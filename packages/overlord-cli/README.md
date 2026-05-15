@@ -131,6 +131,10 @@ Agents can find docs here: https://www.ovld.ai/docs/for-agents
 - `attachment-finalize-upload` - finalize an uploaded objective attachment row after storage upload
 - `attachment-download-url` - get a signed download URL for an existing objective attachment
 - `attachment-upload-file` - prepare, upload, and finalize a local objective attachment in one command
+- `get-device` / `update-device` - register the caller machine (per organization + user + fingerprint) and rename its label
+- `list-project-resources` / `add-project-resource` / `update-project-resource` - manage filesystem directories tied to a project device
+
+Devices are keyed by **(organization, user, fingerprint)** so the same physical workstation can appear once per org session.
 
 Use `create` for future work you want to track, `prompt` for work that should start immediately, and `record-work` for work that was already completed in chat and now needs a review ticket plus feed post.
 

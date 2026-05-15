@@ -7,7 +7,6 @@ import path from 'path';
 import { registerAppIpc } from './ipc/app';
 import { registerAuthIpc } from './ipc/auth';
 import { registerFilesystemIpc, teardownFilesystemIpc } from './ipc/filesystem';
-import { registerRemoteInstallIpc } from './ipc/remote-install';
 import { registerSupabaseIpc } from './ipc/supabase';
 import { registerTailscaleIpc } from './ipc/tailscale';
 import { registerTerminalIpc } from './ipc/terminal';
@@ -385,7 +384,7 @@ app.whenReady().then(async () => {
   // Register IPC handlers
   registerTerminalIpc();
   registerFilesystemIpc();
-  registerRemoteInstallIpc();
+
   registerTailscaleIpc();
   registerSupabaseIpc(supabaseManager);
   registerAppIpc({

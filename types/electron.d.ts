@@ -1,5 +1,3 @@
-type SshAuthMethod = 'agent' | 'key' | 'tailscale';
-
 type RepoWorkspaceManager = 'yarn' | 'npm' | 'pnpm' | 'bun';
 type RepoDeployableKind =
   | 'nextjs-app'
@@ -60,21 +58,8 @@ interface RepoOperationsProfile {
   };
 }
 
-interface SshConnectionConfig {
-  host: string;
-  port?: number;
-  user: string;
-  authMethod: SshAuthMethod;
-  privateKeyPath?: string;
-  passphrase?: string;
-}
-
 interface WorkspacePayload {
-  mode?: 'local' | 'remote';
   directory?: string;
-  remoteDirectory?: string;
-  ssh?: SshConnectionConfig;
-  projectId?: string;
 }
 
 interface TailscaleStatusResult {
@@ -113,8 +98,6 @@ export type LaunchTerminalAgentParams = {
   flags?: string[];
   model?: string;
   thinking?: string;
-  sshCommand?: string;
-  remoteWorkingDirectory?: string;
   projectId?: string | null;
   feedPostId?: string;
   initialQuestion?: string;
@@ -179,10 +162,6 @@ interface ElectronAPI {
       files: string[];
       linkedDirectory: string | null;
       truncated: boolean;
-      error?: string;
-    }>;
-    checkSshConnection: (options: WorkspacePayload) => Promise<{
-      ok: boolean;
       error?: string;
     }>;
     getAggregateDiff: (options?: WorkspacePayload) => Promise<{
@@ -308,22 +287,6 @@ interface ElectronAPI {
       | { ok: false; error: string }
     >;
   };
-  remoteHelper: {
-    install: (payload: { projectId: string; ssh: SshConnectionConfig }) => Promise<{
-      ok: boolean;
-      token?: string;
-      serverPath?: string;
-      nodeBin?: string;
-      version?: string;
-      error?: string;
-    }>;
-    status: (payload: { projectId: string }) => Promise<{
-      installed: boolean;
-      version: string | null;
-      bundledVersion: string;
-      needsUpdate: boolean;
-    }>;
-  };
   tailscale: {
     getStatus: () => Promise<TailscaleStatusResult>;
   };
@@ -351,6 +314,12 @@ interface ElectronAPI {
   app: {
     getConnectorUrl: () => Promise<string>;
     getPlatformUrl: () => Promise<string>;
+    getHostMetadata: () => Promise<{ hostname: string; platform: string }>;
+    getDeviceIdentity: () => Promise<{
+      deviceFingerprint: string;
+      hostname: string;
+      platform: string;
+    }>;
     notify: (title: string, body: string) => Promise<boolean>;
     openExternal: (url: string) => Promise<boolean>;
     revealFile: (filePath: string) => Promise<string>;

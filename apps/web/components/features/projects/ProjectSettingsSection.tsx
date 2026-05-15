@@ -25,19 +25,13 @@ type ProjectSettingsSectionProps = {
   initialName: string;
   initialColor: string;
   initialWorkingDirectory: string | null;
-  initialSshCommand: string | null;
-  initialRemoteWorkingDirectory: string | null;
-  sshFeatureEnabled: boolean;
 };
 
 export function ProjectSettingsSection({
   projectId,
   initialName,
   initialColor,
-  initialWorkingDirectory,
-  initialSshCommand,
-  initialRemoteWorkingDirectory,
-  sshFeatureEnabled
+  initialWorkingDirectory
 }: ProjectSettingsSectionProps) {
   const { isElectron } = useElectron();
   const router = useRouter();
@@ -65,12 +59,6 @@ export function ProjectSettingsSection({
   const currentChangesToggleTitle = currentChangesToggleDisabled
     ? 'Link a project directory to inspect current changes'
     : 'Open Current Changes';
-  const localDirectoryLabel = hasSavedWorkingDirectory ? savedWorkingDirectory : 'configure';
-  const hasSshDirectory = sshFeatureEnabled && Boolean(initialSshCommand?.trim());
-  const sshDirectoryLabel = initialRemoteWorkingDirectory?.trim() || 'configure';
-  const sshTitle = hasSshDirectory
-    ? `${initialSshCommand}${initialRemoteWorkingDirectory ? ` → ${initialRemoteWorkingDirectory}` : ''}`
-    : 'Configure SSH workspace';
 
   useEffect(() => {
     setSavedColor(initialColor);
@@ -191,14 +179,7 @@ export function ProjectSettingsSection({
               </Button>
             ) : null}
           </div>
-          {isElectron && (
-            <ProjectExecutionWorkspaceSelector
-              localDirectoryLabel={localDirectoryLabel}
-              sshDirectoryLabel={sshDirectoryLabel}
-              sshTitle={sshTitle}
-              sshFeatureEnabled={sshFeatureEnabled}
-            />
-          )}
+          {isElectron && <ProjectExecutionWorkspaceSelector projectId={projectId} />}
 
           {isElectron && (
             <div className="ml-auto flex flex-wrap items-center justify-end gap-2 ">

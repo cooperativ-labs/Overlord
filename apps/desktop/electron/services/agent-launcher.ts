@@ -4,8 +4,6 @@ import crypto from 'node:crypto';
 import os from 'os';
 import path from 'path';
 
-import { parseSshCommand } from '../../../../lib/ssh/shell-utils';
-
 import { type AgentBundleAgent, isBundleInstalled } from './agent-bundle';
 import { loadElectronCredentials, saveElectronCredentials } from './electron-credentials';
 
@@ -36,23 +34,10 @@ type LaunchAgentInput = {
   model?: string;
   /** Preferred thinking/effort level (e.g. 'high', 'max'). Passed as agent-specific flag. */
   thinking?: string;
-  /** SSH command to connect to remote server (e.g. "ssh user@host"). */
-  sshCommand?: string;
-  /** Working directory path on the remote server. */
-  remoteWorkingDirectory?: string;
   /** When set, context markdown includes the feed post appendix (desktop feed discuss). */
   feedPostId?: string;
   /** First user question for feed discuss (paired with feedPostId). */
   initialQuestion?: string;
-  /**
-   * Server-side multiplexer config. When `enabled` is true (tmux on the
-   * remote host), the agent command is wrapped in `tmuxCommand` with
-   * `{script}` substituted by a remote temp script path.
-   */
-  serverMultiplexer?: {
-    enabled: boolean;
-    tmuxCommand: string;
-  };
 };
 
 type LaunchAgentResult = {
@@ -73,14 +58,12 @@ export function buildAgentContextUrl(input: {
   agent: AgentType;
   connectorUrl: string;
   instructionMode: string;
-  isRemote: boolean;
   launchMode: AgentLaunchMode;
   sessionId: string;
   ticketId: string;
   feedPostId?: string;
   initialQuestion?: string;
 }): string {
-  const workspaceParam = input.isRemote ? '&workspace=ssh' : '';
   const feedParams =
     input.feedPostId?.trim() && typeof input.initialQuestion === 'string'
       ? `&feedPostId=${encodeURIComponent(input.feedPostId.trim())}&initialQuestion=${encodeURIComponent(input.initialQuestion)}`
@@ -89,7 +72,7 @@ export function buildAgentContextUrl(input: {
     `${input.connectorUrl}/api/protocol/context/${input.ticketId}` +
     `?context=electron&agent=${input.agent}` +
     `${input.launchMode === 'ask' ? '&mode=ask' : ''}` +
-    `&instructionMode=${input.instructionMode}${workspaceParam}&sessionId=${input.sessionId}` +
+    `&instructionMode=${input.instructionMode}&sessionId=${input.sessionId}` +
     feedParams
   );
 }
@@ -329,7 +312,6 @@ function buildModelThinkingFlags(agent: AgentType, model?: string, thinking?: st
  */
 export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<LaunchAgentResult> {
   const connectorUrl = getConnectorUrl();
-  const isRemote = Boolean(input.sshCommand?.trim());
   const launchAuth = await resolveLaunchAuth(input);
   const launchMode = input.launchMode ?? 'run';
   const launchSessionId = crypto.randomUUID();
@@ -351,7 +333,6 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
     agent: input.agent,
     connectorUrl,
     instructionMode,
-    isRemote,
     launchMode,
     sessionId: launchSessionId,
     ticketId: input.ticketId,
@@ -429,9 +410,8 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
 
   // Pre-flight check: if a local cwd is configured but missing, surface a clear
   // error to the renderer instead of opening a terminal where `cd` silently
-  // fails and the agent appears to do nothing. Skipped for remote SSH launches
-  // (the path lives on the remote host).
-  if (!isRemote && resolvedCwd) {
+  // fails and the agent appears to do nothing.
+  if (resolvedCwd) {
     const cwdProblem = describeLocalCwdProblem(resolvedCwd);
     if (cwdProblem) {
       throw new Error(
@@ -478,22 +458,16 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
     input.agent === 'codex'
       ? {
           _OVLD_CODEX_CMD: codexBaseCommand,
-          ...(isRemote ? {} : { _OVLD_CTX_FILE: contextFile })
+          _OVLD_CTX_FILE: contextFile
         }
       : {};
 
-  // For remote (SSH) launches, inline the context via base64 to avoid referencing
-  // a local temp file that doesn't exist on the remote server.
-  const contextRef = isRemote
-    ? '"$(cat "$_OVLD_CTX_FILE")"'
-    : `"$(cat ${shellQuote(contextFile)})"`;
+  const contextRef = `"$(cat ${shellQuote(contextFile)})"`;
 
   if (input.agent === 'claude') {
     // When the bundle is installed, the durable hook is in ~/.claude/settings.json,
     // so we don't need to pass a temporary --settings file.
-    // For SSH, skip the local settings file — it won't exist on the remote.
-    const settingsArg =
-      bundleInstalled || isRemote ? '' : ` --settings ${shellQuote(settingsFile)}`;
+    const settingsArg = bundleInstalled ? '' : ` --settings ${shellQuote(settingsFile)}`;
     const pluginDir = claudeSourcePluginDir();
     const pluginArg = pluginDir ? ` --plugin-dir ${shellQuote(pluginDir)}` : '';
     command = `claude${pluginArg} --append-system-prompt ${contextRef}${settingsArg}${modelThinkingFlags}${extraFlags ? ` ${extraFlags}` : ''} ${shellQuote(startPrompt)}`;
@@ -502,68 +476,17 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
   } else if (input.agent === 'cursor') {
     command = `agent${modelThinkingFlags}${extraFlags ? ` ${extraFlags}` : ''} ${contextRef}`;
   } else if (input.agent === 'gemini') {
-    if (isRemote) {
-      command = `gemini${modelThinkingFlags}${extraFlags ? ` ${extraFlags}` : ''} ${contextRef}`;
-    } else {
-      // Pass context as an @file reference instead of inlining via $(cat ...).
-      // Inlining causes Gemini's @-reference parser to scan the full markdown
-      // for @ symbols (e.g. "@@ -10,6 +10,14 @@" in JSON hunk examples),
-      // which triggers lstat on cwd+<entire-content> → ENAMETOOLONG crash.
-      // Using @contextFile keeps the path short and --include-directories
-      // allows the temp file to be read without a user approval prompt.
-      command = `gemini --include-directories ${shellQuote(os.tmpdir())}${modelThinkingFlags}${extraFlags ? ` ${extraFlags}` : ''} @${contextFile}`;
-    }
+    // Pass context as an @file reference instead of inlining via $(cat ...).
+    // Inlining causes Gemini's @-reference parser to scan the full markdown
+    // for @ symbols (e.g. "@@ -10,6 +10,14 @@" in JSON hunk examples),
+    // which triggers lstat on cwd+<entire-content> → ENAMETOOLONG crash.
+    // Using @contextFile keeps the path short and --include-directories
+    // allows the temp file to be read without a user approval prompt.
+    command = `gemini --include-directories ${shellQuote(os.tmpdir())}${modelThinkingFlags}${extraFlags ? ` ${extraFlags}` : ''} @${contextFile}`;
   } else if (input.agent === 'opencode') {
     command = `opencode${modelThinkingFlags}${extraFlags ? ` ${extraFlags}` : ''} --prompt ${contextRef}`;
   } else {
     throw new Error(`Unknown agent type: ${input.agent}`);
-  }
-
-  // When SSH is configured, wrap the command to run on the remote server.
-  // The launch script will SSH into the server, cd to the remote directory,
-  // set env vars, and run the agent command remotely.
-  if (isRemote) {
-    const remoteCwd = input.remoteWorkingDirectory?.trim();
-    // Base64-encode the context so it can be decoded on the remote without
-    // needing the local temp file (which doesn't exist on the remote server).
-    const contextB64 = Buffer.from(contextMarkdown).toString('base64');
-    // Augment PATH with common CLI install locations and source NVM if available,
-    // since SSH non-interactive shells don't source shell profile files.
-    const pathSetup =
-      'export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$HOME/.cargo/bin:$PATH"; [ -s "$HOME/.nvm/nvm.sh" ] && . "$HOME/.nvm/nvm.sh" 2>/dev/null';
-    const remoteContextSetup = [
-      'export _OVLD_CTX_FILE=$(mktemp "${TMPDIR:-/tmp}/overlord-codex-ctx.XXXXXX")',
-      'trap \'rm -f "$_OVLD_CTX_FILE"\' EXIT',
-      `if printf '%s' '${contextB64}' | base64 --decode > "$_OVLD_CTX_FILE" 2>/dev/null; then`,
-      '  :',
-      `elif printf '%s' '${contextB64}' | base64 -d > "$_OVLD_CTX_FILE" 2>/dev/null; then`,
-      '  :',
-      'else',
-      '  echo "Failed to decode Overlord prompt context on the remote host."',
-      '  exit 1',
-      'fi'
-    ].join('; ');
-    const remoteLaunchEnv: Record<string, string> = { ...launchEnv, ...codexLaunchEnv };
-    const envExports = Object.entries(remoteLaunchEnv)
-      .map(([key, value]) => `export ${key}=${shellQuote(value)}`)
-      .join('; ');
-    const cdPart = remoteCwd ? `cd ${shellQuote(remoteCwd)} && ` : '';
-    const remoteInvocation = wrapRemoteCommandWithMultiplexer(command, input.serverMultiplexer);
-    const remoteScript = `${pathSetup}; ${cdPart}${envExports}; ${remoteContextSetup}; ${remoteInvocation}`;
-    // Force PTY allocation so the remote agent gets a working terminal for
-    // stdin.  Without -tt, SSH runs the remote command without a pseudo-terminal
-    // and interactive CLIs (claude, codex, etc.) fail with "stdin is not a terminal".
-    const sshParts = parseSshCommand(input.sshCommand!.trim(), { forceTty: true });
-    const sshBase = sshParts.map(p => (p.includes(' ') ? shellQuote(p) : p)).join(' ');
-    const sshWrappedCommand = `${sshBase} ${shellQuote(remoteScript)}`;
-
-    return {
-      command: sshWrappedCommand,
-      // No local cwd needed — the command runs remotely
-      cwd: undefined,
-      // No local env vars needed — they're exported inside the SSH session
-      env: {}
-    };
   }
 
   return {
@@ -671,40 +594,6 @@ function describeLocalCwdProblem(cwd: string): string | null {
 
 function shellQuote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
-}
-
-/**
- * When the server profile asks us to run the remote agent inside tmux, write
- * the agent command to a temp script on the remote host, then substitute that
- * path into the user's tmux command template. Using a script file makes the
- * `{script}` placeholder (already documented in the UI) behave the same on
- * local and remote launches and avoids re-quoting an already-quoted command.
- */
-function wrapRemoteCommandWithMultiplexer(
-  command: string,
-  multiplexer?: { enabled: boolean; tmuxCommand: string }
-): string {
-  if (!multiplexer?.enabled) return command;
-
-  const rawTemplate = multiplexer.tmuxCommand.trim();
-  const template =
-    rawTemplate.length > 0 && rawTemplate.includes('{script}')
-      ? rawTemplate
-      : 'tmux new-session bash {script}';
-
-  // Write the agent command to a remote temp script; quoted heredoc delimiter
-  // prevents any expansion of the command contents on the way in.
-  const writeScript = [
-    'export _OVLD_AGENT_SCRIPT=$(mktemp "${TMPDIR:-/tmp}/overlord-agent.XXXXXX")',
-    'cat > "$_OVLD_AGENT_SCRIPT" <<\'OVLD_AGENT_SCRIPT_EOF\'',
-    '#!/bin/bash',
-    command,
-    'OVLD_AGENT_SCRIPT_EOF',
-    'chmod +x "$_OVLD_AGENT_SCRIPT"'
-  ].join('\n');
-
-  const tmuxInvocation = template.replaceAll('{script}', '"$_OVLD_AGENT_SCRIPT"');
-  return `${writeScript}\n${tmuxInvocation}`;
 }
 
 function isCodexPluginInstalled(): boolean {

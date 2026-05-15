@@ -30,6 +30,7 @@ const securityHeaders = async () => [
 ];
 
 const nextConfig = withSerwist({
+  allowedDevOrigins: ['127.0.0.1'],
   reactStrictMode: true,
   env: {
     NEXT_PUBLIC_VERCEL_ENV: process.env.VERCEL_ENV

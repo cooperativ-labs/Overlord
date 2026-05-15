@@ -145,6 +145,10 @@ ovld protocol prompt --agent cursor --objective "Implement feature X" --priority
 ovld protocol discover-project
 ```
 
+### Devices and checkout paths
+
+Resource directories attach to **device** rows scoped to `(organization_id, user_id, device_fingerprint)`, so one workstation can register once **per organization**. Persist a stable fingerprint (for example `OVERLORD_DEVICE_FINGERPRINT`), call `ovld protocol get-device`, then use `list-project-resources`, `add-project-resource`, `update-project-resource`, or `update-device` as described in `ovld protocol help`.
+
 ### Choosing `--execution-target`
 
 Pass `--execution-target agent` or `--execution-target human` (default: `human`) when creating tickets.
@@ -183,7 +187,7 @@ This keeps the ticket feed readable while preserving the full document in versio
 ## Defaults And Notes
 
 - The Overlord API requires `agentIdentifier` and `connectionMethod` on attach/connect/prompt, but the CLI defaults them to `cursor`/`cli` (override with `--agent` / `--method`). The MCP tools default to `mcp`.
-- The Cursor local MCP stub exposes `attach`, `update`, and `deliver` only (same names as the hosted Overlord MCP core set).
+- The local Overlord MCP shim shells into `ovld protocol`; it exposes hosted-parity tools (including attachments plus `get_device`, `update_device`, `list_project_resources`, `add_project_resource`, `update_project_resource`) with snake_case keys mapped to CLI flags.
 - `permission-request` is invoked by the installed permission hook; agents normally do not call it directly.
 - The `record_change_rationales` MCP tool and `ovld protocol record-change-rationales` CLI both write to the same `file_changes` table; pick whichever fits your runtime.
 

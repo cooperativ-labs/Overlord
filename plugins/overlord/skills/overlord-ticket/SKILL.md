@@ -129,6 +129,17 @@ ovld protocol create --agent codex --objective "Capture follow-up work from this
 ovld protocol prompt --agent codex --objective "Implement feature X" --priority medium
 ```
 
+### Devices and checkout paths
+
+Register the workstation per **organization** with a stable `device_fingerprint`, then manage resources:
+
+```bash
+ovld protocol get-device --device-fingerprint "$OVERLORD_DEVICE_FINGERPRINT"
+ovld protocol add-project-resource --project-id <uuid> --directory /path/to/checkout --device-fingerprint "$OVERLORD_DEVICE_FINGERPRINT"
+```
+
+`list-project-resources --device-fingerprint` filters to that device **in the current org**. See `ovld protocol help`.
+
 ### Choosing `--execution-target`
 
 Pass `--execution-target agent` or `--execution-target human` (default: `human`) when creating tickets.
@@ -185,7 +196,7 @@ This keeps the ticket feed readable while preserving the full document in versio
 ## Defaults And Notes
 
 - API requires `agentIdentifier` and `connectionMethod` on attach/connect/prompt. The CLI defaults them to `codex`/`cli`; the hosted MCP defaults to `mcp`. Override with `--agent` / `--method` when calling from a different runtime.
-- Hosted MCP and the local `overlord-mcp.mjs` shim use the same **tool names** (\`attach\`, \`update\`, \`deliver\`, …). The shim uses **snake_case** JSON keys (\`ticket_id\`, \`session_key\`) that map to CLI flags; hosted MCP uses **camelCase** (\`ticketId\`, \`sessionKey\`) matching REST bodies.
+- Hosted MCP and the local `overlord-mcp.mjs` shim use the same **tool names** (`attach`, `update`, `deliver`, `get_device`, `list_project_resources`, …). The shim uses **snake_case** JSON keys (`ticket_id`, `session_key`, `device_fingerprint`) that map to CLI flags; hosted MCP uses **camelCase** (`ticketId`, `sessionKey`, `deviceFingerprint`) matching REST bodies.
 - `permission-request` is invoked by the local Codex plugin's permission rules; agents do not normally call it directly.
 - `record_change_rationales` (MCP) and `ovld protocol record-change-rationales` (CLI) both write to the `file_changes` table; the dedicated route is `POST /api/protocol/record-change-rationales`.
 - Objective attachment MCP tools use `<verb>_<noun>` names — `list_attachments`, `prepare_attachment_upload`, `finalize_attachment_upload`, `get_attachment_download_url`, `upload_attachment_file`. CLI commands use `attachment-*` and require `--objective-id` for upload/finalize.

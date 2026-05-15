@@ -2,6 +2,8 @@
 
 import { revalidatePath } from 'next/cache';
 
+import { upsertDeviceFromProtocol } from '@/lib/overlord/upsert-device';
+import { defaultDirectoryLabel } from '@/lib/resource-directories/labels';
 import { createClientForRequest } from '@/supabase/utils/server';
 import type { Database } from '@/types/database.types';
 
@@ -11,6 +13,7 @@ export type ProjectResourceDirectory = {
   userId: string;
   deviceId: string | null;
   deviceLabel: string | null;
+  deviceHostname: string | null;
   directoryPath: string;
   label: string | null;
   isPrimary: boolean;
@@ -18,8 +21,17 @@ export type ProjectResourceDirectory = {
   updatedAt: string;
 };
 
+export type ProjectResourceDirectoriesPayload = {
+  resources: ProjectResourceDirectory[];
+  /** Resolved `devices.id` for this org + user + fingerprint when `deviceFingerprint` was provided. */
+  matchedDeviceId: string | null;
+};
+
 type Row = Database['public']['Tables']['project_resource_directories']['Row'] & {
-  devices?: { label: string | null } | { label: string | null }[] | null;
+  devices?:
+    | { label: string | null; hostname: string | null }
+    | { label: string | null; hostname: string | null }[]
+    | null;
 };
 
 function rowToDto(row: Row): ProjectResourceDirectory {
@@ -31,6 +43,7 @@ function rowToDto(row: Row): ProjectResourceDirectory {
     userId: row.user_id,
     deviceId: row.device_id,
     deviceLabel: device?.label ?? null,
+    deviceHostname: device?.hostname ?? null,
     directoryPath: row.directory_path,
     label: row.label,
     isPrimary: row.is_primary,
@@ -45,18 +58,44 @@ function revalidateProjectPaths(projectId: string) {
 }
 
 /** List resource directories for the current user on a given project. */
-export async function getProjectResourceDirectoriesAction(
-  projectId: string
-): Promise<ProjectResourceDirectory[]> {
+export async function getProjectResourceDirectoriesAction({
+  projectId,
+  deviceFingerprint
+}: {
+  projectId: string;
+  /** When set (e.g. from Desktop identity), resolves the device row for this project org + user. */
+  deviceFingerprint?: string | null;
+}): Promise<ProjectResourceDirectoriesPayload> {
   const supabase = await createClientForRequest();
   const {
     data: { user }
   } = await supabase.auth.getUser();
-  if (!user) return [];
+  if (!user) return { resources: [], matchedDeviceId: null };
+
+  const fp = deviceFingerprint?.trim();
+  let matchedDeviceId: string | null = null;
+  if (fp) {
+    const { data: project } = await supabase
+      .from('projects')
+      .select('organization_id')
+      .eq('id', projectId)
+      .maybeSingle();
+
+    if (project) {
+      const { data: device } = await supabase
+        .from('devices')
+        .select('id')
+        .eq('organization_id', project.organization_id)
+        .eq('user_id', user.id)
+        .eq('device_fingerprint', fp)
+        .maybeSingle();
+      matchedDeviceId = device?.id ?? null;
+    }
+  }
 
   const { data, error } = await supabase
     .from('project_resource_directories')
-    .select('*, devices(label)')
+    .select('*, devices(label, hostname)')
     .eq('user_id', user.id)
     .eq('project_id', projectId)
     .order('is_primary', { ascending: false })
@@ -64,9 +103,10 @@ export async function getProjectResourceDirectoriesAction(
 
   if (error) {
     console.error('getProjectResourceDirectoriesAction', error);
-    return [];
+    return { resources: [], matchedDeviceId };
   }
-  return (data ?? []).map(row => rowToDto(row as Row));
+  const resources = (data ?? []).map(row => rowToDto(row as Row));
+  return { resources, matchedDeviceId };
 }
 
 export async function addProjectResourceDirectoryAction(input: {
@@ -74,6 +114,9 @@ export async function addProjectResourceDirectoryAction(input: {
   directoryPath: string;
   label?: string | null;
   deviceId?: string | null;
+  deviceFingerprint?: string | null;
+  deviceHostname?: string | null;
+  devicePlatform?: string | null;
   isPrimary?: boolean;
 }): Promise<void> {
   const directoryPath = input.directoryPath.trim();
@@ -89,6 +132,30 @@ export async function addProjectResourceDirectoryAction(input: {
     throw new Error('You must be signed in to add a resource directory.');
   }
 
+  let resolvedDeviceId: string | null = input.deviceId ?? null;
+  const deviceFingerprint = input.deviceFingerprint?.trim();
+  if (deviceFingerprint) {
+    const { data: project, error: projectError } = await supabase
+      .from('projects')
+      .select('organization_id')
+      .eq('id', input.projectId)
+      .maybeSingle();
+    if (projectError || !project) {
+      throw new Error('Project not found.');
+    }
+    const upsertedId = await upsertDeviceFromProtocol(supabase, {
+      organizationId: project.organization_id,
+      userId: user.id,
+      deviceFingerprint,
+      hostname: input.deviceHostname ?? null,
+      platform: input.devicePlatform ?? null
+    });
+    if (!upsertedId) {
+      throw new Error('Failed to register device.');
+    }
+    resolvedDeviceId = upsertedId;
+  }
+
   if (input.isPrimary) {
     await supabase
       .from('project_resource_directories')
@@ -97,12 +164,25 @@ export async function addProjectResourceDirectoryAction(input: {
       .eq('project_id', input.projectId);
   }
 
+  let label = input.label?.trim() || null;
+  if (!label) {
+    const { data: existingRows } = await supabase
+      .from('project_resource_directories')
+      .select('label')
+      .eq('user_id', user.id)
+      .eq('project_id', input.projectId);
+    label = defaultDirectoryLabel({
+      directoryPath,
+      existingLabels: (existingRows ?? []).map(row => row.label)
+    });
+  }
+
   const { error } = await supabase.from('project_resource_directories').insert({
     user_id: user.id,
     project_id: input.projectId,
-    device_id: input.deviceId ?? null,
+    device_id: resolvedDeviceId,
     directory_path: directoryPath,
-    label: input.label?.trim() || null,
+    label,
     is_primary: input.isPrimary ?? false
   });
 

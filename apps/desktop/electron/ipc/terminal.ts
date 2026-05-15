@@ -25,8 +25,6 @@ const LaunchAgentPayloadSchema = z.object({
   flags: z.array(z.string().max(512)).max(64).optional(),
   model: z.string().max(128).optional(),
   thinking: z.string().max(64).optional(),
-  sshCommand: z.string().max(4096).optional(),
-  remoteWorkingDirectory: z.string().max(4096).optional(),
   projectId: z.string().uuid().nullable().optional(),
   feedPostId: z.string().uuid().optional(),
   initialQuestion: z.string().max(8000).optional()
@@ -86,24 +84,6 @@ function getLocalTerminalSettingsProfile(): TerminalSettingsProfile {
       'externalTerminalTmuxCommand',
       'tmux new-session bash {script}'
     ) as string
-  };
-}
-
-/**
- * Server-side multiplexer config. Unlike the local profile, the server
- * section only controls what happens *inside* the SSH session on the remote
- * host — the local GUI terminal is always driven by the local profile.
- */
-function getServerMultiplexerConfig(): { enabled: boolean; tmuxCommand: string } {
-  const termApp = store.get('serverExternalTerminalApp', 'default') as string;
-  const customApp = store.get('customServerExternalTerminalApp', '') as string;
-  const tmuxCommand = store.get(
-    'serverExternalTerminalTmuxCommand',
-    'tmux new-session bash {script}'
-  ) as string;
-  return {
-    enabled: isTmuxLikeTerminalApp(termApp, customApp),
-    tmuxCommand
   };
 }
 
@@ -264,8 +244,7 @@ function buildLaunchScriptContent(
   const innerScript = innerParts.join('\n');
 
   // Run through the user's preferred shell in interactive mode so that aliases
-  // and functions defined in ~/.zshrc / ~/.bashrc are available. This is
-  // required when the SSH command field contains a shell alias (e.g. "claw").
+  // and functions defined in ~/.zshrc / ~/.bashrc are available.
   return ['#!/bin/bash', `exec "\${SHELL:-zsh}" -i -c ${shellQuote(innerScript)}`].join('\n');
 }
 
@@ -533,7 +512,6 @@ async function launchScriptInExternalTerminal(scriptPath: string): Promise<void>
 export function registerTerminalIpc(): void {
   ipcMain.handle('terminal:launch-agent', async (_event, rawPayload: unknown) => {
     const payload = LaunchAgentPayloadSchema.parse(rawPayload);
-    const isRemote = Boolean(payload.sshCommand?.trim());
     const { command, cwd, env } = await prepareAgentLaunch({
       ticketId: payload.ticketId,
       agent: payload.agent,
@@ -544,11 +522,8 @@ export function registerTerminalIpc(): void {
       flags: payload.flags,
       model: payload.model,
       thinking: payload.thinking,
-      sshCommand: payload.sshCommand,
-      remoteWorkingDirectory: payload.remoteWorkingDirectory,
       feedPostId: payload.feedPostId,
-      initialQuestion: payload.initialQuestion,
-      serverMultiplexer: isRemote ? getServerMultiplexerConfig() : undefined
+      initialQuestion: payload.initialQuestion
     });
 
     const scriptPath = writeLaunchScript(command, cwd, env);

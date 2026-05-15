@@ -585,9 +585,152 @@ const tools = [
       'metadata-json': args.metadata
     }),
     subcommand: 'attachment-upload-file'
+  },
+
+  // ---------------------------------------------------------------------------
+  // Device + project resources (hosted MCP parity; maps to ovld protocol)
+  // ---------------------------------------------------------------------------
+  {
+    name: 'get_device',
+    description:
+      'Register or refresh the caller device (pass a stable fingerprint and optional hostname/platform). Prefer calling before add_project_resource.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        device_fingerprint: {
+          type: 'string',
+          description: 'Stable UUID or token stored locally for this workstation.'
+        },
+        device_hostname: { type: 'string' },
+        device_platform: {
+          type: 'string',
+          description: 'e.g. darwin, linux, win32.'
+        }
+      },
+      required: ['device_fingerprint']
+    },
+    toCliFlags: args => ({
+      'device-fingerprint': args.device_fingerprint,
+      ...(typeof args.device_hostname === 'string' && args.device_hostname.trim().length > 0
+        ? { 'device-hostname': args.device_hostname }
+        : {}),
+      ...(typeof args.device_platform === 'string' && args.device_platform.trim().length > 0
+        ? { 'device-platform': args.device_platform }
+        : {})
+    }),
+    subcommand: 'get-device'
+  },
+  {
+    name: 'update_device',
+    description:
+      'Rename this device label (lowercase kebab-case, unique per organization). Requires the same device_fingerprint.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        device_fingerprint: { type: 'string' },
+        label: { type: 'string' }
+      },
+      required: ['device_fingerprint', 'label']
+    },
+    toCliFlags: args => ({
+      'device-fingerprint': args.device_fingerprint,
+      label: args.label
+    }),
+    subcommand: 'update-device'
+  },
+  {
+    name: 'list_project_resources',
+    description:
+      'List directories registered as resources for a project. Optionally filter by device_fingerprint to the device registered for this org session.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        project_id: { type: 'string', description: 'Project UUID.' },
+        device_fingerprint: {
+          type: 'string',
+          description:
+            'When set with this org scope, restricts results to directories for this org + user device.'
+        }
+      },
+      required: ['project_id']
+    },
+    toCliFlags: args => ({
+      'project-id': args.project_id,
+      ...(typeof args.device_fingerprint === 'string' && args.device_fingerprint.trim().length > 0
+        ? { 'device-fingerprint': args.device_fingerprint.trim() }
+        : {})
+    }),
+    subcommand: 'list-project-resources'
+  },
+  {
+    name: 'add_project_resource',
+    description:
+      'Attach a filesystem directory to this project on the current machine. Directory must exist; device is keyed by fingerprint (per org).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        project_id: { type: 'string' },
+        directory_path: {
+          type: 'string',
+          description: 'Absolute path; omit to use cwd (CLI verifies existence).'
+        },
+        device_fingerprint: { type: 'string' },
+        label: { type: 'string' },
+        is_primary: { type: 'boolean' },
+        device_hostname: { type: 'string' },
+        device_platform: { type: 'string' }
+      },
+      required: ['project_id', 'device_fingerprint']
+    },
+    toCliFlags: args => ({
+      'project-id': args.project_id,
+      ...(typeof args.directory_path === 'string' && args.directory_path.trim().length > 0
+        ? { directory: args.directory_path }
+        : {}),
+      'device-fingerprint': args.device_fingerprint,
+      ...(typeof args.label === 'string' ? { label: args.label } : {}),
+      ...(args.is_primary === true || args.is_primary === 'true' ? { 'is-primary': true } : {}),
+      ...(typeof args.device_hostname === 'string' && args.device_hostname.trim().length > 0
+        ? { 'device-hostname': args.device_hostname }
+        : {}),
+      ...(typeof args.device_platform === 'string' && args.device_platform.trim().length > 0
+        ? { 'device-platform': args.device_platform }
+        : {})
+    }),
+    subcommand: 'add-project-resource'
+  },
+  {
+    name: 'update_project_resource',
+    description:
+      'Update path / label / primary flag for one resource directory. Must belong to the device fingerprint in this org.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        resource_id: { type: 'string' },
+        device_fingerprint: { type: 'string' },
+        directory_path: { type: 'string' },
+        label: {
+          oneOf: [{ type: 'string' }, { type: 'null' }],
+          description: 'Use string "null" to clear via CLI shim pass-through.'
+        },
+        is_primary: { type: 'boolean' }
+      },
+      required: ['resource_id', 'device_fingerprint']
+    },
+    toCliFlags: args => ({
+      'resource-id': args.resource_id,
+      'device-fingerprint': args.device_fingerprint,
+      ...(typeof args.directory_path === 'string' ? { directory: args.directory_path.trim() } : {}),
+      ...(typeof args.label === 'undefined'
+        ? {}
+        : { label: args.label === null ? 'null' : String(args.label) }),
+      ...(args.is_primary !== undefined
+        ? { 'is-primary': args.is_primary === true || args.is_primary === 'true' }
+        : {})
+    }),
+    subcommand: 'update-project-resource'
   }
 ];
-
 const searchTicketsTool = {
   name: 'search_tickets',
   description:
@@ -796,7 +939,7 @@ async function handleRequest(message) {
         version: '0.1.4'
       },
       instructions:
-        'Use these tools to drive Overlord ticket workflows through the installed ovld CLI. Tool names match the hosted Overlord MCP server (attach, update, deliver, …). Most operations expect a session key from attach or connect.'
+        'Use these tools to drive Overlord ticket workflows through the installed ovld CLI. Names mirror hosted MCP tools (attach, update, deliver, get_device, list_project_resources, …). Session tools need attach/connect. Devices are scoped to organization + user + fingerprint — call get_device before add_project_resource.'
     });
     return;
   }

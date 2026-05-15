@@ -7,8 +7,8 @@ import { type TokenContext } from '../auth.ts';
 import { scheduleGenerateFeedPost } from '../helpers/invoke-generate-feed-post.ts';
 import { toolErr, toolOk } from '../rpc.ts';
 
-import { upsertDeviceFromProtocol } from './_device-upsert.ts';
 import { insertChangeRationales } from './_change-rationales.ts';
+import { upsertDeviceFromProtocol } from './_device-upsert.ts';
 import { resolvePreferredStatusNameByType } from './_status-resolution.ts';
 import { resolveTicketCreatorUserId } from './_ticket-creator.ts';
 

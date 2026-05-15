@@ -136,14 +136,14 @@ export function AgentSplitButton({
     projectId,
     workingDirectory,
     sshCommand,
-    remoteWorkingDirectory
+    remoteWorkingDirectory,
+    isElectron
   });
   const ACTIVE_SESSION_STATES: SessionState[] = ['attached', 'blocked', 'idle'];
   const effectiveSelection: AgentModelSelection = assignedSelection ?? selection;
   const hasResolvedSelection = assignedSelection !== null || selectionLoaded;
   const effectiveWorkingDirectory = workspace.effectiveWorkingDirectory;
   const effectiveSshCommand = workspace.effectiveSshCommand;
-  const effectiveRemoteWorkingDirectory = workspace.effectiveRemoteWorkingDirectory;
   const isRunning = agentSessionState === 'attached';
 
   const isActive =
@@ -229,8 +229,6 @@ export function AgentSplitButton({
           thinking: options?.useStoredModelPreference
             ? (effectiveSelection.thinking ?? undefined)
             : undefined,
-          sshCommand: effectiveSshCommand ?? undefined,
-          remoteWorkingDirectory: effectiveRemoteWorkingDirectory ?? undefined,
           projectId: projectId ?? undefined
         });
       } catch (error) {

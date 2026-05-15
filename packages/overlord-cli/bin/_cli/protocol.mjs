@@ -1516,6 +1516,223 @@ async function protocolDiscoverProject(args) {
 }
 
 // ---------------------------------------------------------------------------
+// get-device (identify / register the current device)
+// ---------------------------------------------------------------------------
+
+async function protocolGetDevice(args) {
+  const flags = parseFlags(args);
+  const { platformUrl, bearerToken, localSecret, organizationId } =
+    await resolveProtocolAuthForFlags(flags);
+  const timeoutMs = resolveTimeout(flags);
+
+  const deviceFingerprint = String(flags['device-fingerprint'] ?? process.env.OVERLORD_DEVICE_FINGERPRINT ?? '');
+  if (!deviceFingerprint) {
+    console.error('Error: --device-fingerprint is required (or set OVERLORD_DEVICE_FINGERPRINT)');
+    process.exit(1);
+  }
+
+  const body = {
+    deviceFingerprint,
+    ...(flags['device-hostname'] ? { deviceHostname: String(flags['device-hostname']) } : {}),
+    ...(flags['device-platform'] ? { devicePlatform: String(flags['device-platform']) } : {})
+  };
+
+  const data = await apiPost(
+    platformUrl,
+    bearerToken,
+    localSecret,
+    organizationId,
+    '/api/protocol/get-device',
+    body,
+    timeoutMs
+  );
+  console.log(JSON.stringify(data, null, 2));
+
+  if (data.device?.label) {
+    process.stderr.write(`\nDEVICE_LABEL=${data.device.label}\n`);
+  }
+  if (data.device?.id) {
+    process.stderr.write(`DEVICE_ID=${data.device.id}\n`);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// update-device (rename the device label)
+// ---------------------------------------------------------------------------
+
+async function protocolUpdateDevice(args) {
+  const flags = parseFlags(args);
+  const { platformUrl, bearerToken, localSecret, organizationId } =
+    await resolveProtocolAuthForFlags(flags);
+  const timeoutMs = resolveTimeout(flags);
+
+  const deviceFingerprint = String(flags['device-fingerprint'] ?? process.env.OVERLORD_DEVICE_FINGERPRINT ?? '');
+  if (!deviceFingerprint) {
+    console.error('Error: --device-fingerprint is required (or set OVERLORD_DEVICE_FINGERPRINT)');
+    process.exit(1);
+  }
+  const label = typeof flags.label === 'string' ? flags.label.trim() : '';
+  if (!label) {
+    console.error('Error: --label is required');
+    process.exit(1);
+  }
+
+  const data = await apiPost(
+    platformUrl,
+    bearerToken,
+    localSecret,
+    organizationId,
+    '/api/protocol/update-device',
+    { deviceFingerprint, label },
+    timeoutMs
+  );
+  console.log(JSON.stringify(data, null, 2));
+}
+
+// ---------------------------------------------------------------------------
+// list-project-resources (list resource directories for a project)
+// ---------------------------------------------------------------------------
+
+async function protocolListProjectResources(args) {
+  const flags = parseFlags(args);
+  const { platformUrl, bearerToken, localSecret, organizationId } =
+    await resolveProtocolAuthForFlags(flags);
+  const timeoutMs = resolveTimeout(flags);
+
+  const projectId = typeof flags['project-id'] === 'string' ? flags['project-id'].trim() : '';
+  if (!projectId) {
+    console.error('Error: --project-id is required');
+    process.exit(1);
+  }
+
+  const deviceFingerprint = typeof flags['device-fingerprint'] === 'string'
+    ? flags['device-fingerprint'].trim()
+    : (process.env.OVERLORD_DEVICE_FINGERPRINT?.trim() ?? '');
+
+  const body = {
+    projectId,
+    ...(deviceFingerprint ? { deviceFingerprint } : {})
+  };
+
+  const data = await apiPost(
+    platformUrl,
+    bearerToken,
+    localSecret,
+    organizationId,
+    '/api/protocol/list-project-resources',
+    body,
+    timeoutMs
+  );
+  console.log(JSON.stringify(data, null, 2));
+}
+
+// ---------------------------------------------------------------------------
+// add-project-resource (register a directory for a project on this device)
+// ---------------------------------------------------------------------------
+
+async function protocolAddProjectResource(args) {
+  const flags = parseFlags(args);
+  const { platformUrl, bearerToken, localSecret, organizationId } =
+    await resolveProtocolAuthForFlags(flags);
+  const timeoutMs = resolveTimeout(flags);
+
+  const projectId = typeof flags['project-id'] === 'string' ? flags['project-id'].trim() : '';
+  const directoryPath = typeof flags['directory'] === 'string'
+    ? flags['directory'].trim()
+    : process.cwd();
+  const deviceFingerprint = String(
+    flags['device-fingerprint'] ?? process.env.OVERLORD_DEVICE_FINGERPRINT ?? ''
+  );
+
+  if (!projectId) {
+    console.error('Error: --project-id is required');
+    process.exit(1);
+  }
+  if (!deviceFingerprint) {
+    console.error('Error: --device-fingerprint is required (or set OVERLORD_DEVICE_FINGERPRINT)');
+    process.exit(1);
+  }
+
+  // Verify directory exists on this device before sending to server
+  const fs = await import('node:fs');
+  if (!fs.existsSync(directoryPath)) {
+    console.error(`Error: Directory does not exist: ${directoryPath}`);
+    process.exit(1);
+  }
+
+  const body = {
+    projectId,
+    directoryPath,
+    deviceFingerprint,
+    ...(typeof flags.label === 'string' ? { label: flags.label } : {}),
+    ...(flags['is-primary'] === true || flags['is-primary'] === 'true' ? { isPrimary: true } : {}),
+    ...(flags['device-hostname'] ? { deviceHostname: String(flags['device-hostname']) } : {}),
+    ...(flags['device-platform'] ? { devicePlatform: String(flags['device-platform']) } : {})
+  };
+
+  const data = await apiPost(
+    platformUrl,
+    bearerToken,
+    localSecret,
+    organizationId,
+    '/api/protocol/add-project-resource',
+    body,
+    timeoutMs
+  );
+  console.log(JSON.stringify(data, null, 2));
+
+  if (data.resource?.id) {
+    process.stderr.write(`\nRESOURCE_ID=${data.resource.id}\n`);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// update-project-resource (update path, label, or primary status)
+// ---------------------------------------------------------------------------
+
+async function protocolUpdateProjectResource(args) {
+  const flags = parseFlags(args);
+  const { platformUrl, bearerToken, localSecret, organizationId } =
+    await resolveProtocolAuthForFlags(flags);
+  const timeoutMs = resolveTimeout(flags);
+
+  const resourceId = typeof flags['resource-id'] === 'string' ? flags['resource-id'].trim() : '';
+  const deviceFingerprint = String(
+    flags['device-fingerprint'] ?? process.env.OVERLORD_DEVICE_FINGERPRINT ?? ''
+  );
+
+  if (!resourceId) {
+    console.error('Error: --resource-id is required');
+    process.exit(1);
+  }
+  if (!deviceFingerprint) {
+    console.error('Error: --device-fingerprint is required (or set OVERLORD_DEVICE_FINGERPRINT)');
+    process.exit(1);
+  }
+
+  const body = {
+    resourceId,
+    deviceFingerprint,
+    ...(typeof flags.directory === 'string' ? { directoryPath: flags.directory.trim() } : {}),
+    ...('label' in flags ? { label: flags.label === 'null' ? null : String(flags.label) } : {}),
+    ...(flags['is-primary'] !== undefined
+      ? { isPrimary: flags['is-primary'] === true || flags['is-primary'] === 'true' }
+      : {})
+  };
+
+  const data = await apiPost(
+    platformUrl,
+    bearerToken,
+    localSecret,
+    organizationId,
+    '/api/protocol/update-project-resource',
+    body,
+    timeoutMs
+  );
+  console.log(JSON.stringify(data, null, 2));
+}
+
+// ---------------------------------------------------------------------------
 // connect (lightweight session, no context returned)
 // ---------------------------------------------------------------------------
 
@@ -2031,6 +2248,11 @@ Subcommands:
   attachment-finalize-upload  Finalize an uploaded attachment row after storage upload
   attachment-download-url     Get a signed download URL for an existing attachment
   attachment-upload-file      Prepare, upload, and finalize a local file in one command
+  get-device                  Identify / register the current device and return its label
+  update-device               Rename this device's label (must be lowercase kebab-case)
+  list-project-resources      List resource directories registered for a project
+  add-project-resource        Register a local directory as a project resource on this device
+  update-project-resource     Update a resource directory's path, label, or primary status
 
 Environment fallback:
   --session-key  <- SESSION_KEY
@@ -2393,6 +2615,44 @@ attachment-upload-file:
     --content-type <mime>     Defaults to application/octet-stream
     --metadata-json <json>
 
+get-device:
+  Required:
+    --device-fingerprint <fp>  (or OVERLORD_DEVICE_FINGERPRINT env var)
+  Optional:
+    --device-hostname <name>
+    --device-platform <platform>  (darwin|linux|windows)
+
+update-device:
+  Required:
+    --device-fingerprint <fp>  (or OVERLORD_DEVICE_FINGERPRINT env var)
+    --label <label>            Lowercase kebab-case, unique within org
+
+list-project-resources:
+  Required:
+    --project-id <uuid>
+  Optional:
+    --device-fingerprint <fp>  Filter to current device only
+
+add-project-resource:
+  Required:
+    --project-id <uuid>
+    --device-fingerprint <fp>  (or OVERLORD_DEVICE_FINGERPRINT env var)
+  Optional:
+    --directory <path>         Defaults to current working directory
+    --label <text>
+    --is-primary               Mark as primary directory for this device+project
+    --device-hostname <name>
+    --device-platform <platform>
+
+update-project-resource:
+  Required:
+    --resource-id <uuid>       From list-project-resources output
+    --device-fingerprint <fp>  (or OVERLORD_DEVICE_FINGERPRINT env var)
+  Optional:
+    --directory <path>         New absolute path
+    --label <text>             New label (pass 'null' to clear)
+    --is-primary <true|false>
+
 Examples:
   ovld protocol auth-status
   ovld protocol discover-project
@@ -2431,6 +2691,14 @@ Examples:
   ovld protocol record-work --payload-file - <<'EOF'
     {"objective":"...","summary":"...","artifacts":[...],"changeRationales":[...]}
 EOF
+  ovld protocol get-device --device-fingerprint $OVERLORD_DEVICE_FINGERPRINT
+  ovld protocol update-device --device-fingerprint $OVERLORD_DEVICE_FINGERPRINT --label work-macbook
+  ovld protocol list-project-resources --project-id <project-uuid>
+  ovld protocol list-project-resources --project-id <project-uuid> --device-fingerprint $OVERLORD_DEVICE_FINGERPRINT
+  ovld protocol add-project-resource --project-id <project-uuid> --device-fingerprint $OVERLORD_DEVICE_FINGERPRINT
+  ovld protocol add-project-resource --project-id <project-uuid> --directory /path/to/repo --device-fingerprint $OVERLORD_DEVICE_FINGERPRINT --label "main checkout" --is-primary
+  ovld protocol update-project-resource --resource-id <resource-uuid> --device-fingerprint $OVERLORD_DEVICE_FINGERPRINT --label "docs branch"
+  ovld protocol update-project-resource --resource-id <resource-uuid> --device-fingerprint $OVERLORD_DEVICE_FINGERPRINT --is-primary true
 `);
     return;
   }
@@ -2529,6 +2797,26 @@ EOF
   }
   if (subcommand === 'deliver') {
     await protocolDeliver(args);
+    return;
+  }
+  if (subcommand === 'get-device') {
+    await protocolGetDevice(args);
+    return;
+  }
+  if (subcommand === 'update-device') {
+    await protocolUpdateDevice(args);
+    return;
+  }
+  if (subcommand === 'list-project-resources') {
+    await protocolListProjectResources(args);
+    return;
+  }
+  if (subcommand === 'add-project-resource') {
+    await protocolAddProjectResource(args);
+    return;
+  }
+  if (subcommand === 'update-project-resource') {
+    await protocolUpdateProjectResource(args);
     return;
   }
 

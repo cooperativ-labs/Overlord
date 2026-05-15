@@ -38,11 +38,9 @@ function normalizeDirPath(dir: string): string {
   return normalized.toLowerCase();
 }
 
-function pickBestPathMatch<T extends { directory_path?: string | null; local_working_directory?: string | null }>(
-  rows: T[],
-  normalizedCwd: string,
-  getPath: (row: T) => string | null | undefined
-): T | null {
+function pickBestPathMatch<
+  T extends { directory_path?: string | null; local_working_directory?: string | null }
+>(rows: T[], normalizedCwd: string, getPath: (row: T) => string | null | undefined): T | null {
   const exact = rows.find(row => {
     const p = getPath(row);
     return p ? normalizeDirPath(p) === normalizedCwd : false;

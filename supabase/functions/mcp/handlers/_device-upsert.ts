@@ -44,8 +44,8 @@ export async function upsertDeviceFromProtocol(
 
   const { data: labelRow } = await supabase.rpc('generate_device_label', {
     org_id: input.organizationId,
-    hostname: input.hostname ?? null,
-    platform: input.platform ?? null
+    hostname: input.hostname ?? '',
+    platform: input.platform ?? ''
   });
   const label =
     typeof labelRow === 'string' && labelRow.length > 0

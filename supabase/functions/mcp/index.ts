@@ -13,6 +13,7 @@
 // deno-lint-ignore-file no-explicit-any
 import { createClient } from '@supabase/supabase-js';
 
+import { handleAddProjectResource } from './handlers/add-project-resource.ts';
 import { handleAsk } from './handlers/ask.ts';
 import { handleAttach } from './handlers/attach.ts';
 import { handleAttachmentFinalizeUpload } from './handlers/attachment-finalize-upload.ts';
@@ -24,6 +25,8 @@ import { handleCreateTicketDraft } from './handlers/create-ticket-draft.ts';
 import { handleDeliver } from './handlers/deliver.ts';
 import { handleDiscoverProject } from './handlers/discover-project.ts';
 import { handleDiscussObjective } from './handlers/discuss-objective.ts';
+import { handleGetDevice } from './handlers/get-device.ts';
+import { handleListProjectResources } from './handlers/list-project-resources.ts';
 import { handleReadContext } from './handlers/read-context.ts';
 import { handleRecordChangeRationales } from './handlers/record-change-rationales.ts';
 import { handleRecordHookEvent } from './handlers/record-hook-event.ts';
@@ -31,6 +34,8 @@ import { handleRecordWork } from './handlers/record-work.ts';
 import { handleSaveTicketDraft } from './handlers/save-ticket-draft.ts';
 import { handleSearchTickets } from './handlers/search-tickets.ts';
 import { handleUpdate } from './handlers/update.ts';
+import { handleUpdateDevice } from './handlers/update-device.ts';
+import { handleUpdateProjectResource } from './handlers/update-project-resource.ts';
 import { handleWriteContext } from './handlers/write-context.ts';
 import { getUiResourceByUri, listUiResources } from './ui/resources.ts';
 import { resolveToken } from './auth.ts';
@@ -315,6 +320,16 @@ Deno.serve(async (req: Request) => {
         result = await handleDiscoverProject(supabase, toolArgs, requestContext);
       } else if (toolName === 'search_tickets') {
         result = await handleSearchTickets(supabase, toolArgs, requestContext);
+      } else if (toolName === 'get_device') {
+        result = await handleGetDevice(supabase, toolArgs, requestContext);
+      } else if (toolName === 'update_device') {
+        result = await handleUpdateDevice(supabase, toolArgs, requestContext);
+      } else if (toolName === 'list_project_resources') {
+        result = await handleListProjectResources(supabase, toolArgs, requestContext);
+      } else if (toolName === 'add_project_resource') {
+        result = await handleAddProjectResource(supabase, toolArgs, requestContext);
+      } else if (toolName === 'update_project_resource') {
+        result = await handleUpdateProjectResource(supabase, toolArgs, requestContext);
       } else {
         return rpcError(id, -32601, `Unknown tool: ${toolName}`);
       }

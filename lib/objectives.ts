@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { generateTitleWithGemini } from '@/lib/ai/generate-ticket-title';
+import { isAppFeatureEnabled } from '@/lib/app-features';
 import { parseTicketAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
 import { deriveTitleFromObjective } from '@/lib/helpers/tickets';
 import type { Database, Json } from '@/types/database.types';
@@ -294,14 +295,47 @@ export async function markSubmittedObjectiveExecuting(
   }
 
   if (!existingDraftRow) {
-    const { error: insertDraftError } = await supabase.from('objectives').insert({
-      state: 'draft',
-      objective: '',
-      ticket_id: ticketId,
-      created_by: createdBy ?? null
-    });
-    if (insertDraftError) {
-      throw new Error(insertDraftError.message);
+    const futureObjectivesEnabled = await isAppFeatureEnabled('future-objectives');
+    let promotedFutureToDraft = false;
+
+    if (futureObjectivesEnabled) {
+      const { data: earliestFuture, error: earliestFutureError } = await supabase
+        .from('objectives')
+        .select('id')
+        .eq('ticket_id', ticketId)
+        .eq('state', 'future')
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+      if (earliestFutureError) {
+        throw new Error(earliestFutureError.message);
+      }
+
+      if (earliestFuture) {
+        const { error: promoteError } = await supabase
+          .from('objectives')
+          .update({ state: 'draft', completed_at: null })
+          .eq('id', earliestFuture.id);
+
+        if (promoteError) {
+          throw new Error(promoteError.message);
+        }
+
+        promotedFutureToDraft = true;
+      }
+    }
+
+    if (!promotedFutureToDraft) {
+      const { error: insertDraftError } = await supabase.from('objectives').insert({
+        state: 'draft',
+        objective: '',
+        ticket_id: ticketId,
+        created_by: createdBy ?? null
+      });
+      if (insertDraftError) {
+        throw new Error(insertDraftError.message);
+      }
     }
   }
 

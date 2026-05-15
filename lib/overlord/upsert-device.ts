@@ -50,7 +50,9 @@ export async function upsertDeviceFromProtocol(
     platform: input.platform ?? ''
   });
   const label =
-    typeof labelRow === 'string' && labelRow.length > 0 ? labelRow : `device-${fingerprint.slice(0, 8)}`;
+    typeof labelRow === 'string' && labelRow.length > 0
+      ? labelRow
+      : `device-${fingerprint.slice(0, 8)}`;
 
   const { data: inserted, error } = await supabase
     .from('devices')

@@ -1,9 +1,5 @@
 /**
- * Filesystem IPC handlers — thin delegation layer on top of the unified
- * WorkspaceClient. Local mode uses LocalWorkspaceClient directly. Remote mode
- * resolves a tunnel (see services/remote-tunnel.ts) and uses
- * RemoteWorkspaceClient, so all operations go through a single persistent SSH
- * connection + HTTP helper rather than spawning a fresh ssh process per call.
+ * Filesystem IPC handlers — delegation layer on top of WorkspaceClient (local only).
  */
 
 import { ipcMain } from 'electron';
@@ -25,28 +21,12 @@ import type {
   GitBranchOptions,
   GitDiffOptions,
   ListFilesOptions,
-  SshConnectionConfig,
   WorkspaceClient
 } from '../../../../lib/workspace/types';
-import { resolveRemoteWorkspaceClient, shutdownAllRemoteTunnels } from '../services/remote-tunnel';
-
-const SshConfigSchema = z
-  .object({
-    host: z.string().min(1).max(256),
-    user: z.string().min(1).max(128).optional(),
-    port: z.number().int().min(1).max(65535).optional(),
-    identityFile: z.string().max(4096).optional(),
-    sshCommand: z.string().max(4096).optional()
-  })
-  .passthrough();
 
 const WorkspacePayloadSchema = z
   .object({
-    mode: z.enum(['local', 'remote']).optional(),
-    directory: z.string().max(4096).optional(),
-    remoteDirectory: z.string().max(4096).optional(),
-    ssh: SshConfigSchema.optional(),
-    projectId: z.string().max(256).optional()
+    directory: z.string().max(4096).optional()
   })
   .passthrough();
 
@@ -82,19 +62,9 @@ function safeParseWorkspace(payload: unknown): WorkspacePayload | undefined {
 }
 
 async function resolveClient(payload: WorkspacePayload | undefined): Promise<WorkspaceClient> {
-  const mode = payload?.mode ?? (payload?.ssh ? 'remote' : 'local');
-  if (mode === 'remote') {
-    if (!payload?.ssh) throw new Error('SSH connection config is required.');
-    if (!payload.remoteDirectory?.trim()) throw new Error('Remote working directory is required.');
-    if (!payload.projectId) throw new Error('projectId is required for remote workspaces.');
-    return resolveRemoteWorkspaceClient({
-      projectId: payload.projectId,
-      ssh: payload.ssh as SshConnectionConfig,
-      remoteWorkingDirectory: payload.remoteDirectory
-    });
-  }
-  if (!payload?.directory?.trim()) throw new Error('Local working directory is required.');
-  return new LocalWorkspaceClient(payload.directory);
+  const directory = payload?.directory?.trim();
+  if (!directory) throw new Error('Local working directory is required.');
+  return new LocalWorkspaceClient(directory);
 }
 
 function failure<T extends object>(error: unknown, base: T): T & { error: string } {
@@ -126,24 +96,6 @@ export function registerFilesystemIpc(): void {
       return await client.listProjectFiles(options);
     } catch (error) {
       return failure(error, { files: [], linkedDirectory: null, truncated: false });
-    }
-  });
-
-  ipcMain.handle('filesystem:check-ssh-connection', async (_event, rawPayload?: unknown) => {
-    try {
-      const payload = safeParseWorkspace(rawPayload);
-      if (!payload?.ssh) return { ok: false, error: 'SSH config is required.' };
-      const client = await resolveClient({
-        ...payload,
-        mode: 'remote',
-        remoteDirectory: payload.remoteDirectory ?? '/'
-      });
-      return await client.checkHealth();
-    } catch (error) {
-      return {
-        ok: false,
-        error: error instanceof Error ? error.message : 'SSH connection failed.'
-      };
     }
   });
 
@@ -476,5 +428,5 @@ export function registerFilesystemIpc(): void {
 }
 
 export async function teardownFilesystemIpc(): Promise<void> {
-  await shutdownAllRemoteTunnels();
+  // No remote tunnels to close (local workspace only).
 }

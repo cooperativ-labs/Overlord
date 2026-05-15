@@ -29,12 +29,15 @@ export function useWorkspacePreference({
   projectId,
   workingDirectory,
   sshCommand,
-  remoteWorkingDirectory
+  remoteWorkingDirectory,
+  isElectron = false
 }: {
   projectId?: string | null;
   workingDirectory?: string | null;
   sshCommand?: string | null;
   remoteWorkingDirectory?: string | null;
+  /** Desktop app does not support SSH execution; ignore SSH workspace prefs. */
+  isElectron?: boolean;
 }) {
   const projectSettings = useProjectSettings();
 
@@ -78,10 +81,20 @@ export function useWorkspacePreference({
 
     window.addEventListener(WORKSPACE_CHANGED_EVENT, handleWorkspaceChanged);
     return () => window.removeEventListener(WORKSPACE_CHANGED_EVENT, handleWorkspaceChanged);
-  }, [projectId, projectSettings, readFromStorage]);
+  }, [projectId, projectSettings, readFromStorage, isElectron]);
 
   // When the context is available, use it directly.
   if (projectSettings) {
+    if (isElectron) {
+      return {
+        executionWorkspace: 'local' as const,
+        effectiveWorkingDirectory: projectSettings.effectiveWorkingDirectory,
+        effectiveSshCommand: null,
+        effectiveRemoteWorkingDirectory: null,
+        hasLocalDirectory: projectSettings.hasLocalDirectory,
+        hasSshDirectory: projectSettings.hasSshDirectory
+      };
+    }
     return {
       executionWorkspace: projectSettings.executionWorkspace,
       effectiveWorkingDirectory: projectSettings.effectiveWorkingDirectory,
@@ -99,6 +112,17 @@ export function useWorkspacePreference({
     typeof remoteWorkingDirectory === 'string' && remoteWorkingDirectory.trim().length > 0
       ? remoteWorkingDirectory.trim()
       : null;
+
+  if (isElectron) {
+    return {
+      executionWorkspace: 'local' as const,
+      effectiveWorkingDirectory: localDir,
+      effectiveSshCommand: null,
+      effectiveRemoteWorkingDirectory: null,
+      hasLocalDirectory,
+      hasSshDirectory
+    };
+  }
 
   return {
     executionWorkspace: storageBased,
