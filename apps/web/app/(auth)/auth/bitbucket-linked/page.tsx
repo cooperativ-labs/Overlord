@@ -1,6 +1,6 @@
 import Link from 'next/link';
 
-import { BitbucketIcon } from '@/components/features/account/bitbucket-icon';
+import { BitbucketIcon } from '@/components/brand-icons/bitbucket-icon';
 import { Button } from '@/components/ui/button';
 import {
   Card,

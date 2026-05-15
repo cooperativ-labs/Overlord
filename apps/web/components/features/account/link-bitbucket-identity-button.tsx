@@ -6,7 +6,7 @@ import { type ButtonLoadingState, LoadingButton } from '@/components/ui/loading-
 import { linkBitbucketIdentityAction } from '@/lib/actions/account';
 import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
 
-import { BitbucketIcon } from './bitbucket-icon';
+import { BitbucketIcon } from '../../brand-icons/bitbucket-icon';
 
 const linkBitbucketIdentityActionWithRetry = withElectronActionRetry(linkBitbucketIdentityAction);
 

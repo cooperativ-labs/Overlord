@@ -1,8 +1,8 @@
 'use client';
 
-import { Github } from 'lucide-react';
 import * as React from 'react';
 
+import { GithubIcon } from '@/components/brand-icons/github-icon';
 import { type ButtonLoadingState, LoadingButton } from '@/components/ui/loading-button';
 import { linkGithubIdentityAction } from '@/lib/actions/account';
 import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
@@ -50,7 +50,7 @@ export function LinkGithubIdentityButton({ className }: LinkGithubIdentityButton
         onClick={handleConnect}
         text={
           <span className="flex items-center justify-center gap-2">
-            <Github className="size-4" />
+            <GithubIcon className="size-4" />
             Connect GitHub
           </span>
         }

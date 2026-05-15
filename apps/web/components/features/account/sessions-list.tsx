@@ -1,9 +1,10 @@
 'use client';
 
-import { Github, Globe, Mail } from 'lucide-react';
+import { Globe, Mail } from 'lucide-react';
 import type { ReactNode } from 'react';
 
-import { BitbucketIcon } from '@/components/features/account/bitbucket-icon';
+import { BitbucketIcon } from '../../brand-icons/bitbucket-icon';
+import { GithubIcon } from '../../brand-icons/github-icon';
 import { DisconnectIdentityButton } from '@/components/features/account/disconnect-identity-button';
 import type { OAuthIdentity } from '@/lib/actions/account';
 
@@ -23,7 +24,7 @@ const PROVIDER_LABELS: Record<string, string> = {
 function ProviderIcon({ provider }: { provider: string }): ReactNode {
   switch (provider) {
     case 'github':
-      return <Github className="size-4" />;
+      return <GithubIcon className="size-4" />;
     case 'bitbucket':
       return <BitbucketIcon className="size-4" />;
     case 'email':
