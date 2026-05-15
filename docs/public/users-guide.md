@@ -50,8 +50,8 @@ ovld restart codex
 Agent protocol commands live under `ovld protocol`. They are the stable lifecycle surface agents should use after receiving a ticket.
 
 ### MCP Server
-
 The MCP server gives remote or hosted agent runtimes a tool-based way to work with Overlord. It is useful when an agent is not running through the local desktop app or a local terminal connector.
+You can access the full tool documentation [here](https://www.ovld.ai/.well-known/overlord-mcp-tools.json).
 
 Use cases include:
 
