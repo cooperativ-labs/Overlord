@@ -2,6 +2,32 @@
 
 All notable changes to this project will be documented in this file.
 
+## [5.2605151717.0] - 2026-05-15:17:17
+
+### Added
+- New project resources system for registering device-bound checkout paths and managing resource directories across the web app, CLI, and hosted MCP.
+- Device identity support so Overlord can register a workstation per organization and keep its resources tied to that machine.
+- New protocol and MCP operations for `get-device`, `update-device`, `list-project-resources`, `add-project-resource`, and `update-project-resource`.
+
+### Fixed
+- None.
+
+### Changed
+- Replace the old SSH/remote tunnel workspace flow with local device and resource-directory management.
+- Update project settings and execution workspace selection to surface resource directories directly in the product UI.
+
+### Security
+- None.
+
+### Test
+- Add coverage for resource directory labels.
+
+### Documentation
+- Update CLI and agent-facing docs to describe the new resource system and device-scoped checkout paths.
+
+### Chore
+- Bump the workspace and `overlord-cli` versions for the release.
+
 ## [5.2605151440.0] - 2026-05-15:14:40
 
 ### Added
