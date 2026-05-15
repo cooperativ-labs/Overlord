@@ -137,7 +137,16 @@ const AGENT_LABELS: Record<string, string> = {
   opencode: 'OpenCode'
 };
 
-function getAgentSelectorLabel(agentValue: AgentTypeValue): string {
+const COPY_AGENT_LABELS: Record<Extract<AgentSelectorValue, `copy-${string}`>, string> = {
+  'copy-local': 'For Local',
+  'copy-cloud': 'For Cloud',
+  'copy-terminal': 'For Terminal'
+};
+
+export function getAgentSelectorLabel(agentValue: AgentSelectorValue): string {
+  if (agentValue in COPY_AGENT_LABELS) {
+    return COPY_AGENT_LABELS[agentValue as keyof typeof COPY_AGENT_LABELS];
+  }
   return getAgentTypeByValue(agentValue).label;
 }
 
@@ -278,7 +287,7 @@ function AgentNameWithLogo({
   label: string;
   iconClassName?: string;
 }) {
-  if (agent === 'copy-local' || agent === 'copy-cloud') {
+  if (agent in COPY_AGENT_LABELS) {
     return <span>{label}</span>;
   }
 

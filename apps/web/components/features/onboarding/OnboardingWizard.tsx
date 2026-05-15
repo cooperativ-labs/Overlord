@@ -1,7 +1,7 @@
 'use client';
 
 import * as Sentry from '@sentry/nextjs';
-import { Building2, FolderKanban, FolderSearch } from 'lucide-react';
+import { FolderKanban, FolderSearch } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useRef, useState } from 'react';
 
@@ -185,11 +185,29 @@ export function OnboardingWizard({ initialState }: OnboardingWizardProps) {
     setProjectButtonState('loading');
     setProjectError(null);
     try {
+      let deviceIdentity: { deviceFingerprint: string; hostname: string; platform: string } | null =
+        null;
+      if (isElectron && api?.app?.getDeviceIdentity) {
+        try {
+          deviceIdentity = await api.app.getDeviceIdentity();
+        } catch (error) {
+          Sentry.captureException(error);
+          console.error('handleCreateProject:getDeviceIdentity', error);
+        }
+      }
+
       await createFirstProjectWithDirectoryWithRetry({
         organizationId,
         name: trimmedName,
         color: projectColor,
-        workingDirectory: workingDirectory.trim() || null
+        workingDirectory: workingDirectory.trim() || null,
+        ...(deviceIdentity
+          ? {
+              deviceFingerprint: deviceIdentity.deviceFingerprint,
+              deviceHostname: deviceIdentity.hostname,
+              devicePlatform: deviceIdentity.platform
+            }
+          : {})
       });
       setProjectButtonState('success');
       await updateOnboardingProgressActionWithRetry({ completedStep: 4, skipped: true });
