@@ -53,6 +53,7 @@ export type RecordWorkParams = {
   metadata: Json;
   organizationId: number;
   userId?: string;
+  deviceId?: string | null;
 };
 
 /**
@@ -85,7 +86,8 @@ export async function runRecordWorkProtocol(supabase: RecordClient, params: Reco
     connectionMethod,
     metadata,
     organizationId,
-    userId
+    userId,
+    deviceId
   } = params;
 
   // Project resolution: explicit projectId wins; else try workingDirectory; else require `personal`.
@@ -98,7 +100,8 @@ export async function runRecordWorkProtocol(supabase: RecordClient, params: Reco
       supabase,
       organizationId,
       workingDirectory,
-      userId ?? null
+      userId ?? null,
+      deviceId ?? null
     );
     resolvedProjectId = matched?.id;
   }

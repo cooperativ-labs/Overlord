@@ -36,6 +36,7 @@ export type SpawnParams = {
   metadata: Json;
   organizationId: number;
   userId?: string;
+  deviceId?: string | null;
 };
 
 /**
@@ -64,7 +65,8 @@ export async function runSpawnProtocol(supabase: SpawnClient, params: SpawnParam
     connectionMethod,
     metadata,
     organizationId,
-    userId
+    userId,
+    deviceId
   } = params;
 
   // Resolve project — use provided projectId, then try workingDirectory, then fall back to first in org
@@ -75,7 +77,8 @@ export async function runSpawnProtocol(supabase: SpawnClient, params: SpawnParam
       supabase,
       organizationId,
       workingDirectory,
-      userId ?? null
+      userId ?? null,
+      deviceId ?? null
     );
     resolvedProjectId = matched?.id;
   }

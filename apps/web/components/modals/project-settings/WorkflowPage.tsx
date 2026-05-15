@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 import { ProjectStatusSettings } from '@/components/features/projects/ProjectStatusSettings';
+import { ResourceDirectoryList } from '@/components/features/projects/ResourceDirectoryList';
 import { useElectron } from '@/components/features/terminal/useElectron';
 import { Button } from '@/components/ui/button';
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
@@ -415,6 +416,11 @@ export function WorkflowPage({
           ) : null}
         </div>
       ) : null}
+
+      <div className="mt-4">
+        <ResourceDirectoryList projectId={projectId} />
+      </div>
+
 
       {sshFeatureEnabled ? (
         <div className="grid gap-2">

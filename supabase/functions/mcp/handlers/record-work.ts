@@ -7,12 +7,19 @@ import { type TokenContext } from '../auth.ts';
 import { scheduleGenerateFeedPost } from '../helpers/invoke-generate-feed-post.ts';
 import { toolErr, toolOk } from '../rpc.ts';
 
+import { upsertDeviceFromProtocol } from './_device-upsert.ts';
 import { insertChangeRationales } from './_change-rationales.ts';
 import { resolvePreferredStatusNameByType } from './_status-resolution.ts';
 import { resolveTicketCreatorUserId } from './_ticket-creator.ts';
 
 type ProjectUserJoinRow = {
   local_working_directory: string | null;
+  projects: { id: string; name: string; organization_id: number } | null;
+};
+
+type ResourceDirectoryRow = {
+  directory_path: string;
+  device_id: string | null;
   projects: { id: string; name: string; organization_id: number } | null;
 };
 
@@ -29,44 +36,74 @@ function normalizeDirPath(dir: string): string {
   return normalized.toLowerCase();
 }
 
+function pickBestPathMatch<T>(
+  rows: T[],
+  normalizedCwd: string,
+  getPath: (row: T) => string | null | undefined
+): T | null {
+  const exact = rows.find(row => {
+    const p = getPath(row);
+    return p ? normalizeDirPath(p) === normalizedCwd : false;
+  });
+  if (exact) return exact;
+  let best: { row: T; length: number } | null = null;
+  for (const row of rows) {
+    const p = getPath(row);
+    if (!p) continue;
+    const normalizedDir = normalizeDirPath(p);
+    if (normalizedCwd.startsWith(normalizedDir + '/')) {
+      if (!best || normalizedDir.length > best.length) {
+        best = { row, length: normalizedDir.length };
+      }
+    }
+  }
+  return best?.row ?? null;
+}
+
 async function resolveProjectByWorkingDirectory(
   supabase: SupabaseClient,
   organizationId: number,
   workingDirectory: string,
-  userId: string | null
+  userId: string | null,
+  deviceId: string | null
 ) {
+  const normalizedCwd = normalizeDirPath(workingDirectory);
+
+  if (userId) {
+    if (deviceId) {
+      const { data } = await supabase
+        .from('project_resource_directories')
+        .select('directory_path, device_id, projects!inner(id, name, organization_id)')
+        .eq('user_id', userId)
+        .eq('device_id', deviceId)
+        .eq('projects.organization_id', organizationId);
+      const rows = (data ?? []) as unknown as ResourceDirectoryRow[];
+      const match = pickBestPathMatch(rows, normalizedCwd, r => r.directory_path);
+      if (match?.projects) return match.projects;
+    }
+
+    const { data } = await supabase
+      .from('project_resource_directories')
+      .select('directory_path, device_id, projects!inner(id, name, organization_id)')
+      .eq('user_id', userId)
+      .eq('projects.organization_id', organizationId);
+    const rows = (data ?? []) as unknown as ResourceDirectoryRow[];
+    const match = pickBestPathMatch(rows, normalizedCwd, r => r.directory_path);
+    if (match?.projects) return match.projects;
+  }
+
   let query = supabase
     .from('project_user')
     .select('local_working_directory, projects!inner(id, name, organization_id)')
     .eq('projects.organization_id', organizationId)
     .not('local_working_directory', 'is', null);
-
   if (userId) {
     query = query.eq('user_id', userId);
   }
-
   const { data } = await query;
   const rows = (data ?? []) as unknown as ProjectUserJoinRow[];
-  if (rows.length === 0) return null;
-
-  const normalizedCwd = normalizeDirPath(workingDirectory);
-  const exact = rows.find(
-    row =>
-      row.local_working_directory && normalizeDirPath(row.local_working_directory) === normalizedCwd
-  );
-  if (exact?.projects) return exact.projects;
-
-  let best: { row: ProjectUserJoinRow; length: number } | null = null;
-  for (const row of rows) {
-    if (!row.local_working_directory) continue;
-    const normalizedProjectDir = normalizeDirPath(row.local_working_directory);
-    if (normalizedCwd.startsWith(normalizedProjectDir + '/')) {
-      if (!best || normalizedProjectDir.length > best.length) {
-        best = { row, length: normalizedProjectDir.length };
-      }
-    }
-  }
-  if (best?.row.projects) return best.row.projects;
+  const match = pickBestPathMatch(rows, normalizedCwd, r => r.local_working_directory);
+  if (match?.projects) return match.projects;
   return null;
 }
 
@@ -93,7 +130,10 @@ export async function handleRecordWork(supabase: SupabaseClient, args: any, ctx:
     workingDirectory,
     delegate = null,
     agentIdentifier = 'unknown',
-    metadata = {}
+    metadata = {},
+    deviceFingerprint = null,
+    deviceHostname = null,
+    devicePlatform = null
   } = args;
 
   if (typeof objective !== 'string' || !objective.trim()) {
@@ -104,6 +144,17 @@ export async function handleRecordWork(supabase: SupabaseClient, args: any, ctx:
   }
 
   const { organizationId } = ctx;
+
+  let deviceId: string | null = null;
+  if (ctx.userId && typeof deviceFingerprint === 'string' && deviceFingerprint.trim()) {
+    deviceId = await upsertDeviceFromProtocol(supabase, {
+      organizationId,
+      userId: ctx.userId,
+      deviceFingerprint: deviceFingerprint.trim(),
+      hostname: typeof deviceHostname === 'string' ? deviceHostname : null,
+      platform: typeof devicePlatform === 'string' ? devicePlatform : null
+    });
+  }
 
   // Project resolution
   let resolvedProjectId: string | undefined = explicitProjectId;
@@ -117,7 +168,8 @@ export async function handleRecordWork(supabase: SupabaseClient, args: any, ctx:
       supabase,
       organizationId,
       workingDirectory,
-      ctx.userId ?? null
+      ctx.userId ?? null,
+      deviceId
     );
     resolvedProjectId = matched?.id;
   }

@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 
 import { internalErrorResponse, parseProtocolBody } from '@/app/api/protocol/_lib';
 import { runRecordWorkProtocol } from '@/lib/overlord/protocol-record-work';
+import { upsertDeviceFromProtocol } from '@/lib/overlord/upsert-device';
 import { recordWorkSchema } from '@/lib/overlord/validation';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 import type { Database } from '@/types/database.types';
@@ -28,9 +29,23 @@ export async function POST(request: Request) {
       delegate,
       agentIdentifier,
       connectionMethod,
-      metadata
+      metadata,
+      deviceFingerprint,
+      deviceHostname,
+      devicePlatform
     } = parsed.data;
     const { organizationId, userId } = parsed.tokenContext;
+
+    let deviceId: string | null = null;
+    if (userId && deviceFingerprint) {
+      deviceId = await upsertDeviceFromProtocol(supabase, {
+        organizationId,
+        userId,
+        deviceFingerprint,
+        hostname: deviceHostname ?? null,
+        platform: devicePlatform ?? null
+      });
+    }
 
     const result = await runRecordWorkProtocol(supabase, {
       title,
@@ -50,7 +65,8 @@ export async function POST(request: Request) {
       connectionMethod,
       metadata: metadata as Record<string, never>,
       organizationId,
-      userId
+      userId,
+      deviceId
     });
 
     if (result.error) {

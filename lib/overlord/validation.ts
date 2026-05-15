@@ -268,7 +268,10 @@ export const recordWorkSchema = z.object({
   delegate: z.string().trim().max(120).optional(),
   agentIdentifier: z.string().trim().min(1).max(120),
   connectionMethod: connectionMethodSchema.default('rest'),
-  metadata: z.record(z.string(), z.unknown()).optional().default({})
+  metadata: z.record(z.string(), z.unknown()).optional().default({}),
+  deviceFingerprint: z.string().trim().max(128).optional(),
+  deviceHostname: z.string().trim().max(256).optional(),
+  devicePlatform: z.string().trim().max(64).optional()
 });
 
 /** spawn: create a new ticket and immediately connect to it */
@@ -287,12 +290,23 @@ export const spawnSchema = z.object({
   parentTicketId: z.string().optional(),
   agentIdentifier: z.string().trim().min(1).max(120),
   connectionMethod: connectionMethodSchema.default('rest'),
-  metadata: z.record(z.string(), z.unknown()).optional().default({})
+  metadata: z.record(z.string(), z.unknown()).optional().default({}),
+  deviceFingerprint: z.string().trim().max(128).optional(),
+  deviceHostname: z.string().trim().max(256).optional(),
+  devicePlatform: z.string().trim().max(64).optional()
 });
+
+/** Optional device-identifying fields accepted on protocol calls. */
+const deviceFingerprintSchema = z.string().trim().max(128).optional();
+const deviceHostnameSchema = z.string().trim().max(256).optional();
+const devicePlatformSchema = z.string().trim().max(64).optional();
 
 /** discover-project: resolve a project from working directory */
 export const discoverProjectSchema = z.object({
-  workingDirectory: z.string().trim().min(1).max(1024)
+  workingDirectory: z.string().trim().min(1).max(1024),
+  deviceFingerprint: deviceFingerprintSchema,
+  deviceHostname: deviceHostnameSchema,
+  devicePlatform: devicePlatformSchema
 });
 
 export const attachmentPrepareUploadSchema = z.object({
