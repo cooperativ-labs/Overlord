@@ -25,6 +25,18 @@ export type ElectronCredentials = {
   user_email?: string;
 };
 
+type StoredCredentialsRecord = {
+  encrypted_access_token?: string;
+  encrypted_refresh_token?: string;
+  access_token?: string;
+  refresh_token?: string;
+  supabase_refresh_token?: string;
+  platform_url?: string;
+  access_token_expires_at?: string;
+  organization_id?: number;
+  user_email?: string;
+};
+
 function ensureOvldDir(): void {
   fs.mkdirSync(OVLD_DIR, { recursive: true, mode: 0o700 });
 }
@@ -100,59 +112,90 @@ function hasOrganizationId(organizationId: number | null | undefined): boolean {
   return typeof organizationId === 'number' && Number.isFinite(organizationId);
 }
 
-function decryptLegacyElectronCredentials(): ElectronCredentials | null {
-  const parsed = readJsonFile(LEGACY_ELECTRON_FILE) as {
-    encrypted_access_token?: string;
-    encrypted_refresh_token?: string;
-    access_token?: string;
-    refresh_token?: string;
-    platform_url?: string;
-    access_token_expires_at?: string;
-    organization_id?: number;
-    user_email?: string;
-  } | null;
-
-  if (!parsed?.platform_url) return null;
-
-  let accessToken = typeof parsed.access_token === 'string' ? parsed.access_token.trim() : '';
-  if (!accessToken && parsed.encrypted_access_token && safeStorage.isEncryptionAvailable()) {
-    try {
-      accessToken = safeStorage.decryptString(Buffer.from(parsed.encrypted_access_token, 'base64'));
-    } catch {
-      accessToken = '';
-    }
+async function isAsyncEncryptionAvailable(): Promise<boolean> {
+  try {
+    return await safeStorage.isAsyncEncryptionAvailable();
+  } catch {
+    return false;
   }
-
-  let refreshToken = typeof parsed.refresh_token === 'string' ? parsed.refresh_token.trim() : '';
-  if (!refreshToken && parsed.encrypted_refresh_token && safeStorage.isEncryptionAvailable()) {
-    try {
-      refreshToken = safeStorage.decryptString(
-        Buffer.from(parsed.encrypted_refresh_token, 'base64')
-      );
-    } catch {
-      refreshToken = '';
-    }
-  }
-
-  return parseCredentials({
-    ...parsed,
-    access_token: accessToken || parsed.access_token,
-    refresh_token: refreshToken || parsed.refresh_token
-  });
 }
 
-function migrateLegacyCredentials(): ElectronCredentials | null {
+async function decryptStoredValue(
+  plainText: string,
+  encryptedValue: string | undefined,
+  encryptionAvailable: boolean
+): Promise<{ value: string; shouldReEncrypt: boolean }> {
+  if (plainText) {
+    return { value: plainText, shouldReEncrypt: false };
+  }
+
+  if (!encryptedValue || !encryptionAvailable) {
+    return { value: '', shouldReEncrypt: false };
+  }
+
+  try {
+    const decrypted = await safeStorage.decryptStringAsync(Buffer.from(encryptedValue, 'base64'));
+    return {
+      value: decrypted.result,
+      shouldReEncrypt: decrypted.shouldReEncrypt
+    };
+  } catch {
+    return { value: '', shouldReEncrypt: false };
+  }
+}
+
+async function parseStoredCredentials(
+  parsed: StoredCredentialsRecord | null
+): Promise<{ credentials: ElectronCredentials | null; shouldReEncrypt: boolean }> {
+  if (!parsed?.platform_url) {
+    return { credentials: null, shouldReEncrypt: false };
+  }
+
+  const encryptionAvailable = await isAsyncEncryptionAvailable();
+  const accessToken = await decryptStoredValue(
+    typeof parsed.access_token === 'string' ? parsed.access_token.trim() : '',
+    parsed.encrypted_access_token,
+    encryptionAvailable
+  );
+  const refreshToken = await decryptStoredValue(
+    typeof parsed.refresh_token === 'string'
+      ? parsed.refresh_token.trim()
+      : typeof parsed.supabase_refresh_token === 'string'
+        ? parsed.supabase_refresh_token.trim()
+        : '',
+    parsed.encrypted_refresh_token,
+    encryptionAvailable
+  );
+
+  return {
+    credentials: parseCredentials({
+      ...parsed,
+      access_token: accessToken.value || parsed.access_token,
+      refresh_token: refreshToken.value || parsed.refresh_token || parsed.supabase_refresh_token
+    }),
+    shouldReEncrypt: accessToken.shouldReEncrypt || refreshToken.shouldReEncrypt
+  };
+}
+
+async function decryptLegacyElectronCredentials(): Promise<ElectronCredentials | null> {
+  const parsed = readJsonFile(LEGACY_ELECTRON_FILE) as StoredCredentialsRecord | null;
+
+  const { credentials } = await parseStoredCredentials(parsed);
+  return credentials;
+}
+
+async function migrateLegacyCredentials(): Promise<ElectronCredentials | null> {
   if (credentialsProfile === 'dev') return null;
   if (fileExists(LEGACY_MIGRATION_MARKER)) return null;
 
   const legacyShared = parseCredentials(readJsonFile(LEGACY_CREDENTIALS_FILE));
-  const legacyEncrypted = decryptLegacyElectronCredentials();
+  const legacyEncrypted = await decryptLegacyElectronCredentials();
   const source = legacyShared ?? legacyEncrypted;
 
   if (!source) return null;
 
   try {
-    writeDesktopCredentials(source);
+    await writeDesktopCredentials(source);
     ensureOvldDir();
     fs.writeFileSync(LEGACY_MIGRATION_MARKER, new Date().toISOString(), { mode: FILE_MODE });
   } catch {
@@ -162,7 +205,7 @@ function migrateLegacyCredentials(): ElectronCredentials | null {
   return source;
 }
 
-function writeDesktopCredentials(credentials: ElectronCredentials): void {
+async function writeDesktopCredentials(credentials: ElectronCredentials): Promise<void> {
   const payload: Record<string, unknown> = {
     platform_url: credentials.platform_url,
     updated_at: new Date().toISOString(),
@@ -177,76 +220,50 @@ function writeDesktopCredentials(credentials: ElectronCredentials): void {
     ...(credentials.user_email ? { user_email: credentials.user_email } : {})
   };
 
-  if (safeStorage.isEncryptionAvailable()) {
+  if (await isAsyncEncryptionAvailable()) {
     if (credentials.access_token) {
-      payload.encrypted_access_token = safeStorage
-        .encryptString(credentials.access_token)
-        .toString('base64');
+      payload.encrypted_access_token = (
+        await safeStorage.encryptStringAsync(credentials.access_token)
+      ).toString('base64');
     }
     if (credentials.refresh_token) {
-      payload.encrypted_refresh_token = safeStorage
-        .encryptString(credentials.refresh_token)
-        .toString('base64');
+      payload.encrypted_refresh_token = (
+        await safeStorage.encryptStringAsync(credentials.refresh_token)
+      ).toString('base64');
     }
   }
 
   writeJsonFileAtomic(getDesktopCredentialsFile(), payload);
 }
 
-export function loadElectronCredentials(): ElectronCredentials | null {
+export async function loadElectronCredentials(): Promise<ElectronCredentials | null> {
   try {
-    const desktopCredentials = readDesktopCredentials();
+    const desktopCredentials = await readDesktopCredentials();
     if (desktopCredentials) return desktopCredentials;
 
-    return migrateLegacyCredentials();
+    return await migrateLegacyCredentials();
   } catch {
     return null;
   }
 }
 
-function readDesktopCredentials(): ElectronCredentials | null {
-  const parsed = readJsonFile(getDesktopCredentialsFile()) as {
-    encrypted_access_token?: string;
-    encrypted_refresh_token?: string;
-    access_token?: string;
-    refresh_token?: string;
-    platform_url?: string;
-    access_token_expires_at?: string;
-    organization_id?: number;
-    user_email?: string;
-  } | null;
+async function readDesktopCredentials(): Promise<ElectronCredentials | null> {
+  const parsed = readJsonFile(getDesktopCredentialsFile()) as StoredCredentialsRecord | null;
+  const { credentials, shouldReEncrypt } = await parseStoredCredentials(parsed);
 
-  if (!parsed?.platform_url) return null;
-
-  let accessToken = typeof parsed.access_token === 'string' ? parsed.access_token.trim() : '';
-  if (!accessToken && parsed.encrypted_access_token && safeStorage.isEncryptionAvailable()) {
+  if (credentials && shouldReEncrypt) {
     try {
-      accessToken = safeStorage.decryptString(Buffer.from(parsed.encrypted_access_token, 'base64'));
+      await writeDesktopCredentials(credentials);
     } catch {
-      accessToken = '';
+      // Best-effort re-encryption.
     }
   }
 
-  let refreshToken = typeof parsed.refresh_token === 'string' ? parsed.refresh_token.trim() : '';
-  if (!refreshToken && parsed.encrypted_refresh_token && safeStorage.isEncryptionAvailable()) {
-    try {
-      refreshToken = safeStorage.decryptString(
-        Buffer.from(parsed.encrypted_refresh_token, 'base64')
-      );
-    } catch {
-      refreshToken = '';
-    }
-  }
-
-  return parseCredentials({
-    ...parsed,
-    access_token: accessToken || parsed.access_token,
-    refresh_token: refreshToken || parsed.refresh_token
-  });
+  return credentials;
 }
 
-export function saveElectronCredentials(credentials: ElectronCredentials): void {
-  writeDesktopCredentials(credentials);
+export async function saveElectronCredentials(credentials: ElectronCredentials): Promise<void> {
+  await writeDesktopCredentials(credentials);
 }
 
 export function clearElectronCredentials(): void {

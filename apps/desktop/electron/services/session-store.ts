@@ -1,5 +1,6 @@
 import {
   clearElectronCredentials,
+  type ElectronCredentials,
   loadElectronCredentials,
   saveElectronCredentials
 } from './electron-credentials';
@@ -51,7 +52,7 @@ function normalizeSession(session: ElectronSession | null): ElectronSession | nu
 }
 
 function sessionFromCredentials(
-  credentials: ReturnType<typeof loadElectronCredentials>
+  credentials: Awaited<ReturnType<typeof loadElectronCredentials>>
 ): ElectronSession | null {
   if (!credentials?.platform_url?.trim() || !credentials.refresh_token?.trim()) {
     return null;
@@ -71,9 +72,7 @@ function sessionFromCredentials(
   });
 }
 
-function credentialsFromSession(
-  session: ElectronSession
-): Parameters<typeof saveElectronCredentials>[0] {
+function credentialsFromSession(session: ElectronSession): ElectronCredentials {
   return {
     platform_url: session.platformUrl,
     refresh_token: session.refreshToken,
@@ -90,44 +89,44 @@ function credentialsFromSession(
 
 export type ElectronSessionStore = {
   getSession: () => ElectronSession | null;
-  setSession: (session: ElectronSession) => ElectronSession | null;
-  updateSession: (patch: Partial<ElectronSession>) => ElectronSession | null;
+  setSession: (session: ElectronSession) => Promise<ElectronSession | null>;
+  updateSession: (patch: Partial<ElectronSession>) => Promise<ElectronSession | null>;
   clear: () => void;
 };
 
-export function createElectronSessionStore(
+export async function createElectronSessionStore(
   options: SessionStoreOptions = {}
-): ElectronSessionStore {
+): Promise<ElectronSessionStore> {
   const persistence: SessionPersistenceAdapter = {
     load: options.load ?? DEFAULT_PERSISTENCE.load,
     save: options.save ?? DEFAULT_PERSISTENCE.save,
     clear: options.clear ?? DEFAULT_PERSISTENCE.clear
   };
 
-  let session = sessionFromCredentials(persistence.load());
+  let session = sessionFromCredentials(await persistence.load());
 
-  const persist = (nextSession: ElectronSession | null) => {
+  const persist = async (nextSession: ElectronSession | null): Promise<void> => {
     if (!nextSession) {
       persistence.clear();
       return;
     }
 
-    persistence.save(credentialsFromSession(nextSession));
+    await persistence.save(credentialsFromSession(nextSession));
   };
 
   return {
     getSession: () => cloneSession(session),
-    setSession: (nextSession: ElectronSession) => {
+    setSession: async (nextSession: ElectronSession) => {
       const normalized = normalizeSession(nextSession);
       if (!normalized) {
         return cloneSession(session);
       }
 
-      persist(normalized);
+      await persist(normalized);
       session = normalized;
       return cloneSession(session);
     },
-    updateSession: (patch: Partial<ElectronSession>) => {
+    updateSession: async (patch: Partial<ElectronSession>) => {
       if (!session) return null;
 
       const normalized = normalizeSession({
@@ -136,7 +135,7 @@ export function createElectronSessionStore(
       });
       if (!normalized) return cloneSession(session);
 
-      persist(normalized);
+      await persist(normalized);
       session = normalized;
       return cloneSession(session);
     },

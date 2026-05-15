@@ -107,7 +107,7 @@ export function createRefreshController({
         throw new Error('OAuth refresh did not return an access token.');
       }
 
-      const nextSession = store.updateSession({
+      const nextSession = await store.updateSession({
         accessToken: refreshed.accessToken,
         accessTokenExpiresAt: normalizeAccessTokenExpiresAt(refreshed),
         refreshToken: refreshed.refreshToken ?? session.refreshToken

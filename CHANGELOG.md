@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [5.2605151257.0] - 2026-05-15:12:57
+
+### Added
+- None.
+
+### Fixed
+- Resolve desktop login and agent-launch races by awaiting credential persistence through the async session store and auth IPC paths.
+
+### Changed
+- Initialize the desktop **Electron** session store after **`app.whenReady()`** so startup always loads persisted OAuth credentials before registering auth IPC.
+
+### Security
+- Migrate desktop OAuth token storage to Electron **async** **`safeStorage`** encrypt/decrypt APIs (compatible with Electron 42+).
+- Re-encrypt stored desktop credentials on load when Electron reports decrypted values are stale.
+
+### Test
+- Add **`desktop-electron-credentials.test.ts`** covering async decrypt, stale-token re-encryption, and legacy **`supabase_refresh_token`** field reads.
+
+### Chore
+- Bump workspace to **`5.2605151257.0`** and **`overlord-cli`** to **`0.2605151257.0`**.
+
 ## [5.2605150751.0] - 2026-05-15:07:51
 
 ### Added

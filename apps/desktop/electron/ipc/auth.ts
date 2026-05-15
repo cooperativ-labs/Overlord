@@ -242,7 +242,7 @@ type RendererSessionResponse = {
 
 async function performLogin(
   platformUrl: string,
-  saveSession: (session: ElectronSession) => void
+  saveSession: (session: ElectronSession) => Promise<ElectronSession | null>
 ): Promise<RendererSessionResponse> {
   // 1. Discover OAuth config from the platform
   const {
@@ -306,7 +306,7 @@ async function performLogin(
   const defaultOrganizationId = organizations[0]?.id ?? null;
 
   // 10. Persist credentials including refresh token for session renewal
-  saveSession({
+  await saveSession({
     platformUrl: resolvedPlatformUrl,
     accessToken: supabaseTokens.access_token,
     accessTokenExpiresAt: computeAccessTokenExpiresAt(supabaseTokens),
@@ -325,13 +325,13 @@ async function performLogin(
 
 type RegisterAuthIpcOptions = {
   getPlatformUrl: () => string;
-  sessionStore?: ReturnType<typeof createElectronSessionStore>;
+  sessionStore: Awaited<ReturnType<typeof createElectronSessionStore>>;
   refreshController?: ReturnType<typeof createRefreshController>;
 };
 
 export function registerAuthIpc({
   getPlatformUrl,
-  sessionStore = createElectronSessionStore(),
+  sessionStore,
   refreshController = createRefreshController({
     store: sessionStore,
     refreshTokens: async ({ platformUrl, refreshToken }) => {

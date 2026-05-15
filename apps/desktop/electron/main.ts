@@ -35,7 +35,7 @@ import {
   unregisterQuickTaskHotkey
 } from './services/quick-task-window';
 import { createRefreshController } from './services/refresh-controller';
-import { createElectronSessionStore } from './services/session-store';
+import { createElectronSessionStore, type ElectronSessionStore } from './services/session-store';
 import { SupabaseManager } from './services/supabase-manager';
 // Baked-in production runtime vars (generated from an explicit allowlist before build).
 // In dev mode, the committed default file exports an empty object.
@@ -49,18 +49,6 @@ let unsubscribeAppMenu: (() => void) | null = null;
 let platformUrl = '';
 let connectorUrl = '';
 const supabaseManager = new SupabaseManager();
-const sessionStore = createElectronSessionStore();
-const refreshController = createRefreshController({
-  store: sessionStore,
-  refreshTokens: async ({ platformUrl: currentPlatformUrl, refreshToken }) => {
-    const sessionToken = await refreshOAuthTokens(currentPlatformUrl, refreshToken);
-    return {
-      accessToken: sessionToken.access_token,
-      refreshToken: sessionToken.refresh_token,
-      accessTokenExpiresAt: computeAccessTokenExpiresAt(sessionToken)
-    };
-  }
-});
 const appUpdater = new AppUpdaterService({
   isPackaged: app.isPackaged,
   currentVersion: app.getVersion()
@@ -370,6 +358,19 @@ app.whenReady().then(async () => {
   }
   process.env.OVERLORD_PLATFORM_URL = platformUrl;
   process.env.OVERLORD_CONNECTOR_URL = connectorUrl;
+
+  const sessionStore: ElectronSessionStore = await createElectronSessionStore();
+  const refreshController = createRefreshController({
+    store: sessionStore,
+    refreshTokens: async ({ platformUrl: currentPlatformUrl, refreshToken }) => {
+      const sessionToken = await refreshOAuthTokens(currentPlatformUrl, refreshToken);
+      return {
+        accessToken: sessionToken.access_token,
+        refreshToken: sessionToken.refresh_token,
+        accessTokenExpiresAt: computeAccessTokenExpiresAt(sessionToken)
+      };
+    }
+  });
 
   writeLocalRuntime(connectorUrl, localSecret);
 

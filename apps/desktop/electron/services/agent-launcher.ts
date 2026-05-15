@@ -251,7 +251,7 @@ async function resolveLaunchAuth(input: LaunchAgentInput): Promise<{
   authMode: 'oauth';
   platformUrl: string | null;
 }> {
-  const credentials = loadElectronCredentials();
+  const credentials = await loadElectronCredentials();
   let oauthToken = credentials?.access_token?.trim() ?? '';
   const organizationId =
     organizationIdFromTicketId(input.ticketId) ??
@@ -267,7 +267,7 @@ async function resolveLaunchAuth(input: LaunchAgentInput): Promise<{
       credentials.platform_url,
       credentials.refresh_token
     );
-    saveElectronCredentials({
+    await saveElectronCredentials({
       ...credentials,
       access_token: refreshed.access_token,
       access_token_expires_at: refreshed.access_token_expires_at,
