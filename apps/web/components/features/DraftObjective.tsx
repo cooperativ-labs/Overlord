@@ -129,7 +129,10 @@ export function DraftObjective({
         </div>
       }
       className={cn(
-        'w-full overflow-hidden rounded-xl border border-border/60 transition-all focus-within:ring-1 focus-within:ring-ring/40 min-w-[350px]',
+        'w-full overflow-hidden border rounded-xl transition-all focus-within:ring-1 focus-within:ring-ring/50 min-w-[350px]',
+        isFuture
+          ? 'border-border-500/35 bg-muted/20 opacity-70 focus-within:opacity-100 focus-within:ring-ring/55'
+          : 'border-muted-foreground/20',
         isSubmitted && 'border-sky-400/45 bg-sky-500/3 focus-within:ring-sky-400/30'
       )}
     >
@@ -148,26 +151,37 @@ export function DraftObjective({
           </button>
         </div>
       ) : null} */}
-      <InlineEditField
-        ref={editFieldRef}
-        alwaysEditing
-        autoListContinuation="enter"
-        displayClassName="text-base leading-relaxed"
-        field="objective"
-        fileMentionPaths={fileMentionPaths}
-        initialValue={initialValue}
-        inputClassName="text-base leading-relaxed"
-        multiline
-        objectiveRowId={objectiveId || undefined}
-        objectiveState={objectiveState}
-        placeholder="Click to add an objective…"
-        renderMarkdown
-        seamless
-        textareaMaxHeightPx={DRAFT_OBJECTIVE_EDITOR_MAX_HEIGHT_PX}
-        ticketId={ticketId}
-        variant="textarea"
-        workingDirectory={workingDirectory}
-      />
+      <div
+        className={cn(
+          'relative group/future',
+          isFuture &&
+          'max-h-[3.25rem] overflow-hidden transition-[max-height] duration-200 ease-in-out hover:max-h-[500px] focus-within:max-h-[500px]'
+        )}
+      >
+        <InlineEditField
+          ref={editFieldRef}
+          alwaysEditing
+          autoListContinuation="enter"
+          displayClassName="text-base leading-relaxed"
+          field="objective"
+          fileMentionPaths={fileMentionPaths}
+          initialValue={initialValue}
+          inputClassName={cn("text-base leading-relaxed", isFuture ? 'text-muted-foreground' : '')}
+          multiline
+          objectiveRowId={objectiveId || undefined}
+          objectiveState={objectiveState}
+          placeholder="Click to add an objective…"
+          renderMarkdown
+          seamless
+          textareaMaxHeightPx={DRAFT_OBJECTIVE_EDITOR_MAX_HEIGHT_PX}
+          ticketId={ticketId}
+          variant="textarea"
+          workingDirectory={workingDirectory}
+        />
+        {isFuture ? (
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-background/80 to-transparent transition-opacity duration-200 group-hover/future:opacity-0 group-focus-within/future:opacity-0" />
+        ) : null}
+      </div>
       <div className="border-t border-border/40">
         <ObjectiveAttachmentList
           attachments={attachments}
