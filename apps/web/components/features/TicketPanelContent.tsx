@@ -335,7 +335,7 @@ export async function TicketPanelContent({
           everhourIntegration={everhourIntegration ?? null}
         />
 
-        <div className="flex-1 overflow-y-auto overflow-x-hidden bg-muted/50 pb-10 ">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden bg-bg-subtle pb-10">
           <section className="bg-card py-5">
             <div className="px-5">
               {ticket.delegate ? (

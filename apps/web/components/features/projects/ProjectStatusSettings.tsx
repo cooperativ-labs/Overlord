@@ -310,9 +310,7 @@ export function ProjectStatusSettings({
       <Collapsible open={statusesOpen} onOpenChange={setStatusesOpen} className="rounded-md border">
         <div className="flex items-center justify-between gap-3 px-3 py-2">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-              Task Statuses
-            </p>
+            <p className="eyebrow">Task Statuses</p>
             <p className="mt-1 text-xs text-muted-foreground">
               {statuses.length} statuses define board columns across this organization.
             </p>

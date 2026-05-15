@@ -35,9 +35,7 @@ export function LiveFileChanges({
   return (
     <section>
       <div className="mb-3 flex items-center justify-between gap-2">
-        <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-          File Changes
-        </h2>
+        <h2 className="eyebrow">File Changes</h2>
         {currentChangesHref ? (
           <Button asChild size="sm" variant="outline" className="h-7 gap-1.5 px-2 text-[11px]">
             <Link href={currentChangesHref}>

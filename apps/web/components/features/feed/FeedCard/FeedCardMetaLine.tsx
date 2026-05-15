@@ -18,14 +18,14 @@ export function FeedCardMetaLine({
   dateStr
 }: FeedCardMetaLineProps) {
   return (
-    <div className="mb-2 flex flex-wrap items-center gap-2 text-[13px] text-muted-foreground">
+    <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-fg3">
       <span>
         {wasUpdated ? 'Updated ' : ''}
         {timeStr}
       </span>
-      <span className="text-muted-foreground/40">&middot;</span>
+      <span className="text-fg3/40">&middot;</span>
       <span>{dateStr}</span>
-      <span className="text-muted-foreground/40">&middot;</span>
+      <span className="text-fg3/40">&middot;</span>
       <span className="inline-flex items-center gap-1">
         <span
           className="inline-block h-2 w-2 rounded-full"
@@ -33,8 +33,11 @@ export function FeedCardMetaLine({
         />
         {post.project_name}
       </span>
-      <span className="text-muted-foreground/40">&middot;</span>
-      <FeedTicketLink href={ticketPath} className="text-primary underline-offset-2 hover:underline">
+      <span className="text-fg3/40">&middot;</span>
+      <FeedTicketLink
+        href={ticketPath}
+        className="text-fg1 font-medium underline-offset-2 hover:underline"
+      >
         {post.ticket_identifier ? `${post.ticket_identifier} ` : ''}
         {post.ticket_title ?? 'Untitled ticket'}
       </FeedTicketLink>

@@ -115,7 +115,7 @@ export default function KanbanColumn({
       )}
     >
       <div className="flex items-center justify-between gap-2 px-4 py-3">
-        <h3 className="text-sm font-semibold tracking-tight">{column.title}</h3>
+        <h3 className="eyebrow">{column.title}</h3>
         <div className="flex items-center gap-1.5">
           <Badge variant="secondary" className="rounded-full">
             {tickets.length}

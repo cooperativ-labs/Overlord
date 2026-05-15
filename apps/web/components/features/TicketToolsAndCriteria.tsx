@@ -22,7 +22,7 @@ export function TicketToolsAndCriteria({
   return (
     <Accordion type="multiple">
       <AccordionItem value="acceptance-criteria" className="border-b-0">
-        <AccordionTrigger className="py-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground hover:no-underline">
+        <AccordionTrigger className="eyebrow text-xs py-3 hover:no-underline">
           Acceptance Criteria
         </AccordionTrigger>
         <AccordionContent>
@@ -39,7 +39,7 @@ export function TicketToolsAndCriteria({
         </AccordionContent>
       </AccordionItem>
       <AccordionItem value="tools" className="border-b-0">
-        <AccordionTrigger className="py-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground hover:no-underline">
+        <AccordionTrigger className="eyebrow text-xs py-3 hover:no-underline">
           Tools
         </AccordionTrigger>
         <AccordionContent>

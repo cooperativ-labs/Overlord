@@ -81,10 +81,10 @@ export function TicketTitleField({
   return (
     <div className="relative">
       <InlineEditField
-        displayClassName="text-xl font-bold tracking-tight pr-10"
+        displayClassName="text-xl font-semibold tracking-tight pr-10"
         field="title"
         initialValue={titleValue}
-        inputClassName="text-xl font-bold tracking-tight pr-10"
+        inputClassName="text-xl font-semibold tracking-tight pr-10"
         placeholder="Untitled — click to add a title"
         ticketId={ticketId}
       />

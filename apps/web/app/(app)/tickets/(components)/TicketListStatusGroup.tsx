@@ -166,7 +166,7 @@ export function TicketListStatusGroup({
           type="button"
           onClick={() => onToggleCollapse(status.name)}
           className={cn(
-            'flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider transition-opacity hover:opacity-70',
+            'flex items-center gap-1.5 font-mono text-[10px] font-medium uppercase tracking-widest transition-opacity hover:opacity-70',
             style.text
           )}
           title={

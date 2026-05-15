@@ -126,8 +126,10 @@ export default async function AdminPage() {
     <div className="min-h-0 flex-1 overflow-auto bg-slate-50">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-6 py-8 lg:px-8">
         <section className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-sky-600">Admin</p>
-          <h1 className="mt-3 text-3xl font-semibold tracking-[-0.03em] text-slate-950">
+          <p className="font-mono text-xs font-semibold uppercase tracking-widest text-sky-600">
+            Admin
+          </p>
+          <h1 className="mt-3 font-display text-3xl font-semibold tracking-tight text-slate-950">
             Internal submissions
           </h1>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600">

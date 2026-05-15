@@ -136,33 +136,64 @@ export async function submitDraftObjective(
   ticketId: string,
   draftObjectiveId?: string | null
 ) {
-  let draftQuery = supabase
-    .from('objectives')
-    .select('id,objective,state,assigned_agent')
-    .eq('ticket_id', ticketId)
-    .eq('state', 'draft');
+  let draft: DraftObjective | null = null;
 
   if (draftObjectiveId) {
-    draftQuery = draftQuery.eq('id', draftObjectiveId);
-  } else {
-    draftQuery = draftQuery.order('created_at', { ascending: false }).limit(1);
-  }
+    // When a specific ID is provided, query without a state filter so we can
+    // handle objectives that are already in `submitted` state gracefully.
+    const { data, error } = await supabase
+      .from('objectives')
+      .select('id,objective,state,assigned_agent')
+      .eq('ticket_id', ticketId)
+      .eq('id', draftObjectiveId)
+      .maybeSingle<DraftObjective>();
 
-  const { data: draft, error: draftError } = await draftQuery.maybeSingle<DraftObjective>();
+    if (error) throw new Error(error.message);
 
-  if (draftError) {
-    throw new Error(draftError.message);
-  }
-
-  if (!draft) {
-    if (draftObjectiveId) {
+    if (!data) {
       return {
-        error: 'Draft objective not found.',
+        error: 'Objective not found.',
         didSubmit: false,
         submittedObjective: null,
         submittedObjectiveId: null
       };
     }
+
+    // Already submitted — nothing to do; let the caller proceed normally.
+    if (data.state === 'submitted') {
+      return {
+        error: null,
+        didSubmit: false,
+        submittedObjective: normalizeObjectiveText(data.objective) || null,
+        submittedObjectiveId: data.id
+      };
+    }
+
+    if (data.state !== 'draft') {
+      return {
+        error: 'Objective is not in a submittable state.',
+        didSubmit: false,
+        submittedObjective: null,
+        submittedObjectiveId: null
+      };
+    }
+
+    draft = data;
+  } else {
+    const { data, error } = await supabase
+      .from('objectives')
+      .select('id,objective,state,assigned_agent')
+      .eq('ticket_id', ticketId)
+      .eq('state', 'draft')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle<DraftObjective>();
+
+    if (error) throw new Error(error.message);
+    draft = data;
+  }
+
+  if (!draft) {
     return { error: null, didSubmit: false, submittedObjective: null, submittedObjectiveId: null };
   }
 

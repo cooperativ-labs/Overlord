@@ -72,7 +72,7 @@ export function FeedCardRollupBody({
   return (
     <>
       <div className="flex items-start gap-2.5 border-b border-border/60 px-5 pb-3 pt-4">
-        <h3 className="flex-1 break-words text-base font-semibold leading-snug">{post.title}</h3>
+        <h3 className="flex-1 break-words text-base font-medium leading-snug">{post.title}</h3>
         <Badge
           className={cn('shrink-0 rounded-full px-2 text-xs font-medium', impact.className)}
           variant="secondary"

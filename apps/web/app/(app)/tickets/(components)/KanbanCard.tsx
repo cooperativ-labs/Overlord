@@ -123,9 +123,9 @@ export default function KanbanCard({
             isDragging ? 'opacity-40' : '',
             isAgentRunning && 'animate-pulse border-emerald-500/40',
             isSelected &&
-            'border-gray-600/60 dark:border-gray-500/70 bg-gray-100/90 dark:bg-gray-900/40',
+              'border-gray-600/60 dark:border-gray-500/70 bg-gray-100/90 dark:bg-gray-900/40',
             hasUnopenedReview &&
-            'border-sky-500/40 bg-sky-50/60 bg-linear-to-br from-sky-300/18 to-transparent dark:bg-sky-950/25'
+              'border-sky-500/40 bg-sky-50/60 bg-linear-to-br from-sky-300/18 to-transparent dark:bg-sky-950/25'
           )}
           style={style}
           onClick={() => router.push(ticketPath)}
@@ -176,17 +176,17 @@ function KanbanCardBody({
     <CardContent className="flex h-full flex-col p-0 pt-3  ">
       <div className="px-3 space-y-3">
         <div className="min-w-0">
-          <h4 className="text-sm leading-snug font-semibold">{getDisplayTitle(ticket)}</h4>
+          <h4 className="text-[13px] leading-snug font-medium text-fg1">
+            {getDisplayTitle(ticket)}
+          </h4>
 
-          <div className="mt-5 flex items-start justify-between gap-2">
+          <div className="mt-4 flex items-start justify-between gap-2">
             <div className="flex min-w-0 items-center gap-1.5">
               <ProjectColorDot color={ticket.project_color} name={ticket.project_name} />
               {ticket.project_id ? (
-                <span className="truncate text-xs text-muted-foreground">
-                  {ticket.project_name}
-                </span>
+                <span className="truncate text-[11px] text-fg3">{ticket.project_name}</span>
               ) : (
-                <span className="text-xs text-muted-foreground">Personal</span>
+                <span className="text-[11px] text-fg3">Personal</span>
               )}
             </div>
             <div className="flex shrink-0 items-center gap-1.5">
@@ -194,7 +194,7 @@ function KanbanCardBody({
               {ticket.schedule_id ? <ScheduleBadge /> : null}
               {ticket.objectives_executed_count && ticket.objectives_executed_count > 0 ? (
                 <span
-                  className="text-[10px] text-muted-foreground tabular-nums"
+                  className="text-[10px] text-fg3 tabular-nums rounded-full bg-muted px-1.5 py-0.5"
                   title={`${ticket.objectives_executed_count} objective${ticket.objectives_executed_count === 1 ? '' : 's'} executed`}
                 >
                   {ticket.objectives_executed_count}×

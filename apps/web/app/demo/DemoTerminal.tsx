@@ -72,7 +72,7 @@ export function DemoTerminal({ lines, isRunning, onComplete }: DemoTerminalProps
   return (
     <div
       ref={scrollRef}
-      className="h-[240px] overflow-y-auto p-4 font-[family-name:var(--font-mono)] text-sm leading-relaxed"
+      className="h-[240px] overflow-y-auto p-4 font-mono text-sm leading-relaxed"
     >
       {visibleLines.length === 0 && !isRunning && (
         <p className="text-slate-600">

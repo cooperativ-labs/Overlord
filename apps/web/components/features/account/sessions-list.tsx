@@ -3,10 +3,11 @@
 import { Globe, Mail } from 'lucide-react';
 import type { ReactNode } from 'react';
 
-import { BitbucketIcon } from '../../brand-icons/bitbucket-icon';
-import { GithubIcon } from '../../brand-icons/github-icon';
 import { DisconnectIdentityButton } from '@/components/features/account/disconnect-identity-button';
 import type { OAuthIdentity } from '@/lib/actions/account';
+
+import { BitbucketIcon } from '../../brand-icons/bitbucket-icon';
+import { GithubIcon } from '../../brand-icons/github-icon';
 
 const PROVIDER_LABELS: Record<string, string> = {
   email: 'Email / Password',

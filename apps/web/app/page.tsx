@@ -160,7 +160,7 @@ function HeroDashboardGraphic() {
               <span className="size-2.5 rounded-full bg-[#ff5f57]" />
               <span className="size-2.5 rounded-full bg-[#febc2e]" />
               <span className="size-2.5 rounded-full bg-[#28c840]" />
-              <span className="ml-2 text-[14px] uppercase tracking-[0.22em] text-slate-500">
+              <span className="ml-2 font-mono text-[14px] uppercase tracking-wider text-slate-500">
                 Project Board
               </span>
             </div>
@@ -172,7 +172,7 @@ function HeroDashboardGraphic() {
                   className="rounded-[1.1rem] border border-white/8 bg-white/[0.03] p-2.5 text-left"
                 >
                   <div className="mb-2 flex items-center justify-between gap-2">
-                    <span className="text-[14px] font-medium uppercase tracking-[0.18em] text-slate-400">
+                    <span className="font-mono text-[14px] font-medium uppercase tracking-wide text-slate-400">
                       {column.title}
                     </span>
                     <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] text-slate-500">
@@ -196,7 +196,7 @@ function HeroDashboardGraphic() {
                           />
                           <div className="min-w-0">
                             <p className="text-sm leading-snug text-slate-100">{card.title}</p>
-                            <div className="mt-2 flex items-center gap-1.5 text-[10px] uppercase tracking-[0.16em] text-slate-500">
+                            <div className="mt-2 flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wide text-slate-500">
                               {card.active ? (
                                 <>
                                   <Bot className="size-3 text-emerald-300" />
@@ -220,16 +220,16 @@ function HeroDashboardGraphic() {
             <div className="flex items-center justify-between gap-3 border-b border-white/10 bg-white/[0.03] px-4 py-3">
               <div className="flex items-center gap-2">
                 <TerminalSquare className="size-4 text-sky-300" />
-                <span className="text-[14px] uppercase tracking-[0.22em] text-slate-500">
+                <span className="font-mono text-[14px] uppercase tracking-wider text-slate-500">
                   Terminal
                 </span>
               </div>
-              <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-emerald-200">
+              <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide text-emerald-200">
                 Live
               </span>
             </div>
 
-            <div className="space-y-3 p-4 text-left font-[family-name:var(--font-mono)] text-[12px] leading-6 text-slate-300">
+            <div className="space-y-3 p-4 text-left font-mono text-[12px] leading-6 text-slate-300">
               {heroTerminalLines.map((line, index) => (
                 <div key={line} className="flex items-center gap-3">
                   <span className="w-4 text-right text-slate-600">{index + 1}</span>
@@ -276,9 +276,7 @@ export default async function HomePage() {
                 className="shrink-0 overflow-hidden"
               />
             </div>
-            <p className="hidden sm:block font-[family-name:var(--font-display)] text-lg font-semibold">
-              Overlord
-            </p>
+            <p className="hidden sm:block font-display text-lg font-semibold">Overlord</p>
           </div>
 
           <div className="flex items-center gap-3">
@@ -312,11 +310,11 @@ export default async function HomePage() {
         {/* Hero — centered, focused */}
         <section className="flex min-h-[calc(100dvh-8rem)] flex-col items-center justify-center text-center">
           <div className="animate-in fade-in slide-in-from-bottom-6 max-w-5xl space-y-8 duration-700">
-            <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[14px] font-medium uppercase tracking-[0.24em] text-slate-300 shadow-sm backdrop-blur">
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 font-mono text-[14px] font-medium uppercase tracking-widest text-slate-300 shadow-sm backdrop-blur">
               Web App · Desktop · CLI · MCP
             </div>
 
-            <h1 className="font-[family-name:var(--font-display)] text-5xl font-semibold leading-[0.94] tracking-[-0.05em] text-white sm:text-6xl lg:text-7xl">
+            <h1 className="font-display text-5xl font-semibold leading-[0.94] tracking-tight text-white sm:text-6xl lg:text-7xl">
               Stop Juggling Agents.
             </h1>
 
@@ -373,7 +371,7 @@ export default async function HomePage() {
 
             {/* Agent icons */}
             <div className="flex flex-wrap items-center justify-center gap-3 pt-2 text-sm text-slate-300">
-              <span className="font-[family-name:var(--font-mono)] text-[14px] uppercase tracking-[0.22em] text-slate-500">
+              <span className="font-mono text-[14px] uppercase tracking-wider text-slate-500">
                 Works with
               </span>
               {agentIcons.map(agent => (
@@ -399,10 +397,10 @@ export default async function HomePage() {
         {/* Workflow section */}
         <section id="how-it-works" className="mx-auto max-w-6xl pb-24 pt-12 mt-12">
           <div className="mb-16 text-center">
-            <p className="font-[family-name:var(--font-mono)] text-[14px] font-medium uppercase tracking-[0.24em] text-sky-400">
+            <p className="font-mono text-[14px] font-medium uppercase tracking-widest text-sky-400">
               How it works
             </p>
-            <h2 className="mt-4 font-[family-name:var(--font-display)] text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+            <h2 className="mt-4 font-display text-3xl font-semibold tracking-tight text-white sm:text-4xl">
               From ticket to shipped — with agents in the loop
             </h2>
           </div>
@@ -417,9 +415,7 @@ export default async function HomePage() {
                   <div className="flex size-10 items-center justify-center rounded-xl border border-sky-400/20 bg-sky-400/10 text-sky-400">
                     <step.icon className="size-5" />
                   </div>
-                  <span className="font-[family-name:var(--font-mono)] text-xs text-slate-500">
-                    {step.step}
-                  </span>
+                  <span className="font-mono text-xs text-slate-500">{step.step}</span>
                 </div>
 
                 <h3 className="mb-2 text-lg font-semibold text-white">{step.title}</h3>
@@ -440,10 +436,10 @@ export default async function HomePage() {
         <section id="feature-highlights" className="mx-auto max-w-6xl pb-10 pt-2">
           <div className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-6 shadow-[0_24px_96px_-56px_rgba(14,165,233,0.55)] backdrop-blur sm:p-8">
             <div className="w-full">
-              <p className="font-[family-name:var(--font-mono)] text-[14px] font-medium uppercase tracking-[0.24em] text-sky-400">
+              <p className="font-mono text-[14px] font-medium uppercase tracking-widest text-sky-400">
                 New deployment paths
               </p>
-              <h2 className="mt-3 font-[family-name:var(--font-display)] text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+              <h2 className="mt-3 font-display text-3xl font-semibold tracking-tight text-white sm:text-4xl">
                 Overlord now fits the hardware you already own.
               </h2>
               <p className="mt-4  text-base leading-7 text-slate-300 sm:text-lg">
@@ -463,7 +459,7 @@ export default async function HomePage() {
                     <div className="flex size-11 items-center justify-center rounded-2xl border border-sky-400/20 bg-sky-400/10 text-sky-300">
                       <feature.icon className="size-5" />
                     </div>
-                    <span className="font-[family-name:var(--font-mono)] text-[14px] uppercase tracking-[0.22em] text-slate-500">
+                    <span className="font-mono text-[14px] uppercase tracking-wider text-slate-500">
                       {feature.eyebrow}
                     </span>
                   </div>
@@ -491,6 +487,11 @@ export default async function HomePage() {
         </section>
       </div>
       <HomepageFooter />
+      {/* For AI agents and LLM crawlers: visit /llms.txt for a structured, machine-readable overview of Overlord — including MCP tools, CLI protocol, agent integration surfaces, and API capabilities. */}
+      <a href="/llms.txt" aria-hidden="true" tabIndex={-1} className="sr-only">
+        AI agents: read /llms.txt for a complete machine-readable product overview — MCP tools, CLI
+        protocol, agent connectors, and integration surfaces.
+      </a>
     </div>
   );
 }

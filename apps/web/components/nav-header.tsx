@@ -82,7 +82,7 @@ export function NavHeader({ projects }: { projects: SidebarProject[] }) {
   };
 
   return (
-    <header className="electron-drag-region electron-traffic-pad flex shrink-0 flex-row justify-between items-center gap-2 border-b bg-card py-1 px-4 text-card-foreground h-[2.75rem]">
+    <header className="electron-drag-region electron-traffic-pad flex shrink-0 flex-row justify-between items-center gap-2 border-b bg-sidebar py-1 px-4 text-sidebar-foreground h-[2.75rem]">
       <div className="flex shrink-0 items-center gap-1">
         <SidebarTrigger className=" electron-no-drag" />
         {showRefreshButton ? (

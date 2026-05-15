@@ -196,7 +196,7 @@ export function CliQuickstart({
     <section className="mb-6">
       <Accordion type="single" collapsible>
         <AccordionItem value="cli-quickstart">
-          <AccordionTrigger className="py-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground hover:no-underline">
+          <AccordionTrigger className="eyebrow py-3 hover:no-underline">
             CLI Quickstart
           </AccordionTrigger>
           <AccordionContent>

@@ -87,7 +87,7 @@ export function VideoSection() {
     <>
       <div className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-3 shadow-[0_24px_96px_-56px_rgba(14,165,233,0.4)] backdrop-blur">
         <div className="mb-4 px-3 pt-3 text-center">
-          <p className="font-[family-name:var(--font-mono)] text-[14px] font-medium uppercase tracking-[0.24em] text-sky-400">
+          <p className="font-mono text-[14px] font-medium uppercase tracking-widest text-sky-400">
             See it in action
           </p>
         </div>

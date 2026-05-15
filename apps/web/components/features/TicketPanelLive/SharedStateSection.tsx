@@ -9,9 +9,7 @@ export function SharedStateSection({ sharedState }: { sharedState: SharedStateIt
 
   return (
     <section>
-      <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-        Shared State
-      </h2>
+      <h2 className="eyebrow mb-3">Shared State</h2>
       <div className="grid gap-3">
         {sharedState.map(item => (
           <div key={item.id}>

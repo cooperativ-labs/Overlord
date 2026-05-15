@@ -210,8 +210,8 @@ export default function TicketListCard({
           <div className="min-w-0 flex-1">
             <span
               className={cn(
-                'block truncate text-[13px] font-medium leading-snug',
-                isComplete && 'text-muted-foreground'
+                'block truncate text-[13px] font-medium leading-snug text-fg1',
+                isComplete && 'text-fg3'
               )}
             >
               {getDisplayTitle(ticket)}
@@ -250,7 +250,7 @@ export default function TicketListCard({
             ) : null}
             {/* Project name (cross-project list views) */}
             {showProjectName && ticket.project_name ? (
-              <span className="hidden truncate max-w-[100px] text-[10px] text-muted-foreground sm:inline">
+              <span className="hidden truncate max-w-[100px] text-[10px] text-fg3 sm:inline">
                 {ticket.project_name}
               </span>
             ) : null}

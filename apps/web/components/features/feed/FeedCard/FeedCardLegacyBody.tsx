@@ -60,7 +60,7 @@ export function FeedCardLegacyBody({
           />
         </button>
         <h3
-          className="flex-1 cursor-pointer break-words text-base font-semibold leading-snug"
+          className="flex-1 cursor-pointer break-words text-base font-medium leading-snug"
           onClick={() => setExpanded(prev => !prev)}
         >
           {post.title}

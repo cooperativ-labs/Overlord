@@ -19,9 +19,7 @@ export function LiveArtifacts({
 
   return (
     <section>
-      <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-        Artifacts
-      </h2>
+      <h2 className="eyebrow mb-3">Artifacts</h2>
       <div className="grid gap-4">
         {visibleArtifacts.map(artifact => (
           <div key={artifact.id} className="min-w-0">

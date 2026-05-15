@@ -82,9 +82,7 @@ export function TicketPanelLive({
       <Separator className="mb-10" />
       <section className="mb-6">
         <div className="mb-4 flex items-center gap-2">
-          <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-            Activity
-          </h2>
+          <h2 className="eyebrow">Activity</h2>
           <AgentSessionBadge session={session} />
           {session?.external_url ? (
             <Button asChild className="h-5 px-2 text-[10px]" size="sm" variant="outline">

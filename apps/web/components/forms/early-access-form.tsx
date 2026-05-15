@@ -52,10 +52,10 @@ export function EarlyAccessForm() {
 
       <FieldGroup>
         <div className="space-y-3 text-left">
-          <p className="font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.24em] text-sky-400">
+          <p className="font-mono text-[11px] uppercase tracking-widest text-sky-400">
             Early Access
           </p>
-          <h1 className="font-[family-name:var(--font-display)] text-4xl font-semibold tracking-[-0.04em] text-white">
+          <h1 className="font-display text-4xl font-semibold tracking-tight text-white">
             Get early access to Overlord
           </h1>
           <FieldDescription className="text-base leading-7 text-slate-300">

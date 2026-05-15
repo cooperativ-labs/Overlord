@@ -151,18 +151,15 @@ export function FeedList({ projects, editorScheme, initialExecutingTickets = [] 
               ))}
             </div>
           ) : filteredPosts.length === 0 ? (
-            <div className="flex flex-col items-center justify-center gap-3 py-16 text-muted-foreground">
-              <Newspaper className="h-10 w-10 text-muted-foreground/40" />
-              <p className="text-sm">No feed posts yet.</p>
-              <p className="text-xs text-muted-foreground/60">
-                Posts are generated when agents complete work on tickets.
-              </p>
+            <div className="flex flex-col items-center justify-center gap-3 py-16">
+              <Newspaper className="h-8 w-8 text-fg3/50" />
+              <p className="text-sm font-medium text-fg2">No feed posts yet</p>
+              <p className="text-xs text-fg3">Posts appear when agents complete work on tickets.</p>
             </div>
           ) : (
             <div className="flex flex-col gap-6">
-              <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                <Newspaper className="h-4 w-4 text-blue-600" />
-                <span>Completed</span>
+              <div className="flex items-center gap-2">
+                <span className="eyebrow">Completed Work</span>
               </div>
               {filteredPosts.map(post => (
                 <FeedCard

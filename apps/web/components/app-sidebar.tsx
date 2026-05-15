@@ -137,8 +137,8 @@ function ProjectMenuItem({ project, isActive, onNavigationClick }: ProjectMenuIt
           onClick={event => onNavigationClick(event, project, `/projects/${project.id}`)}
         >
           <span
-            className="h-3 w-3 rounded-[6px] border group-data-[collapsible=icon]:h-4 group-data-[collapsible=icon]:w-4 group-data-[collapsible=icon]:rounded-full group-data-[collapsible=icon]:border-0"
-            style={{ backgroundColor: project.color, borderColor: project.color }}
+            className="h-2 w-2 shrink-0 rounded-sm group-data-[collapsible=icon]:h-4 group-data-[collapsible=icon]:w-4 group-data-[collapsible=icon]:rounded-full"
+            style={{ backgroundColor: project.color }}
           />
           <span className="group-data-[collapsible=icon]:hidden">{project.name}</span>
         </Link>

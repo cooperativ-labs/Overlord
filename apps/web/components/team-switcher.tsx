@@ -106,7 +106,7 @@ export function TeamSwitcher({
                       className="group gap-2 p-2"
                     >
                       <div className="flex size-6 items-center justify-center rounded-md border">
-                        <span className="text-xs font-semibold">
+                        <span className="text-xs font-medium">
                           {org.name.charAt(0).toUpperCase()}
                         </span>
                       </div>
