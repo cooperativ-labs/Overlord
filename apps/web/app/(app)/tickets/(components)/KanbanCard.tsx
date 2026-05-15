@@ -123,9 +123,9 @@ export default function KanbanCard({
             isDragging ? 'opacity-40' : '',
             isAgentRunning && 'animate-pulse border-emerald-500/40',
             isSelected &&
-              'border-gray-600/60 dark:border-gray-500/70 bg-gray-100/90 dark:bg-gray-900/40',
+            'border-gray-600/60 dark:border-gray-500/70 bg-gray-100/90 dark:bg-gray-900/40',
             hasUnopenedReview &&
-              'border-sky-500/40 bg-sky-50/60 bg-linear-to-br from-sky-300/18 to-transparent dark:bg-sky-950/25'
+            'border-sky-500/40 bg-sky-50/60 bg-linear-to-br from-sky-300/18 to-transparent dark:bg-sky-950/25'
           )}
           style={style}
           onClick={() => router.push(ticketPath)}
@@ -178,7 +178,7 @@ function KanbanCardBody({
         <div className="min-w-0">
           <h4 className="text-sm leading-snug font-semibold">{getDisplayTitle(ticket)}</h4>
 
-          <div className="mt-3.5 flex items-start justify-between gap-2">
+          <div className="mt-5 flex items-start justify-between gap-2">
             <div className="flex min-w-0 items-center gap-1.5">
               <ProjectColorDot color={ticket.project_color} name={ticket.project_name} />
               {ticket.project_id ? (
