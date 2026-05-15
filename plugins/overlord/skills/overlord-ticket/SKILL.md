@@ -25,6 +25,8 @@ Attach:
 ovld protocol attach --ticket-id $TICKET_ID
 ```
 
+In a git workspace, `attach` automatically creates a local git checkpoint for each executing objective before work begins, stored under `refs/overlord/checkpoints/<objectiveId>`. Pass `--skip-checkpoint` only when intentionally bypassing local provenance.
+
 Update:
 
 ```bash
@@ -65,16 +67,26 @@ ovld protocol deliver --session-key <sessionKey> \
   --change-rationales-json '[{"label":"Short reviewer title","file_path":"path/to/file.ts","summary":"What changed.","why":"Why it changed.","impact":"Behavioral impact.","hunks":[{"header":"@@ -10,6 +10,14 @@"}]}]'
 ```
 
-`ovld protocol deliver` automatically creates a local checkpoint before the API request when the workspace is JJ- or Git-managed; use `--skip-checkpoint` only when intentionally bypassing local provenance. Use `--payload-json` when the full delivery object fits comfortably inline. For larger delivery payloads, prefer `--payload-file -` and stream the full JSON on stdin so no scratch file needs to be created or removed. If you use `--payload-file`, `--artifacts-file`, or `--change-rationales-file` with a real path, treat that file as ephemeral scratch data outside the repository and remove it after delivery.
+Use `--payload-json` when the full delivery object fits comfortably inline. For larger delivery payloads, prefer `--payload-file -` and stream the full JSON on stdin so no scratch file needs to be created or removed. If you use `--payload-file`, `--artifacts-file`, or `--change-rationales-file` with a real path, treat that file as ephemeral scratch data outside the repository and remove it after delivery.
+
+Revert an objective:
+
+```bash
+ovld protocol revert --objective-id <objective-id>
+```
+
+`revert` restores the local working tree to the recorded objective checkpoint and saves a safety ref under `refs/overlord/safety/` first.
 
 ## Objective Submission vs Execution
 
 Discussing or otherwise opening a ticket from within a chat should cause the draft objective to be marked **submitted** — this signals the ticket is in active discussion with an agent, but not yet being executed. Only an explicit order to execute (e.g. "execute this", "do this", "start working on it") should cause you to **attach** to the ticket and trigger execution.
 
 - **Discussing / opening a ticket** → submit the objective:
+
   ```bash
   ovld protocol discuss-objective --ticket-id $TICKET_ID
   ```
+
   This transitions the objective from `draft` to `submitted`. No session is created.
 
 - **Creating a ticket** via `ovld protocol create` keeps the objective in `draft` state.
@@ -189,4 +201,4 @@ This keeps the ticket feed readable while preserving the full document in versio
 - If a protocol or MCP call fails with auth/session errors, run `ovld auth repair` yourself before asking the user to log in again or proceed without Overlord updates.
 - If you must run `ovld auth login`, always include `--organization-id <id>` — use the organization ID from the ticket prompt context to select the organization non-interactively and avoid a blocking TTY prompt.
 
-<!-- version: 0.5.0 -->
+<!-- version: 0.5.1 -->

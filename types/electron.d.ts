@@ -215,6 +215,32 @@ interface ElectronAPI {
         }
       | { ok: false; error: string }
     >;
+    diffCheckpoint: (options: {
+      directory: string;
+      objectiveId?: string;
+      gitCommitId?: string;
+    }) => Promise<
+      | {
+          ok: true;
+          ref: string | null;
+          gitCommitId: string;
+          headSha: string;
+          diff: string;
+          diffStat: string | null;
+        }
+      | { ok: false; error: string }
+    >;
+    pruneCheckpoints: (options: {
+      directory: string;
+      keepObjectiveIds?: string[];
+      objectiveIds?: string[];
+    }) => Promise<
+      | {
+          ok: true;
+          pruned: string[];
+        }
+      | { ok: false; error: string }
+    >;
     gitCheckoutBranch: (
       options: WorkspacePayload & {
         options: { name: string };

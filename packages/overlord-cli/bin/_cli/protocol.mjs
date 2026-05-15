@@ -548,6 +548,80 @@ function createLocalCheckpoint({ flags, kind = 'objective', objectiveId, snapsho
   }
 }
 
+function snapshotLocalWorkingTree(repoRoot, parentSha, message) {
+  const tempIndex = path.join(repoRoot, '.git', `overlord-snap-index-${Date.now()}`);
+  const env = { ...process.env, NO_COLOR: '1', GIT_INDEX_FILE: tempIndex };
+  try {
+    execFileSync('git', ['-C', repoRoot, 'read-tree', 'HEAD'], { cwd: repoRoot, env });
+    execFileSync('git', ['-C', repoRoot, 'add', '-A'], { cwd: repoRoot, env });
+    const tree = execFileSync('git', ['-C', repoRoot, 'write-tree'], {
+      cwd: repoRoot,
+      env,
+      encoding: 'utf8'
+    }).trim();
+    if (!tree) throw new Error('git write-tree produced no output.');
+    return execFileSync(
+      'git',
+      ['-C', repoRoot, 'commit-tree', tree, '-p', parentSha, '-m', message],
+      {
+        cwd: repoRoot,
+        env: { ...process.env, NO_COLOR: '1' },
+        encoding: 'utf8'
+      }
+    ).trim();
+  } finally {
+    try {
+      fs.unlinkSync(tempIndex);
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+function restoreLocalCheckpoint({ workspacePath, objectiveId, gitCommitId }) {
+  const repoRoot = resolveGitRepoRoot(workspacePath);
+  if (!repoRoot) throw new Error(`No git repository found at ${workspacePath}.`);
+
+  const ref = `refs/overlord/checkpoints/${objectiveId}`;
+  const target = gitCommitId
+    ? runLocalCommand('git', ['-C', repoRoot, 'rev-parse', '--verify', `${gitCommitId}^{commit}`], {
+        cwd: repoRoot
+      }).trim()
+    : runLocalCommand('git', ['-C', repoRoot, 'rev-parse', '--verify', ref], {
+        cwd: repoRoot
+      }).trim();
+  if (!target) throw new Error(`No checkpoint exists for objective ${objectiveId}.`);
+
+  let safetyRef = null;
+  let safetySha = null;
+  try {
+    const headSha = runLocalCommand('git', ['-C', repoRoot, 'rev-parse', 'HEAD'], {
+      cwd: repoRoot
+    }).trim();
+    const stamp = new Date().toISOString().replace(/[^0-9A-Za-z]/g, '');
+    safetyRef = `refs/overlord/safety/${stamp}`;
+    safetySha = snapshotLocalWorkingTree(
+      repoRoot,
+      headSha,
+      `overlord pre-revert safety ${new Date().toISOString()}`
+    );
+    if (safetySha) {
+      runLocalCommand('git', ['-C', repoRoot, 'update-ref', safetyRef, safetySha], {
+        cwd: repoRoot
+      });
+    }
+  } catch {
+    safetyRef = null;
+    safetySha = null;
+  }
+
+  runLocalCommand('git', ['-C', repoRoot, 'read-tree', '--reset', '-u', target], {
+    cwd: repoRoot
+  });
+
+  return { ref, gitCommitId: target, safetyRef, safetySha };
+}
+
 async function createAndRecordPendingCheckpoints({
   attachData,
   bearerToken,
@@ -1503,6 +1577,42 @@ async function protocolLoadContext(args) {
 }
 
 // ---------------------------------------------------------------------------
+// revert (restore local working tree to an objective checkpoint)
+// ---------------------------------------------------------------------------
+
+async function protocolRevert(args) {
+  const flags = parseFlags(args);
+  const objectiveId = requireFlag(flags, 'objective-id', 'OVERLORD_OBJECTIVE_ID');
+  const workspacePath = path.resolve(
+    String(flags['working-directory'] ?? process.env.OVERLORD_WORKSPACE_PATH ?? process.cwd())
+  );
+  const { platformUrl, bearerToken, localSecret, organizationId } =
+    await resolveProtocolAuthForFlags(flags);
+  const timeoutMs = resolveTimeout(flags);
+
+  const data = await apiPost(
+    platformUrl,
+    bearerToken,
+    localSecret,
+    organizationId,
+    '/api/protocol/revert',
+    { objectiveId },
+    timeoutMs
+  );
+  const checkpoint = data?.checkpoint;
+  if (!checkpoint?.git_commit_id) {
+    throw new Error('API response did not include a checkpoint git_commit_id.');
+  }
+
+  const result = restoreLocalCheckpoint({
+    workspacePath,
+    objectiveId,
+    gitCommitId: checkpoint.git_commit_id
+  });
+  console.log(JSON.stringify({ ok: true, checkpoint, restore: result }, null, 2));
+}
+
+// ---------------------------------------------------------------------------
 // prompt (create ticket + connect in one call)
 // ---------------------------------------------------------------------------
 
@@ -1902,6 +2012,7 @@ Subcommands:
   attach                    Start a ticket session and return full working context
   connect                   Start a lightweight session without full context
   load-context              Read ticket context without creating a session
+  revert                    Restore the local working tree to an objective checkpoint
   search-tickets            Find tickets by keyword, status, project, creator, or update date
   discuss-objective          Mark a draft objective as submitted (ready for review/execution)
   create                    Create a draft ticket without attaching (follow-up or standalone)
@@ -1992,6 +2103,16 @@ load-context:
     Read ticket details without creating a session
   Required:
     --ticket-id <ticket_id>
+
+revert:
+  Purpose:
+    Fetch an objective checkpoint from Overlord and restore the local git working tree to it.
+  Required:
+    --objective-id <objective-uuid>
+  Optional:
+    --working-directory <path>  Repository to restore (default: current working directory)
+  Notes:
+    A safety snapshot of the current working tree is saved under refs/overlord/safety/ first.
 
 search-tickets:
   Purpose:
@@ -2281,6 +2402,7 @@ Examples:
   ovld protocol attach --ticket-id 1:899 --external-session-id null
   ovld protocol connect --ticket-id 1:899
   ovld protocol load-context --ticket-id 1:899
+  ovld protocol revert --objective-id <objective-uuid>
   ovld protocol search-tickets --query "auth refactor" --status next-up,execute --limit 10
   ovld protocol discuss-objective --ticket-id 1:899
   ovld protocol discuss-objective --ticket-id 1:899 --objective-id <objective-uuid>
@@ -2331,6 +2453,10 @@ EOF
   }
   if (subcommand === 'load-context') {
     await protocolLoadContext(args);
+    return;
+  }
+  if (subcommand === 'revert') {
+    await protocolRevert(args);
     return;
   }
   if (subcommand === 'search-tickets') {

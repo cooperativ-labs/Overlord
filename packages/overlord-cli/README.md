@@ -111,9 +111,10 @@ Agents can find docs here: https://www.ovld.ai/docs/for-agents
 
 - `auth-status` - return machine-readable auth status for agent runtimes
 - `discover-project` - resolve a project from the current (or given) working directory
-- `attach` - start a ticket session and return full working context
+- `attach` - start a ticket session, create a local git checkpoint per executing objective, and return full working context
 - `connect` - start a lightweight session without full context
 - `load-context` - read ticket context without creating a session
+- `revert` - restore the local working tree to an objective checkpoint after fetching its checkpoint row
 - `search-tickets` - find tickets by keyword, status, project, creator, or update date
 - `create` - create a draft ticket without attaching (standalone or follow-up)
 - `prompt` - create a ticket and attach to it immediately (`spawn` is a backward-compatible alias)
@@ -125,7 +126,7 @@ Agents can find docs here: https://www.ovld.ai/docs/for-agents
 - `hook-event` - record lifecycle hook events such as `UserPromptSubmit` / Cursor `beforeSubmitPrompt` without a session key
 - `read-context` - read shared persistent context for this ticket
 - `write-context` - write shared persistent context for future sessions
-- `deliver` - create a local JJ/Git checkpoint when available, send artifacts/rationales, and move the ticket to review
+- `deliver` - send artifacts/rationales and move the ticket to review
 - `attachment-prepare-upload` - get a signed upload URL for an objective attachment
 - `attachment-finalize-upload` - finalize an uploaded objective attachment row after storage upload
 - `attachment-download-url` - get a signed download URL for an existing objective attachment

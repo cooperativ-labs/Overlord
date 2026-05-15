@@ -1,10 +1,12 @@
 'use client';
 
-import { useMemo } from 'react';
+import { Trash2 } from 'lucide-react';
+import { useMemo, useState } from 'react';
 
 import { AddTicketObjectiveButton } from '@/components/features/AddTicketObjectiveButton';
 import { DraftObjective } from '@/components/features/DraftObjective';
 import { ObjectiveCollapsibleItem } from '@/components/features/ObjectiveCollapsibleItem';
+import { type ButtonLoadingState, LoadingButton } from '@/components/ui/loading-button';
 import type { ObjectiveAttachment } from '@/lib/actions/attachments';
 import type { LaunchAgentTypeValue } from '@/lib/helpers/agent-types';
 import {
@@ -50,6 +52,8 @@ type TicketObjectivesSectionProps = {
   remoteWorkingDirectory?: string | null;
   hasProjectWorkingDirectory?: boolean;
   checkpointsByObjectiveId?: Record<string, ObjectiveCheckpoint>;
+  allProjectCheckpointObjectiveIds?: string[];
+  gitRevertFeatureEnabled?: boolean;
 };
 
 export function TicketObjectivesSection({
@@ -67,8 +71,12 @@ export function TicketObjectivesSection({
   sshCommand,
   remoteWorkingDirectory,
   hasProjectWorkingDirectory,
-  checkpointsByObjectiveId
+  checkpointsByObjectiveId,
+  allProjectCheckpointObjectiveIds = [],
+  gitRevertFeatureEnabled = false
 }: TicketObjectivesSectionProps) {
+  const [pruneState, setPruneState] = useState<ButtonLoadingState>('default');
+  const [pruneMessage, setPruneMessage] = useState<string | null>(null);
   const objectives = useTicketObjectivesRealtime({
     ticketId,
     initialObjectives
@@ -107,24 +115,92 @@ export function TicketObjectivesSection({
   );
   const orderedExecutedObjectives = sortObjectivesByCreatedAtAscending(executedObjectives);
 
+  async function handlePruneCheckpoints() {
+    if (!workingDirectory) {
+      setPruneState('error');
+      setPruneMessage('No working directory is configured for this project.');
+      return;
+    }
+    const pruneCheckpoints = window.electronAPI?.filesystem?.pruneCheckpoints;
+    if (!pruneCheckpoints) {
+      setPruneState('error');
+      setPruneMessage('Checkpoint cleanup is only available in the Overlord desktop app.');
+      return;
+    }
+
+    setPruneState('loading');
+    setPruneMessage(null);
+    try {
+      const result = await pruneCheckpoints({
+        directory: workingDirectory,
+        keepObjectiveIds: allProjectCheckpointObjectiveIds
+      });
+      if (!result.ok) {
+        setPruneState('error');
+        setPruneMessage(result.error ?? 'Failed to prune checkpoints.');
+        return;
+      }
+      setPruneState('success');
+      setPruneMessage(
+        result.pruned.length > 0
+          ? `Pruned ${result.pruned.length} stale checkpoint ref${result.pruned.length === 1 ? '' : 's'}.`
+          : 'No stale checkpoint refs found.'
+      );
+    } catch (error) {
+      setPruneState('error');
+      setPruneMessage(error instanceof Error ? error.message : 'Failed to prune checkpoints.');
+    }
+  }
+
   return (
     <div className="flex flex-col pb-5">
       <div className="px-5">
         {orderedExecutedObjectives.length > 0 ? (
-          <div className="mb-3 space-y-2 rounded-md border bg-background">
-            {orderedExecutedObjectives.map((objective, index) => (
-              <ObjectiveCollapsibleItem
-                key={objective.id}
-                objective={objective}
-                index={index}
-                ticketId={ticketId}
-                attachments={objectiveAttachments.filter(
-                  attachment => attachment.objectiveId === objective.id
-                )}
-                checkpoint={checkpointsByObjectiveId?.[objective.id] ?? null}
-              />
-            ))}
-          </div>
+          <>
+            <div className="mb-3 space-y-2 rounded-md border bg-background">
+              {orderedExecutedObjectives.map((objective, index) => (
+                <ObjectiveCollapsibleItem
+                  key={objective.id}
+                  objective={objective}
+                  index={index}
+                  ticketId={ticketId}
+                  attachments={objectiveAttachments.filter(
+                    attachment => attachment.objectiveId === objective.id
+                  )}
+                  checkpoint={checkpointsByObjectiveId?.[objective.id] ?? null}
+                  gitRevertFeatureEnabled={gitRevertFeatureEnabled}
+                  workingDirectory={workingDirectory}
+                />
+              ))}
+            </div>
+            {gitRevertFeatureEnabled ? (
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                <LoadingButton
+                  buttonState={pruneState}
+                  setButtonState={setPruneState}
+                  reset={true}
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 gap-1 px-2 text-[11px] text-muted-foreground"
+                  text={
+                    <>
+                      <Trash2 className="h-3 w-3" />
+                      Prune stale checkpoints
+                    </>
+                  }
+                  loadingText="Pruning..."
+                  successText="Pruned"
+                  errorText="Prune failed"
+                  disabled={!workingDirectory}
+                  onClick={handlePruneCheckpoints}
+                />
+                {pruneMessage ? (
+                  <p className="text-[11px] text-muted-foreground">{pruneMessage}</p>
+                ) : null}
+              </div>
+            ) : null}
+          </>
         ) : null}
 
         {editableObjectives.length === 0 ? (
@@ -167,7 +243,9 @@ export function TicketObjectivesSection({
             <div className="mt-3">
               <AddTicketObjectiveButton
                 futureObjectivesEnabled={futureObjectivesEnabled}
-                disabled={hasTrailingEmptyDraft || hasAnyDraftObjective}
+                disabled={
+                  hasTrailingEmptyDraft || (!futureObjectivesEnabled && hasAnyDraftObjective)
+                }
                 ticketId={ticketId}
               />
             </div>

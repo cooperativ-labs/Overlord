@@ -25,6 +25,8 @@ Attach:
 ovld protocol attach --ticket-id $TICKET_ID
 ```
 
+In a git workspace, `attach` automatically creates a local git checkpoint for each executing objective before work begins, stored under `refs/overlord/checkpoints/<objectiveId>`. Pass `--skip-checkpoint` only when intentionally bypassing local provenance.
+
 Update:
 
 ```bash
@@ -32,6 +34,7 @@ ovld protocol update --session-key <sessionKey> --ticket-id $TICKET_ID --summary
 ```
 
 Supported `--phase` values:
+
 - `draft`
 - `execute`
 - `review`
@@ -41,6 +44,7 @@ Supported `--phase` values:
 - `cancelled`
 
 Event types:
+
 - `update` for standard progress updates
 - `user_follow_up` — only when the Cursor `beforeSubmitPrompt` hook is unavailable; the hook normally posts follow-ups to the activity feed
 - `alert` for warnings or non-blocking issues
@@ -61,16 +65,26 @@ ovld protocol deliver --session-key <sessionKey> \
   --change-rationales-json '[{"label":"Short reviewer title","file_path":"path/to/file.ts","summary":"What changed.","why":"Why it changed.","impact":"Behavioral impact.","hunks":[{"header":"@@ -10,6 +10,14 @@"}]}]'
 ```
 
-`ovld protocol deliver` automatically creates a local checkpoint before the API request when the workspace is JJ- or Git-managed; use `--skip-checkpoint` only when intentionally bypassing local provenance. Use `--payload-json` when the full delivery object fits comfortably inline. For larger delivery payloads, prefer `--payload-file -` and stream the full JSON on stdin so no scratch file needs to be created or removed.
+Use `--payload-json` when the full delivery object fits comfortably inline. For larger delivery payloads, prefer `--payload-file -` and stream the full JSON on stdin so no scratch file needs to be created or removed.
+
+Revert an objective:
+
+```bash
+ovld protocol revert --objective-id <objective-id>
+```
+
+`revert` restores the local working tree to the recorded objective checkpoint and saves a safety ref under `refs/overlord/safety/` first.
 
 ## Objective Submission vs Execution
 
 Discussing or otherwise opening a ticket from within a chat should cause the draft objective to be marked **submitted** — this signals the ticket is in active discussion with an agent, but not yet being executed. Only an explicit order to execute (e.g. "execute this", "do this", "start working on it") should cause you to **attach** to the ticket and trigger execution.
 
 - **Discussing / opening a ticket** → submit the objective:
+
   ```bash
   ovld protocol discuss-objective --ticket-id $TICKET_ID
   ```
+
   This transitions the objective from `draft` to `submitted`. No session is created.
 
 - **Creating a ticket** via `ovld protocol create` keeps the objective in `draft` state.
@@ -120,6 +134,7 @@ Record only meaningful behavioral changes. Skip formatting-only noise.
 ## Project Discovery And Ticket Creation
 
 When creating tickets from within a repository:
+
 - Prefer `create` by default for draft ticket creation.
 - Use `prompt` only when the user explicitly asks to start execution immediately.
 - Both commands resolve the project from the current working directory; use `--working-directory` to override or `--project-id` to be explicit.
@@ -137,7 +152,7 @@ Pass `--execution-target agent` or `--execution-target human` (default: `human`)
 - **`agent`** — any task an AI agent can complete in a computer environment: coding, internet research, document editing, data analysis, automated testing, etc.
 - **`human`** — any task requiring human presence or judgment: setting credentials or tokens in a third-party UI (e.g. Vercel, AWS), sending physical mail, making a product or business decision, physical-world actions.
 
-When in doubt, ask yourself: *can this be done entirely inside a terminal or browser by an AI without human intervention?* If yes → `agent`. If it requires a human to log in, decide, or act in the real world → `human`.
+When in doubt, ask yourself: _can this be done entirely inside a terminal or browser by an AI without human intervention?_ If yes → `agent`. If it requires a human to log in, decide, or act in the real world → `human`.
 
 ## Context And Artifacts
 
@@ -183,4 +198,4 @@ This keeps the ticket feed readable while preserving the full document in versio
 - If you must run `ovld auth login`, always include `--organization-id <id>` — use the organization ID from the ticket prompt context to select the organization non-interactively and avoid a blocking TTY prompt.
 - Delivery is the concluding step. After delivering, stop unless the user follows up or the ticket is reopened.
 
-<!-- version: 0.5.0 -->
+<!-- version: 0.5.1 -->

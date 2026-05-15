@@ -66,6 +66,13 @@ const electronAPI = {
       ipcRenderer.invoke('filesystem:create-checkpoint', options),
     restoreCheckpoint: (options: { directory: string; objectiveId: string }) =>
       ipcRenderer.invoke('filesystem:restore-checkpoint', options),
+    diffCheckpoint: (options: { directory: string; objectiveId?: string; gitCommitId?: string }) =>
+      ipcRenderer.invoke('filesystem:diff-checkpoint', options),
+    pruneCheckpoints: (options: {
+      directory: string;
+      keepObjectiveIds?: string[];
+      objectiveIds?: string[];
+    }) => ipcRenderer.invoke('filesystem:prune-checkpoints', options),
     getGitBranches: (options?: WorkspacePayload) =>
       ipcRenderer.invoke('filesystem:get-git-branches', options),
     gitCheckoutBranch: (options: WorkspacePayload & { options: { name: string } }) =>

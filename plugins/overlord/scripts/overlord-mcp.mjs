@@ -129,6 +129,27 @@ const tools = [
     subcommand: 'load-context'
   },
   {
+    name: 'revert',
+    description:
+      'Restore the local working tree to an objective checkpoint (maps to ovld protocol revert).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        objective_id: { type: 'string' },
+        working_directory: {
+          type: 'string',
+          description: 'Repository to restore. Defaults to the current workspace.'
+        }
+      },
+      required: ['objective_id']
+    },
+    toCliFlags: args => ({
+      'objective-id': args.objective_id,
+      'working-directory': args.working_directory
+    }),
+    subcommand: 'revert'
+  },
+  {
     name: 'discuss_objective',
     description:
       'Mark a draft objective as "submitted", indicating the ticket is in active discussion with an agent but not yet being executed. Does NOT start execution — use attach for that.',
@@ -390,9 +411,8 @@ const tools = [
         checkpoint: {
           type: 'object',
           description:
-            'Optional checkpoint metadata. The local CLI creates this automatically for JJ/Git workspaces during deliver.'
+            'Optional checkpoint metadata. Local git checkpoints are created on `attach`, not deliver; this field is only for callers forwarding pre-recorded checkpoint provenance.'
         },
-        skip_checkpoint: { type: 'boolean' },
         skip_file_change_check: { type: 'boolean' }
       },
       required: ['session_key', 'ticket_id', 'summary']
@@ -401,7 +421,6 @@ const tools = [
       'session-key': args.session_key,
       'ticket-id': args.ticket_id,
       'payload-file': '-',
-      'skip-checkpoint': args.skip_checkpoint,
       'skip-file-change-check': args.skip_file_change_check
     }),
     toCliStdin: args =>

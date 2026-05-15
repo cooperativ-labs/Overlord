@@ -1,4 +1,8 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
 
 import {
@@ -7,6 +11,14 @@ import {
   resolveProtocolModelIdentifier,
   resolveProtocolTicketDelegate
 } from '../packages/overlord-cli/bin/_cli/protocol.mjs';
+
+function git(cwd, args) {
+  return execFileSync('git', args, {
+    cwd,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe']
+  }).trim();
+}
 
 test('resolveProtocolAgentIdentifier prefers explicit agent, then environment, then default', () => {
   const original = process.env.AGENT_IDENTIFIER;
@@ -29,7 +41,10 @@ test('resolveProtocolAgentIdentifier prefers explicit agent, then environment, t
 
 test('resolveProtocolTicketDelegate uses explicit delegate before model or agent identifier', () => {
   assert.equal(resolveProtocolTicketDelegate({ delegate: 'gemini' }, 'gpt-5.4', 'codex'), 'gemini');
-  assert.equal(resolveProtocolTicketDelegate({ delegate: '  cursor  ' }, 'gpt-5.4', 'codex'), 'cursor');
+  assert.equal(
+    resolveProtocolTicketDelegate({ delegate: '  cursor  ' }, 'gpt-5.4', 'codex'),
+    'cursor'
+  );
 });
 
 test('resolveProtocolTicketDelegate falls back to model identifier before agent identifier', () => {
@@ -102,10 +117,7 @@ test('permission-request posts hook payload through protocol auth resolver', asy
       logs.push(String(value));
     };
 
-    await runProtocolCommand('permission-request', [
-      '--ticket-id',
-      'ticket 123'
-    ]);
+    await runProtocolCommand('permission-request', ['--ticket-id', 'ticket 123']);
   } finally {
     global.fetch = previousFetch;
     console.log = previousLog;
@@ -169,7 +181,6 @@ test('deliver accepts --payload-json and posts the full delivery payload', async
       '1:1022',
       '--payload-json',
       '{"summary":"Done","artifacts":[{"type":"note","label":"Delivery","content":"ok"}],"changeRationales":[{"label":"Deliver inline payload","file_path":"packages/overlord-cli/bin/_cli/protocol.mjs","summary":"Added payload-json support.","why":"Agents should be able to submit full delivery JSON inline.","impact":"No temp file or stdin transport is required for compact payloads.","hunks":[{"header":"@@ -1120,6 +1120,22 @@"}]}]}',
-      '--skip-checkpoint',
       '--skip-file-change-check'
     ]);
   } finally {
@@ -219,7 +230,6 @@ test('deliver rejects conflicting payload inputs and summary/artifact/rationale 
         '{"summary":"Done"}',
         '--summary',
         'Done',
-        '--skip-checkpoint',
         '--skip-file-change-check'
       ]),
     /Use either payload input or --summary\/--summary-file, not both/
@@ -236,7 +246,6 @@ test('deliver rejects conflicting payload inputs and summary/artifact/rationale 
         '{"summary":"Done"}',
         '--artifacts-json',
         '[]',
-        '--skip-checkpoint',
         '--skip-file-change-check'
       ]),
     /Use either payload input or --artifacts-json, not both/
@@ -253,7 +262,6 @@ test('deliver rejects conflicting payload inputs and summary/artifact/rationale 
         '{"summary":"Done"}',
         '--change-rationales-json',
         '[]',
-        '--skip-checkpoint',
         '--skip-file-change-check'
       ]),
     /Use either payload input or change-rationale flags, not both/
@@ -270,9 +278,85 @@ test('deliver rejects conflicting payload inputs and summary/artifact/rationale 
         '{"summary":"Done"}',
         '--payload-file',
         './deliver.json',
-        '--skip-checkpoint',
         '--skip-file-change-check'
       ]),
     /Use either --payload-file or --payload-json, not both/
   );
+});
+
+test('revert fetches checkpoint row and restores the local git working tree', async () => {
+  const previousFetch = global.fetch;
+  const previousOverlordUrl = process.env.OVERLORD_URL;
+  const previousAgentToken = process.env.OVERLORD_ACCESS_TOKEN;
+  const previousOrganizationId = process.env.OVERLORD_ORGANIZATION_ID;
+  const previousLog = console.log;
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'ovld-revert-test-'));
+  const objectiveId = '11111111-2222-4333-8444-555555555555';
+  const calls = [];
+  const logs = [];
+
+  try {
+    git(repo, ['init']);
+    git(repo, ['config', 'user.email', 'test@example.com']);
+    git(repo, ['config', 'user.name', 'Test User']);
+    fs.writeFileSync(path.join(repo, 'file.txt'), 'checkpoint\n');
+    git(repo, ['add', 'file.txt']);
+    git(repo, ['commit', '-m', 'checkpoint']);
+    const checkpointSha = git(repo, ['rev-parse', 'HEAD']);
+    fs.writeFileSync(path.join(repo, 'file.txt'), 'changed\n');
+
+    process.env.OVERLORD_URL = 'https://www.ovld.ai';
+    process.env.OVERLORD_ACCESS_TOKEN = 'test-agent-token';
+    process.env.OVERLORD_ORGANIZATION_ID = '42';
+
+    global.fetch = async (url, init = {}) => {
+      calls.push({
+        url: String(url),
+        method: init.method,
+        headers: init.headers,
+        body: init.body
+      });
+      return new Response(
+        JSON.stringify({
+          checkpoint: {
+            id: 'checkpoint-id',
+            objective_id: objectiveId,
+            git_commit_id: checkpointSha,
+            git_ref_name: `refs/overlord/checkpoints/${objectiveId}`
+          }
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      );
+    };
+    console.log = value => {
+      logs.push(String(value));
+    };
+
+    await runProtocolCommand('revert', [
+      '--objective-id',
+      objectiveId,
+      '--working-directory',
+      repo
+    ]);
+
+    assert.equal(fs.readFileSync(path.join(repo, 'file.txt'), 'utf8'), 'checkpoint\n');
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].url, 'https://www.ovld.ai/api/protocol/revert');
+    assert.deepEqual(JSON.parse(calls[0].body), { objectiveId });
+    assert.match(logs.join('\n'), /"ok": true/);
+    assert.match(logs.join('\n'), /"safetyRef": "refs\/overlord\/safety\//);
+  } finally {
+    global.fetch = previousFetch;
+    console.log = previousLog;
+    if (previousOverlordUrl === undefined) delete process.env.OVERLORD_URL;
+    else process.env.OVERLORD_URL = previousOverlordUrl;
+    if (previousAgentToken === undefined) delete process.env.OVERLORD_ACCESS_TOKEN;
+    else process.env.OVERLORD_ACCESS_TOKEN = previousAgentToken;
+    if (previousOrganizationId === undefined) delete process.env.OVERLORD_ORGANIZATION_ID;
+    else process.env.OVERLORD_ORGANIZATION_ID = previousOrganizationId;
+    fs.rmSync(repo, { recursive: true, force: true });
+  }
 });

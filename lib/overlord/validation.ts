@@ -228,6 +228,10 @@ export const loadContextSchema = z.object({
   ticketId: ticketIdSchema
 });
 
+export const revertSchema = z.object({
+  objectiveId: z.uuid()
+});
+
 /**
  * record-work: create a completed ticket from chat in one step.
  * Used when an agent has done work directly in a chat (no live session) and

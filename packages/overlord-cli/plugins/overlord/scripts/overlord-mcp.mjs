@@ -365,9 +365,8 @@ const tools = [
         checkpoint: {
           type: 'object',
           description:
-            'Optional checkpoint metadata. The local CLI creates this automatically for JJ/Git workspaces during deliver.'
+            'Optional checkpoint metadata. Local git checkpoints are created on `attach`, not deliver; this field is only for callers forwarding pre-recorded checkpoint provenance.'
         },
-        skip_checkpoint: { type: 'boolean' },
         skip_file_change_check: { type: 'boolean' }
       },
       required: ['session_key', 'ticket_id', 'summary']
@@ -376,7 +375,6 @@ const tools = [
       'session-key': args.session_key,
       'ticket-id': args.ticket_id,
       'payload-file': '-',
-      'skip-checkpoint': args.skip_checkpoint,
       'skip-file-change-check': args.skip_file_change_check
     }),
     toCliStdin: args =>

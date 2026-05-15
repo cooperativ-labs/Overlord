@@ -208,6 +208,7 @@ export async function TicketPanelContent({
   const projectIdsForSettings = projectOptionsRaw.map(project => project.id);
   const sshEnabled = await isAppFeatureEnabled('ssh');
   const futureObjectivesEnabled = await isAppFeatureEnabled('future-objectives');
+  const gitRevertFeatureEnabled = await isAppFeatureEnabled('objective-git-revert');
   const [sshSettingsByProjectId, localSettingsByProjectId] = await Promise.all([
     getProjectUserSshSettingsByProjectId(supabase, user?.id, projectIdsForSettings),
     getProjectUserLocalSettingsByProjectId(supabase, user?.id, projectIdsForSettings)
@@ -301,6 +302,19 @@ export async function TicketPanelContent({
   const agentCommands: AgentCommands = { launchCommands, resumeCommands };
   const objectiveAttachments = await listObjectiveAttachmentsAction(ticketId).catch(() => []);
   const initialTags = ticket.project_id ? await getTicketTagsAction(ticketId).catch(() => []) : [];
+  const allProjectCheckpointObjectiveIds = ticket.project_id
+    ? (
+        (
+          await supabase
+            .from('project_checkpoints')
+            .select('objective_id')
+            .eq('project_id', ticket.project_id)
+            .not('objective_id', 'is', null)
+        ).data ?? []
+      )
+        .map(checkpoint => checkpoint.objective_id)
+        .filter((objectiveId): objectiveId is string => Boolean(objectiveId))
+    : [];
 
   return (
     <TicketLiveProvider
@@ -413,6 +427,8 @@ export async function TicketPanelContent({
                 remoteWorkingDirectory={projectRemoteWorkingDirectory}
                 hasProjectWorkingDirectory={hasProjectWorkingDirectory}
                 checkpointsByObjectiveId={checkpointsByObjectiveId}
+                allProjectCheckpointObjectiveIds={allProjectCheckpointObjectiveIds}
+                gitRevertFeatureEnabled={gitRevertFeatureEnabled}
               />
             </div>
           </section>

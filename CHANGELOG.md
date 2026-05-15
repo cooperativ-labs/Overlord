@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented in this file.
 
+## [5.2605151440.0] - 2026-05-15:14:40
+
+### Added
+- **Objective git revert** (app feature **`objective-git-revert`**, off by default): per-objective **Revert** on the ticket panel with a diff preview dialog and restore in the **Overlord desktop** app; **Prune stale checkpoints** removes orphan `refs/overlord/checkpoints/*` refs for the project.
+- **`POST /api/protocol/revert`** returns the objective checkpoint row; **`ovld protocol revert`** fetches it and restores the caller’s local git working tree (safety snapshot under **`refs/overlord/safety/`** first).
+- Local MCP **`revert`** tool (local shim only — not on hosted MCP because it mutates the user’s repository).
+- Snapshot **`diffCheckpoint`** plus desktop **`filesystem:diff-checkpoint`**, **`filesystem:restore-checkpoint`**, and **`filesystem:prune-checkpoints`** IPC.
+
+### Fixed
+- None.
+
+### Changed
+- Create per-objective git checkpoints on **`attach`**, not **`deliver`**; align connector surfaces, protocol help, **`overlord-ticket`** skills, CLI reference, and local MCP **`deliver`** schema (remove **`skip_checkpoint`** from deliver; checkpoint metadata is attach-time).
+- Kanban card title typography uses **`text-sm`** for consistency with surrounding UI.
+
+### Security
+- None.
+
+### Test
+- Extend **`cli-protocol.test.mjs`** for **`revert`** (API checkpoint fetch plus local git restore).
+
+### Documentation
+- Update **connector surfaces**, **`ovld-protocol-help.txt`**, **for-agents** CLI reference, **`overlord-cli` README**, and **`overlord-ticket`** skills for **`revert`** and attach-time checkpoints.
+
+### Chore
+- Add Supabase migration for **`objective-git-revert`** app feature; bump workspace to **`5.2605151440.0`** and **`overlord-cli`** to **`0.2605151440.0`**.
+
 ## [5.2605151257.0] - 2026-05-15:12:57
 
 ### Added

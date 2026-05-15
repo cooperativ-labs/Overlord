@@ -41,6 +41,21 @@ export type RestoreCheckpointResult = {
   safetySha: string | null;
 };
 
+export type CheckpointDiffInput = {
+  workspacePath: string;
+  objectiveId?: string;
+  gitCommitId?: string;
+  runner?: Runner;
+};
+
+export type CheckpointDiffResult = {
+  ref: string | null;
+  gitCommitId: string;
+  headSha: string;
+  diff: string;
+  diffStat: string | null;
+};
+
 const REF_NS = 'refs/overlord/checkpoints';
 const SAFETY_NS = 'refs/overlord/safety';
 
@@ -206,6 +221,49 @@ export async function restoreCheckpoint(
   await git(runner, repoRoot, ['read-tree', '--reset', '-u', target.output]);
 
   return { ref, gitCommitId: target.output, safetyRef, safetySha };
+}
+
+export async function diffCheckpoint(input: CheckpointDiffInput): Promise<CheckpointDiffResult> {
+  const workspacePath = path.resolve(input.workspacePath.trim());
+  const runner = input.runner ?? defaultRunner;
+  const repoRoot = await assertGitRepo(runner, workspacePath);
+  const headSha = await git(runner, repoRoot, ['rev-parse', 'HEAD']);
+  let ref: string | null = null;
+  let gitCommitId = input.gitCommitId?.trim() ?? '';
+
+  if (!gitCommitId) {
+    if (!input.objectiveId) {
+      throw new Error('objectiveId or gitCommitId is required.');
+    }
+    ref = refFor(input.objectiveId);
+    const target = await gitOk(runner, repoRoot, ['rev-parse', '--verify', ref]);
+    if (!target.ok || !target.output) {
+      throw new Error(`No checkpoint exists for objective ${input.objectiveId}.`);
+    }
+    gitCommitId = target.output;
+  }
+
+  const verified = await gitOk(runner, repoRoot, [
+    'rev-parse',
+    '--verify',
+    `${gitCommitId}^{commit}`
+  ]);
+  if (!verified.ok || !verified.output) {
+    throw new Error(`Checkpoint commit ${gitCommitId} does not exist in this repository.`);
+  }
+
+  const [diff, diffStat] = await Promise.all([
+    gitOk(runner, repoRoot, ['diff', '--find-renames', verified.output, 'HEAD']),
+    gitOk(runner, repoRoot, ['diff', '--stat', verified.output, 'HEAD'])
+  ]);
+
+  return {
+    ref,
+    gitCommitId: verified.output,
+    headSha,
+    diff: diff.output,
+    diffStat: diffStat.output || null
+  };
 }
 
 export type CheckpointSummary = {

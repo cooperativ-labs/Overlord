@@ -86,10 +86,13 @@ Optional:
 --method <connectionMethod>
 --external-session-id <id|null>   # store native agent thread id, or clear with "null"
 --metadata-json <json>            # extra session metadata
+--skip-checkpoint                 # bypass automatic objective-start git checkpoint creation
 \`\`\`
 
 Returns full JSON including \`session.sessionKey\`, \`ticket\`, \`history\`, \`artifacts\`,
-\`sharedState\`, and \`promptContext\`.
+\`sharedState\`, and \`promptContext\`. In a git workspace, \`attach\` creates a
+local git checkpoint for each executing objective before work begins, stored
+under \`refs/overlord/checkpoints/<objectiveId>\`.
 
 ## connect
 
@@ -107,6 +110,17 @@ Read ticket details without creating a session.
 
 \`\`\`bash
 ovld protocol load-context --ticket-id <ticket_id>
+\`\`\`
+
+## revert
+
+Restore the local git working tree to an objective checkpoint. The CLI fetches
+the checkpoint row from Overlord, saves a safety ref under
+\`refs/overlord/safety/\`, then restores the tree.
+
+\`\`\`bash
+ovld protocol revert --objective-id <objective-uuid>
+ovld protocol revert --objective-id <objective-uuid> --working-directory /path/to/repo
 \`\`\`
 
 ## search-tickets
@@ -292,13 +306,14 @@ Optional:
 --change-rationales-file <path|->
 --payload-json <json>              # full { summary, artifacts, changeRationales } JSON inline
 --payload-file <path|->            # full { summary, artifacts, changeRationales } JSON
---skip-checkpoint                  # bypass automatic local checkpoint creation
 --skip-file-change-check           # bypass local git vs changeRationales validation
 \`\`\`
 
-Before sending the API request, \`deliver\` creates a local checkpoint when the
-workspace has a git snapshot and includes the resulting provenance in the
-payload. Use \`--skip-checkpoint\` only for intentional no-checkpoint delivery.
+Local git checkpoints are created on \`attach\` (one per executing objective at
+\`refs/overlord/checkpoints/<objectiveId>\`), not on \`deliver\`. Pass
+\`--skip-checkpoint\` to \`attach\` to opt out of that behavior. \`deliver\` itself
+does not create a checkpoint; restore an objective checkpoint with
+\`ovld protocol revert --objective-id <id>\`.
 
 In a git workspace, \`deliver\` validates that changed files are represented by
 \`changeRationales\` unless the check is skipped.

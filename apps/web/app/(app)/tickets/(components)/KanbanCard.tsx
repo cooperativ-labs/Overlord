@@ -176,9 +176,7 @@ function KanbanCardBody({
     <CardContent className="flex h-full flex-col p-0 pt-3  ">
       <div className="px-3 space-y-3">
         <div className="min-w-0">
-          <h4 className="text-[13px] leading-snug font-medium text-fg1">
-            {getDisplayTitle(ticket)}
-          </h4>
+          <h4 className="text-sm leading-snug font-medium text-fg1">{getDisplayTitle(ticket)}</h4>
 
           <div className="mt-4 flex items-start justify-between gap-2">
             <div className="flex min-w-0 items-center gap-1.5">

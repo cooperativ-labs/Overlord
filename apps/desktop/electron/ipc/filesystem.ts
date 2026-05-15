@@ -12,7 +12,13 @@ import { z } from 'zod';
 
 import { resolveLinkedDirectory } from '../../../../lib/filesystem/project-file-tree';
 import { buildRepoOperationsProfile } from '../../../../lib/repo-profile/build-profile';
-import { createCheckpoint, restoreCheckpoint } from '../../../../lib/snapshot/git-checkpoint';
+import {
+  createCheckpoint,
+  diffCheckpoint,
+  listCheckpoints,
+  pruneCheckpoints,
+  restoreCheckpoint
+} from '../../../../lib/snapshot/git-checkpoint';
 import { LocalWorkspaceClient } from '../../../../lib/workspace/local';
 import type {
   CreatePullRequestOptions,
@@ -227,6 +233,74 @@ export function registerFilesystemIpc(): void {
       return {
         ok: false,
         error: error instanceof Error ? error.message : 'Failed to restore checkpoint.'
+      };
+    }
+  });
+
+  ipcMain.handle('filesystem:diff-checkpoint', async (_event, rawPayload?: unknown) => {
+    try {
+      const raw = (rawPayload ?? {}) as {
+        directory?: unknown;
+        objectiveId?: unknown;
+        gitCommitId?: unknown;
+      };
+      const directory = typeof raw.directory === 'string' ? raw.directory.trim() : '';
+      const objectiveId = typeof raw.objectiveId === 'string' ? raw.objectiveId.trim() : '';
+      const gitCommitId = typeof raw.gitCommitId === 'string' ? raw.gitCommitId.trim() : '';
+      if (!directory) return { ok: false, error: 'Local working directory is required.' };
+      if (!objectiveId && !gitCommitId) {
+        return { ok: false, error: 'objectiveId or gitCommitId is required.' };
+      }
+      const result = await diffCheckpoint({
+        workspacePath: directory,
+        objectiveId: objectiveId || undefined,
+        gitCommitId: gitCommitId || undefined
+      });
+      return { ok: true, ...result };
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : 'Failed to diff checkpoint.'
+      };
+    }
+  });
+
+  ipcMain.handle('filesystem:prune-checkpoints', async (_event, rawPayload?: unknown) => {
+    try {
+      const raw = (rawPayload ?? {}) as {
+        directory?: unknown;
+        keepObjectiveIds?: unknown;
+        objectiveIds?: unknown;
+      };
+      const directory = typeof raw.directory === 'string' ? raw.directory.trim() : '';
+      if (!directory) return { ok: false, error: 'Local working directory is required.' };
+
+      let objectiveIds = Array.isArray(raw.objectiveIds)
+        ? raw.objectiveIds.filter(
+            (id): id is string => typeof id === 'string' && id.trim().length > 0
+          )
+        : null;
+
+      if (!objectiveIds) {
+        const keepObjectiveIds = new Set(
+          Array.isArray(raw.keepObjectiveIds)
+            ? raw.keepObjectiveIds.filter(
+                (id): id is string => typeof id === 'string' && id.trim().length > 0
+              )
+            : []
+        );
+        const checkpoints = await listCheckpoints({ workspacePath: directory });
+        objectiveIds = checkpoints
+          .map(checkpoint => checkpoint.objectiveId)
+          .filter(objectiveId => !keepObjectiveIds.has(objectiveId));
+      }
+
+      const result = await pruneCheckpoints({ workspacePath: directory, objectiveIds });
+      return { ok: true, ...result };
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : 'Failed to prune checkpoints.'
       };
     }
   });

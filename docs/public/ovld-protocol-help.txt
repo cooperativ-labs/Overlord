@@ -22,6 +22,7 @@ Subcommands:
   attach                    Start a ticket session and return full working context
   connect                   Start a lightweight session without full context
   load-context              Read ticket context without creating a session
+  revert                    Restore the local working tree to an objective checkpoint
   search-tickets            Find tickets by keyword, status, project, creator, or update date
   discuss-objective          Mark a draft objective as submitted (ready for review/execution)
   create                    Create a draft ticket without attaching (follow-up or standalone)
@@ -112,6 +113,16 @@ load-context:
     Read ticket details without creating a session
   Required:
     --ticket-id <ticket_id>
+
+revert:
+  Purpose:
+    Fetch an objective checkpoint from Overlord and restore the local git working tree to it.
+  Required:
+    --objective-id <objective-uuid>
+  Optional:
+    --working-directory <path>  Repository to restore (default: current working directory)
+  Notes:
+    A safety snapshot of the current working tree is saved under refs/overlord/safety/ first.
 
 search-tickets:
   Purpose:
@@ -401,6 +412,7 @@ Examples:
   ovld protocol attach --ticket-id 1:899 --external-session-id null
   ovld protocol connect --ticket-id 1:899
   ovld protocol load-context --ticket-id 1:899
+  ovld protocol revert --objective-id <objective-uuid>
   ovld protocol search-tickets --query "auth refactor" --status next-up,execute --limit 10
   ovld protocol discuss-objective --ticket-id 1:899
   ovld protocol discuss-objective --ticket-id 1:899 --objective-id <objective-uuid>

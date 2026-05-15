@@ -10,6 +10,12 @@ export const APP_FEATURE_DEFAULTS = {
       'Shows multi-objective planning with future objective placeholders and promotion controls.',
     isEnabled: false
   },
+  'objective-git-revert': {
+    name: 'Objective git revert',
+    description:
+      'Shows per-objective checkpoint revert controls and local checkpoint cleanup actions.',
+    isEnabled: false
+  },
   ssh: {
     name: 'SSH remote workspaces',
     description:
