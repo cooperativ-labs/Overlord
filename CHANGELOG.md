@@ -2,6 +2,37 @@
 
 All notable changes to this project will be documented in this file.
 
+## [5.2605150751.0] - 2026-05-15:07:51
+
+### Added
+- **Public MCP tool catalog** at **`GET /api/mcp/tools`** (no auth): Next.js proxies the Supabase edge **`/mcp/tools`** route so agents can fetch every hosted tool’s name, description, and input schema without a session.
+- **`/agent-docs`** and agent doc indexes now embed live **`ovld protocol help`** (from **`docs/public/ovld-protocol-help.txt`**, regenerated on web prebuild) and point agents at the public MCP tools endpoint.
+- **`scripts/generate-protocol-help.mjs`** plus web **`prebuild`**: capture **`ovld protocol help`** and build **`lib/agent-docs-manifest.json`** from **`docs/public/*.md`** on each build (skips gracefully when **`ovld`** is unavailable so CI still succeeds).
+- **Desktop pop-out feed → main window navigation**: ticket links in **`/feed-window`** call **`app:navigate-main`** IPC; the main shell listens via **`MainWindowNavigationBridge`** and routes in-app without losing the feed window.
+- **Quick task overlay bar pinning**: **`quick-task:set-bounds`** keeps the control bar at a fixed screen Y while the window grows upward for expanding text and downward for menus.
+- Split public agent docs into **`new-user-onboarding.md`** (setup-focused) and **`users-guide.md`** (full workflow reference), replacing the monolithic **`overlord-new-user-guide.md`**.
+- **`overlord-ticket`** skills (all connectors): **Large artifacts** guidance — save full planning/decision docs in the linked repo and summarize them in delivery artifacts instead of stuffing the ticket feed.
+
+### Fixed
+- Skip macOS desktop notifications in **unsigned dev** Electron builds (Electron 42 **`UNNotification`** requires a signed app bundle); log a clear warning instead of failing silently.
+- Report desktop **notification delivery failures** to Sentry from the Electron main process.
+
+### Changed
+- **`/agent-docs`** is **dynamic** (generation timestamp, shorter cache TTL) so embedded protocol help stays current after deploys.
+- Site and docs metadata: product title **Overlord**, canonical URLs on key docs pages, and a link to **`llms-full.txt`** on the **for-agents** hub.
+- Quick task window **max height** scales with the display work area; **global shortcut suspension** during programmatic resize; bar anchor resets after user moves or re-show.
+
+### Security
+- Electron **fuses** enable embedded ASAR integrity validation and **`onlyLoadAppFromAsar`** for packaged desktop builds.
+- Add **`scripts/electron-after-pack.cjs`** to enable and verify ASAR integrity digest on production **macOS** builds when **`OVLD_ENABLE_ASAR_INTEGRITY_DIGEST=1`**.
+
+### Documentation
+- Reorganize public agent documentation (**`new-user-onboarding`**, **`users-guide`**, generated protocol help); retire **`overlord-new-user-guide.md`**; move checkpoint internals to **`docs/checkpoints-change-tracking.md`** (remove **`jujustu-integration.md`**).
+- Extend **drift-review** skill to cross-check **`for-agents`** CLI reference and rules pages; refresh **for-agents** metadata and rules page title.
+
+### Chore
+- Bump workspace to **`5.2605150751.0`** and **`overlord-cli`** to **`0.2605150751.0`**.
+
 ## [5.2605141444.0] - 2026-05-14:14:44
 
 ### Added

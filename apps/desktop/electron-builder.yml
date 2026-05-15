@@ -40,4 +40,8 @@ asarUnpack:
   - "plugins/claude/**/*"
   - "plugins/cursor/**/*"
 
+electronFuses:
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
+
 npmRebuild: false

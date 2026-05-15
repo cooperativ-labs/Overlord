@@ -155,6 +155,16 @@ Objective attachment uploads also expose two-step variants — `attachment-prepa
 
 "Artifacts" in `deliver` are the structured records an agent submits at delivery time (next_steps, test_results, migration, decision, note, url) — not user-uploaded files.
 
+## Large Artifacts
+
+For large artifacts such as planning documents, architecture decisions, research summaries, or design documents: **save the full content as a markdown file in the linked repository, then summarize it in the artifact returned to the ticket.**
+
+- Save to a meaningful path in the repository (e.g., `ai/feature-plans/my-feature.md` for feature plans, `docs/decisions/my-decision.md` for architecture decision records).
+- Commit the file as part of the ticket's work so it appears in `changeRationales`.
+- In the delivery, include a `note` or `decision` artifact with a concise summary and the repository file path — not the full document content.
+
+This keeps the ticket feed readable while preserving the full document in version control where it can be reviewed, diffed, and referenced later.
+
 ## Defaults And Notes
 
 - The Overlord API requires `agentIdentifier` and `connectionMethod` on attach/connect/prompt, but the CLI defaults them to `cursor`/`cli` (override with `--agent` / `--method`). The MCP tools default to `mcp`.

@@ -1337,6 +1337,22 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@electron/asar@npm:^4.1.0":
+  version: 4.2.0
+  resolution: "@electron/asar@npm:4.2.0"
+  dependencies:
+    commander: "npm:^13.1.0"
+    glob: "npm:^13.0.2"
+    minimatch: "npm:^10.0.1"
+  dependenciesMeta:
+    electron:
+      built: true
+  bin:
+    asar: bin/asar.mjs
+  checksum: 10c0/6ec3f5c9b670f0a5c1b83e098bfc9d4b59b90bad2446f462d34c7d43caad96c6026a5eee2ec269dabe095dd0a07c76369d617b786ac262b98ba51556b34f7bb8
+  languageName: node
+  linkType: hard
+
 "@electron/fuses@npm:^1.8.0":
   version: 1.8.0
   resolution: "@electron/fuses@npm:1.8.0"
@@ -9208,6 +9224,7 @@ __metadata:
     "@dnd-kit/core": "npm:^6.3.1"
     "@dnd-kit/sortable": "npm:^10.0.0"
     "@dnd-kit/utilities": "npm:^3.2.2"
+    "@electron/asar": "npm:^4.1.0"
     "@eslint/js": "npm:^10.0.1"
     "@google/genai": "npm:^1.46.0"
     "@modelcontextprotocol/ext-apps": "npm:^1.2.2"
@@ -9264,7 +9281,6 @@ __metadata:
     lucide-react: "npm:^0.575.0"
     next: "npm:^16.1.6"
     next-themes: "npm:^0.4.6"
-    node-abi: "npm:^4.31.0"
     pg: "npm:^8.18.0"
     postcss: "npm:^8.5.6"
     prettier: "npm:^3.8.1"
@@ -11313,6 +11329,13 @@ __metadata:
   version: 12.1.0
   resolution: "commander@npm:12.1.0"
   checksum: 10c0/6e1996680c083b3b897bfc1cfe1c58dfbcd9842fd43e1aaf8a795fbc237f65efcc860a3ef457b318e73f29a4f4a28f6403c3d653d021d960e4632dd45bde54a9
+  languageName: node
+  linkType: hard
+
+"commander@npm:^13.1.0":
+  version: 13.1.0
+  resolution: "commander@npm:13.1.0"
+  checksum: 10c0/7b8c5544bba704fbe84b7cab2e043df8586d5c114a4c5b607f83ae5060708940ed0b5bd5838cf8ce27539cde265c1cbd59ce3c8c6b017ed3eec8943e3a415164
   languageName: node
   linkType: hard
 
@@ -14859,7 +14882,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"glob@npm:^13.0.6":
+"glob@npm:^13.0.2, glob@npm:^13.0.6":
   version: 13.0.6
   resolution: "glob@npm:13.0.6"
   dependencies:

@@ -60,6 +60,10 @@ let baseUrl = '';
 let isDevMode = false;
 /** Cleared on focus; avoids hiding when blur is transient (e.g. setSize after popover open). */
 let quickTaskBlurHideTimer: ReturnType<typeof setTimeout> | null = null;
+/** Absolute screen Y where the control bar should stay pinned. Reset on hide/show/user-move. */
+let barAnchorScreenY: number | null = null;
+/** Set while we are programmatically moving the window so the 'moved' handler doesn't reset the anchor. */
+let suppressMovedReset = false;
 
 const QUICK_TASK_BLUR_HIDE_MS = 180;
 
@@ -67,6 +71,11 @@ function isReservedAccelerator(accel: string): boolean {
   // Disallow obvious system-level chords. Electron's globalShortcut.register
   // returns false anyway, but we do a light pre-check.
   return accel.trim().length === 0;
+}
+
+function setQuickTaskHotkeySuspended(suspended: boolean): void {
+  if (globalShortcut.isSuspended() === suspended) return;
+  globalShortcut.setSuspended(suspended);
 }
 
 export function getStoredQuickTaskHotkey(): string {
@@ -164,6 +173,10 @@ function ensureWindow(): BrowserWindow {
     if (!win || win.isDestroyed()) return;
     const [x, y] = win.getPosition();
     writeSavedPosition({ x, y });
+    if (!suppressMovedReset) {
+      // User-initiated move — re-anchor on the next resize call.
+      barAnchorScreenY = null;
+    }
   });
 
   quickWindow.on('closed', () => {
@@ -193,6 +206,8 @@ function showQuickTaskWindow(): void {
     getValidatedSavedPosition(WINDOW_WIDTH, currentHeight) ??
     getCursorDisplayPosition(WINDOW_WIDTH);
   window.setPosition(target.x, target.y, false);
+  // Re-anchor on the next resize call so the bar pins to wherever it lands on this show.
+  barAnchorScreenY = null;
 
   // Reload to ensure a fresh state each invocation. The page is light.
   if (window.webContents.getURL() !== getQuickTaskUrl()) {
@@ -217,11 +232,65 @@ export function toggleQuickTaskWindow(): void {
   showQuickTaskWindow();
 }
 
+const QUICK_TASK_MIN_HEIGHT = 120;
+const QUICK_TASK_DISPLAY_MARGIN = 80;
+
+function getQuickTaskMaxHeight(window: BrowserWindow): number {
+  try {
+    const [x, y] = window.getPosition();
+    const display = screen.getDisplayNearestPoint({ x, y });
+    return Math.max(QUICK_TASK_MIN_HEIGHT, display.workArea.height - QUICK_TASK_DISPLAY_MARGIN);
+  } catch {
+    return 800;
+  }
+}
+
 export function setQuickTaskWindowSize(height: number): void {
   if (!quickWindow || quickWindow.isDestroyed()) return;
-  const clamped = Math.max(120, Math.min(600, Math.round(height)));
+  const max = getQuickTaskMaxHeight(quickWindow);
+  const clamped = Math.max(QUICK_TASK_MIN_HEIGHT, Math.min(max, Math.round(height)));
   const [width] = quickWindow.getSize();
   quickWindow.setSize(width ?? WINDOW_WIDTH, clamped, false);
+}
+
+/**
+ * Resize the window so the control bar stays at a constant screen Y.
+ *
+ * - `barOffsetTop` is the bar's offset within the renderer container.
+ * - On the first call (or after show/user-move), we capture the bar's current
+ *   screen Y as the anchor. Subsequent calls compute a new window Y so the bar
+ *   visually stays put — text expanding above pushes the window up, menus
+ *   opening below extend the window down.
+ */
+export function setQuickTaskWindowBounds(args: { height: number; barOffsetTop: number }): void {
+  if (!quickWindow || quickWindow.isDestroyed()) return;
+  const win = quickWindow;
+  const max = getQuickTaskMaxHeight(win);
+  const clampedHeight = Math.max(QUICK_TASK_MIN_HEIGHT, Math.min(max, Math.round(args.height)));
+  const [width] = win.getSize();
+  const [x, currentY] = win.getPosition();
+
+  if (barAnchorScreenY === null) {
+    barAnchorScreenY = currentY + args.barOffsetTop;
+  }
+
+  let nextY = Math.round(barAnchorScreenY - args.barOffsetTop);
+
+  // Keep the window on a connected display — if anchored position drifts off
+  // screen, clamp to the nearest display's workArea and re-anchor.
+  const display = screen.getDisplayNearestPoint({ x, y: nextY });
+  const minY = display.workArea.y;
+  const maxY = display.workArea.y + display.workArea.height - clampedHeight;
+  if (nextY < minY || nextY > maxY) {
+    nextY = Math.max(minY, Math.min(maxY, nextY));
+    barAnchorScreenY = nextY + args.barOffsetTop;
+  }
+
+  suppressMovedReset = true;
+  win.setBounds({ x, y: nextY, width: width ?? WINDOW_WIDTH, height: clampedHeight }, false);
+  setImmediate(() => {
+    suppressMovedReset = false;
+  });
 }
 
 export function registerQuickTaskHotkey(accelerator?: string): {
@@ -230,18 +299,37 @@ export function registerQuickTaskHotkey(accelerator?: string): {
   error?: string;
 } {
   const target = (accelerator ?? getStoredQuickTaskHotkey()).trim();
+  const wasSuspended = globalShortcut.isSuspended();
 
-  if (registeredAccelerator) {
+  if (registeredAccelerator === target) {
     try {
-      globalShortcut.unregister(registeredAccelerator);
-    } catch {
-      // ignore
+      setQuickTaskHotkeySuspended(false);
+    } catch (error) {
+      return {
+        ok: false,
+        accelerator: target,
+        error: error instanceof Error ? error.message : String(error)
+      };
     }
-    registeredAccelerator = null;
+
+    setStoredQuickTaskHotkey(target);
+    return { ok: true, accelerator: target };
   }
 
   if (isReservedAccelerator(target)) {
     return { ok: false, accelerator: target, error: 'Empty accelerator' };
+  }
+
+  let previousAccelerator: string | null = null;
+  if (registeredAccelerator) {
+    try {
+      setQuickTaskHotkeySuspended(false);
+      globalShortcut.unregister(registeredAccelerator);
+      previousAccelerator = registeredAccelerator;
+    } catch {
+      // ignore
+    }
+    registeredAccelerator = null;
   }
 
   let ok: boolean;
@@ -258,6 +346,27 @@ export function registerQuickTaskHotkey(accelerator?: string): {
   }
 
   if (!ok) {
+    if (previousAccelerator) {
+      try {
+        const restored = globalShortcut.register(previousAccelerator, () => {
+          toggleQuickTaskWindow();
+        });
+        if (restored) {
+          registeredAccelerator = previousAccelerator;
+        }
+      } catch {
+        // ignore restore failure and return the target registration error
+      }
+    }
+
+    if (wasSuspended && registeredAccelerator) {
+      try {
+        setQuickTaskHotkeySuspended(true);
+      } catch {
+        // ignore restore failure and return the target registration error
+      }
+    }
+
     return {
       ok: false,
       accelerator: target,
@@ -266,6 +375,9 @@ export function registerQuickTaskHotkey(accelerator?: string): {
   }
 
   registeredAccelerator = target;
+  if (wasSuspended) {
+    setQuickTaskHotkeySuspended(true);
+  }
   setStoredQuickTaskHotkey(target);
   return { ok: true, accelerator: target };
 }
@@ -273,6 +385,7 @@ export function registerQuickTaskHotkey(accelerator?: string): {
 export function unregisterQuickTaskHotkey(): void {
   if (registeredAccelerator) {
     try {
+      setQuickTaskHotkeySuspended(false);
       globalShortcut.unregister(registeredAccelerator);
     } catch {
       // ignore

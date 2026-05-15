@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 import { DocsMarkdownPage } from '../../_components/docs-markdown-page';
 
 export const metadata: Metadata = {
-  title: 'Rules for Agents'
+  title: 'Rules for AI Agents'
 };
 
 export default function RulesPage() {

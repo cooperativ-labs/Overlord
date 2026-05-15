@@ -11,7 +11,7 @@ import { displayFont, monoFont } from '@/lib/fonts';
 
 export const metadata: Metadata = {
   metadataBase: new URL(getSiteMetadataBaseUrl()),
-  title: 'Overlord AI',
+  title: 'Overlord',
   description: 'Stop juggling AI agents. Organize and launch agent work with Overlord.',
   icons: {
     apple: '/images/256.png'
@@ -21,6 +21,9 @@ export const metadata: Metadata = {
     statusBarStyle: 'default',
     title: 'Overlord',
     startupImage: '/images/1024.png'
+  },
+  alternates: {
+    canonical: 'https://www.ovld.ai'
   }
 };
 

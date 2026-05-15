@@ -115,6 +115,14 @@ const electronAPI = {
     openExternal: (url: string) => ipcRenderer.invoke('app:open-external', url),
     revealFile: (filePath: string) => ipcRenderer.invoke('app:reveal-file', filePath),
     reload: () => ipcRenderer.invoke('app:reload'),
+    navigateMain: (targetPath: string) => ipcRenderer.invoke('app:navigate-main', targetPath),
+    onNavigate: (callback: (path: string) => void) => {
+      const handler = (_: Electron.IpcRendererEvent, path: string) => callback(path);
+      ipcRenderer.on('app:navigate', handler);
+      return () => {
+        ipcRenderer.removeListener('app:navigate', handler);
+      };
+    },
     captureSentryTestEvent: () => ipcRenderer.invoke('app:capture-sentry-test-event')
   },
   cli: {
@@ -169,6 +177,8 @@ const electronAPI = {
       }>,
     close: () => ipcRenderer.invoke('quick-task:close'),
     setHeight: (height: number) => ipcRenderer.invoke('quick-task:set-height', height),
+    setBounds: (args: { height: number; barOffsetTop: number }) =>
+      ipcRenderer.invoke('quick-task:set-bounds', args),
     onShown: (callback: () => void) => {
       const handler = () => callback();
       ipcRenderer.on('quick-task:shown', handler);

@@ -9,6 +9,7 @@ import {
   ElectronAuthBoundary,
   ElectronAuthGate
 } from '@/components/features/electron-auth/ElectronAuthGate';
+import { MainWindowNavigationBridge } from '@/components/features/electron-nav/MainWindowNavigationBridge';
 import { ElectronOfflineGate } from '@/components/features/electron-offline/ElectronOfflineGate';
 import { OfflineTicketProcessor } from '@/components/features/electron-offline/OfflineTicketProcessor';
 import { RepoProfileMaintenance } from '@/components/features/electron-offline/RepoProfileMaintenance';
@@ -134,6 +135,7 @@ export default async function RootLayout({
         launchPreference={launchPreference}
       />
       <ElectronDetector />
+      <MainWindowNavigationBridge />
 
       <WebAuthGate />
       <ElectronAuthGate />

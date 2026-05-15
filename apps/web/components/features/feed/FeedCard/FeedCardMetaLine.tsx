@@ -1,6 +1,6 @@
-import Link from 'next/link';
-
 import type { FeedPost } from '@/lib/actions/feed';
+
+import { FeedTicketLink } from '../FeedTicketLink';
 
 type FeedCardMetaLineProps = {
   post: FeedPost;
@@ -34,10 +34,10 @@ export function FeedCardMetaLine({
         {post.project_name}
       </span>
       <span className="text-muted-foreground/40">&middot;</span>
-      <Link href={ticketPath} className="text-primary underline-offset-2 hover:underline">
+      <FeedTicketLink href={ticketPath} className="text-primary underline-offset-2 hover:underline">
         {post.ticket_identifier ? `${post.ticket_identifier} ` : ''}
         {post.ticket_title ?? 'Untitled ticket'}
-      </Link>
+      </FeedTicketLink>
     </div>
   );
 }

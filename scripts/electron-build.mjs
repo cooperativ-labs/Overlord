@@ -211,4 +211,6 @@ run(
 // Step 6 — electron-builder
 // ---------------------------------------------------------------------------
 
-run(`yarn electron-builder --config apps/desktop/electron-builder.yml${isDirMode ? ' --dir' : ''}${getElectronBuilderTargetFlag()}`);
+run(
+  `yarn electron-builder --config apps/desktop/electron-builder.yml${isDirMode ? ' --dir' : ''}${getElectronBuilderTargetFlag()}`
+);

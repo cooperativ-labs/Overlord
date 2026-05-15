@@ -319,6 +319,7 @@ interface ElectronAPI {
     ) => Promise<{ ok: boolean; accelerator: string; error?: string }>;
     close: () => Promise<unknown>;
     setHeight: (height: number) => Promise<unknown>;
+    setBounds: (args: { height: number; barOffsetTop: number }) => Promise<unknown>;
     onShown: (cb: () => void) => () => void;
   };
   app: {
@@ -328,6 +329,8 @@ interface ElectronAPI {
     openExternal: (url: string) => Promise<boolean>;
     revealFile: (filePath: string) => Promise<string>;
     reload: () => Promise<boolean>;
+    navigateMain: (targetPath: string) => Promise<boolean>;
+    onNavigate: (callback: (path: string) => void) => () => void;
     captureSentryTestEvent: () => Promise<{
       ok: boolean;
       eventId?: string;

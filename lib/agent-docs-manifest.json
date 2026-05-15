@@ -1,0 +1,26 @@
+[
+  {
+    "slug": "new-user-onboarding",
+    "filename": "new-user-onboarding.md",
+    "title": "Overlord for New Users",
+    "description": "Overlord is a ticketing and coordination layer for AI-assisted engineering work. It gives you one place to create agent-ready work, launch that work in the coding agent you already use (Claude Code..."
+  },
+  {
+    "slug": "users-guide",
+    "filename": "users-guide.md",
+    "title": "Overlord Users Guide",
+    "description": "This guide covers how to use Overlord after your initial setup. If you haven't completed the onboarding steps yet, start with the [New User Onboarding Guide](new-user-onboarding.md)."
+  },
+  {
+    "slug": "overlord-examples",
+    "filename": "overlord-examples.md",
+    "title": "Overlord Example Workflows",
+    "description": "This document gives agents two concrete examples they can use when explaining Overlord to humans."
+  },
+  {
+    "slug": "feed-page-functionality",
+    "filename": "feed-page-functionality.md",
+    "title": "Feed Page Functionality",
+    "description": "The `/feed` page is the activity feed for AI-assisted work in Overlord. It is designed to answer a practical question for a user or reviewer: what did agents recently do across my projects, what ch..."
+  }
+]

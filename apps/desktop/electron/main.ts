@@ -387,7 +387,12 @@ app.whenReady().then(async () => {
   registerRemoteInstallIpc();
   registerTailscaleIpc();
   registerSupabaseIpc(supabaseManager);
-  registerAppIpc({ appUpdater, platformUrl, connectorUrl });
+  registerAppIpc({
+    appUpdater,
+    platformUrl,
+    connectorUrl,
+    getMainWindow: () => mainWindow
+  });
   registerAuthIpc({
     getPlatformUrl: () => platformUrl,
     sessionStore,

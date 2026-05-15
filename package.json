@@ -2,7 +2,7 @@
   "name": "Overlord",
   "description": "Overlord is a platform for managing AI agent workflows.",
   "author": "Overlord",
-  "version": "5.2605141444.0",
+  "version": "5.2605150751.0",
   "private": true,
   "main": "apps/desktop/dist-electron/main.js",
   "workspaces": [
@@ -122,6 +122,7 @@
     "zustand": "^5.0.12"
   },
   "devDependencies": {
+    "@electron/asar": "^4.1.0",
     "@eslint/js": "^10.0.1",
     "@serwist/turbopack": "^9.5.6",
     "@snaplet/copycat": "^6.0.0",

@@ -96,6 +96,18 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    // Public tool definitions — no auth required
+    if (url.pathname.endsWith('/tools')) {
+      return new Response(JSON.stringify({ tools: TOOLS }), {
+        status: 200,
+        headers: {
+          ...cors,
+          'Content-Type': 'application/json',
+          'Cache-Control': 'public, max-age=300, s-maxage=3600'
+        }
+      });
+    }
+
     return new Response('Method not allowed', {
       status: 405,
       headers: { ...cors, Allow: 'POST, OPTIONS', 'Content-Type': 'text/plain; charset=utf-8' }

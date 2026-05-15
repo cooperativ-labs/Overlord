@@ -1,5 +1,4 @@
 import { AlertTriangle, CheckCircle2, ChevronDown, TicketPlus } from 'lucide-react';
-import Link from 'next/link';
 import { useState } from 'react';
 
 import { ExternalLink } from '@/components/features/ExternalLink';
@@ -13,6 +12,8 @@ import type { FeedPost } from '@/lib/actions/feed';
 import { buildEditorHref } from '@/lib/helpers/file-changes';
 import { buildTicketPath } from '@/lib/helpers/ticket-path';
 import { cn } from '@/lib/utils';
+
+import { FeedTicketLink } from '../FeedTicketLink';
 
 type FeedCardImpact = { label: string; className: string };
 
@@ -161,12 +162,12 @@ export function FeedCardLegacyBody({
                     className="flex gap-2 text-[13px] text-violet-800 dark:text-violet-300"
                   >
                     <span className="mt-0.5 shrink-0">&#8226;</span>
-                    <Link
+                    <FeedTicketLink
                       href={buildTicketPath({ projectId: post.project_id, ticketId: t.id })}
                       className="underline-offset-2 hover:underline"
                     >
                       {t.reference ?? t.sequence}: {t.title}
-                    </Link>
+                    </FeedTicketLink>
                   </li>
                 ))}
               </ul>

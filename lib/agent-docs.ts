@@ -1,6 +1,8 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
+import agentDocsManifest from './agent-docs-manifest.json';
+
 export type AgentDoc = {
   slug: string;
   filename: string;
@@ -8,31 +10,13 @@ export type AgentDoc = {
   description: string;
 };
 
-export const agentDocs: AgentDoc[] = [
-  {
-    slug: 'overlord-new-user-guide',
-    filename: 'overlord-new-user-guide.md',
-    title: 'Overlord for New Users',
-    description:
-      'Product overview, first-time setup, web app, desktop app, CLI, connectors, and core workflow concepts.'
-  },
-  {
-    slug: 'overlord-examples',
-    filename: 'overlord-examples.md',
-    title: 'Overlord Example Workflows',
-    description:
-      'Concrete examples agents can use when explaining Overlord tickets, objectives, review loops, and follow-up passes.'
-  },
-  {
-    slug: 'feed-page-functionality',
-    filename: 'feed-page-functionality.md',
-    title: 'Feed Page Functionality',
-    description:
-      'Agent-oriented explanation of the Overlord feed page, generated posts, review workflows, and implementation behavior.'
-  }
-];
+export const agentDocs: AgentDoc[] = agentDocsManifest;
 
 const docsDirectory = path.join(process.cwd(), '..', '..', 'docs', 'public');
+
+export async function readProtocolHelp(): Promise<string> {
+  return readFile(path.join(docsDirectory, 'ovld-protocol-help.txt'), 'utf8');
+}
 
 export function getAgentDocBySlug(slug: string) {
   return agentDocs.find(doc => doc.slug === slug);
@@ -60,6 +44,12 @@ These files are the public, agent-readable Overlord documentation. Agents should
 ## Agent Documentation
 
 ${docLinks}
+
+## MCP Tools
+
+Overlord exposes a hosted MCP endpoint at \`/api/mcp\`. The full tool definitions are available publicly (no auth required) at:
+
+- [MCP tool definitions](/api/mcp/tools): JSON array of all MCP tool schemas (name, description, inputSchema).
 
 ## Complete Agent Context
 

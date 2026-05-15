@@ -72,6 +72,8 @@ Read relevant files in `docs/public/`.
 
 These docs are specifically targeted to AI agents, and their purpose is to help agents explain Overlord to users accurately. Treat drift here as high-importance documentation drift whenever operations, parameters, or behavioral descriptions differ from API/CLI/MCP reality.
 
+Also read `docs/for-agents/cli-reference/page.tsx` and `docs/for-agents/rules/page.tsx` to check for drift in the agent documentation.
+
 #### 6. CLI README
 Read `packages/overlord-cli/README.md`.
 

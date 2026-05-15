@@ -5,7 +5,6 @@ import {
   MessageSquareText,
   TicketPlus
 } from 'lucide-react';
-import Link from 'next/link';
 import { type Dispatch, type SetStateAction } from 'react';
 
 import {
@@ -22,6 +21,8 @@ import {
 import { buildEditorHref } from '@/lib/helpers/file-changes';
 import { buildTicketPath } from '@/lib/helpers/ticket-path';
 import { cn } from '@/lib/utils';
+
+import { FeedTicketLink } from '../FeedTicketLink';
 
 import { FeedCardAgentBadge } from './FeedCardAgentBadge';
 import { FeedCardFileChip } from './FeedCardFileChip';
@@ -302,7 +303,7 @@ export function FeedCardRollupBody({
                     className="flex gap-2 text-[13px] text-violet-800 dark:text-violet-300"
                   >
                     <span className="mt-0.5 shrink-0">&#8226;</span>
-                    <Link
+                    <FeedTicketLink
                       href={buildTicketPath({
                         projectId: post.project_id,
                         ticketId: t.id
@@ -310,7 +311,7 @@ export function FeedCardRollupBody({
                       className="underline-offset-2 hover:underline"
                     >
                       {t.reference ?? t.sequence}: {t.title}
-                    </Link>
+                    </FeedTicketLink>
                   </li>
                 ))}
               </ul>

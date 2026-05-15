@@ -1,5 +1,5 @@
 import * as Sentry from '@sentry/electron/main';
-import { BrowserWindow, ipcMain, Notification, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, Notification, shell } from 'electron';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -32,6 +32,7 @@ import {
   getStoredQuickTaskHotkey,
   hideQuickTaskWindow,
   registerQuickTaskHotkey,
+  setQuickTaskWindowBounds,
   setQuickTaskWindowSize
 } from '../services/quick-task-window';
 import { store } from '../services/settings-store';
@@ -40,12 +41,14 @@ type RegisterAppIpcOptions = {
   appUpdater: AppUpdaterService;
   connectorUrl: string;
   platformUrl: string;
+  getMainWindow: () => BrowserWindow | null;
 };
 
 export function registerAppIpc({
   appUpdater,
   connectorUrl,
-  platformUrl
+  platformUrl,
+  getMainWindow
 }: RegisterAppIpcOptions): void {
   const allowedExternalProtocols = new Set([
     'http:',
@@ -89,10 +92,29 @@ export function registerAppIpc({
 
     if (!title || !body) return false;
     if (!Notification.isSupported()) return false;
+    if (process.platform === 'darwin' && !app.isPackaged) {
+      console.warn(
+        '[app:notify] Skipping macOS notification in unsigned dev build because Electron 42 uses UNNotification and requires a signed app bundle.'
+      );
+      return false;
+    }
 
     const notification = new Notification({
       title: title.slice(0, 160),
       body: body.slice(0, 1_000)
+    });
+    notification.on('failed', (_failedEvent, error) => {
+      Sentry.captureException(new Error(`Failed to show desktop notification: ${error}`), {
+        tags: {
+          source: 'electron-notification',
+          target: 'electron-main'
+        },
+        extra: {
+          platform: process.platform,
+          title: title.slice(0, 160),
+          bodyLength: body.length
+        }
+      });
     });
     notification.show();
     return true;
@@ -150,6 +172,19 @@ export function registerAppIpc({
     return true;
   });
 
+  ipcMain.handle('app:navigate-main', (_event, targetPath: unknown) => {
+    if (typeof targetPath !== 'string' || !targetPath.startsWith('/')) return false;
+
+    const win = getMainWindow();
+    if (!win || win.isDestroyed()) return false;
+
+    win.webContents.send('app:navigate', targetPath);
+    if (win.isMinimized()) win.restore();
+    win.show();
+    win.focus();
+    return true;
+  });
+
   ipcMain.handle('quick-task:get-hotkey', () => {
     return {
       accelerator: getStoredQuickTaskHotkey(),
@@ -177,6 +212,25 @@ export function registerAppIpc({
     }
     return true;
   });
+
+  ipcMain.handle(
+    'quick-task:set-bounds',
+    (_event, args: { height: number; barOffsetTop: number }) => {
+      if (
+        args &&
+        typeof args.height === 'number' &&
+        Number.isFinite(args.height) &&
+        typeof args.barOffsetTop === 'number' &&
+        Number.isFinite(args.barOffsetTop)
+      ) {
+        setQuickTaskWindowBounds({
+          height: args.height,
+          barOffsetTop: args.barOffsetTop
+        });
+      }
+      return true;
+    }
+  );
 
   ipcMain.handle('app-update:get-status', () => {
     return appUpdater.getStatus();

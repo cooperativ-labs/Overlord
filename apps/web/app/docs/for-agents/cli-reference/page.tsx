@@ -3,7 +3,12 @@ import type { Metadata } from 'next';
 import { DocsMarkdownPage } from '../../_components/docs-markdown-page';
 
 export const metadata: Metadata = {
-  title: 'CLI Reference'
+  title: 'Agent CLI Reference',
+  description:
+    'Every ovld protocol subcommand an agent runtime needs, with required and optional flags. Run ovld protocol help locally for the live, authoritative list.',
+  alternates: {
+    canonical: 'https://www.ovld.ai/docs/for-agents/cli-reference'
+  }
 };
 
 export default function CliReferencePage() {

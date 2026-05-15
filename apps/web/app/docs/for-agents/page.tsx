@@ -2,7 +2,11 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 
 export const metadata: Metadata = {
-  title: 'For Agents'
+  title: 'For Agents',
+  description: 'Documentation for AI coding agents working with Overlord',
+  alternates: {
+    canonical: 'https://www.ovld.ai/docs/for-agents'
+  }
 };
 
 export default function ForAgentsPage() {
@@ -93,6 +97,17 @@ export default function ForAgentsPage() {
           </ol>
         </div>
       </section>
+
+      <p className="text-sm leading-7 text-muted-foreground border-t pt-6">
+        For an extensive description of Overlord AI, visit{' '}
+        <a
+          href="https://www.ovld.ai/llms-full.txt"
+          className="font-medium text-foreground underline underline-offset-4 hover:text-primary"
+        >
+          www.ovld.ai/llms-full.txt
+        </a>
+        .
+      </p>
     </main>
   );
 }

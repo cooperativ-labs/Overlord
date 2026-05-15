@@ -54,6 +54,7 @@ type StagedFile = {
 type QuickTaskWindowApi = {
   close: () => Promise<unknown>;
   setHeight: (height: number) => Promise<unknown>;
+  setBounds?: (args: { height: number; barOffsetTop: number }) => Promise<unknown>;
   onShown: (cb: () => void) => () => void;
 };
 
@@ -83,6 +84,7 @@ export function QuickTaskBar({ defaultProjectId, projects }: QuickTaskBarProps) 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const controlBarRef = useRef<HTMLDivElement>(null);
 
   const { selection, setSelection, loaded: selectionLoaded } = useAgentModelPreference();
   const createTicketMutation = useCreateTicketMutation();
@@ -97,7 +99,10 @@ export function QuickTaskBar({ defaultProjectId, projects }: QuickTaskBarProps) 
     workingDirectory: selectedProject?.local_working_directory ?? null
   });
 
-  // Auto-resize textarea + window height
+  // Auto-resize textarea + window height.
+  // We send the bar's offsetTop so the Electron host can pin the bar to a
+  // constant screen Y — text above grows the window upward, menus below grow
+  // it downward, but the bar itself never shifts on screen.
   const autoResize = useCallback(() => {
     const el = textareaRef.current;
     if (!el) return;
@@ -105,8 +110,20 @@ export function QuickTaskBar({ defaultProjectId, projects }: QuickTaskBarProps) 
     el.style.height = `${Math.min(el.scrollHeight, 220)}px`;
 
     const container = containerRef.current;
+    const bar = controlBarRef.current;
     const api = getQuickTaskApi();
-    if (container && api) {
+    if (!container || !api) return;
+
+    if (bar && typeof api.setBounds === 'function') {
+      const containerTop = container.getBoundingClientRect().top;
+      const barTop = bar.getBoundingClientRect().top;
+      api
+        .setBounds({
+          height: container.offsetHeight,
+          barOffsetTop: Math.round(barTop - containerTop)
+        })
+        .catch(() => {});
+    } else {
       api.setHeight(container.offsetHeight).catch(() => {});
     }
   }, []);
@@ -387,7 +404,10 @@ export function QuickTaskBar({ defaultProjectId, projects }: QuickTaskBarProps) 
           </div>
         ) : null}
 
-        <div className="electron-no-drag flex items-center justify-between gap-2">
+        <div
+          ref={controlBarRef}
+          className="electron-no-drag flex items-center justify-between gap-2"
+        >
           <div className="flex items-center gap-1">
             {/* File upload */}
             <button

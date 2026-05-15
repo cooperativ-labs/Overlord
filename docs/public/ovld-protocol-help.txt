@@ -1,0 +1,432 @@
+ovld protocol <subcommand> [flags]
+
+Use this for ticket lifecycle work from an agent runtime: create a standalone
+draft with `ovld protocol create`, create-and-attach with `ovld protocol prompt`,
+or attach to an existing ticket with `ovld protocol attach --ticket-id <ticket_id>`.
+
+Project discovery:
+  When prompting or creating tickets, the CLI automatically resolves the correct
+  project by matching your current working directory against your configured
+  "Local working directory" for that project (stored per user in Overlord).
+  You can also discover the project explicitly:
+
+    ovld protocol discover-project
+    ovld protocol discover-project --working-directory /path/to/repo
+
+  Use --project-id to override automatic resolution on prompt or ticket creation.
+  Use --personal to create a private ticket without assigning any project.
+
+Subcommands:
+  auth-status               Return machine-readable auth status for agent runtimes
+  discover-project          Resolve a project from the current working directory
+  attach                    Start a ticket session and return full working context
+  connect                   Start a lightweight session without full context
+  load-context              Read ticket context without creating a session
+  search-tickets            Find tickets by keyword, status, project, creator, or update date
+  discuss-objective          Mark a draft objective as submitted (ready for review/execution)
+  create                    Create a draft ticket without attaching (follow-up or standalone)
+  prompt                    Create a ticket and attach to it immediately
+  record-work               Record completed-from-chat work as a ticket in review + feed post (no attach)
+  update                    Post progress, activity events, and optional change rationales
+  record-change-rationales  Persist structured change rationales without a progress update
+  ask                       Post a blocking question and move the ticket to review
+  permission-request        Notify Overlord that the agent is requesting tool permission
+  hook-event                Record a lifecycle hook event without a session key
+  read-context              Read shared persistent context for this ticket
+  write-context             Write shared persistent context for future sessions
+  deliver                     Finish work, send artifacts, and move the ticket to review
+  attachment-list             List objective attachments visible to the current session
+  attachment-prepare-upload   Get a signed upload URL for an objective attachment
+  attachment-finalize-upload  Finalize an uploaded attachment row after storage upload
+  attachment-download-url     Get a signed download URL for an existing attachment
+  attachment-upload-file      Prepare, upload, and finalize a local file in one command
+
+Environment fallback:
+  --session-key  <- SESSION_KEY
+  --ticket-id    <- TICKET_ID  (human-readable ticket_id, e.g. 1:899)
+  auth/host     <- OVERLORD_URL, optional OVERLORD_ACCESS_TOKEN + OVERLORD_ORGANIZATION_ID, or shared OAuth credentials from ovld auth/Desktop login
+  --timeout     <- OVERLORD_TIMEOUT
+
+Common flags:
+  --timeout <ms>              Request timeout in milliseconds (default: 30000)
+  --ticket-id <ticket_id>     Ticket identifier (e.g. 1:899) when the subcommand operates on an existing ticket
+  --organization-id <id>      Legacy organization override for UUID ticket ids; inferred from ticket_id when possible
+  --session-key <key>         Session key returned by attach/connect/prompt
+  --agent <identifier>        Agent identifier sent to Overlord (default: AGENT_IDENTIFIER or claude-code)
+  --model <identifier>        Model identifier to snapshot on executing objectives
+  --method <connectionMethod> Connection method sent to Overlord (default: cli)
+  --snapshot-json <json>      Snapshot metadata to attach to sessions/file changes
+  --snapshot-file <path|->    Read snapshot metadata JSON from a file or stdin
+
+auth-status:
+  Purpose:
+    Check whether the local runtime has usable Overlord credentials.
+  Returns:
+    JSON with ok=true|false plus authStatus fields describing token and host sources.
+
+discover-project:
+  Purpose:
+    Resolve the Overlord project that corresponds to the current (or given) working directory.
+    Uses the caller's configured "Local working directory" for matching.
+  Optional:
+    --working-directory <path>  Directory to match (default: current working directory)
+  Returns:
+    Project JSON with id, name, organizationId. Prints PROJECT_ID=<id> on stderr.
+  Notes:
+    Set your local working directory for a project in the Overlord UI under Project Settings.
+    When no match is found, returns a 404 with a hint.
+
+attach:
+  Purpose:
+    Create the working session for an agent on an existing ticket. This is the normal first call.
+  Required:
+    --ticket-id <ticket_id>   Human-readable identifier (e.g. 1:899). Also accepts UUID.
+  Optional:
+    --agent <identifier>
+    --model <identifier>
+    --method <connectionMethod>
+    --external-session-id <id|null>  Store the native agent thread/session id, or clear it with null
+    --metadata-json <json>     Extra session metadata object
+    --skip-checkpoint          Bypass automatic objective-start git checkpoint creation
+  Returns:
+    Full JSON including session.sessionKey, ticket, history, artifacts, sharedState, and promptContext
+  Notes:
+    If --external-session-id is omitted, the CLI may auto-detect Codex or Claude session ids
+    Attach creates and records missing local git checkpoints for executing objectives before work starts.
+
+connect:
+  Purpose:
+    Create a lightweight session when you only need a session key and not the full ticket payload
+  Required:
+    --ticket-id <ticket_id>   Human-readable identifier (e.g. 1:899). Also accepts UUID.
+  Optional:
+    --agent <identifier>
+    --model <identifier>
+    --method <connectionMethod>
+    --metadata-json <json>     Extra session metadata object
+  Returns:
+    Session JSON and SESSION_KEY on stderr when available
+
+load-context:
+  Purpose:
+    Read ticket details without creating a session
+  Required:
+    --ticket-id <ticket_id>
+
+search-tickets:
+  Purpose:
+    Find tickets in your organization by keyword, status, project, creator, or update window.
+    Omit --query to list mode (most recently updated first).
+  Optional:
+    --query <text>             Free-text search across the ticket search vector + title fallback
+    --status <csv>             Comma-separated statuses, e.g. "draft,next-up,execute"
+    --include-completed <bool> Include completed tickets (default: false)
+    --limit <n>                Max results 1..50 (default: 8)
+    --project-id <uuid>        Restrict to a single project
+    --created-by <uuid>        Restrict to tickets created by this user
+    --updated-after <iso>      Updated_at >= ISO timestamp
+    --updated-before <iso>     Updated_at <= ISO timestamp
+  Returns:
+    JSON with { tickets, count }.
+
+update:
+  Purpose:
+    Post progress or activity events during execution
+  Required:
+    --session-key <key>
+    --ticket-id <ticket_id>
+    --summary <text> or --summary-file <path|->
+  Optional:
+    --phase <status>          draft | execute | review | deliver | complete | blocked | cancelled
+    --event-type <type>       update | user_follow_up | alert
+    --payload-json <json>     Additional structured payload, for example notifications
+    --external-url <url|null> Store or clear a deep link to the live agent session
+    --external-session-id <id|null>
+    --change-rationales-json <json>
+    --change-rationales-file <path>
+  Notes:
+    Use phase=execute while actively working. user_follow_up is for verbatim human follow-up messages.
+    Pass --summary-file - to read the summary from stdin — avoids shell interpretation of backticks,
+    quotes, or other special characters in the summary text.
+
+record-change-rationales:
+  Purpose:
+    Persist structured file-change rationale records without also posting a normal update
+  Required:
+    --session-key <key>
+    --ticket-id <ticket_id>
+    --change-rationales-json <json> or --change-rationales-file <path>
+  Optional:
+    --summary <text> or --summary-file <path|->
+    --phase <status>
+
+ask:
+  Purpose:
+    Raise a blocking question for a human reviewer/PM
+  Required:
+    --session-key <key>
+    --ticket-id <ticket_id>
+    --question <text> or --question-file <path|->
+  Optional:
+    --phase <status>
+    --payload-json <json>
+  Notes:
+    After ask succeeds, stop working until the human responds
+
+permission-request:
+  Purpose:
+    Notify Overlord that the local agent runtime is requesting tool permission.
+    This is primarily used by installed permission hooks.
+  Required:
+    --ticket-id <ticket_id>
+  Optional:
+    --payload-file <path|->   Hook JSON payload, or stdin when "-"
+
+hook-event:
+  Purpose:
+    Record a lifecycle hook event for a ticket without requiring a session key.
+    This is primarily used by installed UserPromptSubmit hooks. Stop is reserved for future lifecycle hooks.
+  Required:
+    --hook-type <UserPromptSubmit|Stop>
+    --ticket-id <ticket_id>
+  Optional:
+    --prompt <text>
+    --turn-index <n>
+
+read-context:
+  Purpose:
+    Read persistent shared context written by earlier sessions
+  Required:
+    --session-key <key>
+    --ticket-id <ticket_id>
+  Optional:
+    --query <text>            Filter by key substring
+    --limit <n>               Max entries to return
+
+write-context:
+  Purpose:
+    Save shared facts for future sessions
+  Required:
+    --session-key <key>
+    --ticket-id <ticket_id>
+    --key <name>
+    --value <json-or-string>  Parsed as JSON first; stored as a string if JSON parsing fails
+  Optional:
+    --tags <csv>
+
+deliver:
+  Purpose:
+    Conclude the session and submit the final narrative plus artifacts/change rationales
+  Required:
+    --session-key <key>
+    --ticket-id <ticket_id>
+    --summary <text> or --summary-file <path|->
+    or: --payload-json <json>
+    or: --payload-file <path|-> containing { summary, artifacts, changeRationales }
+  Optional:
+    --artifacts-json <json>
+    --artifacts-file <path|->
+    --change-rationales-json <json>
+    --change-rationales-file <path|->
+    --skip-file-change-check  Bypass local git vs changeRationales validation
+  Notes:
+    Use --payload-json when the full delivery JSON fits comfortably inline.
+    Use --payload-file - to read the full delivery JSON from stdin without creating a scratch file.
+    Use --summary-file - to pipe just the summary text via stdin (avoids shell special-char issues).
+    Do not combine --payload-json/--payload-file with --summary/--summary-file, --artifacts-json/--artifacts-file, or change-rationale flags.
+    In a git workspace, deliver validates that changed files are represented by changeRationales unless skipped.
+
+prompt:
+  Purpose:
+    Create a ticket and attach to it in one call.
+    When --project-id is omitted, automatically resolves the project from the
+    current working directory (matching against the caller's project_user.local_working_directory).
+  Required:
+    --objective <text>
+  Optional:
+    --title <text>
+    --priority <level>        low | medium | high | urgent
+    --project-id <id>         Explicit project; skips working-directory resolution
+    --personal                Create the ticket without assigning a project
+    --working-directory <path> Override cwd for project resolution (default: cwd)
+    --acceptance-criteria <text>
+    --available-tools <text>
+    --execution-target <t>    agent | human
+    --delegate <model>        Model or delegate identifier that created the ticket
+    --parent-session-key <key>
+    --parent-ticket-id <ticket_id>
+    --agent <identifier>
+    --model <identifier>
+    --method <connectionMethod>
+    --metadata-json <json>     Extra session metadata object
+  Returns:
+    New ticket/session JSON plus SESSION_KEY and TICKET_ID on stderr when available
+
+discuss-objective:
+  Purpose:
+    Mark the latest draft objective on a ticket as "submitted", indicating the objective
+    has been discussed and is ready for review or execution. Does NOT start execution —
+    use `attach` to begin execution.
+  Required:
+    --ticket-id <ticket_id>
+  Optional:
+    --objective-id <id>       Target a specific draft objective by UUID
+
+create:
+  Purpose:
+    Create a draft ticket without attaching to it.
+    If session flags are provided, creates a follow-up draft linked to the current ticket.
+    If session flags are omitted, resolves project by working directory and creates a standalone draft.
+  Required:
+    --objective <text>
+  Optional:
+    --session-key <key>
+    --ticket-id <ticket_id>
+    --working-directory <path>  Resolve project by your configured local working directory (default: cwd)
+    --project-id <id>           Explicit project for standalone draft creation
+    --personal                  Create a private standalone draft without a project
+    --title <text>
+    --priority <level>        low | medium | high | urgent
+    --acceptance-criteria <text>
+    --available-tools <text>
+    --execution-target <t>    agent | human
+    --delegate <model>        Model or delegate identifier that created the ticket
+    --agent <identifier>
+    --model <identifier>
+  Returns:
+    New draft ticket JSON (follow-up draft when session flags are provided)
+  Notes:
+    Standalone create auto-discovers the project from the current working directory unless --personal is set.
+    Follow-up create requires both --session-key and --ticket-id.
+    Use create for future work. If the work is already complete and only needs to be recorded,
+    use `record-work` instead.
+
+record-work:
+  Purpose:
+    Record work the agent already completed in a chat as a ticket in `review` status
+    with a completed objective, then trigger the feed-post generator. No session is
+    left open — use this INSTEAD OF `create` + `attach` + `deliver` for "log what we
+    just did" flows. Do NOT use this for in-progress work; use `prompt` for that.
+  Required:
+    --objective <text> or --objective-file <path|->   What was asked / what was done
+    --summary   <text> or --summary-file   <path|->   Narrative for feed post + reviewer
+    or: --payload-json <json>
+    or: --payload-file <path|-> containing { objective, summary, artifacts, changeRationales }
+  Optional:
+    --title <text>            Auto-derived from objective if omitted
+    --priority <level>        low | medium | high | urgent
+    --project-id <id>         Skip cwd resolution and use this project explicitly
+    --working-directory <path> Override cwd for project resolution
+    --personal                Create a private ticket when no project should be associated
+    --artifacts-json <json>
+    --artifacts-file <path|->
+    --change-rationales-json <json>
+    --change-rationales-file <path|->
+    --skip-file-change-check  Bypass local git vs changeRationales validation
+    --acceptance-criteria <text>
+    --available-tools <text>
+    --delegate <model>
+    --agent <identifier>
+    --model <identifier>
+  Notes:
+    Project resolution mirrors `prompt`: if --project-id is not set and --personal is not used,
+    the CLI sends cwd as workingDirectory and the API matches it against your configured
+    project_user.local_working_directory rows. If no match, the API returns 400 — re-run with
+    --project-id <id> or --personal.
+    Use this for completed-from-chat work. If you still need to execute the work, use `create`
+    for a draft ticket or `prompt` to create and start execution immediately.
+    In a git workspace, record-work validates that changed files are represented by
+    changeRationales unless --skip-file-change-check is set.
+
+attachment-list:
+  Required:
+    --session-key <key>
+    --ticket-id <ticket_id>
+  Optional:
+    --objective-id <id>       Filter to a single objective
+  Returns:
+    JSON array of { id, label, content_type, file_size, objective_id, storage_path, created_at }
+
+attachment-prepare-upload:
+  Required:
+    --session-key <key>
+    --ticket-id <ticket_id>
+    --objective-id <id>
+    --file-name <name>
+  Optional:
+    --label <text>
+    --content-type <mime>
+    --file-size <bytes>
+    --metadata-json <json>
+
+attachment-finalize-upload:
+  Required:
+    --session-key <key>
+    --ticket-id <ticket_id>
+    --objective-id <id>
+    --storage-path <path>
+    --label <text>
+  Optional:
+    --content-type <mime>
+    --file-size <bytes>
+    --metadata-json <json>
+
+attachment-download-url:
+  Required:
+    --session-key <key>
+    --ticket-id <ticket_id>
+    one of: --attachment-id <id> | --storage-path <path>
+  Optional:
+    --objective-id <id>       Required when using --storage-path
+    --expires-in <seconds>
+
+attachment-upload-file:
+  Required:
+    --session-key <key>
+    --ticket-id <ticket_id>
+    --objective-id <id>
+    --file <path>
+  Optional:
+    --file-name <name>        Defaults to basename of --file
+    --label <text>            Defaults to file name
+    --content-type <mime>     Defaults to application/octet-stream
+    --metadata-json <json>
+
+Examples:
+  ovld protocol auth-status
+  ovld protocol discover-project
+  ovld protocol discover-project --working-directory /path/to/repo
+  ovld protocol prompt --agent codex --objective "Implement feature X"   # auto-resolves project from cwd
+  ovld protocol attach --ticket-id 1:899
+  ovld protocol attach --ticket-id 1:899 --external-session-id null
+  ovld protocol connect --ticket-id 1:899
+  ovld protocol load-context --ticket-id 1:899
+  ovld protocol search-tickets --query "auth refactor" --status next-up,execute --limit 10
+  ovld protocol discuss-objective --ticket-id 1:899
+  ovld protocol discuss-objective --ticket-id 1:899 --objective-id <objective-uuid>
+  ovld protocol create --agent codex --objective "Capture follow-up work from this repo"
+  ovld protocol create --agent codex --session-key <key> --ticket-id <ticket_id> --objective "Capture follow-up work"
+  ovld protocol prompt --agent codex --objective "Implement user auth" --priority high
+  ovld protocol update --session-key <key> --ticket-id <ticket_id> --summary "Did X" --phase execute
+  ovld protocol update --session-key <key> --ticket-id <ticket_id> --summary-file ./update.txt --event-type user_follow_up
+  ovld protocol record-change-rationales --session-key <key> --ticket-id <ticket_id> --change-rationales-json '[{"label":"...","file_path":"...","summary":"...","why":"...","impact":"...","hunks":[{"header":"@@ ... @@"}]}]'
+  ovld protocol ask --session-key <key> --ticket-id <ticket_id> --question-file ./question.txt
+  ovld protocol hook-event --hook-type UserPromptSubmit --ticket-id <ticket_id> --prompt "User follow-up" --turn-index 1
+  ovld protocol read-context --session-key <key> --ticket-id <ticket_id> --query arch --limit 5
+  ovld protocol write-context --session-key <key> --ticket-id <ticket_id> --key "arch" --value '"monorepo"' --tags repo,agent
+  ovld protocol attachment-list --session-key <key> --ticket-id <ticket_id>
+  ovld protocol attachment-prepare-upload --session-key <key> --ticket-id <ticket_id> --objective-id <objective-id> --file-name spec.pdf --content-type application/pdf
+  ovld protocol attachment-upload-file --session-key <key> --ticket-id <ticket_id> --objective-id <objective-id> --file ./spec.pdf
+  ovld protocol attachment-download-url --session-key <key> --ticket-id <ticket_id> --attachment-id <attachment-id>
+  ovld protocol deliver --session-key <key> --ticket-id <ticket_id> --summary "Done"
+  ovld protocol deliver --session-key <key> --ticket-id <ticket_id> --summary "Done" --artifacts-file ./artifacts.json
+  ovld protocol deliver --session-key <key> --ticket-id <ticket_id> --payload-json '{"summary":"Done","artifacts":[{"type":"note","label":"Delivery","content":"..."}]}'
+  ovld protocol deliver --session-key <key> --ticket-id <ticket_id> --payload-file ./deliver.json
+  ovld protocol deliver --session-key <key> --ticket-id <ticket_id> --payload-file -
+  ovld protocol deliver --session-key <key> --ticket-id <ticket_id> --summary "Done" --skip-file-change-check
+  ovld protocol deliver --session-key <key> --ticket-id <ticket_id> --summary "Done" --timeout 60000
+  ovld protocol record-work --objective "User asked for X; I did Y" --summary "What I did and why" --change-rationales-json '[...]'
+  ovld protocol record-work --payload-file - <<'EOF'
+    {"objective":"...","summary":"...","artifacts":[...],"changeRationales":[...]}
+EOF
+
