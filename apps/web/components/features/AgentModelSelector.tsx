@@ -20,7 +20,7 @@ import {
   resolveAgentSelectionForAgent,
   type UserLaunchPreference
 } from '@/lib/helpers/agent-model-preference';
-import { AGENT_TYPES, type AgentTypeValue, LAUNCH_AGENT_VALUES } from '@/lib/helpers/agent-types';
+import { AGENT_TYPES, type AgentTypeValue } from '@/lib/helpers/agent-types';
 import type { AgentConfig } from '@/lib/schemas/agent-config';
 import { cn } from '@/lib/utils';
 
@@ -39,7 +39,7 @@ const DEFAULT_SELECTION: AgentModelSelection = {
   model: null,
   thinking: null
 };
-const AGENT_SELECTOR_VALUES = [...LAUNCH_AGENT_VALUES];
+export const AGENT_MODEL_OPTIONS = AGENT_TYPES;
 
 let cachedResolvedModels: AgentModel[] | null = null;
 let cachedConfigs: Record<string, AgentConfig> | null = null;
@@ -220,14 +220,13 @@ export function AgentModelSelector({
         <p className="mb-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
           Agent
         </p>
-        {AGENT_SELECTOR_VALUES.map(agentValue => {
-          const agent = AGENT_TYPES.find(a => a.value === agentValue)!;
-          const isSelected = value.agent === agentValue;
+        {AGENT_MODEL_OPTIONS.map(agent => {
+          const isSelected = value.agent === agent.value;
           return (
             <button
-              key={agentValue}
+              key={agent.value}
               type="button"
-              onClick={() => handleAgentChange(agentValue)}
+              onClick={() => handleAgentChange(agent.value)}
               className={cn(
                 'flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors',
                 isSelected ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'
