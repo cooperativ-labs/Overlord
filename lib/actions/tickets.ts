@@ -1469,10 +1469,28 @@ export async function createEmptyDraftObjectiveAction({
     return;
   }
 
+  const newState = futureObjectivesEnabled && hasDraft ? 'future' : 'draft';
+  let nextPosition = 0;
+  if (newState === 'future') {
+    const { data: maxRow, error: maxError } = await supabase
+      .from('objectives')
+      .select('position')
+      .eq('ticket_id', ticketId)
+      .eq('state', 'future')
+      .order('position', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (maxError) {
+      throw new Error(maxError.message);
+    }
+    nextPosition = (maxRow?.position ?? -1) + 1;
+  }
+
   const { error: insertError } = await supabase.from('objectives').insert({
     ticket_id: ticketId,
-    state: futureObjectivesEnabled && hasDraft ? 'future' : 'draft',
-    objective: ''
+    state: newState,
+    objective: '',
+    position: nextPosition
   });
 
   if (insertError) {
@@ -1487,6 +1505,69 @@ export async function createEmptyDraftObjectiveAction({
 
   if (ticketError || !ticket) {
     throw new Error(ticketError?.message ?? 'Ticket not found.');
+  }
+
+  revalidateTicketBoards();
+  revalidatePath(
+    buildProjectPath({ organizationId: ticket.organization_id, projectId: ticket.project_id })
+  );
+  revalidateTicketDetails([
+    { organizationId: ticket.organization_id, projectId: ticket.project_id, ticketId }
+  ]);
+}
+
+export async function reorderFutureObjectivesAction({
+  ticketId,
+  orderedObjectiveIds
+}: {
+  ticketId: string;
+  orderedObjectiveIds: string[];
+}): Promise<void> {
+  const supabase = await createClientForRequest();
+  const ticket = await assertTicketAccess(supabase, ticketId);
+  const futureObjectivesEnabled = await isAppFeatureEnabled('future-objectives');
+
+  if (!futureObjectivesEnabled) {
+    throw new Error('Future objectives are disabled.');
+  }
+
+  if (orderedObjectiveIds.length === 0) {
+    return;
+  }
+
+  const { data: existing, error: existingError } = await supabase
+    .from('objectives')
+    .select('id,state')
+    .eq('ticket_id', ticketId)
+    .in('id', orderedObjectiveIds);
+
+  if (existingError) {
+    throw new Error(existingError.message);
+  }
+  if (!existing) {
+    return;
+  }
+
+  const validIds = new Set(
+    existing.filter(objective => objective.state === 'future').map(objective => objective.id)
+  );
+  const filteredOrderedIds = orderedObjectiveIds.filter(id => validIds.has(id));
+
+  const updates = await Promise.all(
+    filteredOrderedIds.map((id, index) =>
+      supabase
+        .from('objectives')
+        .update({ position: index })
+        .eq('id', id)
+        .eq('ticket_id', ticketId)
+        .eq('state', 'future')
+    )
+  );
+
+  for (const { error } of updates) {
+    if (error) {
+      throw new Error(error.message);
+    }
   }
 
   revalidateTicketBoards();

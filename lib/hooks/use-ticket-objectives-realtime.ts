@@ -17,6 +17,7 @@ type ObjectiveRow = Pick<
   | 'agent_identifier'
   | 'model_identifier'
   | 'assigned_agent'
+  | 'position'
 >;
 
 function parseTimestamp(value: string | null | undefined): number {
@@ -83,7 +84,7 @@ export function useTicketObjectivesRealtime({
       const { data } = await supabase
         .from('objectives')
         .select(
-          'id,objective,created_at,title,state,agent_identifier,model_identifier,assigned_agent'
+          'id,objective,created_at,title,state,agent_identifier,model_identifier,assigned_agent,position'
         )
         .eq('ticket_id', ticketId)
         .order('created_at', { ascending: false });

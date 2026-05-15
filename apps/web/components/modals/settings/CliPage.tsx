@@ -80,32 +80,32 @@ type SlashStatusEntry = {
 
 type AgentPluginInstallOption =
   | {
-    key: string;
-    agentKey: string;
-    label: string;
-    description: string;
-    kind: 'bundle';
-    bundleAgent: BundleAgent;
-    supportNote?: string;
-  }
+      key: string;
+      agentKey: string;
+      label: string;
+      description: string;
+      kind: 'bundle';
+      bundleAgent: BundleAgent;
+      supportNote?: string;
+    }
   | {
-    key: string;
-    agentKey: string;
-    label: string;
-    description: string;
-    kind: 'service';
-    serviceKey: 'overlord-plugin';
-    supportNote?: string;
-  }
+      key: string;
+      agentKey: string;
+      label: string;
+      description: string;
+      kind: 'service';
+      serviceKey: 'overlord-plugin';
+      supportNote?: string;
+    }
   | {
-    key: string;
-    agentKey: string;
-    label: string;
-    description: string;
-    kind: 'slash';
-    slashAgent: SlashAgent;
-    supportNote?: string;
-  };
+      key: string;
+      agentKey: string;
+      label: string;
+      description: string;
+      kind: 'slash';
+      slashAgent: SlashAgent;
+      supportNote?: string;
+    };
 
 type PluginActionMeta = {
   label: 'Install' | 'Update' | 'Repair' | 'Remove';
@@ -971,10 +971,11 @@ export function CliPage({ open }: { open: boolean }) {
                     </button>
                   </div>
                   <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs">
-                    {`ovld restart ${selectedLocalAgent}${(agentFlags[selectedLocalAgent] ?? []).length > 0
-                      ? ` ${(agentFlags[selectedLocalAgent] ?? []).join(' ')}`
-                      : ''
-                      }`}
+                    {`ovld restart ${selectedLocalAgent}${
+                      (agentFlags[selectedLocalAgent] ?? []).length > 0
+                        ? ` ${(agentFlags[selectedLocalAgent] ?? []).join(' ')}`
+                        : ''
+                    }`}
                   </pre>
                 </div>
               </div>
@@ -1165,25 +1166,25 @@ export function CliPage({ open }: { open: boolean }) {
                                       ? bundleStatus?.status === 'installed'
                                         ? handleUninstallBundle(bundleStatus.agent, option.key)
                                         : bundleStatus?.status === 'partial' ||
-                                          bundleStatus?.status === 'error'
+                                            bundleStatus?.status === 'error'
                                           ? handleRepairBundle(bundleStatus.agent, option.key)
                                           : handleInstallBundle(option.bundleAgent, option.key)
                                       : option.kind === 'service'
                                         ? serviceStatus?.status === 'installed'
                                           ? handleUninstallService(option.key)
                                           : serviceStatus?.status === 'partial' ||
-                                            serviceStatus?.status === 'error'
+                                              serviceStatus?.status === 'error'
                                             ? handleRepairService(option.key)
                                             : handleInstallService(option.key)
                                         : !slashStatus || slashStatus.status === 'not_installed'
                                           ? handleInstallSlashCommands(
-                                            option.slashAgent,
-                                            option.key
-                                          )
+                                              option.slashAgent,
+                                              option.key
+                                            )
                                           : handleUninstallSlashCommands(
-                                            option.slashAgent,
-                                            option.key
-                                          );
+                                              option.slashAgent,
+                                              option.key
+                                            );
                                   if (isRemove || option.kind === 'slash') {
                                     void baseAction();
                                     return;

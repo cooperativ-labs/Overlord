@@ -773,6 +773,7 @@ export type Database = {
           id: string;
           model_identifier: string | null;
           objective: string;
+          position: number;
           state: Database['public']['Enums']['objective_state'];
           ticket_id: string;
           title: string | null;
@@ -787,6 +788,7 @@ export type Database = {
           id?: string;
           model_identifier?: string | null;
           objective?: string;
+          position?: number;
           state?: Database['public']['Enums']['objective_state'];
           ticket_id: string;
           title?: string | null;
@@ -801,6 +803,7 @@ export type Database = {
           id?: string;
           model_identifier?: string | null;
           objective?: string;
+          position?: number;
           state?: Database['public']['Enums']['objective_state'];
           ticket_id?: string;
           title?: string | null;

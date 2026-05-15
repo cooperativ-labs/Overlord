@@ -88,6 +88,21 @@ export function sortObjectivesByCreatedAtAscending<T extends ObjectiveTimelineIt
   return [...objectives].sort((a, b) => toTimestamp(a.created_at) - toTimestamp(b.created_at));
 }
 
+type ObjectivePositionItem = ObjectiveTimelineItem & { position?: number | null };
+
+export function sortObjectivesByPositionThenCreatedAt<T extends ObjectivePositionItem>(
+  objectives: readonly T[]
+): T[] {
+  return [...objectives].sort((a, b) => {
+    const positionA = typeof a.position === 'number' ? a.position : Number.POSITIVE_INFINITY;
+    const positionB = typeof b.position === 'number' ? b.position : Number.POSITIVE_INFINITY;
+    if (positionA !== positionB) {
+      return positionA - positionB;
+    }
+    return toTimestamp(a.created_at) - toTimestamp(b.created_at);
+  });
+}
+
 export async function upsertDraftObjective(
   supabase: ObjectiveClient,
   ticketId: string,
@@ -304,6 +319,7 @@ export async function markSubmittedObjectiveExecuting(
         .select('id')
         .eq('ticket_id', ticketId)
         .eq('state', 'future')
+        .order('position', { ascending: true })
         .order('created_at', { ascending: true })
         .limit(1)
         .maybeSingle();
