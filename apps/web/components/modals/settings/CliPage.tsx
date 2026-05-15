@@ -80,32 +80,32 @@ type SlashStatusEntry = {
 
 type AgentPluginInstallOption =
   | {
-      key: string;
-      agentKey: string;
-      label: string;
-      description: string;
-      kind: 'bundle';
-      bundleAgent: BundleAgent;
-      supportNote?: string;
-    }
+    key: string;
+    agentKey: string;
+    label: string;
+    description: string;
+    kind: 'bundle';
+    bundleAgent: BundleAgent;
+    supportNote?: string;
+  }
   | {
-      key: string;
-      agentKey: string;
-      label: string;
-      description: string;
-      kind: 'service';
-      serviceKey: 'overlord-plugin';
-      supportNote?: string;
-    }
+    key: string;
+    agentKey: string;
+    label: string;
+    description: string;
+    kind: 'service';
+    serviceKey: 'overlord-plugin';
+    supportNote?: string;
+  }
   | {
-      key: string;
-      agentKey: string;
-      label: string;
-      description: string;
-      kind: 'slash';
-      slashAgent: SlashAgent;
-      supportNote?: string;
-    };
+    key: string;
+    agentKey: string;
+    label: string;
+    description: string;
+    kind: 'slash';
+    slashAgent: SlashAgent;
+    supportNote?: string;
+  };
 
 type PluginActionMeta = {
   label: 'Install' | 'Update' | 'Repair' | 'Remove';
@@ -147,7 +147,7 @@ export function getAgentSelectorLabel(agentValue: AgentSelectorValue): string {
   if (agentValue in COPY_AGENT_LABELS) {
     return COPY_AGENT_LABELS[agentValue as keyof typeof COPY_AGENT_LABELS];
   }
-  return getAgentTypeByValue(agentValue).label;
+  return getAgentTypeByValue(agentValue as AgentTypeValue).label;
 }
 
 const SLASH_COMMAND_CONFIGS: Record<string, SlashCommandConfig> = {
@@ -873,7 +873,7 @@ export function CliPage({ open }: { open: boolean }) {
       {isElectron ? (
         <>
           <Accordion type="multiple" className="grid gap-1 last:border-b">
-            <AccordionItem value="default-agent" className="rounded-md border px-3">
+            <AccordionItem value="default-agent" className="rounded-md border last:border-b px-3">
               <AccordionTrigger className="hover:no-underline">
                 <div className="grid gap-1">
                   <p className="text-sm font-medium">Default agent</p>
@@ -886,32 +886,7 @@ export function CliPage({ open }: { open: boolean }) {
                 </div>
               </AccordionTrigger>
               <AccordionContent>
-                <div className="grid gap-4">
-                  <DefaultAgentSelector />
-                  <div className="grid gap-2">
-                    <p className="text-xs text-muted-foreground">
-                      Default quick-launch target for the Run menu.
-                    </p>
-                    <Select
-                      value={selectedDefaultAgentTrigger}
-                      onValueChange={handleDefaultAgentTriggerChange}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select default agent" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {AGENT_SELECTOR_VALUES.map(agentValue => (
-                          <SelectItem key={agentValue} value={agentValue}>
-                            <AgentNameWithLogo
-                              agent={agentValue}
-                              label={getAgentSelectorLabel(agentValue as AgentTypeValue)}
-                            />
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
+                <DefaultAgentSelector />
               </AccordionContent>
             </AccordionItem>
           </Accordion>
@@ -996,11 +971,10 @@ export function CliPage({ open }: { open: boolean }) {
                     </button>
                   </div>
                   <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs">
-                    {`ovld restart ${selectedLocalAgent}${
-                      (agentFlags[selectedLocalAgent] ?? []).length > 0
-                        ? ` ${(agentFlags[selectedLocalAgent] ?? []).join(' ')}`
-                        : ''
-                    }`}
+                    {`ovld restart ${selectedLocalAgent}${(agentFlags[selectedLocalAgent] ?? []).length > 0
+                      ? ` ${(agentFlags[selectedLocalAgent] ?? []).join(' ')}`
+                      : ''
+                      }`}
                   </pre>
                 </div>
               </div>
@@ -1191,25 +1165,25 @@ export function CliPage({ open }: { open: boolean }) {
                                       ? bundleStatus?.status === 'installed'
                                         ? handleUninstallBundle(bundleStatus.agent, option.key)
                                         : bundleStatus?.status === 'partial' ||
-                                            bundleStatus?.status === 'error'
+                                          bundleStatus?.status === 'error'
                                           ? handleRepairBundle(bundleStatus.agent, option.key)
                                           : handleInstallBundle(option.bundleAgent, option.key)
                                       : option.kind === 'service'
                                         ? serviceStatus?.status === 'installed'
                                           ? handleUninstallService(option.key)
                                           : serviceStatus?.status === 'partial' ||
-                                              serviceStatus?.status === 'error'
+                                            serviceStatus?.status === 'error'
                                             ? handleRepairService(option.key)
                                             : handleInstallService(option.key)
                                         : !slashStatus || slashStatus.status === 'not_installed'
                                           ? handleInstallSlashCommands(
-                                              option.slashAgent,
-                                              option.key
-                                            )
+                                            option.slashAgent,
+                                            option.key
+                                          )
                                           : handleUninstallSlashCommands(
-                                              option.slashAgent,
-                                              option.key
-                                            );
+                                            option.slashAgent,
+                                            option.key
+                                          );
                                   if (isRemove || option.kind === 'slash') {
                                     void baseAction();
                                     return;

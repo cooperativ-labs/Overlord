@@ -18,6 +18,7 @@ export function NavHeader({ projects }: { projects: SidebarProject[] }) {
   const [hasEverhourIntegration, setHasEverhourIntegration] = useState(false);
   const [isStandalonePwa, setIsStandalonePwa] = useState(false);
   const [isMac, setIsMac] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const [hardRefreshButtonState, setHardRefreshButtonState] =
     useState<ButtonLoadingState>('default');
   const { api, isElectron } = useElectron();
@@ -25,6 +26,7 @@ export function NavHeader({ projects }: { projects: SidebarProject[] }) {
   useEffect(() => {
     setIsMac(navigator.platform.toLowerCase().includes('mac'));
     getEverhourConnectionStatus().then(status => setHasEverhourIntegration(status.connected));
+    setMounted(true);
   }, []);
 
   useEffect(() => {
@@ -43,7 +45,7 @@ export function NavHeader({ projects }: { projects: SidebarProject[] }) {
     return () => mediaQuery.removeEventListener('change', updateStandaloneState);
   }, [isElectron]);
 
-  const showRefreshButton = isElectron || isStandalonePwa;
+  const showRefreshButton = mounted && (isElectron || isStandalonePwa);
 
   const handleHardRefresh = async () => {
     setHardRefreshButtonState('loading');
