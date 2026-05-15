@@ -149,8 +149,8 @@ export const MentionableTextarea = React.forwardRef<HTMLTextAreaElement, Mention
       (filePath: string) => {
         const textArea = textareaRef.current as
           | (TextareaHandle & {
-              selectionStart: number | null;
-            })
+            selectionStart: number | null;
+          })
           | null;
         if (!textArea || mentionStart === null || !filePath) return;
 
@@ -260,14 +260,14 @@ export const MentionableTextarea = React.forwardRef<HTMLTextAreaElement, Mention
         style={
           mentionMenuMode === 'portal'
             ? {
-                top: mentionMenuPlacement === 'top' ? undefined : menuPosition.top,
-                bottom:
-                  mentionMenuPlacement === 'top'
-                    ? window.innerHeight - menuPosition.top
-                    : undefined,
-                left: menuPosition.left,
-                maxHeight: mentionMenuMaxHeight
-              }
+              top: mentionMenuPlacement === 'top' ? undefined : menuPosition.top,
+              bottom:
+                mentionMenuPlacement === 'top'
+                  ? window.innerHeight - menuPosition.top
+                  : undefined,
+              left: menuPosition.left,
+              maxHeight: mentionMenuMaxHeight
+            }
             : undefined
         }
       >
@@ -278,8 +278,8 @@ export const MentionableTextarea = React.forwardRef<HTMLTextAreaElement, Mention
             className={cn(
               'block w-full whitespace-nowrap rounded px-2 py-1.5 text-left text-sm transition-colors',
               index === mentionIndex
-                ? 'bg-primary text-primary-foreground shadow-sm'
-                : 'text-foreground hover:bg-muted'
+                ? 'bg-muted-foreground/30 text-foreground shadow-sm'
+                : 'text-foreground hover:bg-muted-foreground/30'
             )}
             type="button"
             onMouseDown={event => {
@@ -291,7 +291,7 @@ export const MentionableTextarea = React.forwardRef<HTMLTextAreaElement, Mention
             <span
               className={cn(
                 'ml-2 text-xs',
-                index === mentionIndex ? 'text-primary-foreground/85' : 'text-muted-foreground'
+                index === mentionIndex ? 'text-foreground' : 'text-muted-foreground'
               )}
             >
               {filePath}
