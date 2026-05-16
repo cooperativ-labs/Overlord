@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 
 import { upsertDeviceFromProtocol } from '@/lib/overlord/upsert-device';
 import { defaultDirectoryLabel } from '@/lib/resource-directories/labels';
-import { createClientForRequest } from '@/supabase/utils/server';
+import { createClientForRequest, isElectronRequestFromHeaders } from '@/supabase/utils/server';
 import type { Database } from '@/types/database.types';
 
 export type ProjectResourceDirectory = {
@@ -55,6 +55,13 @@ function rowToDto(row: Row): ProjectResourceDirectory {
 function revalidateProjectPaths(projectId: string) {
   revalidatePath(`/projects/${projectId}`);
   revalidatePath('/');
+}
+
+async function ensureDesktopMutationAllowed() {
+  const isElectron = await isElectronRequestFromHeaders();
+  if (!isElectron) {
+    throw new Error('Resource directory changes require the Overlord desktop app.');
+  }
 }
 
 /** List resource directories for the current user on a given project. */
@@ -119,6 +126,8 @@ export async function addProjectResourceDirectoryAction(input: {
   devicePlatform?: string | null;
   isPrimary?: boolean;
 }): Promise<void> {
+  await ensureDesktopMutationAllowed();
+
   const directoryPath = input.directoryPath.trim();
   if (!directoryPath) {
     throw new Error('Directory path is required.');
@@ -198,6 +207,8 @@ export async function removeProjectResourceDirectoryAction(input: {
   directoryId: string;
   projectId: string;
 }): Promise<void> {
+  await ensureDesktopMutationAllowed();
+
   const supabase = await createClientForRequest();
   const {
     data: { user }
@@ -224,6 +235,8 @@ export async function setResourceDirectoryPrimaryAction(input: {
   directoryId: string;
   projectId: string;
 }): Promise<void> {
+  await ensureDesktopMutationAllowed();
+
   const supabase = await createClientForRequest();
   const {
     data: { user }
@@ -257,6 +270,8 @@ export async function updateResourceDirectoryLabelAction(input: {
   projectId: string;
   label: string | null;
 }): Promise<void> {
+  await ensureDesktopMutationAllowed();
+
   const supabase = await createClientForRequest();
   const {
     data: { user }

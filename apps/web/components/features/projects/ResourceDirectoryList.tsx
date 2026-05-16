@@ -26,6 +26,7 @@ type Props = {
 
 export function ResourceDirectoryList({ projectId, onResourceDirectoriesChanged }: Props) {
   const { api, isElectron } = useElectron();
+  const canManageDirectories = isElectron;
   const [items, setItems] = useState<ProjectResourceDirectory[]>([]);
   const [loading, setLoading] = useState(true);
   const [newPath, setNewPath] = useState('');
@@ -56,6 +57,7 @@ export function ResourceDirectoryList({ projectId, onResourceDirectoriesChanged 
     setLoading(true);
     try {
       const { resources } = await getProjectResourceDirectoriesAction({ projectId });
+      setItems(resources);
     } finally {
       setLoading(false);
     }
@@ -81,6 +83,8 @@ export function ResourceDirectoryList({ projectId, onResourceDirectoriesChanged 
   }
 
   async function handleAdd() {
+    if (!canManageDirectories) return;
+
     const trimmed = newPath.trim();
     if (!trimmed) return;
     setAdding(true);
@@ -130,6 +134,8 @@ export function ResourceDirectoryList({ projectId, onResourceDirectoriesChanged 
   }
 
   function handleRemove(directoryId: string) {
+    if (!canManageDirectories) return;
+
     startTransition(async () => {
       try {
         await removeProjectResourceDirectoryAction({ directoryId, projectId });
@@ -141,6 +147,8 @@ export function ResourceDirectoryList({ projectId, onResourceDirectoriesChanged 
   }
 
   function handleSetPrimary(directoryId: string) {
+    if (!canManageDirectories) return;
+
     startTransition(async () => {
       try {
         await setResourceDirectoryPrimaryAction({ directoryId, projectId });
@@ -162,6 +170,8 @@ export function ResourceDirectoryList({ projectId, onResourceDirectoriesChanged 
   }
 
   async function handleSaveLabel(directoryId: string) {
+    if (!canManageDirectories) return;
+
     const next = editingLabel.trim();
     setSavingDirectoryId(directoryId);
     try {
@@ -247,119 +257,129 @@ export function ResourceDirectoryList({ projectId, onResourceDirectoriesChanged 
                     {item.deviceLabel}
                   </span>
                 ) : null}
-                {isEditingLabel ? (
+                {canManageDirectories ? (
                   <>
+                    {isEditingLabel ? (
+                      <>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0"
+                          onClick={() => void handleSaveLabel(item.id)}
+                          disabled={isSavingLabel}
+                          title="Save label"
+                        >
+                          <Check className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0"
+                          onClick={handleCancelEditLabel}
+                          disabled={isSavingLabel}
+                          title="Cancel"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </Button>
+                      </>
+                    ) : (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 p-0 text-muted-foreground"
+                        onClick={() => handleStartEditLabel(item)}
+                        title={item.label ? 'Edit label' : 'Add label'}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
                     <Button
                       type="button"
                       variant="ghost"
                       size="sm"
                       className="h-7 w-7 p-0"
-                      onClick={() => void handleSaveLabel(item.id)}
-                      disabled={isSavingLabel}
-                      title="Save label"
+                      title={item.isPrimary ? 'Primary directory' : 'Set as primary'}
+                      onClick={() => (item.isPrimary ? undefined : handleSetPrimary(item.id))}
                     >
-                      <Check className="h-3.5 w-3.5" />
+                      {item.isPrimary ? (
+                        <Star className="h-3.5 w-3.5 fill-current text-amber-500" />
+                      ) : (
+                        <StarOff className="h-3.5 w-3.5 text-muted-foreground" />
+                      )}
                     </Button>
                     <Button
                       type="button"
                       variant="ghost"
                       size="sm"
-                      className="h-7 w-7 p-0"
-                      onClick={handleCancelEditLabel}
-                      disabled={isSavingLabel}
-                      title="Cancel"
+                      className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+                      onClick={() => handleRemove(item.id)}
+                      title="Remove"
                     >
-                      <X className="h-3.5 w-3.5" />
+                      <Trash2 className="h-3.5 w-3.5" />
                     </Button>
                   </>
-                ) : (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 w-7 p-0 text-muted-foreground"
-                    onClick={() => handleStartEditLabel(item)}
-                    title={item.label ? 'Edit label' : 'Add label'}
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                  </Button>
-                )}
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 w-7 p-0"
-                  title={item.isPrimary ? 'Primary directory' : 'Set as primary'}
-                  onClick={() => (item.isPrimary ? undefined : handleSetPrimary(item.id))}
-                >
-                  {item.isPrimary ? (
-                    <Star className="h-3.5 w-3.5 fill-current text-amber-500" />
-                  ) : (
-                    <StarOff className="h-3.5 w-3.5 text-muted-foreground" />
-                  )}
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
-                  onClick={() => handleRemove(item.id)}
-                  title="Remove"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
+                ) : null}
               </div>
             );
           })
         )}
       </div>
 
-      <div className="grid gap-2">
-        <Input
-          value={newLabel}
-          onChange={event => {
-            labelManuallyEditedRef.current = true;
-            setNewLabel(event.target.value);
-          }}
-          placeholder="Label (optional)"
-          className="h-8 text-xs"
-        />
-        <div className="flex items-center gap-2">
+      {canManageDirectories ? (
+        <div className="grid gap-2">
           <Input
-            value={newPath}
-            onChange={event => handlePathChange(event.target.value)}
-            placeholder="/absolute/path/to/project"
-            className="h-8 min-w-0 flex-1 text-xs"
-            onKeyDown={event => {
-              if (event.key === 'Enter') {
-                event.preventDefault();
-                void handleAdd();
-              }
+            value={newLabel}
+            onChange={event => {
+              labelManuallyEditedRef.current = true;
+              setNewLabel(event.target.value);
             }}
+            placeholder="Label (optional)"
+            className="h-8 text-xs"
           />
-          {isElectron ? (
-            <Button
+          <div className="flex items-center gap-2">
+            <Input
+              value={newPath}
+              onChange={event => handlePathChange(event.target.value)}
+              placeholder="/absolute/path/to/project"
+              className="h-8 min-w-0 flex-1 text-xs"
+              onKeyDown={event => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  void handleAdd();
+                }
+              }}
+            />
+            {isElectron ? (
+              <Button
+                type="button"
+                size="sm"
+                className="h-8 shrink-0 gap-1.5 px-2.5 text-xs"
+                onClick={() => void handleBrowseDirectory()}
+                disabled={browsing || adding}
+                title="Browse for folder"
+              >
+                <FolderOpen className="h-3.5 w-3.5" />
+                Browse
+              </Button>
+            ) : null}
+            <LoadingButton
               type="button"
               size="sm"
-              className="h-8 shrink-0 gap-1.5 px-2.5 text-xs"
-              onClick={() => void handleBrowseDirectory()}
-              disabled={browsing || adding}
-              title="Browse for folder"
-            >
-              <FolderOpen className="h-3.5 w-3.5" />
-              Browse
-            </Button>
-          ) : null}
-          <LoadingButton
-            type="button"
-            size="sm"
-            buttonState={adding ? 'loading' : 'default'}
-            text="Add"
-            onClick={() => void handleAdd()}
-            disabled={!newPath.trim()}
-          />
+              buttonState={adding ? 'loading' : 'default'}
+              text="Add"
+              onClick={() => void handleAdd()}
+              disabled={!newPath.trim()}
+            />
+          </div>
         </div>
-      </div>
+      ) : (
+        <p className="text-xs text-muted-foreground">
+          Open the Overlord desktop app to add, edit, or remove resource directories.
+        </p>
+      )}
     </div>
   );
 }
