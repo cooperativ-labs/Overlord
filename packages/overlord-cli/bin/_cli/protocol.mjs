@@ -1036,6 +1036,42 @@ async function protocolAsk(args) {
 }
 
 // ---------------------------------------------------------------------------
+// request-approval-gate
+// ---------------------------------------------------------------------------
+
+async function protocolRequestApprovalGate(args) {
+  const flags = parseFlags(args);
+  const { sessionKey, ticketId } = resolveSessionFlags(flags);
+  if (!sessionKey) throw new Error('--session-key is required (or set SESSION_KEY)');
+  if (!ticketId) throw new Error('--ticket-id is required (or set TICKET_ID)');
+  const reason = flags['reason-file']
+    ? await readTextFileOrStdin(String(flags['reason-file']), '--reason-file')
+    : requireFlag(flags, 'reason', undefined);
+
+  const { platformUrl, bearerToken, localSecret, organizationId } =
+    await resolveProtocolAuthForFlags(flags, ticketId);
+  const timeoutMs = resolveTimeout(flags);
+
+  const body = {
+    sessionKey,
+    ticketId,
+    reason,
+    ...(flags['objective-id'] ? { objectiveId: String(flags['objective-id']) } : {})
+  };
+
+  const data = await apiPost(
+    platformUrl,
+    bearerToken,
+    localSecret,
+    organizationId,
+    '/api/protocol/request-approval-gate',
+    body,
+    timeoutMs
+  );
+  console.log(JSON.stringify(data, null, 2));
+}
+
+// ---------------------------------------------------------------------------
 // permission-request
 // ---------------------------------------------------------------------------
 
@@ -2238,6 +2274,7 @@ Subcommands:
   update                    Post progress, activity events, and optional change rationales
   record-change-rationales  Persist structured change rationales without a progress update
   ask                       Post a blocking question and move the ticket to review
+  request-approval-gate     Flip auto_advance=false on the next queued future objective
   permission-request        Notify Overlord that the agent is requesting tool permission
   hook-event                Record a lifecycle hook event without a session key
   read-context              Read shared persistent context for this ticket
@@ -2777,6 +2814,10 @@ EOF
   }
   if (subcommand === 'ask') {
     await protocolAsk(args);
+    return;
+  }
+  if (subcommand === 'request-approval-gate') {
+    await protocolRequestApprovalGate(args);
     return;
   }
   if (subcommand === 'permission-request') {

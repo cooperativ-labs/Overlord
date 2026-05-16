@@ -67,7 +67,7 @@ export function AgentPluginsTabs() {
             alt=""
             width={16}
             height={16}
-            className="size-4"
+            className="size-4 dark:invert"
             aria-hidden="true"
           />
           <span>Codex Desktop</span>

@@ -54,7 +54,7 @@ export function ExecutingTicketsSection({ tickets }: ExecutingTicketsSectionProp
                       alt={`${agentType.label} icon`}
                       width={12}
                       height={12}
-                      className="h-3 w-3 shrink-0"
+                      className={`h-3 w-3 shrink-0 ${agentType.invertDark ? 'dark:invert' : ''}`}
                     />
                     <span>{agentType.label}</span>
                   </>

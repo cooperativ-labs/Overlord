@@ -1516,6 +1516,73 @@ export async function createEmptyDraftObjectiveAction({
   ]);
 }
 
+export async function setObjectiveAutoAdvanceAction({
+  ticketId,
+  objectiveId,
+  autoAdvance
+}: {
+  ticketId: string;
+  objectiveId: string;
+  autoAdvance: boolean;
+}): Promise<void> {
+  const supabase = await createClientForRequest();
+  const ticket = await assertTicketAccess(supabase, ticketId);
+
+  const updates: Record<string, unknown> = { auto_advance: autoAdvance };
+  if (autoAdvance) {
+    updates.approval_reason = null;
+  }
+
+  const { error } = await supabase
+    .from('objectives')
+    .update(updates)
+    .eq('id', objectiveId)
+    .eq('ticket_id', ticketId)
+    .eq('state', 'future');
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  revalidateTicketBoards();
+  revalidatePath(
+    buildProjectPath({ organizationId: ticket.organization_id, projectId: ticket.project_id })
+  );
+  revalidateTicketDetails([
+    { organizationId: ticket.organization_id, projectId: ticket.project_id, ticketId }
+  ]);
+}
+
+export async function clearAwaitingApprovalAction({
+  ticketId,
+  objectiveId
+}: {
+  ticketId: string;
+  objectiveId: string;
+}): Promise<void> {
+  const supabase = await createClientForRequest();
+  const ticket = await assertTicketAccess(supabase, ticketId);
+
+  await supabase
+    .from('objectives')
+    .update({ approval_reason: null, auto_advance: true })
+    .eq('id', objectiveId)
+    .eq('ticket_id', ticketId);
+
+  await supabase
+    .from('tickets')
+    .update({ has_unopened_waiting_response: false })
+    .eq('id', ticketId);
+
+  revalidateTicketBoards();
+  revalidatePath(
+    buildProjectPath({ organizationId: ticket.organization_id, projectId: ticket.project_id })
+  );
+  revalidateTicketDetails([
+    { organizationId: ticket.organization_id, projectId: ticket.project_id, ticketId }
+  ]);
+}
+
 export async function reorderFutureObjectivesAction({
   ticketId,
   orderedObjectiveIds

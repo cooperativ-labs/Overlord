@@ -293,6 +293,31 @@ const tools = [
     subcommand: 'ask'
   },
   {
+    name: 'request_approval_gate',
+    description:
+      'Flip auto_advance=false on the next queued future objective so a human must approve before it runs.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        session_key: { type: 'string' },
+        ticket_id: {
+          type: 'string',
+          description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.'
+        },
+        reason: { type: 'string' },
+        objective_id: { type: 'string' }
+      },
+      required: ['session_key', 'ticket_id', 'reason']
+    },
+    toCliFlags: args => ({
+      'session-key': args.session_key,
+      'ticket-id': args.ticket_id,
+      reason: args.reason,
+      'objective-id': args.objective_id
+    }),
+    subcommand: 'request-approval-gate'
+  },
+  {
     name: 'read_context',
     description: 'Read persistent shared context entries for a ticket.',
     inputSchema: {

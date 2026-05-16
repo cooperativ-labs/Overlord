@@ -72,6 +72,13 @@ export const askSchema = z.object({
   payload: z.record(z.string(), z.unknown()).optional().default({})
 });
 
+export const requestApprovalGateSchema = z.object({
+  sessionKey: z.string().uuid(),
+  ticketId: ticketIdSchema,
+  reason: agentText(2_000),
+  objectiveId: z.string().uuid().optional()
+});
+
 const updateEventTypeSchema = z
   .enum(['update', 'user_follow_up', 'alert'])
   .optional()

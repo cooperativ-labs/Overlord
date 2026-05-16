@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2605161310.0] - 2026-05-16:13:10
+
+### Added
+- Sequential objective execution with approval gates: agents can request approval before advancing to the next queued objective via the `request-approval-gate` MCP tool.
+- Per-objective auto-advance control (`auto_advance` column) to enable or disable automatic promotion of the next objective.
+- Awaiting-approval event type and notifications when an objective is gated for human review.
+- Auto-advance event telemetry to track when objectives are automatically promoted without human intervention.
+- New `/api/protocol/request-approval-gate` route and corresponding MCP handler for agents to pause and request approval.
+
+### Fixed
+- None.
+
+### Changed
+- Deliver flow now checks for queued future objectives on ticket completion and either auto-advances or gates them based on their `auto_advance` setting.
+- Objectives table now includes `approval_reason` field to store human-readable context for why approval was requested.
+- Auto-advanced objectives are stamped with `auto_advanced_at` timestamp for visibility in the objective history UI.
+
+### Security
+- None.
+
+### Chore
+- Add database migration for objective auto-advance schema and event types.
+
 ## [0.2605160931.0] - 2026-05-16:09:31
 
 ### Added

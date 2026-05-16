@@ -132,6 +132,131 @@ export async function POST(request: Request) {
     // sandbox runtimes with short request windows receive a timely 200 response.
     after(async () => {
       try {
+        // Mark the executing objective as complete first so the next-future
+        // lookup below cannot accidentally re-promote it.
+        const completedAt = new Date().toISOString();
+        await supabase
+          .from('objectives')
+          .update({ state: 'complete', completed_at: completedAt })
+          .eq('ticket_id', ticketId)
+          .eq('state', 'executing');
+
+        // Auto-advance scheduler: peek at the next queued future objective on
+        // this ticket. If present, either promote+relaunch (auto_advance=true)
+        // or promote-and-gate (auto_advance=false). If absent, fall through
+        // to the standard deliver-to-review behavior.
+        const { data: nextFuture } = await supabase
+          .from('objectives')
+          .select('id, objective, auto_advance, approval_reason, assigned_agent')
+          .eq('ticket_id', ticketId)
+          .eq('state', 'future')
+          .order('position', { ascending: true })
+          .order('created_at', { ascending: true })
+          .limit(1)
+          .maybeSingle();
+
+        if (nextFuture) {
+          const wantsAutoAdvance = nextFuture.auto_advance !== false;
+
+          if (wantsAutoAdvance) {
+            // Promote to submitted + stamp auto_advanced_at. A desktop /
+            // remote-agent observer should pick up the auto_advance event
+            // and call launchAgent.
+            await supabase
+              .from('objectives')
+              .update({
+                state: 'submitted',
+                auto_advanced_at: new Date().toISOString()
+              })
+              .eq('id', nextFuture.id);
+
+            await supabase.from('ticket_events').insert({
+              event_type: 'auto_advance',
+              phase: 'execute',
+              summary: 'Queue advanced to next objective automatically.',
+              session_id: sessionId,
+              ticket_id: ticketId,
+              objective_id: nextFuture.id,
+              created_by: userId,
+              payload: {
+                next_objective_id: nextFuture.id,
+                assigned_agent: nextFuture.assigned_agent ?? null
+              }
+            });
+          } else {
+            // Gated: promote to draft so it becomes the editable current
+            // objective, set the awaiting-response flag, push a
+            // notification, and stop the chain.
+            await supabase
+              .from('objectives')
+              .update({ state: 'draft', completed_at: null })
+              .eq('id', nextFuture.id);
+
+            await supabase
+              .from('tickets')
+              .update({ has_unopened_waiting_response: true, is_read: false })
+              .eq('id', ticketId);
+
+            await supabase.from('ticket_events').insert({
+              event_type: 'awaiting_approval',
+              phase: 'execute',
+              summary:
+                nextFuture.approval_reason || 'Queued objective is waiting for your approval.',
+              session_id: sessionId,
+              ticket_id: ticketId,
+              objective_id: nextFuture.id,
+              is_blocking: true,
+              created_by: userId
+            });
+
+            await sendPushNotification(supabase, {
+              title: `Awaiting approval (${ticketReference})`,
+              body: (
+                nextFuture.approval_reason || 'Queued objective is waiting for your approval.'
+              ).slice(0, 200),
+              organizationId,
+              data: { ticketId, eventType: 'awaiting_approval', objectiveId: nextFuture.id }
+            });
+          }
+
+          // Both branches detach the just-finished agent session but keep
+          // the ticket in its current execution status — do NOT route to
+          // review while a follow-up objective is queued.
+          await supabase
+            .from('agent_sessions')
+            .update({
+              detached_at: new Date().toISOString(),
+              session_state: 'completed'
+            })
+            .eq('id', sessionId);
+
+          if (artifacts.length) {
+            const artifactRows = artifacts.map(artifact => ({
+              artifact_type: artifact.type,
+              content: artifact.content ?? null,
+              event_id: eventId,
+              label: artifact.label,
+              metadata: artifact.metadata,
+              session_id: sessionId,
+              ticket_id: ticketId,
+              uri: artifact.uri ?? null,
+              created_by: userId
+            }));
+            await supabase.from('artifacts').insert(artifactRows);
+          }
+
+          try {
+            await supabase.functions.invoke('generate-feed-post', {
+              body: { ticketId, sessionId, organizationId }
+            });
+          } catch (feedErr) {
+            console.error('[protocol:deliver] feed post generation error:', feedErr);
+            Sentry.captureException(feedErr, { extra: { ticketId, sessionId } });
+          }
+
+          return;
+        }
+
         if (artifacts.length) {
           const artifactRows = artifacts.map(artifact => ({
             artifact_type: artifact.type,
@@ -181,14 +306,6 @@ export async function POST(request: Request) {
             })
             .eq('id', sessionId)
         ]);
-
-        // Mark the executing objective as complete
-        const completedAt = new Date().toISOString();
-        await supabase
-          .from('objectives')
-          .update({ state: 'complete', completed_at: completedAt })
-          .eq('ticket_id', ticketId)
-          .eq('state', 'executing');
 
         if (ticketError) {
           console.error('[protocol:deliver] ticket update error:', ticketError.message);

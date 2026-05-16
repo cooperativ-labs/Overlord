@@ -2,6 +2,9 @@
 
 import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
 const require = createRequire(import.meta.url);
 const cliPackage = require('../../package.json');
@@ -47,6 +50,41 @@ export async function fetchLatestCliVersion({
     return null;
   } finally {
     clearTimeout(timeout);
+  }
+}
+
+function pruneOldCliVersions() {
+  const cliInstallRoot = path.join(os.homedir(), '.ovld', 'cli');
+  if (!fs.existsSync(cliInstallRoot)) return;
+
+  let entries;
+  try {
+    entries = fs.readdirSync(cliInstallRoot);
+  } catch {
+    return;
+  }
+
+  const versionDirs = entries
+    .filter(name => name.startsWith('overlord-cli-'))
+    .flatMap(name => {
+      const dirPath = path.join(cliInstallRoot, name);
+      try {
+        const stat = fs.statSync(dirPath);
+        if (!stat.isDirectory()) return [];
+        return [{ dirPath, mtime: stat.mtimeMs }];
+      } catch {
+        return [];
+      }
+    });
+
+  // Sort newest-first, keep current + 1 previous, delete the rest
+  versionDirs.sort((a, b) => b.mtime - a.mtime);
+  for (const { dirPath } of versionDirs.slice(2)) {
+    try {
+      fs.rmSync(dirPath, { recursive: true, force: true });
+    } catch {
+      // Best-effort cleanup
+    }
   }
 }
 
@@ -114,6 +152,8 @@ export async function runCliUpdateCommand({
   } else {
     logger.log('Overlord CLI update complete. Run `ovld version` to confirm the installed version.');
   }
+
+  pruneOldCliVersions();
 
   return { alreadyLatest: false, currentVersion, latestVersion, result };
 }

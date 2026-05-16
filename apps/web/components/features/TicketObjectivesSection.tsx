@@ -17,7 +17,7 @@ import {
   verticalListSortingStrategy
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical, Trash2 } from 'lucide-react';
+import { FastForward, GripVertical, PauseCircle, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -26,7 +26,11 @@ import { DraftObjective } from '@/components/features/DraftObjective';
 import { ObjectiveCollapsibleItem } from '@/components/features/ObjectiveCollapsibleItem';
 import { type ButtonLoadingState, LoadingButton } from '@/components/ui/loading-button';
 import type { ObjectiveAttachment } from '@/lib/actions/attachments';
-import { reorderFutureObjectivesAction } from '@/lib/actions/tickets';
+import {
+  clearAwaitingApprovalAction,
+  reorderFutureObjectivesAction,
+  setObjectiveAutoAdvanceAction
+} from '@/lib/actions/tickets';
 import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
 import type { LaunchAgentType } from '@/lib/helpers/agent-types';
 import {
@@ -57,6 +61,9 @@ type ObjectiveRow = Pick<
   | 'model_identifier'
   | 'assigned_agent'
   | 'position'
+  | 'auto_advance'
+  | 'auto_advanced_at'
+  | 'approval_reason'
 >;
 
 type ObjectiveCheckpoint = {
@@ -167,7 +174,108 @@ function SortableFutureObjective({
       <div className="min-w-0 flex-1">
         <ObjectiveEditableItem objective={objective} shared={shared} />
       </div>
+      <AutoAdvanceToggle objective={objective} ticketId={shared.ticketId} />
     </div>
+  );
+}
+
+function AwaitingApprovalBanner({
+  objective,
+  ticketId
+}: {
+  objective: ObjectiveRow;
+  ticketId: string;
+}) {
+  const [pending, setPending] = useState(false);
+
+  const handleDismiss = async () => {
+    if (pending) return;
+    setPending(true);
+    try {
+      await clearAwaitingApprovalAction({ ticketId, objectiveId: objective.id });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to clear approval gate.');
+    } finally {
+      setPending(false);
+    }
+  };
+
+  return (
+    <div className="rounded-md border border-amber-500/50 bg-amber-500/10 p-3 text-sm">
+      <p className="font-medium text-amber-900 dark:text-amber-200">
+        Waiting for your approval to continue.
+      </p>
+      {objective.approval_reason ? (
+        <p className="mt-1 text-amber-900/80 dark:text-amber-200/80">{objective.approval_reason}</p>
+      ) : (
+        <p className="mt-1 text-amber-900/80 dark:text-amber-200/80">
+          This objective is queued for your review.
+        </p>
+      )}
+      <div className="mt-2 flex items-center gap-2">
+        <button
+          type="button"
+          onClick={handleDismiss}
+          disabled={pending}
+          className="text-xs text-amber-900 underline-offset-2 hover:underline dark:text-amber-200"
+        >
+          Dismiss approval gate
+        </button>
+        <span className="text-[11px] text-amber-900/60 dark:text-amber-200/60">
+          (then start the objective normally)
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function AutoAdvanceToggle({ objective, ticketId }: { objective: ObjectiveRow; ticketId: string }) {
+  const autoAdvance = objective.auto_advance !== false;
+  const [pending, setPending] = useState(false);
+
+  const handleToggle = async () => {
+    if (pending) return;
+    setPending(true);
+    try {
+      await setObjectiveAutoAdvanceAction({
+        ticketId,
+        objectiveId: objective.id,
+        autoAdvance: !autoAdvance
+      });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to update auto-advance.');
+    } finally {
+      setPending(false);
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handleToggle}
+      disabled={pending}
+      aria-pressed={autoAdvance}
+      aria-label={
+        autoAdvance
+          ? 'Auto-advance on — runs after the previous objective delivers. Click to require manual approval.'
+          : 'Auto-advance off — pauses the queue for manual approval. Click to allow auto-advance.'
+      }
+      title={
+        autoAdvance
+          ? 'Auto-advance ON — runs after the previous objective delivers.'
+          : 'Auto-advance OFF — pauses for manual approval.'
+      }
+      className={cn(
+        'flex w-7 shrink-0 items-center justify-center self-stretch rounded text-muted-foreground/60 transition hover:text-foreground',
+        pending && 'opacity-50'
+      )}
+    >
+      {autoAdvance ? (
+        <FastForward className="h-4 w-4" />
+      ) : (
+        <PauseCircle className="h-4 w-4 text-amber-500" />
+      )}
+    </button>
   );
 }
 
@@ -417,7 +525,12 @@ export function TicketObjectivesSection({
           <>
             <div className="space-y-3">
               {nonFutureEditable.map(objective => (
-                <ObjectiveEditableItem key={objective.id} objective={objective} shared={shared} />
+                <div key={objective.id} className="space-y-2">
+                  {objective.state === 'draft' && objective.approval_reason ? (
+                    <AwaitingApprovalBanner objective={objective} ticketId={ticketId} />
+                  ) : null}
+                  <ObjectiveEditableItem objective={objective} shared={shared} />
+                </div>
               ))}
               {orderedFutureObjectives.length > 0 ? (
                 <DndContext

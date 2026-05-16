@@ -273,9 +273,10 @@ export async function runAttachProtocol(supabase: AttachClient, params: AttachPa
       .limit(50),
     supabase
       .from('objectives')
-      .select('id, objective, state, created_at')
+      .select('id, objective, state, created_at, auto_advance, position')
       .eq('ticket_id', ticketId)
       .neq('state', 'draft')
+      .order('position', { ascending: true })
       .order('created_at', { ascending: true })
       .limit(50),
     supabase

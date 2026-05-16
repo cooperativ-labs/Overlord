@@ -173,7 +173,7 @@ export async function TicketPanelContent({
     supabase
       .from('objectives')
       .select(
-        'id,objective,created_at,title,state,agent_identifier,model_identifier,assigned_agent,position'
+        'id,objective,created_at,title,state,agent_identifier,model_identifier,assigned_agent,position,auto_advance,auto_advanced_at,approval_reason'
       )
       .eq('ticket_id', ticketId)
       .order('created_at', { ascending: false }),

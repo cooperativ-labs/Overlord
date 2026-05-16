@@ -144,7 +144,13 @@ export function AgentSetupStep({ initialPreferredAgent, onContinue }: Props) {
                 : 'border-input hover:bg-accent hover:text-accent-foreground'
             )}
           >
-            <Image src={agent.icon} alt={agent.label} width={28} height={28} />
+            <Image
+              src={agent.icon}
+              alt={agent.label}
+              width={28}
+              height={28}
+              className={agent.invertDark ? 'dark:invert' : ''}
+            />
             <span className="text-xs font-medium">{agent.label}</span>
           </button>
         ))}

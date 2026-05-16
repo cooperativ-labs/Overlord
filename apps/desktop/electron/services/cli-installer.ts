@@ -257,6 +257,41 @@ function syncInstalledCliCopy(sourceCliDir: string, version: string): string {
   return targetCliDir;
 }
 
+function pruneOldCliVersions(currentVersion: string): void {
+  if (!fs.existsSync(CLI_INSTALL_ROOT)) return;
+
+  let entries: string[];
+  try {
+    entries = fs.readdirSync(CLI_INSTALL_ROOT);
+  } catch {
+    return;
+  }
+
+  const currentDirName = `overlord-cli-${currentVersion}`;
+  const oldDirs = entries
+    .filter(name => name.startsWith('overlord-cli-') && name !== currentDirName)
+    .flatMap(name => {
+      const dirPath = path.join(CLI_INSTALL_ROOT, name);
+      try {
+        const stat = fs.statSync(dirPath);
+        if (!stat.isDirectory()) return [];
+        return [{ dirPath, mtime: stat.mtimeMs }];
+      } catch {
+        return [];
+      }
+    });
+
+  // Sort newest-first, keep 1 previous, delete the rest
+  oldDirs.sort((a, b) => b.mtime - a.mtime);
+  for (const { dirPath } of oldDirs.slice(1)) {
+    try {
+      fs.rmSync(dirPath, { recursive: true, force: true });
+    } catch {
+      // Best-effort cleanup
+    }
+  }
+}
+
 function isPathConfiguredFor(dir: string): boolean {
   return getPathEntries().includes(dir);
 }
@@ -365,6 +400,8 @@ export async function installCli(): Promise<CliInstallResult> {
     const message = err instanceof Error ? err.message : String(err);
     return { ok: false, error: `Failed to install: ${message}` };
   }
+
+  pruneOldCliVersions(bundledCliVersion);
 
   const pathInstruction = isPathConfiguredFor(installDir)
     ? `Installed globally at ${installDir}. You can now run ovld from any repository. It will use ${nodeRuntime.version} from ${nodeRuntime.binPath}.`

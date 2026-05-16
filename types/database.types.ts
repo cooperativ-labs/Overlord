@@ -766,7 +766,10 @@ export type Database = {
       objectives: {
         Row: {
           agent_identifier: string | null;
+          approval_reason: string | null;
           assigned_agent: Json | null;
+          auto_advance: boolean;
+          auto_advanced_at: string | null;
           completed_at: string | null;
           created_at: string;
           created_by: string | null;
@@ -781,7 +784,10 @@ export type Database = {
         };
         Insert: {
           agent_identifier?: string | null;
+          approval_reason?: string | null;
           assigned_agent?: Json | null;
+          auto_advance?: boolean;
+          auto_advanced_at?: string | null;
           completed_at?: string | null;
           created_at?: string;
           created_by?: string | null;
@@ -796,7 +802,10 @@ export type Database = {
         };
         Update: {
           agent_identifier?: string | null;
+          approval_reason?: string | null;
           assigned_agent?: Json | null;
+          auto_advance?: boolean;
+          auto_advanced_at?: string | null;
           completed_at?: string | null;
           created_at?: string;
           created_by?: string | null;
@@ -2114,7 +2123,9 @@ export type Database = {
         | 'status_change'
         | 'alert'
         | 'user_follow_up'
-        | 'ticket_reopened';
+        | 'ticket_reopened'
+        | 'awaiting_approval'
+        | 'auto_advance';
       ticket_execution_target: 'agent' | 'human';
       ticket_priority: 'low' | 'medium' | 'high' | 'urgent';
       ticket_status_type: 'draft' | 'execute' | 'review' | 'complete';
@@ -2262,7 +2273,9 @@ export const Constants = {
         'status_change',
         'alert',
         'user_follow_up',
-        'ticket_reopened'
+        'ticket_reopened',
+        'awaiting_approval',
+        'auto_advance'
       ],
       ticket_execution_target: ['agent', 'human'],
       ticket_priority: ['low', 'medium', 'high', 'urgent'],

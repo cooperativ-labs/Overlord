@@ -16,6 +16,7 @@ export type PromptContextObjective = {
   id: string;
   state: string | null;
   objective: string | null;
+  auto_advance?: boolean | null;
 };
 
 type TicketLike = {
@@ -137,15 +138,42 @@ export function buildPromptContextSections(input: BuildPromptContextInput): Prom
             const text = (o.objective ?? '').trim();
             const preview = text ? ` — ${text.length > 80 ? `${text.slice(0, 77)}...` : text}` : '';
             const stateSuffix = o.state ? ` [${o.state}]` : '';
-            return `- \`${o.id}\`${stateSuffix}${preview}`;
+            const autoAdvanceSuffix =
+              o.state === 'future'
+                ? ` auto_advance=${o.auto_advance === false ? 'false' : 'true'}`
+                : '';
+            return `- \`${o.id}\`${stateSuffix}${autoAdvanceSuffix}${preview}`;
           })
           .join('\n')}`
       : '';
+
+  const hasQueuedFutureObjective = objectives.some(o => o.state === 'future');
+  const queuedFollowupGuidance = hasQueuedFutureObjective
+    ? `### Queued follow-up objectives
+
+After you deliver, the platform may automatically launch the next future
+objective listed above (in queue order) on this same ticket. Whether it
+auto-launches depends on the per-objective \`auto_advance\` flag shown beside
+each Objective ID. You do NOT need to do anything to trigger the next one.
+
+If — and ONLY if — the next objective is marked \`auto_advance=true\` but
+SHOULD NOT run without human review (because your current work surfaced a
+question, risk, or decision a human must make first), call:
+
+\`\`\`
+ovld protocol request-approval-gate --session-key <sessionKey> --ticket-id <ticketId> --reason "..."
+\`\`\`
+
+This flips the next objective's \`auto_advance\` to false so a human must
+approve it before it runs. Use sparingly — the default is to deliver and let
+the queue continue.`
+    : '';
 
   const taskParts = [
     formatTicketMetadata(ticket),
     optionalSubsection('Objective', ticket.objective),
     objectiveIdsSubsection,
+    queuedFollowupGuidance,
     optionalSubsection('Acceptance Criteria', ticket.acceptance_criteria),
     optionalSubsection('Constraints', ticket.constraints),
     optionalSubsection('Available Tools', ticket.available_tools),

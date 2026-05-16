@@ -455,6 +455,38 @@ export const TOOLS = [
     }
   },
   {
+    name: 'request_approval_gate',
+    annotations: {
+      title: 'Request Approval Gate',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false
+    },
+    description:
+      'Flip the next queued future objective on this ticket to require manual human approval before it runs. Use sparingly — only when your current work surfaced a question, risk, or decision a human must make before the next objective auto-launches.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sessionKey: { type: 'string' },
+        ticketId: {
+          type: 'string',
+          description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.'
+        },
+        reason: {
+          type: 'string',
+          description:
+            'Why a human must approve before the next objective runs. Rendered in the awaiting-approval banner verbatim.'
+        },
+        objectiveId: {
+          type: 'string',
+          description: 'Optional UUID of a specific future objective to gate. Defaults to the next.'
+        }
+      },
+      required: ['sessionKey', 'ticketId', 'reason']
+    }
+  },
+  {
     name: 'read_context',
     annotations: {
       title: 'Read Shared Context',

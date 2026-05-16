@@ -27,11 +27,12 @@ export const metadata: Metadata = {
 };
 
 const agentIcons = [
-  { src: '/images/icons/codex.svg', alt: 'Codex' },
-  { src: '/images/icons/claude-code.svg', alt: 'Claude Code' },
-  { src: '/images/icons/cursor.svg', alt: 'Cursor' },
-  { src: '/images/icons/gemini.svg', alt: 'Gemini' },
-  { src: '/images/icons/opencode.svg', alt: 'OpenCode' }
+  { src: '/images/icons/codex.svg', alt: 'Codex', invertDark: true },
+  { src: '/images/icons/claude-code.svg', alt: 'Claude Code', invertDark: false },
+  { src: '/images/icons/cursor.svg', alt: 'Cursor', invertDark: true },
+  { src: '/images/icons/gemini.svg', alt: 'Gemini', invertDark: false },
+  { src: '/images/icons/opencode.svg', alt: 'OpenCode', invertDark: false },
+  { src: '/images/icons/pi.svg', alt: 'Pi', invertDark: true }
 ] as const;
 
 const workflowSteps = [
@@ -379,7 +380,13 @@ export default async function HomePage() {
                   key={agent.alt}
                   className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-2 shadow-sm"
                 >
-                  <Image src={agent.src} alt={agent.alt} width={16} height={16} />
+                  <Image
+                    src={agent.src}
+                    alt={agent.alt}
+                    width={16}
+                    height={16}
+                    className={agent.invertDark ? 'dark:invert' : ''}
+                  />
                   <span>{agent.alt}</span>
                 </div>
               ))}

@@ -31,6 +31,7 @@ import { handleReadContext } from './handlers/read-context.ts';
 import { handleRecordChangeRationales } from './handlers/record-change-rationales.ts';
 import { handleRecordHookEvent } from './handlers/record-hook-event.ts';
 import { handleRecordWork } from './handlers/record-work.ts';
+import { handleRequestApprovalGate } from './handlers/request-approval-gate.ts';
 import { handleSaveTicketDraft } from './handlers/save-ticket-draft.ts';
 import { handleSearchTickets } from './handlers/search-tickets.ts';
 import { handleUpdate } from './handlers/update.ts';
@@ -302,6 +303,8 @@ Deno.serve(async (req: Request) => {
         result = await handleUpdate(supabase, toolArgs, requestContext);
       } else if (toolName === 'ask') {
         result = await handleAsk(supabase, toolArgs, requestContext);
+      } else if (toolName === 'request_approval_gate') {
+        result = await handleRequestApprovalGate(supabase, toolArgs, requestContext);
       } else if (toolName === 'read_context') {
         result = await handleReadContext(supabase, toolArgs, requestContext);
       } else if (toolName === 'record_change_rationales') {

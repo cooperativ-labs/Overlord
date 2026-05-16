@@ -26,6 +26,9 @@ type ObjectiveRow = Pick<
   | 'model_identifier'
   | 'assigned_agent'
   | 'position'
+  | 'auto_advance'
+  | 'auto_advanced_at'
+  | 'approval_reason'
 >;
 
 type TicketTitleFieldProps = {

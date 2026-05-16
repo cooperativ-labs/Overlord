@@ -1,6 +1,14 @@
 'use client';
 
-import { AlertTriangle, CheckCircle, ChevronDown, History, Loader2, RotateCcw } from 'lucide-react';
+import {
+  AlertTriangle,
+  CheckCircle,
+  ChevronDown,
+  FastForward,
+  History,
+  Loader2,
+  RotateCcw
+} from 'lucide-react';
 import Image from 'next/image';
 import { useCallback, useState } from 'react';
 
@@ -30,7 +38,14 @@ import type { Database } from '@/types/database.types';
 
 type ObjectiveRow = Pick<
   Database['public']['Tables']['objectives']['Row'],
-  'id' | 'objective' | 'created_at' | 'title' | 'state' | 'agent_identifier' | 'model_identifier'
+  | 'id'
+  | 'objective'
+  | 'created_at'
+  | 'title'
+  | 'state'
+  | 'agent_identifier'
+  | 'model_identifier'
+  | 'auto_advanced_at'
 >;
 
 type ObjectiveCheckpoint = {
@@ -166,47 +181,58 @@ export function ObjectiveCollapsibleItem({
             <CollapsibleTrigger asChild>
               <button
                 className={cn(
-                  'relative flex flex-1 items-center justify-between rounded-md pl-3 pr-1 py-2 text-left overflow-hidden min-w-0',
+                  'relative flex flex-1 flex-col rounded-md pl-3 pr-1 py-2 text-left overflow-hidden min-w-0',
                   !isExecuting && 'hover:bg-background'
                 )}
                 type="button"
               >
-                <div className="flex items-center gap-2 min-w-0 flex-1">
-                  {objective.state === 'executing' ? (
-                    <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />
-                  ) : objective.state === 'complete' ? (
-                    <CheckCircle className="h-3.5 w-3.5 shrink-0 text-green-500" />
-                  ) : null}
-                  {agentType ? (
+                <div className="flex items-center justify-between gap-2 min-w-0 w-full">
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    {objective.state === 'executing' ? (
+                      <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />
+                    ) : objective.state === 'complete' ? (
+                      <CheckCircle className="h-3.5 w-3.5 shrink-0 text-green-500" />
+                    ) : null}
+                    {agentType ? (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="flex shrink-0 items-center">
+                            <Image
+                              src={agentType.icon}
+                              alt={`${agentType.label} icon`}
+                              width={14}
+                              height={14}
+                              className={cn(
+                                'h-3.5 w-3.5',
+                                agentType.invertDark ? 'dark:invert' : ''
+                              )}
+                            />
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="top">
+                          {modelIdentifier ?? 'Model unavailable'}
+                        </TooltipContent>
+                      </Tooltip>
+                    ) : null}
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <span className="flex shrink-0 items-center">
-                          <Image
-                            src={agentType.icon}
-                            alt={`${agentType.label} icon`}
-                            width={14}
-                            height={14}
-                            className={cn('h-3.5 w-3.5', agentType.invertDark ? 'dark:invert' : '')}
-                          />
-                        </span>
+                        <p className="text-sm font-medium truncate">
+                          {objective.title ?? `Objective ${index + 1}`}
+                        </p>
                       </TooltipTrigger>
                       <TooltipContent side="top">
-                        {modelIdentifier ?? 'Model unavailable'}
+                        {timestampLabel} {objectiveTimestamp}
                       </TooltipContent>
                     </Tooltip>
-                  ) : null}
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <p className="text-sm font-medium truncate">
-                        {objective.title ?? `Objective ${index + 1}`}
-                      </p>
-                    </TooltipTrigger>
-                    <TooltipContent side="top">
-                      {timestampLabel} {objectiveTimestamp}
-                    </TooltipContent>
-                  </Tooltip>
+                  </div>
+                  <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0 ml-1" />
                 </div>
-                <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0 ml-1" />
+                {objective.auto_advanced_at ? (
+                  <div className="mt-0.5 flex items-center gap-1 pl-[18px] text-[11px] text-muted-foreground">
+                    <FastForward className="h-3 w-3" />
+                    <span>Auto-advanced</span>
+                  </div>
+                ) : null}
               </button>
             </CollapsibleTrigger>
             <ObjectiveMenuButton
