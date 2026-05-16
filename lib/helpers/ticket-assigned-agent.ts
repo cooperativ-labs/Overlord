@@ -2,12 +2,12 @@ import type { AgentModelSelection } from '@/lib/helpers/agent-model-preference';
 import {
   getLaunchAgentTypeByIdentifier,
   LAUNCH_AGENT_VALUES,
-  type LaunchAgentTypeValue
+  type LaunchAgentType
 } from '@/lib/helpers/agent-types';
 import type { Json } from '@/types/database.types';
 
 export type TicketAssignedAgent = {
-  agent: LaunchAgentTypeValue;
+  agent: LaunchAgentType;
   model: string | null;
   thinking: string | null;
 };
@@ -16,8 +16,8 @@ function isRecord(value: Json): value is Record<string, Json | undefined> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function isLaunchAgent(value: string): value is LaunchAgentTypeValue {
-  return LAUNCH_AGENT_VALUES.includes(value as LaunchAgentTypeValue);
+function isLaunchAgent(value: string): value is LaunchAgentType {
+  return LAUNCH_AGENT_VALUES.includes(value as LaunchAgentType);
 }
 
 export function createTicketAssignedAgent(selection: AgentModelSelection): TicketAssignedAgent {

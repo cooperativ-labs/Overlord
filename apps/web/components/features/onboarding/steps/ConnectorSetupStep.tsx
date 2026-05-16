@@ -8,7 +8,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import type { AgentTypeValue } from '@/lib/helpers/agent-types';
+import type { LaunchAgentType } from '@/lib/helpers/agent-types';
 import { AGENT_TYPES } from '@/lib/helpers/agent-types';
 
 type Props = {
@@ -21,7 +21,7 @@ type SlashAgent = 'claude' | 'cursor' | 'gemini' | 'opencode';
 
 /** What each agent connector includes. */
 const AGENT_CONNECTOR_FEATURES: Record<
-  AgentTypeValue,
+  LaunchAgentType,
   {
     bundle: boolean;
     service: boolean;
@@ -85,6 +85,17 @@ const AGENT_CONNECTOR_FEATURES: Record<
       'Slash commands (/connect, /load, /prompt)',
       'OpenCode config merge (instructions + bash permissions)'
     ]
+  },
+  pi: {
+    bundle: false,
+    service: false,
+    slashCommands: false,
+    permissions: false,
+    details: [
+      'Pi CLI is launched directly with the Overlord ticket prompt',
+      'Full workflow instructions are inlined on every launch (no durable extension yet)',
+      'Dedicated Pi extension package for richer integration is on the roadmap'
+    ]
   }
 };
 
@@ -100,10 +111,10 @@ type AgentInstallState = {
 
 export function ConnectorSetupStep({ onContinue, projectDirectory }: Props) {
   const { isElectron } = useElectron();
-  const [selectedAgents, setSelectedAgents] = useState<Set<AgentTypeValue>>(
-    new Set(['claude', 'codex', 'cursor', 'gemini', 'opencode'])
+  const [selectedAgents, setSelectedAgents] = useState<Set<LaunchAgentType>>(
+    new Set(['claude', 'codex', 'cursor', 'gemini', 'opencode', 'pi'])
   );
-  const [agentStates, setAgentStates] = useState<Record<AgentTypeValue, AgentInstallState>>({
+  const [agentStates, setAgentStates] = useState<Record<LaunchAgentType, AgentInstallState>>({
     claude: {
       bundleStatus: 'idle',
       slashStatus: 'idle',
@@ -129,6 +140,12 @@ export function ConnectorSetupStep({ onContinue, projectDirectory }: Props) {
       installStatus: 'idle'
     },
     opencode: {
+      bundleStatus: 'idle',
+      slashStatus: 'idle',
+      permissionsConfigured: false,
+      installStatus: 'idle'
+    },
+    pi: {
       bundleStatus: 'idle',
       slashStatus: 'idle',
       permissionsConfigured: false,
@@ -189,7 +206,7 @@ export function ConnectorSetupStep({ onContinue, projectDirectory }: Props) {
     void loadStatuses();
   }, [loadStatuses]);
 
-  function toggleAgent(agent: AgentTypeValue) {
+  function toggleAgent(agent: LaunchAgentType) {
     setSelectedAgents(prev => {
       const next = new Set(prev);
       if (next.has(agent)) {

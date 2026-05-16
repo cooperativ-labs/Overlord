@@ -4,25 +4,26 @@ import crypto from 'node:crypto';
 import os from 'os';
 import path from 'path';
 
+import type { LaunchAgentType } from '@/lib/helpers/agent-types';
+
 import { type AgentBundleAgent, isBundleInstalled } from './agent-bundle';
 import { loadElectronCredentials, saveElectronCredentials } from './electron-credentials';
 
 const OVERLORD_URL_DEFAULT = 'http://localhost:3000';
-
-export type AgentType = 'claude' | 'codex' | 'cursor' | 'gemini' | 'opencode';
 type AgentLaunchMode = 'run' | 'ask';
 
-const agentIdentifierMap: Record<AgentType, string> = {
+const agentIdentifierMap: Record<LaunchAgentType, string> = {
   claude: 'claude-code',
   codex: 'codex',
   cursor: 'cursor',
   gemini: 'gemini',
-  opencode: 'opencode'
+  opencode: 'opencode',
+  pi: 'pi'
 };
 
 type LaunchAgentInput = {
   ticketId: string;
-  agent: AgentType;
+  agent: LaunchAgentType;
   organizationId?: number;
   /** Project UUID when the ticket is project-scoped; required for managed JJ workspaces. */
   projectId?: string | null;
@@ -52,10 +53,11 @@ type ContextCommandsResponse = {
   cursor: string;
   gemini: string;
   opencode: string;
+  pi: string;
 };
 
 export function buildAgentContextUrl(input: {
-  agent: AgentType;
+  agent: LaunchAgentType;
   connectorUrl: string;
   instructionMode: string;
   launchMode: AgentLaunchMode;
@@ -276,7 +278,11 @@ async function resolveLaunchAuth(input: LaunchAgentInput): Promise<{
 /**
  * Builds CLI flags for model and thinking/effort selection per agent type.
  */
-function buildModelThinkingFlags(agent: AgentType, model?: string, thinking?: string): string {
+function buildModelThinkingFlags(
+  agent: LaunchAgentType,
+  model?: string,
+  thinking?: string
+): string {
   const parts: string[] = [];
 
   switch (agent) {
@@ -299,6 +305,10 @@ function buildModelThinkingFlags(agent: AgentType, model?: string, thinking?: st
       break;
     case 'opencode':
       if (model) parts.push(`--model ${shellQuote(model)}`);
+      break;
+    case 'pi':
+      if (model) parts.push(`--model ${shellQuote(model)}`);
+      if (thinking) parts.push(`--thinking ${shellQuote(thinking)}`);
       break;
   }
 
@@ -454,13 +464,11 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
   // Build model/thinking flags per agent
   const modelThinkingFlags = buildModelThinkingFlags(input.agent, input.model, input.thinking);
   const codexBaseCommand = `codex${modelThinkingFlags}${extraFlags ? ` ${extraFlags}` : ''}`;
-  const codexLaunchEnv =
-    input.agent === 'codex'
-      ? {
-          _OVLD_CODEX_CMD: codexBaseCommand,
-          _OVLD_CTX_FILE: contextFile
-        }
-      : {};
+  const codexLaunchEnv: Record<string, string> = {};
+  if (input.agent === 'codex') {
+    codexLaunchEnv._OVLD_CODEX_CMD = codexBaseCommand;
+    codexLaunchEnv._OVLD_CTX_FILE = contextFile;
+  }
 
   const contextRef = `"$(cat ${shellQuote(contextFile)})"`;
 
@@ -485,6 +493,8 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
     command = `gemini --include-directories ${shellQuote(os.tmpdir())}${modelThinkingFlags}${extraFlags ? ` ${extraFlags}` : ''} @${contextFile}`;
   } else if (input.agent === 'opencode') {
     command = `opencode${modelThinkingFlags}${extraFlags ? ` ${extraFlags}` : ''} --prompt ${contextRef}`;
+  } else if (input.agent === 'pi') {
+    command = `pi${modelThinkingFlags}${extraFlags ? ` ${extraFlags}` : ''} ${contextRef}`;
   } else {
     throw new Error(`Unknown agent type: ${input.agent}`);
   }
@@ -661,7 +671,7 @@ async function fetchContextCommandFallback(
   contextUrl: string,
   bearerToken: string,
   organizationId: number | null,
-  agent: AgentType
+  agent: LaunchAgentType
 ): Promise<string | null> {
   try {
     const headers = buildProtocolHeaders(bearerToken, organizationId);
@@ -700,6 +710,14 @@ async function fetchContextCommandFallback(
       return typeof payload.gemini === 'string' && payload.gemini.trim().length > 0
         ? payload.gemini
         : null;
+    }
+    if (agent === 'opencode') {
+      return typeof payload.opencode === 'string' && payload.opencode.trim().length > 0
+        ? payload.opencode
+        : null;
+    }
+    if (agent === 'pi') {
+      return typeof payload.pi === 'string' && payload.pi.trim().length > 0 ? payload.pi : null;
     }
     return typeof payload.claudeCode === 'string' && payload.claudeCode.trim().length > 0
       ? payload.claudeCode

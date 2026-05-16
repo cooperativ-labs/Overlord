@@ -170,8 +170,12 @@ export function OrganizationSettingsModal({
                       organizationId={details.id}
                       initialName={details.name}
                       initialGitProvider={details.gitProvider}
+                      initialLogoUrl={details.logoUrl}
                       onNameChange={nextName =>
                         setDetails(prev => (prev ? { ...prev, name: nextName } : prev))
+                      }
+                      onLogoChange={nextLogoUrl =>
+                        setDetails(prev => (prev ? { ...prev, logoUrl: nextLogoUrl } : prev))
                       }
                     />
                   )}

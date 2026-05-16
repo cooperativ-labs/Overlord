@@ -92,6 +92,7 @@ export async function GET(request: Request, { params }: RouteContext) {
       | 'cursor'
       | 'gemini'
       | 'opencode'
+      | 'pi'
       | undefined;
     const instructionMode = (searchParams.get('instructionMode') ?? 'legacy') as InstructionMode;
     const requestedWorkspace = searchParams.get('workspace')?.trim().toLowerCase();
@@ -239,7 +240,7 @@ export async function POST(request: Request, { params }: RouteContext) {
 
   const requestOrigin = new URL(request.url).origin;
   const platformUrl = getPlatformUrl(requestOrigin);
-  const { claudeCode, codex, cursor, gemini, opencode, contextUrl } = buildLaunchCommands({
+  const { claudeCode, codex, cursor, gemini, opencode, pi, contextUrl } = buildLaunchCommands({
     platformUrl,
     ticketId: ticket.ticket_id || ticketId,
     organizationId
@@ -259,6 +260,7 @@ export async function POST(request: Request, { params }: RouteContext) {
     cursor,
     gemini,
     opencode,
+    pi,
     contextUrl,
     ...(mcpUrl ? { mcpUrl } : {})
   });

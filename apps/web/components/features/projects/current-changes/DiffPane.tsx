@@ -44,6 +44,7 @@ function formatAgentName(agent: string | null | undefined) {
   if (agent === 'opencode') return 'OpenCode';
   if (agent === 'cursor') return 'Cursor';
   if (agent === 'gemini') return 'Gemini';
+  if (agent === 'pi') return 'Pi';
   return 'Agent';
 }
 

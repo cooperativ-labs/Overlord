@@ -21,7 +21,7 @@ import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
 import {
   getAgentTypeByIdentifier,
   getLaunchAgentTypeByIdentifier,
-  type LaunchAgentTypeValue
+  type LaunchAgentType
 } from '@/lib/helpers/agent-types';
 import type { TicketAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
 import type { AgentCommands } from '@/lib/overlord/launch-commands';
@@ -44,7 +44,7 @@ type DraftObjectiveProps = {
   workingDirectory: string | null;
   assignedAgent?: TicketAssignedAgent | null;
   projectId?: string | null;
-  agentFlags?: Partial<Record<LaunchAgentTypeValue, string[]>>;
+  agentFlags?: Partial<Record<LaunchAgentType, string[]>>;
   agentCommands?: AgentCommands;
   sshCommand?: string | null;
   remoteWorkingDirectory?: string | null;
@@ -76,13 +76,14 @@ export function DraftObjective({
   const activeAgentType = getAgentTypeByIdentifier(session?.agent_identifier ?? null);
   const showAgentControls = assignedAgent !== undefined;
   const isFuture = objectiveState === 'future';
-  const splitButtonCommands = useMemo<Record<LaunchAgentTypeValue, string>>(
+  const splitButtonCommands = useMemo<Record<LaunchAgentType, string>>(
     () => ({
       claude: agentCommands?.launchCommands?.claudeCode ?? '',
       codex: agentCommands?.launchCommands?.codex ?? '',
       cursor: agentCommands?.launchCommands?.cursor ?? '',
       gemini: agentCommands?.launchCommands?.gemini ?? '',
-      opencode: agentCommands?.launchCommands?.opencode ?? ''
+      opencode: agentCommands?.launchCommands?.opencode ?? '',
+      pi: agentCommands?.launchCommands?.pi ?? ''
     }),
     [agentCommands]
   );

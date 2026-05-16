@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { updateOnboardingProgressAction } from '@/lib/actions/onboarding';
 import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
-import { AGENT_TYPES, type AgentTypeValue } from '@/lib/helpers/agent-types';
+import { AGENT_TYPES, type LaunchAgentType } from '@/lib/helpers/agent-types';
 import { cn } from '@/lib/utils';
 
 const updateOnboardingProgressActionWithRetry = withElectronActionRetry(
@@ -15,7 +15,7 @@ const updateOnboardingProgressActionWithRetry = withElectronActionRetry(
 );
 
 type Props = {
-  initialPreferredAgent?: AgentTypeValue;
+  initialPreferredAgent?: LaunchAgentType;
   onContinue: () => void;
 };
 
@@ -26,7 +26,7 @@ type AgentInstallInfo = {
   overlordSetupDescription: string;
 };
 
-const AGENT_INSTALL_INFO: Record<AgentTypeValue, AgentInstallInfo> = {
+const AGENT_INSTALL_INFO: Record<LaunchAgentType, AgentInstallInfo> = {
   claude: {
     installCommand: 'npm install -g @anthropic-ai/claude-code',
     installLabel: 'Install Claude Code CLI',
@@ -61,6 +61,13 @@ const AGENT_INSTALL_INFO: Record<AgentTypeValue, AgentInstallInfo> = {
     overlordSetupCommand: 'ovld setup opencode',
     overlordSetupDescription:
       'Installs the Overlord workflow instructions, slash commands, and local permission rules into your OpenCode config.'
+  },
+  pi: {
+    installCommand: 'npm install -g @earendil-works/pi-coding-agent',
+    installLabel: 'Install Pi CLI',
+    overlordSetupCommand: 'ovld setup pi',
+    overlordSetupDescription:
+      'Launching Pi from Overlord works out of the box once the Pi CLI is on your PATH. A dedicated Pi extension package for richer integration is on the roadmap.'
   }
 };
 
@@ -98,11 +105,11 @@ function CodeBlock({ value }: { value: string }) {
 }
 
 export function AgentSetupStep({ initialPreferredAgent, onContinue }: Props) {
-  const [selectedAgent, setSelectedAgent] = useState<AgentTypeValue>(
+  const [selectedAgent, setSelectedAgent] = useState<LaunchAgentType>(
     initialPreferredAgent ?? 'claude'
   );
 
-  async function handleSelectAgent(value: AgentTypeValue) {
+  async function handleSelectAgent(value: LaunchAgentType) {
     setSelectedAgent(value);
     try {
       await updateOnboardingProgressActionWithRetry({ preferredAgent: value });

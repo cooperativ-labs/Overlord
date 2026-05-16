@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 
+import { OrganizationLogoForm } from '@/components/features/account/organization-logo-form';
 import { Input } from '@/components/ui/input';
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import { LoadingButton } from '@/components/ui/loading-button';
@@ -24,7 +25,9 @@ type GeneralPageProps = {
   organizationId: number;
   initialName: string;
   initialGitProvider: GitProvider | null;
+  initialLogoUrl: string | null;
   onNameChange: (name: string) => void;
+  onLogoChange?: (url: string | null) => void;
 };
 
 export function GeneralPage({
@@ -32,7 +35,9 @@ export function GeneralPage({
   organizationId,
   initialName,
   initialGitProvider,
-  onNameChange
+  initialLogoUrl,
+  onNameChange,
+  onLogoChange
 }: GeneralPageProps) {
   const [name, setName] = useState(initialName);
   const [savedName, setSavedName] = useState(initialName);
@@ -92,6 +97,15 @@ export function GeneralPage({
 
   return (
     <div className="space-y-6">
+      <OrganizationLogoForm
+        organizationId={organizationId}
+        organizationName={name}
+        initialLogoUrl={initialLogoUrl}
+        onLogoChange={onLogoChange}
+      />
+
+      <Separator />
+
       <div className="grid gap-2">
         <label className="text-xs font-medium text-muted-foreground">Name</label>
         <div className="flex gap-2">

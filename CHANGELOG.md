@@ -2,6 +2,35 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2605160931.0] - 2026-05-16:09:31
+
+### Added
+- Organization logo upload and removal in organization settings, with the logo reflected in the settings modal.
+- Pi as a supported launchable agent across ticket actions, onboarding, CLI quickstart, and desktop/CLI launch paths.
+- Recovery snapshots for git checkpoint restores so desktop users can review and restore a prior working tree state.
+- Quick Task can create a ticket and immediately launch the selected agent from the desktop app.
+
+### Fixed
+- Roll back execution target toggles if the save request fails.
+- Normalize ticket tag filters so blank and duplicate tag IDs do not leak into current-changes filtering.
+
+### Changed
+- Move the current-changes ticket filter control into the file list pane and compact the filter trigger.
+- Surface the execution target toggle in the ticket header next to ticket actions.
+- Standardize launch-agent typing and command generation across the web app, desktop app, and CLI.
+
+### Security
+- None.
+
+### Test
+- Extend selector and ticket filter tests for the expanded launch-agent list and tag-filter normalization.
+
+### Documentation
+- Update connector surface guidance for Pi launch behavior and onboarding copy.
+
+### Chore
+- Bump the workspace and `overlord-cli` versions for the release.
+
 ## [5.2605151717.0] - 2026-05-15:17:17
 
 ### Added

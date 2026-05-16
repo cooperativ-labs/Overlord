@@ -1,7 +1,6 @@
+import type { LaunchAgentType } from '@/lib/helpers/agent-types';
 import type { TicketAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
 import type { SshConnectionConfig } from '@/lib/workspace/types';
-
-export type LaunchAgentName = 'claude' | 'codex' | 'cursor' | 'gemini' | 'opencode';
 
 type LaunchCommandOptions = {
   organizationId?: number | null;
@@ -49,7 +48,7 @@ type BuildLaunchCommandsInput = {
     enabled: boolean;
     tmuxCommand?: string | null;
   } | null;
-  agentFlags?: Partial<Record<LaunchAgentName, string[]>>;
+  agentFlags?: Partial<Record<LaunchAgentType, string[]>>;
   assignedAgent?: TicketAssignedAgent | null;
 };
 
@@ -59,6 +58,7 @@ export type LaunchCommands = {
   cursor: string;
   gemini: string;
   opencode: string;
+  pi: string;
   contextUrl: string;
 };
 
@@ -68,6 +68,7 @@ export type ResumeCommands = {
   cursor: string;
   gemini: string;
   opencode: string;
+  pi: string;
 };
 
 export type AgentCommands = {
@@ -90,7 +91,7 @@ function hasOrganizationInTicketId(ticketId: string): boolean {
 }
 
 function normalizeAgentLaunchOptions(
-  agent: LaunchAgentName,
+  agent: LaunchAgentType,
   input: BuildLaunchCommandsInput
 ): LaunchCommandOptions {
   const assignedAgent = input.assignedAgent?.agent === agent ? input.assignedAgent : null;
@@ -108,7 +109,7 @@ function normalizeAgentLaunchOptions(
 }
 
 export function buildAgentLaunchCommand(
-  agent: LaunchAgentName,
+  agent: LaunchAgentType,
   ticketId: string,
   options: LaunchCommandOptions = {}
 ): string {
@@ -210,6 +211,7 @@ export function buildLaunchCommands({
       ticketId,
       normalizeAgentLaunchOptions('opencode', sharedInput)
     ),
+    pi: buildAgentLaunchCommand('pi', ticketId, normalizeAgentLaunchOptions('pi', sharedInput)),
     contextUrl
   };
 }
@@ -236,7 +238,8 @@ export function buildResumeCommands({
     codex: `ovld restart codex --ticket-id ${ticketId}${organizationFlag}`,
     cursor: `ovld restart cursor --ticket-id ${ticketId}${organizationFlag}`,
     gemini: `ovld restart gemini --ticket-id ${ticketId}${organizationFlag}`,
-    opencode: `ovld restart opencode --ticket-id ${ticketId}${organizationFlag}`
+    opencode: `ovld restart opencode --ticket-id ${ticketId}${organizationFlag}`,
+    pi: `ovld restart pi --ticket-id ${ticketId}${organizationFlag}`
   };
 }
 
@@ -245,7 +248,7 @@ export function buildResumeCommands({
  * Normal usage goes through ovld so shared OAuth credentials are resolved from ~/.ovld.
  */
 export function buildRawLaunchCommand(
-  agent: LaunchAgentName,
+  agent: LaunchAgentType,
   { ticketId, platformUrl, oauthAccessToken, organizationId }: BuildLaunchCommandsInput
 ): string {
   const envParts = [`OVERLORD_URL=${platformUrl}`];
@@ -265,7 +268,7 @@ export function buildRawLaunchCommand(
 
 export function selectRestartSessionCommand(
   agentIdentifier: string | null | undefined,
-  commands: Pick<LaunchCommands, 'claudeCode' | 'codex' | 'cursor' | 'gemini' | 'opencode'>,
+  commands: Pick<LaunchCommands, 'claudeCode' | 'codex' | 'cursor' | 'gemini' | 'opencode' | 'pi'>,
   externalSessionId?: string | null
 ): string {
   const normalized = agentIdentifier?.trim().toLowerCase() ?? '';
@@ -283,6 +286,9 @@ export function selectRestartSessionCommand(
   }
   if (normalized.includes('opencode')) {
     return commands.opencode;
+  }
+  if (normalized === 'pi' || normalized.startsWith('pi-') || normalized.includes('pi.dev')) {
+    return commands.pi;
   }
   return commands.codex;
 }
@@ -326,6 +332,9 @@ export function buildNativeResumeCommand(
   }
   if (normalized.includes('opencode')) {
     return `opencode --continue --session ${sessionId}`;
+  }
+  if (normalized === 'pi' || normalized.startsWith('pi-') || normalized.includes('pi.dev')) {
+    return `pi --resume ${sessionId}`;
   }
   return null;
 }

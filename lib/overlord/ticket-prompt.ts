@@ -1,3 +1,4 @@
+import type { LaunchAgentType } from '@/lib/helpers/agent-types';
 import type { InstructionMode } from '@/lib/overlord/agent-capabilities';
 import { buildPromptContext, renderPromptContextMarkdown } from '@/lib/overlord/prompt-context';
 import {
@@ -10,7 +11,7 @@ import type { AgentConfig } from '@/lib/schemas/agent-config';
 
 export type PromptContext = 'electron' | 'cli' | 'web' | 'paste';
 export type PromptLaunchMode = 'run' | 'ask';
-export type PromptAgent = 'claude' | 'codex' | 'cursor' | 'gemini' | 'opencode';
+export type PromptAgent = LaunchAgentType;
 
 export type PromptOptions = {
   /** Supabase functions base URL for the MCP server, e.g. https://xyz.supabase.co/functions/v1/mcp */

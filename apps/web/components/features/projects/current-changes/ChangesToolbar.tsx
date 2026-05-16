@@ -17,8 +17,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { GitBranchPanel } from './GitBranchPanel';
 import { PullRequestPanel } from './PullRequestPanel';
 import { PushToGithubPanel } from './PushToGithubPanel';
-import { TicketFilterPopover } from './TicketFilterPopover';
-import type { GitBranchEntry, GitStatusResponse, TicketSummary } from './types';
+import type { GitBranchEntry, GitStatusResponse } from './types';
 
 type ChangesToolbarProps = {
   backHref: string;
@@ -30,12 +29,7 @@ type ChangesToolbarProps = {
   statusResponse: GitStatusResponse | null;
   workingDirectory: string;
   projectName: string;
-  tickets: TicketSummary[];
-  selectedTicketIds: Set<string>;
-  fileCountsByTicketId: Map<string, number>;
   onRefresh: () => void;
-  onToggleTicketFilter: (ticketId: string) => void;
-  onClearTicketFilter: () => void;
 };
 
 export function ChangesToolbar({
@@ -44,12 +38,7 @@ export function ChangesToolbar({
   statusResponse,
   workingDirectory,
   projectName,
-  tickets,
-  selectedTicketIds,
-  fileCountsByTicketId,
-  onRefresh,
-  onToggleTicketFilter,
-  onClearTicketFilter
+  onRefresh
 }: ChangesToolbarProps) {
   const branch = branchesResponse?.currentBranch ?? statusResponse?.branch ?? null;
   const defaultBranch = branchesResponse?.defaultBranch ?? null;
@@ -75,15 +64,6 @@ export function ChangesToolbar({
       </span>
       <span className="mx-1 text-muted-foreground/60">/</span>
       <span className="truncate text-sm text-muted-foreground">Changes</span>
-      <div className="mx-1">
-        <TicketFilterPopover
-          fileCountsByTicketId={fileCountsByTicketId}
-          selectedTicketIds={selectedTicketIds}
-          tickets={tickets}
-          onClear={onClearTicketFilter}
-          onToggle={onToggleTicketFilter}
-        />
-      </div>
 
       <div className="ml-auto flex items-center gap-1">
         <Popover>

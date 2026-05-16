@@ -1,6 +1,7 @@
 import { ArrowRightToLine, EllipsisVertical } from 'lucide-react';
 import Link from 'next/link';
 
+import { ExecutionTargetToggle } from '@/app/(app)/tickets/(components)/ExecutionTargetToggle';
 import { CopyTicketIdentifierButton } from '@/components/features/CopyTicketIdentifierButton';
 import { DeleteTicketButton } from '@/components/features/DeleteTicketButton';
 import { TicketProjectSelect } from '@/components/features/TicketProjectSelect';
@@ -11,6 +12,9 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
+import type { Database } from '@/types/database.types';
+
+type ExecutionTarget = Database['public']['Enums']['ticket_execution_target'];
 
 type ProjectOption = {
   id: string;
@@ -28,6 +32,7 @@ type TicketPanelHeaderProps = {
   currentStatus: string;
   statusOptions: string[];
   closePath: string;
+  executionTarget: ExecutionTarget;
 };
 
 export function TicketPanelHeader({
@@ -38,37 +43,41 @@ export function TicketPanelHeader({
   projects,
   currentStatus,
   statusOptions,
-  closePath
+  closePath,
+  executionTarget
 }: TicketPanelHeaderProps) {
   return (
     <div className="relative flex items-center justify-between gap-2 overflow-hidden border-b px-4 py-2.5">
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button aria-label="Ticket actions" className="h-7 w-7" size="icon" variant="ghost">
-            <EllipsisVertical className="h-3.5 w-3.5" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-52">
-          <div className="flex items-center justify-between gap-2 px-2 py-1.5 text-sm">
-            <span>
-              Ticket ID: <strong>{ticketIdentifier}</strong>
-            </span>
-            <CopyTicketIdentifierButton
-              value={ticketIdentifier}
-              ariaLabel="Copy full ticket identifier"
-              className="inline-flex h-6 w-6 items-center justify-center rounded-sm hover:bg-accent"
-            />
-          </div>
-          <div className="flex items-center justify-between gap-2 px-2 py-1.5 text-sm">
-            <span>Delete ticket</span>
-            <DeleteTicketButton
-              ticketId={ticketId}
-              ticketLabel={ticketIdentifier}
-              className="inline-flex h-7 w-7 items-center justify-center"
-            />
-          </div>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <div className="flex items-center gap-2">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button aria-label="Ticket actions" className="h-7 w-7" size="icon" variant="ghost">
+              <EllipsisVertical className="h-3.5 w-3.5" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-52">
+            <div className="flex items-center justify-between gap-2 px-2 py-1.5 text-sm">
+              <span>
+                Ticket ID: <strong>{ticketIdentifier}</strong>
+              </span>
+              <CopyTicketIdentifierButton
+                value={ticketIdentifier}
+                ariaLabel="Copy full ticket identifier"
+                className="inline-flex h-6 w-6 items-center justify-center rounded-sm hover:bg-accent"
+              />
+            </div>
+            <div className="flex items-center justify-between gap-2 px-2 py-1.5 text-sm">
+              <span>Delete ticket</span>
+              <DeleteTicketButton
+                ticketId={ticketId}
+                ticketLabel={ticketIdentifier}
+                className="inline-flex h-7 w-7 items-center justify-center"
+              />
+            </div>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <ExecutionTargetToggle ticketId={ticketId} executionTarget={executionTarget} size="md" />
+      </div>
       <div className="flex items-center justify-end gap-3">
         <div className="flex items-center gap-1.5">
           <TicketProjectSelect

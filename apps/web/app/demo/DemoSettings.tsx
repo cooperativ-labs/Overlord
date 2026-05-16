@@ -49,6 +49,7 @@ import {
 } from '@/components/ui/sidebar';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
+import { LAUNCH_AGENT_VALUES, type LaunchAgentType } from '@/lib/helpers/agent-types';
 
 type NavItem = { name: string; icon: React.ElementType };
 
@@ -282,7 +283,7 @@ function DemoCliSettings() {
   });
   const [commandCopied, setCommandCopied] = useState(false);
 
-  const agents = ['claude', 'cursor', 'codex', 'opencode'] as const;
+  const agents: readonly LaunchAgentType[] = LAUNCH_AGENT_VALUES;
   const agentLabels: Record<string, string> = {
     claude: 'Claude',
     cursor: 'Cursor',

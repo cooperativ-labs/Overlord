@@ -11,11 +11,13 @@ import {
 } from '@/components/features/AgentModelSelector';
 import { MentionableTextarea } from '@/components/features/MentionableTextarea';
 import { useWorkspaceFileTree } from '@/components/features/projects/useWorkspaceFileTree';
+import { useTerminal } from '@/components/features/terminal/TerminalProvider';
 import {
   finalizeObjectiveAttachmentUploadAction,
   prepareObjectiveAttachmentUploadAction
 } from '@/lib/actions/attachments';
 import { generateTicketTitleAction } from '@/lib/actions/generate-title';
+import { submitTicketObjectiveAction } from '@/lib/actions/tickets';
 import {
   useCreateTicketMutation,
   useUpdateTicketAssignmentMutation,
@@ -23,6 +25,7 @@ import {
   useUpdateTicketFieldsMutation
 } from '@/lib/client-data/tickets/mutations';
 import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
+import { isLaunchAgentTypeValue } from '@/lib/helpers/agent-types';
 import { dispatchTicketCreatedEvent } from '@/lib/helpers/ticket-board-events';
 import { deriveTitleFromObjective } from '@/lib/helpers/tickets';
 import { cn } from '@/lib/utils';
@@ -87,6 +90,7 @@ export function QuickTaskBar({ defaultProjectId, projects }: QuickTaskBarProps) 
   const controlBarRef = useRef<HTMLDivElement>(null);
 
   const { selection, setSelection, loaded: selectionLoaded } = useAgentModelPreference();
+  const { isElectron, launchAgent } = useTerminal();
   const createTicketMutation = useCreateTicketMutation();
   const updateAssignmentMutation = useUpdateTicketAssignmentMutation();
   const updateFieldsMutation = useUpdateTicketFieldsMutation();
@@ -253,7 +257,7 @@ export function QuickTaskBar({ defaultProjectId, projects }: QuickTaskBarProps) 
     }
   }
 
-  async function handleSubmit() {
+  async function handleSubmit(shouldLaunch = false) {
     const trimmed = objective.trim();
     if (!trimmed || !selectedProject || isSubmitting || !selectionLoaded) return;
 
@@ -325,6 +329,30 @@ export function QuickTaskBar({ defaultProjectId, projects }: QuickTaskBarProps) 
       setObjective('');
       setStagedFiles([]);
       handleClose();
+
+      if (shouldLaunch && isElectron && isLaunchAgentTypeValue(selection.agent)) {
+        try {
+          await submitTicketObjectiveAction(createdTicket.id);
+          await launchAgent({
+            ticketId: createdTicket.id,
+            agent: selection.agent,
+            organizationId: selectedProject.organization_id,
+            cwd: selectedProject.local_working_directory ?? undefined,
+            launchMode: 'run',
+            model: selection.model ?? undefined,
+            thinking: selection.thinking ?? undefined,
+            projectId: selectedProject.id
+          });
+        } catch (error) {
+          console.error('Failed to launch agent:', error);
+          toast.error('Failed to launch agent.', {
+            description:
+              error instanceof Error && error.message.trim().length > 0
+                ? error.message
+                : 'Check your terminal settings and try again.'
+          });
+        }
+      }
     } catch (error) {
       console.error('Failed to create ticket:', error);
       toast.error('Failed to create ticket.');
@@ -336,7 +364,7 @@ export function QuickTaskBar({ defaultProjectId, projects }: QuickTaskBarProps) 
   function handleKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
-      void handleSubmit();
+      void handleSubmit(event.metaKey);
     }
   }
 

@@ -68,10 +68,11 @@ const agentIdentifierMap = {
   codex: 'codex',
   cursor: 'cursor',
   gemini: 'gemini',
-  opencode: 'opencode'
+  opencode: 'opencode',
+  pi: 'pi'
 };
 
-const supportedAgents = ['claude', 'codex', 'cursor', 'gemini', 'opencode'];
+const supportedAgents = ['claude', 'codex', 'cursor', 'gemini', 'opencode', 'pi'];
 
 function shellQuote(value) {
   return `'${String(value).replace(/'/g, `'\\''`)}'`;
@@ -98,6 +99,8 @@ function buildExtraArgs(agent, options = {}) {
       args.push('-c', `model_reasoning_effort=${toTomlString(options.thinking)}`);
     } else if (agent === 'gemini') {
       args.push('--thinking-level', options.thinking);
+    } else if (agent === 'pi') {
+      args.push('--thinking', options.thinking);
     }
   }
 
@@ -378,6 +381,17 @@ async function runAgent(agent, mode = 'run', options = {}) {
           env: childEnv
         });
       }
+    } else if (agent === 'pi') {
+      if (mode === 'resume') {
+        const piSessionId = process.env.PI_SESSION_ID?.trim();
+        const args = piSessionId
+          ? ['--session', piSessionId, context]
+          : ['--continue', context];
+        args.unshift(...extraArgs);
+        execFileSync('pi', args, { stdio: 'inherit', env: childEnv });
+      } else {
+        execFileSync('pi', [...extraArgs, context], { stdio: 'inherit', env: childEnv });
+      }
     } else if (agent === 'gemini') {
       // Write context to a temp file. Passing inline content as a positional arg
       // causes Gemini's @-reference parser to lstat(cwd + content) when it encounters
@@ -413,7 +427,9 @@ async function runAgent(agent, mode = 'run', options = {}) {
           ? `No prior Codex session was found. Start one with \`ovld launch codex --ticket-id <ticket_id>\` first.`
           : agent === 'opencode'
             ? `No prior OpenCode session was found. Start one with \`ovld launch opencode --ticket-id <ticket_id>\` first.`
-            : '';
+            : agent === 'pi'
+              ? `No prior Pi session was found. Start one with \`ovld launch pi --ticket-id <ticket_id>\` first.`
+              : '';
     const message = error instanceof Error ? error.message : String(error);
 
     if (isResume && noSessionHint) {

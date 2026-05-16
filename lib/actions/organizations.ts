@@ -1,5 +1,6 @@
 'use server';
 
+import * as Sentry from '@sentry/nextjs';
 import { cookies } from 'next/headers';
 
 import {
@@ -10,6 +11,124 @@ import {
 import { ORGANIZATION_ROLE_ORDER, type OrganizationRole } from '@/lib/organization-roles';
 import { createClientForRequest } from '@/supabase/utils/server';
 import type { Database } from '@/types/database.types';
+
+const ORG_IMAGES_BUCKET = 'org-images';
+const MAX_ORG_IMAGE_BYTES = 5 * 1024 * 1024;
+
+function sanitizeOrgImageFileName(fileName: string): string {
+  const sanitized = fileName
+    .replace(/[\\/\0]/g, '-')
+    .replace(/[\r\n\t]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return sanitized ? sanitized.slice(0, 120) : 'logo';
+}
+
+function getOwnedOrgImageStoragePath(logoUrl: string, organizationId: number): string | null {
+  if (!logoUrl) return null;
+  try {
+    const url = new URL(logoUrl);
+    const prefix = `/storage/v1/object/public/${ORG_IMAGES_BUCKET}/`;
+    const prefixIndex = url.pathname.indexOf(prefix);
+    if (prefixIndex < 0) return null;
+    const storagePath = decodeURIComponent(url.pathname.slice(prefixIndex + prefix.length));
+    return storagePath.startsWith(`${organizationId}/`) ? storagePath : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function uploadOrganizationLogoAction(
+  organizationId: number,
+  formData: FormData
+): Promise<string> {
+  const file = formData.get('file');
+  if (!(file instanceof File)) throw new Error('No image provided.');
+  if (!file.type.startsWith('image/')) throw new Error('Please upload an image file.');
+  if (file.size > MAX_ORG_IMAGE_BYTES) throw new Error('Image must be 5 MB or smaller.');
+
+  const supabase = await createClientForRequest();
+  const userId = await requireUserId();
+
+  const { data: existingOrg } = await supabase
+    .from('organizations')
+    .select('logo_url')
+    .eq('id', organizationId)
+    .single();
+
+  const previousStoragePath = existingOrg?.logo_url
+    ? getOwnedOrgImageStoragePath(existingOrg.logo_url, organizationId)
+    : null;
+
+  const storagePath = `${organizationId}/${Date.now()}-${sanitizeOrgImageFileName(file.name)}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from(ORG_IMAGES_BUCKET)
+    .upload(storagePath, file, { cacheControl: '3600', upsert: false });
+
+  if (uploadError) throw new Error(uploadError.message ?? 'Failed to upload image.');
+
+  const {
+    data: { publicUrl }
+  } = supabase.storage.from(ORG_IMAGES_BUCKET).getPublicUrl(storagePath);
+
+  const { error: updateError } = await supabase
+    .from('organizations')
+    .update({ logo_url: publicUrl })
+    .eq('id', organizationId);
+
+  if (updateError) {
+    await supabase.storage.from(ORG_IMAGES_BUCKET).remove([storagePath]);
+    throw new Error(updateError.message ?? 'Failed to save logo URL.');
+  }
+
+  if (previousStoragePath) {
+    const { error: removeError } = await supabase.storage
+      .from(ORG_IMAGES_BUCKET)
+      .remove([previousStoragePath]);
+    if (removeError) {
+      console.warn('Failed to remove previous org logo:', removeError.message);
+      Sentry.captureMessage(
+        `Failed to remove previous org logo: ${removeError.message}`,
+        'warning'
+      );
+    }
+  }
+
+  return publicUrl;
+}
+
+export async function removeOrganizationLogoAction(organizationId: number): Promise<void> {
+  const supabase = await createClientForRequest();
+  await requireUserId();
+
+  const { data: existingOrg } = await supabase
+    .from('organizations')
+    .select('logo_url')
+    .eq('id', organizationId)
+    .single();
+
+  const currentStoragePath = existingOrg?.logo_url
+    ? getOwnedOrgImageStoragePath(existingOrg.logo_url, organizationId)
+    : null;
+
+  const { error } = await supabase
+    .from('organizations')
+    .update({ logo_url: null })
+    .eq('id', organizationId);
+
+  if (error) throw new Error(error.message ?? 'Failed to remove logo.');
+
+  if (currentStoragePath) {
+    const { error: removeError } = await supabase.storage
+      .from(ORG_IMAGES_BUCKET)
+      .remove([currentStoragePath]);
+    if (removeError) {
+      console.warn('Failed to remove org logo object:', removeError.message);
+      Sentry.captureMessage(`Failed to remove org logo object: ${removeError.message}`, 'warning');
+    }
+  }
+}
 
 export async function createOrganizationAction(input: { name: string }): Promise<{
   organizationId: number;
@@ -106,6 +225,7 @@ export type OrganizationDetails = {
   name: string;
   feedRetentionDays: number;
   gitProvider: GitProvider | null;
+  logoUrl: string | null;
   role: OrganizationRole | null;
 };
 
@@ -129,7 +249,7 @@ export async function getOrganizationDetailsAction(
   const [orgResult, memberResult] = await Promise.all([
     supabase
       .from('organizations')
-      .select('id,name,feed_retention_days,git_provider')
+      .select('id,name,feed_retention_days,git_provider,logo_url')
       .eq('id', organizationId)
       .single(),
     supabase
@@ -149,6 +269,7 @@ export async function getOrganizationDetailsAction(
     name: orgResult.data.name,
     feedRetentionDays: orgResult.data.feed_retention_days,
     gitProvider: (orgResult.data.git_provider as GitProvider | null) ?? null,
+    logoUrl: orgResult.data.logo_url ?? null,
     role: (memberResult.data?.role as OrganizationRole | undefined) ?? null
   };
 }

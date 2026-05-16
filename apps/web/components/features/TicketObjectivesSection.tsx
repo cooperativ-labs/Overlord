@@ -28,7 +28,7 @@ import { type ButtonLoadingState, LoadingButton } from '@/components/ui/loading-
 import type { ObjectiveAttachment } from '@/lib/actions/attachments';
 import { reorderFutureObjectivesAction } from '@/lib/actions/tickets';
 import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
-import type { LaunchAgentTypeValue } from '@/lib/helpers/agent-types';
+import type { LaunchAgentType } from '@/lib/helpers/agent-types';
 import {
   parseObjectiveAssignedAgent,
   type TicketAssignedAgent
@@ -75,7 +75,7 @@ type TicketObjectivesSectionProps = {
   workingDirectory: string | null;
   assignedAgent?: TicketAssignedAgent | null;
   projectId?: string | null;
-  agentFlags?: Partial<Record<LaunchAgentTypeValue, string[]>>;
+  agentFlags?: Partial<Record<LaunchAgentType, string[]>>;
   agentCommands?: AgentCommands;
   sshCommand?: string | null;
   remoteWorkingDirectory?: string | null;
@@ -93,7 +93,7 @@ type SharedObjectiveItemProps = {
   workingDirectory: string | null;
   assignedAgent?: TicketAssignedAgent | null;
   projectId?: string | null;
-  agentFlags?: Partial<Record<LaunchAgentTypeValue, string[]>>;
+  agentFlags?: Partial<Record<LaunchAgentType, string[]>>;
   agentCommands?: AgentCommands;
   sshCommand?: string | null;
   remoteWorkingDirectory?: string | null;

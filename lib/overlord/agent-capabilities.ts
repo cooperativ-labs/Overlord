@@ -18,10 +18,12 @@ export type AgentCapability = {
 /**
  * Resolves the instruction mode for a given agent launch.
  *
- * @param agent - The agent type (claude, codex, cursor, gemini, opencode)
+ * @param agent - The agent type (claude, codex, cursor, gemini, opencode, pi)
  * @param bundleInstalled - Whether the Overlord local bundle is installed for this agent
  */
 export function resolveAgentCapabilities(agent: string, bundleInstalled: boolean): AgentCapability {
+  // Pi is intentionally legacy-only for the initial integration; a Pi extension
+  // package can promote it to bundle mode in a follow-up change.
   const bundleSupported =
     agent === 'claude' || agent === 'codex' || agent === 'cursor' || agent === 'opencode';
 

@@ -13,13 +13,14 @@ Use it before shipping any connector-related change. If one surface changes, che
 | Cursor      | Local Cursor plugin via `ovld setup cursor`                                                 | —                                                                                                                                           |
 | Gemini CLI  | TOML slash commands via `ovld setup gemini`                                                 | —                                                                                                                                           |
 | OpenCode    | Overlord bundle (AGENTS.md + config) via `ovld setup opencode`                              | —                                                                                                                                           |
+| Pi          | Direct CLI launch (no durable extension yet — full workflow inlined per launch)             | —                                                                                                                                           |
 
 ## Bundle support
 
 Bundle-backed agents get a slim ticket prompt; unbundled agents always receive the full workflow instructions on every launch.
 
 - **Bundle supported:** `claude`, `cursor`, `opencode`
-- **Legacy mode only:** `codex`, `gemini`
+- **Legacy mode only:** `codex`, `gemini`, `pi`
 
 Desktop local launches set `OVERLORD_SNAPSHOT_JSON` **only** when the user has enabled in-folder JJ version control (`project_user.local_version_control = jj`); the app then points snapshot metadata at the real working directory (after `GET /api/protocol/context/...`). There is no automatic managed/shadow jj workspace for projects that leave version control off. The context API does not run `jj` on the server. The CLI `attach` command creates a per-objective local git checkpoint at `refs/overlord/checkpoints/<objectiveId>` for git workspaces before work begins; `deliver` does not create a checkpoint.
 
@@ -425,6 +426,48 @@ Checklist:
 
 ---
 
+## Pi connector surfaces
+
+### 1. Local launch path
+
+- Launch service:
+  [agent-launcher.ts](/Users/jake/Development/Cooperativ/Overlord/apps/desktop/electron/services/agent-launcher.ts)
+- Human CLI launcher:
+  [launcher.mjs](/Users/jake/Development/Cooperativ/Overlord/packages/overlord-cli/bin/_cli/launcher.mjs)
+- Shared copy-command builder:
+  [launch-commands.ts](/Users/jake/Development/Cooperativ/Overlord/lib/overlord/launch-commands.ts)
+
+Command pattern:
+
+```
+pi [--model <model>] [--thinking <level>] "$(cat <context-file>)"
+
+ovld launch pi --ticket-id <ticket_id> [--working-directory <path>] [--model <model>] [--thinking <level>] [--flag <value> ...]
+```
+
+Checklist:
+
+- No bundle support yet — full workflow instructions always included in the prompt (`instructionMode=legacy`)
+- No permission hook
+- Model flag: `--model`; thinking flag: `--thinking` (off, minimal, low, medium, high, xhigh)
+- Native resume command: `pi --resume <session-id>` (used by `selectRestartSessionCommand`)
+- A dedicated Pi extension package installed under `~/.pi/agent/extensions/overlord/` is planned as a follow-up to promote Pi to bundle mode
+
+### 2. Onboarding
+
+- Agent setup step:
+  [AgentSetupStep.tsx](/Users/jake/Development/Cooperativ/Overlord/apps/web/components/features/onboarding/steps/AgentSetupStep.tsx)
+- Connector install step:
+  [ConnectorSetupStep.tsx](/Users/jake/Development/Cooperativ/Overlord/apps/web/components/features/onboarding/steps/ConnectorSetupStep.tsx)
+
+Checklist:
+
+- Onboarding lists Pi as an installable CLI agent with install command `npm install -g @earendil-works/pi-coding-agent`
+- Connector copy makes clear Pi has no durable extension yet — workflow ships inline on every launch
+- No `ovld setup pi` is advertised because there are no managed files to install in this iteration
+
+---
+
 ## Protocol surfaces (parity matrix)
 
 The Overlord protocol is exposed across three call surfaces. Keep them aligned —
@@ -497,9 +540,9 @@ Source-of-truth files:
 
 Checklist:
 
-- Context route accepts `agent=` query param for all 5 agents: `claude`, `codex`, `cursor`, `gemini`, `opencode`
+- Context route accepts `agent=` query param for all 6 agents: `claude`, `codex`, `cursor`, `gemini`, `opencode`, `pi`
 - `instructionMode=bundle` is sent for `claude`, `cursor`, and `opencode` when their bundle/plugin is installed
-- `instructionMode=legacy` is used for `codex`, `gemini`, and for `claude`/`cursor`/`opencode` when bundle/plugin is not installed
+- `instructionMode=legacy` is used for `codex`, `gemini`, `pi`, and for `claude`/`cursor`/`opencode` when bundle/plugin is not installed
 - Prompt content varies per agent — verify agent-specific workflow sections when changing `ticket-prompt.ts`
 
 ### CLI setup command
@@ -515,7 +558,7 @@ Checklist:
 - `ovld setup cursor` installs Cursor local plugin and permission allow rules
 - `ovld setup gemini` installs Gemini TOML slash commands and policy rules
 - `ovld setup all` installs all supported agents (claude + codex + opencode; slash-only agents are separate)
-- `ovld doctor` validates installed bundle statuses for `claude`, `codex`, `cursor`, `gemini`, and `opencode`
+- `ovld doctor` validates installed bundle statuses for `claude`, `codex`, `cursor`, `gemini`, and `opencode` (Pi is launch-only — no managed files to validate yet)
 
 ### Settings UI
 
@@ -575,6 +618,13 @@ When changing connector integration, verify the relevant agent(s):
 - Launching OpenCode from Overlord produces correct prompt (slim for bundle mode, full for legacy)
 - Slash commands written to `~/.config/opencode/commands/` (Markdown with `agent: build` frontmatter)
 - `--prompt` flag is present in the launch command
+
+**Pi**
+
+- Launching Pi from Overlord runs `pi "$(cat <context-file>)"` with the full legacy workflow prompt
+- Model flag is `--model`; thinking flag is `--thinking`
+- Resume uses native `pi --resume <session-id>` when an external session id is available
+- No managed files; `ovld setup pi`, `ovld doctor` Pi checks, and a permission hook are not implemented in this iteration
 
 ---
 

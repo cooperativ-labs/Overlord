@@ -1,3 +1,5 @@
+import type { LaunchAgentType } from '@/lib/helpers/agent-types';
+
 type RepoWorkspaceManager = 'yarn' | 'npm' | 'pnpm' | 'bun';
 type RepoDeployableKind =
   | 'nextjs-app'
@@ -91,7 +93,7 @@ interface AppUpdateStatus {
 
 export type LaunchTerminalAgentParams = {
   ticketId: string;
-  agent: 'claude' | 'codex' | 'cursor' | 'gemini' | 'opencode';
+  agent: LaunchAgentType;
   organizationId?: number;
   cwd?: string;
   launchMode?: 'run' | 'ask';
@@ -203,6 +205,7 @@ interface ElectronAPI {
           ok: true;
           ref: string | null;
           gitCommitId: string;
+          parentSha: string | null;
           headSha: string;
           diff: string;
           diffStat: string | null;
@@ -217,6 +220,27 @@ interface ElectronAPI {
       | {
           ok: true;
           pruned: string[];
+        }
+      | { ok: false; error: string }
+    >;
+    listSafetyRefs: (options: { directory: string }) => Promise<
+      | {
+          ok: true;
+          refs: Array<{
+            ref: string;
+            gitCommitId: string;
+            createdAt: string | null;
+          }>;
+        }
+      | { ok: false; error: string }
+    >;
+    restoreSafetyRef: (options: { directory: string; ref: string }) => Promise<
+      | {
+          ok: true;
+          ref: string;
+          gitCommitId: string;
+          safetyRef: string | null;
+          safetySha: string | null;
         }
       | { ok: false; error: string }
     >;

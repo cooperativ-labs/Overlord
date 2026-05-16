@@ -875,6 +875,7 @@ export type Database = {
           feed_retention_days: number;
           git_provider: string | null;
           id: number;
+          logo_url: string | null;
           name: string;
           updated_at: string;
         };
@@ -883,6 +884,7 @@ export type Database = {
           feed_retention_days?: number;
           git_provider?: string | null;
           id?: number;
+          logo_url?: string | null;
           name: string;
           updated_at?: string;
         };
@@ -891,6 +893,7 @@ export type Database = {
           feed_retention_days?: number;
           git_provider?: string | null;
           id?: number;
+          logo_url?: string | null;
           name?: string;
           updated_at?: string;
         };

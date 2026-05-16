@@ -13,11 +13,11 @@ import { Button } from '@/components/ui/button';
 import {
   getAgentTypeByValue,
   LAUNCH_AGENT_VALUES,
-  type LaunchAgentTypeValue
+  type LaunchAgentType
 } from '@/lib/helpers/agent-types';
 import { AgentCommands, buildNativeResumeCommand } from '@/lib/overlord/launch-commands';
 
-type QuickstartCommands = Record<LaunchAgentTypeValue, string>;
+type QuickstartCommands = Record<LaunchAgentType, string>;
 
 type CliQuickstartProps = {
   /** `panel` keeps the collapsible section used in the live ticket panel; `embedded` is body-only for parent-controlled expand/collapse. */
@@ -78,19 +78,20 @@ function CliQuickstartBody({
   externalSessionId = null,
   agentCommands
 }: Omit<CliQuickstartProps, 'variant' | 'hasExecutedObjectives'>) {
-  const defaultSelectedAgent: LaunchAgentTypeValue =
-    activeAgentValue && LAUNCH_AGENT_VALUES.includes(activeAgentValue as LaunchAgentTypeValue)
-      ? (activeAgentValue as LaunchAgentTypeValue)
+  const defaultSelectedAgent: LaunchAgentType =
+    activeAgentValue && LAUNCH_AGENT_VALUES.includes(activeAgentValue as LaunchAgentType)
+      ? (activeAgentValue as LaunchAgentType)
       : 'claude';
-  const [selectedAgent, setSelectedAgent] = useState<LaunchAgentTypeValue>(defaultSelectedAgent);
+  const [selectedAgent, setSelectedAgent] = useState<LaunchAgentType>(defaultSelectedAgent);
 
-  const { claudeCode, codex, cursor, gemini, opencode } = agentCommands?.launchCommands ?? {};
+  const { claudeCode, codex, cursor, gemini, opencode, pi } = agentCommands?.launchCommands ?? {};
   const {
     claudeCode: claudeResumeCommand,
     codex: codexResumeCommand,
     cursor: cursorResumeCommand,
     gemini: geminiResumeCommand,
-    opencode: opencodeResumeCommand
+    opencode: opencodeResumeCommand,
+    pi: piResumeCommand
   } = agentCommands?.resumeCommands ?? {};
 
   useEffect(() => {
@@ -103,9 +104,10 @@ function CliQuickstartBody({
       codex: codex ?? 'ovld launch codex',
       cursor: cursor ?? 'ovld launch cursor',
       gemini: gemini ?? 'ovld launch gemini',
-      opencode: opencode ?? 'ovld launch opencode'
+      opencode: opencode ?? 'ovld launch opencode',
+      pi: pi ?? 'ovld launch pi'
     }),
-    [claudeCode, codex, cursor, gemini, opencode]
+    [claudeCode, codex, cursor, gemini, opencode, pi]
   );
 
   const overlordResumeCommands = useMemo<QuickstartCommands>(
@@ -114,14 +116,16 @@ function CliQuickstartBody({
       codex: codexResumeCommand ?? 'ovld restart codex',
       cursor: cursorResumeCommand ?? 'ovld restart cursor',
       gemini: geminiResumeCommand ?? 'ovld restart gemini',
-      opencode: opencodeResumeCommand ?? 'ovld restart opencode'
+      opencode: opencodeResumeCommand ?? 'ovld restart opencode',
+      pi: piResumeCommand ?? 'ovld restart pi'
     }),
     [
       claudeResumeCommand,
       codexResumeCommand,
       cursorResumeCommand,
       geminiResumeCommand,
-      opencodeResumeCommand
+      opencodeResumeCommand,
+      piResumeCommand
     ]
   );
 

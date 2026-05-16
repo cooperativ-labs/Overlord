@@ -51,6 +51,7 @@ export type CheckpointDiffInput = {
 export type CheckpointDiffResult = {
   ref: string | null;
   gitCommitId: string;
+  parentSha: string | null;
   headSha: string;
   diff: string;
   diffStat: string | null;
@@ -252,14 +253,16 @@ export async function diffCheckpoint(input: CheckpointDiffInput): Promise<Checkp
     throw new Error(`Checkpoint commit ${gitCommitId} does not exist in this repository.`);
   }
 
-  const [diff, diffStat] = await Promise.all([
+  const [diff, diffStat, parent] = await Promise.all([
     gitOk(runner, repoRoot, ['diff', '--find-renames', verified.output, 'HEAD']),
-    gitOk(runner, repoRoot, ['diff', '--stat', verified.output, 'HEAD'])
+    gitOk(runner, repoRoot, ['diff', '--stat', verified.output, 'HEAD']),
+    gitOk(runner, repoRoot, ['rev-parse', '--verify', `${verified.output}^`])
   ]);
 
   return {
     ref,
     gitCommitId: verified.output,
+    parentSha: parent.ok && parent.output ? parent.output : null,
     headSha,
     diff: diff.output,
     diffStat: diffStat.output || null
@@ -293,6 +296,101 @@ export async function listCheckpoints(input: {
       const objectiveId = ref.slice(`${REF_NS}/`.length);
       return { objectiveId, ref, gitCommitId: sha };
     });
+}
+
+export type SafetyRefSummary = {
+  ref: string;
+  gitCommitId: string;
+  createdAt: string | null;
+};
+
+function parseSafetyStamp(stamp: string): string | null {
+  const m = /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})(\d{3})Z$/.exec(stamp);
+  if (!m) return null;
+  const [, y, mo, d, h, mi, s, ms] = m;
+  const iso = `${y}-${mo}-${d}T${h}:${mi}:${s}.${ms}Z`;
+  const parsed = new Date(iso);
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+}
+
+function safetyRefIsValid(ref: string): boolean {
+  return ref.startsWith(`${SAFETY_NS}/`) && /^[A-Za-z0-9/_-]+$/.test(ref);
+}
+
+export async function listSafetyRefs(input: {
+  workspacePath: string;
+  runner?: Runner;
+}): Promise<SafetyRefSummary[]> {
+  const runner = input.runner ?? defaultRunner;
+  const repoRoot = await assertGitRepo(runner, path.resolve(input.workspacePath.trim()));
+  const out = await gitOk(runner, repoRoot, [
+    'for-each-ref',
+    `--format=%(refname) %(objectname)`,
+    `${SAFETY_NS}/`
+  ]);
+  if (!out.ok) return [];
+  return out.output
+    .split('\n')
+    .map(line => line.trim())
+    .filter(Boolean)
+    .map(line => {
+      const [ref, sha] = line.split(/\s+/);
+      const stamp = ref.slice(`${SAFETY_NS}/`.length);
+      return { ref, gitCommitId: sha, createdAt: parseSafetyStamp(stamp) };
+    })
+    .sort((a, b) => {
+      if (!a.createdAt && !b.createdAt) return 0;
+      if (!a.createdAt) return 1;
+      if (!b.createdAt) return -1;
+      return b.createdAt.localeCompare(a.createdAt);
+    });
+}
+
+export type RestoreSafetyRefInput = {
+  workspacePath: string;
+  ref: string;
+  runner?: Runner;
+};
+
+export async function restoreSafetyRef(
+  input: RestoreSafetyRefInput
+): Promise<RestoreCheckpointResult> {
+  if (!safetyRefIsValid(input.ref)) {
+    throw new Error(`Invalid safety ref: ${input.ref}`);
+  }
+  const workspacePath = path.resolve(input.workspacePath.trim());
+  const runner = input.runner ?? defaultRunner;
+  const repoRoot = await assertGitRepo(runner, workspacePath);
+
+  const target = await gitOk(runner, repoRoot, ['rev-parse', '--verify', input.ref]);
+  if (!target.ok || !target.output) {
+    throw new Error(`Safety ref ${input.ref} not found.`);
+  }
+
+  let safetyRef: string | null = null;
+  let safetySha: string | null = null;
+  try {
+    const headSha = await git(runner, repoRoot, ['rev-parse', 'HEAD']);
+    const stamp = new Date().toISOString().replace(/[^0-9A-Za-z]/g, '');
+    const sRef = `${SAFETY_NS}/${stamp}`;
+    const sha = await snapshotWorkingTree(
+      runner,
+      repoRoot,
+      headSha,
+      `overlord pre-safety-restore ${new Date().toISOString()}`
+    );
+    if (sha) {
+      await git(runner, repoRoot, ['update-ref', sRef, sha]);
+      safetyRef = sRef;
+      safetySha = sha;
+    }
+  } catch {
+    // Best-effort safety; do not block restore.
+  }
+
+  await git(runner, repoRoot, ['read-tree', '--reset', '-u', target.output]);
+
+  return { ref: input.ref, gitCommitId: target.output, safetyRef, safetySha };
 }
 
 export async function pruneCheckpoints(input: {

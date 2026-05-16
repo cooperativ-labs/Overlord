@@ -5,7 +5,7 @@
 
 export type TicketPriority = 'low' | 'medium' | 'high' | 'urgent';
 export type TicketExecutionTarget = 'agent' | 'human';
-export type LaunchAgentType = 'claude' | 'codex' | 'cursor' | 'gemini' | 'opencode';
+export type LaunchAgentType = 'claude' | 'codex' | 'cursor' | 'gemini' | 'opencode' | 'pi';
 export type TicketEventType =
   | 'system'
   | 'question'

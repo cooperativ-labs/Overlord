@@ -33,13 +33,6 @@ export function TicketFilterPopover({
 }: TicketFilterPopoverProps) {
   if (tickets.length === 0) return null;
 
-  const triggerLabel =
-    selectedTicketIds.size === 0
-      ? 'Filter'
-      : selectedTicketIds.size === 1
-        ? '1 ticket'
-        : `${selectedTicketIds.size} tickets`;
-
   return (
     <Popover>
       <Tooltip>
@@ -47,13 +40,15 @@ export function TicketFilterPopover({
           <PopoverTrigger asChild>
             <Button
               variant={selectedTicketIds.size > 0 ? 'secondary' : 'ghost'}
-              size="sm"
-              className="h-8 gap-1.5 px-2 text-xs"
+              size="icon"
+              className="h-7 w-7 relative"
             >
               <Filter className="h-3.5 w-3.5" />
-              <span>{triggerLabel}</span>
               {selectedTicketIds.size > 0 ? (
-                <Badge variant="default" className="h-4 min-w-4 rounded-full px-1 text-[10px]">
+                <Badge
+                  variant="default"
+                  className="absolute -right-1 -top-1 h-4 min-w-4 rounded-full px-1 text-[10px]"
+                >
                   {selectedTicketIds.size}
                 </Badge>
               ) : null}

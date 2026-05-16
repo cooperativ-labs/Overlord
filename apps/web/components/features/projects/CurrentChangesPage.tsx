@@ -303,12 +303,7 @@ export function CurrentChangesPage({
         statusResponse={statusResponse}
         workingDirectory={displayDirectory}
         projectName={projectName}
-        tickets={uniqueTickets}
-        selectedTicketIds={selectedTicketIds}
-        fileCountsByTicketId={fileCountsByTicketId}
         onRefresh={() => void refreshAll()}
-        onToggleTicketFilter={toggleTicketFilter}
-        onClearTicketFilter={clearTicketFilter}
       />
 
       {rationalesError ? (
@@ -336,6 +331,7 @@ export function CurrentChangesPage({
             workingDirectory={displayDirectory}
             onClearTicketFilter={clearTicketFilter}
             onSelectFile={setSelectedPath}
+            onToggleTicketFilter={toggleTicketFilter}
           />
         </ResizablePanel>
 

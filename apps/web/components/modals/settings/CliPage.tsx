@@ -46,8 +46,9 @@ import {
 import {
   AGENT_SELECTOR_VALUES,
   type AgentSelectorValue,
-  AgentTypeValue,
-  getAgentTypeByValue
+  getAgentTypeByValue,
+  LAUNCH_AGENT_VALUES,
+  type LaunchAgentType
 } from '@/lib/helpers/agent-types';
 import { cn } from '@/lib/utils';
 
@@ -128,13 +129,14 @@ type ServiceStatusEntry = {
 
 const CONNECTOR_UPDATE_WARNING_KEY = 'overlord_connector_update_warning_dismissed';
 
-const AGENTS = ['claude', 'cursor', 'codex', 'opencode'] as const;
+const AGENTS: readonly LaunchAgentType[] = LAUNCH_AGENT_VALUES;
 
 const AGENT_LABELS: Record<string, string> = {
   claude: 'Claude',
   cursor: 'Cursor',
   codex: 'Codex',
-  opencode: 'OpenCode'
+  opencode: 'OpenCode',
+  pi: 'Pi'
 };
 
 const COPY_AGENT_LABELS: Record<Extract<AgentSelectorValue, `copy-${string}`>, string> = {
@@ -143,11 +145,11 @@ const COPY_AGENT_LABELS: Record<Extract<AgentSelectorValue, `copy-${string}`>, s
   'copy-terminal': 'For Terminal'
 };
 
-export function getAgentSelectorLabel(agentValue: AgentSelectorValue): string {
+export function getAgentSelectorLabel(agentValue: LaunchAgentType): string {
   if (agentValue in COPY_AGENT_LABELS) {
     return COPY_AGENT_LABELS[agentValue as keyof typeof COPY_AGENT_LABELS];
   }
-  return getAgentTypeByValue(agentValue as AgentTypeValue).label;
+  return getAgentTypeByValue(agentValue as LaunchAgentType).label;
 }
 
 const SLASH_COMMAND_CONFIGS: Record<string, SlashCommandConfig> = {
@@ -275,7 +277,8 @@ const AGENT_PLUGIN_GROUPS = [
   { key: 'codex', label: 'Codex CLI' },
   { key: 'cursor', label: 'Cursor' },
   { key: 'gemini', label: 'Gemini CLI' },
-  { key: 'opencode', label: 'OpenCode' }
+  { key: 'opencode', label: 'OpenCode' },
+  { key: 'pi', label: 'Pi' }
 ] as const;
 
 function AgentNameWithLogo({
@@ -283,7 +286,7 @@ function AgentNameWithLogo({
   label,
   iconClassName = 'h-4 w-4'
 }: {
-  agent: BundleAgent | SlashAgent | AgentSelectorValue;
+  agent: BundleAgent | SlashAgent | LaunchAgentType;
   label: string;
   iconClassName?: string;
 }) {
@@ -291,7 +294,7 @@ function AgentNameWithLogo({
     return <span>{label}</span>;
   }
 
-  const agentType = getAgentTypeByValue(agent as AgentTypeValue);
+  const agentType = getAgentTypeByValue(agent as LaunchAgentType);
 
   return (
     <span className="flex items-center gap-2">
@@ -364,8 +367,8 @@ export function CliPage({ open }: { open: boolean }) {
   const { isElectron, api } = useElectron();
 
   const [selectedDefaultAgentTrigger, setSelectedDefaultAgentTrigger] =
-    useState<AgentSelectorValue>('claude');
-  const [selectedLocalAgent, setSelectedLocalAgent] = useState<string>('claude');
+    useState<LaunchAgentType>('claude');
+  const [selectedLocalAgent, setSelectedLocalAgent] = useState<LaunchAgentType>('claude');
   const [agentFlags, setAgentFlags] = useState<Record<string, string[]>>({});
   const [flagInput, setFlagInput] = useState('');
   const [commandCopied, setCommandCopied] = useState(false);
@@ -597,7 +600,7 @@ export function CliPage({ open }: { open: boolean }) {
   }
 
   function handleDefaultAgentTriggerChange(value: string) {
-    const nextValue = value as AgentSelectorValue;
+    const nextValue = value as LaunchAgentType;
     if (!AGENT_SELECTOR_VALUES.includes(nextValue)) return;
     setSelectedDefaultAgentTrigger(nextValue);
     window.localStorage.setItem(DEFAULT_AGENT_TRIGGER_STORAGE_KEY, nextValue);
@@ -880,7 +883,7 @@ export function CliPage({ open }: { open: boolean }) {
                   <p className="text-xs text-muted-foreground font-normal">
                     <AgentNameWithLogo
                       agent={selectedDefaultAgentTrigger}
-                      label={getAgentSelectorLabel(selectedDefaultAgentTrigger as AgentTypeValue)}
+                      label={getAgentSelectorLabel(selectedDefaultAgentTrigger)}
                     />
                   </p>
                 </div>
@@ -894,7 +897,10 @@ export function CliPage({ open }: { open: boolean }) {
           <div className="rounded-md border px-3 py-3 grid gap-4">
             <p className="text-sm font-medium">Local agent configuration</p>
             <div className="grid gap-4">
-              <Select value={selectedLocalAgent} onValueChange={setSelectedLocalAgent}>
+              <Select
+                value={selectedLocalAgent}
+                onValueChange={value => setSelectedLocalAgent(value as LaunchAgentType)}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Select agent" />
                 </SelectTrigger>

@@ -5,13 +5,13 @@ import { redirect } from 'next/navigation';
 
 import { createProject } from '@/lib/actions/projects';
 import { addProjectResourceDirectoryAction } from '@/lib/actions/resource-directories';
-import type { AgentTypeValue } from '@/lib/helpers/agent-types';
+import type { LaunchAgentType } from '@/lib/helpers/agent-types';
 import { createClientForRequest } from '@/supabase/utils/server';
 
 export type OnboardingProgress = {
   completedStep: number;
   skipped: boolean;
-  preferredAgent?: AgentTypeValue;
+  preferredAgent?: LaunchAgentType;
   desktopSetupDone?: boolean;
   desktopCompletedStep?: number;
   invitedOrganizationId?: number | null;
@@ -24,7 +24,7 @@ export type OnboardingState = {
   firstOrganizationId: number | null;
   onboardingCompletedStep: number;
   onboardingSkipped: boolean;
-  preferredAgent?: AgentTypeValue;
+  preferredAgent?: LaunchAgentType;
   desktopSetupDone: boolean;
   desktopCompletedStep: number;
   invitedOrganizationId: number | null;
@@ -40,7 +40,7 @@ function parseOnboardingProgress(raw: unknown): OnboardingProgress {
     skipped: typeof obj['skipped'] === 'boolean' ? obj['skipped'] : false,
     preferredAgent:
       typeof obj['preferred_agent'] === 'string'
-        ? (obj['preferred_agent'] as AgentTypeValue)
+        ? (obj['preferred_agent'] as LaunchAgentType)
         : undefined,
     desktopSetupDone:
       typeof obj['desktop_setup_done'] === 'boolean' ? obj['desktop_setup_done'] : false,
@@ -134,7 +134,7 @@ export async function getOnboardingState(): Promise<OnboardingState> {
 export async function updateOnboardingProgressAction(update: {
   completedStep?: number;
   skipped?: boolean;
-  preferredAgent?: AgentTypeValue;
+  preferredAgent?: LaunchAgentType;
   desktopSetupDone?: boolean;
   desktopCompletedStep?: number;
 }): Promise<void> {

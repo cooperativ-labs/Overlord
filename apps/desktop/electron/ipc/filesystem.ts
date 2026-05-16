@@ -12,8 +12,10 @@ import {
   createCheckpoint,
   diffCheckpoint,
   listCheckpoints,
+  listSafetyRefs,
   pruneCheckpoints,
-  restoreCheckpoint
+  restoreCheckpoint,
+  restoreSafetyRef
 } from '../../../../lib/snapshot/git-checkpoint';
 import { LocalWorkspaceClient } from '../../../../lib/workspace/local';
 import type {
@@ -213,6 +215,38 @@ export function registerFilesystemIpc(): void {
       return {
         ok: false,
         error: error instanceof Error ? error.message : 'Failed to diff checkpoint.'
+      };
+    }
+  });
+
+  ipcMain.handle('filesystem:list-safety-refs', async (_event, rawPayload?: unknown) => {
+    try {
+      const raw = (rawPayload ?? {}) as { directory?: unknown };
+      const directory = typeof raw.directory === 'string' ? raw.directory.trim() : '';
+      if (!directory) return { ok: false, error: 'Local working directory is required.' };
+      const refs = await listSafetyRefs({ workspacePath: directory });
+      return { ok: true, refs };
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : 'Failed to list safety refs.'
+      };
+    }
+  });
+
+  ipcMain.handle('filesystem:restore-safety-ref', async (_event, rawPayload?: unknown) => {
+    try {
+      const raw = (rawPayload ?? {}) as { directory?: unknown; ref?: unknown };
+      const directory = typeof raw.directory === 'string' ? raw.directory.trim() : '';
+      const ref = typeof raw.ref === 'string' ? raw.ref.trim() : '';
+      if (!directory) return { ok: false, error: 'Local working directory is required.' };
+      if (!ref) return { ok: false, error: 'ref is required.' };
+      const result = await restoreSafetyRef({ workspacePath: directory, ref });
+      return { ok: true, ...result };
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : 'Failed to restore safety ref.'
       };
     }
   });

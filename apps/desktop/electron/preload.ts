@@ -1,5 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
+import type { LaunchTerminalAgentParams } from '@/types/electron';
+
 type WorkspacePayload = {
   directory?: string;
 };
@@ -12,19 +14,8 @@ type ListFilesOptions = {
 
 const electronAPI = {
   terminal: {
-    launchAgent: (params: {
-      ticketId: string;
-      agent: 'claude' | 'codex' | 'cursor' | 'gemini' | 'opencode';
-      organizationId?: number;
-      cwd?: string;
-      launchMode?: 'run' | 'ask';
-      flags?: string[];
-      model?: string;
-      thinking?: string;
-      projectId?: string | null;
-      feedPostId?: string;
-      initialQuestion?: string;
-    }) => ipcRenderer.invoke('terminal:launch-agent', params),
+    launchAgent: (params: LaunchTerminalAgentParams) =>
+      ipcRenderer.invoke('terminal:launch-agent', params),
     chooseDirectory: () => ipcRenderer.invoke('terminal:choose-directory'),
     openHomebrewJjInstall: () => ipcRenderer.invoke('terminal:open-homebrew-jj-install')
   },
@@ -55,6 +46,10 @@ const electronAPI = {
       keepObjectiveIds?: string[];
       objectiveIds?: string[];
     }) => ipcRenderer.invoke('filesystem:prune-checkpoints', options),
+    listSafetyRefs: (options: { directory: string }) =>
+      ipcRenderer.invoke('filesystem:list-safety-refs', options),
+    restoreSafetyRef: (options: { directory: string; ref: string }) =>
+      ipcRenderer.invoke('filesystem:restore-safety-ref', options),
     getGitBranches: (options?: WorkspacePayload) =>
       ipcRenderer.invoke('filesystem:get-git-branches', options),
     gitCheckoutBranch: (options: WorkspacePayload & { options: { name: string } }) =>

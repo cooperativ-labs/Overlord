@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 
 import { FileListItem } from './FileListItem';
 import { ticketReviewHighlightClasses } from './helpers';
+import { TicketFilterPopover } from './TicketFilterPopover';
 import type { EnrichedCurrentChangeFile, GitStatusResponse, TicketSummary } from './types';
 
 type FileListPaneProps = {
@@ -20,6 +21,7 @@ type FileListPaneProps = {
   workingDirectory: string;
   onClearTicketFilter: () => void;
   onSelectFile: (path: string) => void;
+  onToggleTicketFilter: (ticketId: string) => void;
 };
 
 export function FileListPane({
@@ -32,7 +34,8 @@ export function FileListPane({
   tickets,
   workingDirectory,
   onClearTicketFilter,
-  onSelectFile
+  onSelectFile,
+  onToggleTicketFilter
 }: FileListPaneProps) {
   const totalFiles = statusResponse?.files.length ?? 0;
   const filterActive = selectedTicketIds.size > 0;
@@ -57,6 +60,13 @@ export function FileListPane({
             </TooltipContent>
           </Tooltip>
         </div>
+        <TicketFilterPopover
+          fileCountsByTicketId={fileCountsByTicketId}
+          selectedTicketIds={selectedTicketIds}
+          tickets={tickets}
+          onClear={onClearTicketFilter}
+          onToggle={onToggleTicketFilter}
+        />
       </div>
 
       {filterActive ? (

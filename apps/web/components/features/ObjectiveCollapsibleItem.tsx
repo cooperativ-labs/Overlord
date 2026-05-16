@@ -1,8 +1,8 @@
 'use client';
 
-import { CheckCircle, ChevronDown, Loader2, RotateCcw } from 'lucide-react';
+import { AlertTriangle, CheckCircle, ChevronDown, History, Loader2, RotateCcw } from 'lucide-react';
 import Image from 'next/image';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 
 import { MarkdownContent } from '@/components/features/MarkdownContent';
 import {
@@ -10,6 +10,7 @@ import {
   useObjectiveAttachmentState
 } from '@/components/features/ObjectiveAttachmentUpload';
 import { ObjectiveMenuButton } from '@/components/features/ObjectiveMenuButton';
+import { SafetySnapshotsDialog } from '@/components/features/SafetySnapshotsDialog';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
@@ -62,6 +63,8 @@ export function ObjectiveCollapsibleItem({
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [previewDiff, setPreviewDiff] = useState<string>('');
   const [restoreState, setRestoreState] = useState<ButtonLoadingState>('default');
+  const [headHasMoved, setHeadHasMoved] = useState(false);
+  const [safetyDialogOpen, setSafetyDialogOpen] = useState(false);
   const objectiveTimestamp = new Date(objective.created_at).toLocaleString();
   const isExecuting = objective.state === 'executing';
   const agentType = getAgentTypeByIdentifier(objective.agent_identifier);
@@ -99,6 +102,7 @@ export function ObjectiveCollapsibleItem({
     setPreviewError(null);
     setPreviewDiff('');
     setRestoreState('default');
+    setHeadHasMoved(false);
     try {
       const result = await diffCheckpoint({
         directory: workingDirectory,
@@ -110,12 +114,18 @@ export function ObjectiveCollapsibleItem({
         return;
       }
       setPreviewDiff(result.diff || 'No diff between the checkpoint commit and HEAD.');
+      setHeadHasMoved(Boolean(result.parentSha) && result.parentSha !== result.headSha);
     } catch (error) {
       setPreviewError(error instanceof Error ? error.message : 'Failed to load checkpoint diff.');
     } finally {
       setPreviewLoading(false);
     }
   }
+
+  const handleOpenSafetyDialog = useCallback(() => {
+    setPreviewOpen(false);
+    setSafetyDialogOpen(true);
+  }, []);
 
   async function handleRestoreCheckpoint() {
     if (!workingDirectory) return;
@@ -246,36 +256,78 @@ export function ObjectiveCollapsibleItem({
               Review the diff from this checkpoint to HEAD before restoring the working tree.
             </DialogDescription>
           </DialogHeader>
-          <div className="min-h-0 overflow-auto rounded-md border bg-muted/30">
-            {previewLoading ? (
-              <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Loading diff...
+          <div className="flex min-h-0 flex-col gap-2">
+            {headHasMoved && !previewLoading && !previewError ? (
+              <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-[12px] text-amber-700 dark:text-amber-300">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <div className="space-y-1">
+                  <p className="font-medium">Commits exist since this checkpoint.</p>
+                  <p className="text-amber-700/90 dark:text-amber-300/90">
+                    Restoring will reset the working tree to the pre-attach snapshot but will not
+                    move the branch pointer. The committed work will remain on the branch and the
+                    working tree will appear out of sync with HEAD. Use{' '}
+                    <code className="rounded bg-amber-500/20 px-1 font-mono text-[10px]">
+                      git reset
+                    </code>{' '}
+                    or{' '}
+                    <code className="rounded bg-amber-500/20 px-1 font-mono text-[10px]">
+                      git revert
+                    </code>{' '}
+                    manually if you need to roll back the commits as well.
+                  </p>
+                </div>
               </div>
-            ) : (
-              <pre className="whitespace-pre-wrap p-3 font-mono text-[11px] leading-5">
-                {previewError ?? previewDiff}
-              </pre>
-            )}
+            ) : null}
+            <div className="min-h-0 flex-1 overflow-auto rounded-md border bg-muted/30">
+              {previewLoading ? (
+                <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Loading diff...
+                </div>
+              ) : (
+                <pre className="whitespace-pre-wrap p-3 font-mono text-[11px] leading-5">
+                  {previewError ?? previewDiff}
+                </pre>
+              )}
+            </div>
           </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setPreviewOpen(false)}>
-              Cancel
+          <DialogFooter className="sm:justify-between">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="gap-1 text-xs"
+              onClick={handleOpenSafetyDialog}
+            >
+              <History className="h-3.5 w-3.5" />
+              View recovery snapshots
             </Button>
-            <LoadingButton
-              buttonState={restoreState}
-              setButtonState={setRestoreState}
-              text="Restore checkpoint"
-              loadingText="Restoring..."
-              successText="Restored"
-              errorText="Restore failed"
-              variant="destructive"
-              disabled={previewLoading || Boolean(previewError)}
-              onClick={handleRestoreCheckpoint}
-            />
+            <div className="flex gap-2">
+              <Button type="button" variant="outline" onClick={() => setPreviewOpen(false)}>
+                Cancel
+              </Button>
+              <LoadingButton
+                buttonState={restoreState}
+                setButtonState={setRestoreState}
+                text={headHasMoved ? 'Restore anyway' : 'Restore checkpoint'}
+                loadingText="Restoring..."
+                successText="Restored"
+                errorText="Restore failed"
+                variant="destructive"
+                disabled={previewLoading || Boolean(previewError)}
+                onClick={handleRestoreCheckpoint}
+              />
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {workingDirectory ? (
+        <SafetySnapshotsDialog
+          open={safetyDialogOpen}
+          onOpenChange={setSafetyDialogOpen}
+          workingDirectory={workingDirectory}
+        />
+      ) : null}
     </>
   );
 }

@@ -20,7 +20,7 @@ import {
   type AgentSelectorValue,
   isAgentIdentifierMatch,
   isLaunchAgentTypeValue,
-  type LaunchAgentTypeValue
+  type LaunchAgentType
 } from '@/lib/helpers/agent-types';
 import type { TicketAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
 import { cn } from '@/lib/utils';
@@ -40,8 +40,8 @@ type AgentSplitButtonProps = {
   ticketId: string;
   organizationId?: number;
   projectId?: string | null;
-  agentFlags?: Partial<Record<LaunchAgentTypeValue, string[]>>;
-  commands?: Record<LaunchAgentTypeValue, string>;
+  agentFlags?: Partial<Record<LaunchAgentType, string[]>>;
+  commands?: Record<LaunchAgentType, string>;
   workingDirectory?: string | null;
   sshCommand?: string | null;
   remoteWorkingDirectory?: string | null;

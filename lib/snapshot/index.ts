@@ -8,8 +8,12 @@ export {
   type CreateCheckpointResult,
   diffCheckpoint,
   listCheckpoints,
+  listSafetyRefs,
   pruneCheckpoints,
   restoreCheckpoint,
   type RestoreCheckpointInput,
-  type RestoreCheckpointResult
+  type RestoreCheckpointResult,
+  restoreSafetyRef,
+  type RestoreSafetyRefInput,
+  type SafetyRefSummary
 } from './git-checkpoint';

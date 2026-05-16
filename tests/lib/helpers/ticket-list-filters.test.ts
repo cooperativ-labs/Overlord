@@ -21,7 +21,8 @@ describe('ticket list filter helpers', () => {
       })
     ).toEqual({
       selected_statuses: ['draft', 'review'],
-      filter_project_ids: ['a', 'b']
+      filter_project_ids: ['a', 'b'],
+      filter_tag_ids: []
     });
   });
 
@@ -33,7 +34,8 @@ describe('ticket list filter helpers', () => {
       })
     ).toEqual({
       selected_statuses: ['execute'],
-      filter_project_ids: ['project-123']
+      filter_project_ids: ['project-123'],
+      filter_tag_ids: []
     });
   });
 
@@ -45,7 +47,8 @@ describe('ticket list filter helpers', () => {
       })
     ).toEqual({
       selected_statuses: [],
-      filter_project_ids: ['p1']
+      filter_project_ids: ['p1'],
+      filter_tag_ids: []
     });
   });
 
@@ -54,11 +57,31 @@ describe('ticket list filter helpers', () => {
       parseTicketListFilters({ selected_statuses: ['execute'], filter_project_id: 1 })
     ).toEqual({
       selected_statuses: ['execute'],
-      filter_project_ids: []
+      filter_project_ids: [],
+      filter_tag_ids: []
     });
     expect(parseTicketListFilters(null)).toEqual({
       selected_statuses: [],
-      filter_project_ids: []
+      filter_project_ids: [],
+      filter_tag_ids: []
+    });
+  });
+
+  it('normalizes tag filters by trimming, deduplicating, and defaulting invalid values', () => {
+    expect(
+      normalizeTicketListFilters({
+        filter_tag_ids: ['  tag-1  ', 'tag-2', 'tag-1', '', 42]
+      })
+    ).toEqual({
+      selected_statuses: [],
+      filter_project_ids: [],
+      filter_tag_ids: ['tag-1', 'tag-2']
+    });
+
+    expect(parseTicketListFilters({ filter_tag_ids: 'tag-1' })).toEqual({
+      selected_statuses: [],
+      filter_project_ids: [],
+      filter_tag_ids: []
     });
   });
 });

@@ -23,7 +23,8 @@ export const LAUNCH_AGENT_VALUES: readonly LaunchAgentType[] = [
   'codex',
   'cursor',
   'gemini',
-  'opencode'
+  'opencode',
+  'pi'
 ];
 
 export const AGENT_OPTIONS: ReadonlyArray<{
@@ -34,7 +35,8 @@ export const AGENT_OPTIONS: ReadonlyArray<{
   { value: 'codex', label: 'Codex' },
   { value: 'cursor', label: 'Cursor' },
   { value: 'gemini', label: 'Gemini' },
-  { value: 'opencode', label: 'OpenCode' }
+  { value: 'opencode', label: 'OpenCode' },
+  { value: 'pi', label: 'Pi' }
 ];
 
 export function createAssignedAgent(selection: AgentModelSelection): AssignedAgent {

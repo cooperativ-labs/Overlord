@@ -20,14 +20,14 @@ import {
   resolveAgentSelectionForAgent,
   type UserLaunchPreference
 } from '@/lib/helpers/agent-model-preference';
-import { AGENT_TYPES, type AgentTypeValue } from '@/lib/helpers/agent-types';
+import { AGENT_TYPES, type LaunchAgentType } from '@/lib/helpers/agent-types';
 import type { AgentConfig } from '@/lib/schemas/agent-config';
 import { cn } from '@/lib/utils';
 
 type AgentModelSelectorProps = {
   value: AgentModelSelection;
   onChange: (selection: AgentModelSelection) => void;
-  onAgentSelect?: (agent: AgentTypeValue) => void;
+  onAgentSelect?: (agent: LaunchAgentType) => void;
   /** When true, renders inline (for settings page). When false, renders compact (for popover). */
   inline?: boolean;
 };
@@ -174,7 +174,7 @@ export function AgentModelSelector({
   const thinkingOptions = thinkingEnabled ? (selectedModel?.thinking_options ?? []) : [];
 
   const handleAgentChange = useCallback(
-    (agent: AgentTypeValue) => {
+    (agent: LaunchAgentType) => {
       if (onAgentSelect) {
         onAgentSelect(agent);
         return;
@@ -348,7 +348,7 @@ export function AgentModelSelector({
 export function useAgentModelPreference(): {
   selection: AgentModelSelection;
   setSelection: (s: AgentModelSelection) => void;
-  selectAgent: (agent: AgentTypeValue) => void;
+  selectAgent: (agent: LaunchAgentType) => void;
   loaded: boolean;
 } {
   const instanceId = useRef(Math.random().toString(36).slice(2));
@@ -434,7 +434,7 @@ export function useAgentModelPreference(): {
   }, []);
 
   const selectAgent = useCallback(
-    (agent: AgentTypeValue) => {
+    (agent: LaunchAgentType) => {
       const nextSelection = resolveAgentSelectionForAgent(configs, agent, launchPreference);
       cachedSelection = nextSelection;
       setSelection(nextSelection);

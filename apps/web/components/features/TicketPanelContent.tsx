@@ -5,7 +5,6 @@ import fs from 'node:fs/promises';
 import { TimerWithTimeEntries } from '@/components/features/everhour/TimerWithTimeEntries';
 import { DueDateEditor } from '@/components/features/scheduling/DueDateEditor';
 import { ScheduleEditor } from '@/components/features/scheduling/ScheduleEditor';
-import { TicketExecutionTargetSelect } from '@/components/features/TicketExecutionTargetSelect';
 import { TicketLiveProvider } from '@/components/features/TicketLiveProvider';
 import { TicketObjectivesSection } from '@/components/features/TicketObjectivesSection';
 import { TicketPanelHeader } from '@/components/features/TicketPanelHeader';
@@ -27,7 +26,7 @@ import { getTicketTagsAction } from '@/lib/actions/tags';
 import { isAppFeatureEnabled } from '@/lib/app-features';
 import { getEditorScheme, getPlatformUrl, getWorkspaceRoot } from '@/lib/env';
 import { listProjectFiles, resolveLinkedDirectory } from '@/lib/filesystem/project-file-tree';
-import type { LaunchAgentTypeValue } from '@/lib/helpers/agent-types';
+import type { LaunchAgentType } from '@/lib/helpers/agent-types';
 import { parseObjectiveAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
 import { buildProjectPath } from '@/lib/helpers/ticket-path';
 import { getTicketIdentifier } from '@/lib/helpers/tickets';
@@ -225,12 +224,13 @@ export async function TicketPanelContent({
 
   const platformUrl = getPlatformUrl();
   const agentConfigs = user ? await getAllAgentConfigsByUserIdAction(user.id, supabase) : {};
-  const agentFlags: Partial<Record<LaunchAgentTypeValue, string[]>> = {
+  const agentFlags: Partial<Record<LaunchAgentType, string[]>> = {
     claude: agentConfigs.claude?.flags ?? [],
     codex: agentConfigs.codex?.flags ?? [],
     cursor: agentConfigs.cursor?.flags ?? [],
     gemini: agentConfigs.gemini?.flags ?? [],
-    opencode: agentConfigs.opencode?.flags ?? []
+    opencode: agentConfigs.opencode?.flags ?? [],
+    pi: agentConfigs.pi?.flags ?? []
   };
   const ticketIdentifier = getTicketIdentifier(ticket);
   const statusOptions = statuses?.map(s => s.name) ?? fallbackStatuses;
@@ -341,6 +341,7 @@ export async function TicketPanelContent({
           currentStatus={ticket.status ?? ''}
           statusOptions={[...statusOptions]}
           closePath={closePath}
+          executionTarget={ticket.execution_target ?? 'agent'}
         />
 
         <TimerWithTimeEntries
@@ -393,10 +394,6 @@ export async function TicketPanelContent({
                         }
                       : null
                   }
-                />
-                <TicketExecutionTargetSelect
-                  currentExecutionTarget={ticket.execution_target ?? 'agent'}
-                  ticketId={ticketId}
                 />
               </div>
 

@@ -1,12 +1,12 @@
 import {
   isLaunchAgentTypeValue,
   LAUNCH_AGENT_VALUES,
-  type LaunchAgentTypeValue
+  type LaunchAgentType
 } from '@/lib/helpers/agent-types';
 import type { AgentConfig } from '@/lib/schemas/agent-config';
 
 export type AgentModelSelection = {
-  agent: LaunchAgentTypeValue;
+  agent: LaunchAgentType;
   model: string | null;
   thinking: string | null;
 };
@@ -30,7 +30,7 @@ function resolveAgentConfigSelection(
 
 export function resolveAgentSelectionForAgent(
   configs: Record<string, AgentConfig>,
-  agent: LaunchAgentTypeValue,
+  agent: LaunchAgentType,
   launchPreference?: UserLaunchPreference | null
 ): AgentModelSelection {
   const configSelection = resolveAgentConfigSelection(configs[agent]);
