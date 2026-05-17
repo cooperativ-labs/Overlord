@@ -2,6 +2,34 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2605170853.0] - 2026-05-17:08:53
+
+### Added
+- New `/record-work` slash command for agents to record completed work as tickets without requiring an active Overlord session.
+- Agent token management system (`user_agent_tokens` table) for per-user, per-agent credential storage and persistence.
+- Desktop IPC operations for agent bundle management and cached slash command updates.
+
+### Fixed
+- None.
+
+### Changed
+- Update domain references from legacy domain to www.ovld.ai across feature plans and documentation.
+- Standardize project labels from 'Personal' to 'Inbox' across web, mobile, and desktop applications.
+- Enhance agent configuration UX with improved slash command documentation and agent plugin surface definitions.
+- Refine onboarding workflow with improved project creation and selection flows.
+
+### Security
+- None.
+
+### Documentation
+- Add comprehensive `/record-work` command documentation for agent slash commands across all connector plugins.
+- Update agent plugin surface documentation with new record-work capabilities.
+
+### Chore
+- Add database migration for user agent tokens schema.
+- Update agent plugin definitions across Claude Code, Cursor, and standalone plugins.
+- Bump workspace and `overlord-cli` versions for the release.
+
 ## [0.2605161310.0] - 2026-05-16:13:10
 
 ### Added
