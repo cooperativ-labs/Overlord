@@ -1,6 +1,8 @@
 User-agent: *
 Allow: /docs/
 Allow: /agent-docs/
+Allow: /changelog
+Allow: /changelog/
 Allow: /llms.txt
 Allow: /llms-full.txt
 Allow: /.well-known/llms.txt

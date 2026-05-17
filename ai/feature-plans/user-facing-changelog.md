@@ -129,6 +129,78 @@ After `app-updater` reports `phase: 'downloaded'` and the user restarts into the
 
 The modal component is shared with the web app so it can also be shown on first visit after a release if desired (gated by a localStorage key).
 
+## In-app launch toast (bottom-left notification)
+
+Users see a dismissible toast notification in the bottom-left corner when they launch the app or navigate to a new page, alerting them to new changelog posts published since their last visit. This surfaces the changelog within the product without requiring navigation, improving discoverability.
+
+### Database tracking
+
+Add a single column to the existing `profiles` table:
+
+```sql
+alter table public.profiles add column last_changelog_read_at timestamptz default now();
+```
+
+### Detection logic
+
+On app load (or layout mount in `app/layout.tsx` / `app/(app)/layout.tsx`):
+
+1. Server action `getUnreadChangelogEntriesAction()`:
+   - Fetches published changelog entries where `published_at > user.profiles.last_changelog_read_at`.
+   - Limits to the **most recent 1–2** entries to avoid overwhelming the user with old backlog.
+   - Returns `{ id, title, summary, published_at }`.
+
+2. If unread entries exist, render a `ChangelogToast` component (see below) that displays on the client.
+
+### Toast component (`ChangelogToast.tsx`)
+
+Location: `apps/web/components/features/changelog/ChangelogToast.tsx`
+
+Layout:
+- **Position**: `fixed bottom-4 left-4` (bottom-left, on top of other UI).
+- **Content**: "📰 **New**: [title]" + brief summary + **Read More** CTA + dismiss button (×).
+- **Styling**: subtle background (glass effect or muted surface), smooth fade-in animation.
+- **Dismissal**:
+  - Clicking **Read More** → navigate to `/changelog` (or `/changelog/[slug]`) and record the entry as read.
+  - Clicking **×** → dismiss the toast without marking as read (user sees it again on next session).
+  - Auto-dismiss after 6 seconds, or on route change if user navigates away.
+
+State management:
+- Render toast server-side if unread entries exist; show/hide client-side with a state hook.
+- Use `Sonner` (existing toast library, if available) or a custom toast manager to avoid stacking conflicts with other toasts.
+- On CTA click, call `markChangelogAsReadAction(entryId)` which inserts a `user_changelog_reads` row (marked `dismissed_at = null` for "intentionally read" vs dismissed).
+
+### Server actions (`lib/actions/changelog.ts`)
+
+Add to existing changelog actions:
+
+- `getUnreadChangelogEntriesAction()` — returns published entries where `published_at > user.profiles.last_changelog_read_at`, limited to most recent 1–2.
+- `markChangelogAsReadAction()` — updates `profiles.last_changelog_read_at = now()` for the current user. Called when user clicks "Read More" on the toast or navigates to `/changelog`.
+
+### Layout integration
+
+In `apps/web/app/(app)/layout.tsx` or a root layout component:
+
+```tsx
+import { getUnreadChangelogEntriesAction } from '@/lib/actions/changelog';
+import ChangelogToast from '@/components/features/changelog/ChangelogToast';
+
+export default async function AppLayout({ children }) {
+  const unreadEntries = await getUnreadChangelogEntriesAction();
+
+  return (
+    <>
+      {children}
+      {unreadEntries.length > 0 && (
+        <ChangelogToast entries={unreadEntries} />
+      )}
+    </>
+  );
+}
+```
+
+The `ChangelogToast` component handles client-side state and animations; the parent layout ensures it's always available.
+
 ## Email delivery
 
 Out of scope for the first cut but designed for: on publish, `publishChangelogEntryAction` enqueues a `changelog_email_jobs` row (or invokes an edge function `send-changelog-email`) that reads all opted-in user emails and dispatches via the existing transactional email provider. The email body is the same `body_html` wrapped in a minimal template. Track sends in `changelog_email_sends (entry_id, user_id, sent_at)` to avoid double-sends and to support resend.

@@ -87,6 +87,7 @@ export function registerAppIpc({
 
   ipcMain.handle('app:get-platform-url', () => platformUrl);
   ipcMain.handle('app:get-connector-url', () => connectorUrl);
+  ipcMain.handle('app:get-version', () => app.getVersion());
 
   ipcMain.handle('app:get-host-metadata', () => {
     return { hostname: os.hostname(), platform: process.platform };

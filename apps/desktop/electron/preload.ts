@@ -94,6 +94,7 @@ const electronAPI = {
   app: {
     getConnectorUrl: () => ipcRenderer.invoke('app:get-connector-url'),
     getPlatformUrl: () => ipcRenderer.invoke('app:get-platform-url'),
+    getVersion: () => ipcRenderer.invoke('app:get-version') as Promise<string>,
     getHostMetadata: () =>
       ipcRenderer.invoke('app:get-host-metadata') as Promise<{
         hostname: string;

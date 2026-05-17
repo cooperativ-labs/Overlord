@@ -354,6 +354,7 @@ interface ElectronAPI {
   app: {
     getConnectorUrl: () => Promise<string>;
     getPlatformUrl: () => Promise<string>;
+    getVersion: () => Promise<string>;
     getHostMetadata: () => Promise<{ hostname: string; platform: string }>;
     getDeviceIdentity: () => Promise<{
       deviceFingerprint: string;

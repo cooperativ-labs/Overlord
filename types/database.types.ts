@@ -256,6 +256,63 @@ export type Database = {
         };
         Relationships: [];
       };
+      changelog_entries: {
+        Row: {
+          body_html: string | null;
+          body_markdown: string;
+          created_at: string;
+          drafted_by: string | null;
+          id: string;
+          published_at: string | null;
+          published_by: string | null;
+          slug: string;
+          source_feed_post_ids: string[];
+          source_window_end: string | null;
+          source_window_start: string | null;
+          status: string;
+          summary: string | null;
+          title: string;
+          updated_at: string;
+          version: string | null;
+        };
+        Insert: {
+          body_html?: string | null;
+          body_markdown?: string;
+          created_at?: string;
+          drafted_by?: string | null;
+          id?: string;
+          published_at?: string | null;
+          published_by?: string | null;
+          slug: string;
+          source_feed_post_ids?: string[];
+          source_window_end?: string | null;
+          source_window_start?: string | null;
+          status?: string;
+          summary?: string | null;
+          title: string;
+          updated_at?: string;
+          version?: string | null;
+        };
+        Update: {
+          body_html?: string | null;
+          body_markdown?: string;
+          created_at?: string;
+          drafted_by?: string | null;
+          id?: string;
+          published_at?: string | null;
+          published_by?: string | null;
+          slug?: string;
+          source_feed_post_ids?: string[];
+          source_window_end?: string | null;
+          source_window_start?: string | null;
+          status?: string;
+          summary?: string | null;
+          title?: string;
+          updated_at?: string;
+          version?: string | null;
+        };
+        Relationships: [];
+      };
       connections: {
         Row: {
           config: Json;
@@ -918,6 +975,7 @@ export type Database = {
           email: string;
           id: string;
           image_url: string;
+          last_changelog_read_at: string;
           name: string;
           onboarding: Json;
           preferences: Json;
@@ -932,6 +990,7 @@ export type Database = {
           email?: string;
           id: string;
           image_url?: string;
+          last_changelog_read_at?: string;
           name?: string;
           onboarding?: Json;
           preferences?: Json;
@@ -946,6 +1005,7 @@ export type Database = {
           email?: string;
           id?: string;
           image_url?: string;
+          last_changelog_read_at?: string;
           name?: string;
           onboarding?: Json;
           preferences?: Json;

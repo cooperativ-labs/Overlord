@@ -2,9 +2,11 @@ import { redirect } from 'next/navigation';
 
 import { AgentModelOfferingsPanel } from '@/components/features/admin/AgentModelOfferingsPanel';
 import { AppFeaturesPanel } from '@/components/features/admin/AppFeaturesPanel';
+import { ChangelogPanel } from '@/components/features/admin/ChangelogPanel';
 import { SentryTestPanel } from '@/components/features/admin/SentryTestPanel';
 import { getAdminAgentModelsAction } from '@/lib/actions/admin-agent-models';
 import { getAdminAppFeaturesAction } from '@/lib/actions/admin-features';
+import { listChangelogEntriesAction } from '@/lib/actions/changelog';
 import { ADMIN_EMAIL, isAdminEmail } from '@/lib/auth/admin';
 import { createClientForRequest } from '@/supabase/utils/server';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
@@ -120,7 +122,8 @@ export default async function AdminPage() {
     redirect('/');
   }
 
-  const { accessRequests, feedbackItems, agentModels, appFeatures } = await loadAdminData();
+  const [{ accessRequests, feedbackItems, agentModels, appFeatures }, changelogEntries] =
+    await Promise.all([loadAdminData(), listChangelogEntriesAction()]);
 
   return (
     <div className="min-h-0 flex-1 overflow-auto bg-slate-50">
@@ -140,6 +143,7 @@ export default async function AdminPage() {
 
         <SentryTestPanel />
         <AppFeaturesPanel initialFeatures={appFeatures} />
+        <ChangelogPanel initialEntries={changelogEntries} />
 
         <section className="rounded-[2rem] border border-slate-200 bg-white shadow-sm">
           <div className="flex items-center justify-between gap-4 border-b border-slate-200 px-6 py-5">

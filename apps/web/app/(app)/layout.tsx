@@ -5,6 +5,8 @@ import { AgentModelsPrefetch } from '@/components/features/AgentModelSelector';
 import { AnnouncementBar } from '@/components/features/announcement-bar/AnnouncementBar';
 import { VersionTransitionBanner } from '@/components/features/announcement-bar/VersionTransitionBanner';
 import { WebAuthGate } from '@/components/features/auth/WebAuthGate';
+import { ChangelogToast } from '@/components/features/changelog/ChangelogToast';
+import { ChangelogUpdateModal } from '@/components/features/changelog/ChangelogUpdateModal';
 import {
   ElectronAuthBoundary,
   ElectronAuthGate
@@ -29,6 +31,7 @@ import { SidePanel, SidePanelProvider } from '@/components/ui/side-panel';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import { getAllAgentConfigsAction } from '@/lib/actions/agent-config';
 import { getAgentModelsAction } from '@/lib/actions/agent-models';
+import { getUnreadChangelogEntriesAction } from '@/lib/actions/changelog';
 import { getOnboardingState } from '@/lib/actions/onboarding';
 import { getUserOrganizations } from '@/lib/actions/organizations';
 import { fetchProfileSettings } from '@/lib/actions/profile-settings';
@@ -67,15 +70,23 @@ export default async function RootLayout({
     data: { user }
   } = await supabase.auth.getUser();
 
-  const [projects, organizations, profileSettings, agentModels, agentConfigs, launchPreference] =
-    await Promise.all([
-      getProjectsForCurrentUser(),
-      user ? getUserOrganizations() : Promise.resolve([]),
-      user ? fetchProfileSettings(supabase, user.id) : Promise.resolve(null),
-      getAgentModelsAction(),
-      user ? getAllAgentConfigsAction() : Promise.resolve({}),
-      user ? getUserLaunchPreferenceAction() : Promise.resolve(null)
-    ]);
+  const [
+    projects,
+    organizations,
+    profileSettings,
+    agentModels,
+    agentConfigs,
+    launchPreference,
+    unreadChangelogEntries
+  ] = await Promise.all([
+    getProjectsForCurrentUser(),
+    user ? getUserOrganizations() : Promise.resolve([]),
+    user ? fetchProfileSettings(supabase, user.id) : Promise.resolve(null),
+    getAgentModelsAction(),
+    user ? getAllAgentConfigsAction() : Promise.resolve({}),
+    user ? getUserLaunchPreferenceAction() : Promise.resolve(null),
+    user ? getUnreadChangelogEntriesAction() : Promise.resolve([])
+  ]);
 
   const initialDefaultProjectId = await getRequestDefaultProjectId({
     profileDefaultProjectId: profileSettings?.default_project_id ?? null
@@ -200,6 +211,18 @@ export default async function RootLayout({
                         <TutorialWizardModal />
                       </SidebarProvider>
                       <SystemNotificationRoot />
+                      {user ? <ChangelogUpdateModal /> : null}
+                      {user && unreadChangelogEntries.length > 0 ? (
+                        <ChangelogToast
+                          entries={unreadChangelogEntries.map(entry => ({
+                            id: entry.id,
+                            slug: entry.slug,
+                            title: entry.title,
+                            summary: entry.summary,
+                            published_at: entry.published_at
+                          }))}
+                        />
+                      ) : null}
                     </SystemNotificationProvider>
                   </TutorialProvider>
                 </ProjectCreatorProvider>
