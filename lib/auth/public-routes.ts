@@ -2,15 +2,18 @@ export const SESSION_ENDED_MESSAGE = 'You have been signed out. Please sign in a
 
 const PUBLIC_EXACT_PATHS = new Set([
   '/',
+  '/compare',
   '/early-access',
   '/docs',
   '/llms.txt',
   '/llms-full.txt',
+  '/overlord-context',
   '/robots.txt',
   '/sitemap.xml'
 ]);
 const PUBLIC_PATH_PREFIXES = [
   '/docs/',
+  '/agent-docs/',
   '/downloads/',
   '/login',
   '/signup',
@@ -27,6 +30,7 @@ const PUBLIC_PATH_PREFIXES = [
   '/terms',
   '/api/auth',
   '/callback',
+  '/compare/',
   '/demo'
 ];
 

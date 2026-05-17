@@ -1,5 +1,11 @@
 [
   {
+    "slug": "Marketing-and-positioning",
+    "filename": "Marketing-and-positioning.md",
+    "title": "Core Positioning",
+    "description": "Overlord is the coordination and review layer for people who use coding agents."
+  },
+  {
     "slug": "new-user-onboarding",
     "filename": "new-user-onboarding.md",
     "title": "Overlord for New Users",

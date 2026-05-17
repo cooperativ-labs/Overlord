@@ -7,7 +7,7 @@ const APP_DIR = path.join(process.cwd(), 'app');
 
 const EXCLUDED_GROUPS = new Set(['(app)', '(auth)', '(quick)']);
 const EXCLUDED_PATHS = new Set(['/onboarding']);
-const EXTRA_PUBLIC_PATHS = ['/llms.txt', '/llms-full.txt'] as const;
+const EXTRA_PUBLIC_PATHS = ['/llms.txt', '/llms-full.txt', '/overlord-context'] as const;
 
 function isDynamicSegment(segment: string): boolean {
   return segment.startsWith('[') && segment.endsWith(']');

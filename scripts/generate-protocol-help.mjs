@@ -18,6 +18,7 @@ const protocolHelpPath = resolve(docsPublicDir, 'ovld-protocol-help.txt');
 const manifestPath = resolve(repoRoot, 'lib', 'agent-docs-manifest.json');
 
 const MANIFEST_ORDER = [
+  'Marketing-and-positioning.md',
   'new-user-onboarding.md',
   'users-guide.md',
   'overlord-examples.md',

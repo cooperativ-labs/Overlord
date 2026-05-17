@@ -5,6 +5,7 @@ Allow: /changelog
 Allow: /changelog/
 Allow: /llms.txt
 Allow: /llms-full.txt
+Allow: /overlord-context
 Allow: /.well-known/llms.txt
 Allow: /.well-known/llms-full.txt
 Disallow: /api/
