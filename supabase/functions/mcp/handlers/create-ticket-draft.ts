@@ -25,7 +25,7 @@ export async function handleCreateTicketDraft(
       draft.personal
     );
     draft.projectId = project?.id ?? null;
-    draft.projectName = project?.name ?? 'Personal';
+    draft.projectName = project?.name ?? 'Inbox';
 
     return appToolOk(
       'Prepared a draft ticket. Review the fields in the inline card, edit anything that needs work, then save it to Overlord.',

@@ -73,6 +73,7 @@ Managed files (Markdown format):
 - `~/.claude/commands/discuss-objective.md` — requires `--ticket-id`
 - `~/.claude/commands/create.md`
 - `~/.claude/commands/prompt.md`
+- `~/.claude/commands/record-work.md` — invokes `ovld protocol record-work` for completed-from-chat work
 
 ### 3. Local launch path
 
@@ -257,6 +258,7 @@ Managed files:
 - `~/.cursor/plugins/local/overlord/commands/spawn.md`
 - `~/.cursor/plugins/local/overlord/commands/create.md`
 - `~/.cursor/plugins/local/overlord/commands/prompt.md`
+- `~/.cursor/plugins/local/overlord/commands/record-work.md` — invokes `ovld protocol record-work` for completed-from-chat work
 - `~/.cursor/hooks.json` — merged `beforeSubmitPrompt` entry pointing at the plugin hook script
 - `~/.cursor/settings.json` permission allow rules for `ovld protocol` and `curl -sS -X POST`
 
@@ -314,6 +316,7 @@ Managed files (**TOML format**, not Markdown):
 - `~/.gemini/commands/attach.toml` — requires `--ticket-id`
 - `~/.gemini/commands/create.toml`
 - `~/.gemini/commands/prompt.toml`
+- `~/.gemini/commands/record-work.toml` — invokes `ovld protocol record-work` for completed-from-chat work
 
 Note: Gemini uses `{{args}}` for argument interpolation (vs `$ARGUMENTS` for Claude/Cursor/OpenCode).
 
@@ -387,6 +390,7 @@ Managed files (Markdown with `agent: build` frontmatter):
 - `~/.config/opencode/commands/attach.md` — requires `--ticket-id`
 - `~/.config/opencode/commands/create.md`
 - `~/.config/opencode/commands/prompt.md`
+- `~/.config/opencode/commands/record-work.md` — invokes `ovld protocol record-work` for completed-from-chat work
 
 ### 3. Local launch path
 

@@ -219,7 +219,7 @@ export function TicketSearch({ className }: TicketSearchProps) {
                   </p>
                   <p className="text-xs text-muted-foreground">
                     {getTicketIdentifier(ticket)} •{' '}
-                    {ticket.project?.name ?? (ticket.project_id ? 'Unknown project' : 'Personal')}
+                    {ticket.project?.name ?? (ticket.project_id ? 'Unknown project' : 'Inbox')}
                   </p>
                 </li>
               );

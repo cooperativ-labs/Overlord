@@ -109,15 +109,48 @@ async function resolveProjectByWorkingDirectory(
   return null;
 }
 
+async function resolveProjectById(
+  supabase: SupabaseClient,
+  organizationId: number,
+  projectId: string
+) {
+  const { data } = await supabase
+    .from('projects')
+    .select('id, name, organization_id')
+    .eq('id', projectId)
+    .eq('organization_id', organizationId)
+    .single();
+  return data ?? null;
+}
+
 export async function handleDiscoverProject(
   supabase: SupabaseClient,
   args: any,
   ctx: TokenContext
 ) {
+  // If a projectId is explicitly provided (or the token is scoped to a project),
+  // skip directory matching — this is the normal path for MCP-connected agents.
+  const explicitProjectId =
+    typeof args?.projectId === 'string' ? args.projectId.trim() : (ctx.projectId ?? null);
+
+  if (explicitProjectId) {
+    const project = await resolveProjectById(supabase, ctx.organizationId, explicitProjectId);
+    if (!project) {
+      return toolErr('Project not found or does not belong to this organization.');
+    }
+    return toolOk({
+      project: {
+        id: project.id,
+        name: project.name,
+        organizationId: project.organization_id
+      }
+    });
+  }
+
   const workingDirectory =
     typeof args?.workingDirectory === 'string' ? args.workingDirectory.trim() : '';
   if (!workingDirectory) {
-    return toolErr('workingDirectory is required.');
+    return toolErr('Provide either projectId or workingDirectory.');
   }
 
   const deviceFingerprint =

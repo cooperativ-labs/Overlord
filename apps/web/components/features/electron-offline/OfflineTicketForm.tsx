@@ -36,7 +36,7 @@ export function OfflineTicketForm() {
       objective: objective.trim(),
       organizationId: project?.organizationId,
       projectId: isPersonalTicket ? null : selectedProjectId,
-      projectName: project?.name ?? 'Personal',
+      projectName: project?.name ?? 'Inbox',
       projectColor: project?.color
     });
 
@@ -103,11 +103,11 @@ export function OfflineTicketForm() {
                 ) : (
                   <span className="h-3 w-3 rounded-[6px] border border-muted-foreground/50 bg-muted" />
                 )}
-                <span className="text-sm font-medium">{selectedProject?.name ?? 'Personal'}</span>
+                <span className="text-sm font-medium">{selectedProject?.name ?? 'Inbox'}</span>
               </span>
             </SelectTrigger>
             <SelectContent align="start">
-              <SelectItem value={PERSONAL_PROJECT_VALUE}>No project / Personal</SelectItem>
+              <SelectItem value={PERSONAL_PROJECT_VALUE}>No project / Inbox</SelectItem>
               {projects.map(project => (
                 <SelectItem key={project.id} value={project.id}>
                   {project.name}

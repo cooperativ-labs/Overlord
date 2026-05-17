@@ -143,7 +143,7 @@ export function QuickRunModal({
           objective: trimmedObjective,
           organization_id: resolvedOrganizationId,
           project_id: isPersonalTicket ? null : selectedProjectId,
-          project_name: isPersonalTicket ? 'Personal' : (selectedProject?.name ?? null),
+          project_name: isPersonalTicket ? 'Inbox' : (selectedProject?.name ?? null),
           project_color: isPersonalTicket ? null : (selectedProject?.color ?? null),
           project_everhour_project_id: isPersonalTicket
             ? null
@@ -275,12 +275,12 @@ export function QuickRunModal({
                       <span className="h-3 w-3 shrink-0 rounded-[6px] border border-muted-foreground/50 bg-muted" />
                     )}
                     <span className="truncate text-sm font-medium">
-                      {selectedProject?.name ?? 'Personal'}
+                      {selectedProject?.name ?? 'Inbox'}
                     </span>
                   </span>
                 </SelectTrigger>
                 <SelectContent align="start">
-                  <SelectItem value={PERSONAL_PROJECT_VALUE}>No project / Personal</SelectItem>
+                  <SelectItem value={PERSONAL_PROJECT_VALUE}>No project / Inbox</SelectItem>
                   {projects.map(project => (
                     <SelectItem key={project.id} value={project.id}>
                       {project.name}

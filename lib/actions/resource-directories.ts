@@ -125,7 +125,7 @@ export async function addProjectResourceDirectoryAction(input: {
   deviceHostname?: string | null;
   devicePlatform?: string | null;
   isPrimary?: boolean;
-}): Promise<void> {
+}): Promise<{ projectName: string }> {
   await ensureDesktopMutationAllowed();
 
   const directoryPath = input.directoryPath.trim();
@@ -141,17 +141,18 @@ export async function addProjectResourceDirectoryAction(input: {
     throw new Error('You must be signed in to add a resource directory.');
   }
 
+  const { data: project, error: projectError } = await supabase
+    .from('projects')
+    .select('organization_id, name')
+    .eq('id', input.projectId)
+    .maybeSingle();
+  if (projectError || !project) {
+    throw new Error('Project not found.');
+  }
+
   let resolvedDeviceId: string | null = input.deviceId ?? null;
   const deviceFingerprint = input.deviceFingerprint?.trim();
   if (deviceFingerprint) {
-    const { data: project, error: projectError } = await supabase
-      .from('projects')
-      .select('organization_id')
-      .eq('id', input.projectId)
-      .maybeSingle();
-    if (projectError || !project) {
-      throw new Error('Project not found.');
-    }
     const upsertedId = await upsertDeviceFromProtocol(supabase, {
       organizationId: project.organization_id,
       userId: user.id,
@@ -201,6 +202,7 @@ export async function addProjectResourceDirectoryAction(input: {
   }
 
   revalidateProjectPaths(input.projectId);
+  return { projectName: project.name };
 }
 
 export async function removeProjectResourceDirectoryAction(input: {

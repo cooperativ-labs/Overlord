@@ -90,6 +90,36 @@ ovld protocol revert --objective-id <objective-id>
 
 Use `ovld protocol record-work` when the user has done work directly in chat (no attached ticket) and wants to record it as a ticket plus publish a feed post. This is distinct from `create` (drafts future work), `prompt` (creates + executes), and `deliver` (concludes an attached session). `record-work` creates a ticket in `review` with a completed objective and triggers the feed-post generator atomically. Project resolution mirrors `prompt`: cwd is matched against `project_user.local_working_directory`; if no match, ask the user for `--project-id` or pass `--personal`. Do NOT use for in-progress work.
 
+Do NOT use `record-work` for in-progress work. Use it only when the work is already done in the chat.
+
+```bash
+ovld protocol record-work \
+  --objective "User asked me to X; I did Y by..." \
+  --summary  "Narrative for the feed post and reviewer." \
+  --change-rationales-file -
+```
+
+Or stream the full payload via stdin to avoid quote escaping:
+
+```bash
+ovld protocol record-work --payload-file - <<'EOF'
+{
+  "objective": "...",
+  "summary": "...",
+  "artifacts": [{"type": "next_steps", "label": "...", "content": "..."}],
+  "changeRationales": [{"label": "...", "file_path": "...", "summary": "...", "why": "...", "impact": "...", "hunks": [{"header": "@@ ..."}]}]
+}
+EOF
+```
+
+Project resolution mirrors `prompt`/`create`: cwd is matched against the caller's `project_user.local_working_directory`. If no match:
+
+1. **Ask the user for a `--project-id`** if the work is project-related. Show them a brief description of what you're about to record so they can pick the right project.
+2. If the user confirms the work is not tied to any project, pass `--personal` to create a private ticket.
+
+Validation: in a git workspace, `record-work` checks that uncommitted changes are represented by `changeRationales` and rejects if they aren't (same check as `deliver`). Pass `--skip-file-change-check` only when intentionally bypassing.
+
+
 ## Change Rationales
 
 Always include `changeRationales` when delivering. Optionally include them on updates during long-running work.
@@ -120,8 +150,31 @@ When creating tickets from within a repository:
 ```bash
 ovld protocol create --agent cursor --objective "Capture follow-up work from this repository"
 ovld protocol prompt --agent cursor --objective "Implement feature X" --priority medium
+```
+
+To inspect project resolution explicitly:
+
+```bash
 ovld protocol discover-project
 ```
+
+### Resolving the project ID when you don't have one
+
+When you need a project ID for a protocol command and the ticket prompt did not supply one, resolve it in this order.
+
+**Locally (CLI inside a shell on the user's machine):**
+
+1. `--project-id` if explicitly provided.
+2. Otherwise, let the CLI match the current working directory (the default behavior of `create`, `prompt`, `discover-project`).
+3. If working-directory resolution returns nothing, read `overlord.json` from the cwd (or any ancestor you have access to) and pass its project id via `--project-id`.
+
+**Over MCP (web agents and hosted tools, where the server cannot see the agent's cwd):**
+
+1. `--project-id` / `projectId` if explicitly provided.
+2. Read `overlord.json` from the directory the user is accessing and pass its project id as `projectId`.
+3. As a last resort, try `workingDirectory` resolution.
+
+If `overlord.json` contains more than one project, show the user the project **names** from that file and ask which one to use before calling any protocol command — never silently pick one.
 
 ### Choosing `--execution-target`
 
@@ -174,6 +227,7 @@ This keeps the ticket feed readable while preserving the full document in versio
 - The `summary` in deliver is what the PM reads first, so write it as a narrative, not a command list.
 - If a protocol or MCP call fails with auth/session errors, run `ovld auth repair` yourself before asking the user to log in again or proceed without Overlord updates.
 - If you must run `ovld auth login`, always include `--organization-id <id>` — use the organization ID from the ticket prompt context to select the organization non-interactively and avoid a blocking TTY prompt.
+- Do not add or commit changes unless the user explicitly asks you to commit.
 - Delivery is the concluding step. After delivering, stop unless the user follows up or the ticket is reopened.
 
-<!-- version: 0.4.10 -->
+<!-- version: 0.4.11 -->

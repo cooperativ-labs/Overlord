@@ -238,7 +238,7 @@ export default function KanbanBoard({
       if (!seen.has(optionId)) {
         seen.set(optionId, {
           id: optionId,
-          name: ticket.project_name ?? ticket.project_id ?? 'Personal',
+          name: ticket.project_name ?? ticket.project_id ?? 'Inbox',
           color: ticket.project_color ?? null
         });
       }

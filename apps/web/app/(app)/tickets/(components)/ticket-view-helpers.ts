@@ -145,7 +145,7 @@ export function resolveOptimisticTicketProject(input: {
 
   return {
     project_id: null,
-    project_name: 'Personal',
+    project_name: 'Inbox',
     project_color: null,
     project_everhour_project_id: null,
     organization_id: referenceTicket?.organization_id ?? null

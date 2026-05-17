@@ -108,7 +108,7 @@ export function ResourceDirectoryList({ projectId, onResourceDirectoriesChanged 
           return;
         }
       }
-      await addProjectResourceDirectoryAction({
+      const { projectName } = await addProjectResourceDirectoryAction({
         projectId,
         directoryPath: trimmed,
         label: newLabel.trim() || null,
@@ -121,6 +121,16 @@ export function ResourceDirectoryList({ projectId, onResourceDirectoriesChanged 
             }
           : {})
       });
+      if (isElectron && api?.filesystem?.writeOverlordConfig) {
+        const result = await api.filesystem.writeOverlordConfig({
+          directory: trimmed,
+          projectId,
+          projectName
+        });
+        if (!result.ok) {
+          toast.warning(`Added directory, but could not write overlord.json: ${result.error}`);
+        }
+      }
       setNewPath('');
       setNewLabel('');
       labelManuallyEditedRef.current = false;
@@ -136,9 +146,20 @@ export function ResourceDirectoryList({ projectId, onResourceDirectoriesChanged 
   function handleRemove(directoryId: string) {
     if (!canManageDirectories) return;
 
+    const removed = items.find(item => item.id === directoryId);
+
     startTransition(async () => {
       try {
         await removeProjectResourceDirectoryAction({ directoryId, projectId });
+        if (removed && isElectron && api?.filesystem?.removeOverlordConfigProject) {
+          const result = await api.filesystem.removeOverlordConfigProject({
+            directory: removed.directoryPath,
+            projectId
+          });
+          if (!result.ok) {
+            toast.warning(`Removed directory, but could not update overlord.json: ${result.error}`);
+          }
+        }
         await refresh();
       } catch (error) {
         toast.error(error instanceof Error ? error.message : 'Failed to remove directory.');
@@ -195,7 +216,8 @@ export function ResourceDirectoryList({ projectId, onResourceDirectoriesChanged 
   return (
     <div className="grid gap-3">
       <div className="grid gap-1">
-        <label className="text-xs font-medium text-muted-foreground">Resource directories</label>
+        <h3 className="text-sm font-medium">Resource directories</h3>
+
         <p className="text-xs text-muted-foreground">
           Per-device working directories for this project. Agent flows match the running cwd against
           this list to resolve the project.
@@ -329,7 +351,8 @@ export function ResourceDirectoryList({ projectId, onResourceDirectoriesChanged 
       </div>
 
       {canManageDirectories ? (
-        <div className="grid gap-2">
+        <div className="grid gap-2 mt-4">
+          <h3 className="text-sm font-medium">Add a new resource directory</h3>
           <Input
             value={newLabel}
             onChange={event => {

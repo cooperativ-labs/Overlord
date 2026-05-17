@@ -106,6 +106,24 @@ ovld protocol create --agent codex --objective "Capture follow-up work from this
 ovld protocol prompt --agent codex --objective "Implement feature X" --priority medium
 ```
 
+### Resolving the project ID when you don't have one
+
+When you need a project ID for a protocol command and the ticket prompt did not supply one, resolve it in this order.
+
+**Locally (CLI inside a shell on the user's machine):**
+
+1. `--project-id` if explicitly provided.
+2. Otherwise, let the CLI match the current working directory (the default behavior of `create`, `prompt`, `discover-project`).
+3. If working-directory resolution returns nothing, read `overlord.json` from the cwd (or any ancestor you have access to) and pass its project id via `--project-id`.
+
+**Over MCP (web agents and hosted tools, where the server cannot see the agent's cwd):**
+
+1. `--project-id` / `projectId` if explicitly provided.
+2. Read `overlord.json` from the directory the user is accessing and pass its project id as `projectId`.
+3. As a last resort, try `workingDirectory` resolution.
+
+If `overlord.json` contains more than one project, show the user the project **names** from that file and ask which one to use before calling any protocol command — never silently pick one.
+
 ### Choosing `--execution-target`
 
 Pass `--execution-target agent` or `--execution-target human` (default: `human`) when creating tickets.
@@ -195,4 +213,4 @@ This keeps the ticket feed readable while preserving the full document in versio
 - If a protocol or MCP call fails with auth/session errors, run `ovld auth repair` yourself before asking the user to log in again or proceed without Overlord updates.
 - If you must run `ovld auth login`, always include `--organization-id <id>` — use the organization ID from the ticket prompt context to select the organization non-interactively and avoid a blocking TTY prompt.
 
-<!-- version: 0.4.10 -->
+<!-- version: 0.4.11 -->

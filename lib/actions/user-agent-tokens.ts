@@ -16,17 +16,22 @@ async function hashToken(token: string): Promise<string> {
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-export type AgentTokenInfo = {
+export type UserAgentTokenInfo = {
   id: string;
+  label: string;
   tokenPrefix: string;
   createdAt: string;
   lastUsedAt: string | null;
 };
 
-/** Generate (or rotate) the AGENT_TOKEN for a project. Returns the full token once. */
-export async function generateProjectAgentTokenAction(
-  projectId: string
-): Promise<{ token: string; info: AgentTokenInfo }> {
+/** Create a new labeled AGENT_TOKEN for the current user. Returns the full token once. */
+export async function createUserAgentTokenAction(
+  label: string
+): Promise<{ token: string; info: UserAgentTokenInfo }> {
+  const trimmed = label.trim();
+  if (!trimmed) throw new Error('Label is required');
+  if (trimmed.length > 80) throw new Error('Label must be 80 characters or fewer');
+
   const supabase = await createClientForRequest();
   const {
     data: { user },
@@ -39,19 +44,14 @@ export async function generateProjectAgentTokenAction(
   const tokenPrefix = token.slice(0, 12);
 
   const { data, error } = await supabase
-    .from('project_agent_tokens')
-    .upsert(
-      {
-        project_id: projectId,
-        user_id: user.id,
-        token_hash: tokenHash,
-        token_prefix: tokenPrefix,
-        created_at: new Date().toISOString(),
-        last_used_at: null
-      },
-      { onConflict: 'project_id,user_id' }
-    )
-    .select('id, token_prefix, created_at, last_used_at')
+    .from('user_agent_tokens')
+    .insert({
+      user_id: user.id,
+      label: trimmed,
+      token_hash: tokenHash,
+      token_prefix: tokenPrefix
+    })
+    .select('id, label, token_prefix, created_at, last_used_at')
     .single();
 
   if (error || !data) throw new Error(error?.message ?? 'Failed to generate token');
@@ -60,6 +60,7 @@ export async function generateProjectAgentTokenAction(
     token,
     info: {
       id: data.id,
+      label: data.label,
       tokenPrefix: data.token_prefix,
       createdAt: data.created_at,
       lastUsedAt: data.last_used_at
@@ -67,8 +68,8 @@ export async function generateProjectAgentTokenAction(
   };
 }
 
-/** Revoke the current AGENT_TOKEN for a project. */
-export async function revokeProjectAgentTokenAction(projectId: string): Promise<void> {
+/** Revoke a single AGENT_TOKEN owned by the current user. */
+export async function revokeUserAgentTokenAction(tokenId: string): Promise<void> {
   const supabase = await createClientForRequest();
   const {
     data: { user },
@@ -77,38 +78,36 @@ export async function revokeProjectAgentTokenAction(projectId: string): Promise<
   if (userError || !user) throw new Error('Not authenticated');
 
   const { error } = await supabase
-    .from('project_agent_tokens')
+    .from('user_agent_tokens')
     .delete()
-    .eq('project_id', projectId)
+    .eq('id', tokenId)
     .eq('user_id', user.id);
 
   if (error) throw new Error(error.message);
 }
 
-/** Get metadata about the current AGENT_TOKEN (never returns the token itself). */
-export async function getProjectAgentTokenInfoAction(
-  projectId: string
-): Promise<AgentTokenInfo | null> {
+/** List metadata for all of the current user's tokens (never returns the token itself). */
+export async function listUserAgentTokensAction(): Promise<UserAgentTokenInfo[]> {
   const supabase = await createClientForRequest();
   const {
     data: { user },
     error: userError
   } = await supabase.auth.getUser();
-  if (userError || !user) return null;
+  if (userError || !user) return [];
 
   const { data } = await supabase
-    .from('project_agent_tokens')
-    .select('id, token_prefix, created_at, last_used_at')
-    .eq('project_id', projectId)
+    .from('user_agent_tokens')
+    .select('id, label, token_prefix, created_at, last_used_at')
     .eq('user_id', user.id)
-    .single();
+    .order('created_at', { ascending: false });
 
-  if (!data) return null;
+  if (!data) return [];
 
-  return {
-    id: data.id,
-    tokenPrefix: data.token_prefix,
-    createdAt: data.created_at,
-    lastUsedAt: data.last_used_at
-  };
+  return data.map(row => ({
+    id: row.id,
+    label: row.label,
+    tokenPrefix: row.token_prefix,
+    createdAt: row.created_at,
+    lastUsedAt: row.last_used_at
+  }));
 }

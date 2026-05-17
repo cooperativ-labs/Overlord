@@ -71,6 +71,10 @@ const electronAPI = {
     ) => ipcRenderer.invoke('filesystem:git-create-pull-request', options),
     readFile: (options: WorkspacePayload & { path: string; maxBytes?: number }) =>
       ipcRenderer.invoke('filesystem:read-file', options),
+    writeOverlordConfig: (options: { directory: string; projectId: string; projectName: string }) =>
+      ipcRenderer.invoke('filesystem:write-overlord-config', options),
+    removeOverlordConfigProject: (options: { directory: string; projectId: string }) =>
+      ipcRenderer.invoke('filesystem:remove-overlord-config-project', options),
     rebuildOperationsProfile: (options: {
       directory: string;
       currentFingerprint?: string | null;

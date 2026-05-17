@@ -172,6 +172,24 @@ ovld protocol discover-project
 
 You can override with `--project-id` or `--working-directory` if needed.
 
+### Resolving the project ID when you don't have one
+
+When you need a project ID for a protocol command and the ticket prompt did not supply one, resolve it in this order.
+
+**Locally (CLI inside a shell on the user's machine):**
+
+1. `--project-id` if explicitly provided.
+2. Otherwise, let the CLI match the current working directory (the default behavior of `create`, `prompt`, `discover-project`).
+3. If working-directory resolution returns nothing, read `overlord.json` from the cwd (or any ancestor you have access to) and pass its project id via `--project-id`.
+
+**Over MCP (web agents and hosted tools, where the server cannot see the agent's cwd):**
+
+1. `--project-id` / `projectId` if explicitly provided.
+2. Read `overlord.json` from the directory the user is accessing and pass its project id as `projectId`.
+3. As a last resort, try `workingDirectory` resolution.
+
+If `overlord.json` contains more than one project, show the user the project **names** from that file and ask which one to use before calling any protocol command — never silently pick one.
+
 ### Devices and checkout paths
 
 Device rows use **(organization_id, user_id, device_fingerprint)**, so the same physical machine can register independently in each org you belong to. Persist a fingerprint per workstation, upsert via `ovld protocol get-device`, then maintain checkout paths via `list-project-resources`, `add-project-resource`, `update-project-resource`, and `update-device` (`ovld protocol help` lists flags).
@@ -234,4 +252,4 @@ This keeps the ticket feed readable while preserving the full document in versio
 - Do not add or commit changes unless the user explicitly asks you to commit.
 - Delivery is the concluding step. After delivering, stop unless the user follows up or the ticket is reopened.
 
-<!-- version: 0.5.1 -->
+<!-- version: 0.5.2 -->

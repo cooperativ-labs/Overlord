@@ -1,6 +1,6 @@
 # Nemotron 3 Nano 4B in the Overlord Desktop App
 
-**Ticket:** [`32580cfe`](https://overlord.cooperativ.io) — *Nemotron 3 nano 4b in desktop app*
+**Ticket:** [`32580cfe`](https://www.ovld.ai) — *Nemotron 3 nano 4b in desktop app*
 **Author:** Claude (Opus 4.7) via Overlord
 **Date:** 2026-04-27
 **Status:** Investigation — no code changes proposed yet

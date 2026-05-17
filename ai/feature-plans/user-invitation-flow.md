@@ -134,7 +134,7 @@ removeMemberAction(organizationId, userId): Promise<ActionResult>
 **Body (plain + HTML):**
 - Inviter's name and org name
 - Assigned role with brief description
-- CTA button → `https://overlord.cooperativ.io/invite/{token}`
+- CTA button → `https://www.ovld.ai/invite/{token}`
 - Expiry notice: "This invitation expires in 7 days"
 - If no account: secondary CTA → sign up with same email
 

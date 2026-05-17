@@ -62,6 +62,53 @@ export default function AgentPluginsPage() {
         </Suspense>
       </section>
 
+      <section className="space-y-4">
+        <h2 className="text-2xl font-semibold tracking-tight">Slash commands</h2>
+        <p className="leading-7 text-muted-foreground">
+          Installing an Overlord plugin or running <code>ovld setup &lt;agent&gt;</code> registers a
+          set of slash commands you can use mid-session in Claude Code, Cursor, Gemini CLI, and
+          OpenCode. Each one is a thin wrapper around an <code>ovld protocol</code> call.
+        </p>
+        <ul className="list-disc space-y-2 pl-5 leading-7 text-muted-foreground">
+          <li>
+            <code>/attach &lt;ticket_id&gt;</code> — establish a persistent session with an existing
+            ticket (Claude and OpenCode).
+          </li>
+          <li>
+            <code>/connect &lt;ticket_id&gt;</code> — route the current session onto another ticket
+            without loading its full context.
+          </li>
+          <li>
+            <code>/load &lt;ticket_id&gt;</code> — read a ticket&apos;s details, history, and
+            artifacts without creating a session.
+          </li>
+          <li>
+            <code>/discuss-objective &lt;ticket_id&gt;</code> — mark a draft objective as submitted
+            (in active discussion) without starting execution (Claude and OpenCode).
+          </li>
+          <li>
+            <code>/create &lt;objective&gt;</code> — create a draft Overlord ticket from the current
+            conversation.
+          </li>
+          <li>
+            <code>/prompt &lt;objective&gt;</code> — create a ticket in <code>execute</code> and
+            attach the current session immediately.
+          </li>
+          <li>
+            <code>/record-work [context]</code> — record work the agent already completed in chat as
+            a ticket in <code>review</code> with a generated feed post. The agent synthesizes
+            objective, summary, and per-file change rationales from the conversation and the local
+            git diff before invoking <code>ovld protocol record-work</code>. No session is opened.
+          </li>
+        </ul>
+        <p className="text-sm leading-6 text-muted-foreground">
+          Gemini installs the same set as <code>.toml</code> files under{' '}
+          <code>~/.gemini/commands/</code>; Claude, Cursor, and OpenCode use Markdown files in their
+          respective <code>commands/</code> directories. After installing, run{' '}
+          <code>/commands reload</code> in Gemini CLI so the new files are picked up.
+        </p>
+      </section>
+
       <section className="space-y-3">
         <h2 className="text-2xl font-semibold tracking-tight">Keeping plugins up to date</h2>
         <p className="leading-7 text-muted-foreground">

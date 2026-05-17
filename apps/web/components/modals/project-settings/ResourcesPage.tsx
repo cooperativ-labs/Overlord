@@ -194,7 +194,7 @@ export function ResourcesPage({
         )}
       </section>
 
-      <section className="grid gap-3 border-t pt-5">
+      <section className="grid gap-3 ">
         <ResourceDirectoryList
           projectId={projectId}
           onResourceDirectoriesChanged={() => void refreshDevices({ showLoading: false })}
@@ -202,7 +202,7 @@ export function ResourcesPage({
       </section>
 
       {sshFeatureEnabled ? (
-        <section className="grid gap-3 border-t pt-5">
+        <section className="grid gap-3 ">
           <SshWorkspaceSection
             projectId={projectId}
             initialSshHost={initialSshHost}

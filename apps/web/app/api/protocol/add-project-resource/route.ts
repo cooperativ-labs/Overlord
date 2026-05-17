@@ -29,7 +29,7 @@ export async function POST(request: Request) {
     // Verify the project belongs to the organization
     const { data: project } = await supabase
       .from('projects')
-      .select('id')
+      .select('id, name')
       .eq('id', projectId)
       .eq('organization_id', organizationId)
       .maybeSingle();
@@ -89,6 +89,10 @@ export async function POST(request: Request) {
         label: inserted.label,
         isPrimary: inserted.is_primary,
         deviceId: inserted.device_id
+      },
+      project: {
+        id: project.id,
+        name: project.name
       }
     });
   } catch (error) {

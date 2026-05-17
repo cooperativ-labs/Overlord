@@ -303,6 +303,22 @@ interface ElectronAPI {
       truncated: boolean;
       error?: string;
     }>;
+    writeOverlordConfig: (options: {
+      directory: string;
+      projectId: string;
+      projectName: string;
+    }) => Promise<
+      | { ok: true; filePath: string; action: 'created' | 'added-project' | 'unchanged' }
+      | { ok: false; error: string }
+    >;
+    removeOverlordConfigProject: (options: { directory: string; projectId: string }) => Promise<
+      | {
+          ok: true;
+          filePath: string;
+          action: 'removed-project' | 'deleted-file' | 'not-found' | 'unchanged';
+        }
+      | { ok: false; error: string }
+    >;
     rebuildOperationsProfile: (options: {
       directory: string;
       currentFingerprint?: string | null;

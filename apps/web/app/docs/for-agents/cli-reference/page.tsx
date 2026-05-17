@@ -192,6 +192,47 @@ ovld protocol prompt --agent claude-code \\
 Shares most flags with \`create\`, plus \`--parent-session-key\`, \`--parent-ticket-id\`, and
 \`--metadata-json\`. Returns ticket/session JSON and prints \`SESSION_KEY\` / \`TICKET_ID\` on stderr.
 
+## record-work
+
+Record work the agent already completed in chat as a ticket in \`review\` with a completed
+objective. Triggers a feed post and leaves no open session. Use it instead of
+\`create\` + \`attach\` + \`deliver\` for "log what we just did" flows. Available as a slash command
+(\`/record-work\`) on agents that ship Overlord slash commands.
+
+\`\`\`bash
+ovld protocol record-work \\
+  --objective "User asked me to X; I completed it in chat." \\
+  --summary "Narrative for review and feed post." \\
+  --change-rationales-json '[ ... ]'
+
+ovld protocol record-work --payload-file - <<'EOF'
+{ "objective": "...", "summary": "...", "artifacts": [ ... ], "changeRationales": [ ... ] }
+EOF
+\`\`\`
+
+Optional:
+
+\`\`\`text
+--title <text>                Auto-derived from objective if omitted
+--priority <low|medium|high|urgent>
+--project-id <id>             Skip cwd resolution and use this project explicitly
+--working-directory <path>    Override cwd for project resolution
+--personal                    Private ticket with no project
+--artifacts-json <json>
+--artifacts-file <path|->
+--change-rationales-json <json>
+--change-rationales-file <path|->
+--payload-json <json>         # full { objective, summary, artifacts, changeRationales } JSON inline
+--payload-file <path|->       # full payload JSON; use \`-\` to stream on stdin
+--skip-file-change-check      Bypass local git vs changeRationales validation
+--acceptance-criteria <text>
+--available-tools <text>
+--delegate <model>
+\`\`\`
+
+In a git workspace, \`record-work\` validates that changed files are represented by
+\`changeRationales\` unless \`--skip-file-change-check\` is passed.
+
 ---
 
 ## update

@@ -435,7 +435,7 @@ export default async function TicketsBoardContent({
       objective: null,
       project_id: ticket.project_id,
       organization_name: getOrganizationName(organization),
-      project_name: p?.name ?? (ticket.project_id ? null : 'Personal'),
+      project_name: p?.name ?? (ticket.project_id ? null : 'Inbox'),
       project_color: p?.color ?? null,
       project_everhour_project_id:
         hasEverhourApiKey && ticket.project_id ? (p?.everhour_project_id ?? null) : null,

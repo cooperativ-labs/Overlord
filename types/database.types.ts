@@ -961,44 +961,6 @@ export type Database = {
           }
         ];
       };
-      project_agent_tokens: {
-        Row: {
-          created_at: string;
-          id: string;
-          last_used_at: string | null;
-          project_id: string;
-          token_hash: string;
-          token_prefix: string;
-          user_id: string;
-        };
-        Insert: {
-          created_at?: string;
-          id?: string;
-          last_used_at?: string | null;
-          project_id: string;
-          token_hash: string;
-          token_prefix: string;
-          user_id: string;
-        };
-        Update: {
-          created_at?: string;
-          id?: string;
-          last_used_at?: string | null;
-          project_id?: string;
-          token_hash?: string;
-          token_prefix?: string;
-          user_id?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: 'project_agent_tokens_project_id_fkey';
-            columns: ['project_id'];
-            isOneToOne: false;
-            referencedRelation: 'projects';
-            referencedColumns: ['id'];
-          }
-        ];
-      };
       project_checkpoints: {
         Row: {
           checkpoint_kind: string;
@@ -1941,6 +1903,36 @@ export type Database = {
           created_at?: string | null;
           id?: string;
           updated_at?: string | null;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
+      user_agent_tokens: {
+        Row: {
+          created_at: string;
+          id: string;
+          label: string;
+          last_used_at: string | null;
+          token_hash: string;
+          token_prefix: string;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          id?: string;
+          label: string;
+          last_used_at?: string | null;
+          token_hash: string;
+          token_prefix: string;
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          label?: string;
+          last_used_at?: string | null;
+          token_hash?: string;
+          token_prefix?: string;
           user_id?: string;
         };
         Relationships: [];

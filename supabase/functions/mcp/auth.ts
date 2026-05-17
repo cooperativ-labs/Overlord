@@ -3,7 +3,7 @@ import { type SupabaseClient } from '@supabase/supabase-js';
 import { createRemoteJWKSet, decodeJwt, jwtVerify } from 'npm:jose@6.1.0';
 
 // ---------------------------------------------------------------------------
-// Auth — Supabase OAuth JWTs + per-project AGENT_TOKEN
+// Auth — Supabase OAuth JWTs + per-user AGENT_TOKEN
 // ---------------------------------------------------------------------------
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
@@ -13,8 +13,6 @@ const SUPABASE_JWKS = createRemoteJWKSet(new URL(`${SUPABASE_AUTH_ISSUER}/.well-
 export type TokenContext = {
   userId: string;
   organizationId: number;
-  /** Set when authenticated via a per-project AGENT_TOKEN. */
-  projectId?: string | null;
   /** The raw bearer value. */
   tokenValue: string;
   /** Identifies how the caller authenticated. */
@@ -28,12 +26,12 @@ export type TokenContext = {
  *
  * Accepts two forms:
  *   1. OAuth JWT / opaque token — standard Supabase auth (existing path)
- *   2. Per-project AGENT_TOKEN (prefix "oat_") — looks up a hashed token row
- *      in project_agent_tokens and derives user + org from there.
+ *   2. Per-user AGENT_TOKEN (prefix "oat_") — looks up a hashed token row
+ *      in user_agent_tokens and derives org from the user's membership.
  *
- * For OAuth JWT auth with multi-org users, ticket-scoped tools can pass an
- * organization override derived from ticket_id. Otherwise, `x-organization-id`
- * selects which organization to scope the request to.
+ * For multi-org users, ticket-scoped tools can pass an organization override
+ * derived from ticket_id. Otherwise, `x-organization-id` selects which
+ * organization to scope the request to.
  */
 export async function resolveToken(
   req: Request,
@@ -44,20 +42,20 @@ export async function resolveToken(
   const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7).trim() : null;
   if (!token) return null;
 
-  // Agent token path — prefix-routed so we never attempt JWT validation
-  if (token.startsWith('oat_')) {
-    return resolveAgentToken(token, supabase);
-  }
-
-  // Optional org hint for multi-org OAuth users
   const orgIdHint = req.headers.get('x-organization-id');
   const parsedOrgId = orgIdHint ? parseInt(orgIdHint, 10) : null;
+  const orgHint = organizationIdOverride ?? parsedOrgId;
 
-  return resolveOAuthJwt(token, supabase, organizationIdOverride ?? parsedOrgId);
+  // Agent token path — prefix-routed so we never attempt JWT validation
+  if (token.startsWith('oat_')) {
+    return resolveAgentToken(token, supabase, orgHint);
+  }
+
+  return resolveOAuthJwt(token, supabase, orgHint);
 }
 
 // ---------------------------------------------------------------------------
-// Per-project AGENT_TOKEN resolution
+// Per-user AGENT_TOKEN resolution
 // ---------------------------------------------------------------------------
 
 async function hashToken(token: string): Promise<string> {
@@ -71,13 +69,14 @@ async function hashToken(token: string): Promise<string> {
 
 async function resolveAgentToken(
   token: string,
-  supabase: SupabaseClient
+  supabase: SupabaseClient,
+  organizationIdHint: number | null = null
 ): Promise<TokenContext | null> {
   const tokenHash = await hashToken(token);
 
   const { data: row } = await supabase
-    .from('project_agent_tokens')
-    .select('user_id, project_id')
+    .from('user_agent_tokens')
+    .select('user_id')
     .eq('token_hash', tokenHash)
     .single();
 
@@ -86,32 +85,56 @@ async function resolveAgentToken(
     return null;
   }
 
-  // Resolve the user's organization via project membership
-  const { data: project } = await supabase
-    .from('projects')
-    .select('organization_id')
-    .eq('id', row.project_id)
-    .single();
+  const organizationId = await resolveOrganizationForUser(
+    supabase,
+    row.user_id,
+    organizationIdHint
+  );
 
-  if (!project) {
-    console.warn('[mcp] agent token: project not found for token');
+  if (!organizationId) {
+    console.warn('[mcp] agent token: no org membership for user');
     return null;
   }
 
   // Fire-and-forget last_used_at update
   supabase
-    .from('project_agent_tokens')
+    .from('user_agent_tokens')
     .update({ last_used_at: new Date().toISOString() })
     .eq('token_hash', tokenHash)
     .then(() => {});
 
   return {
     userId: row.user_id,
-    organizationId: project.organization_id,
-    projectId: row.project_id,
+    organizationId,
     tokenValue: token,
     authMethod: 'agent_token'
   };
+}
+
+async function resolveOrganizationForUser(
+  supabase: SupabaseClient,
+  userId: string,
+  organizationIdHint: number | null
+): Promise<number | null> {
+  if (organizationIdHint && !isNaN(organizationIdHint)) {
+    const { data: targetMember } = await supabase
+      .from('members')
+      .select('organization_id')
+      .eq('user_id', userId)
+      .eq('organization_id', organizationIdHint)
+      .single();
+    if (targetMember) return targetMember.organization_id;
+  }
+
+  const { data: member } = await supabase
+    .from('members')
+    .select('organization_id')
+    .eq('user_id', userId)
+    .order('organization_id', { ascending: true })
+    .limit(1)
+    .single();
+
+  return member?.organization_id ?? null;
 }
 
 // ---------------------------------------------------------------------------

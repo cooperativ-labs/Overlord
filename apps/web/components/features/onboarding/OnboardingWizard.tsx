@@ -196,7 +196,7 @@ export function OnboardingWizard({ initialState }: OnboardingWizardProps) {
         }
       }
 
-      await createFirstProjectWithDirectoryWithRetry({
+      const createResult = await createFirstProjectWithDirectoryWithRetry({
         organizationId,
         name: trimmedName,
         color: projectColor,
@@ -209,6 +209,24 @@ export function OnboardingWizard({ initialState }: OnboardingWizardProps) {
             }
           : {})
       });
+      const trimmedDirectory = workingDirectory.trim();
+      const createdProjectId = createResult?.projectId;
+      if (
+        trimmedDirectory &&
+        createdProjectId &&
+        isElectron &&
+        api?.filesystem?.writeOverlordConfig
+      ) {
+        try {
+          await api.filesystem.writeOverlordConfig({
+            directory: trimmedDirectory,
+            projectId: createdProjectId,
+            projectName: trimmedName
+          });
+        } catch (error) {
+          Sentry.captureException(error);
+        }
+      }
       setProjectButtonState('success');
       await updateOnboardingProgressActionWithRetry({ completedStep: 4, skipped: true });
       router.push('/u');

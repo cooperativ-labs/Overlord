@@ -407,6 +407,24 @@ disable-model-invocation: true
 ---
 
 Run \`ovld protocol prompt --agent claude-code\` with \`$ARGUMENTS\`. If no flags are present, treat the arguments as the objective and call \`ovld protocol prompt --agent claude-code --objective "<objective>"\`.`
+      },
+      {
+        path: path.join(base, 'record-work.md'),
+        content: `---
+description: Record completed-from-chat work as a ticket in review + feed post (no attach)
+argument-hint: [optional additional context]
+disable-model-invocation: true
+---
+
+Immediately record the work you just completed in this chat as a new Overlord ticket via \`ovld protocol record-work\`. No agent session is opened — the work is already done.
+
+Synthesize from the current conversation: \`objective\` (what was asked/done), \`summary\` (reviewer-friendly narrative), \`changeRationales\` (one entry per meaningful git-tracked file change — \`label\`, \`file_path\`, \`summary\`, \`why\`, \`impact\`, optional \`hunks\`; use \`git status\`/\`git diff\` to enumerate), and optional \`artifacts\` (\`next_steps\`, \`test_results\`, \`decision\`, \`note\`, \`url\`).
+
+If \`$ARGUMENTS\` is non-empty, treat it as additional context for the summary.
+
+Run \`ovld protocol record-work --payload-file -\` and stream the JSON payload \`{ "objective": "...", "summary": "...", "artifacts": [...], "changeRationales": [...] }\` on stdin via a single-quoted heredoc. Report the new \`TICKET_ID\`.
+
+Do NOT use this for in-progress work — use \`/prompt\` for that. The CLI validates that every changed git-tracked file is represented in \`changeRationales\` unless \`--skip-file-change-check\` is passed. If project resolution fails, re-run with \`--project-id <id>\` or \`--personal\`.`
       }
     ];
   }
@@ -433,6 +451,11 @@ Run \`ovld protocol prompt --agent claude-code\` with \`$ARGUMENTS\`. If no flag
         path: path.join(base, 'prompt.md'),
         content:
           'Create a new Overlord ticket.\n\nRun `ovld protocol prompt --agent cursor --objective "<objective>"` using the text after `/prompt` unless raw flags were provided. If raw flags were provided, pass them after `ovld protocol prompt --agent cursor`.\n'
+      },
+      {
+        path: path.join(base, 'record-work.md'),
+        content:
+          'Record completed-from-chat work as a ticket in review + feed post (no attach).\n\nImmediately record the work you just completed in this chat as a new Overlord ticket via `ovld protocol record-work`. No agent session is opened — the work is already done.\n\nSynthesize from the current conversation: `objective` (what was asked/done), `summary` (reviewer-friendly narrative), `changeRationales` (one entry per meaningful git-tracked file change — `label`, `file_path`, `summary`, `why`, `impact`, optional `hunks`; use `git status`/`git diff` to enumerate), and optional `artifacts` (`next_steps`, `test_results`, `decision`, `note`, `url`).\n\nIf text was provided after `/record-work`, treat it as additional context for the summary.\n\nRun `ovld protocol record-work --payload-file -` and stream the JSON payload on stdin via a single-quoted heredoc. Report the new TICKET_ID.\n\nDo NOT use for in-progress work — use `/prompt` for that. The CLI validates that every changed git-tracked file is represented in `changeRationales` unless `--skip-file-change-check` is passed. If project resolution fails, re-run with `--project-id <id>` or `--personal`.\n'
       }
     ];
   }
@@ -459,6 +482,11 @@ Run \`ovld protocol prompt --agent claude-code\` with \`$ARGUMENTS\`. If no flag
         path: path.join(base, 'prompt.toml'),
         content:
           'description = "Create a new Overlord ticket from the current conversation."\nprompt = """\nRun `ovld protocol prompt --agent gemini --objective "<objective>"` using `{{args}}` as the objective unless raw flags were provided. If raw flags were provided, pass them after `ovld protocol prompt --agent gemini`.\n"""\n'
+      },
+      {
+        path: path.join(base, 'record-work.toml'),
+        content:
+          'description = "Record completed-from-chat work as a ticket in review + feed post (no attach)."\nprompt = """\nImmediately record the work you just completed in this chat as a new Overlord ticket via `ovld protocol record-work`. No agent session is opened — the work is already done.\n\nSynthesize from the current conversation: `objective` (what was asked/done), `summary` (reviewer-friendly narrative), `changeRationales` (one entry per meaningful git-tracked file change — `label`, `file_path`, `summary`, `why`, `impact`, optional `hunks`; use `git status`/`git diff` to enumerate), and optional `artifacts` (`next_steps`, `test_results`, `decision`, `note`, `url`).\n\nIf `{{args}}` is non-empty, treat it as additional context for the summary.\n\nRun `ovld protocol record-work --payload-file -` and stream the JSON payload on stdin via a single-quoted heredoc. Report the new TICKET_ID.\n\nDo NOT use for in-progress work — use `/prompt` for that. The CLI validates that every changed git-tracked file is represented in `changeRationales` unless `--skip-file-change-check` is passed. If project resolution fails, re-run with `--project-id <id>` or `--personal`.\n"""\n'
       }
     ];
   }
@@ -500,6 +528,23 @@ agent: build
 ---
 
 Run \`ovld protocol prompt --agent opencode\` with \`$ARGUMENTS\`. If no flags are present, treat the arguments as the objective and call \`ovld protocol prompt --agent opencode --objective "<objective>"\`.`
+    },
+    {
+      path: path.join(base, 'record-work.md'),
+      content: `---
+description: Record completed-from-chat work as a ticket in review + feed post (no attach)
+agent: build
+---
+
+Immediately record the work you just completed in this chat as a new Overlord ticket via \`ovld protocol record-work\`. No agent session is opened — the work is already done.
+
+Synthesize from the current conversation: \`objective\` (what was asked/done), \`summary\` (reviewer-friendly narrative), \`changeRationales\` (one entry per meaningful git-tracked file change — \`label\`, \`file_path\`, \`summary\`, \`why\`, \`impact\`, optional \`hunks\`; use \`git status\`/\`git diff\` to enumerate), and optional \`artifacts\` (\`next_steps\`, \`test_results\`, \`decision\`, \`note\`, \`url\`).
+
+If \`$ARGUMENTS\` is non-empty, treat it as additional context for the summary.
+
+Run \`ovld protocol record-work --payload-file -\` and stream the JSON payload on stdin via a single-quoted heredoc. Report the new \`TICKET_ID\`.
+
+Do NOT use for in-progress work — use \`/prompt\` for that. The CLI validates that every changed git-tracked file is represented in \`changeRationales\` unless \`--skip-file-change-check\` is passed. If project resolution fails, re-run with \`--project-id <id>\` or \`--personal\`.`
     }
   ];
 }

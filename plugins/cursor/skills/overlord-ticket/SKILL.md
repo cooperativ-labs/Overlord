@@ -145,6 +145,24 @@ ovld protocol prompt --agent cursor --objective "Implement feature X" --priority
 ovld protocol discover-project
 ```
 
+### Resolving the project ID when you don't have one
+
+When you need a project ID for a protocol command and the ticket prompt did not supply one, resolve it in this order.
+
+**Locally (CLI inside a shell on the user's machine):**
+
+1. `--project-id` if explicitly provided.
+2. Otherwise, let the CLI match the current working directory (the default behavior of `create`, `prompt`, `discover-project`).
+3. If working-directory resolution returns nothing, read `overlord.json` from the cwd (or any ancestor you have access to) and pass its project id via `--project-id`.
+
+**Over MCP (web agents and hosted tools, where the server cannot see the agent's cwd):**
+
+1. `--project-id` / `projectId` if explicitly provided.
+2. Read `overlord.json` from the directory the user is accessing and pass its project id as `projectId`.
+3. As a last resort, try `workingDirectory` resolution.
+
+If `overlord.json` contains more than one project, show the user the project **names** from that file and ask which one to use before calling any protocol command — never silently pick one.
+
 ### Devices and checkout paths
 
 Resource directories attach to **device** rows scoped to `(organization_id, user_id, device_fingerprint)`, so one workstation can register once **per organization**. Persist a stable fingerprint (for example `OVERLORD_DEVICE_FINGERPRINT`), call `ovld protocol get-device`, then use `list-project-resources`, `add-project-resource`, `update-project-resource`, or `update-device` as described in `ovld protocol help`.
@@ -202,4 +220,4 @@ This keeps the ticket feed readable while preserving the full document in versio
 - If you must run `ovld auth login`, always include `--organization-id <id>` — use the organization ID from the ticket prompt context to select the organization non-interactively and avoid a blocking TTY prompt.
 - Delivery is the concluding step. After delivering, stop unless the user follows up or the ticket is reopened.
 
-<!-- version: 0.5.1 -->
+<!-- version: 0.5.2 -->

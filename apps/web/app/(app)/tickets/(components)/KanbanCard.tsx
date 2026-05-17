@@ -184,7 +184,7 @@ function KanbanCardBody({
               {ticket.project_id ? (
                 <span className="truncate text-[11px] text-fg3">{ticket.project_name}</span>
               ) : (
-                <span className="text-[11px] text-fg3">Personal</span>
+                <span className="text-[11px] text-fg3">Inbox</span>
               )}
             </div>
             <div className="flex shrink-0 items-center gap-1.5">

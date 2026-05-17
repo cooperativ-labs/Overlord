@@ -283,7 +283,7 @@ export async function createDraftTicket(
     id: createdTicket.id,
     organizationId: createdTicket.organization_id,
     projectId: createdTicket.project_id,
-    projectName: project?.name ?? 'Personal',
+    projectName: project?.name ?? 'Inbox',
     reference: ticketReference,
     status: createdTicket.status,
     title: createdTicket.title ?? draft.title,

@@ -24,6 +24,7 @@ The protocol surface currently includes:
 - load-context
 - create
 - prompt
+- record-work
 - update
 - record-change-rationales
 - ask
@@ -43,6 +44,7 @@ Both create tickets from an agent session, but they differ in intent:
 
 - \`create\` produces a draft ticket without attaching. This is the default path for capturing follow-up work from within an existing session.
 - \`prompt\` creates a ticket in \`execute\` status and immediately attaches the current session. Use it when the agent should start work on the new ticket right away.
+- \`record-work\` records work the agent already completed in chat. It creates the ticket directly in \`review\` with a completed objective, no open session, and triggers a feed post. Use it instead of \`create\` + \`attach\` + \`deliver\` for "log what we just did" flows.
 
 ## Related pages
 

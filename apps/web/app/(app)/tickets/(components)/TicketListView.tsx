@@ -321,7 +321,7 @@ export default function TicketListView({
       if (!seen.has(optionId)) {
         seen.set(optionId, {
           id: optionId,
-          name: t.project_name ?? t.project_id ?? 'Personal',
+          name: t.project_name ?? t.project_id ?? 'Inbox',
           color: t.project_color ?? null
         });
       }

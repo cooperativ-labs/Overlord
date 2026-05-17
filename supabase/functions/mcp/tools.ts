@@ -842,23 +842,28 @@ export const TOOLS = [
   {
     name: 'discover_project',
     annotations: {
-      title: 'Discover Project By Working Directory',
+      title: 'Discover Project',
       readOnlyHint: true,
       destructiveHint: false,
       openWorldHint: false
     },
     description:
-      'Resolve the Overlord project whose local working directory matches the given path (same behavior as ovld protocol discover-project).',
+      'Resolve the Overlord project by ID or by matching a local working directory. When authenticated via an agent token the project is resolved automatically — no arguments needed. For OAuth connections, pass projectId directly or fall back to workingDirectory matching.',
     inputSchema: {
       type: 'object',
       properties: {
+        projectId: {
+          type: 'string',
+          description:
+            'UUID of the project to resolve. Takes precedence over workingDirectory. Use this when connecting via MCP and the project ID is known.'
+        },
         workingDirectory: {
           type: 'string',
           description:
-            'Absolute path of the repository root to match against project_user.local_working_directory.'
+            'Absolute path of the repository root to match against registered resource directories. Used when projectId is not provided.'
         }
       },
-      required: ['workingDirectory']
+      required: []
     }
   },
   {

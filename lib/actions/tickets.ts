@@ -2169,7 +2169,7 @@ function mapBoardTicket(
     schedule_id: raw.schedule_id,
     delegate: raw.delegate,
     organization_name: org?.name ?? null,
-    project_name: p?.name ?? (raw.project_id ? null : 'Personal'),
+    project_name: p?.name ?? (raw.project_id ? null : 'Inbox'),
     project_color: p?.color ?? null,
     project_everhour_project_id: p?.everhour_project_id ?? null,
     agent_session_state: null,

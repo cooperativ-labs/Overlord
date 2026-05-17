@@ -58,11 +58,11 @@ export function TicketCard({
   const agentLabel = formatAgentLabel(ticket.assigned_agent);
   const ticketProject = projects.find(p => p.id === ticket.project_id) ?? null;
   const ticketProjectColor = ticketProject?.color || projectColor;
-  const projectLabel = ticketProject?.name ?? 'Personal';
+  const projectLabel = ticketProject?.name ?? 'Inbox';
   const dueLabel = ticket.due_datetime ? format(parseISO(ticket.due_datetime), 'MMM d') : null;
   const execColors = executionIconColors({ isDark: colors.isDark });
   const executionColor = ticket.execution_target === 'agent' ? execColors.agent : execColors.human;
-  const showProjectHint = showProjectName && projectLabel.length > 0 && projectLabel !== 'Personal';
+  const showProjectHint = showProjectName && projectLabel.length > 0 && projectLabel !== 'Inbox';
   const isAgentRunning = ticket.has_executing_objective === true;
   const isComplete = ticket.status.trim().toLowerCase() === 'complete';
   const checkboxColors = getTicketCheckboxColors(ticketProjectColor);

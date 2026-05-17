@@ -78,7 +78,7 @@ function formatTicketMetadata(ticket: TicketLike): string {
     `- **Title:** ${ticket.title?.trim() || '(Untitled)'}`,
     `- **Ticket ID:** ${ticket.id}`,
     `- **Status:** ${ticket.status ?? 'unknown'}`,
-    `- **Project:** ${ticket.project_id ?? 'Personal / private'}`
+    `- **Project:** ${ticket.project_id ?? 'Inbox / private'}`
   ];
 
   return lines.join('\n');

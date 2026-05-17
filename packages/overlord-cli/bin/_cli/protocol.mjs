@@ -1720,6 +1720,21 @@ async function protocolAddProjectResource(args) {
   if (data.resource?.id) {
     process.stderr.write(`\nRESOURCE_ID=${data.resource.id}\n`);
   }
+
+  if (data.project?.id && data.project?.name) {
+    try {
+      const { upsertLocalOverlordConfig } = await import('./local-config.mjs');
+      const result = await upsertLocalOverlordConfig({
+        directoryPath,
+        project: { id: data.project.id, name: data.project.name }
+      });
+      process.stderr.write(`OVERLORD_CONFIG=${result.filePath} (${result.action})\n`);
+    } catch (configError) {
+      process.stderr.write(
+        `\nWarning: could not write overlord.json: ${configError instanceof Error ? configError.message : configError}\n`
+      );
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------

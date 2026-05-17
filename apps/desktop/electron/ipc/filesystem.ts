@@ -7,6 +7,10 @@ import fs from 'node:fs/promises';
 import { z } from 'zod';
 
 import { resolveLinkedDirectory } from '../../../../lib/filesystem/project-file-tree';
+import {
+  removeProjectFromLocalOverlordConfig,
+  upsertLocalOverlordConfig
+} from '../../../../lib/overlord-config/local-config';
 import { buildRepoOperationsProfile } from '../../../../lib/repo-profile/build-profile';
 import {
   createCheckpoint,
@@ -441,6 +445,58 @@ export function registerFilesystemIpc(): void {
       };
     }
   });
+
+  ipcMain.handle('filesystem:write-overlord-config', async (_event, rawPayload?: unknown) => {
+    const parsed = z
+      .object({
+        directory: z.string().min(1).max(4096),
+        projectId: z.string().min(1).max(128),
+        projectName: z.string().min(1).max(512)
+      })
+      .safeParse(rawPayload);
+    if (!parsed.success) {
+      return { ok: false, error: 'Invalid payload.' };
+    }
+    try {
+      const result = await upsertLocalOverlordConfig({
+        directoryPath: parsed.data.directory,
+        project: { id: parsed.data.projectId, name: parsed.data.projectName }
+      });
+      return { ok: true, ...result };
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : 'Failed to write overlord.json.'
+      };
+    }
+  });
+
+  ipcMain.handle(
+    'filesystem:remove-overlord-config-project',
+    async (_event, rawPayload?: unknown) => {
+      const parsed = z
+        .object({
+          directory: z.string().min(1).max(4096),
+          projectId: z.string().min(1).max(128)
+        })
+        .safeParse(rawPayload);
+      if (!parsed.success) {
+        return { ok: false, error: 'Invalid payload.' };
+      }
+      try {
+        const result = await removeProjectFromLocalOverlordConfig({
+          directoryPath: parsed.data.directory,
+          projectId: parsed.data.projectId
+        });
+        return { ok: true, ...result };
+      } catch (error) {
+        return {
+          ok: false,
+          error: error instanceof Error ? error.message : 'Failed to update overlord.json.'
+        };
+      }
+    }
+  );
 
   ipcMain.handle('filesystem:read-file', async (_event, rawPayload?: unknown) => {
     const raw = (rawPayload ?? {}) as { path?: unknown; maxBytes?: unknown };

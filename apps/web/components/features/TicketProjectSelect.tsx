@@ -132,7 +132,7 @@ export function TicketProjectSelect({
         } else {
           moveTicketProjectInBoards(queryClient, ticketId, {
             project_id: null,
-            project_name: 'Personal',
+            project_name: 'Inbox',
             project_color: null,
             project_everhour_project_id: null
           });
@@ -219,11 +219,11 @@ export function TicketProjectSelect({
             ) : (
               <span className="h-2.5 w-2.5 rounded-[4px] border border-muted-foreground/50 bg-muted shrink-0" />
             )}
-            <span>{selectedProject?.name ?? 'Personal'}</span>
+            <span>{selectedProject?.name ?? 'Inbox'}</span>
           </span>
         </SelectTrigger>
         <SelectContent align="start">
-          <SelectItem value={PERSONAL_PROJECT_VALUE}>Personal</SelectItem>
+          <SelectItem value={PERSONAL_PROJECT_VALUE}>Inbox</SelectItem>
           <SelectSeparator />
           {availableProjects.map(project => (
             <SelectItem key={project.id} value={project.id}>
