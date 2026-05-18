@@ -14,5 +14,4 @@ export type ObjectiveRow = Pick<
   | 'auto_advance'
   | 'auto_advanced_at'
   | 'approval_reason'
-  | 'updated_at'
 >;

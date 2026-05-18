@@ -158,10 +158,10 @@ export async function TicketPanelContent({
       .order('name', { ascending: true }),
     ticket.schedule_id
       ? supabase
-        .from('schedule')
-        .select('period_type,period_interval,days_of_week,days_of_month,weeks_of_month,timezone')
-        .eq('id', ticket.schedule_id)
-        .maybeSingle()
+          .from('schedule')
+          .select('period_type,period_interval,days_of_week,days_of_month,weeks_of_month,timezone')
+          .eq('id', ticket.schedule_id)
+          .maybeSingle()
       : Promise.resolve({ data: null, error: null }),
     supabase
       .from('agent_sessions')
@@ -304,16 +304,16 @@ export async function TicketPanelContent({
   const initialTags = ticket.project_id ? await getTicketTagsAction(ticketId).catch(() => []) : [];
   const allProjectCheckpointObjectiveIds = ticket.project_id
     ? (
-      (
-        await supabase
-          .from('project_checkpoints')
-          .select('objective_id')
-          .eq('project_id', ticket.project_id)
-          .not('objective_id', 'is', null)
-      ).data ?? []
-    )
-      .map(checkpoint => checkpoint.objective_id)
-      .filter((objectiveId): objectiveId is string => Boolean(objectiveId))
+        (
+          await supabase
+            .from('project_checkpoints')
+            .select('objective_id')
+            .eq('project_id', ticket.project_id)
+            .not('objective_id', 'is', null)
+        ).data ?? []
+      )
+        .map(checkpoint => checkpoint.objective_id)
+        .filter((objectiveId): objectiveId is string => Boolean(objectiveId))
     : [];
 
   return (
@@ -383,15 +383,15 @@ export async function TicketPanelContent({
                   initialSchedule={
                     schedule
                       ? {
-                        periodType: schedule.period_type,
-                        periodInterval: schedule.period_interval,
-                        daysOfWeek: Array.isArray(schedule.days_of_week)
-                          ? schedule.days_of_week
-                          : [],
-                        daysOfMonth: schedule.days_of_month ?? undefined,
-                        weeksOfMonth: schedule.weeks_of_month ?? undefined,
-                        timezone: schedule.timezone
-                      }
+                          periodType: schedule.period_type,
+                          periodInterval: schedule.period_interval,
+                          daysOfWeek: Array.isArray(schedule.days_of_week)
+                            ? schedule.days_of_week
+                            : [],
+                          daysOfMonth: schedule.days_of_month ?? undefined,
+                          weeksOfMonth: schedule.weeks_of_month ?? undefined,
+                          timezone: schedule.timezone
+                        }
                       : null
                   }
                 />

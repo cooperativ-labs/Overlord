@@ -1470,27 +1470,13 @@ export async function createEmptyDraftObjectiveAction({
   }
 
   const newState = futureObjectivesEnabled && hasDraft ? 'future' : 'draft';
-  let nextPosition = 0;
-  if (newState === 'future') {
-    const { data: maxRow, error: maxError } = await supabase
-      .from('objectives')
-      .select('position')
-      .eq('ticket_id', ticketId)
-      .eq('state', 'future')
-      .order('position', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (maxError) {
-      throw new Error(maxError.message);
-    }
-    nextPosition = (maxRow?.position ?? -1) + 1;
-  }
 
+  // position is auto-assigned by the objectives_assign_default_position trigger:
+  // when omitted, it becomes max(position) + 1 within the ticket, starting at 0.
   const { error: insertError } = await supabase.from('objectives').insert({
     ticket_id: ticketId,
     state: newState,
-    objective: '',
-    position: nextPosition
+    objective: ''
   });
 
   if (insertError) {
@@ -1615,8 +1601,18 @@ export async function reorderFutureObjectivesAction({
     return;
   }
 
+  const reorderableStates: ReadonlyArray<Database['public']['Enums']['objective_state']> = [
+    'draft',
+    'future'
+  ];
   const validIds = new Set(
-    existing.filter(objective => objective.state === 'future').map(objective => objective.id)
+    existing
+      .filter(objective =>
+        reorderableStates.includes(
+          objective.state as Database['public']['Enums']['objective_state']
+        )
+      )
+      .map(objective => objective.id)
   );
   const filteredOrderedIds = orderedObjectiveIds.filter(id => validIds.has(id));
 
@@ -1627,7 +1623,7 @@ export async function reorderFutureObjectivesAction({
         .update({ position: index })
         .eq('id', id)
         .eq('ticket_id', ticketId)
-        .eq('state', 'future')
+        .in('state', reorderableStates)
     )
   );
 

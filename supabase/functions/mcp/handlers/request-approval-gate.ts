@@ -25,27 +25,24 @@ export async function handleRequestApprovalGate(
   if (!resolved.session) return toolErr(resolved.error ?? 'Session not found.');
   const ticketId = resolved.resolvedTicketId!;
 
-  let target: { id: string; auto_advance: boolean | null } | null = null;
-  if (objectiveId) {
-    const { data } = await supabase
-      .from('objectives')
-      .select('id, auto_advance')
-      .eq('id', objectiveId)
-      .eq('ticket_id', ticketId)
-      .maybeSingle();
-    target = data ?? null;
-  } else {
-    const { data } = await supabase
-      .from('objectives')
-      .select('id, auto_advance')
-      .eq('ticket_id', ticketId)
-      .eq('state', 'future')
-      .order('position', { ascending: true })
-      .order('created_at', { ascending: true })
-      .limit(1)
-      .maybeSingle();
-    target = data ?? null;
-  }
+  const targetQuery = objectiveId
+    ? await supabase
+        .from('objectives')
+        .select('id, auto_advance')
+        .eq('id', objectiveId)
+        .eq('ticket_id', ticketId)
+        .maybeSingle()
+    : await supabase
+        .from('objectives')
+        .select('id, auto_advance')
+        .eq('ticket_id', ticketId)
+        .eq('state', 'future')
+        .order('position', { ascending: true })
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+  const target: { id: string; auto_advance: boolean | null } | null = targetQuery.data ?? null;
 
   if (!target) {
     return toolErr('No queued future objective is available to gate.');

@@ -6,7 +6,7 @@ import { FeedCard } from '@/components/features/feed/FeedCard';
 import { TerminalProvider } from '@/components/features/terminal/TerminalProvider';
 import { cn } from '@/lib/utils';
 
-import { DEMO_FEED_POSTS } from '../../example-tickets/demo-frames/mock-feed-data';
+import { DEMO_FEED_POSTS } from '../../example-content/demo-frames/mock-feed-data';
 
 function WindowFrame({
   children,

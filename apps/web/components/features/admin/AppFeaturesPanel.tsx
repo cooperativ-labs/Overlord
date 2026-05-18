@@ -124,7 +124,9 @@ export function AppFeaturesPanel({ initialFeatures }: Props) {
                   value={createForm.key}
                   onChange={event => updateCreateForm('key', event.target.value)}
                 />
-                <p className="text-xs text-muted-foreground">Lowercase letters, numbers, and hyphens.</p>
+                <p className="text-xs text-muted-foreground">
+                  Lowercase letters, numbers, and hyphens.
+                </p>
               </div>
 
               <div className="space-y-2">
@@ -201,7 +203,9 @@ export function AppFeaturesPanel({ initialFeatures }: Props) {
                     </td>
                     <td className="px-4 py-4">
                       <div className="font-medium text-foreground">{feature.name}</div>
-                      <div className="mt-1 text-xs text-muted-foreground">{feature.description}</div>
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        {feature.description}
+                      </div>
                     </td>
                     <td className="px-4 py-4">
                       <span

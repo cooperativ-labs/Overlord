@@ -5,6 +5,13 @@
 
 @custom-variant dark (&:is(.dark *));
 
+@theme {
+  /* Presentation screen breakpoints: 1080p / 2K / 4K */
+  --breakpoint-p1080: 1920px;
+  --breakpoint-p2k: 2560px;
+  --breakpoint-p4k: 3840px;
+}
+
 @theme inline {
   --font-sans: var(--font-display);
   --font-display: var(--font-display);

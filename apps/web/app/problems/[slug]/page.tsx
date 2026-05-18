@@ -1,14 +1,15 @@
-import { ArrowRight, CheckCircle2, ChevronLeft } from 'lucide-react';
+import { CheckCircle2, ChevronLeft } from 'lucide-react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import type { ReactNode } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { getProblemPage, problemPages } from '@/lib/marketing/problem-pages';
 
-import { DemoFeedShowcase } from '../../../example-tickets/demo-frames/DemoFeedShowcase';
-import { DemoTicketActivity } from '../../../example-tickets/demo-frames/DemoTicketActivity';
-import { DemoTicketDetails } from '../../../example-tickets/demo-frames/DemoTicketDetails';
+import { DemoFeedShowcase } from '../../../example-content/demo-frames/DemoFeedShowcase';
+import { DemoTicketActivity } from '../../../example-content/demo-frames/DemoTicketActivity';
+import { DemoTicketDetails } from '../../../example-content/demo-frames/DemoTicketDetails';
 
 function youtubeEmbedUrl(url: string): string | null {
   try {
@@ -120,10 +121,38 @@ export default async function ProblemPage({ params }: ProblemRouteProps) {
               </Button>
             </div> */}
         </div>
-        {page.slug === 'remember-agent-intent' ? <DemoFeedShowcase numberOfPosts={1} /> : null}
-        {page.slug === 'handoff-between-agents' ? <DemoTicketDetails /> : null}
-        {page.slug === 'review-agent-diffs' ? <DemoTicketActivity /> : null}
-        {page.slug === 'juggling-repos' ? <DemoFeedShowcase numberOfPosts={1} /> : null}
+        {page.slug === 'remember-agent-intent' ? (
+          <ProblemDemoFrame
+            title="The Feed"
+            description="Each ticket becomes a feed post that lets you explore the objectives, file changes, and delivery summaries."
+          >
+            <DemoFeedShowcase numberOfPosts={1} />
+          </ProblemDemoFrame>
+        ) : null}
+        {page.slug === 'handoff-between-agents' ? (
+          <ProblemDemoFrame
+            title="Tickets & Objectives"
+            description="Tickets are the durable record for a thread of work. Each ticket holds one or more objectives: the units of work the agent actually executes."
+          >
+            <DemoTicketDetails />
+          </ProblemDemoFrame>
+        ) : null}
+        {page.slug === 'review-agent-diffs' ? (
+          <ProblemDemoFrame
+            title="Ticket activity"
+            description="The activity feed shows the events that happened on the ticket: one checkpoint, an agent update, a user follow-up, the delivery, and the file changes with rationales the reviewer reads next."
+          >
+            <DemoTicketActivity />
+          </ProblemDemoFrame>
+        ) : null}
+        {page.slug === 'juggling-repos' ? (
+          <ProblemDemoFrame
+            title="The Feed"
+            description="Each ticket becomes a feed post that lets you explore the objectives, file changes, and delivery summaries."
+          >
+            <DemoFeedShowcase numberOfPosts={1} />
+          </ProblemDemoFrame>
+        ) : null}
       </section>
 
       {/* <section className="mx-auto grid w-full max-w-6xl gap-4 lg:grid-cols-3">
@@ -177,6 +206,28 @@ export default async function ProblemPage({ params }: ProblemRouteProps) {
           </Button>
         </div>
       </section>
+    </div>
+  );
+}
+
+function ProblemDemoFrame({
+  title,
+  description,
+  children
+}: {
+  title: string;
+  description: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-[#07101d]/70 p-5 sm:p-6">
+      <div className="mb-5 flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-semibold text-white">{title}</h2>
+          <p className="mt-1 text-sm text-slate-400">{description}</p>
+        </div>
+      </div>
+      {children}
     </div>
   );
 }

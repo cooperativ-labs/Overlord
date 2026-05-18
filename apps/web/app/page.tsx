@@ -15,6 +15,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
+import { AskAboutOverlordSplitButton } from '@/components/marketing/AskAboutOverlordSplitButton';
 import { HeroDashboardGraphic } from '@/components/marketing/HeroDashboardGraphic';
 import { HomepageFooter } from '@/components/marketing/HomepageFooter';
 import { HomepageHeader } from '@/components/marketing/HomepageHeader';
@@ -22,7 +23,6 @@ import { VideoSection } from '@/components/marketing/VideoSection';
 import { Button } from '@/components/ui/button';
 import { problemPages } from '@/lib/marketing/problem-pages';
 import { createClientForRequest } from '@/supabase/utils/server';
-import { AskAboutOverlordSplitButton } from '@/components/marketing/AskAboutOverlordSplitButton';
 
 export const metadata: Metadata = {
   title: 'Overlord | Coordination for Coding Agents',

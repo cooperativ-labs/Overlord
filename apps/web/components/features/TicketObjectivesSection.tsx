@@ -36,8 +36,7 @@ import {
 import { useTicketObjectivesRealtime } from '@/lib/hooks/use-ticket-objectives-realtime';
 import {
   sortObjectivesByCreatedAtAscending,
-  sortObjectivesByPositionThenCreatedAt,
-  sortObjectivesByStateAndUpdatedAt
+  sortObjectivesByPositionThenCreatedAt
 } from '@/lib/objectives';
 import type { AgentCommands } from '@/lib/overlord/launch-commands';
 import { cn } from '@/lib/utils';
@@ -46,7 +45,6 @@ import type { ObjectiveRow } from '@/types/objectives';
 const reorderFutureObjectivesActionWithRetry = withElectronActionRetry(
   reorderFutureObjectivesAction
 );
-
 
 type ObjectiveCheckpoint = {
   git_ref_name: string | null;
@@ -308,7 +306,7 @@ export function TicketObjectivesSection({
       objective.state !== 'submitted' &&
       objective.objective.trim().length > 0
   );
-  const orderedExecutedObjectives = sortObjectivesByStateAndUpdatedAt(executedObjectives);
+  const orderedExecutedObjectives = sortObjectivesByPositionThenCreatedAt(executedObjectives);
 
   const hasEditable = nonFutureEditable.length > 0 || orderedFutureObjectives.length > 0;
 

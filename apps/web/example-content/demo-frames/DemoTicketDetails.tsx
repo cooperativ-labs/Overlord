@@ -54,84 +54,72 @@ export function DemoTicketDetails() {
   }, []);
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-[#07101d]/70 p-5 sm:p-6">
-      <div className="mb-5 flex items-start justify-between gap-4">
-        <div>
-          <h3 className="text-lg font-semibold text-white">Tickets & Objectives</h3>
-          <p className="mt-1 text-sm text-slate-400">
-            Tickets are the durable record for a thread of work. Each ticket holds one or more
-            objectives: the units of work the agent actually executes.
-          </p>
-        </div>
-      </div>
-
-      <div className="overflow-hidden rounded-xl bg-card text-foreground shadow-inner">
-        <PanelHeader />
-        <div className="bg-card py-5">
-          <div className="px-5">
-            <div className="mb-4">
-              <h2 className="text-xl font-semibold leading-tight">{DEMO_TICKET_DETAILS.title}</h2>
-            </div>
-
-            <div className="mb-4 flex flex-wrap items-center gap-2">
-              <Chip>
-                <Calendar className="h-3 w-3" />
-                {DEMO_TICKET_DETAILS.due_label}
-              </Chip>
-              <Chip>
-                <CalendarClock className="h-3 w-3" />
-                {DEMO_TICKET_DETAILS.schedule_label}
-              </Chip>
-            </div>
-
-            <div className="mb-4 flex flex-wrap items-center gap-1.5">
-              {DEMO_TICKET_DETAILS.tags.map(tag => (
-                <span
-                  key={tag.id}
-                  className="inline-flex items-center gap-1 rounded-full border bg-background px-2 py-0.5 text-[11px] text-muted-foreground"
-                  style={{ borderColor: `${tag.color}55` }}
-                >
-                  <Tag className="h-2.5 w-2.5" style={{ color: tag.color }} />
-                  {tag.label}
-                </span>
-              ))}
-              <button
-                type="button"
-                className="inline-flex items-center gap-1 rounded-full border border-dashed px-2 py-0.5 text-[11px] text-muted-foreground hover:bg-background"
-              >
-                <Plus className="h-2.5 w-2.5" />
-                Add tag
-              </button>
-            </div>
+    <div className="overflow-hidden rounded-xl bg-card text-foreground shadow-inner">
+      <PanelHeader />
+      <div className="bg-card py-5">
+        <div className="px-5">
+          <div className="mb-4">
+            <h2 className="text-xl font-semibold leading-tight">{DEMO_TICKET_DETAILS.title}</h2>
           </div>
 
-          <ObjectivesSection />
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            <Chip>
+              <Calendar className="h-3 w-3" />
+              {DEMO_TICKET_DETAILS.due_label}
+            </Chip>
+            <Chip>
+              <CalendarClock className="h-3 w-3" />
+              {DEMO_TICKET_DETAILS.schedule_label}
+            </Chip>
+          </div>
+
+          <div className="mb-4 flex flex-wrap items-center gap-1.5">
+            {DEMO_TICKET_DETAILS.tags.map(tag => (
+              <span
+                key={tag.id}
+                className="inline-flex items-center gap-1 rounded-full border bg-background px-2 py-0.5 text-[11px] text-muted-foreground"
+                style={{ borderColor: `${tag.color}55` }}
+              >
+                <Tag className="h-2.5 w-2.5" style={{ color: tag.color }} />
+                {tag.label}
+              </span>
+            ))}
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 rounded-full border border-dashed px-2 py-0.5 text-[11px] text-muted-foreground hover:bg-background"
+            >
+              <Plus className="h-2.5 w-2.5" />
+              Add tag
+            </button>
+          </div>
         </div>
 
-        <div className="border-t px-5 pb-2">
-          <Accordion type="multiple" defaultValue={[]}>
-            <AccordionItem value="acceptance-criteria" className="border-b-0">
-              <AccordionTrigger className="eyebrow text-xs py-3 hover:no-underline">
-                Acceptance Criteria
-              </AccordionTrigger>
-              <AccordionContent>
-                <p className="pl-2 pb-2 text-sm leading-relaxed text-muted-foreground">
-                  {DEMO_TICKET_DETAILS.acceptance_criteria}
-                </p>
-              </AccordionContent>
-            </AccordionItem>
-            <AccordionItem value="tools" className="border-b-0">
-              <AccordionTrigger className="eyebrow text-xs py-3 hover:no-underline">
-                Tools
-              </AccordionTrigger>
-              <AccordionContent>
-                <p className="pl-2 pb-2 text-sm leading-relaxed text-muted-foreground">
-                  {DEMO_TICKET_DETAILS.available_tools}
-                </p>
-              </AccordionContent>
-            </AccordionItem>
-          </Accordion>
-        </div>
+        <ObjectivesSection />
+      </div>
+
+      <div className="border-t px-5 pb-2">
+        <Accordion type="multiple" defaultValue={[]}>
+          <AccordionItem value="acceptance-criteria" className="border-b-0">
+            <AccordionTrigger className="eyebrow text-xs py-3 hover:no-underline">
+              Acceptance Criteria
+            </AccordionTrigger>
+            <AccordionContent>
+              <p className="pl-2 pb-2 text-sm leading-relaxed text-muted-foreground">
+                {DEMO_TICKET_DETAILS.acceptance_criteria}
+              </p>
+            </AccordionContent>
+          </AccordionItem>
+          <AccordionItem value="tools" className="border-b-0">
+            <AccordionTrigger className="eyebrow text-xs py-3 hover:no-underline">
+              Tools
+            </AccordionTrigger>
+            <AccordionContent>
+              <p className="pl-2 pb-2 text-sm leading-relaxed text-muted-foreground">
+                {DEMO_TICKET_DETAILS.available_tools}
+              </p>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
       </div>
     </div>
   );
@@ -196,8 +184,8 @@ function ObjectivesSection() {
     <div className="flex flex-col px-5">
       {completed.length > 0 ? (
         <div className="mb-3 space-y-0 rounded-md border bg-background">
-          {completed.map((objective, index) => (
-            <CompletedObjective key={objective.id} objective={objective} index={index} />
+          {completed.map(objective => (
+            <CompletedObjective key={objective.id} objective={objective} />
           ))}
         </div>
       ) : null}
@@ -372,7 +360,7 @@ function AgentIcon({ agent }: { agent?: DemoObjective['agent'] }) {
   );
 }
 
-function CompletedObjective({ objective, index }: { objective: DemoObjective; index: number }) {
+function CompletedObjective({ objective }: { objective: DemoObjective }) {
   const [open, setOpen] = useState(false);
   return (
     <Collapsible open={open} onOpenChange={setOpen}>

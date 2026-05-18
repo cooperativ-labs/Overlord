@@ -88,10 +88,7 @@ export function AskAboutOverlordSplitButton({ className }: AskAboutOverlordSplit
         className="inline-flex h-14 cursor-pointer items-center gap-1.5 rounded-l-full px-4 font-medium transition-colors hover:bg-white/5"
         onClick={() => void handleAction()}
       >
-
-        <span className="whitespace-nowrap">
-          {copied ? 'Copied ✓' : 'Ask about Overlord'}
-        </span>
+        <span className="whitespace-nowrap">{copied ? 'Copied ✓' : 'Ask about Overlord'}</span>
       </button>
 
       <DropdownMenu>
@@ -101,10 +98,14 @@ export function AskAboutOverlordSplitButton({ className }: AskAboutOverlordSplit
             className="flex h-14 cursor-pointer items-center gap-1.5 rounded-r-full border-l border-black/20 px-2 hover:bg-slate-100 focus:outline-none"
             aria-label="Choose how to ask about Overlord"
           >
-            <ProviderIcon provider={selectedProvider} /> <ChevronDown className="size-3.5 text-slate-950" />
+            <ProviderIcon provider={selectedProvider} />{' '}
+            <ChevronDown className="size-3.5 text-slate-950" />
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="min-w-[170px] bg-white/90 backdrop-blur-xs text-slate-950">
+        <DropdownMenuContent
+          align="end"
+          className="min-w-[170px] bg-white/90 backdrop-blur-xs text-slate-950"
+        >
           {PROVIDER_OPTIONS.map(provider => (
             <DropdownMenuItem
               key={provider}

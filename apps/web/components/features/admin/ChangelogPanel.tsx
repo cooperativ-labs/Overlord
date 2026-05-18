@@ -196,8 +196,9 @@ export function ChangelogPanel({ initialEntries }: Props) {
           <div className="overflow-hidden rounded-2xl border border-border">
             {entries.length === 0 ? (
               <div className="px-4 py-6 text-center text-sm text-muted-foreground">
-                No entries yet. Click <span className="font-medium text-foreground">Generate Changelog Entry</span>{' '}
-                to create your first draft.
+                No entries yet. Click{' '}
+                <span className="font-medium text-foreground">Generate Changelog Entry</span> to
+                create your first draft.
               </div>
             ) : (
               <ul className="divide-y divide-border">

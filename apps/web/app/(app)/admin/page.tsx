@@ -149,7 +149,9 @@ export default async function AdminPage() {
           <div className="flex items-center justify-between gap-4 border-b border-border px-6 py-5">
             <div>
               <h2 className="text-lg font-semibold text-foreground">Access requests</h2>
-              <p className="text-sm text-muted-foreground">{accessRequests.length} total submissions</p>
+              <p className="text-sm text-muted-foreground">
+                {accessRequests.length} total submissions
+              </p>
             </div>
           </div>
           {accessRequests.length === 0 ? (
@@ -195,7 +197,9 @@ export default async function AdminPage() {
           <div className="flex items-center justify-between gap-4 border-b border-border px-6 py-5">
             <div>
               <h2 className="text-lg font-semibold text-foreground">Feedback</h2>
-              <p className="text-sm text-muted-foreground">{feedbackItems.length} total submissions</p>
+              <p className="text-sm text-muted-foreground">
+                {feedbackItems.length} total submissions
+              </p>
             </div>
           </div>
           {feedbackItems.length === 0 ? (

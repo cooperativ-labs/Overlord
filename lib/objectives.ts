@@ -88,26 +88,6 @@ export function sortObjectivesByCreatedAtAscending<T extends ObjectiveTimelineIt
   return [...objectives].sort((a, b) => toTimestamp(a.created_at) - toTimestamp(b.created_at));
 }
 
-const STATE_SORT_ORDER: Partial<Record<string, number>> = {
-  complete: 0,
-  executing: 1
-};
-
-type ObjectiveStateAndUpdatedItem = { state: string; updated_at: string };
-
-export function sortObjectivesByStateAndUpdatedAt<T extends ObjectiveStateAndUpdatedItem>(
-  objectives: readonly T[]
-): T[] {
-  return [...objectives].sort((a, b) => {
-    const stateA = STATE_SORT_ORDER[a.state] ?? 99;
-    const stateB = STATE_SORT_ORDER[b.state] ?? 99;
-    if (stateA !== stateB) {
-      return stateA - stateB;
-    }
-    return toTimestamp(a.updated_at) - toTimestamp(b.updated_at);
-  });
-}
-
 type ObjectivePositionItem = ObjectiveTimelineItem & { position?: number | null };
 
 export function sortObjectivesByPositionThenCreatedAt<T extends ObjectivePositionItem>(
@@ -172,8 +152,6 @@ export async function submitDraftObjective(
   ticketId: string,
   draftObjectiveId?: string | null
 ) {
-  let draft: DraftObjective | null = null;
-
   if (draftObjectiveId) {
     // When a specific ID is provided, query without a state filter so we can
     // handle objectives that are already in `submitted` state gracefully.
@@ -214,20 +192,44 @@ export async function submitDraftObjective(
       };
     }
 
-    draft = data;
-  } else {
-    const { data, error } = await supabase
-      .from('objectives')
-      .select('id,objective,state,assigned_agent')
-      .eq('ticket_id', ticketId)
-      .eq('state', 'draft')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle<DraftObjective>();
+    const draft = data;
 
-    if (error) throw new Error(error.message);
-    draft = data;
+    const normalizedObjective = normalizeObjectiveText(draft.objective);
+    if (!normalizedObjective) {
+      return {
+        error: 'Objective cannot be empty.',
+        didSubmit: false,
+        submittedObjective: null,
+        submittedObjectiveId: null
+      };
+    }
+
+    const { error: submitError } = await supabase
+      .from('objectives')
+      .update({ state: 'submitted' })
+      .eq('id', draft.id);
+    if (submitError && !isObjectiveStateConstraintError(submitError)) {
+      throw new Error(submitError.message);
+    }
+
+    return {
+      error: null,
+      didSubmit: true,
+      submittedObjective: normalizedObjective,
+      submittedObjectiveId: draft.id
+    };
   }
+
+  const { data: draft, error } = await supabase
+    .from('objectives')
+    .select('id,objective,state,assigned_agent')
+    .eq('ticket_id', ticketId)
+    .eq('state', 'draft')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle<DraftObjective>();
+
+  if (error) throw new Error(error.message);
 
   if (!draft) {
     return { error: null, didSubmit: false, submittedObjective: null, submittedObjectiveId: null };
