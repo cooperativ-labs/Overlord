@@ -8682,15 +8682,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/ssh2@npm:^1.15.1":
-  version: 1.15.5
-  resolution: "@types/ssh2@npm:1.15.5"
-  dependencies:
-    "@types/node": "npm:^18.11.18"
-  checksum: 10c0/750e402ce60d6dd67011bf1a811dcbbe638da14baca30c0952b50bad646c4ef8d6fc400894e20f5d2f8882e38b4c35eb6d4f5fe2ecd1d1b1a2f9efef9cf6e773
-  languageName: node
-  linkType: hard
-
 "@types/stack-utils@npm:^2.0.0, @types/stack-utils@npm:^2.0.3":
   version: 2.0.3
   resolution: "@types/stack-utils@npm:2.0.3"
@@ -9252,7 +9243,6 @@ __metadata:
     "@types/pg": "npm:^8.16.0"
     "@types/react": "npm:^19.2.14"
     "@types/react-dom": "npm:^19.2.3"
-    "@types/ssh2": "npm:^1.15.1"
     "@vercel/analytics": "npm:^2.0.1"
     "@vitejs/plugin-react": "npm:^6.0.1"
     autoprefixer: "npm:^10.4.24"
@@ -9260,7 +9250,7 @@ __metadata:
     class-variance-authority: "npm:^0.7.1"
     clsx: "npm:^2.1.1"
     concurrently: "npm:^9.2.1"
-    date-fns: "npm:^4.1.0"
+    date-fns: "npm:^4.2.0"
     dotenv: "npm:^17.3.1"
     electron: "npm:^42.0.1"
     electron-builder: "npm:^26.8.1"
@@ -9294,7 +9284,6 @@ __metadata:
     serwist: "npm:^9.5.6"
     shadcn: "npm:^3.8.4"
     sonner: "npm:^2.0.7"
-    ssh2: "npm:^1.16.0"
     tailwind: "npm:^4.0.0"
     tailwind-merge: "npm:^3.4.0"
     tailwindcss: "npm:^4.1.18"
@@ -9854,15 +9843,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"asn1@npm:^0.2.6":
-  version: 0.2.6
-  resolution: "asn1@npm:0.2.6"
-  dependencies:
-    safer-buffer: "npm:~2.1.0"
-  checksum: 10c0/00c8a06c37e548762306bcb1488388d2f76c74c36f70c803f0c081a01d3bdf26090fc088cd812afc5e56a6d49e33765d451a5f8a68ab9c2b087eba65d2e980e0
-  languageName: node
-  linkType: hard
-
 "assert-plus@npm:^1.0.0":
   version: 1.0.0
   resolution: "assert-plus@npm:1.0.0"
@@ -10376,15 +10356,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"bcrypt-pbkdf@npm:^1.0.2":
-  version: 1.0.2
-  resolution: "bcrypt-pbkdf@npm:1.0.2"
-  dependencies:
-    tweetnacl: "npm:^0.14.3"
-  checksum: 10c0/ddfe85230b32df25aeebfdccfbc61d3bc493ace49c884c9c68575de1f5dcf733a5d7de9def3b0f318b786616b8d85bad50a28b1da1750c43e0012c93badcc148
-  languageName: node
-  linkType: hard
-
 "better-opn@npm:~3.0.2":
   version: 3.0.2
   resolution: "better-opn@npm:3.0.2"
@@ -10673,13 +10644,6 @@ __metadata:
     base64-js: "npm:^1.3.1"
     ieee754: "npm:^1.2.1"
   checksum: 10c0/2a905fbbcde73cc5d8bd18d1caa23715d5f83a5935867c2329f0ac06104204ba7947be098fe1317fbd8830e26090ff8e764f08cd14fefc977bb248c3487bcbd0
-  languageName: node
-  linkType: hard
-
-"buildcheck@npm:~0.0.6":
-  version: 0.0.7
-  resolution: "buildcheck@npm:0.0.7"
-  checksum: 10c0/987c605267b1b6311bb2ac0638b073d322370267445a6d059da27985fce0b41f85a59d3a9aa9af839e8ac2d63da8af07be6dc737f8bd5323e1dfe6779ad67228
   languageName: node
   linkType: hard
 
@@ -11641,17 +11605,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"cpu-features@npm:~0.0.10":
-  version: 0.0.10
-  resolution: "cpu-features@npm:0.0.10"
-  dependencies:
-    buildcheck: "npm:~0.0.6"
-    nan: "npm:^2.19.0"
-    node-gyp: "npm:latest"
-  checksum: 10c0/0c4a12904657b22477ffbcfd2b4b2bdd45b174f283616b18d9e1ade495083f9f6098493feb09f4ae2d0b36b240f9ecd32cfb4afe210cf0d0f8f0cc257bd58e54
-  languageName: node
-  linkType: hard
-
 "crc@npm:^3.8.0":
   version: 3.8.0
   resolution: "crc@npm:3.8.0"
@@ -11830,10 +11783,17 @@ __metadata:
   languageName: node
   linkType: hard
 
-"date-fns@npm:*, date-fns@npm:^4.1.0":
+"date-fns@npm:*":
   version: 4.1.0
   resolution: "date-fns@npm:4.1.0"
   checksum: 10c0/b79ff32830e6b7faa009590af6ae0fb8c3fd9ffad46d930548fbb5acf473773b4712ae887e156ba91a7b3dc30591ce0f517d69fd83bd9c38650fdc03b4e0bac8
+  languageName: node
+  linkType: hard
+
+"date-fns@npm:^4.2.0":
+  version: 4.2.0
+  resolution: "date-fns@npm:4.2.0"
+  checksum: 10c0/28983b184899b2ab7576382aa4f9f1c6bab5a56e9efb83fe9c34e9a3b1b05447259a23e179e5754c8386dfa705abef2c891318f7f5056cc100744c116081e11f
   languageName: node
   linkType: hard
 
@@ -19498,15 +19458,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"nan@npm:^2.19.0, nan@npm:^2.23.0":
-  version: 2.26.2
-  resolution: "nan@npm:2.26.2"
-  dependencies:
-    node-gyp: "npm:latest"
-  checksum: 10c0/ff204c964729279cf3abb8b170c77753ed36092e2235f11bfb0204dfd3e8cc2d5a3bcfdfd3b677f06a0743d7f835d873dce59f23a2dbf6fb671d9351cc655d73
-  languageName: node
-  linkType: hard
-
 "nanoid@npm:^3.3.11, nanoid@npm:^3.3.6, nanoid@npm:^3.3.7, nanoid@npm:^3.3.8":
   version: 3.3.11
   resolution: "nanoid@npm:3.3.11"
@@ -22527,7 +22478,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"safer-buffer@npm:>= 2.1.2 < 3, safer-buffer@npm:>= 2.1.2 < 3.0.0, safer-buffer@npm:~2.1.0":
+"safer-buffer@npm:>= 2.1.2 < 3, safer-buffer@npm:>= 2.1.2 < 3.0.0":
   version: 2.1.2
   resolution: "safer-buffer@npm:2.1.2"
   checksum: 10c0/7e3c8b2e88a1841c9671094bbaeebd94448111dd90a81a1f606f3f67708a6ec57763b3b47f06da09fc6054193e0e6709e77325415dc8422b04497a8070fa02d4
@@ -23295,23 +23246,6 @@ __metadata:
   version: 2.3.3
   resolution: "sqlstring@npm:2.3.3"
   checksum: 10c0/3b5dd7badb3d6312f494cfa6c9a381ee630fbe3dbd571c4c9eb8ecdb99a7bf5a1f7a5043191d768797f6b3c04eed5958ac6a5f948b998f0a138294c6d3125fbd
-  languageName: node
-  linkType: hard
-
-"ssh2@npm:^1.16.0":
-  version: 1.17.0
-  resolution: "ssh2@npm:1.17.0"
-  dependencies:
-    asn1: "npm:^0.2.6"
-    bcrypt-pbkdf: "npm:^1.0.2"
-    cpu-features: "npm:~0.0.10"
-    nan: "npm:^2.23.0"
-  dependenciesMeta:
-    cpu-features:
-      optional: true
-    nan:
-      optional: true
-  checksum: 10c0/637c1b7e8070fc8a3027f8abf771cd98419f56eaf3817171180e768004d4dea26c65fb3763294ed2f784429857f196c83c4f6889d2c31cc0e2648ea5ad730665
   languageName: node
   linkType: hard
 
@@ -24386,13 +24320,6 @@ __metadata:
   version: 1.4.0
   resolution: "tw-animate-css@npm:1.4.0"
   checksum: 10c0/6cfbc19ccc73883ec80ef1f9147f43e736cb01ee99c8172968b37eb81b720523d30e38b1a96aef92db3c586d864204db5510b51744ddacbbf0ad8e3c7fb56ec7
-  languageName: node
-  linkType: hard
-
-"tweetnacl@npm:^0.14.3":
-  version: 0.14.5
-  resolution: "tweetnacl@npm:0.14.5"
-  checksum: 10c0/4612772653512c7bc19e61923fbf42903f5e0389ec76a4a1f17195859d114671ea4aa3b734c2029ce7e1fa7e5cc8b80580f67b071ecf0b46b5636d030a0102a2
   languageName: node
   linkType: hard
 
