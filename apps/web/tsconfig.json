@@ -33,6 +33,7 @@
     "app/.well-known/**/*.tsx",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts",
+    "../../types/date-fns.d.ts",
     "../../types/electron.d.ts"
   ],
   "exclude": [
