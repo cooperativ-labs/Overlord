@@ -1,6 +1,7 @@
 import { AgentModelsPrefetch } from '@/components/features/AgentModelSelector';
 import { ElectronAuthBoundary } from '@/components/features/electron-auth/ElectronAuthGate';
 import { ElectronDetector } from '@/components/features/terminal/ElectronDetector';
+import { TerminalProvider } from '@/components/features/terminal/TerminalProvider';
 import { AppQueryClientProvider } from '@/components/providers/query-client-provider';
 import { getAllAgentConfigsAction } from '@/lib/actions/agent-config';
 import { getAgentModelsAction } from '@/lib/actions/agent-models';
@@ -27,12 +28,14 @@ export default async function QuickLayout({
     <ElectronAuthBoundary>
       <ElectronDetector />
       <AppQueryClientProvider>
-        <AgentModelsPrefetch
-          models={agentModels}
-          configs={agentConfigs}
-          launchPreference={launchPreference}
-        />
-        <div className="h-dvh w-dvw overflow-hidden bg-transparent">{children}</div>
+        <TerminalProvider>
+          <AgentModelsPrefetch
+            models={agentModels}
+            configs={agentConfigs}
+            launchPreference={launchPreference}
+          />
+          <div className="h-dvh w-dvw overflow-hidden bg-transparent">{children}</div>
+        </TerminalProvider>
       </AppQueryClientProvider>
     </ElectronAuthBoundary>
   );

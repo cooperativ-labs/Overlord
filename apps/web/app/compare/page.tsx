@@ -1,8 +1,9 @@
-import { ArrowRight, Bot, ClipboardList, GitBranch, Rows3, Workflow } from 'lucide-react';
+import { Bot, ClipboardList, GitBranch, Rows3, Workflow } from 'lucide-react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
 import { HomepageFooter } from '@/components/marketing/HomepageFooter';
+import { HomepageHeader } from '@/components/marketing/HomepageHeader';
 import { Button } from '@/components/ui/button';
 
 export const metadata: Metadata = {
@@ -53,7 +54,10 @@ const categories = [
 const needs = [
   ['Remember what agents were asked to do', 'Prompts become durable tickets with objectives.'],
   ['Evaluate work later', 'Delivery notes, artifacts, and change rationales stay with the ticket.'],
-  ['Work across many repos', 'Project working directories launch agents in the right local context.'],
+  [
+    'Work across many repos',
+    'Project working directories launch agents in the right local context.'
+  ],
   ['Move work between agents', 'Shared context and objective history travel with the ticket.'],
   ['Manage sequential work', 'Plan, execute, review, and follow-up can be separate objectives.'],
   ['Avoid tool lock-in', 'Keep using terminal agents, desktop apps, MCP, and hosted agents.']
@@ -62,28 +66,10 @@ const needs = [
 export default function ComparePage() {
   return (
     <div className="min-h-dvh bg-[#020817] text-white">
+      <div className="mx-auto w-full max-w-6xl px-6 sm:px-8 lg:px-12">
+        <HomepageHeader />
+      </div>
       <main className="mx-auto flex w-full max-w-6xl flex-col gap-16 px-6 py-8 sm:px-8 lg:px-12">
-        <header className="flex items-center justify-between gap-4">
-          <Link href="/" className="font-display text-lg font-semibold">
-            Overlord
-          </Link>
-          <div className="flex items-center gap-2">
-            <Button
-              asChild
-              variant="ghost"
-              className="hidden text-slate-300 hover:bg-white/5 hover:text-white sm:inline-flex"
-            >
-              <Link href="/docs">Docs</Link>
-            </Button>
-            <Button asChild size="sm" className="rounded-full bg-white text-slate-950">
-              <Link href="/signup">
-                Create account
-                <ArrowRight className="size-3.5" />
-              </Link>
-            </Button>
-          </div>
-        </header>
-
         <section className="max-w-4xl pt-10">
           <p className="font-mono text-[14px] font-medium uppercase tracking-widest text-sky-400">
             Compare Overlord

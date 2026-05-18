@@ -88,6 +88,26 @@ export function sortObjectivesByCreatedAtAscending<T extends ObjectiveTimelineIt
   return [...objectives].sort((a, b) => toTimestamp(a.created_at) - toTimestamp(b.created_at));
 }
 
+const STATE_SORT_ORDER: Partial<Record<string, number>> = {
+  complete: 0,
+  executing: 1
+};
+
+type ObjectiveStateAndUpdatedItem = { state: string; updated_at: string };
+
+export function sortObjectivesByStateAndUpdatedAt<T extends ObjectiveStateAndUpdatedItem>(
+  objectives: readonly T[]
+): T[] {
+  return [...objectives].sort((a, b) => {
+    const stateA = STATE_SORT_ORDER[a.state] ?? 99;
+    const stateB = STATE_SORT_ORDER[b.state] ?? 99;
+    if (stateA !== stateB) {
+      return stateA - stateB;
+    }
+    return toTimestamp(a.updated_at) - toTimestamp(b.updated_at);
+  });
+}
+
 type ObjectivePositionItem = ObjectiveTimelineItem & { position?: number | null };
 
 export function sortObjectivesByPositionThenCreatedAt<T extends ObjectivePositionItem>(

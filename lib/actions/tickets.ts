@@ -1538,7 +1538,7 @@ export async function setObjectiveAutoAdvanceAction({
     .update(updates)
     .eq('id', objectiveId)
     .eq('ticket_id', ticketId)
-    .eq('state', 'future');
+    .in('state', ['draft', 'submitted', 'future']);
 
   if (error) {
     throw new Error(error.message);

@@ -17,7 +17,7 @@ import {
   verticalListSortingStrategy
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { FastForward, GripVertical, PauseCircle, Trash2 } from 'lucide-react';
+import { GripVertical, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -26,11 +26,7 @@ import { DraftObjective } from '@/components/features/DraftObjective';
 import { ObjectiveCollapsibleItem } from '@/components/features/ObjectiveCollapsibleItem';
 import { type ButtonLoadingState, LoadingButton } from '@/components/ui/loading-button';
 import type { ObjectiveAttachment } from '@/lib/actions/attachments';
-import {
-  clearAwaitingApprovalAction,
-  reorderFutureObjectivesAction,
-  setObjectiveAutoAdvanceAction
-} from '@/lib/actions/tickets';
+import { clearAwaitingApprovalAction, reorderFutureObjectivesAction } from '@/lib/actions/tickets';
 import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
 import type { LaunchAgentType } from '@/lib/helpers/agent-types';
 import {
@@ -40,31 +36,17 @@ import {
 import { useTicketObjectivesRealtime } from '@/lib/hooks/use-ticket-objectives-realtime';
 import {
   sortObjectivesByCreatedAtAscending,
-  sortObjectivesByPositionThenCreatedAt
+  sortObjectivesByPositionThenCreatedAt,
+  sortObjectivesByStateAndUpdatedAt
 } from '@/lib/objectives';
 import type { AgentCommands } from '@/lib/overlord/launch-commands';
 import { cn } from '@/lib/utils';
-import type { Database } from '@/types/database.types';
+import type { ObjectiveRow } from '@/types/objectives';
 
 const reorderFutureObjectivesActionWithRetry = withElectronActionRetry(
   reorderFutureObjectivesAction
 );
 
-type ObjectiveRow = Pick<
-  Database['public']['Tables']['objectives']['Row'],
-  | 'id'
-  | 'objective'
-  | 'created_at'
-  | 'title'
-  | 'state'
-  | 'agent_identifier'
-  | 'model_identifier'
-  | 'assigned_agent'
-  | 'position'
-  | 'auto_advance'
-  | 'auto_advanced_at'
-  | 'approval_reason'
->;
 
 type ObjectiveCheckpoint = {
   git_ref_name: string | null;
@@ -118,6 +100,7 @@ function ObjectiveEditableItem({
     <DraftObjective
       canMarkExecuted={Boolean(objective.objective?.trim())}
       fileMentionPaths={shared.objectiveFileMentionPaths}
+      initialAutoAdvance={objective.auto_advance !== false}
       initialValue={objective.objective ?? ''}
       initialAttachments={shared.objectiveAttachments.filter(
         attachment => attachment.objectiveId === objective.id
@@ -174,7 +157,6 @@ function SortableFutureObjective({
       <div className="min-w-0 flex-1">
         <ObjectiveEditableItem objective={objective} shared={shared} />
       </div>
-      <AutoAdvanceToggle objective={objective} ticketId={shared.ticketId} />
     </div>
   );
 }
@@ -226,56 +208,6 @@ function AwaitingApprovalBanner({
         </span>
       </div>
     </div>
-  );
-}
-
-function AutoAdvanceToggle({ objective, ticketId }: { objective: ObjectiveRow; ticketId: string }) {
-  const autoAdvance = objective.auto_advance !== false;
-  const [pending, setPending] = useState(false);
-
-  const handleToggle = async () => {
-    if (pending) return;
-    setPending(true);
-    try {
-      await setObjectiveAutoAdvanceAction({
-        ticketId,
-        objectiveId: objective.id,
-        autoAdvance: !autoAdvance
-      });
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to update auto-advance.');
-    } finally {
-      setPending(false);
-    }
-  };
-
-  return (
-    <button
-      type="button"
-      onClick={handleToggle}
-      disabled={pending}
-      aria-pressed={autoAdvance}
-      aria-label={
-        autoAdvance
-          ? 'Auto-advance on — runs after the previous objective delivers. Click to require manual approval.'
-          : 'Auto-advance off — pauses the queue for manual approval. Click to allow auto-advance.'
-      }
-      title={
-        autoAdvance
-          ? 'Auto-advance ON — runs after the previous objective delivers.'
-          : 'Auto-advance OFF — pauses for manual approval.'
-      }
-      className={cn(
-        'flex w-7 shrink-0 items-center justify-center self-stretch rounded text-muted-foreground/60 transition hover:text-foreground',
-        pending && 'opacity-50'
-      )}
-    >
-      {autoAdvance ? (
-        <FastForward className="h-4 w-4" />
-      ) : (
-        <PauseCircle className="h-4 w-4 text-amber-500" />
-      )}
-    </button>
   );
 }
 
@@ -376,7 +308,7 @@ export function TicketObjectivesSection({
       objective.state !== 'submitted' &&
       objective.objective.trim().length > 0
   );
-  const orderedExecutedObjectives = sortObjectivesByCreatedAtAscending(executedObjectives);
+  const orderedExecutedObjectives = sortObjectivesByStateAndUpdatedAt(executedObjectives);
 
   const hasEditable = nonFutureEditable.length > 0 || orderedFutureObjectives.length > 0;
 

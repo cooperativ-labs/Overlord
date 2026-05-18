@@ -2,12 +2,19 @@ import type { MetadataRoute } from 'next';
 import { readdir } from 'node:fs/promises';
 import path from 'node:path';
 
+import { problemPages } from '@/lib/marketing/problem-pages';
+
 const SITE_URL = 'https://www.ovld.ai';
 const APP_DIR = path.join(process.cwd(), 'app');
 
 const EXCLUDED_GROUPS = new Set(['(app)', '(auth)', '(quick)']);
 const EXCLUDED_PATHS = new Set(['/onboarding']);
-const EXTRA_PUBLIC_PATHS = ['/llms.txt', '/llms-full.txt', '/overlord-context'] as const;
+const EXTRA_PUBLIC_PATHS = [
+  '/llms.txt',
+  '/llms-full.txt',
+  '/overlord-context',
+  ...problemPages.map(page => `/problems/${page.slug}`)
+] as const;
 
 function isDynamicSegment(segment: string): boolean {
   return segment.startsWith('[') && segment.endsWith(']');

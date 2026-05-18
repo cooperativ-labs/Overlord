@@ -1,7 +1,16 @@
 'use client';
 
-import { ArrowUpCircle, ChevronDown, Loader2, SquareTerminal, Upload } from 'lucide-react';
-import { useMemo, useRef, useState, useTransition } from 'react';
+import {
+  ArrowUpCircle,
+  ChevronDown,
+  FastForward,
+  Loader2,
+  PauseCircle,
+  SquareTerminal,
+  Upload
+} from 'lucide-react';
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import { toast } from 'sonner';
 
 import { AgentModelChooserButton } from '@/components/features/AgentModelChooserButton';
 import { CliQuickstart } from '@/components/features/CliQuickstart';
@@ -16,7 +25,7 @@ import { AgentSplitButtonLive, useTicketLive } from '@/components/features/Ticke
 import { Button } from '@/components/ui/button';
 import { FileDropZone } from '@/components/ui/file-drop-zone';
 import type { ObjectiveAttachment } from '@/lib/actions/attachments';
-import { promoteFutureObjectiveAction } from '@/lib/actions/tickets';
+import { promoteFutureObjectiveAction, setObjectiveAutoAdvanceAction } from '@/lib/actions/tickets';
 import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
 import {
   getAgentTypeByIdentifier,
@@ -37,6 +46,7 @@ type DraftObjectiveProps = {
   organizationId?: number;
   objectiveId: string;
   objectiveState: string | null;
+  initialAutoAdvance?: boolean;
   initialValue: string;
   canMarkExecuted: boolean;
   fileMentionPaths: string[];
@@ -56,6 +66,7 @@ export function DraftObjective({
   organizationId,
   objectiveId,
   objectiveState,
+  initialAutoAdvance = true,
   initialValue,
   canMarkExecuted,
   fileMentionPaths,
@@ -76,6 +87,9 @@ export function DraftObjective({
   const activeAgentType = getAgentTypeByIdentifier(session?.agent_identifier ?? null);
   const showAgentControls = assignedAgent !== undefined;
   const isFuture = objectiveState === 'future';
+  const canToggleAutoAdvance =
+    objectiveState === 'draft' || objectiveState === 'submitted' || objectiveState === 'future';
+  const [autoAdvanceValue, setAutoAdvanceValue] = useState(initialAutoAdvance);
   const splitButtonCommands = useMemo<Record<LaunchAgentType, string>>(
     () => ({
       claude: agentCommands?.launchCommands?.claudeCode ?? '',
@@ -106,11 +120,34 @@ export function DraftObjective({
     initialAttachments
   });
   const isSubmitted = objectiveState === 'submitted';
+  const [isAutoAdvancePending, setIsAutoAdvancePending] = useState(false);
+
+  useEffect(() => {
+    setAutoAdvanceValue(initialAutoAdvance);
+  }, [initialAutoAdvance]);
 
   function handlePromoteFuture() {
     startPromoteTransition(async () => {
       await promoteFutureObjectiveActionWithRetry({ ticketId, objectiveId });
     });
+  }
+
+  async function handleAutoAdvanceToggle() {
+    if (!canToggleAutoAdvance || isAutoAdvancePending) return;
+    const nextAutoAdvance = !autoAdvanceValue;
+    setIsAutoAdvancePending(true);
+    try {
+      await setObjectiveAutoAdvanceAction({
+        ticketId,
+        objectiveId,
+        autoAdvance: nextAutoAdvance
+      });
+      setAutoAdvanceValue(nextAutoAdvance);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to update auto-advance.');
+    } finally {
+      setIsAutoAdvancePending(false);
+    }
   }
 
   return (
@@ -231,6 +268,35 @@ export function DraftObjective({
             state={objectiveState}
             ticketId={ticketId}
           />
+          {canToggleAutoAdvance ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className={cn(
+                'h-7 gap-1 px-2 text-xs text-muted-foreground',
+                !autoAdvanceValue && 'text-amber-600'
+              )}
+              disabled={isAutoAdvancePending}
+              aria-pressed={autoAdvanceValue}
+              aria-label={
+                autoAdvanceValue
+                  ? 'Auto-advance on. Click to require manual approval before this objective starts.'
+                  : 'Auto-advance off. Click to allow this objective to auto-advance.'
+              }
+              title={autoAdvanceValue ? 'Auto-advance ON' : 'Auto-advance OFF'}
+              onClick={handleAutoAdvanceToggle}
+            >
+              {isAutoAdvancePending ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : autoAdvanceValue ? (
+                <FastForward className="h-3.5 w-3.5" />
+              ) : (
+                <PauseCircle className="h-3.5 w-3.5" />
+              )}
+              Auto
+            </Button>
+          ) : null}
           {showAgentControls ? (
             <>
               <AgentModelChooserButton

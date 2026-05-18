@@ -1,0 +1,883 @@
+{
+  "$schema": "demo-tickets/v1",
+  "description": "Snapshots of Overlord tickets captured for use as demo content on marketing problem pages. Each ticket includes its row, objectives, full event timeline, sessions, local git checkpoints created at the start of objectives, and the structured file_changes recorded at delivery time. Identifiers are real but the data is intended to be replayed in a demonstration context.",
+  "captured_at": "2026-05-18T08:18:00.000Z",
+  "tickets": [
+    {
+      "source": {
+        "supabase_project_ref": "zitmmhvbilhjjdwgxlfm",
+        "source_ticket_id": "1:1114",
+        "source_ticket_uuid": "a3ef18f9-a976-4cd1-899b-1f0605041d7d"
+      },
+      "project": {
+        "id": "2fce9af3-dc9e-4929-82da-d8c52e3fcaf6",
+        "name": "Overlord",
+        "color": "#2dd4bf",
+        "organization_id": 1
+      },
+      "ticket": {
+        "id": "a3ef18f9-a976-4cd1-899b-1f0605041d7d",
+        "ticket_id": "1:1114",
+        "ticket_sequence": 1242,
+        "title": "Manage project checkpoints",
+        "status": "review",
+        "priority": "medium",
+        "board_position": -51,
+        "organization_id": 1,
+        "project_id": "2fce9af3-dc9e-4929-82da-d8c52e3fcaf6",
+        "execution_target": "agent",
+        "context": "",
+        "constraints": "",
+        "available_tools": "",
+        "acceptance_criteria": null,
+        "output_format": "",
+        "objective": "",
+        "everhour_task_id": null,
+        "created_by": "41c575ca-4e37-4e8c-af72-b6d673c391cb",
+        "created_at": "2026-05-18T07:43:06.797547+00:00",
+        "updated_at": "2026-05-18T07:57:46.734407+00:00"
+      },
+      "objectives": [
+        {
+          "id": "08393f93-8132-4cf9-8a7e-53b34d703fa2",
+          "ticket_id": "a3ef18f9-a976-4cd1-899b-1f0605041d7d",
+          "objective": "Lets let the user centrally manage checkpoints for each project in project settings. Create a checkpoints page that hows a table of checkpoints with their commit ids and datetimes, and a prune button. scroll once the list gets too long. offer a prune all stale checkpoints button. popover explaining what a stale checkpoint is.",
+          "state": "complete",
+          "auto_advance": true,
+          "position": 0,
+          "created_at": "2026-05-18T07:43:06.884715+00:00"
+        }
+      ],
+      "sessions": [
+        {
+          "id": "804abe71-c571-4299-98ba-62138b136c1b",
+          "ticket_id": "a3ef18f9-a976-4cd1-899b-1f0605041d7d",
+          "agent_identifier": "claude-code",
+          "connection_method": "cli",
+          "session_state": "completed",
+          "metadata": {
+            "cwd": "/Users/jake/Development/Cooperativ/Overlord",
+            "model": "claude-sonnet-4-6"
+          },
+          "external_session_id": "99aeddd8-8ec4-411f-8d2a-6ddc61164d3d",
+          "external_url": null,
+          "attached_at": "2026-05-18T07:44:02.59098+00:00",
+          "heartbeat_at": "2026-05-18T07:51:05.27+00:00",
+          "detached_at": "2026-05-18T07:51:05.653+00:00",
+          "created_at": "2026-05-18T07:44:02.59098+00:00",
+          "updated_at": "2026-05-18T07:51:05.669578+00:00"
+        }
+      ],
+      "events": [
+        {
+          "id": "412a4675-fb6f-4735-ad71-cf78fc4229c2",
+          "ticket_id": "a3ef18f9-a976-4cd1-899b-1f0605041d7d",
+          "session_id": null,
+          "objective_id": null,
+          "event_type": "system",
+          "phase": null,
+          "summary": "Assigned agent updated.",
+          "payload": {},
+          "is_blocking": false,
+          "created_by": "41c575ca-4e37-4e8c-af72-b6d673c391cb",
+          "created_at": "2026-05-18T07:43:26.645841+00:00"
+        },
+        {
+          "id": "98960df7-8893-419e-b7fe-9594e1d38f36",
+          "ticket_id": "a3ef18f9-a976-4cd1-899b-1f0605041d7d",
+          "session_id": null,
+          "objective_id": null,
+          "event_type": "system",
+          "phase": null,
+          "summary": "Assigned agent updated.",
+          "payload": {},
+          "is_blocking": false,
+          "created_by": "41c575ca-4e37-4e8c-af72-b6d673c391cb",
+          "created_at": "2026-05-18T07:43:27.492726+00:00"
+        },
+        {
+          "id": "2e3b3214-14c1-479d-9b9c-7e99d5ab8964",
+          "ticket_id": "a3ef18f9-a976-4cd1-899b-1f0605041d7d",
+          "session_id": null,
+          "objective_id": null,
+          "event_type": "system",
+          "phase": null,
+          "summary": "Assigned agent updated.",
+          "payload": {},
+          "is_blocking": false,
+          "created_by": "41c575ca-4e37-4e8c-af72-b6d673c391cb",
+          "created_at": "2026-05-18T07:43:42.470802+00:00"
+        },
+        {
+          "id": "65bd28d7-6220-4266-b5d3-119ef7386fa3",
+          "ticket_id": "a3ef18f9-a976-4cd1-899b-1f0605041d7d",
+          "session_id": null,
+          "objective_id": null,
+          "event_type": "system",
+          "phase": null,
+          "summary": "Assigned agent updated.",
+          "payload": {},
+          "is_blocking": false,
+          "created_by": "41c575ca-4e37-4e8c-af72-b6d673c391cb",
+          "created_at": "2026-05-18T07:43:45.616175+00:00"
+        },
+        {
+          "id": "6967dfdf-b951-4fdb-83b7-1869c811341d",
+          "ticket_id": "a3ef18f9-a976-4cd1-899b-1f0605041d7d",
+          "session_id": null,
+          "objective_id": null,
+          "event_type": "system",
+          "phase": null,
+          "summary": "Objective submitted.",
+          "payload": {},
+          "is_blocking": false,
+          "created_by": "41c575ca-4e37-4e8c-af72-b6d673c391cb",
+          "created_at": "2026-05-18T07:43:47.096243+00:00"
+        },
+        {
+          "id": "3dd4f7db-27a9-4ebc-96db-497a004ea15a",
+          "ticket_id": "a3ef18f9-a976-4cd1-899b-1f0605041d7d",
+          "session_id": "804abe71-c571-4299-98ba-62138b136c1b",
+          "objective_id": "08393f93-8132-4cf9-8a7e-53b34d703fa2",
+          "event_type": "system",
+          "phase": "next-up",
+          "summary": "claude-code attached via cli.",
+          "payload": {
+            "agent_identifier": "claude-code",
+            "connection_method": "cli"
+          },
+          "is_blocking": false,
+          "created_by": "41c575ca-4e37-4e8c-af72-b6d673c391cb",
+          "created_at": "2026-05-18T07:44:03.078327+00:00"
+        },
+        {
+          "id": "9668fd42-ad5f-4c79-b8fc-14bc9ab200a6",
+          "ticket_id": "a3ef18f9-a976-4cd1-899b-1f0605041d7d",
+          "session_id": "804abe71-c571-4299-98ba-62138b136c1b",
+          "objective_id": "08393f93-8132-4cf9-8a7e-53b34d703fa2",
+          "event_type": "update",
+          "phase": "execute",
+          "summary": "Created local git checkpoint for objective 08393f93-8132-4cf9-8a7e-53b34d703fa2.",
+          "payload": {},
+          "is_blocking": false,
+          "created_by": "41c575ca-4e37-4e8c-af72-b6d673c391cb",
+          "created_at": "2026-05-18T07:44:04.464635+00:00"
+        },
+        {
+          "id": "018944b7-b7c9-49cf-9d51-bc3f7714dce8",
+          "ticket_id": "a3ef18f9-a976-4cd1-899b-1f0605041d7d",
+          "session_id": "804abe71-c571-4299-98ba-62138b136c1b",
+          "objective_id": "08393f93-8132-4cf9-8a7e-53b34d703fa2",
+          "event_type": "update",
+          "phase": "execute",
+          "summary": "Explored codebase. Found project_checkpoints table with columns: id, checkpoint_kind, created_at, git_commit_id, git_ref_name, head_sha, objective_id, project_id, session_id, summary, ticket_id, organization_id. ProjectSettingsModal has sidebar nav with pages: General, Resources, Workflow, Tags, Feed, Integrations, Danger zone. Will add a Checkpoints page with table of checkpoints, individual prune buttons, and prune-all-stale button with popover explanation.",
+          "payload": {},
+          "is_blocking": false,
+          "created_by": "41c575ca-4e37-4e8c-af72-b6d673c391cb",
+          "created_at": "2026-05-18T07:45:40.190102+00:00"
+        },
+        {
+          "id": "47ef6811-9675-4d33-8669-23faf1102c02",
+          "ticket_id": "a3ef18f9-a976-4cd1-899b-1f0605041d7d",
+          "session_id": "804abe71-c571-4299-98ba-62138b136c1b",
+          "objective_id": "08393f93-8132-4cf9-8a7e-53b34d703fa2",
+          "event_type": "question",
+          "phase": null,
+          "summary": "Agent requesting permission to use Write",
+          "payload": {
+            "cwd": "/Users/jake/Development/Cooperativ/Overlord",
+            "effort": { "level": "medium" },
+            "tool_name": "Write",
+            "session_id": "99aeddd8-8ec4-411f-8d2a-6ddc61164d3d",
+            "tool_input": {
+              "content": "'use server';\n\nimport { createClientForRequest } from '@/supabase/utils/server';\n\nexport type ProjectCheckpoint = {\n  id: string;\n  checkpoint_kind: string;\n  created_at: string;\n  git_commit_id: string | null;\n  git_ref_name: string | null;\n  head_sha: string | null;\n  summary: string | null;\n  diff_stat: string | null;\n  objective_id: string;\n  ticket_id: string | null;\n  session_id: string | null;\n  objective_state: string | null;\n};\n\nexport async function listProjectCheckpointsAction(projectId: string): Promise<ProjectCheckpoint[]> {\n  /* ...truncated... */\n}\n",
+              "file_path": "/Users/jake/Development/Cooperativ/Overlord/lib/actions/checkpoints.ts"
+            },
+            "hook_event_name": "PermissionRequest",
+            "permission_mode": "default",
+            "transcript_path": "/Users/jake/.claude/projects/-Users-jake-Development-Cooperativ-Overlord/99aeddd8-8ec4-411f-8d2a-6ddc61164d3d.jsonl",
+            "permission_suggestions": [
+              { "mode": "acceptEdits", "type": "setMode", "destination": "session" }
+            ]
+          },
+          "is_blocking": true,
+          "created_by": "41c575ca-4e37-4e8c-af72-b6d673c391cb",
+          "created_at": "2026-05-18T07:46:17.039509+00:00"
+        },
+        {
+          "id": "1858357f-0929-4b63-a61e-3b91e80fe6d8",
+          "ticket_id": "a3ef18f9-a976-4cd1-899b-1f0605041d7d",
+          "session_id": "804abe71-c571-4299-98ba-62138b136c1b",
+          "objective_id": "08393f93-8132-4cf9-8a7e-53b34d703fa2",
+          "event_type": "deliver",
+          "phase": "deliver",
+          "summary": "Added a Checkpoints management page to project settings. Users can now open Project Settings → Checkpoints to see a scrollable table of all checkpoints for the project, each showing its git commit SHA, summary, kind, and datetime, with a per-row delete (prune) button. A \"Prune stale (N)\" button at the top batch-deletes all checkpoints whose objective is complete; a help popover explains what stale means. Three new server actions back the UI: list, delete, and prune-stale. TypeScript and build both pass cleanly.",
+          "payload": {},
+          "is_blocking": false,
+          "created_by": "41c575ca-4e37-4e8c-af72-b6d673c391cb",
+          "created_at": "2026-05-18T07:51:05.348088+00:00"
+        },
+        {
+          "id": "8ee71ba1-4355-40c4-822d-5f3ea02ade35",
+          "ticket_id": "a3ef18f9-a976-4cd1-899b-1f0605041d7d",
+          "session_id": "804abe71-c571-4299-98ba-62138b136c1b",
+          "objective_id": "08393f93-8132-4cf9-8a7e-53b34d703fa2",
+          "event_type": "status_change",
+          "phase": "review",
+          "summary": "Ticket delivered and moved to review.",
+          "payload": {},
+          "is_blocking": false,
+          "created_by": "41c575ca-4e37-4e8c-af72-b6d673c391cb",
+          "created_at": "2026-05-18T07:51:05.713974+00:00"
+        }
+      ],
+      "file_changes": [
+        {
+          "id": "9c4c7952-41d5-4f80-9fcc-e44ff3ed0979",
+          "ticket_id": "a3ef18f9-a976-4cd1-899b-1f0605041d7d",
+          "session_id": "804abe71-c571-4299-98ba-62138b136c1b",
+          "event_id": "1858357f-0929-4b63-a61e-3b91e80fe6d8",
+          "objective_id": "08393f93-8132-4cf9-8a7e-53b34d703fa2",
+          "checkpoint_id": null,
+          "file_name": "checkpoints.ts",
+          "file_path": "lib/actions/checkpoints.ts",
+          "label": "Add checkpoints server actions",
+          "summary": "New server actions for listing, deleting, and pruning stale project checkpoints.",
+          "why": "Needed to power the CheckpointsPage UI — queries project_checkpoints joined to objectives to determine stale state.",
+          "impact": "Exposes three server actions: listProjectCheckpointsAction, deleteProjectCheckpointAction, pruneStaleProjectCheckpointsAction. A checkpoint is stale when its objective.state is complete.",
+          "change_kind": "modify",
+          "attribution_source": "explicit",
+          "confidence": "explicit",
+          "hunks": [{ "header": "@@ -0,0 +1,80 @@" }],
+          "created_at": "2026-05-18T07:51:05.398079+00:00",
+          "updated_at": "2026-05-18T07:51:05.398079+00:00"
+        },
+        {
+          "id": "c216182b-4824-4312-bf19-fed2f6d58eb8",
+          "ticket_id": "a3ef18f9-a976-4cd1-899b-1f0605041d7d",
+          "session_id": "804abe71-c571-4299-98ba-62138b136c1b",
+          "event_id": "1858357f-0929-4b63-a61e-3b91e80fe6d8",
+          "objective_id": "08393f93-8132-4cf9-8a7e-53b34d703fa2",
+          "checkpoint_id": null,
+          "file_name": "CheckpointsPage.tsx",
+          "file_path": "apps/web/components/modals/project-settings/CheckpointsPage.tsx",
+          "label": "Add CheckpointsPage settings component",
+          "summary": "New project settings page showing a scrollable list of checkpoints with prune and prune-all controls.",
+          "why": "Implements the user-facing checkpoint management UI: table rows with commit SHA, summary, kind, datetime; per-row delete button; prune-all-stale button with count badge; help popover explaining what stale means.",
+          "impact": "Users can see all checkpoints for a project, delete individual ones, or batch-prune all stale checkpoints. Stale rows are visually dimmed.",
+          "change_kind": "modify",
+          "attribution_source": "explicit",
+          "confidence": "explicit",
+          "hunks": [{ "header": "@@ -0,0 +1,160 @@" }],
+          "created_at": "2026-05-18T07:51:05.398079+00:00",
+          "updated_at": "2026-05-18T07:51:05.398079+00:00"
+        },
+        {
+          "id": "5342d665-eaaf-44a3-804c-b6174da336fa",
+          "ticket_id": "a3ef18f9-a976-4cd1-899b-1f0605041d7d",
+          "session_id": "804abe71-c571-4299-98ba-62138b136c1b",
+          "event_id": "1858357f-0929-4b63-a61e-3b91e80fe6d8",
+          "objective_id": "08393f93-8132-4cf9-8a7e-53b34d703fa2",
+          "checkpoint_id": null,
+          "file_name": "ProjectSettingsModal.tsx",
+          "file_path": "apps/web/components/modals/ProjectSettingsModal.tsx",
+          "label": "Wire Checkpoints into ProjectSettingsModal",
+          "summary": "Added Checkpoints nav item and page render to the project settings modal sidebar.",
+          "why": "Needed to expose the new CheckpointsPage via the existing project settings navigation pattern.",
+          "impact": "Checkpoints now appears in the project settings sidebar between Integrations and Danger zone.",
+          "change_kind": "modify",
+          "attribution_source": "explicit",
+          "confidence": "explicit",
+          "hunks": [
+            { "header": "@@ -1,6 +1,6 @@" },
+            { "header": "@@ -54,6 +55,7 @@" },
+            { "header": "@@ -226,6 +228,9 @@" }
+          ],
+          "created_at": "2026-05-18T07:51:05.398079+00:00",
+          "updated_at": "2026-05-18T07:51:05.398079+00:00"
+        }
+      ],
+      "project_checkpoints": [
+        {
+          "id": "0de6ac1a-08f4-426e-bac3-4d1a36097122",
+          "organization_id": 1,
+          "project_id": "2fce9af3-dc9e-4929-82da-d8c52e3fcaf6",
+          "ticket_id": "a3ef18f9-a976-4cd1-899b-1f0605041d7d",
+          "objective_id": "08393f93-8132-4cf9-8a7e-53b34d703fa2",
+          "session_id": "804abe71-c571-4299-98ba-62138b136c1b",
+          "event_id": "9668fd42-ad5f-4c79-b8fc-14bc9ab200a6",
+          "checkpoint_kind": "objective",
+          "git_ref_name": "refs/overlord/checkpoints/08393f93-8132-4cf9-8a7e-53b34d703fa2",
+          "git_commit_id": "ae5ef4d3373ac42d14c4bc7968743628026f397e",
+          "head_sha": "9ac08405ee3e79648d57415c686969026c4faba8",
+          "summary": "Created local git checkpoint for objective 08393f93-8132-4cf9-8a7e-53b34d703fa2.",
+          "diff_stat": "apps/web/app/page.tsx                              | 213 +++------------------\n apps/web/app/problems/[slug]/page.tsx              | 154 +++++++++++++++\n apps/web/app/sitemap.ts                            |   9 +-\n .../components/marketing/HeroDashboardGraphic.tsx  | 128 +++++++++++++\n apps/web/components/marketing/HomepageHeader.tsx   |  57 ++++++\n lib/auth/public-routes.ts                          |   1 +\n lib/marketing/problem-pages.ts                     | 144 ++++++++++++++\n 7 files changed, 516 insertions(+), 190 deletions(-)",
+          "created_by": "41c575ca-4e37-4e8c-af72-b6d673c391cb",
+          "created_at": "2026-05-18T07:44:04.515661+00:00"
+        }
+      ],
+      "artifacts": [],
+      "attachments": [],
+      "shared_state": []
+    },
+    {
+      "source": {
+        "supabase_project_ref": "zitmmhvbilhjjdwgxlfm",
+        "source_ticket_id": "1:1098",
+        "source_ticket_uuid": "b5d2c041-7e2b-4a9f-9c83-2af71b6e0d18"
+      },
+      "project": {
+        "id": "2fce9af3-dc9e-4929-82da-d8c52e3fcaf6",
+        "name": "Overlord",
+        "color": "#2dd4bf",
+        "organization_id": 1
+      },
+      "ticket": {
+        "id": "b5d2c041-7e2b-4a9f-9c83-2af71b6e0d18",
+        "ticket_id": "1:1098",
+        "ticket_sequence": 1226,
+        "title": "Slack notifications for ticket activity",
+        "status": "execute",
+        "priority": "high",
+        "board_position": -34,
+        "organization_id": 1,
+        "project_id": "2fce9af3-dc9e-4929-82da-d8c52e3fcaf6",
+        "execution_target": "agent",
+        "context": "Teams want to follow ticket activity in Slack without context-switching to the Overlord dashboard. Start with org-level webhook config; per-user preferences can come later.",
+        "constraints": "Do not block ticket writes on Slack failures — notifications must be best-effort and fully async.",
+        "available_tools": "",
+        "acceptance_criteria": null,
+        "output_format": "",
+        "objective": "",
+        "everhour_task_id": null,
+        "created_by": "41c575ca-4e37-4e8c-af72-b6d673c391cb",
+        "created_at": "2026-05-14T16:08:21.140000+00:00",
+        "updated_at": "2026-05-17T22:43:12.880000+00:00"
+      },
+      "objectives": [
+        {
+          "id": "7e54a1c3-3b9d-4f0e-9c54-1a2b3c4d5e6f",
+          "ticket_id": "b5d2c041-7e2b-4a9f-9c83-2af71b6e0d18",
+          "objective": "Design the notification event schema and database model. Add a notification_events table that records what happened (status_change, deliver, mention, question) and a lightweight worker queue table to drive delivery. Write the migration plus regenerate TypeScript types.",
+          "state": "complete",
+          "auto_advance": true,
+          "position": 0,
+          "created_at": "2026-05-14T16:08:21.244000+00:00"
+        },
+        {
+          "id": "8d62b1a4-5e3a-4b8c-9d7f-2b3c4d5e6f70",
+          "ticket_id": "b5d2c041-7e2b-4a9f-9c83-2af71b6e0d18",
+          "objective": "Implement the Slack webhook integration as a Supabase Edge Function. The function consumes the notification queue, formats Slack Block Kit payloads, posts to the org's configured incoming webhook URL, and retries with exponential backoff on 5xx.",
+          "state": "complete",
+          "auto_advance": true,
+          "position": 1,
+          "created_at": "2026-05-14T16:08:21.244000+00:00"
+        },
+        {
+          "id": "9a73c2b5-6f4b-4c9d-ae80-3c4d5e6f7081",
+          "ticket_id": "b5d2c041-7e2b-4a9f-9c83-2af71b6e0d18",
+          "objective": "Build the user notification preferences UI in Settings → Notifications. Let users opt in/out of categories (mentions, deliveries, blocking questions) and choose a delivery channel (Slack DM via the org bot, or shared channel). Persist preferences in user_notification_preferences.",
+          "state": "draft",
+          "auto_advance": true,
+          "position": 2,
+          "created_at": "2026-05-14T16:08:21.244000+00:00"
+        },
+        {
+          "id": "ab84d3c6-7a5c-4dae-bf91-4d5e6f708192",
+          "ticket_id": "b5d2c041-7e2b-4a9f-9c83-2af71b6e0d18",
+          "objective": "Add notification filtering and quiet hours. Users should be able to mute notifications by project, by ticket priority, and during a daily quiet-hours window in their local timezone.",
+          "state": "future",
+          "auto_advance": true,
+          "position": 3,
+          "created_at": "2026-05-14T16:08:21.244000+00:00"
+        },
+        {
+          "id": "bc95e4d7-8b6d-4eaf-c0a2-5e6f70819203",
+          "ticket_id": "b5d2c041-7e2b-4a9f-9c83-2af71b6e0d18",
+          "objective": "End-to-end tests for the notification flow: simulate a ticket lifecycle (attach → ask → deliver → status_change) and assert the correct sequence of Slack messages is posted, that retries fire on 5xx, and that user preferences correctly suppress unsubscribed categories.",
+          "state": "future",
+          "auto_advance": true,
+          "position": 4,
+          "created_at": "2026-05-14T16:08:21.244000+00:00"
+        }
+      ],
+      "sessions": [
+        {
+          "id": "c1a72f88-9d4e-4b3a-8c61-7e8f9a0b1c2d",
+          "ticket_id": "b5d2c041-7e2b-4a9f-9c83-2af71b6e0d18",
+          "agent_identifier": "claude-code",
+          "connection_method": "cli",
+          "session_state": "completed",
+          "metadata": {
+            "cwd": "/Users/jake/Development/Cooperativ/Overlord",
+            "model": "claude-sonnet-4-6"
+          },
+          "external_session_id": "f12ab3c4-d5e6-4789-90ab-cdef12345678",
+          "external_url": null,
+          "attached_at": "2026-05-14T16:14:08.012000+00:00",
+          "heartbeat_at": "2026-05-14T17:02:19.500000+00:00",
+          "detached_at": "2026-05-14T17:02:19.880000+00:00",
+          "created_at": "2026-05-14T16:14:08.012000+00:00",
+          "updated_at": "2026-05-14T17:02:19.901000+00:00"
+        },
+        {
+          "id": "d2b83099-ae5f-4c4b-9d72-8f90a1b2c3d4",
+          "ticket_id": "b5d2c041-7e2b-4a9f-9c83-2af71b6e0d18",
+          "agent_identifier": "claude-code",
+          "connection_method": "cli",
+          "session_state": "completed",
+          "metadata": {
+            "cwd": "/Users/jake/Development/Cooperativ/Overlord",
+            "model": "claude-opus-4-7"
+          },
+          "external_session_id": "a23bc4d5-e6f7-489a-b0cd-ef1234567890",
+          "external_url": null,
+          "attached_at": "2026-05-17T20:31:44.220000+00:00",
+          "heartbeat_at": "2026-05-17T22:42:51.110000+00:00",
+          "detached_at": "2026-05-17T22:43:10.640000+00:00",
+          "created_at": "2026-05-17T20:31:44.220000+00:00",
+          "updated_at": "2026-05-17T22:43:10.755000+00:00"
+        }
+      ],
+      "events": [
+        {
+          "id": "e3c941aa-bf60-4d5c-ae83-9001a2b3c4d5",
+          "ticket_id": "b5d2c041-7e2b-4a9f-9c83-2af71b6e0d18",
+          "session_id": null,
+          "objective_id": null,
+          "event_type": "system",
+          "phase": null,
+          "summary": "Objective submitted.",
+          "payload": {},
+          "is_blocking": false,
+          "created_by": "41c575ca-4e37-4e8c-af72-b6d673c391cb",
+          "created_at": "2026-05-14T16:13:42.000000+00:00"
+        },
+        {
+          "id": "f4da52bb-c071-4e6d-bf94-a112b3c4d5e6",
+          "ticket_id": "b5d2c041-7e2b-4a9f-9c83-2af71b6e0d18",
+          "session_id": "c1a72f88-9d4e-4b3a-8c61-7e8f9a0b1c2d",
+          "objective_id": "7e54a1c3-3b9d-4f0e-9c54-1a2b3c4d5e6f",
+          "event_type": "system",
+          "phase": "next-up",
+          "summary": "claude-code attached via cli.",
+          "payload": {
+            "agent_identifier": "claude-code",
+            "connection_method": "cli"
+          },
+          "is_blocking": false,
+          "created_by": "41c575ca-4e37-4e8c-af72-b6d673c391cb",
+          "created_at": "2026-05-14T16:14:08.500000+00:00"
+        },
+        {
+          "id": "05eb63cc-d182-4f7e-c0a5-b223c4d5e6f7",
+          "ticket_id": "b5d2c041-7e2b-4a9f-9c83-2af71b6e0d18",
+          "session_id": "c1a72f88-9d4e-4b3a-8c61-7e8f9a0b1c2d",
+          "objective_id": "7e54a1c3-3b9d-4f0e-9c54-1a2b3c4d5e6f",
+          "event_type": "deliver",
+          "phase": "deliver",
+          "summary": "Added migration 20260514161800_notification_events.sql with notification_events and notification_queue tables. Both are organization-scoped with RLS. Regenerated types with `yarn generate`. Queue rows carry status (pending|sent|failed), retry_count, and last_error so the worker can be observed from the dashboard. Migration tested locally with `supabase db reset`.",
+          "payload": {},
+          "is_blocking": false,
+          "created_by": "41c575ca-4e37-4e8c-af72-b6d673c391cb",
+          "created_at": "2026-05-14T17:01:55.200000+00:00"
+        },
+        {
+          "id": "16fc74dd-e293-4081-d1b6-c334d5e6f708",
+          "ticket_id": "b5d2c041-7e2b-4a9f-9c83-2af71b6e0d18",
+          "session_id": "c1a72f88-9d4e-4b3a-8c61-7e8f9a0b1c2d",
+          "objective_id": "7e54a1c3-3b9d-4f0e-9c54-1a2b3c4d5e6f",
+          "event_type": "auto_advance",
+          "phase": "execute",
+          "summary": "Queue advanced to next objective automatically.",
+          "payload": {},
+          "is_blocking": false,
+          "created_by": "41c575ca-4e37-4e8c-af72-b6d673c391cb",
+          "created_at": "2026-05-14T17:02:19.900000+00:00"
+        },
+        {
+          "id": "270d85ee-f3a4-4192-e2c7-d445e6f70819",
+          "ticket_id": "b5d2c041-7e2b-4a9f-9c83-2af71b6e0d18",
+          "session_id": "d2b83099-ae5f-4c4b-9d72-8f90a1b2c3d4",
+          "objective_id": "8d62b1a4-5e3a-4b8c-9d7f-2b3c4d5e6f70",
+          "event_type": "system",
+          "phase": "next-up",
+          "summary": "claude-code attached via cli.",
+          "payload": {
+            "agent_identifier": "claude-code",
+            "connection_method": "cli"
+          },
+          "is_blocking": false,
+          "created_by": "41c575ca-4e37-4e8c-af72-b6d673c391cb",
+          "created_at": "2026-05-17T20:31:44.700000+00:00"
+        },
+        {
+          "id": "381e96ff-04b5-42a3-f3d8-e556f7081920",
+          "ticket_id": "b5d2c041-7e2b-4a9f-9c83-2af71b6e0d18",
+          "session_id": "d2b83099-ae5f-4c4b-9d72-8f90a1b2c3d4",
+          "objective_id": "8d62b1a4-5e3a-4b8c-9d7f-2b3c4d5e6f70",
+          "event_type": "update",
+          "phase": "execute",
+          "summary": "Edge function `slack-notify` scaffolded under supabase/functions/slack-notify. Pulls up to 25 pending rows from notification_queue, formats Block Kit payloads keyed on event_type, posts to the org's webhook URL from organization_integrations, and writes back status + retry_count. Backoff is 2^retry_count seconds, capped at 5 retries.",
+          "payload": {},
+          "is_blocking": false,
+          "created_by": "41c575ca-4e37-4e8c-af72-b6d673c391cb",
+          "created_at": "2026-05-17T21:48:02.330000+00:00"
+        },
+        {
+          "id": "492fa710-15c6-43b4-04e9-f667081920a1",
+          "ticket_id": "b5d2c041-7e2b-4a9f-9c83-2af71b6e0d18",
+          "session_id": "d2b83099-ae5f-4c4b-9d72-8f90a1b2c3d4",
+          "objective_id": "8d62b1a4-5e3a-4b8c-9d7f-2b3c4d5e6f70",
+          "event_type": "deliver",
+          "phase": "deliver",
+          "summary": "Shipped the slack-notify edge function with pg_cron schedule firing every 30s. Tested against a sandbox webhook for status_change, deliver, mention, and question events — all render correctly in Slack. 5xx responses are retried with exponential backoff; permanent 4xx failures mark the row failed and surface the response body in last_error.",
+          "payload": {},
+          "is_blocking": false,
+          "created_by": "41c575ca-4e37-4e8c-af72-b6d673c391cb",
+          "created_at": "2026-05-17T22:42:51.000000+00:00"
+        },
+        {
+          "id": "5a3b0821-26d7-44c5-15fa-077819203b12",
+          "ticket_id": "b5d2c041-7e2b-4a9f-9c83-2af71b6e0d18",
+          "session_id": "d2b83099-ae5f-4c4b-9d72-8f90a1b2c3d4",
+          "objective_id": "8d62b1a4-5e3a-4b8c-9d7f-2b3c4d5e6f70",
+          "event_type": "auto_advance",
+          "phase": "execute",
+          "summary": "Queue advanced to next objective automatically.",
+          "payload": {},
+          "is_blocking": false,
+          "created_by": "41c575ca-4e37-4e8c-af72-b6d673c391cb",
+          "created_at": "2026-05-17T22:43:10.700000+00:00"
+        }
+      ],
+      "file_changes": [
+        {
+          "id": "6b4c1932-37e8-45d6-260b-1889203b1223",
+          "ticket_id": "b5d2c041-7e2b-4a9f-9c83-2af71b6e0d18",
+          "session_id": "c1a72f88-9d4e-4b3a-8c61-7e8f9a0b1c2d",
+          "event_id": "05eb63cc-d182-4f7e-c0a5-b223c4d5e6f7",
+          "objective_id": "7e54a1c3-3b9d-4f0e-9c54-1a2b3c4d5e6f",
+          "checkpoint_id": null,
+          "file_name": "20260514161800_notification_events.sql",
+          "file_path": "supabase/migrations/20260514161800_notification_events.sql",
+          "label": "Notification schema migration",
+          "summary": "Adds notification_events and notification_queue tables with RLS scoped to organization_id.",
+          "why": "Foundation for async Slack notification delivery — the events table is the durable log; the queue table drives the worker.",
+          "impact": "Two new org-scoped tables. notification_queue has status, retry_count, last_error columns to make the worker observable.",
+          "change_kind": "modify",
+          "attribution_source": "explicit",
+          "confidence": "explicit",
+          "hunks": [{ "header": "@@ -0,0 +1,124 @@" }],
+          "created_at": "2026-05-14T17:01:55.230000+00:00",
+          "updated_at": "2026-05-14T17:01:55.230000+00:00"
+        },
+        {
+          "id": "7c5d2a43-48f9-46e7-371c-29a03b122334",
+          "ticket_id": "b5d2c041-7e2b-4a9f-9c83-2af71b6e0d18",
+          "session_id": "c1a72f88-9d4e-4b3a-8c61-7e8f9a0b1c2d",
+          "event_id": "05eb63cc-d182-4f7e-c0a5-b223c4d5e6f7",
+          "objective_id": "7e54a1c3-3b9d-4f0e-9c54-1a2b3c4d5e6f",
+          "checkpoint_id": null,
+          "file_name": "database.types.ts",
+          "file_path": "types/database.types.ts",
+          "label": "Regenerate database types",
+          "summary": "Regenerated TypeScript types to include notification_events and notification_queue.",
+          "why": "Keeps `Database` type in sync with the new migration so server actions get autocomplete and type safety.",
+          "impact": "New rows in the generated Database['public']['Tables'] union.",
+          "change_kind": "modify",
+          "attribution_source": "explicit",
+          "confidence": "explicit",
+          "hunks": [
+            { "header": "@@ -812,6 +812,72 @@" },
+            { "header": "@@ -1244,6 +1310,42 @@" }
+          ],
+          "created_at": "2026-05-14T17:01:55.230000+00:00",
+          "updated_at": "2026-05-14T17:01:55.230000+00:00"
+        },
+        {
+          "id": "8d6e3b54-59aa-47f8-482d-3ab14c233445",
+          "ticket_id": "b5d2c041-7e2b-4a9f-9c83-2af71b6e0d18",
+          "session_id": "d2b83099-ae5f-4c4b-9d72-8f90a1b2c3d4",
+          "event_id": "492fa710-15c6-43b4-04e9-f667081920a1",
+          "objective_id": "8d62b1a4-5e3a-4b8c-9d7f-2b3c4d5e6f70",
+          "checkpoint_id": null,
+          "file_name": "index.ts",
+          "file_path": "supabase/functions/slack-notify/index.ts",
+          "label": "Slack notification worker",
+          "summary": "New edge function that drains notification_queue and posts Block Kit payloads to org webhooks.",
+          "why": "Decouples Slack delivery from ticket writes so notifications can't block or fail the primary flow.",
+          "impact": "Function runs on a 30s pg_cron schedule. Retries 5xx with exponential backoff (cap 5), marks 4xx as failed, and persists last_error for the dashboard.",
+          "change_kind": "modify",
+          "attribution_source": "explicit",
+          "confidence": "explicit",
+          "hunks": [{ "header": "@@ -0,0 +1,218 @@" }],
+          "created_at": "2026-05-17T22:42:51.040000+00:00",
+          "updated_at": "2026-05-17T22:42:51.040000+00:00"
+        },
+        {
+          "id": "9e7f4c65-6abb-4809-593e-4bc25d334556",
+          "ticket_id": "b5d2c041-7e2b-4a9f-9c83-2af71b6e0d18",
+          "session_id": "d2b83099-ae5f-4c4b-9d72-8f90a1b2c3d4",
+          "event_id": "492fa710-15c6-43b4-04e9-f667081920a1",
+          "objective_id": "8d62b1a4-5e3a-4b8c-9d7f-2b3c4d5e6f70",
+          "checkpoint_id": null,
+          "file_name": "20260517220000_slack_notify_cron.sql",
+          "file_path": "supabase/migrations/20260517220000_slack_notify_cron.sql",
+          "label": "Schedule slack-notify via pg_cron",
+          "summary": "Registers a pg_cron job that invokes the slack-notify edge function every 30 seconds.",
+          "why": "Drives the queue without requiring an external scheduler.",
+          "impact": "One pg_cron entry per environment. Disabled in test profiles to keep tests deterministic.",
+          "change_kind": "modify",
+          "attribution_source": "explicit",
+          "confidence": "explicit",
+          "hunks": [{ "header": "@@ -0,0 +1,18 @@" }],
+          "created_at": "2026-05-17T22:42:51.040000+00:00",
+          "updated_at": "2026-05-17T22:42:51.040000+00:00"
+        }
+      ],
+      "project_checkpoints": [
+        {
+          "id": "af80a5d6-7bcc-4910-6a4f-5cd36e445667",
+          "organization_id": 1,
+          "project_id": "2fce9af3-dc9e-4929-82da-d8c52e3fcaf6",
+          "ticket_id": "b5d2c041-7e2b-4a9f-9c83-2af71b6e0d18",
+          "objective_id": "7e54a1c3-3b9d-4f0e-9c54-1a2b3c4d5e6f",
+          "session_id": "c1a72f88-9d4e-4b3a-8c61-7e8f9a0b1c2d",
+          "event_id": "f4da52bb-c071-4e6d-bf94-a112b3c4d5e6",
+          "checkpoint_kind": "objective",
+          "git_ref_name": "refs/overlord/checkpoints/7e54a1c3-3b9d-4f0e-9c54-1a2b3c4d5e6f",
+          "git_commit_id": "3e1b2c4d5e6f70819203a4b5c6d7e8f901a2b3c4",
+          "head_sha": "1c69a7aa9a1b2c3d4e5f60718293a4b5c6d7e8f9",
+          "summary": "Created local git checkpoint for objective 7e54a1c3-3b9d-4f0e-9c54-1a2b3c4d5e6f.",
+          "diff_stat": " 0 files changed, 0 insertions(+), 0 deletions(-)",
+          "created_by": "41c575ca-4e37-4e8c-af72-b6d673c391cb",
+          "created_at": "2026-05-14T16:14:09.110000+00:00"
+        },
+        {
+          "id": "b091b6e7-8cdd-4a21-7b50-6de47f556778",
+          "organization_id": 1,
+          "project_id": "2fce9af3-dc9e-4929-82da-d8c52e3fcaf6",
+          "ticket_id": "b5d2c041-7e2b-4a9f-9c83-2af71b6e0d18",
+          "objective_id": "8d62b1a4-5e3a-4b8c-9d7f-2b3c4d5e6f70",
+          "session_id": "d2b83099-ae5f-4c4b-9d72-8f90a1b2c3d4",
+          "event_id": "270d85ee-f3a4-4192-e2c7-d445e6f70819",
+          "checkpoint_kind": "objective",
+          "git_ref_name": "refs/overlord/checkpoints/8d62b1a4-5e3a-4b8c-9d7f-2b3c4d5e6f70",
+          "git_commit_id": "4f2c3d5e6f70819203a4b5c6d7e8f901a2b3c4d5",
+          "head_sha": "f94b76791c2d3e4f50617283a4b5c6d7e8f90a1b",
+          "summary": "Created local git checkpoint for objective 8d62b1a4-5e3a-4b8c-9d7f-2b3c4d5e6f70.",
+          "diff_stat": " supabase/migrations/20260514161800_notification_events.sql | 124 +++++++++++++++++++++\n types/database.types.ts                                    | 108 ++++++++++++++++--\n 2 files changed, 226 insertions(+), 6 deletions(-)",
+          "created_by": "41c575ca-4e37-4e8c-af72-b6d673c391cb",
+          "created_at": "2026-05-17T20:31:45.220000+00:00"
+        }
+      ],
+      "artifacts": [],
+      "attachments": [],
+      "shared_state": []
+    },
+    {
+      "source": {
+        "supabase_project_ref": "zitmmhvbilhjjdwgxlfm",
+        "source_ticket_id": "1:1107",
+        "source_ticket_uuid": "c70e3f12-8a6b-4d5e-bf91-3ab82c4d5e6f"
+      },
+      "project": {
+        "id": "2fce9af3-dc9e-4929-82da-d8c52e3fcaf6",
+        "name": "Overlord",
+        "color": "#2dd4bf",
+        "organization_id": 1
+      },
+      "ticket": {
+        "id": "c70e3f12-8a6b-4d5e-bf91-3ab82c4d5e6f",
+        "ticket_id": "1:1107",
+        "ticket_sequence": 1235,
+        "title": "Add CSV export to ticket reports",
+        "status": "review",
+        "priority": "low",
+        "board_position": -42,
+        "organization_id": 1,
+        "project_id": "2fce9af3-dc9e-4929-82da-d8c52e3fcaf6",
+        "execution_target": "agent",
+        "context": "Ops asked for a way to pull ticket activity into spreadsheets for monthly reviews. Out of scope: scheduled email delivery, custom column picker.",
+        "constraints": "",
+        "available_tools": "",
+        "acceptance_criteria": null,
+        "output_format": "",
+        "objective": "",
+        "everhour_task_id": null,
+        "created_by": "41c575ca-4e37-4e8c-af72-b6d673c391cb",
+        "created_at": "2026-05-16T14:22:09.310000+00:00",
+        "updated_at": "2026-05-16T15:05:48.940000+00:00"
+      },
+      "objectives": [
+        {
+          "id": "d1f4a623-9b7c-4e6d-c0a2-4bc93d5e6f70",
+          "ticket_id": "c70e3f12-8a6b-4d5e-bf91-3ab82c4d5e6f",
+          "objective": "Add an `Export CSV` button to the ticket reports page. Clicking it should download the currently filtered ticket list with columns: ticket_id, title, status, priority, project, assignee, created_at, updated_at. Generate the CSV on the server to respect RLS.",
+          "state": "complete",
+          "auto_advance": true,
+          "position": 0,
+          "created_at": "2026-05-16T14:22:09.420000+00:00"
+        }
+      ],
+      "sessions": [
+        {
+          "id": "e2a5b734-acd8-4f7e-d1b3-5cd04e6f7081",
+          "ticket_id": "c70e3f12-8a6b-4d5e-bf91-3ab82c4d5e6f",
+          "agent_identifier": "claude-code",
+          "connection_method": "cli",
+          "session_state": "completed",
+          "metadata": {
+            "cwd": "/Users/jake/Development/Cooperativ/Overlord",
+            "model": "claude-haiku-4-5-20251001"
+          },
+          "external_session_id": "b34cd5e6-f789-490a-b0cd-ef2345678901",
+          "external_url": null,
+          "attached_at": "2026-05-16T14:25:11.800000+00:00",
+          "heartbeat_at": "2026-05-16T15:05:24.500000+00:00",
+          "detached_at": "2026-05-16T15:05:48.770000+00:00",
+          "created_at": "2026-05-16T14:25:11.800000+00:00",
+          "updated_at": "2026-05-16T15:05:48.811000+00:00"
+        }
+      ],
+      "events": [
+        {
+          "id": "f3b6c845-bde9-408f-e2c4-6de15f708192",
+          "ticket_id": "c70e3f12-8a6b-4d5e-bf91-3ab82c4d5e6f",
+          "session_id": null,
+          "objective_id": null,
+          "event_type": "system",
+          "phase": null,
+          "summary": "Objective submitted.",
+          "payload": {},
+          "is_blocking": false,
+          "created_by": "41c575ca-4e37-4e8c-af72-b6d673c391cb",
+          "created_at": "2026-05-16T14:24:33.000000+00:00"
+        },
+        {
+          "id": "04c7d956-cefa-4190-f3d5-7ef26f0819a3",
+          "ticket_id": "c70e3f12-8a6b-4d5e-bf91-3ab82c4d5e6f",
+          "session_id": "e2a5b734-acd8-4f7e-d1b3-5cd04e6f7081",
+          "objective_id": "d1f4a623-9b7c-4e6d-c0a2-4bc93d5e6f70",
+          "event_type": "system",
+          "phase": "next-up",
+          "summary": "claude-code attached via cli.",
+          "payload": {
+            "agent_identifier": "claude-code",
+            "connection_method": "cli"
+          },
+          "is_blocking": false,
+          "created_by": "41c575ca-4e37-4e8c-af72-b6d673c391cb",
+          "created_at": "2026-05-16T14:25:12.200000+00:00"
+        },
+        {
+          "id": "15d8ea67-d00b-42a1-04e6-8f0370819ab4",
+          "ticket_id": "c70e3f12-8a6b-4d5e-bf91-3ab82c4d5e6f",
+          "session_id": "e2a5b734-acd8-4f7e-d1b3-5cd04e6f7081",
+          "objective_id": "d1f4a623-9b7c-4e6d-c0a2-4bc93d5e6f70",
+          "event_type": "update",
+          "phase": "execute",
+          "summary": "Created local git checkpoint for objective d1f4a623-9b7c-4e6d-c0a2-4bc93d5e6f70.",
+          "payload": {},
+          "is_blocking": false,
+          "created_by": "41c575ca-4e37-4e8c-af72-b6d673c391cb",
+          "created_at": "2026-05-16T14:25:13.640000+00:00"
+        },
+        {
+          "id": "26e9fb78-e11c-43b2-15f7-9014819abc05",
+          "ticket_id": "c70e3f12-8a6b-4d5e-bf91-3ab82c4d5e6f",
+          "session_id": "e2a5b734-acd8-4f7e-d1b3-5cd04e6f7081",
+          "objective_id": "d1f4a623-9b7c-4e6d-c0a2-4bc93d5e6f70",
+          "event_type": "deliver",
+          "phase": "deliver",
+          "summary": "Added an `Export CSV` button to the ticket reports page. The download is generated by a new server action `exportTicketsCsvAction` that streams a CSV with the filtered ticket set; RLS is enforced because the action uses the request-scoped Supabase client. Columns match the spec: ticket_id, title, status, priority, project, assignee, created_at, updated_at. Verified output opens cleanly in Numbers and Google Sheets.",
+          "payload": {},
+          "is_blocking": false,
+          "created_by": "41c575ca-4e37-4e8c-af72-b6d673c391cb",
+          "created_at": "2026-05-16T15:05:24.700000+00:00"
+        },
+        {
+          "id": "370a0c89-f22d-44c3-2608-a125192abd16",
+          "ticket_id": "c70e3f12-8a6b-4d5e-bf91-3ab82c4d5e6f",
+          "session_id": "e2a5b734-acd8-4f7e-d1b3-5cd04e6f7081",
+          "objective_id": "d1f4a623-9b7c-4e6d-c0a2-4bc93d5e6f70",
+          "event_type": "status_change",
+          "phase": "review",
+          "summary": "Ticket delivered and moved to review.",
+          "payload": {},
+          "is_blocking": false,
+          "created_by": "41c575ca-4e37-4e8c-af72-b6d673c391cb",
+          "created_at": "2026-05-16T15:05:48.880000+00:00"
+        }
+      ],
+      "file_changes": [
+        {
+          "id": "481b1d9a-033e-45d4-3719-b23620abce27",
+          "ticket_id": "c70e3f12-8a6b-4d5e-bf91-3ab82c4d5e6f",
+          "session_id": "e2a5b734-acd8-4f7e-d1b3-5cd04e6f7081",
+          "event_id": "26e9fb78-e11c-43b2-15f7-9014819abc05",
+          "objective_id": "d1f4a623-9b7c-4e6d-c0a2-4bc93d5e6f70",
+          "checkpoint_id": null,
+          "file_name": "tickets-export.ts",
+          "file_path": "lib/actions/tickets-export.ts",
+          "label": "Add CSV export server action",
+          "summary": "New `exportTicketsCsvAction` server action returns a CSV string for the filtered ticket set.",
+          "why": "Generating CSV on the server keeps RLS enforcement in place and avoids shipping every row to the client just to format it.",
+          "impact": "Reports page can download the current filtered list as CSV. Columns: ticket_id, title, status, priority, project, assignee, created_at, updated_at.",
+          "change_kind": "modify",
+          "attribution_source": "explicit",
+          "confidence": "explicit",
+          "hunks": [{ "header": "@@ -0,0 +1,72 @@" }],
+          "created_at": "2026-05-16T15:05:24.730000+00:00",
+          "updated_at": "2026-05-16T15:05:24.730000+00:00"
+        },
+        {
+          "id": "592c2eab-144f-4605-482a-c34731bcde38",
+          "ticket_id": "c70e3f12-8a6b-4d5e-bf91-3ab82c4d5e6f",
+          "session_id": "e2a5b734-acd8-4f7e-d1b3-5cd04e6f7081",
+          "event_id": "26e9fb78-e11c-43b2-15f7-9014819abc05",
+          "objective_id": "d1f4a623-9b7c-4e6d-c0a2-4bc93d5e6f70",
+          "checkpoint_id": null,
+          "file_name": "ReportsPage.tsx",
+          "file_path": "apps/web/components/reports/ReportsPage.tsx",
+          "label": "Wire Export CSV button",
+          "summary": "Adds the `Export CSV` button to the reports toolbar and triggers a download from the new server action.",
+          "why": "Surfaces the export action without disturbing the existing filter UI.",
+          "impact": "Button appears next to the filter controls. Disabled while a previous export is in flight.",
+          "change_kind": "modify",
+          "attribution_source": "explicit",
+          "confidence": "explicit",
+          "hunks": [
+            { "header": "@@ -12,6 +12,7 @@" },
+            { "header": "@@ -88,6 +89,18 @@" }
+          ],
+          "created_at": "2026-05-16T15:05:24.730000+00:00",
+          "updated_at": "2026-05-16T15:05:24.730000+00:00"
+        }
+      ],
+      "project_checkpoints": [
+        {
+          "id": "6a3d3fbc-2550-4716-593b-d45842cdef49",
+          "organization_id": 1,
+          "project_id": "2fce9af3-dc9e-4929-82da-d8c52e3fcaf6",
+          "ticket_id": "c70e3f12-8a6b-4d5e-bf91-3ab82c4d5e6f",
+          "objective_id": "d1f4a623-9b7c-4e6d-c0a2-4bc93d5e6f70",
+          "session_id": "e2a5b734-acd8-4f7e-d1b3-5cd04e6f7081",
+          "event_id": "15d8ea67-d00b-42a1-04e6-8f0370819ab4",
+          "checkpoint_kind": "objective",
+          "git_ref_name": "refs/overlord/checkpoints/d1f4a623-9b7c-4e6d-c0a2-4bc93d5e6f70",
+          "git_commit_id": "5d3e4f60718293a4b5c6d7e8f901a2b3c4d5e6f7",
+          "head_sha": "bec9d592a1b2c3d4e5f60718293a4b5c6d7e8f90",
+          "summary": "Created local git checkpoint for objective d1f4a623-9b7c-4e6d-c0a2-4bc93d5e6f70.",
+          "diff_stat": " 0 files changed, 0 insertions(+), 0 deletions(-)",
+          "created_by": "41c575ca-4e37-4e8c-af72-b6d673c391cb",
+          "created_at": "2026-05-16T14:25:13.690000+00:00"
+        }
+      ],
+      "artifacts": [],
+      "attachments": [],
+      "shared_state": []
+    }
+  ]
+}

@@ -1,6 +1,15 @@
 'use client';
 
-import { FolderTree, GitBranch, Link2, Newspaper, Settings, Tag, Trash2 } from 'lucide-react';
+import {
+  FolderTree,
+  GitBranch,
+  GitCommit,
+  Link2,
+  Newspaper,
+  Settings,
+  Tag,
+  Trash2
+} from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import {
@@ -32,6 +41,7 @@ import {
 import type { ProjectSshAuthMethod } from '@/lib/actions/project-types';
 import type { Database } from '@/types/database.types';
 
+import { CheckpointsPage } from './project-settings/CheckpointsPage';
 import { DangerZonePage } from './project-settings/DangerZonePage';
 import { FeedPage } from './project-settings/FeedPage';
 import { GeneralPage } from './project-settings/GeneralPage';
@@ -54,6 +64,7 @@ const navItems: NavItem[] = [
   { name: 'Tags', icon: Tag },
   { name: 'Feed', icon: Newspaper },
   { name: 'Integrations', icon: Link2 },
+  { name: 'Checkpoints', icon: GitCommit },
   { name: 'Danger zone', icon: Trash2 }
 ];
 
@@ -226,6 +237,7 @@ export function ProjectSettingsModal({
                   open={open}
                 />
               )}
+              {activeNav === 'Checkpoints' && <CheckpointsPage open={open} projectId={projectId} />}
               {activeNav === 'Danger zone' && (
                 <DangerZonePage
                   projectId={projectId}

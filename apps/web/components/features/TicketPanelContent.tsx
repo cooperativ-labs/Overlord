@@ -36,7 +36,7 @@ import {
   buildResumeCommands
 } from '@/lib/overlord/launch-commands';
 import { createClientForRequest } from '@/supabase/utils/server';
-import type { Database } from '@/types/database.types';
+import type { TicketType } from '@/types/tickets';
 
 import { TicketTagEditor } from './TicketTagEditor';
 import { TicketToolsAndCriteria } from './TicketToolsAndCriteria';
@@ -63,7 +63,7 @@ export async function TicketPanelContent({
     data: { user }
   } = await supabase.auth.getUser();
 
-  let ticket: Database['public']['Tables']['tickets']['Row'] | null = null;
+  let ticket: TicketType | null = null;
   let ticketError: Error | null = null;
 
   for (let attempt = 0; attempt <= CREATED_TICKET_WAIT_RETRIES; attempt += 1) {
@@ -158,10 +158,10 @@ export async function TicketPanelContent({
       .order('name', { ascending: true }),
     ticket.schedule_id
       ? supabase
-          .from('schedule')
-          .select('period_type,period_interval,days_of_week,days_of_month,weeks_of_month,timezone')
-          .eq('id', ticket.schedule_id)
-          .maybeSingle()
+        .from('schedule')
+        .select('period_type,period_interval,days_of_week,days_of_month,weeks_of_month,timezone')
+        .eq('id', ticket.schedule_id)
+        .maybeSingle()
       : Promise.resolve({ data: null, error: null }),
     supabase
       .from('agent_sessions')
@@ -173,7 +173,7 @@ export async function TicketPanelContent({
     supabase
       .from('objectives')
       .select(
-        'id,objective,created_at,title,state,agent_identifier,model_identifier,assigned_agent,position,auto_advance,auto_advanced_at,approval_reason'
+        'id,objective,created_at,title,state,agent_identifier,model_identifier,assigned_agent,position,auto_advance,auto_advanced_at,approval_reason,updated_at'
       )
       .eq('ticket_id', ticketId)
       .order('created_at', { ascending: false }),
@@ -304,16 +304,16 @@ export async function TicketPanelContent({
   const initialTags = ticket.project_id ? await getTicketTagsAction(ticketId).catch(() => []) : [];
   const allProjectCheckpointObjectiveIds = ticket.project_id
     ? (
-        (
-          await supabase
-            .from('project_checkpoints')
-            .select('objective_id')
-            .eq('project_id', ticket.project_id)
-            .not('objective_id', 'is', null)
-        ).data ?? []
-      )
-        .map(checkpoint => checkpoint.objective_id)
-        .filter((objectiveId): objectiveId is string => Boolean(objectiveId))
+      (
+        await supabase
+          .from('project_checkpoints')
+          .select('objective_id')
+          .eq('project_id', ticket.project_id)
+          .not('objective_id', 'is', null)
+      ).data ?? []
+    )
+      .map(checkpoint => checkpoint.objective_id)
+      .filter((objectiveId): objectiveId is string => Boolean(objectiveId))
     : [];
 
   return (
@@ -383,15 +383,15 @@ export async function TicketPanelContent({
                   initialSchedule={
                     schedule
                       ? {
-                          periodType: schedule.period_type,
-                          periodInterval: schedule.period_interval,
-                          daysOfWeek: Array.isArray(schedule.days_of_week)
-                            ? schedule.days_of_week
-                            : [],
-                          daysOfMonth: schedule.days_of_month ?? undefined,
-                          weeksOfMonth: schedule.weeks_of_month ?? undefined,
-                          timezone: schedule.timezone
-                        }
+                        periodType: schedule.period_type,
+                        periodInterval: schedule.period_interval,
+                        daysOfWeek: Array.isArray(schedule.days_of_week)
+                          ? schedule.days_of_week
+                          : [],
+                        daysOfMonth: schedule.days_of_month ?? undefined,
+                        weeksOfMonth: schedule.weeks_of_month ?? undefined,
+                        timezone: schedule.timezone
+                      }
                       : null
                   }
                 />

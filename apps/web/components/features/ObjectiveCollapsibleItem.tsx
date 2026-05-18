@@ -34,19 +34,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import type { ObjectiveAttachment } from '@/lib/actions/attachments';
 import { getAgentTypeByIdentifier } from '@/lib/helpers/agent-types';
 import { cn } from '@/lib/utils';
-import type { Database } from '@/types/database.types';
-
-type ObjectiveRow = Pick<
-  Database['public']['Tables']['objectives']['Row'],
-  | 'id'
-  | 'objective'
-  | 'created_at'
-  | 'title'
-  | 'state'
-  | 'agent_identifier'
-  | 'model_identifier'
-  | 'auto_advanced_at'
->;
+import type { ObjectiveRow } from '@/types/objectives';
 
 type ObjectiveCheckpoint = {
   git_ref_name: string | null;

@@ -30,6 +30,10 @@ type AgentModelSelectorProps = {
   onAgentSelect?: (agent: LaunchAgentType) => void;
   /** When true, renders inline (for settings page). When false, renders compact (for popover). */
   inline?: boolean;
+  /** Marketing/demo surfaces: UI only, no preference persistence. */
+  demo?: boolean;
+  /** When set, uses this catalog instead of the fetched/offered-models cache. */
+  catalogModels?: AgentModel[];
 };
 
 const AGENT_MODEL_SELECTION_EVENT = 'overlord:agent-model-selection-changed';
@@ -53,6 +57,12 @@ let cachedSelection: AgentModelSelection | null = null;
  * user actions update it directly, broadcasts sync it across components, and the fire-and-forget
  * server saves never feed back into client state.
  */
+export function seedAgentModelsCache(models: AgentModel[]): void {
+  if (models.length > 0) {
+    cachedResolvedModels = models;
+  }
+}
+
 export function AgentModelsPrefetch({
   models,
   configs,
@@ -62,6 +72,7 @@ export function AgentModelsPrefetch({
   configs: Record<string, AgentConfig>;
   launchPreference: UserLaunchPreference | null;
 }) {
+  seedAgentModelsCache(models);
   if (cachedResolvedModels === null) {
     cachedResolvedModels = models;
   }
@@ -155,9 +166,13 @@ export function AgentModelSelector({
   value,
   onChange,
   onAgentSelect,
-  inline = false
+  inline = false,
+  demo = false,
+  catalogModels
 }: AgentModelSelectorProps) {
-  const { models, loading } = useAgentModels();
+  const { models: fetchedModels, loading: fetchedLoading } = useAgentModels();
+  const models = catalogModels ?? fetchedModels;
+  const loading = catalogModels ? false : fetchedLoading;
 
   const modelsByAgent = useMemo(() => {
     const grouped: Record<string, AgentModel[]> = {};
@@ -182,9 +197,11 @@ export function AgentModelSelector({
 
       const newSelection: AgentModelSelection = { agent, model: null, thinking: null };
       onChange(newSelection);
-      void updateUserLaunchAgentPreferenceAction(agent);
+      if (!demo) {
+        void updateUserLaunchAgentPreferenceAction(agent);
+      }
     },
-    [onAgentSelect, onChange]
+    [demo, onAgentSelect, onChange]
   );
 
   const handleModelChange = useCallback(
@@ -195,9 +212,11 @@ export function AgentModelSelector({
         thinking: null
       };
       onChange(newSelection);
-      void updateAgentModelPreferenceAction(value.agent, modelId, null);
+      if (!demo) {
+        void updateAgentModelPreferenceAction(value.agent, modelId, null);
+      }
     },
-    [onChange, value.agent]
+    [demo, onChange, value.agent]
   );
 
   const handleThinkingChange = useCallback(
@@ -208,9 +227,11 @@ export function AgentModelSelector({
         thinking
       };
       onChange(newSelection);
-      void updateAgentModelPreferenceAction(value.agent, value.model, thinking);
+      if (!demo) {
+        void updateAgentModelPreferenceAction(value.agent, value.model, thinking);
+      }
     },
-    [onChange, value.agent, value.model]
+    [demo, onChange, value.agent, value.model]
   );
 
   return (

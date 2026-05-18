@@ -6,7 +6,7 @@ import type { LaunchTerminalAgentParams } from '@/types/electron';
 
 import { useElectron } from './useElectron';
 
-type TerminalContextValue = {
+export type TerminalContextValue = {
   isElectron: boolean;
   launchAgent: (params: LaunchTerminalAgentParams) => Promise<void>;
 };
@@ -36,8 +36,12 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
   );
 }
 
+export function useTerminalOptional(): TerminalContextValue | null {
+  return useContext(TerminalContext);
+}
+
 export function useTerminal() {
-  const ctx = useContext(TerminalContext);
+  const ctx = useTerminalOptional();
   if (!ctx) {
     throw new Error('useTerminal must be used within a TerminalProvider');
   }

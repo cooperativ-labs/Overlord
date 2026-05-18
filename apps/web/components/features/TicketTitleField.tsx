@@ -11,25 +11,9 @@ import { useUpdateTicketFieldsMutation } from '@/lib/client-data/tickets/mutatio
 import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
 import { useTicketObjectivesRealtime } from '@/lib/hooks/use-ticket-objectives-realtime';
 import { cn } from '@/lib/utils';
-import type { Database } from '@/types/database.types';
+import type { ObjectiveRow } from '@/types/objectives';
 
 const generateTicketTitleActionWithRetry = withElectronActionRetry(generateTicketTitleAction);
-
-type ObjectiveRow = Pick<
-  Database['public']['Tables']['objectives']['Row'],
-  | 'id'
-  | 'objective'
-  | 'created_at'
-  | 'title'
-  | 'state'
-  | 'agent_identifier'
-  | 'model_identifier'
-  | 'assigned_agent'
-  | 'position'
-  | 'auto_advance'
-  | 'auto_advanced_at'
-  | 'approval_reason'
->;
 
 type TicketTitleFieldProps = {
   ticketId: string;

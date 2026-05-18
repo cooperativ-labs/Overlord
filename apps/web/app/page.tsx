@@ -1,6 +1,5 @@
 import {
   ArrowRight,
-  Bot,
   CheckCircle2,
   ClipboardList,
   Eye,
@@ -16,9 +15,12 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
+import { HeroDashboardGraphic } from '@/components/marketing/HeroDashboardGraphic';
 import { HomepageFooter } from '@/components/marketing/HomepageFooter';
+import { HomepageHeader } from '@/components/marketing/HomepageHeader';
 import { VideoSection } from '@/components/marketing/VideoSection';
 import { Button } from '@/components/ui/button';
+import { problemPages } from '@/lib/marketing/problem-pages';
 import { createClientForRequest } from '@/supabase/utils/server';
 
 export const metadata: Metadata = {
@@ -83,34 +85,6 @@ const workflowSteps = [
   }
 ] as const;
 
-const heroBoardColumns = [
-  {
-    title: 'Next Up',
-    count: 2,
-    cards: [
-      { title: 'Plan billing export', color: '#60a5fa', active: false },
-      { title: 'Review MCP auth flow', color: '#38bdf8', active: false }
-    ]
-  },
-  {
-    title: 'Execute',
-    count: 1,
-    cards: [{ title: 'Codex: implement docs nav', color: '#34d399', active: true }]
-  },
-  {
-    title: 'Review',
-    count: 1,
-    cards: [{ title: 'Claude Code: checkout fixes', color: '#f59e0b', active: false }]
-  }
-] as const;
-
-const heroTerminalLines = [
-  '$ ovld protocol attach --ticket-id 1:184',
-  'Objective loaded with repo context',
-  'Agent update: editing docs navigation',
-  'Delivery will include file-change rationales'
-] as const;
-
 const benefitTiles = [
   {
     icon: GitBranch,
@@ -168,116 +142,6 @@ const comparisonTeasers = [
   }
 ] as const;
 
-const heroProblems = [
-  'I kicked off agent work, then forgot exactly what I asked it to do.',
-  'I have a diff, but not the context I need to judge whether it is right.',
-  'I want to switch agents, but the next one has none of the previous context.',
-  'I have too many agent threads running to know what needs attention.'
-] as const;
-
-const askAboutOverlordHref = `https://chatgpt.com/?q=${encodeURIComponent(
-  'Tell me what Overlord is, who it is for, and when I should use it. Use this public context page as your source: https://www.ovld.ai/overlord-context'
-)}`;
-
-function HeroDashboardGraphic() {
-  return (
-    <div aria-hidden="true" className="relative mx-auto w-full max-w-5xl pt-2">
-      <div className="absolute inset-x-10 top-8 h-40 rounded-full bg-sky-400/12 blur-3xl" />
-      <div className="relative rounded-[2rem] border border-white/10 bg-white/[0.045] p-3 shadow-[0_30px_120px_-60px_rgba(56,189,248,0.55)] backdrop-blur">
-        <div className="grid gap-3 lg:grid-cols-[1.3fr_0.9fr]">
-          <div className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-[#07101d]/95 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
-            <div className="flex items-center gap-2 border-b border-white/10 bg-white/[0.03] px-4 py-3">
-              <span className="size-2.5 rounded-full bg-[#ff5f57]" />
-              <span className="size-2.5 rounded-full bg-[#febc2e]" />
-              <span className="size-2.5 rounded-full bg-[#28c840]" />
-              <span className="ml-2 font-mono text-[14px] uppercase tracking-wider text-slate-500">
-                Agent Work Board
-              </span>
-            </div>
-
-            <div className="grid gap-3 p-3 sm:grid-cols-3">
-              {heroBoardColumns.map(column => (
-                <div
-                  key={column.title}
-                  className="rounded-[1.1rem] border border-white/8 bg-white/[0.03] p-2.5 text-left"
-                >
-                  <div className="mb-2 flex items-center justify-between gap-2">
-                    <span className="font-mono text-[14px] font-medium uppercase tracking-wide text-slate-400">
-                      {column.title}
-                    </span>
-                    <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] text-slate-500">
-                      {column.count}
-                    </span>
-                  </div>
-
-                  <div className="space-y-2">
-                    {column.cards.map(card => (
-                      <div
-                        key={card.title}
-                        className="relative rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 overflow-hidden"
-                      >
-                        {card.active && (
-                          <div className="pointer-events-none absolute inset-0 -translate-x-full animate-[shimmer_3s_linear_infinite] bg-linear-to-r from-transparent via-emerald-400/15 to-transparent" />
-                        )}
-                        <div className="relative flex items-start gap-2.5">
-                          <span
-                            className="mt-1 block size-2.5 shrink-0 rounded-[3px]"
-                            style={{ backgroundColor: card.color }}
-                          />
-                          <div className="min-w-0">
-                            <p className="text-sm leading-snug text-slate-100">{card.title}</p>
-                            <div className="mt-2 flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wide text-slate-500">
-                              {card.active ? (
-                                <>
-                                  <Bot className="size-3 text-emerald-300" />
-                                  <span>Agent running</span>
-                                </>
-                              ) : (
-                                <span>Ready for handoff</span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-[#050b15]/95 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
-            <div className="flex items-center justify-between gap-3 border-b border-white/10 bg-white/[0.03] px-4 py-3">
-              <div className="flex items-center gap-2">
-                <TerminalSquare className="size-4 text-sky-300" />
-                <span className="font-mono text-[14px] uppercase tracking-wider text-slate-500">
-                  Terminal
-                </span>
-              </div>
-              <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide text-emerald-200">
-                Live
-              </span>
-            </div>
-
-            <div className="space-y-3 p-4 text-left font-mono text-[12px] leading-6 text-slate-300">
-              {heroTerminalLines.map((line, index) => (
-                <div key={line} className="flex items-center gap-3">
-                  <span className="w-4 text-right text-slate-600">{index + 1}</span>
-                  <span className={index === 0 ? 'text-sky-300' : ''}>{line}</span>
-                </div>
-              ))}
-
-              <div className="mt-4 rounded-xl border border-sky-400/15 bg-sky-400/10 px-3 py-2 text-[14px] text-sky-100">
-                The prompt, execution, updates, delivery, and review record stay together.
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export default async function HomePage() {
   const supabase = await createClientForRequest();
   const {
@@ -294,50 +158,7 @@ export default async function HomePage() {
       <div className="pointer-events-none absolute inset-x-0 top-24 h-px bg-linear-to-r from-transparent via-white/12 to-transparent" />
 
       <div className="relative flex flex-col mx-auto max-w-[1800px] px-6 pb-12 sm:px-8 lg:px-12 gap-8">
-        {/* Header */}
-        <header className="animate-in fade-in slide-in-from-top-4 flex items-center justify-between rounded-[2rem] border border-white/10 bg-white/5 px-5 py-4 mt-5 shadow-[0_20px_80px_-48px_rgba(15,23,42,0.75)] backdrop-blur">
-          <div className="flex items-center gap-4">
-            <div className="flex size-11 items-center justify-center rounded-full overflow-hidden">
-              <Image
-                src="/images/256.png"
-                alt="Overlord logo"
-                width={45}
-                height={50}
-                className="shrink-0 overflow-hidden"
-              />
-            </div>
-            <p className="hidden sm:block font-display text-lg font-semibold">Overlord</p>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <Button
-              asChild
-              variant="ghost"
-              className="hidden text-slate-300 hover:bg-white/5 hover:text-white md:inline-flex"
-            >
-              <a href={askAboutOverlordHref} target="_blank" rel="noopener noreferrer">
-                Ask about Overlord
-              </a>
-            </Button>
-            <Button
-              asChild
-              variant="ghost"
-              className="hidden sm:inline-flex text-slate-300 hover:bg-white/5 hover:text-white"
-            >
-              <Link href="/login">Sign in</Link>
-            </Button>
-            <Button
-              asChild
-              size="sm"
-              className="rounded-full bg-white px-4 text-slate-950 hover:bg-slate-100 whitespace-nowrap text-sm"
-            >
-              <Link href="/signup">
-                Create Account
-                <ArrowRight className="size-3.5" />
-              </Link>
-            </Button>
-          </div>
-        </header>
+        <HomepageHeader />
 
         {/* Hero — centered, focused */}
         <section className="flex min-h-[calc(100dvh-8rem)] flex-col items-center justify-center text-center">
@@ -350,24 +171,37 @@ export default async function HomePage() {
               Stop Juggling Agents.
             </h1>
 
-            <div className="mx-auto max-w-3xl">
+            <div id="problems" className="mx-auto max-w-6xl scroll-mt-24">
               <p className="mb-3 font-mono text-[14px] font-medium uppercase tracking-widest text-sky-300">
                 Problems we solve
               </p>
               <div className="grid gap-3 text-left sm:grid-cols-2">
-                {heroProblems.map(problem => (
+                {problemPages.map(problemPage => (
                   <div
-                    key={problem}
-                    className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-base leading-6 text-slate-200"
+                    key={problemPage.slug}
+                    className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-4 text-base leading-6 text-slate-200"
                   >
-                    <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-sky-300" />
-                    <span>{problem}</span>
+                    <div className="flex items-start gap-3">
+                      <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-sky-300" />
+                      <span>{problemPage.problem}</span>
+                    </div>
+                    <Button
+                      asChild
+                      size="sm"
+                      variant="outline"
+                      className="h-9 self-start rounded-full border-white/15 bg-white/5 px-3 text-xs text-white hover:bg-white/10 hover:text-white"
+                    >
+                      <Link href={`/problems/${problemPage.slug}`}>
+                        {problemPage.cta}
+                        <ArrowRight className="size-3.5" />
+                      </Link>
+                    </Button>
                   </div>
                 ))}
               </div>
             </div>
 
-            <HeroDashboardGraphic />
+            {/* <HeroDashboardGraphic /> */}
 
             {/* Primary CTA: Demo */}
             <div className="flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
@@ -409,8 +243,8 @@ export default async function HomePage() {
               New to Overlord?{' '}
               <Link href="/docs" className="text-white underline underline-offset-4">
                 Start with the docs
-              </Link>
-              {' '}or{' '}
+              </Link>{' '}
+              or{' '}
               <Link href="/compare" className="text-white underline underline-offset-4">
                 compare the approach
               </Link>

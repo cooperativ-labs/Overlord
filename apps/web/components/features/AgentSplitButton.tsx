@@ -11,6 +11,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { getTicketPromptForCopy, submitTicketObjectiveAction } from '@/lib/actions/tickets';
 import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
@@ -26,9 +27,14 @@ import type { TicketAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
 import { cn } from '@/lib/utils';
 import type { Database } from '@/types/database.types';
 
-import { useTerminal } from './terminal/TerminalProvider';
+import { type TerminalContextValue, useTerminalOptional } from './terminal/TerminalProvider';
 import { useLocalDirectoryAccess } from './terminal/useLocalDirectoryAccess';
 import { useAgentModelPreference } from './AgentModelSelector';
+
+const DEMO_TERMINAL_CONTEXT: TerminalContextValue = {
+  isElectron: true,
+  launchAgent: async () => {}
+};
 
 type SessionState = Database['public']['Enums']['session_state'];
 
@@ -52,6 +58,8 @@ type AgentSplitButtonProps = {
   size?: AgentSplitButtonSize;
   /** When launching from a specific draft card, submit that objective row instead of the latest draft. */
   submitObjectiveId?: string | null;
+  /** Marketing/demo surfaces: show Run chrome without launching or copying. */
+  demo?: boolean;
 };
 
 const sizeStyles: Record<
@@ -126,18 +134,26 @@ export function AgentSplitButton({
   hasProjectWorkingDirectory,
   agentSessionState,
   size = 'default',
-  submitObjectiveId
+  submitObjectiveId,
+  demo = false
 }: AgentSplitButtonProps) {
   const [copied, setCopied] = useState(false);
   const [isLaunching, setIsLaunching] = useState(false);
+  const [showRunningConfirm, setShowRunningConfirm] = useState(false);
   const { selection, loaded: selectionLoaded } = useAgentModelPreference();
-  const { isElectron, launchAgent } = useTerminal();
+  const terminalContext = useTerminalOptional();
+  if (!demo && !terminalContext) {
+    throw new Error('useTerminal must be used within a TerminalProvider');
+  }
+  const { isElectron, launchAgent } = demo
+    ? DEMO_TERMINAL_CONTEXT
+    : (terminalContext as TerminalContextValue);
   const workspace = useWorkspacePreference({
     projectId,
     workingDirectory,
     sshCommand,
     remoteWorkingDirectory,
-    isElectron
+    isElectron: demo ? true : isElectron
   });
   const ACTIVE_SESSION_STATES: SessionState[] = ['attached', 'blocked', 'idle'];
   const effectiveSelection: AgentModelSelection = assignedSelection ?? selection;
@@ -152,29 +168,34 @@ export function AgentSplitButton({
     agentSessionState !== null &&
     ACTIVE_SESSION_STATES.includes(agentSessionState ?? 'idle');
   const hasSshConfig = Boolean(effectiveSshCommand?.trim());
-  const localDirAccess = useLocalDirectoryAccess({
+  const localDirAccessResolved = useLocalDirectoryAccess({
     workingDirectory: effectiveWorkingDirectory,
     hasProjectWorkingDirectory:
       workspace.executionWorkspace === 'local'
         ? Boolean(workspace.hasLocalDirectory)
         : (hasProjectWorkingDirectory ?? false)
   });
+  const localDirAccess = demo ? true : localDirAccessResolved;
   const canRunAgent = hasSshConfig || localDirAccess;
   const isCopySelectedAgent = selectedAgent === 'copy-local' || selectedAgent === 'copy-cloud';
-  const isDisabled =
-    isRunning ||
-    (!canRunAgent && !isCopySelectedAgent) ||
-    (!isCopySelectedAgent && !hasResolvedSelection);
+  const isDisabled = demo
+    ? false
+    : (!canRunAgent && !isCopySelectedAgent) || (!isCopySelectedAgent && !hasResolvedSelection);
   const styles = sizeStyles[size];
-  const defaultActionLabel = isElectron ? 'Run' : 'For CLI';
+  const defaultActionLabel = demo || isElectron ? 'Run' : 'For CLI';
   const primaryActionLabel = isCopySelectedAgent
     ? COPY_PROMPT_LABELS[selectedAgent as CopyPromptOption]
     : defaultActionLabel;
-  const PrimaryActionIcon = isCopySelectedAgent || !isElectron ? Copy : Bot;
+  const PrimaryActionIcon = isCopySelectedAgent || (!isElectron && !demo) ? Copy : Bot;
 
   const appliedStoredDefaultRef = useRef(false);
+  const pendingLaunchRef = useRef<{
+    agentValue: AgentSelectorValue;
+    options?: { useStoredModelPreference?: boolean };
+  } | null>(null);
 
   useEffect(() => {
+    if (demo) return;
     if (appliedStoredDefaultRef.current) return;
     appliedStoredDefaultRef.current = true;
     if (activeAgentIdentifier) return;
@@ -184,17 +205,25 @@ export function AgentSplitButton({
     if (configuredDefault !== selectedAgent) {
       onSelectAgent(configuredDefault);
     }
-  }, [activeAgentIdentifier, onSelectAgent, selectedAgent]);
+  }, [activeAgentIdentifier, demo, onSelectAgent, selectedAgent]);
 
   async function handleLaunch(
     agentValue: AgentSelectorValue = effectiveSelection.agent,
-    options?: { useStoredModelPreference?: boolean }
+    options?: { useStoredModelPreference?: boolean; force?: boolean }
   ): Promise<void> {
+    if (demo) return;
+
     const isCopyLocalValue = agentValue === 'copy-local';
     const isCopyCloudValue = agentValue === 'copy-cloud';
     const isCopyValue = isCopyLocalValue || isCopyCloudValue;
 
     if (!isCopyValue && (!canRunAgent || !hasResolvedSelection)) return;
+
+    if (isRunning && !options?.force) {
+      pendingLaunchRef.current = { agentValue, options };
+      setShowRunningConfirm(true);
+      return;
+    }
 
     if (isCopyValue) {
       const { error, prompt } = await getTicketPromptForCopy(
@@ -286,17 +315,55 @@ export function AgentSplitButton({
     </button>
   );
 
-  const runButtonWithTooltip = (
+  const runButtonWithTooltip = isRunning ? (
+    <Popover open={showRunningConfirm} onOpenChange={setShowRunningConfirm}>
+      <PopoverTrigger asChild>
+        <span className="inline-flex">{runButton}</span>
+      </PopoverTrigger>
+      <PopoverContent side="top" className="w-72 p-3 text-sm">
+        <p className="mb-3 text-foreground">
+          It appears an agent is still working on this ticket. Are you sure you want to launch this
+          objective now?
+        </p>
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            className="rounded-md px-3 py-1.5 text-xs text-muted-foreground hover:bg-accent"
+            onClick={() => setShowRunningConfirm(false)}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="rounded-md bg-primary px-3 py-1.5 text-xs text-primary-foreground hover:bg-primary/90"
+            onClick={() => {
+              setShowRunningConfirm(false);
+              const pending = pendingLaunchRef.current;
+              void handleLaunch(
+                pending?.agentValue ??
+                  (isCopySelectedAgent ? selectedAgent : effectiveSelection.agent),
+                {
+                  ...(pending?.options ?? { useStoredModelPreference: !isCopySelectedAgent }),
+                  force: true
+                }
+              );
+              pendingLaunchRef.current = null;
+            }}
+          >
+            Launch Anyway
+          </button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  ) : (
     <Tooltip>
       <TooltipTrigger asChild>
         <span className={cn('inline-flex', isDisabled && 'cursor-not-allowed')}>{runButton}</span>
       </TooltipTrigger>
       <TooltipContent side="top" hidden={!isDisabled}>
-        {isRunning
-          ? 'An agent is already running on this ticket.'
-          : !canRunAgent && !isCopySelectedAgent
-            ? 'First set a project directory in the project settings.'
-            : 'Loading your agent model selection.'}
+        {!canRunAgent && !isCopySelectedAgent
+          ? 'First set a project directory in the project settings.'
+          : 'Loading your agent model selection.'}
       </TooltipContent>
     </Tooltip>
   );
