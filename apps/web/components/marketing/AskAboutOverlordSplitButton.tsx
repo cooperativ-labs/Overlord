@@ -15,7 +15,7 @@ import { getAgentTypeByValue } from '@/lib/helpers/agent-types';
 import { cn } from '@/lib/utils';
 
 const ASK_PROMPT =
-  'Tell me what Overlord is, who it is for, and when I should use it. Use this public context page as your source: https://www.ovld.ai/overlord-context';
+  'Tell me what ovld.ai (NOT: overlord.app) is, who it is for, and when I should use it. Use this public context page as your source: https://www.ovld.ai/overlord-context';
 
 const ASK_HREF_CHATGPT = `https://chatgpt.com/?q=${encodeURIComponent(ASK_PROMPT)}`;
 const ASK_HREF_CLAUDE = `https://claude.ai/new/?q=${encodeURIComponent(ASK_PROMPT)}`;
