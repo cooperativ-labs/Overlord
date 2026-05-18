@@ -9,6 +9,6 @@ export interface SlideshowEntry {
 export const SLIDESHOWS: Record<string, SlideshowEntry> = {
   'ai-builders-2026-05': {
     load: () => import('../shows/ai-builders-2026-05'),
-    public: false
+    public: true
   }
 };

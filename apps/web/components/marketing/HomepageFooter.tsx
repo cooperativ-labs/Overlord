@@ -5,8 +5,11 @@ export function HomepageFooter() {
 
   return (
     <footer className="mx-auto flex w-full max-w-6xl flex-col gap-3 px-4 pb-4 pt-2 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
-      <p>Copyright {currentYear}, United States of America</p>
+      <p>Copyright {currentYear}</p>
       <nav aria-label="Marketing footer" className="flex flex-wrap gap-x-4 gap-y-2">
+        <Link href="/about" className="hover:text-slate-300">
+          About
+        </Link>
         <Link href="/compare" className="hover:text-slate-300">
           Compare
         </Link>

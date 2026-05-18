@@ -27,6 +27,7 @@ const PUBLIC_PATH_PREFIXES = [
   '/api/health',
   '/.well-known/',
   '/privacy',
+  '/about',
   '/problems/',
   '/terms',
   '/api/auth',
