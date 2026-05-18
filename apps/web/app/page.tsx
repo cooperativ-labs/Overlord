@@ -243,7 +243,7 @@ export default async function HomePage() {
         <section id="problems" className="mx-auto w-full max-w-6xl scroll-mt-24 pb-20 pt-8">
           <div className="mb-12 text-center">
             <h2 className="font-display text-3xl font-semibold tracking-tight text-white sm:text-4xl lg:text-5xl">
-              Mo&apos; agents, mo&apos; problems
+              Mo Agents Mo Problems
             </h2>
 
           </div>
