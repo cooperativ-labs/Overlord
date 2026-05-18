@@ -10,6 +10,12 @@ Short version:
 
 > Overlord lets you run agent work wherever you want while keeping the prompt, context, progress, handoffs, objectives, file changes, and review record in one durable ticket.
 
+Core model:
+
+- Objectives are the unit of work: the prompt, agent choice, checkpoint, attachments, and execution state for one agent pass.
+- Tickets are higher-level goals, like a feature or bug fix, composed of objectives that share context.
+- Projects are whole initiatives, ongoing or temporary, that share a code repository, folders, and other resources.
+
 Alternative phrasing:
 
 > Overlord is the agent workbench that does not trap you in its own agent harness. It coordinates the agents, terminals, repos, and subscriptions you already use.
@@ -22,7 +28,7 @@ Alternative phrasing:
 
 # Problems Solved
 
-1. I spend a bunch of time thinking about an area of the code and carefully writing a prompt to address it. I cannot wait for it to run, so I start working on another prompt. Later, I have no idea what I asked the first agent to do or how I should evaluate the work. Overlord's ticketing system and feed solve this by keeping the prompt, progress, updates, artifacts, and delivery record together.
+1. I spend a bunch of time thinking about an area of the code and carefully writing a prompt to address it. I cannot wait for it to run, so I start working on another prompt. Later, I have no idea what I asked the first agent to do or how I should evaluate the work. Overlord's objectives, tickets, and feed solve this by keeping the prompt, progress, updates, artifacts, and delivery record together under the same higher-level goal.
 2. If I am working in multiple repos at the same time, I have to keep changing directories into the target repo in the terminal before asking an agent to work. Overlord's Run button opens the terminal window in the right project working directory before starting the agent.
 3. If I want to use one agent for the first step of a project and another agent for the second step, there is not an efficient way to maintain context between them. Overlord tickets receive important context from agents automatically, and that context is provided with every run.
 4. Some work requires sequential prompts: plan, then execute, then add another feature, then review. This is easy if I stay focused on one chat, but difficult when I am managing multiple features at the same time. Overlord objectives solve this by letting the same ticket move through sequential objectives, with each objective carrying its own independent agent and model selection.
@@ -59,8 +65,8 @@ They are weak for agentic execution because they treat the ticket as the whole w
 
 Overlord's difference:
 
-- The ticket is not just a planning artifact. It is the active container for the prompt, objectives, agent updates, blocking questions, artifacts, delivery, review notes, file-change rationale, and future follow-up work.
-- Objectives let one ticket move through plan, execute, review, and follow-up without starting over in a new chat.
+- The ticket is not just a planning artifact. It is the active container for the higher-level goal, shared context, objectives, agent updates, blocking questions, artifacts, delivery, review notes, file-change rationale, and future follow-up work.
+- Objectives are the unit of work: each pass has its own prompt, agent choice, checkpoint, and execution record so one ticket can move through plan, execute, review, and follow-up without starting over in a new chat.
 - Agents can attach, update, ask, deliver, write shared context, and record change rationales through the Overlord protocol.
 - The desktop app maps projects to local repos and launches agents in the correct working directory.
 - Users keep using their terminal, permissions, tools, and existing agent subscriptions.

@@ -9,6 +9,11 @@ import { type ButtonLoadingState, LoadingButton } from '@/components/ui/loading-
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
+  getRunningAgentSessionsAction,
+  type RunningAgentSession,
+  stopRunningAgentSessionAction
+} from '@/lib/actions/agent-sessions';
+import {
   createUserAgentTokenAction,
   listUserAgentTokensAction,
   revokeUserAgentTokenAction,
@@ -16,10 +21,13 @@ import {
 } from '@/lib/actions/user-agent-tokens';
 import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
 import { getOverlordMcpUrl, getPlatformUrl } from '@/lib/env';
+import { getAgentTypeByIdentifier } from '@/lib/helpers/agent-types';
 
 const createTokenWithRetry = withElectronActionRetry(createUserAgentTokenAction);
 const listTokensWithRetry = withElectronActionRetry(listUserAgentTokensAction);
 const revokeTokenWithRetry = withElectronActionRetry(revokeUserAgentTokenAction);
+const getRunningAgentSessionsWithRetry = withElectronActionRetry(getRunningAgentSessionsAction);
+const stopRunningAgentSessionWithRetry = withElectronActionRetry(stopRunningAgentSessionAction);
 
 export function AgentsAndMcpPage({ open }: { open: boolean }) {
   const { isElectron } = useElectron();
@@ -35,6 +43,11 @@ export function AgentsAndMcpPage({ open }: { open: boolean }) {
   const [newToken, setNewToken] = useState<string | null>(null);
   const [createState, setCreateState] = useState<ButtonLoadingState>('default');
   const [revokingId, setRevokingId] = useState<string | null>(null);
+  const [refreshSessionsState, setRefreshSessionsState] = useState<ButtonLoadingState>('default');
+  const [runningSessions, setRunningSessions] = useState<RunningAgentSession[]>([]);
+  const [stopSessionStates, setStopSessionStates] = useState<Record<string, ButtonLoadingState>>(
+    {}
+  );
   const [message, setMessage] = useState<string | null>(null);
 
   const mcpUrl = getOverlordMcpUrl();
@@ -70,7 +83,19 @@ export function AgentsAndMcpPage({ open }: { open: boolean }) {
     setNewToken(null);
     setMessage(null);
     void listTokensWithRetry().then(setTokens);
+    void loadRunningSessions();
   }, [isElectron, open]);
+
+  async function loadRunningSessions(): Promise<boolean> {
+    try {
+      const sessions = await getRunningAgentSessionsWithRetry();
+      setRunningSessions(sessions);
+      return true;
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Failed to load live sessions.');
+      return false;
+    }
+  }
 
   async function handleCopy(value: string, setCopied: (v: boolean) => void) {
     await navigator.clipboard.writeText(value);
@@ -110,6 +135,30 @@ export function AgentsAndMcpPage({ open }: { open: boolean }) {
       setMessage(error instanceof Error ? error.message : 'Failed to revoke token.');
     } finally {
       setRevokingId(null);
+    }
+  }
+
+  async function handleRefreshSessions() {
+    setRefreshSessionsState('loading');
+    setMessage(null);
+    const loaded = await loadRunningSessions();
+    if (loaded) {
+      setRefreshSessionsState('success');
+    } else {
+      setRefreshSessionsState('error');
+    }
+  }
+
+  async function handleStopSession(sessionId: string) {
+    setStopSessionStates(previous => ({ ...previous, [sessionId]: 'loading' }));
+    setMessage(null);
+    try {
+      await stopRunningAgentSessionWithRetry(sessionId);
+      setRunningSessions(previous => previous.filter(session => session.id !== sessionId));
+      setStopSessionStates(previous => ({ ...previous, [sessionId]: 'success' }));
+    } catch (error) {
+      setStopSessionStates(previous => ({ ...previous, [sessionId]: 'error' }));
+      setMessage(error instanceof Error ? error.message : 'Failed to clear the live session.');
     }
   }
 
@@ -328,6 +377,77 @@ export function AgentsAndMcpPage({ open }: { open: boolean }) {
             {message ? <p className="text-xs text-muted-foreground">{message}</p> : null}
           </TabsContent>
         </Tabs>
+      </div>
+
+      <div className="grid gap-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="grid gap-1">
+            <p className="text-sm font-medium">Live sessions</p>
+            <p className="text-xs text-muted-foreground">
+              Use this to clear stale Overlord sessions that still appear live after an agent was
+              interrupted. This updates Overlord session state only and does not terminate the
+              external agent process.
+            </p>
+          </div>
+          <LoadingButton
+            buttonState={refreshSessionsState}
+            setButtonState={setRefreshSessionsState}
+            text="Refresh"
+            loadingText="Refreshing..."
+            successText="Refreshed"
+            errorText="Retry"
+            reset
+            size="sm"
+            variant="outline"
+            onClick={handleRefreshSessions}
+          />
+        </div>
+
+        {runningSessions.length === 0 ? (
+          <p className="rounded-md border bg-muted/20 p-3 text-xs text-muted-foreground">
+            No live sessions found.
+          </p>
+        ) : (
+          <ul className="grid gap-2">
+            {runningSessions.map(session => {
+              const agentType = getAgentTypeByIdentifier(session.agentIdentifier);
+              return (
+                <li
+                  key={session.id}
+                  className="flex flex-col gap-3 rounded-md border bg-muted/20 p-3 sm:flex-row sm:items-start sm:justify-between"
+                >
+                  <div className="min-w-0 space-y-1">
+                    <p className="text-xs font-medium text-foreground">
+                      {session.ticketTitle?.trim() || 'Untitled ticket'}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {agentType?.label ?? session.agentIdentifier} · Started{' '}
+                      {new Date(session.attachedAt).toLocaleString()}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground">Ticket {session.ticketId}</p>
+                  </div>
+                  <LoadingButton
+                    buttonState={stopSessionStates[session.id] ?? 'default'}
+                    setButtonState={state =>
+                      setStopSessionStates(previous => ({
+                        ...previous,
+                        [session.id]: state
+                      }))
+                    }
+                    text="Clear session"
+                    loadingText="Clearing..."
+                    successText="Cleared"
+                    errorText="Retry"
+                    reset
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleStopSession(session.id)}
+                  />
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </div>
     </div>
   );

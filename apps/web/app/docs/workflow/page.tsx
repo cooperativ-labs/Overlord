@@ -10,14 +10,14 @@ export default function WorkflowPage() {
   return (
     <DocsMarkdownPage
       title="Workflow"
-      lead="Overlord is built around tickets, not chats. The ticket holds the durable record, while objectives define the next unit of work inside that record."
+      lead="Overlord is built around objectives, tickets, and projects. Objectives are the unit of work; tickets group shared-context objectives into a higher-level goal; projects group related code and resources."
     >
       {`
 ## The normal flow
 
 1. A user creates a ticket.
 2. The user adds the first objective to describe the next concrete task.
-3. The ticket becomes the structured prompt and tracking record for that objective.
+3. The objective becomes the structured prompt and execution record for that agent pass.
 4. The user can attach files to the objective and choose which agent should execute it.
 5. The user sends it to an agent in the tool they already use.
 6. The agent works and reports progress back to Overlord.

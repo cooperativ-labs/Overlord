@@ -9,9 +9,13 @@ interface Props {
   alt: string;
   /** Extra classes on the thumbnail wrapper */
   className?: string;
+  /** Zoom factor applied to the thumbnail (crops via overflow). Defaults to 1. */
+  thumbnailZoom?: number;
+  /** Zoom factor applied to the main image (crops via overflow). Defaults to 1. */
+  mainZoom?: number;
 }
 
-export function ImageLightbox({ src, alt, className }: Props) {
+export function ImageLightbox({ src, alt, className, thumbnailZoom = 1, mainZoom = 1 }: Props) {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -33,14 +37,23 @@ export function ImageLightbox({ src, alt, className }: Props) {
         className={`group relative block overflow-hidden rounded-2xl border border-white/10 transition focus:outline-none hover:border-white/25 ${className ?? ''}`}
         aria-label={`Expand image: ${alt}`}
       >
-        <Image
-          src={src}
-          alt={alt}
-          width={w}
-          height={h}
-          className="w-full h-auto transition duration-300 group-hover:scale-[1.02] group-hover:brightness-110"
-          sizes="40vw"
-        />
+        <span
+          className="block transition duration-300 group-hover:brightness-110"
+          style={
+            thumbnailZoom !== 1
+              ? { transform: `scale(${thumbnailZoom})`, transformOrigin: 'center' }
+              : undefined
+          }
+        >
+          <Image
+            src={src}
+            alt={alt}
+            width={w}
+            height={h}
+            className="w-full h-auto transition duration-300 group-hover:scale-[1.02]"
+            sizes="40vw"
+          />
+        </span>
       </button>
 
       {open && (
@@ -55,7 +68,15 @@ export function ImageLightbox({ src, alt, className }: Props) {
           >
             <X className="size-5 p2k:size-7 p4k:size-10" />
           </button>
-          <div className="relative" onClick={e => e.stopPropagation()}>
+          <div
+            style={
+              mainZoom !== 1
+                ? { transform: `scale(${mainZoom})`, transformOrigin: 'center' }
+                : undefined
+            }
+            className="relative"
+            onClick={e => e.stopPropagation()}
+          >
             <Image
               src={src}
               alt={alt}

@@ -10,20 +10,20 @@ export default function ObjectivesPage() {
   return (
     <DocsMarkdownPage
       title="Objectives"
-      lead="Objectives are the concrete instructions inside a ticket. When an agent runs, it is acting on an objective—the scoped unit of work Overlord hands to the agent."
+      lead="Objectives are the unit of work in Overlord: the prompt, agent choice, checkpoint, attachments, and execution state for one agent pass."
     >
       {`
 ## Objectives vs tickets
 
-A **ticket** is the durable container: title, history, status, reviewers, and everything that happened on that thread of work.
+A **ticket** is the higher-level goal: a feature, bug fix, investigation, or review thread composed of objectives that share context.
 
-An **objective** is the next slice of work inside that ticket: what should happen *now*, in language an agent can execute without guessing.
+An **objective** is the next slice of work inside that ticket: the prompt for what should happen *now*, the agent/model choice for the pass, the checkpoint, and the execution record.
 
 You can add more objectives over time instead of opening a new chat or duplicating context. Planning, implementation, review passes, and cleanup can all live on one ticket as separate objectives.
 
 ## What the agent actually runs
 
-Launch and protocol context are tied to the **active objective**. That objective is the unit of work the agent receives—the prompt body, attachments, and objective id in context all refer to that slice.
+Launch and protocol context are tied to the **active objective**. That objective is the unit of work the agent receives—the prompt body, attachments, checkpoint, and objective id in context all refer to that slice.
 
 The ticket title and metadata still matter for humans scanning the board, but the agent’s instructions live at the objective level.
 
@@ -35,6 +35,7 @@ Typical fields and behaviors include:
 - status for that slice of work (for example executing while an agent has it)
 - attachments scoped to that instruction
 - agent and model choice for that pass
+- the checkpoint that anchors review and file-change rationale
 
 Attachments belong to a specific objective so files stay tied to the task they support.
 

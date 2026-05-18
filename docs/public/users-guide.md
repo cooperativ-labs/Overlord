@@ -62,7 +62,7 @@ Use cases include:
 
 ## Projects and Local Working Directories
 
-Projects group tickets and, for local work, map those tickets to repository folders.
+Projects are whole initiatives, ongoing or temporary, that share a code repository, folders, and other resources. For local work, they map tickets to the repository folders agents should use.
 
 A good default is one project per codebase. For a monorepo, use one project when the same repo and review workflow owns the work. Split projects when different teams, repositories, permissions, or deployment surfaces need separate tracking.
 
@@ -97,10 +97,10 @@ ovld protocol create --agent codex --personal --objective "Draft a private inves
 
 ## Tickets
 
-Tickets are the unit of work in Overlord. A useful ticket usually includes:
+Tickets are higher-level goals in Overlord, like a feature, bug fix, investigation, or review thread. They are composed of objectives that share context. A useful ticket usually includes:
 
 - a clear title
-- one or more concrete objectives
+- one or more concrete objectives that share context
 - acceptance criteria when the expected result is specific
 - status and priority
 - project assignment
@@ -116,11 +116,11 @@ When in doubt, ask whether the work can be done entirely by an agent with availa
 
 ## Objectives
 
-Objectives are the concrete instructions inside a ticket. When an agent runs, it is acting on an objective—the scoped unit of work Overlord hands to the agent.
+Objectives are the unit of work in Overlord: the prompt, agent choice, checkpoint, attachments, and execution state for one agent pass.
 
 You can add more objectives over time instead of opening a new chat or duplicating context. Planning, implementation, review passes, and cleanup can all live on one ticket as separate objectives.
 
-The agent’s instructions live at the objective level.
+The agent’s instructions live at the objective level. The ticket keeps the shared context for the higher-level goal.
 
 Typical fields and behaviors include:
 
@@ -128,6 +128,7 @@ Typical fields and behaviors include:
 - status for that slice of work (for example executing while an agent has it)
 - attachments scoped to that instruction
 - agent and model choice for that pass
+- the checkpoint that anchors review and file-change rationale
 
 Attachments belong to a specific objective so files stay tied to the task they support.
 

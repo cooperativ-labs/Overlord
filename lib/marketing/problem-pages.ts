@@ -125,7 +125,7 @@ export const problemPages = [
     icon: Workflow,
     problem: 'OMG I launched the agent in the wrong repo again!',
     shortTitle: 'Juggling repos',
-    cta: 'See repo juggling',
+    cta: 'Launch the agent in the right repo automatically',
     headline: 'Launch the agent in the right repo automatically.',
     video: null,
     summary:

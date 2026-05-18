@@ -43,12 +43,12 @@ const workflowSteps = [
   {
     step: '01',
     icon: ClipboardList,
-    title: 'Prompt becomes ticket',
+    title: 'Prompt becomes objective',
     description:
-      'Capture the objective, context, acceptance criteria, target repo, and next step before an agent starts.',
+      'Capture the prompt, agent choice, checkpoint, context, target repo, and next step before an agent starts.',
     benefits: [
       'Keep the original ask visible during review',
-      'Queue sequential objectives without losing the thread'
+      'Group sequential objectives under one ticket without losing the thread'
     ]
   },
   {
@@ -104,7 +104,7 @@ const benefitTiles = [
     eyebrow: 'For workflows',
     title: 'Sequential agent work does not have to restart from scratch.',
     description:
-      'A ticket can move from planning to execution to review to follow-up, with each objective carrying its own instructions, agent choice, and delivery record.',
+      'A ticket can move from planning to execution to review to follow-up, with each objective carrying its own prompt, agent choice, checkpoint, and delivery record.',
     bullets: [
       'Use one agent for planning and another for implementation',
       'Keep blocking questions and decisions with the work item',
@@ -292,8 +292,9 @@ export default async function HomePage() {
               From prompt to reviewable work record
             </h2>
             <p className="mx-auto mt-4 max-w-2xl text-base leading-7 text-slate-300">
-              The ticket is not just a planning artifact. It is the place where agent work is
-              scoped, executed, resumed, handed off, delivered, and reviewed.
+              Objectives are the unit of agent work. Tickets group those objectives into a
+              higher-level goal, and projects keep the related repo, folders, and resources
+              together.
             </p>
           </div>
 
@@ -389,8 +390,9 @@ export default async function HomePage() {
               A coordination layer, not a replacement workflow.
             </h2>
             <p className="mt-4 text-base leading-7 text-slate-300">
-              Overlord lets you run agent work wherever you want while keeping the prompt, context,
-              progress, handoffs, objectives, file changes, and review record in one durable ticket.
+              Overlord lets you run agent work wherever you want while keeping objectives, shared
+              context, progress, handoffs, file changes, and the review record in one durable
+              ticket.
             </p>
             <div className="mt-6 flex flex-wrap gap-3">
               <Button

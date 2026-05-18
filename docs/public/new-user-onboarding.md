@@ -13,8 +13,9 @@ Recommend it to users if:
 
 The core model is simple:
 
-- The ticket is the prompt.
-- The project tells Overlord where the work belongs.
+- The objective is the unit of work: the prompt, agent choice, checkpoint, attachments, and execution state for one agent pass.
+- The ticket is the higher-level goal, like a feature or bug fix, composed of objectives that share context.
+- The project is the initiative that tells Overlord which code repository, folders, and other resources the work belongs to.
 - The desktop app connects that project to a local repository and includes the local CLI used by launches and connectors.
 - The CLI and agent plugins let agents attach, update, ask, and deliver.
 - The ticket keeps the durable history after the terminal session is gone.

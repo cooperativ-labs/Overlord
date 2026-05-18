@@ -10,16 +10,16 @@ export default function TicketsPage() {
   return (
     <DocsMarkdownPage
       title="Tickets"
-      lead="Tickets are the durable record for a thread of work. Each ticket holds one or more objectives—and objectives are the units of work the agent actually executes."
+      lead="Tickets are higher-level goals, like a feature, bug fix, investigation, or review thread. They are composed of objectives that share context."
     >
       {`
 ## Tickets contain objectives
 
-The **ticket** is the container on the board: status, priority, project, history, reviewers, and delivery artifacts for that story.
+The **ticket** is the higher-level goal on the board: status, priority, project, shared context, history, reviewers, and delivery artifacts for that feature, bug fix, or story.
 
-**Objectives** live inside the ticket. They are the scoped instructions the agent receives: what to do in this pass, with their own text, attachments, and execution settings.
+**Objectives** live inside the ticket. They are the unit of work the agent receives: the prompt for this pass, the chosen agent/model, attachments, checkpoint, and execution settings.
 
-When you launch an agent, you are sending the **current objective**, not just a free-floating title. That is why objectives are the unit of work for agent execution, while the ticket stays the unit of record for humans and the system of record.
+When you launch an agent, you are sending the **current objective**, not just a free-floating title. That is why objectives are the unit of work for agent execution, while the ticket stays the shared-context record for the higher-level goal.
 
 You can chain stages such as plan, implement, and review on one ticket by adding objectives instead of starting new threads. See the [Objectives](/docs/workflow/objectives) page for the full model.
 
@@ -28,7 +28,7 @@ You can chain stages such as plan, implement, and review on one ticket by adding
 A ticket can include:
 
 - a title
-- one or more objectives
+- one or more objectives that share context
 - acceptance criteria
 - execution target information
 - status and priority

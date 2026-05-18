@@ -11,23 +11,56 @@ export default function Slide04() {
           Don't build a harness
         </h2>
 
-        <div className="mt-14 space-y-6 p4k:space-y-10">
-          <div className="rounded-3xl border border-white/10 bg-white/[0.04] px-10 py-8 p2k:px-14 p2k:py-10 p4k:px-20 p4k:py-14">
+        <div className="mt-14 grid grid-cols-3 gap-6 p4k:gap-10">
+          {/* Principle */}
+          <div className="flex flex-col  gap-4 rounded-3xl border border-sky-400/30 bg-sky-500/[0.08] p-8 p2k:p-10 p4k:p-14">
+            <p className="mb-4 font-mono text-xs uppercase tracking-widest text-sky-400 p2k:text-base p4k:text-2xl">
+              Principle
+            </p>
             <p className="text-2xl leading-snug text-slate-200 p2k:text-3xl p4k:text-5xl">
-              No agent work is done inside Overlord. It&apos;s really just a GUI for a CLI that
-              drives the agents.
+              No agent work is done inside Overlord.
+            </p>
+            <div className="h-px bg-white/10" />
+
+            <p className="text-2xl leading-snug text-slate-200 p2k:text-3xl p4k:text-5xl">
+              It&apos;s really just a GUI for a CLI that tickles the agents.
             </p>
           </div>
-          <div className="rounded-3xl border border-white/10 bg-white/[0.04] px-10 py-8 p2k:px-14 p2k:py-10 p4k:px-20 p4k:py-14">
+
+          {/* Product decisions */}
+          <div className="flex flex-col gap-4 rounded-3xl border border-violet-400/30 bg-violet-500/[0.08] p-8 p2k:p-10 p4k:p-14">
+            <p className="font-mono text-xs uppercase tracking-widest text-violet-300 p2k:text-base p4k:text-2xl">
+              Product decisions
+            </p>
             <p className="text-2xl leading-snug text-slate-200 p2k:text-3xl p4k:text-5xl">
-              A separate CLI for agents — who are sometimes working with different information and
-              who don&apos;t mind a good text dump.
+              A separate CLI subcommand for agents.{' '}
+              <code className="px-4 py-1 rounded-md text-orange-400 text-xl bg-zinc-700">
+                ovld protocol
+              </code>
+            </p>
+            <div className="h-px bg-white/10" />
+            <p className="text-2xl leading-snug text-slate-200 p2k:text-3xl p4k:text-5xl">
+              Rides on top of your existing Codex or Claude Code plan
             </p>
           </div>
-          <div className="rounded-3xl border border-white/10 bg-white/[0.04] px-10 py-8 p2k:px-14 p2k:py-10 p4k:px-20 p4k:py-14">
+
+          {/* Benefits */}
+          <div className="flex flex-col gap-4 rounded-3xl border border-emerald-400/30 bg-emerald-500/[0.08] p-8 p2k:p-10 p4k:p-14">
+            <p className="font-mono text-xs uppercase tracking-widest text-emerald-300 p2k:text-base p4k:text-2xl">
+              Benefits
+            </p>
             <p className="text-2xl leading-snug text-slate-200 p2k:text-3xl p4k:text-5xl">
-              Rides on top of your existing Codex or Claude Code subscription — no new subscription,
-              no new harness.
+              VC-subsidized tokens{' '}
+            </p>
+            <div className="h-px bg-white/10" />
+
+            <p className="text-2xl leading-snug text-slate-200 p2k:text-3xl p4k:text-5xl">
+              Keeps users' existing config, permissions, and tools.
+            </p>
+
+            <div className="h-px bg-white/10" />
+            <p className="text-2xl leading-snug text-slate-200 p2k:text-3xl p4k:text-5xl">
+              Immediately benefit from new features from the frontier labs.
             </p>
           </div>
         </div>

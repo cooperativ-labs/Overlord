@@ -37,9 +37,17 @@ export default function DocsPage() {
           <h2 className="text-xl font-semibold tracking-tight">The mental model</h2>
           <div className="grid gap-3">
             <div className="rounded-lg border bg-card p-4">
-              <p className="font-medium">The ticket is the prompt.</p>
+              <p className="font-medium">The objective is the unit of work.</p>
               <p className="mt-1 text-sm text-muted-foreground">
-                It defines the work, captures progress, and holds the delivery record.
+                It carries the prompt, agent choice, checkpoint, attachments, and execution state
+                for a single agent pass.
+              </p>
+            </div>
+            <div className="rounded-lg border bg-card p-4">
+              <p className="font-medium">The ticket is the higher-level goal.</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                It groups objectives that share context, such as a feature, bug fix, investigation,
+                or review thread.
               </p>
             </div>
             <div className="rounded-lg border bg-card p-4">
@@ -98,14 +106,14 @@ export default function DocsPage() {
             <WorkflowStep
               step={1}
               icon={ClipboardList}
-              title="A ticket defines the job"
-              description="The ticket is the durable unit of work, not a disposable chat thread. It keeps the objective, structure, and delivery record in one place."
+              title="An objective defines the agent pass"
+              description="The objective is the unit of work. It keeps the prompt, agent choice, checkpoint, attachments, and execution state for the pass."
             />
             <WorkflowStep
               step={2}
               icon={Bot}
-              title="An agent executes in its own environment"
-              description="Overlord works with the tools you already use, including terminal agents and hosted agents. It coordinates them instead of replacing them."
+              title="The ticket keeps the shared goal"
+              description="Tickets are higher-level goals, like a feature or bug fix, composed of objectives that share context and delivery history."
             />
             <WorkflowStep
               step={3}
@@ -128,8 +136,8 @@ export default function DocsPage() {
             <div className="rounded-lg border bg-card p-4">
               <p className="text-sm font-medium">1. Create a project</p>
               <p className="mt-1 text-sm text-muted-foreground">
-                Projects group related tickets. Link a project to a local repository in the desktop
-                app.
+                Projects are initiatives that share a code repository, folders, and other resources.
+                Link one to a local repository in the desktop app.
               </p>
             </div>
             <div className="rounded-lg border bg-card p-4">

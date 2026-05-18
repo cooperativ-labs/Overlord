@@ -8,7 +8,7 @@ export default function Slide06() {
           Never reinvent 3
         </p>
         <h2 className="font-display text-7xl font-semibold leading-none tracking-tight lg:text-8xl p1080:text-9xl p2k:text-[11rem] p4k:text-[15rem]">
-          Claws
+          Don't build the next big thing
         </h2>
 
         <div className="mt-14 space-y-6 p4k:space-y-10">

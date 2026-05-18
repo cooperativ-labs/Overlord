@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { getProblemPage, problemPages } from '@/lib/marketing/problem-pages';
 
 import { DemoFeedShowcase } from '../../../example-content/demo-frames/DemoFeedShowcase';
+import { DemoObjectiveTerminal } from '../../../example-content/demo-frames/DemoObjectiveTerminal';
 import { DemoTicketActivity } from '../../../example-content/demo-frames/DemoTicketActivity';
 import { DemoTicketDetails } from '../../../example-content/demo-frames/DemoTicketDetails';
 
@@ -147,10 +148,10 @@ export default async function ProblemPage({ params }: ProblemRouteProps) {
         ) : null}
         {page.slug === 'juggling-repos' ? (
           <ProblemDemoFrame
-            title="The Feed"
-            description="Each ticket becomes a feed post that lets you explore the objectives, file changes, and delivery summaries."
+            title="Repo-aware Run"
+            description="The objective stays visible while Overlord opens the terminal in the project directory before the agent starts."
           >
-            <DemoFeedShowcase numberOfPosts={1} />
+            <DemoObjectiveTerminal />
           </ProblemDemoFrame>
         ) : null}
       </section>

@@ -41,11 +41,23 @@ export default function Slide02() {
 
       {/* Right: terminal screenshot */}
       <div className="relative z-10 flex w-[38%] flex-col items-center justify-center p-10 p2k:p-16 p4k:p-24 shrink-0">
-        <ImageLightbox
-          src={packedTerminal}
-          alt="Packed terminal showing agent output"
-          className="w-full"
-        />
+        <div className="relative">
+          <div className="absolute -top-10 -right-6 z-20 rotate-[-8deg] rounded-md border-4 border-yellow-300 bg-yellow-400 px-5 py-2 shadow-[6px_6px_0_rgba(0,0,0,0.5)] p2k:-top-14 p2k:-right-10 p2k:px-7 p2k:py-3 p4k:-top-20 p4k:-right-14 p4k:px-10 p4k:py-5">
+            <p
+              className="text-3xl font-bold text-slate-900 p2k:text-5xl p4k:text-7xl"
+              style={{ fontFamily: '"Permanent Marker", "Comic Sans MS", "Marker Felt", cursive' }}
+            >
+              Look at this mess!
+            </p>
+          </div>
+          <div className="rounded-md border-[12px] border-amber-100 bg-amber-100 p-2 shadow-[12px_12px_0_rgba(0,0,0,0.4)] p2k:border-[18px] p4k:border-[24px]">
+            <ImageLightbox
+              src={packedTerminal}
+              alt="Packed terminal showing agent output"
+              className="w-full"
+            />
+          </div>
+        </div>
       </div>
     </div>
   );
