@@ -22,6 +22,7 @@ import { VideoSection } from '@/components/marketing/VideoSection';
 import { Button } from '@/components/ui/button';
 import { problemPages } from '@/lib/marketing/problem-pages';
 import { createClientForRequest } from '@/supabase/utils/server';
+import { AskAboutOverlordSplitButton } from '@/components/marketing/AskAboutOverlordSplitButton';
 
 export const metadata: Metadata = {
   title: 'Overlord | Coordination for Coding Agents',
@@ -208,29 +209,30 @@ export default async function HomePage() {
               <Button
                 asChild
                 size="lg"
-                className="h-14 rounded-full bg-white px-8 text-base font-semibold text-slate-950 shadow-lg shadow-white/10 hover:bg-slate-100"
+                className="h-14 rounded-full border-white/15 bg-white/5 px-8 text-base text-white hover:bg-white/10 hover:text-white"
               >
                 <Link href="/demo">
                   <Play className="size-4" />
                   Try the interactive demo
                 </Link>
               </Button>
-              <Button
+              <AskAboutOverlordSplitButton />
+              {/* <Button
                 asChild
                 size="lg"
                 variant="outline"
-                className="h-14 rounded-full border-white/15 bg-white/5 px-8 text-base text-white hover:bg-white/10"
+                className="h-14 rounded-full border-white/15 bg-white/5 px-8 text-base text-white hover:bg-white/10 hover:text-white"
               >
                 <Link href="#watch-video">
                   <Play className="size-4" />
                   Watch video
                 </Link>
-              </Button>
+              </Button> */}
               <Button
                 asChild
                 size="lg"
                 variant="outline"
-                className="h-14 rounded-full border-white/15 bg-white/5 px-8 text-base text-white hover:bg-white/10"
+                className="h-14 rounded-full border-white/15 bg-white/5 px-8 text-base text-white hover:bg-white/10 hover:text-white"
               >
                 <Link href="/signup">
                   Create account

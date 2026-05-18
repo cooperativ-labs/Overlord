@@ -6,7 +6,7 @@ export const problemPages = [
     icon: ClipboardList,
     problem: 'What did I ask this agent to do 20 minutes ago?',
     shortTitle: 'Remember agent intent',
-    cta: 'See how tickets preserve intent',
+    cta: 'See how The Feed keeps you on point',
     headline: 'Keep the original ask attached to the work.',
     video: 'https://youtu.be/BFc41HEkmZY?si=ZfpfWhav_5qVjbdd',
     summary:
@@ -36,8 +36,8 @@ export const problemPages = [
     icon: Eye,
     problem: 'What changes the agent made are actually important?',
     shortTitle: 'Review agent diffs',
-    cta: 'See the review record',
-    headline: 'Review agent output with the why in view.',
+    cta: 'See ticket activity',
+    headline: 'Review what agents changed *and why*.',
     video: null,
     summary:
       'Overlord keeps the objective, delivery notes, artifacts, and file-change rationales next to the work so reviewers can evaluate whether the result matches the ask, not just whether the diff looks plausible.',
@@ -66,7 +66,7 @@ export const problemPages = [
     icon: GitBranch,
     problem: 'Claude planned, now I want Codex to implement. How do I keep the context?',
     shortTitle: 'Handoff between agents',
-    cta: 'See agent handoffs',
+    cta: 'Select an agent for each objective',
     headline: 'Move work between agents without starting over.',
     video: null,
     summary:

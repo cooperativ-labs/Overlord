@@ -2,11 +2,8 @@ import { ArrowRight } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 
-import { Button } from '@/components/ui/button';
 
-const askAboutOverlordHref = `https://chatgpt.com/?q=${encodeURIComponent(
-  'Tell me what Overlord is, who it is for, and when I should use it. Use this public context page as your source: https://www.ovld.ai/overlord-context'
-)}`;
+import { Button } from '@/components/ui/button';
 
 export function HomepageHeader() {
   return (
@@ -28,15 +25,7 @@ export function HomepageHeader() {
       </Link>
 
       <div className="flex items-center gap-3">
-        <Button
-          asChild
-          variant="ghost"
-          className="hidden text-slate-300 hover:bg-white/5 hover:text-white md:inline-flex"
-        >
-          <a href={askAboutOverlordHref} target="_blank" rel="noopener noreferrer">
-            Ask about Overlord
-          </a>
-        </Button>
+
         <Button
           asChild
           variant="ghost"
