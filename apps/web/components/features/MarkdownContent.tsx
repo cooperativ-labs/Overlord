@@ -28,7 +28,7 @@ export function MarkdownContent({
   workspaceRoot
 }: MarkdownContentProps) {
   const proseBaseClasses =
-    'prose prose-sm max-w-none dark:prose-invert prose-headings:text-foreground prose-p:text-foreground prose-p:whitespace-pre-wrap prose-li:text-foreground prose-strong:text-foreground prose-code:text-foreground prose-a:text-primary';
+    'prose prose-neutral prose-sm max-w-none text-foreground dark:prose-invert prose-headings:text-foreground prose-p:text-foreground prose-p:whitespace-pre-wrap prose-li:text-foreground prose-strong:text-foreground prose-code:text-foreground prose-a:text-primary prose-blockquote:text-muted-foreground prose-hr:border-border prose-th:text-foreground prose-td:text-foreground';
   const proseClasses = compact
     ? `${proseBaseClasses} prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-pre:my-1`
     : proseBaseClasses;

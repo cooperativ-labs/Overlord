@@ -66,11 +66,11 @@ export function SentryTestPanel() {
   }
 
   return (
-    <section className="rounded-[2rem] border border-slate-200 bg-white shadow-sm">
-      <div className="flex items-center justify-between gap-4 border-b border-slate-200 px-6 py-5">
+    <section className="rounded-[2rem] border border-border bg-card shadow-sm">
+      <div className="flex items-center justify-between gap-4 border-b border-border px-6 py-5">
         <div>
-          <h2 className="text-lg font-semibold text-slate-950">Sentry</h2>
-          <p className="text-sm text-slate-600">
+          <h2 className="text-lg font-semibold text-foreground">Sentry</h2>
+          <p className="text-sm text-muted-foreground">
             Send explicit test events to confirm the web app and Electron app are both reporting.
           </p>
         </div>
@@ -78,14 +78,16 @@ export function SentryTestPanel() {
 
       <div className="flex flex-col gap-4 p-6">
         <div className="grid gap-4 md:grid-cols-2">
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+          <div className="rounded-2xl border border-border bg-muted/40 p-5">
             <div className="flex items-center gap-3">
-              <div className="rounded-xl bg-white p-2 text-sky-600 shadow-sm">
+              <div className="rounded-xl bg-card p-2 text-sky-600 shadow-sm dark:text-sky-400">
                 <Wifi className="size-4" />
               </div>
               <div>
-                <h3 className="text-sm font-semibold text-slate-950">Web app</h3>
-                <p className="text-xs text-slate-600">Captures a browser-side Sentry exception.</p>
+                <h3 className="text-sm font-semibold text-foreground">Web app</h3>
+                <p className="text-xs text-muted-foreground">
+                  Captures a browser-side Sentry exception.
+                </p>
               </div>
             </div>
             <div className="mt-4">
@@ -102,14 +104,14 @@ export function SentryTestPanel() {
             </div>
           </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+          <div className="rounded-2xl border border-border bg-muted/40 p-5">
             <div className="flex items-center gap-3">
-              <div className="rounded-xl bg-white p-2 text-emerald-600 shadow-sm">
+              <div className="rounded-xl bg-card p-2 text-emerald-600 shadow-sm dark:text-emerald-400">
                 <MonitorSmartphone className="size-4" />
               </div>
               <div>
-                <h3 className="text-sm font-semibold text-slate-950">Electron app</h3>
-                <p className="text-xs text-slate-600">
+                <h3 className="text-sm font-semibold text-foreground">Electron app</h3>
+                <p className="text-xs text-muted-foreground">
                   Sends a test exception from the Electron main process.
                 </p>
               </div>
@@ -128,7 +130,7 @@ export function SentryTestPanel() {
               />
             </div>
             {!isElectron ? (
-              <p className="mt-3 flex items-start gap-2 text-xs text-amber-700">
+              <p className="mt-3 flex items-start gap-2 text-xs text-amber-800 dark:text-amber-300">
                 <TriangleAlert className="mt-0.5 size-3.5 shrink-0" />
                 Open this page inside the desktop app to test the Electron Sentry pipeline.
               </p>

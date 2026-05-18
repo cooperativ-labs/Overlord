@@ -88,29 +88,29 @@ export function AppFeaturesPanel({ initialFeatures }: Props) {
   }
 
   return (
-    <section className="rounded-[2rem] border border-slate-200 bg-white shadow-sm">
-      <div className="flex items-center justify-between gap-4 border-b border-slate-200 px-6 py-5">
+    <section className="rounded-[2rem] border border-border bg-card shadow-sm">
+      <div className="flex items-center justify-between gap-4 border-b border-border px-6 py-5">
         <div>
-          <h2 className="text-lg font-semibold text-slate-950">Feature flags</h2>
-          <p className="text-sm text-slate-600">
+          <h2 className="text-lg font-semibold text-foreground">Feature flags</h2>
+          <p className="text-sm text-muted-foreground">
             Show or hide tagged product features across the web and desktop apps.
           </p>
         </div>
-        <div className="text-sm text-slate-500">{features.length} total</div>
+        <div className="text-sm text-muted-foreground">{features.length} total</div>
       </div>
 
       <div className="flex flex-col gap-4 p-6">
         {error ? (
-          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:border-red-500/40 dark:bg-red-950/30 dark:text-red-300">
             {error}
           </div>
         ) : null}
 
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+        <div className="rounded-2xl border border-border bg-muted/40 p-5">
           <div className="flex flex-col gap-4">
             <div>
-              <h3 className="text-sm font-semibold text-slate-950">Create feature flag</h3>
-              <p className="mt-1 text-xs text-slate-600">
+              <h3 className="text-sm font-semibold text-foreground">Create feature flag</h3>
+              <p className="mt-1 text-xs text-muted-foreground">
                 Add a new toggleable feature entry for future product rollouts.
               </p>
             </div>
@@ -124,7 +124,7 @@ export function AppFeaturesPanel({ initialFeatures }: Props) {
                   value={createForm.key}
                   onChange={event => updateCreateForm('key', event.target.value)}
                 />
-                <p className="text-xs text-slate-500">Lowercase letters, numbers, and hyphens.</p>
+                <p className="text-xs text-muted-foreground">Lowercase letters, numbers, and hyphens.</p>
               </div>
 
               <div className="space-y-2">
@@ -149,7 +149,7 @@ export function AppFeaturesPanel({ initialFeatures }: Props) {
             </div>
 
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-              <label className="flex items-center gap-3 text-sm text-slate-700">
+              <label className="flex items-center gap-3 text-sm text-foreground">
                 <Checkbox
                   checked={createForm.isEnabled}
                   onCheckedChange={checked => updateCreateForm('isEnabled', checked === true)}
@@ -172,20 +172,20 @@ export function AppFeaturesPanel({ initialFeatures }: Props) {
           </div>
         </div>
 
-        <div className="overflow-hidden rounded-2xl border border-slate-200">
+        <div className="overflow-hidden rounded-2xl border border-border">
           <table className="min-w-full text-left text-sm">
-            <thead className="bg-slate-50 text-slate-600">
+            <thead className="bg-muted/60 text-muted-foreground">
               <tr>
                 <th className="w-20 px-4 py-3 font-medium">Show</th>
                 <th className="px-4 py-3 font-medium">Feature</th>
                 <th className="px-4 py-3 font-medium">Status</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-200">
+            <tbody className="divide-y divide-border">
               {features.map(feature => {
                 const isSaving = pendingKey === feature.key && isPending;
                 return (
-                  <tr key={feature.key} className="align-top text-slate-700">
+                  <tr key={feature.key} className="align-top text-foreground/90">
                     <td className="px-4 py-4">
                       <div className="flex items-center gap-2">
                         <Checkbox
@@ -195,21 +195,21 @@ export function AppFeaturesPanel({ initialFeatures }: Props) {
                           aria-label={`Show ${feature.name}`}
                         />
                         {isSaving ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400" />
+                          <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
                         ) : null}
                       </div>
                     </td>
                     <td className="px-4 py-4">
-                      <div className="font-medium text-slate-950">{feature.name}</div>
-                      <div className="mt-1 text-xs text-slate-500">{feature.description}</div>
+                      <div className="font-medium text-foreground">{feature.name}</div>
+                      <div className="mt-1 text-xs text-muted-foreground">{feature.description}</div>
                     </td>
                     <td className="px-4 py-4">
                       <span
                         className={cn(
                           'inline-flex rounded-full px-2 py-1 text-[11px] font-medium',
                           feature.isEnabled
-                            ? 'bg-emerald-50 text-emerald-700'
-                            : 'bg-slate-100 text-slate-600'
+                            ? 'bg-emerald-500/15 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-200'
+                            : 'bg-muted text-muted-foreground'
                         )}
                       >
                         {feature.isEnabled ? 'Visible' : 'Hidden'}
