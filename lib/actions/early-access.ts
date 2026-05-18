@@ -82,7 +82,7 @@ export async function requestEarlyAccess(formData: FormData): Promise<EarlyAcces
 
       await resend.emails.send({
         from: getFromEmail(),
-        to: ['ovld-access@cooperativ.io'],
+        to: ['ovld-signup@cooperativ.io'],
         replyTo: email,
         subject: `Early access request from ${name}`,
         text: [
