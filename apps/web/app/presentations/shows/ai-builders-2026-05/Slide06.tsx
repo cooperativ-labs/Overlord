@@ -11,22 +11,31 @@ export default function Slide06() {
           Don't build the next big thing
         </h2>
 
-        <div className="mt-14 space-y-6 p4k:space-y-10">
-          <div className="rounded-3xl border border-white/10 bg-white/[0.04] px-10 py-8 p2k:px-14 p2k:py-10 p4k:px-20 p4k:py-14">
-            <p className="text-2xl leading-snug text-slate-200 p2k:text-3xl p4k:text-5xl">
-              The tools are evolving so fast that you really benefit from keeping the AI work itself
-              out of your product.
+        {/* Subtitle / lede */}
+        <p className="mt-8 max-w-5xl text-3xl leading-snug text-slate-300 p2k:mt-10 p2k:text-4xl p4k:mt-14 p4k:text-6xl">
+          The tools are evolving really fast — build something that works alongside what&apos;s
+          next.
+        </p>
+
+        <div className="mt-10 p2k:mt-14 p4k:mt-20">
+          {/* Musing */}
+          <div className="relative rounded-3xl border-l-4 border-sky-400/60 bg-white/[0.03] px-10 py-8 p2k:px-14 p2k:py-10 p4k:px-20 p4k:py-14">
+            <p className="mb-3 font-mono text-sm uppercase tracking-widest text-sky-400/80 p2k:text-lg p4k:text-2xl">
+              A musing!
             </p>
-          </div>
-          <div className="rounded-3xl border border-white/10 bg-white/[0.04] px-10 py-8 p2k:px-14 p2k:py-10 p4k:px-20 p4k:py-14">
-            <p className="text-2xl leading-snug text-slate-200 p2k:text-3xl p4k:text-5xl">
-              Install the CLI on a Raspberry Pi, text your Claw to create an Overlord ticket. All
-              the primitives are already there.
-            </p>
-          </div>
-          <div className="rounded-3xl border border-white/10 bg-white/[0.04] px-10 py-8 p2k:px-14 p2k:py-10 p4k:px-20 p4k:py-14">
-            <p className="text-2xl leading-snug text-slate-400 italic p2k:text-3xl p4k:text-5xl">
-              A lot of cool ideas here — but time.
+            <p className="text-2xl italic leading-snug text-slate-300 p2k:text-3xl p4k:text-5xl">
+              I&apos;ve been thinking a lot about how this works with independent agents (OpenClaw
+              &amp; Co.). Overlord works CLI-only, so there are a bunch of ways users and agents can
+              use it to coordinate work and share context.
+              <ul className="mt-6 list-disc space-y-5 pl-8 text-2xl leading-relaxed text-slate-300 marker:text-sky-400/80 p2k:mt-8 p2k:space-y-6 p2k:pl-10 p2k:text-3xl p4k:mt-10 p4k:space-y-8 p4k:pl-14 p4k:text-5xl">
+                <li>
+                  Users and agents can share context about a specific task that needs to get done.
+                </li>
+                <li>
+                  An agent can see that a folder it needs exists, but that it doesn&apos;t have
+                  access, and that it needs to create a ticket for the user.
+                </li>
+              </ul>
             </p>
           </div>
         </div>

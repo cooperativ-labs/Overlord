@@ -16,8 +16,8 @@ export function SlideshowViewer({ slug, initialSlide = 1 }: Props) {
   const [definition, setDefinition] = useState<SlideshowDefinition | null>(null);
 
   useEffect(() => {
-    const loader = SLIDESHOWS[slug];
-    if (loader) loader().then(m => setDefinition(m.default));
+    const entry = SLIDESHOWS[slug];
+    if (entry) entry.load().then(m => setDefinition(m.default));
   }, [slug]);
 
   const total = definition?.slides.length ?? 0;

@@ -19,7 +19,7 @@ export default function Slide07() {
             <ul className="space-y-4 text-xl leading-snug text-slate-300 p2k:text-2xl p4k:text-4xl p2k:space-y-6 p4k:space-y-8">
               <li>Inconsistency with hooks, permissions, &amp; even effort flags</li>
               <li>Keeping them updated requires user involvement</li>
-              <li>Drift concerns as agent apps evolve</li>
+              <li>Terrible permissions control</li>
             </ul>
           </div>
           <div className="rounded-3xl border border-orange-400/20 bg-orange-400/5 p-10 p2k:p-14 p4k:p-20">
@@ -28,18 +28,18 @@ export default function Slide07() {
             </p>
             <ul className="space-y-4 text-xl leading-snug text-slate-300 p2k:text-2xl p4k:text-4xl p2k:space-y-6 p4k:space-y-8">
               <li>Not consistently implemented across services</li>
-              <li>Works in ChatGPT, but not Codex cloud</li>
+              <li>Works in ChatGPT, but not Codex cloud (?)</li>
               <li>Works in Claude Chat, but not Claude Code</li>
             </ul>
           </div>
           <div className="rounded-3xl border border-yellow-400/20 bg-yellow-400/5 p-10 p2k:p-14 p4k:p-20">
             <p className="mb-5 font-mono text-base uppercase tracking-widest text-yellow-400 p2k:text-xl p4k:text-3xl">
-              CLI Security
+              CLI
             </p>
             <ul className="space-y-4 text-xl leading-snug text-slate-300 p2k:text-2xl p4k:text-4xl p2k:space-y-6 p4k:space-y-8">
-              <li>Exposing CLIs may create new vulnerabilities</li>
-              <li>Especially for less sophisticated users</li>
-              <li>Software like Google Drive didn&apos;t previously have CLI access</li>
+              <li>Creates and obstacle to normie adoption</li>
+              <li>Might be a security issue for less technical users</li>
+              <li>Some terminal applications are flaky</li>
             </ul>
           </div>
         </div>
