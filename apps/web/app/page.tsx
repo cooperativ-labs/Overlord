@@ -162,51 +162,24 @@ export default async function HomePage() {
         <HomepageHeader />
 
         {/* Hero — centered, focused */}
-        <section className="flex min-h-[calc(100dvh-8rem)] flex-col items-center justify-center text-center">
-          <div className="animate-in fade-in slide-in-from-bottom-6 max-w-5xl space-y-8 duration-700">
-            <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 font-mono text-[14px] font-medium uppercase tracking-widest text-slate-300 shadow-sm backdrop-blur">
+        <section className="flex min-h-[calc(100dvh-6rem)] flex-col items-center justify-center text-center py-24 sm:py-32">
+          <div className="animate-in fade-in slide-in-from-bottom-6 max-w-4xl space-y-10 duration-700 sm:space-y-12">
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-1.5 font-mono text-[12px] font-medium uppercase tracking-[0.2em] text-slate-300 shadow-sm backdrop-blur">
               Web App · Desktop · CLI · MCP · Agent Plugins
             </div>
 
-            <h1 className="font-display text-5xl font-semibold leading-[0.94] tracking-tight text-white sm:text-6xl lg:text-7xl">
-              Stop Juggling Agents.
-            </h1>
-
-            <div id="problems" className="mx-auto max-w-6xl scroll-mt-24">
-              <p className="mb-3 font-mono text-[14px] font-medium uppercase tracking-widest text-sky-300">
-                Problems we solve
+            <div className="space-y-6">
+              <h1 className="font-display text-6xl font-semibold leading-[0.95] tracking-tight text-white sm:text-7xl lg:text-[5.5rem]">
+                Stop Juggling Agents.
+              </h1>
+              <p className="mx-auto max-w-2xl text-lg leading-8 text-slate-300 sm:text-xl">
+                Overlord is the AI agent coordination layer that works with every tool you already use.
               </p>
-              <div className="grid gap-3 text-left sm:grid-cols-2">
-                {problemPages.map(problemPage => (
-                  <div
-                    key={problemPage.slug}
-                    className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-4 text-base leading-6 text-slate-200"
-                  >
-                    <div className="flex items-start gap-3">
-                      <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-sky-300" />
-                      <span>{problemPage.problem}</span>
-                    </div>
-                    <Button
-                      asChild
-                      size="sm"
-                      variant="outline"
-                      className="h-9 self-start rounded-full border-white/15 bg-white/5 px-3 text-xs text-white hover:bg-white/10 hover:text-white"
-                    >
-                      <Link href={`/problems/${problemPage.slug}`}>
-                        {problemPage.cta}
-                        <ArrowRight className="size-3.5" />
-                      </Link>
-                    </Button>
-                  </div>
-                ))}
-              </div>
             </div>
 
-            {/* <HeroDashboardGraphic /> */}
-
             {/* Primary CTA: Demo */}
-            <div className="flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
-              <Button
+            <div className="flex flex-col items-center gap-3 pt-2 sm:flex-row sm:justify-center sm:gap-4">
+              {/* <Button
                 asChild
                 size="lg"
                 className="h-14 rounded-full border-white/15 bg-white/5 px-8 text-base text-white hover:bg-white/10 hover:text-white"
@@ -215,9 +188,8 @@ export default async function HomePage() {
                   <Play className="size-4" />
                   Try the interactive demo
                 </Link>
-              </Button>
-              <AskAboutOverlordSplitButton />
-              {/* <Button
+              </Button> */}
+              <Button
                 asChild
                 size="lg"
                 variant="outline"
@@ -225,9 +197,11 @@ export default async function HomePage() {
               >
                 <Link href="#watch-video">
                   <Play className="size-4" />
-                  Watch video
+                  Watch videos
                 </Link>
-              </Button> */}
+              </Button>
+              <AskAboutOverlordSplitButton />
+
               <Button
                 asChild
                 size="lg"
@@ -241,21 +215,9 @@ export default async function HomePage() {
               </Button>
             </div>
 
-            <p className="text-sm text-slate-400">
-              New to Overlord?{' '}
-              <Link href="/docs" className="text-white underline underline-offset-4">
-                Start with the docs
-              </Link>{' '}
-              or{' '}
-              <Link href="/compare" className="text-white underline underline-offset-4">
-                compare the approach
-              </Link>
-              .
-            </p>
-
             {/* Agent icons */}
-            <div className="flex flex-wrap items-center justify-center gap-3 pt-2 text-sm text-slate-300">
-              <span className="font-mono text-[14px] uppercase tracking-wider text-slate-500">
+            <div className="flex flex-wrap items-center justify-center gap-2.5 pt-4 text-sm text-slate-300">
+              <span className="w-full font-mono text-[12px] uppercase tracking-[0.2em] text-slate-500 sm:w-auto">
                 Works with
               </span>
               {agentIcons.map(agent => (
@@ -274,6 +236,45 @@ export default async function HomePage() {
                 </div>
               ))}
             </div>
+          </div>
+        </section>
+
+        {/* Problems */}
+        <section id="problems" className="mx-auto w-full max-w-6xl scroll-mt-24 pb-20 pt-8">
+          <div className="mb-12 text-center">
+            <h2 className="font-display text-3xl font-semibold tracking-tight text-white sm:text-4xl lg:text-5xl">
+              Mo&apos; agents, mo&apos; problems
+            </h2>
+
+          </div>
+          <div className="grid gap-5 text-left sm:grid-cols-2">
+            {problemPages.map(problemPage => {
+              const Icon = problemPage.icon;
+              return (
+                <Link
+                  key={problemPage.slug}
+                  href={`/problems/${problemPage.slug}`}
+                  className="group relative flex flex-col gap-5 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] p-7 transition-all hover:-translate-y-0.5 hover:border-sky-400/30 hover:bg-white/[0.06] sm:p-8"
+                >
+                  <div className="pointer-events-none absolute -right-12 -top-12 size-40 rounded-full bg-sky-400/5 blur-2xl transition-opacity group-hover:bg-sky-400/10" />
+                  <div className="relative flex items-center justify-between gap-4">
+                    <div className="flex size-12 items-center justify-center rounded-2xl border border-sky-400/20 bg-sky-400/10 text-sky-300">
+                      <Icon className="size-6" />
+                    </div>
+                    <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-slate-500">
+                      {problemPage.shortTitle}
+                    </span>
+                  </div>
+                  <p className="relative text-xl font-semibold leading-snug text-white sm:text-2xl">
+                    &ldquo;{problemPage.problem}&rdquo;
+                  </p>
+                  <div className="relative mt-auto inline-flex items-center gap-2 text-sm font-medium text-sky-300 transition-colors group-hover:text-sky-200">
+                    {problemPage.cta}
+                    <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
+                  </div>
+                </Link>
+              );
+            })}
           </div>
         </section>
 

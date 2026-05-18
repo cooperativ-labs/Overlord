@@ -34,7 +34,7 @@ export const problemPages = [
   {
     slug: 'review-agent-diffs',
     icon: Eye,
-    problem: 'What changes the agent made are actually important?',
+    problem: 'Which of the changes the agent made are actually important?',
     shortTitle: 'Review agent diffs',
     cta: 'See ticket activity',
     headline: 'Review what agents changed *and why*.',

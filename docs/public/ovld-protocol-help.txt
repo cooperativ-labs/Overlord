@@ -31,6 +31,7 @@ Subcommands:
   update                    Post progress, activity events, and optional change rationales
   record-change-rationales  Persist structured change rationales without a progress update
   ask                       Post a blocking question and move the ticket to review
+  request-approval-gate     Flip auto_advance=false on the next queued future objective
   permission-request        Notify Overlord that the agent is requesting tool permission
   hook-event                Record a lifecycle hook event without a session key
   read-context              Read shared persistent context for this ticket
@@ -41,6 +42,11 @@ Subcommands:
   attachment-finalize-upload  Finalize an uploaded attachment row after storage upload
   attachment-download-url     Get a signed download URL for an existing attachment
   attachment-upload-file      Prepare, upload, and finalize a local file in one command
+  get-device                  Identify / register the current device and return its label
+  update-device               Rename this device's label (must be lowercase kebab-case)
+  list-project-resources      List resource directories registered for a project
+  add-project-resource        Register a local directory as a project resource on this device
+  update-project-resource     Update a resource directory's path, label, or primary status
 
 Environment fallback:
   --session-key  <- SESSION_KEY
@@ -403,6 +409,44 @@ attachment-upload-file:
     --content-type <mime>     Defaults to application/octet-stream
     --metadata-json <json>
 
+get-device:
+  Required:
+    --device-fingerprint <fp>  (or OVERLORD_DEVICE_FINGERPRINT env var)
+  Optional:
+    --device-hostname <name>
+    --device-platform <platform>  (darwin|linux|windows)
+
+update-device:
+  Required:
+    --device-fingerprint <fp>  (or OVERLORD_DEVICE_FINGERPRINT env var)
+    --label <label>            Lowercase kebab-case, unique within org
+
+list-project-resources:
+  Required:
+    --project-id <uuid>
+  Optional:
+    --device-fingerprint <fp>  Filter to current device only
+
+add-project-resource:
+  Required:
+    --project-id <uuid>
+    --device-fingerprint <fp>  (or OVERLORD_DEVICE_FINGERPRINT env var)
+  Optional:
+    --directory <path>         Defaults to current working directory
+    --label <text>
+    --is-primary               Mark as primary directory for this device+project
+    --device-hostname <name>
+    --device-platform <platform>
+
+update-project-resource:
+  Required:
+    --resource-id <uuid>       From list-project-resources output
+    --device-fingerprint <fp>  (or OVERLORD_DEVICE_FINGERPRINT env var)
+  Optional:
+    --directory <path>         New absolute path
+    --label <text>             New label (pass 'null' to clear)
+    --is-primary <true|false>
+
 Examples:
   ovld protocol auth-status
   ovld protocol discover-project
@@ -441,4 +485,12 @@ Examples:
   ovld protocol record-work --payload-file - <<'EOF'
     {"objective":"...","summary":"...","artifacts":[...],"changeRationales":[...]}
 EOF
+  ovld protocol get-device --device-fingerprint $OVERLORD_DEVICE_FINGERPRINT
+  ovld protocol update-device --device-fingerprint $OVERLORD_DEVICE_FINGERPRINT --label work-macbook
+  ovld protocol list-project-resources --project-id <project-uuid>
+  ovld protocol list-project-resources --project-id <project-uuid> --device-fingerprint $OVERLORD_DEVICE_FINGERPRINT
+  ovld protocol add-project-resource --project-id <project-uuid> --device-fingerprint $OVERLORD_DEVICE_FINGERPRINT
+  ovld protocol add-project-resource --project-id <project-uuid> --directory /path/to/repo --device-fingerprint $OVERLORD_DEVICE_FINGERPRINT --label "main checkout" --is-primary
+  ovld protocol update-project-resource --resource-id <resource-uuid> --device-fingerprint $OVERLORD_DEVICE_FINGERPRINT --label "docs branch"
+  ovld protocol update-project-resource --resource-id <resource-uuid> --device-fingerprint $OVERLORD_DEVICE_FINGERPRINT --is-primary true
 

@@ -29,6 +29,20 @@ export function HomepageHeader() {
           variant="ghost"
           className="hidden text-slate-300 hover:bg-white/5 hover:text-white sm:inline-flex"
         >
+          <Link href="/docs">Docs</Link>
+        </Button>
+        <Button
+          asChild
+          variant="ghost"
+          className="hidden text-slate-300 hover:bg-white/5 hover:text-white sm:inline-flex"
+        >
+          <Link href="/compare">Compare</Link>
+        </Button>
+        <Button
+          asChild
+          variant="ghost"
+          className="hidden text-slate-300 hover:bg-white/5 hover:text-white sm:inline-flex"
+        >
           <Link href="/login">Sign in</Link>
         </Button>
         <Button

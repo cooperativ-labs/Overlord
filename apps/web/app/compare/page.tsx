@@ -30,7 +30,7 @@ const categories = [
   {
     icon: Rows3,
     title: 'Conductor and Sculptor',
-    label: 'Multi-agent execution workbenches',
+    label: 'Multi-agent workbenches',
     summary:
       'They focus on running multiple agents simultaneously, often in managed branches, workspaces, containers, or execution environments.',
     difference:
@@ -41,7 +41,7 @@ const categories = [
   {
     icon: Bot,
     title: 'Tasklet and OpenClaw-style tools',
-    label: 'Agent software and automation platforms',
+    label: 'Automation platforms',
     summary:
       'They usually provide their own chat interface, tools, workflow model, memory, and execution runtime.',
     difference:
@@ -66,7 +66,7 @@ const needs = [
 export default function ComparePage() {
   return (
     <div className="min-h-dvh bg-[#020817] text-white">
-      <div className="mx-auto w-full max-w-6xl px-6 sm:px-8 lg:px-12">
+      <div className="mx-auto w-full max-w-[1800px] px-6 sm:px-8 lg:px-12">
         <HomepageHeader />
       </div>
       <main className="mx-auto flex w-full max-w-6xl flex-col gap-16 px-6 py-8 sm:px-8 lg:px-12">
@@ -90,14 +90,15 @@ export default function ComparePage() {
               key={category.title}
               className="rounded-2xl border border-white/10 bg-white/[0.035] p-5"
             >
+              <p className=" mb-3 font-mono text-[12px] uppercase tracking-widest text-slate-500">
+                {category.label}
+              </p>
               <div className="flex items-center gap-3">
                 <div className="flex size-10 items-center justify-center rounded-xl border border-sky-400/20 bg-sky-400/10 text-sky-300">
                   <category.icon className="size-5" />
                 </div>
                 <div>
-                  <p className="font-mono text-[12px] uppercase tracking-widest text-slate-500">
-                    {category.label}
-                  </p>
+
                   <h2 className="font-semibold text-white">{category.title}</h2>
                 </div>
               </div>
