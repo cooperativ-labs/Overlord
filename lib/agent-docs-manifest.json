@@ -3,13 +3,13 @@
     "slug": "Marketing-and-positioning",
     "filename": "Marketing-and-positioning.md",
     "title": "Core Positioning",
-    "description": "Overlord is the coordination and review layer for people who use coding agents."
+    "description": "Overlord is the management, work coordination, and review layer for people who use coding agents."
   },
   {
     "slug": "new-user-onboarding",
     "filename": "new-user-onboarding.md",
     "title": "Overlord for New Users",
-    "description": "Overlord is a management and work coordination layer for AI-assisted engineering work. It gives you one place to create agent-ready work, launch that work in the coding agent you already use (Claude Code..."
+    "description": "Overlord is a management, work coordination, and review layer for AI-assisted engineering work. It gives you one place to create agent-ready work, launch that work in the coding agent you already use (Claude Code..."
   },
   {
     "slug": "users-guide",

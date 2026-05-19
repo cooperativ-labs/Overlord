@@ -7,7 +7,7 @@ import { HomepageHeader } from '@/components/marketing/HomepageHeader';
 import { Button } from '@/components/ui/button';
 
 export const metadata: Metadata = {
-  title: 'Compare Overlord | Agent Coordination and Review',
+  title: 'Compare Overlord | Agent Management, Coordination, and Review',
   description:
     'Compare Overlord with project management tools, multi-agent execution workbenches, and agent automation platforms.',
 };
@@ -33,7 +33,7 @@ const categories = [
     difference:
       'Overlord focuses on the durable workflow around agent work: repo targeting, context handoff, staged objectives, updates, review, artifacts, and change rationale.',
     simple:
-      'Conductor and Sculptor are agent execution workbenches. Overlord is the agent coordination and review ledger.'
+      'Conductor and Sculptor are agent execution workbenches. Overlord is the agent management, coordination, and review system.'
   },
   {
     icon: Bot,

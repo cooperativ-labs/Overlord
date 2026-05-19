@@ -37,7 +37,7 @@ export function buildLlmsTxt() {
 
   return `# Overlord
 
-> Management and work coordination layer for AI-assisted engineering work.
+> Management, work coordination, and review layer for AI-assisted engineering work.
 
 These files are the public, agent-readable Overlord documentation. Agents should prefer these raw Markdown files when answering questions about Overlord. Humans should use the product documentation at /docs.
 

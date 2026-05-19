@@ -25,7 +25,7 @@ import { problemPages } from '@/lib/marketing/problem-pages';
 import { createClientForRequest } from '@/supabase/utils/server';
 
 export const metadata: Metadata = {
-  title: 'Overlord | Coordination for Coding Agents',
+  title: 'Overlord | Management, Work Coordination, and Review for Coding Agents',
   description:
     'Overlord turns coding-agent prompts into durable, reviewable tickets with objectives, progress, context, handoffs, artifacts, file-change rationales, and delivery history.'
 };
@@ -388,7 +388,7 @@ export default async function HomePage() {
               Positioning
             </p>
             <h2 className="mt-3 font-display text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-              A coordination layer, not a replacement workflow.
+              A management and work coordination layer, not a replacement workflow.
             </h2>
             <p className="mt-4 text-base leading-7 text-slate-300">
               Overlord lets you run agent work wherever you want while keeping objectives, shared
