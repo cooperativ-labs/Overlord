@@ -50,6 +50,7 @@ export default function Slide05() {
           className="w-full"
           thumbnailZoom={1.1}
           mainZoom={1.2}
+          loading="eager"
         />
       </div>
     </div>

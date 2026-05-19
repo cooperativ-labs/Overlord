@@ -10,9 +10,6 @@ export const metadata: Metadata = {
   title: 'Compare Overlord | Agent Coordination and Review',
   description:
     'Compare Overlord with project management tools, multi-agent execution workbenches, and agent automation platforms.',
-  alternates: {
-    canonical: 'https://www.ovld.ai/compare'
-  }
 };
 
 const categories = [

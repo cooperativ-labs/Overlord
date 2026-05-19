@@ -2,9 +2,9 @@ import type { MetadataRoute } from 'next';
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'Overlord',
+    name: 'Overlord AI',
     short_name: 'Overlord',
-    description: 'Local-first AI agent orchestration dashboard',
+    description: 'Local-first AI agent management system',
     start_url: '/',
     scope: '/',
     display: 'standalone',

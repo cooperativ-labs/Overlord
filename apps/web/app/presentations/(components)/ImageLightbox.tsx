@@ -13,9 +13,10 @@ interface Props {
   thumbnailZoom?: number;
   /** Zoom factor applied to the main image (crops via overflow). Defaults to 1. */
   mainZoom?: number;
+  loading?: 'eager' | 'lazy';
 }
 
-export function ImageLightbox({ src, alt, className, thumbnailZoom = 1, mainZoom = 1 }: Props) {
+export function ImageLightbox({ src, alt, className, thumbnailZoom = 1, mainZoom = 1, loading }: Props) {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -52,6 +53,7 @@ export function ImageLightbox({ src, alt, className, thumbnailZoom = 1, mainZoom
             height={h}
             className="w-full h-auto transition duration-300 group-hover:scale-[1.02]"
             sizes="40vw"
+            loading={loading}
           />
         </span>
       </button>

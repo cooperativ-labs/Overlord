@@ -73,12 +73,12 @@ export function TutorialWizard({ initialState, startAtStep, onClose }: TutorialW
 
   const stepLabels: Record<number, string> = isElectron
     ? {
-        1: 'Organization',
-        2: 'Project',
-        3: 'Install CLI',
-        4: 'Agent connectors',
-        5: 'How it works'
-      }
+      1: 'Organization',
+      2: 'Project',
+      3: 'Install CLI',
+      4: 'Agent connectors',
+      5: 'How it works'
+    }
     : { 1: 'Organization', 2: 'Project', 3: 'Desktop App', 4: 'How it works' };
 
   const fullVisibleSteps = isElectron ? [1, 2, 3, 4, 5] : [1, 2, 3, 4];
@@ -136,11 +136,11 @@ export function TutorialWizard({ initialState, startAtStep, onClose }: TutorialW
     if (completedStepNumber >= TUTORIAL_START_STEP) {
       const update = isElectron
         ? {
-            completedStep: completedStepNumber,
-            desktopCompletedStep: completedStepNumber,
-            desktopSetupDone:
-              initialState.desktopSetupDone || completedStepNumber >= DESKTOP_TOTAL_STEPS
-          }
+          completedStep: completedStepNumber,
+          desktopCompletedStep: completedStepNumber,
+          desktopSetupDone:
+            initialState.desktopSetupDone || completedStepNumber >= DESKTOP_TOTAL_STEPS
+        }
         : { completedStep: completedStepNumber };
 
       await updateOnboardingProgressActionWithRetry(update);
@@ -151,13 +151,13 @@ export function TutorialWizard({ initialState, startAtStep, onClose }: TutorialW
         ),
         ...(isElectron
           ? {
-              desktopCompletedStep: Math.max(
-                initialState.desktopCompletedStep,
-                completedStepNumber
-              ),
-              desktopSetupDone:
-                initialState.desktopSetupDone || completedStepNumber >= DESKTOP_TOTAL_STEPS
-            }
+            desktopCompletedStep: Math.max(
+              initialState.desktopCompletedStep,
+              completedStepNumber
+            ),
+            desktopSetupDone:
+              initialState.desktopSetupDone || completedStepNumber >= DESKTOP_TOTAL_STEPS
+          }
           : {})
       });
     }
@@ -166,19 +166,19 @@ export function TutorialWizard({ initialState, startAtStep, onClose }: TutorialW
     if (!nextStep) {
       const update = isElectron
         ? {
-            completedStep: totalSteps,
-            desktopCompletedStep: DESKTOP_TOTAL_STEPS,
-            desktopSetupDone: true
-          }
+          completedStep: totalSteps,
+          desktopCompletedStep: DESKTOP_TOTAL_STEPS,
+          desktopSetupDone: true
+        }
         : { completedStep: totalSteps };
       await updateOnboardingProgressActionWithRetry(update);
       updateState({
         onboardingCompletedStep: Math.max(initialState.onboardingCompletedStep, totalSteps),
         ...(isElectron
           ? {
-              desktopCompletedStep: DESKTOP_TOTAL_STEPS,
-              desktopSetupDone: true
-            }
+            desktopCompletedStep: DESKTOP_TOTAL_STEPS,
+            desktopSetupDone: true
+          }
           : {})
       });
       onClose();
@@ -274,10 +274,10 @@ export function TutorialWizard({ initialState, startAtStep, onClose }: TutorialW
         workingDirectory: workingDirectory.trim() || null,
         ...(deviceIdentity
           ? {
-              deviceFingerprint: deviceIdentity.deviceFingerprint,
-              deviceHostname: deviceIdentity.hostname,
-              devicePlatform: deviceIdentity.platform
-            }
+            deviceFingerprint: deviceIdentity.deviceFingerprint,
+            deviceHostname: deviceIdentity.hostname,
+            devicePlatform: deviceIdentity.platform
+          }
           : {})
       });
       setProjectButtonState('success');
@@ -445,7 +445,7 @@ export function TutorialWizard({ initialState, startAtStep, onClose }: TutorialW
                     setProjectName(event.target.value);
                     if (projectError) setProjectError(null);
                   }}
-                  placeholder="Agent orchestration"
+                  placeholder="Overlord Webapp"
                   aria-invalid={!!projectError}
                   aria-describedby={projectError ? 'onboarding-project-error' : undefined}
                 />

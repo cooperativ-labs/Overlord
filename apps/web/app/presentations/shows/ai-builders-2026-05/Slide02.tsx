@@ -55,6 +55,7 @@ export default function Slide02() {
               src={packedTerminal}
               alt="Packed terminal showing agent output"
               className="w-full"
+              loading="eager"
             />
           </div>
         </div>

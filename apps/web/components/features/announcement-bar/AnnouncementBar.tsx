@@ -58,7 +58,7 @@ export function AnnouncementBar() {
           >
             <circle cx={1} cy={1} r={1} />
           </svg>
-          Experience local-first AI orchestration with our native desktop app.
+          Experience local-first AI agent management with our native desktop app.
         </p>
         <Link
           href="/downloads"

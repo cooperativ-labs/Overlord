@@ -15,9 +15,6 @@ import Link from 'next/link';
 export const metadata: Metadata = {
   title: 'Documentation',
   description: 'Documentation for Overlord AI',
-  alternates: {
-    canonical: 'https://www.ovld.ai/docs'
-  }
 };
 
 export default function DocsPage() {
