@@ -1851,6 +1851,7 @@ export type Database = {
           due_datetime: string | null;
           everhour_task_id: string | null;
           execution_target: Database['public']['Enums']['ticket_execution_target'];
+          has_unopened_waiting_response: boolean;
           id: string;
           is_read: boolean;
           organization_id: number;
@@ -1881,6 +1882,7 @@ export type Database = {
           due_datetime?: string | null;
           everhour_task_id?: string | null;
           execution_target?: Database['public']['Enums']['ticket_execution_target'];
+          has_unopened_waiting_response?: boolean;
           id?: string;
           is_read?: boolean;
           organization_id: number;
@@ -1911,6 +1913,7 @@ export type Database = {
           due_datetime?: string | null;
           everhour_task_id?: string | null;
           execution_target?: Database['public']['Enums']['ticket_execution_target'];
+          has_unopened_waiting_response?: boolean;
           id?: string;
           is_read?: boolean;
           organization_id?: number;
