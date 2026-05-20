@@ -9,4 +9,9 @@ describe('isPublicRoute', () => {
   it('does not treat unrelated paths as public', () => {
     expect(isPublicRoute('/changelogging')).toBe(false);
   });
+
+  it('treats the unsubscribe page as public', () => {
+    expect(isPublicRoute('/unsubscribe')).toBe(true);
+    expect(isPublicRoute('/unsubscribed')).toBe(false);
+  });
 });

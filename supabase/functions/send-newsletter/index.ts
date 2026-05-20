@@ -10,6 +10,8 @@ const RESEND_FROM_EMAIL =
   Deno.env.get('RESEND_FROM_EMAIL') ?? 'Overlord <updates@notifications.cooperativ.io>';
 const NEWSLETTER_TRIGGER_SECRET = Deno.env.get('NEWSLETTER_TRIGGER_SECRET') ?? '';
 
+const APP_URL = Deno.env.get('NEXT_PUBLIC_APP_URL') ?? 'https://overlord.cooperativ.io';
+
 const BATCH_SIZE = 100;
 
 const CORS_HEADERS = {
@@ -22,16 +24,25 @@ const ALLOWED_EMAIL_TYPES = ['new_features'] as const;
 type EmailType = (typeof ALLOWED_EMAIL_TYPES)[number];
 
 interface NewsletterPayload {
-  subject: string;
-  html: string;
+  subject?: string;
+  html?: string;
   text?: string;
   previewText?: string;
   emailType?: string;
   replyTo?: string;
+  changelogId?: string;
+  variables?: {
+    title?: string;
+    date?: string;
+    summary?: string;
+    body_html?: string;
+    permalink?: string;
+  };
 }
 
 interface MailingListEntry {
   email: string;
+  user_id: string;
 }
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -56,7 +67,7 @@ function mailingListSubscribersQuery(
   supabase: ReturnType<typeof createClient>,
   emailType: EmailType
 ) {
-  const base = supabase.from('mailing_list').select('email').neq('email', '');
+  const base = supabase.from('mailing_list').select('email, user_id').neq('email', '');
   switch (emailType) {
     case 'new_features':
       return base.eq('new_features', true);
@@ -79,10 +90,58 @@ function isAuthorized(req: Request): boolean {
   );
 }
 
-function wrapInTemplate(html: string, subject: string, previewText?: string): string {
+function escapeHtmlAttributeSafe(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function fillTemplateTags(
+  template: string,
+  vars: {
+    title: string;
+    date: string;
+    summary: string;
+    body_html: string;
+    permalink: string;
+    unsubscribe_url: string;
+    recipient_name: string;
+  }
+): string {
+  const escaped = {
+    title: escapeHtmlAttributeSafe(vars.title),
+    date: escapeHtmlAttributeSafe(vars.date),
+    summary: escapeHtmlAttributeSafe(vars.summary),
+    body_html: vars.body_html,
+    permalink: escapeHtmlAttributeSafe(vars.permalink),
+    unsubscribe_url: escapeHtmlAttributeSafe(vars.unsubscribe_url),
+    recipient_name: escapeHtmlAttributeSafe(vars.recipient_name)
+  };
+
+  return template
+    .replace(/\{\{\{\s*body_html\s*\}\}\}/g, escaped.body_html)
+    .replace(/\{\{\s*body_html\s*\}\}/g, escaped.body_html)
+    .replace(/\{\{\s*title\s*\}\}/g, escaped.title)
+    .replace(/\{\{\s*date\s*\}\}/g, escaped.date)
+    .replace(/\{\{\s*summary\s*\}\}/g, escaped.summary)
+    .replace(/\{\{\s*permalink\s*\}\}/g, escaped.permalink)
+    .replace(/\{\{\s*unsubscribe_url\s*\}\}/g, escaped.unsubscribe_url)
+    .replace(/\{\{\s*recipient_name\s*\}\}/g, escaped.recipient_name);
+}
+
+function wrapInTemplate(
+  html: string,
+  subject: string,
+  previewText?: string,
+  unsubscribeUrl?: string
+): string {
   const preview = previewText
     ? `<div style="display:none;max-height:0;overflow:hidden;">${previewText}&nbsp;</div>`
     : '';
+  const unsubLink = unsubscribeUrl ?? `${APP_URL}/settings`;
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -115,8 +174,8 @@ function wrapInTemplate(html: string, subject: string, previewText?: string): st
                 You're receiving this because you signed up for Overlord.
               </p>
               <p style="margin:0;font-size:12px;color:#71717a;">
-                To update your email preferences, visit your
-                <a href="https://overlord.cooperativ.io/settings" style="color:#18181b;text-decoration:underline;">account settings</a>.
+                To stop receiving these emails, you can
+                <a href="${unsubLink}" style="color:#18181b;text-decoration:underline;">unsubscribe</a> at any time.
               </p>
             </td>
           </tr>
@@ -163,9 +222,6 @@ Deno.serve(async (req: Request) => {
 
   const { subject, html, text, previewText, emailType: rawEmailType, replyTo } = payload;
 
-  if (!subject?.trim()) return jsonResponse({ error: 'subject is required' }, 400);
-  if (!html?.trim()) return jsonResponse({ error: 'html is required' }, 400);
-
   const parsedEmailType = parseEmailType(rawEmailType);
   if (parsedEmailType instanceof Response) return parsedEmailType;
 
@@ -173,6 +229,7 @@ Deno.serve(async (req: Request) => {
     auth: { persistSession: false }
   });
 
+  // 1. Fetch subscribers
   const { data: subscribers, error: dbError } = await mailingListSubscribersQuery(
     supabase,
     parsedEmailType
@@ -183,12 +240,106 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ error: 'Failed to load subscribers' }, 500);
   }
 
-  const emails = (subscribers as MailingListEntry[]).map(r => r.email).filter(Boolean);
+  const emailList = subscribers as MailingListEntry[];
+  const emails = emailList.map(r => r.email).filter(Boolean);
   if (emails.length === 0) {
     return jsonResponse({ ok: true, sent: 0, message: 'No opted-in subscribers' });
   }
 
-  const wrappedHtml = wrapInTemplate(html, subject, previewText);
+  // 2. Fetch profiles to retrieve names
+  const { data: profiles, error: profileError } = await supabase
+    .from('profiles')
+    .select('id, name');
+
+  if (profileError) {
+    console.warn('[send-newsletter] Failed to fetch profiles for recipient names', profileError);
+  }
+
+  const profileMap = new Map<string, string>();
+  if (profiles) {
+    for (const p of profiles) {
+      profileMap.set(p.id, p.name);
+    }
+  }
+
+  const getRecipientName = (userId: string, email: string): string => {
+    const name = profileMap.get(userId)?.trim();
+    if (name) return name;
+    const emailParts = email.split('@');
+    if (emailParts.length > 0 && emailParts[0]) {
+      return emailParts[0];
+    }
+    return 'there';
+  };
+
+  // 3. Resolve template variables
+  let vars = {
+    title: payload.variables?.title ?? '',
+    date: payload.variables?.date ?? '',
+    summary: payload.variables?.summary ?? '',
+    body_html: payload.variables?.body_html ?? '',
+    permalink: payload.variables?.permalink ?? ''
+  };
+
+  let emailSubject = subject;
+  let emailPreviewText = previewText;
+
+  if (payload.changelogId) {
+    const { data: entry, error: entryError } = await supabase
+      .from('changelog_entries')
+      .select('*')
+      .eq('id', payload.changelogId)
+      .single();
+
+    if (entryError || !entry) {
+      console.error('[send-newsletter] Failed to load changelog entry', entryError);
+      return jsonResponse({ error: 'Failed to load changelog entry' }, 404);
+    }
+
+    const publishedDate = entry.published_at
+      ? new Intl.DateTimeFormat('en-US', { dateStyle: 'long' }).format(new Date(entry.published_at))
+      : new Intl.DateTimeFormat('en-US', { dateStyle: 'long' }).format(new Date());
+
+    vars = {
+      title: entry.title,
+      date: publishedDate,
+      summary: entry.summary ?? '',
+      body_html: entry.body_html ?? '',
+      permalink: `${APP_URL}/changelog/${entry.slug}`
+    };
+
+    if (!emailSubject) {
+      emailSubject = entry.title;
+    }
+    if (!emailPreviewText) {
+      emailPreviewText = entry.summary ?? undefined;
+    }
+  }
+
+  if (!emailSubject?.trim()) {
+    return jsonResponse({ error: 'subject is required (or a valid changelogId)' }, 400);
+  }
+
+  // 4. Resolve default HTML template if none is passed
+  let templateHtml = html ?? '';
+  if (!templateHtml) {
+    if (payload.changelogId) {
+      templateHtml = `
+        <h2 style="font-size:22px;font-weight:700;margin:0 0 12px;color:#09090b;">{{ title }}</h2>
+        <p style="font-size:13px;color:#71717a;margin:0 0 24px;">Published on {{ date }}</p>
+        ${vars.summary ? `<p style="font-size:16px;line-height:1.6;color:#27272a;margin:0 0 24px;font-weight:500;">{{ summary }}</p>` : ''}
+        <div style="font-size:15px;line-height:1.6;color:#3f3f46;margin:0 0 24px;">
+          {{{ body_html }}}
+        </div>
+        <p style="margin:24px 0 0;">
+          <a href="{{ permalink }}" style="display:inline-block;background:#09090b;color:#ffffff;padding:12px 24px;font-size:14px;font-weight:500;text-decoration:none;border-radius:6px;">View Full Release Notes</a>
+        </p>
+      `;
+    } else {
+      return jsonResponse({ error: 'html template is required (or a valid changelogId)' }, 400);
+    }
+  }
+
   const resend = new Resend(RESEND_API_KEY);
   const batches = chunk(emails, BATCH_SIZE);
 
@@ -196,14 +347,36 @@ Deno.serve(async (req: Request) => {
   const errors: string[] = [];
 
   for (const batch of batches) {
-    const messages = batch.map(to => ({
-      from: RESEND_FROM_EMAIL,
-      to,
-      subject,
-      html: wrappedHtml,
-      ...(text ? { text } : {}),
-      ...(replyTo ? { replyTo } : {})
-    }));
+    const messages = batch.map(to => {
+      const subscriber = emailList.find(s => s.email === to);
+      const userId = subscriber?.user_id ?? '';
+      const name = getRecipientName(userId, to);
+      const unsub = `${APP_URL}/unsubscribe?email=${encodeURIComponent(to)}`;
+
+      const personalVars = {
+        ...vars,
+        unsubscribe_url: unsub,
+        recipient_name: name
+      };
+
+      const recipientHtml = fillTemplateTags(templateHtml, personalVars);
+      const recipientWrappedHtml = wrapInTemplate(
+        recipientHtml,
+        emailSubject,
+        emailPreviewText,
+        unsub
+      );
+      const recipientText = text ? fillTemplateTags(text, personalVars) : undefined;
+
+      return {
+        from: RESEND_FROM_EMAIL,
+        to,
+        subject: emailSubject,
+        html: recipientWrappedHtml,
+        ...(recipientText ? { text: recipientText } : {}),
+        ...(replyTo ? { replyTo } : {})
+      };
+    });
 
     try {
       const result = await resend.batch.send(messages);

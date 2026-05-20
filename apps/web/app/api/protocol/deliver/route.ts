@@ -142,6 +142,17 @@ export async function POST(request: Request) {
           .eq('ticket_id', ticketId)
           .eq('state', 'executing');
 
+        // Close the delivering session before emitting any auto_advance event.
+        // Desktop launchers skip auto-advance while a ticket has an active
+        // session; if the event arrives first, the launch can be skipped forever.
+        await supabase
+          .from('agent_sessions')
+          .update({
+            detached_at: new Date().toISOString(),
+            session_state: 'completed'
+          })
+          .eq('id', sessionId);
+
         // Auto-advance scheduler: prefer the current draft objective (when it has
         // content), otherwise the earliest future objective. Desktop observers
         // launch auto_advance=true rows; gated rows wait for human approval.
@@ -155,14 +166,6 @@ export async function POST(request: Request) {
         });
 
         if (queueResult.advanced) {
-          await supabase
-            .from('agent_sessions')
-            .update({
-              detached_at: new Date().toISOString(),
-              session_state: 'completed'
-            })
-            .eq('id', sessionId);
-
           if (artifacts.length) {
             const artifactRows = artifacts.map(artifact => ({
               artifact_type: artifact.type,

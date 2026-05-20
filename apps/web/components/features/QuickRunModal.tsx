@@ -72,7 +72,9 @@ export function QuickRunModal({
   const [submitButtonState, setSubmitButtonState] = useState<ButtonLoadingState>('default');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { launchAgent } = useTerminal();
-  const { selection, setSelection, loaded: selectionLoaded } = useAgentModelPreference();
+  const { selection: defaultSelection, loaded: selectionLoaded } = useAgentModelPreference();
+  const [objectiveSelection, setObjectiveSelection] = useState(defaultSelection);
+  const wasOpenRef = useRef(false);
   const createTicketMutation = useCreateTicketMutation();
   const updateAssignmentMutation = useUpdateTicketAssignmentMutation();
   const updateFieldsMutation = useUpdateTicketFieldsMutation();
@@ -94,11 +96,16 @@ export function QuickRunModal({
   }, []);
 
   useEffect(() => {
+    if (isOpen && !wasOpenRef.current) {
+      setObjectiveSelection(defaultSelection);
+    }
+    wasOpenRef.current = isOpen;
+
     setSelectedProjectId(current => {
       if (isOpen && current) return current;
       return current === resolvedDefaultProjectId ? current : resolvedDefaultProjectId;
     });
-  }, [isOpen, resolvedDefaultProjectId]);
+  }, [defaultSelection, isOpen, resolvedDefaultProjectId]);
 
   // Focus textarea once ticket creation finishes
   useEffect(() => {
@@ -178,7 +185,10 @@ export function QuickRunModal({
       void (async () => {
         try {
           const createdTicket = await createPromise;
-          await updateAssignmentMutation.mutateAsync({ ticketId: createdTicket.id, selection });
+          await updateAssignmentMutation.mutateAsync({
+            ticketId: createdTicket.id,
+            selection: objectiveSelection
+          });
           if (trimmedObjective) {
             const title = await generateTicketTitleActionWithRetry(trimmedObjective);
             await updateFieldsMutation.mutateAsync({
@@ -189,12 +199,12 @@ export function QuickRunModal({
 
           await launchAgent({
             ticketId: createdTicket.id,
-            agent: selection.agent,
+            agent: objectiveSelection.agent,
             organizationId: createdTicket.organizationId,
             cwd: selectedProject?.local_working_directory ?? undefined,
             launchMode: 'run',
-            model: selection.model ?? undefined,
-            thinking: selection.thinking ?? undefined,
+            model: objectiveSelection.model ?? undefined,
+            thinking: objectiveSelection.thinking ?? undefined,
             projectId: isPersonalTicket ? undefined : selectedProjectId
           });
           router.push(
@@ -294,9 +304,9 @@ export function QuickRunModal({
               <Label className="text-sm font-medium">Agent & Model</Label>
               <AgentModelChooserButton
                 ticketId={null}
-                initialSelection={null}
+                initialSelection={objectiveSelection}
                 disabled={isSubmitting}
-                onSelectionChange={setSelection}
+                onSelectionChange={setObjectiveSelection}
                 persistSelection={false}
               />
             </div>

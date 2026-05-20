@@ -361,7 +361,8 @@ export async function markSubmittedObjectiveExecuting(
     .select('id,objective,state,assigned_agent')
     .eq('ticket_id', ticketId)
     .eq('state', 'submitted')
-    .order('created_at', { ascending: false })
+    .order('position', { ascending: true })
+    .order('created_at', { ascending: true })
     .limit(1)
     .maybeSingle<DraftObjective>();
 
@@ -377,7 +378,8 @@ export async function markSubmittedObjectiveExecuting(
           .select('id,objective,state,assigned_agent')
           .eq('ticket_id', ticketId)
           .eq('state', 'draft')
-          .order('created_at', { ascending: false })
+          .order('position', { ascending: true })
+          .order('created_at', { ascending: true })
           .limit(1)
           .maybeSingle<DraftObjective>()
       ).data;

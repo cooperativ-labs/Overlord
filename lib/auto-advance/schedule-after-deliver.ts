@@ -42,7 +42,8 @@ async function getCurrentDraftWithContent(
     .select('id, objective, auto_advance, approval_reason, assigned_agent')
     .eq('ticket_id', ticketId)
     .eq('state', 'draft')
-    .order('created_at', { ascending: false })
+    .order('position', { ascending: true })
+    .order('created_at', { ascending: true })
     .limit(1)
     .maybeSingle();
 

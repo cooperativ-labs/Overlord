@@ -10,7 +10,8 @@ const PUBLIC_EXACT_PATHS = new Set([
   '/llms-full.txt',
   '/overlord-context',
   '/robots.txt',
-  '/sitemap.xml'
+  '/sitemap.xml',
+  '/unsubscribe'
 ]);
 const PUBLIC_PATH_PREFIXES = [
   '/changelog/',

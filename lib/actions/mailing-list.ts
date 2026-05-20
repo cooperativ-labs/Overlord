@@ -92,3 +92,34 @@ export async function getMailingListSubscribersAction(
     return { error: 'Failed to load mailing list subscribers' };
   }
 }
+
+// Unsubscribe a user by email address anonymously (from footer unsubscribe link)
+export async function unsubscribeEmailAction(
+  email: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!email || !email.trim()) {
+      return { success: false, error: 'Email address is required.' };
+    }
+
+    const serviceClient = createServiceRoleClient();
+    const normalized = email.trim();
+    const { data, error } = await serviceClient
+      .from('mailing_list')
+      .update({ new_features: false })
+      .eq('email', normalized)
+      .select('id');
+
+    if (error) return { success: false, error: error.message };
+    if (!data?.length) {
+      return {
+        success: false,
+        error: 'We could not find that email on our update list. Check the spelling or use the link from your email.'
+      };
+    }
+    return { success: true };
+  } catch (err) {
+    Sentry.captureException(err);
+    return { success: false, error: 'Failed to process unsubscribe request.' };
+  }
+}

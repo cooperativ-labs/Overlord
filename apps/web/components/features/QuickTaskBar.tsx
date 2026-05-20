@@ -89,7 +89,8 @@ export function QuickTaskBar({ defaultProjectId, projects }: QuickTaskBarProps) 
   const containerRef = useRef<HTMLDivElement>(null);
   const controlBarRef = useRef<HTMLDivElement>(null);
 
-  const { selection, setSelection, loaded: selectionLoaded } = useAgentModelPreference();
+  const { selection: defaultSelection, loaded: selectionLoaded } = useAgentModelPreference();
+  const [objectiveSelection, setObjectiveSelection] = useState(defaultSelection);
   const { isElectron, launchAgent } = useTerminal();
   const createTicketMutation = useCreateTicketMutation();
   const updateAssignmentMutation = useUpdateTicketAssignmentMutation();
@@ -143,7 +144,7 @@ export function QuickTaskBar({ defaultProjectId, projects }: QuickTaskBarProps) 
 
   useEffect(() => {
     autoResize();
-  }, [autoResize, objective, stagedFiles.length, activeMenu, selection]);
+  }, [autoResize, objective, stagedFiles.length, activeMenu, objectiveSelection]);
 
   // Focus the field on mount and after inline menus close — not while a panel is open.
   useEffect(() => {
@@ -161,6 +162,7 @@ export function QuickTaskBar({ defaultProjectId, projects }: QuickTaskBarProps) 
     const off = api.onShown(() => {
       requestAnimationFrame(() => {
         setSelectedProjectId(resolvedDefaultProjectId);
+        setObjectiveSelection(defaultSelection);
         setActiveMenu(null);
         textareaRef.current?.focus();
         autoResize();
@@ -169,7 +171,7 @@ export function QuickTaskBar({ defaultProjectId, projects }: QuickTaskBarProps) 
     return () => {
       off?.();
     };
-  }, [autoResize, resolvedDefaultProjectId]);
+  }, [autoResize, defaultSelection, resolvedDefaultProjectId]);
 
   const handleClose = useCallback(() => {
     const api = getQuickTaskApi();
@@ -305,7 +307,10 @@ export function QuickTaskBar({ defaultProjectId, projects }: QuickTaskBarProps) 
       void (async () => {
         try {
           if (executionTarget === 'agent') {
-            await updateAssignmentMutation.mutateAsync({ ticketId: createdTicket.id, selection });
+            await updateAssignmentMutation.mutateAsync({
+              ticketId: createdTicket.id,
+              selection: objectiveSelection
+            });
           } else {
             await updateExecutionTargetMutation.mutateAsync({
               ticketId: createdTicket.id,
@@ -330,17 +335,17 @@ export function QuickTaskBar({ defaultProjectId, projects }: QuickTaskBarProps) 
       setStagedFiles([]);
       handleClose();
 
-      if (shouldLaunch && isElectron && isLaunchAgentTypeValue(selection.agent)) {
+      if (shouldLaunch && isElectron && isLaunchAgentTypeValue(objectiveSelection.agent)) {
         try {
           await submitTicketObjectiveAction(createdTicket.id);
           await launchAgent({
             ticketId: createdTicket.id,
-            agent: selection.agent,
+            agent: objectiveSelection.agent,
             organizationId: selectedProject.organization_id,
             cwd: selectedProject.local_working_directory ?? undefined,
             launchMode: 'run',
-            model: selection.model ?? undefined,
-            thinking: selection.thinking ?? undefined,
+            model: objectiveSelection.model ?? undefined,
+            thinking: objectiveSelection.thinking ?? undefined,
             projectId: selectedProject.id
           });
         } catch (error) {
@@ -357,6 +362,7 @@ export function QuickTaskBar({ defaultProjectId, projects }: QuickTaskBarProps) 
       console.error('Failed to create ticket:', error);
       toast.error('Failed to create ticket.');
     } finally {
+      setObjectiveSelection(defaultSelection);
       setIsSubmitting(false);
     }
   }
@@ -515,7 +521,7 @@ export function QuickTaskBar({ defaultProjectId, projects }: QuickTaskBarProps) 
             </div>
 
             <AgentModelChooserTrigger
-              selection={selection}
+              selection={objectiveSelection}
               active={activeMenu === 'model'}
               onToggle={() => setActiveMenu(current => (current === 'model' ? null : 'model'))}
               disabled={isSubmitting}
@@ -579,7 +585,7 @@ export function QuickTaskBar({ defaultProjectId, projects }: QuickTaskBarProps) 
 
       {activeMenu === 'model' ? (
         <div className="electron-no-drag rounded-xl border  bg-background/95 p-2  backdrop-blur-md m-4">
-          <AgentModelSelector value={selection} onChange={setSelection} />
+          <AgentModelSelector value={objectiveSelection} onChange={setObjectiveSelection} />
         </div>
       ) : null}
     </div>
