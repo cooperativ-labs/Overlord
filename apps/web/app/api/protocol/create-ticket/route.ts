@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 
 import { internalErrorResponse, parseProtocolBody } from '@/app/api/protocol/_lib';
 import { deriveTitleFromObjective, getTicketIdentifier } from '@/lib/helpers/tickets';
-import { upsertDraftObjective } from '@/lib/objectives';
+import { insertOrderedObjectives } from '@/lib/objectives';
 import { resolveSession, resolveTicketId } from '@/lib/overlord/protocol-db';
 import { resolveProtocolTicketCreatorUserId } from '@/lib/overlord/protocol-ticket-creator';
 import { resolveTicketDelegate } from '@/lib/overlord/protocol-ticket-delegate';
@@ -20,7 +20,7 @@ export async function POST(request: Request) {
       availableTools,
       delegate,
       executionTarget,
-      objective,
+      objectives,
       priority,
       sessionKey,
       ticketId: rawTicketId,
@@ -58,7 +58,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const nextTitle = title.trim() || deriveTitleFromObjective(objective);
+    const nextTitle = title.trim() || deriveTitleFromObjective(objectives[0].objective);
     const draftStatusName = await resolvePreferredStatusNameByType(
       supabase,
       sourceTicket.organization_id,
@@ -89,7 +89,15 @@ export async function POST(request: Request) {
       );
     }
 
-    await upsertDraftObjective(supabase, createdTicket.id, objective, createdBy);
+    const insertedObjectives = await insertOrderedObjectives(
+      supabase,
+      createdTicket.id,
+      objectives,
+      {
+        createdBy,
+        firstState: 'draft'
+      }
+    );
 
     const createdReference = getTicketIdentifier(createdTicket);
     const sourceReference = getTicketIdentifier(sourceTicket);
@@ -133,6 +141,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       ok: true,
+      objectives: insertedObjectives,
       ticket: {
         executionTarget: createdTicket.execution_target,
         id: createdTicket.id,

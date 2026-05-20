@@ -4,8 +4,9 @@ import { randomUUID } from 'node:crypto';
 import { deriveTitleFromObjective } from '@/lib/helpers/tickets';
 import {
   generateAndSetObjectiveTitle,
+  insertOrderedObjectives,
   markSubmittedObjectiveExecuting,
-  upsertDraftObjective
+  type OrderedObjectiveInput
 } from '@/lib/objectives';
 import { resolveProtocolTicketCreatorUserId } from '@/lib/overlord/protocol-ticket-creator';
 import { resolveTicketDelegate } from '@/lib/overlord/protocol-ticket-delegate';
@@ -19,7 +20,7 @@ type ConnectionMethod = (typeof connectionMethods)[number];
 
 export type SpawnParams = {
   title: string;
-  objective: string;
+  objectives: OrderedObjectiveInput[];
   acceptanceCriteria: string;
   availableTools: string;
   executionTarget: 'agent' | 'human';
@@ -49,7 +50,7 @@ export type SpawnParams = {
 export async function runSpawnProtocol(supabase: SpawnClient, params: SpawnParams) {
   const {
     title,
-    objective,
+    objectives,
     acceptanceCriteria,
     availableTools,
     executionTarget,
@@ -98,7 +99,7 @@ export async function runSpawnProtocol(supabase: SpawnClient, params: SpawnParam
     return { error: 'No project found for this organization.', status: 400 } as const;
   }
 
-  const nextTitle = title.trim() || deriveTitleFromObjective(objective);
+  const nextTitle = title.trim() || deriveTitleFromObjective(objectives[0].objective);
   const ticketDelegate = resolveTicketDelegate(delegate, modelIdentifier ?? null, agentIdentifier);
   const createdBy = await resolveProtocolTicketCreatorUserId(supabase, {
     userId
@@ -134,8 +135,12 @@ export async function runSpawnProtocol(supabase: SpawnClient, params: SpawnParam
     } as const;
   }
 
-  // Create the objective and immediately mark it as executing for the spawned session.
-  await upsertDraftObjective(supabase, ticket.id, objective, createdBy);
+  // Create ordered objectives and immediately mark the first one as executing
+  // for the spawned session. Additional objectives remain queued as future.
+  const insertedObjectives = await insertOrderedObjectives(supabase, ticket.id, objectives, {
+    createdBy,
+    firstState: 'draft'
+  });
 
   // Create agent session
   const sessionKey = randomUUID();
@@ -162,7 +167,8 @@ export async function runSpawnProtocol(supabase: SpawnClient, params: SpawnParam
       agentIdentifier,
       metadata
     },
-    createdBy
+    createdBy,
+    { promoteQueuedFutureToDraft: objectives.length <= 1 }
   );
 
   if (objectiveExecution.didExecute && objectiveExecution.executedObjectiveId) {
@@ -245,7 +251,11 @@ export async function runSpawnProtocol(supabase: SpawnClient, params: SpawnParam
         id: session.id,
         sessionKey: session.session_key,
         state: session.session_state
-      }
+      },
+      objectives: insertedObjectives.map((item, index) => ({
+        ...item,
+        state: index === 0 ? ('executing' as const) : item.state
+      }))
     }
   } as const;
 }

@@ -14,7 +14,7 @@ export async function POST(request: Request) {
     const supabase = createServiceRoleClient();
     const {
       title,
-      objective,
+      objectives,
       acceptanceCriteria,
       availableTools,
       executionTarget,
@@ -47,7 +47,7 @@ export async function POST(request: Request) {
 
     const result = await runSpawnProtocol(supabase, {
       title,
-      objective,
+      objectives,
       acceptanceCriteria,
       availableTools,
       executionTarget,

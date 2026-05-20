@@ -9,6 +9,7 @@ import { toolErr, toolOk } from '../rpc.ts';
 
 import { insertChangeRationales } from './_change-rationales.ts';
 import { upsertDeviceFromProtocol } from './_device-upsert.ts';
+import { insertOrderedObjectives, normalizeObjectivesInput } from './_objectives.ts';
 import { resolvePreferredStatusNameByType } from './_status-resolution.ts';
 import { resolveTicketCreatorUserId } from './_ticket-creator.ts';
 
@@ -118,7 +119,7 @@ function resolveTicketDelegate(
 export async function handleRecordWork(supabase: SupabaseClient, args: any, ctx: TokenContext) {
   const {
     title = '',
-    objective,
+    objectives: rawObjectives,
     summary,
     artifacts = [],
     changeRationales = [],
@@ -136,8 +137,11 @@ export async function handleRecordWork(supabase: SupabaseClient, args: any, ctx:
     devicePlatform = null
   } = args;
 
-  if (typeof objective !== 'string' || !objective.trim()) {
-    return toolErr('objective is required.');
+  let objectives;
+  try {
+    objectives = normalizeObjectivesInput({ objectives: rawObjectives });
+  } catch (error) {
+    return toolErr(error instanceof Error ? error.message : String(error));
   }
   if (typeof summary !== 'string' || !summary.trim()) {
     return toolErr('summary is required.');
@@ -179,7 +183,8 @@ export async function handleRecordWork(supabase: SupabaseClient, args: any, ctx:
     );
   }
 
-  const nextTitle = (typeof title === 'string' ? title : '').trim() || objective.slice(0, 120);
+  const nextTitle =
+    (typeof title === 'string' ? title : '').trim() || objectives[0].objective.slice(0, 120);
   const createdBy = await resolveTicketCreatorUserId(supabase, ctx);
   const modelIdentifier =
     metadata && typeof metadata === 'object' && typeof metadata.model === 'string'
@@ -230,7 +235,7 @@ export async function handleRecordWork(supabase: SupabaseClient, args: any, ctx:
       completed_at: completedAt,
       created_by: createdBy,
       model_identifier: modelIdentifier,
-      objective,
+      objective: objectives[0].objective,
       state: 'complete',
       ticket_id: ticket.id
     })
@@ -239,6 +244,15 @@ export async function handleRecordWork(supabase: SupabaseClient, args: any, ctx:
   if (objectiveError || !objectiveRow) {
     return toolErr(objectiveError?.message ?? 'Ticket created but failed to create objective.');
   }
+
+  const queuedObjectives =
+    objectives.length > 1
+      ? await insertOrderedObjectives(supabase, ticket.id, objectives.slice(1), {
+          createdBy,
+          firstState: 'future',
+          followingState: 'future'
+        })
+      : [];
 
   const sessionKey = crypto.randomUUID();
   const { data: session, error: sessionError } = await supabase
@@ -333,6 +347,7 @@ export async function handleRecordWork(supabase: SupabaseClient, args: any, ctx:
       executionTarget: ticket.execution_target
     },
     objective: { id: objectiveRow.id, state: 'complete' },
+    objectives: [{ id: objectiveRow.id, state: 'complete' }, ...queuedObjectives],
     session: { id: session.id, sessionKey: session.session_key, state: session.session_state },
     artifactCount: Array.isArray(artifacts) ? artifacts.length : 0,
     changeRationaleCount: Array.isArray(changeRationales) ? changeRationales.length : 0

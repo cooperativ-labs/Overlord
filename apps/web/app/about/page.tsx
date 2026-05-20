@@ -41,7 +41,10 @@ export default function AboutPage() {
             <p>
               The product is still evolving in the open. If you want to follow along or try it, the
               best place to start is the{' '}
-              <Link href="/" className="text-sky-400 underline underline-offset-4 hover:text-sky-300">
+              <Link
+                href="/"
+                className="text-sky-400 underline underline-offset-4 hover:text-sky-300"
+              >
                 homepage
               </Link>{' '}
               or the{' '}

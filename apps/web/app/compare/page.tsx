@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 export const metadata: Metadata = {
   title: 'Compare Overlord | Agent Management, Coordination, and Review',
   description:
-    'Compare Overlord with project management tools, multi-agent execution workbenches, and agent automation platforms.',
+    'Compare Overlord with project management tools, multi-agent execution workbenches, and agent automation platforms.'
 };
 
 const categories = [
@@ -95,7 +95,6 @@ export default function ComparePage() {
                   <category.icon className="size-5" />
                 </div>
                 <div>
-
                   <h2 className="font-semibold text-white">{category.title}</h2>
                 </div>
               </div>

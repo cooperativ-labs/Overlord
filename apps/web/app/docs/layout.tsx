@@ -10,7 +10,7 @@ import type { DocsNavData } from './_components/docs-nav';
 
 export const metadata: Metadata = {
   title: {
-    default: 'Overlord Docs',
+    default: 'Documentation',
     template: '%s | Overlord Docs'
   },
   description:

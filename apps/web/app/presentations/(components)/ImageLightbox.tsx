@@ -16,7 +16,14 @@ interface Props {
   loading?: 'eager' | 'lazy';
 }
 
-export function ImageLightbox({ src, alt, className, thumbnailZoom = 1, mainZoom = 1, loading }: Props) {
+export function ImageLightbox({
+  src,
+  alt,
+  className,
+  thumbnailZoom = 1,
+  mainZoom = 1,
+  loading
+}: Props) {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {

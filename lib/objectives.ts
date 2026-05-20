@@ -25,6 +25,27 @@ type ObjectiveExecutionSnapshot = {
   objectiveAssignedAgent?: Json | null;
 };
 
+export type OrderedObjectiveInput = {
+  objective: string;
+  title?: string;
+  autoAdvance?: boolean;
+  assignedAgent?: unknown;
+};
+
+type InsertOrderedObjectivesOptions = {
+  createdBy?: string | null;
+  firstState?: ObjectiveState;
+  firstStateWhenNoActive?: ObjectiveState;
+  firstStateWhenActive?: ObjectiveState;
+  followingState?: ObjectiveState;
+  firstExtra?: Partial<Database['public']['Tables']['objectives']['Insert']>;
+};
+
+type InsertedObjective = Pick<
+  Database['public']['Tables']['objectives']['Row'],
+  'id' | 'objective' | 'state' | 'position' | 'title' | 'auto_advance'
+>;
+
 function isObjectiveStateConstraintError(error: { code?: string; message?: string } | null) {
   const message = error?.message ?? '';
   return (
@@ -101,6 +122,75 @@ export function sortObjectivesByPositionThenCreatedAt<T extends ObjectivePositio
     }
     return toTimestamp(a.created_at) - toTimestamp(b.created_at);
   });
+}
+
+export async function insertOrderedObjectives(
+  supabase: ObjectiveClient,
+  ticketId: string,
+  objectives: readonly OrderedObjectiveInput[],
+  options: InsertOrderedObjectivesOptions = {}
+): Promise<InsertedObjective[]> {
+  const normalizedObjectives = objectives.map(input => ({
+    ...input,
+    objective: normalizeObjectiveText(input.objective)
+  }));
+
+  if (normalizedObjectives.length === 0) {
+    return [];
+  }
+
+  const emptyIndex = normalizedObjectives.findIndex(input => !input.objective);
+  if (emptyIndex !== -1) {
+    throw new Error(`Objective at index ${emptyIndex} cannot be empty.`);
+  }
+
+  const { data: existingRows, error: existingError } = await supabase
+    .from('objectives')
+    .select('position,state')
+    .eq('ticket_id', ticketId);
+
+  if (existingError) {
+    throw new Error(existingError.message);
+  }
+
+  const maxPosition = Math.max(
+    -1,
+    ...((existingRows ?? []) as Array<{ position: number | null }>).map(row =>
+      typeof row.position === 'number' ? row.position : -1
+    )
+  );
+  const hasActiveObjective = ((existingRows ?? []) as Array<{ state: ObjectiveState | null }>).some(
+    row => row.state === 'draft' || row.state === 'submitted' || row.state === 'executing'
+  );
+  const firstState =
+    options.firstState ??
+    (hasActiveObjective
+      ? (options.firstStateWhenActive ?? 'future')
+      : (options.firstStateWhenNoActive ?? 'draft'));
+  const followingState = options.followingState ?? 'future';
+
+  const rows = normalizedObjectives.map((input, index) => ({
+    ...(index === 0 ? (options.firstExtra ?? {}) : {}),
+    assigned_agent: (input.assignedAgent ?? null) as Json | null,
+    auto_advance: input.autoAdvance ?? false,
+    created_by: options.createdBy ?? null,
+    objective: input.objective,
+    position: maxPosition + index + 1,
+    state: index === 0 ? firstState : followingState,
+    ticket_id: ticketId,
+    title: input.title?.trim() || null
+  }));
+
+  const { data: inserted, error: insertError } = await supabase
+    .from('objectives')
+    .insert(rows)
+    .select('id,objective,state,position,title,auto_advance');
+
+  if (insertError) {
+    throw new Error(insertError.message);
+  }
+
+  return (inserted ?? []) as InsertedObjective[];
 }
 
 export async function upsertDraftObjective(
@@ -265,7 +355,8 @@ export async function markSubmittedObjectiveExecuting(
   supabase: ObjectiveClient,
   ticketId: string,
   executionSnapshot?: ObjectiveExecutionSnapshot,
-  createdBy?: string | null
+  createdBy?: string | null,
+  options: { promoteQueuedFutureToDraft?: boolean } = {}
 ) {
   const { data: submittedObjective, error: submittedError } = await supabase
     .from('objectives')
@@ -332,7 +423,9 @@ export async function markSubmittedObjectiveExecuting(
   }
 
   if (!existingDraftRow) {
-    const futureObjectivesEnabled = await isAppFeatureEnabled('future-objectives');
+    const futureObjectivesEnabled =
+      options.promoteQueuedFutureToDraft === true &&
+      (await isAppFeatureEnabled('future-objectives'));
     let promotedFutureToDraft = false;
 
     if (futureObjectivesEnabled) {

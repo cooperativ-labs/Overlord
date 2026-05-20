@@ -86,6 +86,17 @@ All other MCP methods (`initialize`, `tools/call`, etc.) require a valid OAuth b
 
 `DELETE /api/mcp` proxies session termination (MCP Streamable HTTP).
 
+Ticket creation tools that accept `objective` also accept an ordered `objectives` array of objects:
+
+```json
+[
+  { "objective": "Draft the plan", "title": "Plan" },
+  { "objective": "Implement the approved plan", "autoAdvance": true }
+]
+```
+
+Use `add_objectives` to append ordered objectives to an existing ticket. Index 0 is the first newly added objective to execute; later indexes queue after it. Agents should create multiple tickets for different features or goals, and use same-ticket objectives for sequential steps toward one feature or goal.
+
 ## Request examples
 
 ### Protocol route

@@ -717,6 +717,33 @@ export type Database = {
           }
         ];
       };
+      mailing_list: {
+        Row: {
+          created_at: string;
+          email: string;
+          id: string;
+          new_features: boolean;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          email?: string;
+          id?: string;
+          new_features?: boolean;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          email?: string;
+          id?: string;
+          new_features?: boolean;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
       members: {
         Row: {
           created_at: string;

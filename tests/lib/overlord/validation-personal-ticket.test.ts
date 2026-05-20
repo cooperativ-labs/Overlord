@@ -3,7 +3,7 @@ import { createStandaloneTicketSchema, spawnSchema } from '@/lib/overlord/valida
 describe('personal ticket protocol validation', () => {
   it('accepts personal standalone ticket creation without a project id', () => {
     const parsed = createStandaloneTicketSchema.parse({
-      objective: 'Capture a private follow-up',
+      objectives: [{ objective: 'Capture a private follow-up' }],
       personal: true
     });
 
@@ -13,7 +13,7 @@ describe('personal ticket protocol validation', () => {
 
   it('accepts personal spawn requests without a project id', () => {
     const parsed = spawnSchema.parse({
-      objective: 'Start a private ticket',
+      objectives: [{ objective: 'Start a private ticket' }],
       personal: true,
       agentIdentifier: 'codex'
     });

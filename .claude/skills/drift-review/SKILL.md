@@ -172,6 +172,7 @@ When comparing names across surfaces, these are the expected transformations (no
 | Ticket ID | `ticketId` | `--ticket-id` | `ticketId` | `ticket_id` |
 | Session Key | `sessionKey` | `--session-key` | `sessionKey` | `session_key` |
 | Working Dir | `workingDirectory` | `--working-directory` | `workingDirectory` | `working_directory` |
+| Ordered Objectives | `objectives` | `--objectives-json` / `--objectives-file` | `objectives` | `objectives` mapped to `--objectives-json` |
 
 Hosted MCP uses camelCase to match `POST /api/protocol/*` bodies. The local shim uses snake_case because it shells to `ovld protocol` kebab-case flags.
 
@@ -185,4 +186,4 @@ If no drift is found, confirm alignment and note the operation count.
 
 </drift-review>
 
-<!-- version: 1.0.5 -->
+<!-- version: 1.0.6 -->

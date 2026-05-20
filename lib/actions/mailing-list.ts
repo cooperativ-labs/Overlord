@@ -1,0 +1,94 @@
+'use server';
+
+import * as Sentry from '@sentry/nextjs';
+
+import { createClientForRequest } from '@/supabase/utils/server';
+import { createServiceRoleClient } from '@/supabase/utils/service-role';
+
+export type MailingListPreferences = {
+  new_features: boolean;
+};
+
+export type MailingListEntry = {
+  id: string;
+  user_id: string;
+  email: string;
+  new_features: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export async function getMailingListPreferencesAction(): Promise<{
+  data?: MailingListPreferences;
+  error?: string;
+}> {
+  try {
+    const supabase = await createClientForRequest();
+    const {
+      data: { user }
+    } = await supabase.auth.getUser();
+    if (!user) return { error: 'Not authenticated' };
+
+    const { data, error } = await supabase
+      .from('mailing_list')
+      .select('new_features')
+      .eq('user_id', user.id)
+      .single();
+
+    if (error) return { error: error.message };
+    return { data: { new_features: data.new_features } };
+  } catch (err) {
+    Sentry.captureException(err);
+    return { error: 'Failed to load mailing list preferences' };
+  }
+}
+
+export async function updateMailingListPreferencesAction(
+  preferences: Partial<MailingListPreferences>
+): Promise<{ error?: string }> {
+  try {
+    const supabase = await createClientForRequest();
+    const {
+      data: { user }
+    } = await supabase.auth.getUser();
+    if (!user) return { error: 'Not authenticated' };
+
+    const { error } = await supabase
+      .from('mailing_list')
+      .upsert({ user_id: user.id, ...preferences }, { onConflict: 'user_id' });
+
+    if (error) return { error: error.message };
+    return {};
+  } catch (err) {
+    Sentry.captureException(err);
+    return { error: 'Failed to update mailing list preferences' };
+  }
+}
+
+// Admin: get all subscribers for a given email type.
+export async function getMailingListSubscribersAction(
+  emailType: keyof MailingListPreferences = 'new_features'
+): Promise<{ data?: MailingListEntry[]; error?: string }> {
+  try {
+    const supabase = await createClientForRequest();
+    const {
+      data: { user }
+    } = await supabase.auth.getUser();
+    if (!user?.email || user.email !== 'jake@cooperativ.io') {
+      return { error: 'Unauthorized' };
+    }
+
+    const serviceClient = createServiceRoleClient();
+    const { data, error } = await serviceClient
+      .from('mailing_list')
+      .select('*')
+      .eq(emailType, true)
+      .order('created_at', { ascending: false });
+
+    if (error) return { error: error.message };
+    return { data: data as MailingListEntry[] };
+  } catch (err) {
+    Sentry.captureException(err);
+    return { error: 'Failed to load mailing list subscribers' };
+  }
+}

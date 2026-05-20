@@ -2,6 +2,22 @@
 // MCP tool definitions
 // ---------------------------------------------------------------------------
 
+const OBJECTIVES_ARRAY_SCHEMA = {
+  type: 'array',
+  description:
+    'Ordered objective objects. Index 0 is the first objective to execute; later indexes queue after it.',
+  items: {
+    type: 'object',
+    properties: {
+      objective: { type: 'string' },
+      title: { type: 'string' },
+      autoAdvance: { type: 'boolean' },
+      assignedAgent: { type: 'object' }
+    },
+    required: ['objective']
+  }
+};
+
 export const TOOLS = [
   {
     name: 'create_ticket_draft',
@@ -29,6 +45,7 @@ export const TOOLS = [
           type: 'string',
           description: 'Optional description/objective override.'
         },
+        objectives: OBJECTIVES_ARRAY_SCHEMA,
         priority: {
           type: 'string',
           enum: ['low', 'medium', 'high', 'urgent'],
@@ -650,14 +667,11 @@ export const TOOLS = [
       openWorldHint: false
     },
     description:
-      'Record work that the agent already completed inside a chat as a ticket in `review` status with a completed objective, then trigger feed-post generation. Use this INSTEAD OF create_ticket + attach + deliver for "log what we just did" flows. Do NOT use this for in-progress work — use `attach` (existing ticket) or `prompt` (new) for that. Project resolution follows the same workingDirectory → projectId precedence as `prompt`/`create_ticket`. If neither resolves a project, pass `personal: true` to create a private ticket. The objective should describe what was asked/done; the summary is the narrative shown to reviewers and used by the feed-post generator.',
+      'Record work that the agent already completed inside a chat as a ticket in `review` status with a completed objective, then trigger feed-post generation. Use this INSTEAD OF create_ticket + attach + deliver for "log what we just did" flows. Do NOT use this for in-progress work — use `attach` (existing ticket) or `prompt` (new) for that. Project resolution follows the same workingDirectory → projectId precedence as `prompt`/`create_ticket`. If neither resolves a project, pass `personal: true` to create a private ticket. Pass objectives as an array (a single objective is just an array with one item); the summary is the narrative shown to reviewers and used by the feed-post generator.',
     inputSchema: {
       type: 'object',
       properties: {
-        objective: {
-          type: 'string',
-          description: 'What was asked / what was done. Stored as a completed objective.'
-        },
+        objectives: OBJECTIVES_ARRAY_SCHEMA,
         summary: {
           type: 'string',
           description:
@@ -740,7 +754,30 @@ export const TOOLS = [
           }
         }
       },
-      required: ['objective', 'summary']
+      required: ['objectives', 'summary']
+    }
+  },
+  {
+    name: 'add_objectives',
+    annotations: {
+      title: 'Add Objectives',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false
+    },
+    description:
+      'Append ordered objectives to an existing ticket. Index 0 is the first newly added objective to execute; later indexes queue after it.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ticketId: {
+          type: 'string',
+          description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.'
+        },
+        objectives: OBJECTIVES_ARRAY_SCHEMA
+      },
+      required: ['ticketId', 'objectives']
     }
   },
   {
@@ -810,7 +847,7 @@ export const TOOLS = [
       openWorldHint: false
     },
     description:
-      'Create a follow-up ticket in the same project. Use when blocked by a human-only action. The objective will be stored in the objectives table and associated with the ticket.',
+      'Create a follow-up ticket in the same project. Use when blocked by a human-only action. Pass objectives as an array (a single objective is just an array with one item); they will be stored in the objectives table and associated with the ticket.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -821,11 +858,7 @@ export const TOOLS = [
             'Current ticket identifier (e.g. 1:899). Follow-up ticket will be linked to this. Also accepts UUID.'
         },
         title: { type: 'string', description: 'Short title for the new ticket.' },
-        objective: {
-          type: 'string',
-          description:
-            'What needs to be done. This will be stored as an objective in the objectives table.'
-        },
+        objectives: OBJECTIVES_ARRAY_SCHEMA,
         acceptanceCriteria: { type: 'string' },
         availableTools: { type: 'string' },
         executionTarget: { type: 'string', enum: ['agent', 'human'], default: 'human' },
@@ -836,7 +869,7 @@ export const TOOLS = [
             'Optional override for tickets.delegate. When omitted, Overlord should fill it with the active model identifier and only fall back to the agent identifier if the model is unavailable. The authenticated bearer token determines created_by automatically.'
         }
       },
-      required: ['sessionKey', 'ticketId', 'objective']
+      required: ['sessionKey', 'ticketId', 'objectives']
     }
   },
   {

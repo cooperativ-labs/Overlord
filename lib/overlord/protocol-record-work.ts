@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { randomUUID } from 'node:crypto';
 
 import { deriveTitleFromObjective } from '@/lib/helpers/tickets';
+import { insertOrderedObjectives, type OrderedObjectiveInput } from '@/lib/objectives';
 import { insertFileChanges } from '@/lib/overlord/file-changes';
 import { resolveProtocolTicketCreatorUserId } from '@/lib/overlord/protocol-ticket-creator';
 import { resolveTicketDelegate } from '@/lib/overlord/protocol-ticket-delegate';
@@ -36,7 +37,7 @@ type ChangeRationaleInput = {
 
 export type RecordWorkParams = {
   title: string;
-  objective: string;
+  objectives: OrderedObjectiveInput[];
   summary: string;
   acceptanceCriteria: string;
   availableTools: string;
@@ -70,7 +71,7 @@ export type RecordWorkParams = {
 export async function runRecordWorkProtocol(supabase: RecordClient, params: RecordWorkParams) {
   const {
     title,
-    objective,
+    objectives,
     summary,
     acceptanceCriteria,
     availableTools,
@@ -115,7 +116,7 @@ export async function runRecordWorkProtocol(supabase: RecordClient, params: Reco
     } as const;
   }
 
-  const nextTitle = title.trim() || deriveTitleFromObjective(objective);
+  const nextTitle = title.trim() || deriveTitleFromObjective(objectives[0].objective);
   const ticketDelegate = resolveTicketDelegate(delegate, modelIdentifier ?? null, agentIdentifier);
   const createdBy = await resolveProtocolTicketCreatorUserId(supabase, { userId });
   const reviewStatusName = await resolvePreferredStatusNameByType(
@@ -166,7 +167,7 @@ export async function runRecordWorkProtocol(supabase: RecordClient, params: Reco
       completed_at: completedAt,
       created_by: createdBy,
       model_identifier: modelIdentifier ?? null,
-      objective,
+      objective: objectives[0].objective,
       state: 'complete',
       ticket_id: ticket.id
     })
@@ -179,6 +180,15 @@ export async function runRecordWorkProtocol(supabase: RecordClient, params: Reco
       status: 500
     } as const;
   }
+
+  const queuedObjectives =
+    objectives.length > 1
+      ? await insertOrderedObjectives(supabase, ticket.id, objectives.slice(1), {
+          createdBy,
+          firstState: 'future',
+          followingState: 'future'
+        })
+      : [];
 
   // Create a completed agent session so events/artifacts/file_changes have a session_id.
   const sessionKey = randomUUID();
@@ -294,6 +304,7 @@ export async function runRecordWorkProtocol(supabase: RecordClient, params: Reco
         ticketSequence: ticket.ticket_sequence
       },
       objective: { id: objectiveRow.id, state: 'complete' as const },
+      objectives: [{ id: objectiveRow.id, state: 'complete' as const }, ...queuedObjectives],
       session: { id: session.id, sessionKey: session.session_key, state: session.session_state },
       event: { id: event.id },
       artifactCount: artifacts.length,

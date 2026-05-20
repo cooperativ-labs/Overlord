@@ -79,10 +79,11 @@ ovld protocol revert --objective-id <objective-id>
 
 ## Mode 2: Asked From Chat To Use Overlord
 
-1. If the user wants to create tickets (and does not ask to start execution), run `ovld protocol create --agent codex --objective "..."`.
+1. If the user wants to create tickets (and does not ask to start execution), run `ovld protocol create --agent codex --objectives-json '[{"objective":"..."}]'`.
    - When `--session-key` and `--ticket-id` are provided, it creates a follow-up draft.
    - When session flags are omitted, it resolves the project by matching current working directory (or `--working-directory`) to Overlord `local_working_directory`, then creates a standalone draft.
-2. Default to `create` for new draft tickets. Only use `ovld protocol prompt --agent codex --objective "..."` when the user explicitly asks to create and execute immediately. If the work is already complete in chat and just needs to be recorded, use `ovld protocol record-work` instead.
+   - Pass multiple items in `--objectives-json` when creating ordered steps for the same feature or goal.
+2. Default to `create` for new draft tickets. Only use `ovld protocol prompt --agent codex --objectives-json '[{"objective":"..."}]'` when the user explicitly asks to create and execute immediately. If the work is already complete in chat and just needs to be recorded, use `ovld protocol record-work` instead.
    `prompt` creates the ticket in `execute` status and attaches immediately.
 3. If the user wants to inspect an existing ticket without starting work, use `ovld protocol load-context --ticket-id <ticket_id>`.
 4. If the user wants to work an existing ticket, attach with `ovld protocol attach --ticket-id <ticket_id>` and then switch to Mode 1. Use `ovld protocol connect --ticket-id <ticket_id>` instead when you only need a session key without the full ticket payload.
@@ -97,13 +98,20 @@ When creating tickets from within a repository:
 - Prefer `create` by default for draft ticket creation.
 - Use `prompt` only when the user explicitly asks to start execution immediately.
 - Both commands can resolve the project from the current working directory; use `--working-directory` to override.
+- Create multiple tickets when each prompt represents a different feature or goal.
+- Add objectives to the same ticket when each prompt is a sequential step toward the same feature or goal; use `ovld protocol add-objectives --ticket-id <ticket_id> --objectives-json '[{"objective":"..."}]'`.
+- `create`, `prompt`, and `record-work` require `--objectives-json` or `--objectives-file` with an ordered array of `{ "objective": "...", "title": "...", "autoAdvance": true }` objects. A single objective is just an array with one item.
 
 ```bash
-ovld protocol create --agent codex --objective "Capture follow-up work from this repository"
+ovld protocol create --agent codex --objectives-json '[{"objective":"Capture follow-up work from this repository"}]'
 ```
 
 ```bash
-ovld protocol prompt --agent codex --objective "Implement feature X" --priority medium
+ovld protocol prompt --agent codex --objectives-json '[{"objective":"Implement feature X"}]' --priority medium
+```
+
+```bash
+ovld protocol add-objectives --ticket-id 1:899 --objectives-json '[{"objective":"Implement the API"},{"objective":"Add CLI docs"}]'
 ```
 
 ### Resolving the project ID when you don't have one
@@ -197,7 +205,7 @@ This keeps the ticket feed readable while preserving the full document in versio
 ## Defaults And Notes
 
 - API requires `agentIdentifier` and `connectionMethod` on attach/connect/prompt. The CLI defaults them to `codex`/`cli`; the hosted MCP defaults to `mcp`. Override with `--agent` / `--method` when calling from a different runtime.
-- Hosted MCP and the local `overlord-mcp.mjs` shim use the same **tool names** (\`attach\`, \`update\`, \`deliver\`, \`record_work\`, …). The shim uses **snake_case** JSON keys (\`ticket_id\`, \`session_key\`) that map to CLI flags; hosted MCP uses **camelCase** (\`ticketId\`, \`sessionKey\`) matching REST bodies.
+- Hosted MCP and the local `overlord-mcp.mjs` shim use the same **tool names** (\`attach\`, \`update\`, \`deliver\`, \`add_objectives\`, \`record_work\`, …). The shim uses **snake_case** JSON keys (\`ticket_id\`, \`session_key\`) that map to CLI flags; hosted MCP uses **camelCase** (\`ticketId\`, \`sessionKey\`) matching REST bodies.
 - `permission-request` is invoked by the local Codex plugin's permission rules; agents do not normally call it directly.
 - `record_change_rationales` (MCP) and `ovld protocol record-change-rationales` (CLI) both write to the `file_changes` table; the dedicated route is `POST /api/protocol/record-change-rationales`.
 - Objective attachment MCP tools use `<verb>_<noun>` names — `list_attachments`, `prepare_attachment_upload`, `finalize_attachment_upload`, `get_attachment_download_url`, `upload_attachment_file`. CLI commands use `attachment-*` and require `--objective-id` for upload/finalize.
@@ -213,4 +221,4 @@ This keeps the ticket feed readable while preserving the full document in versio
 - If a protocol or MCP call fails with auth/session errors, run `ovld auth repair` yourself before asking the user to log in again or proceed without Overlord updates.
 - If you must run `ovld auth login`, always include `--organization-id <id>` — use the organization ID from the ticket prompt context to select the organization non-interactively and avoid a blocking TTY prompt.
 
-<!-- version: 0.4.11 -->
+<!-- version: 0.4.12 -->

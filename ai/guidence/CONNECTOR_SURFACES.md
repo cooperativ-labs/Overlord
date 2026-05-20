@@ -71,6 +71,7 @@ Managed files (Markdown format):
 - `~/.claude/commands/load.md` — requires `--ticket-id`
 - `~/.claude/commands/attach.md` — requires `--ticket-id`
 - `~/.claude/commands/discuss-objective.md` — requires `--ticket-id`
+- `~/.claude/commands/add-objectives.md` — requires `--ticket-id` and ordered objectives JSON/file
 - `~/.claude/commands/create.md`
 - `~/.claude/commands/prompt.md`
 - `~/.claude/commands/record-work.md` — invokes `ovld protocol record-work` for completed-from-chat work
@@ -143,6 +144,7 @@ Checklist:
 
 - Plugin install writes `~/.agents/plugins/marketplace.json`
 - Plugin install writes `~/.codex/plugins/overlord`
+- Plugin install rewrites `.codex-plugin/hooks.json` so the `UserPromptSubmit` command points at the absolute installed script path under `~/.codex/plugins/overlord/scripts/`, avoiding reliance on a Codex-provided plugin-root environment variable
 - Plugin bundle includes `skills/`, `.codex-plugin/hooks.json`, `scripts/user-prompt-submit-hook.sh`, and install-surface assets in `assets/`
 - Plugin install manages `~/.codex/rules/default.rules`
 - Plugin install removes any legacy Overlord-managed Codex `AGENTS.md` section
@@ -256,6 +258,7 @@ Managed files:
 - `~/.cursor/plugins/local/overlord/commands/connect.md` — requires `--ticket-id`
 - `~/.cursor/plugins/local/overlord/commands/load.md` — requires `--ticket-id`
 - `~/.cursor/plugins/local/overlord/commands/spawn.md`
+- `~/.cursor/plugins/local/overlord/commands/add-objectives.md` — requires `--ticket-id` and ordered objectives JSON/file
 - `~/.cursor/plugins/local/overlord/commands/create.md`
 - `~/.cursor/plugins/local/overlord/commands/prompt.md`
 - `~/.cursor/plugins/local/overlord/commands/record-work.md` — invokes `ovld protocol record-work` for completed-from-chat work
@@ -314,6 +317,7 @@ Managed files (**TOML format**, not Markdown):
 - `~/.gemini/commands/connect.toml` — requires `--ticket-id`
 - `~/.gemini/commands/load.toml` — requires `--ticket-id`
 - `~/.gemini/commands/attach.toml` — requires `--ticket-id`
+- `~/.gemini/commands/add-objectives.toml` — requires `--ticket-id` and ordered objectives JSON/file
 - `~/.gemini/commands/create.toml`
 - `~/.gemini/commands/prompt.toml`
 - `~/.gemini/commands/record-work.toml` — invokes `ovld protocol record-work` for completed-from-chat work
@@ -388,6 +392,7 @@ Managed files (Markdown with `agent: build` frontmatter):
 - `~/.config/opencode/commands/connect.md` — requires `--ticket-id`
 - `~/.config/opencode/commands/load.md` — requires `--ticket-id`
 - `~/.config/opencode/commands/attach.md` — requires `--ticket-id`
+- `~/.config/opencode/commands/add-objectives.md` — requires `--ticket-id` and ordered objectives JSON/file
 - `~/.config/opencode/commands/create.md`
 - `~/.config/opencode/commands/prompt.md`
 - `~/.config/opencode/commands/record-work.md` — invokes `ovld protocol record-work` for completed-from-chat work
@@ -487,9 +492,10 @@ when one surface changes, check the others against this table.
 | revert                        | `POST /api/protocol/revert`                       | `revert`                         | `revert` (local shim only; restores local git) |
 | search-tickets                | `POST /api/protocol/search-tickets`               | `search-tickets`                 | `search_tickets`                               |
 | discuss-objective             | `POST /api/protocol/discuss-objective`            | `discuss-objective`              | `discuss_objective`                            |
+| add-objectives                | `POST /api/protocol/add-objectives`               | `add-objectives`                 | `add_objectives`                               |
 | create (follow-up)            | `POST /api/protocol/create-ticket`                | `create` (with session flags)    | `create_ticket`                                |
-| create (standalone)           | `POST /api/protocol/tickets`                      | `create` (no session flags)      | —                                              |
-| prompt                        | `POST /api/protocol/prompt`                       | `prompt`                         | —                                              |
+| create (standalone)           | `POST /api/protocol/tickets`                      | `create` (no session flags)      | `create_ticket` (local shim only)              |
+| prompt                        | `POST /api/protocol/prompt`                       | `prompt`                         | `prompt` (local shim only)                     |
 | record-work                   | `POST /api/protocol/record-work`                  | `record-work`                    | `record_work`                                  |
 | update                        | `POST /api/protocol/update`                       | `update`                         | `update`                                       |
 | hook-event                    | `POST /api/protocol/hook-event`                   | `hook-event`                     | `record_hook_event`                            |
@@ -512,7 +518,9 @@ Notes:
 - `agentIdentifier` and `connectionMethod` are required by the API but defaulted client-side: CLI defaults to `<agent>`/`cli`, MCP defaults to `mcp`.
 - Organization scope for ticket-scoped protocol calls is resolved in this order: organization id embedded in human-readable `ticket_id` (for example `1:899`), then explicit `--organization-id` / `x-organization-id`, then stored OAuth organization.
 - `deliver` accepts optional `artifacts` (defaults to `[]`), `changeRationales`, `snapshot`, and `checkpoint` metadata — same as `deliverSchema` in `/Users/jake/Development/Cooperativ/Overlord/lib/overlord/validation.ts`. The CLI can send the full delivery object via `--payload-json <json>` or `--payload-file <path|->`; when either full-payload flag is used, do not also pass `--summary`, `--artifacts-*`, or `--change-rationales-*`. Local git checkpoints are created on `attach` (per executing objective), not `deliver`; `--skip-checkpoint` is an `attach` flag.
-- `record-work` is the completed-from-chat path. Use it when work is already done and you need a ticket in `review` plus feed-post generation without opening an attached session. Keep its required fields (`objective`, `summary`) and project-resolution behavior aligned across API, CLI, hosted MCP, the local shim, and plugin guidance.
+- Objective arrays are accepted on `create`, `prompt`, and `record-work` as ordered `objectives` arrays of `{ objective, title?, autoAdvance?, assignedAgent? }`. CLI flags are `--objectives-json` / `--objectives-file`; hosted MCP uses camelCase fields and the local shim uses snake_case inputs mapped to those CLI flags.
+- `add-objectives` appends ordered objectives to an existing ticket. Index 0 is the first newly added objective to execute; later indexes queue after it. Agent docs must distinguish this from creating multiple tickets: use multiple tickets for different features/goals, and same-ticket objectives for sequential steps toward one feature/goal.
+- `record-work` is the completed-from-chat path. Use it when work is already done and you need a ticket in `review` plus feed-post generation without opening an attached session. Keep its required fields (`objective` or `objectives`, `summary`) and project-resolution behavior aligned across API, CLI, hosted MCP, the local shim, and plugin guidance.
 - `revert` is local-destructive by design: the API only returns the checkpoint row for `objectiveId`; the CLI/local shim restores the caller's working tree and saves a safety ref under `refs/overlord/safety/`. Hosted MCP does not expose it because it cannot mutate the user's local repository.
 - `permission-request` is invoked by the installed permission hook/rules, not by agent logic.
 - `hook-event` is invoked by installed lifecycle hooks (`UserPromptSubmit` today; `Stop` reserved for future use) and intentionally does not require `sessionKey`.

@@ -5,7 +5,9 @@ import os from 'os';
 import path from 'path';
 import { z } from 'zod';
 
-import { type AgentType, prepareAgentLaunch } from '../services/agent-launcher';
+import type { LaunchAgentType } from '@/lib/helpers/agent-types';
+
+import { prepareAgentLaunch } from '../services/agent-launcher';
 import { store } from '../services/settings-store';
 
 const AGENT_TYPES = [
@@ -14,7 +16,7 @@ const AGENT_TYPES = [
   'cursor',
   'gemini',
   'opencode'
-] as const satisfies readonly AgentType[];
+] as const satisfies readonly LaunchAgentType[];
 
 const LaunchAgentPayloadSchema = z.object({
   ticketId: z.string().min(1).max(256),

@@ -14,7 +14,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { checkForCliUpdate, getCurrentCliVersion, printCliUpdateNotice } from './cli-update.mjs';
 
-const BUNDLE_VERSION = '1.11.0';
+const BUNDLE_VERSION = '1.12.0';
 const MD_MARKER_START = '<!-- overlord:managed:start -->';
 const MD_MARKER_END = '<!-- overlord:managed:end -->';
 const MANIFEST_DIR = path.join(os.homedir(), '.ovld');
@@ -31,6 +31,12 @@ const CODEX_TARGET_PLUGIN_MANIFEST = path.join(
   CODEX_TARGET_PLUGIN_DIR,
   '.codex-plugin',
   'plugin.json'
+);
+const CODEX_TARGET_PLUGIN_HOOKS = path.join(CODEX_TARGET_PLUGIN_DIR, '.codex-plugin', 'hooks.json');
+const CODEX_TARGET_USER_PROMPT_HOOK = path.join(
+  CODEX_TARGET_PLUGIN_DIR,
+  'scripts',
+  'user-prompt-submit-hook.sh'
 );
 const CODEX_TARGET_MARKETPLACE = path.join(os.homedir(), '.agents', 'plugins', 'marketplace.json');
 const CODEX_TARGET_RULES = path.join(os.homedir(), '.codex', 'rules', 'default.rules');
@@ -116,6 +122,8 @@ When creating tickets from within a repository:
 - Prefer \`ovld protocol create --agent claude-code\` by default for draft ticket creation.
 - Use \`ovld protocol prompt --agent claude-code\` only when the user explicitly asks to create and execute immediately.
 - Both commands can resolve the project from the current working directory; use \`--working-directory\` to override.
+- Create multiple tickets when prompts represent different features or goals.
+- Add objectives to the same ticket when prompts are sequential steps toward the same feature or goal: \`ovld protocol add-objectives --ticket-id <ticket_id> --objectives-json '[{"objective":"Step one"},{"objective":"Step two"}]'\`.
 
 \`\`\`bash
 ovld protocol create --agent claude-code --objective "Capture follow-up work from this repository"
@@ -195,6 +203,8 @@ When creating tickets from within a repository:
 - Prefer \`ovld protocol create --agent opencode\` by default for draft ticket creation.
 - Use \`ovld protocol prompt --agent opencode\` only when the user explicitly asks to create and execute immediately.
 - Both commands can resolve the project from the current working directory; use \`--working-directory\` to override.
+- Create multiple tickets when prompts represent different features or goals.
+- Add objectives to the same ticket when prompts are sequential steps toward the same feature or goal: \`ovld protocol add-objectives --ticket-id <ticket_id> --objectives-json '[{"objective":"Step one"},{"objective":"Step two"}]'\`.
 
 \`\`\`bash
 ovld protocol create --agent opencode --objective "Capture follow-up work from this repository"
@@ -267,6 +277,7 @@ Rules:
 - Always attach first and deliver last.
 - Use \`ovld protocol\` commands instead of ad hoc repo scripts for ticket lifecycle work.
 - Prefer \`ovld protocol create --agent cursor\` for draft ticket creation; use \`prompt --agent cursor\` only for create-and-execute requests.
+- Create multiple tickets when prompts represent different features/goals; add objectives to the same ticket when prompts are sequential steps toward one feature/goal.
 - If the user sends a new message during an active ticket session, publish a \`user_follow_up\` event before doing anything else.
 `;
 
@@ -1008,6 +1019,7 @@ function installCodex() {
   fs.mkdirSync(path.dirname(CODEX_TARGET_PLUGIN_DIR), { recursive: true });
   fs.rmSync(CODEX_TARGET_PLUGIN_DIR, { recursive: true, force: true });
   fs.cpSync(sourceDir, CODEX_TARGET_PLUGIN_DIR, { recursive: true });
+  installCodexHookCommand();
   console.log(`  ✓ Installed plugin: ${CODEX_TARGET_PLUGIN_DIR}`);
 
   writeTextFile(CODEX_TARGET_RULES, mergeCodexRules(readTextFile(CODEX_TARGET_RULES)));
@@ -1033,6 +1045,29 @@ function installCodex() {
   writeManifest(manifest);
 
   return { ok: true, installedFiles };
+}
+
+function installCodexHookCommand() {
+  const hooks = readJsonFile(CODEX_TARGET_PLUGIN_HOOKS);
+  if (!hooks || typeof hooks !== 'object') {
+    throw new Error(`Codex hook manifest missing or invalid at ${CODEX_TARGET_PLUGIN_HOOKS}`);
+  }
+
+  const groups = hooks.hooks?.UserPromptSubmit;
+  if (!Array.isArray(groups)) {
+    throw new Error(`Codex UserPromptSubmit hook missing in ${CODEX_TARGET_PLUGIN_HOOKS}`);
+  }
+
+  for (const group of groups) {
+    if (!Array.isArray(group?.hooks)) continue;
+    for (const hook of group.hooks) {
+      if (hook?.type === 'command') {
+        hook.command = CODEX_TARGET_USER_PROMPT_HOOK;
+      }
+    }
+  }
+
+  writeJsonFile(CODEX_TARGET_PLUGIN_HOOKS, hooks);
 }
 
 function installCursor() {
@@ -1177,6 +1212,10 @@ function currentNodeMajor() {
  * @returns {Promise<string[]>} - Array of selected choice labels
  */
 function runCheckboxPrompt({ message, choices, defaults = [] }) {
+  if (!process.stdin.isTTY || typeof process.stdin.setRawMode !== 'function') {
+    return Promise.resolve(defaults);
+  }
+
   return new Promise(resolve => {
     const hide = '\x1b[?25l';
     const show = '\x1b[?25h';
@@ -1287,6 +1326,10 @@ function runCheckboxPrompt({ message, choices, defaults = [] }) {
  * @returns {Promise<boolean>} - true if yes, false if no
  */
 function askYesNo(question, defaultYes = true) {
+  if (!process.stdin.isTTY || typeof process.stdin.setRawMode !== 'function') {
+    return Promise.resolve(defaultYes);
+  }
+
   return new Promise(resolve => {
     const hide = '\x1b[?25l';
     const show = '\x1b[?25h';

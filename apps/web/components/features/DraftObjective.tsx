@@ -24,6 +24,8 @@ import { ObjectiveMenuButton } from '@/components/features/ObjectiveMenuButton';
 import { AgentSplitButtonLive, useTicketLive } from '@/components/features/TicketLiveProvider';
 import { Button } from '@/components/ui/button';
 import { FileDropZone } from '@/components/ui/file-drop-zone';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Switch } from '@/components/ui/switch';
 import type { ObjectiveAttachment } from '@/lib/actions/attachments';
 import { promoteFutureObjectiveAction, setObjectiveAutoAdvanceAction } from '@/lib/actions/tickets';
 import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
@@ -66,7 +68,7 @@ export function DraftObjective({
   organizationId,
   objectiveId,
   objectiveState,
-  initialAutoAdvance = true,
+  initialAutoAdvance = false,
   initialValue,
   canMarkExecuted,
   fileMentionPaths,
@@ -132,17 +134,16 @@ export function DraftObjective({
     });
   }
 
-  async function handleAutoAdvanceToggle() {
+  async function handleAutoAdvanceToggle(nextValue: boolean) {
     if (!canToggleAutoAdvance || isAutoAdvancePending) return;
-    const nextAutoAdvance = !autoAdvanceValue;
     setIsAutoAdvancePending(true);
     try {
       await setObjectiveAutoAdvanceAction({
         ticketId,
         objectiveId,
-        autoAdvance: nextAutoAdvance
+        autoAdvance: nextValue
       });
-      setAutoAdvanceValue(nextAutoAdvance);
+      setAutoAdvanceValue(nextValue);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to update auto-advance.');
     } finally {
@@ -269,33 +270,47 @@ export function DraftObjective({
             ticketId={ticketId}
           />
           {canToggleAutoAdvance ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className={cn(
-                'h-7 gap-1 px-2 text-xs text-muted-foreground',
-                !autoAdvanceValue && 'text-amber-600'
-              )}
-              disabled={isAutoAdvancePending}
-              aria-pressed={autoAdvanceValue}
-              aria-label={
-                autoAdvanceValue
-                  ? 'Auto-advance on. Click to require manual approval before this objective starts.'
-                  : 'Auto-advance off. Click to allow this objective to auto-advance.'
-              }
-              title={autoAdvanceValue ? 'Auto-advance ON' : 'Auto-advance OFF'}
-              onClick={handleAutoAdvanceToggle}
-            >
-              {isAutoAdvancePending ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : autoAdvanceValue ? (
-                <FastForward className="h-3.5 w-3.5" />
-              ) : (
-                <PauseCircle className="h-3.5 w-3.5" />
-              )}
-              Auto
-            </Button>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className={cn(
+                    'h-7 gap-1 px-2 text-xs',
+                    autoAdvanceValue ? 'text-emerald-600' : 'text-amber-600'
+                  )}
+                  disabled={isAutoAdvancePending}
+                  aria-label={autoAdvanceValue ? 'Auto-advance on' : 'Auto-advance off'}
+                  title={autoAdvanceValue ? 'Auto-advance ON' : 'Auto-advance OFF'}
+                >
+                  {isAutoAdvancePending ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : autoAdvanceValue ? (
+                    <FastForward className="h-3.5 w-3.5" />
+                  ) : (
+                    <PauseCircle className="h-3.5 w-3.5" />
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-64" align="end">
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-sm font-medium">Auto-advance</span>
+                    <Switch
+                      checked={autoAdvanceValue}
+                      disabled={isAutoAdvancePending}
+                      onCheckedChange={handleAutoAdvanceToggle}
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    When enabled, this objective will automatically start executing after the
+                    previous one completes. When disabled, it will wait for manual approval before
+                    starting.
+                  </p>
+                </div>
+              </PopoverContent>
+            </Popover>
           ) : null}
           {showAgentControls ? (
             <>

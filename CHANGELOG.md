@@ -2,6 +2,37 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2605200941.0] - 2026-05-20:09:41
+
+### Added
+- Signup notifications system for user registration events.
+- In-app changelog notifications with database schema support for tracking notification history.
+- Problem pages with embedded demo frames and presentation support for feature showcasing.
+- AskAboutOverlordSplitButton integration throughout the application and marketing content.
+
+### Fixed
+- Correct homepage heading for consistency and clarity.
+- Update email recipient for early access requests to use correct contact.
+- Update AskAboutOverlordSplitButton prompt for improved clarity and user engagement.
+
+### Changed
+- Update Overlord descriptions and branding throughout the application for enhanced clarity and consistency.
+- Revise homepage layout with improved problem pages and navigation structure.
+- Make presentations route publicly accessible.
+- Enhance footer navigation with better access control and public page support.
+- Revise page content and structure across marketing and documentation pages for improved clarity.
+- Update terminology and structure in documentation and UI for consistency.
+- Improve admin panel components for enhanced UI consistency.
+- Refactor presentation layout for better organization and access control.
+- Simplify and reorganize skills for improved clarity.
+
+### Documentation
+- Add UI to CLI gap map documentation for better feature surface coverage.
+
+### Chore
+- Update date-fns type definitions and remove @types/date-fns from package dependencies.
+- Bump workspace and CLI versions for the release.
+
 ## [0.2605170853.0] - 2026-05-17:08:53
 
 ### Added

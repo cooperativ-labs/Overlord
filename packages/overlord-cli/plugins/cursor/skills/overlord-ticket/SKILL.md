@@ -75,10 +75,11 @@ ovld protocol revert --objective-id <objective-id>
 
 ## Mode 2: Asked From Chat To Use Overlord
 
-1. If the user wants to create tickets (and does not ask to start execution), use `/create` or run `ovld protocol create --agent cursor --objective "..."`.
+1. If the user wants to create tickets (and does not ask to start execution), use `/create` or run `ovld protocol create --agent cursor --objectives-json '[{"objective":"..."}]'`.
    - When `--session-key` and `--ticket-id` are provided, it creates a follow-up draft.
    - When session flags are omitted, it resolves the project by matching current working directory (or `--working-directory`) to Overlord `local_working_directory`, then creates a standalone draft.
-2. Default to `create` for new draft tickets. Only use `/prompt` or `ovld protocol prompt --agent cursor --objective "..."` when the user explicitly asks to create and execute immediately. If the work is already complete in chat and just needs to be recorded, use `ovld protocol record-work` instead.
+   - Pass multiple items in `--objectives-json` when creating ordered steps for the same feature or goal.
+2. Default to `create` for new draft tickets. Only use `/prompt` or `ovld protocol prompt --agent cursor --objectives-json '[{"objective":"..."}]'` when the user explicitly asks to create and execute immediately. If the work is already complete in chat and just needs to be recorded, use `ovld protocol record-work` instead.
 3. If the user already has a ticket ID and only wants to inspect it, use `/load` or run `ovld protocol load-context --ticket-id <ticket_id>`.
 4. If the user wants to route the current session onto an existing ticket by ID, use `/connect` or run `ovld protocol connect --ticket-id <ticket_id>`.
 5. If the user wants to establish a persistent session with a ticket by ID, use `/attach` or run `ovld protocol attach --ticket-id <ticket_id>`.
@@ -94,7 +95,7 @@ Do NOT use `record-work` for in-progress work. Use it only when the work is alre
 
 ```bash
 ovld protocol record-work \
-  --objective "User asked me to X; I did Y by..." \
+  --objectives-json '[{"objective":"User asked me to X; I did Y by..."}]' \
   --summary  "Narrative for the feed post and reviewer." \
   --change-rationales-file -
 ```
@@ -104,7 +105,7 @@ Or stream the full payload via stdin to avoid quote escaping:
 ```bash
 ovld protocol record-work --payload-file - <<'EOF'
 {
-  "objective": "...",
+  "objectives": [{"objective": "..."}],
   "summary": "...",
   "artifacts": [{"type": "next_steps", "label": "...", "content": "..."}],
   "changeRationales": [{"label": "...", "file_path": "...", "summary": "...", "why": "...", "impact": "...", "hunks": [{"header": "@@ ..."}]}]
@@ -146,10 +147,14 @@ When creating tickets from within a repository:
 - Prefer `create` by default for draft ticket creation.
 - Use `prompt` only when the user explicitly asks to start execution immediately.
 - Both commands resolve the project from the current working directory; use `--working-directory` to override or `--project-id` to be explicit.
+- Create multiple tickets when each prompt represents a different feature or goal.
+- Add objectives to the same ticket when each prompt is a sequential step toward the same feature or goal; use `ovld protocol add-objectives --ticket-id <ticket_id> --objectives-json '[{"objective":"..."}]'`.
+- `create`, `prompt`, and `record-work` require `--objectives-json` or `--objectives-file` with an ordered array of `{ "objective": "...", "title": "...", "autoAdvance": true }` objects. A single objective is just an array with one item.
 
 ```bash
-ovld protocol create --agent cursor --objective "Capture follow-up work from this repository"
-ovld protocol prompt --agent cursor --objective "Implement feature X" --priority medium
+ovld protocol create --agent cursor --objectives-json '[{"objective":"Capture follow-up work from this repository"}]'
+ovld protocol prompt --agent cursor --objectives-json '[{"objective":"Implement feature X"}]' --priority medium
+ovld protocol add-objectives --ticket-id 1:899 --objectives-json '[{"objective":"Implement the API"},{"objective":"Add CLI docs"}]'
 ```
 
 To inspect project resolution explicitly:
@@ -230,4 +235,4 @@ This keeps the ticket feed readable while preserving the full document in versio
 - Do not add or commit changes unless the user explicitly asks you to commit.
 - Delivery is the concluding step. After delivering, stop unless the user follows up or the ticket is reopened.
 
-<!-- version: 0.4.11 -->
+<!-- version: 0.4.12 -->

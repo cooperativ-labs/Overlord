@@ -7,7 +7,7 @@
  */
 
 /** Current bundle version — bump when template content changes materially. */
-export const BUNDLE_VERSION = '1.12.0';
+export const BUNDLE_VERSION = '1.13.0';
 
 /** Markers used to delimit Overlord-owned sections in user-managed files. */
 export const MD_MARKER_START = '<!-- overlord:managed:start -->';
@@ -133,6 +133,8 @@ When creating tickets from within a repository:
 - Prefer \`ovld protocol create --agent claude-code\` by default for draft ticket creation.
 - Use \`ovld protocol prompt --agent claude-code\` only when the user explicitly asks to create and execute immediately.
 - Both commands can resolve the project from the current working directory; use \`--working-directory\` to override.
+- Create multiple tickets when prompts represent different features or goals.
+- Add objectives to the same ticket when prompts are sequential steps toward the same feature or goal: \`ovld protocol add-objectives --ticket-id <ticket_id> --objectives-json '[{"objective":"Step one"},{"objective":"Step two"}]'\`.
 
 \`\`\`bash
 ovld protocol create --agent claude-code --objective "Capture follow-up work from this repository"
@@ -284,6 +286,8 @@ When creating tickets from within a repository:
 - Prefer \`ovld protocol create --agent opencode\` by default for draft ticket creation.
 - Use \`ovld protocol prompt --agent opencode\` only when the user explicitly asks to create and execute immediately.
 - Both commands can resolve the project from the current working directory; use \`--working-directory\` to override.
+- Create multiple tickets when prompts represent different features or goals.
+- Add objectives to the same ticket when prompts are sequential steps toward the same feature or goal: \`ovld protocol add-objectives --ticket-id <ticket_id> --objectives-json '[{"objective":"Step one"},{"objective":"Step two"}]'\`.
 
 \`\`\`bash
 ovld protocol create --agent opencode --objective "Capture follow-up work from this repository"
@@ -421,6 +425,8 @@ When creating tickets from within a repository:
 - Prefer \`ovld protocol create --agent cursor\` by default for draft ticket creation.
 - Use \`ovld protocol prompt --agent cursor\` only when the user explicitly asks to create and execute immediately.
 - Both commands can resolve the project from the current working directory; use \`--working-directory\` to override.
+- Create multiple tickets when prompts represent different features or goals.
+- Add objectives to the same ticket when prompts are sequential steps toward the same feature or goal: \`ovld protocol add-objectives --ticket-id <ticket_id> --objectives-json '[{"objective":"Step one"},{"objective":"Step two"}]'\`.
 
 \`\`\`bash
 ovld protocol create --agent cursor --objective "Capture follow-up work from this repository"

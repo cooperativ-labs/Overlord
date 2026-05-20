@@ -25,6 +25,7 @@ Subcommands:
   revert                    Restore the local working tree to an objective checkpoint
   search-tickets            Find tickets by keyword, status, project, creator, or update date
   discuss-objective          Mark a draft objective as submitted (ready for review/execution)
+  add-objectives             Append ordered objectives to an existing ticket
   create                    Create a draft ticket without attaching (follow-up or standalone)
   prompt                    Create a ticket and attach to it immediately
   record-work               Record completed-from-chat work as a ticket in review + feed post (no attach)
@@ -259,7 +260,7 @@ prompt:
     When --project-id is omitted, automatically resolves the project from the
     current working directory (matching against the caller's project_user.local_working_directory).
   Required:
-    --objective <text>
+    --objectives-json <json> or --objectives-file <path|-> with [{ "objective": "...", "title": "...", "autoAdvance": true }]
   Optional:
     --title <text>
     --priority <level>        low | medium | high | urgent
@@ -295,7 +296,7 @@ create:
     If session flags are provided, creates a follow-up draft linked to the current ticket.
     If session flags are omitted, resolves project by working directory and creates a standalone draft.
   Required:
-    --objective <text>
+    --objectives-json <json> or --objectives-file <path|-> with [{ "objective": "...", "title": "...", "autoAdvance": true }]
   Optional:
     --session-key <key>
     --ticket-id <ticket_id>
@@ -318,6 +319,18 @@ create:
     Use create for future work. If the work is already complete and only needs to be recorded,
     use `record-work` instead.
 
+add-objectives:
+  Purpose:
+    Append ordered objectives to an existing ticket. Index 0 is the first newly
+    added objective to execute; later indexes queue after it.
+  Required:
+    --ticket-id <ticket_id>
+    --objectives-json <json> or --objectives-file <path|->
+  Notes:
+    Use this when each prompt is a sequential step toward the same feature or
+    goal. Create multiple tickets instead when prompts describe different
+    features or goals.
+
 record-work:
   Purpose:
     Record work the agent already completed in a chat as a ticket in `review` status
@@ -325,10 +338,10 @@ record-work:
     left open — use this INSTEAD OF `create` + `attach` + `deliver` for "log what we
     just did" flows. Do NOT use this for in-progress work; use `prompt` for that.
   Required:
-    --objective <text> or --objective-file <path|->   What was asked / what was done
+    --objectives-json <json> or --objectives-file <path|->   Ordered array of what was asked / done
     --summary   <text> or --summary-file   <path|->   Narrative for feed post + reviewer
     or: --payload-json <json>
-    or: --payload-file <path|-> containing { objective, summary, artifacts, changeRationales }
+    or: --payload-file <path|-> containing { objectives, summary, artifacts, changeRationales }
   Optional:
     --title <text>            Auto-derived from objective if omitted
     --priority <level>        low | medium | high | urgent
@@ -451,7 +464,7 @@ Examples:
   ovld protocol auth-status
   ovld protocol discover-project
   ovld protocol discover-project --working-directory /path/to/repo
-  ovld protocol prompt --agent codex --objective "Implement feature X"   # auto-resolves project from cwd
+  ovld protocol prompt --agent codex --objectives-json '[{"objective":"Implement feature X"}]'   # auto-resolves project from cwd
   ovld protocol attach --ticket-id 1:899
   ovld protocol attach --ticket-id 1:899 --external-session-id null
   ovld protocol connect --ticket-id 1:899
@@ -460,9 +473,11 @@ Examples:
   ovld protocol search-tickets --query "auth refactor" --status next-up,execute --limit 10
   ovld protocol discuss-objective --ticket-id 1:899
   ovld protocol discuss-objective --ticket-id 1:899 --objective-id <objective-uuid>
-  ovld protocol create --agent codex --objective "Capture follow-up work from this repo"
-  ovld protocol create --agent codex --session-key <key> --ticket-id <ticket_id> --objective "Capture follow-up work"
-  ovld protocol prompt --agent codex --objective "Implement user auth" --priority high
+  ovld protocol add-objectives --ticket-id 1:899 --objectives-json '[{"objective":"Step one"},{"objective":"Step two"}]'
+  ovld protocol create --agent codex --objectives-json '[{"objective":"Capture follow-up work from this repo"}]'
+  ovld protocol create --agent codex --objectives-json '[{"objective":"Step one"},{"objective":"Step two"}]'
+  ovld protocol create --agent codex --session-key <key> --ticket-id <ticket_id> --objectives-json '[{"objective":"Capture follow-up work"}]'
+  ovld protocol prompt --agent codex --objectives-json '[{"objective":"Implement user auth"}]' --priority high
   ovld protocol update --session-key <key> --ticket-id <ticket_id> --summary "Did X" --phase execute
   ovld protocol update --session-key <key> --ticket-id <ticket_id> --summary-file ./update.txt --event-type user_follow_up
   ovld protocol record-change-rationales --session-key <key> --ticket-id <ticket_id> --change-rationales-json '[{"label":"...","file_path":"...","summary":"...","why":"...","impact":"...","hunks":[{"header":"@@ ... @@"}]}]'
@@ -481,9 +496,9 @@ Examples:
   ovld protocol deliver --session-key <key> --ticket-id <ticket_id> --payload-file -
   ovld protocol deliver --session-key <key> --ticket-id <ticket_id> --summary "Done" --skip-file-change-check
   ovld protocol deliver --session-key <key> --ticket-id <ticket_id> --summary "Done" --timeout 60000
-  ovld protocol record-work --objective "User asked for X; I did Y" --summary "What I did and why" --change-rationales-json '[...]'
+  ovld protocol record-work --objectives-json '[{"objective":"User asked for X; I did Y"}]' --summary "What I did and why" --change-rationales-json '[...]'
   ovld protocol record-work --payload-file - <<'EOF'
-    {"objective":"...","summary":"...","artifacts":[...],"changeRationales":[...]}
+    {"objectives":[{"objective":"..."}],"summary":"...","artifacts":[...],"changeRationales":[...]}
 EOF
   ovld protocol get-device --device-fingerprint $OVERLORD_DEVICE_FINGERPRINT
   ovld protocol update-device --device-fingerprint $OVERLORD_DEVICE_FINGERPRINT --label work-macbook

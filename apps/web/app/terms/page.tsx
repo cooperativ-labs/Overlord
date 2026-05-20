@@ -31,10 +31,10 @@ export default function TermsPage() {
         <section className="space-y-3">
           <h2 className="text-lg font-semibold">2. Description of Service</h2>
           <p>
-            Overlord is a management and work coordination platform for AI-assisted engineering work. The Service
-            includes a web application, desktop application, command-line interface, and related
-            APIs that allow users to manage tickets, organize agent work, and integrate with
-            third-party AI coding assistants.
+            Overlord is a management and work coordination platform for AI-assisted engineering
+            work. The Service includes a web application, desktop application, command-line
+            interface, and related APIs that allow users to manage tickets, organize agent work, and
+            integrate with third-party AI coding assistants.
           </p>
         </section>
 

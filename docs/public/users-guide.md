@@ -72,27 +72,36 @@ The CLI also uses local working directory matching. For example, when you create
 
 ```bash
 ovld protocol discover-project
-ovld protocol create --agent codex --objective "Capture follow-up work from this repository"
+ovld protocol create --agent codex --objectives-json '[{"objective":"Capture follow-up work from this repository"}]'
 ```
+
+For sequential steps toward the same feature or goal, create one ticket with ordered objectives:
+
+```bash
+ovld protocol create --agent codex \
+  --objectives-json '[{"objective":"Draft the plan"},{"objective":"Implement the approved plan"}]'
+```
+
+Create multiple tickets instead when each prompt represents a different feature or goal.
 
 When the work is already done in chat and you want to record it after the fact, use `record-work` instead of `create`:
 
 ```bash
 ovld protocol record-work \
-  --objective "User asked me to investigate the billing regression and summarize the fix." \
+  --objectives-json '[{"objective":"User asked me to investigate the billing regression and summarize the fix."}]' \
   --summary "Confirmed the root cause, implemented the fix, added verification, and recorded the rationale."
 ```
 
 Use `--project-id` when you want to bypass automatic project discovery:
 
 ```bash
-ovld protocol create --agent codex --project-id <project-id> --objective "Add billing tests"
+ovld protocol create --agent codex --project-id <project-id> --objectives-json '[{"objective":"Add billing tests"}]'
 ```
 
 Use `--personal` for private standalone tickets that should not be assigned to a project:
 
 ```bash
-ovld protocol create --agent codex --personal --objective "Draft a private investigation note"
+ovld protocol create --agent codex --personal --objectives-json '[{"objective":"Draft a private investigation note"}]'
 ```
 
 ## Tickets
@@ -140,6 +149,16 @@ When to add a new objective:
 
 You do not need a new ticket for every follow-up if the work still belongs to the same story.
 
+Agents can append ordered objectives to an existing ticket:
+
+```bash
+ovld protocol add-objectives \
+  --ticket-id 1:899 \
+  --objectives-json '[{"objective":"Add tests"},{"objective":"Update docs"}]'
+```
+
+Index 0 is the first newly added objective to execute; later indexes queue after it.
+
 ## The Normal Workflow
 
 ### 1. Create the Ticket
@@ -161,9 +180,10 @@ ovld prompt "Fix the invite email regression" --agent codex
 Agents should use the protocol equivalents:
 
 ```bash
-ovld protocol create --agent codex --objective "Investigate why invite emails are not sending"
-ovld protocol prompt --agent codex --objective "Fix the invite email regression"
-ovld protocol record-work --objective "User asked me to X; I completed it in chat." --summary "Narrative for review and feed post."
+ovld protocol create --agent codex --objectives-json '[{"objective":"Investigate why invite emails are not sending"}]'
+ovld protocol prompt --agent codex --objectives-json '[{"objective":"Fix the invite email regression"}]'
+ovld protocol add-objectives --ticket-id 1:899 --objectives-json '[{"objective":"Add tests"},{"objective":"Update docs"}]'
+ovld protocol record-work --objectives-json '[{"objective":"User asked me to X; I completed it in chat."}]' --summary "Narrative for review and feed post."
 ```
 
 Default to `create` when you want to capture future work as a draft. Use `prompt` when you explicitly want to start execution immediately. Use `record-work` when the work is already done in chat and should be recorded as a ticket in `review` with a generated feed post.

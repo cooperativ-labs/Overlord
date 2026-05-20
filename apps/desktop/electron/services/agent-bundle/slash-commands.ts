@@ -123,6 +123,28 @@ Rules:
 - After the command succeeds, confirm the objective was submitted.`
     },
     {
+      path: path.join(base, 'add-objectives.md'),
+      content: `---
+description: Append ordered objectives to an existing Overlord ticket
+argument-hint: <ticket_id> <ordered objective steps>
+disable-model-invocation: true
+---
+
+Append ordered objectives to an existing ticket.
+
+Use this when the prompts are sequential steps toward the same feature or goal. Create separate tickets when prompts represent different features or goals.
+
+Treat the first token in \`$ARGUMENTS\` as the ticket ID and the remaining text as ordered objective steps unless raw \`--objectives-json\` or \`--objectives-file\` flags are provided.
+
+Run:
+\`ovld protocol add-objectives --ticket-id <ticket_id> --objectives-json '[{"objective":"Step one"},{"objective":"Step two"}]'\`
+
+Rules:
+- Index 0 is the first newly added objective to execute.
+- Later indexes queue after it.
+- After the command succeeds, report the appended objective IDs.`
+    },
+    {
       path: path.join(base, 'create.md'),
       content: `---
 description: Create a draft Overlord ticket from the current conversation
@@ -133,9 +155,11 @@ disable-model-invocation: true
 Create a draft Overlord ticket from the user's request.
 
 Use \`$ARGUMENTS\` as the input.
-If it already contains flags such as \`--title\`, \`--priority\`, \`--project-id\`, or \`--execution-target\`, pass those flags through after \`ovld protocol create --agent claude-code\`.
+If it already contains flags such as \`--title\`, \`--priority\`, \`--project-id\`, \`--execution-target\`, \`--objectives-json\`, or \`--objectives-file\`, pass those flags through after \`ovld protocol create --agent claude-code\`.
 Otherwise, treat \`$ARGUMENTS\` as the objective text and run:
 \`ovld protocol create --agent claude-code --objective "<objective>"\`
+
+Use \`--objectives-json '[{"objective":"Step one"},{"objective":"Step two"}]'\` for ordered steps on one ticket. Create multiple tickets when prompts represent different features or goals.
 
 If no objective was provided, ask the user for one and stop.
 
@@ -152,9 +176,11 @@ disable-model-invocation: true
 Create a new Overlord ticket from the user's request.
 
 Use \`$ARGUMENTS\` as the input.
-If it already contains flags such as \`--title\`, \`--priority\`, \`--project-id\`, or \`--execution-target\`, pass those flags through after \`ovld protocol prompt --agent claude-code\`.
+If it already contains flags such as \`--title\`, \`--priority\`, \`--project-id\`, \`--execution-target\`, \`--objectives-json\`, or \`--objectives-file\`, pass those flags through after \`ovld protocol prompt --agent claude-code\`.
 Otherwise, treat \`$ARGUMENTS\` as the objective text and run:
 \`ovld protocol prompt --agent claude-code --objective "<objective>"\`
+
+Use \`--objectives-json '[{"objective":"Step one"},{"objective":"Step two"}]'\` for ordered steps on one ticket. Create multiple tickets when prompts represent different features or goals.
 
 If no objective was provided, ask the user for one and stop.
 
@@ -255,16 +281,34 @@ Rules:
 - After the command succeeds, confirm the objective was submitted.`
     },
     {
+      path: path.join(base, 'add-objectives.md'),
+      content: `Append ordered objectives to an existing Overlord ticket.
+
+Use this when the prompts are sequential steps toward the same feature or goal. Create separate tickets when prompts represent different features or goals.
+
+The first token after \`/add-objectives\` is the ticket ID and the remaining text is ordered objective steps unless raw \`--objectives-json\` or \`--objectives-file\` flags are present.
+
+Run:
+\`ovld protocol add-objectives --ticket-id <ticket_id> --objectives-json '[{"objective":"Step one"},{"objective":"Step two"}]'\`
+
+Rules:
+- Index 0 is the first newly added objective to execute.
+- Later indexes queue after it.
+- After the command succeeds, report the appended objective IDs.`
+    },
+    {
       path: path.join(base, 'create.md'),
       content: `Create a draft Overlord ticket from the user's request.
 
-The text after \`/create\` is the objective unless it already includes raw flags such as \`--title\`, \`--priority\`, \`--project-id\`, or \`--execution-target\`.
+The text after \`/create\` is the objective unless it already includes raw flags such as \`--title\`, \`--priority\`, \`--project-id\`, \`--execution-target\`, \`--objectives-json\`, or \`--objectives-file\`.
 
 If raw flags are present, run:
 \`ovld protocol create --agent cursor <raw arguments>\`
 
 Otherwise, run:
 \`ovld protocol create --agent cursor --objective "<objective>"\`
+
+Use \`--objectives-json '[{"objective":"Step one"},{"objective":"Step two"}]'\` for ordered steps on one ticket. Create multiple tickets when prompts represent different features or goals.
 
 If no objective was provided, ask the user for one and stop.
 
@@ -274,13 +318,15 @@ After the command succeeds, report the new \`TICKET_ID\`.`
       path: path.join(base, 'prompt.md'),
       content: `Create a new Overlord ticket from the user's request.
 
-The text after \`/prompt\` is the objective unless it already includes raw flags such as \`--title\`, \`--priority\`, \`--project-id\`, or \`--execution-target\`.
+The text after \`/prompt\` is the objective unless it already includes raw flags such as \`--title\`, \`--priority\`, \`--project-id\`, \`--execution-target\`, \`--objectives-json\`, or \`--objectives-file\`.
 
 If raw flags are present, run:
 \`ovld protocol prompt --agent cursor <raw arguments>\`
 
 Otherwise, run:
 \`ovld protocol prompt --agent cursor --objective "<objective>"\`
+
+Use \`--objectives-json '[{"objective":"Step one"},{"objective":"Step two"}]'\` for ordered steps on one ticket. Create multiple tickets when prompts represent different features or goals.
 
 If no objective was provided, ask the user for one and stop.
 
@@ -419,6 +465,23 @@ Rules:
         '`attach`' +
         ` for that.
 - After the command succeeds, confirm the objective was submitted.
+"""`
+    },
+    {
+      path: path.join(base, 'add-objectives.toml'),
+      content:
+        `description = "Append ordered objectives to an existing Overlord ticket."
+prompt = """
+Append ordered objectives to an existing ticket.
+
+Use this when prompts are sequential steps toward the same feature or goal. Create separate tickets when prompts represent different features or goals.
+
+Run:
+` +
+        '`ovld protocol add-objectives --ticket-id <ticket_id> --objectives-json \'[{"objective":"Step one"},{"objective":"Step two"}]\'`' +
+        `
+
+Index 0 is the first newly added objective to execute; later indexes queue after it.
 """`
     },
     {
@@ -636,6 +699,22 @@ Run:
 Rules:
 - Use \`attach\` to establish a persistent session with a ticket.
 - After the command succeeds, report the returned \`SESSION_KEY\` and confirm that future updates should use that ticket.`
+    },
+    {
+      path: path.join(base, 'add-objectives.md'),
+      content: `---
+description: Append ordered objectives to an existing Overlord ticket
+agent: build
+---
+
+Append ordered objectives to an existing ticket.
+
+Use this when prompts are sequential steps toward the same feature or goal. Create separate tickets when prompts represent different features or goals.
+
+Run:
+\`ovld protocol add-objectives --ticket-id <ticket_id> --objectives-json '[{"objective":"Step one"},{"objective":"Step two"}]'\`
+
+Index 0 is the first newly added objective to execute; later indexes queue after it.`
     },
     {
       path: path.join(base, 'discuss-objective.md'),
