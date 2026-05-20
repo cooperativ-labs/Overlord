@@ -11,7 +11,7 @@ const PROMPT_AGENT_IDENTIFIERS = {
   claude: 'claude-code',
   codex: 'codex',
   cursor: 'cursor',
-  gemini: 'gemini',
+  antigravity: 'antigravity',
   opencode: 'opencode'
 };
 const PROMPT_AGENTS = Object.keys(PROMPT_AGENT_IDENTIFIERS);

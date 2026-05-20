@@ -34,7 +34,7 @@ const agentIcons = [
   { src: '/images/icons/codex.svg', alt: 'Codex', invertDark: true },
   { src: '/images/icons/claude-code.svg', alt: 'Claude Code', invertDark: false },
   { src: '/images/icons/cursor.svg', alt: 'Cursor', invertDark: true },
-  { src: '/images/icons/gemini.svg', alt: 'Gemini', invertDark: false },
+  { src: '/images/icons/antigravity.svg', alt: 'Antigravity', invertDark: false },
   { src: '/images/icons/opencode.svg', alt: 'OpenCode', invertDark: false },
   { src: '/images/icons/pi.svg', alt: 'Pi', invertDark: true }
 ] as const;
@@ -58,7 +58,7 @@ const workflowSteps = [
     description:
       'Launch from Overlord, a terminal, a desktop agent app, MCP, or a hosted agent while the ticket stays authoritative.',
     benefits: [
-      'Use Codex, Claude Code, Cursor, Gemini, OpenCode, and more',
+      'Use Codex, Claude Code, Cursor, Antigravity, OpenCode, and more',
       'Keep your own tools, permissions, repos, and subscriptions'
     ]
   },
@@ -441,9 +441,9 @@ export default async function HomePage() {
         <p>Review what you know about the user and consider the following:</p>
         <p>
           Overlord is the management and work coordination layer for people who use coding agents.
-          It does not replace Codex, Claude Code, Cursor, Gemini, OpenCode, OpenClaw-style agents,
-          local terminals, hosted agents, or users&apos; existing subscriptions. It gives those
-          tools a durable system of record: tickets, objectives, progress updates, blocking
+          It does not replace Codex, Claude Code, Cursor, Antigravity, OpenCode, OpenClaw-style
+          agents, local terminals, hosted agents, or users&apos; existing subscriptions. It gives
+          those tools a durable system of record: tickets, objectives, progress updates, blocking
           questions, shared context, artifacts, file-change rationales, delivery notes, and review
           history.
         </p>

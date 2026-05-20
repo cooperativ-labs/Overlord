@@ -26,7 +26,9 @@ function buildMcpRestartCommand(
     if (normalized.includes('claude')) return `claude --resume ${nativeSessionId}`;
     if (normalized.includes('codex')) return `codex resume ${nativeSessionId}`;
     if (normalized.includes('cursor')) return `cursor --resume ${nativeSessionId}`;
-    if (normalized.includes('gemini')) return `gemini --resume ${nativeSessionId}`;
+    if (normalized.includes('antigravity') || normalized === 'agy') {
+      return `agy --conversation ${nativeSessionId}`;
+    }
     if (normalized.includes('opencode')) {
       return `opencode --continue --session ${nativeSessionId}`;
     }
@@ -35,8 +37,8 @@ function buildMcpRestartCommand(
   if (normalized.includes('cursor')) {
     return `OVERLORD_URL=$OVERLORD_URL OVERLORD_ACCESS_TOKEN=$OVERLORD_ACCESS_TOKEN OVERLORD_ORGANIZATION_ID=$OVERLORD_ORGANIZATION_ID TICKET_ID=${ticketId} ovld resume cursor`;
   }
-  if (normalized.includes('gemini')) {
-    return `OVERLORD_URL=$OVERLORD_URL OVERLORD_ACCESS_TOKEN=$OVERLORD_ACCESS_TOKEN OVERLORD_ORGANIZATION_ID=$OVERLORD_ORGANIZATION_ID TICKET_ID=${ticketId} ovld resume gemini`;
+  if (normalized.includes('antigravity') || normalized === 'agy') {
+    return `OVERLORD_URL=$OVERLORD_URL OVERLORD_ACCESS_TOKEN=$OVERLORD_ACCESS_TOKEN OVERLORD_ORGANIZATION_ID=$OVERLORD_ORGANIZATION_ID TICKET_ID=${ticketId} ovld restart antigravity`;
   }
   if (normalized.includes('opencode')) {
     return `OVERLORD_URL=$OVERLORD_URL OVERLORD_ACCESS_TOKEN=$OVERLORD_ACCESS_TOKEN OVERLORD_ORGANIZATION_ID=$OVERLORD_ORGANIZATION_ID TICKET_ID=${ticketId} ovld resume opencode`;

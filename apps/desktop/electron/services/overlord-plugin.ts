@@ -74,6 +74,7 @@ const TARGET_PLUGIN_USER_PROMPT_HOOK = path.join(
   'scripts',
   'user-prompt-submit-hook.sh'
 );
+const TARGET_PLUGIN_PERMISSION_HOOK = path.join(TARGET_PLUGIN_DIR, 'scripts', 'permission-hook.sh');
 const TARGET_MARKETPLACE = path.join(os.homedir(), '.agents', 'plugins', 'marketplace.json');
 const TARGET_CODEX_RULES = path.join(os.homedir(), '.codex', 'rules', 'default.rules');
 const LEGACY_CODEX_AGENTS = path.join(os.homedir(), '.codex', 'AGENTS.md');
@@ -171,6 +172,7 @@ function managedFiles(): string[] {
     TARGET_PLUGIN_MCP,
     TARGET_PLUGIN_SCRIPT,
     TARGET_PLUGIN_USER_PROMPT_HOOK,
+    TARGET_PLUGIN_PERMISSION_HOOK,
     TARGET_MARKETPLACE,
     TARGET_CODEX_RULES
   ];
@@ -179,6 +181,12 @@ function managedFiles(): string[] {
 function installCodexHookCommand(): void {
   const hooks = readJsonFile<{
     hooks?: {
+      PermissionRequest?: Array<{
+        hooks?: Array<{
+          type?: string;
+          command?: string;
+        }>;
+      }>;
       UserPromptSubmit?: Array<{
         hooks?: Array<{
           type?: string;
@@ -191,16 +199,26 @@ function installCodexHookCommand(): void {
     throw new Error(`Codex hook manifest missing or invalid at ${TARGET_PLUGIN_HOOKS}`);
   }
 
-  const groups = hooks.hooks?.UserPromptSubmit;
-  if (!Array.isArray(groups)) {
-    throw new Error(`Codex UserPromptSubmit hook missing in ${TARGET_PLUGIN_HOOKS}`);
+  const permissionGroups = hooks.hooks?.PermissionRequest;
+  if (!Array.isArray(permissionGroups)) {
+    throw new Error(`Codex PermissionRequest hook missing in ${TARGET_PLUGIN_HOOKS}`);
   }
-
-  const command = TARGET_PLUGIN_USER_PROMPT_HOOK;
-  for (const group of groups) {
+  for (const group of permissionGroups) {
     for (const hook of group.hooks ?? []) {
       if (hook.type === 'command') {
-        hook.command = command;
+        hook.command = TARGET_PLUGIN_PERMISSION_HOOK;
+      }
+    }
+  }
+
+  const userPromptGroups = hooks.hooks?.UserPromptSubmit;
+  if (!Array.isArray(userPromptGroups)) {
+    throw new Error(`Codex UserPromptSubmit hook missing in ${TARGET_PLUGIN_HOOKS}`);
+  }
+  for (const group of userPromptGroups) {
+    for (const hook of group.hooks ?? []) {
+      if (hook.type === 'command') {
+        hook.command = TARGET_PLUGIN_USER_PROMPT_HOOK;
       }
     }
   }

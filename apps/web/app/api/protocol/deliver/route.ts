@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { after, NextResponse } from 'next/server';
 
 import { internalErrorResponse, parseProtocolBody } from '@/app/api/protocol/_lib';
+import { scheduleQueuedObjectiveAfterDeliver } from '@/lib/auto-advance/schedule-after-deliver';
 import { getTicketIdentifier } from '@/lib/helpers/tickets';
 import { upsertObjectiveCheckpoint } from '@/lib/overlord/checkpoints';
 import { insertFileChanges } from '@/lib/overlord/file-changes';
@@ -141,87 +142,19 @@ export async function POST(request: Request) {
           .eq('ticket_id', ticketId)
           .eq('state', 'executing');
 
-        // Auto-advance scheduler: peek at the next queued future objective on
-        // this ticket. If present, either promote+relaunch (auto_advance=true)
-        // or promote-and-gate (auto_advance=false). If absent, fall through
-        // to the standard deliver-to-review behavior.
-        const { data: nextFuture } = await supabase
-          .from('objectives')
-          .select('id, objective, auto_advance, approval_reason, assigned_agent')
-          .eq('ticket_id', ticketId)
-          .eq('state', 'future')
-          .order('position', { ascending: true })
-          .order('created_at', { ascending: true })
-          .limit(1)
-          .maybeSingle();
+        // Auto-advance scheduler: prefer the current draft objective (when it has
+        // content), otherwise the earliest future objective. Desktop observers
+        // launch auto_advance=true rows; gated rows wait for human approval.
+        const queueResult = await scheduleQueuedObjectiveAfterDeliver({
+          supabase: typedSupabase,
+          ticketId,
+          sessionId,
+          userId,
+          organizationId,
+          ticketReference
+        });
 
-        if (nextFuture) {
-          const wantsAutoAdvance = nextFuture.auto_advance !== false;
-
-          if (wantsAutoAdvance) {
-            // Promote to submitted + stamp auto_advanced_at. A desktop /
-            // remote-agent observer should pick up the auto_advance event
-            // and call launchAgent.
-            await supabase
-              .from('objectives')
-              .update({
-                state: 'submitted',
-                auto_advanced_at: new Date().toISOString()
-              })
-              .eq('id', nextFuture.id);
-
-            await supabase.from('ticket_events').insert({
-              event_type: 'auto_advance',
-              phase: 'execute',
-              summary: 'Queue advanced to next objective automatically.',
-              session_id: sessionId,
-              ticket_id: ticketId,
-              objective_id: nextFuture.id,
-              created_by: userId,
-              payload: {
-                next_objective_id: nextFuture.id,
-                assigned_agent: nextFuture.assigned_agent ?? null
-              }
-            });
-          } else {
-            // Gated: promote to draft so it becomes the editable current
-            // objective, set the awaiting-response flag, push a
-            // notification, and stop the chain.
-            await supabase
-              .from('objectives')
-              .update({ state: 'draft', completed_at: null })
-              .eq('id', nextFuture.id);
-
-            await supabase
-              .from('tickets')
-              .update({ has_unopened_waiting_response: true, is_read: false })
-              .eq('id', ticketId);
-
-            await supabase.from('ticket_events').insert({
-              event_type: 'awaiting_approval',
-              phase: 'execute',
-              summary:
-                nextFuture.approval_reason || 'Queued objective is waiting for your approval.',
-              session_id: sessionId,
-              ticket_id: ticketId,
-              objective_id: nextFuture.id,
-              is_blocking: true,
-              created_by: userId
-            });
-
-            await sendPushNotification(supabase, {
-              title: `Awaiting approval (${ticketReference})`,
-              body: (
-                nextFuture.approval_reason || 'Queued objective is waiting for your approval.'
-              ).slice(0, 200),
-              organizationId,
-              data: { ticketId, eventType: 'awaiting_approval', objectiveId: nextFuture.id }
-            });
-          }
-
-          // Both branches detach the just-finished agent session but keep
-          // the ticket in its current execution status — do NOT route to
-          // review while a follow-up objective is queued.
+        if (queueResult.advanced) {
           await supabase
             .from('agent_sessions')
             .update({

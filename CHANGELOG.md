@@ -2,6 +2,39 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2605201134.0] - 2026-05-20:11:34
+
+### Added
+- Gemini CLI is eliminated; Antigravity CLI is the replacement connector.
+- `POST /api/protocol/add-objectives` endpoint for agents to queue multiple objectives on a ticket in a single request.
+- MCP `add-objectives` handler and tool for programmatic objective batching.
+- Mailing list management system with `user_mailing_list_signups` table for tracking user subscriptions.
+- Changelog pages now publicly accessible with sitemap integration for better discoverability.
+- "Ordered Objectives" section in drift review skill documentation clarifying objective-to-flag mappings.
+- Supabase auth email templates (confirm-signup, change-email, reset-password, magic-link, invite-user, reauthenticate).
+
+### Fixed
+- None.
+
+### Changed
+- Reorganized feature plans directory; archived legacy plans and introduced new protocol-objective-arrays and antigravity-connector-migration documentation.
+- Objective auto-advance now defaults to `false` for safer execution workflows.
+- Updated agent plugin documentation across Claude, Cursor, and Codex connectors to surface add-objectives command.
+- Improved DraftObjective component to support queued multi-objective workflows.
+- Refine mailing list signup tracking for early access and newsletter management.
+
+### Security
+- None.
+
+### Documentation
+- Add `/add-objectives` command documentation for agent connectors.
+- Enhance MCP protocol documentation with objective batching patterns.
+
+### Chore
+- Add database migration for mailing list schema.
+- Update workspace and CLI versions for the release.
+- Regenerate Supabase types to reflect changelog_entries and mailing_list schema updates.
+
 ## [0.2605200941.0] - 2026-05-20:09:41
 
 ### Added

@@ -1,5 +1,8 @@
 slug: slideshow
 name: slideshow
+description: How to create and add slideshows to the /presentations section.
+  Covers folder layout, component contract, registry wiring, slide authoring
+  rules, and local testing.
 tags: []
 compat: []
-sha256: 51e6dafd731e1bfc82af71f035d429e38333ea607755c0cd25bfc490a38a8d27
+sha256: 3b13fb246500c9df1aec75719390d1564407fabc9249ae49ebd764699cd937ac

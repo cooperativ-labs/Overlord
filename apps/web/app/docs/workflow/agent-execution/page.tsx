@@ -27,7 +27,7 @@ The agent reads the ticket, works in the repository, and reports back through th
 
 ## Launching without lock-in
 
-Overlord is designed to coordinate Claude Code, Codex, Cursor, Gemini, and other setups instead of replacing them.
+Overlord is designed to coordinate Claude Code, Codex, Cursor, Antigravity, and other setups instead of replacing them.
 
 ## Related pages
 

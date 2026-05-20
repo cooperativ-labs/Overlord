@@ -354,6 +354,9 @@ export function AuthForm({
             Privacy Policy
           </Link>
           .
+          <span className="mt-2 block text-xs">
+            By signing up, you consent to receive emails describing new product changes.
+          </span>
         </FieldDescription>
       ) : null}
     </div>

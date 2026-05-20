@@ -13,7 +13,7 @@ import { createServiceRoleClient } from '@/supabase/utils/service-role';
 /**
  * POST /api/protocol/permission-request?ticketId=<uuid>
  *
- * Called by the Claude Code PermissionRequest hook when an agent requests permission
+ * Called by Claude Code or Codex PermissionRequest hooks when an agent requests permission
  * to use a tool. Creates a blocking question ticket_event so the Overlord UI
  * (KanbanBoard) can notify the user via toast, sound, and status dot.
  *

@@ -36,8 +36,11 @@ ovld auth logout
 ## Setup & maintenance
 
 \`\`\`bash
-# Install a local agent integration (claude, codex, cursor, gemini, opencode)
+# Install a local agent integration (claude, codex, cursor, antigravity, opencode)
 ovld setup <agent>
+
+# Launch a ticket in Antigravity (replaces deprecated Gemini CLI)
+ovld launch antigravity --ticket-id <ticket_id>
 
 # Validate local agent integrations and check for CLI updates
 ovld doctor

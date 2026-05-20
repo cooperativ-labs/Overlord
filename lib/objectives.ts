@@ -1,7 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { generateTitleWithGemini } from '@/lib/ai/generate-ticket-title';
-import { isAppFeatureEnabled } from '@/lib/app-features';
 import { parseTicketAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
 import { deriveTitleFromObjective } from '@/lib/helpers/tickets';
 import type { Database, Json } from '@/types/database.types';
@@ -355,8 +354,7 @@ export async function markSubmittedObjectiveExecuting(
   supabase: ObjectiveClient,
   ticketId: string,
   executionSnapshot?: ObjectiveExecutionSnapshot,
-  createdBy?: string | null,
-  options: { promoteQueuedFutureToDraft?: boolean } = {}
+  createdBy?: string | null
 ) {
   const { data: submittedObjective, error: submittedError } = await supabase
     .from('objectives')
@@ -423,41 +421,30 @@ export async function markSubmittedObjectiveExecuting(
   }
 
   if (!existingDraftRow) {
-    const futureObjectivesEnabled =
-      options.promoteQueuedFutureToDraft === true &&
-      (await isAppFeatureEnabled('future-objectives'));
-    let promotedFutureToDraft = false;
+    const { data: earliestFuture, error: earliestFutureError } = await supabase
+      .from('objectives')
+      .select('id')
+      .eq('ticket_id', ticketId)
+      .eq('state', 'future')
+      .order('position', { ascending: true })
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle();
 
-    if (futureObjectivesEnabled) {
-      const { data: earliestFuture, error: earliestFutureError } = await supabase
-        .from('objectives')
-        .select('id')
-        .eq('ticket_id', ticketId)
-        .eq('state', 'future')
-        .order('position', { ascending: true })
-        .order('created_at', { ascending: true })
-        .limit(1)
-        .maybeSingle();
-
-      if (earliestFutureError) {
-        throw new Error(earliestFutureError.message);
-      }
-
-      if (earliestFuture) {
-        const { error: promoteError } = await supabase
-          .from('objectives')
-          .update({ state: 'draft', completed_at: null })
-          .eq('id', earliestFuture.id);
-
-        if (promoteError) {
-          throw new Error(promoteError.message);
-        }
-
-        promotedFutureToDraft = true;
-      }
+    if (earliestFutureError) {
+      throw new Error(earliestFutureError.message);
     }
 
-    if (!promotedFutureToDraft) {
+    if (earliestFuture) {
+      const { error: promoteError } = await supabase
+        .from('objectives')
+        .update({ state: 'draft', completed_at: null })
+        .eq('id', earliestFuture.id);
+
+      if (promoteError) {
+        throw new Error(promoteError.message);
+      }
+    } else {
       const { error: insertDraftError } = await supabase.from('objectives').insert({
         state: 'draft',
         objective: '',

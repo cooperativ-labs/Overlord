@@ -14,7 +14,7 @@ type Props = {
 };
 
 type PermissionResult = {
-  agent: 'claude' | 'cursor' | 'gemini' | 'opencode';
+  agent: 'claude' | 'cursor' | 'antigravity' | 'opencode';
   ok: boolean;
   filePath: string;
   details: string;
@@ -25,7 +25,7 @@ type PermissionResult = {
 const AGENT_LABELS: Record<PermissionResult['agent'], string> = {
   claude: 'Claude',
   cursor: 'Cursor',
-  gemini: 'Gemini',
+  antigravity: 'Antigravity',
   opencode: 'OpenCode'
 };
 

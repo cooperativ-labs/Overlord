@@ -1,4 +1,4 @@
-export type LaunchAgentType = 'claude' | 'codex' | 'cursor' | 'gemini' | 'opencode' | 'pi';
+export type LaunchAgentType = 'claude' | 'codex' | 'cursor' | 'antigravity' | 'opencode' | 'pi';
 export type AgentSelectorValue = LaunchAgentType | 'copy-local' | 'copy-cloud' | 'copy-terminal';
 
 export type AgentType = {
@@ -32,10 +32,10 @@ export const AGENT_TYPES: readonly AgentType[] = [
     invertDark: true
   },
   {
-    value: 'gemini',
-    label: 'Gemini',
-    icon: '/images/icons/gemini.svg',
-    identifiers: ['gemini', 'google-gemini'],
+    value: 'antigravity',
+    label: 'Antigravity',
+    icon: '/images/icons/antigravity.svg',
+    identifiers: ['antigravity', 'agy'],
     invertDark: false
   },
   {
@@ -58,7 +58,7 @@ const agentTypesByValue: Record<LaunchAgentType, AgentType> = {
   claude: AGENT_TYPES[0],
   codex: AGENT_TYPES[1],
   cursor: AGENT_TYPES[2],
-  gemini: AGENT_TYPES[3],
+  antigravity: AGENT_TYPES[3],
   opencode: AGENT_TYPES[4],
   pi: AGENT_TYPES[5]
 };
@@ -67,7 +67,7 @@ export const LAUNCH_AGENT_VALUES: readonly LaunchAgentType[] = [
   'claude',
   'codex',
   'cursor',
-  'gemini',
+  'antigravity',
   'opencode',
   'pi'
 ];
@@ -75,7 +75,7 @@ export const COPY_PROMPT_AGENT_VALUES: readonly LaunchAgentType[] = [
   'claude',
   'codex',
   'cursor',
-  'gemini',
+  'antigravity',
   'pi'
 ];
 export const AGENT_SELECTOR_VALUES: readonly AgentSelectorValue[] = [

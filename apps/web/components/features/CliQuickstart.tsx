@@ -84,12 +84,13 @@ function CliQuickstartBody({
       : 'claude';
   const [selectedAgent, setSelectedAgent] = useState<LaunchAgentType>(defaultSelectedAgent);
 
-  const { claudeCode, codex, cursor, gemini, opencode, pi } = agentCommands?.launchCommands ?? {};
+  const { claudeCode, codex, cursor, antigravity, opencode, pi } =
+    agentCommands?.launchCommands ?? {};
   const {
     claudeCode: claudeResumeCommand,
     codex: codexResumeCommand,
     cursor: cursorResumeCommand,
-    gemini: geminiResumeCommand,
+    antigravity: antigravityResumeCommand,
     opencode: opencodeResumeCommand,
     pi: piResumeCommand
   } = agentCommands?.resumeCommands ?? {};
@@ -103,11 +104,11 @@ function CliQuickstartBody({
       claude: claudeCode ?? 'ovld launch claude',
       codex: codex ?? 'ovld launch codex',
       cursor: cursor ?? 'ovld launch cursor',
-      gemini: gemini ?? 'ovld launch gemini',
+      antigravity: antigravity ?? 'ovld launch antigravity',
       opencode: opencode ?? 'ovld launch opencode',
       pi: pi ?? 'ovld launch pi'
     }),
-    [claudeCode, codex, cursor, gemini, opencode, pi]
+    [claudeCode, codex, cursor, antigravity, opencode, pi]
   );
 
   const overlordResumeCommands = useMemo<QuickstartCommands>(
@@ -115,7 +116,7 @@ function CliQuickstartBody({
       claude: claudeResumeCommand ?? 'ovld restart claude',
       codex: codexResumeCommand ?? 'ovld restart codex',
       cursor: cursorResumeCommand ?? 'ovld restart cursor',
-      gemini: geminiResumeCommand ?? 'ovld restart gemini',
+      antigravity: antigravityResumeCommand ?? 'ovld restart antigravity',
       opencode: opencodeResumeCommand ?? 'ovld restart opencode',
       pi: piResumeCommand ?? 'ovld restart pi'
     }),
@@ -123,7 +124,7 @@ function CliQuickstartBody({
       claudeResumeCommand,
       codexResumeCommand,
       cursorResumeCommand,
-      geminiResumeCommand,
+      antigravityResumeCommand,
       opencodeResumeCommand,
       piResumeCommand
     ]

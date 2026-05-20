@@ -16,8 +16,8 @@ type Props = {
   projectDirectory?: string;
 };
 
-type BundleAgent = 'claude' | 'opencode';
-type SlashAgent = 'claude' | 'cursor' | 'gemini' | 'opencode';
+type BundleAgent = 'claude' | 'cursor' | 'antigravity' | 'opencode';
+type SlashAgent = 'claude' | 'cursor' | 'antigravity' | 'opencode';
 
 /** What each agent connector includes. */
 const AGENT_CONNECTOR_FEATURES: Record<
@@ -49,6 +49,7 @@ const AGENT_CONNECTOR_FEATURES: Record<
     permissions: true,
     details: [
       'Home-local Overlord chat plugin with bundled Codex skill',
+      'PermissionRequest and UserPromptSubmit hooks for notifications and follow-ups',
       'Legacy Codex bundle migration cleanup',
       'Permission prefix rules for ovld protocol & curl'
     ]
@@ -65,14 +66,16 @@ const AGENT_CONNECTOR_FEATURES: Record<
       'Permission rules for ovld protocol & curl'
     ]
   },
-  gemini: {
-    bundle: false,
+  antigravity: {
+    bundle: true,
     service: false,
-    slashCommands: true,
+    slashCommands: false,
     permissions: true,
     details: [
-      'Slash commands (/connect, /load, /prompt)',
-      'TOML policy rules for ovld protocol & curl'
+      'Antigravity plugin with bundled Overlord skill (replaces deprecated Gemini CLI)',
+      'Launch with ovld launch antigravity --ticket-id <ticket_id>',
+      'Model selection managed inside Antigravity — not in Overlord',
+      'Permission rules for ovld protocol & curl'
     ]
   },
   opencode: {
@@ -112,7 +115,7 @@ type AgentInstallState = {
 export function ConnectorSetupStep({ onContinue, projectDirectory }: Props) {
   const { isElectron } = useElectron();
   const [selectedAgents, setSelectedAgents] = useState<Set<LaunchAgentType>>(
-    new Set(['claude', 'codex', 'cursor', 'gemini', 'opencode', 'pi'])
+    new Set(['claude', 'codex', 'cursor', 'antigravity', 'opencode', 'pi'])
   );
   const [agentStates, setAgentStates] = useState<Record<LaunchAgentType, AgentInstallState>>({
     claude: {
@@ -133,7 +136,7 @@ export function ConnectorSetupStep({ onContinue, projectDirectory }: Props) {
       permissionsConfigured: false,
       installStatus: 'idle'
     },
-    gemini: {
+    antigravity: {
       bundleStatus: 'idle',
       slashStatus: 'idle',
       permissionsConfigured: false,

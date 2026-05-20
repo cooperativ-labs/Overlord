@@ -21,8 +21,8 @@ Overlord exposes its protocol through six parallel surfaces:
 |---------|----------|------------|
 | **API routes** | `apps/web/app/api/protocol/*/route.ts` | REST endpoints, kebab-case paths |
 | **CLI commands** | `packages/overlord-cli/bin/_cli/protocol.mjs` | `ovld protocol <subcommand>`, `--kebab-case` flags |
-| **MCP tools** | `supabase/functions/mcp/tools.ts` (hosted) + `plugins/overlord/scripts/overlord-mcp.mjs` (local MCP shim used by the Codex plugin path) | Hosted: `snake_case` tool names, **camelCase** parameters matching API JSON. Local shim: `snake_case` parameters mapping to CLI flags. |
-| **Agent plugins** | `plugins/{claude,cursor,overlord}/skills/overlord-ticket/` | Skill instructions referencing CLI/MCP |
+| **MCP tools** | `supabase/functions/mcp/tools.ts` (hosted) + `plugins/overlord/scripts/overlord-mcp.mjs` (Codex local shim) + `plugins/antigravity/scripts/overlord-mcp.mjs` (Antigravity local shim, staged to `~/.ovld/antigravity/scripts/`) | Hosted: `snake_case` tool names, **camelCase** parameters matching API JSON. Local shims: `snake_case` parameters mapping to CLI flags. |
+| **Agent plugins** | `plugins/{claude,cursor,overlord,antigravity}/skills/overlord-ticket/` | Skill instructions referencing CLI/MCP |
 | **Public docs for agents** | `docs/public/` | AI-agent-facing explainers that help agents explain Overlord to end users |
 | **CLI README** | `packages/overlord-cli/README.md` | User-facing CLI documentation and examples |
 
@@ -51,9 +51,12 @@ Read `packages/overlord-cli/bin/_cli/protocol.mjs`. Extract:
 If the task changes human launch commands, also read `packages/overlord-cli/bin/_cli/launcher.mjs` and `lib/overlord/launch-commands.ts` so you can compare `ovld launch` / `ovld restart` help, aliases, and emitted copy commands against Desktop and product copy.
 
 #### 3. MCP Tools
-Read both:
+Read all applicable MCP sources:
 - `supabase/functions/mcp/tools.ts` — hosted MCP tool definitions (`TOOLS` array) and `supabase/functions/mcp/index.ts` dispatch
-- `plugins/overlord/scripts/overlord-mcp.mjs` — local MCP shim (`tools` array + `searchTicketsTool`) and CLI flag mapping
+- `plugins/overlord/scripts/overlord-mcp.mjs` — Codex local MCP shim (`tools` array + `searchTicketsTool`) and CLI flag mapping
+- `plugins/antigravity/scripts/overlord-mcp.mjs` — Antigravity local MCP shim (same `ovld protocol` delegation pattern; installed copy lives at `~/.ovld/antigravity/scripts/overlord-mcp.mjs`)
+
+When auditing Antigravity-only drift, also read the installed-path patch logic in `packages/overlord-cli/bin/_cli/setup.mjs` (`patchAntigravityInstalledPaths`) so MCP `args` and hook `command` paths match the staged runtime scripts.
 
 Extract for each tool:
 - `name`, `inputSchema.properties`, `inputSchema.required`
@@ -63,7 +66,10 @@ Extract for each tool:
 Read the `overlord-ticket` skill in each plugin directory:
 - `plugins/claude/skills/overlord-ticket/SKILL.md`
 - `plugins/cursor/skills/overlord-ticket/SKILL.md`
-- `plugins/overlord/skills/overlord-ticket/SKILL.md`
+- `plugins/overlord/skills/overlord-ticket/SKILL.md` (Codex plugin)
+- `plugins/antigravity/skills/overlord-ticket/SKILL.md`
+
+For Antigravity, also spot-check bundled slash commands under `plugins/antigravity/commands/` (Markdown, `$ARGUMENTS`) — they are not installed via `slash-commands.ts`.
 
 Extract which operations and parameters are documented for agents to use.
 
@@ -186,4 +192,4 @@ If no drift is found, confirm alignment and note the operation count.
 
 </drift-review>
 
-<!-- version: 1.0.6 -->
+<!-- version: 1.0.7 -->

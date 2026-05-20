@@ -39,7 +39,7 @@ const AGENT_INSTALL_INFO: Record<LaunchAgentType, AgentInstallInfo> = {
     installLabel: 'Install Codex CLI',
     overlordSetupCommand: 'ovld setup codex',
     overlordSetupDescription:
-      'Installs the local Overlord Codex chat plugin, migrates any legacy Codex bundle config, and manages the Codex permission rules used for Overlord protocol commands.'
+      'Installs the local Overlord Codex chat plugin with PermissionRequest and UserPromptSubmit hooks, migrates any legacy Codex bundle config, and manages Codex permission rules for Overlord protocol commands.'
   },
   cursor: {
     installCommand: 'https://cursor.sh',
@@ -48,12 +48,12 @@ const AGENT_INSTALL_INFO: Record<LaunchAgentType, AgentInstallInfo> = {
     overlordSetupDescription:
       'Installs the Overlord Cursor plugin, merges a beforeSubmitPrompt hook into ~/.cursor/hooks.json for activity-feed follow-ups, and permission allow rules for ticket lifecycle commands.'
   },
-  gemini: {
-    installCommand: 'npm install -g @google/gemini-cli',
-    installLabel: 'Install Gemini CLI',
-    overlordSetupCommand: 'ovld setup gemini',
+  antigravity: {
+    installCommand: 'npm install -g @antigravity/cli',
+    installLabel: 'Install Antigravity CLI',
+    overlordSetupCommand: 'ovld setup antigravity',
     overlordSetupDescription:
-      'Installs Gemini slash commands and policy rules so it can run Overlord ticket lifecycle commands without repeated prompts.'
+      'Installs the Overlord Antigravity plugin and permission rules so it can run Overlord ticket lifecycle commands without repeated prompts. Replaces the deprecated Gemini CLI connector — model selection is managed inside Antigravity.'
   },
   opencode: {
     installCommand: 'npm install -g opencode-ai',

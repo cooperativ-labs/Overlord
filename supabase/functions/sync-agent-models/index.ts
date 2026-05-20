@@ -2,7 +2,7 @@
 /**
  * sync-agent-models — Supabase Edge Function
  *
- * Queries provider APIs (Anthropic, OpenAI, Google Gemini, Cursor) for available
+ * Queries provider APIs (Anthropic, OpenAI, Cursor) for available
  * models and upserts them into the `agent_models` table. Intended to be called
  * on a cron schedule (every 12 hours).
  */
@@ -14,7 +14,6 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY') ?? '';
 const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY') ?? '';
-const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY') ?? '';
 const CURSOR_AGENTS_API_KEY = Deno.env.get('CURSOR_AGENTS_API_KEY') ?? '';
 const CURSOR_API_KEY = Deno.env.get('CURSOR_API_KEY') ?? '';
 
@@ -225,84 +224,23 @@ function getOpenAISortOrder(modelId: string): number {
 }
 
 // ---------------------------------------------------------------------------
-// Provider: Google Gemini
+// Connector: Antigravity (managed model selection)
 // ---------------------------------------------------------------------------
 
-async function fetchGeminiModels(): Promise<AgentModelRow[]> {
-  if (!GEMINI_API_KEY) return [];
-
-  const models: AgentModelRow[] = [];
-  let pageToken: string | undefined;
-
-  do {
-    const url = new URL('https://generativelanguage.googleapis.com/v1beta/models');
-    url.searchParams.set('key', GEMINI_API_KEY);
-    url.searchParams.set('pageSize', '100');
-    if (pageToken) url.searchParams.set('pageToken', pageToken);
-
-    const res = await fetch(url.toString());
-
-    if (!res.ok) {
-      console.error(`Gemini API error: ${res.status} ${await res.text()}`);
-      break;
+/** Antigravity CLI chooses models internally; Overlord does not pass --model at launch. */
+function buildAntigravityCatalogModels(): AgentModelRow[] {
+  return [
+    {
+      agent_type: 'antigravity',
+      model_id: 'auto',
+      display_name: 'Antigravity default',
+      thinking_options: [],
+      capabilities: buildCapabilities(['antigravity']),
+      is_recommended: true,
+      sort_order: 0,
+      updated_at: new Date().toISOString()
     }
-
-    const body = (await res.json()) as {
-      models: Array<{
-        name: string;
-        displayName: string;
-        description?: string;
-        supportedGenerationMethods?: string[];
-      }>;
-      nextPageToken?: string;
-    };
-
-    for (const m of body.models ?? []) {
-      // Extract model ID from "models/gemini-2.5-pro" format
-      const modelId = m.name.replace('models/', '');
-      const id = modelId.toLowerCase();
-
-      // Filter to Gemini 2.5+ coding-relevant models
-      if (!id.startsWith('gemini-2.5') && !id.startsWith('gemini-3')) continue;
-      // Skip non-text models
-      if (!m.supportedGenerationMethods?.includes('generateContent')) continue;
-
-      const thinkingOptions = getGeminiThinkingOptions(id);
-
-      models.push({
-        agent_type: 'gemini',
-        model_id: modelId,
-        display_name: m.displayName || formatModelName(modelId),
-        thinking_options: thinkingOptions,
-        capabilities: buildCapabilities(['gemini']),
-        is_recommended: id.includes('pro') || id.includes('flash'),
-        sort_order: getGeminiSortOrder(id),
-        updated_at: new Date().toISOString()
-      });
-    }
-
-    pageToken = body.nextPageToken;
-  } while (pageToken);
-
-  return models;
-}
-
-function getGeminiThinkingOptions(modelId: string): string[] {
-  if (modelId.includes('2.5')) {
-    return ['low', 'medium', 'high'];
-  }
-  if (modelId.includes('3')) {
-    return ['minimal', 'low', 'medium', 'high'];
-  }
-  return [];
-}
-
-function getGeminiSortOrder(modelId: string): number {
-  if (modelId.includes('3') && modelId.includes('pro')) return 10;
-  if (modelId.includes('3')) return 20;
-  if (modelId.includes('2.5') && modelId.includes('pro')) return 30;
-  if (modelId.includes('2.5') && modelId.includes('flash')) return 40;
-  return 100;
+  ];
 }
 
 // ---------------------------------------------------------------------------
@@ -395,12 +333,12 @@ Deno.serve(async (req: Request) => {
   const results: Record<string, { count: number; error?: string }> = {};
 
   // Fetch from all providers in parallel
-  const [claudeModels, openaiModels, geminiModels, cursorModels] = await Promise.allSettled([
+  const [claudeModels, openaiModels, cursorModels] = await Promise.allSettled([
     fetchClaudeModels(),
     fetchOpenAIModels(),
-    fetchGeminiModels(),
     fetchCursorModels()
   ]);
+  const antigravityModels = buildAntigravityCatalogModels();
 
   const allModels: AgentModelRow[] = [];
 
@@ -418,18 +356,25 @@ Deno.serve(async (req: Request) => {
     results.codex = { count: 0, error: String(openaiModels.reason) };
   }
 
-  if (geminiModels.status === 'fulfilled') {
-    allModels.push(...geminiModels.value);
-    results.gemini = { count: geminiModels.value.length };
-  } else {
-    results.gemini = { count: 0, error: String(geminiModels.reason) };
-  }
+  allModels.push(...antigravityModels);
+  results.antigravity = { count: antigravityModels.length };
 
   if (cursorModels.status === 'fulfilled') {
     allModels.push(...cursorModels.value);
     results.cursor = { count: cursorModels.value.length };
   } else {
     results.cursor = { count: 0, error: String(cursorModels.reason) };
+  }
+
+  const { error: legacyGeminiDeleteError } = await supabase
+    .from('agent_models')
+    .delete()
+    .eq('agent_type', 'gemini');
+  if (legacyGeminiDeleteError) {
+    console.error('Failed to remove legacy gemini agent_models rows:', legacyGeminiDeleteError);
+    results.gemini = { count: 0, error: legacyGeminiDeleteError.message };
+  } else {
+    results.gemini = { count: 0 };
   }
 
   // Upsert all models

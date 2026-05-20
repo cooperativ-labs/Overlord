@@ -167,8 +167,7 @@ export async function runSpawnProtocol(supabase: SpawnClient, params: SpawnParam
       agentIdentifier,
       metadata
     },
-    createdBy,
-    { promoteQueuedFutureToDraft: objectives.length <= 1 }
+    createdBy
   );
 
   if (objectiveExecution.didExecute && objectiveExecution.executedObjectiveId) {

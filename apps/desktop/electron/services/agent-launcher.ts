@@ -16,7 +16,7 @@ const agentIdentifierMap: Record<LaunchAgentType, string> = {
   claude: 'claude-code',
   codex: 'codex',
   cursor: 'cursor',
-  gemini: 'gemini',
+  antigravity: 'antigravity',
   opencode: 'opencode',
   pi: 'pi'
 };
@@ -51,7 +51,7 @@ type ContextCommandsResponse = {
   claudeCode: string;
   codex: string;
   cursor: string;
-  gemini: string;
+  antigravity: string;
   opencode: string;
   pi: string;
 };
@@ -299,9 +299,7 @@ function buildModelThinkingFlags(
     case 'cursor':
       if (model) parts.push(`--model ${shellQuote(model)}`);
       break;
-    case 'gemini':
-      if (model) parts.push(`--model ${shellQuote(model)}`);
-      if (thinking) parts.push(`--thinking-level ${shellQuote(thinking)}`);
+    case 'antigravity':
       break;
     case 'opencode':
       if (model) parts.push(`--model ${shellQuote(model)}`);
@@ -327,7 +325,10 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
   const launchSessionId = crypto.randomUUID();
   // Check if the Overlord local bundle is installed for this agent
   const bundleAgent =
-    input.agent === 'claude' || input.agent === 'cursor' || input.agent === 'opencode'
+    input.agent === 'claude' ||
+    input.agent === 'cursor' ||
+    input.agent === 'antigravity' ||
+    input.agent === 'opencode'
       ? (input.agent as AgentBundleAgent)
       : null;
   const bundleInstalled =
@@ -483,14 +484,8 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
     command = buildInteractiveCodexCommand({ fallbackPromptRef: contextRef });
   } else if (input.agent === 'cursor') {
     command = `agent${modelThinkingFlags}${extraFlags ? ` ${extraFlags}` : ''} ${contextRef}`;
-  } else if (input.agent === 'gemini') {
-    // Pass context as an @file reference instead of inlining via $(cat ...).
-    // Inlining causes Gemini's @-reference parser to scan the full markdown
-    // for @ symbols (e.g. "@@ -10,6 +10,14 @@" in JSON hunk examples),
-    // which triggers lstat on cwd+<entire-content> → ENAMETOOLONG crash.
-    // Using @contextFile keeps the path short and --include-directories
-    // allows the temp file to be read without a user approval prompt.
-    command = `gemini --include-directories ${shellQuote(os.tmpdir())}${modelThinkingFlags}${extraFlags ? ` ${extraFlags}` : ''} @${contextFile}`;
+  } else if (input.agent === 'antigravity') {
+    command = `agy --prompt-interactive @${contextFile} --add-dir ${shellQuote(os.tmpdir())}${extraFlags ? ` ${extraFlags}` : ''}`;
   } else if (input.agent === 'opencode') {
     command = `opencode${modelThinkingFlags}${extraFlags ? ` ${extraFlags}` : ''} --prompt ${contextRef}`;
   } else if (input.agent === 'pi') {
@@ -706,9 +701,9 @@ async function fetchContextCommandFallback(
         ? payload.cursor
         : null;
     }
-    if (agent === 'gemini') {
-      return typeof payload.gemini === 'string' && payload.gemini.trim().length > 0
-        ? payload.gemini
+    if (agent === 'antigravity') {
+      return typeof payload.antigravity === 'string' && payload.antigravity.trim().length > 0
+        ? payload.antigravity
         : null;
     }
     if (agent === 'opencode') {

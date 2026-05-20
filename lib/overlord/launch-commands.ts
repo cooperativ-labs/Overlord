@@ -56,7 +56,7 @@ export type LaunchCommands = {
   claudeCode: string;
   codex: string;
   cursor: string;
-  gemini: string;
+  antigravity: string;
   opencode: string;
   pi: string;
   contextUrl: string;
@@ -66,7 +66,7 @@ export type ResumeCommands = {
   claudeCode: string;
   codex: string;
   cursor: string;
-  gemini: string;
+  antigravity: string;
   opencode: string;
   pi: string;
 };
@@ -129,8 +129,10 @@ export function buildAgentLaunchCommand(
     parts.push('--launch-mode', 'ask');
   }
 
-  pushOptionalFlag(parts, '--model', options.model ?? null);
-  pushOptionalFlag(parts, '--thinking', options.thinking ?? null);
+  if (agent !== 'antigravity') {
+    pushOptionalFlag(parts, '--model', options.model ?? null);
+    pushOptionalFlag(parts, '--thinking', options.thinking ?? null);
+  }
 
   for (const flag of options.flags ?? []) {
     const trimmed = flag.trim();
@@ -201,10 +203,10 @@ export function buildLaunchCommands({
       ticketId,
       normalizeAgentLaunchOptions('cursor', sharedInput)
     ),
-    gemini: buildAgentLaunchCommand(
-      'gemini',
+    antigravity: buildAgentLaunchCommand(
+      'antigravity',
       ticketId,
-      normalizeAgentLaunchOptions('gemini', sharedInput)
+      normalizeAgentLaunchOptions('antigravity', sharedInput)
     ),
     opencode: buildAgentLaunchCommand(
       'opencode',
@@ -237,7 +239,7 @@ export function buildResumeCommands({
     claudeCode: `ovld restart claude --ticket-id ${ticketId}${organizationFlag}`,
     codex: `ovld restart codex --ticket-id ${ticketId}${organizationFlag}`,
     cursor: `ovld restart cursor --ticket-id ${ticketId}${organizationFlag}`,
-    gemini: `ovld restart gemini --ticket-id ${ticketId}${organizationFlag}`,
+    antigravity: `ovld restart antigravity --ticket-id ${ticketId}${organizationFlag}`,
     opencode: `ovld restart opencode --ticket-id ${ticketId}${organizationFlag}`,
     pi: `ovld restart pi --ticket-id ${ticketId}${organizationFlag}`
   };
@@ -268,7 +270,10 @@ export function buildRawLaunchCommand(
 
 export function selectRestartSessionCommand(
   agentIdentifier: string | null | undefined,
-  commands: Pick<LaunchCommands, 'claudeCode' | 'codex' | 'cursor' | 'gemini' | 'opencode' | 'pi'>,
+  commands: Pick<
+    LaunchCommands,
+    'claudeCode' | 'codex' | 'cursor' | 'antigravity' | 'opencode' | 'pi'
+  >,
   externalSessionId?: string | null
 ): string {
   const normalized = agentIdentifier?.trim().toLowerCase() ?? '';
@@ -281,8 +286,8 @@ export function selectRestartSessionCommand(
   if (normalized.includes('cursor')) {
     return commands.cursor;
   }
-  if (normalized.includes('gemini')) {
-    return commands.gemini;
+  if (normalized.includes('antigravity') || normalized === 'agy') {
+    return commands.antigravity;
   }
   if (normalized.includes('opencode')) {
     return commands.opencode;
@@ -327,8 +332,8 @@ export function buildNativeResumeCommand(
   if (normalized.includes('cursor')) {
     return `cursor --resume ${sessionId}`;
   }
-  if (normalized.includes('gemini')) {
-    return `gemini --resume ${sessionId}`;
+  if (normalized.includes('antigravity') || normalized === 'agy') {
+    return `agy --conversation ${sessionId}`;
   }
   if (normalized.includes('opencode')) {
     return `opencode --continue --session ${sessionId}`;

@@ -132,23 +132,23 @@ const electronAPI = {
   },
   agentBundle: {
     getAllStatuses: () => ipcRenderer.invoke('agent-bundle:get-all-statuses'),
-    getStatus: (agent: 'claude' | 'cursor' | 'opencode') =>
+    getStatus: (agent: 'claude' | 'cursor' | 'antigravity' | 'opencode') =>
       ipcRenderer.invoke('agent-bundle:get-status', agent),
-    install: (agent: 'claude' | 'cursor' | 'opencode') =>
+    install: (agent: 'claude' | 'cursor' | 'antigravity' | 'opencode') =>
       ipcRenderer.invoke('agent-bundle:install', agent),
     installAll: () => ipcRenderer.invoke('agent-bundle:install-all'),
-    repair: (agent: 'claude' | 'cursor' | 'opencode') =>
+    repair: (agent: 'claude' | 'cursor' | 'antigravity' | 'opencode') =>
       ipcRenderer.invoke('agent-bundle:repair', agent),
-    uninstall: (agent: 'claude' | 'cursor' | 'opencode') =>
+    uninstall: (agent: 'claude' | 'cursor' | 'antigravity' | 'opencode') =>
       ipcRenderer.invoke('agent-bundle:uninstall', agent)
   },
   agentSlash: {
     getAllStatuses: () => ipcRenderer.invoke('agent-slash:get-all-statuses'),
-    getStatus: (agent: 'claude' | 'cursor' | 'gemini' | 'opencode') =>
+    getStatus: (agent: 'claude' | 'cursor' | 'opencode') =>
       ipcRenderer.invoke('agent-slash:get-status', agent),
-    install: (agent: 'claude' | 'cursor' | 'gemini' | 'opencode') =>
+    install: (agent: 'claude' | 'cursor' | 'opencode') =>
       ipcRenderer.invoke('agent-slash:install', agent),
-    uninstall: (agent: 'claude' | 'cursor' | 'gemini' | 'opencode') =>
+    uninstall: (agent: 'claude' | 'cursor' | 'opencode') =>
       ipcRenderer.invoke('agent-slash:uninstall', agent)
   },
   agentPermissions: {

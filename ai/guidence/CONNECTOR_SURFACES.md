@@ -11,7 +11,7 @@ Use it before shipping any connector-related change. If one surface changes, che
 | Claude Code | Overlord bundle (skill + permission hook + `UserPromptSubmit` hook) via `ovld setup claude` | `/api/mcp` with shared OAuth credentials or explicit `OVERLORD_ACCESS_TOKEN` + `OVERLORD_ORGANIZATION_ID` override                          |
 | Codex       | Home-local chat plugin via Desktop app Settings → CLI                                       | `/api/mcp` with shared OAuth credentials or explicit `OVERLORD_ACCESS_TOKEN` + `OVERLORD_ORGANIZATION_ID` override (`~/.codex/config.toml`) |
 | Cursor      | Local Cursor plugin via `ovld setup cursor`                                                 | —                                                                                                                                           |
-| Gemini CLI  | TOML slash commands via `ovld setup gemini`                                                 | —                                                                                                                                           |
+| Antigravity CLI | Overlord plugin via `agy plugin install` / `ovld setup antigravity`                      | —                                                                                                                                           |
 | OpenCode    | Overlord bundle (AGENTS.md + config) via `ovld setup opencode`                              | —                                                                                                                                           |
 | Pi          | Direct CLI launch (no durable extension yet — full workflow inlined per launch)             | —                                                                                                                                           |
 
@@ -19,8 +19,8 @@ Use it before shipping any connector-related change. If one surface changes, che
 
 Bundle-backed agents get a slim ticket prompt; unbundled agents always receive the full workflow instructions on every launch.
 
-- **Bundle supported:** `claude`, `cursor`, `opencode`
-- **Legacy mode only:** `codex`, `gemini`, `pi`
+- **Bundle supported:** `claude`, `cursor`, `antigravity`, `opencode`
+- **Legacy mode only:** `codex`, `pi`
 
 Desktop local launches set `OVERLORD_SNAPSHOT_JSON` **only** when the user has enabled in-folder JJ version control (`project_user.local_version_control = jj`); the app then points snapshot metadata at the real working directory (after `GET /api/protocol/context/...`). There is no automatic managed/shadow jj workspace for projects that leave version control off. The context API does not run `jj` on the server. The CLI `attach` command creates a per-objective local git checkpoint at `refs/overlord/checkpoints/<objectiveId>` for git workspaces before work begins; `deliver` does not create a checkpoint.
 
@@ -144,8 +144,8 @@ Checklist:
 
 - Plugin install writes `~/.agents/plugins/marketplace.json`
 - Plugin install writes `~/.codex/plugins/overlord`
-- Plugin install rewrites `.codex-plugin/hooks.json` so the `UserPromptSubmit` command points at the absolute installed script path under `~/.codex/plugins/overlord/scripts/`, avoiding reliance on a Codex-provided plugin-root environment variable
-- Plugin bundle includes `skills/`, `.codex-plugin/hooks.json`, `scripts/user-prompt-submit-hook.sh`, and install-surface assets in `assets/`
+- Plugin install rewrites `.codex-plugin/hooks.json` so `PermissionRequest` and `UserPromptSubmit` commands point at absolute installed script paths under `~/.codex/plugins/overlord/scripts/`, avoiding reliance on a Codex-provided plugin-root environment variable
+- Plugin bundle includes `skills/`, `.codex-plugin/hooks.json`, `scripts/permission-hook.sh`, `scripts/user-prompt-submit-hook.sh`, and install-surface assets in `assets/`
 - Plugin install manages `~/.codex/rules/default.rules`
 - Plugin install removes any legacy Overlord-managed Codex `AGENTS.md` section
 - Plugin install removes any legacy Codex bundle manifest entry from `~/.ovld/bundle-manifest.json`
@@ -180,6 +180,7 @@ Checklist:
 - Local Codex does not request `bundle` instruction mode (`bundleAgent = null` for Codex)
 - Prompt text explicitly includes the Codex ticket workflow instructions
 - Local Codex plugin installs a `UserPromptSubmit` hook that records follow-up activity through `/api/protocol/hook-event`
+- Local Codex plugin installs a `PermissionRequest` hook that notifies Overlord through `/api/protocol/permission-request` (same blocking question event as Claude)
 - Prompt text does not tell Codex to look for `overlord-local` or a local Codex bundle
 - Prompt text tells Codex to run `ovld auth repair` itself on protocol auth failures before asking the user to log in again or proceed without Overlord updates
 - Prompt text tells Codex to try `ovld auth repair` before `ovld auth login --organization-id <id>` when shared credentials look stale; `--organization-id` is required in non-TTY environments with multiple organizations
@@ -303,59 +304,151 @@ Checklist:
 
 ---
 
-## Gemini CLI connector surfaces
+## Antigravity CLI connector surfaces
 
-### 1. Slash commands
+Antigravity CLI (`agy`) replaces the deprecated Gemini CLI connector. Overlord installs a managed plugin bundle (skill, Markdown slash commands, `UserPromptSubmit` hook, and local MCP shim) rather than legacy `~/.gemini/commands/*.toml` files.
 
-- Slash command installer:
-  [slash-commands.ts](/Users/jake/Development/Cooperativ/Overlord/electron/services/agent-bundle/slash-commands.ts)
+### 1. Plugin installer
+
+- Bundle installer:
+  [installer.ts](/Users/jake/Development/Cooperativ/Overlord/apps/desktop/electron/services/agent-bundle/installer.ts)
+- Plugin source (canonical):
+  [plugins/antigravity](/Users/jake/Development/Cooperativ/Overlord/plugins/antigravity)
+- Packaged copy (CLI/npm):
+  [packages/overlord-cli/plugins/antigravity](/Users/jake/Development/Cooperativ/Overlord/packages/overlord-cli/plugins/antigravity)
 - CLI install:
-  [setup.mjs](/Users/jake/Development/Cooperativ/Overlord/packages/overlord-cli/bin/_cli/setup.mjs) — `ovld setup gemini`
+  [setup.mjs](/Users/jake/Development/Cooperativ/Overlord/packages/overlord-cli/bin/_cli/setup.mjs) — `ovld setup antigravity`
+- Legacy Gemini cleanup:
+  [legacy-gemini-connector.cjs](/Users/jake/Development/Cooperativ/Overlord/lib/overlord/legacy-gemini-connector.cjs)
 
-Managed files (**TOML format**, not Markdown):
+Managed files:
 
-- `~/.gemini/commands/connect.toml` — requires `--ticket-id`
-- `~/.gemini/commands/load.toml` — requires `--ticket-id`
-- `~/.gemini/commands/attach.toml` — requires `--ticket-id`
-- `~/.gemini/commands/add-objectives.toml` — requires `--ticket-id` and ordered objectives JSON/file
-- `~/.gemini/commands/create.toml`
-- `~/.gemini/commands/prompt.toml`
-- `~/.gemini/commands/record-work.toml` — invokes `ovld protocol record-work` for completed-from-chat work
+- `~/.gemini/antigravity-cli/plugins/` — flattened plugin tree from `agy plugin install` (skill, commands, `plugin.json`, `hooks.json`, `mcp_config.json`)
+- `~/.ovld/antigravity/scripts/overlord-mcp.mjs` — local MCP shim (staged from plugin source; absolute path injected into installed `plugin.json` / `mcp_config.json` because `agy plugin install` does not copy `scripts/`)
+- `~/.ovld/antigravity/scripts/user-prompt-submit-hook.sh` — `UserPromptSubmit` hook script (installed hook `command` rewritten to this absolute path)
+- `~/.gemini/policies/overlord-protocol.toml` — TOML policy allowing `ovld protocol` via `run_shell_command` (`commandPrefix = "ovld protocol"`, `decision = "allow"`)
+- Runtime diagnostics: `~/.ovld/logs/antigravity-user-prompt-submit-hook.log` — append-only hook trace
+- Manifest entry written to `~/.ovld/bundle-manifest.json` under `antigravity` (replaces deprecated `gemini` key)
 
-Note: Gemini uses `{{args}}` for argument interpolation (vs `$ARGUMENTS` for Claude/Cursor/OpenCode).
+Install flow checklist:
 
-### 2. Local launch path
+- `ovld setup antigravity` runs `agy plugin install <source>` (or `agy plugin import --force` when already present)
+- Runtime scripts are staged under `~/.ovld/antigravity/scripts/` before install
+- Post-install patch replaces `__OVERLORD_MCP_SCRIPT_PATH__` in MCP server args and rewrites hook `command` paths to absolute runtime script locations (not `${PLUGIN_ROOT}` — `agy` may not substitute it reliably)
+- Policy file is written idempotently to `~/.gemini/policies/overlord-protocol.toml`
+- Legacy migration removes only Overlord-managed Gemini artifacts: `~/.gemini/commands/*.toml` when content matches the known managed template, or paths listed on the deprecated `gemini` manifest entry. User-created Gemini commands are left intact.
+
+### 2. Slash commands
+
+Slash commands ship inside the Antigravity plugin (`commands/` directory), not via `slash-commands.ts`. They use Markdown with `$ARGUMENTS` (same convention as Claude/Cursor/OpenCode — **not** legacy Gemini TOML/`{{args}}`).
+
+Managed command files (namespaced as `/overlord:<name>` in `agy`):
+
+- `commands/connect.md` — requires ticket id
+- `commands/load.md` — requires ticket id
+- `commands/attach.md` — requires ticket id
+- `commands/discuss-objective.md` — requires ticket id
+- `commands/add-objectives.md` — requires ticket id and ordered objectives JSON/file
+- `commands/create.md`
+- `commands/prompt.md`
+- `commands/record-work.md` — invokes `ovld protocol record-work`
+
+### 3. MCP shim
+
+- Local MCP shim:
+  [overlord-mcp.mjs](/Users/jake/Development/Cooperativ/Overlord/plugins/antigravity/scripts/overlord-mcp.mjs)
+- Registered in installed `plugin.json` → `mcpServers.overlord` (args patched to `~/.ovld/antigravity/scripts/overlord-mcp.mjs`)
+
+Checklist:
+
+- Shim shells out to `ovld protocol` with snake_case MCP parameters mapped to kebab-case CLI flags (same pattern as the Codex plugin shim, separate file)
+- Exposes the full protocol surface agents need (`attach`, `update`, `deliver`, `ask`, ticket search, attachments, etc.)
+- Hosted `/api/mcp` is **not** the Antigravity local path — Antigravity uses the bundled local shim only
+
+### 4. Hooks
+
+- Hook manifest:
+  [hooks.json](/Users/jake/Development/Cooperativ/Overlord/plugins/antigravity/hooks/hooks.json)
+- Hook script:
+  [user-prompt-submit-hook.sh](/Users/jake/Development/Cooperativ/Overlord/plugins/antigravity/scripts/user-prompt-submit-hook.sh)
+
+Checklist:
+
+- `UserPromptSubmit` calls `POST /api/protocol/hook-event` when `OVERLORD_URL`, `OVERLORD_ACCESS_TOKEN`, and `TICKET_ID` are set (same contract as Claude/Codex/Cursor follow-up capture)
+- Hook skips turn index 0 (initial injected ticket prompt) via file-based session state under `~/.ovld/antigravity-user-prompt-hook/`
+- **No permission hook** — Antigravity has no `PermissionRequest` equivalent wired to Overlord
+- Skill text tells the agent to request permission escalation or network access before retrying if `OVERLORD_URL` is unreachable
+- Skill text tells the agent to run `ovld auth repair` itself on protocol/MCP auth failures before asking the user to log in again
+
+### 5. Plugin skill
+
+- Skill doc:
+  [plugins/antigravity/skills/overlord-ticket/SKILL.md](/Users/jake/Development/Cooperativ/Overlord/plugins/antigravity/skills/overlord-ticket/SKILL.md)
+
+Checklist:
+
+- Skill is loaded automatically by `agy` when the plugin is installed
+- Documents `ovld protocol` workflow for both Overlord-launched tickets and chat-invoked work
+- Keep in sync with Claude/Cursor/Codex `overlord-ticket` skills when protocol behavior changes
+
+### 6. Local launch path
 
 - Launch service:
   [agent-launcher.ts](/Users/jake/Development/Cooperativ/Overlord/apps/desktop/electron/services/agent-launcher.ts)
 - Human CLI launcher:
   [launcher.mjs](/Users/jake/Development/Cooperativ/Overlord/packages/overlord-cli/bin/_cli/launcher.mjs)
+- Shared copy-command builder:
+  [launch-commands.ts](/Users/jake/Development/Cooperativ/Overlord/lib/overlord/launch-commands.ts)
 
 Command pattern:
 
 ```
-gemini [--model <model>] [--thinking-level <level>] "$(cat <context-file>)"
+agy --prompt-interactive @<context-file> --add-dir <tmpdir>
 
-ovld launch gemini --ticket-id <ticket_id> [--working-directory <path>] [--model <model>] [--thinking <level>] [--flag <value> ...]
+ovld launch antigravity --ticket-id <ticket_id> [--working-directory <path>] [--flag <value> ...]
+agy --continue | agy --conversation <id>   # native resume (also: ovld restart antigravity)
 ```
 
 Checklist:
 
-- No bundle support — full workflow instructions always included in the prompt (`instructionMode=legacy`)
-- No permission hook
-- Thinking/effort flag: `--thinking-level` (unique to Gemini)
+- Bundle supported when Antigravity plugin is installed (`instructionMode=bundle`); legacy full prompt when not installed
+- Context route accepts `agent=antigravity`
+- No model/thinking launch flags — Antigravity manages models internally
+- Desktop local launches intentionally stay on the direct Electron path; `ovld launch antigravity` is the copy/paste and remote-shell entrypoint
 
-### 3. Onboarding
+### 7. Deliberate asymmetries
+
+- **No permission hook** — protocol access is policy-based (`overlord-protocol.toml`), not a blocking permission-request event
+- **No hosted MCP path** — local `overlord-mcp.mjs` shim only (unlike Codex cloud headless)
+- **No `slash-commands.ts` installer** — commands live in the plugin bundle installed by `agy`
+- **Runtime scripts outside plugin tree** — MCP and hook scripts must live under `~/.ovld/antigravity/scripts/` with post-install absolute path patching
+- **Legacy Gemini paths** — Antigravity still uses `~/.gemini/` for plugin and policy directories (Antigravity CLI convention), but the connector id is `antigravity`, not `gemini`
+- **No thinking/effort flags** on launch commands
+
+### 8. Onboarding
 
 - Agent setup step:
-  [AgentSetupStep.tsx](/Users/jake/Development/Cooperativ/Overlord/components/features/onboarding/steps/AgentSetupStep.tsx)
+  [AgentSetupStep.tsx](/Users/jake/Development/Cooperativ/Overlord/apps/web/components/features/onboarding/steps/AgentSetupStep.tsx)
 - Connector install step:
-  [ConnectorSetupStep.tsx](/Users/jake/Development/Cooperativ/Overlord/components/features/onboarding/steps/ConnectorSetupStep.tsx)
+  [ConnectorSetupStep.tsx](/Users/jake/Development/Cooperativ/Overlord/apps/web/components/features/onboarding/steps/ConnectorSetupStep.tsx)
+- Permission step (policy only):
+  [ConfigureAgentPermissionsStep.tsx](/Users/jake/Development/Cooperativ/Overlord/apps/web/components/features/onboarding/steps/ConfigureAgentPermissionsStep.tsx)
 
 Checklist:
 
-- Onboarding advertises `ovld setup gemini` as the connector setup command
-- Connector features list includes: TOML slash commands and TOML policy rules for ovld protocol & curl
+- Onboarding advertises `npm install -g @antigravity/cli` then `ovld setup antigravity`
+- Connector features list includes: plugin install (skill, slash commands, hook, MCP), protocol policy rules, `ovld launch antigravity`
+- No references to `ovld setup gemini` or Gemini TOML slash commands in user-facing copy
+
+### 9. Demo / product copy
+
+- Demo settings page:
+  [DemoSettings.tsx](/Users/jake/Development/Cooperativ/Overlord/apps/web/app/demo/DemoSettings.tsx)
+
+Checklist:
+
+- Demo copy describes the Antigravity plugin install path, not legacy Gemini commands
+- Demo managed-file list matches real installer outputs (`plugin.json`, `hooks.json`, runtime scripts, policy file)
 
 ---
 
@@ -537,7 +630,8 @@ Source-of-truth files:
 - Shared copy-command builder: [launch-commands.ts](/Users/jake/Development/Cooperativ/Overlord/lib/overlord/launch-commands.ts)
 - MCP tool definitions: [tools.ts](/Users/jake/Development/Cooperativ/Overlord/supabase/functions/mcp/tools.ts)
 - Local Codex MCP shim: [overlord-mcp.mjs](/Users/jake/Development/Cooperativ/Overlord/plugins/overlord/scripts/overlord-mcp.mjs)
-- Plugin skill docs: [plugins/claude/skills/overlord-ticket/SKILL.md](/Users/jake/Development/Cooperativ/Overlord/plugins/claude/skills/overlord-ticket/SKILL.md), [plugins/cursor/skills/overlord-ticket/SKILL.md](/Users/jake/Development/Cooperativ/Overlord/plugins/cursor/skills/overlord-ticket/SKILL.md), [plugins/overlord/skills/overlord-ticket/SKILL.md](/Users/jake/Development/Cooperativ/Overlord/plugins/overlord/skills/overlord-ticket/SKILL.md)
+- Plugin skill docs: [plugins/claude/skills/overlord-ticket/SKILL.md](/Users/jake/Development/Cooperativ/Overlord/plugins/claude/skills/overlord-ticket/SKILL.md), [plugins/cursor/skills/overlord-ticket/SKILL.md](/Users/jake/Development/Cooperativ/Overlord/plugins/cursor/skills/overlord-ticket/SKILL.md), [plugins/overlord/skills/overlord-ticket/SKILL.md](/Users/jake/Development/Cooperativ/Overlord/plugins/overlord/skills/overlord-ticket/SKILL.md), [plugins/antigravity/skills/overlord-ticket/SKILL.md](/Users/jake/Development/Cooperativ/Overlord/plugins/antigravity/skills/overlord-ticket/SKILL.md)
+- Antigravity local MCP shim: [overlord-mcp.mjs](/Users/jake/Development/Cooperativ/Overlord/plugins/antigravity/scripts/overlord-mcp.mjs)
 
 ## Shared surfaces
 
@@ -552,9 +646,9 @@ Source-of-truth files:
 
 Checklist:
 
-- Context route accepts `agent=` query param for all 6 agents: `claude`, `codex`, `cursor`, `gemini`, `opencode`, `pi`
-- `instructionMode=bundle` is sent for `claude`, `cursor`, and `opencode` when their bundle/plugin is installed
-- `instructionMode=legacy` is used for `codex`, `gemini`, `pi`, and for `claude`/`cursor`/`opencode` when bundle/plugin is not installed
+- Context route accepts `agent=` query param for all 6 agents: `claude`, `codex`, `cursor`, `antigravity`, `opencode`, `pi`
+- `instructionMode=bundle` is sent for `claude`, `cursor`, `antigravity`, and `opencode` when their bundle/plugin is installed
+- `instructionMode=legacy` is used for `codex`, `pi`, and for `claude`/`cursor`/`antigravity`/`opencode` when bundle/plugin is not installed
 - Prompt content varies per agent — verify agent-specific workflow sections when changing `ticket-prompt.ts`
 
 ### CLI setup command
@@ -568,9 +662,9 @@ Checklist:
 - `ovld setup codex` installs the local Codex plugin bundle
 - `ovld setup opencode` installs bundle for OpenCode
 - `ovld setup cursor` installs Cursor local plugin and permission allow rules
-- `ovld setup gemini` installs Gemini TOML slash commands and policy rules
-- `ovld setup all` installs all supported agents (claude + codex + opencode; slash-only agents are separate)
-- `ovld doctor` validates installed bundle statuses for `claude`, `codex`, `cursor`, `gemini`, and `opencode` (Pi is launch-only — no managed files to validate yet)
+- `ovld setup antigravity` installs the Antigravity plugin via `agy plugin install` and protocol policy rules
+- `ovld setup all` installs all supported agents (`claude`, `codex`, `cursor`, `antigravity`, `opencode`)
+- `ovld doctor` validates installed bundle statuses for `claude`, `codex`, `cursor`, `antigravity`, and `opencode` (Pi is launch-only — no managed files to validate yet)
 
 ### Settings UI
 
@@ -618,11 +712,14 @@ When changing connector integration, verify the relevant agent(s):
 - Cursor plugin installed at `~/.cursor/plugins/local/overlord/`
 - Launching Cursor from Overlord uses bundled/slim workflow prompt when plugin is installed
 
-**Gemini CLI**
+**Antigravity CLI**
 
-- Slash commands written to `~/.gemini/commands/` (TOML format, not Markdown)
-- `{{args}}` interpolation is used in TOML content (not `$ARGUMENTS`)
-- Launching Gemini from Overlord always includes full legacy workflow instructions in the prompt
+- Plugin installed to `~/.gemini/antigravity-cli/plugins/` via `agy plugin install`
+- Runtime MCP/hook scripts staged under `~/.ovld/antigravity/scripts/` with absolute paths patched post-install
+- MCP shim and `UserPromptSubmit` hook fire against `/api/protocol/*` when launcher env vars are set
+- Launching Antigravity from Overlord uses slim prompt when plugin is installed (`instructionMode=bundle`)
+- Legacy `~/.gemini/commands/*.toml` removed on setup migration; no user-facing `ovld setup gemini`
+- Copyable ticket commands use `ovld launch antigravity --ticket-id <ticket_id>` (no `--model` / `--thinking` flags)
 
 **OpenCode**
 
@@ -781,7 +878,7 @@ File: `ai/guidence/CONNECTOR_SURFACES.md`
 - [ ] Claude Code local launch pattern (§ "Local launch path"): `ovld launch claude --ticket-id <id>` → `ovld launch claude --ticket-id <ticket_id>`
 - [ ] Codex local launch pattern: `ovld launch codex --ticket-id <id>` → `ovld launch codex --ticket-id <ticket_id>`
 - [ ] Cursor local launch pattern: `ovld launch cursor --ticket-id <id>` → `ovld launch cursor --ticket-id <ticket_id>`
-- [ ] Gemini local launch pattern: `ovld launch gemini --ticket-id <id>` → `ovld launch gemini --ticket-id <ticket_id>`
+- [ ] Antigravity local launch pattern: `ovld launch antigravity --ticket-id <id>` → `ovld launch antigravity --ticket-id <ticket_id>`
 - [ ] OpenCode local launch pattern: `ovld launch opencode --ticket-id <id>` → `ovld launch opencode --ticket-id <ticket_id>`
 - [ ] Codex regression check (line ~502): `ovld launch ... --ticket-id <id>` → `--ticket-id <ticket_id>`
 - [ ] Add a note to the Protocol surfaces section clarifying that `ticketId` in all three surfaces (API, CLI, MCP) now accepts `ticket_id` or UUID.

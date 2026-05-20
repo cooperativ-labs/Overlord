@@ -101,39 +101,15 @@ export const MARKETING_OFFERED_AGENT_MODELS: AgentModel[] = [
     updated_at: UPDATED_AT
   },
   {
-    id: 'marketing-gemini-3-pro',
-    agent_type: 'gemini',
-    model_id: 'gemini-3-pro-preview',
-    display_name: 'Gemini 3 Pro Preview',
-    thinking_options: ['minimal', 'low', 'medium', 'high'],
-    capabilities: { compatible_agents: ['gemini'] },
+    id: 'marketing-antigravity-auto',
+    agent_type: 'antigravity',
+    model_id: 'auto',
+    display_name: 'Antigravity default',
+    thinking_options: [],
+    capabilities: { compatible_agents: ['antigravity'] },
     is_offered: true,
     is_recommended: true,
     sort_order: 10,
-    updated_at: UPDATED_AT
-  },
-  {
-    id: 'marketing-gemini-2-5-pro',
-    agent_type: 'gemini',
-    model_id: 'gemini-2.5-pro',
-    display_name: 'Gemini 2.5 Pro',
-    thinking_options: ['low', 'medium', 'high'],
-    capabilities: { compatible_agents: ['gemini'] },
-    is_offered: true,
-    is_recommended: true,
-    sort_order: 30,
-    updated_at: UPDATED_AT
-  },
-  {
-    id: 'marketing-gemini-2-5-flash',
-    agent_type: 'gemini',
-    model_id: 'gemini-2.5-flash',
-    display_name: 'Gemini 2.5 Flash',
-    thinking_options: ['low', 'medium', 'high'],
-    capabilities: { compatible_agents: ['gemini'] },
-    is_offered: true,
-    is_recommended: false,
-    sort_order: 40,
     updated_at: UPDATED_AT
   }
 ];

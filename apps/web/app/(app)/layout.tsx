@@ -23,6 +23,7 @@ import {
   SystemNotificationProvider,
   SystemNotificationRoot
 } from '@/components/features/system-notifications';
+import { AutoAdvanceLauncher } from '@/components/features/terminal/AutoAdvanceLauncher';
 import { ElectronDetector } from '@/components/features/terminal/ElectronDetector';
 import { TerminalProvider } from '@/components/features/terminal/TerminalProvider';
 import { NavHeader } from '@/components/nav-header';
@@ -169,6 +170,7 @@ export default async function RootLayout({
                         {user ? (
                           <div className="flex h-full w-full flex-col overflow-hidden [--sidebar-top-offset:2.75rem]">
                             <OfflineTicketProcessor />
+                            <AutoAdvanceLauncher />
                             <RepoProfileMaintenance projects={projects} />
                             <AnnouncementBar />
                             <VersionTransitionBanner />

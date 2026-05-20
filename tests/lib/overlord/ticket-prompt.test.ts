@@ -158,6 +158,66 @@ describe('Cursor bundled prompt routing', () => {
   });
 });
 
+describe('Antigravity bundled prompt routing', () => {
+  it('uses Antigravity-specific workflow instructions for Antigravity bundle launches', () => {
+    const prompt = buildTicketPromptMarkdown({
+      ticket: {
+        id: 'ticket-ag-1',
+        title: 'Antigravity bundle',
+        objective: 'Verify bundled prompt text',
+        acceptance_criteria: null,
+        available_tools: null,
+        constraints: null,
+        output_format: null,
+        execution_target: 'agent',
+        project_id: 'project-123',
+        status: 'draft',
+        priority: 'medium'
+      },
+      platformUrl: 'http://localhost:3000',
+      context: 'cli',
+      options: {
+        agent: 'antigravity',
+        instructionMode: 'bundle'
+      }
+    });
+
+    expect(prompt).toContain('Overlord Antigravity plugin');
+    expect(prompt).toContain('`overlord-ticket` skill');
+    expect(prompt).toContain('UserPromptSubmit');
+    expect(prompt).not.toContain('### 1 — Attach (always first)');
+    expect(prompt).not.toContain('Overlord Claude plugin');
+  });
+
+  it('requires explicit user_follow_up in legacy Antigravity launches when hooks are absent', () => {
+    const prompt = buildTicketPromptMarkdown({
+      ticket: {
+        id: 'ticket-ag-2',
+        title: 'Antigravity legacy',
+        objective: 'Verify legacy prompt text',
+        acceptance_criteria: null,
+        available_tools: null,
+        constraints: null,
+        output_format: null,
+        execution_target: 'agent',
+        project_id: 'project-123',
+        status: 'draft',
+        priority: 'medium'
+      },
+      platformUrl: 'http://localhost:3000',
+      context: 'cli',
+      options: {
+        agent: 'antigravity',
+        instructionMode: 'legacy'
+      }
+    });
+
+    expect(prompt).toContain('### 1 — Attach (always first)');
+    expect(prompt).toContain('user_follow_up');
+    expect(prompt).toContain('ovld restart antigravity');
+  });
+});
+
 describe('OpenCode bundled prompt routing', () => {
   it('uses OpenCode-specific workflow instructions for OpenCode bundle launches', () => {
     const prompt = buildTicketPromptMarkdown({

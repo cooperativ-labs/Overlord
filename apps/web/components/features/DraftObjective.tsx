@@ -97,7 +97,7 @@ export function DraftObjective({
       claude: agentCommands?.launchCommands?.claudeCode ?? '',
       codex: agentCommands?.launchCommands?.codex ?? '',
       cursor: agentCommands?.launchCommands?.cursor ?? '',
-      gemini: agentCommands?.launchCommands?.gemini ?? '',
+      antigravity: agentCommands?.launchCommands?.antigravity ?? '',
       opencode: agentCommands?.launchCommands?.opencode ?? '',
       pi: agentCommands?.launchCommands?.pi ?? ''
     }),
@@ -190,188 +190,195 @@ export function DraftObjective({
           </button>
         </div>
       ) : null} */}
-      <div
-        className={cn(
-          'relative group/future',
-          isFuture &&
-            'max-h-[3.25rem] overflow-hidden transition-[max-height] duration-200 ease-in-out hover:max-h-[500px] focus-within:max-h-[500px]'
-        )}
-      >
-        <InlineEditField
-          ref={editFieldRef}
-          alwaysEditing
-          autoListContinuation="enter"
-          displayClassName="text-base leading-relaxed"
-          field="objective"
-          fileMentionPaths={fileMentionPaths}
-          initialValue={initialValue}
-          inputClassName={cn('text-base leading-relaxed', isFuture ? 'text-muted-foreground' : '')}
-          multiline
-          objectiveRowId={objectiveId || undefined}
-          objectiveState={objectiveState}
-          placeholder="Click to add an objective…"
-          renderMarkdown
-          seamless
-          textareaMaxHeightPx={DRAFT_OBJECTIVE_EDITOR_MAX_HEIGHT_PX}
-          ticketId={ticketId}
-          variant="textarea"
-          workingDirectory={workingDirectory}
-        />
-        {isFuture ? (
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-background/80 to-transparent transition-opacity duration-200 group-hover/future:opacity-0 group-focus-within/future:opacity-0" />
-        ) : null}
-      </div>
-      <div className="border-t border-border/40">
-        <ObjectiveAttachmentList
-          attachments={attachments}
-          uploading={uploading}
-          deletingIds={deletingIds}
-          onDownload={handleDownload}
-          onDelete={handleDelete}
-          onDismissUploadingItem={dismissUploadingItem}
-          toolbar
-        />
-        <ObjectiveAttachmentUploadTrigger
-          toolbar
-          omitDropZone
-          objectiveId={objectiveId}
-          attachmentsCount={attachments.length}
-          hasItems={hasItems}
-          isDragOver={isDragOver}
-          inputRef={inputRef}
-          onInputChange={handleInputChange}
-          leadingToolbarExtras={
-            isFuture ? null : (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-7 gap-0.5 px-2 text-xs text-muted-foreground"
-                aria-expanded={cliQuickstartOpen}
-                aria-controls="draft-objective-cli-quickstart"
-                onClick={() => setCliQuickstartOpen(open => !open)}
-              >
-                <SquareTerminal size={16} />
-                <ChevronDown
-                  className={cn(
-                    'h-3.5 w-3.5 shrink-0 transition-transform duration-200',
-                    cliQuickstartOpen && 'rotate-180'
-                  )}
-                  aria-hidden
-                />
-              </Button>
-            )
-          }
+      <div className={cn(isFuture && 'group/future')}>
+        <div
+          className={cn(
+            'relative',
+            isFuture &&
+              'max-h-[3.25rem] overflow-hidden transition-[max-height] duration-200 ease-in-out group-hover/future:max-h-[500px] group-focus-within/future:max-h-[500px]'
+          )}
         >
-          <ObjectiveMenuButton
-            canMarkExecuted={canMarkExecuted}
-            objectiveId={objectiveId}
-            state={objectiveState}
+          <InlineEditField
+            ref={editFieldRef}
+            alwaysEditing
+            autoListContinuation="enter"
+            displayClassName="text-base leading-relaxed"
+            field="objective"
+            fileMentionPaths={fileMentionPaths}
+            initialValue={initialValue}
+            inputClassName={cn(
+              'text-base leading-relaxed',
+              isFuture ? 'text-muted-foreground' : ''
+            )}
+            multiline
+            objectiveRowId={objectiveId || undefined}
+            objectiveState={objectiveState}
+            placeholder="Click to add an objective…"
+            renderMarkdown
+            seamless
+            textareaMaxHeightPx={DRAFT_OBJECTIVE_EDITOR_MAX_HEIGHT_PX}
             ticketId={ticketId}
+            variant="textarea"
+            workingDirectory={workingDirectory}
           />
-          {canToggleAutoAdvance ? (
-            <Popover>
-              <PopoverTrigger asChild>
+          {isFuture ? (
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-background/80 to-transparent transition-opacity duration-200 group-hover/future:opacity-0 group-focus-within/future:opacity-0" />
+          ) : null}
+        </div>
+        <div className="border-t border-border/40">
+          <ObjectiveAttachmentList
+            attachments={attachments}
+            uploading={uploading}
+            deletingIds={deletingIds}
+            onDownload={handleDownload}
+            onDelete={handleDelete}
+            onDismissUploadingItem={dismissUploadingItem}
+            toolbar
+          />
+          <ObjectiveAttachmentUploadTrigger
+            toolbar
+            omitDropZone
+            objectiveId={objectiveId}
+            attachmentsCount={attachments.length}
+            hasItems={hasItems}
+            isDragOver={isDragOver}
+            inputRef={inputRef}
+            onInputChange={handleInputChange}
+            leadingToolbarExtras={
+              isFuture ? null : (
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className={cn(
-                    'h-7 gap-1 px-2 text-xs',
-                    autoAdvanceValue ? 'text-emerald-600' : 'text-amber-600'
-                  )}
-                  disabled={isAutoAdvancePending}
-                  aria-label={autoAdvanceValue ? 'Auto-advance on' : 'Auto-advance off'}
-                  title={autoAdvanceValue ? 'Auto-advance ON' : 'Auto-advance OFF'}
+                  className="h-7 gap-0.5 px-2 text-xs text-muted-foreground"
+                  aria-expanded={cliQuickstartOpen}
+                  aria-controls="draft-objective-cli-quickstart"
+                  onClick={() => setCliQuickstartOpen(open => !open)}
                 >
-                  {isAutoAdvancePending ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : autoAdvanceValue ? (
-                    <FastForward className="h-3.5 w-3.5" />
-                  ) : (
-                    <PauseCircle className="h-3.5 w-3.5" />
-                  )}
+                  <SquareTerminal size={16} />
+                  <ChevronDown
+                    className={cn(
+                      'h-3.5 w-3.5 shrink-0 transition-transform duration-200',
+                      cliQuickstartOpen && 'rotate-180'
+                    )}
+                    aria-hidden
+                  />
                 </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-64" align="end">
-                <div className="flex flex-col gap-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-sm font-medium">Auto-advance</span>
-                    <Switch
-                      checked={autoAdvanceValue}
-                      disabled={isAutoAdvancePending}
-                      onCheckedChange={handleAutoAdvanceToggle}
-                    />
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    When enabled, this objective will automatically start executing after the
-                    previous one completes. When disabled, it will wait for manual approval before
-                    starting.
-                  </p>
-                </div>
-              </PopoverContent>
-            </Popover>
-          ) : null}
-          {showAgentControls ? (
-            <>
-              <AgentModelChooserButton
-                ticketId={ticketId}
-                objectiveId={objectiveId}
-                initialSelection={assignedAgent ?? null}
-                persistSelection
-              />
-              {isFuture ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-8 gap-1.5 px-3 text-xs"
-                  disabled={promoting}
-                  onClick={handlePromoteFuture}
-                >
-                  {promoting ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <ArrowUpCircle className="h-3.5 w-3.5" />
-                  )}
-                  Promote
-                </Button>
-              ) : (
-                <AgentSplitButtonLive
-                  assignedSelection={assignedAgent ?? null}
-                  defaultAgent={
-                    assignedAgent ? getLaunchAgentTypeByIdentifier(assignedAgent.agent) : undefined
-                  }
-                  ticketId={ticketId}
-                  organizationId={organizationId}
-                  projectId={projectId ?? null}
-                  agentFlags={agentFlags}
-                  commands={splitButtonCommands}
-                  workingDirectory={workingDirectory}
-                  sshCommand={sshCommand ?? null}
-                  remoteWorkingDirectory={remoteWorkingDirectory ?? null}
-                  hasProjectWorkingDirectory={hasProjectWorkingDirectory ?? false}
-                  submitObjectiveId={objectiveId}
-                  size="sm"
-                />
-              )}
-            </>
-          ) : null}
-        </ObjectiveAttachmentUploadTrigger>
-        {cliQuickstartOpen && !isFuture ? (
-          <div
-            id="draft-objective-cli-quickstart"
-            className="border-t border-border/40 bg-muted/10 p-4"
+              )
+            }
           >
-            <CliQuickstart
-              variant="embedded"
-              activeAgentValue={activeAgentType?.value}
-              externalSessionId={session?.external_session_id ?? null}
-              hasExecutedObjectives={events.length > 0}
-              agentCommands={agentCommands}
+            <ObjectiveMenuButton
+              canMarkExecuted={canMarkExecuted}
+              objectiveId={objectiveId}
+              state={objectiveState}
+              ticketId={ticketId}
             />
-          </div>
-        ) : null}
+            {canToggleAutoAdvance ? (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className={cn(
+                      'h-7 gap-1 px-2 text-xs',
+                      autoAdvanceValue ? 'text-emerald-600' : 'text-amber-600'
+                    )}
+                    disabled={isAutoAdvancePending}
+                    aria-label={autoAdvanceValue ? 'Auto-advance on' : 'Auto-advance off'}
+                    title={autoAdvanceValue ? 'Auto-advance ON' : 'Auto-advance OFF'}
+                  >
+                    {isAutoAdvancePending ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : autoAdvanceValue ? (
+                      <FastForward className="h-3.5 w-3.5" />
+                    ) : (
+                      <PauseCircle className="h-3.5 w-3.5" />
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-64" align="end">
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-sm font-medium">Auto-advance</span>
+                      <Switch
+                        checked={autoAdvanceValue}
+                        disabled={isAutoAdvancePending}
+                        onCheckedChange={handleAutoAdvanceToggle}
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      When enabled, this objective will automatically start executing after the
+                      previous one completes. When disabled, it will wait for manual approval before
+                      starting.
+                    </p>
+                  </div>
+                </PopoverContent>
+              </Popover>
+            ) : null}
+            {showAgentControls ? (
+              <>
+                <AgentModelChooserButton
+                  ticketId={ticketId}
+                  objectiveId={objectiveId}
+                  initialSelection={assignedAgent ?? null}
+                  persistSelection
+                />
+                {isFuture ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 gap-1.5 px-3 text-xs"
+                    disabled={promoting}
+                    onClick={handlePromoteFuture}
+                  >
+                    {promoting ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <ArrowUpCircle className="h-3.5 w-3.5" />
+                    )}
+                    Promote
+                  </Button>
+                ) : (
+                  <AgentSplitButtonLive
+                    assignedSelection={assignedAgent ?? null}
+                    defaultAgent={
+                      assignedAgent
+                        ? getLaunchAgentTypeByIdentifier(assignedAgent.agent)
+                        : undefined
+                    }
+                    ticketId={ticketId}
+                    organizationId={organizationId}
+                    projectId={projectId ?? null}
+                    agentFlags={agentFlags}
+                    commands={splitButtonCommands}
+                    workingDirectory={workingDirectory}
+                    sshCommand={sshCommand ?? null}
+                    remoteWorkingDirectory={remoteWorkingDirectory ?? null}
+                    hasProjectWorkingDirectory={hasProjectWorkingDirectory ?? false}
+                    submitObjectiveId={objectiveId}
+                    size="sm"
+                  />
+                )}
+              </>
+            ) : null}
+          </ObjectiveAttachmentUploadTrigger>
+          {cliQuickstartOpen && !isFuture ? (
+            <div
+              id="draft-objective-cli-quickstart"
+              className="border-t border-border/40 bg-muted/10 p-4"
+            >
+              <CliQuickstart
+                variant="embedded"
+                activeAgentValue={activeAgentType?.value}
+                externalSessionId={session?.external_session_id ?? null}
+                hasExecutedObjectives={events.length > 0}
+                agentCommands={agentCommands}
+              />
+            </div>
+          ) : null}
+        </div>
       </div>
     </FileDropZone>
   );

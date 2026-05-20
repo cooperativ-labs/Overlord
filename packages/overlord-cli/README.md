@@ -72,10 +72,13 @@ ovld setup
 ovld setup codex
 ovld setup claude
 ovld setup cursor
-ovld setup gemini
+ovld setup antigravity
 ovld setup all
+ovld launch antigravity --ticket-id <ticket_id>
 ovld doctor
 ```
+
+**Antigravity:** Gemini CLI is deprecated. Use `ovld setup antigravity` and `ovld launch antigravity --ticket-id <ticket_id>`. Antigravity manages model selection internally.
 
 For ticket-scoped protocol and launch commands, `ticket_id` values such as `1:899` carry the organization id. The CLI uses that first, then `--organization-id` for UUID compatibility, then stored auth.
 

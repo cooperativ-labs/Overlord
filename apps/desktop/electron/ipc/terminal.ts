@@ -14,7 +14,7 @@ const AGENT_TYPES = [
   'claude',
   'codex',
   'cursor',
-  'gemini',
+  'antigravity',
   'opencode'
 ] as const satisfies readonly LaunchAgentType[];
 

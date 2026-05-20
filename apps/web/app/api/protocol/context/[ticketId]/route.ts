@@ -90,7 +90,7 @@ export async function GET(request: Request, { params }: RouteContext) {
       | 'claude'
       | 'codex'
       | 'cursor'
-      | 'gemini'
+      | 'antigravity'
       | 'opencode'
       | 'pi'
       | undefined;
@@ -240,7 +240,7 @@ export async function POST(request: Request, { params }: RouteContext) {
 
   const requestOrigin = new URL(request.url).origin;
   const platformUrl = getPlatformUrl(requestOrigin);
-  const { claudeCode, codex, cursor, gemini, opencode, pi, contextUrl } = buildLaunchCommands({
+  const { claudeCode, codex, cursor, antigravity, opencode, pi, contextUrl } = buildLaunchCommands({
     platformUrl,
     ticketId: ticket.ticket_id || ticketId,
     organizationId
@@ -258,7 +258,7 @@ export async function POST(request: Request, { params }: RouteContext) {
     claudeCode,
     codex,
     cursor,
-    gemini,
+    antigravity,
     opencode,
     pi,
     contextUrl,

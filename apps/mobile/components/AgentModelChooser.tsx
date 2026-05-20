@@ -150,15 +150,20 @@ export function AgentModelChooser({
     );
   }, [models]);
 
-  const currentModels = modelsByAgent[effectiveSelection.agent] ?? [];
+  const antigravityManagesModels = effectiveSelection.agent === 'antigravity';
+  const currentModels = antigravityManagesModels
+    ? []
+    : (modelsByAgent[effectiveSelection.agent] ?? []);
   const selectedModel = currentModels.find(model => model.model_id === effectiveSelection.model);
-  const showThinking = effectiveSelection.agent !== 'codex';
+  const showThinking = effectiveSelection.agent !== 'codex' && !antigravityManagesModels;
   const thinkingOptions = showThinking ? (selectedModel?.thinking_options ?? []) : [];
   const selectedAgentOption = AGENT_OPTIONS.find(
     option => option.value === effectiveSelection.agent
   );
   const isSelectorVisible = alwaysExpanded || (expanded ?? showSelector);
-  const selectedModelLabel = selectedModel?.display_name ?? 'Default model';
+  const selectedModelLabel = antigravityManagesModels
+    ? 'Antigravity default'
+    : (selectedModel?.display_name ?? 'Default model');
   const selectedThinkingLabel = effectiveSelection.thinking
     ? ` · ${effectiveSelection.thinking}`
     : '';
@@ -242,7 +247,12 @@ export function AgentModelChooser({
           </View>
 
           <Text style={styles.groupLabel}>Model</Text>
-          {loading ? (
+          {antigravityManagesModels ? (
+            <Text style={styles.emptyText}>
+              Antigravity chooses models in its own UI. Launch tickets with ovld launch antigravity
+              --ticket-id. Gemini CLI is deprecated — use ovld setup antigravity.
+            </Text>
+          ) : loading ? (
             <View style={styles.loadingRow}>
               <ActivityIndicator size="small" color={colors.primary} />
               <Text style={styles.loadingText}>Loading available models...</Text>

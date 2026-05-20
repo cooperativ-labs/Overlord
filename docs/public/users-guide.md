@@ -503,9 +503,12 @@ Run:
 ```bash
 ovld doctor
 ovld setup <agent>
+ovld setup antigravity
 ```
 
 Use `ovld setup all` when you want to refresh every supported connector.
+
+**Antigravity (replaces Gemini CLI):** Google is deprecating Gemini CLI in favor of Antigravity CLI. Install with `ovld setup antigravity`, launch tickets with `ovld launch antigravity --ticket-id <ticket_id>`, and choose models inside Antigravity — Overlord does not pass model or thinking flags for that connector.
 
 ### An Agent Is Blocked
 

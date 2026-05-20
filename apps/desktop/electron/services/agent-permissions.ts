@@ -8,7 +8,7 @@ import {
   writeTextFile
 } from './agent-bundle/merge-helpers';
 
-export type AgentPermissionAgent = 'claude' | 'cursor' | 'gemini' | 'opencode';
+export type AgentPermissionAgent = 'claude' | 'cursor' | 'antigravity' | 'opencode';
 
 export type AgentPermissionResult = {
   agent: AgentPermissionAgent;
@@ -138,7 +138,7 @@ function configureCursor(projectDirectory?: string): AgentPermissionResult {
   }
 }
 
-function configureGemini(): AgentPermissionResult {
+function configureAntigravity(): AgentPermissionResult {
   const backups: string[] = [];
   const filePath = path.join(os.homedir(), '.gemini', 'policies', 'overlord-protocol.toml');
 
@@ -170,20 +170,20 @@ function configureGemini(): AgentPermissionResult {
     writeTextFile(filePath, content);
 
     return {
-      agent: 'gemini',
+      agent: 'antigravity',
       ok: true,
       filePath,
       backups,
-      details: 'Installed Gemini policy rules for ovld protocol and /tmp file access.'
+      details: 'Installed Antigravity policy rules for ovld protocol and /tmp file access.'
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return {
-      agent: 'gemini',
+      agent: 'antigravity',
       ok: false,
       filePath,
       backups,
-      details: 'Failed to install Gemini policy rules.',
+      details: 'Failed to install Antigravity policy rules.',
       error: message
     };
   }
@@ -253,7 +253,7 @@ export function configureAgentPermissions(
   const results = [
     configureClaude(options.projectDirectory),
     configureCursor(options.projectDirectory),
-    configureGemini(),
+    configureAntigravity(),
     configureOpenCode()
   ];
 

@@ -22,7 +22,7 @@ export const LAUNCH_AGENT_VALUES: readonly LaunchAgentType[] = [
   'claude',
   'codex',
   'cursor',
-  'gemini',
+  'antigravity',
   'opencode',
   'pi'
 ];
@@ -34,7 +34,7 @@ export const AGENT_OPTIONS: ReadonlyArray<{
   { value: 'claude', label: 'Claude Code' },
   { value: 'codex', label: 'Codex' },
   { value: 'cursor', label: 'Cursor' },
-  { value: 'gemini', label: 'Gemini' },
+  { value: 'antigravity', label: 'Antigravity' },
   { value: 'opencode', label: 'OpenCode' },
   { value: 'pi', label: 'Pi' }
 ];

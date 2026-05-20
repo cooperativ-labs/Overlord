@@ -151,9 +151,9 @@ export function DemoTicketPanel({ ticket, onClose, onDiscuss, onRun }: DemoTicke
               { agent: 'Codex', model: 'o3', icon: '/images/icons/codex.svg', selected: false },
               { agent: 'Cursor', model: 'Auto', icon: '/images/icons/cursor.svg', selected: false },
               {
-                agent: 'Gemini CLI',
-                model: 'Gemini 2.5 Pro',
-                icon: '/images/icons/gemini.svg',
+                agent: 'Antigravity',
+                model: 'Antigravity default',
+                icon: '/images/icons/antigravity.svg',
                 selected: false
               }
             ].map(item => (

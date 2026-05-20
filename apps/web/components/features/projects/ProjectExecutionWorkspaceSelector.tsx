@@ -1,11 +1,13 @@
 'use client';
 
-import { ChevronDown, Folder, Loader2 } from 'lucide-react';
+import { ChevronDown, Folder, FolderOpen, Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 
 import { useProjectSettings } from '@/components/features/projects/ProjectSettingsContext';
 import { useElectron } from '@/components/features/terminal/useElectron';
 import { WorkspaceConnectionWarningModal } from '@/components/modals/WorkspaceConnectionWarningModal';
+import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -56,7 +58,7 @@ export function ProjectExecutionWorkspaceSelector({
   projectId
 }: ProjectExecutionWorkspaceSelectorProps) {
   const projectSettings = useProjectSettings();
-  const { api } = useElectron();
+  const { api, isElectron } = useElectron();
   const [resources, setResources] = useState<ProjectResourceDirectory[]>([]);
   const [matchedDeviceId, setMatchedDeviceId] = useState<string | null>(null);
   const [localHostname, setLocalHostname] = useState<string | null>(null);
@@ -235,6 +237,16 @@ export function ProjectExecutionWorkspaceSelector({
     projectId
   ]);
 
+  async function handleRevealInFinder(directoryPath: string) {
+    if (!api?.app?.revealFile) return;
+
+    try {
+      await api.app.revealFile(directoryPath);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not open in Finder.');
+    }
+  }
+
   if (!projectSettings) return null;
   const ps = projectSettings;
 
@@ -328,6 +340,18 @@ export function ProjectExecutionWorkspaceSelector({
                       </p>
                     </div>
                     <div className="flex shrink-0 flex-col items-end gap-1 pt-0.5">
+                      {onThisDevice && isElectron && api?.app?.revealFile ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 w-6 p-0 text-muted-foreground"
+                          onClick={() => void handleRevealInFinder(resource.directoryPath)}
+                          title="See in finder"
+                        >
+                          <FolderOpen className="h-3 w-3" />
+                        </Button>
+                      ) : null}
                       {onThisDevice ? (
                         <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-400">
                           <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden />
