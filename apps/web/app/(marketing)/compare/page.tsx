@@ -2,8 +2,6 @@ import { Bot, ClipboardList, GitBranch, Rows3, Workflow } from 'lucide-react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
-import { HomepageFooter } from '@/components/marketing/HomepageFooter';
-import { HomepageHeader } from '@/components/marketing/HomepageHeader';
 import { Button } from '@/components/ui/button';
 
 export const metadata: Metadata = {
@@ -62,11 +60,7 @@ const needs = [
 
 export default function ComparePage() {
   return (
-    <div className="min-h-dvh bg-[#020817] text-white">
-      <div className="mx-auto w-full max-w-[1800px] px-6 sm:px-8 lg:px-12">
-        <HomepageHeader />
-      </div>
-      <main className="mx-auto flex w-full max-w-6xl flex-col gap-16 px-6 py-8 sm:px-8 lg:px-12">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-16 py-8">
         <section className="max-w-4xl pt-10">
           <p className="font-mono text-[14px] font-medium uppercase tracking-widest text-sky-400">
             Compare Overlord
@@ -164,8 +158,6 @@ export default function ComparePage() {
             </div>
           </div>
         </section>
-      </main>
-      <HomepageFooter />
     </div>
   );
 }

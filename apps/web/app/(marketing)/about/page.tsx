@@ -1,9 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
-import { HomepageFooter } from '@/components/marketing/HomepageFooter';
-import { HomepageHeader } from '@/components/marketing/HomepageHeader';
-
 export const metadata: Metadata = {
   title: 'About | Overlord',
   description:
@@ -12,11 +9,7 @@ export const metadata: Metadata = {
 
 export default function AboutPage() {
   return (
-    <div className="min-h-dvh flex flex-col bg-[#020817] text-white overflow-y-auto">
-      <div className="mx-auto w-full max-w-[1800px] px-6 sm:px-8 lg:px-12">
-        <HomepageHeader />
-      </div>
-      <main className="mx-auto h-full max-w-3xl px-6 py-12 sm:px-8 lg:px-12">
+    <div className="mx-auto max-w-3xl py-12">
         <h1 className="font-display text-3xl font-bold tracking-tight">About Overlord</h1>
         <p className="mt-2 text-sm text-slate-400">
           A hobby project by{' '}
@@ -101,8 +94,6 @@ export default function AboutPage() {
           </p>
           </section> */}
         </div>
-      </main>
-      <HomepageFooter />
     </div>
   );
 }

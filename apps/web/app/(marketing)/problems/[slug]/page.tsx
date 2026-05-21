@@ -7,10 +7,10 @@ import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { getProblemPage, problemPages } from '@/lib/marketing/problem-pages';
 
-import { DemoFeedShowcase } from '../../../example-content/demo-frames/DemoFeedShowcase';
-import { DemoObjectiveTerminal } from '../../../example-content/demo-frames/DemoObjectiveTerminal';
-import { DemoTicketActivity } from '../../../example-content/demo-frames/DemoTicketActivity';
-import { DemoTicketDetails } from '../../../example-content/demo-frames/DemoTicketDetails';
+import { DemoFeedShowcase } from '../../../../example-content/demo-frames/DemoFeedShowcase';
+import { DemoObjectiveTerminal } from '../../../../example-content/demo-frames/DemoObjectiveTerminal';
+import { DemoTicketActivity } from '../../../../example-content/demo-frames/DemoTicketActivity';
+import { DemoTicketDetails } from '../../../../example-content/demo-frames/DemoTicketDetails';
 
 function youtubeEmbedUrl(url: string): string | null {
   try {
