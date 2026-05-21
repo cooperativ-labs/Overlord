@@ -8,11 +8,10 @@ import { changelogEmailTemplate, fillTemplateTags, wrapInTemplate } from './temp
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY') ?? '';
-const RESEND_FROM_EMAIL =
-  Deno.env.get('RESEND_FROM_EMAIL') ?? 'Overlord <updates@notifications.cooperativ.io>';
+const RESEND_FROM_EMAIL = 'Overlord Updates <updates@notifications.cooperativ.io>';
 const NEWSLETTER_TRIGGER_SECRET = Deno.env.get('NEWSLETTER_TRIGGER_SECRET') ?? '';
 
-const APP_URL = Deno.env.get('NEXT_PUBLIC_APP_URL') ?? 'https://overlord.cooperativ.io';
+const APP_URL = Deno.env.get('NEXT_PUBLIC_APP_URL') ?? 'https://www.ovld.ai';
 
 const BATCH_SIZE = 100;
 

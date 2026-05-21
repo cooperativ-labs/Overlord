@@ -125,9 +125,9 @@ export async function createExecutionRequest(
 
   const objective = await resolveObjectiveForExecution(supabase, ticket.id, input.objectiveId);
   const assigned = parseObjectiveAssignedAgent(objective.assigned_agent);
-  const agent = normalizeAgent(input.agentIdentifier ?? assigned?.agent ?? null);
-  const model = normalizeOptionalText(input.modelIdentifier) ?? assigned?.model ?? null;
-  const thinking = normalizeOptionalText(input.thinkingLevel) ?? assigned?.thinking ?? null;
+  const agent = normalizeAgent(assigned?.agent ?? input.agentIdentifier ?? null);
+  const model = assigned?.model ?? normalizeOptionalText(input.modelIdentifier) ?? null;
+  const thinking = assigned?.thinking ?? normalizeOptionalText(input.thinkingLevel) ?? null;
   const requestedFrom = input.requestedFrom.trim();
   const idempotencyKey =
     normalizeOptionalText(input.idempotencyKey) ??

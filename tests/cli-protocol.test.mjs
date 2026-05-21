@@ -360,3 +360,219 @@ test('revert fetches checkpoint row and restores the local git working tree', as
     fs.rmSync(repo, { recursive: true, force: true });
   }
 });
+
+test('request-execution posts local launch payload with repeated flags', async () => {
+  const previousFetch = global.fetch;
+  const previousOverlordUrl = process.env.OVERLORD_URL;
+  const previousAgentToken = process.env.OVERLORD_ACCESS_TOKEN;
+  const previousOrganizationId = process.env.OVERLORD_ORGANIZATION_ID;
+  const previousLog = console.log;
+  const calls = [];
+
+  try {
+    process.env.OVERLORD_URL = 'https://www.ovld.ai';
+    process.env.OVERLORD_ACCESS_TOKEN = 'test-agent-token';
+    process.env.OVERLORD_ORGANIZATION_ID = '42';
+
+    global.fetch = async (url, init = {}) => {
+      calls.push({ url: String(url), body: init.body });
+      return new Response(JSON.stringify({ request: { id: 'req-1' } }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    };
+    console.log = () => {};
+
+    await runProtocolCommand('request-execution', [
+      '--ticket-id',
+      '1:899',
+      '--requested-from',
+      'manual_run',
+      '--agent',
+      'codex',
+      '--launch-mode',
+      'ask',
+      '--working-directory',
+      '/repo',
+      '--flag',
+      '--verbose',
+      '--flag',
+      '--dangerously-skip-permissions'
+    ]);
+  } finally {
+    global.fetch = previousFetch;
+    console.log = previousLog;
+    if (previousOverlordUrl === undefined) delete process.env.OVERLORD_URL;
+    else process.env.OVERLORD_URL = previousOverlordUrl;
+    if (previousAgentToken === undefined) delete process.env.OVERLORD_ACCESS_TOKEN;
+    else process.env.OVERLORD_ACCESS_TOKEN = previousAgentToken;
+    if (previousOrganizationId === undefined) delete process.env.OVERLORD_ORGANIZATION_ID;
+    else process.env.OVERLORD_ORGANIZATION_ID = previousOrganizationId;
+  }
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, 'https://www.ovld.ai/api/protocol/request-execution');
+  assert.deepEqual(JSON.parse(calls[0].body), {
+    ticketId: '1:899',
+    requestedFrom: 'manual_run',
+    agentIdentifier: 'codex',
+    launchMode: 'ask',
+    flags: ['--verbose', '--dangerously-skip-permissions'],
+    workingDirectory: '/repo'
+  });
+});
+
+test('request-execution includes ssh targeting fields when provided', async () => {
+  const previousFetch = global.fetch;
+  const previousOverlordUrl = process.env.OVERLORD_URL;
+  const previousAgentToken = process.env.OVERLORD_ACCESS_TOKEN;
+  const previousOrganizationId = process.env.OVERLORD_ORGANIZATION_ID;
+  const previousLog = console.log;
+  const calls = [];
+
+  try {
+    process.env.OVERLORD_URL = 'https://www.ovld.ai';
+    process.env.OVERLORD_ACCESS_TOKEN = 'test-agent-token';
+    process.env.OVERLORD_ORGANIZATION_ID = '42';
+
+    global.fetch = async (url, init = {}) => {
+      calls.push({ body: init.body });
+      return new Response(JSON.stringify({ request: { id: 'req-ssh' } }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    };
+    console.log = () => {};
+
+    await runProtocolCommand('request-execution', [
+      '--ticket-id',
+      '1:900',
+      '--target-kind',
+      'ssh',
+      '--ssh-command',
+      'ssh dev@host',
+      '--remote-working-directory',
+      '/remote/repo',
+      '--server-multiplexer',
+      'tmux',
+      '--tmux-command',
+      'tmux new -s ovld'
+    ]);
+  } finally {
+    global.fetch = previousFetch;
+    console.log = previousLog;
+    if (previousOverlordUrl === undefined) delete process.env.OVERLORD_URL;
+    else process.env.OVERLORD_URL = previousOverlordUrl;
+    if (previousAgentToken === undefined) delete process.env.OVERLORD_ACCESS_TOKEN;
+    else process.env.OVERLORD_ACCESS_TOKEN = previousAgentToken;
+    if (previousOrganizationId === undefined) delete process.env.OVERLORD_ORGANIZATION_ID;
+    else process.env.OVERLORD_ORGANIZATION_ID = previousOrganizationId;
+  }
+
+  assert.deepEqual(JSON.parse(calls[0].body), {
+    ticketId: '1:900',
+    requestedFrom: 'api',
+    launchMode: 'run',
+    flags: [],
+    sshCommand: 'ssh dev@host',
+    remoteWorkingDirectory: '/remote/repo',
+    serverMultiplexer: 'tmux',
+    tmuxCommand: 'tmux new -s ovld',
+    targetKind: 'ssh'
+  });
+});
+
+test('claim-execution posts device fingerprint from flag', async () => {
+  const previousFetch = global.fetch;
+  const previousOverlordUrl = process.env.OVERLORD_URL;
+  const previousAgentToken = process.env.OVERLORD_ACCESS_TOKEN;
+  const previousOrganizationId = process.env.OVERLORD_ORGANIZATION_ID;
+  const previousLog = console.log;
+  const calls = [];
+
+  try {
+    process.env.OVERLORD_URL = 'https://www.ovld.ai';
+    process.env.OVERLORD_ACCESS_TOKEN = 'test-agent-token';
+    process.env.OVERLORD_ORGANIZATION_ID = '42';
+
+    global.fetch = async (url, init = {}) => {
+      calls.push({ body: init.body });
+      return new Response(JSON.stringify({ request: null }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    };
+    console.log = () => {};
+
+    await runProtocolCommand('claim-execution', ['--device-fingerprint', 'fp-cli-test']);
+  } finally {
+    global.fetch = previousFetch;
+    console.log = previousLog;
+    if (previousOverlordUrl === undefined) delete process.env.OVERLORD_URL;
+    else process.env.OVERLORD_URL = previousOverlordUrl;
+    if (previousAgentToken === undefined) delete process.env.OVERLORD_ACCESS_TOKEN;
+    else process.env.OVERLORD_ACCESS_TOKEN = previousAgentToken;
+    if (previousOrganizationId === undefined) delete process.env.OVERLORD_ORGANIZATION_ID;
+    else process.env.OVERLORD_ORGANIZATION_ID = previousOrganizationId;
+  }
+
+  assert.deepEqual(JSON.parse(calls[0].body), {
+    deviceFingerprint: 'fp-cli-test'
+  });
+});
+
+test('complete-execution-launch and fail-execution-launch post expected payloads', async () => {
+  const previousFetch = global.fetch;
+  const previousOverlordUrl = process.env.OVERLORD_URL;
+  const previousAgentToken = process.env.OVERLORD_ACCESS_TOKEN;
+  const previousOrganizationId = process.env.OVERLORD_ORGANIZATION_ID;
+  const previousLog = console.log;
+  const calls = [];
+
+  try {
+    process.env.OVERLORD_URL = 'https://www.ovld.ai';
+    process.env.OVERLORD_ACCESS_TOKEN = 'test-agent-token';
+    process.env.OVERLORD_ORGANIZATION_ID = '42';
+    process.env.OVERLORD_DEVICE_FINGERPRINT = 'fp-env';
+
+    global.fetch = async (url, init = {}) => {
+      calls.push({ url: String(url), body: init.body });
+      return new Response(JSON.stringify({ request: { id: 'req-1' } }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    };
+    console.log = () => {};
+
+    await runProtocolCommand('complete-execution-launch', ['--request-id', 'req-uuid']);
+    await runProtocolCommand('fail-execution-launch', [
+      '--request-id',
+      'req-uuid',
+      '--error',
+      'spawn failed'
+    ]);
+  } finally {
+    global.fetch = previousFetch;
+    console.log = previousLog;
+    if (previousOverlordUrl === undefined) delete process.env.OVERLORD_URL;
+    else process.env.OVERLORD_URL = previousOverlordUrl;
+    if (previousAgentToken === undefined) delete process.env.OVERLORD_ACCESS_TOKEN;
+    else process.env.OVERLORD_ACCESS_TOKEN = previousAgentToken;
+    if (previousOrganizationId === undefined) delete process.env.OVERLORD_ORGANIZATION_ID;
+    else process.env.OVERLORD_ORGANIZATION_ID = previousOrganizationId;
+    delete process.env.OVERLORD_DEVICE_FINGERPRINT;
+  }
+
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].url, 'https://www.ovld.ai/api/protocol/complete-execution-launch');
+  assert.deepEqual(JSON.parse(calls[0].body), {
+    requestId: 'req-uuid',
+    deviceFingerprint: 'fp-env'
+  });
+  assert.equal(calls[1].url, 'https://www.ovld.ai/api/protocol/fail-execution-launch');
+  assert.deepEqual(JSON.parse(calls[1].body), {
+    requestId: 'req-uuid',
+    deviceFingerprint: 'fp-env',
+    error: 'spawn failed'
+  });
+});

@@ -9,6 +9,12 @@ import path from 'node:path';
 const OVLD_ENTRY = process.argv[1];
 const DEVICE_FILE = path.join(os.homedir(), '.ovld', 'device.json');
 
+/** @internal Test-only overrides for protocol/launch subprocess calls. */
+export const runnerTestHooks = {
+  execFileSync: null,
+  spawn: null
+};
+
 function printRunnerHelp(primaryCommand = 'ovld') {
   console.log(`Usage:
   ${primaryCommand} runner once [options]
@@ -45,7 +51,7 @@ function parseFlags(args) {
   return flags;
 }
 
-function readOrCreateDeviceFingerprint(flags) {
+export function readOrCreateDeviceFingerprint(flags) {
   const explicit =
     typeof flags['device-fingerprint'] === 'string'
       ? flags['device-fingerprint'].trim()
@@ -69,7 +75,8 @@ function readOrCreateDeviceFingerprint(flags) {
 }
 
 function runOvld(args, env = {}) {
-  return execFileSync(process.execPath, [OVLD_ENTRY, ...args], {
+  const exec = runnerTestHooks.execFileSync ?? execFileSync;
+  return exec(process.execPath, [OVLD_ENTRY, ...args], {
     encoding: 'utf8',
     env: { ...process.env, ...env }
   });
@@ -111,7 +118,7 @@ function failLaunch(requestId, deviceFingerprint, error) {
   );
 }
 
-function buildLaunchArgs(launch) {
+export function buildLaunchArgs(launch) {
   const args = ['launch', launch.agent, '--ticket-id', launch.ticketId];
   if (launch.workingDirectory) args.push('--working-directory', launch.workingDirectory);
   if (launch.launchMode === 'ask') args.push('--launch-mode', 'ask');
@@ -127,7 +134,7 @@ function buildLaunchArgs(launch) {
   return args;
 }
 
-async function launchClaimedRequest(claim, deviceFingerprint) {
+export async function launchClaimedRequest(claim, deviceFingerprint) {
   const requestId = claim.request?.id;
   if (!requestId || !claim.launch?.agent || !claim.launch?.ticketId) return false;
 
@@ -137,7 +144,8 @@ async function launchClaimedRequest(claim, deviceFingerprint) {
   );
 
   await new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [OVLD_ENTRY, ...args], {
+    const spawnImpl = runnerTestHooks.spawn ?? spawn;
+    const child = spawnImpl(process.execPath, [OVLD_ENTRY, ...args], {
       stdio: 'inherit',
       env: { ...process.env, OVERLORD_DEVICE_FINGERPRINT: deviceFingerprint }
     });
@@ -170,7 +178,7 @@ async function launchClaimedRequest(claim, deviceFingerprint) {
   return true;
 }
 
-async function runOnce(flags, deviceFingerprint) {
+export async function runOnce(flags, deviceFingerprint) {
   const claim = claimExecution(flags, deviceFingerprint);
   if (!claim.request) {
     process.stderr.write('[runner] no queued execution requests\n');

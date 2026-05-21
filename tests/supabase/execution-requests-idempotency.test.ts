@@ -1,0 +1,106 @@
+import { createExecutionRequest } from '@/lib/overlord/execution-requests';
+import { createServiceRoleClient } from '@/supabase/utils/service-role';
+
+const LOCAL_SUPABASE_URL = 'http://127.0.0.1:54321';
+const LOCAL_SERVICE_ROLE_KEY =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU';
+
+const USER_ID = '11111111-1111-4111-8111-111111111111';
+const ORG_ID = 1;
+const PROJECT_ID = 'aaaaaaaa-0000-4000-8000-000000000001';
+
+describe('execution_requests idempotency', () => {
+  let supabase: ReturnType<typeof createServiceRoleClient>;
+  let ticketId = '';
+  let objectiveId = '';
+
+  beforeAll(() => {
+    process.env.SUPABASE_URL ??= LOCAL_SUPABASE_URL;
+    process.env.NEXT_PUBLIC_SUPABASE_URL ??= LOCAL_SUPABASE_URL;
+    process.env.SUPABASE_SERVICE_ROLE_KEY ??= LOCAL_SERVICE_ROLE_KEY;
+    supabase = createServiceRoleClient();
+  });
+
+  beforeEach(async () => {
+    const { data: ticket, error: ticketError } = await supabase
+      .from('tickets')
+      .insert({
+        organization_id: ORG_ID,
+        title: 'Idempotency test ticket',
+        execution_target: 'agent',
+        project_id: PROJECT_ID,
+        created_by: USER_ID
+      })
+      .select('id')
+      .single();
+
+    if (ticketError) throw ticketError;
+    ticketId = ticket.id;
+
+    const { data: objective, error: objectiveError } = await supabase
+      .from('objectives')
+      .insert({
+        ticket_id: ticketId,
+        state: 'draft',
+        objective: 'Run the idempotency check'
+      })
+      .select('id')
+      .single();
+
+    if (objectiveError) throw objectiveError;
+    objectiveId = objective.id;
+  });
+
+  afterEach(async () => {
+    if (ticketId) {
+      await supabase.from('execution_requests').delete().eq('ticket_id', ticketId);
+      await supabase.from('ticket_events').delete().eq('ticket_id', ticketId);
+      await supabase.from('objectives').delete().eq('ticket_id', ticketId);
+      await supabase.from('tickets').delete().eq('id', ticketId);
+    }
+    ticketId = '';
+    objectiveId = '';
+  });
+
+  it('returns one row when auto_advance is requested twice with the same key', async () => {
+    const first = await createExecutionRequest(supabase, {
+      ticketId,
+      objectiveId,
+      userId: USER_ID,
+      organizationId: ORG_ID,
+      requestedFrom: 'auto_advance'
+    });
+    const second = await createExecutionRequest(supabase, {
+      ticketId,
+      objectiveId,
+      userId: USER_ID,
+      organizationId: ORG_ID,
+      requestedFrom: 'auto_advance'
+    });
+
+    expect(second.request.id).toBe(first.request.id);
+
+    const { data: rows, error } = await supabase
+      .from('execution_requests')
+      .select('id, status')
+      .eq('organization_id', ORG_ID)
+      .eq('idempotency_key', `auto_advance:${objectiveId}`);
+
+    expect(error).toBeNull();
+    expect(rows).toHaveLength(1);
+
+    const { data: launched, error: launchError } = await supabase
+      .from('execution_requests')
+      .update({
+        status: 'launched',
+        launched_at: new Date().toISOString(),
+        lease_expires_at: null
+      })
+      .eq('id', first.request.id)
+      .select('status')
+      .single();
+
+    expect(launchError).toBeNull();
+    expect(launched?.status).toBe('launched');
+  });
+});
