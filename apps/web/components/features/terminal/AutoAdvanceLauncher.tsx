@@ -1,25 +1,25 @@
 'use client';
 
 import { useDefaultProject } from '@/components/features/projects/DefaultProjectContext';
-import { useAutoAdvanceLauncher } from '@/lib/hooks/use-auto-advance-launcher';
+import { useExecutionRequestLauncher } from '@/lib/hooks/use-execution-request-launcher';
 
 import { useTerminal } from './TerminalProvider';
 import { useElectron } from './useElectron';
 
 /**
- * Watches for protocol deliver auto-advance events and launches the next
- * objective in an external terminal on desktop.
+ * Claims durable execution requests and launches the assigned agent in an
+ * external terminal. Runs whenever the desktop app is open so it acts as the
+ * Electron-side runner; the standalone `ovld runner` CLI shares the same queue.
  */
 export function AutoAdvanceLauncher() {
   const { isElectron } = useElectron();
   const { launchAgent } = useTerminal();
-  const { projects, defaultProject } = useDefaultProject();
+  const { defaultProject } = useDefaultProject();
   const organizationId = defaultProject?.organizationId;
 
-  useAutoAdvanceLauncher({
+  useExecutionRequestLauncher({
     enabled: isElectron,
     organizationId,
-    projects,
     launchAgent
   });
 

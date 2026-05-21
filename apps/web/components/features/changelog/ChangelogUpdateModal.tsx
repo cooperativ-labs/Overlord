@@ -14,24 +14,26 @@ import {
 } from '@/components/ui/dialog';
 import {
   type ChangelogEntry,
-  getLatestPublishedChangelogEntryAction,
+  getPublishedChangelogEntryByVersionAction,
   markChangelogAsReadAction
 } from '@/lib/actions/changelog';
 
 const SETTINGS_KEY = 'lastSeenAppVersion';
 
 /**
- * Shows the latest published changelog entry after the user updates the desktop app.
+ * Shows the published changelog for the installed desktop app version after an update.
  *
- * Detection model: compare the current `app.getVersion()` against the stored
- * `lastSeenAppVersion` setting. When they differ (first run after an update),
- * fetch the latest published entry and show it. Then persist the new version.
+ * Detection model: compare `app.getVersion()` to stored `lastSeenAppVersion`. When they
+ * differ, load the published entry whose `version` matches the installed app version and
+ * show it. Persist the version only after the user dismisses the modal so a matching
+ * entry published later can still surface.
  *
  * Web is a no-op: `window.electronAPI` is undefined off-desktop.
  */
 export function ChangelogUpdateModal() {
   const [entry, setEntry] = useState<ChangelogEntry | null>(null);
   const [open, setOpen] = useState(false);
+  const [installedVersion, setInstalledVersion] = useState<string | null>(null);
 
   useEffect(() => {
     const electronAPI = (
@@ -59,16 +61,14 @@ export function ChangelogUpdateModal() {
 
         if (stored === currentVersion) return;
 
-        const latest = await getLatestPublishedChangelogEntryAction();
+        const matching = await getPublishedChangelogEntryByVersionAction(currentVersion);
         if (cancelled) return;
 
-        if (latest) {
-          setEntry(latest);
+        if (matching) {
+          setInstalledVersion(currentVersion);
+          setEntry(matching);
           setOpen(true);
         }
-
-        // Persist regardless so we don't keep checking each navigation.
-        await settings?.set(SETTINGS_KEY, currentVersion);
       } catch {
         // best-effort; modal stays closed
       }
@@ -83,6 +83,21 @@ export function ChangelogUpdateModal() {
     setOpen(false);
     try {
       await markChangelogAsReadAction();
+    } catch {
+      // best-effort
+    }
+
+    if (!installedVersion) return;
+
+    try {
+      const settings = (
+        window as typeof window & {
+          electronAPI?: {
+            settings?: { set: (key: string, value: unknown) => Promise<unknown> };
+          };
+        }
+      ).electronAPI?.settings;
+      await settings?.set(SETTINGS_KEY, installedVersion);
     } catch {
       // best-effort
     }

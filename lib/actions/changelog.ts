@@ -124,6 +124,26 @@ export async function getLatestPublishedChangelogEntryAction(): Promise<Changelo
   return (data ?? null) as ChangelogEntry | null;
 }
 
+/** Latest published entry for a specific app version (Electron post-update modal). */
+export async function getPublishedChangelogEntryByVersionAction(
+  version: string
+): Promise<ChangelogEntry | null> {
+  const trimmed = version.trim();
+  if (!trimmed) return null;
+
+  const supabase = await createClientForRequest();
+  const { data, error } = await supabase
+    .from('changelog_entries')
+    .select('*')
+    .eq('status', 'published')
+    .eq('version', trimmed)
+    .order('published_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return (data ?? null) as ChangelogEntry | null;
+}
+
 type GenerateDraftResult = {
   id: string;
   empty: boolean;

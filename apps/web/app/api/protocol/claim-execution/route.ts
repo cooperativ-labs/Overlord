@@ -46,7 +46,10 @@ async function resolveWorkingDirectory(
 
   if (!request.project_id) return null;
 
-  const { data } = await supabase
+  // Prefer a project_resource_directories row registered for the user on this
+  // exact device. `is_primary` wins so users can pin a primary working
+  // directory per project.
+  const { data: deviceResource } = await supabase
     .from('project_resource_directories')
     .select('directory_path')
     .eq('project_id', request.project_id)
@@ -56,8 +59,18 @@ async function resolveWorkingDirectory(
     .order('created_at', { ascending: true })
     .limit(1)
     .maybeSingle();
+  if (deviceResource?.directory_path) return deviceResource.directory_path;
 
-  return data?.directory_path ?? null;
+  // Fall back to the user's per-project local working directory so devices
+  // that haven't registered an explicit project resource can still claim.
+  const { data: projectUser } = await supabase
+    .from('project_user')
+    .select('local_working_directory')
+    .eq('project_id', request.project_id)
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  return projectUser?.local_working_directory ?? null;
 }
 
 function claimableByStatus(row: ExecutionRequestRow, nowMs: number): boolean {

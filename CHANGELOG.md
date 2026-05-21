@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2605211213.0] - 2026-05-21:12:13
+
+### Added
+- Public changelog at `/changelog` with per-entry pages under the shared marketing layout and sitemap entries for discoverability.
+- Marketing site light/dark theme toggle via a shared `(marketing)` layout and `ThemeProvider`.
+- Admin **Send newsletter** action to email a published changelog entry to subscribers opted in to new-feature updates.
+- Dedicated HTML email template for changelog newsletters in the `send-newsletter` edge function.
+- Antigravity agent connector plugin in the desktop app bundle and CLI plugin settings.
+- Lookup published changelog entries by app version so the desktop post-update modal can show release notes for the installed build.
+
+### Fixed
+- Run button should now launch agents in the terminal
+
+### Changed
+- Restructure marketing pages (home, about, compare, problems, demo, changelog) with updated typography, color system, and changelog-specific styles.
+- Refresh Early Access and email unsubscribe pages to match the new marketing design.
+- Desktop post-update changelog modal shows the published entry matching `app.getVersion()` instead of always the latest release; persist the seen version only after the user dismisses the modal.
+- Improve CLI settings plugin install and repair feedback.
+- Desktop auto-advance launcher claims the durable `execution_requests` queue (same path as `ovld runner`) instead of legacy deliver-event terminal spawning.
+- `claim-execution` resolves working directory from device-registered project resources, falling back to the user's per-project local working directory.
+
+### Security
+- None.
+
+### Chore
+- Bump workspace and CLI package versions.
+
 ## [0.2605211051.0] - 2026-05-21:10:51
 
 ### Added
