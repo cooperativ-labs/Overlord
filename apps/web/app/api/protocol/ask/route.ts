@@ -32,7 +32,7 @@ export async function POST(request: Request) {
       is_blocking: true,
       payload,
       phase: phase ?? 'review',
-      session_id: resolved.session.id,
+      objective_id: resolved.session.objective_id,
       summary: question,
       ticket_id: ticketId,
       created_by: userId

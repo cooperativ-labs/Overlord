@@ -67,7 +67,6 @@ export async function handleAttachmentFinalizeUpload(
       label,
       metadata: attachmentMetadata,
       objective_id: objectiveId,
-      session_id: access.session.id,
       storage_path: storagePath,
       ticket_id: access.ticket.id
     })
@@ -88,7 +87,7 @@ export async function handleAttachmentFinalizeUpload(
       storage_path: storagePath
     },
     phase: 'execute',
-    session_id: access.session.id,
+    objective_id: objectiveId,
     summary: `Objective attachment uploaded: ${label}`,
     ticket_id: access.ticket.id,
     created_by: ctx.userId

@@ -31,7 +31,7 @@ export async function handleReadContext(supabase: SupabaseClient, args: any, ctx
   await supabase.from('ticket_events').insert({
     event_type: 'context_read',
     payload: { query },
-    session_id: resolved.session.id,
+    objective_id: resolved.session.objective_id,
     summary: query ? `Read context query: ${query}` : 'Read latest context entries.',
     ticket_id: ticketId,
     created_by: ctx.userId

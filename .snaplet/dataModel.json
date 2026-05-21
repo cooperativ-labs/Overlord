@@ -304,20 +304,6 @@
           "maxLength": null
         },
         {
-          "id": "public.agent_sessions.ticket_id",
-          "name": "ticket_id",
-          "columnName": "ticket_id",
-          "type": "uuid",
-          "isRequired": true,
-          "kind": "scalar",
-          "isList": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": false,
-          "isId": false,
-          "maxLength": null
-        },
-        {
           "id": "public.agent_sessions.agent_identifier",
           "name": "agent_identifier",
           "columnName": "agent_identifier",
@@ -486,13 +472,27 @@
           "maxLength": null
         },
         {
-          "name": "tickets",
-          "type": "tickets",
+          "id": "public.agent_sessions.objective_id",
+          "name": "objective_id",
+          "columnName": "objective_id",
+          "type": "uuid",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "name": "objectives",
+          "type": "objectives",
           "isRequired": true,
           "kind": "object",
-          "relationName": "agent_sessionsTotickets",
+          "relationName": "agent_sessionsToobjectives",
           "relationFromFields": [
-            "ticket_id"
+            "objective_id"
           ],
           "relationToFields": [
             "id"
@@ -504,25 +504,11 @@
           "hasDefaultValue": false
         },
         {
-          "name": "artifacts",
-          "type": "artifacts",
+          "name": "execution_requests",
+          "type": "execution_requests",
           "isRequired": false,
           "kind": "object",
-          "relationName": "artifactsToagent_sessions",
-          "relationFromFields": [],
-          "relationToFields": [],
-          "isList": true,
-          "isId": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": false
-        },
-        {
-          "name": "feed_posts",
-          "type": "feed_posts",
-          "isRequired": false,
-          "kind": "object",
-          "relationName": "feed_postsToagent_sessions",
+          "relationName": "execution_requestsToagent_sessions",
           "relationFromFields": [],
           "relationToFields": [],
           "isList": true,
@@ -546,53 +532,11 @@
           "hasDefaultValue": false
         },
         {
-          "name": "objective_attachments",
-          "type": "objective_attachments",
-          "isRequired": false,
-          "kind": "object",
-          "relationName": "objective_attachmentsToagent_sessions",
-          "relationFromFields": [],
-          "relationToFields": [],
-          "isList": true,
-          "isId": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": false
-        },
-        {
           "name": "project_checkpoints",
           "type": "project_checkpoints",
           "isRequired": false,
           "kind": "object",
           "relationName": "project_checkpointsToagent_sessions",
-          "relationFromFields": [],
-          "relationToFields": [],
-          "isList": true,
-          "isId": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": false
-        },
-        {
-          "name": "shared_state",
-          "type": "shared_state",
-          "isRequired": false,
-          "kind": "object",
-          "relationName": "shared_stateToagent_sessions",
-          "relationFromFields": [],
-          "relationToFields": [],
-          "isList": true,
-          "isId": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": false
-        },
-        {
-          "name": "ticket_events",
-          "type": "ticket_events",
-          "isRequired": false,
-          "kind": "object",
-          "relationName": "ticket_eventsToagent_sessions",
           "relationFromFields": [],
           "relationToFields": [],
           "isList": true,
@@ -753,20 +697,6 @@
           "maxLength": null
         },
         {
-          "id": "public.artifacts.session_id",
-          "name": "session_id",
-          "columnName": "session_id",
-          "type": "uuid",
-          "isRequired": false,
-          "kind": "scalar",
-          "isList": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": false,
-          "isId": false,
-          "maxLength": null
-        },
-        {
           "id": "public.artifacts.artifact_type",
           "name": "artifact_type",
           "columnName": "artifact_type",
@@ -879,6 +809,20 @@
           "maxLength": null
         },
         {
+          "id": "public.artifacts.objective_id",
+          "name": "objective_id",
+          "columnName": "objective_id",
+          "type": "uuid",
+          "isRequired": false,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
           "name": "users",
           "type": "users",
           "isRequired": false,
@@ -897,13 +841,13 @@
           "hasDefaultValue": false
         },
         {
-          "name": "agent_sessions",
-          "type": "agent_sessions",
+          "name": "objectives",
+          "type": "objectives",
           "isRequired": false,
           "kind": "object",
-          "relationName": "artifactsToagent_sessions",
+          "relationName": "artifactsToobjectives",
           "relationFromFields": [
-            "session_id"
+            "objective_id"
           ],
           "relationToFields": [
             "id"
@@ -2852,6 +2796,34 @@
           "hasDefaultValue": false
         },
         {
+          "name": "execution_requests_execution_requests_claimed_by_device_idTodevices",
+          "type": "execution_requests",
+          "isRequired": false,
+          "kind": "object",
+          "relationName": "execution_requests_claimed_by_device_idTodevices",
+          "relationFromFields": [],
+          "relationToFields": [],
+          "isList": true,
+          "isId": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false
+        },
+        {
+          "name": "execution_requests_execution_requests_target_device_idTodevices",
+          "type": "execution_requests",
+          "isRequired": false,
+          "kind": "object",
+          "relationName": "execution_requests_target_device_idTodevices",
+          "relationFromFields": [],
+          "relationToFields": [],
+          "isList": true,
+          "isId": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false
+        },
+        {
           "name": "project_resource_directories",
           "type": "project_resource_directories",
           "isRequired": false,
@@ -2972,6 +2944,570 @@
       "uniqueConstraints": [
         {
           "name": "early_access_requests_pkey",
+          "fields": [
+            "id"
+          ],
+          "nullNotDistinct": false
+        }
+      ]
+    },
+    "execution_requests": {
+      "id": "public.execution_requests",
+      "schemaName": "public",
+      "tableName": "execution_requests",
+      "fields": [
+        {
+          "id": "public.execution_requests.id",
+          "name": "id",
+          "columnName": "id",
+          "type": "uuid",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": true,
+          "isId": true,
+          "maxLength": null
+        },
+        {
+          "id": "public.execution_requests.organization_id",
+          "name": "organization_id",
+          "columnName": "organization_id",
+          "type": "int4",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.execution_requests.ticket_id",
+          "name": "ticket_id",
+          "columnName": "ticket_id",
+          "type": "uuid",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.execution_requests.objective_id",
+          "name": "objective_id",
+          "columnName": "objective_id",
+          "type": "uuid",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.execution_requests.project_id",
+          "name": "project_id",
+          "columnName": "project_id",
+          "type": "uuid",
+          "isRequired": false,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.execution_requests.requested_by",
+          "name": "requested_by",
+          "columnName": "requested_by",
+          "type": "uuid",
+          "isRequired": false,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.execution_requests.requested_from",
+          "name": "requested_from",
+          "columnName": "requested_from",
+          "type": "text",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.execution_requests.agent_identifier",
+          "name": "agent_identifier",
+          "columnName": "agent_identifier",
+          "type": "text",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.execution_requests.model_identifier",
+          "name": "model_identifier",
+          "columnName": "model_identifier",
+          "type": "text",
+          "isRequired": false,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.execution_requests.thinking_level",
+          "name": "thinking_level",
+          "columnName": "thinking_level",
+          "type": "text",
+          "isRequired": false,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.execution_requests.launch_mode",
+          "name": "launch_mode",
+          "columnName": "launch_mode",
+          "type": "text",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": true,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.execution_requests.launch_params",
+          "name": "launch_params",
+          "columnName": "launch_params",
+          "type": "jsonb",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": true,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.execution_requests.target_device_id",
+          "name": "target_device_id",
+          "columnName": "target_device_id",
+          "type": "uuid",
+          "isRequired": false,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.execution_requests.target_resource_id",
+          "name": "target_resource_id",
+          "columnName": "target_resource_id",
+          "type": "uuid",
+          "isRequired": false,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.execution_requests.target_kind",
+          "name": "target_kind",
+          "columnName": "target_kind",
+          "type": "text",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": true,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.execution_requests.status",
+          "name": "status",
+          "columnName": "status",
+          "type": "text",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": true,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.execution_requests.claimed_by_device_id",
+          "name": "claimed_by_device_id",
+          "columnName": "claimed_by_device_id",
+          "type": "uuid",
+          "isRequired": false,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.execution_requests.claimed_at",
+          "name": "claimed_at",
+          "columnName": "claimed_at",
+          "type": "timestamptz",
+          "isRequired": false,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.execution_requests.lease_expires_at",
+          "name": "lease_expires_at",
+          "columnName": "lease_expires_at",
+          "type": "timestamptz",
+          "isRequired": false,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.execution_requests.launched_session_id",
+          "name": "launched_session_id",
+          "columnName": "launched_session_id",
+          "type": "uuid",
+          "isRequired": false,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.execution_requests.launched_at",
+          "name": "launched_at",
+          "columnName": "launched_at",
+          "type": "timestamptz",
+          "isRequired": false,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.execution_requests.failed_at",
+          "name": "failed_at",
+          "columnName": "failed_at",
+          "type": "timestamptz",
+          "isRequired": false,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.execution_requests.last_error",
+          "name": "last_error",
+          "columnName": "last_error",
+          "type": "text",
+          "isRequired": false,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.execution_requests.attempt_count",
+          "name": "attempt_count",
+          "columnName": "attempt_count",
+          "type": "int4",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": true,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.execution_requests.idempotency_key",
+          "name": "idempotency_key",
+          "columnName": "idempotency_key",
+          "type": "text",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.execution_requests.created_at",
+          "name": "created_at",
+          "columnName": "created_at",
+          "type": "timestamptz",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": true,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.execution_requests.updated_at",
+          "name": "updated_at",
+          "columnName": "updated_at",
+          "type": "timestamptz",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": true,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "name": "users",
+          "type": "users",
+          "isRequired": false,
+          "kind": "object",
+          "relationName": "execution_requestsTousers",
+          "relationFromFields": [
+            "requested_by"
+          ],
+          "relationToFields": [
+            "id"
+          ],
+          "isList": false,
+          "isId": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false
+        },
+        {
+          "name": "agent_sessions",
+          "type": "agent_sessions",
+          "isRequired": false,
+          "kind": "object",
+          "relationName": "execution_requestsToagent_sessions",
+          "relationFromFields": [
+            "launched_session_id"
+          ],
+          "relationToFields": [
+            "id"
+          ],
+          "isList": false,
+          "isId": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false
+        },
+        {
+          "name": "devices_execution_requests_claimed_by_device_idTodevices",
+          "type": "devices",
+          "isRequired": false,
+          "kind": "object",
+          "relationName": "execution_requests_claimed_by_device_idTodevices",
+          "relationFromFields": [
+            "claimed_by_device_id"
+          ],
+          "relationToFields": [
+            "id"
+          ],
+          "isList": false,
+          "isId": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false
+        },
+        {
+          "name": "devices_execution_requests_target_device_idTodevices",
+          "type": "devices",
+          "isRequired": false,
+          "kind": "object",
+          "relationName": "execution_requests_target_device_idTodevices",
+          "relationFromFields": [
+            "target_device_id"
+          ],
+          "relationToFields": [
+            "id"
+          ],
+          "isList": false,
+          "isId": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false
+        },
+        {
+          "name": "objectives",
+          "type": "objectives",
+          "isRequired": true,
+          "kind": "object",
+          "relationName": "execution_requestsToobjectives",
+          "relationFromFields": [
+            "objective_id"
+          ],
+          "relationToFields": [
+            "id"
+          ],
+          "isList": false,
+          "isId": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false
+        },
+        {
+          "name": "organizations",
+          "type": "organizations",
+          "isRequired": true,
+          "kind": "object",
+          "relationName": "execution_requestsToorganizations",
+          "relationFromFields": [
+            "organization_id"
+          ],
+          "relationToFields": [
+            "id"
+          ],
+          "isList": false,
+          "isId": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false
+        },
+        {
+          "name": "project_resource_directories",
+          "type": "project_resource_directories",
+          "isRequired": false,
+          "kind": "object",
+          "relationName": "execution_requestsToproject_resource_directories",
+          "relationFromFields": [
+            "target_resource_id"
+          ],
+          "relationToFields": [
+            "id"
+          ],
+          "isList": false,
+          "isId": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false
+        },
+        {
+          "name": "projects",
+          "type": "projects",
+          "isRequired": false,
+          "kind": "object",
+          "relationName": "execution_requestsToprojects",
+          "relationFromFields": [
+            "project_id"
+          ],
+          "relationToFields": [
+            "id"
+          ],
+          "isList": false,
+          "isId": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false
+        },
+        {
+          "name": "tickets",
+          "type": "tickets",
+          "isRequired": true,
+          "kind": "object",
+          "relationName": "execution_requestsTotickets",
+          "relationFromFields": [
+            "ticket_id"
+          ],
+          "relationToFields": [
+            "id"
+          ],
+          "isList": false,
+          "isId": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false
+        }
+      ],
+      "uniqueConstraints": [
+        {
+          "name": "execution_requests_organization_id_idempotency_key_key",
+          "fields": [
+            "idempotency_key",
+            "organization_id"
+          ],
+          "nullNotDistinct": false
+        },
+        {
+          "name": "execution_requests_pkey",
           "fields": [
             "id"
           ],
@@ -3151,20 +3687,6 @@
           "columnName": "ticket_id",
           "type": "uuid",
           "isRequired": true,
-          "kind": "scalar",
-          "isList": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": false,
-          "isId": false,
-          "maxLength": null
-        },
-        {
-          "id": "public.feed_posts.session_id",
-          "name": "session_id",
-          "columnName": "session_id",
-          "type": "uuid",
-          "isRequired": false,
           "kind": "scalar",
           "isList": false,
           "isGenerated": false,
@@ -3482,16 +4004,16 @@
           "maxLength": null
         },
         {
-          "id": "public.feed_posts.source_session_ids",
-          "name": "source_session_ids",
-          "columnName": "source_session_ids",
-          "type": "uuid[]",
-          "isRequired": true,
+          "id": "public.feed_posts.source_objective_id",
+          "name": "source_objective_id",
+          "columnName": "source_objective_id",
+          "type": "uuid",
+          "isRequired": false,
           "kind": "scalar",
           "isList": false,
           "isGenerated": false,
           "sequence": false,
-          "hasDefaultValue": true,
+          "hasDefaultValue": false,
           "isId": false,
           "maxLength": null
         },
@@ -3514,13 +4036,13 @@
           "hasDefaultValue": false
         },
         {
-          "name": "agent_sessions",
-          "type": "agent_sessions",
+          "name": "objectives_feed_posts_objective_idToobjectives",
+          "type": "objectives",
           "isRequired": false,
           "kind": "object",
-          "relationName": "feed_postsToagent_sessions",
+          "relationName": "feed_posts_objective_idToobjectives",
           "relationFromFields": [
-            "session_id"
+            "objective_id"
           ],
           "relationToFields": [
             "id"
@@ -3532,13 +4054,13 @@
           "hasDefaultValue": false
         },
         {
-          "name": "objectives",
+          "name": "objectives_feed_posts_source_objective_idToobjectives",
           "type": "objectives",
           "isRequired": false,
           "kind": "object",
-          "relationName": "feed_postsToobjectives",
+          "relationName": "feed_posts_source_objective_idToobjectives",
           "relationFromFields": [
-            "objective_id"
+            "source_objective_id"
           ],
           "relationToFields": [
             "id"
@@ -7245,20 +7767,6 @@
           "maxLength": null
         },
         {
-          "id": "public.objective_attachments.session_id",
-          "name": "session_id",
-          "columnName": "session_id",
-          "type": "uuid",
-          "isRequired": false,
-          "kind": "scalar",
-          "isList": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": false,
-          "isId": false,
-          "maxLength": null
-        },
-        {
           "id": "public.objective_attachments.created_by",
           "name": "created_by",
           "columnName": "created_by",
@@ -7294,24 +7802,6 @@
           "relationName": "objective_attachmentsTousers",
           "relationFromFields": [
             "created_by"
-          ],
-          "relationToFields": [
-            "id"
-          ],
-          "isList": false,
-          "isId": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": false
-        },
-        {
-          "name": "agent_sessions",
-          "type": "agent_sessions",
-          "isRequired": false,
-          "kind": "object",
-          "relationName": "objective_attachmentsToagent_sessions",
-          "relationFromFields": [
-            "session_id"
           ],
           "relationToFields": [
             "id"
@@ -7662,11 +8152,67 @@
           "hasDefaultValue": false
         },
         {
-          "name": "feed_posts",
+          "name": "agent_sessions",
+          "type": "agent_sessions",
+          "isRequired": false,
+          "kind": "object",
+          "relationName": "agent_sessionsToobjectives",
+          "relationFromFields": [],
+          "relationToFields": [],
+          "isList": true,
+          "isId": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false
+        },
+        {
+          "name": "artifacts",
+          "type": "artifacts",
+          "isRequired": false,
+          "kind": "object",
+          "relationName": "artifactsToobjectives",
+          "relationFromFields": [],
+          "relationToFields": [],
+          "isList": true,
+          "isId": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false
+        },
+        {
+          "name": "execution_requests",
+          "type": "execution_requests",
+          "isRequired": false,
+          "kind": "object",
+          "relationName": "execution_requestsToobjectives",
+          "relationFromFields": [],
+          "relationToFields": [],
+          "isList": true,
+          "isId": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false
+        },
+        {
+          "name": "feed_posts_feed_posts_objective_idToobjectives",
           "type": "feed_posts",
           "isRequired": false,
           "kind": "object",
-          "relationName": "feed_postsToobjectives",
+          "relationName": "feed_posts_objective_idToobjectives",
+          "relationFromFields": [],
+          "relationToFields": [],
+          "isList": true,
+          "isId": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false
+        },
+        {
+          "name": "feed_posts_feed_posts_source_objective_idToobjectives",
+          "type": "feed_posts",
+          "isRequired": false,
+          "kind": "object",
+          "relationName": "feed_posts_source_objective_idToobjectives",
           "relationFromFields": [],
           "relationToFields": [],
           "isList": true,
@@ -7732,6 +8278,20 @@
           "hasDefaultValue": false
         },
         {
+          "name": "shared_state",
+          "type": "shared_state",
+          "isRequired": false,
+          "kind": "object",
+          "relationName": "shared_stateToobjectives",
+          "relationFromFields": [],
+          "relationToFields": [],
+          "isList": true,
+          "isId": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false
+        },
+        {
           "name": "ticket_events",
           "type": "ticket_events",
           "isRequired": false,
@@ -7765,6 +8325,14 @@
         {
           "name": "objectives_one_draft_per_ticket_idx",
           "fields": [
+            "ticket_id"
+          ],
+          "nullNotDistinct": false
+        },
+        {
+          "name": "objectives_ticket_position_unique_idx",
+          "fields": [
+            "position",
             "ticket_id"
           ],
           "nullNotDistinct": false
@@ -8458,6 +9026,20 @@
           "isRequired": false,
           "kind": "object",
           "relationName": "devicesToorganizations",
+          "relationFromFields": [],
+          "relationToFields": [],
+          "isList": true,
+          "isId": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false
+        },
+        {
+          "name": "execution_requests",
+          "type": "execution_requests",
+          "isRequired": false,
+          "kind": "object",
+          "relationName": "execution_requestsToorganizations",
           "relationFromFields": [],
           "relationToFields": [],
           "isList": true,
@@ -9423,6 +10005,20 @@
           "isGenerated": false,
           "sequence": false,
           "hasDefaultValue": false
+        },
+        {
+          "name": "execution_requests",
+          "type": "execution_requests",
+          "isRequired": false,
+          "kind": "object",
+          "relationName": "execution_requestsToproject_resource_directories",
+          "relationFromFields": [],
+          "relationToFields": [],
+          "isList": true,
+          "isId": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false
         }
       ],
       "uniqueConstraints": [
@@ -10104,6 +10700,20 @@
             "id"
           ],
           "isList": false,
+          "isId": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false
+        },
+        {
+          "name": "execution_requests",
+          "type": "execution_requests",
+          "isRequired": false,
+          "kind": "object",
+          "relationName": "execution_requestsToprojects",
+          "relationFromFields": [],
+          "relationToFields": [],
+          "isList": true,
           "isId": false,
           "isGenerated": false,
           "sequence": false,
@@ -12334,20 +12944,6 @@
           "maxLength": null
         },
         {
-          "id": "public.shared_state.session_id",
-          "name": "session_id",
-          "columnName": "session_id",
-          "type": "uuid",
-          "isRequired": false,
-          "kind": "scalar",
-          "isList": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": false,
-          "isId": false,
-          "maxLength": null
-        },
-        {
           "id": "public.shared_state.state_key",
           "name": "state_key",
           "columnName": "state_key",
@@ -12418,13 +13014,27 @@
           "maxLength": null
         },
         {
-          "name": "agent_sessions",
-          "type": "agent_sessions",
+          "id": "public.shared_state.objective_id",
+          "name": "objective_id",
+          "columnName": "objective_id",
+          "type": "uuid",
+          "isRequired": false,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "name": "objectives",
+          "type": "objectives",
           "isRequired": false,
           "kind": "object",
-          "relationName": "shared_stateToagent_sessions",
+          "relationName": "shared_stateToobjectives",
           "relationFromFields": [
-            "session_id"
+            "objective_id"
           ],
           "relationToFields": [
             "id"
@@ -13561,20 +14171,6 @@
           "maxLength": null
         },
         {
-          "id": "public.ticket_events.session_id",
-          "name": "session_id",
-          "columnName": "session_id",
-          "type": "uuid",
-          "isRequired": false,
-          "kind": "scalar",
-          "isList": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": false,
-          "isId": false,
-          "maxLength": null
-        },
-        {
           "id": "public.ticket_events.event_type",
           "name": "event_type",
           "columnName": "event_type",
@@ -13694,24 +14290,6 @@
           "relationName": "ticket_eventsTousers",
           "relationFromFields": [
             "created_by"
-          ],
-          "relationToFields": [
-            "id"
-          ],
-          "isList": false,
-          "isId": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": false
-        },
-        {
-          "name": "agent_sessions",
-          "type": "agent_sessions",
-          "isRequired": false,
-          "kind": "object",
-          "relationName": "ticket_eventsToagent_sessions",
-          "relationFromFields": [
-            "session_id"
           ],
           "relationToFields": [
             "id"
@@ -14741,6 +15319,20 @@
           "maxLength": null
         },
         {
+          "id": "public.tickets.has_unopened_waiting_response",
+          "name": "has_unopened_waiting_response",
+          "columnName": "has_unopened_waiting_response",
+          "type": "bool",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": true,
+          "isId": false,
+          "maxLength": null
+        },
+        {
           "name": "users",
           "type": "users",
           "isRequired": false,
@@ -14855,11 +15447,11 @@
           "hasDefaultValue": false
         },
         {
-          "name": "agent_sessions",
-          "type": "agent_sessions",
+          "name": "artifacts",
+          "type": "artifacts",
           "isRequired": false,
           "kind": "object",
-          "relationName": "agent_sessionsTotickets",
+          "relationName": "artifactsTotickets",
           "relationFromFields": [],
           "relationToFields": [],
           "isList": true,
@@ -14869,11 +15461,11 @@
           "hasDefaultValue": false
         },
         {
-          "name": "artifacts",
-          "type": "artifacts",
+          "name": "execution_requests",
+          "type": "execution_requests",
           "isRequired": false,
           "kind": "object",
-          "relationName": "artifactsTotickets",
+          "relationName": "execution_requestsTotickets",
           "relationFromFields": [],
           "relationToFields": [],
           "isList": true,
@@ -16283,6 +16875,20 @@
           "hasDefaultValue": false
         },
         {
+          "name": "execution_requests",
+          "type": "execution_requests",
+          "isRequired": false,
+          "kind": "object",
+          "relationName": "execution_requestsTousers",
+          "relationFromFields": [],
+          "relationToFields": [],
+          "isList": true,
+          "isId": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false
+        },
+        {
           "name": "feed_posts",
           "type": "feed_posts",
           "isRequired": false,
@@ -17403,6 +18009,12 @@
         },
         {
           "name": "deliver"
+        },
+        {
+          "name": "execution_launch_failed"
+        },
+        {
+          "name": "execution_requested"
         },
         {
           "name": "question"

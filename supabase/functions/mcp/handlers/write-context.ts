@@ -20,7 +20,7 @@ export async function handleWriteContext(supabase: SupabaseClient, args: any, ct
   const { data: state, error } = await supabase
     .from('shared_state')
     .insert({
-      session_id: resolved.session.id,
+      objective_id: resolved.session.objective_id,
       state_key: key,
       state_value: value,
       tags,

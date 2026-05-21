@@ -127,7 +127,6 @@ type FeedPostContext = {
     event_type: string;
     summary: string | null;
     objective_id: string | null;
-    session_id: string | null;
   }>;
   rationales: Array<{
     file_path: string;
@@ -777,7 +776,7 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const { ticketId, sessionId, organizationId } = await req.json();
+    const { ticketId, objectiveId: requestObjectiveId, organizationId } = await req.json();
 
     if (!ticketId || !organizationId) {
       return new Response(JSON.stringify({ error: 'ticketId and organizationId are required' }), {
@@ -793,12 +792,11 @@ Deno.serve(async (req: Request) => {
       body: string;
       summary: string;
       source_event_ids: string[];
-      source_session_ids: string[];
     } | null = null;
 
     const { data: existingPostRow } = await supabase
       .from('feed_posts')
-      .select('id, title, body, summary, source_event_ids, source_session_ids')
+      .select('id, title, body, summary, source_event_ids')
       .eq('ticket_id', ticketId)
       .order('updated_at', { ascending: false })
       .limit(1)
@@ -884,7 +882,7 @@ Deno.serve(async (req: Request) => {
     // Fetch ticket-wide events so every regeneration rebuilds the canonical rollup from source facts.
     const eventsQuery = supabase
       .from('ticket_events')
-      .select('id, created_at, event_type, summary, objective_id, session_id')
+      .select('id, created_at, event_type, summary, objective_id')
       .eq('ticket_id', ticketId)
       .neq('event_type', 'system')
       .order('created_at', { ascending: true })
@@ -918,19 +916,20 @@ Deno.serve(async (req: Request) => {
         r.objective_id && excludedObjectiveIds.has(r.objective_id) ? null : r.objective_id
     }));
 
-    // Fetch agent type from session
+    // Fetch agent type from the objective's latest session
     let agentType: string | null = null;
-    if (sessionId) {
+    if (requestObjectiveId) {
       const { data: session } = await supabase
         .from('agent_sessions')
         .select('agent_identifier')
-        .eq('id', sessionId)
-        .single();
+        .eq('objective_id', requestObjectiveId)
+        .order('attached_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
       agentType = session?.agent_identifier ?? null;
     }
 
-    // Fetch tickets spawned during this session (recorded via protocol.spawn
-    // with parentSessionKey pointing back to this session).
+    // Fetch tickets spawned during work on this ticket (recorded via protocol.spawn).
     let spawnedTickets: Array<{
       id: string;
       ticket_id: string | null;
@@ -938,12 +937,10 @@ Deno.serve(async (req: Request) => {
       ticket_sequence: number;
       delegate: string | null;
     }> = [];
-    if (sessionId) {
-      // Find spawn events on this session that reference spawned_ticket_id
+    {
       const { data: spawnEvents } = await supabase
         .from('ticket_events')
         .select('payload')
-        .eq('session_id', sessionId)
         .eq('ticket_id', ticketId)
         .limit(50);
 
@@ -1026,10 +1023,6 @@ Deno.serve(async (req: Request) => {
     // Compute event window
     const allEvents = events ?? [];
     const eventIds = allEvents.map(e => e.id);
-    const sourceSessionIds = uniqueStrings(
-      [...allEvents.map(e => e.session_id), sessionId ?? null],
-      100
-    );
     const timestamps = allEvents.map(e => e.created_at).sort();
     const windowStart = timestamps[0] ?? new Date().toISOString();
     const windowEnd = timestamps[timestamps.length - 1] ?? new Date().toISOString();
@@ -1049,7 +1042,6 @@ Deno.serve(async (req: Request) => {
       const { error: updateError } = await supabase
         .from('feed_posts')
         .update({
-          session_id: sessionId ?? null,
           title: generated.title,
           summary,
           body: renderedBody,
@@ -1060,16 +1052,13 @@ Deno.serve(async (req: Request) => {
           files_touched: filesTouched,
           tickets_created: ticketsCreatedPayload,
           objective_id: latestObjective?.id ?? null,
+          source_objective_id: requestObjectiveId ?? latestObjective?.id ?? null,
           objective_sections: objectiveSections,
           orphan_file_changes: orphanFileChanges,
           total_events: allEvents.length,
           total_files: filesTouched.length,
           pending_actions: pendingActions,
           source_event_ids: mergedEventIds,
-          source_session_ids: uniqueStrings([
-            ...(existingPost.source_session_ids ?? []),
-            ...sourceSessionIds
-          ]),
           source_window_end: windowEnd,
           updated_at: new Date().toISOString()
         })
@@ -1102,8 +1091,8 @@ Deno.serve(async (req: Request) => {
           organization_id: organizationId,
           project_id: ticket.project_id,
           ticket_id: ticketId,
-          session_id: sessionId ?? null,
           objective_id: latestObjective?.id ?? null,
+          source_objective_id: requestObjectiveId ?? latestObjective?.id ?? null,
           agent_type: agentType,
           title: generated.title,
           summary,
@@ -1120,7 +1109,6 @@ Deno.serve(async (req: Request) => {
           total_files: filesTouched.length,
           pending_actions: pendingActions,
           source_event_ids: eventIds,
-          source_session_ids: sourceSessionIds,
           source_window_start: windowStart,
           source_window_end: windowEnd,
           created_by: ticket.created_by ?? null

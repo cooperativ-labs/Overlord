@@ -49,15 +49,15 @@ type EventInsert = {
   isBlocking?: boolean;
   payload?: Record<string, unknown>;
   phase?: string | null;
-  sessionId?: string | null;
+  objectiveId?: string | null;
   summary?: string | null;
   ticketId: string;
 };
 
 /**
  * Resolves an agent session by sessionKey + ticketId.
- * When organizationId is provided, the session query uses a joined tickets filter
- * to verify org membership in a single round-trip instead of two sequential queries.
+ * Joins through objectives to verify the session belongs to the supplied ticket.
+ * When organizationId is provided, also verifies org membership.
  */
 export async function resolveSession(
   sessionKey: string,
@@ -66,43 +66,17 @@ export async function resolveSession(
 ) {
   const supabase = createServiceRoleClient();
 
+  let query = supabase
+    .from('agent_sessions')
+    .select('*, objective:objectives!inner(ticket_id, ticket:tickets!inner(organization_id))')
+    .eq('session_key', sessionKey)
+    .eq('objective.ticket_id', ticketId);
+
   if (organizationId !== undefined) {
-    // Single query: join session → ticket and filter by org in one round-trip.
-    const { data: session, error } = await supabase
-      .from('agent_sessions')
-      .select('*, ticket:tickets!inner(organization_id)')
-      .eq('session_key', sessionKey)
-      .eq('ticket_id', ticketId)
-      .eq('ticket.organization_id', organizationId)
-      .single();
-
-    if (error || !session) {
-      return {
-        error: 'Session not found for ticket.',
-        session: null
-      };
-    }
-
-    // Strip the joined ticket data before returning the session row.
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { ticket: _ticket, ...sessionRow } = session as typeof session & {
-      ticket: unknown;
-    };
-
-    await supabase
-      .from('agent_sessions')
-      .update({ heartbeat_at: new Date().toISOString() })
-      .eq('id', sessionRow.id);
-
-    return { error: null, session: sessionRow };
+    query = query.eq('objective.ticket.organization_id', organizationId);
   }
 
-  const { data: session, error } = await supabase
-    .from('agent_sessions')
-    .select('*')
-    .eq('session_key', sessionKey)
-    .eq('ticket_id', ticketId)
-    .single();
+  const { data: session, error } = await query.single();
 
   if (error || !session) {
     return {
@@ -111,15 +85,18 @@ export async function resolveSession(
     };
   }
 
+  // Strip the joined data before returning the session row.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { objective: _objective, ...sessionRow } = session as typeof session & {
+    objective: unknown;
+  };
+
   await supabase
     .from('agent_sessions')
     .update({ heartbeat_at: new Date().toISOString() })
-    .eq('id', session.id);
+    .eq('id', sessionRow.id);
 
-  return {
-    error: null,
-    session
-  };
+  return { error: null, session: sessionRow };
 }
 
 export async function insertTicketEvent(input: EventInsert) {
@@ -129,7 +106,7 @@ export async function insertTicketEvent(input: EventInsert) {
     is_blocking: input.isBlocking ?? false,
     payload: input.payload ?? {},
     phase: input.phase ?? null,
-    session_id: input.sessionId ?? null,
+    objective_id: input.objectiveId ?? null,
     summary: input.summary ?? null,
     ticket_id: input.ticketId
   });

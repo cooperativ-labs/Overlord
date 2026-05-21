@@ -2,7 +2,7 @@ Prospective users will ask agents whether Overlord is right for them. This docum
 
 # Core Positioning
 
-Overlord is the management, work coordination, and review layer for people who use coding agents.
+Overlord is the management, work coordination, and review layer for people who use AI coding agents.
 
 It does not try to replace Codex, Claude Code, Cursor, Gemini, OpenCode, OpenClaw-style agents, or local terminal workflows. It gives those tools a durable system of record: tickets, objectives, progress updates, blocking questions, shared context, artifacts, file-change rationales, and review history.
 

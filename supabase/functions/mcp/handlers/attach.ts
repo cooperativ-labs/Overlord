@@ -86,27 +86,9 @@ export async function handleAttach(supabase: SupabaseClient, args: any, ctx: Tok
     return toolErr('Ticket not found or access denied.');
   }
 
-  const sessionKey = crypto.randomUUID();
-  const { data: session, error: sessionErr } = await supabase
-    .from('agent_sessions')
-    .insert({
-      agent_identifier: agentIdentifier,
-      connection_method: connectionMethod,
-      external_session_id:
-        typeof externalSessionId === 'string' && externalSessionId.trim().length > 0
-          ? externalSessionId.trim()
-          : null,
-      metadata,
-      session_key: sessionKey,
-      ticket_id: ticketId
-    })
-    .select('*')
-    .single();
-
-  if (sessionErr || !session) return toolErr('Failed to create session.');
-
   // Mark submitted objective as executing. If the database does not yet accept
   // submitted objectives, fall back to the newest draft so launch still works.
+  // Objective must be resolved BEFORE creating the session (session uses objective_id).
   const { data: submittedObjective } = await supabase
     .from('objectives')
     .select('id, objective, assigned_agent')
@@ -130,6 +112,7 @@ export async function handleAttach(supabase: SupabaseClient, args: any, ctx: Tok
     ).data;
 
   let executedObjective: string | null = null;
+  let executedObjectiveId: string | null = null;
   if (draftObjective && draftObjective.objective.trim().length > 0) {
     const objectiveAssignedModel =
       draftObjective.assigned_agent &&
@@ -163,6 +146,7 @@ export async function handleAttach(supabase: SupabaseClient, args: any, ctx: Tok
           : null);
 
     executedObjective = draftObjective.objective;
+    executedObjectiveId = draftObjective.id;
     await supabase
       .from('objectives')
       .update({
@@ -181,6 +165,27 @@ export async function handleAttach(supabase: SupabaseClient, args: any, ctx: Tok
       created_by: ctx.userId
     });
   }
+
+  if (!executedObjectiveId) return toolErr('No objective available for execution.');
+
+  const sessionKey = crypto.randomUUID();
+  const { data: session, error: sessionErr } = await supabase
+    .from('agent_sessions')
+    .insert({
+      agent_identifier: agentIdentifier,
+      connection_method: connectionMethod,
+      external_session_id:
+        typeof externalSessionId === 'string' && externalSessionId.trim().length > 0
+          ? externalSessionId.trim()
+          : null,
+      metadata,
+      session_key: sessionKey,
+      objective_id: executedObjectiveId
+    })
+    .select('*')
+    .single();
+
+  if (sessionErr || !session) return toolErr('Failed to create session.');
 
   const previousStatus = ticket.status;
   const previousStatusType = await resolveStatusTypeForName(
@@ -207,7 +212,7 @@ export async function handleAttach(supabase: SupabaseClient, args: any, ctx: Tok
     event_type: 'system',
     payload: { agent_identifier: agentIdentifier, connection_method: connectionMethod },
     phase: previousStatus,
-    session_id: session.id,
+    objective_id: session.objective_id,
     summary: `${agentIdentifier} attached via ${connectionMethod}.`,
     ticket_id: ticketId,
     created_by: ctx.userId
@@ -219,7 +224,7 @@ export async function handleAttach(supabase: SupabaseClient, args: any, ctx: Tok
     const { error: reopenEventError } = await supabase.from('ticket_events').insert({
       event_type: 'ticket_reopened',
       phase: 'execute',
-      session_id: session.id,
+      objective_id: session.objective_id,
       summary: 'Ticket reopened — resumed from delivered state.',
       ticket_id: ticketId,
       created_by: ctx.userId

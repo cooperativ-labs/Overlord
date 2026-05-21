@@ -21,7 +21,6 @@ export const DEMO_TICKET_EVENTS: TicketEvent[] = [
   {
     id: 'evt-deliver',
     ticket_id: TICKET_UUID,
-    session_id: SESSION_UUID,
     objective_id: OBJECTIVE_UUID,
     event_type: 'deliver',
     phase: 'deliver',
@@ -44,7 +43,6 @@ export const DEMO_TICKET_EVENTS: TicketEvent[] = [
   {
     id: 'evt-followup',
     ticket_id: TICKET_UUID,
-    session_id: SESSION_UUID,
     objective_id: OBJECTIVE_UUID,
     event_type: 'user_follow_up',
     phase: null,
@@ -58,7 +56,6 @@ export const DEMO_TICKET_EVENTS: TicketEvent[] = [
   {
     id: 'evt-update',
     ticket_id: TICKET_UUID,
-    session_id: SESSION_UUID,
     objective_id: OBJECTIVE_UUID,
     event_type: 'update',
     phase: 'execute',
@@ -72,7 +69,6 @@ export const DEMO_TICKET_EVENTS: TicketEvent[] = [
   {
     id: 'evt-checkpoint',
     ticket_id: TICKET_UUID,
-    session_id: SESSION_UUID,
     objective_id: OBJECTIVE_UUID,
     event_type: 'update',
     phase: 'execute',

@@ -52,7 +52,6 @@ export async function resolveNextQueuedObjectiveAfterDeliver(
 export type ScheduleQueuedObjectiveAfterDeliverInput = {
   supabase: ObjectiveClient;
   ticketId: string;
-  sessionId: string;
   userId: string;
   organizationId: number;
   ticketReference: string;
@@ -63,7 +62,6 @@ export type ScheduleQueuedObjectiveAfterDeliverResult = { advanced: true } | { a
 export async function scheduleQueuedObjectiveAfterDeliver({
   supabase,
   ticketId,
-  sessionId,
   userId,
   organizationId,
   ticketReference
@@ -94,7 +92,6 @@ export async function scheduleQueuedObjectiveAfterDeliver({
       event_type: 'awaiting_approval',
       phase: 'execute',
       summary: nextQueued.approval_reason || 'Queued objective is waiting for your approval.',
-      session_id: sessionId,
       ticket_id: ticketId,
       objective_id: nextQueued.id,
       is_blocking: true,

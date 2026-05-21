@@ -12,7 +12,6 @@ describe('buildFeedDiscussLayeredTaskMarkdown', () => {
       summary: 'Did the thing.',
       impact_level: 'medium',
       agent_type: 'cursor',
-      session_id: 'sess-1',
       objective_id: 'obj-1',
       tradeoffs: [
         {
@@ -31,7 +30,7 @@ describe('buildFeedDiscussLayeredTaskMarkdown', () => {
       updated_at: '2026-01-01',
       created_by: null,
       source_event_ids: [],
-      source_session_ids: ['sess-1'],
+      source_objective_id: 'obj-1',
       objective_sections: [],
       orphan_file_changes: [],
       total_events: 0,

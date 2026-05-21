@@ -71,7 +71,6 @@ export async function POST(request: Request) {
       event_type: 'update',
       phase: 'execute',
       summary: `Requested approval gate on next objective: ${reason}`,
-      session_id: resolved.session.id,
       ticket_id: ticketId,
       objective_id: targetObjective.id,
       created_by: userId

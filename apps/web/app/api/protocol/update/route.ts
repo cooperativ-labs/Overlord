@@ -85,7 +85,7 @@ export async function POST(request: Request) {
         supabase.from('ticket_events').insert({
           event_type: 'ticket_reopened',
           phase: 'execute',
-          session_id: resolved.session.id,
+          objective_id: resolved.session.objective_id,
           summary: 'Ticket resumed — agent continued working after delivery.',
           ticket_id: ticketId,
           created_by: userId
@@ -126,7 +126,7 @@ export async function POST(request: Request) {
         event_type: eventType ?? 'update',
         payload,
         phase: phase ?? null,
-        session_id: resolved.session.id,
+        objective_id: resolved.session.objective_id,
         summary,
         ticket_id: ticketId,
         created_by: userId
@@ -209,7 +209,7 @@ export async function POST(request: Request) {
             title: notification.title ?? null
           },
           phase: phase ?? null,
-          session_id: resolved.session.id,
+          objective_id: resolved.session.objective_id,
           summary: buildAgentNotificationSummary(notification),
           ticket_id: ticketId,
           created_by: userId
@@ -260,15 +260,17 @@ export async function POST(request: Request) {
         ticketUpdate.is_read = false;
 
         // Generate feed post for review transitions (fire-and-forget)
-        const reviewSessionId = resolved.session.id;
+        const reviewObjectiveId = resolved.session.objective_id;
         after(async () => {
           try {
             await supabase.functions.invoke('generate-feed-post', {
-              body: { ticketId, sessionId: reviewSessionId, organizationId }
+              body: { ticketId, objectiveId: reviewObjectiveId, organizationId }
             });
           } catch (feedErr) {
             console.error('[protocol:update] feed post generation error:', feedErr);
-            Sentry.captureException(feedErr, { extra: { ticketId, sessionId: reviewSessionId } });
+            Sentry.captureException(feedErr, {
+              extra: { ticketId, objectiveId: reviewObjectiveId }
+            });
           }
         });
       }

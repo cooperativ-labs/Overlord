@@ -78,7 +78,6 @@ export async function POST(request: Request) {
         label,
         metadata: attachmentMetadata,
         objective_id: objectiveId,
-        session_id: access.session.id,
         storage_path: storagePath,
         ticket_id: ticketId
       })
@@ -102,7 +101,7 @@ export async function POST(request: Request) {
         storage_path: storagePath
       },
       phase: 'execute',
-      session_id: access.session.id,
+      objective_id: access.session.objective_id,
       summary: `Objective attachment uploaded: ${label}`,
       ticket_id: ticketId,
       created_by: userId

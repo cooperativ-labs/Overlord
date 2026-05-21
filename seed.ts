@@ -153,7 +153,13 @@ async function main() {
       position: 1,
       is_default: true
     },
-    { organization_id: orgId, name: 'review', status_type: 'review', position: 2, is_default: true },
+    {
+      organization_id: orgId,
+      name: 'review',
+      status_type: 'review',
+      position: 2,
+      is_default: true
+    },
     {
       organization_id: orgId,
       name: 'complete',
@@ -390,7 +396,7 @@ async function main() {
   await seed.agent_sessions([
     {
       id: reviewSessionId,
-      ticket_id: ticketIds[0],
+      objective_id: objectiveIds.deployment,
       agent_identifier: 'Claude',
       connection_method: 'claude_code',
       session_state: 'completed',
@@ -411,7 +417,7 @@ async function main() {
     {
       id: reviewEventId,
       ticket_id: ticketIds[0],
-      session_id: reviewSessionId,
+      objective_id: objectiveIds.deployment,
       event_type: 'deliver',
       phase: 'review',
       summary: 'Delivered the CI/CD workflow update for review.',
@@ -466,8 +472,8 @@ async function main() {
       organization_id: orgId,
       project_id: projectAlphaId,
       ticket_id: ticketIds[0],
-      session_id: reviewSessionId,
       objective_id: objectiveIds.deployment,
+      source_objective_id: objectiveIds.deployment,
       created_by: jakeId,
       agent_type: null,
       title: 'CI/CD pipeline scaffolded',
@@ -497,8 +503,7 @@ async function main() {
           duration: '12m',
           events: 1,
           takeaway: 'Lint and test jobs run on every pull request with cached dependencies.',
-          body:
-            'Configured GitHub Actions workflows for lint and test jobs mirroring what reviewers now see in file changes.',
+          body: 'Configured GitHub Actions workflows for lint and test jobs mirroring what reviewers now see in file changes.',
           file_changes: [
             {
               path: '.github/workflows/ci.yml',
@@ -513,7 +518,8 @@ async function main() {
             {
               decision: 'Cache node_modules between jobs',
               alternatives_considered: 'Fresh install each job',
-              rationale: 'Speeds up CI significantly while accepting occasional cache staleness risk.'
+              rationale:
+                'Speeds up CI significantly while accepting occasional cache staleness risk.'
             }
           ],
           event_ids: [reviewEventId],
@@ -530,9 +536,9 @@ async function main() {
           position: 1,
           duration: '7m',
           events: 0,
-          takeaway: 'Deploy job exists; production credentials remain gated behind security review.',
-          body:
-            'Added the deploy job structure and placeholders for secrets; wiring completes once credentials land.',
+          takeaway:
+            'Deploy job exists; production credentials remain gated behind security review.',
+          body: 'Added the deploy job structure and placeholders for secrets; wiring completes once credentials land.',
           file_changes: [
             {
               path: '.github/workflows/deploy.yml',
@@ -560,14 +566,12 @@ async function main() {
       total_events: 1,
       total_files: 2,
       pending_actions: 3,
-      source_event_ids: [reviewEventId],
-      source_session_ids: [reviewSessionId]
+      source_event_ids: [reviewEventId]
     },
     {
       organization_id: orgId,
       project_id: projectAlphaId,
       ticket_id: ticketIds[1],
-      session_id: null,
       objective_id: objectiveIds.designTokens,
       created_by: jakeId,
       agent_type: null,
@@ -584,7 +588,8 @@ async function main() {
         {
           decision: 'CSS custom properties for runtime theming',
           alternatives_considered: 'JS-in-CSS token objects compiled at build time',
-          rationale: 'Keeps tokens consumable from plain CSS and Storybook without extra bundler plugins.'
+          rationale:
+            'Keeps tokens consumable from plain CSS and Storybook without extra bundler plugins.'
         }
       ],
       objective_sections: [
@@ -598,8 +603,7 @@ async function main() {
           duration: null,
           events: 0,
           takeaway: 'Foundational palette and spacing are ready for component refactors.',
-          body:
-            'Define color, spacing, and typography tokens for the Alpha project so downstream components share one source of truth.',
+          body: 'Define color, spacing, and typography tokens for the Alpha project so downstream components share one source of truth.',
           file_changes: [
             {
               path: 'tokens/colors.ts',
@@ -629,13 +633,12 @@ async function main() {
       total_files: 2,
       pending_actions: 2,
       source_event_ids: [],
-      source_session_ids: []
+      source_objective_id: null
     },
     {
       organization_id: orgId,
       project_id: projectBetaId,
       ticket_id: ticketIds[3],
-      session_id: null,
       objective_id: objectiveIds.posthog,
       created_by: jakeId,
       agent_type: null,
@@ -651,7 +654,8 @@ async function main() {
         {
           decision: 'Lazy-load PostHog on interaction',
           alternatives_considered: 'Bundle SDK with the main layout chunk',
-          rationale: 'Avoids blocking first paint while still capturing high-intent flows early enough.'
+          rationale:
+            'Avoids blocking first paint while still capturing high-intent flows early enough.'
         }
       ],
       objective_sections: [
@@ -664,9 +668,9 @@ async function main() {
           position: 0,
           duration: null,
           events: 0,
-          takeaway: 'Core acquisition and monetization funnels now emit structured analytics events.',
-          body:
-            'Add PostHog analytics to the Beta project and instrument key user flows so product can measure activation.',
+          takeaway:
+            'Core acquisition and monetization funnels now emit structured analytics events.',
+          body: 'Add PostHog analytics to the Beta project and instrument key user flows so product can measure activation.',
           file_changes: [
             {
               path: 'lib/analytics.ts',
@@ -696,13 +700,12 @@ async function main() {
       total_files: 2,
       pending_actions: 1,
       source_event_ids: [],
-      source_session_ids: []
+      source_objective_id: null
     },
     {
       organization_id: orgId,
       project_id: projectBetaId,
       ticket_id: ticketIds[4],
-      session_id: null,
       objective_id: objectiveIds.a11y,
       created_by: jakeId,
       agent_type: null,
@@ -732,9 +735,9 @@ async function main() {
           position: 0,
           duration: null,
           events: 0,
-          takeaway: 'Critical interactive components now meet keyboard and screen reader baselines.',
-          body:
-            'Run axe-core across all pages and resolve WCAG AA violations, prioritizing customer-facing flows first.',
+          takeaway:
+            'Critical interactive components now meet keyboard and screen reader baselines.',
+          body: 'Run axe-core across all pages and resolve WCAG AA violations, prioritizing customer-facing flows first.',
           file_changes: [
             {
               path: 'components/Button.tsx',
@@ -771,7 +774,7 @@ async function main() {
       total_files: 3,
       pending_actions: 3,
       source_event_ids: [],
-      source_session_ids: []
+      source_objective_id: null
     }
   ]);
 

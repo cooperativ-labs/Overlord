@@ -79,7 +79,7 @@ export async function handleRecordHookEvent(
         hook_type: 'UserPromptSubmit',
         turn_index: typeof turnIndex === 'number' ? turnIndex : null
       },
-      session_id: null
+      objective_id: null
     });
 
     if (error) return toolOk({ ok: true });

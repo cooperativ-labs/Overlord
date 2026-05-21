@@ -652,10 +652,7 @@ export function CliPage({ open }: { open: boolean }) {
       }
       setPluginActionButtonState(optionKey, 'success');
     } catch (error) {
-      setPluginActionMessage(
-        optionKey,
-        error instanceof Error ? error.message : 'Install failed'
-      );
+      setPluginActionMessage(optionKey, error instanceof Error ? error.message : 'Install failed');
       setPluginActionButtonState(optionKey, 'error');
     } finally {
       setActivePluginActionKey(null);
@@ -691,10 +688,7 @@ export function CliPage({ open }: { open: boolean }) {
       }
       setPluginActionButtonState(optionKey, 'success');
     } catch (error) {
-      setPluginActionMessage(
-        optionKey,
-        error instanceof Error ? error.message : 'Update failed'
-      );
+      setPluginActionMessage(optionKey, error instanceof Error ? error.message : 'Update failed');
       setPluginActionButtonState(optionKey, 'error');
     } finally {
       setActivePluginActionKey(null);

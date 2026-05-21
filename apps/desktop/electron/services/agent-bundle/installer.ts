@@ -321,13 +321,64 @@ function patchAntigravityInstalledPaths({
   }
 }
 
+/**
+ * Electron GUI processes often inherit a minimal PATH (missing Homebrew, ~/.local/bin,
+ * cargo, etc.). Match the prefixes we inject for in-app terminals so `agy` resolves the
+ * same way as in an interactive shell.
+ */
+function desktopAgentCliLookupPath(): string {
+  const home = os.homedir();
+  const prefixes = [
+    path.join(home, '.local', 'bin'),
+    '/opt/homebrew/bin',
+    '/usr/local/bin',
+    path.join(home, '.cargo', 'bin')
+  ];
+  return [...prefixes, process.env.PATH ?? ''].join(path.delimiter);
+}
+
+function agyBinaryNames(): string[] {
+  return process.platform === 'win32' ? ['agy.cmd', 'agy.exe', 'agy'] : ['agy'];
+}
+
+function resolveAgyBinaryPath(): string | null {
+  const dirs = desktopAgentCliLookupPath()
+    .split(path.delimiter)
+    .map(entry => entry.trim())
+    .filter(Boolean);
+  const seen = new Set<string>();
+  for (const dir of dirs) {
+    if (seen.has(dir)) continue;
+    seen.add(dir);
+    for (const name of agyBinaryNames()) {
+      const full = path.join(dir, name);
+      if (fs.existsSync(full)) {
+        return full;
+      }
+    }
+  }
+  return null;
+}
+
 function runAgyPluginInstall(sourceDir: string): void {
+  const agyPath = resolveAgyBinaryPath();
+  if (!agyPath) {
+    throw new Error(
+      'Antigravity CLI (`agy`) was not found. Install it (for example `npm install -g @antigravity/cli`), ensure it is on your PATH in a normal terminal, then fully quit and reopen Overlord Desktop so the app can see the same locations (for example Homebrew at /opt/homebrew/bin or tools under ~/.local/bin).'
+    );
+  }
+
+  const childEnv = { ...process.env, PATH: desktopAgentCliLookupPath() };
+
   try {
-    execFileSync('agy', ['plugin', 'install', sourceDir], { stdio: 'inherit' });
+    execFileSync(agyPath, ['plugin', 'install', sourceDir], { stdio: 'inherit', env: childEnv });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     if (message.includes('already') || message.includes('imported')) {
-      execFileSync('agy', ['plugin', 'import', '--force', sourceDir], { stdio: 'inherit' });
+      execFileSync(agyPath, ['plugin', 'import', '--force', sourceDir], {
+        stdio: 'inherit',
+        env: childEnv
+      });
       return;
     }
     throw error;

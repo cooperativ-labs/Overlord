@@ -297,11 +297,28 @@ export function useTicketBoardRealtime({
       return mapRealtimeBoardTicketRow(data as RealtimeBoardTicketRow);
     };
 
+    const objectiveTicketCache = new Map<string, string>();
+
+    const resolveTicketIdFromObjective = async (objectiveId: string): Promise<string | null> => {
+      const cached = objectiveTicketCache.get(objectiveId);
+      if (cached) return cached;
+      const { data } = await supabase
+        .from('objectives')
+        .select('ticket_id')
+        .eq('id', objectiveId)
+        .maybeSingle();
+      if (data?.ticket_id) {
+        objectiveTicketCache.set(objectiveId, data.ticket_id);
+      }
+      return data?.ticket_id ?? null;
+    };
+
     const applySessionOverride = (
-      session: Pick<AgentSession, 'ticket_id' | 'session_state' | 'agent_identifier'>
+      ticketId: string,
+      session: Pick<AgentSession, 'session_state' | 'agent_identifier'>
     ) => {
       const isAttached = session.session_state === 'attached';
-      updateTicketInBoards(queryClient, session.ticket_id, {
+      updateTicketInBoards(queryClient, ticketId, {
         agent_session_state: session.session_state,
         running_agent: isAttached ? session.agent_identifier : null
       });
@@ -316,8 +333,10 @@ export function useTicketBoardRealtime({
           .order('created_at', { ascending: false }),
         supabase
           .from('agent_sessions')
-          .select('session_state,agent_identifier,attached_at')
-          .eq('ticket_id', ticketId)
+          .select(
+            'session_state,agent_identifier,attached_at,objective:objectives!inner(ticket_id)'
+          )
+          .eq('objective.ticket_id', ticketId)
           .order('attached_at', { ascending: false })
           .limit(1)
       ]);
@@ -383,8 +402,10 @@ export function useTicketBoardRealtime({
       ] = await Promise.all([
         supabase
           .from('agent_sessions')
-          .select('ticket_id,session_state,agent_identifier,attached_at')
-          .in('ticket_id', ticketIds)
+          .select(
+            'session_state,agent_identifier,attached_at,objective:objectives!inner(ticket_id)'
+          )
+          .in('objective.ticket_id', ticketIds)
           .order('attached_at', { ascending: false }),
         supabase
           .from('ticket_events')
@@ -414,13 +435,10 @@ export function useTicketBoardRealtime({
         string,
         Pick<AgentSession, 'session_state' | 'agent_identifier'>
       >();
-      for (const session of (sessions ?? []) as Pick<
-        AgentSession,
-        'ticket_id' | 'session_state' | 'agent_identifier'
-      >[]) {
-        if (!sessionByTicket.has(session.ticket_id)) {
-          sessionByTicket.set(session.ticket_id, session);
-        }
+      for (const session of sessions ?? []) {
+        const ticketId = (session.objective as unknown as { ticket_id: string })?.ticket_id;
+        if (!ticketId || sessionByTicket.has(ticketId)) continue;
+        sessionByTicket.set(ticketId, session);
       }
 
       const ticketUpdateMap = new Map(
@@ -571,7 +589,7 @@ export function useTicketBoardRealtime({
       if (!event.phase) return;
       if (!ticketIdsRef.current.has(event.ticket_id)) return;
 
-      const shouldMoveToTopOfReview = event.phase === 'review' && event.session_id !== null;
+      const shouldMoveToTopOfReview = event.phase === 'review' && event.objective_id !== null;
       const existingTicket = ticketsByIdRef.current.get(event.ticket_id);
       updateTicketInBoards(queryClient, event.ticket_id, {
         status: event.phase,
@@ -653,14 +671,17 @@ export function useTicketBoardRealtime({
         { event: 'INSERT', schema: 'public', table: 'agent_sessions' },
         payload => {
           const session = payload.new;
-          if (!ticketIdsRef.current.has(session.ticket_id)) return;
-          latestSessionAttachedAtRef.current.set(session.ticket_id, session.attached_at);
-          mergeSessionMetaIntoBoards(queryClient, session.ticket_id, {
-            session_state: session.session_state,
-            agent_identifier: session.agent_identifier,
-            attached_at: session.attached_at
-          });
-          applySessionOverride(session);
+          void (async () => {
+            const ticketId = await resolveTicketIdFromObjective(session.objective_id);
+            if (!ticketId || !ticketIdsRef.current.has(ticketId)) return;
+            latestSessionAttachedAtRef.current.set(ticketId, session.attached_at);
+            mergeSessionMetaIntoBoards(queryClient, ticketId, {
+              session_state: session.session_state,
+              agent_identifier: session.agent_identifier,
+              attached_at: session.attached_at
+            });
+            applySessionOverride(ticketId, session);
+          })();
         }
       )
       .on<AgentSession>(
@@ -668,15 +689,18 @@ export function useTicketBoardRealtime({
         { event: 'UPDATE', schema: 'public', table: 'agent_sessions' },
         payload => {
           const session = payload.new;
-          if (!ticketIdsRef.current.has(session.ticket_id)) return;
-          const latestAt = latestSessionAttachedAtRef.current.get(session.ticket_id) ?? '';
-          if (session.attached_at < latestAt) return;
-          mergeSessionMetaIntoBoards(queryClient, session.ticket_id, {
-            session_state: session.session_state,
-            agent_identifier: session.agent_identifier,
-            attached_at: session.attached_at
-          });
-          applySessionOverride(session);
+          void (async () => {
+            const ticketId = await resolveTicketIdFromObjective(session.objective_id);
+            if (!ticketId || !ticketIdsRef.current.has(ticketId)) return;
+            const latestAt = latestSessionAttachedAtRef.current.get(ticketId) ?? '';
+            if (session.attached_at < latestAt) return;
+            mergeSessionMetaIntoBoards(queryClient, ticketId, {
+              session_state: session.session_state,
+              agent_identifier: session.agent_identifier,
+              attached_at: session.attached_at
+            });
+            applySessionOverride(ticketId, session);
+          })();
         }
       )
       .on<Objective>(

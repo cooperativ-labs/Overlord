@@ -246,9 +246,9 @@ export function ResourceDirectoryList({ projectId, onResourceDirectoriesChanged 
             return (
               <div
                 key={item.id}
-                className="flex items-center gap-2 rounded-md border px-2 py-1.5 text-xs"
+                className="flex items-start gap-2 rounded-md border px-2 py-1.5 text-xs"
               >
-                <Folder className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                <Folder className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                 <div className="min-w-0 flex-1">
                   {isEditingLabel ? (
                     <Input
@@ -271,12 +271,12 @@ export function ResourceDirectoryList({ projectId, onResourceDirectoriesChanged 
                   ) : (
                     <div className="min-w-0">
                       {item.label ? (
-                        <div className="truncate font-medium" title={item.label}>
+                        <div className="break-all font-medium" title={item.label}>
                           {item.label}
                         </div>
                       ) : null}
                       <div
-                        className={`truncate ${item.label ? 'text-muted-foreground' : ''}`}
+                        className={`break-all ${item.label ? 'text-muted-foreground' : ''}`}
                         title={item.directoryPath}
                       >
                         {item.directoryPath}
@@ -285,7 +285,7 @@ export function ResourceDirectoryList({ projectId, onResourceDirectoriesChanged 
                   )}
                 </div>
                 {!isEditingLabel && item.deviceLabel ? (
-                  <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                  <span className="mt-0.5 shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
                     {item.deviceLabel}
                   </span>
                 ) : null}

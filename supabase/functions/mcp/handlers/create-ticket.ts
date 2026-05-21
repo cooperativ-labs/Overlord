@@ -106,7 +106,7 @@ export async function handleCreateTicket(supabase: SupabaseClient, args: any, ct
     supabase.from('ticket_events').insert({
       event_type: 'system',
       payload: { created_from_ticket_id: ticketId, delegate: ticketDelegate },
-      session_id: resolved.session.id,
+      objective_id: resolved.session.objective_id,
       summary: `Follow-up ticket created from ${sourceRef}.`,
       ticket_id: created.id,
       created_by: createdBy
@@ -118,7 +118,7 @@ export async function handleCreateTicket(supabase: SupabaseClient, args: any, ct
         delegate: ticketDelegate,
         entry_type: 'follow_up_ticket'
       },
-      session_id: resolved.session.id,
+      objective_id: resolved.session.objective_id,
       summary: `Created follow-up ticket ${createdRef} (${created.execution_target}).`,
       ticket_id: ticketId,
       created_by: createdBy

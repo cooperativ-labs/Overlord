@@ -37,7 +37,7 @@ type AttachmentAccessResult =
   | {
       error: null;
       objective: ObjectiveForAttachment;
-      session: { id: string };
+      session: { id: string; objective_id: string };
       ticket: TicketForAttachment;
     };
 
@@ -155,7 +155,7 @@ export async function resolveAttachmentAccess(
   return {
     error: null,
     objective,
-    session: { id: resolved.session.id },
+    session: { id: resolved.session.id, objective_id: resolved.session.objective_id },
     ticket
   };
 }

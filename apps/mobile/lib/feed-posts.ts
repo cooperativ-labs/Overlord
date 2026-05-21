@@ -6,8 +6,8 @@ export type FeedPostRow = {
   organization_id: number;
   project_id: string;
   ticket_id: string;
-  session_id: string | null;
   objective_id: string | null;
+  source_objective_id: string | null;
   title: string;
   summary: string | null;
   body: string;
@@ -23,7 +23,6 @@ export type FeedPostRow = {
   total_files: number | null;
   pending_actions: number | null;
   source_event_ids: string[] | null;
-  source_session_ids: string[] | null;
   source_window_start: string | null;
   source_window_end: string | null;
   created_at: string;
@@ -40,8 +39,8 @@ export type FeedPostInsertRow = {
   organization_id: number;
   project_id: string;
   ticket_id: string;
-  session_id: string | null;
   objective_id: string | null;
+  source_objective_id: string | null;
   title: string;
   summary: string | null;
   body: string;
@@ -57,7 +56,6 @@ export type FeedPostInsertRow = {
   total_files: number | null;
   pending_actions: number | null;
   source_event_ids: string[] | null;
-  source_session_ids: string[] | null;
   source_window_start: string | null;
   source_window_end: string | null;
   created_at: string;
@@ -65,7 +63,7 @@ export type FeedPostInsertRow = {
 };
 
 export const FEED_POST_SELECT =
-  'id, organization_id, project_id, ticket_id, session_id, objective_id, title, summary, body, tags, impact_level, files_touched, tradeoffs, human_actions, tickets_created, objective_sections, orphan_file_changes, total_events, total_files, pending_actions, source_event_ids, source_session_ids, source_window_start, source_window_end, created_at, updated_at, projects!inner(name, color), tickets!inner(title, ticket_sequence)';
+  'id, organization_id, project_id, ticket_id, objective_id, source_objective_id, title, summary, body, tags, impact_level, files_touched, tradeoffs, human_actions, tickets_created, objective_sections, orphan_file_changes, total_events, total_files, pending_actions, source_event_ids, source_window_start, source_window_end, created_at, updated_at, projects!inner(name, color), tickets!inner(title, ticket_sequence)';
 
 function normalizeTradeoffs(value: unknown): FeedPost['tradeoffs'] {
   return Array.isArray(value)

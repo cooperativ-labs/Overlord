@@ -79,9 +79,9 @@ export type Database = {
           heartbeat_at: string;
           id: string;
           metadata: Json;
+          objective_id: string;
           session_key: string;
           session_state: Database['public']['Enums']['session_state'];
-          ticket_id: string;
           updated_at: string;
         };
         Insert: {
@@ -95,9 +95,9 @@ export type Database = {
           heartbeat_at?: string;
           id?: string;
           metadata?: Json;
+          objective_id: string;
           session_key?: string;
           session_state?: Database['public']['Enums']['session_state'];
-          ticket_id: string;
           updated_at?: string;
         };
         Update: {
@@ -111,17 +111,17 @@ export type Database = {
           heartbeat_at?: string;
           id?: string;
           metadata?: Json;
+          objective_id?: string;
           session_key?: string;
           session_state?: Database['public']['Enums']['session_state'];
-          ticket_id?: string;
           updated_at?: string;
         };
         Relationships: [
           {
-            foreignKeyName: 'agent_sessions_ticket_id_fkey';
-            columns: ['ticket_id'];
+            foreignKeyName: 'agent_sessions_objective_id_fkey';
+            columns: ['objective_id'];
             isOneToOne: false;
-            referencedRelation: 'tickets';
+            referencedRelation: 'objectives';
             referencedColumns: ['id'];
           }
         ];
@@ -160,7 +160,7 @@ export type Database = {
           id: string;
           label: string;
           metadata: Json;
-          session_id: string | null;
+          objective_id: string | null;
           storage_path: string | null;
           ticket_id: string;
           uri: string | null;
@@ -174,7 +174,7 @@ export type Database = {
           id?: string;
           label: string;
           metadata?: Json;
-          session_id?: string | null;
+          objective_id?: string | null;
           storage_path?: string | null;
           ticket_id: string;
           uri?: string | null;
@@ -188,7 +188,7 @@ export type Database = {
           id?: string;
           label?: string;
           metadata?: Json;
-          session_id?: string | null;
+          objective_id?: string | null;
           storage_path?: string | null;
           ticket_id?: string;
           uri?: string | null;
@@ -202,10 +202,10 @@ export type Database = {
             referencedColumns: ['id'];
           },
           {
-            foreignKeyName: 'artifacts_session_id_fkey';
-            columns: ['session_id'];
+            foreignKeyName: 'artifacts_objective_id_fkey';
+            columns: ['objective_id'];
             isOneToOne: false;
-            referencedRelation: 'agent_sessions';
+            referencedRelation: 'objectives';
             referencedColumns: ['id'];
           },
           {
@@ -628,9 +628,8 @@ export type Database = {
           orphan_file_changes: Json;
           pending_actions: number;
           project_id: string;
-          session_id: string | null;
           source_event_ids: string[];
-          source_session_ids: string[];
+          source_objective_id: string | null;
           source_window_end: string | null;
           source_window_start: string | null;
           summary: string;
@@ -658,9 +657,8 @@ export type Database = {
           orphan_file_changes?: Json;
           pending_actions?: number;
           project_id: string;
-          session_id?: string | null;
           source_event_ids?: string[];
-          source_session_ids?: string[];
+          source_objective_id?: string | null;
           source_window_end?: string | null;
           source_window_start?: string | null;
           summary?: string;
@@ -688,9 +686,8 @@ export type Database = {
           orphan_file_changes?: Json;
           pending_actions?: number;
           project_id?: string;
-          session_id?: string | null;
           source_event_ids?: string[];
-          source_session_ids?: string[];
+          source_objective_id?: string | null;
           source_window_end?: string | null;
           source_window_start?: string | null;
           summary?: string;
@@ -726,10 +723,10 @@ export type Database = {
             referencedColumns: ['id'];
           },
           {
-            foreignKeyName: 'feed_posts_session_id_fkey';
-            columns: ['session_id'];
+            foreignKeyName: 'feed_posts_source_objective_id_fkey';
+            columns: ['source_objective_id'];
             isOneToOne: false;
-            referencedRelation: 'agent_sessions';
+            referencedRelation: 'objectives';
             referencedColumns: ['id'];
           },
           {
@@ -933,7 +930,6 @@ export type Database = {
           label: string;
           metadata: Json;
           objective_id: string;
-          session_id: string | null;
           storage_path: string;
           ticket_id: string;
         };
@@ -946,7 +942,6 @@ export type Database = {
           label: string;
           metadata?: Json;
           objective_id: string;
-          session_id?: string | null;
           storage_path: string;
           ticket_id: string;
         };
@@ -959,7 +954,6 @@ export type Database = {
           label?: string;
           metadata?: Json;
           objective_id?: string;
-          session_id?: string | null;
           storage_path?: string;
           ticket_id?: string;
         };
@@ -977,13 +971,6 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: 'objectives';
             referencedColumns: ['id', 'ticket_id'];
-          },
-          {
-            foreignKeyName: 'objective_attachments_session_id_fkey';
-            columns: ['session_id'];
-            isOneToOne: false;
-            referencedRelation: 'agent_sessions';
-            referencedColumns: ['id'];
           },
           {
             foreignKeyName: 'objective_attachments_ticket_id_fkey';
@@ -1645,7 +1632,7 @@ export type Database = {
         Row: {
           created_at: string;
           id: string;
-          session_id: string | null;
+          objective_id: string | null;
           source: string;
           state_key: string;
           state_value: Json;
@@ -1655,7 +1642,7 @@ export type Database = {
         Insert: {
           created_at?: string;
           id?: string;
-          session_id?: string | null;
+          objective_id?: string | null;
           source?: string;
           state_key: string;
           state_value: Json;
@@ -1665,7 +1652,7 @@ export type Database = {
         Update: {
           created_at?: string;
           id?: string;
-          session_id?: string | null;
+          objective_id?: string | null;
           source?: string;
           state_key?: string;
           state_value?: Json;
@@ -1674,10 +1661,10 @@ export type Database = {
         };
         Relationships: [
           {
-            foreignKeyName: 'shared_state_session_id_fkey';
-            columns: ['session_id'];
+            foreignKeyName: 'shared_state_objective_id_fkey';
+            columns: ['objective_id'];
             isOneToOne: false;
-            referencedRelation: 'agent_sessions';
+            referencedRelation: 'objectives';
             referencedColumns: ['id'];
           },
           {
@@ -1786,7 +1773,6 @@ export type Database = {
           objective_id: string | null;
           payload: Json;
           phase: string | null;
-          session_id: string | null;
           summary: string | null;
           ticket_id: string;
         };
@@ -1799,7 +1785,6 @@ export type Database = {
           objective_id?: string | null;
           payload?: Json;
           phase?: string | null;
-          session_id?: string | null;
           summary?: string | null;
           ticket_id: string;
         };
@@ -1812,7 +1797,6 @@ export type Database = {
           objective_id?: string | null;
           payload?: Json;
           phase?: string | null;
-          session_id?: string | null;
           summary?: string | null;
           ticket_id?: string;
         };
@@ -1822,13 +1806,6 @@ export type Database = {
             columns: ['objective_id'];
             isOneToOne: false;
             referencedRelation: 'objectives';
-            referencedColumns: ['id'];
-          },
-          {
-            foreignKeyName: 'ticket_events_session_id_fkey';
-            columns: ['session_id'];
-            isOneToOne: false;
-            referencedRelation: 'agent_sessions';
             referencedColumns: ['id'];
           },
           {

@@ -71,8 +71,8 @@ export async function POST(request: Request) {
     // Find the latest agent session for this ticket (no sessionKey needed here)
     const { data: session } = await supabase
       .from('agent_sessions')
-      .select('id')
-      .eq('ticket_id', ticketId)
+      .select('id, objective_id, objective:objectives!inner(ticket_id)')
+      .eq('objective.ticket_id', ticketId)
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -87,7 +87,7 @@ export async function POST(request: Request) {
       is_blocking: true,
       payload: hookPayload,
       phase: null,
-      session_id: session?.id ?? null,
+      objective_id: session?.objective_id ?? null,
       summary,
       ticket_id: ticketId,
       created_by: userId

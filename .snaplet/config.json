@@ -1,3 +1,4 @@
 {
-  "adapter": "pg"
+  "adapter": "pg",
+  "projectDescription": "Overlord is the management, work coordination, and review layer for people who use AI coding agents."
 }

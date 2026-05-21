@@ -106,7 +106,7 @@ type RawTicket = {
 type SessionState = Database['public']['Enums']['session_state'];
 type AgentSessionForBoard = Pick<
   Database['public']['Tables']['agent_sessions']['Row'],
-  'ticket_id' | 'session_state' | 'agent_identifier'
+  'objective_id' | 'session_state' | 'agent_identifier'
 >;
 type WaitingQuestionForBoard = Pick<
   Database['public']['Tables']['ticket_events']['Row'],
@@ -360,8 +360,8 @@ export default async function TicketsBoardContent({
       await Promise.all([
         supabase
           .from('agent_sessions')
-          .select('ticket_id,session_state,agent_identifier')
-          .in('ticket_id', ticketIds)
+          .select('session_state,agent_identifier,objective:objectives!inner(ticket_id)')
+          .in('objective.ticket_id', ticketIds)
           .order('attached_at', { ascending: false }),
         supabase
           .from('ticket_events')
@@ -377,13 +377,13 @@ export default async function TicketsBoardContent({
           .order('created_at', { ascending: false })
       ]);
 
-    for (const session of (sessions ?? []) as AgentSessionForBoard[]) {
-      if (!latestSessionByTicket.has(session.ticket_id)) {
-        latestSessionByTicket.set(session.ticket_id, {
-          session_state: session.session_state,
-          agent_identifier: session.agent_identifier
-        });
-      }
+    for (const session of sessions ?? []) {
+      const ticketId = (session.objective as unknown as { ticket_id: string })?.ticket_id;
+      if (!ticketId || latestSessionByTicket.has(ticketId)) continue;
+      latestSessionByTicket.set(ticketId, {
+        session_state: session.session_state,
+        agent_identifier: session.agent_identifier
+      });
     }
 
     for (const waitingQuestion of (waitingQuestions ?? []) as WaitingQuestionForBoard[]) {

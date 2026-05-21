@@ -31,7 +31,9 @@ export async function getRunningAgentSessionsAction(): Promise<RunningAgentSessi
   const supabase = await createClientForRequest();
   const { data: sessions, error: sessionsError } = await supabase
     .from('agent_sessions')
-    .select('id,ticket_id,agent_identifier,attached_at')
+    .select(
+      'id, agent_identifier, attached_at, objective:objectives!inner(ticket_id, ticket:tickets!inner(id, title, project_id, organization_id))'
+    )
     .eq('session_state', 'attached')
     .is('detached_at', null)
     .order('attached_at', { ascending: false });
@@ -40,33 +42,20 @@ export async function getRunningAgentSessionsAction(): Promise<RunningAgentSessi
     throw new Error(sessionsError.message);
   }
 
-  const ticketIds = [...new Set((sessions ?? []).map(session => session.ticket_id))];
-  if (ticketIds.length === 0) {
-    return [];
-  }
-
-  const { data: tickets, error: ticketsError } = await supabase
-    .from('tickets')
-    .select('id,title,project_id,organization_id')
-    .in('id', ticketIds);
-
-  if (ticketsError) {
-    throw new Error(ticketsError.message);
-  }
-
-  const ticketById = new Map((tickets ?? []).map(ticket => [ticket.id, ticket]));
-
   return (sessions ?? [])
     .map(session => {
-      const ticket = ticketById.get(session.ticket_id);
-      if (!ticket) return null;
+      const objective = session.objective as unknown as {
+        ticket_id: string;
+        ticket: { id: string; title: string | null; project_id: string; organization_id: number };
+      };
+      if (!objective?.ticket) return null;
 
       return {
         id: session.id,
-        ticketId: session.ticket_id,
-        ticketTitle: ticket.title,
-        projectId: ticket.project_id,
-        organizationId: ticket.organization_id,
+        ticketId: objective.ticket_id,
+        ticketTitle: objective.ticket.title,
+        projectId: objective.ticket.project_id,
+        organizationId: objective.ticket.organization_id,
         agentIdentifier: session.agent_identifier,
         attachedAt: session.attached_at
       };

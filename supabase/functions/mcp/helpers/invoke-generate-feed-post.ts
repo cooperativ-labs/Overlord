@@ -16,16 +16,16 @@ function edgeRuntimeWaitUntil(): ((promise: Promise<unknown>) => void) | null {
 export function scheduleGenerateFeedPost(options: {
   supabase: SupabaseClient;
   ticketId: string;
-  sessionId: string;
+  objectiveId: string;
   organizationId: number;
   logPrefix: string;
 }): void {
-  const { supabase, ticketId, sessionId, organizationId, logPrefix } = options;
+  const { supabase, ticketId, objectiveId, organizationId, logPrefix } = options;
 
   const promise = (async () => {
     try {
       const { error } = await supabase.functions.invoke('generate-feed-post', {
-        body: { ticketId, sessionId, organizationId }
+        body: { ticketId, objectiveId, organizationId }
       });
       if (error) {
         console.error(`${logPrefix} feed post generation failed:`, error.message);

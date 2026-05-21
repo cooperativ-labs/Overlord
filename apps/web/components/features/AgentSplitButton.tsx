@@ -267,9 +267,6 @@ export function AgentSplitButton({
           ? (effectiveSelection.thinking ?? undefined)
           : undefined
       });
-      toast.success('Execution queued', {
-        description: 'A local or remote ovld runner can now claim and launch this objective.'
-      });
     } catch (error) {
       console.error('Failed to queue execution:', error);
       toast.error('Failed to queue execution', {

@@ -190,7 +190,7 @@ export async function runRecordWorkProtocol(supabase: RecordClient, params: Reco
         })
       : [];
 
-  // Create a completed agent session so events/artifacts/file_changes have a session_id.
+  // Create a completed agent session so file_changes/checkpoints have a session_id.
   const sessionKey = randomUUID();
   const { data: session, error: sessionError } = await supabase
     .from('agent_sessions')
@@ -201,7 +201,7 @@ export async function runRecordWorkProtocol(supabase: RecordClient, params: Reco
       metadata,
       session_key: sessionKey,
       session_state: 'completed',
-      ticket_id: ticket.id
+      objective_id: objectiveRow.id
     })
     .select('id,session_key,session_state')
     .single();
@@ -220,7 +220,7 @@ export async function runRecordWorkProtocol(supabase: RecordClient, params: Reco
       event_type: 'deliver',
       payload: { created_via: 'protocol.record-work' },
       phase: 'deliver',
-      session_id: session.id,
+      objective_id: objectiveRow.id,
       summary,
       ticket_id: ticket.id
     })
@@ -260,7 +260,7 @@ export async function runRecordWorkProtocol(supabase: RecordClient, params: Reco
       event_id: event.id,
       label: artifact.label,
       metadata: (artifact.metadata ?? {}) as Json,
-      session_id: session.id,
+      objective_id: objectiveRow.id,
       ticket_id: ticket.id,
       uri: artifact.uri ?? null
     }));
@@ -275,7 +275,7 @@ export async function runRecordWorkProtocol(supabase: RecordClient, params: Reco
     created_by: createdBy,
     event_type: 'status_change',
     phase: 'review',
-    session_id: session.id,
+    objective_id: objectiveRow.id,
     summary: 'Work recorded from chat and moved to review.',
     ticket_id: ticket.id
   });
@@ -283,7 +283,7 @@ export async function runRecordWorkProtocol(supabase: RecordClient, params: Reco
   // Trigger feed-post generation (fire-and-forget — non-fatal).
   try {
     await supabase.functions.invoke('generate-feed-post', {
-      body: { ticketId: ticket.id, sessionId: session.id, organizationId }
+      body: { ticketId: ticket.id, objectiveId: objectiveRow.id, organizationId }
     });
   } catch (feedErr) {
     console.error('[protocol:record-work] feed post generation error:', feedErr);

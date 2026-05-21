@@ -211,6 +211,106 @@ This centralizes too much sensitive host state in the backend. It would require 
 
 Realtime events are useful notifications, but they are not a durable work queue. A listener can be offline, miss an event, or race another listener. The event can remain, but it should not be the launch contract.
 
+## Proposed Tests
+
+The implementation should be tested at the same boundaries where ownership changes:
+
+- objective selection and enqueueing in `lib/auto-advance/schedule-after-deliver.ts`
+- request creation and idempotency in `lib/overlord/execution-requests.ts`
+- claim and lease behavior in `apps/web/app/api/protocol/claim-execution/route.ts`
+- launch state transitions in `apps/web/app/api/protocol/complete-execution-launch/route.ts` and `apps/web/app/api/protocol/fail-execution-launch/route.ts`
+- CLI request plumbing and runner behavior in `packages/overlord-cli/bin/_cli/protocol.mjs` and `packages/overlord-cli/bin/_cli/runner.mjs`
+
+Recommended split:
+
+### 1. Unit tests for auto-advance enqueueing
+
+Add to `tests/lib/auto-advance/schedule-after-deliver.test.ts`.
+
+- `scheduleQueuedObjectiveAfterDeliver()` creates one execution request with `requestedFrom='auto_advance'` and `idempotencyKey='auto_advance:<objectiveId>'` when the next draft has `auto_advance=true`.
+- It does not enqueue anything when no current draft objective exists.
+- It does not enqueue anything when the next draft objective text is blank or whitespace.
+- When `auto_advance=false`, it does not call `createExecutionRequest()`, marks the ticket unread/waiting, and writes the `awaiting_approval` event instead.
+- If the next draft has an `approval_reason`, that exact text is used for both the blocking event summary and the push notification body.
+
+These tests should mock `createExecutionRequest()` and `sendPushNotification()` directly so the assertions stay on scheduler behavior, not downstream queue mechanics.
+
+### 2. Unit tests for execution request creation
+
+Add `tests/lib/overlord/execution-requests.test.ts`.
+
+- A draft objective is promoted to `submitted` before the request row is inserted.
+- `requestedFrom='auto_advance'` sets `auto_advanced_at` when promoting the objective.
+- The assigned agent payload on the objective wins over caller defaults for agent/model/thinking when present.
+- Explicit API inputs for agent/model/thinking win when the objective has no assignment.
+- Manual runs generate a non-empty idempotency key when one is not provided.
+- Auto-advance derives `auto_advance:<objectiveId>` when no idempotency key is passed.
+- Duplicate inserts on the same `(organization_id, idempotency_key)` return the pre-existing request row rather than throwing.
+- A non-agent ticket or a non-launchable objective state fails with a clear error.
+- The `execution_requested` ticket event payload snapshots the resolved agent/model/thinking and `target_kind`.
+
+This is the real contract for "request execution" and deserves deeper coverage than the route wrapper.
+
+### 3. Route tests for claim and launch state transitions
+
+Add route-level tests under `tests/app/api/protocol/`.
+
+- `request-execution` returns `404` for missing tickets and `401` without a user context.
+- `claim-execution` skips requests targeted to another device.
+- `claim-execution` skips SSH-targeted requests that do not have an `sshCommand`.
+- `claim-execution` resolves `workingDirectory` from explicit launch params first, then `target_resource_id`, then same-device primary project resource, then `project_user.local_working_directory`.
+- `claim-execution` can reclaim a previously `claimed` request after `lease_expires_at` passes, but not before.
+- `claim-execution` increments `attempt_count` only on a successful claim.
+- `complete-execution-launch` only succeeds for the device that currently holds the claim and clears the lease.
+- `fail-execution-launch` only succeeds for the device that currently holds the claim, records `last_error`, and writes an `execution_launch_failed` ticket event.
+
+These tests should stub the service-role Supabase client in the same style as other API route tests so they stay fast and deterministic.
+
+### 4. CLI protocol tests
+
+Extend `tests/cli-protocol.test.mjs`.
+
+- `request-execution` posts the expected JSON body for local launches including `requestedFrom`, `launchMode`, repeated `--flag`, and optional targeting fields.
+- `request-execution` includes SSH fields when `--ssh-command`, `--remote-working-directory`, `--server-multiplexer`, and `--tmux-command` are provided.
+- `claim-execution` requires `--device-fingerprint` or `OVERLORD_DEVICE_FINGERPRINT`.
+- `complete-execution-launch` and `fail-execution-launch` post the expected payloads and enforce the device fingerprint requirement.
+
+Those tests protect the CLI surface from drifting away from the route contract.
+
+### 5. Runner tests
+
+Add `tests/cli-runner.test.mjs`.
+
+- `buildLaunchArgs()` maps a claimed request into the correct `ovld launch` arguments for local execution.
+- SSH claims include `--ssh-command`, `--remote-working-directory`, `--server-multiplexer`, and `--tmux-command` in the spawned launch command.
+- `runOnce()` exits cleanly when `claim-execution` returns no request.
+- When a request is claimed, the runner spawns `ovld launch ...` and calls `complete-execution-launch` after the child emits `spawn`.
+- If the child emits `error`, the runner calls `fail-execution-launch` with the launch error message.
+- If `complete-execution-launch` fails after spawn, the runner logs the problem but does not crash before the child exits.
+- `readOrCreateDeviceFingerprint()` reuses an existing `~/.ovld/device.json` fingerprint and persists a generated one when absent.
+
+These tests are the closest thing to proving "Electron closed, runner only" without needing a full end-to-end environment.
+
+### 6. One focused integration test for duplicate suppression
+
+Add a database-backed integration test once the route and helper tests are in place.
+
+- Create a ticket with one draft objective.
+- Call the execution-request path twice with `requestedFrom='auto_advance'` and the same derived key.
+- Assert that only one `execution_requests` row exists and only one later claim can transition to `launched`.
+
+This is the highest-value integration test because duplicate suppression is the main correctness risk in the design.
+
+### 7. Lower-priority UI coverage
+
+Only add UI tests after the queue and runner layers are covered.
+
+- `AgentSplitButton` / Run UI: verify the action requests execution and surfaces "waiting for runner" copy when no local runner is available.
+- Execution request status UI: verify queued/claimed/launched/failed badges render from request state without requiring Electron.
+- `AutoAdvanceLauncher` compatibility layer: verify Electron claims the same queue path rather than using a private launch path.
+
+These tests matter, but they are downstream of the queue semantics. The queue and runner tests should land first.
+
 ## Acceptance Criteria For Implementation
 
 - Auto-advance launches the next objective when only `ovld runner start` is running and Electron is closed.

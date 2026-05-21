@@ -110,7 +110,7 @@ export async function POST(request: Request) {
         created_via: 'protocol.create-ticket',
         delegate: ticketDelegate
       },
-      session_id: resolved.session.id,
+      objective_id: resolved.session.objective_id,
       summary: `Follow-up ticket created from ${sourceReference}.`,
       ticket_id: createdTicket.id,
       created_by: createdBy
@@ -129,7 +129,7 @@ export async function POST(request: Request) {
         delegate: ticketDelegate,
         entry_type: 'follow_up_ticket'
       },
-      session_id: resolved.session.id,
+      objective_id: resolved.session.objective_id,
       summary: `Created follow-up ticket ${createdReference} (${createdTicket.execution_target}).`,
       ticket_id: ticketId,
       created_by: createdBy

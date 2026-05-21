@@ -9,8 +9,8 @@ export type FeedPost = {
   organization_id: number;
   project_id: string;
   ticket_id: string;
-  session_id: string | null;
   objective_id: string | null;
+  source_objective_id: string | null;
   title: string;
   summary: string;
   body: string;
@@ -31,7 +31,6 @@ export type FeedPost = {
   total_files: number;
   pending_actions: number;
   source_event_ids: string[];
-  source_session_ids: string[];
   source_window_start: string | null;
   source_window_end: string | null;
   created_at: string;
@@ -182,8 +181,8 @@ export async function getFeedPostsAction(options?: {
       organization_id: row.organization_id as number,
       project_id: row.project_id as string,
       ticket_id: row.ticket_id as string,
-      session_id: row.session_id as string | null,
       objective_id: (row.objective_id as string | null) ?? null,
+      source_objective_id: (row.source_objective_id as string | null) ?? null,
       title: row.title as string,
       summary: (row.summary as string | null) ?? '',
       body: row.body as string,
@@ -203,9 +202,6 @@ export async function getFeedPostsAction(options?: {
       total_files: (row.total_files as number | null) ?? changedFiles.length,
       pending_actions: (row.pending_actions as number | null) ?? 0,
       source_event_ids: row.source_event_ids as string[],
-      source_session_ids: Array.isArray(row.source_session_ids)
-        ? (row.source_session_ids as string[])
-        : [],
       source_window_start: row.source_window_start as string | null,
       source_window_end: row.source_window_end as string | null,
       created_at: row.created_at as string,
@@ -297,8 +293,8 @@ export async function getExecutingFeedTicketsAction(): Promise<ExecutingFeedTick
   ] = await Promise.all([
     supabase
       .from('agent_sessions')
-      .select('ticket_id,session_state,agent_identifier,attached_at')
-      .in('ticket_id', ticketIds)
+      .select('session_state,agent_identifier,attached_at,objective:objectives!inner(ticket_id)')
+      .in('objective.ticket_id', ticketIds)
       .order('attached_at', { ascending: false }),
     supabase
       .from('objectives')
@@ -335,16 +331,20 @@ export async function getExecutingFeedTicketsAction(): Promise<ExecutingFeedTick
     { agent_identifier: string; attached_at: string | null }
   >();
 
-  for (const session of (sessions ?? []) as Array<{
-    ticket_id: string;
+  for (const raw of (sessions ?? []) as Array<{
     session_state: string;
     agent_identifier: string;
     attached_at: string | null;
+    objective: { ticket_id: string } | Array<{ ticket_id: string }>;
   }>) {
-    if (latestAttachedSessionByTicketId.has(session.ticket_id)) continue;
+    const obj = Array.isArray(raw.objective) ? raw.objective[0] : raw.objective;
+    if (!obj) continue;
+    const session = { ...raw, objective: obj };
+    const ticketId = session.objective.ticket_id;
+    if (latestAttachedSessionByTicketId.has(ticketId)) continue;
     if (session.session_state !== 'attached') continue;
 
-    latestAttachedSessionByTicketId.set(session.ticket_id, {
+    latestAttachedSessionByTicketId.set(ticketId, {
       agent_identifier: session.agent_identifier,
       attached_at: session.attached_at
     });

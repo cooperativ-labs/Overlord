@@ -23,7 +23,7 @@ export async function POST(request: Request) {
     const { data: state, error: stateError } = await supabase
       .from('shared_state')
       .insert({
-        session_id: resolved.session.id,
+        objective_id: resolved.session.objective_id,
         state_key: key,
         state_value: value,
         tags,
@@ -42,7 +42,7 @@ export async function POST(request: Request) {
     await supabase.from('ticket_events').insert({
       event_type: 'context_write',
       payload: { key, tags },
-      session_id: resolved.session.id,
+      objective_id: resolved.session.objective_id,
       summary: `Wrote context key ${key}.`,
       ticket_id: ticketId,
       created_by: userId

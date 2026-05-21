@@ -46,7 +46,7 @@ const demoFeedPostRollupDefaults = {
   total_events: 0,
   total_files: 0,
   pending_actions: 0,
-  source_session_ids: []
+  source_objective_id: null
 };
 
 export const DEMO_PROJECT = {
@@ -80,8 +80,8 @@ export const DEMO_FEED_POSTS = [
     organization_id: 1,
     project_id: 'demo-overlord',
     ticket_id: 'demo-21a7b495',
-    session_id: 'sess-feed-001',
     objective_id: null,
+    source_objective_id: null,
     title: 'Added a fourth demo tab for the /feed experience',
     body: 'The demo shell now includes a dedicated feed preview alongside the board, settings, and CLI tabs.\n\n- Reused the same window chrome for visual consistency\n- Added a mock project filter so the feed can be scoped in-demo\n- Kept the content local so the preview loads instantly without auth',
     summary:
@@ -103,7 +103,6 @@ export const DEMO_FEED_POSTS = [
     human_actions: ['Verify the tab order after the UI refresh.'],
     tickets_created: [],
     source_event_ids: ['evt-demo-feed-001', 'evt-demo-feed-002'],
-    source_session_ids: ['sess-feed-001'],
     total_events: 2,
     total_files: 3,
     pending_actions: 1,
@@ -123,8 +122,8 @@ export const DEMO_FEED_POSTS = [
     organization_id: 1,
     project_id: 'demo-product',
     ticket_id: 'demo-21a7b496',
-    session_id: 'sess-feed-002',
     objective_id: null,
+    source_objective_id: null,
     title: 'Feed cards now show human actions and tradeoffs inline',
     body: 'We updated the mock cards to mirror the live feed layout more closely.\n\n1. Human follow-ups stay visible even when the card is collapsed\n2. Tradeoff notes explain why a change was made\n3. File chips make it obvious which surface area changed',
     summary: 'We updated the mock cards to mirror the live feed layout more closely.',
@@ -147,7 +146,6 @@ export const DEMO_FEED_POSTS = [
     ],
     tickets_created: [],
     source_event_ids: ['evt-demo-feed-003'],
-    source_session_ids: ['sess-feed-002'],
     total_events: 1,
     total_files: 2,
     pending_actions: 2,
@@ -167,8 +165,8 @@ export const DEMO_FEED_POSTS = [
     organization_id: 1,
     project_id: 'demo-automation',
     ticket_id: 'demo-21a7b497',
-    session_id: 'sess-feed-003',
     objective_id: null,
+    source_objective_id: null,
     title: 'Review-ready deliverables now generate a clearer activity summary',
     body: 'The feed now reads more like a product history than a raw event log.\n\n- Added clearer language for what changed\n- Tuned the sample content to feel like real reviewer notes\n- Included short file lists so each post has a concrete trail',
     summary: 'The feed now reads more like a product history than a raw event log.',
@@ -179,7 +177,6 @@ export const DEMO_FEED_POSTS = [
     human_actions: [],
     tickets_created: [],
     source_event_ids: ['evt-demo-feed-004', 'evt-demo-feed-005', 'evt-demo-feed-006'],
-    source_session_ids: ['sess-feed-003'],
     total_events: 3,
     total_files: 2,
     source_window_start: '2026-03-19T09:00:00.000Z',
@@ -198,8 +195,8 @@ export const DEMO_FEED_POSTS = [
     organization_id: 1,
     project_id: 'demo-overlord',
     ticket_id: 'demo-21a7b498',
-    session_id: 'sess-feed-004',
     objective_id: null,
+    source_objective_id: null,
     title: 'Kept the demo feed offline-first and self-contained',
     body: 'This post exists to show the filtering and timeline behavior without reaching out to production data.\n\nIt keeps the preview fast, deterministic, and safe to open during a live walkthrough.',
     summary:
@@ -219,7 +216,6 @@ export const DEMO_FEED_POSTS = [
     ],
     tickets_created: [],
     source_event_ids: ['evt-demo-feed-007'],
-    source_session_ids: ['sess-feed-004'],
     total_events: 1,
     total_files: 1,
     pending_actions: 1,

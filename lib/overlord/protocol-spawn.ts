@@ -142,24 +142,6 @@ export async function runSpawnProtocol(supabase: SpawnClient, params: SpawnParam
     firstState: 'draft'
   });
 
-  // Create agent session
-  const sessionKey = randomUUID();
-  const { data: session, error: sessionError } = await supabase
-    .from('agent_sessions')
-    .insert({
-      agent_identifier: agentIdentifier,
-      connection_method: connectionMethod,
-      metadata,
-      session_key: sessionKey,
-      ticket_id: ticket.id
-    })
-    .select('id,session_key,session_state')
-    .single();
-
-  if (sessionError || !session) {
-    return { error: 'Ticket created but failed to create session.', status: 500 } as const;
-  }
-
   const objectiveExecution = await markSubmittedObjectiveExecuting(
     supabase,
     ticket.id,
@@ -170,13 +152,38 @@ export async function runSpawnProtocol(supabase: SpawnClient, params: SpawnParam
     createdBy
   );
 
-  if (objectiveExecution.didExecute && objectiveExecution.executedObjectiveId) {
+  if (!objectiveExecution.executedObjectiveId) {
+    return {
+      error: 'Ticket created but no objective available for execution.',
+      status: 500
+    } as const;
+  }
+
+  if (objectiveExecution.didExecute) {
     generateAndSetObjectiveTitle(
       supabase,
       objectiveExecution.executedObjectiveId,
       objectiveExecution.executedObjective!,
       createdBy
     ).catch(err => console.error('[spawn] objective title generation failed:', err));
+  }
+
+  // Create agent session
+  const sessionKey = randomUUID();
+  const { data: session, error: sessionError } = await supabase
+    .from('agent_sessions')
+    .insert({
+      agent_identifier: agentIdentifier,
+      connection_method: connectionMethod,
+      metadata,
+      session_key: sessionKey,
+      objective_id: objectiveExecution.executedObjectiveId
+    })
+    .select('id,session_key,session_state')
+    .single();
+
+  if (sessionError || !session) {
+    return { error: 'Ticket created but failed to create session.', status: 500 } as const;
   }
 
   // Record the spawn event on the new ticket's session
@@ -189,7 +196,7 @@ export async function runSpawnProtocol(supabase: SpawnClient, params: SpawnParam
       ...(ticketDelegate ? { delegate: ticketDelegate } : {})
     },
     phase: 'execute',
-    session_id: session.id,
+    objective_id: objectiveExecution.executedObjectiveId,
     summary: `Ticket spawned by ${agentIdentifier}${ticketDelegate ? ` (${ticketDelegate})` : ''} via ${connectionMethod}.`,
     ticket_id: ticket.id,
     created_by: createdBy
@@ -207,9 +214,8 @@ export async function runSpawnProtocol(supabase: SpawnClient, params: SpawnParam
   if (parentSessionKey && parentTicketId) {
     const { data: parentSession } = await supabase
       .from('agent_sessions')
-      .select('id')
+      .select('id, objective_id')
       .eq('session_key', parentSessionKey)
-      .eq('ticket_id', parentTicketId)
       .maybeSingle();
 
     if (parentSession) {
@@ -224,7 +230,7 @@ export async function runSpawnProtocol(supabase: SpawnClient, params: SpawnParam
           delegate: ticketDelegate
         },
         phase: 'execute',
-        session_id: parentSession.id,
+        objective_id: parentSession.objective_id,
         summary: `Spawned ticket ${ticket.ticket_id ?? ticket.ticket_sequence}: ${nextTitle}`,
         ticket_id: parentTicketId,
         created_by: createdBy

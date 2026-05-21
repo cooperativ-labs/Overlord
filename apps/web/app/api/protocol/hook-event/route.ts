@@ -84,7 +84,7 @@ export async function POST(request: Request) {
           hook_type: 'UserPromptSubmit',
           turn_index: turnIndex ?? null
         },
-        session_id: null
+        objective_id: null
       });
 
       if (error) {
@@ -109,7 +109,7 @@ export async function POST(request: Request) {
         hook_type: hookType,
         turn_index: turnIndex ?? null
       },
-      session_id: null
+      objective_id: null
     });
 
     if (error) {

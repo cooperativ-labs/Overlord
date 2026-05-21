@@ -74,7 +74,7 @@ export async function handleDeliver(supabase: SupabaseClient, args: any, ctx: To
     .insert({
       event_type: 'deliver',
       phase: 'deliver',
-      session_id: resolved.session.id,
+      objective_id: resolved.session.objective_id,
       summary,
       ticket_id: ticketId,
       created_by: ctx.userId
@@ -165,7 +165,7 @@ export async function handleDeliver(supabase: SupabaseClient, args: any, ctx: To
         event_id: event.id,
         label: a.label,
         metadata: a.metadata ?? {},
-        session_id: resolved.session.id,
+        objective_id: resolved.session.objective_id,
         ticket_id: ticketId,
         uri: a.uri ?? null,
         created_by: ctx.userId
@@ -210,7 +210,7 @@ export async function handleDeliver(supabase: SupabaseClient, args: any, ctx: To
     event_type: 'status_change',
     phase: 'review',
     summary: 'Ticket delivered and moved to review.',
-    session_id: resolved.session.id,
+    objective_id: resolved.session.objective_id,
     ticket_id: ticketId,
     created_by: ctx.userId
   });
@@ -218,7 +218,7 @@ export async function handleDeliver(supabase: SupabaseClient, args: any, ctx: To
   scheduleGenerateFeedPost({
     supabase,
     ticketId,
-    sessionId: resolved.session.id,
+    objectiveId: resolved.session.objective_id,
     organizationId: ctx.organizationId,
     logPrefix: '[mcp:deliver]'
   });

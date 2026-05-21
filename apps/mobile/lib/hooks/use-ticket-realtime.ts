@@ -39,16 +39,6 @@ export function useTicketRealtime(
         { event: '*', schema: 'public', table: 'objectives', filter: `ticket_id=eq.${ticketId}` },
         () => onUpdateRef.current({ suppressTransientNetworkAlert: true })
       )
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'agent_sessions',
-          filter: `ticket_id=eq.${ticketId}`
-        },
-        () => onUpdateRef.current({ suppressTransientNetworkAlert: true })
-      )
       .subscribe(status => {
         if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
           onUpdateRef.current({ suppressTransientNetworkAlert: true });

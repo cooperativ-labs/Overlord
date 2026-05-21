@@ -63,9 +63,10 @@ export async function resolveSession(
 
   const { data: session, error: sessionErr } = await supabase
     .from('agent_sessions')
-    .select('*')
+    .select('*, objectives!inner(ticket_id, ticket:tickets!inner(organization_id))')
     .eq('session_key', sessionKey)
-    .eq('ticket_id', resolvedId)
+    .eq('objectives.ticket_id', resolvedId)
+    .eq('objectives.ticket.organization_id', organizationId)
     .single();
 
   if (sessionErr || !session) {

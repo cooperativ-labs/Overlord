@@ -43,6 +43,20 @@ export async function runConnectProtocol(supabase: ConnectClient, params: Connec
     } as const;
   }
 
+  const objectiveExecution = await markSubmittedObjectiveExecuting(
+    supabase,
+    ticketId,
+    {
+      agentIdentifier,
+      metadata
+    },
+    userId
+  );
+
+  if (!objectiveExecution.executedObjectiveId) {
+    return { error: 'No objective available for execution.', status: 400 } as const;
+  }
+
   const { data: session, error: sessionError } = await supabase
     .from('agent_sessions')
     .insert({
@@ -50,7 +64,7 @@ export async function runConnectProtocol(supabase: ConnectClient, params: Connec
       connection_method: connectionMethod,
       metadata,
       session_key: sessionKey,
-      ticket_id: ticketId
+      objective_id: objectiveExecution.executedObjectiveId
     })
     .select('id,session_key,session_state')
     .single();
@@ -73,16 +87,6 @@ export async function runConnectProtocol(supabase: ConnectClient, params: Connec
     'execute'
   );
 
-  await markSubmittedObjectiveExecuting(
-    supabase,
-    ticketId,
-    {
-      agentIdentifier,
-      metadata
-    },
-    userId
-  );
-
   const { error: ticketUpdateError } = await supabase
     .from('tickets')
     .update({ status: executeStatusName })
@@ -96,7 +100,7 @@ export async function runConnectProtocol(supabase: ConnectClient, params: Connec
     event_type: 'system',
     payload: { agent_identifier: agentIdentifier, connection_method: connectionMethod },
     phase: previousStatus,
-    session_id: session.id,
+    objective_id: objectiveExecution.executedObjectiveId,
     summary: `${agentIdentifier} connected via ${connectionMethod}.`,
     ticket_id: ticketId,
     created_by: userId ?? null
@@ -110,7 +114,7 @@ export async function runConnectProtocol(supabase: ConnectClient, params: Connec
     await supabase.from('ticket_events').insert({
       event_type: 'ticket_reopened',
       phase: 'execute',
-      session_id: session.id,
+      objective_id: objectiveExecution.executedObjectiveId,
       summary: 'Ticket reopened — resumed from delivered state.',
       ticket_id: ticketId,
       created_by: userId ?? null

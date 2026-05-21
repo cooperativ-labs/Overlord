@@ -49,7 +49,7 @@ export async function handleRecordChangeRationales(
         entry_type: 'file_changes'
       },
       phase: phase ?? null,
-      session_id: resolved.session.id,
+      objective_id: resolved.session.objective_id,
       summary: eventSummary,
       ticket_id: ticketId,
       created_by: ctx.userId

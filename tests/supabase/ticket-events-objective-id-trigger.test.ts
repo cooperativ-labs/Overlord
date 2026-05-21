@@ -71,7 +71,7 @@ async function insertTicketEvent(
   return result.rows[0].objective_id;
 }
 
-describe('ticket_events objective_id trigger', () => {
+describe('ticket_events objective_id', () => {
   const databaseUrl = getDatabaseUrl();
   let client: Client;
 
@@ -92,60 +92,18 @@ describe('ticket_events objective_id trigger', () => {
     await client.end();
   });
 
-  it('uses the newest executing objective when objective_id is omitted', async () => {
+  it('leaves objective_id null when omitted on insert', async () => {
     const ticketId = await insertTicket(client);
     await insertObjective(client, {
       ticketId,
-      state: 'complete',
-      objective: 'completed first',
-      createdAt: '2026-05-12T10:00:00.000Z',
-      completedAt: '2026-05-12T10:05:00.000Z'
-    });
-    await insertObjective(client, {
-      ticketId,
       state: 'executing',
-      objective: 'older executing',
-      createdAt: '2026-05-12T10:10:00.000Z'
-    });
-    const newestExecutingId = await insertObjective(client, {
-      ticketId,
-      state: 'executing',
-      objective: 'newest executing',
+      objective: 'executing objective',
       createdAt: '2026-05-12T10:20:00.000Z'
     });
 
     const eventObjectiveId = await insertTicketEvent(client, { ticketId });
 
-    expect(eventObjectiveId).toBe(newestExecutingId);
-  });
-
-  it('falls back to the newest completed objective using completed_at then created_at', async () => {
-    const ticketId = await insertTicket(client);
-    await insertObjective(client, {
-      ticketId,
-      state: 'complete',
-      objective: 'older complete',
-      createdAt: '2026-05-12T09:00:00.000Z',
-      completedAt: '2026-05-12T09:30:00.000Z'
-    });
-    await insertObjective(client, {
-      ticketId,
-      state: 'complete',
-      objective: 'null completed_at',
-      createdAt: '2026-05-12T11:00:00.000Z',
-      completedAt: null
-    });
-    const newestCompletedId = await insertObjective(client, {
-      ticketId,
-      state: 'complete',
-      objective: 'newest complete',
-      createdAt: '2026-05-12T10:00:00.000Z',
-      completedAt: '2026-05-12T11:30:00.000Z'
-    });
-
-    const eventObjectiveId = await insertTicketEvent(client, { ticketId });
-
-    expect(eventObjectiveId).toBe(newestCompletedId);
+    expect(eventObjectiveId).toBeNull();
   });
 
   it('preserves an explicitly supplied objective_id', async () => {

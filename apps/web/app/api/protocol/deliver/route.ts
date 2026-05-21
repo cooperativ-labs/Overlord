@@ -61,7 +61,7 @@ export async function POST(request: Request) {
       .insert({
         event_type: 'deliver',
         phase: 'deliver',
-        session_id: resolved.session.id,
+        objective_id: resolved.session.objective_id,
         summary,
         ticket_id: ticketId,
         created_by: userId
@@ -122,6 +122,7 @@ export async function POST(request: Request) {
     const artifactCount = artifacts.length;
     const eventId = event.id;
     const sessionId = resolved.session.id;
+    const objectiveId = resolved.session.objective_id;
     const reviewStatusName = await resolvePreferredStatusNameByType(
       supabase,
       organizationId,
@@ -159,7 +160,6 @@ export async function POST(request: Request) {
         const queueResult = await scheduleQueuedObjectiveAfterDeliver({
           supabase: typedSupabase,
           ticketId,
-          sessionId,
           userId,
           organizationId,
           ticketReference
@@ -173,7 +173,7 @@ export async function POST(request: Request) {
               event_id: eventId,
               label: artifact.label,
               metadata: artifact.metadata,
-              session_id: sessionId,
+              objective_id: objectiveId,
               ticket_id: ticketId,
               uri: artifact.uri ?? null,
               created_by: userId
@@ -183,11 +183,11 @@ export async function POST(request: Request) {
 
           try {
             await supabase.functions.invoke('generate-feed-post', {
-              body: { ticketId, sessionId, organizationId }
+              body: { ticketId, objectiveId, organizationId }
             });
           } catch (feedErr) {
             console.error('[protocol:deliver] feed post generation error:', feedErr);
-            Sentry.captureException(feedErr, { extra: { ticketId, sessionId } });
+            Sentry.captureException(feedErr, { extra: { ticketId, objectiveId } });
           }
 
           return;
@@ -200,7 +200,7 @@ export async function POST(request: Request) {
             event_id: eventId,
             label: artifact.label,
             metadata: artifact.metadata,
-            session_id: sessionId,
+            objective_id: objectiveId,
             ticket_id: ticketId,
             uri: artifact.uri ?? null,
             created_by: userId
@@ -209,7 +209,7 @@ export async function POST(request: Request) {
           if (artifactError) {
             console.error('[protocol:deliver] artifact insert error:', artifactError.message);
             Sentry.captureException(artifactError, {
-              extra: { ticketId, sessionId, eventId }
+              extra: { ticketId, objectiveId, eventId }
             });
           }
         }
@@ -258,7 +258,7 @@ export async function POST(request: Request) {
           event_type: 'status_change',
           phase: 'review',
           summary: 'Ticket delivered and moved to review.',
-          session_id: sessionId,
+          objective_id: objectiveId,
           ticket_id: ticketId,
           created_by: userId
         });
@@ -266,11 +266,11 @@ export async function POST(request: Request) {
         // Generate feed post (fire-and-forget — non-fatal if it fails)
         try {
           await supabase.functions.invoke('generate-feed-post', {
-            body: { ticketId, sessionId, organizationId }
+            body: { ticketId, objectiveId, organizationId }
           });
         } catch (feedErr) {
           console.error('[protocol:deliver] feed post generation error:', feedErr);
-          Sentry.captureException(feedErr, { extra: { ticketId, sessionId } });
+          Sentry.captureException(feedErr, { extra: { ticketId, objectiveId } });
         }
 
         // Send mobile push notification
@@ -282,7 +282,7 @@ export async function POST(request: Request) {
         });
       } catch (bgErr) {
         console.error('[protocol:deliver] background job error:', bgErr);
-        Sentry.captureException(bgErr, { extra: { ticketId, sessionId } });
+        Sentry.captureException(bgErr, { extra: { ticketId, sessionId, objectiveId } });
       }
     });
 

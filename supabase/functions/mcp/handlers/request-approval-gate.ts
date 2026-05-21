@@ -59,7 +59,6 @@ export async function handleRequestApprovalGate(
     event_type: 'update',
     phase: 'execute',
     summary: `Requested approval gate on next objective: ${reason}`,
-    session_id: resolved.session.id,
     ticket_id: ticketId,
     objective_id: target.id,
     created_by: ctx.userId

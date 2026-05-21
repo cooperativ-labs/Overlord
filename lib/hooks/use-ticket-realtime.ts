@@ -191,8 +191,8 @@ export function useTicketRealtime({
             .limit(20),
           supabase
             .from('agent_sessions')
-            .select('*')
-            .eq('ticket_id', ticketId)
+            .select('*, objective:objectives!inner(ticket_id)')
+            .eq('objective.ticket_id', ticketId)
             .order('attached_at', { ascending: false })
             .limit(1)
             .maybeSingle(),
@@ -295,36 +295,6 @@ export function useTicketRealtime({
           queryClient.setQueryData<FileChange[]>(
             ticketQueryKeys.ticketFileChanges(ticketId),
             previous => mergeNewestById([payload.new], previous ?? [], row => row.created_at)
-          );
-        }
-      )
-      .on<AgentSession>(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'agent_sessions',
-          filter: `ticket_id=eq.${ticketId}`
-        },
-        payload => {
-          queryClient.setQueryData<AgentSession | null>(
-            ticketQueryKeys.ticketSession(ticketId),
-            previous => pickNewestSession(previous ?? null, payload.new)
-          );
-        }
-      )
-      .on<AgentSession>(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'agent_sessions',
-          filter: `ticket_id=eq.${ticketId}`
-        },
-        payload => {
-          queryClient.setQueryData<AgentSession | null>(
-            ticketQueryKeys.ticketSession(ticketId),
-            previous => pickNewestSession(previous ?? null, payload.new)
           );
         }
       )

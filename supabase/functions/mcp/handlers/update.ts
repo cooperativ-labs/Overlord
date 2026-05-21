@@ -99,7 +99,7 @@ export async function handleUpdate(supabase: SupabaseClient, args: any, ctx: Tok
       supabase.from('ticket_events').insert({
         event_type: 'ticket_reopened',
         phase: 'execute',
-        session_id: resolved.session.id,
+        objective_id: resolved.session.objective_id,
         summary: 'Ticket resumed — agent continued working after delivery.',
         ticket_id: ticketId,
         created_by: ctx.userId
@@ -135,7 +135,7 @@ export async function handleUpdate(supabase: SupabaseClient, args: any, ctx: Tok
       event_type: 'update',
       payload,
       phase: phase ?? null,
-      session_id: resolved.session.id,
+      objective_id: resolved.session.objective_id,
       summary,
       ticket_id: ticketId,
       created_by: ctx.userId
@@ -212,7 +212,7 @@ export async function handleUpdate(supabase: SupabaseClient, args: any, ctx: Tok
           title: n.title ?? null
         },
         phase: phase ?? null,
-        session_id: resolved.session.id,
+        objective_id: resolved.session.objective_id,
         summary: n.title ?? n.message ?? 'Agent notification.',
         ticket_id: ticketId,
         created_by: ctx.userId
@@ -259,7 +259,7 @@ export async function handleUpdate(supabase: SupabaseClient, args: any, ctx: Tok
       scheduleGenerateFeedPost({
         supabase,
         ticketId,
-        sessionId: resolved.session.id,
+        objectiveId: resolved.session.objective_id,
         organizationId: ctx.organizationId,
         logPrefix: '[mcp:update]'
       });

@@ -2,6 +2,39 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2605211800.0] - 2026-05-21:18:00
+
+### Added
+- Associate `agent_sessions` with objectives (`objective_id`) so each protocol session is tied to the unit of work being executed, not only the parent ticket.
+- `source_objective_id` on feed posts for objective-level feed provenance, replacing `source_session_ids`.
+- System theme option on the marketing site theme toggle (light, dark, or follow OS preference).
+
+### Fixed
+- Resolve Antigravity CLI (`agy`) on desktop plugin install when the binary lives on Homebrew, `~/.local/bin`, or Cargo paths that Electron’s minimal PATH omits.
+- Keep Kanban and ticket realtime agent indicators accurate when `agent_sessions` realtime payloads expose `objective_id` instead of `ticket_id`.
+
+### Changed
+- Protocol connect, attach, spawn, deliver, record-work, and related API and MCP handlers create and resolve sessions through objectives; ticket events and shared state use `objective_id` where session provenance is not required.
+- Drop `session_id` from artifacts, feed posts, objective attachments, shared state, and ticket events; retain it on file changes, project checkpoints, and execution requests where exact launch provenance still matters.
+- Feed post generation and mobile feed queries use objective-scoped provenance instead of session arrays.
+- Auto-advance scheduling no longer threads `session_id` through deliver-side approval events.
+- Remove the Run-button “execution queued” toast now that runner feedback is shown on the ticket.
+- Improve project resource directory list layout so long labels and paths wrap instead of truncating.
+
+### Security
+- Rewrite `agent_sessions` row-level security to authorize through `objective_id` → ticket → organization membership.
+
+### Documentation
+- Move objective auto-advance documentation to `docs/public/auto-advance-flow.md`.
+- Add feature plan for associating agent sessions with objectives.
+
+### Test
+- Update protocol, feed, conversation, and database trigger tests for objective-owned sessions and objective-scoped ticket events.
+
+### Chore
+- Add migration for agent session objective ownership and related `session_id` column removals; regenerate Supabase types and refresh seed data.
+- Bump workspace and CLI package versions.
+
 ## [0.2605211213.0] - 2026-05-21:12:13
 
 ### Added

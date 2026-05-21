@@ -25,14 +25,12 @@ type ClaimedLaunchParams = {
 };
 
 type ClaimResponse = {
-  request:
-    | {
-        id: string;
-        ticket_id: string;
-        project_id: string | null;
-        organization_id: number;
-      }
-    | null;
+  request: {
+    id: string;
+    ticket_id: string;
+    project_id: string | null;
+    organization_id: number;
+  } | null;
   launch?: ClaimedLaunchParams;
 };
 

@@ -12,7 +12,7 @@ type AttachmentAccess =
     }
   | {
       error: null;
-      session: { id: string };
+      session: { id: string; objective_id: string };
       ticket: { id: string; organization_id: number; project_id: string | null };
     };
 
@@ -131,7 +131,7 @@ export async function resolveAttachmentAccess(
 
   return {
     error: null,
-    session: { id: resolved.session.id },
+    session: { id: resolved.session.id, objective_id: resolved.session.objective_id },
     ticket
   };
 }

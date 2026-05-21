@@ -75,8 +75,8 @@ export async function POST(request: Request, { params }: RouteContext) {
 
     const { data: latestSession } = await supabase
       .from('agent_sessions')
-      .select('id')
-      .eq('ticket_id', ticketId)
+      .select('id, objective_id, objective:objectives!inner(ticket_id)')
+      .eq('objective.ticket_id', ticketId)
       .order('attached_at', { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -96,7 +96,7 @@ export async function POST(request: Request, { params }: RouteContext) {
         is_blocking: false,
         payload,
         phase: phase ?? null,
-        session_id: latestSession?.id ?? null,
+        objective_id: latestSession?.objective_id ?? null,
         summary: message,
         ticket_id: ticketId
       })

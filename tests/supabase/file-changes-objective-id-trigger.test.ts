@@ -49,14 +49,14 @@ async function insertObjective(
   return result.rows[0].id;
 }
 
-async function insertSession(client: Client, ticketId: string) {
+async function insertSession(client: Client, objectiveId: string) {
   const result = await client.query<{ id: string }>(
     `
-      insert into public.agent_sessions (ticket_id, agent_identifier)
+      insert into public.agent_sessions (objective_id, agent_identifier)
       values ($1, $2)
       returning id
     `,
-    [ticketId, 'codex']
+    [objectiveId, 'codex']
   );
 
   return result.rows[0].id;
@@ -64,15 +64,15 @@ async function insertSession(client: Client, ticketId: string) {
 
 async function insertTicketEvent(
   client: Client,
-  { ticketId, sessionId }: { ticketId: string; sessionId: string }
+  { ticketId, objectiveId }: { ticketId: string; objectiveId?: string | null }
 ) {
   const result = await client.query<{ id: string }>(
     `
-      insert into public.ticket_events (ticket_id, session_id, summary)
+      insert into public.ticket_events (ticket_id, objective_id, summary)
       values ($1, $2, $3)
       returning id
     `,
-    [ticketId, sessionId, 'file change trigger parent event']
+    [ticketId, objectiveId ?? null, 'file change trigger parent event']
   );
 
   return result.rows[0].id;
@@ -87,7 +87,7 @@ async function insertFileChange(
     objectiveId
   }: {
     ticketId: string;
-    sessionId: string;
+    sessionId?: string | null;
     eventId: string;
     objectiveId?: string | null;
   }
@@ -111,7 +111,7 @@ async function insertFileChange(
     `,
     [
       ticketId,
-      sessionId,
+      sessionId ?? null,
       eventId,
       objectiveId ?? null,
       'example.ts',
@@ -147,11 +147,8 @@ describe('file_changes objective_id trigger', () => {
     await client.end();
   });
 
-  it('uses the newest executing objective when objective_id is omitted', async () => {
+  it('uses the session objective when objective_id is omitted', async () => {
     const ticketId = await insertTicket(client);
-    const sessionId = await insertSession(client, ticketId);
-    const eventId = await insertTicketEvent(client, { ticketId, sessionId });
-
     await insertObjective(client, {
       ticketId,
       state: 'complete',
@@ -165,12 +162,14 @@ describe('file_changes objective_id trigger', () => {
       objective: 'older executing',
       createdAt: '2026-05-12T10:10:00.000Z'
     });
-    const newestExecutingId = await insertObjective(client, {
+    const sessionObjectiveId = await insertObjective(client, {
       ticketId,
       state: 'executing',
-      objective: 'newest executing',
+      objective: 'session objective',
       createdAt: '2026-05-12T10:20:00.000Z'
     });
+    const sessionId = await insertSession(client, sessionObjectiveId);
+    const eventId = await insertTicketEvent(client, { ticketId, objectiveId: sessionObjectiveId });
 
     const fileChangeObjectiveId = await insertFileChange(client, {
       ticketId,
@@ -178,14 +177,11 @@ describe('file_changes objective_id trigger', () => {
       eventId
     });
 
-    expect(fileChangeObjectiveId).toBe(newestExecutingId);
+    expect(fileChangeObjectiveId).toBe(sessionObjectiveId);
   });
 
-  it('falls back to the newest completed objective using completed_at then created_at', async () => {
+  it('uses the session objective over other ticket objectives when objective_id is omitted', async () => {
     const ticketId = await insertTicket(client);
-    const sessionId = await insertSession(client, ticketId);
-    const eventId = await insertTicketEvent(client, { ticketId, sessionId });
-
     await insertObjective(client, {
       ticketId,
       state: 'complete',
@@ -200,13 +196,21 @@ describe('file_changes objective_id trigger', () => {
       createdAt: '2026-05-12T11:00:00.000Z',
       completedAt: null
     });
-    const newestCompletedId = await insertObjective(client, {
+    const sessionObjectiveId = await insertObjective(client, {
       ticketId,
       state: 'complete',
-      objective: 'newest complete',
+      objective: 'session objective',
       createdAt: '2026-05-12T10:00:00.000Z',
       completedAt: '2026-05-12T11:30:00.000Z'
     });
+    await insertObjective(client, {
+      ticketId,
+      state: 'executing',
+      objective: 'newer executing on ticket',
+      createdAt: '2026-05-12T12:00:00.000Z'
+    });
+    const sessionId = await insertSession(client, sessionObjectiveId);
+    const eventId = await insertTicketEvent(client, { ticketId, objectiveId: sessionObjectiveId });
 
     const fileChangeObjectiveId = await insertFileChange(client, {
       ticketId,
@@ -214,14 +218,11 @@ describe('file_changes objective_id trigger', () => {
       eventId
     });
 
-    expect(fileChangeObjectiveId).toBe(newestCompletedId);
+    expect(fileChangeObjectiveId).toBe(sessionObjectiveId);
   });
 
   it('preserves an explicitly supplied objective_id', async () => {
     const ticketId = await insertTicket(client);
-    const sessionId = await insertSession(client, ticketId);
-    const eventId = await insertTicketEvent(client, { ticketId, sessionId });
-
     const explicitObjectiveId = await insertObjective(client, {
       ticketId,
       state: 'complete',
@@ -235,6 +236,8 @@ describe('file_changes objective_id trigger', () => {
       objective: 'auto objective',
       createdAt: '2026-05-12T10:20:00.000Z'
     });
+    const sessionId = await insertSession(client, explicitObjectiveId);
+    const eventId = await insertTicketEvent(client, { ticketId, objectiveId: explicitObjectiveId });
 
     const fileChangeObjectiveId = await insertFileChange(client, {
       ticketId,

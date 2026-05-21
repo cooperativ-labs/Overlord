@@ -264,7 +264,7 @@ export async function handleRecordWork(supabase: SupabaseClient, args: any, ctx:
       metadata,
       session_key: sessionKey,
       session_state: 'completed',
-      ticket_id: ticket.id
+      objective_id: objectiveRow.id
     })
     .select('id,session_key,session_state')
     .single();
@@ -277,7 +277,7 @@ export async function handleRecordWork(supabase: SupabaseClient, args: any, ctx:
       event_type: 'deliver',
       payload: { created_via: 'mcp.record_work' },
       phase: 'deliver',
-      session_id: session.id,
+      objective_id: objectiveRow.id,
       summary,
       ticket_id: ticket.id
     })
@@ -309,7 +309,7 @@ export async function handleRecordWork(supabase: SupabaseClient, args: any, ctx:
       event_id: event.id,
       label: artifact.label,
       metadata: artifact.metadata ?? {},
-      session_id: session.id,
+      objective_id: objectiveRow.id,
       ticket_id: ticket.id,
       uri: artifact.uri ?? null
     }));
@@ -321,7 +321,7 @@ export async function handleRecordWork(supabase: SupabaseClient, args: any, ctx:
     created_by: createdBy,
     event_type: 'status_change',
     phase: 'review',
-    session_id: session.id,
+    objective_id: objectiveRow.id,
     summary: 'Work recorded from chat and moved to review.',
     ticket_id: ticket.id
   });
@@ -329,7 +329,7 @@ export async function handleRecordWork(supabase: SupabaseClient, args: any, ctx:
   scheduleGenerateFeedPost({
     supabase,
     ticketId: ticket.id,
-    sessionId: session.id,
+    objectiveId: objectiveRow.id,
     organizationId,
     logPrefix: '[mcp:record-work]'
   });
