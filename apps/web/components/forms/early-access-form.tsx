@@ -35,16 +35,16 @@ export function EarlyAccessForm() {
   };
 
   return (
-    <div className="w-full max-w-xl rounded-[2rem] border border-white/10 bg-white/5 p-8 shadow-[0_30px_120px_-56px_rgba(15,23,42,0.85)] backdrop-blur">
+    <div className="w-full max-w-xl rounded-[2rem] border border-stone-200 bg-white p-8 shadow-lg dark:border-white/10 dark:bg-white/5 dark:shadow-[0_30px_120px_-56px_rgba(15,23,42,0.85)] dark:backdrop-blur">
       <div className="mb-8 flex items-center justify-between gap-4">
         <Link
           href="/"
-          className="inline-flex items-center gap-2 text-sm text-slate-300 transition hover:text-white"
+          className="inline-flex items-center gap-2 text-sm text-stone-600 transition hover:text-stone-900 dark:text-slate-300 dark:hover:text-white"
         >
           <ArrowLeft className="size-4" />
           Back to home
         </Link>
-        <div className="flex items-center gap-2 text-sm font-medium text-white">
+        <div className="flex items-center gap-2 text-sm font-medium text-stone-900 dark:text-white">
           <GalleryVerticalEnd className="size-4" />
           Overlord
         </div>
@@ -52,26 +52,26 @@ export function EarlyAccessForm() {
 
       <FieldGroup>
         <div className="space-y-3 text-left">
-          <p className="font-mono text-[11px] uppercase tracking-widest text-sky-400">
+          <p className="font-mono text-[11px] tracking-widest text-sky-600 uppercase dark:text-sky-400">
             Early Access
           </p>
-          <h1 className="font-display text-4xl font-semibold tracking-tight text-white">
+          <h1 className="font-display text-4xl font-semibold tracking-tight text-stone-900 dark:text-white">
             Get early access to Overlord
           </h1>
-          <FieldDescription className="text-base leading-7 text-slate-300">
+          <FieldDescription className="text-base leading-7 text-stone-600 dark:text-slate-300">
             Tell us who you are and what role you play. We&apos;ll review your request and follow up
             soon.
           </FieldDescription>
         </div>
 
         {formError ? (
-          <div className="rounded-xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
+          <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 dark:border-rose-400/30 dark:bg-rose-500/10 dark:text-rose-100">
             {formError}
           </div>
         ) : null}
 
         {successMessage ? (
-          <div className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-50">
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 dark:border-emerald-400/30 dark:bg-emerald-500/10 dark:text-emerald-50">
             {successMessage}
           </div>
         ) : null}
@@ -86,7 +86,7 @@ export function EarlyAccessForm() {
               placeholder="Ada Lovelace"
               required
               autoComplete="name"
-              className="border-white/10 bg-slate-950/40 text-white placeholder:text-slate-500"
+              className="border-stone-200 bg-stone-50 text-stone-900 placeholder:text-stone-400 dark:border-white/10 dark:bg-slate-950/40 dark:text-white dark:placeholder:text-slate-500"
             />
           </Field>
 
@@ -99,7 +99,7 @@ export function EarlyAccessForm() {
               placeholder="ada@company.com"
               required
               autoComplete="email"
-              className="border-white/10 bg-slate-950/40 text-white placeholder:text-slate-500"
+              className="border-stone-200 bg-stone-50 text-stone-900 placeholder:text-stone-400 dark:border-white/10 dark:bg-slate-950/40 dark:text-white dark:placeholder:text-slate-500"
             />
           </Field>
 
@@ -110,13 +110,17 @@ export function EarlyAccessForm() {
               name="role"
               required
               defaultValue=""
-              className="border-input focus-visible:border-ring focus-visible:ring-ring/50 h-10 w-full rounded-md border border-white/10 bg-slate-950/40 px-3 py-2 text-sm text-white shadow-xs outline-none focus-visible:ring-[3px]"
+              className="border-input focus-visible:border-ring focus-visible:ring-ring/50 h-10 w-full rounded-md border border-stone-200 bg-stone-50 px-3 py-2 text-sm text-stone-900 shadow-xs outline-none focus-visible:ring-[3px] dark:border-white/10 dark:bg-slate-950/40 dark:text-white"
             >
-              <option value="" disabled className="text-slate-500">
+              <option value="" disabled className="text-stone-500 dark:text-slate-500">
                 Select your role
               </option>
               {earlyAccessRoles.map(role => (
-                <option key={role} value={role} className="bg-slate-950 text-white">
+                <option
+                  key={role}
+                  value={role}
+                  className="bg-white text-stone-900 dark:bg-slate-950 dark:text-white"
+                >
                   {role}
                 </option>
               ))}
@@ -132,7 +136,7 @@ export function EarlyAccessForm() {
               loadingText="Sending request..."
               successText="Request received"
               errorText="Try again"
-              className="h-12 w-full rounded-full bg-white text-slate-950 hover:bg-slate-100"
+              className="h-12 w-full rounded-full bg-stone-900 text-white hover:bg-stone-800 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-100"
             />
           </Field>
         </form>
