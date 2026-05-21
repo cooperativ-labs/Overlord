@@ -1,3 +1,10 @@
-Run `ovld protocol connect --ticket-id <ticketId>` using the text after `/connect`.
+Connect this session to another Overlord ticket.
 
-If `ovld` reports `OVERLORD_URL` is unreachable, stop and request permission escalation or network access before retrying.
+Use the text after `/connect` as the ticket ID.
+
+
+Run:
+`ovld protocol connect --ticket-id <ticketId>`
+
+
+

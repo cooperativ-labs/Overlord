@@ -927,20 +927,11 @@ function parseMessages(chunk) {
     if (headerEnd === -1) break;
 
     const headerText = buffer.subarray(0, headerEnd).toString('utf8');
-    const headers = Object.fromEntries(
-      headerText.split('\r\n').map(line => {
-        const separatorIndex = line.indexOf(':');
-        return [
-          line.slice(0, separatorIndex).trim().toLowerCase(),
-          line.slice(separatorIndex + 1).trim()
-        ];
-      })
-    );
-
-    const contentLength = Number(headers['content-length']);
-    if (!Number.isFinite(contentLength)) {
+    const lengthMatch = headerText.match(/Content-Length:\s*(\d+)/i);
+    if (!lengthMatch) {
       throw new Error('Missing Content-Length header');
     }
+    const contentLength = Number(lengthMatch[1]);
 
     const totalLength = headerEnd + 4 + contentLength;
     if (buffer.length < totalLength) break;
@@ -995,7 +986,7 @@ async function runProtocol(tool, args) {
         cwd: process.cwd(),
         env: {
           ...process.env,
-          AGENT_IDENTIFIER: process.env.AGENT_IDENTIFIER ?? 'antigravity-overlord-plugin'
+          AGENT_IDENTIFIER: process.env.AGENT_IDENTIFIER ?? 'antigravity'
         },
         maxBuffer: 20 * 1024 * 1024
       },

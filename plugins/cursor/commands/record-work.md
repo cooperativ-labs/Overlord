@@ -1,5 +1,3 @@
-Record completed-from-chat work as a ticket in review + feed post (no attach).
-
 Immediately record the work you just completed in this chat as a new Overlord ticket via `ovld protocol record-work`. No agent session is opened — the work is already done.
 
 Synthesize from the current conversation:
@@ -15,3 +13,5 @@ Run `ovld protocol record-work --payload-file -` and stream the JSON payload `{ 
 After the command succeeds, report the new TICKET_ID.
 
 Do NOT use for in-progress work — use `/prompt` for that.
+
+

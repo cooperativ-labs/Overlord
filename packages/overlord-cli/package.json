@@ -16,6 +16,7 @@
     "plugins/"
   ],
   "scripts": {
+    "prepack": "node ../../scripts/render-agent-plugins.mjs --check",
     "postinstall": "node bin/_cli/postinstall.mjs || true"
   },
   "engines": {

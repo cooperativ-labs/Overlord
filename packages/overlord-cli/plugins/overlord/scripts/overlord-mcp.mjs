@@ -524,8 +524,7 @@ const tools = [
   },
   {
     name: 'record_work',
-    description:
-      'Record completed-from-chat work as a ticket in review + feed post (no attach).',
+    description: 'Record completed-from-chat work as a ticket in review + feed post (no attach).',
     inputSchema: {
       type: 'object',
       properties: {
@@ -994,7 +993,7 @@ async function runProtocol(tool, args) {
         cwd: process.cwd(),
         env: {
           ...process.env,
-          AGENT_IDENTIFIER: process.env.AGENT_IDENTIFIER ?? 'codex-overlord-plugin'
+          AGENT_IDENTIFIER: process.env.AGENT_IDENTIFIER ?? 'codex'
         },
         maxBuffer: 20 * 1024 * 1024
       },

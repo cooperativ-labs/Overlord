@@ -1,17 +1,20 @@
 ---
-description: Create a new Overlord ticket from the current conversation
+description: (Deprecated — use /prompt instead) Create a new Overlord ticket
 argument-hint: <objective or raw flags>
 disable-model-invocation: true
 ---
 
+This command is deprecated. Use `/overlord:prompt` instead.
+
 Create a new Overlord ticket from the user's request.
 
 Use `$ARGUMENTS` as the input.
-If it already contains flags such as `--title`, `--priority`, `--project-id`, or `--execution-target`, pass those flags through after `ovld protocol spawn --agent claude-code`.
+If it already contains flags such as `--title`, `--priority`, `--project-id`, or `--execution-target`, pass those flags through after `ovld protocol prompt --agent claude-code`.
 Otherwise, treat `$ARGUMENTS` as the objective text and run:
-`ovld protocol spawn --agent claude-code --objective "<objective>"`
+`ovld protocol prompt --agent claude-code --objective "<objective>"`
 
 If no objective was provided, ask the user for one and stop.
 
 After the command succeeds, report the new `TICKET_ID` and `SESSION_KEY`.
-- If `ovld` reports `OVERLORD_URL` is unreachable, stop and request permission escalation or network access before retrying.
+
+

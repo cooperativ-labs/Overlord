@@ -1,3 +1,11 @@
-Run `ovld protocol load-context --ticket-id <ticketId>` using the text after `/load`.
+Load Overlord ticket context without attaching.
 
-If `ovld` reports `OVERLORD_URL` is unreachable, stop and request permission escalation or network access before retrying.
+
+Use the text after `/load` as the ticket ID.
+
+
+Run:
+`ovld protocol load-context --ticket-id <ticketId>`
+
+
+
