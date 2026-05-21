@@ -49,6 +49,29 @@ function sleep(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+type ObjectiveSessionResume = {
+  agentIdentifier: string;
+  externalSessionId: string | null;
+};
+
+function buildSessionsByObjectiveId(
+  sessions: Array<{
+    objective_id: string;
+    agent_identifier: string;
+    external_session_id: string | null;
+  }> | null
+): Record<string, ObjectiveSessionResume> {
+  const byObjectiveId: Record<string, ObjectiveSessionResume> = {};
+  for (const session of sessions ?? []) {
+    if (byObjectiveId[session.objective_id]) continue;
+    byObjectiveId[session.objective_id] = {
+      agentIdentifier: session.agent_identifier,
+      externalSessionId: session.external_session_id
+    };
+  }
+  return byObjectiveId;
+}
+
 export async function TicketPanelContent({
   ticketId,
   organizationId,
@@ -165,8 +188,8 @@ export async function TicketPanelContent({
       : Promise.resolve({ data: null, error: null }),
     supabase
       .from('agent_sessions')
-      .select('*')
-      .eq('ticket_id', ticketId)
+      .select('*, objective:objectives!inner(ticket_id)')
+      .eq('objective.ticket_id', ticketId)
       .order('attached_at', { ascending: false })
       .limit(1)
       .maybeSingle(),
@@ -193,6 +216,16 @@ export async function TicketPanelContent({
   const schedule = scheduleResult.data;
   const agentSession = agentSessionResult.data;
   const objectives = objectivesResult.data;
+  const objectiveIds = (objectives ?? []).map(objective => objective.id);
+  const objectiveSessionsResult =
+    objectiveIds.length > 0
+      ? await supabase
+          .from('agent_sessions')
+          .select('objective_id, agent_identifier, external_session_id, attached_at')
+          .in('objective_id', objectiveIds)
+          .order('attached_at', { ascending: false })
+      : { data: [], error: null };
+  const sessionsByObjectiveId = buildSessionsByObjectiveId(objectiveSessionsResult.data);
   const checkpointsByObjectiveId = Object.fromEntries(
     (checkpointsResult.data ?? []).map(cp => [cp.objective_id, cp])
   );
@@ -427,6 +460,7 @@ export async function TicketPanelContent({
                 checkpointsByObjectiveId={checkpointsByObjectiveId}
                 allProjectCheckpointObjectiveIds={allProjectCheckpointObjectiveIds}
                 gitRevertFeatureEnabled={gitRevertFeatureEnabled}
+                sessionsByObjectiveId={sessionsByObjectiveId}
               />
             </div>
           </section>

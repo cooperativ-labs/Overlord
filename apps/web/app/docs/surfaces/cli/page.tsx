@@ -55,14 +55,34 @@ ovld update
 # Interactively search for a ticket and launch the agent
 ovld attach
 
-# Launch the desktop app
-ovld open
+# Launch a specific ticket in an agent (manual / fallback when no runner)
+ovld launch cursor --ticket-id <ticket_id> --working-directory <path>
 \`\`\`
+
+## Terminal runner
+
+When the web or desktop app enqueues an execution request (Run or auto-advance), a local **runner** claims the row and spawns \`ovld launch\` for you. The backend does not open terminals.
+
+\`\`\`bash
+# Run continuously — claim and launch queued requests (polls every 3s by default)
+ovld runner start
+
+# Process one queued request, then exit
+ovld runner once
+
+# Show this machine's device fingerprint (~/.ovld/device.json)
+ovld runner status
+\`\`\`
+
+Common options: \`--poll-interval-ms\`, \`--device-fingerprint\` (or \`OVERLORD_DEVICE_FINGERPRINT\`), \`--project-id\`.
+
+See [Agent Execution & Runner](/docs/workflow/agent-execution) for architecture diagrams and the full request lifecycle.
 
 ## When to use the CLI
 
 - Installing and configuring agent plugins on a new machine
 - Launching tickets from the terminal without the desktop app
+- Running \`ovld runner start\` so Run / auto-advance opens agents automatically
 - Verifying your local setup after an upgrade
 - Headless or CI environments where the desktop app is unavailable
 
@@ -74,6 +94,7 @@ ovld open
 
 ## Related pages
 
+- [Agent Execution & Runner](/docs/workflow/agent-execution)
 - [Agent Plugins](/docs/agent-plugins)
 - [Desktop App](/docs/surfaces/desktop-app)
 - [Protocol Reference](/docs/protocol)

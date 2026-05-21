@@ -248,9 +248,7 @@ export function AgentModelChooser({
 
           <Text style={styles.groupLabel}>Model</Text>
           {antigravityManagesModels ? (
-            <Text style={styles.emptyText}>
-              Antigravity chooses models in its own UI.
-            </Text>
+            <Text style={styles.emptyText}>Antigravity chooses models in its own UI.</Text>
           ) : loading ? (
             <View style={styles.loadingRow}>
               <ActivityIndicator size="small" color={colors.primary} />

@@ -58,7 +58,11 @@ Always include `changeRationales` when delivering. Optionally include them on up
 
 Before delivering, make sure every meaningful git-tracked file change is represented in `changeRationales`; do not send `file_changes` as an artifact. Record only meaningful behavioral changes. Skip formatting-only noise.
 
-For the `record-change-rationales` command and `--change-rationales-json` payload shape see [reference/cli.md](reference/cli.md).
+Each rationale entry requires these fields: `file_path`, `label`, `summary`, `why`, `impact` — all strings. Do **not** use `filePath` or `rationale`; those are a different internal shape and will cause a validation error.
+
+For more than a handful of entries, use `--change-rationales-file` with a temp file or stdin (`-`) instead of inline `--change-rationales-json` to avoid shell quoting failures with large arrays.
+
+For the `record-change-rationales` command and full payload shape with optional `hunks` see [reference/cli.md](reference/cli.md).
 
 ## Rules
 

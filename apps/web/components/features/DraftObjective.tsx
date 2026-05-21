@@ -274,6 +274,14 @@ export function DraftObjective({
               objectiveId={objectiveId}
               state={objectiveState}
               ticketId={ticketId}
+              agentIdentifier={
+                session?.objective_id === objectiveId
+                  ? session.agent_identifier
+                  : (activeAgentType?.value ?? null)
+              }
+              externalSessionId={
+                session?.objective_id === objectiveId ? session.external_session_id : null
+              }
             />
             {canToggleAutoAdvance ? (
               <Popover>

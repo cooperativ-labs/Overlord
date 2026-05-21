@@ -21,7 +21,7 @@ const TITLES: Record<string, string> = {
   '/docs/surfaces/mcp-server': 'MCP Server',
   '/docs/workflow': 'Workflow',
   '/docs/workflow/tickets': 'Tickets',
-  '/docs/workflow/agent-execution': 'Agent Execution',
+  '/docs/workflow/agent-execution': 'Agent Execution & Runner',
   '/docs/workflow/updates': 'Updates & Questions',
   '/docs/workflow/review': 'Review & Delivery',
   '/docs/protocol': 'Protocol Reference',

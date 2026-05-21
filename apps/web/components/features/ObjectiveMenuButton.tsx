@@ -1,7 +1,8 @@
 'use client';
 
-import { MoreHorizontal, MoreVertical, Trash2 } from 'lucide-react';
-import { useTransition } from 'react';
+import { Copy, MoreVertical, Trash2 } from 'lucide-react';
+import { useMemo, useTransition } from 'react';
+import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -16,6 +17,7 @@ import {
   markObjectiveExecutedAction
 } from '@/lib/actions/tickets';
 import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
+import { buildNativeResumeCommand } from '@/lib/overlord/launch-commands';
 
 const markObjectiveDraftActionWithRetry = withElectronActionRetry(markObjectiveDraftAction);
 const markObjectiveExecutedActionWithRetry = withElectronActionRetry(markObjectiveExecutedAction);
@@ -26,15 +28,23 @@ type ObjectiveMenuButtonProps = {
   objectiveId: string;
   state: string | null;
   canMarkExecuted?: boolean;
+  agentIdentifier?: string | null;
+  externalSessionId?: string | null;
 };
 
 export function ObjectiveMenuButton({
   ticketId,
   objectiveId,
   state,
-  canMarkExecuted = true
+  canMarkExecuted = true,
+  agentIdentifier = null,
+  externalSessionId = null
 }: ObjectiveMenuButtonProps) {
   const [pending, startTransition] = useTransition();
+  const resumeCommand = useMemo(
+    () => buildNativeResumeCommand(agentIdentifier, externalSessionId),
+    [agentIdentifier, externalSessionId]
+  );
 
   function handleMarkExecuted() {
     startTransition(async () => {
@@ -52,6 +62,16 @@ export function ObjectiveMenuButton({
     startTransition(async () => {
       await deleteFutureObjectiveActionWithRetry({ ticketId, objectiveId });
     });
+  }
+
+  async function handleCopyResumeCommand() {
+    if (!resumeCommand) return;
+    try {
+      await navigator.clipboard.writeText(resumeCommand);
+      toast.success('Resume command copied to clipboard.');
+    } catch {
+      toast.error('Could not copy to clipboard.');
+    }
   }
 
   const canShowMarkComplete = state !== 'complete' && state !== 'future';
@@ -72,6 +92,17 @@ export function ObjectiveMenuButton({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
+        {resumeCommand ? (
+          <DropdownMenuItem
+            onSelect={event => {
+              event.preventDefault();
+              void handleCopyResumeCommand();
+            }}
+          >
+            <Copy className="mr-2 h-4 w-4" />
+            Copy resume command
+          </DropdownMenuItem>
+        ) : null}
         {canShowMarkComplete ? (
           <DropdownMenuItem
             disabled={pending || !canMarkExecuted}

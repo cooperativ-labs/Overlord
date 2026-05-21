@@ -72,7 +72,7 @@ const data = {
           url: '/docs/workflow/objectives'
         },
         {
-          title: 'Agent Execution',
+          title: 'Agent Execution & Runner',
           url: '/docs/workflow/agent-execution'
         },
         {

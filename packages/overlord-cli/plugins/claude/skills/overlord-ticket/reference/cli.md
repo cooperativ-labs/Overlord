@@ -64,6 +64,8 @@ ovld protocol revert --objective-id <objective-id>
 
 These are structured protocol payloads that Overlord stores as first-class rows in the `file_changes` table. Prefer inline JSON or the dedicated command below. Use `--payload-json` for compact full delivery payloads, or `--payload-file -` when the JSON is larger or quote-sensitive so summary, artifacts, and change rationales stay in one JSON document without creating a temporary file.
 
+**Required fields per entry:** `file_path`, `label`, `summary`, `why`, `impact` (all strings). Do not use `filePath` or `rationale` — those are the internal API shape and will fail CLI validation.
+
 ```bash
 ovld protocol record-change-rationales --session-key <sessionKey> --ticket-id $TICKET_ID \
   --summary "Recorded rationale details for the latest code changes." --phase execute \
@@ -74,6 +76,19 @@ ovld protocol record-change-rationales --session-key <sessionKey> --ticket-id $T
 ovld protocol update --session-key <sessionKey> --ticket-id $TICKET_ID \
   --summary "Added retry logic." --phase execute \
   --change-rationales-json '[{"label":"Add backoff","file_path":"lib/api.ts","summary":"Added retry.","why":"Transient failures.","impact":"Retries 3x.","hunks":[{"header":"@@ -22,4 +22,18 @@"}]}]'
+```
+
+For many entries (roughly 5+), pipe via stdin to avoid shell quoting failures:
+
+```bash
+ovld protocol record-change-rationales --session-key <sessionKey> --ticket-id $TICKET_ID \
+  --summary "Recorded rationale details for the latest code changes." --phase execute \
+  --change-rationales-file - <<'EOF'
+[
+  {"label":"Add backoff","file_path":"lib/api.ts","summary":"Added retry.","why":"Transient failures.","impact":"Retries 3x."},
+  {"label":"Update config","file_path":"lib/config.ts","summary":"Added timeout.","why":"Match new defaults.","impact":"Requests time out after 30s."}
+]
+EOF
 ```
 
 ## Project Discovery And Ticket Creation

@@ -1,42 +1,147 @@
 import type { Metadata } from 'next';
 
+import { MarkdownContent } from '@/components/features/MarkdownContent';
+
 import { DocsMarkdownPage } from '../../_components/docs-markdown-page';
+import { RunnerArchitectureDiagram } from '../../_components/runner-architecture-diagram';
+import { RunnerSequenceDiagram } from '../../_components/runner-sequence-diagram';
 
 export const metadata: Metadata = {
-  title: 'Agent Execution'
+  title: 'Agent Execution & Runner'
 };
+
+const INTRO = `
+In Overlord, the Next.js backend decides **what** should run by writing a durable row to the \`execution_requests\` queue. A machine capable of running agents runs the **Terminal Runner (\`ovld runner\`)** to claim these rows and start the agent locally using the **\`ovld launch\`** command.
+
+This architecture decouples coordination from execution. Spawning a terminal, managing environment variables, PATH settings, shell configurations, and credentials are all handled locally by the runner process. This means the Electron desktop app is completely optional—you can run a headless terminal runner on your workstation, in a cloud environment, or on a remote server.
+
+---
+
+## Who opens the terminal?
+
+Three layers are involved. Only the bottom layer touches the host shell.
+
+| Layer | Component | Opens a terminal? | Role |
+| --- | --- | --- | --- |
+| Coordination | Overlord backend (Next.js / Supabase) | **No** | Decides *which* objective should run next, promotes draft → \`submitted\`, inserts a row in \`execution_requests\`, emits \`execution_requested\` for the UI. |
+| Dispatch | \`ovld runner\` on a capable machine | **Indirectly** | Polls (or listens via Realtime), claims a compatible queued row, then **spawns** \`ovld launch\` as a child process. |
+| Launch | \`ovld launch <agent>\` | **Yes** | Starts the assigned agent (Claude Code, Cursor, Codex, etc.) in a new terminal session or remote tmux/SSH context using local PATH, credentials, and working directory. |
+
+The backend never SSHs into your machine and never spawns a local process. If no runner is running, the request stays \`queued\` until something on a capable host runs \`ovld runner start\` or \`ovld runner once\`, or a human copies the fallback \`ovld launch\` command from the UI.
+
+---
+
+## How an objective reaches the runner
+
+1. **Objective exists on the ticket** — usually as \`draft\` (next step) or already \`submitted\` (manual Run).
+2. **Trigger enqueues work** — auto-advance after \`deliver\`, or a human **Run** / \`ovld protocol request-execution\`. Both call the same \`execution_requests\` queue with different idempotency keys.
+3. **Row is \`queued\`** — stores resolved agent, model, thinking, flags, target device/resource, and launch mode. The UI can show “waiting for runner.”
+4. **Runner claims** — \`ovld runner\` calls \`POST /api/protocol/claim-execution\` with the device fingerprint from \`~/.ovld/device.json\`. The row moves to \`claimed\` with a lease.
+5. **Runner launches** — the runner builds \`ovld launch …\` arguments from the claim payload and spawns that process (\`stdio: inherit\` so output appears in the runner’s terminal).
+6. **Runner reports success** — on child \`spawn\`, it calls \`complete-execution-launch\`; the row becomes \`launched\`.
+7. **Next agent attaches** — the new agent process calls \`ovld protocol attach\`, loads ticket context, and executes the \`submitted\` objective.
+
+Auto-advance and manual Run differ only at step 2 (scheduler vs. Run button / protocol). Steps 3–7 are identical.
+
+---
+
+## Architecture Flow
+
+The following diagram illustrates how triggers (like clicking "Run" or an agent delivering an objective) create execution requests, and how the Terminal Runner claims and spawns the agent locally.
+`;
+
+const AFTER_ARCHITECTURE = `
+---
+
+## End-to-End Sequence
+
+The step-by-step lifecycle of an execution request, from the current agent delivering its work to the next agent attaching, is detailed below:
+`;
+
+const REST = `
+---
+
+## Execution Request Queue
+
+All execution triggers (whether automated or manual) write to the unified \`execution_requests\` table. Each row acts as a durable lease:
+
+- **Idempotency**: Execution requests enforce a unique constraint on \`(organization_id, idempotency_key)\`. Automated auto-advances use \`auto_advance:<objective_id>\`, while manual runs use \`manual_run:<objective_id>:<client_request_id>\` to ensure duplicate runs are safely suppressed.
+- **Leasing**: When a runner claims a request, the row transitions to \`claimed\` with a \`lease_expires_at\` timestamp. If the runner crashes or fails to launch the process within the lease window, the backend releases the request so it can be claimed again.
+
+### Request Status States
+| Status | Meaning |
+| --- | --- |
+| \`queued\` | Waiting for a runner that matches the target device, resource, or kind. |
+| \`claimed\` | Leased by a device fingerprint; runner is preparing to launch. |
+| \`launching\` | Spawning the agent child process. |
+| \`launched\` | Child process successfully started; \`launched_session_id\` is recorded. |
+| \`failed\` | Spawning error recorded in the \`last_error\` column. |
+| \`cancelled\` / \`expired\` | Request is no longer eligible for execution. |
+
+---
+
+## The Terminal Runner (\`ovld runner\`)
+
+The Terminal Runner is a lightweight, long-running CLI process that manages local execution. It handles:
+1. **Device Identity**: Generates a unique UUID fingerprint stored in \`~/.ovld/device.json\` to identify the machine.
+2. **Project Directories**: Resolves working directories from registered project resources on the current device fingerprint.
+3. **Queue Polling**: Regularly polls the backend (or subscribes via Supabase Realtime) for compatible queued requests.
+4. **Agent Spawning**: Spawns agent sessions locally by shelling into \`ovld launch\`.
+
+### CLI Commands
+
+\`\`\`bash
+# Start the runner, polling continuously for queued requests (default 3000ms)
+ovld runner start
+
+# Claim and execute a single queued request, then exit
+ovld runner once
+
+# Inspect and display the local runner's device identity
+ovld runner status
+\`\`\`
+
+### Command Options
+
+- \`--device-fingerprint <fingerprint>\`: Manually override the runner's device identity (or set the \`OVERLORD_DEVICE_FINGERPRINT\` environment variable).
+- \`--poll-interval-ms <ms>\`: Adjust the polling interval when running in \`start\` mode (default is \`3000\`, minimum \`1000\`).
+- \`--project-id <uuid>\`: Restrict the runner to only claim requests belonging to a specific project.
+
+---
+
+## Manual Run vs. Auto-Advance
+
+Both execution models utilize the same queue mechanism:
+
+| Trigger Mode | Backend Behavior | Local Behavior |
+| --- | --- | --- |
+| **Auto-Advance** | Current agent delivers a successful pass. If the next objective has \`auto_advance = true\`, the backend automatically enqueues an execution request. | A local running \`ovld runner\` automatically claims and spawns the next objective seamlessly. |
+| **Manual Run** | A human clicks **Run** in the web UI, mobile app, or uses \`ovld protocol request-execution\`. | If a runner is active, the request is claimed and launched. If no runner is active, the UI guides the user with a copyable \`ovld launch\` fallback. |
+
+---
+
+## Related Pages
+
+- [Objectives](/docs/workflow/objectives)
+- [Tickets](/docs/workflow/tickets)
+- [CLI Reference](/docs/surfaces/cli)
+- [Protocol Reference](/docs/protocol)
+- [File changes & checkpoints](/docs/workflow/file-changes)
+`;
 
 export default function AgentExecutionPage() {
   return (
     <DocsMarkdownPage
-      title="Agent Execution"
-      lead="Overlord coordinates the work, but the agent still runs in the environment best suited to the task."
+      title="Agent Execution & Runner"
+      lead="Overlord coordinates ticket progress, but agent processes run in the host-local environment best suited to the task."
     >
-      {`
-## Execution targets
-
-Depending on the task, the execution target might be:
-
-- a local repository via the desktop app
-- a terminal-first CLI session
-- a hosted or cloud agent through MCP
-
-## What happens during execution
-
-The agent reads the ticket, works in the repository, and reports back through the ticket workflow.
-
-## Launching without lock-in
-
-Overlord is designed to coordinate Claude Code, Codex, Cursor, Antigravity, and other setups instead of replacing them.
-
-## Related pages
-
-- [Objectives](/docs/workflow/objectives)
-- [File changes & checkpoints](/docs/workflow/file-changes)
-- [CLI](/docs/surfaces/cli)
-- [MCP server](/docs/surfaces/mcp-server)
-- [Updates & questions](/docs/workflow/updates)
-      `}
+      <MarkdownContent className="prose-headings:scroll-mt-24">{INTRO}</MarkdownContent>
+      <RunnerArchitectureDiagram />
+      <MarkdownContent className="prose-headings:scroll-mt-24">
+        {AFTER_ARCHITECTURE}
+      </MarkdownContent>
+      <RunnerSequenceDiagram />
+      <MarkdownContent className="prose-headings:scroll-mt-24">{REST}</MarkdownContent>
     </DocsMarkdownPage>
   );
 }

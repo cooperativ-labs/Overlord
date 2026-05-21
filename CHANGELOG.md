@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2605211850.0] - 2026-05-21:18:50
+
+### Added
+- Copy resume command on objective menus so users can paste the native agent resume CLI for an objective’s last session.
+- Interactive architecture and sequence diagrams on the Agent Execution & Runner docs page.
+
+### Fixed
+- None.
+
+### Changed
+- Load per-objective agent sessions on the ticket panel so resume commands use the correct agent and external session id.
+- Expand docs markdown pages to support mixed markdown blocks and embedded diagram components.
+
+### Security
+- None.
+
+### Documentation
+- Rewrite [Agent Execution & Runner](/docs/workflow/agent-execution) with the `execution_requests` queue lifecycle, `ovld runner` commands, manual Run vs auto-advance, and end-to-end sequence.
+- Update CLI docs: remove invalid `ovld open`, document `ovld launch` and `ovld runner start` / `once` / `status`, and link to the runner architecture page.
+- Clarify `overlord-ticket` change-rationale field names (`file_path`, `label`, `summary`, `why`, `impact`) and recommend `--change-rationales-file` / stdin for large deliver payloads across agent plugin skills and references.
+
+### Chore
+- Bump workspace and CLI package versions.
+
 ## [0.2605211800.0] - 2026-05-21:18:00
 
 ### Added

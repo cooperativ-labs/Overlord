@@ -52,6 +52,11 @@ type ObjectiveCheckpoint = {
   checkpoint_kind: string;
 };
 
+type ObjectiveSessionResume = {
+  agentIdentifier: string;
+  externalSessionId: string | null;
+};
+
 type TicketObjectivesSectionProps = {
   ticketId: string;
   organizationId?: number;
@@ -71,6 +76,7 @@ type TicketObjectivesSectionProps = {
   checkpointsByObjectiveId?: Record<string, ObjectiveCheckpoint>;
   allProjectCheckpointObjectiveIds?: string[];
   gitRevertFeatureEnabled?: boolean;
+  sessionsByObjectiveId?: Record<string, ObjectiveSessionResume>;
 };
 
 type SharedObjectiveItemProps = {
@@ -230,7 +236,8 @@ export function TicketObjectivesSection({
   hasProjectWorkingDirectory,
   checkpointsByObjectiveId,
   allProjectCheckpointObjectiveIds = [],
-  gitRevertFeatureEnabled = false
+  gitRevertFeatureEnabled = false,
+  sessionsByObjectiveId = {}
 }: TicketObjectivesSectionProps) {
   const [pruneState, setPruneState] = useState<ButtonLoadingState>('default');
   const [pruneMessage, setPruneMessage] = useState<string | null>(null);
@@ -415,6 +422,11 @@ export function TicketObjectivesSection({
                   checkpoint={checkpointsByObjectiveId?.[objective.id] ?? null}
                   gitRevertFeatureEnabled={gitRevertFeatureEnabled}
                   workingDirectory={workingDirectory}
+                  resumeAgentIdentifier={
+                    sessionsByObjectiveId[objective.id]?.agentIdentifier ??
+                    objective.agent_identifier
+                  }
+                  externalSessionId={sessionsByObjectiveId[objective.id]?.externalSessionId ?? null}
                 />
               ))}
             </div>

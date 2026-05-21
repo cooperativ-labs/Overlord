@@ -50,6 +50,8 @@ type ObjectiveCollapsibleItemProps = {
   checkpoint?: ObjectiveCheckpoint | null;
   gitRevertFeatureEnabled?: boolean;
   workingDirectory: string | null;
+  resumeAgentIdentifier?: string | null;
+  externalSessionId?: string | null;
 };
 
 export function ObjectiveCollapsibleItem({
@@ -59,7 +61,9 @@ export function ObjectiveCollapsibleItem({
   attachments,
   checkpoint,
   gitRevertFeatureEnabled = false,
-  workingDirectory
+  workingDirectory,
+  resumeAgentIdentifier = null,
+  externalSessionId = null
 }: ObjectiveCollapsibleItemProps) {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -228,6 +232,8 @@ export function ObjectiveCollapsibleItem({
               objectiveId={objective.id}
               state={objective.state}
               canMarkExecuted={objective.objective.trim().length > 0}
+              agentIdentifier={resumeAgentIdentifier ?? objective.agent_identifier}
+              externalSessionId={externalSessionId}
             />
           </div>
           <CollapsibleContent className="px-3 pb-2 pt-1 border-b">

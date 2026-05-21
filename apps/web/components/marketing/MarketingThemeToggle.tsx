@@ -47,7 +47,13 @@ export function MarketingThemeToggle() {
           className="size-9 shrink-0 text-stone-600 hover:bg-stone-200/80 hover:text-stone-900 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white"
           aria-label="Color theme"
         >
-          {resolved === 'light' ? <Sun className="size-4" /> : resolved === 'dark' ? <Moon className="size-4" /> : <Monitor className="size-4" />}
+          {resolved === 'light' ? (
+            <Sun className="size-4" />
+          ) : resolved === 'dark' ? (
+            <Moon className="size-4" />
+          ) : (
+            <Monitor className="size-4" />
+          )}
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-[10rem]">
