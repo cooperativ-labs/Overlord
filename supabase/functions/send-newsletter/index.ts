@@ -3,6 +3,8 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { Resend } from 'npm:resend@4.6.0';
 
+import { changelogEmailTemplate, fillTemplateTags, wrapInTemplate } from './template.ts';
+
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY') ?? '';
@@ -85,103 +87,6 @@ function isAuthorized(req: Request): boolean {
     token === SUPABASE_SERVICE_ROLE_KEY ||
     (!!NEWSLETTER_TRIGGER_SECRET && token === NEWSLETTER_TRIGGER_SECRET)
   );
-}
-
-function escapeHtmlAttributeSafe(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-function fillTemplateTags(
-  template: string,
-  vars: {
-    title: string;
-    date: string;
-    summary: string;
-    body_html: string;
-    permalink: string;
-    unsubscribe_url: string;
-    recipient_name: string;
-  }
-): string {
-  const escaped = {
-    title: escapeHtmlAttributeSafe(vars.title),
-    date: escapeHtmlAttributeSafe(vars.date),
-    summary: escapeHtmlAttributeSafe(vars.summary),
-    body_html: vars.body_html,
-    permalink: escapeHtmlAttributeSafe(vars.permalink),
-    unsubscribe_url: escapeHtmlAttributeSafe(vars.unsubscribe_url),
-    recipient_name: escapeHtmlAttributeSafe(vars.recipient_name)
-  };
-
-  return template
-    .replace(/\{\{\{\s*body_html\s*\}\}\}/g, escaped.body_html)
-    .replace(/\{\{\s*body_html\s*\}\}/g, escaped.body_html)
-    .replace(/\{\{\s*title\s*\}\}/g, escaped.title)
-    .replace(/\{\{\s*date\s*\}\}/g, escaped.date)
-    .replace(/\{\{\s*summary\s*\}\}/g, escaped.summary)
-    .replace(/\{\{\s*permalink\s*\}\}/g, escaped.permalink)
-    .replace(/\{\{\s*unsubscribe_url\s*\}\}/g, escaped.unsubscribe_url)
-    .replace(/\{\{\s*recipient_name\s*\}\}/g, escaped.recipient_name);
-}
-
-function wrapInTemplate(
-  html: string,
-  subject: string,
-  previewText?: string,
-  unsubscribeUrl?: string
-): string {
-  const preview = previewText
-    ? `<div style="display:none;max-height:0;overflow:hidden;">${previewText}&nbsp;</div>`
-    : '';
-  const unsubLink = unsubscribeUrl ?? `${APP_URL}/settings`;
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>${subject}</title>
-</head>
-<body style="margin:0;padding:0;background:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-  ${preview}
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:40px 0;">
-    <tr>
-      <td align="center">
-        <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
-          <!-- Header -->
-          <tr>
-            <td style="background:#09090b;padding:24px 40px;">
-              <span style="color:#ffffff;font-size:20px;font-weight:700;letter-spacing:-0.5px;">Overlord</span>
-            </td>
-          </tr>
-          <!-- Body -->
-          <tr>
-            <td style="padding:40px;color:#18181b;font-size:15px;line-height:1.6;">
-              ${html}
-            </td>
-          </tr>
-          <!-- Footer -->
-          <tr>
-            <td style="padding:24px 40px;background:#fafafa;border-top:1px solid #e4e4e7;text-align:center;">
-              <p style="margin:0 0 8px;font-size:12px;color:#71717a;">
-                You're receiving this because you signed up for Overlord.
-              </p>
-              <p style="margin:0;font-size:12px;color:#71717a;">
-                To stop receiving these emails, you can
-                <a href="${unsubLink}" style="color:#18181b;text-decoration:underline;">unsubscribe</a> at any time.
-              </p>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>`;
 }
 
 function chunk<T>(arr: T[], size: number): T[][] {
@@ -294,8 +199,16 @@ Deno.serve(async (req: Request) => {
     }
 
     const publishedDate = entry.published_at
-      ? new Intl.DateTimeFormat('en-US', { dateStyle: 'long' }).format(new Date(entry.published_at))
-      : new Intl.DateTimeFormat('en-US', { dateStyle: 'long' }).format(new Date());
+      ? new Intl.DateTimeFormat('en-US', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric'
+        }).format(new Date(entry.published_at))
+      : new Intl.DateTimeFormat('en-US', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric'
+        }).format(new Date());
 
     vars = {
       title: entry.title,
@@ -319,19 +232,11 @@ Deno.serve(async (req: Request) => {
 
   // 4. Resolve default HTML template if none is passed
   let templateHtml = html ?? '';
+  let isFullChangelogTemplate = false;
   if (!templateHtml) {
     if (payload.changelogId) {
-      templateHtml = `
-        <h2 style="font-size:22px;font-weight:700;margin:0 0 12px;color:#09090b;">{{ title }}</h2>
-        <p style="font-size:13px;color:#71717a;margin:0 0 24px;">Published on {{ date }}</p>
-        ${vars.summary ? `<p style="font-size:16px;line-height:1.6;color:#27272a;margin:0 0 24px;font-weight:500;">{{ summary }}</p>` : ''}
-        <div style="font-size:15px;line-height:1.6;color:#3f3f46;margin:0 0 24px;">
-          {{{ body_html }}}
-        </div>
-        <p style="margin:24px 0 0;">
-          <a href="{{ permalink }}" style="display:inline-block;background:#09090b;color:#ffffff;padding:12px 24px;font-size:14px;font-weight:500;text-decoration:none;border-radius:6px;">View Full Release Notes</a>
-        </p>
-      `;
+      templateHtml = changelogEmailTemplate();
+      isFullChangelogTemplate = true;
     } else {
       return jsonResponse({ error: 'html template is required (or a valid changelogId)' }, 400);
     }
@@ -357,12 +262,15 @@ Deno.serve(async (req: Request) => {
       };
 
       const recipientHtml = fillTemplateTags(templateHtml, personalVars);
-      const recipientWrappedHtml = wrapInTemplate(
-        recipientHtml,
-        emailSubject,
-        emailPreviewText,
-        unsub
-      );
+      const recipientWrappedHtml = isFullChangelogTemplate
+        ? recipientHtml
+        : wrapInTemplate({
+            html: recipientHtml,
+            subject: emailSubject,
+            appUrl: APP_URL,
+            previewText: emailPreviewText,
+            unsubscribeUrl: unsub
+          });
       const recipientText = text ? fillTemplateTags(text, personalVars) : undefined;
 
       return {

@@ -640,15 +640,22 @@ export function CliPage({ open }: { open: boolean }) {
     if (!window.electronAPI?.agentBundle) return;
     setActivePluginActionKey(optionKey);
     setPluginActionButtonState(optionKey, 'loading');
+    setPluginActionMessage(optionKey, null);
     try {
-      await window.electronAPI.agentBundle.install(agent);
+      const result = await window.electronAPI.agentBundle.install(agent);
+      if (!result.ok) {
+        throw new Error(result.error ?? 'Install failed');
+      }
       await loadBundleStatuses();
       if (agent === 'claude' || agent === 'opencode') {
         await loadSlashStatuses();
       }
       setPluginActionButtonState(optionKey, 'success');
-    } catch {
-      // Handled by status refresh
+    } catch (error) {
+      setPluginActionMessage(
+        optionKey,
+        error instanceof Error ? error.message : 'Install failed'
+      );
       setPluginActionButtonState(optionKey, 'error');
     } finally {
       setActivePluginActionKey(null);
@@ -672,15 +679,22 @@ export function CliPage({ open }: { open: boolean }) {
     if (!window.electronAPI?.agentBundle) return;
     setActivePluginActionKey(optionKey);
     setPluginActionButtonState(optionKey, 'loading');
+    setPluginActionMessage(optionKey, null);
     try {
-      await window.electronAPI.agentBundle.repair(agent);
+      const result = await window.electronAPI.agentBundle.repair(agent);
+      if (!result.ok) {
+        throw new Error(result.error ?? 'Update failed');
+      }
       await loadBundleStatuses();
       if (agent === 'claude' || agent === 'opencode') {
         await loadSlashStatuses();
       }
       setPluginActionButtonState(optionKey, 'success');
-    } catch {
-      // Handled by status refresh
+    } catch (error) {
+      setPluginActionMessage(
+        optionKey,
+        error instanceof Error ? error.message : 'Update failed'
+      );
       setPluginActionButtonState(optionKey, 'error');
     } finally {
       setActivePluginActionKey(null);
@@ -1180,7 +1194,8 @@ export function CliPage({ open }: { open: boolean }) {
                                       ? bundleStatus?.status === 'installed'
                                         ? handleUninstallBundle(bundleStatus.agent, option.key)
                                         : bundleStatus?.status === 'partial' ||
-                                            bundleStatus?.status === 'error'
+                                            bundleStatus?.status === 'error' ||
+                                            bundleStatus?.status === 'stale'
                                           ? handleRepairBundle(bundleStatus.agent, option.key)
                                           : handleInstallBundle(option.bundleAgent, option.key)
                                       : option.kind === 'service'

@@ -213,10 +213,20 @@ function antigravityPaths() {
   };
 }
 
+function monorepoAntigravityPluginCandidates(appPath: string): string[] {
+  return [
+    path.join(appPath, 'packages', 'overlord-cli', 'plugins', 'antigravity'),
+    path.join(appPath, '..', '..', 'packages', 'overlord-cli', 'plugins', 'antigravity'),
+    path.join(appPath, '..', '..', 'plugins', 'antigravity'),
+    path.join(appPath, 'plugins', 'antigravity')
+  ];
+}
+
 function antigravitySourcePluginDir(): string {
   const appPath = app.getAppPath();
   const unpackedAppPath = appPath.replace('app.asar', 'app.asar.unpacked');
   const candidates = [
+    ...(!app.isPackaged ? monorepoAntigravityPluginCandidates(appPath) : []),
     path.join(unpackedAppPath, 'plugins', 'antigravity'),
     path.join(unpackedAppPath, 'packages', 'overlord-cli', 'plugins', 'antigravity'),
     path.join(appPath, 'plugins', 'antigravity'),

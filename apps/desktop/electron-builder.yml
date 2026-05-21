@@ -12,6 +12,7 @@ files:
   - "plugins/overlord/**/*"
   - "plugins/claude/**/*"
   - "plugins/cursor/**/*"
+  - "plugins/antigravity/**/*"
   - "!node_modules"
 
 mac:
@@ -33,6 +34,7 @@ asarUnpack:
   - "plugins/overlord/**/*"
   - "plugins/claude/**/*"
   - "plugins/cursor/**/*"
+  - "plugins/antigravity/**/*"
 
 electronFuses:
   enableEmbeddedAsarIntegrityValidation: true
