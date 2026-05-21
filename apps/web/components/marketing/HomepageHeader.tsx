@@ -2,16 +2,17 @@ import { ArrowRight } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 
+import { MarketingThemeToggle } from '@/components/marketing/MarketingThemeToggle';
 import { Button } from '@/components/ui/button';
 
 export function HomepageHeader() {
   return (
-    <header className="animate-in fade-in slide-in-from-top-4 mt-5 flex items-center justify-between rounded-[2rem] border border-white/10 bg-white/5 px-5 py-4 shadow-[0_20px_80px_-48px_rgba(15,23,42,0.75)] backdrop-blur">
+    <header className="animate-in fade-in slide-in-from-top-4 mt-5 flex items-center justify-between rounded-[2rem] border border-stone-200/90 bg-white/80 px-5 py-4 shadow-sm backdrop-blur dark:border-white/10 dark:bg-white/5 dark:shadow-[0_20px_80px_-48px_rgba(15,23,42,0.75)]">
       <Link
         href="/"
-        className="flex items-center gap-4 rounded-lg transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/50"
+        className="flex items-center gap-3 rounded-lg transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-stone-400 dark:focus-visible:outline-white/50 sm:gap-4"
       >
-        <div className="flex size-11 items-center justify-center overflow-hidden rounded-full">
+        <div className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-lg sm:size-11 sm:rounded-full">
           <Image
             src="/images/256.png"
             alt="Overlord logo"
@@ -20,35 +21,38 @@ export function HomepageHeader() {
             className="shrink-0 overflow-hidden"
           />
         </div>
-        <p className="font-display hidden text-lg font-semibold sm:block">Overlord</p>
+        <p className="font-display hidden text-lg font-semibold tracking-tight text-stone-900 sm:block dark:text-white">
+          Overlord
+        </p>
       </Link>
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-1 sm:gap-3">
         <Button
           asChild
           variant="ghost"
-          className="hidden text-slate-300 hover:bg-white/5 hover:text-white sm:inline-flex"
+          className="hidden text-stone-600 hover:bg-stone-200/80 hover:text-stone-900 sm:inline-flex dark:text-slate-300 dark:hover:bg-white/5 dark:hover:text-white"
         >
           <Link href="/docs">Docs</Link>
         </Button>
         <Button
           asChild
           variant="ghost"
-          className="hidden text-slate-300 hover:bg-white/5 hover:text-white sm:inline-flex"
+          className="hidden text-stone-600 hover:bg-stone-200/80 hover:text-stone-900 sm:inline-flex dark:text-slate-300 dark:hover:bg-white/5 dark:hover:text-white"
         >
           <Link href="/compare">Compare</Link>
         </Button>
+        <MarketingThemeToggle />
         <Button
           asChild
           variant="ghost"
-          className="hidden text-slate-300 hover:bg-white/5 hover:text-white sm:inline-flex"
+          className="hidden text-stone-600 hover:bg-stone-200/80 hover:text-stone-900 sm:inline-flex dark:text-slate-300 dark:hover:bg-white/5 dark:hover:text-white"
         >
           <Link href="/login">Sign in</Link>
         </Button>
         <Button
           asChild
           size="sm"
-          className="rounded-full bg-white px-4 text-sm whitespace-nowrap text-slate-950 hover:bg-slate-100"
+          className="rounded-full bg-stone-900 px-4 text-sm whitespace-nowrap text-[#fafaf7] hover:bg-stone-800 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-100"
         >
           <Link href="/signup">
             Create Account

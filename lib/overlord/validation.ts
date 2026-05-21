@@ -429,3 +429,58 @@ export const updateProjectResourceSchema = z.object({
   label: z.string().trim().max(160).nullable().optional(),
   isPrimary: z.boolean().optional()
 });
+
+// ---------------------------------------------------------------------------
+// Execution requests
+// ---------------------------------------------------------------------------
+
+export const executionRequestTargetKindSchema = z.enum(['any', 'local', 'ssh']);
+export const executionRequestStatusSchema = z.enum([
+  'queued',
+  'claimed',
+  'launching',
+  'launched',
+  'failed',
+  'cancelled',
+  'expired'
+]);
+
+export const requestExecutionSchema = z.object({
+  ticketId: ticketIdSchema,
+  objectiveId: z.string().uuid().optional(),
+  requestedFrom: z.string().trim().min(1).max(80).optional().default('api'),
+  idempotencyKey: z.string().trim().min(1).max(240).optional(),
+  agentIdentifier: z.string().trim().min(1).max(120).optional(),
+  modelIdentifier: z.string().trim().max(240).nullable().optional(),
+  thinkingLevel: z.string().trim().max(80).nullable().optional(),
+  launchMode: z.enum(['run', 'ask']).optional().default('run'),
+  flags: z.array(z.string().trim().min(1).max(400)).max(40).optional().default([]),
+  workingDirectory: z.string().trim().max(1024).nullable().optional(),
+  sshCommand: z.string().trim().max(2048).nullable().optional(),
+  remoteWorkingDirectory: z.string().trim().max(1024).nullable().optional(),
+  serverMultiplexer: z.enum(['none', 'tmux']).optional(),
+  tmuxCommand: z.string().trim().max(1024).nullable().optional(),
+  targetKind: executionRequestTargetKindSchema.optional().default('any'),
+  targetDeviceId: z.string().uuid().nullable().optional(),
+  targetResourceId: z.string().uuid().nullable().optional()
+});
+
+export const claimExecutionSchema = z.object({
+  deviceFingerprint: z.string().trim().min(1).max(128),
+  deviceHostname: z.string().trim().max(256).optional(),
+  devicePlatform: z.string().trim().max(64).optional(),
+  leaseSeconds: z.number().int().min(30).max(3600).optional().default(300),
+  projectId: z.string().uuid().optional()
+});
+
+export const completeExecutionLaunchSchema = z.object({
+  requestId: z.string().uuid(),
+  deviceFingerprint: z.string().trim().min(1).max(128),
+  launchedSessionId: z.string().uuid().nullable().optional()
+});
+
+export const failExecutionLaunchSchema = z.object({
+  requestId: z.string().uuid(),
+  deviceFingerprint: z.string().trim().min(1).max(128),
+  error: z.string().trim().min(1).max(4000)
+});

@@ -251,6 +251,64 @@ export async function publishChangelogEntryAction(id: string): Promise<Changelog
   return data as ChangelogEntry;
 }
 
+export type SendChangelogNewsletterResult = {
+  sent: number;
+  total: number;
+  partialErrors?: string[];
+};
+
+export async function sendChangelogNewsletterAction(
+  id: string
+): Promise<SendChangelogNewsletterResult> {
+  await requireAdmin();
+  const service = createServiceRoleClient();
+
+  const { data: entry, error: entryError } = await service
+    .from('changelog_entries')
+    .select('id, status, body_html')
+    .eq('id', id)
+    .single();
+  if (entryError || !entry) {
+    throw new Error('Changelog entry not found');
+  }
+  if (entry.status !== 'published') {
+    throw new Error('Publish the entry before sending the newsletter');
+  }
+  if (!entry.body_html?.trim()) {
+    throw new Error('Entry has no HTML body; publish again to regenerate it');
+  }
+
+  const { data: invokeData, error: invokeError } = await service.functions.invoke(
+    'send-newsletter',
+    { body: { changelogId: id, emailType: 'new_features' } }
+  );
+  if (invokeError) {
+    throw new Error(`Newsletter send failed: ${invokeError.message}`);
+  }
+
+  const result = invokeData as {
+    ok?: boolean;
+    error?: string;
+    sent?: number;
+    total?: number;
+    partialErrors?: string[];
+    message?: string;
+  };
+
+  if (result.error) {
+    throw new Error(result.error);
+  }
+  if (!result.ok) {
+    throw new Error('Newsletter send failed');
+  }
+
+  return {
+    sent: result.sent ?? 0,
+    total: result.total ?? 0,
+    ...(result.partialErrors?.length ? { partialErrors: result.partialErrors } : {})
+  };
+}
+
 export async function archiveChangelogEntryAction(id: string): Promise<ChangelogEntry> {
   await requireAdmin();
   const service = createServiceRoleClient();

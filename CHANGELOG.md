@@ -2,6 +2,39 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2605211051.0] - 2026-05-21:10:51
+
+### Added
+- Durable `execution_requests` queue so manual Run and auto-advance can launch agents without requiring the Overlord desktop app to be open.
+- Protocol operations `request-execution`, `claim-execution`, `complete-execution-launch`, and `fail-execution-launch` on the API, CLI (`ovld protocol`), and local MCP shims.
+- `ovld runner start`, `ovld runner once`, and `ovld runner status` to register a device, claim compatible queued requests, and launch assigned agents with the existing `ovld launch` primitive.
+- Idempotency keys on execution requests (for example `auto_advance:<objective_id>`) so repeated deliver or Run actions do not spawn duplicate sessions.
+- `execution_requested` and `execution_launch_failed` ticket events for UI visibility into queued, claimed, launched, and failed runner launches.
+- Web server action to enqueue objective execution from the Run button through the same request path as auto-advance.
+
+### Fixed
+- Normalize and enforce unique per-ticket objective positions so draft, future, submitted, and complete objectives never share the same slot.
+
+### Changed
+- Auto-advance after deliver creates an execution request instead of depending on an Electron renderer to open the next terminal.
+- Manual Run in the web UI enqueues execution requests rather than spawning terminals directly; a local or remote `ovld runner` claims and launches.
+- Agent Run feedback reflects queued runner execution and missing project directory or runner resource when launch cannot proceed.
+
+### Security
+- Row-level security on `execution_requests` so runners and users only see and mutate requests within their organization scope.
+
+### Documentation
+- Rewrite `docs/auto-advance-flow.md` for the execution-request and `ovld runner` architecture (backend coordinates *what* runs; capable machines perform *how*).
+- Add feature plan `ai/feature-plans/auto-advance-terminal-runner.md` describing the durable queue, rollout, and remote-runner direction.
+- Document execution-request protocol and runner commands in connector surfaces guidance, CLI README, users guide, protocol help, and overlord-ticket device/MCP references.
+
+### Test
+- Add unit tests for objective position promotion and reorder helpers used by the objective queue.
+
+### Chore
+- Add database migrations for `execution_requests` and unique objective positions; regenerate Supabase types.
+- Bump workspace and CLI package versions.
+
 ## [0.2605210944.0] - 2026-05-21:09:44
 
 ### Added

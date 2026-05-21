@@ -5,6 +5,7 @@ import { runAuthCommand } from './auth.mjs';
 import { checkForCliUpdate, printCliUpdateNotice, runCliUpdateCommand } from './cli-update.mjs';
 import { runLauncherCommand } from './launcher.mjs';
 import { runProtocolCommand } from './protocol.mjs';
+import { runRunnerCommand } from './runner.mjs';
 import { runDoctorCommand, runSetupCommand } from './setup.mjs';
 import { runTicketCommand } from './ticket.mjs';
 import { runTicketsCommand } from './tickets.mjs';
@@ -35,6 +36,7 @@ Usage:
   ${primaryCommand} tickets <subcommand>       Create or list tickets
   ${primaryCommand} ticket <subcommand>        Work with a single ticket
   ${primaryCommand} protocol <subcommand>      Agent workflow commands
+  ${primaryCommand} runner <subcommand>        Claim and launch queued execution requests
   ${primaryCommand} launch <agent>             Launch an agent on a ticket
   ${primaryCommand} connect <agent>            Launch an agent on a ticket (legacy alias)
   ${primaryCommand} restart <agent>            Resume an agent session
@@ -124,6 +126,11 @@ export async function runCli({ primaryCommand }) {
   // Protocol group
   if (command === 'protocol') {
     await runProtocolCommand(rest[0], rest.slice(1));
+    return;
+  }
+
+  if (command === 'runner') {
+    await runRunnerCommand(rest[0], rest.slice(1), primaryCommand);
     return;
   }
 

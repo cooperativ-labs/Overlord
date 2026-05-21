@@ -1,111 +1,134 @@
 # Objective Auto-Advance Flow
 
-This document details the step-by-step lifecycle of the **Objective Auto-Advance** feature. It explains how Overlord automatically promotes and launches sequential agent objectives, outlining where each step occurs and whether the desktop Electron application must be open.
+Auto-advance and manual Run share one launch path: the backend decides **what** should run, writes a durable `execution_requests` row, and a capable machine runs **`ovld runner`** to claim that row and start the agent with **`ovld launch`**.
+
+The backend coordinates execution; it does not spawn terminals. Electron is optional — a foreground CLI runner, a future always-on service, or a remote host runner can perform the launch.
+
+## Architecture
+
+```mermaid
+flowchart LR
+  subgraph triggers["Triggers"]
+    Deliver["Agent delivers objective"]
+    RunBtn["User clicks Run"]
+  end
+
+  subgraph backend["Overlord backend"]
+    Schedule["scheduleQueuedObjectiveAfterDeliver"]
+    RequestAPI["request-execution API"]
+    Queue[("execution_requests")]
+    Events["ticket_events: execution_requested"]
+  end
+
+  subgraph runner["Capable machine"]
+    OvldRunner["ovld runner start / once"]
+    Launch["ovld launch &lt;agent&gt;"]
+    Agent["Next agent session"]
+  end
+
+  Deliver --> Schedule
+  RunBtn --> RequestAPI
+  Schedule -->|"auto_advance:&lt;objective_id&gt;"| Queue
+  RequestAPI -->|"manual_run / api / …"| Queue
+  Queue --> Events
+  OvldRunner -->|"claim-execution"| Queue
+  OvldRunner --> Launch
+  Launch --> Agent
+  Agent -->|"attach + execute"| backend
+```
+
+## End-to-end sequence
 
 ```mermaid
 sequenceDiagram
-    autonumber
-    participant Agent as Local Agent Sandbox
-    participant Server as Next.js API / Supabase
-    participant Electron as Electron Desktop App
+  autonumber
+  participant Agent as Current agent
+  participant API as Next.js API / Supabase
+  participant Runner as ovld runner
+  participant Next as Next agent
 
-    rect rgb(240, 248, 255)
-        note right of Agent: Step 1 & 2: Executing & Delivery
-        Agent->>Server: HTTP POST /api/protocol/deliver (Commit, Diffs, Summary)
-    end
-    
-    rect rgb(245, 245, 245)
-        note right of Server: Step 3 & 4: API Response & Queue Processing
-        Server-->>Agent: HTTP 200 OK (Fast-Ack)
-        Note over Server: Mark active session/objective as complete
-        Note over Server: Promote earliest future objective to draft/submitted
-        Server->>Server: Write 'auto_advance' to ticket_events
-    end
-
-    rect rgb(255, 250, 240)
-        note right of Electron: Step 5 & 6: Real-time Event & Launching
-        Server-->>Electron: PostgreSQL Real-time Notification ('auto_advance')
-        Note over Electron: useAutoAdvanceLauncher handles event
-        Electron->>Agent: Spawn new OS Terminal window running target agent
-    end
+  Agent->>API: POST /api/protocol/deliver
+  API->>API: Complete session; evaluate draft queue
+  alt auto_advance = true
+    API->>API: draft → submitted; insert execution_requests
+    API->>API: execution_requested event
+  else auto_advance = false
+    API->>API: awaiting_approval event + notify user
+  end
+  Runner->>API: POST /api/protocol/claim-execution
+  API-->>Runner: Claimed launch params (agent, model, path, SSH)
+  Runner->>Next: ovld launch &lt;agent&gt; --ticket-id …
+  Runner->>API: POST /api/protocol/complete-execution-launch
+  Next->>API: POST /api/protocol/attach
 ```
 
----
+## Auto-advance steps
 
-## Technical Walkthrough
+1. The current agent calls `POST /api/protocol/deliver`.
+2. Deferred deliver work completes the active session, then runs `scheduleQueuedObjectiveAfterDeliver(...)`.
+3. If there is no draft objective with non-empty content, auto-advance stops.
+4. If the draft has `auto_advance = false`, Overlord writes an `awaiting_approval` event and notifies the user. No execution request is created.
+5. If `auto_advance = true`, Overlord creates an execution request with idempotency key `auto_advance:<objective_id>`. That path moves the objective to `submitted`, sets `auto_advanced_at`, and emits `execution_requested`.
+6. `ovld runner start` (or `ovld runner once`) registers the device, claims a compatible queued request, resolves a project resource directory or SSH launch params from `launch_params`, and runs `ovld launch`.
+7. The next agent attaches and executes the submitted objective.
 
-### 1. Running the First Objective
-* **What is happening**: The first objective (e.g., *Objective A*) is in the `executing` state. The assigned agent (such as Claude Code, Cursor, Codex, or Gemini CLI) is running locally, working on the task.
-* **Where the action is happening**: Locally on the user's computer inside a terminal process or sandbox environment.
-* **Electron App Requirement**: **No.** Once the agent process is successfully launched, it executes independently in its own operating system process shell (tmux pane, terminal window, or sandbox). The Electron app does not need to be running.
+## Manual Run
 
-### 2. The Agent Completes the Objective and Delivers Work
-* **What is happening**: The agent completes the objective and invokes the protocol’s deliver tool. This tool sends an HTTP `POST` request containing git commits, file diffs, change rationales, and the completion summary to the Next.js API endpoint `/api/protocol/deliver`.
-* **Where the action is happening**: The HTTP request is initiated by the local agent process and processed by the Next.js server (either hosted on Vercel or running locally).
-* **Electron App Requirement**: **No.** The agent communicates directly with the Next.js backend/API over standard HTTP/HTTPS networks. The Electron app is not involved in handling or transmitting this network request.
+Manual Run uses the same queue:
 
-### 3. Next.js Server Receives the Deliver Request
-* **What is happening**: The POST handler in `apps/web/app/api/protocol/deliver/route.ts` runs. It:
-  1. Validates the incoming payload against `deliverSchema`.
-  2. Resolves the correct database records (`ticketId`, `sessionId`).
-  3. Synchronously inserts a `deliver` ticket event into the `ticket_events` table on Supabase.
-  4. Stores git commit snapshots, database checkpoints (`upsertObjectiveCheckpoint`), and file-change rationales (`insertFileChanges`).
-  5. Returns a synchronous `200` response back to the agent so it can exit.
-* **Where the action is happening**: Next.js server (App Router runtime) and the Supabase PostgreSQL database.
-* **Electron App Requirement**: **No.** This is a standard web server handler processing a request and updating tables in Supabase.
+- UI: `requestTicketObjectiveExecutionAction(...)` → `POST /api/protocol/request-execution`
+- CLI/MCP: `ovld protocol request-execution` / `request_execution`
 
-### 4. Next.js Backend Evaluates the Queue (Deferred Processing)
-* **What is happening**: Immediately after returning the fast-ack `200` response, the server executes a deferred background task (via Next.js `after()` callback):
-  1. It marks the delivering objective as `complete` (setting `completed_at`) in the `objectives` table.
-  2. It updates the agent session's `session_state` to `completed` and sets `detached_at` in the `agent_sessions` table. *This is done before the auto-advance event is emitted so that subsequent checks do not block the next launch.*
-  3. It calls `scheduleQueuedObjectiveAfterDeliver(...)` from `lib/auto-advance/schedule-after-deliver.ts`.
-  4. The scheduler resolves the next objective. If no `draft` objective has content, it promotes the earliest `future` objective to `draft` state in the database.
-  5. It checks the next objective's `auto_advance` setting:
-     * **If `auto_advance !== false` (Enabled)**:
-       * The next objective is moved from `draft` to `submitted` state and stamped with `auto_advanced_at = new Date()`.
-       * The *next* earliest future objective is promoted to `draft` state (keeping the queue populated for visual display).
-       * It inserts an `auto_advance` event row into the `ticket_events` table on Supabase.
-     * **If `auto_advance === false` (Disabled/Gated)**:
-       * The ticket is updated with `has_unopened_waiting_response = true` and `is_read = false`.
-       * An `awaiting_approval` event is inserted into the `ticket_events` table.
-       * A push notification is sent to the user via `sendPushNotification`.
-* **Where the action is happening**: Next.js server (background worker thread) and the Supabase database.
-* **Electron App Requirement**: **No.** This step is fully contained in the backend server queue-resolver logic.
+Idempotency keys differ from auto-advance so repeated manual launches are allowed (`manual_run:<objective_id>:<client-request-id>`). Assigned agent, model, thinking, flags, and working directory come from the objective (with user defaults only when appropriate).
 
-### 5. Real-time Event Received by Electron App
-* **What is happening**:
-  * Since an `auto_advance` event was inserted into `ticket_events` in Step 4, Supabase emits a PostgreSQL realtime notification.
-  * In the web UI, the `AutoAdvanceLauncher` React component is mounted. Because it runs with `enabled: isElectron` (detecting the desktop shell context), it subscribes to the Supabase realtime channel (`postgres_changes` on the `ticket_events` table) using the `useAutoAdvanceLauncher` hook.
-  * The hook receives the `INSERT` event payload of type `auto_advance`.
-* **Where the action is happening**: Inside the running Electron application's renderer process (browser context).
-* **Electron App Requirement**: **Yes, absolutely.** If the Electron app is closed, there is no active React application context to maintain the WebSocket connection, subscribe to the realtime event channel, or handle incoming messages.
+| Environment | What happens |
+| --- | --- |
+| Runner active locally | Request is claimed and launched automatically |
+| Browser only, no runner | Request stays queued; UI can show “waiting for runner” and a copyable `ovld launch` command |
+| Remote target | A runner on that host (or SSH launch params on a local runner) claims and executes |
 
-### 6. Electron App Launches the Next Agent Process
-* **What is happening**:
-  * The `useAutoAdvanceLauncher` hook executes `handleAutoAdvanceEvent`.
-  * It verifies that the ticket target is `'agent'`, the target objective is indeed in `submitted` state with `auto_advanced_at` set, and that no active agent sessions currently block the ticket.
-  * It queries user configurations (`user_agent_configs`) to fetch agent flags and parameters (model, thinking configurations) and maps the local project working directory from settings.
-  * It triggers `launchAgent(...)` via `useTerminal()`.
-  * `launchAgent` calls out to the Electron main process via the IPC bridge (`window.electronAPI`), which spawns a new OS terminal window or tmux session running the resolved agent startup command in the resolved local project directory.
-  * It displays a native desktop system notification: *"Auto-advanced: Launching the next objective in a new terminal."*
-* **Where the action is happening**: Inside the Electron app (renderer and main processes) and the local operating system's shell environment.
-* **Electron App Requirement**: **Yes, absolutely.** Electron main process APIs (`window.electronAPI`) are required to spawn the local OS shell processes, read desktop configurations, and access local project paths.
+## Execution request lifecycle
 
-### 7. The New Agent Process Runs the Second Objective to Completion
-* **What is happening**: The new terminal window/agent process boots up, synchronizes with the database, fetches the objective instructions (now in `submitted`/`executing` state), and begins executing the next task.
-* **Where the action is happening**: Locally on your computer inside the newly spawned terminal/agent process.
-* **Electron App Requirement**: **No.** Once the terminal process is successfully spawned by the Electron main process in Step 6, the agent shell runs independently. The Electron app can be closed or minimized without interrupting the running agent.
+| Status | Meaning |
+| --- | --- |
+| `queued` | Waiting for a runner that can satisfy target device/resource/kind |
+| `claimed` | Leased by a device; runner is about to launch |
+| `launching` | Launch in progress |
+| `launched` | Child process started; `launched_session_id` set when known |
+| `failed` | Launch error recorded in `last_error` |
+| `cancelled` / `expired` | No longer eligible |
 
----
+Duplicate auto-advance for the same objective is prevented by the unique `(organization_id, idempotency_key)` constraint. Stale claims can expire via `lease_expires_at` and be retried.
 
-## Architectural Summary
+## Runner commands
 
-| Step | Action | Location | Electron Open? |
-| :--- | :--- | :--- | :--- |
-| **1** | Agent executes objective | Local Sandbox / Terminal | **No** |
-| **2** | Agent posts delivery payload | Local Process & Next.js Server | **No** |
-| **3** | Server saves commits & events | Next.js API & Supabase DB | **No** |
-| **4** | Server completes session & evaluates queue | Next.js API `after()` Worker | **No** |
-| **5** | Realtime subscription triggers event | Electron Renderer (Web App) | **Yes** |
-| **6** | IPC triggers external command shell | Electron Main & Host OS | **Yes** |
-| **7** | New agent starts execution | Local Sandbox / Terminal | **No** |
+```bash
+ovld runner once    # Claim and launch one queued request, then exit
+ovld runner start   # Poll (or Realtime) and claim continuously
+ovld runner status  # Inspect local runner identity
+```
+
+Protocol operations used by the runner:
+
+| Operation | API | CLI |
+| --- | --- | --- |
+| Enqueue | `POST /api/protocol/request-execution` | `ovld protocol request-execution` |
+| Claim | `POST /api/protocol/claim-execution` | `ovld protocol claim-execution` |
+| Success | `POST /api/protocol/complete-execution-launch` | `ovld protocol complete-execution-launch` |
+| Failure | `POST /api/protocol/fail-execution-launch` | `ovld protocol fail-execution-launch` |
+
+## What must be running
+
+| Step | Needs Electron? | Needs runner? |
+| --- | --- | --- |
+| Agent delivers | No | No |
+| Server enqueues next objective | No | No |
+| Terminal/agent starts | No | Yes — on some machine that can run `ovld launch` |
+| Next agent executes | No | No (agent process only) |
+
+For CLI-only or closed-desktop workflows, run `ovld runner start` on the workstation (or on a remote host registered as a device with project resources). Auto-advance then proceeds without the Overlord desktop app open.
+
+## Related docs
+
+- Feature plan: `ai/feature-plans/auto-advance-terminal-runner.md`
+- Connector surfaces: `ai/guidence/CONNECTOR_SURFACES.md`

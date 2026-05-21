@@ -7,6 +7,8 @@ ovld protocol get-device --device-fingerprint "$OVERLORD_DEVICE_FINGERPRINT"
 ovld protocol list-project-resources --project-id <project_uuid> --device-fingerprint "$OVERLORD_DEVICE_FINGERPRINT"
 ```
 
+`ovld runner start` uses the same device identity and project resource directories to claim queued execution requests from manual Run and auto-advance. `ovld runner once` claims at most one request and exits.
+
 ## Choosing `--execution-target`
 
 Pass `--execution-target agent` or `--execution-target human` (default: `human`) when creating tickets.

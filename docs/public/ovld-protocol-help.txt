@@ -33,6 +33,10 @@ Subcommands:
   record-change-rationales  Persist structured change rationales without a progress update
   ask                       Post a blocking question and move the ticket to review
   request-approval-gate     Flip auto_advance=false on the next queued future objective
+  request-execution         Queue an objective for local/remote runner execution
+  claim-execution           Claim one queued execution request for this device
+  complete-execution-launch Mark a claimed execution request launched
+  fail-execution-launch     Mark a claimed execution request failed
   permission-request        Notify Overlord that the agent is requesting tool permission
   hook-event                Record a lifecycle hook event without a session key
   read-context              Read shared persistent context for this ticket
@@ -260,7 +264,8 @@ prompt:
     When --project-id is omitted, automatically resolves the project from the
     current working directory (matching against the caller's project_user.local_working_directory).
   Required:
-    --objectives-json <json> or --objectives-file <path|-> with [{ "objective": "...", "title": "...", "autoAdvance": true }]
+    --objective <text>
+    or: --objectives-json <json> / --objectives-file <path|-> with [{ "objective": "...", "title": "...", "autoAdvance": true }]
   Optional:
     --title <text>
     --priority <level>        low | medium | high | urgent
@@ -296,7 +301,8 @@ create:
     If session flags are provided, creates a follow-up draft linked to the current ticket.
     If session flags are omitted, resolves project by working directory and creates a standalone draft.
   Required:
-    --objectives-json <json> or --objectives-file <path|-> with [{ "objective": "...", "title": "...", "autoAdvance": true }]
+    --objective <text>
+    or: --objectives-json <json> / --objectives-file <path|-> with [{ "objective": "...", "title": "...", "autoAdvance": true }]
   Optional:
     --session-key <key>
     --ticket-id <ticket_id>
@@ -338,10 +344,11 @@ record-work:
     left open — use this INSTEAD OF `create` + `attach` + `deliver` for "log what we
     just did" flows. Do NOT use this for in-progress work; use `prompt` for that.
   Required:
-    --objectives-json <json> or --objectives-file <path|->   Ordered array of what was asked / done
+    --objective <text> or --objective-file <path|->   What was asked / what was done
+    or: --objectives-json <json> / --objectives-file <path|->
     --summary   <text> or --summary-file   <path|->   Narrative for feed post + reviewer
     or: --payload-json <json>
-    or: --payload-file <path|-> containing { objectives, summary, artifacts, changeRationales }
+    or: --payload-file <path|-> containing { objective, summary, artifacts, changeRationales }
   Optional:
     --title <text>            Auto-derived from objective if omitted
     --priority <level>        low | medium | high | urgent
@@ -460,11 +467,52 @@ update-project-resource:
     --label <text>             New label (pass 'null' to clear)
     --is-primary <true|false>
 
+request-execution:
+  Required:
+    --ticket-id <ticket_id>
+  Optional:
+    --objective-id <uuid>
+    --requested-from <source>  manual_run | auto_advance | api | ssh
+    --idempotency-key <key>
+    --agent <agent>
+    --model <model>
+    --thinking <level>
+    --flag <value>             Extra agent flag (repeatable)
+    --working-directory <path>
+    --ssh-command <command>
+    --remote-working-directory <path>
+    --server-multiplexer <none|tmux>
+    --target-kind <any|local|ssh>
+    --target-device-id <uuid>
+    --target-resource-id <uuid>
+
+claim-execution:
+  Required:
+    --device-fingerprint <fp>  (or OVERLORD_DEVICE_FINGERPRINT env var)
+  Optional:
+    --device-hostname <name>
+    --device-platform <platform>
+    --lease-seconds <n>
+    --project-id <uuid>
+
+complete-execution-launch:
+  Required:
+    --request-id <uuid>        (or EXECUTION_REQUEST_ID env var)
+    --device-fingerprint <fp>  (or OVERLORD_DEVICE_FINGERPRINT env var)
+  Optional:
+    --launched-session-id <uuid>
+
+fail-execution-launch:
+  Required:
+    --request-id <uuid>        (or EXECUTION_REQUEST_ID env var)
+    --device-fingerprint <fp>  (or OVERLORD_DEVICE_FINGERPRINT env var)
+    --error <message>
+
 Examples:
   ovld protocol auth-status
   ovld protocol discover-project
   ovld protocol discover-project --working-directory /path/to/repo
-  ovld protocol prompt --agent codex --objectives-json '[{"objective":"Implement feature X"}]'   # auto-resolves project from cwd
+  ovld protocol prompt --agent codex --objective "Implement feature X"   # auto-resolves project from cwd
   ovld protocol attach --ticket-id 1:899
   ovld protocol attach --ticket-id 1:899 --external-session-id null
   ovld protocol connect --ticket-id 1:899
@@ -474,10 +522,10 @@ Examples:
   ovld protocol discuss-objective --ticket-id 1:899
   ovld protocol discuss-objective --ticket-id 1:899 --objective-id <objective-uuid>
   ovld protocol add-objectives --ticket-id 1:899 --objectives-json '[{"objective":"Step one"},{"objective":"Step two"}]'
-  ovld protocol create --agent codex --objectives-json '[{"objective":"Capture follow-up work from this repo"}]'
+  ovld protocol create --agent codex --objective "Capture follow-up work from this repo"
   ovld protocol create --agent codex --objectives-json '[{"objective":"Step one"},{"objective":"Step two"}]'
-  ovld protocol create --agent codex --session-key <key> --ticket-id <ticket_id> --objectives-json '[{"objective":"Capture follow-up work"}]'
-  ovld protocol prompt --agent codex --objectives-json '[{"objective":"Implement user auth"}]' --priority high
+  ovld protocol create --agent codex --session-key <key> --ticket-id <ticket_id> --objective "Capture follow-up work"
+  ovld protocol prompt --agent codex --objective "Implement user auth" --priority high
   ovld protocol update --session-key <key> --ticket-id <ticket_id> --summary "Did X" --phase execute
   ovld protocol update --session-key <key> --ticket-id <ticket_id> --summary-file ./update.txt --event-type user_follow_up
   ovld protocol record-change-rationales --session-key <key> --ticket-id <ticket_id> --change-rationales-json '[{"label":"...","file_path":"...","summary":"...","why":"...","impact":"...","hunks":[{"header":"@@ ... @@"}]}]'
@@ -489,6 +537,8 @@ Examples:
   ovld protocol attachment-prepare-upload --session-key <key> --ticket-id <ticket_id> --objective-id <objective-id> --file-name spec.pdf --content-type application/pdf
   ovld protocol attachment-upload-file --session-key <key> --ticket-id <ticket_id> --objective-id <objective-id> --file ./spec.pdf
   ovld protocol attachment-download-url --session-key <key> --ticket-id <ticket_id> --attachment-id <attachment-id>
+  ovld protocol request-execution --ticket-id 1:899 --agent codex --requested-from manual_run
+  ovld protocol claim-execution --device-fingerprint $OVERLORD_DEVICE_FINGERPRINT
   ovld protocol deliver --session-key <key> --ticket-id <ticket_id> --summary "Done"
   ovld protocol deliver --session-key <key> --ticket-id <ticket_id> --summary "Done" --artifacts-file ./artifacts.json
   ovld protocol deliver --session-key <key> --ticket-id <ticket_id> --payload-json '{"summary":"Done","artifacts":[{"type":"note","label":"Delivery","content":"..."}]}'
@@ -496,9 +546,9 @@ Examples:
   ovld protocol deliver --session-key <key> --ticket-id <ticket_id> --payload-file -
   ovld protocol deliver --session-key <key> --ticket-id <ticket_id> --summary "Done" --skip-file-change-check
   ovld protocol deliver --session-key <key> --ticket-id <ticket_id> --summary "Done" --timeout 60000
-  ovld protocol record-work --objectives-json '[{"objective":"User asked for X; I did Y"}]' --summary "What I did and why" --change-rationales-json '[...]'
+  ovld protocol record-work --objective "User asked for X; I did Y" --summary "What I did and why" --change-rationales-json '[...]'
   ovld protocol record-work --payload-file - <<'EOF'
-    {"objectives":[{"objective":"..."}],"summary":"...","artifacts":[...],"changeRationales":[...]}
+    {"objective":"...","summary":"...","artifacts":[...],"changeRationales":[...]}
 EOF
   ovld protocol get-device --device-fingerprint $OVERLORD_DEVICE_FINGERPRINT
   ovld protocol update-device --device-fingerprint $OVERLORD_DEVICE_FINGERPRINT --label work-macbook

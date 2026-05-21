@@ -110,6 +110,11 @@ export function sortObjectivesByCreatedAtAscending<T extends ObjectiveTimelineIt
 
 type ObjectivePositionItem = ObjectiveTimelineItem & { position?: number | null };
 
+type ObjectiveQueueRow = ObjectivePositionItem & {
+  id: string;
+  state: ObjectiveState | null;
+};
+
 export function sortObjectivesByPositionThenCreatedAt<T extends ObjectivePositionItem>(
   objectives: readonly T[]
 ): T[] {
@@ -121,6 +126,151 @@ export function sortObjectivesByPositionThenCreatedAt<T extends ObjectivePositio
     }
     return toTimestamp(a.created_at) - toTimestamp(b.created_at);
   });
+}
+
+function buildPositionMapFromOrderedObjectives(
+  objectives: readonly ObjectiveQueueRow[]
+): Record<string, number> {
+  const sortedPositions = objectives
+    .map(objective => objective.position)
+    .filter((position): position is number => typeof position === 'number')
+    .sort((a, b) => a - b);
+
+  return Object.fromEntries(
+    objectives.map((objective, index) => [objective.id, sortedPositions[index] ?? index])
+  );
+}
+
+export function computePromotedObjectivePositions(
+  objectives: readonly ObjectiveQueueRow[],
+  promotedObjectiveId: string
+): Record<string, number> {
+  const orderedObjectives = sortObjectivesByPositionThenCreatedAt(objectives);
+  const promotedIndex = orderedObjectives.findIndex(
+    objective => objective.id === promotedObjectiveId
+  );
+
+  if (promotedIndex === -1) {
+    throw new Error('Objective not found.');
+  }
+
+  const draftIndex = orderedObjectives.findIndex(objective => objective.state === 'draft');
+  if (draftIndex === -1 || draftIndex === promotedIndex) {
+    return buildPositionMapFromOrderedObjectives(orderedObjectives);
+  }
+
+  const reorderedObjectives = [...orderedObjectives];
+  const [promotedObjective] = reorderedObjectives.splice(promotedIndex, 1);
+  reorderedObjectives.splice(draftIndex, 0, promotedObjective);
+
+  return buildPositionMapFromOrderedObjectives(reorderedObjectives);
+}
+
+export function computeReorderedObjectivePositions(
+  objectives: readonly ObjectiveQueueRow[],
+  orderedObjectiveIds: readonly string[]
+): Record<string, number> {
+  const queuedById = new Map(objectives.map(objective => [objective.id, objective]));
+  const reorderedQueue = orderedObjectiveIds
+    .map(id => queuedById.get(id))
+    .filter(Boolean) as ObjectiveQueueRow[];
+  if (reorderedQueue.length !== orderedObjectiveIds.length) {
+    throw new Error('Ordered objectives must all belong to the queued draft/future set.');
+  }
+
+  const positionPool = reorderedQueue
+    .map(objective => objective.position)
+    .filter((position): position is number => typeof position === 'number')
+    .sort((a, b) => a - b);
+
+  return Object.fromEntries(
+    reorderedQueue.map((objective, index) => [objective.id, positionPool[index] ?? index])
+  );
+}
+
+export async function persistObjectivePositions(
+  supabase: ObjectiveClient,
+  ticketId: string,
+  positionsById: Readonly<Record<string, number>>
+) {
+  const updates = Object.entries(positionsById);
+  if (updates.length === 0) {
+    return;
+  }
+
+  const { data: ticketObjectives, error: ticketObjectivesError } = await supabase
+    .from('objectives')
+    .select('id,position')
+    .eq('ticket_id', ticketId);
+
+  if (ticketObjectivesError) {
+    throw new Error(ticketObjectivesError.message);
+  }
+
+  const maxExistingPosition = Math.max(
+    -1,
+    ...((ticketObjectives ?? []) as Array<{ position: number | null }>).map(objective =>
+      typeof objective.position === 'number' ? objective.position : -1
+    )
+  );
+  const tempBase = maxExistingPosition + updates.length + 1000;
+
+  for (const [index, [id]] of updates.entries()) {
+    const { error } = await supabase
+      .from('objectives')
+      .update({ position: tempBase + index })
+      .eq('id', id)
+      .eq('ticket_id', ticketId);
+
+    if (error) {
+      throw new Error(error.message);
+    }
+  }
+
+  for (const [id, position] of updates) {
+    const { error } = await supabase
+      .from('objectives')
+      .update({ position })
+      .eq('id', id)
+      .eq('ticket_id', ticketId);
+
+    if (error) {
+      throw new Error(error.message);
+    }
+  }
+}
+
+export async function promoteNextFutureDraft(
+  supabase: ObjectiveClient,
+  ticketId: string
+): Promise<boolean> {
+  const { data: nextFuture, error: nextFutureError } = await supabase
+    .from('objectives')
+    .select('id')
+    .eq('ticket_id', ticketId)
+    .eq('state', 'future')
+    .order('position', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (nextFutureError) {
+    throw new Error(nextFutureError.message);
+  }
+
+  if (!nextFuture) {
+    return false;
+  }
+
+  const { error: promoteError } = await supabase
+    .from('objectives')
+    .update({ state: 'draft', completed_at: null })
+    .eq('id', nextFuture.id);
+
+  if (promoteError) {
+    throw new Error(promoteError.message);
+  }
+
+  return true;
 }
 
 export async function insertOrderedObjectives(
@@ -410,43 +560,22 @@ export async function markSubmittedObjectiveExecuting(
     throw new Error(executeError.message);
   }
 
-  const { data: existingDraftRow, error: existingDraftProbeError } = await supabase
-    .from('objectives')
-    .select('id')
-    .eq('ticket_id', ticketId)
-    .eq('state', 'draft')
-    .limit(1)
-    .maybeSingle();
+  const promotedFuture = await promoteNextFutureDraft(supabase, ticketId);
 
-  if (existingDraftProbeError) {
-    throw new Error(existingDraftProbeError.message);
-  }
-
-  if (!existingDraftRow) {
-    const { data: earliestFuture, error: earliestFutureError } = await supabase
+  if (!promotedFuture) {
+    const { data: existingDraftRow, error: existingDraftProbeError } = await supabase
       .from('objectives')
       .select('id')
       .eq('ticket_id', ticketId)
-      .eq('state', 'future')
-      .order('position', { ascending: true })
-      .order('created_at', { ascending: true })
+      .eq('state', 'draft')
       .limit(1)
       .maybeSingle();
 
-    if (earliestFutureError) {
-      throw new Error(earliestFutureError.message);
+    if (existingDraftProbeError) {
+      throw new Error(existingDraftProbeError.message);
     }
 
-    if (earliestFuture) {
-      const { error: promoteError } = await supabase
-        .from('objectives')
-        .update({ state: 'draft', completed_at: null })
-        .eq('id', earliestFuture.id);
-
-      if (promoteError) {
-        throw new Error(promoteError.message);
-      }
-    } else {
+    if (!existingDraftRow) {
       const { error: insertDraftError } = await supabase.from('objectives').insert({
         state: 'draft',
         objective: '',

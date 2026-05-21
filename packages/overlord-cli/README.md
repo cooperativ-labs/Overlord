@@ -68,6 +68,7 @@ ovld protocol discover-project
 ovld protocol attach --ticket-id <ticket_id>
 ovld protocol search-tickets --query "auth refactor" --status next-up,execute
 ovld protocol update --session-key <session-key> --ticket-id <ticket_id> --summary "Working on it" --phase execute
+ovld runner start
 ovld setup
 ovld setup codex
 ovld setup claude
@@ -100,6 +101,7 @@ Top-level commands (see `ovld help`):
 - `tickets` - `create` or `list` (optional `--status`)
 - `ticket` - `context <ticketId>` to print context for one ticket
 - `launch`, `restart` - launch or resume an agent session
+- `runner` - claim queued execution requests and launch assigned agents with `ovld launch`
 - `connect`, `run`, `resume` - legacy aliases for `launch` and `restart`
 - `setup` - install the Overlord connector for an agent; `ovld setup [agent|all]` (interactive with no args). `ovld setup claude` also performs the one-time v3.25.0 to v4 Claude plugin migration
 - `update` - install the latest CLI release from npm
@@ -137,8 +139,11 @@ Agents can find docs here: https://www.ovld.ai/docs/for-agents
 - `attachment-upload-file` - prepare, upload, and finalize a local objective attachment in one command
 - `get-device` / `update-device` - register the caller machine (per organization + user + fingerprint) and rename its label
 - `list-project-resources` / `add-project-resource` / `update-project-resource` - manage filesystem directories tied to a project device
+- `request-execution` / `claim-execution` / `complete-execution-launch` / `fail-execution-launch` - durable runner queue operations used by auto-advance and manual Run
 
 Devices are keyed by **(organization, user, fingerprint)** so the same physical workstation can appear once per org session.
+
+`ovld runner start` keeps a foreground runner alive for CLI-only or remote hosts. It claims compatible execution requests for the current device and launches the assigned agent/model with `ovld launch`; `ovld runner once` claims at most one request and exits.
 
 Use `create` for future work you want to track, `prompt` for work that should start immediately, and `record-work` for work that was already completed in chat and now needs a review ticket plus feed post. Use multiple tickets when prompts represent different features or goals; use `add-objectives` or `--objectives-json '[{"objective":"Step one"},{"objective":"Step two"}]'` when prompts are sequential steps toward the same feature or goal.
 

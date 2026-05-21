@@ -14,6 +14,7 @@ import {
   type ChangelogEntry,
   generateChangelogDraftAction,
   publishChangelogEntryAction,
+  sendChangelogNewsletterAction,
   updateChangelogDraftAction
 } from '@/lib/actions/changelog';
 import { cn } from '@/lib/utils';
@@ -64,6 +65,7 @@ export function ChangelogPanel({ initialEntries }: Props) {
   const [generateState, setGenerateState] = useState<ButtonLoadingState>('default');
   const [saveState, setSaveState] = useState<ButtonLoadingState>('default');
   const [publishState, setPublishState] = useState<ButtonLoadingState>('default');
+  const [newsletterState, setNewsletterState] = useState<ButtonLoadingState>('default');
   const [archiveState, setArchiveState] = useState<ButtonLoadingState>('default');
   const [error, setError] = useState<string | null>(null);
 
@@ -152,6 +154,29 @@ export function ChangelogPanel({ initialEntries }: Props) {
     } catch (err) {
       setPublishState('error');
       setError(err instanceof Error ? err.message : 'Failed to publish entry.');
+    }
+  }
+
+  async function handleSendNewsletter() {
+    if (!selectedEntry) return;
+    setError(null);
+    setNewsletterState('loading');
+    try {
+      const result = await sendChangelogNewsletterAction(selectedEntry.id);
+      if (result.sent === 0) {
+        setNewsletterState('success');
+        setError('No subscribers opted in to new feature emails.');
+        return;
+      }
+      if (result.partialErrors?.length) {
+        setNewsletterState('success');
+        setError(`Sent to ${result.sent} of ${result.total} subscribers. Some batches failed.`);
+        return;
+      }
+      setNewsletterState('success');
+    } catch (err) {
+      setNewsletterState('error');
+      setError(err instanceof Error ? err.message : 'Failed to send newsletter.');
     }
   }
 
@@ -345,6 +370,18 @@ export function ChangelogPanel({ initialEntries }: Props) {
                   reset
                   onClick={handlePublish}
                 />
+                {selectedEntry.status === 'published' ? (
+                  <LoadingButton
+                    buttonState={newsletterState}
+                    setButtonState={setNewsletterState}
+                    text="Send newsletter"
+                    loadingText="Sending..."
+                    successText="Sent"
+                    errorText="Send failed"
+                    reset
+                    onClick={handleSendNewsletter}
+                  />
+                ) : null}
                 {selectedEntry.status !== 'archived' ? (
                   <LoadingButton
                     buttonState={archiveState}

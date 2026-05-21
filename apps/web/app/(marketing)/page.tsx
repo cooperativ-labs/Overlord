@@ -155,15 +155,15 @@ export default async function HomePage() {
       {/* Hero — centered, focused */}
       <section className="flex min-h-[calc(100dvh-6rem)] flex-col items-center justify-center text-center py-24 sm:py-32">
         <div className="animate-in fade-in slide-in-from-bottom-6 max-w-4xl space-y-10 duration-700 sm:space-y-12">
-          <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-1.5 font-mono text-[12px] font-medium uppercase tracking-[0.2em] text-slate-300 shadow-sm backdrop-blur">
+          <div className="inline-flex items-center gap-2 rounded-full border border-stone-200 bg-white px-4 py-1.5 font-mono text-[12px] font-medium uppercase tracking-[0.2em] text-stone-600 shadow-sm backdrop-blur dark:border-white/10 dark:bg-white/5 dark:text-slate-300">
             Web App · Desktop · CLI · MCP · Agent Plugins
           </div>
 
           <div className="space-y-6">
-            <h1 className="font-display text-6xl font-semibold leading-[0.95] tracking-tight text-white sm:text-7xl lg:text-[5.5rem]">
+            <h1 className="font-display text-6xl font-semibold leading-[0.95] tracking-tight text-stone-900 dark:text-white sm:text-7xl lg:text-[5.5rem]">
               Stop Juggling Agents.
             </h1>
-            <p className="mx-auto max-w-2xl text-lg leading-8 text-slate-300 sm:text-xl">
+            <p className="mx-auto max-w-2xl text-lg leading-8 text-stone-600 dark:text-slate-300 sm:text-xl">
               Overlord is the AI agent coordination layer that works with every tool you already
               use.
             </p>
@@ -174,7 +174,7 @@ export default async function HomePage() {
             {/* <Button
                 asChild
                 size="lg"
-                className="h-14 rounded-full border-white/15 bg-white/5 px-8 text-base text-white hover:bg-white/10 hover:text-white"
+                className="h-14 rounded-full border-stone-300 bg-white px-8 text-base text-stone-900 shadow-sm hover:bg-stone-50 dark:border-white/15 dark:bg-white/5 dark:text-white dark:shadow-none dark:hover:bg-white/10 dark:hover:text-white"
               >
                 <Link href="/demo">
                   <Play className="size-4" />
@@ -185,7 +185,7 @@ export default async function HomePage() {
               asChild
               size="lg"
               variant="outline"
-              className="h-14 rounded-full border-white/15 bg-white/5 px-8 text-base text-white hover:bg-white/10 hover:text-white"
+              className="h-14 rounded-full border-stone-300 bg-white px-8 text-base text-stone-900 shadow-sm hover:bg-stone-50 dark:border-white/15 dark:bg-white/5 dark:text-white dark:shadow-none dark:hover:bg-white/10 dark:hover:text-white"
             >
               <Link href="#watch-video">
                 <Play className="size-4" />
@@ -198,7 +198,7 @@ export default async function HomePage() {
               asChild
               size="lg"
               variant="outline"
-              className="h-14 rounded-full border-white/15 bg-white/5 px-8 text-base text-white hover:bg-white/10 hover:text-white"
+              className="h-14 rounded-full border-stone-300 bg-white px-8 text-base text-stone-900 shadow-sm hover:bg-stone-50 dark:border-white/15 dark:bg-white/5 dark:text-white dark:shadow-none dark:hover:bg-white/10 dark:hover:text-white"
             >
               <Link href="/signup">
                 Create account
@@ -208,14 +208,14 @@ export default async function HomePage() {
           </div>
 
           {/* Agent icons */}
-          <div className="flex flex-wrap items-center justify-center gap-2.5 pt-4 text-sm text-slate-300">
-            <span className="w-full font-mono text-[12px] uppercase tracking-[0.2em] text-slate-500 sm:w-auto">
+          <div className="flex flex-wrap items-center justify-center gap-2.5 pt-4 text-sm text-stone-600 dark:text-slate-300">
+            <span className="w-full font-mono text-[12px] uppercase tracking-[0.2em] text-stone-500 dark:text-slate-500 sm:w-auto">
               Works with
             </span>
             {agentIcons.map(agent => (
               <div
                 key={agent.alt}
-                className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-2 shadow-sm"
+                className="inline-flex items-center gap-2 rounded-full border border-stone-200 bg-white px-3 py-2 text-stone-800 shadow-sm dark:border-white/10 dark:bg-white/5 dark:text-slate-300"
               >
                 <Image
                   src={agent.src}
@@ -234,7 +234,7 @@ export default async function HomePage() {
       {/* Problems */}
       <section id="problems" className="mx-auto w-full max-w-6xl scroll-mt-24 pb-20 pt-8">
         <div className="mb-12 text-center">
-          <h2 className="font-display text-3xl font-semibold tracking-tight text-white sm:text-4xl lg:text-5xl">
+          <h2 className="font-display text-3xl font-semibold tracking-tight text-stone-900 dark:text-white sm:text-4xl lg:text-5xl">
             Mo Agents Mo Problems
           </h2>
         </div>
@@ -245,18 +245,18 @@ export default async function HomePage() {
               <Link
                 key={problemPage.slug}
                 href={`/problems/${problemPage.slug}`}
-                className="group relative flex flex-col gap-5 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] p-7 transition-all hover:-translate-y-0.5 hover:border-sky-400/30 hover:bg-white/[0.06] sm:p-8"
+                className="group relative flex flex-col gap-5 overflow-hidden rounded-2xl border border-stone-200 bg-white p-7 shadow-sm transition-all hover:-translate-y-0.5 hover:border-sky-400/40 hover:bg-stone-50/80 sm:p-8 dark:border-white/10 dark:bg-white/[0.04] dark:shadow-none dark:hover:border-sky-400/30 dark:hover:bg-white/[0.06]"
               >
                 <div className="pointer-events-none absolute -right-12 -top-12 size-40 rounded-full bg-sky-400/5 blur-2xl transition-opacity group-hover:bg-sky-400/10" />
                 <div className="relative flex items-center justify-between gap-4">
                   <div className="flex size-12 items-center justify-center rounded-2xl border border-sky-400/20 bg-sky-400/10 text-sky-300">
                     <Icon className="size-6" />
                   </div>
-                  <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-slate-500">
+                  <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-stone-500 dark:text-slate-500">
                     {problemPage.shortTitle}
                   </span>
                 </div>
-                <p className="relative text-xl font-semibold leading-snug text-white sm:text-2xl">
+                <p className="relative text-xl font-semibold leading-snug text-stone-900 dark:text-white sm:text-2xl">
                   &ldquo;{problemPage.problem}&rdquo;
                 </p>
                 <div className="relative mt-auto inline-flex items-center gap-2 text-sm font-medium text-sky-300 transition-colors group-hover:text-sky-200">
@@ -280,10 +280,10 @@ export default async function HomePage() {
           <p className="font-mono text-[14px] font-medium uppercase tracking-widest text-sky-400">
             How it works
           </p>
-          <h2 className="mt-4 font-display text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+          <h2 className="mt-4 font-display text-3xl font-semibold tracking-tight text-stone-900 dark:text-white sm:text-4xl">
             From prompt to reviewable work record
           </h2>
-          <p className="mx-auto mt-4 max-w-2xl text-base leading-7 text-slate-300">
+          <p className="mx-auto mt-4 max-w-2xl text-base leading-7 text-stone-600 dark:text-slate-300">
             Objectives are the unit of agent work. Tickets group those objectives into a
             higher-level goal, and projects keep the related repo, folders, and resources together.
           </p>
@@ -293,21 +293,30 @@ export default async function HomePage() {
           {workflowSteps.map(step => (
             <div
               key={step.step}
-              className="group relative flex flex-col rounded-2xl border border-white/8 bg-white/[0.03] p-6 transition-colors hover:border-white/15 hover:bg-white/[0.06]"
+              className="group relative flex flex-col rounded-2xl border border-stone-200 bg-white p-6 shadow-sm transition-colors hover:border-stone-300 hover:bg-stone-50/80 dark:border-white/8 dark:bg-white/[0.03] dark:shadow-none dark:hover:border-white/15 dark:hover:bg-white/[0.06]"
             >
               <div className="mb-4 flex items-center gap-3">
                 <div className="flex size-10 items-center justify-center rounded-xl border border-sky-400/20 bg-sky-400/10 text-sky-400">
                   <step.icon className="size-5" />
                 </div>
-                <span className="font-mono text-xs text-slate-500">{step.step}</span>
+                <span className="font-mono text-xs text-stone-500 dark:text-slate-500">
+                  {step.step}
+                </span>
               </div>
 
-              <h3 className="mb-2 text-lg font-semibold text-white">{step.title}</h3>
-              <p className="mb-5 text-sm leading-relaxed text-slate-400">{step.description}</p>
+              <h3 className="mb-2 text-lg font-semibold text-stone-900 dark:text-white">
+                {step.title}
+              </h3>
+              <p className="mb-5 text-sm leading-relaxed text-stone-500 dark:text-slate-400">
+                {step.description}
+              </p>
 
               <ul className="space-y-2.5">
                 {step.benefits.map(benefit => (
-                  <li key={benefit} className="flex items-start gap-2 text-sm text-slate-300">
+                  <li
+                    key={benefit}
+                    className="flex items-start gap-2 text-sm text-stone-600 dark:text-slate-300"
+                  >
                     <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-sky-400/70" />
                     <span>{benefit}</span>
                   </li>
@@ -323,10 +332,10 @@ export default async function HomePage() {
             <p className="font-mono text-[14px] font-medium uppercase tracking-widest text-sky-400">
               Benefits
             </p>
-            <h2 className="mt-3 font-display text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+            <h2 className="mt-3 font-display text-3xl font-semibold tracking-tight text-stone-900 dark:text-white sm:text-4xl">
               Keep your agents. Add a system of record.
             </h2>
-            <p className="mt-4  text-base leading-7 text-slate-300 sm:text-lg">
+            <p className="mt-4  text-base leading-7 text-stone-600 dark:text-slate-300 sm:text-lg">
               Overlord is deliberately not the agent brain. It coordinates the agents, terminals,
               repos, subscriptions, objectives, context, and review record around the work.
             </p>
@@ -336,25 +345,29 @@ export default async function HomePage() {
             {benefitTiles.map(feature => (
               <article
                 key={feature.title}
-                className="group rounded-2xl border border-white/10 bg-[#07101d]/70 p-5 transition-colors hover:border-white/15 hover:bg-[#07101d]/90"
+                className="group rounded-2xl border border-stone-200 bg-white p-5 shadow-sm transition-colors hover:border-stone-300 hover:bg-stone-50/90 dark:border-white/10 dark:bg-[#07101d]/70 dark:shadow-none dark:hover:border-white/15 dark:hover:bg-[#07101d]/90"
               >
                 <div className="mb-4 flex items-center gap-3">
                   <div className="flex size-11 items-center justify-center rounded-2xl border border-sky-400/20 bg-sky-400/10 text-sky-300">
                     <feature.icon className="size-5" />
                   </div>
-                  <span className="font-mono text-[14px] uppercase tracking-wider text-slate-500">
+                  <span className="font-mono text-[14px] uppercase tracking-wider text-stone-500 dark:text-slate-500">
                     {feature.eyebrow}
                   </span>
                 </div>
 
-                <h3 className="text-xl font-semibold tracking-tight text-white">{feature.title}</h3>
-                <p className="mt-3 text-sm leading-7 text-slate-300">{feature.description}</p>
+                <h3 className="text-xl font-semibold tracking-tight text-stone-900 dark:text-white">
+                  {feature.title}
+                </h3>
+                <p className="mt-3 text-sm leading-7 text-stone-600 dark:text-slate-300">
+                  {feature.description}
+                </p>
 
                 <ul className="mt-5 space-y-2.5">
                   {feature.bullets.map(bullet => (
                     <li
                       key={bullet}
-                      className="flex items-start gap-2 text-sm leading-6 text-slate-300"
+                      className="flex items-start gap-2 text-sm leading-6 text-stone-600 dark:text-slate-300"
                     >
                       <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-sky-400/70" />
                       <span>{bullet}</span>
@@ -375,10 +388,10 @@ export default async function HomePage() {
           <p className="font-mono text-[14px] font-medium uppercase tracking-widest text-sky-400">
             Positioning
           </p>
-          <h2 className="mt-3 font-display text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+          <h2 className="mt-3 font-display text-3xl font-semibold tracking-tight text-stone-900 dark:text-white sm:text-4xl">
             A management and work coordination layer, not a replacement workflow.
           </h2>
-          <p className="mt-4 text-base leading-7 text-slate-300">
+          <p className="mt-4 text-base leading-7 text-stone-600 dark:text-slate-300">
             Overlord lets you run agent work wherever you want while keeping objectives, shared
             context, progress, handoffs, file changes, and the review record in one durable ticket.
           </p>
@@ -386,7 +399,7 @@ export default async function HomePage() {
             <Button
               asChild
               variant="outline"
-              className="rounded-full border-white/15 bg-white/5 text-white hover:bg-white/10"
+              className="rounded-full border-stone-300 bg-white text-stone-900 shadow-sm hover:bg-stone-50 dark:border-white/15 dark:bg-white/5 dark:text-white dark:shadow-none dark:hover:bg-white/10"
             >
               <Link href="/compare">
                 Read comparisons
@@ -396,7 +409,7 @@ export default async function HomePage() {
             <Button
               asChild
               variant="outline"
-              className="rounded-full border-white/15 bg-white/5 text-white hover:bg-white/10"
+              className="rounded-full border-stone-300 bg-white text-stone-900 shadow-sm hover:bg-stone-50 dark:border-white/15 dark:bg-white/5 dark:text-white dark:shadow-none dark:hover:bg-white/10"
             >
               <Link href="/docs/for-agents">
                 Agent docs
@@ -410,10 +423,14 @@ export default async function HomePage() {
           {comparisonTeasers.map(teaser => (
             <article
               key={teaser.title}
-              className="rounded-2xl border border-white/10 bg-white/[0.03] p-5"
+              className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-white/[0.03] dark:shadow-none"
             >
-              <h3 className="text-lg font-semibold text-white">{teaser.title}</h3>
-              <p className="mt-2 text-sm leading-7 text-slate-300">{teaser.description}</p>
+              <h3 className="text-lg font-semibold text-stone-900 dark:text-white">
+                {teaser.title}
+              </h3>
+              <p className="mt-2 text-sm leading-7 text-stone-600 dark:text-slate-300">
+                {teaser.description}
+              </p>
             </article>
           ))}
         </div>

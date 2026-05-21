@@ -1,0 +1,238 @@
+#!/usr/bin/env node
+
+import { execFileSync, spawn } from 'node:child_process';
+import crypto from 'node:crypto';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
+const OVLD_ENTRY = process.argv[1];
+const DEVICE_FILE = path.join(os.homedir(), '.ovld', 'device.json');
+
+function printRunnerHelp(primaryCommand = 'ovld') {
+  console.log(`Usage:
+  ${primaryCommand} runner once [options]
+  ${primaryCommand} runner start [options]
+  ${primaryCommand} runner status [options]
+
+Options:
+  --device-fingerprint <fp>  Override runner device identity
+  --poll-interval-ms <ms>    Poll interval for start mode (default 3000)
+  --project-id <uuid>        Only claim requests for one project
+
+The runner claims durable execution requests and launches them with \`${primaryCommand} launch\`.
+`);
+}
+
+function parseFlags(args) {
+  const flags = {};
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (!arg.startsWith('--')) continue;
+    const eqIdx = arg.indexOf('=');
+    if (eqIdx !== -1) {
+      flags[arg.slice(2, eqIdx)] = arg.slice(eqIdx + 1);
+      continue;
+    }
+    const key = arg.slice(2);
+    if (i + 1 < args.length && !args[i + 1].startsWith('--')) {
+      flags[key] = args[i + 1];
+      i++;
+    } else {
+      flags[key] = true;
+    }
+  }
+  return flags;
+}
+
+function readOrCreateDeviceFingerprint(flags) {
+  const explicit =
+    typeof flags['device-fingerprint'] === 'string'
+      ? flags['device-fingerprint'].trim()
+      : process.env.OVERLORD_DEVICE_FINGERPRINT?.trim();
+  if (explicit) return explicit;
+
+  try {
+    const raw = fs.readFileSync(DEVICE_FILE, 'utf8');
+    const parsed = JSON.parse(raw);
+    if (typeof parsed.deviceFingerprint === 'string' && parsed.deviceFingerprint.trim()) {
+      return parsed.deviceFingerprint.trim();
+    }
+  } catch {
+    // Create below.
+  }
+
+  const deviceFingerprint = crypto.randomUUID();
+  fs.mkdirSync(path.dirname(DEVICE_FILE), { recursive: true });
+  fs.writeFileSync(DEVICE_FILE, `${JSON.stringify({ deviceFingerprint }, null, 2)}\n`, 'utf8');
+  return deviceFingerprint;
+}
+
+function runOvld(args, env = {}) {
+  return execFileSync(process.execPath, [OVLD_ENTRY, ...args], {
+    encoding: 'utf8',
+    env: { ...process.env, ...env }
+  });
+}
+
+function protocolJson(subcommand, args, env) {
+  const stdout = runOvld(['protocol', subcommand, ...args], env);
+  return stdout.trim() ? JSON.parse(stdout) : {};
+}
+
+function claimExecution(flags, deviceFingerprint) {
+  const args = [
+    '--device-fingerprint',
+    deviceFingerprint,
+    '--device-hostname',
+    os.hostname(),
+    '--device-platform',
+    process.platform
+  ];
+  if (typeof flags['project-id'] === 'string') {
+    args.push('--project-id', flags['project-id']);
+  }
+  return protocolJson('claim-execution', args, { OVERLORD_DEVICE_FINGERPRINT: deviceFingerprint });
+}
+
+function completeLaunch(requestId, deviceFingerprint) {
+  protocolJson(
+    'complete-execution-launch',
+    ['--request-id', requestId, '--device-fingerprint', deviceFingerprint],
+    { OVERLORD_DEVICE_FINGERPRINT: deviceFingerprint }
+  );
+}
+
+function failLaunch(requestId, deviceFingerprint, error) {
+  protocolJson(
+    'fail-execution-launch',
+    ['--request-id', requestId, '--device-fingerprint', deviceFingerprint, '--error', error],
+    { OVERLORD_DEVICE_FINGERPRINT: deviceFingerprint }
+  );
+}
+
+function buildLaunchArgs(launch) {
+  const args = ['launch', launch.agent, '--ticket-id', launch.ticketId];
+  if (launch.workingDirectory) args.push('--working-directory', launch.workingDirectory);
+  if (launch.launchMode === 'ask') args.push('--launch-mode', 'ask');
+  if (launch.model) args.push('--model', launch.model);
+  if (launch.thinking) args.push('--thinking', launch.thinking);
+  for (const flag of launch.flags ?? []) args.push('--flag', flag);
+  if (launch.sshCommand) args.push('--ssh-command', launch.sshCommand);
+  if (launch.remoteWorkingDirectory) {
+    args.push('--remote-working-directory', launch.remoteWorkingDirectory);
+  }
+  if (launch.serverMultiplexer === 'tmux') args.push('--server-multiplexer', 'tmux');
+  if (launch.tmuxCommand) args.push('--tmux-command', launch.tmuxCommand);
+  return args;
+}
+
+async function launchClaimedRequest(claim, deviceFingerprint) {
+  const requestId = claim.request?.id;
+  if (!requestId || !claim.launch?.agent || !claim.launch?.ticketId) return false;
+
+  const args = buildLaunchArgs(claim.launch);
+  process.stderr.write(
+    `[runner] launching ${claim.launch.agent} for ${claim.launch.ticketId} (${requestId})\n`
+  );
+
+  await new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [OVLD_ENTRY, ...args], {
+      stdio: 'inherit',
+      env: { ...process.env, OVERLORD_DEVICE_FINGERPRINT: deviceFingerprint }
+    });
+
+    child.once('spawn', () => {
+      try {
+        completeLaunch(requestId, deviceFingerprint);
+      } catch (error) {
+        process.stderr.write(`[runner] failed to mark request launched: ${error}\n`);
+      }
+    });
+
+    child.once('error', error => {
+      try {
+        failLaunch(requestId, deviceFingerprint, error.message);
+      } catch {
+        // Preserve the original launch error.
+      }
+      reject(error);
+    });
+
+    child.once('close', code => {
+      if (code && code !== 0) {
+        process.stderr.write(`[runner] launch process exited with code ${code}\n`);
+      }
+      resolve();
+    });
+  });
+
+  return true;
+}
+
+async function runOnce(flags, deviceFingerprint) {
+  const claim = claimExecution(flags, deviceFingerprint);
+  if (!claim.request) {
+    process.stderr.write('[runner] no queued execution requests\n');
+    return false;
+  }
+  await launchClaimedRequest(claim, deviceFingerprint);
+  return true;
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+export async function runRunnerCommand(subcommand, args, primaryCommand = 'ovld') {
+  if (!subcommand || subcommand === 'help' || subcommand === '--help' || subcommand === '-h') {
+    printRunnerHelp(primaryCommand);
+    return;
+  }
+
+  const flags = parseFlags(args);
+  const deviceFingerprint = readOrCreateDeviceFingerprint(flags);
+
+  if (subcommand === 'status') {
+    const data = protocolJson(
+      'get-device',
+      [
+        '--device-fingerprint',
+        deviceFingerprint,
+        '--device-hostname',
+        os.hostname(),
+        '--device-platform',
+        process.platform
+      ],
+      { OVERLORD_DEVICE_FINGERPRINT: deviceFingerprint }
+    );
+    console.log(JSON.stringify({ ok: true, device: data.device }, null, 2));
+    return;
+  }
+
+  if (subcommand === 'once') {
+    await runOnce(flags, deviceFingerprint);
+    return;
+  }
+
+  if (subcommand === 'start') {
+    const pollIntervalMs =
+      typeof flags['poll-interval-ms'] === 'string'
+        ? Math.max(1000, Number.parseInt(flags['poll-interval-ms'], 10) || 3000)
+        : 3000;
+    process.stderr.write(`[runner] started with device ${deviceFingerprint}\n`);
+    for (;;) {
+      try {
+        const launched = await runOnce(flags, deviceFingerprint);
+        if (!launched) await sleep(pollIntervalMs);
+      } catch (error) {
+        process.stderr.write(`[runner] ${error instanceof Error ? error.message : error}\n`);
+        await sleep(pollIntervalMs);
+      }
+    }
+  }
+
+  console.error(`Unknown runner command: ${subcommand}\n`);
+  printRunnerHelp(primaryCommand);
+  process.exit(1);
+}

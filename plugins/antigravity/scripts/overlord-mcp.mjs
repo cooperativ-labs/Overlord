@@ -862,6 +862,109 @@ const tools = [
         : {})
     }),
     subcommand: 'update-project-resource'
+  },
+  {
+    name: 'request_execution',
+    description:
+      'Queue an objective for local or remote runner execution. Manual Run and auto-advance use this durable queue.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ticket_id: { type: 'string' },
+        objective_id: { type: 'string' },
+        requested_from: { type: 'string' },
+        idempotency_key: { type: 'string' },
+        agent: { type: 'string' },
+        model: { type: 'string' },
+        thinking: { type: 'string' },
+        working_directory: { type: 'string' },
+        ssh_command: { type: 'string' },
+        remote_working_directory: { type: 'string' },
+        server_multiplexer: { type: 'string', enum: ['none', 'tmux'] },
+        target_kind: { type: 'string', enum: ['any', 'local', 'ssh'] },
+        target_device_id: { type: 'string' },
+        target_resource_id: { type: 'string' }
+      },
+      required: ['ticket_id']
+    },
+    toCliFlags: args => ({
+      'ticket-id': args.ticket_id,
+      'objective-id': args.objective_id,
+      'requested-from': args.requested_from,
+      'idempotency-key': args.idempotency_key,
+      agent: args.agent,
+      model: args.model,
+      thinking: args.thinking,
+      'working-directory': args.working_directory,
+      'ssh-command': args.ssh_command,
+      'remote-working-directory': args.remote_working_directory,
+      'server-multiplexer': args.server_multiplexer,
+      'target-kind': args.target_kind,
+      'target-device-id': args.target_device_id,
+      'target-resource-id': args.target_resource_id
+    }),
+    subcommand: 'request-execution'
+  },
+  {
+    name: 'claim_execution',
+    description: 'Claim one queued execution request for this device.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        device_fingerprint: { type: 'string' },
+        device_hostname: { type: 'string' },
+        device_platform: { type: 'string' },
+        lease_seconds: { type: 'number' },
+        project_id: { type: 'string' }
+      },
+      required: ['device_fingerprint']
+    },
+    toCliFlags: args => ({
+      'device-fingerprint': args.device_fingerprint,
+      'device-hostname': args.device_hostname,
+      'device-platform': args.device_platform,
+      'lease-seconds': args.lease_seconds,
+      'project-id': args.project_id
+    }),
+    subcommand: 'claim-execution'
+  },
+  {
+    name: 'complete_execution_launch',
+    description: 'Mark a claimed execution request as launched.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        request_id: { type: 'string' },
+        device_fingerprint: { type: 'string' },
+        launched_session_id: { type: 'string' }
+      },
+      required: ['request_id', 'device_fingerprint']
+    },
+    toCliFlags: args => ({
+      'request-id': args.request_id,
+      'device-fingerprint': args.device_fingerprint,
+      'launched-session-id': args.launched_session_id
+    }),
+    subcommand: 'complete-execution-launch'
+  },
+  {
+    name: 'fail_execution_launch',
+    description: 'Mark a claimed execution request failed and record the launch error.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        request_id: { type: 'string' },
+        device_fingerprint: { type: 'string' },
+        error: { type: 'string' }
+      },
+      required: ['request_id', 'device_fingerprint', 'error']
+    },
+    toCliFlags: args => ({
+      'request-id': args.request_id,
+      'device-fingerprint': args.device_fingerprint,
+      error: args.error
+    }),
+    subcommand: 'fail-execution-launch'
   }
 ];
 

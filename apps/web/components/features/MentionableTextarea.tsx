@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { createPortal } from 'react-dom';
 
-import { findFileMentionAtCursor, getCollapsedFileMentionLabel } from '@/lib/helpers/file-mentions';
+import { getCollapsedFileMentionLabel } from '@/lib/helpers/file-mentions';
 import {
   applyMarkdownListContinuation,
   type AutoListContinuationMode,
@@ -218,36 +218,6 @@ export const MentionableTextarea = React.forwardRef<HTMLTextAreaElement, Mention
       textarea.scrollTop = Math.min(prevTextareaScrollTop, maxScrollTop);
     }, [value, maxHeightPx]);
 
-    const handleCollapsedMentionBackspace = React.useCallback(
-      (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
-        const selectionStart = event.currentTarget.selectionStart;
-        const selectionEnd = event.currentTarget.selectionEnd;
-        if (selectionStart === null || selectionEnd === null || selectionStart !== selectionEnd) {
-          return false;
-        }
-
-        const mentionMatch = findFileMentionAtCursor(value, selectionStart);
-        if (!mentionMatch) return false;
-
-        event.preventDefault();
-
-        const nextValue = `${value.slice(0, mentionMatch.start)}@${value.slice(mentionMatch.end)}`;
-        const nextCursor = mentionMatch.start + 1;
-        onValueChange(nextValue);
-        clearMentionState();
-
-        requestAnimationFrame(() => {
-          const textArea = textareaRef.current as TextareaHandle | null;
-          if (!textArea) return;
-          textArea.focus();
-          textArea.setSelectionRange(nextCursor, nextCursor);
-        });
-
-        return true;
-      },
-      [clearMentionState, onValueChange, value]
-    );
-
     const mentionMenu = mentionMenuOpen ? (
       <div
         ref={mentionListRef}
@@ -352,10 +322,6 @@ export const MentionableTextarea = React.forwardRef<HTMLTextAreaElement, Mention
                 clearMentionState();
                 return;
               }
-            }
-
-            if (event.key === 'Backspace' && handleCollapsedMentionBackspace(event)) {
-              return;
             }
 
             if (

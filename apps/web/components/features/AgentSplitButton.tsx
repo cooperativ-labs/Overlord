@@ -13,8 +13,10 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { getTicketPromptForCopy, submitTicketObjectiveAction } from '@/lib/actions/tickets';
-import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
+import {
+  getTicketPromptForCopy,
+  requestTicketObjectiveExecutionAction
+} from '@/lib/actions/tickets';
 import type { AgentModelSelection } from '@/lib/helpers/agent-model-preference';
 import { readDefaultAgentTriggerFromStorage } from '@/lib/helpers/agent-trigger';
 import {
@@ -108,8 +110,6 @@ const sizeStyles: Record<
   }
 };
 
-const submitTicketObjectiveActionWithRetry = withElectronActionRetry(submitTicketObjectiveAction);
-
 const COPY_PROMPT_LABELS = {
   'copy-local': 'For Local',
   'copy-cloud': 'For Cloud'
@@ -123,10 +123,8 @@ export function AgentSplitButton({
   selectedAgent,
   onSelectAgent,
   ticketId,
-  organizationId,
   projectId,
   agentFlags,
-  commands,
   workingDirectory,
   sshCommand,
   remoteWorkingDirectory,
@@ -147,9 +145,7 @@ export function AgentSplitButton({
   if (!demo && !terminalContext) {
     throw new Error('useTerminal must be used within a TerminalProvider');
   }
-  const { isElectron, launchAgent } = demo
-    ? DEMO_TERMINAL_CONTEXT
-    : (terminalContext as TerminalContextValue);
+  const { isElectron } = demo ? DEMO_TERMINAL_CONTEXT : (terminalContext as TerminalContextValue);
   const workspace = useWorkspacePreference({
     projectId,
     workingDirectory,
@@ -181,16 +177,18 @@ export function AgentSplitButton({
   });
   const localDirAccess = demo ? true : localDirAccessResolved;
   const canRunAgent = hasSshConfig || localDirAccess;
+  const canRequestExecution = canRunAgent || Boolean(projectId);
   const isCopySelectedAgent = selectedAgent === 'copy-local' || selectedAgent === 'copy-cloud';
   const isDisabled = demo
     ? false
-    : (!canRunAgent && !isCopySelectedAgent) || (!isCopySelectedAgent && !hasResolvedSelection);
+    : (!canRequestExecution && !isCopySelectedAgent) ||
+      (!isCopySelectedAgent && !hasResolvedSelection);
   const styles = sizeStyles[size];
-  const defaultActionLabel = demo || isElectron ? 'Run' : 'For CLI';
+  const defaultActionLabel = 'Run';
   const primaryActionLabel = isCopySelectedAgent
     ? COPY_PROMPT_LABELS[selectedAgent as CopyPromptOption]
     : defaultActionLabel;
-  const PrimaryActionIcon = isCopySelectedAgent || (!isElectron && !demo) ? Copy : Bot;
+  const PrimaryActionIcon = isCopySelectedAgent ? Copy : Bot;
 
   const appliedStoredDefaultRef = useRef(false);
   const pendingLaunchRef = useRef<{
@@ -221,7 +219,7 @@ export function AgentSplitButton({
     const isCopyCloudValue = agentValue === 'copy-cloud';
     const isCopyValue = isCopyLocalValue || isCopyCloudValue;
 
-    if (!isCopyValue && (!canRunAgent || !hasResolvedSelection)) return;
+    if (!isCopyValue && (!canRequestExecution || !hasResolvedSelection)) return;
 
     if (isRunning && !options?.force) {
       pendingLaunchRef.current = { agentValue, options };
@@ -245,53 +243,43 @@ export function AgentSplitButton({
 
     if (!isLaunchAgentTypeValue(agentValue)) return;
 
-    if (isElectron) {
-      setIsLaunching(true);
-      try {
-        await submitTicketObjectiveActionWithRetry(ticketId, submitObjectiveId ?? undefined);
-        await launchAgent({
-          ticketId,
-          agent: agentValue,
-          organizationId,
-          cwd:
-            workspace.executionWorkspace === 'local'
-              ? (effectiveWorkingDirectory ?? undefined)
-              : undefined,
-          sshCommand:
-            workspace.executionWorkspace === 'ssh' ? (effectiveSshCommand ?? undefined) : undefined,
-          remoteWorkingDirectory:
-            workspace.executionWorkspace === 'ssh'
-              ? (effectiveRemoteWorkingDirectory ?? undefined)
-              : undefined,
-          launchMode: 'run',
-          flags: agentFlags?.[agentValue],
-          model: options?.useStoredModelPreference
-            ? (effectiveSelection.model ?? undefined)
-            : undefined,
-          thinking: options?.useStoredModelPreference
-            ? (effectiveSelection.thinking ?? undefined)
-            : undefined,
-          projectId: projectId ?? undefined
-        });
-      } catch (error) {
-        console.error('Failed to launch agent:', error);
-        toast.error('Failed to open terminal', {
-          description:
-            error instanceof Error && error.message.trim().length > 0
-              ? error.message
-              : 'Check your terminal settings and sign in again, then try again.'
-        });
-      } finally {
-        setIsLaunching(false);
-      }
-    } else {
-      const command = commands?.[agentValue];
-      if (command) {
-        await submitTicketObjectiveAction(ticketId, submitObjectiveId ?? undefined);
-        await navigator.clipboard.writeText(command);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-      }
+    setIsLaunching(true);
+    try {
+      await requestTicketObjectiveExecutionAction({
+        ticketId,
+        objectiveId: submitObjectiveId ?? undefined,
+        agentIdentifier: agentValue,
+        workingDirectory:
+          workspace.executionWorkspace === 'local'
+            ? (effectiveWorkingDirectory ?? undefined)
+            : null,
+        sshCommand:
+          workspace.executionWorkspace === 'ssh' ? (effectiveSshCommand ?? undefined) : null,
+        remoteWorkingDirectory:
+          workspace.executionWorkspace === 'ssh'
+            ? (effectiveRemoteWorkingDirectory ?? undefined)
+            : null,
+        flags: agentFlags?.[agentValue],
+        modelIdentifier: options?.useStoredModelPreference
+          ? (effectiveSelection.model ?? undefined)
+          : undefined,
+        thinkingLevel: options?.useStoredModelPreference
+          ? (effectiveSelection.thinking ?? undefined)
+          : undefined
+      });
+      toast.success('Execution queued', {
+        description: 'A local or remote ovld runner can now claim and launch this objective.'
+      });
+    } catch (error) {
+      console.error('Failed to queue execution:', error);
+      toast.error('Failed to queue execution', {
+        description:
+          error instanceof Error && error.message.trim().length > 0
+            ? error.message
+            : 'Check your connection and sign in again, then try again.'
+      });
+    } finally {
+      setIsLaunching(false);
     }
   }
 
@@ -375,7 +363,7 @@ export function AgentSplitButton({
       </TooltipTrigger>
       <TooltipContent side="top" hidden={!isDisabled}>
         {!canRunAgent && !isCopySelectedAgent
-          ? 'First set a project directory in the project settings.'
+          ? 'Set a project directory or register a runner resource for this project.'
           : 'Loading your agent model selection.'}
       </TooltipContent>
     </Tooltip>

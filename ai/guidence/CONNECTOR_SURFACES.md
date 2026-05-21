@@ -24,7 +24,7 @@ Bundle-backed agents get a slim ticket prompt; unbundled agents always receive t
 
 Desktop local launches set `OVERLORD_SNAPSHOT_JSON` **only** when the user has enabled in-folder JJ version control (`project_user.local_version_control = jj`); the app then points snapshot metadata at the real working directory (after `GET /api/protocol/context/...`). There is no automatic managed/shadow jj workspace for projects that leave version control off. The context API does not run `jj` on the server. The CLI `attach` command creates a per-objective local git checkpoint at `refs/overlord/checkpoints/<objectiveId>` for git workspaces before work begins; `deliver` does not create a checkpoint.
 
-Desktop local launches remain direct Electron main-process launches. Desktop SSH launches also stay on the direct Electron path: the renderer passes `sshCommand` / `remoteWorkingDirectory` into `terminal:launch-agent`, the main process fetches context locally, writes the prompt into a remote temp file over system SSH, and opens the user's configured local terminal with an interactive SSH session. CLI SSH launches remain the copy/paste and terminal-native surface via `ovld launch ... --ssh-command ... --remote-working-directory ...`. Shared shell parsing, SSH TTY injection, escaping, and remote tmux wrapping live in [shell-utils.ts](/Users/jake/Development/Cooperativ/Overlord/lib/ssh/shell-utils.ts).
+Manual Run and auto-advance now create durable `execution_requests` rows. A local or remote `ovld runner start` process claims requests for its device/resource and launches them with the existing `ovld launch <agent>` primitive. Desktop terminal IPC remains available as a compatibility launch primitive, but the web Run button and deliver auto-advance path use the execution-request queue instead of requiring Electron to be open. CLI SSH launches remain the terminal-native surface via `ovld launch ... --ssh-command ... --remote-working-directory ...`, and queued requests can carry the same SSH fields for a runner to execute. Shared shell parsing, SSH TTY injection, escaping, and remote tmux wrapping live in [shell-utils.ts](/Users/jake/Development/Cooperativ/Overlord/lib/ssh/shell-utils.ts).
 
 Capability resolver:
 [agent-capabilities.ts](/Users/jake/Development/Cooperativ/Overlord/lib/overlord/agent-capabilities.ts)
@@ -600,6 +600,10 @@ when one surface changes, check the others against this table.
 | record-change-rationales      | `POST /api/protocol/record-change-rationales`     | `record-change-rationales`       | `record_change_rationales`                     |
 | ask                           | `POST /api/protocol/ask`                          | `ask`                            | `ask`                                          |
 | permission-request            | `POST /api/protocol/permission-request`           | `permission-request` (hook-only) | —                                              |
+| request-execution             | `POST /api/protocol/request-execution`             | `request-execution`              | `request_execution` (local shim)               |
+| claim-execution               | `POST /api/protocol/claim-execution`               | `claim-execution`                | `claim_execution` (local shim)                 |
+| complete-execution-launch     | `POST /api/protocol/complete-execution-launch`     | `complete-execution-launch`      | `complete_execution_launch` (local shim)       |
+| fail-execution-launch         | `POST /api/protocol/fail-execution-launch`         | `fail-execution-launch`          | `fail_execution_launch` (local shim)           |
 | read-context                  | `POST /api/protocol/read-context`                 | `read-context`                   | `read_context`                                 |
 | write-context                 | `POST /api/protocol/write-context`                | `write-context`                  | `write_context`                                |
 | deliver                       | `POST /api/protocol/deliver`                      | `deliver`                        | `deliver`                                      |
@@ -621,6 +625,7 @@ Notes:
 - `record-work` is the completed-from-chat path. Use it when work is already done and you need a ticket in `review` plus feed-post generation without opening an attached session. Keep its required fields (`objective` or `objectives`, `summary`) and project-resolution behavior aligned across API, CLI, hosted MCP, the local shim, and plugin guidance.
 - `revert` is local-destructive by design: the API only returns the checkpoint row for `objectiveId`; the CLI/local shim restores the caller's working tree and saves a safety ref under `refs/overlord/safety/`. Hosted MCP does not expose it because it cannot mutate the user's local repository.
 - `permission-request` is invoked by the installed permission hook/rules, not by agent logic.
+- Execution request operations back `ovld runner`. `request-execution` is the durable launch contract used by manual Run and auto-advance; `claim-execution`, `complete-execution-launch`, and `fail-execution-launch` are runner operations and are exposed in the CLI/local MCP shims for headless devices. Hosted MCP exposure is intentionally deferred until hosted remote runners are supported end-to-end.
 - `hook-event` is invoked by installed lifecycle hooks (`UserPromptSubmit` today; `Stop` reserved for future use) and intentionally does not require `sessionKey`.
 - `prompt` (formerly `spawn`) creates and executes a ticket immediately. The CLI accepts `spawn` as a backward-compatible alias.
 - MCP objective attachment tools follow `<verb>_<noun>` naming. CLI subcommands keep the `attachment-*` shape for terminal ergonomics. (`artifacts` is reserved for the structured records agents submit via `deliver`, not user-uploaded files.)
@@ -631,6 +636,7 @@ Source-of-truth files:
 
 - API routes: [apps/web/app/api/protocol/](/Users/jake/Development/Cooperativ/Overlord/apps/web/app/api/protocol)
 - CLI dispatcher: [protocol.mjs](/Users/jake/Development/Cooperativ/Overlord/packages/overlord-cli/bin/_cli/protocol.mjs)
+- CLI runner: [runner.mjs](/Users/jake/Development/Cooperativ/Overlord/packages/overlord-cli/bin/_cli/runner.mjs)
 - Human CLI launcher: [launcher.mjs](/Users/jake/Development/Cooperativ/Overlord/packages/overlord-cli/bin/_cli/launcher.mjs)
 - Shared copy-command builder: [launch-commands.ts](/Users/jake/Development/Cooperativ/Overlord/lib/overlord/launch-commands.ts)
 - MCP tool definitions: [tools.ts](/Users/jake/Development/Cooperativ/Overlord/supabase/functions/mcp/tools.ts)

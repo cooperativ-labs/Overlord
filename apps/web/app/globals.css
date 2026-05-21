@@ -247,6 +247,258 @@
     letter-spacing: var(--tracking-widest);
     color: var(--color-sky);
   }
+
+  /* Public changelog markdown — mirrors marketing email template; light + .dark */
+  .changelog-body {
+    font-family: var(--font-display), ui-sans-serif, system-ui, sans-serif;
+    font-size: 1rem;
+    line-height: 1.6;
+    color: #1c1917;
+  }
+
+  .dark .changelog-body {
+    color: #fafaf7;
+  }
+
+  .changelog-body > *:first-child {
+    margin-top: 0 !important;
+  }
+
+  .changelog-body > *:last-child {
+    margin-bottom: 0 !important;
+  }
+
+  .changelog-body h1,
+  .changelog-body h2,
+  .changelog-body h3,
+  .changelog-body h4 {
+    font-family: var(--font-display), ui-sans-serif, system-ui, sans-serif;
+    color: #1c1917;
+    letter-spacing: -0.01em;
+    margin: 2rem 0 0.875rem;
+  }
+
+  .dark .changelog-body h1,
+  .dark .changelog-body h2,
+  .dark .changelog-body h3,
+  .dark .changelog-body h4 {
+    color: #fafaf7;
+  }
+
+  .changelog-body h1 {
+    font-size: 1.5rem;
+    font-weight: 600;
+  }
+
+  .changelog-body h2 {
+    font-size: 1.25rem;
+    font-weight: 600;
+  }
+
+  /* Section labels (### Added / ### Fixed …) */
+  .changelog-body h3 {
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-size: 0.6875rem;
+    font-weight: 500;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: #a8a29e;
+    margin: 2.25rem 0 0.875rem;
+    padding-bottom: 0.625rem;
+    border-bottom: 1px solid #e7e5e0;
+  }
+
+  .dark .changelog-body h3 {
+    color: #a8a29e;
+    border-bottom-color: rgba(255, 255, 255, 0.12);
+  }
+
+  .changelog-body h3:first-child {
+    margin-top: 0;
+  }
+
+  .changelog-body h4 {
+    font-size: 1rem;
+    font-weight: 600;
+  }
+
+  .changelog-body p {
+    margin: 0 0 0.875rem;
+    color: #57534e;
+  }
+
+  .dark .changelog-body p {
+    color: #d6d3d1;
+  }
+
+  .changelog-body strong {
+    color: #1c1917;
+    font-weight: 600;
+  }
+
+  .dark .changelog-body strong {
+    color: #fafaf7;
+  }
+
+  .changelog-body em {
+    font-style: italic;
+  }
+
+  .changelog-body ul,
+  .changelog-body ol {
+    margin: 0 0 1.125rem;
+    padding: 0;
+    list-style: none;
+  }
+
+  .changelog-body li {
+    position: relative;
+    padding: 0.625rem 0 0.625rem 1.375rem;
+    border-bottom: 1px solid #f1efe9;
+    color: #57534e;
+  }
+
+  .dark .changelog-body li {
+    border-bottom-color: rgba(255, 255, 255, 0.08);
+    color: #d6d3d1;
+  }
+
+  .changelog-body li:last-child {
+    border-bottom: none;
+  }
+
+  .changelog-body li::before {
+    content: '';
+    position: absolute;
+    left: 0.25rem;
+    top: 1.125rem;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #1c1917;
+  }
+
+  .dark .changelog-body li::before {
+    background: #fafaf7;
+  }
+
+  .changelog-body li strong:first-child {
+    display: inline;
+    color: #1c1917;
+  }
+
+  .dark .changelog-body li strong:first-child {
+    color: #fafaf7;
+  }
+
+  .changelog-body a {
+    color: #1c1917;
+    text-decoration: none;
+    border-bottom: 1px solid #d6d3ce;
+  }
+
+  .dark .changelog-body a {
+    color: #7dd3fc;
+    border-bottom-color: rgba(125, 211, 252, 0.35);
+  }
+
+  .changelog-body a:hover {
+    border-bottom-color: #1c1917;
+  }
+
+  .dark .changelog-body a:hover {
+    border-bottom-color: #7dd3fc;
+  }
+
+  .changelog-body code {
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-size: 0.92em;
+    background: #f4f3ee;
+    border: 1px solid #e7e5e0;
+    border-radius: 4px;
+    padding: 1px 6px;
+    color: #1c1917;
+  }
+
+  .dark .changelog-body code {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.12);
+    color: #fafaf7;
+  }
+
+  .changelog-body pre {
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-size: 0.8125rem;
+    background: #f4f3ee;
+    border: 1px solid #e7e5e0;
+    border-radius: 8px;
+    padding: 0.875rem 1rem;
+    margin: 0 0 1rem;
+    overflow-x: auto;
+    line-height: 1.55;
+    color: #1c1917;
+  }
+
+  .dark .changelog-body pre {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.12);
+    color: #fafaf7;
+  }
+
+  .changelog-body pre code {
+    background: transparent;
+    border: none;
+    padding: 0;
+  }
+
+  .changelog-body blockquote {
+    margin: 0 0 1rem;
+    padding: 0.375rem 0 0.375rem 1rem;
+    border-left: 3px solid #e7e5e0;
+    color: #57534e;
+    font-style: normal;
+  }
+
+  .dark .changelog-body blockquote {
+    border-left-color: rgba(255, 255, 255, 0.15);
+    color: #d6d3d1;
+  }
+
+  .changelog-body hr {
+    border: none;
+    border-top: 1px solid #e7e5e0;
+    margin: 1.75rem 0;
+  }
+
+  .dark .changelog-body hr {
+    border-top-color: rgba(255, 255, 255, 0.12);
+  }
+
+  .changelog-body img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 10px;
+    margin: 0.5rem 0;
+  }
+
+  .changelog-body table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+    margin: 0 0 1rem;
+  }
+
+  .changelog-body th,
+  .changelog-body td {
+    border: 1px solid #e7e5e0;
+    padding: 0.5rem 0.625rem;
+    text-align: left;
+  }
+
+  .dark .changelog-body th,
+  .dark .changelog-body td {
+    border-color: rgba(255, 255, 255, 0.12);
+  }
 }
 
 @keyframes shimmer {

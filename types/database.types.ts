@@ -465,6 +465,153 @@ export type Database = {
         };
         Relationships: [];
       };
+      execution_requests: {
+        Row: {
+          agent_identifier: string;
+          attempt_count: number;
+          claimed_at: string | null;
+          claimed_by_device_id: string | null;
+          created_at: string;
+          failed_at: string | null;
+          id: string;
+          idempotency_key: string;
+          last_error: string | null;
+          launch_mode: string;
+          launch_params: Json;
+          launched_at: string | null;
+          launched_session_id: string | null;
+          lease_expires_at: string | null;
+          model_identifier: string | null;
+          objective_id: string;
+          organization_id: number;
+          project_id: string | null;
+          requested_by: string | null;
+          requested_from: string;
+          status: string;
+          target_device_id: string | null;
+          target_kind: string;
+          target_resource_id: string | null;
+          thinking_level: string | null;
+          ticket_id: string;
+          updated_at: string;
+        };
+        Insert: {
+          agent_identifier: string;
+          attempt_count?: number;
+          claimed_at?: string | null;
+          claimed_by_device_id?: string | null;
+          created_at?: string;
+          failed_at?: string | null;
+          id?: string;
+          idempotency_key: string;
+          last_error?: string | null;
+          launch_mode?: string;
+          launch_params?: Json;
+          launched_at?: string | null;
+          launched_session_id?: string | null;
+          lease_expires_at?: string | null;
+          model_identifier?: string | null;
+          objective_id: string;
+          organization_id: number;
+          project_id?: string | null;
+          requested_by?: string | null;
+          requested_from: string;
+          status?: string;
+          target_device_id?: string | null;
+          target_kind?: string;
+          target_resource_id?: string | null;
+          thinking_level?: string | null;
+          ticket_id: string;
+          updated_at?: string;
+        };
+        Update: {
+          agent_identifier?: string;
+          attempt_count?: number;
+          claimed_at?: string | null;
+          claimed_by_device_id?: string | null;
+          created_at?: string;
+          failed_at?: string | null;
+          id?: string;
+          idempotency_key?: string;
+          last_error?: string | null;
+          launch_mode?: string;
+          launch_params?: Json;
+          launched_at?: string | null;
+          launched_session_id?: string | null;
+          lease_expires_at?: string | null;
+          model_identifier?: string | null;
+          objective_id?: string;
+          organization_id?: number;
+          project_id?: string | null;
+          requested_by?: string | null;
+          requested_from?: string;
+          status?: string;
+          target_device_id?: string | null;
+          target_kind?: string;
+          target_resource_id?: string | null;
+          thinking_level?: string | null;
+          ticket_id?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'execution_requests_claimed_by_device_id_fkey';
+            columns: ['claimed_by_device_id'];
+            isOneToOne: false;
+            referencedRelation: 'devices';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'execution_requests_launched_session_id_fkey';
+            columns: ['launched_session_id'];
+            isOneToOne: false;
+            referencedRelation: 'agent_sessions';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'execution_requests_objective_id_fkey';
+            columns: ['objective_id'];
+            isOneToOne: false;
+            referencedRelation: 'objectives';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'execution_requests_organization_id_fkey';
+            columns: ['organization_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'execution_requests_project_id_fkey';
+            columns: ['project_id'];
+            isOneToOne: false;
+            referencedRelation: 'projects';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'execution_requests_target_device_id_fkey';
+            columns: ['target_device_id'];
+            isOneToOne: false;
+            referencedRelation: 'devices';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'execution_requests_target_resource_id_fkey';
+            columns: ['target_resource_id'];
+            isOneToOne: false;
+            referencedRelation: 'project_resource_directories';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'execution_requests_ticket_id_fkey';
+            columns: ['ticket_id'];
+            isOneToOne: false;
+            referencedRelation: 'tickets';
+            referencedColumns: ['id'];
+          }
+        ];
+      };
       feed_posts: {
         Row: {
           agent_type: string | null;
@@ -2207,7 +2354,9 @@ export type Database = {
         | 'user_follow_up'
         | 'ticket_reopened'
         | 'awaiting_approval'
-        | 'auto_advance';
+        | 'auto_advance'
+        | 'execution_requested'
+        | 'execution_launch_failed';
       ticket_execution_target: 'agent' | 'human';
       ticket_priority: 'low' | 'medium' | 'high' | 'urgent';
       ticket_status_type: 'draft' | 'execute' | 'review' | 'complete';
@@ -2357,7 +2506,9 @@ export const Constants = {
         'user_follow_up',
         'ticket_reopened',
         'awaiting_approval',
-        'auto_advance'
+        'auto_advance',
+        'execution_requested',
+        'execution_launch_failed'
       ],
       ticket_execution_target: ['agent', 'human'],
       ticket_priority: ['low', 'medium', 'high', 'urgent'],

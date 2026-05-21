@@ -61,103 +61,111 @@ const needs = [
 export default function ComparePage() {
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-16 py-8">
-        <section className="max-w-4xl pt-10">
+      <section className="max-w-4xl pt-10">
+        <p className="font-mono text-[14px] font-medium uppercase tracking-widest text-sky-400">
+          Compare Overlord
+        </p>
+        <h1 className="mt-4 font-display text-5xl font-semibold leading-[0.95] tracking-tight text-stone-900 sm:text-6xl dark:text-white">
+          Overlord coordinates agent work without trapping it in one harness.
+        </h1>
+        <p className="mt-6 max-w-3xl text-lg leading-8 text-stone-600 dark:text-slate-300">
+          Use Overlord when the problem is not just running an agent. Use it when you need the
+          prompt, context, progress, handoffs, objectives, file changes, and review record to
+          survive across tools, agents, repos, and sessions.
+        </p>
+      </section>
+
+      <section className="grid gap-4 lg:grid-cols-3">
+        {categories.map(category => (
+          <article
+            key={category.title}
+            className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-white/[0.035] dark:shadow-none"
+          >
+            <p className=" mb-3 font-mono text-[12px] uppercase tracking-widest text-stone-500 dark:text-slate-500">
+              {category.label}
+            </p>
+            <div className="flex items-center gap-3">
+              <div className="flex size-10 items-center justify-center rounded-xl border border-sky-400/20 bg-sky-400/10 text-sky-300">
+                <category.icon className="size-5" />
+              </div>
+              <div>
+                <h2 className="font-semibold text-stone-900 dark:text-white">{category.title}</h2>
+              </div>
+            </div>
+            <p className="mt-5 text-sm leading-7 text-stone-600 dark:text-slate-300">
+              {category.summary}
+            </p>
+            <p className="mt-4 text-sm leading-7 text-stone-700 dark:text-slate-200">
+              {category.difference}
+            </p>
+            <p className="mt-5 border-t border-stone-200 pt-4 text-sm leading-7 text-sky-800 dark:border-white/10 dark:text-sky-100">
+              {category.simple}
+            </p>
+          </article>
+        ))}
+      </section>
+
+      <section className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr]">
+        <div>
           <p className="font-mono text-[14px] font-medium uppercase tracking-widest text-sky-400">
-            Compare Overlord
+            When it fits
           </p>
-          <h1 className="mt-4 font-display text-5xl font-semibold leading-[0.95] tracking-tight sm:text-6xl">
-            Overlord coordinates agent work without trapping it in one harness.
-          </h1>
-          <p className="mt-6 max-w-3xl text-lg leading-8 text-slate-300">
-            Use Overlord when the problem is not just running an agent. Use it when you need the
-            prompt, context, progress, handoffs, objectives, file changes, and review record to
-            survive across tools, agents, repos, and sessions.
+          <h2 className="mt-3 font-display text-3xl font-semibold tracking-tight text-stone-900 dark:text-white">
+            The core need is durable coordination.
+          </h2>
+          <p className="mt-4 text-base leading-7 text-stone-600 dark:text-slate-300">
+            Overlord is for solo developers, engineering teams, and productivity power users who
+            have more agent work than one chat thread can safely hold.
           </p>
-        </section>
+        </div>
 
-        <section className="grid gap-4 lg:grid-cols-3">
-          {categories.map(category => (
-            <article
-              key={category.title}
-              className="rounded-2xl border border-white/10 bg-white/[0.035] p-5"
+        <div className="grid gap-3 sm:grid-cols-2">
+          {needs.map(([title, description]) => (
+            <div
+              key={title}
+              className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#07101d]/70 dark:shadow-none"
             >
-              <p className=" mb-3 font-mono text-[12px] uppercase tracking-widest text-slate-500">
-                {category.label}
-              </p>
-              <div className="flex items-center gap-3">
-                <div className="flex size-10 items-center justify-center rounded-xl border border-sky-400/20 bg-sky-400/10 text-sky-300">
-                  <category.icon className="size-5" />
-                </div>
+              <div className="flex items-start gap-3">
+                <GitBranch className="mt-1 size-4 shrink-0 text-sky-600 dark:text-sky-300" />
                 <div>
-                  <h2 className="font-semibold text-white">{category.title}</h2>
+                  <h3 className="font-medium text-stone-900 dark:text-white">{title}</h3>
+                  <p className="mt-2 text-sm leading-6 text-stone-600 dark:text-slate-300">
+                    {description}
+                  </p>
                 </div>
               </div>
-              <p className="mt-5 text-sm leading-7 text-slate-300">{category.summary}</p>
-              <p className="mt-4 text-sm leading-7 text-slate-200">{category.difference}</p>
-              <p className="mt-5 border-t border-white/10 pt-4 text-sm leading-7 text-sky-100">
-                {category.simple}
-              </p>
-            </article>
+            </div>
           ))}
-        </section>
+        </div>
+      </section>
 
-        <section className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr]">
+      <section className="rounded-2xl border border-stone-200 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-white/[0.035] dark:shadow-none">
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <p className="font-mono text-[14px] font-medium uppercase tracking-widest text-sky-400">
-              When it fits
-            </p>
-            <h2 className="mt-3 font-display text-3xl font-semibold tracking-tight">
-              The core need is durable coordination.
-            </h2>
-            <p className="mt-4 text-base leading-7 text-slate-300">
-              Overlord is for solo developers, engineering teams, and productivity power users who
-              have more agent work than one chat thread can safely hold.
-            </p>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-2">
-            {needs.map(([title, description]) => (
-              <div key={title} className="rounded-2xl border border-white/10 bg-[#07101d]/70 p-4">
-                <div className="flex items-start gap-3">
-                  <GitBranch className="mt-1 size-4 shrink-0 text-sky-300" />
-                  <div>
-                    <h3 className="font-medium text-white">{title}</h3>
-                    <p className="mt-2 text-sm leading-6 text-slate-300">{description}</p>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="rounded-2xl border border-white/10 bg-white/[0.035] p-6">
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <div className="flex items-center gap-3 text-sky-300">
-                <Workflow className="size-5" />
-                <p className="font-mono text-[14px] uppercase tracking-widest">For agents</p>
-              </div>
-              <p className="mt-3 max-w-3xl text-base leading-7 text-slate-300">
-                Agents should treat Overlord as the system of record for agent-executed engineering
-                work. Read the ticket, attach to the objective, post meaningful progress, ask
-                blocking questions, preserve shared context, and deliver artifacts plus file-change
-                rationales.
-              </p>
+            <div className="flex items-center gap-3 text-sky-600 dark:text-sky-300">
+              <Workflow className="size-5" />
+              <p className="font-mono text-[14px] uppercase tracking-widest">For agents</p>
             </div>
-            <div className="flex flex-wrap gap-3">
-              <Button
-                asChild
-                variant="outline"
-                className="rounded-full border-white/15 bg-white/5 text-white hover:bg-white/10"
-              >
-                <Link href="/docs/for-agents">Agent docs</Link>
-              </Button>
-              <Button asChild className="rounded-full bg-white text-slate-950 hover:bg-slate-100">
-                <Link href="/llms.txt">llms.txt</Link>
-              </Button>
-            </div>
+            <p className="mt-3 max-w-3xl text-base leading-7 text-stone-600 dark:text-slate-300">
+              Agents should treat Overlord as the system of record for agent-executed engineering
+              work. Read the ticket, attach to the objective, post meaningful progress, ask blocking
+              questions, preserve shared context, and deliver artifacts plus file-change rationales.
+            </p>
           </div>
-        </section>
+          <div className="flex flex-wrap gap-3">
+            <Button
+              asChild
+              variant="outline"
+              className="rounded-full border-stone-300 bg-white text-stone-900 shadow-sm hover:bg-stone-50 dark:border-white/15 dark:bg-white/5 dark:text-white dark:shadow-none dark:hover:bg-white/10"
+            >
+              <Link href="/docs/for-agents">Agent docs</Link>
+            </Button>
+            <Button asChild className="rounded-full bg-white text-slate-950 hover:bg-slate-100">
+              <Link href="/llms.txt">llms.txt</Link>
+            </Button>
+          </div>
+        </div>
+      </section>
     </div>
   );
 }

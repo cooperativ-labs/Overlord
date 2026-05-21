@@ -45,6 +45,7 @@ ovld tickets list --status next-up
 ovld ticket context <ticket_id>
 ovld launch codex
 ovld restart codex
+ovld runner start
 ```
 
 Agent protocol commands live under `ovld protocol`. They are the stable lifecycle surface agents should use after receiving a ticket.
@@ -191,6 +192,8 @@ Default to `create` when you want to capture future work as a draft. Use `prompt
 ### 2. Launch the Agent
 
 From the desktop app, open the ticket and launch it with the desired connector. Overlord starts the agent in the linked working directory and includes the ticket prompt, ticket ID, and protocol instructions.
+
+Auto-advance and the web Run button enqueue durable execution requests. Keep `ovld runner start` running on a workstation or remote host to claim those requests and launch the assigned agent/model without requiring the desktop app to stay open.
 
 From the CLI, use:
 

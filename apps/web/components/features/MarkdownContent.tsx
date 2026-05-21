@@ -12,6 +12,8 @@ type MarkdownContentProps = {
   className?: string;
   /** Compact mode reduces heading sizes and spacing for inline use */
   compact?: boolean;
+  /** Public changelog: typography from `.changelog-body` in globals.css (no Tailwind prose). */
+  variant?: 'default' | 'changelog';
   editorScheme?: string | null;
   workspaceRoot?: string | null;
 };
@@ -24,6 +26,7 @@ export function MarkdownContent({
   children,
   className = '',
   compact = false,
+  variant = 'default',
   editorScheme,
   workspaceRoot
 }: MarkdownContentProps) {
@@ -33,8 +36,13 @@ export function MarkdownContent({
     ? `${proseBaseClasses} prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-pre:my-1`
     : proseBaseClasses;
 
+  const wrapperClass =
+    variant === 'changelog'
+      ? `changelog-body overflow-hidden ${className}`.trim()
+      : `${proseClasses} overflow-hidden ${className}`.trim();
+
   return (
-    <div className={`${proseClasses} overflow-hidden ${className}`}>
+    <div className={wrapperClass}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
@@ -76,16 +84,25 @@ export function MarkdownContent({
               </ExternalLink>
             );
           },
-          // Style code blocks
-          pre: ({ children: preChildren, ...props }) => (
-            <pre className="overflow-auto rounded border bg-muted p-2 text-xs" {...props}>
-              {preChildren}
-            </pre>
-          ),
+          pre: ({ children: preChildren, ...props }) =>
+            variant === 'changelog' ? (
+              <pre {...props}>{preChildren}</pre>
+            ) : (
+              <pre className="overflow-auto rounded border bg-muted p-2 text-xs" {...props}>
+                {preChildren}
+              </pre>
+            ),
           code: ({ children: codeChildren, className: codeClassName, ...props }) => {
             // Inline code vs code blocks
             const isBlock = codeClassName?.includes('language-');
             if (isBlock) {
+              return (
+                <code className={codeClassName} {...props}>
+                  {codeChildren}
+                </code>
+              );
+            }
+            if (variant === 'changelog') {
               return (
                 <code className={codeClassName} {...props}>
                   {codeChildren}

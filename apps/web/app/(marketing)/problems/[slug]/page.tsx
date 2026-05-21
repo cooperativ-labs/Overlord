@@ -71,7 +71,7 @@ export default async function ProblemPage({ params }: ProblemRouteProps) {
         <div>
           <Link
             href="/#problems"
-            className="flex flex-row items-start gap-2 font-mono text-[14px] font-medium uppercase tracking-widest text-sky-400"
+            className="flex flex-row items-start gap-2 font-mono text-[14px] font-medium uppercase tracking-widest text-sky-600 dark:text-sky-400"
           >
             <ChevronLeft className="size-4 shrink-0" /> {page.problem}
           </Link>
@@ -88,21 +88,27 @@ export default async function ProblemPage({ params }: ProblemRouteProps) {
                 </div>
               </div>
             </div> */}
-          <h1 className="mt-4 font-display text-5xl font-semibold leading-[0.95] tracking-tight sm:text-6xl">
+          <h1 className="mt-4 font-display text-5xl font-semibold leading-[0.95] tracking-tight text-stone-900 sm:text-6xl dark:text-white">
             {page.headline}
           </h1>
-          <p className="mt-6 text-lg leading-8 text-slate-300">{page.summary}</p>
+          <p className="mt-6 text-lg leading-8 text-stone-600 dark:text-slate-300">
+            {page.summary}
+          </p>
           <div className="mt-8 flex flex-wrap gap-3">
             {page.features.map(feature => (
               <article
                 key={feature.title}
-                className="rounded-2xl border border-white/10 bg-[#07101d]/70 p-5"
+                className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-[#07101d]/70 dark:shadow-none"
               >
                 <div className="mb-4 flex items-center gap-3">
-                  <CheckCircle2 className="size-5 text-sky-300" />
-                  <h2 className="text-lg font-semibold text-white">{feature.title}</h2>{' '}
+                  <CheckCircle2 className="size-5 text-sky-600 dark:text-sky-300" />
+                  <h2 className="text-lg font-semibold text-stone-900 dark:text-white">
+                    {feature.title}
+                  </h2>{' '}
                 </div>
-                <p className="mt-3 text-sm leading-7 text-slate-300">{feature.description}</p>
+                <p className="mt-3 text-sm leading-7 text-stone-600 dark:text-slate-300">
+                  {feature.description}
+                </p>
               </article>
             ))}
           </div>
@@ -171,7 +177,7 @@ export default async function ProblemPage({ params }: ProblemRouteProps) {
 
       {page.video ? (
         <section className="mx-auto w-full max-w-6xl">
-          <div className="overflow-hidden rounded-2xl border border-white/10 bg-black">
+          <div className="overflow-hidden rounded-2xl border border-stone-200 bg-black dark:border-white/10">
             <div className="relative aspect-video w-full">
               <iframe
                 src={youtubeEmbedUrl(page.video) ?? ''}
@@ -185,23 +191,25 @@ export default async function ProblemPage({ params }: ProblemRouteProps) {
         </section>
       ) : null}
 
-      <section className="mx-auto w-full max-w-6xl rounded-2xl border border-white/10 bg-white/[0.035] p-6">
-        <p className="font-mono text-[14px] uppercase tracking-widest text-sky-400">
+      <section className="mx-auto w-full max-w-6xl rounded-2xl border border-stone-200 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-white/[0.035] dark:shadow-none">
+        <p className="font-mono text-[14px] uppercase tracking-widest text-sky-600 dark:text-sky-400">
           Agent-readable detail
         </p>
-        <p className="mt-3 max-w-3xl text-base leading-7 text-slate-300">{page.agentNote}</p>
+        <p className="mt-3 max-w-3xl text-base leading-7 text-stone-600 dark:text-slate-300">
+          {page.agentNote}
+        </p>
         <div className="mt-6 flex flex-wrap gap-3">
           <Button
             asChild
             variant="outline"
-            className="rounded-full border-white/15 bg-white/5 text-white hover:bg-white/10"
+            className="rounded-full border-stone-300 bg-white text-stone-900 shadow-sm hover:bg-stone-50 dark:border-white/15 dark:bg-white/5 dark:text-white dark:shadow-none dark:hover:bg-white/10"
           >
             <Link href="/llms.txt">llms.txt</Link>
           </Button>
           <Button
             asChild
             variant="outline"
-            className="rounded-full border-white/15 bg-white/5 text-white hover:bg-white/10"
+            className="rounded-full border-stone-300 bg-white text-stone-900 shadow-sm hover:bg-stone-50 dark:border-white/15 dark:bg-white/5 dark:text-white dark:shadow-none dark:hover:bg-white/10"
           >
             <Link href="/overlord-context">Public context</Link>
           </Button>
@@ -221,11 +229,11 @@ function ProblemDemoFrame({
   children: ReactNode;
 }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-[#07101d]/70 p-5 sm:p-6">
+    <div className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm sm:p-6 dark:border-white/10 dark:bg-[#07101d]/70 dark:shadow-none">
       <div className="mb-5 flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-lg font-semibold text-white">{title}</h2>
-          <p className="mt-1 text-sm text-slate-400">{description}</p>
+          <h2 className="text-lg font-semibold text-stone-900 dark:text-white">{title}</h2>
+          <p className="mt-1 text-sm text-stone-500 dark:text-slate-400">{description}</p>
         </div>
       </div>
       {children}

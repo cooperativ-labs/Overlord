@@ -36,7 +36,7 @@ function VideoThumbnail({ video, onClick, large }: VideoThumbnailProps) {
   return (
     <button
       onClick={onClick}
-      className="group relative w-full overflow-hidden rounded-[1.5rem] border border-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+      className="group relative w-full overflow-hidden rounded-[1.5rem] border border-stone-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 dark:border-white/10"
       aria-label={`Play ${video.title}`}
     >
       <div className={`aspect-video w-full ${large ? '' : 'rounded-[1.25rem]'}`}>
@@ -85,7 +85,7 @@ export function VideoSection() {
 
   return (
     <>
-      <div className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-3 shadow-[0_24px_96px_-56px_rgba(14,165,233,0.4)] backdrop-blur">
+      <div className="rounded-[2rem] border border-stone-200 bg-white p-3 shadow-md backdrop-blur dark:border-white/10 dark:bg-white/[0.03] dark:shadow-[0_24px_96px_-56px_rgba(14,165,233,0.4)]">
         <div className="mb-4 px-3 pt-3 text-center">
           <p className="font-mono text-[14px] font-medium uppercase tracking-widest text-sky-400">
             See it in action
@@ -99,7 +99,7 @@ export function VideoSection() {
             <button
               key={video.title}
               onClick={() => setActiveIndex(i + 1)}
-              className="group relative overflow-hidden rounded-[1.25rem] border border-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+              className="group relative overflow-hidden rounded-[1.25rem] border border-stone-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 dark:border-white/10"
               aria-label={`Play ${video.title}`}
             >
               <div className="aspect-video w-full">

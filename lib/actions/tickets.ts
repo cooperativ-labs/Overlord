@@ -34,7 +34,15 @@ import {
 } from '@/lib/helpers/ticket-assigned-agent';
 import { buildProjectPath, buildTicketPath } from '@/lib/helpers/ticket-path';
 import { deriveTitleFromObjective } from '@/lib/helpers/tickets';
-import { submitDraftObjective, upsertDraftObjective } from '@/lib/objectives';
+import {
+  computePromotedObjectivePositions,
+  computeReorderedObjectivePositions,
+  persistObjectivePositions,
+  promoteNextFutureDraft,
+  submitDraftObjective,
+  upsertDraftObjective
+} from '@/lib/objectives';
+import { createExecutionRequest } from '@/lib/overlord/execution-requests';
 import { loadFeedDiscussAppendMarkdown } from '@/lib/overlord/load-feed-discuss-append';
 import { resolveProtocolObjectiveText } from '@/lib/overlord/protocol-context-objective';
 import {
@@ -500,6 +508,60 @@ export async function submitTicketObjectiveAction(
   revalidateTicketDetails([
     { organizationId: ticket.organization_id, projectId: ticket.project_id, ticketId }
   ]);
+}
+
+export async function requestTicketObjectiveExecutionAction(input: {
+  ticketId: string;
+  objectiveId?: string | null;
+  agentIdentifier?: string | null;
+  modelIdentifier?: string | null;
+  thinkingLevel?: string | null;
+  flags?: string[];
+  workingDirectory?: string | null;
+  sshCommand?: string | null;
+  remoteWorkingDirectory?: string | null;
+  serverMultiplexer?: 'none' | 'tmux' | null;
+  tmuxCommand?: string | null;
+}): Promise<{ requestId: string; status: string }> {
+  const supabase = await createClientForRequest();
+  const ticket = await assertTicketAccess(supabase, input.ticketId);
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error('Authentication required.');
+
+  const result = await createExecutionRequest(supabase, {
+    ticketId: input.ticketId,
+    objectiveId: input.objectiveId ?? null,
+    userId: user.id,
+    organizationId: ticket.organization_id,
+    requestedFrom: 'manual_run',
+    agentIdentifier: input.agentIdentifier ?? null,
+    modelIdentifier: input.modelIdentifier ?? null,
+    thinkingLevel: input.thinkingLevel ?? null,
+    launchMode: 'run',
+    flags: input.flags ?? [],
+    workingDirectory: input.workingDirectory ?? null,
+    sshCommand: input.sshCommand ?? null,
+    remoteWorkingDirectory: input.remoteWorkingDirectory ?? null,
+    serverMultiplexer: input.serverMultiplexer ?? null,
+    tmuxCommand: input.tmuxCommand ?? null,
+    targetKind: input.sshCommand?.trim() ? 'ssh' : 'any'
+  });
+
+  revalidateTicketBoards();
+  revalidatePath(
+    buildProjectPath({ organizationId: ticket.organization_id, projectId: ticket.project_id })
+  );
+  revalidateTicketDetails([
+    {
+      organizationId: ticket.organization_id,
+      projectId: ticket.project_id,
+      ticketId: input.ticketId
+    }
+  ]);
+
+  return { requestId: result.request.id, status: result.request.status };
 }
 
 async function resolveTicketProjectAndOrganization(
@@ -1233,48 +1295,31 @@ export async function markObjectiveExecutedAction(
     throw new Error(executeError.message);
   }
 
-  const { data: existingDraft, error: existingDraftError } = await supabase
-    .from('objectives')
-    .select('id')
-    .eq('ticket_id', ticketId)
-    .eq('state', 'draft')
-    .limit(1)
-    .maybeSingle();
-  if (existingDraftError) {
-    throw new Error(existingDraftError.message);
-  }
+  const shouldPromoteNextFuture = objective.state === 'draft' || objective.state === 'submitted';
+  if (shouldPromoteNextFuture) {
+    const promotedFuture = await promoteNextFutureDraft(supabase, ticketId);
 
-  if (!existingDraft) {
-    const { data: earliestFuture, error: earliestFutureError } = await supabase
-      .from('objectives')
-      .select('id')
-      .eq('ticket_id', ticketId)
-      .eq('state', 'future')
-      .order('position', { ascending: true })
-      .order('created_at', { ascending: true })
-      .limit(1)
-      .maybeSingle();
-
-    if (earliestFutureError) {
-      throw new Error(earliestFutureError.message);
-    }
-
-    if (earliestFuture) {
-      const { error: promoteError } = await supabase
+    if (!promotedFuture) {
+      const { data: existingDraft, error: existingDraftError } = await supabase
         .from('objectives')
-        .update({ state: 'draft', completed_at: null })
-        .eq('id', earliestFuture.id);
-      if (promoteError) {
-        throw new Error(promoteError.message);
+        .select('id')
+        .eq('ticket_id', ticketId)
+        .eq('state', 'draft')
+        .limit(1)
+        .maybeSingle();
+      if (existingDraftError) {
+        throw new Error(existingDraftError.message);
       }
-    } else {
-      const { error: insertDraftError } = await supabase.from('objectives').insert({
-        ticket_id: ticketId,
-        objective: '',
-        state: 'draft'
-      });
-      if (insertDraftError) {
-        throw new Error(insertDraftError.message);
+
+      if (!existingDraft) {
+        const { error: insertDraftError } = await supabase.from('objectives').insert({
+          ticket_id: ticketId,
+          objective: '',
+          state: 'draft'
+        });
+        if (insertDraftError) {
+          throw new Error(insertDraftError.message);
+        }
       }
     }
   }
@@ -1614,9 +1659,11 @@ export async function reorderFutureObjectivesAction({
 
   const { data: existing, error: existingError } = await supabase
     .from('objectives')
-    .select('id,state')
+    .select('id,state,position,created_at')
     .eq('ticket_id', ticketId)
-    .in('id', orderedObjectiveIds);
+    .in('state', ['draft', 'future'])
+    .order('position', { ascending: true })
+    .order('created_at', { ascending: true });
 
   if (existingError) {
     throw new Error(existingError.message);
@@ -1624,38 +1671,10 @@ export async function reorderFutureObjectivesAction({
   if (!existing) {
     return;
   }
-
-  const reorderableStates: ReadonlyArray<Database['public']['Enums']['objective_state']> = [
-    'draft',
-    'future'
-  ];
-  const validIds = new Set(
-    existing
-      .filter(objective =>
-        reorderableStates.includes(
-          objective.state as Database['public']['Enums']['objective_state']
-        )
-      )
-      .map(objective => objective.id)
-  );
+  const validIds = new Set(existing.map(objective => objective.id));
   const filteredOrderedIds = orderedObjectiveIds.filter(id => validIds.has(id));
-
-  const updates = await Promise.all(
-    filteredOrderedIds.map((id, index) =>
-      supabase
-        .from('objectives')
-        .update({ position: index })
-        .eq('id', id)
-        .eq('ticket_id', ticketId)
-        .in('state', reorderableStates)
-    )
-  );
-
-  for (const { error } of updates) {
-    if (error) {
-      throw new Error(error.message);
-    }
-  }
+  const nextPositions = computeReorderedObjectivePositions(existing, filteredOrderedIds);
+  await persistObjectivePositions(supabase, ticketId, nextPositions);
 
   revalidateTicketBoards();
   revalidatePath(
@@ -1681,16 +1700,18 @@ export async function promoteFutureObjectiveAction({
     throw new Error('Future objectives are disabled.');
   }
 
-  const { data: objective, error: objectiveError } = await supabase
+  const { data: objectives, error: objectivesError } = await supabase
     .from('objectives')
-    .select('id,state')
-    .eq('id', objectiveId)
+    .select('id,state,position,created_at')
     .eq('ticket_id', ticketId)
-    .maybeSingle();
+    .in('state', ['draft', 'future'])
+    .order('position', { ascending: true })
+    .order('created_at', { ascending: true });
 
-  if (objectiveError) {
-    throw new Error(objectiveError.message);
+  if (objectivesError) {
+    throw new Error(objectivesError.message);
   }
+  const objective = objectives?.find(candidate => candidate.id === objectiveId) ?? null;
   if (!objective) {
     throw new Error('Objective not found.');
   }
@@ -1700,6 +1721,8 @@ export async function promoteFutureObjectiveAction({
   if (objective.state !== 'future') {
     throw new Error('Only future objectives can be promoted.');
   }
+
+  const nextPositions = computePromotedObjectivePositions(objectives ?? [], objectiveId);
 
   const { error: demoteDraftsError } = await supabase
     .from('objectives')
@@ -1720,6 +1743,8 @@ export async function promoteFutureObjectiveAction({
   if (promoteError) {
     throw new Error(promoteError.message);
   }
+
+  await persistObjectivePositions(supabase, ticketId, nextPositions);
 
   await supabase.from('ticket_events').insert({
     event_type: 'system',

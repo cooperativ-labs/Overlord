@@ -1,36 +1,4 @@
-import {
-  resolveNextQueuedObjectiveAfterDeliver,
-  selectQueuedObjectiveSource
-} from '@/lib/auto-advance/schedule-after-deliver';
-
-describe('selectQueuedObjectiveSource', () => {
-  it('prefers a non-empty draft over a future objective', () => {
-    expect(
-      selectQueuedObjectiveSource({
-        draftObjective: 'Implement API',
-        futureObjective: 'Write docs'
-      })
-    ).toBe('draft');
-  });
-
-  it('falls back to future when draft is empty', () => {
-    expect(
-      selectQueuedObjectiveSource({
-        draftObjective: '   ',
-        futureObjective: 'Write docs'
-      })
-    ).toBe('future');
-  });
-
-  it('returns null when neither queue row has content', () => {
-    expect(
-      selectQueuedObjectiveSource({
-        draftObjective: '',
-        futureObjective: null
-      })
-    ).toBeNull();
-  });
-});
+import { resolveNextQueuedObjectiveAfterDeliver } from '@/lib/auto-advance/schedule-after-deliver';
 
 describe('resolveNextQueuedObjectiveAfterDeliver', () => {
   it('looks up the current draft by explicit queue position before creation time', async () => {
@@ -64,5 +32,24 @@ describe('resolveNextQueuedObjectiveAfterDeliver', () => {
       { column: 'position', ascending: true },
       { column: 'created_at', ascending: true }
     ]);
+  });
+
+  it('stops when no draft objective exists instead of promoting a future objective', async () => {
+    const query = {
+      select: jest.fn(() => query),
+      eq: jest.fn(() => query),
+      order: jest.fn(() => query),
+      limit: jest.fn(() => query),
+      maybeSingle: jest.fn(async () => ({ data: null, error: null })),
+      update: jest.fn(() => query)
+    };
+    const supabase = { from: jest.fn(() => query) };
+
+    await expect(
+      resolveNextQueuedObjectiveAfterDeliver(supabase as never, 'ticket-1')
+    ).resolves.toBeNull();
+
+    expect(query.update).not.toHaveBeenCalled();
+    expect(supabase.from).toHaveBeenCalledTimes(1);
   });
 });

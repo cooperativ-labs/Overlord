@@ -20,47 +20,62 @@ export default async function ChangelogIndexPage() {
   const entries = await listPublishedChangelogEntriesAction(50);
 
   return (
-    <div className="mx-auto max-w-3xl py-4 lg:py-8">
-      <header className="mb-12">
-        <p className="font-mono text-xs font-semibold uppercase tracking-widest text-sky-400">
-          Overlord
-        </p>
-        <h1 className="mt-3 font-display text-4xl font-semibold tracking-tight text-white">
+    <div className="mx-auto max-w-[640px] px-1 py-4 sm:px-2 lg:py-8">
+      <header className="mb-10 px-1">
+        <h1 className="font-display text-3xl font-semibold tracking-tight text-stone-900 sm:text-4xl dark:text-white">
           What&apos;s New
         </h1>
-        <p className="mt-3 text-base text-slate-300">
+        <p className="mt-3 text-base leading-relaxed text-[#57534e] dark:text-slate-300">
           Recent updates and improvements to Overlord.
         </p>
       </header>
 
       {entries.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-white/15 bg-white/5 px-6 py-16 text-center text-sm text-slate-400">
+        <div className="rounded-[20px] border border-dashed border-stone-200 bg-white px-6 py-16 text-center text-sm text-[#57534e] dark:border-white/15 dark:bg-white/5 dark:text-slate-400">
           No changelog entries published yet — check back soon.
         </div>
       ) : (
-        <div className="space-y-12">
+        <div className="flex flex-col gap-10">
           {entries.map(entry => (
             <article
               key={entry.id}
-              className="rounded-[2rem] border border-white/10 bg-white/5 p-8 shadow-[0_20px_80px_-48px_rgba(15,23,42,0.75)]"
+              className="rounded-[20px] border border-[#e7e5e0] bg-white px-7 py-9 shadow-sm sm:px-11 sm:py-11 dark:border-white/10 dark:bg-white/5 dark:shadow-[0_20px_80px_-48px_rgba(15,23,42,0.75)]"
             >
-              <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <p className="font-mono text-[11px] font-medium tracking-[0.22em] text-[#a8a29e] uppercase">
+                Changelog
+                <span className="mx-2 text-[#d6d3ce] dark:text-white/20">·</span>
+                <span className="tracking-wide text-[#57534e] dark:text-slate-300">
+                  {formatDate(entry.published_at)}
+                  {entry.version ? ` · v${entry.version}` : ''}
+                </span>
+              </p>
+
+              <h2 className="mt-3 font-display text-[1.75rem] font-semibold leading-[1.05] tracking-tight text-stone-900 sm:text-[2.125rem] dark:text-white">
                 <Link
                   href={`/changelog/${entry.slug}`}
-                  className="font-display text-2xl font-semibold tracking-tight text-white hover:text-sky-300"
+                  className="transition-colors hover:text-stone-600 dark:hover:text-sky-300"
                 >
                   {entry.title}
                 </Link>
-                <div className="text-xs text-slate-400">
-                  {formatDate(entry.published_at)}
-                  {entry.version ? ` · v${entry.version}` : ''}
-                </div>
-              </div>
+              </h2>
+
               {entry.summary ? (
-                <p className="mt-2 text-sm text-slate-300">{entry.summary}</p>
+                <p className="mt-3 text-base leading-relaxed text-[#57534e] dark:text-slate-300">
+                  {entry.summary}
+                </p>
               ) : null}
-              <div className="mt-6 [&_.prose]:text-slate-200 [&_.prose_a]:text-sky-400 [&_.prose_headings]:text-white [&_.prose_strong]:text-white">
-                <MarkdownContent>{entry.body_markdown}</MarkdownContent>
+
+              <div className="my-7 h-px bg-[#e7e5e0] dark:bg-white/10" role="separator" />
+
+              <MarkdownContent variant="changelog">{entry.body_markdown}</MarkdownContent>
+
+              <div className="mt-8">
+                <Link
+                  href={`/changelog/${entry.slug}`}
+                  className="inline-flex rounded-full bg-stone-900 px-7 py-3.5 text-[15px] font-semibold tracking-tight text-[#fafaf7] no-underline transition-colors hover:bg-stone-800 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-100"
+                >
+                  Read full update →
+                </Link>
               </div>
             </article>
           ))}

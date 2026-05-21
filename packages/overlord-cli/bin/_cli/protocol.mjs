@@ -230,6 +230,23 @@ function resolveTimeout(flags) {
   return DEFAULT_TIMEOUT_MS;
 }
 
+function parseRepeatedCliFlags(args, name) {
+  const result = [];
+  const prefix = `--${name}=`;
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === `--${name}` && i + 1 < args.length) {
+      result.push(args[i + 1]);
+      i++;
+      continue;
+    }
+    if (arg.startsWith(prefix)) {
+      result.push(arg.slice(prefix.length));
+    }
+  }
+  return result;
+}
+
 function requireFlag(flags, name, envAlias) {
   const value = flags[name] ?? (envAlias ? process.env[envAlias] : undefined);
   if (!value) {
@@ -1822,6 +1839,155 @@ async function protocolUpdateProjectResource(args) {
 }
 
 // ---------------------------------------------------------------------------
+// execution requests (durable runner queue)
+// ---------------------------------------------------------------------------
+
+async function protocolRequestExecution(args) {
+  const flags = parseFlags(args);
+  const ticketId = requireFlag(flags, 'ticket-id', 'TICKET_ID');
+  const { platformUrl, bearerToken, localSecret, organizationId } =
+    await resolveProtocolAuthForFlags(flags, ticketId);
+  const timeoutMs = resolveTimeout(flags);
+
+  const body = {
+    ticketId,
+    ...(typeof flags['objective-id'] === 'string' ? { objectiveId: flags['objective-id'] } : {}),
+    requestedFrom: String(flags['requested-from'] ?? 'api'),
+    ...(typeof flags['idempotency-key'] === 'string'
+      ? { idempotencyKey: flags['idempotency-key'] }
+      : {}),
+    ...(typeof flags.agent === 'string' ? { agentIdentifier: flags.agent } : {}),
+    ...(typeof flags.model === 'string' ? { modelIdentifier: flags.model } : {}),
+    ...(typeof flags.thinking === 'string' ? { thinkingLevel: flags.thinking } : {}),
+    launchMode: flags['launch-mode'] === 'ask' ? 'ask' : 'run',
+    flags: parseRepeatedCliFlags(args, 'flag'),
+    ...(typeof flags['working-directory'] === 'string'
+      ? { workingDirectory: flags['working-directory'] }
+      : {}),
+    ...(typeof flags['ssh-command'] === 'string' ? { sshCommand: flags['ssh-command'] } : {}),
+    ...(typeof flags['remote-working-directory'] === 'string'
+      ? { remoteWorkingDirectory: flags['remote-working-directory'] }
+      : {}),
+    ...(flags['server-multiplexer'] === 'tmux' ? { serverMultiplexer: 'tmux' } : {}),
+    ...(typeof flags['tmux-command'] === 'string' ? { tmuxCommand: flags['tmux-command'] } : {}),
+    ...(typeof flags['target-kind'] === 'string' ? { targetKind: flags['target-kind'] } : {}),
+    ...(typeof flags['target-device-id'] === 'string'
+      ? { targetDeviceId: flags['target-device-id'] }
+      : {}),
+    ...(typeof flags['target-resource-id'] === 'string'
+      ? { targetResourceId: flags['target-resource-id'] }
+      : {})
+  };
+
+  const data = await apiPost(
+    platformUrl,
+    bearerToken,
+    localSecret,
+    organizationId,
+    '/api/protocol/request-execution',
+    body,
+    timeoutMs
+  );
+  console.log(JSON.stringify(data, null, 2));
+
+  if (data.request?.id) {
+    process.stderr.write(`\nEXECUTION_REQUEST_ID=${data.request.id}\n`);
+  }
+}
+
+async function protocolClaimExecution(args) {
+  const flags = parseFlags(args);
+  const { platformUrl, bearerToken, localSecret, organizationId } =
+    await resolveProtocolAuthForFlags(flags);
+  const timeoutMs = resolveTimeout(flags);
+  const deviceFingerprint = String(
+    flags['device-fingerprint'] ?? process.env.OVERLORD_DEVICE_FINGERPRINT ?? ''
+  );
+  if (!deviceFingerprint) {
+    console.error('Error: --device-fingerprint is required (or set OVERLORD_DEVICE_FINGERPRINT)');
+    process.exit(1);
+  }
+
+  const data = await apiPost(
+    platformUrl,
+    bearerToken,
+    localSecret,
+    organizationId,
+    '/api/protocol/claim-execution',
+    {
+      deviceFingerprint,
+      ...(flags['device-hostname'] ? { deviceHostname: String(flags['device-hostname']) } : {}),
+      ...(flags['device-platform'] ? { devicePlatform: String(flags['device-platform']) } : {}),
+      ...(typeof flags['lease-seconds'] === 'string'
+        ? { leaseSeconds: Number.parseInt(flags['lease-seconds'], 10) }
+        : {}),
+      ...(typeof flags['project-id'] === 'string' ? { projectId: flags['project-id'] } : {})
+    },
+    timeoutMs
+  );
+  console.log(JSON.stringify(data, null, 2));
+}
+
+async function protocolCompleteExecutionLaunch(args) {
+  const flags = parseFlags(args);
+  const { platformUrl, bearerToken, localSecret, organizationId } =
+    await resolveProtocolAuthForFlags(flags);
+  const timeoutMs = resolveTimeout(flags);
+  const requestId = requireFlag(flags, 'request-id', 'EXECUTION_REQUEST_ID');
+  const deviceFingerprint = String(
+    flags['device-fingerprint'] ?? process.env.OVERLORD_DEVICE_FINGERPRINT ?? ''
+  );
+  if (!deviceFingerprint) {
+    console.error('Error: --device-fingerprint is required (or set OVERLORD_DEVICE_FINGERPRINT)');
+    process.exit(1);
+  }
+
+  const data = await apiPost(
+    platformUrl,
+    bearerToken,
+    localSecret,
+    organizationId,
+    '/api/protocol/complete-execution-launch',
+    {
+      requestId,
+      deviceFingerprint,
+      ...(typeof flags['launched-session-id'] === 'string'
+        ? { launchedSessionId: flags['launched-session-id'] }
+        : {})
+    },
+    timeoutMs
+  );
+  console.log(JSON.stringify(data, null, 2));
+}
+
+async function protocolFailExecutionLaunch(args) {
+  const flags = parseFlags(args);
+  const { platformUrl, bearerToken, localSecret, organizationId } =
+    await resolveProtocolAuthForFlags(flags);
+  const timeoutMs = resolveTimeout(flags);
+  const requestId = requireFlag(flags, 'request-id', 'EXECUTION_REQUEST_ID');
+  const deviceFingerprint = String(
+    flags['device-fingerprint'] ?? process.env.OVERLORD_DEVICE_FINGERPRINT ?? ''
+  );
+  if (!deviceFingerprint) {
+    console.error('Error: --device-fingerprint is required (or set OVERLORD_DEVICE_FINGERPRINT)');
+    process.exit(1);
+  }
+  const error = requireFlag(flags, 'error');
+
+  const data = await apiPost(
+    platformUrl,
+    bearerToken,
+    localSecret,
+    organizationId,
+    '/api/protocol/fail-execution-launch',
+    { requestId, deviceFingerprint, error },
+    timeoutMs
+  );
+  console.log(JSON.stringify(data, null, 2));
+}
+
+// ---------------------------------------------------------------------------
 // connect (lightweight session, no context returned)
 // ---------------------------------------------------------------------------
 
@@ -2349,6 +2515,10 @@ Subcommands:
   record-change-rationales  Persist structured change rationales without a progress update
   ask                       Post a blocking question and move the ticket to review
   request-approval-gate     Flip auto_advance=false on the next queued future objective
+  request-execution         Queue an objective for local/remote runner execution
+  claim-execution           Claim one queued execution request for this device
+  complete-execution-launch Mark a claimed execution request launched
+  fail-execution-launch     Mark a claimed execution request failed
   permission-request        Notify Overlord that the agent is requesting tool permission
   hook-event                Record a lifecycle hook event without a session key
   read-context              Read shared persistent context for this ticket
@@ -2779,6 +2949,47 @@ update-project-resource:
     --label <text>             New label (pass 'null' to clear)
     --is-primary <true|false>
 
+request-execution:
+  Required:
+    --ticket-id <ticket_id>
+  Optional:
+    --objective-id <uuid>
+    --requested-from <source>  manual_run | auto_advance | api | ssh
+    --idempotency-key <key>
+    --agent <agent>
+    --model <model>
+    --thinking <level>
+    --flag <value>             Extra agent flag (repeatable)
+    --working-directory <path>
+    --ssh-command <command>
+    --remote-working-directory <path>
+    --server-multiplexer <none|tmux>
+    --target-kind <any|local|ssh>
+    --target-device-id <uuid>
+    --target-resource-id <uuid>
+
+claim-execution:
+  Required:
+    --device-fingerprint <fp>  (or OVERLORD_DEVICE_FINGERPRINT env var)
+  Optional:
+    --device-hostname <name>
+    --device-platform <platform>
+    --lease-seconds <n>
+    --project-id <uuid>
+
+complete-execution-launch:
+  Required:
+    --request-id <uuid>        (or EXECUTION_REQUEST_ID env var)
+    --device-fingerprint <fp>  (or OVERLORD_DEVICE_FINGERPRINT env var)
+  Optional:
+    --launched-session-id <uuid>
+
+fail-execution-launch:
+  Required:
+    --request-id <uuid>        (or EXECUTION_REQUEST_ID env var)
+    --device-fingerprint <fp>  (or OVERLORD_DEVICE_FINGERPRINT env var)
+    --error <message>
+
 Examples:
   ovld protocol auth-status
   ovld protocol discover-project
@@ -2808,6 +3019,8 @@ Examples:
   ovld protocol attachment-prepare-upload --session-key <key> --ticket-id <ticket_id> --objective-id <objective-id> --file-name spec.pdf --content-type application/pdf
   ovld protocol attachment-upload-file --session-key <key> --ticket-id <ticket_id> --objective-id <objective-id> --file ./spec.pdf
   ovld protocol attachment-download-url --session-key <key> --ticket-id <ticket_id> --attachment-id <attachment-id>
+  ovld protocol request-execution --ticket-id 1:899 --agent codex --requested-from manual_run
+  ovld protocol claim-execution --device-fingerprint $OVERLORD_DEVICE_FINGERPRINT
   ovld protocol deliver --session-key <key> --ticket-id <ticket_id> --summary "Done"
   ovld protocol deliver --session-key <key> --ticket-id <ticket_id> --summary "Done" --artifacts-file ./artifacts.json
   ovld protocol deliver --session-key <key> --ticket-id <ticket_id> --payload-json '{"summary":"Done","artifacts":[{"type":"note","label":"Delivery","content":"..."}]}'
@@ -2913,6 +3126,22 @@ EOF
   }
   if (subcommand === 'request-approval-gate') {
     await protocolRequestApprovalGate(args);
+    return;
+  }
+  if (subcommand === 'request-execution') {
+    await protocolRequestExecution(args);
+    return;
+  }
+  if (subcommand === 'claim-execution') {
+    await protocolClaimExecution(args);
+    return;
+  }
+  if (subcommand === 'complete-execution-launch') {
+    await protocolCompleteExecutionLaunch(args);
+    return;
+  }
+  if (subcommand === 'fail-execution-launch') {
+    await protocolFailExecutionLaunch(args);
     return;
   }
   if (subcommand === 'permission-request') {
