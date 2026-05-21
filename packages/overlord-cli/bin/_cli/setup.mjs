@@ -14,10 +14,86 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { checkForCliUpdate, getCurrentCliVersion, printCliUpdateNotice } from './cli-update.mjs';
-import {
-  geminiLegacyCommandFiles,
-  removeLegacyGeminiConnector as removeLegacyGeminiConnectorFiles
-} from '../../../../lib/overlord/legacy-gemini-connector.cjs';
+
+// ---------------------------------------------------------------------------
+// Legacy Gemini connector (inlined — the lib/ directory is not published with
+// the npm package, so the old relative import broke on global installs)
+// ---------------------------------------------------------------------------
+
+const GEMINI_LEGACY_COMMANDS_DIR = path.join(os.homedir(), '.gemini', 'commands');
+
+function geminiLegacyCommandFiles() {
+  const base = GEMINI_LEGACY_COMMANDS_DIR;
+  return [
+    {
+      path: path.join(base, 'connect.toml'),
+      content: `description = "Connect this session to another Overlord ticket (requires: ticket-id)."\nprompt = """\nConnect this session to another Overlord ticket.\n\nTreat \`{{args}}\` as the target ticket ID.\nIf no ticket ID was provided, ask the user for one and stop.\n\nRun:\n\`ovld protocol connect --ticket-id <ticket_id>\`\n\nRules:\n- Use \`connect\`, not \`attach\`.\n- Do not load extra ticket context unless the user explicitly asks for it.\n- After the command succeeds, report the returned \`SESSION_KEY\` and confirm that future updates should use that ticket.\n"""`
+    },
+    {
+      path: path.join(base, 'load.toml'),
+      content: `description = "Load Overlord ticket context (requires: ticket-id)."\nprompt = """\nLoad Overlord ticket context without attaching to the ticket.\n\nTreat \`{{args}}\` as the target ticket ID.\nIf no ticket ID was provided, ask the user for one and stop.\n\nRun:\n\`ovld protocol load-context --ticket-id <ticket_id>\`\n\nRules:\n- Use \`load-context\`, not \`attach\`.\n- Do not create or switch sessions.\n- Summarize the returned ticket details, history, artifacts, and shared context for the user.\n"""`
+    },
+    {
+      path: path.join(base, 'attach.toml'),
+      content: `description = "Attach this session to an Overlord ticket (requires: ticket-id)."\nprompt = """\nAttach this session to an Overlord ticket.\n\nTreat \`{{args}}\` as the target ticket ID.\nIf no ticket ID was provided, ask the user for one and stop.\n\nRun:\n\`ovld protocol attach --ticket-id <ticket_id>\`\n\nRules:\n- Use \`attach\` to establish a persistent session with a ticket.\n- After the command succeeds, report the returned \`SESSION_KEY\` and confirm that future updates should use that ticket.\n"""`
+    },
+    {
+      path: path.join(base, 'discuss-objective.toml'),
+      content: `description = "Mark a ticket's draft objective as submitted (in discussion)."\nprompt = """\nMark a draft objective as "submitted", indicating the ticket is in active discussion with an agent.\n\nTreat \`{{args}}\` as the target ticket ID.\nIf no ticket ID was provided, ask the user for one and stop.\n\nRun:\n\`ovld protocol discuss-objective --ticket-id <ticket_id>\`\n\nRules:\n- This does NOT start execution. Use \`attach\` for that.\n- After the command succeeds, confirm the objective was submitted.\n"""`
+    },
+    {
+      path: path.join(base, 'add-objectives.toml'),
+      content: `description = "Append ordered objectives to an existing Overlord ticket."\nprompt = """\nAppend ordered objectives to an existing ticket.\n\nUse this when prompts are sequential steps toward the same feature or goal. Create separate tickets when prompts represent different features or goals.\n\nRun:\n\`ovld protocol add-objectives --ticket-id <ticket_id> --objectives-json '[{"objective":"Step one"},{"objective":"Step two"}]'\`\n\nIndex 0 is the first newly added objective to execute; later indexes queue after it.\n"""`
+    },
+    {
+      path: path.join(base, 'create.toml'),
+      content: `description = "Create a draft Overlord ticket from the current conversation."\nprompt = """\nCreate a draft Overlord ticket from the user's request.\n\nUse \`{{args}}\` as the input.\nIf it already contains flags such as \`--title\`, \`--priority\`, \`--project-id\`, or \`--execution-target\`, pass those flags through after \`ovld protocol create --agent gemini\`.\nOtherwise, treat \`{{args}}\` as the objective text and run:\n\`ovld protocol create --agent gemini --objective "<objective>"\`\n\nIf no objective was provided, ask the user for one and stop.\n\nAfter the command succeeds, report the new \`TICKET_ID\`.\n"""`
+    },
+    {
+      path: path.join(base, 'prompt.toml'),
+      content: `description = "Create a new Overlord ticket from the current conversation."\nprompt = """\nCreate a new Overlord ticket from the user's request.\n\nUse \`{{args}}\` as the input.\nIf it already contains flags such as \`--title\`, \`--priority\`, \`--project-id\`, or \`--execution-target\`, pass those flags through after \`ovld protocol prompt --agent gemini\`.\nOtherwise, treat \`{{args}}\` as the objective text and run:\n\`ovld protocol prompt --agent gemini --objective "<objective>"\`\n\nIf no objective was provided, ask the user for one and stop.\n\nAfter the command succeeds, report the new \`TICKET_ID\` and \`SESSION_KEY\`.\n"""`
+    },
+    {
+      path: path.join(base, 'record-work.toml'),
+      content: `description = "Record completed-from-chat work as a ticket in review + feed post (no attach)."\nprompt = """\nImmediately record the work you just completed in this chat as a new Overlord ticket via \`ovld protocol record-work\`. No agent session is opened — the work is already done.\n\nSynthesize from the current conversation:\n- \`objective\`: what was asked / what was done.\n- \`summary\`: reviewer-friendly narrative for the feed.\n- \`changeRationales\`: one entry per meaningful git-tracked file change (\`label\`, \`file_path\`, \`summary\`, \`why\`, \`impact\`, optional \`hunks\`). Use \`git status\` and \`git diff\` to enumerate changed files.\n- \`artifacts\` (optional): \`next_steps\`, \`test_results\`, \`decision\`, \`note\`, \`url\`.\n\nIf \`{{args}}\` is non-empty, treat it as additional context to weave into the summary.\n\nRun \`ovld protocol record-work --payload-file -\` and stream a JSON object \`{ "objective": "...", "summary": "...", "artifacts": [...], "changeRationales": [...] }\` on stdin via a single-quoted heredoc.\n\nAfter the command succeeds, report the new \`TICKET_ID\`.\n\nRules:\n- Do NOT use this for in-progress work. Use \`/prompt\` for that.\n- The CLI validates that every changed git-tracked file is represented in \`changeRationales\` unless \`--skip-file-change-check\` is passed.\n- If project resolution fails, re-run with \`--project-id <id>\` or \`--personal\`.\n"""`
+    }
+  ];
+}
+
+function isRemovableLegacyGeminiCommandFile({ filePath, content, manifestFiles }) {
+  if (manifestFiles.has(filePath)) return true;
+  const managed = geminiLegacyCommandFiles().find(file => file.path === filePath);
+  if (!managed) return false;
+  return content.trim() === managed.content.trim();
+}
+
+function removeLegacyGeminiConnectorFiles({ readManifest, writeManifest, readTextFile, existsSync = fs.existsSync.bind(fs), rmSync = fs.rmSync.bind(fs) }) {
+  const removed = [];
+  const manifest = readManifest();
+  const manifestFiles = new Set(manifest.gemini?.files ?? []);
+
+  for (const file of geminiLegacyCommandFiles()) {
+    if (!existsSync(file.path)) continue;
+    const existing = readTextFile(file.path);
+    if (!isRemovableLegacyGeminiCommandFile({ filePath: file.path, content: existing, manifestFiles })) continue;
+    rmSync(file.path, { force: true });
+    removed.push(file.path);
+  }
+
+  for (const filePath of manifestFiles) {
+    if (removed.includes(filePath) || !existsSync(filePath)) continue;
+    if (!filePath.includes('.gemini/commands') || !filePath.endsWith('.toml')) continue;
+    rmSync(filePath, { force: true });
+    removed.push(filePath);
+  }
+
+  if (manifest.gemini) {
+    delete manifest.gemini;
+    writeManifest(manifest);
+  }
+
+  return removed;
+}
 
 const BUNDLE_VERSION = '1.12.0';
 const MD_MARKER_START = '<!-- overlord:managed:start -->';

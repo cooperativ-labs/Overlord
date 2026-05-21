@@ -25,7 +25,7 @@ if (!existsSync(README_PATH)) {
   process.exit(1);
 }
 
-run('node', ['scripts/sync-cli-package.mjs']);
+// run('node', ['scripts/sync-cli-package.mjs']);
 run('npm', ['publish', '--access', 'public', '--workspaces=false', '--tag', 'latest'], {
   cwd: CLI_PACKAGE_ROOT
 });
