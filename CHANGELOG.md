@@ -2,6 +2,34 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2605210944.0] - 2026-05-21:09:44
+
+### Added
+- Canonical agent plugin source under `plugins/_source/` with shared templates for Claude Code, Cursor, and Codex connectors.
+- `yarn plugins:render` and `yarn plugins:check` to generate and verify committed plugin trees in `plugins/` and `packages/overlord-cli/plugins/`.
+- Progressive disclosure for `overlord-ticket` skills: slim eager-loaded `SKILL.md` plus on-demand `reference/*.md` files for CLI flags, MCP naming, devices, context, and shell escaping.
+- CI quality-gate step that fails when rendered agent plugin output drifts from source templates.
+- CLI `prepack` hook that runs the same plugin drift check before `npm pack` / publish.
+
+### Fixed
+- None.
+
+### Changed
+- Refactor Claude, Cursor, and Codex agent plugins to render from a single templated source, eliminating manual duplication between dev and published CLI plugin trees.
+- Clarify when to use `create` versus `prompt` versus `record-work` in overlord-ticket workflow guidance across all three connectors.
+- Update slash-command docs (`connect`, `create`, `load`, `spawn`, `record-work`) for consistent agent-specific usage instructions.
+
+### Security
+- None.
+
+### Documentation
+- Add objective auto-advance sequence diagram and technical walkthrough in `docs/auto-advance-flow.md`.
+- Document templated plugin rendering, progressive disclosure, and drift checks in connector surfaces guidance and the drift-review skill.
+- Add feature plan for agent plugin SKILL.md progressive disclosure and templated source.
+
+### Chore
+- Bump workspace and CLI package versions.
+
 ## [0.2605210733.0] - 2026-05-21:07:33
 
 ### Added
