@@ -39,7 +39,7 @@ export function AgentBrandIcon({ agent, size = 16 }: AgentBrandIconProps) {
           />
         </Svg>
       );
-    case 'gemini':
+    case 'antigravity':
       return (
         <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
           <Path

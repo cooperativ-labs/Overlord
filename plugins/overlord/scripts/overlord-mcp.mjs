@@ -7,6 +7,32 @@ const execFileAsync = promisify(execFile);
 const OVLD_BIN = process.env.OVLD_BIN?.trim() || 'ovld';
 const PROTOCOL_VERSION = '2025-06-18';
 
+const OBJECTIVES_ARRAY_SCHEMA = {
+  type: 'array',
+  description:
+    'Ordered objective objects. Index 0 is the first objective to execute; later indexes queue after it.',
+  items: {
+    type: 'object',
+    properties: {
+      objective: { type: 'string' },
+      title: { type: 'string' },
+      auto_advance: { type: 'boolean' },
+      assigned_agent: { type: 'object' }
+    },
+    required: ['objective']
+  }
+};
+
+function toCliObjectives(objectives) {
+  if (!Array.isArray(objectives)) return undefined;
+  return objectives.map(item => ({
+    objective: item.objective,
+    ...(item.title ? { title: item.title } : {}),
+    ...(typeof item.auto_advance === 'boolean' ? { autoAdvance: item.auto_advance } : {}),
+    ...(item.assigned_agent ? { assignedAgent: item.assigned_agent } : {})
+  }));
+}
+
 function execFileWithOptionalInput(file, args, options, input) {
   if (input === undefined) {
     return execFileAsync(file, args, options);
@@ -180,7 +206,7 @@ const tools = [
     inputSchema: {
       type: 'object',
       properties: {
-        objective: { type: 'string' },
+        objectives: OBJECTIVES_ARRAY_SCHEMA,
         title: { type: 'string' },
         priority: { type: 'string', enum: ['low', 'medium', 'high', 'urgent'] },
         project_id: { type: 'string' },
@@ -198,10 +224,10 @@ const tools = [
         agent: { type: 'string' },
         method: { type: 'string' }
       },
-      required: ['objective']
+      required: ['objectives']
     },
     toCliFlags: args => ({
-      objective: args.objective,
+      'objectives-json': toCliObjectives(args.objectives),
       title: args.title,
       priority: args.priority,
       'project-id': args.project_id,
@@ -217,6 +243,65 @@ const tools = [
       method: args.method
     }),
     subcommand: 'prompt'
+  },
+  {
+    name: 'create_ticket',
+    description: 'Create a draft ticket without attaching (ovld protocol create).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        objectives: OBJECTIVES_ARRAY_SCHEMA,
+        title: { type: 'string' },
+        priority: { type: 'string', enum: ['low', 'medium', 'high', 'urgent'] },
+        project_id: { type: 'string' },
+        working_directory: { type: 'string' },
+        personal: { type: 'boolean' },
+        acceptance_criteria: { type: 'string' },
+        available_tools: { type: 'string' },
+        execution_target: { type: 'string', enum: ['agent', 'human'] },
+        delegate: { type: 'string' },
+        session_key: { type: 'string' },
+        ticket_id: { type: 'string' },
+        agent: { type: 'string' }
+      },
+      required: ['objectives']
+    },
+    toCliFlags: args => ({
+      'objectives-json': toCliObjectives(args.objectives),
+      title: args.title,
+      priority: args.priority,
+      'project-id': args.project_id,
+      'working-directory': args.working_directory,
+      personal: args.personal === true ? true : undefined,
+      'acceptance-criteria': args.acceptance_criteria,
+      'available-tools': args.available_tools,
+      'execution-target': args.execution_target,
+      delegate: args.delegate,
+      'session-key': args.session_key,
+      'ticket-id': args.ticket_id,
+      agent: args.agent
+    }),
+    subcommand: 'create'
+  },
+  {
+    name: 'add_objectives',
+    description: 'Append ordered objectives to an existing ticket.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ticket_id: {
+          type: 'string',
+          description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.'
+        },
+        objectives: OBJECTIVES_ARRAY_SCHEMA
+      },
+      required: ['ticket_id', 'objectives']
+    },
+    toCliFlags: args => ({
+      'ticket-id': args.ticket_id,
+      'objectives-json': toCliObjectives(args.objectives)
+    }),
+    subcommand: 'add-objectives'
   },
   {
     name: 'update',
@@ -436,6 +521,54 @@ const tools = [
           : {})
       }),
     subcommand: 'deliver'
+  },
+  {
+    name: 'record_work',
+    description:
+      'Record completed-from-chat work as a ticket in review + feed post (no attach).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        objectives: OBJECTIVES_ARRAY_SCHEMA,
+        summary: { type: 'string' },
+        title: { type: 'string' },
+        artifacts: { type: 'array' },
+        change_rationales: { type: 'array' },
+        priority: { type: 'string', enum: ['low', 'medium', 'high', 'urgent'] },
+        project_id: { type: 'string' },
+        working_directory: { type: 'string' },
+        personal: { type: 'boolean' },
+        acceptance_criteria: { type: 'string' },
+        available_tools: { type: 'string' },
+        delegate: { type: 'string' },
+        agent: { type: 'string' },
+        skip_file_change_check: { type: 'boolean' }
+      },
+      required: ['objectives', 'summary']
+    },
+    toCliFlags: args => ({
+      'payload-file': '-',
+      title: args.title,
+      priority: args.priority,
+      'project-id': args.project_id,
+      'working-directory': args.working_directory,
+      personal: args.personal === true ? true : undefined,
+      'acceptance-criteria': args.acceptance_criteria,
+      'available-tools': args.available_tools,
+      delegate: args.delegate,
+      agent: args.agent,
+      'skip-file-change-check': args.skip_file_change_check
+    }),
+    toCliStdin: args =>
+      JSON.stringify({
+        objectives: toCliObjectives(args.objectives),
+        summary: args.summary,
+        ...(Array.isArray(args.artifacts) ? { artifacts: args.artifacts } : {}),
+        ...(Array.isArray(args.change_rationales)
+          ? { changeRationales: args.change_rationales }
+          : {})
+      }),
+    subcommand: 'record-work'
   },
   {
     name: 'list_attachments',
@@ -936,7 +1069,7 @@ async function handleRequest(message) {
       },
       serverInfo: {
         name: 'overlord',
-        version: '0.1.4'
+        version: '0.1.5'
       },
       instructions:
         'Use these tools to drive Overlord ticket workflows through the installed ovld CLI. Names mirror hosted MCP tools (attach, update, deliver, get_device, list_project_resources, …). Session tools need attach/connect. Devices are scoped to organization + user + fingerprint — call get_device before add_project_resource.'

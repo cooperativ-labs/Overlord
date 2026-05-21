@@ -190,6 +190,16 @@ export function ResourceDirectoryList({ projectId, onResourceDirectoriesChanged 
     setEditingLabel('');
   }
 
+  async function handleRevealInFinder(directoryPath: string) {
+    if (!api?.app?.revealFile) return;
+
+    try {
+      await api.app.revealFile(directoryPath);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not open in Finder.');
+    }
+  }
+
   async function handleSaveLabel(directoryId: string) {
     if (!canManageDirectories) return;
 
@@ -307,16 +317,30 @@ export function ResourceDirectoryList({ projectId, onResourceDirectoriesChanged 
                         </Button>
                       </>
                     ) : (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 w-7 p-0 text-muted-foreground"
-                        onClick={() => handleStartEditLabel(item)}
-                        title={item.label ? 'Edit label' : 'Add label'}
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
+                      <>
+                        {isElectron && api?.app?.revealFile ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0 text-muted-foreground"
+                            onClick={() => void handleRevealInFinder(item.directoryPath)}
+                            title="See in finder"
+                          >
+                            <FolderOpen className="h-3.5 w-3.5" />
+                          </Button>
+                        ) : null}
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0 text-muted-foreground"
+                          onClick={() => handleStartEditLabel(item)}
+                          title={item.label ? 'Edit label' : 'Add label'}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                      </>
                     )}
                     <Button
                       type="button"

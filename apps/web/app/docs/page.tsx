@@ -14,7 +14,7 @@ import Link from 'next/link';
 
 export const metadata: Metadata = {
   title: 'Documentation',
-  description: 'Documentation for Overlord AI',
+  description: 'Documentation for Overlord AI'
 };
 
 export default function DocsPage() {
@@ -24,9 +24,9 @@ export default function DocsPage() {
         <div className="space-y-4">
           <h1 className="text-3xl font-bold tracking-tight">Introduction</h1>
           <p className="text-lg text-muted-foreground leading-7">
-            Overlord is a management, work coordination, and review layer for AI-assisted engineering work. It keeps the ticket,
-            progress, review, and delivery record in one place while your agents keep working in the
-            tools you already use.
+            Overlord is a management, work coordination, and review layer for AI-assisted
+            engineering work. It keeps the ticket, progress, review, and delivery record in one
+            place while your agents keep working in the tools you already use.
           </p>
         </div>
 

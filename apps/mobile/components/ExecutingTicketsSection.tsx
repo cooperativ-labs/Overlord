@@ -10,8 +10,8 @@ const AGENT_LABELS: Record<string, string> = {
   claude: 'Claude Code',
   codex: 'Codex',
   cursor: 'Cursor',
-  gemini: 'Gemini',
-  'google-gemini': 'Gemini',
+  antigravity: 'Antigravity',
+  agy: 'Antigravity',
   opencode: 'OpenCode',
   'open-code': 'OpenCode'
 };

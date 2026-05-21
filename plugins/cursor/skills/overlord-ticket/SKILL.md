@@ -99,10 +99,11 @@ Do not attach to a ticket just because it was mentioned or opened in conversatio
 
 ## Mode 2: Asked From Chat To Use Overlord
 
-1. If the user wants to create tickets (and does not ask to start execution), use `/create` or run `ovld protocol create --agent cursor --objective "..."`.
+1. If the user wants to create tickets (and does not ask to start execution), use `/create` or run `ovld protocol create --agent cursor --objectives-json '[{"objective":"..."}]'`.
    - When `--session-key` and `--ticket-id` are provided, it creates a follow-up draft.
    - When session flags are omitted, it resolves the project by matching current working directory (or `--working-directory`) to Overlord `local_working_directory`, then creates a standalone draft.
-2. Default to `create` for new tickets. Only use `/prompt` or `ovld protocol prompt --agent cursor --objective "..."` when the user explicitly asks to create and execute immediately.
+   - Pass multiple items in `--objectives-json` when creating ordered steps for the same feature or goal.
+2. Default to `create` for new tickets. Only use `/prompt` or `ovld protocol prompt --agent cursor --objectives-json '[{"objective":"..."}]'` when the user explicitly asks to create and execute immediately.
 3. If the user already has a ticket ID and only wants to inspect it, use `/load` or run `ovld protocol load-context --ticket-id <ticket_id>`.
    When you open or discuss an existing ticket that has a draft objective, submit it with `ovld protocol discuss-objective --ticket-id <ticket_id>`.
 4. If the user wants to route the current session onto an existing ticket by ID, use `/connect` or run `ovld protocol connect --ticket-id <ticket_id>`.
@@ -138,10 +139,14 @@ When creating tickets from within a repository:
 - Prefer `create` by default for draft ticket creation.
 - Use `prompt` only when the user explicitly asks to start execution immediately.
 - Both commands resolve the project from the current working directory; use `--working-directory` to override or `--project-id` to be explicit.
+- Create multiple tickets when each prompt represents a different feature or goal.
+- Add objectives to the same ticket when each prompt is a sequential step toward the same feature or goal; use `ovld protocol add-objectives --ticket-id <ticket_id> --objectives-json '[{"objective":"..."}]'`.
+- `create`, `prompt`, and `record-work` require `--objectives-json` or `--objectives-file` with an ordered array of `{ "objective": "...", "title": "...", "autoAdvance": true }` objects. A single objective is just an array with one item.
 
 ```bash
-ovld protocol create --agent cursor --objective "Capture follow-up work from this repository"
-ovld protocol prompt --agent cursor --objective "Implement feature X" --priority medium
+ovld protocol create --agent cursor --objectives-json '[{"objective":"Capture follow-up work from this repository"}]'
+ovld protocol prompt --agent cursor --objectives-json '[{"objective":"Implement feature X"}]' --priority medium
+ovld protocol add-objectives --ticket-id 1:899 --objectives-json '[{"objective":"Implement the API"},{"objective":"Add CLI docs"}]'
 ovld protocol discover-project
 ```
 
@@ -220,4 +225,4 @@ This keeps the ticket feed readable while preserving the full document in versio
 - If you must run `ovld auth login`, always include `--organization-id <id>` — use the organization ID from the ticket prompt context to select the organization non-interactively and avoid a blocking TTY prompt.
 - Delivery is the concluding step. After delivering, stop unless the user follows up or the ticket is reopened.
 
-<!-- version: 0.5.2 -->
+<!-- version: 0.5.3 -->

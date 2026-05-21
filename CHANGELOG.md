@@ -2,6 +2,99 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2605210733.0] - 2026-05-21:07:33
+
+### Added
+- Launch agents from the Overlord desktop app over SSH workspaces configured on a project, using the same direct Electron launch path as local runs.
+- Pass SSH command and remote working directory through agent launch controls on tickets, feed, quick task, and quick run flows when the SSH workspace is selected.
+- Shared SSH shell utilities for parsing SSH commands, TTY injection, escaping, and optional remote tmux session wrapping.
+- Pi agent type support in desktop terminal agent launch IPC.
+- Copyable allowed-domain snippet (including wildcard) on the Agents & MCP settings page for third-party agent configuration.
+
+### Fixed
+- None.
+
+### Changed
+- Desktop no longer forces local-only workspace; SSH workspace preferences apply when the SSH feature flag is enabled.
+- Quick run and new-ticket modals load project SSH settings via a server action instead of direct Supabase client queries.
+- SSH project settings auth method selector shows On-Device Key only (private key and Tailscale options temporarily hidden).
+
+### Security
+- None.
+
+### Test
+- Add unit tests for SSH shell utility parsing and remote tmux command building.
+
+### Documentation
+- Document desktop SSH agent launch behavior and parity with CLI SSH launches in connector surfaces guidance.
+
+### Chore
+- Bump workspace and CLI package versions.
+
+## [0.2605201134.0] - 2026-05-20:11:34
+
+### Added
+- Gemini CLI is eliminated; Antigravity CLI is the replacement connector.
+- `POST /api/protocol/add-objectives` endpoint for agents to queue multiple objectives on a ticket in a single request.
+- MCP `add-objectives` handler and tool for programmatic objective batching.
+- Mailing list management system with `user_mailing_list_signups` table for tracking user subscriptions.
+- Changelog pages now publicly accessible with sitemap integration for better discoverability.
+- "Ordered Objectives" section in drift review skill documentation clarifying objective-to-flag mappings.
+- Supabase auth email templates (confirm-signup, change-email, reset-password, magic-link, invite-user, reauthenticate).
+
+### Fixed
+- None.
+
+### Changed
+- Reorganized feature plans directory; archived legacy plans and introduced new protocol-objective-arrays and antigravity-connector-migration documentation.
+- Objective auto-advance now defaults to `false` for safer execution workflows.
+- Updated agent plugin documentation across Claude, Cursor, and Codex connectors to surface add-objectives command.
+- Improved DraftObjective component to support queued multi-objective workflows.
+- Refine mailing list signup tracking for early access and newsletter management.
+
+### Security
+- None.
+
+### Documentation
+- Add `/add-objectives` command documentation for agent connectors.
+- Enhance MCP protocol documentation with objective batching patterns.
+
+### Chore
+- Add database migration for mailing list schema.
+- Update workspace and CLI versions for the release.
+- Regenerate Supabase types to reflect changelog_entries and mailing_list schema updates.
+
+## [0.2605200941.0] - 2026-05-20:09:41
+
+### Added
+- Signup notifications system for user registration events.
+- In-app changelog notifications with database schema support for tracking notification history.
+- Problem pages with embedded demo frames and presentation support for feature showcasing.
+- AskAboutOverlordSplitButton integration throughout the application and marketing content.
+
+### Fixed
+- Correct homepage heading for consistency and clarity.
+- Update email recipient for early access requests to use correct contact.
+- Update AskAboutOverlordSplitButton prompt for improved clarity and user engagement.
+
+### Changed
+- Update Overlord descriptions and branding throughout the application for enhanced clarity and consistency.
+- Revise homepage layout with improved problem pages and navigation structure.
+- Make presentations route publicly accessible.
+- Enhance footer navigation with better access control and public page support.
+- Revise page content and structure across marketing and documentation pages for improved clarity.
+- Update terminology and structure in documentation and UI for consistency.
+- Improve admin panel components for enhanced UI consistency.
+- Refactor presentation layout for better organization and access control.
+- Simplify and reorganize skills for improved clarity.
+
+### Documentation
+- Add UI to CLI gap map documentation for better feature surface coverage.
+
+### Chore
+- Update date-fns type definitions and remove @types/date-fns from package dependencies.
+- Bump workspace and CLI versions for the release.
+
 ## [0.2605170853.0] - 2026-05-17:08:53
 
 ### Added

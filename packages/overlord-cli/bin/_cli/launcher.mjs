@@ -23,6 +23,12 @@ function claudeSourcePluginDir() {
   return null;
 }
 
+function antigravityBundleInstalled() {
+  return fs.existsSync(
+    path.join(os.homedir(), '.gemini', 'antigravity-cli', 'plugins', 'plugin.json')
+  );
+}
+
 function getInstructionMode(agent) {
   if (agent === 'claude') {
     return claudeSourcePluginDir() ? 'bundle' : 'legacy';
@@ -40,7 +46,25 @@ function getInstructionMode(agent) {
     return fs.existsSync(pluginManifest) ? 'bundle' : 'legacy';
   }
 
+  if (agent === 'antigravity') {
+    return antigravityBundleInstalled() ? 'bundle' : 'legacy';
+  }
+
   return 'legacy';
+}
+
+function buildAgyLaunchArgv({ contextFile, mode, sessionId, extraArgs }) {
+  const argv = [...extraArgs, '--add-dir', os.tmpdir()];
+  if (mode === 'resume') {
+    const agySessionId = sessionId?.trim();
+    if (agySessionId) {
+      argv.push('--conversation', agySessionId);
+    } else {
+      argv.push('--continue');
+    }
+  }
+  argv.push('--prompt-interactive', `@${contextFile}`);
+  return argv;
 }
 
 async function fetchContext(platformUrl, bearerToken, localSecret, organizationId, ticketId, agent) {
@@ -67,12 +91,12 @@ const agentIdentifierMap = {
   claude: 'claude-code',
   codex: 'codex',
   cursor: 'cursor',
-  gemini: 'gemini',
+  antigravity: 'antigravity',
   opencode: 'opencode',
   pi: 'pi'
 };
 
-const supportedAgents = ['claude', 'codex', 'cursor', 'gemini', 'opencode', 'pi'];
+const supportedAgents = ['claude', 'codex', 'cursor', 'antigravity', 'opencode', 'pi'];
 
 function shellQuote(value) {
   return `'${String(value).replace(/'/g, `'\\''`)}'`;
@@ -88,7 +112,7 @@ function buildExtraArgs(agent, options = {}) {
     ? options.flags.map(flag => String(flag).trim()).filter(Boolean)
     : [];
 
-  if (options.model) {
+  if (options.model && agent !== 'antigravity') {
     args.push('--model', options.model);
   }
 
@@ -97,8 +121,8 @@ function buildExtraArgs(agent, options = {}) {
       args.push('--effort', options.thinking);
     } else if (agent === 'codex') {
       args.push('-c', `model_reasoning_effort=${toTomlString(options.thinking)}`);
-    } else if (agent === 'gemini') {
-      args.push('--thinking-level', options.thinking);
+    } else if (agent === 'antigravity') {
+      // Antigravity manages thinking levels internally — no launch flag.
     } else if (agent === 'pi') {
       args.push('--thinking', options.thinking);
     }
@@ -392,31 +416,24 @@ async function runAgent(agent, mode = 'run', options = {}) {
       } else {
         execFileSync('pi', [...extraArgs, context], { stdio: 'inherit', env: childEnv });
       }
-    } else if (agent === 'gemini') {
-      // Write context to a temp file. Passing inline content as a positional arg
-      // causes Gemini's @-reference parser to lstat(cwd + content) when it encounters
-      // @ symbols in the markdown (e.g. "@@ -10,6 +10,14 @@" in JSON hunk examples),
-      // producing an ENAMETOOLONG crash. Using @file keeps the path short.
+    } else if (agent === 'antigravity') {
       const tag = `overlord-${ticketId.slice(-8)}-${Date.now()}`;
       const contextFile = path.join(os.tmpdir(), `${tag}-ctx.md`);
       fs.writeFileSync(contextFile, context, 'utf-8');
       setTimeout(() => { try { fs.unlinkSync(contextFile); } catch { /* already gone */ } }, 30 * 60_000).unref();
 
-      if (mode === 'resume') {
-        const geminiSessionId = process.env.GEMINI_SESSION_ID?.trim();
-        const resumeTarget = geminiSessionId ?? 'latest';
-        execFileSync(
-          'gemini',
-          [...extraArgs, '--resume', resumeTarget, '--include-directories', os.tmpdir(), `@${contextFile}`],
-          { stdio: 'inherit', env: childEnv }
-        );
-      } else {
-        execFileSync(
-          'gemini',
-          [...extraArgs, '--include-directories', os.tmpdir(), `@${contextFile}`],
-          { stdio: 'inherit', env: childEnv }
-        );
-      }
+      const agySessionId =
+        process.env.AGY_SESSION_ID?.trim() ?? process.env.GEMINI_SESSION_ID?.trim();
+      execFileSync(
+        'agy',
+        buildAgyLaunchArgv({
+          contextFile,
+          mode,
+          sessionId: agySessionId,
+          extraArgs
+        }),
+        { stdio: 'inherit', env: childEnv }
+      );
     }
   } catch (error) {
     const isResume = mode === 'resume';
@@ -429,7 +446,9 @@ async function runAgent(agent, mode = 'run', options = {}) {
             ? `No prior OpenCode session was found. Start one with \`ovld launch opencode --ticket-id <ticket_id>\` first.`
             : agent === 'pi'
               ? `No prior Pi session was found. Start one with \`ovld launch pi --ticket-id <ticket_id>\` first.`
-              : '';
+              : agent === 'antigravity'
+                ? `No prior Antigravity session was found. Start one with \`ovld launch antigravity --ticket-id <ticket_id>\` first.`
+                : '';
     const message = error instanceof Error ? error.message : String(error);
 
     if (isResume && noSessionHint) {

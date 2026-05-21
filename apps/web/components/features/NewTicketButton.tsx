@@ -10,7 +10,7 @@ import { QuickRunModal } from '@/components/features/QuickRunModal';
 import { useElectron } from '@/components/features/terminal/useElectron';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { createClient } from '@/supabase/utils/client';
+import { getProjectsForModalAction } from '@/lib/actions/projects';
 
 type ProjectOption = {
   id: string;
@@ -19,6 +19,8 @@ type ProjectOption = {
   everhour_project_id: string | null;
   organization_id: number;
   local_working_directory: string | null;
+  ssh_command: string | null;
+  remote_working_directory: string | null;
 };
 
 export function NewTicketButton() {
@@ -43,26 +45,8 @@ export function NewTicketButton() {
 
     const loadProjects = async () => {
       try {
-        const supabase = createClient();
-        const [{ data: projectsData }, { data: projectUserRows }] = await Promise.all([
-          supabase
-            .from('projects')
-            .select('id,name,color,everhour_project_id,organization_id')
-            .order('created_at', { ascending: true }),
-          supabase.from('project_user').select('project_id,local_working_directory')
-        ]);
-
-        if (projectsData) {
-          const dirByProject = new Map(
-            (projectUserRows ?? []).map(row => [row.project_id, row.local_working_directory])
-          );
-          setProjects(
-            projectsData.map(project => ({
-              ...project,
-              local_working_directory: dirByProject.get(project.id) ?? null
-            }))
-          );
-        }
+        const projects = await getProjectsForModalAction();
+        setProjects(projects);
       } catch (error) {
         console.error('Failed to load projects:', error);
       }

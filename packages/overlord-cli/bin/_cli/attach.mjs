@@ -12,7 +12,7 @@
 import { buildAuthHeaders, resolveAuth } from './credentials.mjs';
 import { runLauncherCommand } from './launcher.mjs';
 
-const AGENTS = ['claude', 'cursor', 'codex', 'gemini', 'opencode'];
+const AGENTS = ['claude', 'cursor', 'codex', 'antigravity', 'opencode'];
 const MAX_VISIBLE = 8;
 const SEARCH_DEBOUNCE_MS = 120;
 

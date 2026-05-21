@@ -6,6 +6,7 @@ It now includes:
 
 - MCP tools for the Overlord ticket protocol
 - a bundled Codex skill for the local ticket lifecycle
+- lifecycle hooks for `UserPromptSubmit` follow-ups and `PermissionRequest` Overlord notifications
 - branded plugin assets for the Codex install surfaces
 
 The plugin is designed for personal installs under `~/.codex/plugins/overlord` with a

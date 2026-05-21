@@ -59,8 +59,10 @@ type SlashCommandConfig = {
   filePaths: string[];
 };
 
-type BundleAgent = 'claude' | 'cursor' | 'opencode';
-type SlashAgent = 'claude' | 'cursor' | 'gemini' | 'opencode';
+type BundleAgent = 'claude' | 'cursor' | 'antigravity' | 'opencode';
+/** Agents whose slash commands are installed via Electron agentSlash IPC (not Antigravity — use bundle). */
+type SlashAgent = 'claude' | 'cursor' | 'opencode';
+type SlashCommandConfigAgent = 'claude' | 'cursor' | 'antigravity' | 'opencode';
 
 type BundleStatusEntry = {
   agent: BundleAgent;
@@ -177,15 +179,15 @@ const SLASH_COMMAND_CONFIGS: Record<string, SlashCommandConfig> = {
       '~/.cursor/plugins/local/overlord/commands/prompt.md'
     ]
   },
-  gemini: {
-    label: 'Gemini CLI',
-    description: 'Installs global slash commands for mid-session Overlord ticket operations.',
+  antigravity: {
+    label: 'Antigravity CLI',
+    description:
+      'Installs the Overlord Antigravity plugin for mid-session Overlord ticket operations.',
     supportNote:
-      'Creates `/connect`, `/load`, and `/spawn` in `~/.gemini/commands/`. Run `/commands reload` in Gemini CLI after installing.',
+      'Installs the plugin via `agy plugin install`. Run `ovld setup antigravity` to install.',
     filePaths: [
-      '~/.gemini/commands/connect.toml',
-      '~/.gemini/commands/load.toml',
-      '~/.gemini/commands/spawn.toml'
+      '~/.gemini/antigravity-cli/plugins/plugin.json',
+      '~/.gemini/antigravity-cli/plugins/hooks.json'
     ]
   },
   opencode: {
@@ -207,6 +209,12 @@ const BUNDLE_FILE_PATHS: Record<BundleAgent, string[]> = {
     '~/.cursor/plugins/local/overlord/.cursor-plugin/plugin.json',
     '~/.cursor/hooks.json'
   ],
+  antigravity: [
+    '~/.ovld/bundle-manifest.json',
+    '~/.ovld/antigravity/scripts/overlord-mcp.mjs',
+    '~/.gemini/antigravity-cli/plugins/plugin.json',
+    '~/.gemini/antigravity-cli/plugins/hooks.json'
+  ],
   opencode: ['~/.config/opencode/AGENTS.md', '~/.config/opencode/opencode.json']
 };
 
@@ -226,7 +234,7 @@ const AGENT_PLUGIN_OPTIONS: AgentPluginInstallOption[] = [
     agentKey: 'codex',
     label: 'Chat plugin',
     description:
-      'Gives Codex CLI access to Overlord tickets, workflow skills, and permission rules so it can receive and deliver tickets directly from your terminal.',
+      'Gives Codex CLI access to Overlord tickets, workflow skills, PermissionRequest notifications, and permission rules so it can receive and deliver tickets directly from your terminal.',
     kind: 'service',
     serviceKey: 'overlord-plugin',
     supportNote: 'https://www.ovld.ai/docs/surfaces/agent-plugins?tab=codex-desktop'
@@ -243,13 +251,13 @@ const AGENT_PLUGIN_OPTIONS: AgentPluginInstallOption[] = [
       'Managed by the desktop app or `ovld setup cursor` in ~/.cursor/plugins/local/overlord, ~/.cursor/hooks.json, and ~/.cursor/settings.json. Legacy ~/.cursor/rules and ~/.cursor/commands files are removed during install.'
   },
   {
-    key: 'gemini:slash',
-    agentKey: 'gemini',
-    label: '/connect /load /spawn',
-    description: SLASH_COMMAND_CONFIGS.gemini.description,
-    kind: 'slash',
-    slashAgent: 'gemini',
-    supportNote: SLASH_COMMAND_CONFIGS.gemini.supportNote
+    key: 'antigravity:bundle',
+    agentKey: 'antigravity',
+    label: 'Antigravity plugin',
+    description: SLASH_COMMAND_CONFIGS.antigravity.description,
+    kind: 'bundle',
+    bundleAgent: 'antigravity',
+    supportNote: SLASH_COMMAND_CONFIGS.antigravity.supportNote
   },
   {
     key: 'opencode:bundle',
@@ -276,7 +284,7 @@ const AGENT_PLUGIN_GROUPS = [
   { key: 'claude', label: 'Claude Code' },
   { key: 'codex', label: 'Codex CLI' },
   { key: 'cursor', label: 'Cursor' },
-  { key: 'gemini', label: 'Gemini CLI' },
+  { key: 'antigravity', label: 'Antigravity CLI' },
   { key: 'opencode', label: 'OpenCode' },
   { key: 'pi', label: 'Pi' }
 ] as const;
@@ -1242,8 +1250,8 @@ export function CliPage({ open }: { open: boolean }) {
       <div className="grid gap-1">
         <p className="text-sm font-medium">Overlord CLI (ovld)</p>
         <p className="text-xs text-muted-foreground">
-          The CLI lets agents in Claude Code, Codex, Cursor, Gemini, and OpenCode work with Overlord
-          tickets. Available commands:
+          The CLI lets agents in Claude Code, Codex, Cursor, Antigravity, and OpenCode work with
+          Overlord tickets. Available commands:
         </p>
       </div>
 

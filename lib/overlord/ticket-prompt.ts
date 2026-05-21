@@ -65,7 +65,12 @@ type ProtocolSectionInput = {
   mcpUrl?: string;
 };
 
-type LocalProtocolFamily = 'bundled' | 'codex-bundled' | 'codex' | 'verbose';
+type LocalProtocolFamily =
+  | 'bundled'
+  | 'codex-bundled'
+  | 'antigravity-bundled'
+  | 'codex'
+  | 'verbose';
 
 export function buildTicketPromptMarkdown({
   ticket,
@@ -154,6 +159,10 @@ function resolveLocalProtocolFamily(
     return 'codex-bundled';
   }
 
+  if (agent === 'antigravity' && instructionMode === 'bundle') {
+    return 'antigravity-bundled';
+  }
+
   if (agent === 'codex') {
     return 'codex';
   }
@@ -175,6 +184,9 @@ function buildLocalProtocolSectionByAgent(
   }
   if (input.family === 'codex-bundled') {
     return buildCodexBundledLocalProtocolSection(input);
+  }
+  if (input.family === 'antigravity-bundled') {
+    return buildAntigravityBundledLocalProtocolSection(input);
   }
   if (input.family === 'codex') {
     return buildCodexLocalProtocolSection(input);
@@ -208,6 +220,38 @@ Before delivering, make sure every meaningful git-tracked file change is represe
 \`\`\`bash
 ovld protocol attach --ticket-id ${ticketId}
 \`\`\`
+`;
+}
+
+function buildAntigravityBundledLocalProtocolSection({
+  ticketId,
+  context,
+  launchMode
+}: ProtocolSectionInput): string {
+  const discussionGuidance =
+    launchMode === 'ask'
+      ? '- This is Ask mode: discuss the ticket, do not implement, and do not publish `user_follow_up` events for normal discussion turns.'
+      : '- Follow-up messages after the initial ticket are captured automatically by the installed Antigravity `UserPromptSubmit` hook when it is wired. Do not publish `user_follow_up` manually unless the hook is unavailable.';
+
+  return `## Overlord Protocol
+
+- **Ticket ID:** ${ticketId}
+
+${buildLocalLaunchNote(context)}
+
+Use the installed Overlord Antigravity plugin (\`overlord-ticket\` skill) for attach/update/ask/deliver details, then attach to this ticket.
+
+\`\`\`bash
+ovld protocol attach --ticket-id ${ticketId}
+\`\`\`
+
+### Rules
+
+- Always attach before writing code or working on the ticket.
+- Use the Overlord Antigravity plugin workflow as the source of truth for protocol details.
+${discussionGuidance}
+Before delivering, make sure every meaningful git-tracked file change is represented in \`changeRationales\`; do not send \`file_changes\` as an artifact.
+${buildAskModeRules(launchMode)}
 `;
 }
 
@@ -331,6 +375,11 @@ function buildVerboseLocalProtocolSection({
     'opencode',
     agentConfigs
   );
+  const antigravityResumeCommand = buildResumeCommandWithFlags(
+    `ovld restart antigravity --ticket-id ${ticketId}`,
+    'antigravity',
+    agentConfigs
+  );
 
   return `## Overlord Protocol
 
@@ -438,6 +487,8 @@ ${claudeResumeCommand}
 ${codexResumeCommand}
 # or for OpenCode:
 ${opencodeResumeCommand}
+# or for Antigravity:
+${antigravityResumeCommand}
 \`\`\`
 
 ### Rules

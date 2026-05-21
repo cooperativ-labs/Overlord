@@ -3,6 +3,7 @@ import { type SupabaseClient } from '@supabase/supabase-js';
 
 import { type TokenContext } from '../auth.ts';
 
+import { insertOrderedObjectives, normalizeObjectivesInput } from './_objectives.ts';
 import { resolvePreferredStatusNameByType } from './_status-resolution.ts';
 import { resolveTicketCreatorUserId } from './_ticket-creator.ts';
 
@@ -13,6 +14,7 @@ export const DEFAULT_EXECUTION_TARGET = 'agent';
 export type TicketDraft = {
   title: string;
   description: string;
+  objectives: ReturnType<typeof normalizeObjectivesInput>;
   priority: (typeof PRIORITY_ORDER)[number];
   projectId: string | null;
   projectName: string | null;
@@ -112,14 +114,19 @@ function getSourceSummary(value: string) {
 
 export function buildTicketDraft(args: any): TicketDraft {
   const description = getDescription(args);
+  const objectives = normalizeObjectivesInput({
+    objective: Array.isArray(args.objectives) ? undefined : description,
+    objectives: Array.isArray(args.objectives) ? args.objectives : undefined
+  });
   const title =
     typeof args.title === 'string' && args.title.trim()
       ? clampText(args.title.trim(), 120)
-      : deriveTitleFromDescription(description);
+      : deriveTitleFromDescription(objectives[0]?.objective ?? description);
 
   return {
     title,
     description,
+    objectives,
     priority: getPriority(args.priority, `${title}\n${description}`),
     projectId:
       typeof args.projectId === 'string' && args.projectId.trim() ? args.projectId.trim() : null,
@@ -244,16 +251,10 @@ export async function createDraftTicket(
     throw new Error(createTicketError?.message ?? 'Failed to create ticket.');
   }
 
-  const { error: objectiveError } = await supabase.from('objectives').insert({
-    state: 'draft',
-    objective: draft.description,
-    ticket_id: createdTicket.id,
-    created_by: createdBy
+  await insertOrderedObjectives(supabase, createdTicket.id, draft.objectives, {
+    createdBy,
+    firstState: 'draft'
   });
-
-  if (objectiveError) {
-    throw new Error(objectiveError.message);
-  }
 
   await assignTicketToDraftColumnEnd(
     supabase,

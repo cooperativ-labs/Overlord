@@ -36,11 +36,11 @@ describe('resolveAgentModelSelection', () => {
     expect(
       resolveAgentModelSelection({
         cursor: { flags: [] },
-        gemini: { flags: [], defaultModel: 'gemini-default', defaultThinking: 'high' }
+        antigravity: { flags: [], defaultModel: 'auto', defaultThinking: 'high' }
       })
     ).toEqual({
-      agent: 'gemini',
-      model: 'gemini-default',
+      agent: 'antigravity',
+      model: 'auto',
       thinking: 'high'
     });
   });

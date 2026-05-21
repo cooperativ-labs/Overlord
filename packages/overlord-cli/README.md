@@ -72,10 +72,13 @@ ovld setup
 ovld setup codex
 ovld setup claude
 ovld setup cursor
-ovld setup gemini
+ovld setup antigravity
 ovld setup all
+ovld launch antigravity --ticket-id <ticket_id>
 ovld doctor
 ```
+
+**Antigravity:** Gemini CLI is deprecated. Use `ovld setup antigravity` and `ovld launch antigravity --ticket-id <ticket_id>`. Antigravity manages model selection internally.
 
 For ticket-scoped protocol and launch commands, `ticket_id` values such as `1:899` carry the organization id. The CLI uses that first, then `--organization-id` for UUID compatibility, then stored auth.
 
@@ -116,6 +119,7 @@ Agents can find docs here: https://www.ovld.ai/docs/for-agents
 - `load-context` - read ticket context without creating a session
 - `revert` - restore the local working tree to an objective checkpoint after fetching its checkpoint row
 - `search-tickets` - find tickets by keyword, status, project, creator, or update date
+- `add-objectives` - append ordered objectives to an existing ticket (`--objectives-json` / `--objectives-file`)
 - `create` - create a draft ticket without attaching (standalone or follow-up)
 - `prompt` - create a ticket and attach to it immediately (`spawn` is a backward-compatible alias)
 - `record-work` - record already-completed chat work as a ticket in review with a completed objective and trigger feed-post generation
@@ -136,7 +140,7 @@ Agents can find docs here: https://www.ovld.ai/docs/for-agents
 
 Devices are keyed by **(organization, user, fingerprint)** so the same physical workstation can appear once per org session.
 
-Use `create` for future work you want to track, `prompt` for work that should start immediately, and `record-work` for work that was already completed in chat and now needs a review ticket plus feed post.
+Use `create` for future work you want to track, `prompt` for work that should start immediately, and `record-work` for work that was already completed in chat and now needs a review ticket plus feed post. Use multiple tickets when prompts represent different features or goals; use `add-objectives` or `--objectives-json '[{"objective":"Step one"},{"objective":"Step two"}]'` when prompts are sequential steps toward the same feature or goal.
 
 `ovld protocol deliver` accepts either discrete flags like `--summary` / `--artifacts-json`, an inline full payload with `--payload-json '{"summary":"...","artifacts":[...],"changeRationales":[...]}'`, or a file/stdin payload with `--payload-file <path|->`.
 

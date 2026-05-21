@@ -2,6 +2,7 @@
 
 import readline from 'node:readline';
 import { stdin as input, stdout as output } from 'node:process';
+import fs from 'node:fs';
 
 import { buildAuthHeaders, resolveAuth } from './credentials.mjs';
 import { runLauncherCommand } from './launcher.mjs';
@@ -10,7 +11,7 @@ const PROMPT_AGENT_IDENTIFIERS = {
   claude: 'claude-code',
   codex: 'codex',
   cursor: 'cursor',
-  gemini: 'gemini',
+  antigravity: 'antigravity',
   opencode: 'opencode'
 };
 const PROMPT_AGENTS = Object.keys(PROMPT_AGENT_IDENTIFIERS);
@@ -47,10 +48,10 @@ function parseFlags(args) {
 
 function buildUsage(commandName) {
   if (commandName === 'prompt') {
-    return 'Usage: ovld prompt "<objective>" [--title "..."] [--acceptance-criteria "..."] [--available-tools "..."] [--execution-target agent|human] [--priority low|medium|high|urgent] [--project-id <id>] [--agent <agent>] [--model <identifier>] [--delegate <agent>]';
+    return 'Usage: ovld prompt --objectives-json \'[{"objective":"..."}]\' [--objectives-file <path>] [--title "..."] [--acceptance-criteria "..."] [--available-tools "..."] [--execution-target agent|human] [--priority low|medium|high|urgent] [--project-id <id>] [--agent <agent>] [--model <identifier>] [--delegate <agent>]';
   }
 
-  return 'Usage: ovld create "<objective>" [--title "..."] [--acceptance-criteria "..."] [--available-tools "..."] [--execution-target agent|human] [--priority low|medium|high|urgent] [--project-id <id>] [--agent <agent>] [--model <identifier>] [--delegate <agent>]';
+  return 'Usage: ovld create --objectives-json \'[{"objective":"..."}]\' [--objectives-file <path>] [--title "..."] [--acceptance-criteria "..."] [--available-tools "..."] [--execution-target agent|human] [--priority low|medium|high|urgent] [--project-id <id>] [--agent <agent>] [--model <identifier>] [--delegate <agent>]';
 }
 
 function ensureObjective(commandName, objective) {
@@ -59,6 +60,79 @@ function ensureObjective(commandName, objective) {
   console.error(`Error: objective is required.\n`);
   console.error(buildUsage(commandName));
   process.exit(1);
+}
+
+function parseJsonFlag(flagName, rawValue) {
+  try {
+    return JSON.parse(String(rawValue));
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    throw new Error(`${flagName} must be valid JSON: ${detail}`);
+  }
+}
+
+function readJsonFile(filePath, label) {
+  try {
+    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  } catch (err) {
+    throw new Error(
+      `${label}: could not read or parse "${filePath}": ${
+        err instanceof Error ? err.message : String(err)
+      }`
+    );
+  }
+}
+
+async function readTextFromStdin(label) {
+  const chunks = [];
+  try {
+    for await (const chunk of process.stdin) {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)));
+    }
+  } catch (err) {
+    throw new Error(
+      `${label}: could not read stdin: ${err instanceof Error ? err.message : String(err)}`
+    );
+  }
+  return Buffer.concat(chunks).toString('utf8');
+}
+
+async function readJsonFileOrStdin(filePath, label) {
+  if (filePath !== '-') return readJsonFile(filePath, label);
+  try {
+    return JSON.parse(await readTextFromStdin(label));
+  } catch (err) {
+    throw new Error(
+      `${label}: could not parse stdin: ${err instanceof Error ? err.message : String(err)}`
+    );
+  }
+}
+
+async function resolveObjectiveInput(flags) {
+  if (flags['objectives-json'] && flags['objectives-file']) {
+    throw new Error('Use either --objectives-json or --objectives-file, not both');
+  }
+
+  if (flags['objectives-json']) {
+    const objectives = parseJsonFlag('--objectives-json', flags['objectives-json']);
+    if (!Array.isArray(objectives) || objectives.length === 0) {
+      throw new Error('--objectives-json must be a non-empty JSON array');
+    }
+    return { objectives };
+  }
+
+  if (flags['objectives-file']) {
+    const objectives = await readJsonFileOrStdin(
+      String(flags['objectives-file']),
+      '--objectives-file'
+    );
+    if (!Array.isArray(objectives) || objectives.length === 0) {
+      throw new Error('--objectives-file must contain a non-empty JSON array');
+    }
+    return { objectives };
+  }
+
+  throw new Error('Provide --objectives-json or --objectives-file');
 }
 
 export function parseNumberedSelection(rawValue, count) {
@@ -220,9 +294,8 @@ export function resolveTicketCreationDelegate(flags = {}, selectedAgent = null, 
 }
 
 async function runTicketCreationFlow(args, { commandName, launchAgent }) {
-  const { flags, positionals } = parseFlags(args);
-  const objective = String(flags.objective ?? positionals.join(' ')).trim();
-  ensureObjective(commandName, objective);
+  const { flags } = parseFlags(args);
+  const objectiveInput = await resolveObjectiveInput(flags);
 
   const { platformUrl, bearerToken, localSecret, organizationId } = await resolveAuth();
   const projects = await fetchProjects(platformUrl, bearerToken, localSecret, organizationId);
@@ -254,7 +327,7 @@ async function runTicketCreationFlow(args, { commandName, launchAgent }) {
   const ticketDelegate = resolveTicketCreationDelegate(flags, selectedAgent, modelIdentifier);
 
   const ticket = await createTicket(platformUrl, bearerToken, localSecret, organizationId, {
-    objective,
+    ...objectiveInput,
     title: String(flags.title ?? ''),
     acceptanceCriteria: String(flags['acceptance-criteria'] ?? ''),
     availableTools: String(flags['available-tools'] ?? ''),
@@ -280,8 +353,8 @@ export async function runCreateCommand(args) {
 Creates a ticket after interactive numbered project selection.
 
 Examples:
-  ovld create "Implement login page" --agent codex
-  ovld create "Fix sync bug" --project-id <project-id>
+  ovld create --objectives-json '[{"objective":"Implement login page"}]'
+  ovld create --objectives-json '[{"objective":"Fix sync bug"}]' --project-id <project-id>
 `);
     return;
   }
@@ -296,8 +369,8 @@ export async function runPromptCommand(args) {
 Creates a ticket after interactive numbered project selection, then lets you pick an agent by number and launches it on the new ticket.
 
 Examples:
-  ovld prompt "Implement login page"
-  ovld prompt "Investigate flaky tests" --agent codex --model gpt-5.4
+  ovld prompt --objectives-json '[{"objective":"Implement login page"}]'
+  ovld prompt --objectives-json '[{"objective":"Investigate flaky tests"}]' --agent codex --model gpt-5.4
 `);
     return;
   }

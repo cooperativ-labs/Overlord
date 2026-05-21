@@ -66,7 +66,7 @@ export default function AgentPluginsPage() {
         <h2 className="text-2xl font-semibold tracking-tight">Slash commands</h2>
         <p className="leading-7 text-muted-foreground">
           Installing an Overlord plugin or running <code>ovld setup &lt;agent&gt;</code> registers a
-          set of slash commands you can use mid-session in Claude Code, Cursor, Gemini CLI, and
+          set of slash commands you can use mid-session in Claude Code, Cursor, Antigravity CLI, and
           OpenCode. Each one is a thin wrapper around an <code>ovld protocol</code> call.
         </p>
         <ul className="list-disc space-y-2 pl-5 leading-7 text-muted-foreground">
@@ -102,10 +102,11 @@ export default function AgentPluginsPage() {
           </li>
         </ul>
         <p className="text-sm leading-6 text-muted-foreground">
-          Gemini installs the same set as <code>.toml</code> files under{' '}
-          <code>~/.gemini/commands/</code>; Claude, Cursor, and OpenCode use Markdown files in their
-          respective <code>commands/</code> directories. After installing, run{' '}
-          <code>/commands reload</code> in Gemini CLI so the new files are picked up.
+          Antigravity installs as a plugin via <code>agy plugin install</code>; Claude, Cursor, and
+          OpenCode use Markdown files in their respective <code>commands/</code> directories. Run{' '}
+          <code>ovld setup antigravity</code> to install the Antigravity plugin, then launch tickets
+          with <code>ovld launch antigravity --ticket-id &lt;ticket_id&gt;</code>. Gemini CLI is
+          deprecated — Antigravity manages model selection in its own UI.
         </p>
       </section>
 

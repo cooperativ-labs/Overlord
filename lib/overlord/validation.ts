@@ -22,6 +22,15 @@ const agentText = (max: number) => z.string().trim().min(1).max(max).transform(n
 /** Optional agent-authored text field with normalization applied after trim. */
 const agentTextOptional = (max: number) => z.string().trim().max(max).transform(normalizeAgentText);
 
+const objectiveInputSchema = z.object({
+  objective: agentText(20_000),
+  title: z.string().trim().max(180).optional(),
+  autoAdvance: z.boolean().optional(),
+  assignedAgent: z.unknown().optional()
+});
+
+const objectivesArrayField = z.array(objectiveInputSchema).min(1).max(50);
+
 /** Accepts a full UUID or a human-readable ticket_id (e.g. "1:899"). */
 const ticketIdSchema = z
   .string()
@@ -199,7 +208,7 @@ export const recordChangeRationalesSchema = z.object({
 
 export const createStandaloneTicketSchema = z.object({
   title: z.string().trim().max(180).optional().default(''),
-  objective: agentText(20_000),
+  objectives: objectivesArrayField,
   availableTools: agentTextOptional(20_000).optional().default(''),
   acceptanceCriteria: agentTextOptional(20_000).optional().default(''),
   executionTarget: ticketExecutionTargetSchema.default('agent'),
@@ -214,7 +223,7 @@ export const createFollowUpTicketSchema = z.object({
   sessionKey: z.string().uuid(),
   ticketId: ticketIdSchema,
   title: z.string().trim().max(180).optional().default(''),
-  objective: agentText(20_000),
+  objectives: objectivesArrayField,
   availableTools: agentTextOptional(20_000).optional().default(''),
   acceptanceCriteria: agentTextOptional(20_000).optional().default(''),
   executionTarget: ticketExecutionTargetSchema.default('human'),
@@ -249,7 +258,7 @@ export const revertSchema = z.object({
  */
 export const recordWorkSchema = z.object({
   title: z.string().trim().max(180).optional().default(''),
-  objective: agentText(20_000),
+  objectives: objectivesArrayField,
   summary: agentText(20_000),
   changeRationales: z.array(changeRationaleSchema).max(50).optional().default([]),
   artifacts: z
@@ -284,7 +293,7 @@ export const recordWorkSchema = z.object({
 /** spawn: create a new ticket and immediately connect to it */
 export const spawnSchema = z.object({
   title: z.string().trim().max(180).optional().default(''),
-  objective: agentText(20_000),
+  objectives: objectivesArrayField,
   acceptanceCriteria: agentTextOptional(20_000).optional().default(''),
   availableTools: agentTextOptional(20_000).optional().default(''),
   executionTarget: ticketExecutionTargetSchema.default('agent'),
@@ -301,6 +310,11 @@ export const spawnSchema = z.object({
   deviceFingerprint: z.string().trim().max(128).optional(),
   deviceHostname: z.string().trim().max(256).optional(),
   devicePlatform: z.string().trim().max(64).optional()
+});
+
+export const addObjectivesSchema = z.object({
+  ticketId: ticketIdSchema,
+  objectives: z.array(objectiveInputSchema).min(1).max(50)
 });
 
 /** Optional device-identifying fields accepted on protocol calls. */

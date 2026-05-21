@@ -2,6 +2,7 @@ import type { MetadataRoute } from 'next';
 import { readdir } from 'node:fs/promises';
 import path from 'node:path';
 
+import { getPublishedChangelogSitemapPaths } from '@/lib/marketing/changelog-sitemap';
 import { problemPages } from '@/lib/marketing/problem-pages';
 
 const SITE_URL = 'https://www.ovld.ai';
@@ -10,6 +11,7 @@ const APP_DIR = path.join(process.cwd(), 'app');
 const EXCLUDED_GROUPS = new Set(['(app)', '(auth)', '(quick)']);
 const EXCLUDED_PATHS = new Set(['/onboarding']);
 const EXTRA_PUBLIC_PATHS = [
+  '/changelog',
   '/llms.txt',
   '/llms-full.txt',
   '/overlord-context',
@@ -79,7 +81,8 @@ async function getPageFiles(dir: string): Promise<string[]> {
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const now = new Date();
   const pageFiles = await getPageFiles(APP_DIR);
-  const routes = new Set<string>(EXTRA_PUBLIC_PATHS);
+  const changelogPaths = await getPublishedChangelogSitemapPaths();
+  const routes = new Set<string>([...EXTRA_PUBLIC_PATHS, ...changelogPaths]);
 
   for (const pageFile of pageFiles) {
     const routePath = toRoutePath(pageFile);

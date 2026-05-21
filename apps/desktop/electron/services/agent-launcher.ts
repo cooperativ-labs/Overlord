@@ -5,6 +5,7 @@ import os from 'os';
 import path from 'path';
 
 import type { LaunchAgentType } from '@/lib/helpers/agent-types';
+import { buildRemoteTmuxCommand, parseSshCommand, shellEscape } from '@/lib/ssh/shell-utils';
 
 import { type AgentBundleAgent, isBundleInstalled } from './agent-bundle';
 import { loadElectronCredentials, saveElectronCredentials } from './electron-credentials';
@@ -16,7 +17,7 @@ const agentIdentifierMap: Record<LaunchAgentType, string> = {
   claude: 'claude-code',
   codex: 'codex',
   cursor: 'cursor',
-  gemini: 'gemini',
+  antigravity: 'antigravity',
   opencode: 'opencode',
   pi: 'pi'
 };
@@ -28,6 +29,9 @@ type LaunchAgentInput = {
   /** Project UUID when the ticket is project-scoped; required for managed JJ workspaces. */
   projectId?: string | null;
   cwd?: string;
+  sshCommand?: string;
+  remoteWorkingDirectory?: string;
+  serverMultiplexer?: { enabled: boolean; tmuxCommand?: string | null };
   launchMode?: AgentLaunchMode;
   /** Extra CLI flags from local agent configuration (e.g. --enable-auto-mode). */
   flags?: string[];
@@ -51,7 +55,7 @@ type ContextCommandsResponse = {
   claudeCode: string;
   codex: string;
   cursor: string;
-  gemini: string;
+  antigravity: string;
   opencode: string;
   pi: string;
 };
@@ -65,6 +69,7 @@ export function buildAgentContextUrl(input: {
   ticketId: string;
   feedPostId?: string;
   initialQuestion?: string;
+  workspace?: 'ssh';
 }): string {
   const feedParams =
     input.feedPostId?.trim() && typeof input.initialQuestion === 'string'
@@ -73,6 +78,7 @@ export function buildAgentContextUrl(input: {
   return (
     `${input.connectorUrl}/api/protocol/context/${input.ticketId}` +
     `?context=electron&agent=${input.agent}` +
+    `${input.workspace === 'ssh' ? '&workspace=ssh' : ''}` +
     `${input.launchMode === 'ask' ? '&mode=ask' : ''}` +
     `&instructionMode=${input.instructionMode}&sessionId=${input.sessionId}` +
     feedParams
@@ -114,7 +120,7 @@ function parseOrganizationId(value: unknown): number | null {
 }
 
 function organizationIdFromTicketId(ticketId: string): number | null {
-  const [organizationPart, _ticketSequencePart, ...rest] = ticketId.trim().split(':');
+  const [organizationPart, , ...rest] = ticketId.trim().split(':');
   if (rest.length > 0) return null;
   return parseOrganizationId(organizationPart);
 }
@@ -299,9 +305,7 @@ function buildModelThinkingFlags(
     case 'cursor':
       if (model) parts.push(`--model ${shellQuote(model)}`);
       break;
-    case 'gemini':
-      if (model) parts.push(`--model ${shellQuote(model)}`);
-      if (thinking) parts.push(`--thinking-level ${shellQuote(thinking)}`);
+    case 'antigravity':
       break;
     case 'opencode':
       if (model) parts.push(`--model ${shellQuote(model)}`);
@@ -325,9 +329,13 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
   const launchAuth = await resolveLaunchAuth(input);
   const launchMode = input.launchMode ?? 'run';
   const launchSessionId = crypto.randomUUID();
+  const isRemote = Boolean(input.sshCommand?.trim());
   // Check if the Overlord local bundle is installed for this agent
   const bundleAgent =
-    input.agent === 'claude' || input.agent === 'cursor' || input.agent === 'opencode'
+    input.agent === 'claude' ||
+    input.agent === 'cursor' ||
+    input.agent === 'antigravity' ||
+    input.agent === 'opencode'
       ? (input.agent as AgentBundleAgent)
       : null;
   const bundleInstalled =
@@ -347,7 +355,8 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
     sessionId: launchSessionId,
     ticketId: input.ticketId,
     feedPostId: input.feedPostId,
-    initialQuestion: input.initialQuestion
+    initialQuestion: input.initialQuestion,
+    workspace: isRemote ? 'ssh' : undefined
   });
   const launchEnv: Record<string, string> = {
     OVERLORD_URL: connectorUrl,
@@ -387,7 +396,7 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
       launchAuth.organizationId,
       input.agent
     );
-    if (fallback) {
+    if (fallback && !isRemote) {
       return {
         command: fallback,
         cwd: input.cwd || undefined,
@@ -416,12 +425,15 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
   // Use the project's working directory from the API if the caller didn't provide one
   const apiWorkingDirectory = response.headers.get('X-Working-Directory');
 
-  const resolvedCwd = input.cwd || apiWorkingDirectory || undefined;
+  const resolvedCwd = isRemote ? undefined : input.cwd || apiWorkingDirectory || undefined;
+  const resolvedRemoteCwd = isRemote
+    ? input.remoteWorkingDirectory?.trim() || apiWorkingDirectory || undefined
+    : undefined;
 
   // Pre-flight check: if a local cwd is configured but missing, surface a clear
   // error to the renderer instead of opening a terminal where `cd` silently
   // fails and the agent appears to do nothing.
-  if (resolvedCwd) {
+  if (!isRemote && resolvedCwd) {
     const cwdProblem = describeLocalCwdProblem(resolvedCwd);
     if (cwdProblem) {
       throw new Error(
@@ -472,31 +484,38 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
 
   const contextRef = `"$(cat ${shellQuote(contextFile)})"`;
 
-  if (input.agent === 'claude') {
-    // When the bundle is installed, the durable hook is in ~/.claude/settings.json,
-    // so we don't need to pass a temporary --settings file.
-    const settingsArg = bundleInstalled ? '' : ` --settings ${shellQuote(settingsFile)}`;
-    const pluginDir = claudeSourcePluginDir();
-    const pluginArg = pluginDir ? ` --plugin-dir ${shellQuote(pluginDir)}` : '';
-    command = `claude${pluginArg} --append-system-prompt ${contextRef}${settingsArg}${modelThinkingFlags}${extraFlags ? ` ${extraFlags}` : ''} ${shellQuote(startPrompt)}`;
-  } else if (input.agent === 'codex') {
-    command = buildInteractiveCodexCommand({ fallbackPromptRef: contextRef });
-  } else if (input.agent === 'cursor') {
-    command = `agent${modelThinkingFlags}${extraFlags ? ` ${extraFlags}` : ''} ${contextRef}`;
-  } else if (input.agent === 'gemini') {
-    // Pass context as an @file reference instead of inlining via $(cat ...).
-    // Inlining causes Gemini's @-reference parser to scan the full markdown
-    // for @ symbols (e.g. "@@ -10,6 +10,14 @@" in JSON hunk examples),
-    // which triggers lstat on cwd+<entire-content> → ENAMETOOLONG crash.
-    // Using @contextFile keeps the path short and --include-directories
-    // allows the temp file to be read without a user approval prompt.
-    command = `gemini --include-directories ${shellQuote(os.tmpdir())}${modelThinkingFlags}${extraFlags ? ` ${extraFlags}` : ''} @${contextFile}`;
-  } else if (input.agent === 'opencode') {
-    command = `opencode${modelThinkingFlags}${extraFlags ? ` ${extraFlags}` : ''} --prompt ${contextRef}`;
-  } else if (input.agent === 'pi') {
-    command = `pi${modelThinkingFlags}${extraFlags ? ` ${extraFlags}` : ''} ${contextRef}`;
-  } else {
-    throw new Error(`Unknown agent type: ${input.agent}`);
+  command = buildAgentCommand({
+    agent: input.agent,
+    bundleInstalled,
+    settingsFile,
+    contextFile,
+    contextRef,
+    modelThinkingFlags,
+    extraFlags,
+    startPrompt
+  });
+
+  if (isRemote) {
+    return {
+      command: buildSshWrappedCommand({
+        input,
+        contextMarkdown,
+        launchEnv: { ...launchEnv, ...codexLaunchEnv },
+        agentCommand: buildAgentCommand({
+          agent: input.agent,
+          bundleInstalled: input.agent === 'claude' ? true : bundleInstalled,
+          settingsFile,
+          contextFile: '$_OVLD_REMOTE_CONTEXT_FILE',
+          contextRef: '"$(cat "$_OVLD_REMOTE_CONTEXT_FILE")"',
+          modelThinkingFlags,
+          extraFlags,
+          startPrompt,
+          useLocalClaudePluginDir: false
+        }),
+        remoteCwd: resolvedRemoteCwd
+      }),
+      env: {}
+    };
   }
 
   return {
@@ -504,6 +523,86 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
     cwd: resolvedCwd,
     env: { ...launchEnv, ...codexLaunchEnv }
   };
+}
+
+function buildAgentCommand(input: {
+  agent: LaunchAgentType;
+  bundleInstalled: boolean;
+  settingsFile: string;
+  contextFile: string;
+  contextRef: string;
+  modelThinkingFlags: string;
+  extraFlags: string;
+  startPrompt: string;
+  useLocalClaudePluginDir?: boolean;
+}): string {
+  if (input.agent === 'claude') {
+    // When the bundle is installed, the durable hook is in ~/.claude/settings.json,
+    // so we don't need to pass a temporary --settings file.
+    const settingsArg = input.bundleInstalled
+      ? ''
+      : ` --settings ${shellQuote(input.settingsFile)}`;
+    const pluginDir = input.useLocalClaudePluginDir === false ? null : claudeSourcePluginDir();
+    const pluginArg = pluginDir ? ` --plugin-dir ${shellQuote(pluginDir)}` : '';
+    return `claude${pluginArg} --append-system-prompt ${input.contextRef}${settingsArg}${input.modelThinkingFlags}${input.extraFlags ? ` ${input.extraFlags}` : ''} ${shellQuote(input.startPrompt)}`;
+  }
+
+  if (input.agent === 'codex') {
+    return buildInteractiveCodexCommand({ fallbackPromptRef: input.contextRef });
+  }
+  if (input.agent === 'cursor') {
+    return `agent${input.modelThinkingFlags}${input.extraFlags ? ` ${input.extraFlags}` : ''} ${input.contextRef}`;
+  }
+  if (input.agent === 'antigravity') {
+    return `agy --prompt-interactive @${input.contextFile} --add-dir ${shellQuote(os.tmpdir())}${input.extraFlags ? ` ${input.extraFlags}` : ''}`;
+  }
+  if (input.agent === 'opencode') {
+    return `opencode${input.modelThinkingFlags}${input.extraFlags ? ` ${input.extraFlags}` : ''} --prompt ${input.contextRef}`;
+  }
+  if (input.agent === 'pi') {
+    return `pi${input.modelThinkingFlags}${input.extraFlags ? ` ${input.extraFlags}` : ''} ${input.contextRef}`;
+  }
+  throw new Error(`Unknown agent type: ${input.agent}`);
+}
+
+function buildSshWrappedCommand(input: {
+  input: LaunchAgentInput;
+  contextMarkdown: string;
+  launchEnv: Record<string, string>;
+  agentCommand: string;
+  remoteCwd?: string;
+}): string {
+  const sshCommand = input.input.sshCommand?.trim();
+  if (!sshCommand) {
+    throw new Error('SSH command is required for remote launches.');
+  }
+
+  const contextBase64 = Buffer.from(input.contextMarkdown, 'utf8').toString('base64');
+  const envLines = Object.entries(input.launchEnv).map(
+    ([key, value]) => `export ${key}=${shellQuote(value)}`
+  );
+  const remoteScript = [
+    'set -e',
+    '[ -f "$HOME/.bashrc" ] && . "$HOME/.bashrc"',
+    '[ -f "$HOME/.zshrc" ] && . "$HOME/.zshrc"',
+    '[ -f "$HOME/.profile" ] && . "$HOME/.profile"',
+    'export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"',
+    '[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"',
+    'export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$HOME/.cargo/bin:$PATH"',
+    ...envLines,
+    '_OVLD_REMOTE_CONTEXT_FILE="$(mktemp "${TMPDIR:-/tmp}/overlord-context.XXXXXX.md")"',
+    'export _OVLD_CTX_FILE="$_OVLD_REMOTE_CONTEXT_FILE"',
+    'trap \'rm -f "$_OVLD_REMOTE_CONTEXT_FILE"\' EXIT',
+    `if command -v base64 >/dev/null 2>&1; then printf %s ${shellQuote(contextBase64)} | base64 -d > "$_OVLD_REMOTE_CONTEXT_FILE" 2>/dev/null || printf %s ${shellQuote(contextBase64)} | base64 -D > "$_OVLD_REMOTE_CONTEXT_FILE"; elif command -v python3 >/dev/null 2>&1; then python3 -c 'import base64, pathlib, sys; pathlib.Path(sys.argv[1]).write_bytes(base64.b64decode(sys.argv[2]))' "$_OVLD_REMOTE_CONTEXT_FILE" ${shellQuote(contextBase64)}; else printf 'Overlord: base64 or python3 is required on the remote host.\\n' >&2; exit 127; fi`,
+    input.remoteCwd ? `cd ${shellQuote(input.remoteCwd)}` : null,
+    input.agentCommand
+  ].filter((line): line is string => Boolean(line));
+  const innerCommand = remoteScript.join('; ');
+  const remoteCommand = input.input.serverMultiplexer?.enabled
+    ? buildRemoteTmuxCommand(innerCommand, input.input.serverMultiplexer.tmuxCommand)
+    : innerCommand;
+  const sshArgs = parseSshCommand(sshCommand, { forceTty: true });
+  return [...sshArgs.map(shellEscape), shellEscape(remoteCommand)].join(' ');
 }
 
 /**
@@ -706,9 +805,9 @@ async function fetchContextCommandFallback(
         ? payload.cursor
         : null;
     }
-    if (agent === 'gemini') {
-      return typeof payload.gemini === 'string' && payload.gemini.trim().length > 0
-        ? payload.gemini
+    if (agent === 'antigravity') {
+      return typeof payload.antigravity === 'string' && payload.antigravity.trim().length > 0
+        ? payload.antigravity
         : null;
     }
     if (agent === 'opencode') {

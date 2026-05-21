@@ -16,7 +16,7 @@ export async function POST(request: Request) {
     const supabase = createServiceRoleClient() as SupabaseClient<Database>;
     const {
       title,
-      objective,
+      objectives,
       summary,
       acceptanceCriteria,
       availableTools,
@@ -49,7 +49,7 @@ export async function POST(request: Request) {
 
     const result = await runRecordWorkProtocol(supabase, {
       title,
-      objective,
+      objectives,
       summary,
       acceptanceCriteria,
       availableTools,

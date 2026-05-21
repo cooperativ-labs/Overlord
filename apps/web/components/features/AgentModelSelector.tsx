@@ -183,9 +183,10 @@ export function AgentModelSelector({
     return grouped;
   }, [models]);
 
-  const currentModels = modelsByAgent[value.agent] ?? [];
+  const antigravityManagesModels = value.agent === 'antigravity';
+  const currentModels = antigravityManagesModels ? [] : (modelsByAgent[value.agent] ?? []);
   const selectedModel = currentModels.find(m => m.model_id === value.model);
-  const thinkingEnabled = value.agent !== 'codex';
+  const thinkingEnabled = value.agent !== 'codex' && !antigravityManagesModels;
   const thinkingOptions = thinkingEnabled ? (selectedModel?.thinking_options ?? []) : [];
 
   const handleAgentChange = useCallback(
@@ -274,54 +275,65 @@ export function AgentModelSelector({
         <p className="mb-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
           Model
         </p>
-        <button
-          type="button"
-          onClick={() => handleModelChange(null)}
-          className={cn(
-            'flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors',
-            value.model === null ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'
-          )}
-        >
-          <DefaultTooltipLabel />
-          {value.model === null && <Check className="ml-auto h-3 w-3 shrink-0" />}
-        </button>
-        {value.agent === 'cursor' ? (
-          <button
-            type="button"
-            onClick={() => handleModelChange('auto')}
-            className={cn(
-              'flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors',
-              value.model === 'auto' ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'
-            )}
-          >
-            <CursorAutoTooltipLabel />
-            {value.model === 'auto' && <Check className="ml-auto h-3 w-3 shrink-0" />}
-          </button>
-        ) : null}
-        {currentModels.length > 0 ? (
-          <div className="max-h-[220px] overflow-y-auto">
-            {currentModels.map(m => {
-              const isSelected = value.model === m.model_id;
-              return (
-                <button
-                  key={m.model_id}
-                  type="button"
-                  onClick={() => handleModelChange(m.model_id)}
-                  className={cn(
-                    'flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors',
-                    isSelected ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'
-                  )}
-                >
-                  <span className="truncate">{m.display_name}</span>
-                  {isSelected && <Check className="ml-auto h-3 w-3 shrink-0" />}
-                </button>
-              );
-            })}
-          </div>
-        ) : loading ? (
-          <p className="px-2 py-1.5 text-xs text-muted-foreground">Loading...</p>
+        {antigravityManagesModels ? (
+          <p className="px-2 py-1.5 text-xs leading-relaxed text-muted-foreground">
+            Antigravity chooses models in its own UI. Overlord launches with{' '}
+            <code className="text-[11px]">ovld launch antigravity --ticket-id &lt;id&gt;</code>.
+            Gemini CLI is deprecated — use{' '}
+            <code className="text-[11px]">ovld setup antigravity</code>.
+          </p>
         ) : (
-          <p className="px-2 py-1.5 text-xs text-muted-foreground">No models available</p>
+          <>
+            <button
+              type="button"
+              onClick={() => handleModelChange(null)}
+              className={cn(
+                'flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors',
+                value.model === null ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'
+              )}
+            >
+              <DefaultTooltipLabel />
+              {value.model === null && <Check className="ml-auto h-3 w-3 shrink-0" />}
+            </button>
+            {value.agent === 'cursor' ? (
+              <button
+                type="button"
+                onClick={() => handleModelChange('auto')}
+                className={cn(
+                  'flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors',
+                  value.model === 'auto' ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'
+                )}
+              >
+                <CursorAutoTooltipLabel />
+                {value.model === 'auto' && <Check className="ml-auto h-3 w-3 shrink-0" />}
+              </button>
+            ) : null}
+            {currentModels.length > 0 ? (
+              <div className="max-h-[220px] overflow-y-auto">
+                {currentModels.map(m => {
+                  const isSelected = value.model === m.model_id;
+                  return (
+                    <button
+                      key={m.model_id}
+                      type="button"
+                      onClick={() => handleModelChange(m.model_id)}
+                      className={cn(
+                        'flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors',
+                        isSelected ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'
+                      )}
+                    >
+                      <span className="truncate">{m.display_name}</span>
+                      {isSelected && <Check className="ml-auto h-3 w-3 shrink-0" />}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : loading ? (
+              <p className="px-2 py-1.5 text-xs text-muted-foreground">Loading...</p>
+            ) : (
+              <p className="px-2 py-1.5 text-xs text-muted-foreground">No models available</p>
+            )}
+          </>
         )}
       </div>
 

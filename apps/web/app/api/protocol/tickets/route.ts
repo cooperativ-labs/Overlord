@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 
 import { internalErrorResponse } from '@/app/api/protocol/_lib';
 import { deriveTitleFromObjective, getTicketIdentifier } from '@/lib/helpers/tickets';
-import { upsertDraftObjective } from '@/lib/objectives';
+import { insertOrderedObjectives } from '@/lib/objectives';
 import { resolveAgentToken } from '@/lib/overlord/protocol-auth';
 import { resolveProtocolTicketCreatorUserId } from '@/lib/overlord/protocol-ticket-creator';
 import { resolveProjectByWorkingDirectory } from '@/lib/overlord/resolve-project';
@@ -37,7 +37,7 @@ export async function POST(request: Request) {
       availableTools,
       delegate,
       executionTarget,
-      objective,
+      objectives,
       personal,
       priority,
       projectId,
@@ -107,7 +107,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const nextTitle = title.trim() || deriveTitleFromObjective(objective);
+    const nextTitle = title.trim() || deriveTitleFromObjective(objectives[0].objective);
     const draftStatusName = await resolvePreferredStatusNameByType(
       supabase,
       resolvedOrganizationId,
@@ -138,10 +138,14 @@ export async function POST(request: Request) {
       );
     }
 
-    await upsertDraftObjective(supabase, ticket.id, objective, createdBy);
+    const insertedObjectives = await insertOrderedObjectives(supabase, ticket.id, objectives, {
+      createdBy,
+      firstState: 'draft'
+    });
 
     return NextResponse.json({
       ok: true,
+      objectives: insertedObjectives,
       ticket: {
         executionTarget: ticket.execution_target,
         id: ticket.id,

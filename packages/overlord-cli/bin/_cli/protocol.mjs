@@ -331,6 +331,44 @@ async function readJsonFileOrStdin(filePath, label) {
   }
 }
 
+async function resolveObjectivesInput(flags, { payload = null, requireSingleObjective = true } = {}) {
+  if (flags['objectives-json'] && flags['objectives-file']) {
+    throw new Error('Use either --objectives-json or --objectives-file, not both');
+  }
+  if (payload && (flags['objectives-json'] || flags['objectives-file'])) {
+    throw new Error('Use either payload input or --objectives-json/--objectives-file, not both');
+  }
+
+  if (payload?.objectives !== undefined) {
+    if (!Array.isArray(payload.objectives) || payload.objectives.length === 0) {
+      throw new Error('payload objectives must be a non-empty array');
+    }
+    return { objectives: payload.objectives };
+  }
+
+  if (flags['objectives-file']) {
+    const objectives = await readJsonFileOrStdin(String(flags['objectives-file']), '--objectives-file');
+    if (!Array.isArray(objectives) || objectives.length === 0) {
+      throw new Error('--objectives-file must contain a non-empty JSON array');
+    }
+    return { objectives };
+  }
+
+  if (flags['objectives-json']) {
+    const objectives = parseJsonFlag('--objectives-json', flags['objectives-json']);
+    if (!Array.isArray(objectives) || objectives.length === 0) {
+      throw new Error('--objectives-json must be a non-empty JSON array');
+    }
+    return { objectives };
+  }
+
+  if (requireSingleObjective) {
+    throw new Error('Provide --objectives-json or --objectives-file');
+  }
+
+  throw new Error('Provide --objectives-json or --objectives-file');
+}
+
 // ---------------------------------------------------------------------------
 // changeRationales helper
 // ---------------------------------------------------------------------------
@@ -1886,7 +1924,7 @@ async function protocolRevert(args) {
 
 async function protocolPrompt(args) {
   const flags = parseFlags(args);
-  const objective = requireFlag(flags, 'objective', undefined);
+  const objectiveInput = await resolveObjectivesInput(flags);
   const parentTicketId =
     flags['parent-ticket-id'] !== undefined
       ? String(flags['parent-ticket-id'] ?? process.env.TICKET_ID ?? '')
@@ -1905,7 +1943,7 @@ async function protocolPrompt(args) {
     flags['working-directory'] ?? (!flags['project-id'] && !personal ? process.cwd() : undefined);
 
   const body = {
-    objective,
+    ...objectiveInput,
     agentIdentifier,
     connectionMethod: String(flags.method ?? 'cli'),
     metadata: await resolveProtocolMetadata(flags, { cwd: process.cwd() }),
@@ -1983,7 +2021,7 @@ async function protocolDiscussObjective(args) {
 async function protocolCreateTicket(args) {
   const flags = parseFlags(args);
   const { sessionKey, ticketId } = resolveSessionFlags(flags);
-  const objective = requireFlag(flags, 'objective', undefined);
+  const objectiveInput = await resolveObjectivesInput(flags);
   const { platformUrl, bearerToken, localSecret, organizationId } =
     await resolveProtocolAuthForFlags(flags, ticketId);
   const timeoutMs = resolveTimeout(flags);
@@ -1997,7 +2035,7 @@ async function protocolCreateTicket(args) {
     const body = {
       sessionKey,
       ticketId,
-      objective,
+      ...objectiveInput,
       ...(flags.title ? { title: String(flags.title) } : {}),
       ...(flags.priority ? { priority: String(flags.priority) } : {}),
       ...(flags['acceptance-criteria']
@@ -2034,7 +2072,7 @@ async function protocolCreateTicket(args) {
       : undefined;
 
   const standaloneBody = {
-    objective,
+    ...objectiveInput,
     ...(flags.personal ? { personal: true } : {}),
     ...(!flags.personal && flags['project-id'] ? { projectId: String(flags['project-id']) } : {}),
     ...(standaloneWorkingDirectory ? { workingDirectory: standaloneWorkingDirectory } : {}),
@@ -2079,21 +2117,11 @@ async function protocolRecordWork(args) {
   if (payload && (flags.summary || flags['summary-file'])) {
     throw new Error('Use either payload input or --summary/--summary-file, not both');
   }
-  if (payload && (flags.objective || flags['objective-file'])) {
-    throw new Error('Use either payload input or --objective/--objective-file, not both');
+  if (payload && (flags['objectives-json'] || flags['objectives-file'])) {
+    throw new Error('Use either payload input or --objectives-json/--objectives-file, not both');
   }
 
-  const objective = payload
-    ? (() => {
-        const value = payload.objective;
-        if (typeof value !== 'string' || !value.trim()) {
-          throw new Error('payload input must include a non-empty objective');
-        }
-        return value;
-      })()
-    : flags['objective-file']
-      ? await readTextFileOrStdin(String(flags['objective-file']), '--objective-file')
-      : requireFlag(flags, 'objective', undefined);
+  const objectiveInput = await resolveObjectivesInput(flags, { payload });
 
   const summary = payload
     ? (() => {
@@ -2134,7 +2162,7 @@ async function protocolRecordWork(args) {
   const modelIdentifier = resolveProtocolModelIdentifier(flags);
 
   const body = {
-    objective,
+    ...objectiveInput,
     summary,
     artifacts,
     changeRationales,
@@ -2172,6 +2200,36 @@ async function protocolRecordWork(args) {
   if (ticketId) {
     process.stderr.write(`\nTICKET_ID=${ticketId}\n`);
   }
+}
+
+// ---------------------------------------------------------------------------
+// add-objectives (append ordered objectives to an existing ticket)
+// ---------------------------------------------------------------------------
+
+async function protocolAddObjectives(args) {
+  const flags = parseFlags(args);
+  const ticketId = requireFlag(flags, 'ticket-id', process.env.TICKET_ID);
+  const objectiveInput = await resolveObjectivesInput(flags, { requireSingleObjective: false });
+  if (!objectiveInput.objectives) {
+    throw new Error('add-objectives requires --objectives-json or --objectives-file');
+  }
+  const { platformUrl, bearerToken, localSecret, organizationId } =
+    await resolveProtocolAuthForFlags(flags, ticketId);
+  const timeoutMs = resolveTimeout(flags);
+
+  const data = await apiPost(
+    platformUrl,
+    bearerToken,
+    localSecret,
+    organizationId,
+    '/api/protocol/add-objectives',
+    {
+      ticketId,
+      objectives: objectiveInput.objectives
+    },
+    timeoutMs
+  );
+  console.log(JSON.stringify(data, null, 2));
 }
 
 // ---------------------------------------------------------------------------
@@ -2283,6 +2341,7 @@ Subcommands:
   revert                    Restore the local working tree to an objective checkpoint
   search-tickets            Find tickets by keyword, status, project, creator, or update date
   discuss-objective          Mark a draft objective as submitted (ready for review/execution)
+  add-objectives             Append ordered objectives to an existing ticket
   create                    Create a draft ticket without attaching (follow-up or standalone)
   prompt                    Create a ticket and attach to it immediately
   record-work               Record completed-from-chat work as a ticket in review + feed post (no attach)
@@ -2518,6 +2577,7 @@ prompt:
     current working directory (matching against the caller's project_user.local_working_directory).
   Required:
     --objective <text>
+    or: --objectives-json <json> / --objectives-file <path|-> with [{ "objective": "...", "title": "...", "autoAdvance": true }]
   Optional:
     --title <text>
     --priority <level>        low | medium | high | urgent
@@ -2554,6 +2614,7 @@ create:
     If session flags are omitted, resolves project by working directory and creates a standalone draft.
   Required:
     --objective <text>
+    or: --objectives-json <json> / --objectives-file <path|-> with [{ "objective": "...", "title": "...", "autoAdvance": true }]
   Optional:
     --session-key <key>
     --ticket-id <ticket_id>
@@ -2576,6 +2637,18 @@ create:
     Use create for future work. If the work is already complete and only needs to be recorded,
     use \`record-work\` instead.
 
+add-objectives:
+  Purpose:
+    Append ordered objectives to an existing ticket. Index 0 is the first newly
+    added objective to execute; later indexes queue after it.
+  Required:
+    --ticket-id <ticket_id>
+    --objectives-json <json> or --objectives-file <path|->
+  Notes:
+    Use this when each prompt is a sequential step toward the same feature or
+    goal. Create multiple tickets instead when prompts describe different
+    features or goals.
+
 record-work:
   Purpose:
     Record work the agent already completed in a chat as a ticket in \`review\` status
@@ -2584,6 +2657,7 @@ record-work:
     just did" flows. Do NOT use this for in-progress work; use \`prompt\` for that.
   Required:
     --objective <text> or --objective-file <path|->   What was asked / what was done
+    or: --objectives-json <json> / --objectives-file <path|->
     --summary   <text> or --summary-file   <path|->   Narrative for feed post + reviewer
     or: --payload-json <json>
     or: --payload-file <path|-> containing { objective, summary, artifacts, changeRationales }
@@ -2718,7 +2792,9 @@ Examples:
   ovld protocol search-tickets --query "auth refactor" --status next-up,execute --limit 10
   ovld protocol discuss-objective --ticket-id 1:899
   ovld protocol discuss-objective --ticket-id 1:899 --objective-id <objective-uuid>
+  ovld protocol add-objectives --ticket-id 1:899 --objectives-json '[{"objective":"Step one"},{"objective":"Step two"}]'
   ovld protocol create --agent codex --objective "Capture follow-up work from this repo"
+  ovld protocol create --agent codex --objectives-json '[{"objective":"Step one"},{"objective":"Step two"}]'
   ovld protocol create --agent codex --session-key <key> --ticket-id <ticket_id> --objective "Capture follow-up work"
   ovld protocol prompt --agent codex --objective "Implement user auth" --priority high
   ovld protocol update --session-key <key> --ticket-id <ticket_id> --summary "Did X" --phase execute
@@ -2785,6 +2861,10 @@ EOF
   }
   if (subcommand === 'discuss-objective') {
     await protocolDiscussObjective(args);
+    return;
+  }
+  if (subcommand === 'add-objectives') {
+    await protocolAddObjectives(args);
     return;
   }
   if (subcommand === 'create' || subcommand === 'create-ticket') {

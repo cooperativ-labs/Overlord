@@ -323,7 +323,7 @@ function DemoCliSettings() {
         {
           label: 'Chat plugin',
           description:
-            'Installs the Overlord chat plugin into your home-local Codex plugin directories, bundles the Codex workflow skill, migrates any legacy Codex bundle config, and manages the Codex permission rules used for Overlord protocol commands.',
+            'Installs the Overlord chat plugin into your home-local Codex plugin directories, bundles the Codex workflow skill, registers PermissionRequest and UserPromptSubmit hooks, migrates any legacy Codex bundle config, and manages the Codex permission rules used for Overlord protocol commands.',
           supportNote:
             'Managed by the desktop app in ~/.agents/plugins, ~/.codex/plugins, and ~/.codex/rules/default.rules.',
           status: 'not_installed' as const,
@@ -349,17 +349,18 @@ function DemoCliSettings() {
       ]
     },
     {
-      key: 'gemini',
-      label: 'Gemini CLI',
+      key: 'antigravity',
+      label: 'Antigravity CLI',
       plugins: [
         {
-          label: '/connect /load /prompt /record-work',
-          description: 'Installs global slash commands for mid-session Overlord ticket operations.',
+          label: 'Overlord plugin',
+          description:
+            'Installs the Overlord Antigravity plugin for mid-session ticket operations (replaces deprecated Gemini CLI).',
           supportNote:
-            'Creates `/connect`, `/load`, `/prompt`, and `/record-work` in `~/.gemini/commands/`. Run `/commands reload` in Gemini CLI after installing.',
+            'Installs via `agy plugin install`. Run `ovld setup antigravity`, then `ovld launch antigravity --ticket-id <ticket_id>`. Models are chosen inside Antigravity.',
           status: 'not_installed' as const,
           installFiles:
-            '~/.gemini/commands/connect.toml, ~/.gemini/commands/load.toml, ~/.gemini/commands/prompt.toml, ~/.gemini/commands/record-work.toml'
+            '~/.gemini/antigravity-cli/plugins/plugin.json, ~/.gemini/antigravity-cli/plugins/hooks.json'
         }
       ]
     },
@@ -621,8 +622,8 @@ function DemoCliSettings() {
       <div className="grid gap-1">
         <p className="text-sm font-medium">Overlord CLI (ovld)</p>
         <p className="text-xs text-muted-foreground">
-          The CLI lets agents in Claude Code, Codex, Cursor, Gemini, and OpenCode work with Overlord
-          tickets. Available commands:
+          The CLI lets agents in Claude Code, Codex, Cursor, Antigravity, and OpenCode work with
+          Overlord tickets. Available commands:
         </p>
       </div>
 

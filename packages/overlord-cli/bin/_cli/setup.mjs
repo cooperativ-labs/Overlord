@@ -7,14 +7,19 @@
  * into their respective config directories.
  */
 
+import { execFileSync } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { checkForCliUpdate, getCurrentCliVersion, printCliUpdateNotice } from './cli-update.mjs';
+import {
+  geminiLegacyCommandFiles,
+  removeLegacyGeminiConnector as removeLegacyGeminiConnectorFiles
+} from '../../../../lib/overlord/legacy-gemini-connector.cjs';
 
-const BUNDLE_VERSION = '1.11.0';
+const BUNDLE_VERSION = '1.12.0';
 const MD_MARKER_START = '<!-- overlord:managed:start -->';
 const MD_MARKER_END = '<!-- overlord:managed:end -->';
 const MANIFEST_DIR = path.join(os.homedir(), '.ovld');
@@ -26,11 +31,46 @@ const PACKAGE_CLAUDE_PLUGIN_DIR = path.resolve(__dirname, '..', '..', 'plugins',
 const REPO_CLAUDE_PLUGIN_DIR = path.resolve(__dirname, '..', '..', '..', '..', 'plugins', 'claude');
 const PACKAGE_CURSOR_PLUGIN_DIR = path.resolve(__dirname, '..', '..', 'plugins', 'cursor');
 const REPO_CURSOR_PLUGIN_DIR = path.resolve(__dirname, '..', '..', '..', '..', 'plugins', 'cursor');
+const PACKAGE_ANTIGRAVITY_PLUGIN_DIR = path.resolve(
+  __dirname,
+  '..',
+  '..',
+  'plugins',
+  'antigravity'
+);
+const REPO_ANTIGRAVITY_PLUGIN_DIR = path.resolve(
+  __dirname,
+  '..',
+  '..',
+  '..',
+  '..',
+  'plugins',
+  'antigravity'
+);
+const ANTIGRAVITY_RUNTIME_SCRIPTS_DIR = path.join(os.homedir(), '.ovld', 'antigravity', 'scripts');
+const ANTIGRAVITY_INSTALLED_PLUGINS_DIR = path.join(
+  os.homedir(),
+  '.gemini',
+  'antigravity-cli',
+  'plugins'
+);
+const ANTIGRAVITY_MCP_PATH_PLACEHOLDER = '__OVERLORD_MCP_SCRIPT_PATH__';
 const CODEX_TARGET_PLUGIN_DIR = path.join(os.homedir(), '.codex', 'plugins', 'overlord');
 const CODEX_TARGET_PLUGIN_MANIFEST = path.join(
   CODEX_TARGET_PLUGIN_DIR,
   '.codex-plugin',
   'plugin.json'
+);
+const CODEX_TARGET_PLUGIN_HOOKS = path.join(CODEX_TARGET_PLUGIN_DIR, '.codex-plugin', 'hooks.json');
+const CODEX_TARGET_USER_PROMPT_HOOK = path.join(
+  CODEX_TARGET_PLUGIN_DIR,
+  'scripts',
+  'user-prompt-submit-hook.sh'
+);
+const CODEX_TARGET_PERMISSION_HOOK = path.join(
+  CODEX_TARGET_PLUGIN_DIR,
+  'scripts',
+  'permission-hook.sh'
 );
 const CODEX_TARGET_MARKETPLACE = path.join(os.homedir(), '.agents', 'plugins', 'marketplace.json');
 const CODEX_TARGET_RULES = path.join(os.homedir(), '.codex', 'rules', 'default.rules');
@@ -39,7 +79,7 @@ const CODEX_RULES_START = '# overlord:permissions:start';
 const CODEX_RULES_END = '# overlord:permissions:end';
 const REQUIRED_NODE_MAJOR = 20;
 
-const supportedAgents = ['claude', 'codex', 'cursor', 'gemini', 'opencode'];
+const supportedAgents = ['claude', 'codex', 'cursor', 'antigravity', 'opencode'];
 
 // ---------------------------------------------------------------------------
 // Templates (same content as electron/services/agent-bundle/templates.ts)
@@ -116,6 +156,8 @@ When creating tickets from within a repository:
 - Prefer \`ovld protocol create --agent claude-code\` by default for draft ticket creation.
 - Use \`ovld protocol prompt --agent claude-code\` only when the user explicitly asks to create and execute immediately.
 - Both commands can resolve the project from the current working directory; use \`--working-directory\` to override.
+- Create multiple tickets when prompts represent different features or goals.
+- Add objectives to the same ticket when prompts are sequential steps toward the same feature or goal: \`ovld protocol add-objectives --ticket-id <ticket_id> --objectives-json '[{"objective":"Step one"},{"objective":"Step two"}]'\`.
 
 \`\`\`bash
 ovld protocol create --agent claude-code --objective "Capture follow-up work from this repository"
@@ -195,6 +237,8 @@ When creating tickets from within a repository:
 - Prefer \`ovld protocol create --agent opencode\` by default for draft ticket creation.
 - Use \`ovld protocol prompt --agent opencode\` only when the user explicitly asks to create and execute immediately.
 - Both commands can resolve the project from the current working directory; use \`--working-directory\` to override.
+- Create multiple tickets when prompts represent different features or goals.
+- Add objectives to the same ticket when prompts are sequential steps toward the same feature or goal: \`ovld protocol add-objectives --ticket-id <ticket_id> --objectives-json '[{"objective":"Step one"},{"objective":"Step two"}]'\`.
 
 \`\`\`bash
 ovld protocol create --agent opencode --objective "Capture follow-up work from this repository"
@@ -267,6 +311,7 @@ Rules:
 - Always attach first and deliver last.
 - Use \`ovld protocol\` commands instead of ad hoc repo scripts for ticket lifecycle work.
 - Prefer \`ovld protocol create --agent cursor\` for draft ticket creation; use \`prompt --agent cursor\` only for create-and-execute requests.
+- Create multiple tickets when prompts represent different features/goals; add objectives to the same ticket when prompts are sequential steps toward one feature/goal.
 - If the user sends a new message during an active ticket session, publish a \`user_follow_up\` event before doing anything else.
 `;
 
@@ -461,34 +506,7 @@ Do NOT use this for in-progress work — use \`/prompt\` for that. The CLI valid
   }
 
   if (agent === 'gemini') {
-    const base = path.join(os.homedir(), '.gemini', 'commands');
-    return [
-      {
-        path: path.join(base, 'connect.toml'),
-        content:
-          'description = "Connect this session to another Overlord ticket by ticket ID."\nprompt = """\nRun `ovld protocol connect --ticket-id <ticketId>` using `{{args}}` as the ticket ID.\n"""\n'
-      },
-      {
-        path: path.join(base, 'load.toml'),
-        content:
-          'description = "Load Overlord ticket context without creating a new session."\nprompt = """\nRun `ovld protocol load-context --ticket-id <ticketId>` using `{{args}}` as the ticket ID.\n"""\n'
-      },
-      {
-        path: path.join(base, 'create.toml'),
-        content:
-          'description = "Create a draft Overlord ticket from the current conversation."\nprompt = """\nRun `ovld protocol create --agent gemini --objective "<objective>"` using `{{args}}` as the objective unless raw flags were provided. If raw flags were provided, pass them after `ovld protocol create --agent gemini`.\n"""\n'
-      },
-      {
-        path: path.join(base, 'prompt.toml'),
-        content:
-          'description = "Create a new Overlord ticket from the current conversation."\nprompt = """\nRun `ovld protocol prompt --agent gemini --objective "<objective>"` using `{{args}}` as the objective unless raw flags were provided. If raw flags were provided, pass them after `ovld protocol prompt --agent gemini`.\n"""\n'
-      },
-      {
-        path: path.join(base, 'record-work.toml'),
-        content:
-          'description = "Record completed-from-chat work as a ticket in review + feed post (no attach)."\nprompt = """\nImmediately record the work you just completed in this chat as a new Overlord ticket via `ovld protocol record-work`. No agent session is opened — the work is already done.\n\nSynthesize from the current conversation: `objective` (what was asked/done), `summary` (reviewer-friendly narrative), `changeRationales` (one entry per meaningful git-tracked file change — `label`, `file_path`, `summary`, `why`, `impact`, optional `hunks`; use `git status`/`git diff` to enumerate), and optional `artifacts` (`next_steps`, `test_results`, `decision`, `note`, `url`).\n\nIf `{{args}}` is non-empty, treat it as additional context for the summary.\n\nRun `ovld protocol record-work --payload-file -` and stream the JSON payload on stdin via a single-quoted heredoc. Report the new TICKET_ID.\n\nDo NOT use for in-progress work — use `/prompt` for that. The CLI validates that every changed git-tracked file is represented in `changeRationales` unless `--skip-file-change-check` is passed. If project resolution fails, re-run with `--project-id <id>` or `--personal`.\n"""\n'
-      }
-    ];
+    return geminiLegacyCommandFiles();
   }
 
   const base = path.join(os.homedir(), '.config', 'opencode', 'commands');
@@ -584,12 +602,8 @@ function currentContentHashForAgent(agent) {
   if (agent === 'cursor') {
     return contentHashForDirectory(cursorSourcePluginDir());
   }
-  if (agent === 'gemini') {
-    return contentHash(
-      slashCommandFiles('gemini')
-        .map(file => file.content)
-        .join('\n')
-    );
+  if (agent === 'antigravity') {
+    return antigravityContentHash();
   }
   if (agent === 'codex') return codexContentHash();
   return contentHash(
@@ -619,6 +633,117 @@ function cursorSourcePluginDir() {
   throw new Error(
     `Cursor plugin bundle not found. Checked ${PACKAGE_CURSOR_PLUGIN_DIR} and ${REPO_CURSOR_PLUGIN_DIR}.`
   );
+}
+
+function antigravitySourcePluginDir() {
+  if (fs.existsSync(PACKAGE_ANTIGRAVITY_PLUGIN_DIR)) return PACKAGE_ANTIGRAVITY_PLUGIN_DIR;
+  if (fs.existsSync(REPO_ANTIGRAVITY_PLUGIN_DIR)) return REPO_ANTIGRAVITY_PLUGIN_DIR;
+  throw new Error(
+    `Antigravity plugin bundle not found. Checked ${PACKAGE_ANTIGRAVITY_PLUGIN_DIR} and ${REPO_ANTIGRAVITY_PLUGIN_DIR}.`
+  );
+}
+
+function antigravityContentHash() {
+  return contentHashForDirectory(antigravitySourcePluginDir());
+}
+
+function antigravityPaths() {
+  return {
+    policyFile: path.join(os.homedir(), '.gemini', 'policies', 'overlord-protocol.toml'),
+    installedPluginJson: path.join(ANTIGRAVITY_INSTALLED_PLUGINS_DIR, 'plugin.json'),
+    installedHooks: path.join(ANTIGRAVITY_INSTALLED_PLUGINS_DIR, 'hooks.json'),
+    installedMcp: path.join(ANTIGRAVITY_INSTALLED_PLUGINS_DIR, 'mcp_config.json'),
+    runtimeMcp: path.join(ANTIGRAVITY_RUNTIME_SCRIPTS_DIR, 'overlord-mcp.mjs'),
+    runtimeHook: path.join(ANTIGRAVITY_RUNTIME_SCRIPTS_DIR, 'user-prompt-submit-hook.sh')
+  };
+}
+
+function ensureAntigravityRuntimeScripts(sourceDir) {
+  const scriptNames = ['overlord-mcp.mjs', 'user-prompt-submit-hook.sh'];
+  fs.mkdirSync(ANTIGRAVITY_RUNTIME_SCRIPTS_DIR, { recursive: true });
+
+  for (const scriptName of scriptNames) {
+    const sourcePath = path.join(sourceDir, 'scripts', scriptName);
+    if (!fs.existsSync(sourcePath)) {
+      throw new Error(`Antigravity runtime script missing: ${sourcePath}`);
+    }
+    const targetPath = path.join(ANTIGRAVITY_RUNTIME_SCRIPTS_DIR, scriptName);
+    fs.copyFileSync(sourcePath, targetPath);
+    if (scriptName.endsWith('.sh')) {
+      fs.chmodSync(targetPath, 0o755);
+    }
+  }
+}
+
+function patchAntigravityMcpServers(servers, mcpScriptPath) {
+  if (!servers || typeof servers !== 'object') return;
+  for (const entry of Object.values(servers)) {
+    if (!entry || typeof entry !== 'object' || !Array.isArray(entry.args)) continue;
+    const referencesOverlordMcp = entry.args.some(
+      arg =>
+        arg === ANTIGRAVITY_MCP_PATH_PLACEHOLDER ||
+        (typeof arg === 'string' && arg.includes('overlord-mcp'))
+    );
+    if (referencesOverlordMcp) {
+      entry.args = [mcpScriptPath];
+      entry.command = entry.command ?? 'node';
+    }
+  }
+}
+
+function patchAntigravityInstalledPaths({ mcpScriptPath, hookScriptPath }) {
+  const paths = antigravityPaths();
+
+  if (fs.existsSync(paths.installedHooks)) {
+    const hooks = readJsonFile(paths.installedHooks);
+    const groups = hooks.hooks && typeof hooks.hooks === 'object' ? hooks.hooks : null;
+    if (groups) {
+      for (const eventHooks of Object.values(groups)) {
+        if (!Array.isArray(eventHooks)) continue;
+        for (const group of eventHooks) {
+          if (!group || typeof group !== 'object' || !Array.isArray(group.hooks)) continue;
+          for (const hook of group.hooks) {
+            if (hook?.type !== 'command') continue;
+            hook.command = hookScriptPath;
+          }
+        }
+      }
+      writeJsonFile(paths.installedHooks, hooks);
+    }
+  }
+
+  if (fs.existsSync(paths.installedMcp)) {
+    const mcpConfig = readJsonFile(paths.installedMcp);
+    patchAntigravityMcpServers(mcpConfig.mcpServers, mcpScriptPath);
+    writeJsonFile(paths.installedMcp, mcpConfig);
+  }
+
+  if (fs.existsSync(paths.installedPluginJson)) {
+    const pluginJson = readJsonFile(paths.installedPluginJson);
+    patchAntigravityMcpServers(pluginJson.mcpServers, mcpScriptPath);
+    writeJsonFile(paths.installedPluginJson, pluginJson);
+  }
+}
+
+function runAgyPluginInstall(sourceDir) {
+  try {
+    execFileSync('agy', ['plugin', 'install', sourceDir], { stdio: 'inherit' });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes('already') || message.includes('imported')) {
+      execFileSync('agy', ['plugin', 'import', '--force', sourceDir], { stdio: 'inherit' });
+      return;
+    }
+    throw error;
+  }
+}
+
+function removeLegacyGeminiConnector() {
+  return removeLegacyGeminiConnectorFiles({
+    readManifest,
+    writeManifest,
+    readTextFile
+  });
 }
 
 function listFilesRecursive(dir) {
@@ -905,12 +1030,6 @@ function removeCursorBeforeSubmitHook(paths) {
   writeJsonFile(hooksFile, base);
 }
 
-function geminiPaths() {
-  const base = path.join(os.homedir(), '.gemini');
-  return {
-    policyFile: path.join(base, 'policies', 'overlord-protocol.toml')
-  };
-}
 
 function installClaude() {
   const sourceDir = claudeSourcePluginDir();
@@ -1008,6 +1127,7 @@ function installCodex() {
   fs.mkdirSync(path.dirname(CODEX_TARGET_PLUGIN_DIR), { recursive: true });
   fs.rmSync(CODEX_TARGET_PLUGIN_DIR, { recursive: true, force: true });
   fs.cpSync(sourceDir, CODEX_TARGET_PLUGIN_DIR, { recursive: true });
+  installCodexHookCommand();
   console.log(`  ✓ Installed plugin: ${CODEX_TARGET_PLUGIN_DIR}`);
 
   writeTextFile(CODEX_TARGET_RULES, mergeCodexRules(readTextFile(CODEX_TARGET_RULES)));
@@ -1033,6 +1153,42 @@ function installCodex() {
   writeManifest(manifest);
 
   return { ok: true, installedFiles };
+}
+
+function rewriteCodexHookCommands({ hooks, eventName, targetCommand }) {
+  const groups = hooks.hooks?.[eventName];
+  if (!Array.isArray(groups)) {
+    throw new Error(`Codex ${eventName} hook missing in ${CODEX_TARGET_PLUGIN_HOOKS}`);
+  }
+
+  for (const group of groups) {
+    if (!Array.isArray(group?.hooks)) continue;
+    for (const hook of group.hooks) {
+      if (hook?.type === 'command') {
+        hook.command = targetCommand;
+      }
+    }
+  }
+}
+
+function installCodexHookCommand() {
+  const hooks = readJsonFile(CODEX_TARGET_PLUGIN_HOOKS);
+  if (!hooks || typeof hooks !== 'object') {
+    throw new Error(`Codex hook manifest missing or invalid at ${CODEX_TARGET_PLUGIN_HOOKS}`);
+  }
+
+  rewriteCodexHookCommands({
+    hooks,
+    eventName: 'PermissionRequest',
+    targetCommand: CODEX_TARGET_PERMISSION_HOOK
+  });
+  rewriteCodexHookCommands({
+    hooks,
+    eventName: 'UserPromptSubmit',
+    targetCommand: CODEX_TARGET_USER_PROMPT_HOOK
+  });
+
+  writeJsonFile(CODEX_TARGET_PLUGIN_HOOKS, hooks);
 }
 
 function installCursor() {
@@ -1091,9 +1247,28 @@ function installCursor() {
   return { ok: true, backups };
 }
 
-function installGemini() {
-  const slashResult = installSlashCommands('gemini');
-  const paths = geminiPaths();
+function installAntigravity() {
+  const sourceDir = antigravitySourcePluginDir();
+  const paths = antigravityPaths();
+  const removed = removeLegacyGeminiConnector();
+
+  if (removed.length > 0) {
+    console.log('  ✓ Migrated legacy Gemini connector files:');
+    for (const filePath of removed) console.log(`      ${filePath}`);
+  }
+
+  ensureAntigravityRuntimeScripts(sourceDir);
+  console.log(`  ✓ Staged runtime scripts: ${ANTIGRAVITY_RUNTIME_SCRIPTS_DIR}`);
+
+  runAgyPluginInstall(sourceDir);
+  console.log(`  ✓ Installed Antigravity plugin via agy: ${ANTIGRAVITY_INSTALLED_PLUGINS_DIR}`);
+
+  patchAntigravityInstalledPaths({
+    mcpScriptPath: paths.runtimeMcp,
+    hookScriptPath: paths.runtimeHook
+  });
+  console.log('  ✓ Patched installed MCP and hook paths');
+
   const policyContent = [
     '# Managed by Overlord onboarding',
     '[[rule]]',
@@ -1106,12 +1281,21 @@ function installGemini() {
   writeTextFile(paths.policyFile, policyContent);
   console.log(`  ✓ Installed policy: ${paths.policyFile}`);
 
+  const installedFiles = [
+    paths.policyFile,
+    paths.runtimeMcp,
+    paths.runtimeHook,
+    paths.installedPluginJson,
+    paths.installedHooks,
+    paths.installedMcp
+  ].filter(filePath => fs.existsSync(filePath));
+
   const manifest = readManifest();
-  manifest.gemini = {
-    version: BUNDLE_VERSION,
-    contentHash: currentContentHashForAgent('gemini'),
+  manifest.antigravity = {
+    version: pluginVersion(path.join(sourceDir, 'plugin.json')) ?? '0.0.0',
+    contentHash: currentContentHashForAgent('antigravity'),
     installedAt: new Date().toISOString(),
-    files: [paths.policyFile, ...slashResult.managedFiles]
+    files: installedFiles
   };
   writeManifest(manifest);
 
@@ -1138,7 +1322,9 @@ function doctorAgent(agent) {
         ? pluginVersion(path.join(codexSourcePluginDir(), '.codex-plugin', 'plugin.json'))
         : agent === 'cursor'
           ? pluginVersion(path.join(cursorSourcePluginDir(), '.cursor-plugin', 'plugin.json'))
-          : BUNDLE_VERSION;
+          : agent === 'antigravity'
+            ? pluginVersion(path.join(antigravitySourcePluginDir(), 'plugin.json'))
+            : BUNDLE_VERSION;
   const currentHash = currentContentHashForAgent(agent);
 
   if (entry.version !== currentVersion || entry.contentHash !== currentHash) {
@@ -1177,6 +1363,10 @@ function currentNodeMajor() {
  * @returns {Promise<string[]>} - Array of selected choice labels
  */
 function runCheckboxPrompt({ message, choices, defaults = [] }) {
+  if (!process.stdin.isTTY || typeof process.stdin.setRawMode !== 'function') {
+    return Promise.resolve(defaults);
+  }
+
   return new Promise(resolve => {
     const hide = '\x1b[?25l';
     const show = '\x1b[?25h';
@@ -1287,6 +1477,10 @@ function runCheckboxPrompt({ message, choices, defaults = [] }) {
  * @returns {Promise<boolean>} - true if yes, false if no
  */
 function askYesNo(question, defaultYes = true) {
+  if (!process.stdin.isTTY || typeof process.stdin.setRawMode !== 'function') {
+    return Promise.resolve(defaultYes);
+  }
+
   return new Promise(resolve => {
     const hide = '\x1b[?25l';
     const show = '\x1b[?25h';
@@ -1412,7 +1606,7 @@ function installAgentPermissions(agents, platformUrl) {
     } else if (agent === 'codex') {
       installCodexPermissions(platformUrl);
     }
-    // cursor and gemini don't have permission configuration
+    // cursor and antigravity use global policy files instead of project-local permission JSON
   }
 }
 
@@ -1537,7 +1731,7 @@ export async function runSetupCommand(args) {
   ovld setup claude    Prepare the Overlord Claude plugin and migrate v3.25 connector files
   ovld setup codex     Install Overlord Codex plugin bundle
   ovld setup cursor    Install Overlord Cursor local plugin and permissions
-  ovld setup gemini    Install Overlord slash commands and policy rules for Gemini CLI
+  ovld setup antigravity  Install Overlord Antigravity plugin (agy) and protocol policy rules
   ovld setup opencode  Install Overlord connector for OpenCode
   ovld setup all       Prepare all supported agents
   ovld doctor          Validate installed connectors and check for CLI updates`);
@@ -1554,7 +1748,7 @@ export async function runSetupCommand(args) {
         claude: 'Claude Code',
         codex: 'Codex',
         cursor: 'Cursor',
-        gemini: 'Gemini CLI',
+        antigravity: 'Antigravity CLI',
         opencode: 'OpenCode'
       };
       return `${a.padEnd(10)} - ${descriptions[a] || a}`;
@@ -1586,7 +1780,7 @@ export async function runSetupCommand(args) {
         if (a === 'claude') installClaude();
         else if (a === 'codex') installCodex();
         else if (a === 'cursor') installCursor();
-        else if (a === 'gemini') installGemini();
+        else if (a === 'antigravity') installAntigravity();
         else installOpenCode();
         installedAgents.push(a);
       } catch (err) {
@@ -1638,7 +1832,7 @@ export async function runSetupCommand(args) {
         if (a === 'claude') installClaude();
         else if (a === 'codex') installCodex();
         else if (a === 'cursor') installCursor();
-        else if (a === 'gemini') installGemini();
+        else if (a === 'antigravity') installAntigravity();
         else installOpenCode();
         installedAgents.push(a);
       } catch (err) {
@@ -1680,7 +1874,7 @@ export async function runSetupCommand(args) {
     if (agent === 'claude') installClaude();
     else if (agent === 'codex') installCodex();
     else if (agent === 'cursor') installCursor();
-    else if (agent === 'gemini') installGemini();
+    else if (agent === 'antigravity') installAntigravity();
     else installOpenCode();
     console.log('\nDone.');
 

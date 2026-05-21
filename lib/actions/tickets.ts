@@ -1245,13 +1245,37 @@ export async function markObjectiveExecutedAction(
   }
 
   if (!existingDraft) {
-    const { error: insertDraftError } = await supabase.from('objectives').insert({
-      ticket_id: ticketId,
-      objective: '',
-      state: 'draft'
-    });
-    if (insertDraftError) {
-      throw new Error(insertDraftError.message);
+    const { data: earliestFuture, error: earliestFutureError } = await supabase
+      .from('objectives')
+      .select('id')
+      .eq('ticket_id', ticketId)
+      .eq('state', 'future')
+      .order('position', { ascending: true })
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    if (earliestFutureError) {
+      throw new Error(earliestFutureError.message);
+    }
+
+    if (earliestFuture) {
+      const { error: promoteError } = await supabase
+        .from('objectives')
+        .update({ state: 'draft', completed_at: null })
+        .eq('id', earliestFuture.id);
+      if (promoteError) {
+        throw new Error(promoteError.message);
+      }
+    } else {
+      const { error: insertDraftError } = await supabase.from('objectives').insert({
+        ticket_id: ticketId,
+        objective: '',
+        state: 'draft'
+      });
+      if (insertDraftError) {
+        throw new Error(insertDraftError.message);
+      }
     }
   }
 

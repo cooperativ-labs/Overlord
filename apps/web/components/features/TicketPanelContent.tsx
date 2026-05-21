@@ -228,7 +228,7 @@ export async function TicketPanelContent({
     claude: agentConfigs.claude?.flags ?? [],
     codex: agentConfigs.codex?.flags ?? [],
     cursor: agentConfigs.cursor?.flags ?? [],
-    gemini: agentConfigs.gemini?.flags ?? [],
+    antigravity: agentConfigs.antigravity?.flags ?? [],
     opencode: agentConfigs.opencode?.flags ?? [],
     pi: agentConfigs.pi?.flags ?? []
   };
@@ -422,6 +422,7 @@ export async function TicketPanelContent({
                 agentCommands={agentCommands}
                 sshCommand={projectSshCommand}
                 remoteWorkingDirectory={projectRemoteWorkingDirectory}
+                sshEnabled={sshEnabled}
                 hasProjectWorkingDirectory={hasProjectWorkingDirectory}
                 checkpointsByObjectiveId={checkpointsByObjectiveId}
                 allProjectCheckpointObjectiveIds={allProjectCheckpointObjectiveIds}

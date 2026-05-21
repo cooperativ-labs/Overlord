@@ -7,6 +7,32 @@ const execFileAsync = promisify(execFile);
 const OVLD_BIN = process.env.OVLD_BIN?.trim() || 'ovld';
 const PROTOCOL_VERSION = '2025-06-18';
 
+const OBJECTIVES_ARRAY_SCHEMA = {
+  type: 'array',
+  description:
+    'Ordered objective objects. Index 0 is the first objective to execute; later indexes queue after it.',
+  items: {
+    type: 'object',
+    properties: {
+      objective: { type: 'string' },
+      title: { type: 'string' },
+      auto_advance: { type: 'boolean' },
+      assigned_agent: { type: 'object' }
+    },
+    required: ['objective']
+  }
+};
+
+function toCliObjectives(objectives) {
+  if (!Array.isArray(objectives)) return undefined;
+  return objectives.map(item => ({
+    objective: item.objective,
+    ...(item.title ? { title: item.title } : {}),
+    ...(typeof item.auto_advance === 'boolean' ? { autoAdvance: item.auto_advance } : {}),
+    ...(item.assigned_agent ? { assignedAgent: item.assigned_agent } : {})
+  }));
+}
+
 function execFileWithOptionalInput(file, args, options, input) {
   if (input === undefined) {
     return execFileAsync(file, args, options);
@@ -129,12 +155,58 @@ const tools = [
     subcommand: 'load-context'
   },
   {
+    name: 'revert',
+    description:
+      'Restore the local working tree to an objective checkpoint (maps to ovld protocol revert).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        objective_id: { type: 'string' },
+        working_directory: {
+          type: 'string',
+          description: 'Repository to restore. Defaults to the current workspace.'
+        }
+      },
+      required: ['objective_id']
+    },
+    toCliFlags: args => ({
+      'objective-id': args.objective_id,
+      'working-directory': args.working_directory
+    }),
+    subcommand: 'revert'
+  },
+  {
+    name: 'discuss_objective',
+    description:
+      'Mark a draft objective as "submitted", indicating the ticket is in active discussion with an agent but not yet being executed. Does NOT start execution — use attach for that.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ticket_id: {
+          type: 'string',
+          description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.'
+        },
+        objective_id: {
+          type: 'string',
+          description:
+            'Optional UUID of a specific draft objective to submit. Defaults to the latest draft.'
+        }
+      },
+      required: ['ticket_id']
+    },
+    toCliFlags: args => ({
+      'ticket-id': args.ticket_id,
+      'objective-id': args.objective_id
+    }),
+    subcommand: 'discuss-objective'
+  },
+  {
     name: 'prompt',
     description: 'Create a ticket and attach to it immediately (ovld protocol prompt).',
     inputSchema: {
       type: 'object',
       properties: {
-        objective: { type: 'string' },
+        objectives: OBJECTIVES_ARRAY_SCHEMA,
         title: { type: 'string' },
         priority: { type: 'string', enum: ['low', 'medium', 'high', 'urgent'] },
         project_id: { type: 'string' },
@@ -152,10 +224,10 @@ const tools = [
         agent: { type: 'string' },
         method: { type: 'string' }
       },
-      required: ['objective']
+      required: ['objectives']
     },
     toCliFlags: args => ({
-      objective: args.objective,
+      'objectives-json': toCliObjectives(args.objectives),
       title: args.title,
       priority: args.priority,
       'project-id': args.project_id,
@@ -171,6 +243,65 @@ const tools = [
       method: args.method
     }),
     subcommand: 'prompt'
+  },
+  {
+    name: 'create_ticket',
+    description: 'Create a draft ticket without attaching (ovld protocol create).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        objectives: OBJECTIVES_ARRAY_SCHEMA,
+        title: { type: 'string' },
+        priority: { type: 'string', enum: ['low', 'medium', 'high', 'urgent'] },
+        project_id: { type: 'string' },
+        working_directory: { type: 'string' },
+        personal: { type: 'boolean' },
+        acceptance_criteria: { type: 'string' },
+        available_tools: { type: 'string' },
+        execution_target: { type: 'string', enum: ['agent', 'human'] },
+        delegate: { type: 'string' },
+        session_key: { type: 'string' },
+        ticket_id: { type: 'string' },
+        agent: { type: 'string' }
+      },
+      required: ['objectives']
+    },
+    toCliFlags: args => ({
+      'objectives-json': toCliObjectives(args.objectives),
+      title: args.title,
+      priority: args.priority,
+      'project-id': args.project_id,
+      'working-directory': args.working_directory,
+      personal: args.personal === true ? true : undefined,
+      'acceptance-criteria': args.acceptance_criteria,
+      'available-tools': args.available_tools,
+      'execution-target': args.execution_target,
+      delegate: args.delegate,
+      'session-key': args.session_key,
+      'ticket-id': args.ticket_id,
+      agent: args.agent
+    }),
+    subcommand: 'create'
+  },
+  {
+    name: 'add_objectives',
+    description: 'Append ordered objectives to an existing ticket.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ticket_id: {
+          type: 'string',
+          description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.'
+        },
+        objectives: OBJECTIVES_ARRAY_SCHEMA
+      },
+      required: ['ticket_id', 'objectives']
+    },
+    toCliFlags: args => ({
+      'ticket-id': args.ticket_id,
+      'objectives-json': toCliObjectives(args.objectives)
+    }),
+    subcommand: 'add-objectives'
   },
   {
     name: 'update',
@@ -293,31 +424,6 @@ const tools = [
     subcommand: 'ask'
   },
   {
-    name: 'request_approval_gate',
-    description:
-      'Flip auto_advance=false on the next queued future objective so a human must approve before it runs.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        session_key: { type: 'string' },
-        ticket_id: {
-          type: 'string',
-          description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.'
-        },
-        reason: { type: 'string' },
-        objective_id: { type: 'string' }
-      },
-      required: ['session_key', 'ticket_id', 'reason']
-    },
-    toCliFlags: args => ({
-      'session-key': args.session_key,
-      'ticket-id': args.ticket_id,
-      reason: args.reason,
-      'objective-id': args.objective_id
-    }),
-    subcommand: 'request-approval-gate'
-  },
-  {
     name: 'read_context',
     description: 'Read persistent shared context entries for a ticket.',
     inputSchema: {
@@ -419,19 +525,15 @@ const tools = [
   {
     name: 'record_work',
     description:
-      'Record completed-from-chat work as a ticket in `review` status with a completed objective, then trigger feed-post generation. Use this INSTEAD OF create_ticket + attach + deliver for "log what we just did" flows. Project resolution mirrors `prompt`: if project_id is omitted, working_directory is matched against project_user.local_working_directory. When neither resolves, pass personal: true. Do not use for in-progress work.',
+      'Record completed-from-chat work as a ticket in review + feed post (no attach).',
     inputSchema: {
       type: 'object',
       properties: {
-        objective: {
-          type: 'string',
-          description: 'What was asked / what was done. Stored as a completed objective.'
-        },
-        summary: {
-          type: 'string',
-          description: 'Narrative for feed post + reviewer.'
-        },
+        objectives: OBJECTIVES_ARRAY_SCHEMA,
+        summary: { type: 'string' },
         title: { type: 'string' },
+        artifacts: { type: 'array' },
+        change_rationales: { type: 'array' },
         priority: { type: 'string', enum: ['low', 'medium', 'high', 'urgent'] },
         project_id: { type: 'string' },
         working_directory: { type: 'string' },
@@ -439,11 +541,10 @@ const tools = [
         acceptance_criteria: { type: 'string' },
         available_tools: { type: 'string' },
         delegate: { type: 'string' },
-        artifacts: { type: 'array' },
-        change_rationales: { type: 'array' },
+        agent: { type: 'string' },
         skip_file_change_check: { type: 'boolean' }
       },
-      required: ['objective', 'summary']
+      required: ['objectives', 'summary']
     },
     toCliFlags: args => ({
       'payload-file': '-',
@@ -451,15 +552,16 @@ const tools = [
       priority: args.priority,
       'project-id': args.project_id,
       'working-directory': args.working_directory,
-      personal: args.personal,
+      personal: args.personal === true ? true : undefined,
       'acceptance-criteria': args.acceptance_criteria,
       'available-tools': args.available_tools,
       delegate: args.delegate,
+      agent: args.agent,
       'skip-file-change-check': args.skip_file_change_check
     }),
     toCliStdin: args =>
       JSON.stringify({
-        objective: args.objective,
+        objectives: toCliObjectives(args.objectives),
         summary: args.summary,
         ...(Array.isArray(args.artifacts) ? { artifacts: args.artifacts } : {}),
         ...(Array.isArray(args.change_rationales)
@@ -616,9 +718,152 @@ const tools = [
       'metadata-json': args.metadata
     }),
     subcommand: 'attachment-upload-file'
+  },
+
+  // ---------------------------------------------------------------------------
+  // Device + project resources (hosted MCP parity; maps to ovld protocol)
+  // ---------------------------------------------------------------------------
+  {
+    name: 'get_device',
+    description:
+      'Register or refresh the caller device (pass a stable fingerprint and optional hostname/platform). Prefer calling before add_project_resource.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        device_fingerprint: {
+          type: 'string',
+          description: 'Stable UUID or token stored locally for this workstation.'
+        },
+        device_hostname: { type: 'string' },
+        device_platform: {
+          type: 'string',
+          description: 'e.g. darwin, linux, win32.'
+        }
+      },
+      required: ['device_fingerprint']
+    },
+    toCliFlags: args => ({
+      'device-fingerprint': args.device_fingerprint,
+      ...(typeof args.device_hostname === 'string' && args.device_hostname.trim().length > 0
+        ? { 'device-hostname': args.device_hostname }
+        : {}),
+      ...(typeof args.device_platform === 'string' && args.device_platform.trim().length > 0
+        ? { 'device-platform': args.device_platform }
+        : {})
+    }),
+    subcommand: 'get-device'
+  },
+  {
+    name: 'update_device',
+    description:
+      'Rename this device label (lowercase kebab-case, unique per organization). Requires the same device_fingerprint.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        device_fingerprint: { type: 'string' },
+        label: { type: 'string' }
+      },
+      required: ['device_fingerprint', 'label']
+    },
+    toCliFlags: args => ({
+      'device-fingerprint': args.device_fingerprint,
+      label: args.label
+    }),
+    subcommand: 'update-device'
+  },
+  {
+    name: 'list_project_resources',
+    description:
+      'List directories registered as resources for a project. Optionally filter by device_fingerprint to the device registered for this org session.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        project_id: { type: 'string', description: 'Project UUID.' },
+        device_fingerprint: {
+          type: 'string',
+          description:
+            'When set with this org scope, restricts results to directories for this org + user device.'
+        }
+      },
+      required: ['project_id']
+    },
+    toCliFlags: args => ({
+      'project-id': args.project_id,
+      ...(typeof args.device_fingerprint === 'string' && args.device_fingerprint.trim().length > 0
+        ? { 'device-fingerprint': args.device_fingerprint.trim() }
+        : {})
+    }),
+    subcommand: 'list-project-resources'
+  },
+  {
+    name: 'add_project_resource',
+    description:
+      'Attach a filesystem directory to this project on the current machine. Directory must exist; device is keyed by fingerprint (per org).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        project_id: { type: 'string' },
+        directory_path: {
+          type: 'string',
+          description: 'Absolute path; omit to use cwd (CLI verifies existence).'
+        },
+        device_fingerprint: { type: 'string' },
+        label: { type: 'string' },
+        is_primary: { type: 'boolean' },
+        device_hostname: { type: 'string' },
+        device_platform: { type: 'string' }
+      },
+      required: ['project_id', 'device_fingerprint']
+    },
+    toCliFlags: args => ({
+      'project-id': args.project_id,
+      ...(typeof args.directory_path === 'string' && args.directory_path.trim().length > 0
+        ? { directory: args.directory_path }
+        : {}),
+      'device-fingerprint': args.device_fingerprint,
+      ...(typeof args.label === 'string' ? { label: args.label } : {}),
+      ...(args.is_primary === true || args.is_primary === 'true' ? { 'is-primary': true } : {}),
+      ...(typeof args.device_hostname === 'string' && args.device_hostname.trim().length > 0
+        ? { 'device-hostname': args.device_hostname }
+        : {}),
+      ...(typeof args.device_platform === 'string' && args.device_platform.trim().length > 0
+        ? { 'device-platform': args.device_platform }
+        : {})
+    }),
+    subcommand: 'add-project-resource'
+  },
+  {
+    name: 'update_project_resource',
+    description:
+      'Update path / label / primary flag for one resource directory. Must belong to the device fingerprint in this org.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        resource_id: { type: 'string' },
+        device_fingerprint: { type: 'string' },
+        directory_path: { type: 'string' },
+        label: {
+          oneOf: [{ type: 'string' }, { type: 'null' }],
+          description: 'Use string "null" to clear via CLI shim pass-through.'
+        },
+        is_primary: { type: 'boolean' }
+      },
+      required: ['resource_id', 'device_fingerprint']
+    },
+    toCliFlags: args => ({
+      'resource-id': args.resource_id,
+      'device-fingerprint': args.device_fingerprint,
+      ...(typeof args.directory_path === 'string' ? { directory: args.directory_path.trim() } : {}),
+      ...(typeof args.label === 'undefined'
+        ? {}
+        : { label: args.label === null ? 'null' : String(args.label) }),
+      ...(args.is_primary !== undefined
+        ? { 'is-primary': args.is_primary === true || args.is_primary === 'true' }
+        : {})
+    }),
+    subcommand: 'update-project-resource'
   }
 ];
-
 const searchTicketsTool = {
   name: 'search_tickets',
   description:
@@ -824,10 +1069,10 @@ async function handleRequest(message) {
       },
       serverInfo: {
         name: 'overlord',
-        version: '0.1.4'
+        version: '0.1.5'
       },
       instructions:
-        'Use these tools to drive Overlord ticket workflows through the installed ovld CLI. Tool names match the hosted Overlord MCP server (attach, update, deliver, …). Most operations expect a session key from attach or connect.'
+        'Use these tools to drive Overlord ticket workflows through the installed ovld CLI. Names mirror hosted MCP tools (attach, update, deliver, get_device, list_project_resources, …). Session tools need attach/connect. Devices are scoped to organization + user + fingerprint — call get_device before add_project_resource.'
     });
     return;
   }

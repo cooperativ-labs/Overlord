@@ -10,11 +10,14 @@
  * - Expose install, repair, and status operations
  */
 
+import { execFileSync } from 'child_process';
 import crypto from 'crypto';
 import { app } from 'electron';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+
+import legacyGeminiConnector from '../../../../../lib/overlord/legacy-gemini-connector.cjs';
 
 import {
   backupFile,
@@ -25,6 +28,8 @@ import {
   writeJsonFile,
   writeTextFile
 } from './merge-helpers';
+
+const { removeLegacyGeminiConnector: removeLegacyGeminiConnectorFiles } = legacyGeminiConnector;
 import { installSlashCommands, uninstallSlashCommands } from './slash-commands';
 import { BUNDLE_VERSION, JSON_MARKER_KEY, OPENCODE_AGENTS_SECTION } from './templates';
 
@@ -32,7 +37,7 @@ import { BUNDLE_VERSION, JSON_MARKER_KEY, OPENCODE_AGENTS_SECTION } from './temp
 // Types
 // ---------------------------------------------------------------------------
 
-export type AgentBundleAgent = 'claude' | 'cursor' | 'opencode';
+export type AgentBundleAgent = 'claude' | 'cursor' | 'antigravity' | 'opencode';
 
 export type BundleStatus = 'installed' | 'stale' | 'partial' | 'not_installed' | 'error';
 
@@ -63,9 +68,20 @@ type ManifestEntry = {
 type BundleManifest = {
   claude?: ManifestEntry;
   cursor?: ManifestEntry;
+  antigravity?: ManifestEntry;
   opencode?: ManifestEntry;
+  /** @deprecated Legacy Gemini connector manifest entry removed during migration. */
+  gemini?: ManifestEntry;
 };
 
+const ANTIGRAVITY_RUNTIME_SCRIPTS_DIR = path.join(os.homedir(), '.ovld', 'antigravity', 'scripts');
+const ANTIGRAVITY_INSTALLED_PLUGINS_DIR = path.join(
+  os.homedir(),
+  '.gemini',
+  'antigravity-cli',
+  'plugins'
+);
+const ANTIGRAVITY_MCP_PATH_PLACEHOLDER = '__OVERLORD_MCP_SCRIPT_PATH__';
 // ---------------------------------------------------------------------------
 // Paths
 // ---------------------------------------------------------------------------
@@ -186,6 +202,145 @@ function asStringArray(value: unknown): string[] {
   return value.filter((entry): entry is string => typeof entry === 'string');
 }
 
+function antigravityPaths() {
+  return {
+    policyFile: path.join(os.homedir(), '.gemini', 'policies', 'overlord-protocol.toml'),
+    installedPluginJson: path.join(ANTIGRAVITY_INSTALLED_PLUGINS_DIR, 'plugin.json'),
+    installedHooks: path.join(ANTIGRAVITY_INSTALLED_PLUGINS_DIR, 'hooks.json'),
+    installedMcp: path.join(ANTIGRAVITY_INSTALLED_PLUGINS_DIR, 'mcp_config.json'),
+    runtimeMcp: path.join(ANTIGRAVITY_RUNTIME_SCRIPTS_DIR, 'overlord-mcp.mjs'),
+    runtimeHook: path.join(ANTIGRAVITY_RUNTIME_SCRIPTS_DIR, 'user-prompt-submit-hook.sh')
+  };
+}
+
+function antigravitySourcePluginDir(): string {
+  const appPath = app.getAppPath();
+  const unpackedAppPath = appPath.replace('app.asar', 'app.asar.unpacked');
+  const candidates = [
+    path.join(unpackedAppPath, 'plugins', 'antigravity'),
+    path.join(unpackedAppPath, 'packages', 'overlord-cli', 'plugins', 'antigravity'),
+    path.join(appPath, 'plugins', 'antigravity'),
+    path.join(appPath, 'packages', 'overlord-cli', 'plugins', 'antigravity')
+  ];
+
+  return (
+    candidates.find(candidate => fs.existsSync(path.join(candidate, 'plugin.json'))) ??
+    candidates[0]
+  );
+}
+
+function ensureAntigravityRuntimeScripts(sourceDir: string): void {
+  const scriptNames = ['overlord-mcp.mjs', 'user-prompt-submit-hook.sh'];
+  fs.mkdirSync(ANTIGRAVITY_RUNTIME_SCRIPTS_DIR, { recursive: true });
+
+  for (const scriptName of scriptNames) {
+    const sourcePath = path.join(sourceDir, 'scripts', scriptName);
+    if (!fs.existsSync(sourcePath)) {
+      throw new Error(`Antigravity runtime script missing: ${sourcePath}`);
+    }
+    const targetPath = path.join(ANTIGRAVITY_RUNTIME_SCRIPTS_DIR, scriptName);
+    fs.copyFileSync(sourcePath, targetPath);
+    if (scriptName.endsWith('.sh')) {
+      fs.chmodSync(targetPath, 0o755);
+    }
+  }
+}
+
+function patchAntigravityMcpServers(
+  servers: Record<string, { command?: string; args?: unknown[] }> | undefined,
+  mcpScriptPath: string
+): void {
+  if (!servers || typeof servers !== 'object') return;
+  for (const entry of Object.values(servers)) {
+    if (!entry || typeof entry !== 'object' || !Array.isArray(entry.args)) continue;
+    const referencesOverlordMcp = entry.args.some(
+      arg =>
+        arg === ANTIGRAVITY_MCP_PATH_PLACEHOLDER ||
+        (typeof arg === 'string' && arg.includes('overlord-mcp'))
+    );
+    if (referencesOverlordMcp) {
+      entry.args = [mcpScriptPath];
+      entry.command = entry.command ?? 'node';
+    }
+  }
+}
+
+function patchAntigravityInstalledPaths({
+  mcpScriptPath,
+  hookScriptPath
+}: {
+  mcpScriptPath: string;
+  hookScriptPath: string;
+}): void {
+  const paths = antigravityPaths();
+
+  if (fs.existsSync(paths.installedHooks)) {
+    const hooks = readJsonFile(paths.installedHooks) as {
+      hooks?: Record<string, Array<{ hooks?: Array<{ type?: string; command?: string }> }>>;
+    };
+    const groups = hooks.hooks;
+    if (groups) {
+      for (const eventHooks of Object.values(groups)) {
+        if (!Array.isArray(eventHooks)) continue;
+        for (const group of eventHooks) {
+          if (!group?.hooks) continue;
+          for (const hook of group.hooks) {
+            if (hook?.type !== 'command') continue;
+            hook.command = hookScriptPath;
+          }
+        }
+      }
+      writeJsonFile(paths.installedHooks, hooks as Record<string, unknown>);
+    }
+  }
+
+  if (fs.existsSync(paths.installedMcp)) {
+    const mcpConfig = readJsonFile(paths.installedMcp) as {
+      mcpServers?: Record<string, { command?: string; args?: unknown[] }>;
+    };
+    patchAntigravityMcpServers(mcpConfig.mcpServers, mcpScriptPath);
+    writeJsonFile(paths.installedMcp, mcpConfig as Record<string, unknown>);
+  }
+
+  if (fs.existsSync(paths.installedPluginJson)) {
+    const pluginJson = readJsonFile(paths.installedPluginJson) as {
+      mcpServers?: Record<string, { command?: string; args?: unknown[] }>;
+    };
+    patchAntigravityMcpServers(pluginJson.mcpServers, mcpScriptPath);
+    writeJsonFile(paths.installedPluginJson, pluginJson as Record<string, unknown>);
+  }
+}
+
+function runAgyPluginInstall(sourceDir: string): void {
+  try {
+    execFileSync('agy', ['plugin', 'install', sourceDir], { stdio: 'inherit' });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes('already') || message.includes('imported')) {
+      execFileSync('agy', ['plugin', 'import', '--force', sourceDir], { stdio: 'inherit' });
+      return;
+    }
+    throw error;
+  }
+}
+
+function removeLegacyGeminiConnector(): string[] {
+  return removeLegacyGeminiConnectorFiles({
+    readManifest,
+    writeManifest: manifest => writeManifest(manifest as BundleManifest),
+    readTextFile
+  });
+}
+
+function checkAntigravityFilesExist(): boolean {
+  const paths = antigravityPaths();
+  return (
+    fs.existsSync(paths.installedPluginJson) &&
+    fs.existsSync(paths.runtimeMcp) &&
+    fs.existsSync(paths.runtimeHook)
+  );
+}
+
 function cursorSourcePluginDir(): string {
   const appPath = app.getAppPath();
   const unpackedAppPath = appPath.replace('app.asar', 'app.asar.unpacked');
@@ -252,6 +407,7 @@ function pluginVersion(filePath: string): string | null {
 function currentContentHashForAgent(agent: AgentBundleAgent): string {
   if (agent === 'claude') return contentHashForDirectory(claudeSourcePluginDir());
   if (agent === 'cursor') return contentHashForDirectory(cursorSourcePluginDir());
+  if (agent === 'antigravity') return contentHashForDirectory(antigravitySourcePluginDir());
   return contentHash(OPENCODE_AGENTS_SECTION);
 }
 
@@ -264,7 +420,9 @@ export function getAgentBundleStatus(agent: AgentBundleAgent): AgentBundleStatus
       ? pluginVersion(path.join(claudeSourcePluginDir(), '.claude-plugin', 'plugin.json'))
       : agent === 'cursor'
         ? pluginVersion(path.join(cursorSourcePluginDir(), '.cursor-plugin', 'plugin.json'))
-        : BUNDLE_VERSION;
+        : agent === 'antigravity'
+          ? pluginVersion(path.join(antigravitySourcePluginDir(), 'plugin.json'))
+          : BUNDLE_VERSION;
 
   if (!entry) {
     if (agent === 'claude') {
@@ -282,6 +440,7 @@ export function getAgentBundleStatus(agent: AgentBundleAgent): AgentBundleStatus
     // Check if files exist anyway (manual install or pre-manifest)
     let filesExist: boolean;
     if (agent === 'cursor') filesExist = checkCursorFilesExist();
+    else if (agent === 'antigravity') filesExist = checkAntigravityFilesExist();
     else filesExist = checkOpenCodeFilesExist();
     if (filesExist) {
       return {
@@ -363,6 +522,7 @@ export function getAllBundleStatuses(): AgentBundleStatus[] {
   return [
     getAgentBundleStatus('claude'),
     getAgentBundleStatus('cursor'),
+    getAgentBundleStatus('antigravity'),
     getAgentBundleStatus('opencode')
   ];
 }
@@ -732,6 +892,65 @@ function installCursor(): InstallResult {
   }
 }
 
+function installAntigravity(): InstallResult {
+  const backups: string[] = [];
+
+  try {
+    const sourceDir = antigravitySourcePluginDir();
+    if (!fs.existsSync(path.join(sourceDir, 'plugin.json'))) {
+      return {
+        ok: false,
+        agent: 'antigravity',
+        backups,
+        error: `Antigravity plugin source not found at ${sourceDir}.`
+      };
+    }
+
+    removeLegacyGeminiConnector();
+    const paths = antigravityPaths();
+    ensureAntigravityRuntimeScripts(sourceDir);
+    runAgyPluginInstall(sourceDir);
+    patchAntigravityInstalledPaths({
+      mcpScriptPath: paths.runtimeMcp,
+      hookScriptPath: paths.runtimeHook
+    });
+
+    const policyContent = [
+      '# Managed by Overlord onboarding',
+      '[[rule]]',
+      'toolName = "run_shell_command"',
+      'commandPrefix = "ovld protocol"',
+      'decision = "allow"',
+      'priority = 900',
+      ''
+    ].join('\n');
+    writeTextFile(paths.policyFile, policyContent);
+
+    const installedFiles = [
+      paths.policyFile,
+      paths.runtimeMcp,
+      paths.runtimeHook,
+      paths.installedPluginJson,
+      paths.installedHooks,
+      paths.installedMcp
+    ].filter(filePath => fs.existsSync(filePath));
+
+    const manifest = readManifest();
+    manifest.antigravity = {
+      version: pluginVersion(path.join(sourceDir, 'plugin.json')) ?? '0.0.0',
+      contentHash: contentHashForDirectory(sourceDir),
+      installedAt: new Date().toISOString(),
+      files: installedFiles
+    };
+    writeManifest(manifest);
+
+    return { ok: true, agent: 'antigravity', backups };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { ok: false, agent: 'antigravity', backups, error: message };
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -743,6 +962,7 @@ function installCursor(): InstallResult {
 export function installAgentBundle(agent: AgentBundleAgent): InstallResult {
   if (agent === 'claude') return installClaude();
   if (agent === 'cursor') return installCursor();
+  if (agent === 'antigravity') return installAntigravity();
   return installOpenCode();
 }
 
@@ -753,6 +973,7 @@ export function installAllBundles(): InstallResult[] {
   return [
     installAgentBundle('claude'),
     installAgentBundle('cursor'),
+    installAgentBundle('antigravity'),
     installAgentBundle('opencode')
   ];
 }
@@ -897,6 +1118,21 @@ export function uninstallAgentBundle(agent: AgentBundleAgent): { ok: boolean; er
       if (!slashUninstall.ok) {
         return { ok: false, error: slashUninstall.error };
       }
+    } else if (agent === 'antigravity') {
+      const paths = antigravityPaths();
+      if (fs.existsSync(ANTIGRAVITY_RUNTIME_SCRIPTS_DIR)) {
+        fs.rmSync(ANTIGRAVITY_RUNTIME_SCRIPTS_DIR, { recursive: true, force: true });
+      }
+      if (fs.existsSync(ANTIGRAVITY_INSTALLED_PLUGINS_DIR)) {
+        fs.rmSync(ANTIGRAVITY_INSTALLED_PLUGINS_DIR, { recursive: true, force: true });
+      }
+      if (fs.existsSync(paths.policyFile)) {
+        const existing = readTextFile(paths.policyFile);
+        if (existing.includes('commandPrefix = "ovld protocol"')) {
+          fs.rmSync(paths.policyFile, { force: true });
+        }
+      }
+      removeLegacyGeminiConnector();
     }
 
     // Remove from manifest

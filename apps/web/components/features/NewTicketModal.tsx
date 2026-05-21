@@ -67,7 +67,9 @@ export function NewTicketModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitButtonState, setSubmitButtonState] = useState<ButtonLoadingState>('default');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const { selection, setSelection, loaded: selectionLoaded } = useAgentModelPreference();
+  const { selection: defaultSelection, loaded: selectionLoaded } = useAgentModelPreference();
+  const [objectiveSelection, setObjectiveSelection] = useState(defaultSelection);
+  const wasOpenRef = useRef(false);
   const createTicketMutation = useCreateTicketMutation();
   const updateAssignmentMutation = useUpdateTicketAssignmentMutation();
   const updateFieldsMutation = useUpdateTicketFieldsMutation();
@@ -90,11 +92,16 @@ export function NewTicketModal({
   }, []);
 
   useEffect(() => {
+    if (isOpen && !wasOpenRef.current) {
+      setObjectiveSelection(defaultSelection);
+    }
+    wasOpenRef.current = isOpen;
+
     setSelectedProjectId(current => {
       if (isOpen && current) return current;
       return current === resolvedDefaultProjectId ? current : resolvedDefaultProjectId;
     });
-  }, [isOpen, resolvedDefaultProjectId]);
+  }, [defaultSelection, isOpen, resolvedDefaultProjectId]);
 
   // Focus textarea once ticket creation finishes and textarea is rendered
   useEffect(() => {
@@ -178,7 +185,10 @@ export function NewTicketModal({
       void (async () => {
         try {
           const createdTicket = await createPromise;
-          await updateAssignmentMutation.mutateAsync({ ticketId: createdTicket.id, selection });
+          await updateAssignmentMutation.mutateAsync({
+            ticketId: createdTicket.id,
+            selection: objectiveSelection
+          });
           if (trimmedObjective) {
             const title = await generateTicketTitleActionWithRetry(trimmedObjective);
             await updateFieldsMutation.mutateAsync({
@@ -266,9 +276,9 @@ export function NewTicketModal({
               <Label className="text-sm font-medium">Agent &amp; Model</Label>
               <AgentModelChooserButton
                 ticketId={null}
-                initialSelection={selection}
+                initialSelection={objectiveSelection}
                 disabled={isSubmitting}
-                onSelectionChange={setSelection}
+                onSelectionChange={setObjectiveSelection}
                 persistSelection={false}
               />
             </div>

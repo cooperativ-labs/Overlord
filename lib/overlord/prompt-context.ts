@@ -139,7 +139,7 @@ export function buildPromptContextSections(input: BuildPromptContextInput): Prom
             const preview = text ? ` — ${text.length > 80 ? `${text.slice(0, 77)}...` : text}` : '';
             const stateSuffix = o.state ? ` [${o.state}]` : '';
             const autoAdvanceSuffix =
-              o.state === 'future'
+              o.state === 'future' || o.state === 'draft'
                 ? ` auto_advance=${o.auto_advance === false ? 'false' : 'true'}`
                 : '';
             return `- \`${o.id}\`${stateSuffix}${autoAdvanceSuffix}${preview}`;
@@ -147,14 +147,17 @@ export function buildPromptContextSections(input: BuildPromptContextInput): Prom
           .join('\n')}`
       : '';
 
-  const hasQueuedFutureObjective = objectives.some(o => o.state === 'future');
-  const queuedFollowupGuidance = hasQueuedFutureObjective
+  const hasQueuedFollowUpObjective = objectives.some(
+    o => o.state === 'future' || o.state === 'draft'
+  );
+  const queuedFollowupGuidance = hasQueuedFollowUpObjective
     ? `### Queued follow-up objectives
 
-After you deliver, the platform may automatically launch the next future
-objective listed above (in queue order) on this same ticket. Whether it
-auto-launches depends on the per-objective \`auto_advance\` flag shown beside
-each Objective ID. You do NOT need to do anything to trigger the next one.
+After you deliver, the platform may automatically launch the current draft
+objective (when it has content) or the next future objective in queue order.
+Whether it auto-launches depends on the per-objective \`auto_advance\` flag
+shown beside each Objective ID. You do NOT need to do anything to trigger the
+next one.
 
 If — and ONLY if — the next objective is marked \`auto_advance=true\` but
 SHOULD NOT run without human review (because your current work surfaced a

@@ -1,0 +1,1126 @@
+#!/usr/bin/env node
+
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+
+const execFileAsync = promisify(execFile);
+const OVLD_BIN = process.env.OVLD_BIN?.trim() || 'ovld';
+const PROTOCOL_VERSION = '2025-06-18';
+
+const OBJECTIVES_ARRAY_SCHEMA = {
+  type: 'array',
+  description:
+    'Ordered objective objects. Index 0 is the first objective to execute; later indexes queue after it.',
+  items: {
+    type: 'object',
+    properties: {
+      objective: { type: 'string' },
+      title: { type: 'string' },
+      auto_advance: { type: 'boolean' },
+      assigned_agent: { type: 'object' }
+    },
+    required: ['objective']
+  }
+};
+
+function toCliObjectives(objectives) {
+  if (!Array.isArray(objectives)) return undefined;
+  return objectives.map(item => ({
+    objective: item.objective,
+    ...(item.title ? { title: item.title } : {}),
+    ...(typeof item.auto_advance === 'boolean' ? { autoAdvance: item.auto_advance } : {}),
+    ...(item.assigned_agent ? { assignedAgent: item.assigned_agent } : {})
+  }));
+}
+
+function execFileWithOptionalInput(file, args, options, input) {
+  if (input === undefined) {
+    return execFileAsync(file, args, options);
+  }
+
+  return new Promise((resolve, reject) => {
+    const child = execFile(file, args, options, (error, stdout, stderr) => {
+      if (error) {
+        error.stdout = stdout;
+        error.stderr = stderr;
+        reject(error);
+        return;
+      }
+
+      resolve({ stdout, stderr });
+    });
+
+    child.stdin?.end(input);
+  });
+}
+
+const tools = [
+  {
+    name: 'discover_project',
+    description: 'Resolve the Overlord project that matches a working directory.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        working_directory: {
+          type: 'string',
+          description: 'Directory to match. Defaults to the current workspace.'
+        }
+      }
+    },
+    toCliFlags: args => ({
+      'working-directory': args.working_directory
+    }),
+    subcommand: 'discover-project'
+  },
+  {
+    name: 'attach',
+    description:
+      'Attach an agent session to an existing Overlord ticket and return the working context.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ticket_id: {
+          type: 'string',
+          description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.'
+        },
+        agent: { type: 'string' },
+        method: { type: 'string' },
+        external_session_id: { type: ['string', 'null'] },
+        metadata: {
+          type: 'object',
+          description:
+            'Optional extra metadata merged into the attach request (same as --metadata-json on the CLI).'
+        }
+      },
+      required: ['ticket_id']
+    },
+    toCliFlags: args => ({
+      'ticket-id': args.ticket_id,
+      agent: args.agent,
+      method: args.method,
+      'external-session-id': args.external_session_id,
+      ...(args.metadata && typeof args.metadata === 'object' && !Array.isArray(args.metadata)
+        ? { 'metadata-json': args.metadata }
+        : {})
+    }),
+    subcommand: 'attach'
+  },
+  {
+    name: 'connect',
+    description: 'Create a lightweight Overlord session without loading the full ticket context.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ticket_id: {
+          type: 'string',
+          description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.'
+        },
+        agent: { type: 'string' },
+        method: { type: 'string' },
+        metadata: {
+          type: 'object',
+          description:
+            'Optional extra metadata merged into the connect request (same as --metadata-json on the CLI).'
+        }
+      },
+      required: ['ticket_id']
+    },
+    toCliFlags: args => ({
+      'ticket-id': args.ticket_id,
+      agent: args.agent,
+      method: args.method,
+      ...(args.metadata && typeof args.metadata === 'object' && !Array.isArray(args.metadata)
+        ? { 'metadata-json': args.metadata }
+        : {})
+    }),
+    subcommand: 'connect'
+  },
+  {
+    name: 'load_ticket_context',
+    description:
+      'Fetch Overlord ticket context without creating a session (maps to ovld protocol load-context; not the same as read_context).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ticket_id: {
+          type: 'string',
+          description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.'
+        }
+      },
+      required: ['ticket_id']
+    },
+    toCliFlags: args => ({
+      'ticket-id': args.ticket_id
+    }),
+    subcommand: 'load-context'
+  },
+  {
+    name: 'revert',
+    description:
+      'Restore the local working tree to an objective checkpoint (maps to ovld protocol revert).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        objective_id: { type: 'string' },
+        working_directory: {
+          type: 'string',
+          description: 'Repository to restore. Defaults to the current workspace.'
+        }
+      },
+      required: ['objective_id']
+    },
+    toCliFlags: args => ({
+      'objective-id': args.objective_id,
+      'working-directory': args.working_directory
+    }),
+    subcommand: 'revert'
+  },
+  {
+    name: 'discuss_objective',
+    description:
+      'Mark a draft objective as "submitted", indicating the ticket is in active discussion with an agent but not yet being executed. Does NOT start execution — use attach for that.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ticket_id: {
+          type: 'string',
+          description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.'
+        },
+        objective_id: {
+          type: 'string',
+          description:
+            'Optional UUID of a specific draft objective to submit. Defaults to the latest draft.'
+        }
+      },
+      required: ['ticket_id']
+    },
+    toCliFlags: args => ({
+      'ticket-id': args.ticket_id,
+      'objective-id': args.objective_id
+    }),
+    subcommand: 'discuss-objective'
+  },
+  {
+    name: 'prompt',
+    description: 'Create a ticket and attach to it immediately (ovld protocol prompt).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        objectives: OBJECTIVES_ARRAY_SCHEMA,
+        title: { type: 'string' },
+        priority: { type: 'string', enum: ['low', 'medium', 'high', 'urgent'] },
+        project_id: { type: 'string' },
+        working_directory: { type: 'string' },
+        personal: {
+          type: 'boolean',
+          description: 'Create without assigning a project (private ticket).'
+        },
+        acceptance_criteria: { type: 'string' },
+        available_tools: { type: 'string' },
+        execution_target: { type: 'string', enum: ['agent', 'human'] },
+        delegate: { type: 'string' },
+        parent_session_key: { type: 'string' },
+        parent_ticket_id: { type: 'string' },
+        agent: { type: 'string' },
+        method: { type: 'string' }
+      },
+      required: ['objectives']
+    },
+    toCliFlags: args => ({
+      'objectives-json': toCliObjectives(args.objectives),
+      title: args.title,
+      priority: args.priority,
+      'project-id': args.project_id,
+      'working-directory': args.working_directory,
+      personal: args.personal === true ? true : undefined,
+      'acceptance-criteria': args.acceptance_criteria,
+      'available-tools': args.available_tools,
+      'execution-target': args.execution_target,
+      delegate: args.delegate,
+      'parent-session-key': args.parent_session_key,
+      'parent-ticket-id': args.parent_ticket_id,
+      agent: args.agent,
+      method: args.method
+    }),
+    subcommand: 'prompt'
+  },
+  {
+    name: 'create_ticket',
+    description: 'Create a draft ticket without attaching (ovld protocol create).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        objectives: OBJECTIVES_ARRAY_SCHEMA,
+        title: { type: 'string' },
+        priority: { type: 'string', enum: ['low', 'medium', 'high', 'urgent'] },
+        project_id: { type: 'string' },
+        working_directory: { type: 'string' },
+        personal: { type: 'boolean' },
+        acceptance_criteria: { type: 'string' },
+        available_tools: { type: 'string' },
+        execution_target: { type: 'string', enum: ['agent', 'human'] },
+        delegate: { type: 'string' },
+        session_key: { type: 'string' },
+        ticket_id: { type: 'string' },
+        agent: { type: 'string' }
+      },
+      required: ['objectives']
+    },
+    toCliFlags: args => ({
+      'objectives-json': toCliObjectives(args.objectives),
+      title: args.title,
+      priority: args.priority,
+      'project-id': args.project_id,
+      'working-directory': args.working_directory,
+      personal: args.personal === true ? true : undefined,
+      'acceptance-criteria': args.acceptance_criteria,
+      'available-tools': args.available_tools,
+      'execution-target': args.execution_target,
+      delegate: args.delegate,
+      'session-key': args.session_key,
+      'ticket-id': args.ticket_id,
+      agent: args.agent
+    }),
+    subcommand: 'create'
+  },
+  {
+    name: 'add_objectives',
+    description: 'Append ordered objectives to an existing ticket.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ticket_id: {
+          type: 'string',
+          description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.'
+        },
+        objectives: OBJECTIVES_ARRAY_SCHEMA
+      },
+      required: ['ticket_id', 'objectives']
+    },
+    toCliFlags: args => ({
+      'ticket-id': args.ticket_id,
+      'objectives-json': toCliObjectives(args.objectives)
+    }),
+    subcommand: 'add-objectives'
+  },
+  {
+    name: 'update',
+    description: 'Post an Overlord progress update or activity event.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        session_key: { type: 'string' },
+        ticket_id: {
+          type: 'string',
+          description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.'
+        },
+        summary: { type: 'string' },
+        phase: {
+          type: 'string',
+          enum: ['draft', 'execute', 'review', 'deliver', 'complete', 'blocked', 'cancelled']
+        },
+        event_type: { type: 'string', enum: ['update', 'user_follow_up', 'alert'] },
+        external_url: { type: ['string', 'null'] },
+        external_session_id: { type: ['string', 'null'] },
+        payload: { type: 'object' },
+        change_rationales: { type: 'array' }
+      },
+      required: ['session_key', 'ticket_id', 'summary']
+    },
+    toCliFlags: args => ({
+      'session-key': args.session_key,
+      'ticket-id': args.ticket_id,
+      summary: args.summary,
+      phase: args.phase,
+      'event-type': args.event_type,
+      'external-url': args.external_url,
+      'external-session-id': args.external_session_id,
+      'payload-json': args.payload,
+      'change-rationales-json': args.change_rationales
+    }),
+    subcommand: 'update'
+  },
+  {
+    name: 'record_change_rationales',
+    description: 'Persist structured change rationale rows without posting a separate update.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        session_key: { type: 'string' },
+        ticket_id: {
+          type: 'string',
+          description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.'
+        },
+        summary: { type: 'string' },
+        phase: {
+          type: 'string',
+          enum: ['draft', 'execute', 'review', 'deliver', 'complete', 'blocked', 'cancelled']
+        },
+        change_rationales: { type: 'array' }
+      },
+      required: ['session_key', 'ticket_id', 'change_rationales']
+    },
+    toCliFlags: args => ({
+      'session-key': args.session_key,
+      'ticket-id': args.ticket_id,
+      summary: args.summary,
+      phase: args.phase,
+      'change-rationales-json': args.change_rationales
+    }),
+    subcommand: 'record-change-rationales'
+  },
+  {
+    name: 'record_hook_event',
+    description:
+      'Record a hook lifecycle event for a ticket without requiring a session key. Stop is reserved for future lifecycle hooks.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        hook_type: { type: 'string', enum: ['UserPromptSubmit', 'Stop'] },
+        ticket_id: {
+          type: 'string',
+          description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.'
+        },
+        prompt: { type: 'string' },
+        turn_index: { type: 'number' }
+      },
+      required: ['hook_type', 'ticket_id']
+    },
+    toCliFlags: args => ({
+      'hook-type': args.hook_type,
+      'ticket-id': args.ticket_id,
+      prompt: args.prompt,
+      'turn-index': args.turn_index
+    }),
+    subcommand: 'hook-event'
+  },
+  {
+    name: 'ask',
+    description: 'Send a blocking question to the human reviewer or PM.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        session_key: { type: 'string' },
+        ticket_id: {
+          type: 'string',
+          description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.'
+        },
+        question: { type: 'string' },
+        phase: {
+          type: 'string',
+          enum: ['draft', 'execute', 'review', 'deliver', 'complete', 'blocked', 'cancelled']
+        },
+        payload: { type: 'object' }
+      },
+      required: ['session_key', 'ticket_id', 'question']
+    },
+    toCliFlags: args => ({
+      'session-key': args.session_key,
+      'ticket-id': args.ticket_id,
+      question: args.question,
+      phase: args.phase,
+      'payload-json': args.payload
+    }),
+    subcommand: 'ask'
+  },
+  {
+    name: 'read_context',
+    description: 'Read persistent shared context entries for a ticket.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        session_key: { type: 'string' },
+        ticket_id: {
+          type: 'string',
+          description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.'
+        },
+        query: { type: 'string' },
+        limit: { type: 'number' }
+      },
+      required: ['session_key', 'ticket_id']
+    },
+    toCliFlags: args => ({
+      'session-key': args.session_key,
+      'ticket-id': args.ticket_id,
+      query: args.query,
+      limit: args.limit
+    }),
+    subcommand: 'read-context'
+  },
+  {
+    name: 'write_context',
+    description: 'Write a persistent shared context entry for future Overlord sessions.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        session_key: { type: 'string' },
+        ticket_id: {
+          type: 'string',
+          description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.'
+        },
+        key: { type: 'string' },
+        value: {},
+        tags: { type: 'array', items: { type: 'string' } }
+      },
+      required: ['session_key', 'ticket_id', 'key', 'value']
+    },
+    toCliFlags: args => ({
+      'session-key': args.session_key,
+      'ticket-id': args.ticket_id,
+      key: args.key,
+      value: typeof args.value === 'string' ? args.value : JSON.stringify(args.value),
+      tags: Array.isArray(args.tags) ? args.tags.join(',') : args.tags
+    }),
+    subcommand: 'write-context'
+  },
+  {
+    name: 'deliver',
+    description:
+      'Deliver final work back into Overlord with summary, optional artifacts, and optional change rationales (matches POST /api/protocol/deliver). Large payloads are streamed to the CLI through stdin, so this tool does not create delivery scratch files.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        session_key: { type: 'string' },
+        ticket_id: {
+          type: 'string',
+          description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.'
+        },
+        summary: { type: 'string' },
+        artifacts: { type: 'array' },
+        change_rationales: { type: 'array' },
+        snapshot: {
+          type: 'object',
+          description:
+            'Optional snapshot metadata (jj/git-worktree, workspace, jj ids). Merged with OVERLORD_SNAPSHOT_JSON when both are set.'
+        },
+        checkpoint: {
+          type: 'object',
+          description:
+            'Optional checkpoint metadata. Local git checkpoints are created on `attach`, not deliver; this field is only for callers forwarding pre-recorded checkpoint provenance.'
+        },
+        skip_file_change_check: { type: 'boolean' }
+      },
+      required: ['session_key', 'ticket_id', 'summary']
+    },
+    toCliFlags: args => ({
+      'session-key': args.session_key,
+      'ticket-id': args.ticket_id,
+      'payload-file': '-',
+      'skip-file-change-check': args.skip_file_change_check
+    }),
+    toCliStdin: args =>
+      JSON.stringify({
+        summary: args.summary,
+        ...(Array.isArray(args.artifacts) ? { artifacts: args.artifacts } : {}),
+        ...(Array.isArray(args.change_rationales)
+          ? { changeRationales: args.change_rationales }
+          : {}),
+        ...(args.snapshot && typeof args.snapshot === 'object' ? { snapshot: args.snapshot } : {}),
+        ...(args.checkpoint && typeof args.checkpoint === 'object'
+          ? { checkpoint: args.checkpoint }
+          : {})
+      }),
+    subcommand: 'deliver'
+  },
+  {
+    name: 'record_work',
+    description:
+      'Record completed-from-chat work as a ticket in review + feed post (no attach).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        objectives: OBJECTIVES_ARRAY_SCHEMA,
+        summary: { type: 'string' },
+        title: { type: 'string' },
+        artifacts: { type: 'array' },
+        change_rationales: { type: 'array' },
+        priority: { type: 'string', enum: ['low', 'medium', 'high', 'urgent'] },
+        project_id: { type: 'string' },
+        working_directory: { type: 'string' },
+        personal: { type: 'boolean' },
+        acceptance_criteria: { type: 'string' },
+        available_tools: { type: 'string' },
+        delegate: { type: 'string' },
+        agent: { type: 'string' },
+        skip_file_change_check: { type: 'boolean' }
+      },
+      required: ['objectives', 'summary']
+    },
+    toCliFlags: args => ({
+      'payload-file': '-',
+      title: args.title,
+      priority: args.priority,
+      'project-id': args.project_id,
+      'working-directory': args.working_directory,
+      personal: args.personal === true ? true : undefined,
+      'acceptance-criteria': args.acceptance_criteria,
+      'available-tools': args.available_tools,
+      delegate: args.delegate,
+      agent: args.agent,
+      'skip-file-change-check': args.skip_file_change_check
+    }),
+    toCliStdin: args =>
+      JSON.stringify({
+        objectives: toCliObjectives(args.objectives),
+        summary: args.summary,
+        ...(Array.isArray(args.artifacts) ? { artifacts: args.artifacts } : {}),
+        ...(Array.isArray(args.change_rationales)
+          ? { changeRationales: args.change_rationales }
+          : {})
+      }),
+    subcommand: 'record-work'
+  },
+  {
+    name: 'list_attachments',
+    description:
+      'List objective attachments visible to the current ticket session. Returns attachment IDs needed by get_attachment_download_url, plus their objective_id, label, content_type, file_size, and storage_path.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        session_key: { type: 'string' },
+        ticket_id: {
+          type: 'string',
+          description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.'
+        },
+        objective_id: { type: 'string' }
+      },
+      required: ['session_key', 'ticket_id']
+    },
+    toCliFlags: args => ({
+      'session-key': args.session_key,
+      'ticket-id': args.ticket_id,
+      'objective-id': args.objective_id
+    }),
+    subcommand: 'attachment-list'
+  },
+  {
+    name: 'prepare_attachment_upload',
+    description: 'Prepare an objective attachment upload and return a signed upload URL.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        session_key: { type: 'string' },
+        ticket_id: {
+          type: 'string',
+          description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.'
+        },
+        objective_id: { type: 'string' },
+        file_name: { type: 'string' },
+        label: { type: 'string' },
+        content_type: { type: 'string' },
+        file_size: { type: 'number' },
+        metadata: { type: 'object' }
+      },
+      required: ['session_key', 'ticket_id', 'objective_id', 'file_name']
+    },
+    toCliFlags: args => ({
+      'session-key': args.session_key,
+      'ticket-id': args.ticket_id,
+      'objective-id': args.objective_id,
+      'file-name': args.file_name,
+      label: args.label,
+      'content-type': args.content_type,
+      'file-size': args.file_size,
+      'metadata-json': args.metadata
+    }),
+    subcommand: 'attachment-prepare-upload'
+  },
+  {
+    name: 'finalize_attachment_upload',
+    description:
+      'Finalize an objective attachment after uploading bytes to the signed storage URL.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        session_key: { type: 'string' },
+        ticket_id: {
+          type: 'string',
+          description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.'
+        },
+        objective_id: { type: 'string' },
+        storage_path: { type: 'string' },
+        label: { type: 'string' },
+        content_type: { type: 'string' },
+        file_size: { type: 'number' },
+        metadata: { type: 'object' }
+      },
+      required: ['session_key', 'ticket_id', 'objective_id', 'storage_path', 'label']
+    },
+    toCliFlags: args => ({
+      'session-key': args.session_key,
+      'ticket-id': args.ticket_id,
+      'objective-id': args.objective_id,
+      'storage-path': args.storage_path,
+      label: args.label,
+      'content-type': args.content_type,
+      'file-size': args.file_size,
+      'metadata-json': args.metadata
+    }),
+    subcommand: 'attachment-finalize-upload'
+  },
+  {
+    name: 'get_attachment_download_url',
+    description: 'Create a signed download URL for an uploaded objective attachment.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        session_key: { type: 'string' },
+        ticket_id: {
+          type: 'string',
+          description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.'
+        },
+        objective_id: { type: 'string' },
+        attachment_id: { type: 'string' },
+        storage_path: { type: 'string' },
+        expires_in: { type: 'number' }
+      },
+      required: ['session_key', 'ticket_id']
+    },
+    toCliFlags: args => ({
+      'session-key': args.session_key,
+      'ticket-id': args.ticket_id,
+      'objective-id': args.objective_id,
+      'attachment-id': args.attachment_id,
+      'storage-path': args.storage_path,
+      'expires-in': args.expires_in
+    }),
+    subcommand: 'attachment-download-url'
+  },
+  {
+    name: 'upload_attachment_file',
+    description:
+      'Prepare, upload, and finalize a local file as an objective attachment in one step.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        session_key: { type: 'string' },
+        ticket_id: {
+          type: 'string',
+          description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.'
+        },
+        objective_id: { type: 'string' },
+        file: { type: 'string' },
+        file_name: { type: 'string' },
+        label: { type: 'string' },
+        content_type: { type: 'string' },
+        metadata: { type: 'object' }
+      },
+      required: ['session_key', 'ticket_id', 'objective_id', 'file']
+    },
+    toCliFlags: args => ({
+      'session-key': args.session_key,
+      'ticket-id': args.ticket_id,
+      'objective-id': args.objective_id,
+      file: args.file,
+      'file-name': args.file_name,
+      label: args.label,
+      'content-type': args.content_type,
+      'metadata-json': args.metadata
+    }),
+    subcommand: 'attachment-upload-file'
+  },
+
+  // ---------------------------------------------------------------------------
+  // Device + project resources (hosted MCP parity; maps to ovld protocol)
+  // ---------------------------------------------------------------------------
+  {
+    name: 'get_device',
+    description:
+      'Register or refresh the caller device (pass a stable fingerprint and optional hostname/platform). Prefer calling before add_project_resource.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        device_fingerprint: {
+          type: 'string',
+          description: 'Stable UUID or token stored locally for this workstation.'
+        },
+        device_hostname: { type: 'string' },
+        device_platform: {
+          type: 'string',
+          description: 'e.g. darwin, linux, win32.'
+        }
+      },
+      required: ['device_fingerprint']
+    },
+    toCliFlags: args => ({
+      'device-fingerprint': args.device_fingerprint,
+      ...(typeof args.device_hostname === 'string' && args.device_hostname.trim().length > 0
+        ? { 'device-hostname': args.device_hostname }
+        : {}),
+      ...(typeof args.device_platform === 'string' && args.device_platform.trim().length > 0
+        ? { 'device-platform': args.device_platform }
+        : {})
+    }),
+    subcommand: 'get-device'
+  },
+  {
+    name: 'update_device',
+    description:
+      'Rename this device label (lowercase kebab-case, unique per organization). Requires the same device_fingerprint.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        device_fingerprint: { type: 'string' },
+        label: { type: 'string' }
+      },
+      required: ['device_fingerprint', 'label']
+    },
+    toCliFlags: args => ({
+      'device-fingerprint': args.device_fingerprint,
+      label: args.label
+    }),
+    subcommand: 'update-device'
+  },
+  {
+    name: 'list_project_resources',
+    description:
+      'List directories registered as resources for a project. Optionally filter by device_fingerprint to the device registered for this org session.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        project_id: { type: 'string', description: 'Project UUID.' },
+        device_fingerprint: {
+          type: 'string',
+          description:
+            'When set with this org scope, restricts results to directories for this org + user device.'
+        }
+      },
+      required: ['project_id']
+    },
+    toCliFlags: args => ({
+      'project-id': args.project_id,
+      ...(typeof args.device_fingerprint === 'string' && args.device_fingerprint.trim().length > 0
+        ? { 'device-fingerprint': args.device_fingerprint.trim() }
+        : {})
+    }),
+    subcommand: 'list-project-resources'
+  },
+  {
+    name: 'add_project_resource',
+    description:
+      'Attach a filesystem directory to this project on the current machine. Directory must exist; device is keyed by fingerprint (per org).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        project_id: { type: 'string' },
+        directory_path: {
+          type: 'string',
+          description: 'Absolute path; omit to use cwd (CLI verifies existence).'
+        },
+        device_fingerprint: { type: 'string' },
+        label: { type: 'string' },
+        is_primary: { type: 'boolean' },
+        device_hostname: { type: 'string' },
+        device_platform: { type: 'string' }
+      },
+      required: ['project_id', 'device_fingerprint']
+    },
+    toCliFlags: args => ({
+      'project-id': args.project_id,
+      ...(typeof args.directory_path === 'string' && args.directory_path.trim().length > 0
+        ? { directory: args.directory_path }
+        : {}),
+      'device-fingerprint': args.device_fingerprint,
+      ...(typeof args.label === 'string' ? { label: args.label } : {}),
+      ...(args.is_primary === true || args.is_primary === 'true' ? { 'is-primary': true } : {}),
+      ...(typeof args.device_hostname === 'string' && args.device_hostname.trim().length > 0
+        ? { 'device-hostname': args.device_hostname }
+        : {}),
+      ...(typeof args.device_platform === 'string' && args.device_platform.trim().length > 0
+        ? { 'device-platform': args.device_platform }
+        : {})
+    }),
+    subcommand: 'add-project-resource'
+  },
+  {
+    name: 'update_project_resource',
+    description:
+      'Update path / label / primary flag for one resource directory. Must belong to the device fingerprint in this org.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        resource_id: { type: 'string' },
+        device_fingerprint: { type: 'string' },
+        directory_path: { type: 'string' },
+        label: {
+          oneOf: [{ type: 'string' }, { type: 'null' }],
+          description: 'Use string "null" to clear via CLI shim pass-through.'
+        },
+        is_primary: { type: 'boolean' }
+      },
+      required: ['resource_id', 'device_fingerprint']
+    },
+    toCliFlags: args => ({
+      'resource-id': args.resource_id,
+      'device-fingerprint': args.device_fingerprint,
+      ...(typeof args.directory_path === 'string' ? { directory: args.directory_path.trim() } : {}),
+      ...(typeof args.label === 'undefined'
+        ? {}
+        : { label: args.label === null ? 'null' : String(args.label) }),
+      ...(args.is_primary !== undefined
+        ? { 'is-primary': args.is_primary === true || args.is_primary === 'true' }
+        : {})
+    }),
+    subcommand: 'update-project-resource'
+  }
+];
+
+const searchTicketsTool = {
+  name: 'search_tickets',
+  description:
+    'Search Overlord tickets by keyword and/or filter by status. Leave query empty to list all tickets matching the status filter. Useful when the user asks to find tickets related to a subject or in a specific workflow state.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      query: {
+        type: 'string',
+        description:
+          'Keyword or phrase to search for in ticket titles and objectives. Leave empty to list without text filtering.'
+      },
+      statuses: {
+        type: 'array',
+        items: { type: 'string' },
+        description:
+          'Filter by one or more ticket statuses (e.g. ["next-up", "execute", "review"]). Omit to include all non-completed statuses.'
+      },
+      include_completed: {
+        type: 'boolean',
+        description: 'Whether to include completed tickets in results. Defaults to false.'
+      },
+      limit: {
+        type: 'number',
+        description: 'Maximum number of results to return (1–50, default 8).'
+      }
+    }
+  },
+  toCliFlags: args => ({
+    query: args.query,
+    statuses: Array.isArray(args.statuses) ? args.statuses.join(',') : args.statuses,
+    'include-completed': args.include_completed,
+    limit: args.limit
+  }),
+  subcommand: 'search-tickets'
+};
+
+const allListedTools = [...tools, searchTicketsTool];
+
+const toolMap = new Map(allListedTools.map(tool => [tool.name, tool]));
+let buffer = Buffer.alloc(0);
+
+function serializeMessage(message) {
+  const json = JSON.stringify(message);
+  const body = Buffer.from(json, 'utf8');
+  const header = Buffer.from(`Content-Length: ${body.length}\r\n\r\n`, 'utf8');
+  return Buffer.concat([header, body]);
+}
+
+function send(message) {
+  process.stdout.write(serializeMessage(message));
+}
+
+function parseMessages(chunk) {
+  buffer = Buffer.concat([buffer, chunk]);
+  const messages = [];
+
+  while (true) {
+    const headerEnd = buffer.indexOf('\r\n\r\n');
+    if (headerEnd === -1) break;
+
+    const headerText = buffer.subarray(0, headerEnd).toString('utf8');
+    const headers = Object.fromEntries(
+      headerText.split('\r\n').map(line => {
+        const separatorIndex = line.indexOf(':');
+        return [
+          line.slice(0, separatorIndex).trim().toLowerCase(),
+          line.slice(separatorIndex + 1).trim()
+        ];
+      })
+    );
+
+    const contentLength = Number(headers['content-length']);
+    if (!Number.isFinite(contentLength)) {
+      throw new Error('Missing Content-Length header');
+    }
+
+    const totalLength = headerEnd + 4 + contentLength;
+    if (buffer.length < totalLength) break;
+
+    const body = buffer.subarray(headerEnd + 4, totalLength).toString('utf8');
+    buffer = buffer.subarray(totalLength);
+    messages.push(JSON.parse(body));
+  }
+
+  return messages;
+}
+
+function success(id, result) {
+  send({ jsonrpc: '2.0', id, result });
+}
+
+function failure(id, code, message) {
+  send({ jsonrpc: '2.0', id, error: { code, message } });
+}
+
+function cliArgsFromFlags(flags) {
+  const args = [];
+
+  for (const [key, value] of Object.entries(flags)) {
+    if (value === undefined || value === null) continue;
+
+    if (typeof value === 'boolean') {
+      if (value) args.push(`--${key}`);
+      continue;
+    }
+
+    const serialized =
+      typeof value === 'string' || typeof value === 'number'
+        ? String(value)
+        : JSON.stringify(value);
+    args.push(`--${key}`, serialized);
+  }
+
+  return args;
+}
+
+async function runProtocol(tool, args) {
+  const toolArgs = args ?? {};
+  const cliArgs = ['protocol', tool.subcommand, ...cliArgsFromFlags(tool.toCliFlags(toolArgs))];
+  const stdin = typeof tool.toCliStdin === 'function' ? tool.toCliStdin(toolArgs) : undefined;
+
+  try {
+    const { stdout, stderr } = await execFileWithOptionalInput(
+      OVLD_BIN,
+      cliArgs,
+      {
+        cwd: process.cwd(),
+        env: {
+          ...process.env,
+          AGENT_IDENTIFIER: process.env.AGENT_IDENTIFIER ?? 'antigravity-overlord-plugin'
+        },
+        maxBuffer: 20 * 1024 * 1024
+      },
+      stdin
+    );
+
+    const trimmed = stdout.trim();
+    const data = trimmed ? JSON.parse(trimmed) : {};
+
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(
+            {
+              subcommand: tool.subcommand,
+              data,
+              stderr: stderr.trim() || undefined
+            },
+            null,
+            2
+          )
+        }
+      ],
+      structuredContent: data
+    };
+  } catch (error) {
+    const stdout = typeof error?.stdout === 'string' ? error.stdout.trim() : '';
+    const stderr = typeof error?.stderr === 'string' ? error.stderr.trim() : '';
+    const message = error instanceof Error ? error.message : String(error);
+
+    let parsedStdout = stdout;
+    if (stdout) {
+      try {
+        parsedStdout = JSON.parse(stdout);
+      } catch {
+        // keep raw stdout
+      }
+    }
+
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(
+            {
+              subcommand: tool.subcommand,
+              error: message,
+              stdout: parsedStdout || undefined,
+              stderr: stderr || undefined
+            },
+            null,
+            2
+          )
+        }
+      ],
+      isError: true
+    };
+  }
+}
+
+async function handleRequest(message) {
+  const { id, method, params } = message;
+
+  if (method === 'initialize') {
+    success(id, {
+      protocolVersion: PROTOCOL_VERSION,
+      capabilities: {
+        tools: {
+          listChanged: false
+        }
+      },
+      serverInfo: {
+        name: 'overlord',
+        version: '0.1.0'
+      },
+      instructions:
+        'Use these tools to drive Overlord ticket workflows through the installed ovld CLI. Names mirror hosted MCP tools (attach, update, deliver, get_device, list_project_resources, …). Session tools need attach/connect. Devices are scoped to organization + user + fingerprint — call get_device before add_project_resource.'
+    });
+    return;
+  }
+
+  if (method === 'ping') {
+    success(id, {});
+    return;
+  }
+
+  if (method === 'tools/list') {
+    success(id, {
+      tools: allListedTools.map(tool => ({
+        name: tool.name,
+        description: tool.description,
+        inputSchema: tool.inputSchema
+      }))
+    });
+    return;
+  }
+
+  if (method === 'tools/call') {
+    const tool = toolMap.get(params?.name);
+    if (!tool) {
+      failure(id, -32602, `Unknown tool: ${params?.name ?? 'undefined'}`);
+      return;
+    }
+
+    success(id, await runProtocol(tool, params?.arguments ?? {}));
+    return;
+  }
+
+  failure(id, -32601, `Method not found: ${method}`);
+}
+
+process.stdin.on('data', async chunk => {
+  try {
+    for (const message of parseMessages(chunk)) {
+      if (!message || typeof message !== 'object') continue;
+      if ('method' in message && 'id' in message) {
+        await handleRequest(message);
+      }
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    process.stderr.write(`Overlord MCP server failed: ${message}\n`);
+    process.exit(1);
+  }
+});
+
+process.stdin.resume();

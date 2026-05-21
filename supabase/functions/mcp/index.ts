@@ -13,6 +13,7 @@
 // deno-lint-ignore-file no-explicit-any
 import { createClient } from '@supabase/supabase-js';
 
+import { handleAddObjectives } from './handlers/add-objectives.ts';
 import { handleAddProjectResource } from './handlers/add-project-resource.ts';
 import { handleAsk } from './handlers/ask.ts';
 import { handleAttach } from './handlers/attach.ts';
@@ -285,6 +286,8 @@ Deno.serve(async (req: Request) => {
 
       if (toolName === 'attach') {
         result = await handleAttach(supabase, toolArgs, requestContext);
+      } else if (toolName === 'add_objectives') {
+        result = await handleAddObjectives(supabase, toolArgs, requestContext);
       } else if (toolName === 'create_ticket_draft') {
         result = await handleCreateTicketDraft(supabase, toolArgs, requestContext);
       } else if (toolName === 'list_attachments') {

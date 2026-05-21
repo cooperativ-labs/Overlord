@@ -5,6 +5,7 @@ import { type TokenContext } from '../auth.ts';
 import { toolErr, toolOk } from '../rpc.ts';
 import { resolveSession } from '../session.ts';
 
+import { insertOrderedObjectives, normalizeObjectivesInput } from './_objectives.ts';
 import { resolvePreferredStatusNameByType } from './_status-resolution.ts';
 import { resolveTicketCreatorUserId } from './_ticket-creator.ts';
 
@@ -28,13 +29,19 @@ export async function handleCreateTicket(supabase: SupabaseClient, args: any, ct
     sessionKey,
     ticketId: rawTicketId,
     title = '',
-    objective,
+    objectives: rawObjectives,
     acceptanceCriteria = '',
     availableTools = '',
     executionTarget = 'human',
     priority = 'medium',
     delegate = null
   } = args;
+  let objectives;
+  try {
+    objectives = normalizeObjectivesInput({ objectives: rawObjectives });
+  } catch (error) {
+    return toolErr(error instanceof Error ? error.message : String(error));
+  }
   const { organizationId } = ctx;
   const resolved = await resolveSession(
     supabase,
@@ -60,7 +67,7 @@ export async function handleCreateTicket(supabase: SupabaseClient, args: any, ct
 
   if (sourceErr || !sourceTicket) return toolErr('Source ticket not found.');
 
-  const nextTitle = title.trim() || objective.slice(0, 120);
+  const nextTitle = title.trim() || objectives[0].objective.slice(0, 120);
   const createdBy = await resolveTicketCreatorUserId(supabase, ctx);
   const draftStatusName = await resolvePreferredStatusNameByType(
     supabase,
@@ -87,15 +94,10 @@ export async function handleCreateTicket(supabase: SupabaseClient, args: any, ct
 
   if (createErr || !created) return toolErr(createErr?.message ?? 'Failed to create ticket.');
 
-  // Create objective in the objectives table
-  const { error: objectiveErr } = await supabase.from('objectives').insert({
-    state: 'draft',
-    objective: objective,
-    ticket_id: created.id,
-    created_by: createdBy
+  const insertedObjectives = await insertOrderedObjectives(supabase, created.id, objectives, {
+    createdBy,
+    firstState: 'draft'
   });
-
-  if (objectiveErr) return toolErr(objectiveErr.message);
 
   const sourceRef = sourceTicket.ticket_id ?? sourceTicket.id.slice(-8);
   const createdRef = created.ticket_id ?? created.id.slice(-8);
@@ -125,6 +127,7 @@ export async function handleCreateTicket(supabase: SupabaseClient, args: any, ct
 
   return toolOk({
     ok: true,
+    objectives: insertedObjectives,
     ticket: {
       executionTarget: created.execution_target,
       id: created.id,

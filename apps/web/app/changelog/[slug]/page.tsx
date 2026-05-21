@@ -3,7 +3,6 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
 import { MarkdownContent } from '@/components/features/MarkdownContent';
-import { HomepageFooter } from '@/components/marketing/HomepageFooter';
 import { getChangelogEntryBySlugAction } from '@/lib/actions/changelog';
 
 type PageProps = {
@@ -37,33 +36,28 @@ export default async function ChangelogEntryPage({ params }: PageProps) {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <main className="mx-auto max-w-3xl px-6 py-16 lg:px-8">
-        <nav className="mb-8">
-          <Link href="/changelog" className="text-sm text-sky-700 hover:text-sky-900">
-            ← All updates
-          </Link>
-        </nav>
+    <div className="mx-auto max-w-3xl py-4 lg:py-8">
+      <nav className="mb-8">
+        <Link href="/changelog" className="text-sm text-sky-400 hover:text-sky-300">
+          ← All updates
+        </Link>
+      </nav>
 
-        <article className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm">
-          <header>
-            <div className="text-xs text-slate-500">
-              {formatDate(entry.published_at)}
-              {entry.version ? ` · v${entry.version}` : ''}
-            </div>
-            <h1 className="mt-2 font-display text-3xl font-semibold tracking-tight text-slate-950">
-              {entry.title}
-            </h1>
-            {entry.summary ? (
-              <p className="mt-3 text-base text-slate-600">{entry.summary}</p>
-            ) : null}
-          </header>
-          <div className="mt-8">
-            <MarkdownContent>{entry.body_markdown}</MarkdownContent>
+      <article className="rounded-[2rem] border border-white/10 bg-white/5 p-8 shadow-[0_20px_80px_-48px_rgba(15,23,42,0.75)]">
+        <header>
+          <div className="text-xs text-slate-400">
+            {formatDate(entry.published_at)}
+            {entry.version ? ` · v${entry.version}` : ''}
           </div>
-        </article>
-      </main>
-      <HomepageFooter />
+          <h1 className="mt-2 font-display text-3xl font-semibold tracking-tight text-white">
+            {entry.title}
+          </h1>
+          {entry.summary ? <p className="mt-3 text-base text-slate-300">{entry.summary}</p> : null}
+        </header>
+        <div className="mt-8 [&_.prose]:text-slate-200 [&_.prose_a]:text-sky-400 [&_.prose_headings]:text-white [&_.prose_strong]:text-white">
+          <MarkdownContent>{entry.body_markdown}</MarkdownContent>
+        </div>
+      </article>
     </div>
   );
 }

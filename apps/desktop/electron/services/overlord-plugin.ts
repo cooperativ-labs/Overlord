@@ -66,8 +66,15 @@ const STATE_DIR = path.join(os.homedir(), '.ovld');
 const MANIFEST_PATH = path.join(STATE_DIR, 'overlord-plugin-manifest.json');
 const TARGET_PLUGIN_DIR = path.join(os.homedir(), '.codex', 'plugins', 'overlord');
 const TARGET_PLUGIN_MANIFEST = path.join(TARGET_PLUGIN_DIR, '.codex-plugin', 'plugin.json');
+const TARGET_PLUGIN_HOOKS = path.join(TARGET_PLUGIN_DIR, '.codex-plugin', 'hooks.json');
 const TARGET_PLUGIN_MCP = path.join(TARGET_PLUGIN_DIR, '.mcp.json');
 const TARGET_PLUGIN_SCRIPT = path.join(TARGET_PLUGIN_DIR, 'scripts', 'overlord-mcp.mjs');
+const TARGET_PLUGIN_USER_PROMPT_HOOK = path.join(
+  TARGET_PLUGIN_DIR,
+  'scripts',
+  'user-prompt-submit-hook.sh'
+);
+const TARGET_PLUGIN_PERMISSION_HOOK = path.join(TARGET_PLUGIN_DIR, 'scripts', 'permission-hook.sh');
 const TARGET_MARKETPLACE = path.join(os.homedir(), '.agents', 'plugins', 'marketplace.json');
 const TARGET_CODEX_RULES = path.join(os.homedir(), '.codex', 'rules', 'default.rules');
 const LEGACY_CODEX_AGENTS = path.join(os.homedir(), '.codex', 'AGENTS.md');
@@ -161,11 +168,62 @@ function pluginMarketplaceEntryPresent(): boolean {
 function managedFiles(): string[] {
   return [
     TARGET_PLUGIN_MANIFEST,
+    TARGET_PLUGIN_HOOKS,
     TARGET_PLUGIN_MCP,
     TARGET_PLUGIN_SCRIPT,
+    TARGET_PLUGIN_USER_PROMPT_HOOK,
+    TARGET_PLUGIN_PERMISSION_HOOK,
     TARGET_MARKETPLACE,
     TARGET_CODEX_RULES
   ];
+}
+
+function installCodexHookCommand(): void {
+  const hooks = readJsonFile<{
+    hooks?: {
+      PermissionRequest?: Array<{
+        hooks?: Array<{
+          type?: string;
+          command?: string;
+        }>;
+      }>;
+      UserPromptSubmit?: Array<{
+        hooks?: Array<{
+          type?: string;
+          command?: string;
+        }>;
+      }>;
+    };
+  }>(TARGET_PLUGIN_HOOKS);
+  if (!hooks || typeof hooks !== 'object') {
+    throw new Error(`Codex hook manifest missing or invalid at ${TARGET_PLUGIN_HOOKS}`);
+  }
+
+  const permissionGroups = hooks.hooks?.PermissionRequest;
+  if (!Array.isArray(permissionGroups)) {
+    throw new Error(`Codex PermissionRequest hook missing in ${TARGET_PLUGIN_HOOKS}`);
+  }
+  for (const group of permissionGroups) {
+    for (const hook of group.hooks ?? []) {
+      if (hook.type === 'command') {
+        hook.command = TARGET_PLUGIN_PERMISSION_HOOK;
+      }
+    }
+  }
+
+  const userPromptGroups = hooks.hooks?.UserPromptSubmit;
+  if (!Array.isArray(userPromptGroups)) {
+    throw new Error(`Codex UserPromptSubmit hook missing in ${TARGET_PLUGIN_HOOKS}`);
+  }
+  for (const group of userPromptGroups) {
+    for (const hook of group.hooks ?? []) {
+      if (hook.type === 'command') {
+        hook.command = TARGET_PLUGIN_USER_PROMPT_HOOK;
+      }
+    }
+  }
+
+  writeJsonFile(TARGET_PLUGIN_HOOKS, hooks);
 }
 
 function mergeCodexRules(existingContent: string): string {
@@ -320,14 +378,11 @@ export function getOverlordPluginStatus(): OverlordPluginStatus {
   const files = managedFiles();
   const existingManagedFiles = files.filter(filePath => fs.existsSync(filePath));
   const missingManagedFiles = files.filter(filePath => !fs.existsSync(filePath));
-  const pluginInstalled =
-    fs.existsSync(TARGET_PLUGIN_MANIFEST) &&
-    fs.existsSync(TARGET_PLUGIN_MCP) &&
-    fs.existsSync(TARGET_PLUGIN_SCRIPT);
+  const managedFilesInstalled = files.every(filePath => fs.existsSync(filePath));
   const marketplaceInstalled = pluginMarketplaceEntryPresent();
 
   if (!manifest) {
-    if (!pluginInstalled && !marketplaceInstalled) {
+    if (!managedFilesInstalled && !marketplaceInstalled) {
       return {
         status: 'not_installed',
         version: sourceVersion,
@@ -352,7 +407,7 @@ export function getOverlordPluginStatus(): OverlordPluginStatus {
     };
   }
 
-  if (!pluginInstalled || !marketplaceInstalled) {
+  if (!managedFilesInstalled || !marketplaceInstalled) {
     return {
       status: 'partial',
       version: sourceVersion,
@@ -400,6 +455,7 @@ export function installOverlordPlugin(): OverlordPluginInstallResult {
     fs.mkdirSync(path.dirname(TARGET_PLUGIN_DIR), { recursive: true });
     fs.rmSync(TARGET_PLUGIN_DIR, { recursive: true, force: true });
     fs.cpSync(sourceDir, TARGET_PLUGIN_DIR, { recursive: true });
+    installCodexHookCommand();
     writeTextFile(TARGET_CODEX_RULES, mergeCodexRules(readTextFile(TARGET_CODEX_RULES)));
     removeLegacyCodexBundle();
 

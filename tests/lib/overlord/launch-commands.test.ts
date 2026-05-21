@@ -1,6 +1,7 @@
 import {
   buildAgentLaunchCommand,
   buildLaunchCommands,
+  buildNativeResumeCommand,
   buildRawLaunchCommand
 } from '@/lib/overlord/launch-commands';
 
@@ -72,17 +73,24 @@ describe('buildLaunchCommands', () => {
   });
 });
 
+describe('buildNativeResumeCommand', () => {
+  it('uses agy --conversation for Antigravity session ids', () => {
+    expect(buildNativeResumeCommand('antigravity', 'conv-42')).toBe('agy --conversation conv-42');
+    expect(buildNativeResumeCommand('agy', 'conv-42')).toBe('agy --conversation conv-42');
+  });
+});
+
 describe('buildRawLaunchCommand', () => {
   it('uses ovld launch for env-prefixed fallback commands', () => {
     expect(
-      buildRawLaunchCommand('gemini', {
+      buildRawLaunchCommand('antigravity', {
         ticketId: 'ticket-123',
         platformUrl: 'https://www.ovld.ai',
         oauthAccessToken: 'token-123',
         organizationId: 7
       })
     ).toBe(
-      "OVERLORD_URL=https://www.ovld.ai OVERLORD_ACCESS_TOKEN=token-123 OVERLORD_ORGANIZATION_ID=7 ovld launch gemini --ticket-id 'ticket-123'"
+      "OVERLORD_URL=https://www.ovld.ai OVERLORD_ACCESS_TOKEN=token-123 OVERLORD_ORGANIZATION_ID=7 ovld launch antigravity --ticket-id 'ticket-123'"
     );
   });
 });

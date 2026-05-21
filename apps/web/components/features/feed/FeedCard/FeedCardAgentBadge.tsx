@@ -14,7 +14,7 @@ export function FeedCardAgentBadge({ agentIdentifier, state }: FeedCardAgentBadg
 
   if (agentType) {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
+      <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted p-0.5 text-[10px] font-semibold text-muted-foreground">
         <Image
           src={agentType.icon}
           alt={agentType.label}

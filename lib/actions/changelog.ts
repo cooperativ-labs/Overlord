@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 
 import { isAdminEmail } from '@/lib/auth/admin';
+import { markdownToHtml } from '@/lib/helpers/markdown';
 import { createClientForRequest } from '@/supabase/utils/server';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
@@ -175,6 +176,7 @@ export async function generateChangelogDraftAction(): Promise<GenerateDraftResul
       title: result.draft.title,
       summary: result.draft.summary,
       body_markdown: result.draft.body_markdown,
+      body_html: markdownToHtml(result.draft.body_markdown),
       status: 'draft',
       source_window_start: result.window_start,
       source_window_end: result.window_end,
@@ -200,10 +202,16 @@ export async function updateChangelogDraftAction(
 ): Promise<ChangelogEntry> {
   await requireAdmin();
   const parsed = updateSchema.parse(fields);
+
+  const updateData: Record<string, any> = { ...parsed };
+  if (parsed.body_markdown !== undefined) {
+    updateData.body_html = markdownToHtml(parsed.body_markdown);
+  }
+
   const service = createServiceRoleClient();
   const { data, error } = await service
     .from('changelog_entries')
-    .update(parsed)
+    .update(updateData)
     .eq('id', id)
     .select('*')
     .single();
@@ -215,12 +223,23 @@ export async function updateChangelogDraftAction(
 export async function publishChangelogEntryAction(id: string): Promise<ChangelogEntry> {
   const { userId } = await requireAdmin();
   const service = createServiceRoleClient();
+
+  // Load current draft to render markdown to HTML
+  const { data: entry } = await service
+    .from('changelog_entries')
+    .select('body_markdown')
+    .eq('id', id)
+    .single();
+
+  const body_html = entry ? markdownToHtml(entry.body_markdown) : null;
+
   const { data, error } = await service
     .from('changelog_entries')
     .update({
       status: 'published',
       published_at: new Date().toISOString(),
-      published_by: userId
+      published_by: userId,
+      body_html
     })
     .eq('id', id)
     .select('*')

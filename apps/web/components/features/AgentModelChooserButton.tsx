@@ -71,8 +71,7 @@ export function AgentModelChooserButton({
   compact?: boolean;
   className?: string;
 }) {
-  const { selection: preferenceSelection, setSelection: setPreferenceSelection } =
-    useAgentModelPreference();
+  const { selection: preferenceSelection } = useAgentModelPreference();
   const { models } = useAgentModels();
   const [selection, setSelection] = useState<AgentModelSelection>(
     initialSelection ?? preferenceSelection
@@ -84,6 +83,7 @@ export function AgentModelChooserButton({
   // prop actually changes — not on every parent re-render. Without this, our own server save
   // can echo back through live data while the user has already moved on, reverting their pick.
   const lastInitialRef = useRef(initialSelection);
+  const userChangedRef = useRef(false);
 
   useEffect(() => {
     const initialChanged = !isSameAssigned(lastInitialRef.current, initialSelection);
@@ -91,13 +91,18 @@ export function AgentModelChooserButton({
 
     if (initialChanged && initialSelection !== null) {
       // Truly new ticket assignment — sync local to it
+      userChangedRef.current = false;
       setSelection(current =>
         isSameSelection(current, initialSelection) ? current : initialSelection
       );
       return;
     }
 
-    if (initialSelection === null) {
+    if (initialChanged && initialSelection === null) {
+      userChangedRef.current = false;
+    }
+
+    if (initialSelection === null && !userChangedRef.current) {
       // No per-ticket assignment — follow cross-component preference broadcasts
       setSelection(current =>
         isSameSelection(current, preferenceSelection) ? current : preferenceSelection
@@ -158,8 +163,8 @@ export function AgentModelChooserButton({
         <AgentModelSelector
           value={selection}
           onChange={nextSelection => {
+            userChangedRef.current = true;
             setSelection(nextSelection);
-            setPreferenceSelection(nextSelection);
             onSelectionChange?.(nextSelection);
             if (persistSelection && ticketId) {
               startTransition(() => {
