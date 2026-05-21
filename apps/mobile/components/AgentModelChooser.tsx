@@ -249,8 +249,7 @@ export function AgentModelChooser({
           <Text style={styles.groupLabel}>Model</Text>
           {antigravityManagesModels ? (
             <Text style={styles.emptyText}>
-              Antigravity chooses models in its own UI. Launch tickets with ovld launch antigravity
-              --ticket-id. Gemini CLI is deprecated — use ovld setup antigravity.
+              Antigravity chooses models in its own UI.
             </Text>
           ) : loading ? (
             <View style={styles.loadingRow}>

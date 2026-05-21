@@ -277,10 +277,7 @@ export function AgentModelSelector({
         </p>
         {antigravityManagesModels ? (
           <p className="px-2 py-1.5 text-xs leading-relaxed text-muted-foreground">
-            Antigravity chooses models in its own UI. Overlord launches with{' '}
-            <code className="text-[11px]">ovld launch antigravity --ticket-id &lt;id&gt;</code>.
-            Gemini CLI is deprecated — use{' '}
-            <code className="text-[11px]">ovld setup antigravity</code>.
+            Antigravity chooses models in its own UI.
           </p>
         ) : (
           <>
