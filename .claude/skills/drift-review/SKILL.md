@@ -22,7 +22,7 @@ Overlord exposes its protocol through six parallel surfaces:
 | **API routes** | `apps/web/app/api/protocol/*/route.ts` | REST endpoints, kebab-case paths |
 | **CLI commands** | `packages/overlord-cli/bin/_cli/protocol.mjs` | `ovld protocol <subcommand>`, `--kebab-case` flags |
 | **MCP tools** | `supabase/functions/mcp/tools.ts` (hosted) + `plugins/overlord/scripts/overlord-mcp.mjs` (Codex local shim) + `plugins/antigravity/scripts/overlord-mcp.mjs` (Antigravity local shim, staged to `~/.ovld/antigravity/scripts/`) | Hosted: `snake_case` tool names, **camelCase** parameters matching API JSON. Local shims: `snake_case` parameters mapping to CLI flags. |
-| **Agent plugins** | `plugins/{claude,cursor,overlord,antigravity}/skills/overlord-ticket/` | Skill instructions referencing CLI/MCP |
+| **Agent plugins** | Source templates in `plugins/_source/agents/{claude,cursor,overlord}/` plus shared include templates in `plugins/_source/shared/` render to `plugins/{claude,cursor,overlord}/` and `packages/overlord-cli/plugins/{claude,cursor,overlord}/`; Antigravity remains direct at `plugins/antigravity/skills/overlord-ticket/` | Skill instructions referencing CLI/MCP |
 | **Public docs for agents** | `docs/public/` | AI-agent-facing explainers that help agents explain Overlord to end users |
 | **CLI README** | `packages/overlord-cli/README.md` | User-facing CLI documentation and examples |
 
@@ -63,7 +63,10 @@ Extract for each tool:
 - For the shim: the `subcommand` and `toCliFlags` / `toCliStdin` mapping
 
 #### 4. Agent Plugin Skills
-Read the `overlord-ticket` skill in each plugin directory:
+Read the `overlord-ticket` skill in each plugin directory. For Claude, Cursor, and Codex, prefer the source templates first and then confirm rendered output with `yarn plugins:check`:
+- `plugins/_source/agents/claude/skills/overlord-ticket/SKILL.md`
+- `plugins/_source/agents/cursor/skills/overlord-ticket/SKILL.md`
+- `plugins/_source/agents/overlord/skills/overlord-ticket/SKILL.md`
 - `plugins/claude/skills/overlord-ticket/SKILL.md`
 - `plugins/cursor/skills/overlord-ticket/SKILL.md`
 - `plugins/overlord/skills/overlord-ticket/SKILL.md` (Codex plugin)

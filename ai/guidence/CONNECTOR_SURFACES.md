@@ -634,9 +634,14 @@ Source-of-truth files:
 - Human CLI launcher: [launcher.mjs](/Users/jake/Development/Cooperativ/Overlord/packages/overlord-cli/bin/_cli/launcher.mjs)
 - Shared copy-command builder: [launch-commands.ts](/Users/jake/Development/Cooperativ/Overlord/lib/overlord/launch-commands.ts)
 - MCP tool definitions: [tools.ts](/Users/jake/Development/Cooperativ/Overlord/supabase/functions/mcp/tools.ts)
+- Agent plugin template source: [plugins/_source/agents/](/Users/jake/Development/Cooperativ/Overlord/plugins/_source/agents) plus [plugins/_source/shared/](/Users/jake/Development/Cooperativ/Overlord/plugins/_source/shared) render Claude, Cursor, and Codex plugin outputs with [render-agent-plugins.mjs](/Users/jake/Development/Cooperativ/Overlord/scripts/render-agent-plugins.mjs)
 - Local Codex MCP shim: [overlord-mcp.mjs](/Users/jake/Development/Cooperativ/Overlord/plugins/overlord/scripts/overlord-mcp.mjs)
 - Plugin skill docs: [plugins/claude/skills/overlord-ticket/SKILL.md](/Users/jake/Development/Cooperativ/Overlord/plugins/claude/skills/overlord-ticket/SKILL.md), [plugins/cursor/skills/overlord-ticket/SKILL.md](/Users/jake/Development/Cooperativ/Overlord/plugins/cursor/skills/overlord-ticket/SKILL.md), [plugins/overlord/skills/overlord-ticket/SKILL.md](/Users/jake/Development/Cooperativ/Overlord/plugins/overlord/skills/overlord-ticket/SKILL.md), [plugins/antigravity/skills/overlord-ticket/SKILL.md](/Users/jake/Development/Cooperativ/Overlord/plugins/antigravity/skills/overlord-ticket/SKILL.md)
 - Antigravity local MCP shim: [overlord-mcp.mjs](/Users/jake/Development/Cooperativ/Overlord/plugins/antigravity/scripts/overlord-mcp.mjs)
+
+Claude, Cursor, and Codex committed plugin outputs are generated from `plugins/_source/agents/` plus shared include templates in `plugins/_source/shared/` into both `plugins/` and `packages/overlord-cli/plugins/`. Run `yarn plugins:render` after changing those templates and `yarn plugins:check` before shipping; CI runs the same drift check. The `packages/overlord-cli` package also runs `yarn plugins:check` as a `prepack` hook so `npm pack` / `npm publish` will fail if the committed plugin outputs are stale. Antigravity remains a direct committed plugin tree until its follow-on migration objective moves it into the renderer.
+
+Each generated agent SKILL.md uses progressive disclosure: rules and workflow decision trees load eagerly, while verbose command reference, MCP naming, device management, context/attachment commands, and shell-escaping examples live in `reference/*.md` files that agents fetch on demand. Claude gets 5 reference files (cli, mcp, devices, context, shell-escaping); Cursor and Codex get 4 (no shell-escaping).
 
 ## Shared surfaces
 

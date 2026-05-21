@@ -47,7 +47,7 @@ async function runProtocol(subcommand, args = {}) {
     const { stdout } = await execFileAsync(OVLD_BIN, ['protocol', subcommand, ...flags], {
       env: {
         ...process.env,
-        AGENT_IDENTIFIER: process.env.AGENT_IDENTIFIER ?? 'cursor-overlord-plugin'
+        AGENT_IDENTIFIER: process.env.AGENT_IDENTIFIER ?? 'cursor'
       },
       maxBuffer: 20 * 1024 * 1024
     });

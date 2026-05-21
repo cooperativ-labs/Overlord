@@ -1,3 +1,13 @@
-Run `ovld protocol spawn --agent cursor --objective "<objective>"` using text after `/spawn` unless raw flags were provided.
+Deprecated — use `/prompt` instead.
 
-If `ovld` reports `OVERLORD_URL` is unreachable, stop and request permission escalation or network access before retrying.
+Create a new Overlord ticket.
+
+Use the text after `/spawn` as the objective unless raw flags are present.
+
+Run:
+`ovld protocol prompt --agent cursor --objective "<objective>"`
+
+If raw flags are present, pass them through after:
+`ovld protocol prompt --agent cursor`
+
+
