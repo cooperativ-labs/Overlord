@@ -66,7 +66,9 @@ export function AgentsAndMcpPage({ open }: { open: boolean }) {
   })();
 
   const domainSnippet = Array.from(
-    new Set([resolvedPlatformDomain].filter((v): v is string => Boolean(v)))
+    new Set(
+      [resolvedPlatformDomain, `*.${resolvedPlatformDomain}`].filter((v): v is string => Boolean(v))
+    )
   ).join('\n');
 
   const envBlock = newToken
@@ -260,6 +262,26 @@ export function AgentsAndMcpPage({ open }: { open: boolean }) {
                 </li>
               </ol>
             </p>
+            <div className="space-y-2 rounded-md border bg-muted/30 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-medium text-foreground">Allowed domain</p>
+                <button
+                  type="button"
+                  onClick={() => void handleCopy(domainSnippet, setAgentDomainSnippetCopied)}
+                  className="shrink-0 rounded p-1 hover:bg-muted"
+                  title="Copy domain snippet"
+                >
+                  {agentDomainSnippetCopied ? (
+                    <Check className="h-3.5 w-3.5 text-green-500" />
+                  ) : (
+                    <Copy className="h-3.5 w-3.5 text-muted-foreground" />
+                  )}
+                </button>
+              </div>
+              <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs">
+                {domainSnippet}
+              </pre>
+            </div>
             <div className="flex flex-col gap-2">
               <p className="text-xs font-medium text-foreground">Create a new token</p>
               <div className="flex flex-col gap-2 sm:flex-row">

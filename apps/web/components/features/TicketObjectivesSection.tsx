@@ -66,6 +66,7 @@ type TicketObjectivesSectionProps = {
   agentCommands?: AgentCommands;
   sshCommand?: string | null;
   remoteWorkingDirectory?: string | null;
+  sshEnabled?: boolean;
   hasProjectWorkingDirectory?: boolean;
   checkpointsByObjectiveId?: Record<string, ObjectiveCheckpoint>;
   allProjectCheckpointObjectiveIds?: string[];
@@ -84,6 +85,7 @@ type SharedObjectiveItemProps = {
   agentCommands?: AgentCommands;
   sshCommand?: string | null;
   remoteWorkingDirectory?: string | null;
+  sshEnabled?: boolean;
   hasProjectWorkingDirectory?: boolean;
 };
 
@@ -116,6 +118,7 @@ function ObjectiveEditableItem({
       agentCommands={shared.agentCommands}
       sshCommand={shared.sshCommand}
       remoteWorkingDirectory={shared.remoteWorkingDirectory}
+      sshEnabled={shared.sshEnabled}
       hasProjectWorkingDirectory={shared.hasProjectWorkingDirectory}
     />
   );
@@ -223,6 +226,7 @@ export function TicketObjectivesSection({
   agentCommands,
   sshCommand,
   remoteWorkingDirectory,
+  sshEnabled,
   hasProjectWorkingDirectory,
   checkpointsByObjectiveId,
   allProjectCheckpointObjectiveIds = [],
@@ -352,6 +356,7 @@ export function TicketObjectivesSection({
     agentCommands,
     sshCommand,
     remoteWorkingDirectory,
+    sshEnabled,
     hasProjectWorkingDirectory
   };
 

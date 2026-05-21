@@ -114,7 +114,8 @@ export async function unsubscribeEmailAction(
     if (!data?.length) {
       return {
         success: false,
-        error: 'We could not find that email on our update list. Check the spelling or use the link from your email.'
+        error:
+          'We could not find that email on our update list. Check the spelling or use the link from your email.'
       };
     }
     return { success: true };

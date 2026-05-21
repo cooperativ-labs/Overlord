@@ -1,6 +1,6 @@
 'use client';
 
-import { ChevronDown, Copy, MessageSquareText } from 'lucide-react';
+import { ChevronDown, Copy } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 
@@ -27,6 +27,7 @@ export type FeedProjectWorkspace = {
   localWorkingDirectory: string | null;
   sshCommand: string | null;
   remoteWorkingDirectory: string | null;
+  sshEnabled?: boolean;
 };
 
 type FeedPostDiscussPanelProps = {
@@ -66,10 +67,12 @@ export function FeedPostDiscussPanel({ post, project }: FeedPostDiscussPanelProp
     workingDirectory: project?.localWorkingDirectory ?? null,
     sshCommand: project?.sshCommand ?? null,
     remoteWorkingDirectory: project?.remoteWorkingDirectory ?? null,
-    isElectron
+    isElectron,
+    sshEnabled: project?.sshEnabled
   });
   const effectiveWorkingDirectory = workspace.effectiveWorkingDirectory;
   const effectiveSshCommand = workspace.effectiveSshCommand;
+  const effectiveRemoteWorkingDirectory = workspace.effectiveRemoteWorkingDirectory;
   const hasSshConfig = Boolean(effectiveSshCommand?.trim());
   const localDirAccess = useLocalDirectoryAccess({
     workingDirectory: effectiveWorkingDirectory,
@@ -130,7 +133,16 @@ export function FeedPostDiscussPanel({ post, project }: FeedPostDiscussPanelProp
         ticketId: post.ticket_id,
         agent: agentModelSelection.agent,
         organizationId: post.organization_id,
-        cwd: effectiveWorkingDirectory ?? undefined,
+        cwd:
+          workspace.executionWorkspace === 'local'
+            ? (effectiveWorkingDirectory ?? undefined)
+            : undefined,
+        sshCommand:
+          workspace.executionWorkspace === 'ssh' ? (effectiveSshCommand ?? undefined) : undefined,
+        remoteWorkingDirectory:
+          workspace.executionWorkspace === 'ssh'
+            ? (effectiveRemoteWorkingDirectory ?? undefined)
+            : undefined,
         launchMode: 'ask',
         model: agentModelSelection.model ?? undefined,
         thinking: agentModelSelection.thinking ?? undefined,

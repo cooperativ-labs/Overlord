@@ -96,6 +96,8 @@ export type LaunchTerminalAgentParams = {
   agent: LaunchAgentType;
   organizationId?: number;
   cwd?: string;
+  sshCommand?: string;
+  remoteWorkingDirectory?: string;
   launchMode?: 'run' | 'ask';
   flags?: string[];
   model?: string;

@@ -60,6 +60,7 @@ type DraftObjectiveProps = {
   agentCommands?: AgentCommands;
   sshCommand?: string | null;
   remoteWorkingDirectory?: string | null;
+  sshEnabled?: boolean;
   hasProjectWorkingDirectory?: boolean;
 };
 
@@ -80,6 +81,7 @@ export function DraftObjective({
   agentCommands,
   sshCommand,
   remoteWorkingDirectory,
+  sshEnabled,
   hasProjectWorkingDirectory
 }: DraftObjectiveProps) {
   const editFieldRef = useRef<InlineEditFieldHandle>(null);
@@ -356,6 +358,7 @@ export function DraftObjective({
                     workingDirectory={workingDirectory}
                     sshCommand={sshCommand ?? null}
                     remoteWorkingDirectory={remoteWorkingDirectory ?? null}
+                    sshEnabled={sshEnabled}
                     hasProjectWorkingDirectory={hasProjectWorkingDirectory ?? false}
                     submitObjectiveId={objectiveId}
                     size="sm"

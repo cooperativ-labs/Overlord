@@ -1,6 +1,6 @@
 /// <reference lib="deno.ns" />
 
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { Resend } from 'npm:resend@4.6.0';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
@@ -63,10 +63,7 @@ function parseEmailType(value: unknown): EmailType | Response {
   return value as EmailType;
 }
 
-function mailingListSubscribersQuery(
-  supabase: ReturnType<typeof createClient>,
-  emailType: EmailType
-) {
+function mailingListSubscribersQuery(supabase: SupabaseClient, emailType: EmailType) {
   const base = supabase.from('mailing_list').select('email, user_id').neq('email', '');
   switch (emailType) {
     case 'new_features':

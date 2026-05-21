@@ -422,6 +422,7 @@ export async function TicketPanelContent({
                 agentCommands={agentCommands}
                 sshCommand={projectSshCommand}
                 remoteWorkingDirectory={projectRemoteWorkingDirectory}
+                sshEnabled={sshEnabled}
                 hasProjectWorkingDirectory={hasProjectWorkingDirectory}
                 checkpointsByObjectiveId={checkpointsByObjectiveId}
                 allProjectCheckpointObjectiveIds={allProjectCheckpointObjectiveIds}

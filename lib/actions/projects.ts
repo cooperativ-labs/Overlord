@@ -152,6 +152,31 @@ export async function getProjectsForCurrentUser(): Promise<SidebarProject[]> {
   });
 }
 
+export type ModalProjectOption = {
+  id: string;
+  name: string;
+  color: string;
+  everhour_project_id: string | null;
+  organization_id: number;
+  local_working_directory: string | null;
+  ssh_command: string | null;
+  remote_working_directory: string | null;
+};
+
+export async function getProjectsForModalAction(): Promise<ModalProjectOption[]> {
+  const projects = await getProjectsForCurrentUser();
+  return projects.map(p => ({
+    id: p.id,
+    name: p.name,
+    color: p.color,
+    everhour_project_id: p.everhourProjectId ?? null,
+    organization_id: p.organizationId,
+    local_working_directory: p.localWorkingDirectory,
+    ssh_command: p.sshCommand,
+    remote_working_directory: p.remoteWorkingDirectory
+  }));
+}
+
 export async function updateProjectColorAction(input: {
   projectId: string;
   color: string;

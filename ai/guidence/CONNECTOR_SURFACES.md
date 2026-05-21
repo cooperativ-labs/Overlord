@@ -24,6 +24,8 @@ Bundle-backed agents get a slim ticket prompt; unbundled agents always receive t
 
 Desktop local launches set `OVERLORD_SNAPSHOT_JSON` **only** when the user has enabled in-folder JJ version control (`project_user.local_version_control = jj`); the app then points snapshot metadata at the real working directory (after `GET /api/protocol/context/...`). There is no automatic managed/shadow jj workspace for projects that leave version control off. The context API does not run `jj` on the server. The CLI `attach` command creates a per-objective local git checkpoint at `refs/overlord/checkpoints/<objectiveId>` for git workspaces before work begins; `deliver` does not create a checkpoint.
 
+Desktop local launches remain direct Electron main-process launches. Desktop SSH launches also stay on the direct Electron path: the renderer passes `sshCommand` / `remoteWorkingDirectory` into `terminal:launch-agent`, the main process fetches context locally, writes the prompt into a remote temp file over system SSH, and opens the user's configured local terminal with an interactive SSH session. CLI SSH launches remain the copy/paste and terminal-native surface via `ovld launch ... --ssh-command ... --remote-working-directory ...`. Shared shell parsing, SSH TTY injection, escaping, and remote tmux wrapping live in [shell-utils.ts](/Users/jake/Development/Cooperativ/Overlord/lib/ssh/shell-utils.ts).
+
 Capability resolver:
 [agent-capabilities.ts](/Users/jake/Development/Cooperativ/Overlord/lib/overlord/agent-capabilities.ts)
 
@@ -100,6 +102,7 @@ Checklist:
 - `instructionMode=bundle` is passed to context route when bundle is installed
 - Model flag: `--model`; thinking/effort flag: `--effort`
 - Desktop local launches intentionally do **not** shell out to `ovld launch`; they prefetch context, write temp hook/settings files, and avoid shell-quoting edge cases before spawning Claude directly
+- Desktop SSH launches use the same direct main-process command builder, omit local-only temp Claude settings/plugin paths on the remote host, and wrap the final remote agent command over system SSH
 
 ### 4. Onboarding
 
@@ -186,6 +189,7 @@ Checklist:
 - Prompt text tells Codex to try `ovld auth repair` before `ovld auth login --organization-id <id>` when shared credentials look stale; `--organization-id` is required in non-TTY environments with multiple organizations
 - Thinking/effort flag uses `-c model_reasoning_effort=<value>` (TOML inline format)
 - Desktop local launches intentionally stay on the direct Electron path instead of delegating to `ovld launch`; `ovld launch` is the copy/paste surface and remote shell entrypoint
+- Desktop SSH launches use the same Codex expect/context-file behavior with the context file created on the remote host before Codex starts
 
 ### 3. Cloud / headless Codex setup
 
@@ -415,6 +419,7 @@ Checklist:
 - Context route accepts `agent=antigravity`
 - No model/thinking launch flags — Antigravity manages models internally
 - Desktop local launches intentionally stay on the direct Electron path; `ovld launch antigravity` is the copy/paste and remote-shell entrypoint
+- Desktop SSH launches keep Antigravity's no-model/no-thinking asymmetry and pass the remote context file to `agy --prompt-interactive`
 
 ### 7. Deliberate asymmetries
 

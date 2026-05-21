@@ -15,7 +15,8 @@ const AGENT_TYPES = [
   'codex',
   'cursor',
   'antigravity',
-  'opencode'
+  'opencode',
+  'pi'
 ] as const satisfies readonly LaunchAgentType[];
 
 const LaunchAgentPayloadSchema = z.object({
@@ -23,6 +24,8 @@ const LaunchAgentPayloadSchema = z.object({
   agent: z.enum(AGENT_TYPES),
   organizationId: z.number().int().positive().optional(),
   cwd: z.string().max(4096).optional(),
+  sshCommand: z.string().max(4096).optional(),
+  remoteWorkingDirectory: z.string().max(4096).optional(),
   launchMode: z.enum(['run', 'ask']).optional(),
   flags: z.array(z.string().max(512)).max(64).optional(),
   model: z.string().max(128).optional(),
@@ -31,6 +34,11 @@ const LaunchAgentPayloadSchema = z.object({
   feedPostId: z.string().uuid().optional(),
   initialQuestion: z.string().max(8000).optional()
 });
+
+type ServerMultiplexerConfig = {
+  enabled: boolean;
+  tmuxCommand?: string | null;
+};
 
 function runAppleScript(script: string) {
   return new Promise<void>((resolve, reject) => {
@@ -86,6 +94,18 @@ function getLocalTerminalSettingsProfile(): TerminalSettingsProfile {
       'externalTerminalTmuxCommand',
       'tmux new-session bash {script}'
     ) as string
+  };
+}
+
+function getServerMultiplexerConfig(): ServerMultiplexerConfig {
+  const termApp = store.get('serverExternalTerminalApp', 'default') as string;
+  const tmuxCommand = store.get(
+    'serverExternalTerminalTmuxCommand',
+    'tmux new-session bash {script}'
+  ) as string;
+  return {
+    enabled: termApp === 'tmux',
+    tmuxCommand
   };
 }
 
@@ -520,6 +540,9 @@ export function registerTerminalIpc(): void {
       organizationId: payload.organizationId,
       projectId: payload.projectId ?? undefined,
       cwd: payload.cwd,
+      sshCommand: payload.sshCommand,
+      remoteWorkingDirectory: payload.remoteWorkingDirectory,
+      serverMultiplexer: getServerMultiplexerConfig(),
       launchMode: payload.launchMode,
       flags: payload.flags,
       model: payload.model,

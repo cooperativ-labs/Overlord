@@ -2,6 +2,35 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2605210733.0] - 2026-05-21:07:33
+
+### Added
+- Launch agents from the Overlord desktop app over SSH workspaces configured on a project, using the same direct Electron launch path as local runs.
+- Pass SSH command and remote working directory through agent launch controls on tickets, feed, quick task, and quick run flows when the SSH workspace is selected.
+- Shared SSH shell utilities for parsing SSH commands, TTY injection, escaping, and optional remote tmux session wrapping.
+- Pi agent type support in desktop terminal agent launch IPC.
+- Copyable allowed-domain snippet (including wildcard) on the Agents & MCP settings page for third-party agent configuration.
+
+### Fixed
+- None.
+
+### Changed
+- Desktop no longer forces local-only workspace; SSH workspace preferences apply when the SSH feature flag is enabled.
+- Quick run and new-ticket modals load project SSH settings via a server action instead of direct Supabase client queries.
+- SSH project settings auth method selector shows On-Device Key only (private key and Tailscale options temporarily hidden).
+
+### Security
+- None.
+
+### Test
+- Add unit tests for SSH shell utility parsing and remote tmux command building.
+
+### Documentation
+- Document desktop SSH agent launch behavior and parity with CLI SSH launches in connector surfaces guidance.
+
+### Chore
+- Bump workspace and CLI package versions.
+
 ## [0.2605201134.0] - 2026-05-20:11:34
 
 ### Added

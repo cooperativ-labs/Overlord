@@ -217,9 +217,9 @@ export function SshWorkspaceSection({
               <SelectValue placeholder="Auth method" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="agent">ssh-agent</SelectItem>
-              <SelectItem value="key">Private key</SelectItem>
-              <SelectItem value="tailscale">Tailscale SSH</SelectItem>
+              <SelectItem value="agent">On-Device Key</SelectItem>
+              {/* <SelectItem value="key">Private key</SelectItem>
+              <SelectItem value="tailscale">Tailscale SSH</SelectItem> */}
             </SelectContent>
           </Select>
         </div>

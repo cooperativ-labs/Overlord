@@ -11,7 +11,6 @@ export type SidebarProject = {
   operationsProfileFingerprint?: string | null;
   operationsProfileGeneratedAt?: string | null;
   localWorkingDirectory: string | null;
-  /** @deprecated — retained for one release so legacy callers keep compiling. */
   sshCommand: string | null;
   remoteWorkingDirectory: string | null;
   sshHost: string | null;

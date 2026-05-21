@@ -51,6 +51,7 @@ type AgentSplitButtonProps = {
   workingDirectory?: string | null;
   sshCommand?: string | null;
   remoteWorkingDirectory?: string | null;
+  sshEnabled?: boolean;
   activeAgentIdentifier?: string | null;
   assignedSelection?: TicketAssignedAgent | null;
   hasProjectWorkingDirectory?: boolean;
@@ -129,6 +130,7 @@ export function AgentSplitButton({
   workingDirectory,
   sshCommand,
   remoteWorkingDirectory,
+  sshEnabled,
   activeAgentIdentifier,
   assignedSelection,
   hasProjectWorkingDirectory,
@@ -153,13 +155,15 @@ export function AgentSplitButton({
     workingDirectory,
     sshCommand,
     remoteWorkingDirectory,
-    isElectron: demo ? true : isElectron
+    isElectron: demo ? true : isElectron,
+    sshEnabled
   });
   const ACTIVE_SESSION_STATES: SessionState[] = ['attached', 'blocked', 'idle'];
   const effectiveSelection: AgentModelSelection = assignedSelection ?? selection;
   const hasResolvedSelection = assignedSelection !== null || selectionLoaded;
   const effectiveWorkingDirectory = workspace.effectiveWorkingDirectory;
   const effectiveSshCommand = workspace.effectiveSshCommand;
+  const effectiveRemoteWorkingDirectory = workspace.effectiveRemoteWorkingDirectory;
   const isRunning = agentSessionState === 'attached';
 
   const isActive =
@@ -249,7 +253,16 @@ export function AgentSplitButton({
           ticketId,
           agent: agentValue,
           organizationId,
-          cwd: effectiveWorkingDirectory ?? undefined,
+          cwd:
+            workspace.executionWorkspace === 'local'
+              ? (effectiveWorkingDirectory ?? undefined)
+              : undefined,
+          sshCommand:
+            workspace.executionWorkspace === 'ssh' ? (effectiveSshCommand ?? undefined) : undefined,
+          remoteWorkingDirectory:
+            workspace.executionWorkspace === 'ssh'
+              ? (effectiveRemoteWorkingDirectory ?? undefined)
+              : undefined,
           launchMode: 'run',
           flags: agentFlags?.[agentValue],
           model: options?.useStoredModelPreference

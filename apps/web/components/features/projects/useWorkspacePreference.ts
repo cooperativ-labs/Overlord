@@ -30,14 +30,14 @@ export function useWorkspacePreference({
   workingDirectory,
   sshCommand,
   remoteWorkingDirectory,
-  isElectron = false
+  sshEnabled = true
 }: {
   projectId?: string | null;
   workingDirectory?: string | null;
   sshCommand?: string | null;
   remoteWorkingDirectory?: string | null;
-  /** Desktop app does not support SSH execution; ignore SSH workspace prefs. */
   isElectron?: boolean;
+  sshEnabled?: boolean;
 }) {
   const projectSettings = useProjectSettings();
 
@@ -45,7 +45,8 @@ export function useWorkspacePreference({
     typeof workingDirectory === 'string' &&
     workingDirectory.trim().length > 0 &&
     !isWorkingDirectoryNone(workingDirectory);
-  const hasSshDirectory = typeof sshCommand === 'string' && sshCommand.trim().length > 0;
+  const hasSshDirectory =
+    sshEnabled && typeof sshCommand === 'string' && sshCommand.trim().length > 0;
 
   const readFromStorage = useCallback((): ProjectExecutionWorkspace => {
     if (typeof window === 'undefined' || !projectId) return 'local';
@@ -81,20 +82,10 @@ export function useWorkspacePreference({
 
     window.addEventListener(WORKSPACE_CHANGED_EVENT, handleWorkspaceChanged);
     return () => window.removeEventListener(WORKSPACE_CHANGED_EVENT, handleWorkspaceChanged);
-  }, [projectId, projectSettings, readFromStorage, isElectron]);
+  }, [projectId, projectSettings, readFromStorage]);
 
   // When the context is available, use it directly.
   if (projectSettings) {
-    if (isElectron) {
-      return {
-        executionWorkspace: 'local' as const,
-        effectiveWorkingDirectory: projectSettings.effectiveWorkingDirectory,
-        effectiveSshCommand: null,
-        effectiveRemoteWorkingDirectory: null,
-        hasLocalDirectory: projectSettings.hasLocalDirectory,
-        hasSshDirectory: projectSettings.hasSshDirectory
-      };
-    }
     return {
       executionWorkspace: projectSettings.executionWorkspace,
       effectiveWorkingDirectory: projectSettings.effectiveWorkingDirectory,
@@ -109,26 +100,17 @@ export function useWorkspacePreference({
   const localDir = hasLocalDirectory ? workingDirectory!.trim() : null;
   const ssh = hasSshDirectory ? sshCommand!.trim() : null;
   const remoteDir =
-    typeof remoteWorkingDirectory === 'string' && remoteWorkingDirectory.trim().length > 0
+    sshEnabled &&
+    typeof remoteWorkingDirectory === 'string' &&
+    remoteWorkingDirectory.trim().length > 0
       ? remoteWorkingDirectory.trim()
       : null;
-
-  if (isElectron) {
-    return {
-      executionWorkspace: 'local' as const,
-      effectiveWorkingDirectory: localDir,
-      effectiveSshCommand: null,
-      effectiveRemoteWorkingDirectory: null,
-      hasLocalDirectory,
-      hasSshDirectory
-    };
-  }
 
   return {
     executionWorkspace: storageBased,
     effectiveWorkingDirectory: storageBased === 'local' ? localDir : null,
-    effectiveSshCommand: storageBased === 'ssh' ? ssh : null,
-    effectiveRemoteWorkingDirectory: storageBased === 'ssh' ? remoteDir : null,
+    effectiveSshCommand: sshEnabled && storageBased === 'ssh' ? ssh : null,
+    effectiveRemoteWorkingDirectory: sshEnabled && storageBased === 'ssh' ? remoteDir : null,
     hasLocalDirectory,
     hasSshDirectory
   };

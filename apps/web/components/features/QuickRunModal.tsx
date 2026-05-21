@@ -8,6 +8,7 @@ import { AgentModelChooserButton } from '@/components/features/AgentModelChooser
 import { useAgentModelPreference } from '@/components/features/AgentModelSelector';
 import { MentionableTextarea } from '@/components/features/MentionableTextarea';
 import { useWorkspaceFileTree } from '@/components/features/projects/useWorkspaceFileTree';
+import { useWorkspacePreference } from '@/components/features/projects/useWorkspacePreference';
 import { useTerminal } from '@/components/features/terminal/TerminalProvider';
 import { Button } from '@/components/ui/button';
 import {
@@ -45,6 +46,8 @@ type ProjectOption = {
   everhour_project_id: string | null;
   organization_id?: number;
   local_working_directory?: string | null;
+  ssh_command?: string | null;
+  remote_working_directory?: string | null;
 };
 
 type QuickRunModalProps = {
@@ -54,6 +57,7 @@ type QuickRunModalProps = {
   organizationId?: number;
   projects: ProjectOption[];
   fileMentionPaths?: string[];
+  sshEnabled?: boolean;
 };
 
 export function QuickRunModal({
@@ -62,7 +66,8 @@ export function QuickRunModal({
   defaultProjectId,
   organizationId,
   projects,
-  fileMentionPaths = EMPTY_FILE_MENTION_PATHS
+  fileMentionPaths = EMPTY_FILE_MENTION_PATHS,
+  sshEnabled
 }: QuickRunModalProps) {
   const router = useRouter();
   const resolvedDefaultProjectId = defaultProjectId ?? PERSONAL_PROJECT_VALUE;
@@ -83,9 +88,17 @@ export function QuickRunModal({
     selectedProjectId === PERSONAL_PROJECT_VALUE
       ? null
       : projects.find(p => p.id === selectedProjectId);
+  const workspace = useWorkspacePreference({
+    projectId: selectedProjectForFileTree?.id ?? null,
+    workingDirectory: selectedProjectForFileTree?.local_working_directory ?? null,
+    sshCommand: selectedProjectForFileTree?.ssh_command ?? null,
+    remoteWorkingDirectory: selectedProjectForFileTree?.remote_working_directory ?? null,
+    isElectron: true,
+    sshEnabled
+  });
   const { files: effectiveMentionPaths } = useWorkspaceFileTree({
     fileMentionPaths,
-    workingDirectory: selectedProjectForFileTree?.local_working_directory
+    workingDirectory: workspace.effectiveWorkingDirectory
   });
 
   const autoResize = useCallback(() => {
@@ -201,7 +214,18 @@ export function QuickRunModal({
             ticketId: createdTicket.id,
             agent: objectiveSelection.agent,
             organizationId: createdTicket.organizationId,
-            cwd: selectedProject?.local_working_directory ?? undefined,
+            cwd:
+              workspace.executionWorkspace === 'local'
+                ? (workspace.effectiveWorkingDirectory ?? undefined)
+                : undefined,
+            sshCommand:
+              workspace.executionWorkspace === 'ssh'
+                ? (workspace.effectiveSshCommand ?? undefined)
+                : undefined,
+            remoteWorkingDirectory:
+              workspace.executionWorkspace === 'ssh'
+                ? (workspace.effectiveRemoteWorkingDirectory ?? undefined)
+                : undefined,
             launchMode: 'run',
             model: objectiveSelection.model ?? undefined,
             thinking: objectiveSelection.thinking ?? undefined,
