@@ -339,14 +339,16 @@ export const TOOLS = [
         sessionKey: { type: 'string', description: 'Session key from attach.' },
         ticketId: {
           type: 'string',
-          description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.'
+          description:
+            'Ticket identifier (e.g. 1:899). Optional when objectiveId is provided; required to list every attachment across a ticket. Also accepts UUID.'
         },
         objectiveId: {
           type: 'string',
-          description: 'Optional objective UUID filter.'
+          description:
+            'Objective UUID. Filters to a single objective and lets the server derive ticketId.'
         }
       },
-      required: ['sessionKey', 'ticketId']
+      required: ['sessionKey']
     }
   },
   {
@@ -366,7 +368,8 @@ export const TOOLS = [
         sessionKey: { type: 'string', description: 'Session key from attach.' },
         ticketId: {
           type: 'string',
-          description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.'
+          description:
+            'Ticket identifier (e.g. 1:899) or UUID. Optional — derived from objectiveId when omitted.'
         },
         objectiveId: { type: 'string', description: 'Objective UUID.' },
         fileName: { type: 'string', description: 'Original filename (e.g. design-spec.pdf).' },
@@ -375,7 +378,7 @@ export const TOOLS = [
         fileSize: { type: 'number', description: 'Optional file size in bytes.' },
         metadata: { type: 'object', description: 'Optional metadata for finalize step.' }
       },
-      required: ['sessionKey', 'ticketId', 'objectiveId', 'fileName']
+      required: ['sessionKey', 'objectiveId', 'fileName']
     }
   },
   {
@@ -395,7 +398,8 @@ export const TOOLS = [
         sessionKey: { type: 'string', description: 'Session key from attach.' },
         ticketId: {
           type: 'string',
-          description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.'
+          description:
+            'Ticket identifier (e.g. 1:899) or UUID. Optional — derived from objectiveId when omitted.'
         },
         objectiveId: { type: 'string', description: 'Objective UUID.' },
         storagePath: {
@@ -407,7 +411,7 @@ export const TOOLS = [
         fileSize: { type: 'number', description: 'Optional file size in bytes.' },
         metadata: { type: 'object', description: 'Optional metadata to persist on row.' }
       },
-      required: ['sessionKey', 'ticketId', 'objectiveId', 'storagePath', 'label']
+      required: ['sessionKey', 'objectiveId', 'storagePath', 'label']
     }
   },
   {
@@ -426,7 +430,8 @@ export const TOOLS = [
         sessionKey: { type: 'string', description: 'Session key from attach.' },
         ticketId: {
           type: 'string',
-          description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.'
+          description:
+            'Ticket identifier (e.g. 1:899) or UUID. Optional — derived from attachmentId / objectiveId when omitted.'
         },
         objectiveId: {
           type: 'string',
@@ -439,7 +444,7 @@ export const TOOLS = [
         },
         expiresIn: { type: 'number', description: 'Expiry in seconds (default 3600, max 86400).' }
       },
-      required: ['sessionKey', 'ticketId']
+      required: ['sessionKey']
     }
   },
   {
@@ -881,7 +886,7 @@ export const TOOLS = [
       openWorldHint: false
     },
     description:
-      'Resolve the Overlord project by ID or by matching a local working directory. When authenticated via an agent token the project is resolved automatically — no arguments needed. For OAuth connections, pass projectId directly or fall back to workingDirectory matching.',
+      'Resolve the Overlord project by ID or by matching a local working directory. Hosted agents should pass projectId when known; otherwise pass workingDirectory and optional device identity for resource-directory matching.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -894,6 +899,19 @@ export const TOOLS = [
           type: 'string',
           description:
             'Absolute path of the repository root to match against registered resource directories. Used when projectId is not provided.'
+        },
+        deviceFingerprint: {
+          type: 'string',
+          description:
+            'Optional stable device fingerprint. When provided, workingDirectory matching prefers resource directories for that registered device.'
+        },
+        deviceHostname: {
+          type: 'string',
+          description: 'Optional hostname to register/update when deviceFingerprint is provided.'
+        },
+        devicePlatform: {
+          type: 'string',
+          description: "Optional platform string such as 'darwin', 'linux', or 'windows'."
         }
       },
       required: []

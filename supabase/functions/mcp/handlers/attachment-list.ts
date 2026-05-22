@@ -5,13 +5,27 @@ import { type TokenContext } from '../auth.ts';
 import { toolErr, toolOk } from '../rpc.ts';
 import { resolveSession } from '../session.ts';
 
+import { resolveTicketIdFromObjective } from './_attachments.ts';
+
 export async function handleAttachmentList(supabase: SupabaseClient, args: any, ctx: TokenContext) {
   const { sessionKey, ticketId, objectiveId } = args;
-  if (!sessionKey || !ticketId) {
-    return toolErr('sessionKey and ticketId are required.');
+  if (!sessionKey || (!ticketId && !objectiveId)) {
+    return toolErr('sessionKey and one of ticketId or objectiveId are required.');
   }
 
-  const resolved = await resolveSession(supabase, sessionKey, ticketId, ctx.organizationId);
+  const ticketIdForSession =
+    ticketId ??
+    (await resolveTicketIdFromObjective(supabase, String(objectiveId), ctx.organizationId));
+  if (!ticketIdForSession) {
+    return toolErr('Objective not found or access denied.');
+  }
+
+  const resolved = await resolveSession(
+    supabase,
+    sessionKey,
+    ticketIdForSession,
+    ctx.organizationId
+  );
   if (!resolved.session || !resolved.resolvedTicketId) {
     return toolErr(resolved.error ?? 'Session not found.');
   }

@@ -444,9 +444,9 @@ ovld protocol write-context --session-key <sessionKey> --ticket-id ${ticketId} -
 The \`attach\` response already lists existing attachments and objective IDs in the \`attachments\` and \`objectives\` arrays (also rendered as the **Attachments** and **Objective IDs** sections of the prompt above). To list mid-session, run \`attachment-list\`.
 
 \`\`\`bash
-ovld protocol attachment-list --session-key <sessionKey> --ticket-id ${ticketId}
-ovld protocol attachment-upload-file --session-key <sessionKey> --ticket-id ${ticketId} --objective-id <objective-id> --file ./spec.pdf --content-type application/pdf
-ovld protocol attachment-download-url --session-key <sessionKey> --ticket-id ${ticketId} --attachment-id <attachment-id>
+ovld protocol attachment-list --session-key <sessionKey> --objective-id <objective-id>
+ovld protocol attachment-upload-file --session-key <sessionKey> --objective-id <objective-id> --file ./spec.pdf --content-type application/pdf
+ovld protocol attachment-download-url --session-key <sessionKey> --attachment-id <attachment-id>
 \`\`\`
 
 ### 6 — Deliver (always last)

@@ -1,7 +1,7 @@
 jest.mock('@/app/api/protocol/_lib', () => ({
   parseProtocolBody: jest.fn(),
-  internalErrorResponse: jest.fn(() =>
-    new Response(JSON.stringify({ error: 'internal' }), { status: 500 })
+  internalErrorResponse: jest.fn(
+    () => new Response(JSON.stringify({ error: 'internal' }), { status: 500 })
   )
 }));
 jest.mock('@/supabase/utils/service-role');

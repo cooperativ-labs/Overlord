@@ -73,6 +73,8 @@ The CLI also uses local working directory matching. For example, when you create
 
 ```bash
 ovld protocol discover-project
+ovld protocol discover-project --project-id <project-id>
+ovld protocol discover-project --working-directory /path/to/repo --device-fingerprint "$OVERLORD_DEVICE_FINGERPRINT"
 ovld protocol create --agent codex --objectives-json '[{"objective":"Capture follow-up work from this repository"}]'
 ```
 
@@ -365,7 +367,7 @@ Do not send file changes as a generic artifact. Use change rationales so Overlor
 Attachments are files tied to ticket objectives. Attach returns visible attachment IDs and objective IDs. Agents can refresh the list:
 
 ```bash
-ovld protocol attachment-list --session-key <session-key> --ticket-id <ticket_id>
+ovld protocol attachment-list --session-key <session-key> --objective-id <objective-id>
 ```
 
 Upload a local file to an objective:
@@ -373,7 +375,6 @@ Upload a local file to an objective:
 ```bash
 ovld protocol attachment-upload-file \
   --session-key <session-key> \
-  --ticket-id <ticket_id> \
   --objective-id <objective-id> \
   --file ./spec.pdf \
   --content-type application/pdf
@@ -384,7 +385,6 @@ Get a download URL for an attachment:
 ```bash
 ovld protocol attachment-download-url \
   --session-key <session-key> \
-  --ticket-id <ticket_id> \
   --attachment-id <attachment-id>
 ```
 
@@ -562,8 +562,8 @@ Agent context and attachments:
 ```bash
 ovld protocol read-context --session-key <session-key> --ticket-id <ticket_id>
 ovld protocol write-context --session-key <session-key> --ticket-id <ticket_id> --key "key" --value '"value"'
-ovld protocol attachment-list --session-key <session-key> --ticket-id <ticket_id>
-ovld protocol attachment-upload-file --session-key <session-key> --ticket-id <ticket_id> --objective-id <objective-id> --file ./spec.pdf
+ovld protocol attachment-list --session-key <session-key> --objective-id <objective-id>
+ovld protocol attachment-upload-file --session-key <session-key> --objective-id <objective-id> --file ./spec.pdf
 ```
 
 ## Summary

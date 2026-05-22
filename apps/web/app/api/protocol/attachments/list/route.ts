@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { internalErrorResponse, parseProtocolBody } from '@/app/api/protocol/_lib';
+import { resolveTicketIdFromObjective } from '@/lib/overlord/protocol-attachments';
 import { resolveSession, resolveTicketId } from '@/lib/overlord/protocol-db';
 import { attachmentListSchema } from '@/lib/overlord/validation';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
@@ -12,8 +13,16 @@ export async function POST(request: Request) {
   try {
     const { sessionKey, ticketId: rawTicketId, objectiveId } = parsed.data;
     const { organizationId } = parsed.tokenContext;
-    const ticketId = await resolveTicketId(rawTicketId, organizationId);
-    if (!ticketId) return NextResponse.json({ error: 'Ticket not found.' }, { status: 404 });
+
+    let ticketId: string | null = null;
+    if (rawTicketId) {
+      ticketId = await resolveTicketId(rawTicketId, organizationId);
+    } else if (objectiveId) {
+      ticketId = await resolveTicketIdFromObjective(objectiveId, organizationId);
+    }
+    if (!ticketId) {
+      return NextResponse.json({ error: 'Ticket not found.' }, { status: 404 });
+    }
 
     const resolved = await resolveSession(sessionKey, ticketId, organizationId);
     if (!resolved.session) {

@@ -65,6 +65,8 @@ ovld prompt "Draft a fix for the onboarding flow"
 ovld version
 ovld update
 ovld protocol discover-project
+ovld protocol discover-project --project-id <project-id>
+ovld protocol discover-project --working-directory /path/to/repo --device-fingerprint "$OVERLORD_DEVICE_FINGERPRINT"
 ovld protocol attach --ticket-id <ticket_id>
 ovld protocol search-tickets --query "auth refactor" --status next-up,execute
 ovld protocol update --session-key <session-key> --ticket-id <ticket_id> --summary "Working on it" --phase execute

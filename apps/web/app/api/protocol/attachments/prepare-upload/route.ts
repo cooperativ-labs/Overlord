@@ -26,15 +26,17 @@ export async function POST(request: Request) {
       ticketId: rawTicketId
     } = parsed.data;
     const { organizationId, userId } = parsed.tokenContext;
-    const ticketId = await resolveTicketId(rawTicketId, organizationId);
-    if (!ticketId) return NextResponse.json({ error: 'Ticket not found.' }, { status: 404 });
+    const ticketId = rawTicketId ? await resolveTicketId(rawTicketId, organizationId) : undefined;
+    if (rawTicketId && !ticketId) {
+      return NextResponse.json({ error: 'Ticket not found.' }, { status: 404 });
+    }
 
     const access = await resolveAttachmentAccess({
       organizationId,
       objectiveId,
       requireWrite: true,
       sessionKey,
-      ticketId,
+      ticketId: ticketId ?? undefined,
       userId
     });
 
@@ -69,7 +71,7 @@ export async function POST(request: Request) {
         metadata,
         objectiveId,
         storagePath,
-        ticketId
+        ticketId: access.ticket.id
       }
     });
   } catch (error) {

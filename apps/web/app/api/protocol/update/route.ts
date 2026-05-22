@@ -263,9 +263,15 @@ export async function POST(request: Request) {
         const reviewObjectiveId = resolved.session.objective_id;
         after(async () => {
           try {
-            await supabase.functions.invoke('generate-feed-post', {
+            const { error: feedError } = await supabase.functions.invoke('generate-feed-post', {
               body: { ticketId, objectiveId: reviewObjectiveId, organizationId }
             });
+            if (feedError) {
+              console.error('[protocol:update] feed post generation failed:', feedError.message);
+              Sentry.captureException(feedError, {
+                extra: { ticketId, objectiveId: reviewObjectiveId }
+              });
+            }
           } catch (feedErr) {
             console.error('[protocol:update] feed post generation error:', feedErr);
             Sentry.captureException(feedErr, {

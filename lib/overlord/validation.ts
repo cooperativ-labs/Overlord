@@ -323,16 +323,22 @@ const deviceHostnameSchema = z.string().trim().max(256).optional();
 const devicePlatformSchema = z.string().trim().max(64).optional();
 
 /** discover-project: resolve a project from working directory */
-export const discoverProjectSchema = z.object({
-  workingDirectory: z.string().trim().min(1).max(1024),
-  deviceFingerprint: deviceFingerprintSchema,
-  deviceHostname: deviceHostnameSchema,
-  devicePlatform: devicePlatformSchema
-});
+export const discoverProjectSchema = z
+  .object({
+    projectId: z.string().uuid().optional(),
+    workingDirectory: z.string().trim().min(1).max(1024).optional(),
+    deviceFingerprint: deviceFingerprintSchema,
+    deviceHostname: deviceHostnameSchema,
+    devicePlatform: devicePlatformSchema
+  })
+  .refine(input => Boolean(input.projectId || input.workingDirectory), {
+    message: 'projectId or workingDirectory is required.',
+    path: ['workingDirectory']
+  });
 
 export const attachmentPrepareUploadSchema = z.object({
   sessionKey: z.uuid(),
-  ticketId: ticketIdSchema,
+  ticketId: ticketIdSchema.optional(),
   objectiveId: z.uuid(),
   fileName: z.string().trim().min(1).max(240),
   label: z.string().trim().max(160).optional(),
@@ -343,7 +349,7 @@ export const attachmentPrepareUploadSchema = z.object({
 
 export const attachmentFinalizeUploadSchema = z.object({
   sessionKey: z.uuid(),
-  ticketId: ticketIdSchema,
+  ticketId: ticketIdSchema.optional(),
   objectiveId: z.uuid(),
   storagePath: z.string().trim().min(1).max(1024),
   label: z.string().trim().min(1).max(160),
@@ -352,16 +358,21 @@ export const attachmentFinalizeUploadSchema = z.object({
   metadata: z.record(z.string(), z.unknown()).optional().default({})
 });
 
-export const attachmentListSchema = z.object({
-  sessionKey: z.uuid(),
-  ticketId: ticketIdSchema,
-  objectiveId: z.uuid().optional()
-});
+export const attachmentListSchema = z
+  .object({
+    sessionKey: z.uuid(),
+    ticketId: ticketIdSchema.optional(),
+    objectiveId: z.uuid().optional()
+  })
+  .refine(input => Boolean(input.objectiveId || input.ticketId), {
+    message: 'objectiveId or ticketId is required.',
+    path: ['objectiveId']
+  });
 
 export const attachmentGetDownloadUrlSchema = z
   .object({
     sessionKey: z.uuid(),
-    ticketId: ticketIdSchema,
+    ticketId: ticketIdSchema.optional(),
     objectiveId: z.uuid().optional(),
     attachmentId: z.uuid().optional(),
     storagePath: z.string().trim().min(1).max(1024).optional(),

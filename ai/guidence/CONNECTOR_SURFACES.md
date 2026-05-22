@@ -153,6 +153,7 @@ Checklist:
 - Plugin install removes any legacy Overlord-managed Codex `AGENTS.md` section
 - Plugin install removes any legacy Codex bundle manifest entry from `~/.ovld/bundle-manifest.json`
 - Skill text and MCP shim tell Codex to request permission escalation or network access before retrying if `OVERLORD_URL` is unreachable
+- Local MCP shim exposes the local runner queue tools (`request_execution`, `claim_execution`, `complete_execution_launch`, `fail_execution_launch`) to match Antigravity's local shim. Hosted MCP intentionally leaves those runner tools out until hosted remote runners are supported end-to-end.
 
 ### 2. Local launch path
 
@@ -366,7 +367,7 @@ Managed command files (namespaced as `/overlord:<name>` in `agy`):
 Checklist:
 
 - Shim shells out to `ovld protocol` with snake_case MCP parameters mapped to kebab-case CLI flags (same pattern as the Codex plugin shim, separate file)
-- Exposes the full protocol surface agents need (`attach`, `update`, `deliver`, `ask`, ticket search, attachments, etc.)
+- Exposes the full local protocol surface agents need (`attach`, `update`, `deliver`, `ask`, ticket search, attachments, device/resource tools, and runner queue tools)
 - Hosted `/api/mcp` is **not** the Antigravity local path — Antigravity uses the bundled local shim only
 
 ### 4. Hooks
@@ -617,6 +618,7 @@ when one surface changes, check the others against this table.
 Notes:
 
 - **Parameter naming:** Supabase Edge MCP (`/Users/jake/Development/Cooperativ/Overlord/supabase/functions/mcp/tools.ts`) uses **camelCase** tool arguments that match `POST /api/protocol/*` JSON bodies (`ticketId`, `sessionKey`, `changeRationales`, …). The local Codex MCP shim (`/Users/jake/Development/Cooperativ/Overlord/plugins/overlord/scripts/overlord-mcp.mjs`) uses **snake_case** keys that map to `ovld protocol` kebab-case flags (`ticket_id` → `--ticket-id`). Prefer camelCase when calling the hosted MCP endpoint and snake_case when calling the shim.
+- `discover-project` accepts `projectId` / `--project-id` / `project_id` as an explicit shortcut, or `workingDirectory` / `--working-directory` / `working_directory` for path matching. Device identity fields (`deviceFingerprint`, `deviceHostname`, `devicePlatform`) are accepted across API, CLI, hosted MCP, and local shims so directory matching can prefer resource directories for the current device.
 - `agentIdentifier` and `connectionMethod` are required by the API but defaulted client-side: CLI defaults to `<agent>`/`cli`, MCP defaults to `mcp`.
 - Organization scope for ticket-scoped protocol calls is resolved in this order: organization id embedded in human-readable `ticket_id` (for example `1:899`), then explicit `--organization-id` / `x-organization-id`, then stored OAuth organization.
 - `deliver` accepts optional `artifacts` (defaults to `[]`), `changeRationales`, `snapshot`, and `checkpoint` metadata — same as `deliverSchema` in `/Users/jake/Development/Cooperativ/Overlord/lib/overlord/validation.ts`. The CLI can send the full delivery object via `--payload-json <json>` or `--payload-file <path|->`; when either full-payload flag is used, do not also pass `--summary`, `--artifacts-*`, or `--change-rationales-*`. Local git checkpoints are created on `attach` (per executing objective), not `deliver`; `--skip-checkpoint` is an `attach` flag.
@@ -626,6 +628,7 @@ Notes:
 - `revert` is local-destructive by design: the API only returns the checkpoint row for `objectiveId`; the CLI/local shim restores the caller's working tree and saves a safety ref under `refs/overlord/safety/`. Hosted MCP does not expose it because it cannot mutate the user's local repository.
 - `permission-request` is invoked by the installed permission hook/rules, not by agent logic.
 - Execution request operations back `ovld runner`. `request-execution` is the durable launch contract used by manual Run and auto-advance; `claim-execution`, `complete-execution-launch`, and `fail-execution-launch` are runner operations and are exposed in the CLI/local MCP shims for headless devices. Hosted MCP exposure is intentionally deferred until hosted remote runners are supported end-to-end.
+- Attachment calls accept an optional ticket id. Agents can omit it when `objectiveId`/`objective_id` or `attachmentId`/`attachment_id` is enough for the server to derive ticket scope.
 - `hook-event` is invoked by installed lifecycle hooks (`UserPromptSubmit` today; `Stop` reserved for future use) and intentionally does not require `sessionKey`.
 - `prompt` (formerly `spawn`) creates and executes a ticket immediately. The CLI accepts `spawn` as a backward-compatible alias.
 - MCP objective attachment tools follow `<verb>_<noun>` naming. CLI subcommands keep the `attachment-*` shape for terminal ergonomics. (`artifacts` is reserved for the structured records agents submit via `deliver`, not user-uploaded files.)

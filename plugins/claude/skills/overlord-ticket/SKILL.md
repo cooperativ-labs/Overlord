@@ -21,6 +21,28 @@ Use this mode when the prompt already contains a ticket ID or explicitly says th
 
 For full command syntax, flags, phase values, and event types see [reference/cli.md](reference/cli.md).
 
+## Tickets vs Objectives
+
+**Tickets** represent whole features or goals. **Objectives** are the individual steps to implement that goal — one objective equals one agent prompt.
+
+Example:
+```
+Ticket: add CLI command for editing user profile
+ - Objective 1: draft plan for this command
+ - Objective 2: implement phase 1 of plan
+ - Objective 3: implement phase 2 of plan
+ - Objective 4: update documentation
+```
+
+When to create a ticket vs an objective:
+- **Create a new ticket** when the user describes a distinct feature, bug, or goal that stands on its own.
+- **Add objectives to an existing ticket** when the work is a sequential step toward the same feature or goal already tracked in a ticket.
+
+To add further objectives to an existing ticket (Mode 2):
+```
+ovld protocol add-objectives --ticket-id <ticket_id> --objectives-json '[{"objective":"..."},{"objective":"..."}]'
+```
+
 ## Objective Submission vs Execution
 
 Discussing or otherwise opening a ticket from within a chat should cause the draft objective to be marked **submitted** — this signals the ticket is in active discussion with an agent, but not yet being executed. Only an explicit order to execute (e.g. "execute this", "do this", "start working on it") should cause you to **attach** to the ticket and trigger execution.
@@ -39,6 +61,7 @@ Use this mode when the conversation starts normally and the user asks Claude to 
    - When `--session-key` and `--ticket-id` are provided, it creates a follow-up draft.
    - When session flags are omitted, it resolves the project by matching current working directory (or `--working-directory`) to Overlord `local_working_directory`, then creates a standalone draft.
    - Pass multiple items in `--objectives-json` when creating ordered steps for the same feature or goal.
+   - If the user wants to **add more objectives to an existing ticket** (not create a new ticket), use `ovld protocol add-objectives --ticket-id <ticket_id> --objectives-json '[{"objective":"..."}]'` instead.
 2. Default to `create` for new tickets. Only use `/overlord:prompt` or `ovld protocol prompt --agent claude-code --objectives-json '[{"objective":"..."}]'` when the user explicitly asks to create and execute immediately.
    `prompt` creates the ticket in `execute` status and attaches immediately.
 3. If the user already has a ticket ID and only wants to inspect it, use `/overlord:load` or run `ovld protocol load-context --ticket-id <ticket_id>`.
@@ -86,5 +109,5 @@ For the `record-change-rationales` command and full payload shape with optional 
 - [reference/context.md](reference/context.md) — Shared state, attachments, and large artifact policy
 - [reference/shell-escaping.md](reference/shell-escaping.md) — Heredoc stdin piping for special characters in summaries and payloads
 
-<!-- version: 0.5.3 -->
+<!-- version: 0.5.5 -->
 

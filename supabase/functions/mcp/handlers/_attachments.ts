@@ -55,15 +55,40 @@ export function buildAttachmentSignedUploadUrl(storagePath: string, token: strin
   return `${supabaseUrl}/storage/v1/object/upload/sign/artifacts/${encodedPath}?token=${encodeURIComponent(token)}`;
 }
 
+export async function resolveTicketIdFromObjective(
+  supabase: SupabaseClient,
+  objectiveId: string,
+  organizationId: number
+): Promise<string | null> {
+  const { data } = await supabase
+    .from('objectives')
+    .select('ticket_id, ticket:tickets!inner(organization_id)')
+    .eq('id', objectiveId)
+    .eq('ticket.organization_id', organizationId)
+    .maybeSingle();
+  return (data as { ticket_id?: string } | null)?.ticket_id ?? null;
+}
+
 export async function resolveAttachmentAccess(
   supabase: SupabaseClient,
-  args: { sessionKey: string; ticketId: string; objectiveId: string; requireWrite: boolean },
+  args: { sessionKey: string; ticketId?: string; objectiveId: string; requireWrite: boolean },
   ctx: TokenContext
 ): Promise<AttachmentAccess> {
+  const ticketIdForSession =
+    args.ticketId ??
+    (await resolveTicketIdFromObjective(supabase, args.objectiveId, ctx.organizationId));
+  if (!ticketIdForSession) {
+    return {
+      error: 'Objective not found or access denied.',
+      session: null,
+      ticket: null
+    };
+  }
+
   const resolved = await resolveSession(
     supabase,
     args.sessionKey,
-    args.ticketId,
+    ticketIdForSession,
     ctx.organizationId,
     ctx.mcpSessionId
   );

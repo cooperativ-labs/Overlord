@@ -11,9 +11,10 @@ Project discovery:
   You can also discover the project explicitly:
 
     ovld protocol discover-project
+    ovld protocol discover-project --project-id <project-uuid>
     ovld protocol discover-project --working-directory /path/to/repo
 
-  Use --project-id to override automatic resolution on prompt or ticket creation.
+  Use --project-id to override automatic resolution on discover, prompt, or ticket creation.
   Use --personal to create a private ticket without assigning any project.
 
 Subcommands:
@@ -81,7 +82,11 @@ discover-project:
     Resolve the Overlord project that corresponds to the current (or given) working directory.
     Uses the caller's configured "Local working directory" for matching.
   Optional:
+    --project-id <uuid>       Resolve this project directly; skips working-directory matching
     --working-directory <path>  Directory to match (default: current working directory)
+    --device-fingerprint <fp>   Prefer resource directories for this registered device
+    --device-hostname <name>    Register/update device metadata when fingerprint is provided
+    --device-platform <platform>
   Returns:
     Project JSON with id, name, organizationId. Prints PROJECT_ID=<id> on stderr.
   Notes:
@@ -511,6 +516,7 @@ fail-execution-launch:
 Examples:
   ovld protocol auth-status
   ovld protocol discover-project
+  ovld protocol discover-project --project-id <project-uuid>
   ovld protocol discover-project --working-directory /path/to/repo
   ovld protocol prompt --agent codex --objective "Implement feature X"   # auto-resolves project from cwd
   ovld protocol attach --ticket-id 1:899
@@ -558,4 +564,3 @@ EOF
   ovld protocol add-project-resource --project-id <project-uuid> --directory /path/to/repo --device-fingerprint $OVERLORD_DEVICE_FINGERPRINT --label "main checkout" --is-primary
   ovld protocol update-project-resource --resource-id <resource-uuid> --device-fingerprint $OVERLORD_DEVICE_FINGERPRINT --label "docs branch"
   ovld protocol update-project-resource --resource-id <resource-uuid> --device-fingerprint $OVERLORD_DEVICE_FINGERPRINT --is-primary true
-

@@ -13,7 +13,32 @@ export async function POST(request: Request) {
   try {
     const supabase = createServiceRoleClient();
     const { organizationId, userId } = parsed.tokenContext;
-    const { workingDirectory, deviceFingerprint, deviceHostname, devicePlatform } = parsed.data;
+    const { projectId, workingDirectory, deviceFingerprint, deviceHostname, devicePlatform } =
+      parsed.data;
+
+    if (projectId) {
+      const { data: project } = await supabase
+        .from('projects')
+        .select('id, name, organization_id')
+        .eq('id', projectId)
+        .eq('organization_id', organizationId)
+        .maybeSingle();
+
+      if (!project) {
+        return NextResponse.json(
+          { error: 'Project not found or does not belong to this organization.' },
+          { status: 404 }
+        );
+      }
+
+      return NextResponse.json({
+        project: {
+          id: project.id,
+          name: project.name,
+          organizationId: project.organization_id
+        }
+      });
+    }
 
     let deviceId: string | null = null;
     if (userId && deviceFingerprint) {
@@ -29,7 +54,7 @@ export async function POST(request: Request) {
     const project = await resolveProjectByWorkingDirectory(
       supabase,
       organizationId,
-      workingDirectory,
+      workingDirectory!,
       userId,
       deviceId
     );

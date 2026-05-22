@@ -63,10 +63,15 @@ Resolve the Overlord project that corresponds to a working directory. Uses your 
 
 \`\`\`bash
 ovld protocol discover-project
+ovld protocol discover-project --project-id <project-uuid>
 ovld protocol discover-project --working-directory /path/to/repo
+ovld protocol discover-project --working-directory /path/to/repo \\
+  --device-fingerprint "$OVERLORD_DEVICE_FINGERPRINT"
 \`\`\`
 
 Prints \`PROJECT_ID=<id>\` on stderr. Returns 404 with a hint when no match is found.
+Use \`--project-id\` when the project id is already known; it skips directory matching.
+Use \`--device-fingerprint\` when matching registered resource directories for a specific device.
 
 ---
 
@@ -364,29 +369,71 @@ In a git workspace, \`deliver\` validates that changed files are represented by
 Upload and download files attached to a ticket objective. The \`attach\` and
 \`load-context\` responses already include \`attachments\` and \`objectives\`
 arrays — use those for \`<attachment-id>\` and \`<objective-id>\` values.
+\`--ticket-id\` is optional on attachment commands when \`--objective-id\` or
+\`--attachment-id\` lets the server derive ticket scope.
 
 \`\`\`bash
 # Discover attachments mid-session (also surfaced in attach response)
 ovld protocol attachment-list \\
-  --session-key <key> --ticket-id <ticket_id>
+  --session-key <key> --objective-id <objective-id>
 
 # Upload a local file in one call
 ovld protocol attachment-upload-file \\
-  --session-key <key> --ticket-id <ticket_id> --objective-id <objective-id> \\
+  --session-key <key> --objective-id <objective-id> \\
   --file ./spec.pdf --content-type application/pdf
 
 # Or do it in two steps with a signed URL
 ovld protocol attachment-prepare-upload \\
-  --session-key <key> --ticket-id <ticket_id> --objective-id <objective-id> \\
+  --session-key <key> --objective-id <objective-id> \\
   --file-name spec.pdf --content-type application/pdf
 ovld protocol attachment-finalize-upload \\
-  --session-key <key> --ticket-id <ticket_id> --objective-id <objective-id> \\
+  --session-key <key> --objective-id <objective-id> \\
   --storage-path <path> --label "Spec"
 
 # Get a signed download URL
 ovld protocol attachment-download-url \\
-  --session-key <key> --ticket-id <ticket_id> \\
-  --attachment-id <attachment-id>
+  --session-key <key> --attachment-id <attachment-id>
+\`\`\`
+
+## Device and project resources
+
+Register the caller device and manage local checkout directories used by project
+resolution and queued runner launches.
+
+\`\`\`bash
+ovld protocol get-device --device-fingerprint "$OVERLORD_DEVICE_FINGERPRINT"
+ovld protocol update-device \\
+  --device-fingerprint "$OVERLORD_DEVICE_FINGERPRINT" --label work-macbook
+ovld protocol list-project-resources --project-id <project-uuid>
+ovld protocol add-project-resource \\
+  --project-id <project-uuid> \\
+  --device-fingerprint "$OVERLORD_DEVICE_FINGERPRINT" \\
+  --directory /path/to/repo --is-primary
+ovld protocol update-project-resource \\
+  --resource-id <resource-uuid> \\
+  --device-fingerprint "$OVERLORD_DEVICE_FINGERPRINT" \\
+  --label "main checkout"
+\`\`\`
+
+## Runner queue
+
+These commands are for local or remote runner processes that claim queued execution
+requests from manual Run and auto-advance. Normal agent sessions usually do not call
+them directly.
+
+\`\`\`bash
+ovld protocol request-execution \\
+  --ticket-id <ticket_id> --agent codex --requested-from manual_run
+ovld protocol claim-execution \\
+  --device-fingerprint "$OVERLORD_DEVICE_FINGERPRINT"
+ovld protocol complete-execution-launch \\
+  --request-id <execution-request-id> \\
+  --device-fingerprint "$OVERLORD_DEVICE_FINGERPRINT" \\
+  --launched-session-id <session-id>
+ovld protocol fail-execution-launch \\
+  --request-id <execution-request-id> \\
+  --device-fingerprint "$OVERLORD_DEVICE_FINGERPRINT" \\
+  --error "Launch failed"
 \`\`\`
 
 ---

@@ -20,8 +20,11 @@ export async function handleAttachmentGetDownloadUrl(
     expiresIn = 3600
   } = args;
 
-  if (!sessionKey || !ticketId) {
-    return toolErr('sessionKey and ticketId are required.');
+  if (!sessionKey) {
+    return toolErr('sessionKey is required.');
+  }
+  if (!attachmentId && !inputStoragePath) {
+    return toolErr('attachmentId or storagePath is required.');
   }
 
   let storagePath = inputStoragePath ? String(inputStoragePath) : null;
@@ -29,12 +32,15 @@ export async function handleAttachmentGetDownloadUrl(
   if (!storagePath && attachmentId) {
     const { data: attachment, error: attachmentError } = await supabase
       .from('objective_attachments')
-      .select('storage_path, objective_id')
+      .select('storage_path, objective_id, ticket_id')
       .eq('id', attachmentId)
       .single();
 
     if (attachmentError || !attachment?.storage_path) {
       return toolErr('Attachment not found or has no storage path.');
+    }
+    if (ticketId && ticketId !== attachment.ticket_id) {
+      return toolErr('Attachment does not belong to the supplied ticket.');
     }
     storagePath = attachment.storage_path;
     objectiveId = attachment.objective_id;

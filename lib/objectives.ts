@@ -534,6 +534,33 @@ export async function markSubmittedObjectiveExecuting(
           .maybeSingle<DraftObjective>()
       ).data;
 
+  // Re-attach fallback: when there's no submitted/draft objective but the
+  // ticket already has an executing one, return it without changing state.
+  // This makes attach/connect idempotent so an agent that lost its SESSION_KEY
+  // mid-run (e.g. in a terminal) can recover by re-attaching.
+  if (!launchObjective || !normalizeObjectiveText(launchObjective.objective)) {
+    const { data: executingObjective } = await supabase
+      .from('objectives')
+      .select('id,objective,state,assigned_agent')
+      .eq('ticket_id', ticketId)
+      .eq('state', 'executing')
+      .order('position', { ascending: true })
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle<DraftObjective>();
+
+    if (executingObjective) {
+      const normalizedExisting = normalizeObjectiveText(executingObjective.objective);
+      if (normalizedExisting) {
+        return {
+          didExecute: false,
+          executedObjective: normalizedExisting,
+          executedObjectiveId: executingObjective.id
+        };
+      }
+    }
+  }
+
   if (!launchObjective) {
     return { didExecute: false, executedObjective: null };
   }

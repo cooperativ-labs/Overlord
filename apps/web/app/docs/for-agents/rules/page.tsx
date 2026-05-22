@@ -20,8 +20,9 @@ export default function RulesPage() {
   run \`ovld protocol help\` if unsure.
 - **Treat \`promptContext\` as authoritative** for the objective, constraints, and delivery
   target.
-- **Publish user follow-ups.** If the human sends a follow-up message after the initial
-  ticket, post it with \`update --event-type user_follow_up\` before acting on it.
+- **Preserve user follow-ups.** Installed connector hooks normally capture human follow-up
+  messages automatically. If the hook is unavailable or misconfigured, post the message
+  verbatim with \`update --event-type user_follow_up\` before acting on it.
 - **Cover every meaningful change in \`changeRationales\`** when delivering. Skip
   formatting-only noise.
 - **Stop after \`ask\`.** Do not keep working on the blocked path while waiting for a human.

@@ -118,9 +118,11 @@ To inspect project resolution explicitly:
 
 ```bash
 ovld protocol discover-project
+ovld protocol discover-project --project-id <project_uuid>
+ovld protocol discover-project --working-directory /path/to/repo
 ```
 
-You can override with `--project-id` or `--working-directory` if needed.
+Use `--project-id` when the project id is already known. Use `--working-directory` to override cwd path matching. If the runtime has an `OVERLORD_DEVICE_FINGERPRINT`, pass `--device-fingerprint "$OVERLORD_DEVICE_FINGERPRINT"` so resource-directory matching prefers the current device.
 
 ### Resolving the project ID when you don't have one
 
@@ -134,9 +136,9 @@ When you need a project ID for a protocol command and the ticket prompt did not 
 
 **Over MCP (web agents and hosted tools, where the server cannot see the agent's cwd):**
 
-1. `--project-id` / `projectId` if explicitly provided.
-2. Read `overlord.json` from the directory the user is accessing and pass its project id as `projectId`.
-3. As a last resort, try `workingDirectory` resolution.
+1. `projectId` (hosted MCP) or `project_id` (local shim) if explicitly provided or found in the ticket/context.
+2. Read `overlord.json` from the directory the user is accessing and pass its project id as `projectId` / `project_id`.
+3. As a last resort, try `workingDirectory` / `working_directory` resolution. If a device fingerprint is available, include `deviceFingerprint` / `device_fingerprint`.
 
 If `overlord.json` contains more than one project, show the user the project **names** from that file and ask which one to use before calling any protocol command — never silently pick one.
 

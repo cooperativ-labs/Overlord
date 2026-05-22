@@ -176,9 +176,11 @@ To inspect project resolution explicitly:
 
 ```bash
 ovld protocol discover-project
+ovld protocol discover-project --project-id <project_uuid>
+ovld protocol discover-project --working-directory /path/to/repo
 ```
 
-You can override with `--project-id` or `--working-directory` if needed.
+Use `--project-id` when the project id is already known. Use `--working-directory` to override cwd path matching. If the runtime has an `OVERLORD_DEVICE_FINGERPRINT`, pass `--device-fingerprint "$OVERLORD_DEVICE_FINGERPRINT"` so resource-directory matching prefers the current device.
 
 ### Resolving the project ID when you don't have one
 
@@ -192,9 +194,9 @@ When you need a project ID for a protocol command and the ticket prompt did not 
 
 **Over MCP (web agents and hosted tools, where the server cannot see the agent's cwd):**
 
-1. `--project-id` / `projectId` if explicitly provided.
-2. Read `overlord.json` from the directory the user is accessing and pass its project id as `projectId`.
-3. As a last resort, try `workingDirectory` resolution.
+1. `projectId` (hosted MCP) or `project_id` (local shim) if explicitly provided or found in the ticket/context.
+2. Read `overlord.json` from the directory the user is accessing and pass its project id as `projectId` / `project_id`.
+3. As a last resort, try `workingDirectory` / `working_directory` resolution. If a device fingerprint is available, include `deviceFingerprint` / `device_fingerprint`.
 
 If `overlord.json` contains more than one project, show the user the project **names** from that file and ask which one to use before calling any protocol command — never silently pick one.
 
@@ -221,12 +223,12 @@ When in doubt, ask yourself: _can this be done entirely inside a terminal or bro
 ```bash
 ovld protocol read-context --session-key <sessionKey> --ticket-id $TICKET_ID
 ovld protocol write-context --session-key <sessionKey> --ticket-id $TICKET_ID --key "key" --value '"json-value"'
-ovld protocol attachment-list --session-key <sessionKey> --ticket-id $TICKET_ID
-ovld protocol attachment-upload-file --session-key <sessionKey> --ticket-id $TICKET_ID --objective-id <objective-id> --file ./spec.pdf --content-type application/pdf
-ovld protocol attachment-download-url --session-key <sessionKey> --ticket-id $TICKET_ID --attachment-id <attachment-id>
+ovld protocol attachment-list --session-key <sessionKey> --objective-id <objective-id>
+ovld protocol attachment-upload-file --session-key <sessionKey> --objective-id <objective-id> --file ./spec.pdf --content-type application/pdf
+ovld protocol attachment-download-url --session-key <sessionKey> --attachment-id <attachment-id>
 ```
 
-The `attach` and `load-context` responses already include `attachments` and `objectives` arrays — use those for `<attachment-id>` and `<objective-id>` values. Run `attachment-list` mid-session if new files have been uploaded since attach.
+The `attach` and `load-context` responses already include `attachments` and `objectives` arrays — use those for `<attachment-id>` and `<objective-id>` values. Run `attachment-list` mid-session if new files have been uploaded since attach. `--ticket-id` is optional for attachment calls when `--objective-id` or `--attachment-id` lets the server derive the ticket.
 
 ## Large Artifacts
 
@@ -241,9 +243,10 @@ This keeps the ticket feed readable while preserving the full document in versio
 ## Defaults And Notes
 
 - API requires `agentIdentifier` and `connectionMethod` on attach/connect/prompt. The CLI defaults them to `antigravity`/`cli`; the MCP tool defaults to `mcp`. Override with `--agent` / `--method` when calling from a different runtime.
-- Hosted Overlord MCP (`/functions/v1/mcp`) uses the same canonical tool names as the local shim that shells into `ovld protocol` (`attach`, `update`, `deliver`, `get_device`, `list_project_resources`, …). Hosted calls use camelCase JSON keys (`ticketId`, `sessionKey`, `deviceFingerprint`) matching `POST /api/protocol/*` bodies; the local shim uses snake_case keys mapped to CLI flags (`ticket_id`, `session_key`, `device_fingerprint`).
+- Hosted Overlord MCP (`/functions/v1/mcp`) uses camelCase JSON keys (`ticketId`, `sessionKey`, `deviceFingerprint`) matching `POST /api/protocol/*` bodies. The local shim uses snake_case keys mapped to CLI flags (`ticket_id`, `session_key`, `device_fingerprint`). Some local-only operations (`connect`, `load_ticket_context`, `revert`, `prompt`, runner queue tools) intentionally remain out of hosted MCP for now.
+- `discover_project` accepts an explicit project id (`projectId` hosted, `project_id` local shim) or a working directory (`workingDirectory` hosted, `working_directory` local shim). When resolving by directory and a device fingerprint is available, include `deviceFingerprint` / `device_fingerprint` so resource-directory matching prefers the current device.
 - `record_change_rationales` (MCP) and `ovld protocol record-change-rationales` (CLI) both write to the same `file_changes` table. The dedicated CLI route is `POST /api/protocol/record-change-rationales`.
-- Objective attachment tools follow the `<verb>_<noun>` MCP naming: `list_attachments`, `prepare_attachment_upload`, `finalize_attachment_upload`, `get_attachment_download_url`, `upload_attachment_file`. CLI commands use `attachment-*` and require `--objective-id` for upload/finalize.
+- Objective attachment tools follow the `<verb>_<noun>` MCP naming: `list_attachments`, `prepare_attachment_upload`, `finalize_attachment_upload`, `get_attachment_download_url`, `upload_attachment_file`. CLI commands use `attachment-*`. `ticket_id` / `ticketId` is optional for attachment calls when the objective or attachment id lets the server derive ticket scope.
 - "Artifacts" in `deliver` are the structured records an agent submits at delivery time (next_steps, test_results, migration, decision, note, url) — not user-uploaded files. Files attached by users live on objectives via the attachment tools above.
 - Antigravity CLI does not expose `--model`, `--thinking-level`, or `--temperature` flags. Model selection is managed by the Antigravity platform; do not attempt to pass these at launch.
 - The Overlord plugin is installed by `ovld setup antigravity`. Run this once to install the bundle into `~/.gemini/antigravity-cli/plugins/` and wire the MCP server path.
@@ -261,4 +264,4 @@ This keeps the ticket feed readable while preserving the full document in versio
 - Do not add or commit changes unless the user explicitly asks you to commit.
 - Delivery is the concluding step. After delivering, stop unless the user follows up or the ticket is reopened.
 
-<!-- version: 0.1.0 -->
+<!-- version: 0.1.1 -->

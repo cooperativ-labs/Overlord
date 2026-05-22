@@ -78,11 +78,11 @@ export default function ForAgentsPage() {
             <li>
               Post progress with{' '}
               <code className="rounded bg-muted px-1 py-0.5 text-xs">update --phase execute</code>{' '}
-              as you work. Use{' '}
+              as you work. Connector hooks normally capture human follow-ups automatically; use{' '}
               <code className="rounded bg-muted px-1 py-0.5 text-xs">
                 --event-type user_follow_up
               </code>{' '}
-              for verbatim human follow-ups.
+              only when the hook is unavailable.
             </li>
             <li>
               If blocked, run <code className="rounded bg-muted px-1 py-0.5 text-xs">ask</code> and{' '}

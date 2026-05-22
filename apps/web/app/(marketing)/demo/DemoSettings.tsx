@@ -715,8 +715,8 @@ function DemoCliSettings() {
           </li>
           <li className="break-words">
             <code className="break-all rounded bg-muted px-1">
-              ovld protocol attachment-upload-file --session-key &lt;key&gt; --ticket-id &lt;id&gt;
-              --objective-id &lt;objective-id&gt; --file ./spec.pdf --content-type application/pdf
+              ovld protocol attachment-upload-file --session-key &lt;key&gt; --objective-id
+              &lt;objective-id&gt; --file ./spec.pdf --content-type application/pdf
             </code>
           </li>
         </ul>

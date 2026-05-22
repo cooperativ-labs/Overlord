@@ -23,9 +23,52 @@ type AttachmentAccessInput = {
   objectiveId: string;
   requireWrite: boolean;
   sessionKey: string;
-  ticketId: string;
+  ticketId?: string;
   userId: string;
 };
+
+/**
+ * Looks up the ticket_id that owns the given objective. Returns null if the
+ * objective is missing or belongs to a different organization.
+ */
+export async function resolveTicketIdFromObjective(
+  objectiveId: string,
+  organizationId: number
+): Promise<string | null> {
+  const supabase = createServiceRoleClient();
+  const { data } = await supabase
+    .from('objectives')
+    .select('ticket_id, ticket:tickets!inner(organization_id)')
+    .eq('id', objectiveId)
+    .eq('ticket.organization_id', organizationId)
+    .maybeSingle();
+
+  return data?.ticket_id ?? null;
+}
+
+/**
+ * Looks up the ticket_id that owns the given attachment. Returns null if
+ * the attachment is missing or belongs to a different organization.
+ */
+export async function resolveTicketIdFromAttachment(
+  attachmentId: string,
+  organizationId: number
+): Promise<{ ticketId: string; objectiveId: string; storagePath: string } | null> {
+  const supabase = createServiceRoleClient();
+  const { data } = await supabase
+    .from('objective_attachments')
+    .select('ticket_id, objective_id, storage_path, ticket:tickets!inner(organization_id)')
+    .eq('id', attachmentId)
+    .eq('ticket.organization_id', organizationId)
+    .maybeSingle();
+
+  if (!data?.ticket_id || !data.objective_id || !data.storage_path) return null;
+  return {
+    objectiveId: data.objective_id,
+    storagePath: data.storage_path,
+    ticketId: data.ticket_id
+  };
+}
 
 type AttachmentAccessResult =
   | {
@@ -85,7 +128,19 @@ export async function resolveAttachmentAccess(
   input: AttachmentAccessInput
 ): Promise<AttachmentAccessResult> {
   const supabase = createServiceRoleClient();
-  const resolved = await resolveSession(input.sessionKey, input.ticketId, input.organizationId);
+
+  const ticketId =
+    input.ticketId ?? (await resolveTicketIdFromObjective(input.objectiveId, input.organizationId));
+  if (!ticketId) {
+    return {
+      error: 'Objective not found or access denied.',
+      objective: null,
+      session: null,
+      ticket: null
+    };
+  }
+
+  const resolved = await resolveSession(input.sessionKey, ticketId, input.organizationId);
   if (!resolved.session) {
     return {
       error: resolved.error ?? 'Session not found.',
@@ -98,7 +153,7 @@ export async function resolveAttachmentAccess(
   const { data: ticket, error: ticketError } = await supabase
     .from('tickets')
     .select('id, organization_id, project_id')
-    .eq('id', input.ticketId)
+    .eq('id', ticketId)
     .eq('organization_id', input.organizationId)
     .single();
 
@@ -115,7 +170,7 @@ export async function resolveAttachmentAccess(
     .from('objectives')
     .select('id, ticket_id')
     .eq('id', input.objectiveId)
-    .eq('ticket_id', input.ticketId)
+    .eq('ticket_id', ticketId)
     .single();
 
   if (objectiveError || !objective) {

@@ -182,9 +182,13 @@ export async function POST(request: Request) {
           }
 
           try {
-            await supabase.functions.invoke('generate-feed-post', {
+            const { error: feedError } = await supabase.functions.invoke('generate-feed-post', {
               body: { ticketId, objectiveId, organizationId }
             });
+            if (feedError) {
+              console.error('[protocol:deliver] feed post generation failed:', feedError.message);
+              Sentry.captureException(feedError, { extra: { ticketId, objectiveId } });
+            }
           } catch (feedErr) {
             console.error('[protocol:deliver] feed post generation error:', feedErr);
             Sentry.captureException(feedErr, { extra: { ticketId, objectiveId } });
@@ -265,9 +269,13 @@ export async function POST(request: Request) {
 
         // Generate feed post (fire-and-forget — non-fatal if it fails)
         try {
-          await supabase.functions.invoke('generate-feed-post', {
+          const { error: feedError } = await supabase.functions.invoke('generate-feed-post', {
             body: { ticketId, objectiveId, organizationId }
           });
+          if (feedError) {
+            console.error('[protocol:deliver] feed post generation failed:', feedError.message);
+            Sentry.captureException(feedError, { extra: { ticketId, objectiveId } });
+          }
         } catch (feedErr) {
           console.error('[protocol:deliver] feed post generation error:', feedErr);
           Sentry.captureException(feedErr, { extra: { ticketId, objectiveId } });

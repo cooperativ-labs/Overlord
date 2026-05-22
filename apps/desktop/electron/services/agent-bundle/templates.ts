@@ -166,8 +166,8 @@ When in doubt, ask yourself: *can this be done entirely inside a terminal or bro
 \`\`\`bash
 ovld protocol read-context --session-key <sessionKey> --ticket-id $TICKET_ID
 ovld protocol write-context --session-key <sessionKey> --ticket-id $TICKET_ID --key "key" --value '"json-value"'
-ovld protocol attachment-upload-file --session-key <sessionKey> --ticket-id $TICKET_ID --objective-id <objective-id> --file ./spec.pdf --content-type application/pdf
-ovld protocol attachment-download-url --session-key <sessionKey> --ticket-id $TICKET_ID --attachment-id <attachment-id>
+ovld protocol attachment-upload-file --session-key <sessionKey> --objective-id <objective-id> --file ./spec.pdf --content-type application/pdf
+ovld protocol attachment-download-url --session-key <sessionKey> --attachment-id <attachment-id>
 \`\`\`
 
 Objective attachments also expose two-step variants — \`attachment-prepare-upload\` and \`attachment-finalize-upload\` — for callers that need a signed URL directly. Prefer \`attachment-upload-file\` for one-shot uploads.
@@ -319,8 +319,8 @@ When in doubt, ask yourself: *can this be done entirely inside a terminal or bro
 \`\`\`bash
 ovld protocol read-context --session-key <sessionKey> --ticket-id $TICKET_ID
 ovld protocol write-context --session-key <sessionKey> --ticket-id $TICKET_ID --key "key" --value '"json-value"'
-ovld protocol attachment-upload-file --session-key <sessionKey> --ticket-id $TICKET_ID --objective-id <objective-id> --file ./spec.pdf --content-type application/pdf
-ovld protocol attachment-download-url --session-key <sessionKey> --ticket-id $TICKET_ID --attachment-id <attachment-id>
+ovld protocol attachment-upload-file --session-key <sessionKey> --objective-id <objective-id> --file ./spec.pdf --content-type application/pdf
+ovld protocol attachment-download-url --session-key <sessionKey> --attachment-id <attachment-id>
 \`\`\`
 
 Objective attachments also expose two-step variants — \`attachment-prepare-upload\` and \`attachment-finalize-upload\` — for callers that need a signed URL directly. Prefer \`attachment-upload-file\` for one-shot uploads.
@@ -458,8 +458,8 @@ When in doubt, ask yourself: *can this be done entirely inside a terminal or bro
 \`\`\`bash
 ovld protocol read-context --session-key <sessionKey> --ticket-id $TICKET_ID
 ovld protocol write-context --session-key <sessionKey> --ticket-id $TICKET_ID --key "key" --value '"json-value"'
-ovld protocol attachment-upload-file --session-key <sessionKey> --ticket-id $TICKET_ID --objective-id <objective-id> --file ./spec.pdf --content-type application/pdf
-ovld protocol attachment-download-url --session-key <sessionKey> --ticket-id $TICKET_ID --attachment-id <attachment-id>
+ovld protocol attachment-upload-file --session-key <sessionKey> --objective-id <objective-id> --file ./spec.pdf --content-type application/pdf
+ovld protocol attachment-download-url --session-key <sessionKey> --attachment-id <attachment-id>
 \`\`\`
 
 Objective attachments also expose two-step variants — \`attachment-prepare-upload\` and \`attachment-finalize-upload\` — for callers that need a signed URL directly. Prefer \`attachment-upload-file\` for one-shot uploads.

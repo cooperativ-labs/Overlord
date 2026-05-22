@@ -125,9 +125,11 @@ function ticketEventsInsert() {
 
 describe('createExecutionRequest', () => {
   beforeEach(() => {
-    jest.spyOn(crypto, 'randomUUID').mockReturnValue(
-      'eeeeeeee-0000-4000-8000-000000000099' as `${string}-${string}-${string}-${string}-${string}`
-    );
+    jest
+      .spyOn(crypto, 'randomUUID')
+      .mockReturnValue(
+        'eeeeeeee-0000-4000-8000-000000000099' as `${string}-${string}-${string}-${string}-${string}`
+      );
   });
 
   afterEach(() => {
@@ -199,8 +201,7 @@ describe('createExecutionRequest', () => {
         objectiveQuery({
           assigned_agent: { agent: 'claude', model: 'opus', thinking: 'high' }
         }),
-      execution_requests: () =>
-        executionRequestInsert({ captureInsert: row => (inserted = row) }),
+      execution_requests: () => executionRequestInsert({ captureInsert: row => (inserted = row) }),
       ticket_events: () => ticketEventsInsert()
     });
 
@@ -229,8 +230,7 @@ describe('createExecutionRequest', () => {
     const supabase = buildSupabase({
       tickets: () => ticketQuery(),
       objectives: () => objectiveQuery(),
-      execution_requests: () =>
-        executionRequestInsert({ captureInsert: row => (inserted = row) }),
+      execution_requests: () => executionRequestInsert({ captureInsert: row => (inserted = row) }),
       ticket_events: () => ticketEventsInsert()
     });
 
@@ -259,8 +259,7 @@ describe('createExecutionRequest', () => {
     const supabase = buildSupabase({
       tickets: () => ticketQuery(),
       objectives: () => objectiveQuery(),
-      execution_requests: () =>
-        executionRequestInsert({ captureInsert: row => (inserted = row) }),
+      execution_requests: () => executionRequestInsert({ captureInsert: row => (inserted = row) }),
       ticket_events: () => ticketEventsInsert()
     });
 
@@ -284,8 +283,7 @@ describe('createExecutionRequest', () => {
     const supabase = buildSupabase({
       tickets: () => ticketQuery(),
       objectives: () => objectiveQuery(),
-      execution_requests: () =>
-        executionRequestInsert({ captureInsert: row => (inserted = row) }),
+      execution_requests: () => executionRequestInsert({ captureInsert: row => (inserted = row) }),
       ticket_events: () => ticketEventsInsert()
     });
 

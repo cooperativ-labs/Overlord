@@ -282,9 +282,12 @@ export async function runRecordWorkProtocol(supabase: RecordClient, params: Reco
 
   // Trigger feed-post generation (fire-and-forget — non-fatal).
   try {
-    await supabase.functions.invoke('generate-feed-post', {
+    const { error: feedError } = await supabase.functions.invoke('generate-feed-post', {
       body: { ticketId: ticket.id, objectiveId: objectiveRow.id, organizationId }
     });
+    if (feedError) {
+      console.error('[protocol:record-work] feed post generation failed:', feedError.message);
+    }
   } catch (feedErr) {
     console.error('[protocol:record-work] feed post generation error:', feedErr);
   }

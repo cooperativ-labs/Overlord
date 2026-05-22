@@ -59,10 +59,10 @@ Phases: \`draft\`, \`execute\`, \`review\`, \`deliver\`, \`complete\`, \`blocked
 Use \`execute\` while actively working.
 
 Event types: \`update\` (default), \`user_follow_up\` (verbatim human follow-ups after the initial
-ticket), \`alert\` (non-blocking warnings).
+ticket, normally posted by installed connector hooks), \`alert\` (non-blocking warnings).
 
 \`\`\`bash
-# Record a verbatim follow-up from the human
+# Record a verbatim follow-up only when the connector hook is unavailable
 ovld protocol update \\
   --session-key "$SESSION_KEY" --ticket-id "$TICKET_ID" \\
   --summary-file ./human-follow-up.txt \\

@@ -25,21 +25,26 @@ export async function POST(request: Request) {
       ticketId: rawTicketId
     } = parsed.data;
     const { organizationId, userId } = parsed.tokenContext;
-    const ticketId = await resolveTicketId(rawTicketId, organizationId);
-    if (!ticketId) return NextResponse.json({ error: 'Ticket not found.' }, { status: 404 });
+    const resolvedTicketId = rawTicketId
+      ? await resolveTicketId(rawTicketId, organizationId)
+      : undefined;
+    if (rawTicketId && !resolvedTicketId) {
+      return NextResponse.json({ error: 'Ticket not found.' }, { status: 404 });
+    }
 
     const access = await resolveAttachmentAccess({
       organizationId,
       objectiveId,
       requireWrite: true,
       sessionKey,
-      ticketId,
+      ticketId: resolvedTicketId ?? undefined,
       userId
     });
 
     if (access.error || !access.ticket || !access.session) {
       return NextResponse.json({ error: access.error ?? 'Access denied.' }, { status: 403 });
     }
+    const ticketId = access.ticket.id;
 
     if (!ensureObjectiveAttachmentStoragePath(storagePath, access.ticket, objectiveId)) {
       return NextResponse.json(

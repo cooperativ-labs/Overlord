@@ -2,6 +2,34 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2605221356.0] - 2026-05-22:13:56
+
+### Added
+- Resolve projects by UUID with `discover-project --project-id` (and MCP `project_id`) without working-directory matching.
+- Pass device fingerprint, hostname, and platform on `discover-project` so directory matching can prefer resource directories registered for the current device.
+- Expose local runner queue tools (`request_execution`, `claim_execution`, `complete_execution_launch`, `fail_execution_launch`) on Codex and generic Overlord MCP shims, aligned with Antigravity.
+
+### Fixed
+- Allow agents to recover a lost session key by re-attaching: when a ticket already has an executing objective, `attach` returns it without resetting state.
+- Surface feed post generation failures from `deliver` and `update` to Sentry when the edge function returns an error response.
+
+### Changed
+- Make `ticketId` optional on protocol attachment operations when `objectiveId` or `attachmentId` is enough for the server to derive ticket scope.
+- Update agent launch prompts, desktop bundle templates, demo CLI examples, and local MCP schemas for objective-scoped attachment calls.
+
+### Security
+- None.
+
+### Documentation
+- Update for-agents docs (CLI reference, context and artifacts, lifecycle, rules) for optional ticket id on attachments, discover-project shortcuts, and runner MCP tools.
+- Refresh connector surfaces guidance, protocol help text, users guide, and agent plugin skills and references across Cursor, Claude, Codex, and Antigravity.
+
+### Test
+- Update protocol route, execution request, auto-advance, and database trigger tests for objective-scoped attachments and re-attach behavior.
+
+### Chore
+- Bump workspace and CLI package versions.
+
 ## [0.2605211850.0] - 2026-05-21:18:50
 
 ### Added

@@ -22,8 +22,8 @@ export async function handleAttachmentFinalizeUpload(
     metadata = {}
   } = args;
 
-  if (!sessionKey || !ticketId || !objectiveId || !storagePath || !label) {
-    return toolErr('sessionKey, ticketId, objectiveId, storagePath, and label are required.');
+  if (!sessionKey || !objectiveId || !storagePath || !label) {
+    return toolErr('sessionKey, objectiveId, storagePath, and label are required.');
   }
 
   const access = await resolveAttachmentAccess(

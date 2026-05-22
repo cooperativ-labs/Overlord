@@ -57,18 +57,40 @@ function execFileWithOptionalInput(file, args, options, input) {
 const tools = [
   {
     name: 'discover_project',
-    description: 'Resolve the Overlord project that matches a working directory.',
+    description:
+      'Resolve an Overlord project by explicit project_id or by matching a working directory.',
     inputSchema: {
       type: 'object',
       properties: {
+        project_id: {
+          type: 'string',
+          description: 'Project UUID to resolve directly. Skips working-directory matching.'
+        },
         working_directory: {
           type: 'string',
           description: 'Directory to match. Defaults to the current workspace.'
+        },
+        device_fingerprint: {
+          type: 'string',
+          description:
+            'Optional stable device fingerprint. When provided, matching prefers resource directories for this registered device.'
+        },
+        device_hostname: {
+          type: 'string',
+          description: 'Optional hostname to register/update with device_fingerprint.'
+        },
+        device_platform: {
+          type: 'string',
+          description: 'Optional platform string, e.g. darwin, linux, or windows.'
         }
       }
     },
     toCliFlags: args => ({
-      'working-directory': args.working_directory
+      'project-id': args.project_id,
+      'working-directory': args.working_directory,
+      'device-fingerprint': args.device_fingerprint,
+      'device-hostname': args.device_hostname,
+      'device-platform': args.device_platform
     }),
     subcommand: 'discover-project'
   },
@@ -437,7 +459,7 @@ const tools = [
         query: { type: 'string' },
         limit: { type: 'number' }
       },
-      required: ['session_key', 'ticket_id']
+      required: ['session_key']
     },
     toCliFlags: args => ({
       'session-key': args.session_key,
@@ -584,7 +606,7 @@ const tools = [
         },
         objective_id: { type: 'string' }
       },
-      required: ['session_key', 'ticket_id']
+      required: ['session_key']
     },
     toCliFlags: args => ({
       'session-key': args.session_key,
@@ -611,7 +633,7 @@ const tools = [
         file_size: { type: 'number' },
         metadata: { type: 'object' }
       },
-      required: ['session_key', 'ticket_id', 'objective_id', 'file_name']
+      required: ['session_key', 'objective_id', 'file_name']
     },
     toCliFlags: args => ({
       'session-key': args.session_key,
@@ -644,7 +666,7 @@ const tools = [
         file_size: { type: 'number' },
         metadata: { type: 'object' }
       },
-      required: ['session_key', 'ticket_id', 'objective_id', 'storage_path', 'label']
+      required: ['session_key', 'objective_id', 'storage_path', 'label']
     },
     toCliFlags: args => ({
       'session-key': args.session_key,
@@ -674,7 +696,7 @@ const tools = [
         storage_path: { type: 'string' },
         expires_in: { type: 'number' }
       },
-      required: ['session_key', 'ticket_id']
+      required: ['session_key']
     },
     toCliFlags: args => ({
       'session-key': args.session_key,
@@ -705,7 +727,7 @@ const tools = [
         content_type: { type: 'string' },
         metadata: { type: 'object' }
       },
-      required: ['session_key', 'ticket_id', 'objective_id', 'file']
+      required: ['session_key', 'objective_id', 'file']
     },
     toCliFlags: args => ({
       'session-key': args.session_key,
@@ -877,10 +899,12 @@ const tools = [
         agent: { type: 'string' },
         model: { type: 'string' },
         thinking: { type: 'string' },
+        launch_mode: { type: 'string', enum: ['run', 'ask'] },
         working_directory: { type: 'string' },
         ssh_command: { type: 'string' },
         remote_working_directory: { type: 'string' },
         server_multiplexer: { type: 'string', enum: ['none', 'tmux'] },
+        tmux_command: { type: 'string' },
         target_kind: { type: 'string', enum: ['any', 'local', 'ssh'] },
         target_device_id: { type: 'string' },
         target_resource_id: { type: 'string' }
@@ -895,10 +919,12 @@ const tools = [
       agent: args.agent,
       model: args.model,
       thinking: args.thinking,
+      'launch-mode': args.launch_mode,
       'working-directory': args.working_directory,
       'ssh-command': args.ssh_command,
       'remote-working-directory': args.remote_working_directory,
       'server-multiplexer': args.server_multiplexer,
+      'tmux-command': args.tmux_command,
       'target-kind': args.target_kind,
       'target-device-id': args.target_device_id,
       'target-resource-id': args.target_resource_id

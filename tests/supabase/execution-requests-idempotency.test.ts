@@ -6,11 +6,10 @@ const LOCAL_SERVICE_ROLE_KEY =
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU';
 
 const USER_ID = '11111111-1111-4111-8111-111111111111';
-const ORG_ID = 1;
-const PROJECT_ID = 'aaaaaaaa-0000-4000-8000-000000000001';
 
 describe('execution_requests idempotency', () => {
   let supabase: ReturnType<typeof createServiceRoleClient>;
+  let orgId = 0;
   let ticketId = '';
   let objectiveId = '';
 
@@ -22,13 +21,25 @@ describe('execution_requests idempotency', () => {
   });
 
   beforeEach(async () => {
+    const { data: org, error: orgError } = await supabase
+      .from('organizations')
+      .insert({ name: 'Idempotency Test Org' })
+      .select('id')
+      .single();
+
+    if (orgError) throw orgError;
+    orgId = org.id;
+
+    await supabase.rpc('seed_default_ticket_statuses_for_organization', {
+      target_organization_id: orgId
+    });
+
     const { data: ticket, error: ticketError } = await supabase
       .from('tickets')
       .insert({
-        organization_id: ORG_ID,
+        organization_id: orgId,
         title: 'Idempotency test ticket',
         execution_target: 'agent',
-        project_id: PROJECT_ID,
         created_by: USER_ID
       })
       .select('id')
@@ -58,6 +69,10 @@ describe('execution_requests idempotency', () => {
       await supabase.from('objectives').delete().eq('ticket_id', ticketId);
       await supabase.from('tickets').delete().eq('id', ticketId);
     }
+    if (orgId) {
+      await supabase.from('organizations').delete().eq('id', orgId);
+    }
+    orgId = 0;
     ticketId = '';
     objectiveId = '';
   });
@@ -67,14 +82,14 @@ describe('execution_requests idempotency', () => {
       ticketId,
       objectiveId,
       userId: USER_ID,
-      organizationId: ORG_ID,
+      organizationId: orgId,
       requestedFrom: 'auto_advance'
     });
     const second = await createExecutionRequest(supabase, {
       ticketId,
       objectiveId,
       userId: USER_ID,
-      organizationId: ORG_ID,
+      organizationId: orgId,
       requestedFrom: 'auto_advance'
     });
 
@@ -83,7 +98,7 @@ describe('execution_requests idempotency', () => {
     const { data: rows, error } = await supabase
       .from('execution_requests')
       .select('id, status')
-      .eq('organization_id', ORG_ID)
+      .eq('organization_id', orgId)
       .eq('idempotency_key', `auto_advance:${objectiveId}`);
 
     expect(error).toBeNull();

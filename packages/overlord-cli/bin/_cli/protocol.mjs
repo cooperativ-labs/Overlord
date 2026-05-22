@@ -1367,8 +1367,11 @@ async function protocolDeliver(args) {
 async function protocolAttachmentList(args) {
   const flags = parseFlags(args);
   const { sessionKey, ticketId } = resolveSessionFlags(flags);
+  const objectiveId = flags['objective-id'] ? String(flags['objective-id']) : '';
   if (!sessionKey) throw new Error('--session-key is required (or set SESSION_KEY)');
-  if (!ticketId) throw new Error('--ticket-id is required (or set TICKET_ID)');
+  if (!ticketId && !objectiveId) {
+    throw new Error('--objective-id or --ticket-id is required');
+  }
 
   const { platformUrl, bearerToken, localSecret, organizationId } =
     await resolveProtocolAuthForFlags(flags, ticketId);
@@ -1376,8 +1379,8 @@ async function protocolAttachmentList(args) {
 
   const body = {
     sessionKey,
-    ticketId,
-    ...(flags['objective-id'] ? { objectiveId: String(flags['objective-id']) } : {})
+    ...(ticketId ? { ticketId } : {}),
+    ...(objectiveId ? { objectiveId } : {})
   };
 
   const data = await apiPost(
@@ -1396,7 +1399,6 @@ async function protocolAttachmentPrepareUpload(args) {
   const flags = parseFlags(args);
   const { sessionKey, ticketId } = resolveSessionFlags(flags);
   if (!sessionKey) throw new Error('--session-key is required (or set SESSION_KEY)');
-  if (!ticketId) throw new Error('--ticket-id is required (or set TICKET_ID)');
   const objectiveId = requireFlag(flags, 'objective-id', undefined);
   const fileName = requireFlag(flags, 'file-name', undefined);
 
@@ -1406,7 +1408,7 @@ async function protocolAttachmentPrepareUpload(args) {
 
   const body = {
     sessionKey,
-    ticketId,
+    ...(ticketId ? { ticketId } : {}),
     objectiveId,
     fileName,
     ...(flags.label ? { label: String(flags.label) } : {}),
@@ -1433,7 +1435,6 @@ async function protocolAttachmentFinalizeUpload(args) {
   const flags = parseFlags(args);
   const { sessionKey, ticketId } = resolveSessionFlags(flags);
   if (!sessionKey) throw new Error('--session-key is required (or set SESSION_KEY)');
-  if (!ticketId) throw new Error('--ticket-id is required (or set TICKET_ID)');
   const objectiveId = requireFlag(flags, 'objective-id', undefined);
   const storagePath = requireFlag(flags, 'storage-path', undefined);
   const label = requireFlag(flags, 'label', undefined);
@@ -1444,7 +1445,7 @@ async function protocolAttachmentFinalizeUpload(args) {
 
   const body = {
     sessionKey,
-    ticketId,
+    ...(ticketId ? { ticketId } : {}),
     objectiveId,
     storagePath,
     label,
@@ -1471,7 +1472,6 @@ async function protocolAttachmentGetDownloadUrl(args) {
   const flags = parseFlags(args);
   const { sessionKey, ticketId } = resolveSessionFlags(flags);
   if (!sessionKey) throw new Error('--session-key is required (or set SESSION_KEY)');
-  if (!ticketId) throw new Error('--ticket-id is required (or set TICKET_ID)');
   if (!flags['attachment-id'] && !flags['storage-path']) {
     throw new Error('--attachment-id or --storage-path is required');
   }
@@ -1485,7 +1485,7 @@ async function protocolAttachmentGetDownloadUrl(args) {
 
   const body = {
     sessionKey,
-    ticketId,
+    ...(ticketId ? { ticketId } : {}),
     ...(flags['objective-id'] ? { objectiveId: String(flags['objective-id']) } : {}),
     ...(flags['attachment-id'] ? { attachmentId: String(flags['attachment-id']) } : {}),
     ...(flags['storage-path'] ? { storagePath: String(flags['storage-path']) } : {}),
@@ -1508,7 +1508,6 @@ async function protocolAttachmentUploadFile(args) {
   const flags = parseFlags(args);
   const { sessionKey, ticketId } = resolveSessionFlags(flags);
   if (!sessionKey) throw new Error('--session-key is required (or set SESSION_KEY)');
-  if (!ticketId) throw new Error('--ticket-id is required (or set TICKET_ID)');
   const objectiveId = requireFlag(flags, 'objective-id', undefined);
   const filePath = requireFlag(flags, 'file', undefined);
 
@@ -1537,7 +1536,7 @@ async function protocolAttachmentUploadFile(args) {
     '/api/protocol/attachments/prepare-upload',
     {
       sessionKey,
-      ticketId,
+      ...(ticketId ? { ticketId } : {}),
       objectiveId,
       fileName,
       label,
@@ -1564,7 +1563,7 @@ async function protocolAttachmentUploadFile(args) {
     '/api/protocol/attachments/finalize-upload',
     {
       sessionKey,
-      ticketId,
+      ...(ticketId ? { ticketId } : {}),
       objectiveId,
       storagePath,
       label,
@@ -1588,7 +1587,8 @@ async function protocolDiscoverProject(args) {
     await resolveProtocolAuthForFlags(flags);
   const timeoutMs = resolveTimeout(flags);
 
-  const workingDirectory = String(flags['working-directory'] ?? process.cwd());
+  const workingDirectory =
+    flags['working-directory'] !== undefined ? String(flags['working-directory']) : process.cwd();
 
   const data = await apiPost(
     platformUrl,
@@ -1596,7 +1596,14 @@ async function protocolDiscoverProject(args) {
     localSecret,
     organizationId,
     '/api/protocol/discover-project',
-    { workingDirectory },
+    {
+      ...(flags['project-id'] ? { projectId: String(flags['project-id']) } : { workingDirectory }),
+      ...(flags['device-fingerprint']
+        ? { deviceFingerprint: String(flags['device-fingerprint']) }
+        : {}),
+      ...(flags['device-hostname'] ? { deviceHostname: String(flags['device-hostname']) } : {}),
+      ...(flags['device-platform'] ? { devicePlatform: String(flags['device-platform']) } : {})
+    },
     timeoutMs
   );
   console.log(JSON.stringify(data, null, 2));
@@ -2493,9 +2500,10 @@ Project discovery:
   You can also discover the project explicitly:
 
     ovld protocol discover-project
+    ovld protocol discover-project --project-id <project-uuid>
     ovld protocol discover-project --working-directory /path/to/repo
 
-  Use --project-id to override automatic resolution on prompt or ticket creation.
+  Use --project-id to override automatic resolution on discover, prompt, or ticket creation.
   Use --personal to create a private ticket without assigning any project.
 
 Subcommands:
@@ -2563,7 +2571,11 @@ discover-project:
     Resolve the Overlord project that corresponds to the current (or given) working directory.
     Uses the caller's configured "Local working directory" for matching.
   Optional:
+    --project-id <uuid>       Resolve this project directly; skips working-directory matching
     --working-directory <path>  Directory to match (default: current working directory)
+    --device-fingerprint <fp>   Prefer resource directories for this registered device
+    --device-hostname <name>    Register/update device metadata when fingerprint is provided
+    --device-platform <platform>
   Returns:
     Project JSON with id, name, organizationId. Prints PROJECT_ID=<id> on stderr.
   Notes:
@@ -2860,19 +2872,20 @@ record-work:
 attachment-list:
   Required:
     --session-key <key>
-    --ticket-id <ticket_id>
+    one of: --objective-id <id> | --ticket-id <ticket_id>
   Optional:
-    --objective-id <id>       Filter to a single objective
+    --objective-id <id>       Filter to a single objective (also acts as ticket scope)
+    --ticket-id <ticket_id>   List every attachment for a ticket
   Returns:
     JSON array of { id, label, content_type, file_size, objective_id, storage_path, created_at }
 
 attachment-prepare-upload:
   Required:
     --session-key <key>
-    --ticket-id <ticket_id>
     --objective-id <id>
     --file-name <name>
   Optional:
+    --ticket-id <ticket_id>   Derived from --objective-id when omitted
     --label <text>
     --content-type <mime>
     --file-size <bytes>
@@ -2881,11 +2894,11 @@ attachment-prepare-upload:
 attachment-finalize-upload:
   Required:
     --session-key <key>
-    --ticket-id <ticket_id>
     --objective-id <id>
     --storage-path <path>
     --label <text>
   Optional:
+    --ticket-id <ticket_id>   Derived from --objective-id when omitted
     --content-type <mime>
     --file-size <bytes>
     --metadata-json <json>
@@ -2893,19 +2906,19 @@ attachment-finalize-upload:
 attachment-download-url:
   Required:
     --session-key <key>
-    --ticket-id <ticket_id>
     one of: --attachment-id <id> | --storage-path <path>
   Optional:
+    --ticket-id <ticket_id>   Derived from --attachment-id / --objective-id when omitted
     --objective-id <id>       Required when using --storage-path
     --expires-in <seconds>
 
 attachment-upload-file:
   Required:
     --session-key <key>
-    --ticket-id <ticket_id>
     --objective-id <id>
     --file <path>
   Optional:
+    --ticket-id <ticket_id>   Derived from --objective-id when omitted
     --file-name <name>        Defaults to basename of --file
     --label <text>            Defaults to file name
     --content-type <mime>     Defaults to application/octet-stream
@@ -2993,6 +3006,7 @@ fail-execution-launch:
 Examples:
   ovld protocol auth-status
   ovld protocol discover-project
+  ovld protocol discover-project --project-id <project-uuid>
   ovld protocol discover-project --working-directory /path/to/repo
   ovld protocol prompt --agent codex --objective "Implement feature X"   # auto-resolves project from cwd
   ovld protocol attach --ticket-id 1:899
@@ -3015,10 +3029,10 @@ Examples:
   ovld protocol hook-event --hook-type UserPromptSubmit --ticket-id <ticket_id> --prompt "User follow-up" --turn-index 1
   ovld protocol read-context --session-key <key> --ticket-id <ticket_id> --query arch --limit 5
   ovld protocol write-context --session-key <key> --ticket-id <ticket_id> --key "arch" --value '"monorepo"' --tags repo,agent
-  ovld protocol attachment-list --session-key <key> --ticket-id <ticket_id>
-  ovld protocol attachment-prepare-upload --session-key <key> --ticket-id <ticket_id> --objective-id <objective-id> --file-name spec.pdf --content-type application/pdf
-  ovld protocol attachment-upload-file --session-key <key> --ticket-id <ticket_id> --objective-id <objective-id> --file ./spec.pdf
-  ovld protocol attachment-download-url --session-key <key> --ticket-id <ticket_id> --attachment-id <attachment-id>
+  ovld protocol attachment-list --session-key <key> --objective-id <objective-id>
+  ovld protocol attachment-prepare-upload --session-key <key> --objective-id <objective-id> --file-name spec.pdf --content-type application/pdf
+  ovld protocol attachment-upload-file --session-key <key> --objective-id <objective-id> --file ./spec.pdf
+  ovld protocol attachment-download-url --session-key <key> --attachment-id <attachment-id>
   ovld protocol request-execution --ticket-id 1:899 --agent codex --requested-from manual_run
   ovld protocol claim-execution --device-fingerprint $OVERLORD_DEVICE_FINGERPRINT
   ovld protocol deliver --session-key <key> --ticket-id <ticket_id> --summary "Done"

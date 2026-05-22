@@ -8,14 +8,24 @@ function getDatabaseUrl() {
   );
 }
 
-async function insertTicket(client: Client) {
+async function insertOrganization(client: Client) {
+  const result = await client.query<{ id: number }>(
+    `insert into public.organizations (name) values ($1) returning id`,
+    ['Test Organization']
+  );
+  const id = result.rows[0].id;
+  await client.query(`select public.seed_default_ticket_statuses_for_organization($1)`, [id]);
+  return id;
+}
+
+async function insertTicket(client: Client, organizationId: number) {
   const result = await client.query<{ id: string }>(
     `
       insert into public.tickets (organization_id, title)
       values ($1, $2)
       returning id
     `,
-    [1, 'Trigger test ticket']
+    [organizationId, 'Trigger test ticket']
   );
 
   return result.rows[0].id;
@@ -93,7 +103,8 @@ describe('ticket_events objective_id', () => {
   });
 
   it('leaves objective_id null when omitted on insert', async () => {
-    const ticketId = await insertTicket(client);
+    const orgId = await insertOrganization(client);
+    const ticketId = await insertTicket(client, orgId);
     await insertObjective(client, {
       ticketId,
       state: 'executing',
@@ -107,7 +118,8 @@ describe('ticket_events objective_id', () => {
   });
 
   it('preserves an explicitly supplied objective_id', async () => {
-    const ticketId = await insertTicket(client);
+    const orgId = await insertOrganization(client);
+    const ticketId = await insertTicket(client, orgId);
     const explicitObjectiveId = await insertObjective(client, {
       ticketId,
       state: 'complete',

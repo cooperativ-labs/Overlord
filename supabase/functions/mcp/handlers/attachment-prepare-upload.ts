@@ -26,8 +26,8 @@ export async function handleAttachmentPrepareUpload(
     metadata = {}
   } = args;
 
-  if (!sessionKey || !ticketId || !objectiveId || !fileName) {
-    return toolErr('sessionKey, ticketId, objectiveId, and fileName are required.');
+  if (!sessionKey || !objectiveId || !fileName) {
+    return toolErr('sessionKey, objectiveId, and fileName are required.');
   }
 
   const access = await resolveAttachmentAccess(
@@ -64,7 +64,7 @@ export async function handleAttachmentPrepareUpload(
       metadata,
       objectiveId,
       storagePath,
-      ticketId
+      ticketId: access.ticket.id
     }
   });
 }

@@ -241,7 +241,7 @@ the queue continue.`
 
   const attachmentsBody =
     attachmentLines.length > 0
-      ? `${attachmentLines.join('\n')}\n\nDownload with: \`ovld protocol attachment-download-url --session-key <sessionKey> --ticket-id ${ticket.id} --attachment-id <attachment-id>\` (MCP: \`get_attachment_download_url\`).`
+      ? `${attachmentLines.join('\n')}\n\nDownload with: \`ovld protocol attachment-download-url --session-key <sessionKey> --attachment-id <attachment-id>\` (MCP: \`get_attachment_download_url\`).`
       : '';
 
   return {

@@ -40,6 +40,7 @@ Tool names match the hosted Overlord MCP server (`supabase/functions/mcp/tools.t
 - Progress and review flow: `update`, `record_change_rationales`, `ask`, `deliver`
 - Shared context: `read_context`, `write_context`
 - Objective attachments: `list_attachments`, `prepare_attachment_upload`, `finalize_attachment_upload`, `get_attachment_download_url`, `upload_attachment_file`
+- Local runner queue: `request_execution`, `claim_execution`, `complete_execution_launch`, `fail_execution_launch`
 
 The MCP server shells into the installed `ovld` binary so the plugin stays aligned with the shipped CLI behavior instead of depending on this repository checkout.
 

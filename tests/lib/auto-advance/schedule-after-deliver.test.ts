@@ -116,9 +116,9 @@ describe('scheduleQueuedObjectiveAfterDeliver', () => {
   it('creates an auto_advance execution request when the next draft has auto_advance enabled', async () => {
     const supabase = mockDraftObjective({ id: 'obj-42', auto_advance: true });
 
-    await expect(
-      scheduleQueuedObjectiveAfterDeliver({ ...baseInput, supabase })
-    ).resolves.toEqual({ advanced: true });
+    await expect(scheduleQueuedObjectiveAfterDeliver({ ...baseInput, supabase })).resolves.toEqual({
+      advanced: true
+    });
 
     expect(mockCreateExecutionRequest).toHaveBeenCalledWith(supabase, {
       ticketId: 'ticket-1',
@@ -151,9 +151,9 @@ describe('scheduleQueuedObjectiveAfterDeliver', () => {
   it('does not enqueue when the draft objective text is blank', async () => {
     const supabase = mockDraftObjective({ objective: '   ' });
 
-    await expect(
-      scheduleQueuedObjectiveAfterDeliver({ ...baseInput, supabase })
-    ).resolves.toEqual({ advanced: false });
+    await expect(scheduleQueuedObjectiveAfterDeliver({ ...baseInput, supabase })).resolves.toEqual({
+      advanced: false
+    });
 
     expect(mockCreateExecutionRequest).not.toHaveBeenCalled();
   });

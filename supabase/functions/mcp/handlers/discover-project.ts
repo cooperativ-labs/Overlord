@@ -128,10 +128,9 @@ export async function handleDiscoverProject(
   args: any,
   ctx: TokenContext
 ) {
-  // If a projectId is explicitly provided (or the token is scoped to a project),
-  // skip directory matching — this is the normal path for MCP-connected agents.
-  const explicitProjectId =
-    typeof args?.projectId === 'string' ? args.projectId.trim() : (ctx.projectId ?? null);
+  // If a projectId is explicitly provided, skip directory matching. This is the
+  // preferred hosted-MCP path because hosted agents often cannot expose a useful cwd.
+  const explicitProjectId = typeof args?.projectId === 'string' ? args.projectId.trim() : '';
 
   if (explicitProjectId) {
     const project = await resolveProjectById(supabase, ctx.organizationId, explicitProjectId);
