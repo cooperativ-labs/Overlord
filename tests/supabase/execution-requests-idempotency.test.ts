@@ -13,11 +13,21 @@ describe('execution_requests idempotency', () => {
   let ticketId = '';
   let objectiveId = '';
 
-  beforeAll(() => {
+  beforeAll(async () => {
     process.env.SUPABASE_URL ??= LOCAL_SUPABASE_URL;
     process.env.NEXT_PUBLIC_SUPABASE_URL ??= LOCAL_SUPABASE_URL;
     process.env.SUPABASE_SERVICE_ROLE_KEY ??= LOCAL_SERVICE_ROLE_KEY;
     supabase = createServiceRoleClient();
+    await supabase.auth.admin.createUser({
+      user_metadata: {},
+      email: 'idempotency-test@test.local',
+      email_confirm: true,
+      id: USER_ID
+    });
+  });
+
+  afterAll(async () => {
+    await supabase.auth.admin.deleteUser(USER_ID);
   });
 
   beforeEach(async () => {
