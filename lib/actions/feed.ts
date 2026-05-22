@@ -77,7 +77,7 @@ export async function getFeedPostsAction(options?: {
       *,
       projects!inner(name, color),
       tickets!inner(title, ticket_id, ticket_sequence),
-      objectives(objective)
+      objectives!feed_posts_objective_id_fkey(objective)
     `
     )
     .order('updated_at', { ascending: false })
