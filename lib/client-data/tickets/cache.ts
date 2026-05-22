@@ -5,19 +5,15 @@ import type { QueryClient } from '@tanstack/react-query';
 import {
   applyStatusListChange,
   clearWaitingQuestion,
-  mergeObjectiveMeta,
   mergeRealtimeTicketRow,
   mergeServerTicketRow,
-  mergeSessionMeta,
   mergeWaitingQuestion,
   reconcileRemovedTicket,
   updateTicketFields
 } from './board-reducers';
 import type {
-  AgentSessionMeta,
   BoardStatus,
   BoardTicket,
-  ObjectiveMeta,
   TicketBoardState,
   TicketRowSource
 } from './board-types';
@@ -146,22 +142,6 @@ export function mergeWaitingQuestionIntoBoards(
 
 export function clearWaitingQuestionFromBoards(qc: QueryClient, ticketId: string): void {
   applyToAllBoards(qc, state => clearWaitingQuestion(state, ticketId));
-}
-
-export function mergeObjectiveMetaIntoBoards(
-  qc: QueryClient,
-  ticketId: string,
-  meta: ObjectiveMeta
-): void {
-  applyToAllBoards(qc, state => mergeObjectiveMeta(state, ticketId, meta));
-}
-
-export function mergeSessionMetaIntoBoards(
-  qc: QueryClient,
-  ticketId: string,
-  session: AgentSessionMeta
-): void {
-  applyToAllBoards(qc, state => mergeSessionMeta(state, ticketId, session));
 }
 
 export function applyStatusListToBoards(qc: QueryClient, statuses: BoardStatus[]): void {

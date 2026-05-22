@@ -65,17 +65,6 @@ export type WaitingMeta = {
   raisedAt: string;
 };
 
-export type AgentSessionMeta = {
-  session_state: string;
-  agent_identifier: string | null;
-  attached_at?: string | null;
-};
-
-export type ObjectiveMeta = {
-  latest_agent: string | null;
-  executing_agent: string | null;
-};
-
 export type TicketBoardState = {
   scope: BoardScope;
   ticketsById: Record<string, BoardTicket>;
@@ -86,8 +75,6 @@ export type TicketBoardState = {
   columnPageInfoByStatus: Record<string, ColumnPageInfo>;
   ticketStatusesByName: Record<string, BoardStatus>;
   waitingByTicketId: Record<string, WaitingMeta>;
-  objectiveMetaByTicketId: Record<string, ObjectiveMeta>;
-  agentSessionsByTicketId: Record<string, AgentSessionMeta>;
   pendingMutationsByEntityId: Record<string, PendingMutation[]>;
 };
 

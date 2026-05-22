@@ -18,7 +18,11 @@ export type TicketEventType =
   | 'status_change'
   | 'alert'
   | 'user_follow_up'
-  | 'ticket_reopened';
+  | 'ticket_reopened'
+  | 'awaiting_approval'
+  | 'auto_advance'
+  | 'execution_requested'
+  | 'execution_launch_failed';
 
 export interface AssignedAgent {
   agent?: LaunchAgentType;
@@ -123,6 +127,10 @@ export interface Objective {
   agent_identifier: string | null;
   model_identifier: string | null;
   assigned_agent: AssignedAgent | null;
+  position: number;
+  auto_advance: boolean;
+  approval_reason: string | null;
+  auto_advanced_at: string | null;
   created_at: string;
 }
 

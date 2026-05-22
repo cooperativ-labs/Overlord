@@ -206,7 +206,8 @@ export function QuickCreateTicketModal({ visible, onClose, defaultProjectId }: P
       await supabase.from('ticket_events').insert({
         event_type: 'system',
         summary: 'Ticket created from mobile.',
-        ticket_id: ticket.id
+        ticket_id: ticket.id,
+        objective_id: objective.id
       });
 
       for (const doc of pendingDocuments) {

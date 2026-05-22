@@ -39,8 +39,6 @@ export function normalizeBoardBootstrap(bootstrap: BoardBootstrap): TicketBoardS
     columnPageInfoByStatus: bootstrap.columnPageInfo ?? {},
     ticketStatusesByName,
     waitingByTicketId,
-    objectiveMetaByTicketId: {},
-    agentSessionsByTicketId: {},
     pendingMutationsByEntityId: {}
   };
 }
@@ -52,8 +50,6 @@ export function emptyBoardState(scope: TicketBoardState['scope']): TicketBoardSt
     columnPageInfoByStatus: {},
     ticketStatusesByName: {},
     waitingByTicketId: {},
-    objectiveMetaByTicketId: {},
-    agentSessionsByTicketId: {},
     pendingMutationsByEntityId: {}
   };
 }

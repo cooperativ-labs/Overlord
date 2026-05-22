@@ -68,10 +68,30 @@ async function loadExecutingFeedTickets(): Promise<ExecutingFeedTicket[]> {
   const ticketIds = rows.map(ticket => ticket.id);
   if (ticketIds.length === 0) return [];
 
+  const { data: objectives, error: objectivesError } = await supabase
+    .from('objectives')
+    .select('id,ticket_id')
+    .in('ticket_id', ticketIds);
+
+  if (objectivesError) {
+    if (__DEV__) {
+      console.error('[useExecutingFeedTickets] objectives error:', objectivesError);
+    }
+    return [];
+  }
+
+  const objectiveToTicket = new Map<string, string>();
+  for (const objective of (objectives ?? []) as Array<{ id: string; ticket_id: string }>) {
+    objectiveToTicket.set(objective.id, objective.ticket_id);
+  }
+
+  const objectiveIds = Array.from(objectiveToTicket.keys());
+  if (objectiveIds.length === 0) return [];
+
   const { data: sessions, error: sessionsError } = await supabase
     .from('agent_sessions')
-    .select('ticket_id,session_state,agent_identifier,attached_at')
-    .in('ticket_id', ticketIds)
+    .select('objective_id,session_state,agent_identifier,attached_at')
+    .in('objective_id', objectiveIds)
     .order('attached_at', { ascending: false });
 
   if (sessionsError) {
@@ -87,15 +107,17 @@ async function loadExecutingFeedTickets(): Promise<ExecutingFeedTicket[]> {
   >();
 
   for (const session of (sessions ?? []) as Array<{
-    ticket_id: string;
+    objective_id: string;
     session_state: string;
     agent_identifier: string;
     attached_at: string | null;
   }>) {
-    if (latestAttachedSessionByTicketId.has(session.ticket_id)) continue;
     if (session.session_state !== 'attached') continue;
+    const ticketId = objectiveToTicket.get(session.objective_id);
+    if (!ticketId) continue;
+    if (latestAttachedSessionByTicketId.has(ticketId)) continue;
 
-    latestAttachedSessionByTicketId.set(session.ticket_id, {
+    latestAttachedSessionByTicketId.set(ticketId, {
       agent_identifier: session.agent_identifier,
       attached_at: session.attached_at
     });

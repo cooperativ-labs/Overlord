@@ -1,9 +1,7 @@
 import { mergeTicketFields } from './board-normalize';
 import type {
-  AgentSessionMeta,
   BoardStatus,
   BoardTicket,
-  ObjectiveMeta,
   PendingMutation,
   TicketBoardState,
   TicketRowSource
@@ -33,18 +31,6 @@ function withoutTicket(state: TicketBoardState, ticketId: string): TicketBoardSt
     delete nextWaiting[ticketId];
   }
 
-  let nextObjective = state.objectiveMetaByTicketId;
-  if (ticketId in nextObjective) {
-    nextObjective = { ...nextObjective };
-    delete nextObjective[ticketId];
-  }
-
-  let nextSessions = state.agentSessionsByTicketId;
-  if (ticketId in nextSessions) {
-    nextSessions = { ...nextSessions };
-    delete nextSessions[ticketId];
-  }
-
   let nextPending = state.pendingMutationsByEntityId;
   if (ticketId in nextPending) {
     nextPending = { ...nextPending };
@@ -55,8 +41,6 @@ function withoutTicket(state: TicketBoardState, ticketId: string): TicketBoardSt
     ...state,
     ticketsById: nextTickets,
     waitingByTicketId: nextWaiting,
-    objectiveMetaByTicketId: nextObjective,
-    agentSessionsByTicketId: nextSessions,
     pendingMutationsByEntityId: nextPending
   };
 }
@@ -231,35 +215,6 @@ export function clearWaitingQuestion(state: TicketBoardState, ticketId: string):
   const next = { ...state.waitingByTicketId };
   delete next[ticketId];
   return { ...state, waitingByTicketId: next };
-}
-
-export function mergeObjectiveMeta(
-  state: TicketBoardState,
-  ticketId: string,
-  meta: ObjectiveMeta
-): TicketBoardState {
-  return {
-    ...state,
-    objectiveMetaByTicketId: { ...state.objectiveMetaByTicketId, [ticketId]: meta }
-  };
-}
-
-export function mergeSessionMeta(
-  state: TicketBoardState,
-  ticketId: string,
-  session: AgentSessionMeta
-): TicketBoardState {
-  const existing = state.agentSessionsByTicketId[ticketId];
-  // Prefer the newest attached_at when both have one, otherwise take the new.
-  if (existing && existing.attached_at && session.attached_at) {
-    if (Date.parse(existing.attached_at) > Date.parse(session.attached_at)) {
-      return state;
-    }
-  }
-  return {
-    ...state,
-    agentSessionsByTicketId: { ...state.agentSessionsByTicketId, [ticketId]: session }
-  };
 }
 
 export function applyStatusListChange(

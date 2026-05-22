@@ -4,8 +4,6 @@ import type { QueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
-  mergeObjectiveMetaIntoBoards,
-  mergeSessionMetaIntoBoards,
   mergeTicketsIntoBoards,
   mergeWaitingQuestionIntoBoards,
   reconcileRealtimeTicketRow,
@@ -61,6 +59,24 @@ type RealtimeBoardTicketRow = {
 
 const WAITING_SOUND_PATH = '/sounds/notification-question.mp3';
 const REVIEW_SOUND_PATH = '/sounds/notification-complete.mp3';
+const ALERT_SOUND_PATH = '/sounds/notification-complete.mp3';
+
+function sendDesktopNotification(title: string, body: string): void {
+  if (window.electronAPI?.app?.notify) {
+    void window.electronAPI.app.notify(title, body);
+    return;
+  }
+  if (typeof Notification === 'undefined') return;
+  if (Notification.permission === 'granted') {
+    new Notification(title, { body, icon: '/images/favicon.png' });
+  } else if (Notification.permission === 'default') {
+    void Notification.requestPermission().then(permission => {
+      if (permission === 'granted') {
+        new Notification(title, { body, icon: '/images/favicon.png' });
+      }
+    });
+  }
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -69,6 +85,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function getObjectivePayloadTicketId(value: unknown): string | null {
   if (!isRecord(value)) return null;
   return typeof value.ticket_id === 'string' ? value.ticket_id : null;
+}
+
+function getObjectivePayloadId(value: unknown): string | null {
+  if (!isRecord(value)) return null;
+  return typeof value.id === 'string' ? value.id : null;
+}
+
+function getSessionPayloadObjectiveId(value: unknown): string | null {
+  if (!isRecord(value)) return null;
+  return typeof value.objective_id === 'string' ? value.objective_id : null;
 }
 
 function getSingleRelation<T>(relation: T | T[] | null | undefined): T | null {
@@ -198,9 +224,9 @@ export function useTicketBoardRealtime({
     () => getWaitingRaisedWhileOpenMap()
   );
 
-  const latestSessionAttachedAtRef = useRef<Map<string, string>>(new Map());
   const waitingSoundRef = useRef<HTMLAudioElement | null>(null);
   const reviewSoundRef = useRef<HTMLAudioElement | null>(null);
+  const alertSoundRef = useRef<HTMLAudioElement | null>(null);
   const waitingByTicketRef = useRef(waitingByTicket);
   const openTicketIdRef = useRef<string | null>(null);
   const ticketIdsRef = useRef<Set<string>>(new Set());
@@ -233,7 +259,6 @@ export function useTicketBoardRealtime({
         delete next[ticketId];
         return next;
       });
-      latestSessionAttachedAtRef.current.delete(ticketId);
       onTicketRemoved?.(ticketId);
     },
     [onTicketRemoved, queryClient]
@@ -263,9 +288,14 @@ export function useTicketBoardRealtime({
     reviewAudio.preload = 'auto';
     reviewSoundRef.current = reviewAudio;
 
+    const alertAudio = new Audio(ALERT_SOUND_PATH);
+    alertAudio.preload = 'auto';
+    alertSoundRef.current = alertAudio;
+
     return () => {
       waitingSoundRef.current = null;
       reviewSoundRef.current = null;
+      alertSoundRef.current = null;
     };
   }, []);
 
@@ -311,17 +341,6 @@ export function useTicketBoardRealtime({
         objectiveTicketCache.set(objectiveId, data.ticket_id);
       }
       return data?.ticket_id ?? null;
-    };
-
-    const applySessionOverride = (
-      ticketId: string,
-      session: Pick<AgentSession, 'session_state' | 'agent_identifier'>
-    ) => {
-      const isAttached = session.session_state === 'attached';
-      updateTicketInBoards(queryClient, ticketId, {
-        agent_session_state: session.session_state,
-        running_agent: isAttached ? session.agent_identifier : null
-      });
     };
 
     const syncObjectiveStateForTicket = async (ticketId: string) => {
@@ -383,10 +402,6 @@ export function useTicketBoardRealtime({
         running_agent: executingObjectiveAgent ?? (isAttached ? session.agent_identifier : null),
         has_executing_objective: executingObjectiveAgent !== null,
         objectives_executed_count: executedObjectivesCount
-      });
-      mergeObjectiveMetaIntoBoards(queryClient, ticketId, {
-        latest_agent: latestObjectiveAgent,
-        executing_agent: executingObjectiveAgent
       });
     };
 
@@ -509,11 +524,6 @@ export function useTicketBoardRealtime({
           objectives_executed_count:
             executedObjectivesCountByTicket.get(ticket.id) ?? ticket.objectives_executed_count ?? 0
         });
-        mergeObjectiveMetaIntoBoards(queryClient, ticket.id, {
-          latest_agent:
-            latestObjectiveAgentByTicket.get(ticket.id) ?? ticket.latest_objective_agent ?? null,
-          executing_agent: executingObjectiveAgentByTicket.get(ticket.id) ?? null
-        });
       }
 
       const nextWaitingByTicket = { ...waitingByTicketRef.current };
@@ -576,7 +586,7 @@ export function useTicketBoardRealtime({
         ? `Agent waiting: ${ticket.title.trim()}`
         : 'Agent waiting for response';
 
-      void window.electronAPI?.app?.notify(title, getEventMessage(event));
+      sendDesktopNotification(title, getEventMessage(event));
 
       const waitingSound = waitingSoundRef.current;
       if (waitingSound) {
@@ -617,7 +627,24 @@ export function useTicketBoardRealtime({
       const reviewTitle = reviewTicket?.title?.trim()
         ? `Ready for review: ${reviewTicket.title.trim()}`
         : 'Ticket moved to review';
-      void window.electronAPI?.app?.notify(reviewTitle, 'The agent has delivered this ticket.');
+      sendDesktopNotification(reviewTitle, 'The agent has delivered this ticket.');
+    };
+
+    const handleAlertEvent = (event: TicketEvent) => {
+      if (!ticketIdsRef.current.has(event.ticket_id)) return;
+
+      const ticket = ticketsByIdRef.current.get(event.ticket_id);
+      const title = ticket?.title?.trim()
+        ? `Agent alert: ${ticket.title.trim()}`
+        : 'Agent alert';
+
+      sendDesktopNotification(title, getEventMessage(event));
+
+      const alertSound = alertSoundRef.current;
+      if (alertSound) {
+        alertSound.currentTime = 0;
+        void alertSound.play().catch(() => undefined);
+      }
     };
 
     const handleTicketCreated = (event: Event) => {
@@ -663,43 +690,31 @@ export function useTicketBoardRealtime({
           }
           if (event.event_type === 'status_change') {
             handleStatusChangeEvent(event);
+            return;
+          }
+          if (event.event_type === 'alert') {
+            handleAlertEvent(event);
           }
         }
       )
+      // Both agent_sessions and objectives drive the same fields on a board
+      // ticket (agent_session_state, running_agent, latest_objective_agent,
+      // assigned_agent, has_executing_objective, objectives_executed_count).
+      // Rather than maintain two separate partial-update paths, we resolve
+      // each change to its ticket_id and trigger a single authoritative
+      // re-read via syncObjectiveStateForTicket.
       .on<AgentSession>(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'agent_sessions' },
+        { event: '*', schema: 'public', table: 'agent_sessions' },
         payload => {
-          const session = payload.new;
+          const objectiveId =
+            getSessionPayloadObjectiveId(payload.new) ??
+            getSessionPayloadObjectiveId(payload.old);
+          if (!objectiveId) return;
           void (async () => {
-            const ticketId = await resolveTicketIdFromObjective(session.objective_id);
+            const ticketId = await resolveTicketIdFromObjective(objectiveId);
             if (!ticketId || !ticketIdsRef.current.has(ticketId)) return;
-            latestSessionAttachedAtRef.current.set(ticketId, session.attached_at);
-            mergeSessionMetaIntoBoards(queryClient, ticketId, {
-              session_state: session.session_state,
-              agent_identifier: session.agent_identifier,
-              attached_at: session.attached_at
-            });
-            applySessionOverride(ticketId, session);
-          })();
-        }
-      )
-      .on<AgentSession>(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'agent_sessions' },
-        payload => {
-          const session = payload.new;
-          void (async () => {
-            const ticketId = await resolveTicketIdFromObjective(session.objective_id);
-            if (!ticketId || !ticketIdsRef.current.has(ticketId)) return;
-            const latestAt = latestSessionAttachedAtRef.current.get(ticketId) ?? '';
-            if (session.attached_at < latestAt) return;
-            mergeSessionMetaIntoBoards(queryClient, ticketId, {
-              session_state: session.session_state,
-              agent_identifier: session.agent_identifier,
-              attached_at: session.attached_at
-            });
-            applySessionOverride(ticketId, session);
+            await syncObjectiveStateForTicket(ticketId);
           })();
         }
       )
@@ -710,6 +725,14 @@ export function useTicketBoardRealtime({
           const changedTicketId =
             getObjectivePayloadTicketId(payload.new) ?? getObjectivePayloadTicketId(payload.old);
           if (!changedTicketId) return;
+          // Keep the objective→ticket cache warm so agent_sessions events
+          // that arrive before we've ever loaded the objective resolve from
+          // memory instead of issuing an extra round trip.
+          const objectiveId =
+            getObjectivePayloadId(payload.new) ?? getObjectivePayloadId(payload.old);
+          if (objectiveId) {
+            objectiveTicketCache.set(objectiveId, changedTicketId);
+          }
           if (!ticketIdsRef.current.has(changedTicketId)) return;
           void syncObjectiveStateForTicket(changedTicketId);
         }

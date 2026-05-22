@@ -142,7 +142,7 @@ export default function TicketDetailScreen() {
         supabase
           .from('objectives')
           .select(
-            'id, objective, title, state, agent_identifier, model_identifier, assigned_agent, created_at'
+            'id, objective, title, state, agent_identifier, model_identifier, assigned_agent, position, auto_advance, approval_reason, auto_advanced_at, created_at'
           )
           .eq('ticket_id', ticketId)
           .order('created_at', { ascending: false }),
@@ -491,6 +491,7 @@ export default function TicketDetailScreen() {
     try {
       const supabase = getSupabase();
       const hasExistingDraft = Boolean(activeDraftObjective);
+      let savedObjectiveId: string | null = activeDraftObjective?.id ?? null;
 
       if (activeDraftObjective) {
         const { error } = await supabase
@@ -502,16 +503,21 @@ export default function TicketDetailScreen() {
           throw new Error(error.message);
         }
       } else {
-        const { error } = await supabase.from('objectives').insert({
-          ticket_id: ticketId,
-          objective: trimmedObjective,
-          state: 'draft',
-          assigned_agent: assignedSelection ? createAssignedAgent(assignedSelection) : null
-        });
+        const { data, error } = await supabase
+          .from('objectives')
+          .insert({
+            ticket_id: ticketId,
+            objective: trimmedObjective,
+            state: 'draft',
+            assigned_agent: assignedSelection ? createAssignedAgent(assignedSelection) : null
+          })
+          .select('id')
+          .single();
 
         if (error) {
           throw new Error(error.message);
         }
+        savedObjectiveId = data?.id ?? null;
       }
 
       const { error: eventError } = await supabase.from('ticket_events').insert({
@@ -519,7 +525,8 @@ export default function TicketDetailScreen() {
         summary: hasExistingDraft
           ? 'Objective updated from mobile.'
           : 'Objective created from mobile.',
-        ticket_id: ticketId
+        ticket_id: ticketId,
+        objective_id: savedObjectiveId
       });
 
       if (eventError) {
@@ -597,7 +604,8 @@ export default function TicketDetailScreen() {
       const { error: eventError } = await supabase.from('ticket_events').insert({
         event_type: 'system',
         summary: 'Assigned agent updated.',
-        ticket_id: ticket.id
+        ticket_id: ticket.id,
+        objective_id: activeDraftObjective?.id ?? null
       });
 
       if (eventError) {
@@ -670,7 +678,8 @@ export default function TicketDetailScreen() {
       const { error: eventError } = await supabase.from('ticket_events').insert({
         event_type: 'status_change',
         summary: `Status changed to ${formatStatusName(nextStatus)} from mobile.`,
-        ticket_id: ticket.id
+        ticket_id: ticket.id,
+        objective_id: activeDraftObjective?.id ?? null
       });
 
       if (eventError) {
@@ -721,7 +730,8 @@ export default function TicketDetailScreen() {
     await supabase.from('ticket_events').insert({
       event_type: 'system',
       summary: 'Objective created from mobile.',
-      ticket_id: ticketId
+      ticket_id: ticketId,
+      objective_id: data.id
     });
     await loadData();
     return data.id;
@@ -778,7 +788,8 @@ export default function TicketDetailScreen() {
       const { error: eventError } = await supabase.from('ticket_events').insert({
         event_type: 'artifact',
         summary: `Objective attachment uploaded: ${options.fileName}`,
-        ticket_id: ticket.id
+        ticket_id: ticket.id,
+        objective_id: objectiveId
       });
 
       if (eventError) {
@@ -835,7 +846,8 @@ export default function TicketDetailScreen() {
       const { error: eventError } = await supabase.from('ticket_events').insert({
         event_type: 'system',
         summary: 'Acceptance criteria updated from mobile.',
-        ticket_id: ticket.id
+        ticket_id: ticket.id,
+        objective_id: activeDraftObjective?.id ?? null
       });
 
       if (eventError) {
@@ -897,7 +909,8 @@ export default function TicketDetailScreen() {
       const { error: eventError } = await supabase.from('ticket_events').insert({
         event_type: 'system',
         summary: 'Ticket title updated from mobile.',
-        ticket_id: ticket.id
+        ticket_id: ticket.id,
+        objective_id: activeDraftObjective?.id ?? null
       });
 
       if (eventError) {
@@ -913,7 +926,7 @@ export default function TicketDetailScreen() {
     } finally {
       savingTitleRef.current = false;
     }
-  }, [ticket, titleDraft]);
+  }, [ticket, titleDraft, activeDraftObjective?.id]);
 
   async function launchWithPassword(server: Server, password: string) {
     if (!ticket || !resolvedAssignedSelection) return;

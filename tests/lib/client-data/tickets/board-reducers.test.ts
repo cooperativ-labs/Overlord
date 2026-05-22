@@ -8,7 +8,6 @@ import {
   markTicketRead,
   mergeRealtimeTicketRow,
   mergeServerTicketRow,
-  mergeSessionMeta,
   mergeWaitingQuestion,
   moveTicketBetweenStatuses,
   reconcileRemovedTicket,
@@ -164,11 +163,6 @@ describe('deleteTicket', () => {
     let state = freshState([
       makeTicket({ id: 'a', waiting_for_response_at: '2026-04-17T01:00:00.000Z' })
     ]);
-    state = mergeSessionMeta(state, 'a', {
-      session_state: 'attached',
-      agent_identifier: 'claude',
-      attached_at: '2026-04-17T01:00:00.000Z'
-    });
     state = withPendingMutation(state, 'a', {
       mutationId: 'm1',
       kind: 'update',
@@ -179,7 +173,6 @@ describe('deleteTicket', () => {
 
     expect(next.ticketsById).toEqual({});
     expect(next.waitingByTicketId).toEqual({});
-    expect(next.agentSessionsByTicketId).toEqual({});
     expect(next.pendingMutationsByEntityId).toEqual({});
   });
 });
@@ -257,22 +250,6 @@ describe('waiting questions', () => {
   });
 });
 
-describe('session metadata', () => {
-  it('keeps the most recently attached session when both have attached_at', () => {
-    let state = freshState([makeTicket({ id: 'a' })]);
-    state = mergeSessionMeta(state, 'a', {
-      session_state: 'attached',
-      agent_identifier: 'claude',
-      attached_at: '2026-04-17T05:00:00.000Z'
-    });
-    state = mergeSessionMeta(state, 'a', {
-      session_state: 'detached',
-      agent_identifier: 'cursor',
-      attached_at: '2026-04-17T01:00:00.000Z'
-    });
-    expect(state.agentSessionsByTicketId.a.agent_identifier).toBe('claude');
-  });
-});
 
 describe('updateTicketFields and markTicketRead', () => {
   it('field updates are no-ops for unknown tickets', () => {
