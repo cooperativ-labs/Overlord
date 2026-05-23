@@ -8,7 +8,7 @@ import {
   upsertExecutionTargetFromProtocol
 } from '@/lib/overlord/execution-targets';
 import { defaultDirectoryLabel } from '@/lib/resource-directories/labels';
-import { createClientForRequest, isElectronRequestFromHeaders } from '@/supabase/utils/server';
+import { createClientForRequest } from '@/supabase/utils/server';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 import type { Database } from '@/types/database.types';
 
@@ -80,11 +80,49 @@ function revalidateProjectPaths(projectId: string) {
   revalidatePath('/');
 }
 
-async function ensureDesktopMutationAllowed() {
-  const isElectron = await isElectronRequestFromHeaders();
-  if (!isElectron) {
-    throw new Error('Resource directory changes require the Overlord desktop app.');
+export type UserExecutionTarget = {
+  id: string;
+  label: string;
+  hostname: string | null;
+  platform: string | null;
+  lastSeenAt: string | null;
+};
+
+/** Returns execution targets the current user has access to, for project resource assignment in the browser. */
+export async function getUserExecutionTargetsAction(): Promise<UserExecutionTarget[]> {
+  const supabase = await createClientForRequest();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data, error } = await (supabase as any)
+    .from('user_execution_targets')
+    .select(
+      'execution_target_id, execution_targets(host, platform, last_seen_at, organization_execution_targets(label, organization_id))'
+    )
+    .eq('user_id', user.id)
+    .order('last_connected_at', { ascending: false, nullsFirst: false });
+
+  if (error) {
+    console.error('getUserExecutionTargetsAction', error);
+    return [];
   }
+
+  return (data ?? []).map((row: any) => {
+    const target = Array.isArray(row.execution_targets)
+      ? row.execution_targets[0]
+      : row.execution_targets;
+    const orgRel = target?.organization_execution_targets;
+    const orgTarget = Array.isArray(orgRel) ? orgRel[0] : orgRel;
+    return {
+      id: row.execution_target_id,
+      label: orgTarget?.label ?? target?.host ?? 'Unknown target',
+      hostname: target?.host ?? null,
+      platform: target?.platform ?? null,
+      lastSeenAt: target?.last_seen_at ?? null
+    };
+  });
 }
 
 /** List resource directories for the current user on a given project. */
@@ -146,8 +184,6 @@ export async function addProjectResourceDirectoryAction(input: {
   devicePlatform?: string | null;
   isPrimary?: boolean;
 }): Promise<{ projectName: string }> {
-  await ensureDesktopMutationAllowed();
-
   const directoryPath = input.directoryPath.trim();
   if (!directoryPath) {
     throw new Error('Directory path is required.');
@@ -241,8 +277,6 @@ export async function removeProjectResourceDirectoryAction(input: {
   directoryId: string;
   projectId: string;
 }): Promise<void> {
-  await ensureDesktopMutationAllowed();
-
   const supabase = await createClientForRequest();
   const {
     data: { user }
@@ -313,8 +347,6 @@ export async function updateResourceDirectoryLabelAction(input: {
   projectId: string;
   label: string | null;
 }): Promise<void> {
-  await ensureDesktopMutationAllowed();
-
   const supabase = await createClientForRequest();
   const {
     data: { user }
