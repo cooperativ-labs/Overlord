@@ -7,8 +7,38 @@ export type DeviceUpsertInput = {
   userId: string;
   deviceFingerprint: string;
   hostname?: string | null;
+  port?: number | null;
   platform?: string | null;
 };
+
+function normalizePort(port: number | null | undefined): number {
+  return typeof port === 'number' && Number.isFinite(port) ? port : 22;
+}
+
+async function findSshPlaceholderId(
+  supabase: SupabaseClient,
+  input: { host: string; port?: number | null }
+): Promise<string | null> {
+  const host = input.host.trim();
+  if (!host) return null;
+
+  const baseQuery = () =>
+    supabase
+      .from('execution_targets')
+      .select('id')
+      .eq('is_placeholder', true)
+      .eq('host', host)
+      .eq('transport', 'ssh');
+
+  if (input.port != null) {
+    const { data } = await baseQuery().eq('port', normalizePort(input.port)).maybeSingle();
+    return (data as any)?.id ?? null;
+  }
+
+  const { data: matches } = await baseQuery();
+  if (!matches || matches.length !== 1) return null;
+  return (matches[0] as any)?.id ?? null;
+}
 
 async function generateLabel(
   supabase: SupabaseClient,
@@ -61,18 +91,12 @@ export async function upsertDeviceFromProtocol(
   }
 
   const host = input.hostname ?? '';
-  const { data: placeholder } = host
-    ? await supabase
-        .from('execution_targets')
-        .select('id')
-        .eq('is_placeholder', true)
-        .eq('host', host)
-        .limit(1)
-        .maybeSingle()
-    : { data: null };
+  const placeholderId = host
+    ? await findSshPlaceholderId(supabase, { host, port: input.port })
+    : null;
 
-  if ((placeholder as any)?.id) {
-    const targetId = (placeholder as any).id;
+  if (placeholderId) {
+    const targetId = placeholderId;
     await supabase
       .from('execution_targets')
       .update({

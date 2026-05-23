@@ -394,7 +394,8 @@ export const DEVICE_LABEL_REGEX = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/;
 export const getDeviceSchema = z.object({
   deviceFingerprint: z.string().trim().min(1).max(128),
   deviceHostname: z.string().trim().max(256).optional(),
-  devicePlatform: z.string().trim().max(64).optional()
+  devicePlatform: z.string().trim().max(64).optional(),
+  devicePort: z.coerce.number().int().min(1).max(65535).optional()
 });
 
 /** update-device: rename the device label */
@@ -429,7 +430,8 @@ export const addProjectResourceSchema = z.object({
   isPrimary: z.boolean().optional().default(false),
   deviceFingerprint: z.string().trim().min(1).max(128),
   deviceHostname: z.string().trim().max(256).optional(),
-  devicePlatform: z.string().trim().max(64).optional()
+  devicePlatform: z.string().trim().max(64).optional(),
+  devicePort: z.coerce.number().int().min(1).max(65535).optional()
 });
 
 /** update-project-resource: update path, label, or primary status of a directory */

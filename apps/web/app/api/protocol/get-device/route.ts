@@ -16,13 +16,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Authentication required.' }, { status: 401 });
     }
 
-    const { deviceFingerprint, deviceHostname, devicePlatform } = parsed.data;
+    const { deviceFingerprint, deviceHostname, devicePlatform, devicePort } = parsed.data;
 
     const deviceId = await upsertDeviceFromProtocol(supabase, {
       organizationId,
       userId,
       deviceFingerprint,
       hostname: deviceHostname ?? null,
+      port: devicePort ?? null,
       platform: devicePlatform ?? null
     });
 

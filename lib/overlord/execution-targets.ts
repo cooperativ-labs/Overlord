@@ -10,6 +10,7 @@ export type ExecutionTargetUpsertInput = {
   userId: string;
   deviceFingerprint: string;
   hostname?: string | null;
+  port?: number | null;
   platform?: string | null;
 };
 
@@ -37,6 +38,31 @@ function normalizeAuthMethod(
   method: ProjectSshAuthMethod | null | undefined
 ): ProjectSshAuthMethod {
   return method && ['agent', 'key', 'tailscale'].includes(method) ? method : 'agent';
+}
+
+async function findSshPlaceholderId(
+  supabase: SupabaseClient<Database>,
+  input: { host: string; port?: number | null }
+): Promise<string | null> {
+  const host = input.host.trim();
+  if (!host) return null;
+
+  const baseQuery = () =>
+    db(supabase)
+      .from('execution_targets')
+      .select('id')
+      .eq('is_placeholder', true)
+      .eq('host', host)
+      .eq('transport', 'ssh');
+
+  if (input.port != null) {
+    const { data } = await baseQuery().eq('port', normalizePort(input.port)).maybeSingle();
+    return data?.id ?? null;
+  }
+
+  const { data: matches } = await baseQuery();
+  if (!matches || matches.length !== 1) return null;
+  return matches[0]?.id ?? null;
 }
 
 async function generateLabel(
@@ -152,18 +178,12 @@ export async function upsertExecutionTargetFromProtocol(
       })
       .eq('id', targetId);
   } else {
-    const { data: placeholder } = host
-      ? await db(supabase)
-          .from('execution_targets')
-          .select('id')
-          .eq('is_placeholder', true)
-          .eq('host', host)
-          .limit(1)
-          .maybeSingle()
-      : { data: null };
+    const placeholderId = host
+      ? await findSshPlaceholderId(supabase, { host, port: input.port })
+      : null;
 
-    if (placeholder?.id) {
-      targetId = placeholder.id;
+    if (placeholderId) {
+      targetId = placeholderId;
       await db(supabase)
         .from('execution_targets')
         .update({

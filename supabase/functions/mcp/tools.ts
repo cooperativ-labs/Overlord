@@ -989,6 +989,11 @@ export const TOOLS = [
         devicePlatform: {
           type: 'string',
           description: "Platform of the device: 'darwin', 'linux', or 'windows'."
+        },
+        devicePort: {
+          type: 'integer',
+          description:
+            'SSH port for placeholder reconciliation when multiple targets share the same host.'
         }
       },
       required: ['deviceFingerprint']

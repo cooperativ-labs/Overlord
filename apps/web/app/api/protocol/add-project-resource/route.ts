@@ -24,7 +24,8 @@ export async function POST(request: Request) {
       isPrimary,
       deviceFingerprint,
       deviceHostname,
-      devicePlatform
+      devicePlatform,
+      devicePort
     } = parsed.data;
 
     // Verify the project belongs to the organization
@@ -44,6 +45,7 @@ export async function POST(request: Request) {
       userId,
       deviceFingerprint,
       hostname: deviceHostname ?? null,
+      port: devicePort ?? null,
       platform: devicePlatform ?? null
     });
 

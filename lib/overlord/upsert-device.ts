@@ -8,6 +8,7 @@ export type DeviceUpsertInput = {
   userId: string;
   deviceFingerprint: string;
   hostname?: string | null;
+  port?: number | null;
   platform?: string | null;
 };
 

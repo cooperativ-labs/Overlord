@@ -22,12 +22,17 @@ export async function handleGetDevice(supabase: SupabaseClient, args: any, ctx: 
     typeof args?.deviceHostname === 'string' ? args.deviceHostname.trim() : null;
   const devicePlatform =
     typeof args?.devicePlatform === 'string' ? args.devicePlatform.trim() : null;
+  const devicePort =
+    typeof args?.devicePort === 'number' && Number.isFinite(args.devicePort)
+      ? args.devicePort
+      : null;
 
   const deviceId = await upsertDeviceFromProtocol(supabase, {
     organizationId: ctx.organizationId,
     userId: ctx.userId,
     deviceFingerprint,
     hostname: deviceHostname,
+    port: devicePort,
     platform: devicePlatform
   });
 

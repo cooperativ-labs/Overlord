@@ -1670,7 +1670,8 @@ async function protocolGetDevice(args) {
   const body = {
     deviceFingerprint,
     ...(flags['device-hostname'] ? { deviceHostname: String(flags['device-hostname']) } : {}),
-    ...(flags['device-platform'] ? { devicePlatform: String(flags['device-platform']) } : {})
+    ...(flags['device-platform'] ? { devicePlatform: String(flags['device-platform']) } : {}),
+    ...(flags['device-port'] != null ? { devicePort: Number(flags['device-port']) } : {})
   };
 
   const data = await apiPost(
@@ -1803,7 +1804,8 @@ async function protocolAddProjectResource(args) {
     ...(typeof flags.label === 'string' ? { label: flags.label } : {}),
     ...(flags['is-primary'] === true || flags['is-primary'] === 'true' ? { isPrimary: true } : {}),
     ...(flags['device-hostname'] ? { deviceHostname: String(flags['device-hostname']) } : {}),
-    ...(flags['device-platform'] ? { devicePlatform: String(flags['device-platform']) } : {})
+    ...(flags['device-platform'] ? { devicePlatform: String(flags['device-platform']) } : {}),
+    ...(flags['device-port'] != null ? { devicePort: Number(flags['device-port']) } : {})
   };
 
   const data = await apiPost(
@@ -2970,6 +2972,7 @@ get-device:
   Optional:
     --device-hostname <name>
     --device-platform <platform>  (darwin|linux|windows)
+    --device-port <port>          SSH port for placeholder reconciliation
 
 update-device:
   Required:
@@ -2992,6 +2995,7 @@ add-project-resource:
     --is-primary               Mark as primary directory for this device+project
     --device-hostname <name>
     --device-platform <platform>
+    --device-port <port>       SSH port for placeholder reconciliation
 
 update-project-resource:
   Required:

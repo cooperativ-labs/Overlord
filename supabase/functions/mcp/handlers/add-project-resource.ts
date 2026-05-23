@@ -28,6 +28,10 @@ export async function handleAddProjectResource(
     typeof args?.deviceHostname === 'string' ? args.deviceHostname.trim() : null;
   const devicePlatform =
     typeof args?.devicePlatform === 'string' ? args.devicePlatform.trim() : null;
+  const devicePort =
+    typeof args?.devicePort === 'number' && Number.isFinite(args.devicePort)
+      ? args.devicePort
+      : null;
 
   // Verify project belongs to the organization
   const { data: project } = await supabase
@@ -44,6 +48,7 @@ export async function handleAddProjectResource(
     userId: ctx.userId,
     deviceFingerprint,
     hostname: deviceHostname,
+    port: devicePort,
     platform: devicePlatform
   });
 

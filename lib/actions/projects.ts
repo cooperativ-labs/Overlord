@@ -518,36 +518,60 @@ async function clearProjectSshTargets(
     projectId: string;
   }
 ): Promise<void> {
-  const { data: credentials } = await (supabase as any)
-    .from('execution_target_ssh_credentials')
-    .select('execution_target_id')
-    .eq('user_id', input.userId);
-
-  const targetIds = [
-    ...new Set(
-      (credentials ?? [])
-        .map((row: { execution_target_id?: string | null }) => row.execution_target_id)
-        .filter((id: string | null | undefined): id is string => Boolean(id))
-    )
-  ];
-  if (targetIds.length === 0) return;
-
   const { data: projectTargets } = await (supabase as any)
     .from('project_execution_targets')
-    .select('execution_target_id')
-    .eq('project_id', input.projectId)
-    .in('execution_target_id', targetIds);
+    .select('execution_target_id, execution_targets!inner(transport)')
+    .eq('project_id', input.projectId);
 
-  const projectTargetIds = (projectTargets ?? [])
-    .map((row: { execution_target_id?: string | null }) => row.execution_target_id)
+  const sshTargetIds = (projectTargets ?? [])
+    .map(
+      (row: {
+        execution_target_id?: string | null;
+        execution_targets?:
+          | { transport?: string | null }
+          | { transport?: string | null }[]
+          | null;
+      }) => {
+        const target = Array.isArray(row.execution_targets)
+          ? row.execution_targets[0]
+          : row.execution_targets;
+        return target?.transport === 'ssh' ? row.execution_target_id : null;
+      }
+    )
     .filter((id: string | null | undefined): id is string => Boolean(id));
-  if (projectTargetIds.length === 0) return;
+
+  if (sshTargetIds.length === 0) return;
+
+  await (supabase as any)
+    .from('project_resource_directories')
+    .delete()
+    .eq('project_id', input.projectId)
+    .in('execution_target_id', sshTargetIds);
+
+  await (supabase as any)
+    .from('project_execution_targets')
+    .delete()
+    .eq('project_id', input.projectId)
+    .in('execution_target_id', sshTargetIds);
+
+  const { data: remainingLinks } = await (supabase as any)
+    .from('project_execution_targets')
+    .select('execution_target_id')
+    .in('execution_target_id', sshTargetIds);
+
+  const stillReferenced = new Set(
+    (remainingLinks ?? [])
+      .map((row: { execution_target_id?: string | null }) => row.execution_target_id)
+      .filter((id: string | null | undefined): id is string => Boolean(id))
+  );
+  const orphanedTargetIds = sshTargetIds.filter(targetId => !stillReferenced.has(targetId));
+  if (orphanedTargetIds.length === 0) return;
 
   await (supabase as any)
     .from('execution_target_ssh_credentials')
     .delete()
     .eq('user_id', input.userId)
-    .in('execution_target_id', projectTargetIds);
+    .in('execution_target_id', orphanedTargetIds);
 }
 
 export async function moveProjectToOrganizationAction(input: {
