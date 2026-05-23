@@ -54,11 +54,13 @@ export async function handleUpdateProjectResource(
     rawLabel === null ? null : typeof rawLabel === 'string' ? rawLabel.trim() || null : undefined;
 
   if (isPrimary) {
+    // A device has at most one primary resource — clear by device, not project.
     await supabase
       .from('project_resource_directories')
       .update({ is_primary: false })
       .eq('user_id', ctx.userId)
-      .eq('project_id', (existing as any).project_id);
+      .eq('device_id', (device as any).id)
+      .neq('id', resourceId);
   }
 
   const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };

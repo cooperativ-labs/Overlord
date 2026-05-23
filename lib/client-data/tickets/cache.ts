@@ -11,12 +11,7 @@ import {
   reconcileRemovedTicket,
   updateTicketFields
 } from './board-reducers';
-import type {
-  BoardStatus,
-  BoardTicket,
-  TicketBoardState,
-  TicketRowSource
-} from './board-types';
+import type { BoardStatus, BoardTicket, TicketBoardState, TicketRowSource } from './board-types';
 
 export type BoardEntry = [readonly unknown[], TicketBoardState];
 

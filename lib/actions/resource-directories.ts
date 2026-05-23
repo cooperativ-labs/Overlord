@@ -237,8 +237,6 @@ export async function setResourceDirectoryPrimaryAction(input: {
   directoryId: string;
   projectId: string;
 }): Promise<void> {
-  await ensureDesktopMutationAllowed();
-
   const supabase = await createClientForRequest();
   const {
     data: { user }

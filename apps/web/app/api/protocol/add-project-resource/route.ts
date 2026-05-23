@@ -50,13 +50,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Failed to register device.' }, { status: 500 });
     }
 
-    // Clear existing primary if setting this one as primary
+    // Clear existing primary on this device (a device has exactly one primary
+    // resource, but may be primary for multiple projects across devices).
     if (isPrimary) {
       await supabase
         .from('project_resource_directories')
         .update({ is_primary: false })
         .eq('user_id', userId)
-        .eq('project_id', projectId);
+        .eq('device_id', deviceId);
     }
 
     const { data: inserted, error } = await supabase

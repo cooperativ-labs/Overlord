@@ -393,7 +393,7 @@ ${buildLocalLaunchNote(context)}
 ovld protocol attach --ticket-id ${ticketId}
 \`\`\`
 
-Prints response JSON to stdout. Store \`session.sessionKey\` — required for every subsequent call. Response also includes \`ticket\`, \`history\` (deliver events), \`artifacts\`, and \`sharedState\`.
+Prints response JSON to stdout. The CLI automatically persists the session key for subsequent calls in the same working directory. If auto-resolution fails, pass \`--session-key <sessionKey>\` explicitly. The response also includes \`ticket\`, \`history\` (deliver events), \`artifacts\`, and \`sharedState\`.
 \`promptContext\` is also returned as a ready-to-use assembled context block.
 
 ### 2 — Update (after each meaningful step)
@@ -562,6 +562,8 @@ ${mcpSection}
 \`\`\`json
 ${generateAttachPayloadExample(ticketId)}
 \`\`\`
+
+The response includes \`session.sessionKey\` — a string you **must** include as \`sessionKey\` in every subsequent tool call (update, deliver, ask, etc.). Extract it immediately and reuse it for the entire session.
 
 ### 2 — update (after each meaningful step)
 

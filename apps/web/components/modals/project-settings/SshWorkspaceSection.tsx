@@ -180,8 +180,10 @@ export function SshWorkspaceSection({
     <div className="grid gap-2">
       <label className="text-xs font-medium text-muted-foreground">SSH / Remote workspace</label>
       <p className="text-xs text-muted-foreground">
-        Saves SSH preferences for CLI and mobile. The Overlord desktop app uses a local folder only;
-        use <code className="rounded bg-muted px-1">ovld</code> on the remote host for agent runs.
+        Saves SSH preferences for CLI and mobile. The remote directory is added to this project's
+        resource manifest as the primary folder for the SSH host — when{' '}
+        <code className="rounded bg-muted px-1">ovld</code> actually runs on the remote machine, it
+        operates out of that folder automatically.
       </p>
       <div className="grid gap-2">
         <div className="grid gap-2 sm:grid-cols-[1fr_120px]">

@@ -250,7 +250,6 @@ describe('waiting questions', () => {
   });
 });
 
-
 describe('updateTicketFields and markTicketRead', () => {
   it('field updates are no-ops for unknown tickets', () => {
     const state = freshState();

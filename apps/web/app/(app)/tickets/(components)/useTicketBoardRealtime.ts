@@ -3,203 +3,22 @@
 import type { QueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { removeTicketFromBoards } from '@/lib/client-data/tickets/cache';
 import {
-  mergeTicketsIntoBoards,
-  mergeWaitingQuestionIntoBoards,
-  reconcileRealtimeTicketRow,
-  removeTicketFromBoards,
-  updateTicketInBoards
-} from '@/lib/client-data/tickets/cache';
-import { parseObjectiveAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
-import {
-  TICKET_CREATED_EVENT,
-  TICKET_CREATED_STORAGE_KEY,
   TICKET_DELETED_EVENT,
-  type TicketCreatedEventDetail,
   type TicketDeletedEventDetail
 } from '@/lib/helpers/ticket-board-events';
 import {
   getOpenedWaitingTimestamps,
   getWaitingRaisedWhileOpenMap,
   hasUnopenedTimestamp,
-  markTicketWaitingRaised,
   type TicketOpenedTimestamps,
   type TicketRaisedWhileOpenMap
 } from '@/lib/helpers/ticket-waiting-response';
-import { createClient } from '@/supabase/utils/client';
-import type { Database } from '@/types/database.types';
 
 import type { Ticket } from './KanbanCard';
-import { toBoardTicket } from './ticket-view-helpers';
-
-type TicketEvent = Database['public']['Tables']['ticket_events']['Row'];
-type AgentSession = Database['public']['Tables']['agent_sessions']['Row'];
-type Objective = Database['public']['Tables']['objectives']['Row'];
-type RealtimeBoardTicketRow = {
-  id: string;
-  title: string | null;
-  due_datetime: string | null;
-  execution_target: Database['public']['Enums']['ticket_execution_target'];
-  status: string;
-  priority: string;
-  delegate: string | null;
-  is_read: boolean;
-  updated_at: string;
-  board_position: number;
-  organization_id: number;
-  project_id: string | null;
-  everhour_task_id: string | null;
-  schedule_id: number | null;
-  organization: { name: string } | Array<{ name: string }> | null;
-  project:
-    | { name: string; color: string; everhour_project_id: string | null }
-    | Array<{ name: string; color: string; everhour_project_id: string | null }>
-    | null;
-};
-
-const WAITING_SOUND_PATH = '/sounds/notification-question.mp3';
-const REVIEW_SOUND_PATH = '/sounds/notification-complete.mp3';
-const ALERT_SOUND_PATH = '/sounds/notification-complete.mp3';
-
-function sendDesktopNotification(title: string, body: string): void {
-  if (window.electronAPI?.app?.notify) {
-    void window.electronAPI.app.notify(title, body);
-    return;
-  }
-  if (typeof Notification === 'undefined') return;
-  if (Notification.permission === 'granted') {
-    new Notification(title, { body, icon: '/images/favicon.png' });
-  } else if (Notification.permission === 'default') {
-    void Notification.requestPermission().then(permission => {
-      if (permission === 'granted') {
-        new Notification(title, { body, icon: '/images/favicon.png' });
-      }
-    });
-  }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function getObjectivePayloadTicketId(value: unknown): string | null {
-  if (!isRecord(value)) return null;
-  return typeof value.ticket_id === 'string' ? value.ticket_id : null;
-}
-
-function getObjectivePayloadId(value: unknown): string | null {
-  if (!isRecord(value)) return null;
-  return typeof value.id === 'string' ? value.id : null;
-}
-
-function getSessionPayloadObjectiveId(value: unknown): string | null {
-  if (!isRecord(value)) return null;
-  return typeof value.objective_id === 'string' ? value.objective_id : null;
-}
-
-function getSingleRelation<T>(relation: T | T[] | null | undefined): T | null {
-  if (!relation) return null;
-  return Array.isArray(relation) ? (relation[0] ?? null) : relation;
-}
-
-function mapRealtimeBoardTicketRow(row: RealtimeBoardTicketRow): Ticket {
-  const project = getSingleRelation(row.project);
-  const organization = getSingleRelation(row.organization);
-
-  return {
-    id: row.id,
-    title: row.title,
-    objective: null,
-    organization_id: row.organization_id,
-    project_id: row.project_id,
-    project_name: project?.name ?? null,
-    project_color: project?.color ?? null,
-    project_everhour_project_id: project?.everhour_project_id ?? null,
-    everhour_task_id: row.everhour_task_id,
-    agent_session_state: null,
-    running_agent: null,
-    latest_objective_agent: null,
-    has_executing_objective: false,
-    status: row.status,
-    priority: row.priority,
-    execution_target: row.execution_target,
-    assigned_agent: null,
-    board_position: row.board_position,
-    organization_name: organization?.name ?? null,
-    waiting_for_response_at: null,
-    has_unopened_waiting_response: false,
-    is_read: row.is_read,
-    objectives_executed_count: 0,
-    updated_at: row.updated_at,
-    delegate: row.delegate,
-    schedule_id: row.schedule_id,
-    due_datetime: row.due_datetime
-  };
-}
-
-function getEventMessage(event: TicketEvent): string {
-  const summary = event.summary?.trim();
-  if (summary) return summary;
-
-  const payload = isRecord(event.payload) ? event.payload : {};
-  const payloadMessage = typeof payload.message === 'string' ? payload.message.trim() : '';
-  if (payloadMessage) return payloadMessage;
-
-  return 'An agent is waiting for your response.';
-}
-
-function toWaitingByTicket(tickets: Ticket[]): Record<string, string> {
-  return tickets.reduce<Record<string, string>>((acc, ticket) => {
-    if (ticket.waiting_for_response_at) {
-      acc[ticket.id] = ticket.waiting_for_response_at;
-    }
-    return acc;
-  }, {});
-}
-
-function mergeWaitingByTicket(
-  current: Record<string, string>,
-  incoming: Ticket[]
-): Record<string, string> {
-  if (incoming.length === 0) return current;
-
-  const next = { ...current };
-  for (const ticket of incoming) {
-    if (ticket.waiting_for_response_at) {
-      next[ticket.id] = ticket.waiting_for_response_at;
-    } else {
-      delete next[ticket.id];
-    }
-  }
-
-  return next;
-}
-
-function getTopBoardPositionForStatus(
-  tickets: Ticket[],
-  status: string,
-  excludeTicketId?: string
-): number {
-  let minBoardPosition = Number.POSITIVE_INFINITY;
-
-  for (const ticket of tickets) {
-    if (ticket.status !== status || ticket.id === excludeTicketId) continue;
-    minBoardPosition = Math.min(minBoardPosition, ticket.board_position);
-  }
-
-  return Number.isFinite(minBoardPosition) ? minBoardPosition - 1 : 0;
-}
-
-function isTicketCreatedDetail(value: unknown): value is TicketCreatedEventDetail {
-  if (typeof value !== 'object' || value === null) return false;
-
-  const detail = value as Record<string, unknown>;
-  return (
-    typeof detail.ticketId === 'string' &&
-    typeof detail.organizationId === 'number' &&
-    (typeof detail.projectId === 'string' || detail.projectId === null)
-  );
-}
+import { initAudioRefs, mergeWaitingByTicket, toWaitingByTicket } from './realtime-helpers';
+import { setupRealtimeSubscriptions } from './realtime-subscriptions';
 
 export function useTicketBoardRealtime({
   tickets,
@@ -232,6 +51,7 @@ export function useTicketBoardRealtime({
   const ticketIdsRef = useRef<Set<string>>(new Set());
   const ticketsByIdRef = useRef<Map<string, Ticket>>(new Map());
 
+  // Merge waiting indicators into the ticket list for rendering.
   const ticketsWithIndicators = useMemo(
     () =>
       tickets.map(ticket => {
@@ -268,6 +88,7 @@ export function useTicketBoardRealtime({
     waitingByTicketRef.current = waitingByTicket;
   }, [waitingByTicket]);
 
+  // Handle ticket deleted events from other tabs / components.
   useEffect(() => {
     const handleTicketDeleted = (event: Event) => {
       const ticketId = (event as CustomEvent<TicketDeletedEventDetail>).detail?.ticketId;
@@ -279,17 +100,11 @@ export function useTicketBoardRealtime({
     return () => window.removeEventListener(TICKET_DELETED_EVENT, handleTicketDeleted);
   }, [removeTicketFromBoard]);
 
+  // Initialise notification audio elements once.
   useEffect(() => {
-    const waitingAudio = new Audio(WAITING_SOUND_PATH);
-    waitingAudio.preload = 'auto';
+    const { waitingAudio, reviewAudio, alertAudio } = initAudioRefs();
     waitingSoundRef.current = waitingAudio;
-
-    const reviewAudio = new Audio(REVIEW_SOUND_PATH);
-    reviewAudio.preload = 'auto';
     reviewSoundRef.current = reviewAudio;
-
-    const alertAudio = new Audio(ALERT_SOUND_PATH);
-    alertAudio.preload = 'auto';
     alertSoundRef.current = alertAudio;
 
     return () => {
@@ -299,519 +114,28 @@ export function useTicketBoardRealtime({
     };
   }, []);
 
+  // Wire up Supabase realtime channels, DOM listeners, and polling.
   useEffect(() => {
-    let cancelled = false;
-    const supabase = createClient();
-    const fetchRealtimeBoardTicket = async (ticketId: string): Promise<Ticket | null> => {
-      let query = supabase
-        .from('tickets')
-        .select(
-          'id,title,due_datetime,execution_target,status,priority,delegate,is_read,updated_at,board_position,organization_id,project_id,everhour_task_id,schedule_id,organization:organizations(name),project:projects(name,color,everhour_project_id)'
-        )
-        .eq('id', ticketId)
-        .limit(1);
-
-      if (organizationId !== undefined) {
-        query = query.eq('organization_id', organizationId);
+    return setupRealtimeSubscriptions({
+      organizationId,
+      projectId,
+      queryClient,
+      removeTicketFromBoard,
+      refs: {
+        waitingByTicketRef,
+        openTicketIdRef,
+        ticketIdsRef,
+        ticketsByIdRef,
+        waitingSoundRef,
+        reviewSoundRef,
+        alertSoundRef
+      },
+      setters: {
+        setWaitingByTicket,
+        setOpenedWaitingTimestamps,
+        setWaitingRaisedWhileOpen
       }
-
-      if (projectId !== undefined) {
-        query = query.eq('project_id', projectId);
-      }
-
-      const { data, error } = await query.maybeSingle();
-      if (cancelled || error || !data) {
-        return null;
-      }
-
-      return mapRealtimeBoardTicketRow(data as RealtimeBoardTicketRow);
-    };
-
-    const objectiveTicketCache = new Map<string, string>();
-
-    const resolveTicketIdFromObjective = async (objectiveId: string): Promise<string | null> => {
-      const cached = objectiveTicketCache.get(objectiveId);
-      if (cached) return cached;
-      const { data } = await supabase
-        .from('objectives')
-        .select('ticket_id')
-        .eq('id', objectiveId)
-        .maybeSingle();
-      if (data?.ticket_id) {
-        objectiveTicketCache.set(objectiveId, data.ticket_id);
-      }
-      return data?.ticket_id ?? null;
-    };
-
-    const syncObjectiveStateForTicket = async (ticketId: string) => {
-      const [{ data: objectives }, { data: sessions }] = await Promise.all([
-        supabase
-          .from('objectives')
-          .select('state,agent_identifier,assigned_agent')
-          .eq('ticket_id', ticketId)
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('agent_sessions')
-          .select(
-            'session_state,agent_identifier,attached_at,objective:objectives!inner(ticket_id)'
-          )
-          .eq('objective.ticket_id', ticketId)
-          .order('attached_at', { ascending: false })
-          .limit(1)
-      ]);
-
-      if (cancelled || !ticketIdsRef.current.has(ticketId)) return;
-
-      let latestObjectiveAgent: string | null = null;
-      let latestObjectiveAssignedAgent: Objective['assigned_agent'] = null;
-      let executingObjectiveAgent: string | null = null;
-      let executedObjectivesCount = 0;
-
-      for (const objective of (objectives ?? []) as Array<{
-        state: string | null;
-        agent_identifier: string | null;
-        assigned_agent: Objective['assigned_agent'];
-      }>) {
-        if (latestObjectiveAgent === null) {
-          latestObjectiveAgent = objective.agent_identifier ?? null;
-        }
-        if (latestObjectiveAssignedAgent === null) {
-          latestObjectiveAssignedAgent = objective.assigned_agent;
-        }
-        if (objective.state === 'complete') {
-          executedObjectivesCount += 1;
-        }
-        if (
-          objective.state === 'executing' &&
-          objective.agent_identifier &&
-          executingObjectiveAgent === null
-        ) {
-          executingObjectiveAgent = objective.agent_identifier;
-        }
-      }
-
-      const session = (sessions ?? [])[0] as
-        | Pick<AgentSession, 'session_state' | 'agent_identifier'>
-        | undefined;
-      const isAttached = session?.session_state === 'attached';
-
-      updateTicketInBoards(queryClient, ticketId, {
-        agent_session_state: session?.session_state ?? null,
-        latest_objective_agent: latestObjectiveAgent,
-        assigned_agent: parseObjectiveAssignedAgent(latestObjectiveAssignedAgent),
-        running_agent: executingObjectiveAgent ?? (isAttached ? session.agent_identifier : null),
-        has_executing_objective: executingObjectiveAgent !== null,
-        objectives_executed_count: executedObjectivesCount
-      });
-    };
-
-    const syncBoardData = async () => {
-      const ticketIds = [...ticketIdsRef.current];
-      if (ticketIds.length === 0) return;
-
-      const [
-        { data: sessions },
-        { data: waitingQuestions },
-        { data: ticketUpdates },
-        { data: objectives }
-      ] = await Promise.all([
-        supabase
-          .from('agent_sessions')
-          .select(
-            'session_state,agent_identifier,attached_at,objective:objectives!inner(ticket_id)'
-          )
-          .in('objective.ticket_id', ticketIds)
-          .order('attached_at', { ascending: false }),
-        supabase
-          .from('ticket_events')
-          .select('ticket_id,created_at')
-          .in('ticket_id', ticketIds)
-          .eq('event_type', 'question')
-          .eq('is_blocking', true)
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('tickets')
-          .select('id,status,title,delegate,is_read,board_position,updated_at')
-          .in('id', ticketIds),
-        supabase
-          .from('objectives')
-          .select('ticket_id,state,agent_identifier,assigned_agent')
-          .in('ticket_id', ticketIds)
-          .order('created_at', { ascending: false })
-      ]);
-
-      if (cancelled) return;
-
-      const latestObjectiveAgentByTicket = new Map<string, string | null>();
-      const latestObjectiveAssignedAgentByTicket = new Map<string, Objective['assigned_agent']>();
-      const executingObjectiveAgentByTicket = new Map<string, string>();
-      const executedObjectivesCountByTicket = new Map<string, number>();
-      const sessionByTicket = new Map<
-        string,
-        Pick<AgentSession, 'session_state' | 'agent_identifier'>
-      >();
-      for (const session of sessions ?? []) {
-        const ticketId = (session.objective as unknown as { ticket_id: string })?.ticket_id;
-        if (!ticketId || sessionByTicket.has(ticketId)) continue;
-        sessionByTicket.set(ticketId, session);
-      }
-
-      const ticketUpdateMap = new Map(
-        (
-          (ticketUpdates ?? []) as Array<{
-            id: string;
-            status: string | null;
-            title: string | null;
-            delegate: string | null;
-            is_read: boolean;
-            board_position: number;
-            updated_at: string;
-          }>
-        ).map(ticket => [ticket.id, ticket])
-      );
-
-      for (const objective of (objectives ?? []) as Array<{
-        ticket_id: string;
-        state: string | null;
-        agent_identifier: string | null;
-        assigned_agent: Objective['assigned_agent'];
-      }>) {
-        if (!latestObjectiveAgentByTicket.has(objective.ticket_id)) {
-          latestObjectiveAgentByTicket.set(objective.ticket_id, objective.agent_identifier ?? null);
-        }
-        if (!latestObjectiveAssignedAgentByTicket.has(objective.ticket_id)) {
-          latestObjectiveAssignedAgentByTicket.set(objective.ticket_id, objective.assigned_agent);
-        }
-        if (objective.state === 'complete') {
-          executedObjectivesCountByTicket.set(
-            objective.ticket_id,
-            (executedObjectivesCountByTicket.get(objective.ticket_id) ?? 0) + 1
-          );
-        }
-        if (
-          objective.state === 'executing' &&
-          objective.agent_identifier &&
-          !executingObjectiveAgentByTicket.has(objective.ticket_id)
-        ) {
-          executingObjectiveAgentByTicket.set(objective.ticket_id, objective.agent_identifier);
-        }
-      }
-
-      for (const ticket of ticketsByIdRef.current.values()) {
-        const update = ticketUpdateMap.get(ticket.id);
-        if (!update) continue;
-        const session = sessionByTicket.get(ticket.id);
-        const isAttached = session?.session_state === 'attached';
-        const runningAgent =
-          executingObjectiveAgentByTicket.get(ticket.id) ??
-          (isAttached ? session.agent_identifier : null);
-        updateTicketInBoards(queryClient, ticket.id, {
-          status: update.status ?? ticket.status,
-          title: update.title ?? ticket.title,
-          is_read: update.is_read ?? ticket.is_read,
-          board_position: update.board_position ?? ticket.board_position,
-          updated_at: update.updated_at ?? ticket.updated_at,
-          latest_objective_agent:
-            latestObjectiveAgentByTicket.get(ticket.id) ?? ticket.latest_objective_agent,
-          assigned_agent:
-            parseObjectiveAssignedAgent(
-              latestObjectiveAssignedAgentByTicket.get(ticket.id) ?? null
-            ) ?? ticket.assigned_agent,
-          delegate: update.delegate,
-          agent_session_state: session?.session_state ?? ticket.agent_session_state ?? null,
-          running_agent: runningAgent,
-          has_executing_objective: executingObjectiveAgentByTicket.has(ticket.id),
-          objectives_executed_count:
-            executedObjectivesCountByTicket.get(ticket.id) ?? ticket.objectives_executed_count ?? 0
-        });
-      }
-
-      const nextWaitingByTicket = { ...waitingByTicketRef.current };
-      const raisedWaitingTicketIds: string[] = [];
-      let waitingChanged = false;
-      for (const question of (waitingQuestions ?? []) as {
-        ticket_id: string;
-        created_at: string;
-      }[]) {
-        if (
-          !nextWaitingByTicket[question.ticket_id] ||
-          Date.parse(question.created_at) > Date.parse(nextWaitingByTicket[question.ticket_id])
-        ) {
-          nextWaitingByTicket[question.ticket_id] = question.created_at;
-          mergeWaitingQuestionIntoBoards(queryClient, question);
-          raisedWaitingTicketIds.push(question.ticket_id);
-          waitingChanged = true;
-        }
-      }
-      if (waitingChanged) {
-        setWaitingByTicket(nextWaitingByTicket);
-        for (const ticketId of raisedWaitingTicketIds) {
-          markTicketWaitingRaised(ticketId, openTicketIdRef.current === ticketId);
-        }
-        setOpenedWaitingTimestamps(getOpenedWaitingTimestamps());
-        setWaitingRaisedWhileOpen(getWaitingRaisedWhileOpenMap());
-      }
-    };
-
-    const handleCreatedTicketSignal = (detail: TicketCreatedEventDetail) => {
-      if (organizationId !== undefined && detail.organizationId !== organizationId) return;
-      if (projectId !== undefined && detail.projectId !== projectId) return;
-
-      void (async () => {
-        const ticket = await fetchRealtimeBoardTicket(detail.ticketId);
-        if (!ticket) return;
-        mergeTicketsIntoBoards(queryClient, [toBoardTicket(ticket)], 'realtime');
-        setWaitingByTicket(previous => mergeWaitingByTicket(previous, [ticket]));
-      })();
-    };
-
-    const handleQuestionEvent = (event: TicketEvent) => {
-      if (!event.is_blocking) return;
-      if (!ticketIdsRef.current.has(event.ticket_id)) return;
-      mergeWaitingQuestionIntoBoards(queryClient, event);
-
-      setWaitingByTicket(previous => {
-        const existing = previous[event.ticket_id];
-        if (existing && Date.parse(existing) >= Date.parse(event.created_at)) {
-          return previous;
-        }
-        return { ...previous, [event.ticket_id]: event.created_at };
-      });
-      markTicketWaitingRaised(event.ticket_id, openTicketIdRef.current === event.ticket_id);
-      setOpenedWaitingTimestamps(getOpenedWaitingTimestamps());
-      setWaitingRaisedWhileOpen(getWaitingRaisedWhileOpenMap());
-
-      const ticket = ticketsByIdRef.current.get(event.ticket_id);
-      const title = ticket?.title?.trim()
-        ? `Agent waiting: ${ticket.title.trim()}`
-        : 'Agent waiting for response';
-
-      sendDesktopNotification(title, getEventMessage(event));
-
-      const waitingSound = waitingSoundRef.current;
-      if (waitingSound) {
-        waitingSound.currentTime = 0;
-        void waitingSound.play().catch(() => undefined);
-      }
-    };
-
-    const handleStatusChangeEvent = (event: TicketEvent) => {
-      if (!event.phase) return;
-      if (!ticketIdsRef.current.has(event.ticket_id)) return;
-
-      const shouldMoveToTopOfReview = event.phase === 'review' && event.objective_id !== null;
-      const existingTicket = ticketsByIdRef.current.get(event.ticket_id);
-      updateTicketInBoards(queryClient, event.ticket_id, {
-        status: event.phase,
-        board_position:
-          shouldMoveToTopOfReview && existingTicket
-            ? getTopBoardPositionForStatus(
-                [...ticketsByIdRef.current.values()],
-                event.phase,
-                event.ticket_id
-              )
-            : existingTicket?.board_position,
-        updated_at: event.created_at ?? existingTicket?.updated_at,
-        ...(openTicketIdRef.current !== event.ticket_id ? { is_read: false } : {})
-      });
-
-      if (event.phase !== 'review') return;
-
-      const reviewSound = reviewSoundRef.current;
-      if (reviewSound) {
-        reviewSound.currentTime = 0;
-        void reviewSound.play().catch(() => undefined);
-      }
-
-      const reviewTicket = ticketsByIdRef.current.get(event.ticket_id);
-      const reviewTitle = reviewTicket?.title?.trim()
-        ? `Ready for review: ${reviewTicket.title.trim()}`
-        : 'Ticket moved to review';
-      sendDesktopNotification(reviewTitle, 'The agent has delivered this ticket.');
-    };
-
-    const handleAlertEvent = (event: TicketEvent) => {
-      if (!ticketIdsRef.current.has(event.ticket_id)) return;
-
-      const ticket = ticketsByIdRef.current.get(event.ticket_id);
-      const title = ticket?.title?.trim()
-        ? `Agent alert: ${ticket.title.trim()}`
-        : 'Agent alert';
-
-      sendDesktopNotification(title, getEventMessage(event));
-
-      const alertSound = alertSoundRef.current;
-      if (alertSound) {
-        alertSound.currentTime = 0;
-        void alertSound.play().catch(() => undefined);
-      }
-    };
-
-    const handleTicketCreated = (event: Event) => {
-      const detail = (event as CustomEvent<TicketCreatedEventDetail>).detail;
-      if (!detail) return;
-      handleCreatedTicketSignal(detail);
-    };
-
-    const handleStorage = (event: StorageEvent) => {
-      if (event.key !== TICKET_CREATED_STORAGE_KEY || !event.newValue) return;
-      try {
-        const parsed: unknown = JSON.parse(event.newValue);
-        if (!isTicketCreatedDetail(parsed)) return;
-        handleCreatedTicketSignal(parsed);
-      } catch {
-        // Ignore malformed storage payloads.
-      }
-    };
-
-    // Use a stable channel name (no ticket-set size) so the channel survives
-    // ticket additions/removals — otherwise we tear down and rebuild on every
-    // ticket-set change and miss INSERTs during the gap.
-    let channel = supabase.channel(
-      `tickets-realtime:${organizationId ?? 'all'}:${projectId ?? 'all'}`
-    );
-
-    // Subscribe once at the schema level for ticket_events / agent_sessions /
-    // objectives instead of attaching one filtered listener per ticket.
-    // Per-ticket filters scaled linearly with the visible ticket count and hit
-    // Supabase Realtime's per-channel filter limits, dropping events silently
-    // under load. RLS still gates row visibility; we filter to the visible
-    // ticket set client-side via ticketIdsRef.
-    channel = channel
-      .on<TicketEvent>(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'ticket_events' },
-        payload => {
-          const event = payload.new;
-          if (!ticketIdsRef.current.has(event.ticket_id)) return;
-          if (event.event_type === 'question') {
-            handleQuestionEvent(event);
-            return;
-          }
-          if (event.event_type === 'status_change') {
-            handleStatusChangeEvent(event);
-            return;
-          }
-          if (event.event_type === 'alert') {
-            handleAlertEvent(event);
-          }
-        }
-      )
-      // Both agent_sessions and objectives drive the same fields on a board
-      // ticket (agent_session_state, running_agent, latest_objective_agent,
-      // assigned_agent, has_executing_objective, objectives_executed_count).
-      // Rather than maintain two separate partial-update paths, we resolve
-      // each change to its ticket_id and trigger a single authoritative
-      // re-read via syncObjectiveStateForTicket.
-      .on<AgentSession>(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'agent_sessions' },
-        payload => {
-          const objectiveId =
-            getSessionPayloadObjectiveId(payload.new) ??
-            getSessionPayloadObjectiveId(payload.old);
-          if (!objectiveId) return;
-          void (async () => {
-            const ticketId = await resolveTicketIdFromObjective(objectiveId);
-            if (!ticketId || !ticketIdsRef.current.has(ticketId)) return;
-            await syncObjectiveStateForTicket(ticketId);
-          })();
-        }
-      )
-      .on<Objective>(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'objectives' },
-        payload => {
-          const changedTicketId =
-            getObjectivePayloadTicketId(payload.new) ?? getObjectivePayloadTicketId(payload.old);
-          if (!changedTicketId) return;
-          // Keep the objective→ticket cache warm so agent_sessions events
-          // that arrive before we've ever loaded the objective resolve from
-          // memory instead of issuing an extra round trip.
-          const objectiveId =
-            getObjectivePayloadId(payload.new) ?? getObjectivePayloadId(payload.old);
-          if (objectiveId) {
-            objectiveTicketCache.set(objectiveId, changedTicketId);
-          }
-          if (!ticketIdsRef.current.has(changedTicketId)) return;
-          void syncObjectiveStateForTicket(changedTicketId);
-        }
-      )
-      .on<Database['public']['Tables']['tickets']['Row']>(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'tickets',
-          ...(organizationId ? { filter: `organization_id=eq.${organizationId}` } : {})
-        },
-        payload => {
-          const inserted = payload.new;
-          if (projectId && inserted.project_id !== projectId) return;
-
-          void (async () => {
-            const ticket = await fetchRealtimeBoardTicket(inserted.id);
-            if (!ticket) return;
-            mergeTicketsIntoBoards(queryClient, [toBoardTicket(ticket)], 'realtime');
-            setWaitingByTicket(previous => mergeWaitingByTicket(previous, [ticket]));
-          })();
-        }
-      )
-      .on<Database['public']['Tables']['tickets']['Row']>(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'tickets',
-          ...(organizationId ? { filter: `organization_id=eq.${organizationId}` } : {})
-        },
-        payload => {
-          const updated = payload.new;
-          if (!ticketIdsRef.current.has(updated.id)) return;
-          reconcileRealtimeTicketRow(queryClient, {
-            id: updated.id,
-            status: updated.status ?? undefined,
-            title: updated.title,
-            is_read: updated.is_read,
-            board_position: updated.board_position,
-            updated_at: updated.updated_at,
-            delegate: updated.delegate
-          });
-        }
-      )
-      .on<Database['public']['Tables']['tickets']['Row']>(
-        'postgres_changes',
-        { event: 'DELETE', schema: 'public', table: 'tickets' },
-        payload => {
-          const deletedId = payload.old.id;
-          if (!deletedId || !ticketIdsRef.current.has(deletedId)) return;
-          removeTicketFromBoard(deletedId);
-        }
-      )
-      .subscribe(status => {
-        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-          void syncBoardData();
-        }
-      });
-
-    window.addEventListener(TICKET_CREATED_EVENT, handleTicketCreated);
-    window.addEventListener('storage', handleStorage);
-
-    // Safety net: even when the channel reports SUBSCRIBED, Realtime can
-    // silently drop events (e.g. transient backend hiccups, network proxies,
-    // sleeping tabs). Reconcile every 30s so the board never strands on a
-    // stale state for more than that long.
-    const pollId = window.setInterval(() => {
-      void syncBoardData();
-    }, 30_000);
-
-    return () => {
-      cancelled = true;
-      window.clearInterval(pollId);
-      window.removeEventListener(TICKET_CREATED_EVENT, handleTicketCreated);
-      window.removeEventListener('storage', handleStorage);
-      void supabase.removeChannel(channel);
-    };
+    });
   }, [organizationId, projectId, queryClient, removeTicketFromBoard]);
 
   const mergeWaitingFromLoadedTickets = useCallback((incoming: Ticket[]) => {

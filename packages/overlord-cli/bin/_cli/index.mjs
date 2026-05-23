@@ -32,6 +32,7 @@ Usage:
   ${primaryCommand} attach [ticketId] [agent]  Search tickets and launch an agent (interactive)
   ${primaryCommand} create "<objective>"       Create a ticket with numbered project selection; supports --agent/--model/--delegate
   ${primaryCommand} prompt "<objective>"       Create a ticket, then launch an agent on it
+  ${primaryCommand} add-cwd                   Register the current directory as a project resource (interactive)
   ${primaryCommand} auth <subcommand>          Login, logout, repair, or check auth status
   ${primaryCommand} tickets <subcommand>       Create or list tickets
   ${primaryCommand} ticket <subcommand>        Work with a single ticket
@@ -102,6 +103,12 @@ export async function runCli({ primaryCommand }) {
   if (command === 'prompt') {
     const { runPromptCommand } = await import('./new-ticket.mjs');
     await runPromptCommand(rest);
+    return;
+  }
+
+  if (command === 'add-cwd') {
+    const { runAddCwdCommand } = await import('./add-cwd.mjs');
+    await runAddCwdCommand(rest);
     return;
   }
 

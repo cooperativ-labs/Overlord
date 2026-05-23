@@ -179,7 +179,7 @@ export function ProjectSettingsSection({
               </Button>
             ) : null}
           </div>
-          {isElectron && <ProjectExecutionWorkspaceSelector projectId={projectId} />}
+          <ProjectExecutionWorkspaceSelector projectId={projectId} />
 
           {isElectron && (
             <div className="ml-auto flex flex-wrap items-center justify-end gap-2 ">

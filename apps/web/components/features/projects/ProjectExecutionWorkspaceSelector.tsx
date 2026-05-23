@@ -1,6 +1,6 @@
 'use client';
 
-import { ChevronDown, Folder, FolderOpen, Loader2 } from 'lucide-react';
+import { Check, ChevronDown, Folder, FolderOpen, Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -11,13 +11,13 @@ import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 import {
   getProjectResourceDirectoriesAction,
-  type ProjectResourceDirectory
+  type ProjectResourceDirectory,
+  setResourceDirectoryPrimaryAction
 } from '@/lib/actions/resource-directories';
 import { cn } from '@/lib/utils';
 import type { SshConnectionConfig } from '@/lib/workspace/types';
@@ -67,6 +67,7 @@ export function ProjectExecutionWorkspaceSelector({
   const [sshWarningPath, setSshWarningPath] = useState('');
   const [sshWarningError, setSshWarningError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [switchingId, setSwitchingId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -237,6 +238,28 @@ export function ProjectExecutionWorkspaceSelector({
     projectId
   ]);
 
+  async function handleSetPrimary(resource: ProjectResourceDirectory) {
+    if (resource.isPrimary || switchingId) return;
+    setSwitchingId(resource.id);
+    try {
+      await setResourceDirectoryPrimaryAction({
+        directoryId: resource.id,
+        projectId
+      });
+      setResources(prev =>
+        prev.map(r => ({
+          ...r,
+          isPrimary: r.id === resource.id
+        }))
+      );
+      toast.success(`Switched execution to ${resourceTitle(resource)}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to switch execution location.');
+    } finally {
+      setSwitchingId(null);
+    }
+  }
+
   async function handleRevealInFinder(directoryPath: string) {
     if (!api?.app?.revealFile) return;
 
@@ -250,6 +273,9 @@ export function ProjectExecutionWorkspaceSelector({
   if (!projectSettings) return null;
   const ps = projectSettings;
 
+  const primaryResource = resources.find(r => r.isPrimary);
+  const primaryLabel = primaryResource ? resourceTitle(primaryResource) : null;
+
   return (
     <>
       <DropdownMenu>
@@ -262,8 +288,8 @@ export function ProjectExecutionWorkspaceSelector({
                 ? 'border-border'
                 : 'border-dashed border-muted-foreground/60'
             )}
-            aria-label="Project resources"
-            title="Resource directories registered for this project"
+            aria-label="Execution location"
+            title="Switch execution location for this project"
           >
             {loading ? (
               <Loader2 className="h-3 w-3 animate-spin" />
@@ -273,9 +299,11 @@ export function ProjectExecutionWorkspaceSelector({
             <span className="max-w-[12rem] truncate sm:max-w-[16rem]">
               {loading
                 ? 'Resources'
-                : resources.length === 0
-                  ? 'Resources'
-                  : `${resources.length} resource${resources.length === 1 ? '' : 's'}`}
+                : primaryLabel
+                  ? primaryLabel
+                  : resources.length === 0
+                    ? 'No workspace'
+                    : `${resources.length} resource${resources.length === 1 ? '' : 's'}`}
             </span>
             <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground/80" />
           </button>
@@ -285,15 +313,14 @@ export function ProjectExecutionWorkspaceSelector({
           className="w-96 max-h-[min(24rem,70vh)] overflow-y-auto p-0"
         >
           <div className="border-b px-3 py-2">
-            <p className="text-xs font-medium text-foreground">Project resources</p>
+            <p className="text-xs font-medium text-foreground">Execution location</p>
             <p className="text-[11px] text-muted-foreground">
-              Rows marked &quot;this device&quot; match your Overlord Desktop fingerprint when
-              Electron provides it (hostname fallback if not). Listed paths may be verified on disk
-              when the desktop agent API is available.
+              Select which resource directory to use as the primary execution location for this
+              project.
             </p>
           </div>
           {loading ? (
-            <div className="px-3 py-4 text-xs text-muted-foreground">Loading…</div>
+            <div className="px-3 py-4 text-xs text-muted-foreground">Loading...</div>
           ) : resources.length === 0 ? (
             <div className="px-3 py-4 text-xs italic text-muted-foreground">
               No resource directories yet. Add one in project settings.
@@ -308,76 +335,102 @@ export function ProjectExecutionWorkspaceSelector({
                     : undefined;
                 const otherLabel =
                   resource.deviceLabel?.trim() || resource.deviceHostname?.trim() || 'Other device';
+                const isSwitching = switchingId === resource.id;
                 return (
-                  <li
-                    key={resource.id}
-                    className="flex gap-2 border-b border-border/60 px-3 py-2 text-xs last:border-b-0"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className="truncate font-medium text-foreground"
+                  <li key={resource.id}>
+                    <button
+                      type="button"
+                      className={cn(
+                        'flex w-full gap-2 border-b border-border/60 px-3 py-2 text-left text-xs last:border-b-0 transition-colors',
+                        resource.isPrimary ? 'bg-primary/5' : 'hover:bg-muted/60 cursor-pointer',
+                        isSwitching && 'opacity-60'
+                      )}
+                      onClick={() => void handleSetPrimary(resource)}
+                      disabled={resource.isPrimary || isSwitching}
+                      title={
+                        resource.isPrimary
+                          ? 'Current execution location'
+                          : `Switch execution to ${resourceTitle(resource)}`
+                      }
+                    >
+                      <div className="flex shrink-0 items-start pt-0.5">
+                        {isSwitching ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                        ) : resource.isPrimary ? (
+                          <Check className="h-3.5 w-3.5 text-primary" />
+                        ) : (
+                          <span className="h-3.5 w-3.5" />
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className="truncate font-medium text-foreground"
+                            title={resource.directoryPath}
+                          >
+                            {resourceTitle(resource)}
+                          </span>
+                          {resource.isPrimary ? (
+                            <span className="shrink-0 rounded bg-primary/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-primary">
+                              Active
+                            </span>
+                          ) : null}
+                          {onThisDevice && pathOk === false ? (
+                            <span className="shrink-0 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:text-amber-400">
+                              Path missing
+                            </span>
+                          ) : null}
+                        </div>
+                        <p
+                          className="truncate font-mono text-[11px] text-muted-foreground"
                           title={resource.directoryPath}
                         >
-                          {resourceTitle(resource)}
-                        </span>
-                        {resource.isPrimary ? (
-                          <span className="shrink-0 rounded bg-primary/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-primary">
-                            Primary
-                          </span>
-                        ) : null}
-                        {onThisDevice && pathOk === false ? (
-                          <span className="shrink-0 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:text-amber-400">
-                            Path missing
-                          </span>
-                        ) : null}
+                          {resource.directoryPath}
+                        </p>
                       </div>
-                      <p
-                        className="truncate font-mono text-[11px] text-muted-foreground"
-                        title={resource.directoryPath}
-                      >
-                        {resource.directoryPath}
-                      </p>
-                    </div>
-                    <div className="flex shrink-0 flex-col items-end gap-1 pt-0.5">
-                      {onThisDevice && isElectron && api?.app?.revealFile ? (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="h-6 w-6 p-0 text-muted-foreground"
-                          onClick={() => void handleRevealInFinder(resource.directoryPath)}
-                          title="See in finder"
-                        >
-                          <FolderOpen className="h-3 w-3" />
-                        </Button>
-                      ) : null}
-                      {onThisDevice ? (
-                        <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-400">
-                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden />
-                          This device
-                        </span>
-                      ) : resource.deviceId ? (
-                        <span
-                          className="inline-flex max-w-[9rem] items-center gap-1 rounded-full border border-border bg-muted/50 px-2 py-0.5 text-[10px] font-medium text-muted-foreground"
-                          title={otherLabel}
-                        >
+                      <div className="flex shrink-0 flex-col items-end gap-1 pt-0.5">
+                        {onThisDevice && isElectron && api?.app?.revealFile ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 w-6 p-0 text-muted-foreground"
+                            onClick={e => {
+                              e.stopPropagation();
+                              void handleRevealInFinder(resource.directoryPath);
+                            }}
+                            title="See in finder"
+                          >
+                            <FolderOpen className="h-3 w-3" />
+                          </Button>
+                        ) : null}
+                        {onThisDevice ? (
+                          <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-400">
+                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden />
+                            This device
+                          </span>
+                        ) : resource.deviceId ? (
                           <span
-                            className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500/80"
-                            aria-hidden
-                          />
-                          <span className="truncate">{otherLabel}</span>
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 rounded-full border border-dashed border-border px-2 py-0.5 text-[10px] text-muted-foreground">
-                          <span
-                            className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50"
-                            aria-hidden
-                          />
-                          Unassigned device
-                        </span>
-                      )}
-                    </div>
+                            className="inline-flex max-w-[9rem] items-center gap-1 rounded-full border border-border bg-muted/50 px-2 py-0.5 text-[10px] font-medium text-muted-foreground"
+                            title={otherLabel}
+                          >
+                            <span
+                              className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500/80"
+                              aria-hidden
+                            />
+                            <span className="truncate">{otherLabel}</span>
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 rounded-full border border-dashed border-border px-2 py-0.5 text-[10px] text-muted-foreground">
+                            <span
+                              className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50"
+                              aria-hidden
+                            />
+                            Unassigned device
+                          </span>
+                        )}
+                      </div>
+                    </button>
                   </li>
                 );
               })}
@@ -385,12 +438,13 @@ export function ProjectExecutionWorkspaceSelector({
           )}
 
           <DropdownMenuSeparator className="my-0" />
-          <DropdownMenuItem
-            className="cursor-pointer rounded-none text-xs"
-            onSelect={() => ps.openProjectSettings('Resources')}
+          <button
+            type="button"
+            className="w-full cursor-pointer px-3 py-2 text-left text-xs hover:bg-muted/60 transition-colors"
+            onClick={() => ps.openProjectSettings('Resources')}
           >
-            Manage resources…
-          </DropdownMenuItem>
+            Manage resources...
+          </button>
         </DropdownMenuContent>
       </DropdownMenu>
 

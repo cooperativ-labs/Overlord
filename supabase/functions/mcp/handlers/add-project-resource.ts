@@ -50,11 +50,12 @@ export async function handleAddProjectResource(
   if (!deviceId) return toolErr('Failed to register device.');
 
   if (isPrimary) {
+    // A device has at most one primary resource — clear by device, not project.
     await supabase
       .from('project_resource_directories')
       .update({ is_primary: false })
       .eq('user_id', ctx.userId)
-      .eq('project_id', projectId);
+      .eq('device_id', deviceId);
   }
 
   const { data: inserted, error } = await supabase

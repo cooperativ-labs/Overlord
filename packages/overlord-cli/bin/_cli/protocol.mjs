@@ -212,12 +212,49 @@ async function uploadToSignedUrl(uploadUrl, bytes, contentType, timeoutMs = DEFA
   }
 }
 
+// ---------------------------------------------------------------------------
+// Session file persistence — auto-resolve session key between CLI calls
+// ---------------------------------------------------------------------------
+
+function getSessionFilePath() {
+  return path.join(os.tmpdir(), `.overlord-session-${Buffer.from(process.cwd()).toString('base64url')}`);
+}
+
+function persistSession(sessionKey, ticketId) {
+  try {
+    fs.writeFileSync(
+      getSessionFilePath(),
+      JSON.stringify({ sessionKey, ticketId, ts: Date.now() }),
+      'utf8'
+    );
+  } catch { /* best-effort */ }
+}
+
+function readPersistedSession() {
+  try {
+    const raw = fs.readFileSync(getSessionFilePath(), 'utf8');
+    const data = JSON.parse(raw);
+    if (data.sessionKey && data.ticketId) return data;
+  } catch { /* missing or corrupt — ignore */ }
+  return null;
+}
+
 /** Read SESSION_KEY and TICKET_ID from env if flags not provided */
 function resolveSessionFlags(flags) {
-  return {
-    sessionKey: String(flags['session-key'] ?? process.env.SESSION_KEY ?? ''),
-    ticketId: String(flags['ticket-id'] ?? process.env.TICKET_ID ?? '')
-  };
+  const sessionKey = String(flags['session-key'] ?? process.env.SESSION_KEY ?? '');
+  const ticketId = String(flags['ticket-id'] ?? process.env.TICKET_ID ?? '');
+
+  if (sessionKey && ticketId) return { sessionKey, ticketId };
+
+  const persisted = readPersistedSession();
+  if (persisted) {
+    return {
+      sessionKey: sessionKey || persisted.sessionKey,
+      ticketId: ticketId || persisted.ticketId
+    };
+  }
+
+  return { sessionKey, ticketId };
 }
 
 /** Resolve request timeout from --timeout flag or OVERLORD_TIMEOUT env var. */
@@ -944,6 +981,7 @@ async function protocolAttach(args) {
   console.log(JSON.stringify(data, null, 2));
 
   if (sessionKey) {
+    persistSession(sessionKey, ticketId);
     // Emit a machine-readable line for easy shell capture:
     // SESSION_KEY=$(ovld protocol attach --ticket-id ... | grep ^SESSION_KEY= | cut -d= -f2)
     process.stderr.write(`\nSESSION_KEY=${sessionKey}\n`);
@@ -2026,6 +2064,7 @@ async function protocolConnect(args) {
   console.log(JSON.stringify(data, null, 2));
 
   if (sessionKey) {
+    persistSession(sessionKey, ticketId);
     process.stderr.write(`\nSESSION_KEY=${sessionKey}\n`);
   }
 }
@@ -2152,6 +2191,7 @@ async function protocolPrompt(args) {
   console.log(JSON.stringify(data, null, 2));
 
   if (sessionKey) {
+    if (ticketId) persistSession(sessionKey, ticketId);
     process.stderr.write(`\nSESSION_KEY=${sessionKey}\n`);
   }
   if (ticketId) {
@@ -2544,8 +2584,8 @@ Subcommands:
   update-project-resource     Update a resource directory's path, label, or primary status
 
 Environment fallback:
-  --session-key  <- SESSION_KEY
-  --ticket-id    <- TICKET_ID  (human-readable ticket_id, e.g. 1:899)
+  --session-key  <- SESSION_KEY or auto-persisted session from last attach/connect/prompt in this working directory
+  --ticket-id    <- TICKET_ID  or auto-persisted session (human-readable ticket_id, e.g. 1:899)
   auth/host     <- OVERLORD_URL, optional OVERLORD_ACCESS_TOKEN + OVERLORD_ORGANIZATION_ID, or shared OAuth credentials from ovld auth/Desktop login
   --timeout     <- OVERLORD_TIMEOUT
 

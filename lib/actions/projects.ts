@@ -384,7 +384,117 @@ export async function updateProjectSshConfigAction(
     throw new Error(error?.message ?? 'Failed to update project SSH configuration.');
   }
 
+  // Mirror the SSH remote directory into the resource manifest so that the
+  // remote device — once it actually runs `ovld` — can pick up its primary
+  // resource without needing a parallel "remote_working_directory" field on
+  // the SSH config. We register a placeholder device keyed on the SSH host;
+  // a future reconciliation step replaces it with the real device fingerprint.
+  const remoteDir = trimOrNull(input.remoteWorkingDirectory);
+  const sshHost = trimOrNull(input.sshHost);
+  const sshUser = trimOrNull(input.sshUser);
+  if (remoteDir && sshHost && sshUser) {
+    await syncSshRemoteResource(supabase, {
+      userId: user.id,
+      projectId: input.projectId,
+      sshHost,
+      sshUser,
+      sshPort: input.sshPort ?? null,
+      directoryPath: remoteDir
+    });
+  }
+
   revalidateProjectPaths(input.projectId);
+}
+
+/**
+ * Register (or refresh) a placeholder device + primary resource entry for an
+ * SSH remote working directory. Idempotent — re-saving the SSH form updates
+ * the same rows. The placeholder device gets replaced with the real device
+ * once the remote `ovld` registers itself (handled separately).
+ */
+async function syncSshRemoteResource(
+  supabase: ServerSupabase,
+  input: {
+    userId: string;
+    projectId: string;
+    sshHost: string;
+    sshUser: string;
+    sshPort: number | null;
+    directoryPath: string;
+  }
+): Promise<void> {
+  const { data: project, error: projectError } = await supabase
+    .from('projects')
+    .select('organization_id')
+    .eq('id', input.projectId)
+    .maybeSingle();
+  if (projectError || !project) return;
+
+  const portSegment = typeof input.sshPort === 'number' ? `:${input.sshPort}` : '';
+  const fingerprint = `ssh:${input.sshUser}@${input.sshHost}${portSegment}`;
+
+  const { data: existingDevice } = await supabase
+    .from('devices')
+    .select('id')
+    .eq('organization_id', project.organization_id)
+    .eq('user_id', input.userId)
+    .eq('device_fingerprint', fingerprint)
+    .maybeSingle();
+
+  let deviceId = existingDevice?.id ?? null;
+  const now = new Date().toISOString();
+
+  if (!deviceId) {
+    const { data: labelRow } = await supabase.rpc('generate_device_label', {
+      org_id: project.organization_id,
+      hostname: input.sshHost,
+      platform: 'ssh'
+    });
+    const label =
+      typeof labelRow === 'string' && labelRow.length > 0
+        ? labelRow
+        : `ssh-${input.sshHost.replace(/[^a-z0-9-]+/gi, '-').toLowerCase()}`;
+
+    const { data: inserted, error: insertError } = await supabase
+      .from('devices')
+      .insert({
+        organization_id: project.organization_id,
+        user_id: input.userId,
+        device_fingerprint: fingerprint,
+        label,
+        hostname: input.sshHost,
+        platform: 'ssh',
+        is_placeholder: true,
+        last_seen_at: now
+      })
+      .select('id')
+      .single();
+    if (insertError || !inserted) return;
+    deviceId = inserted.id;
+  } else {
+    await supabase
+      .from('devices')
+      .update({ hostname: input.sshHost, last_seen_at: now })
+      .eq('id', deviceId);
+  }
+
+  // Clear any other primary on this device before upserting the new one.
+  await supabase
+    .from('project_resource_directories')
+    .update({ is_primary: false })
+    .eq('user_id', input.userId)
+    .eq('device_id', deviceId);
+
+  await supabase.from('project_resource_directories').upsert(
+    {
+      user_id: input.userId,
+      project_id: input.projectId,
+      device_id: deviceId,
+      directory_path: input.directoryPath,
+      is_primary: true
+    },
+    { onConflict: 'project_id,user_id,device_id,directory_path' }
+  );
 }
 
 export async function moveProjectToOrganizationAction(input: {

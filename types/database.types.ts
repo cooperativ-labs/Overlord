@@ -400,6 +400,7 @@ export type Database = {
           device_fingerprint: string;
           hostname: string | null;
           id: string;
+          is_placeholder: boolean;
           label: string;
           last_seen_at: string | null;
           organization_id: number;
@@ -412,6 +413,7 @@ export type Database = {
           device_fingerprint: string;
           hostname?: string | null;
           id?: string;
+          is_placeholder?: boolean;
           label: string;
           last_seen_at?: string | null;
           organization_id: number;
@@ -424,6 +426,7 @@ export type Database = {
           device_fingerprint?: string;
           hostname?: string | null;
           id?: string;
+          is_placeholder?: boolean;
           label?: string;
           last_seen_at?: string | null;
           organization_id?: number;

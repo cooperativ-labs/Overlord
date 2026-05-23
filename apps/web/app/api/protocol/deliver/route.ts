@@ -229,31 +229,18 @@ export async function POST(request: Request) {
           .limit(1);
         const topBoardPosition = (headTickets?.[0]?.board_position ?? 0) - 1;
 
-        const [{ error: ticketError }, { error: sessionError }] = await Promise.all([
-          supabase
-            .from('tickets')
-            .update({
-              is_read: false,
-              status: reviewStatusName,
-              board_position: topBoardPosition
-            })
-            .eq('id', ticketId),
-          supabase
-            .from('agent_sessions')
-            .update({
-              detached_at: new Date().toISOString(),
-              session_state: 'completed'
-            })
-            .eq('id', sessionId)
-        ]);
+        const { error: ticketError } = await supabase
+          .from('tickets')
+          .update({
+            is_read: false,
+            status: reviewStatusName,
+            board_position: topBoardPosition
+          })
+          .eq('id', ticketId);
 
         if (ticketError) {
           console.error('[protocol:deliver] ticket update error:', ticketError.message);
           Sentry.captureException(ticketError, { extra: { ticketId } });
-        }
-        if (sessionError) {
-          console.error('[protocol:deliver] session update error:', sessionError.message);
-          Sentry.captureException(sessionError, { extra: { sessionId } });
         }
 
         // Emit status_change event so KanbanBoard realtime listener triggers

@@ -55,13 +55,15 @@ export async function POST(request: Request) {
       );
     }
 
-    // If setting as primary, clear others first
+    // If setting as primary, clear the other primary on this device first
+    // (a device has at most one primary resource).
     if (isPrimary) {
       await supabase
         .from('project_resource_directories')
         .update({ is_primary: false })
         .eq('user_id', userId)
-        .eq('project_id', existing.project_id);
+        .eq('device_id', device.id)
+        .neq('id', resourceId);
     }
 
     const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };

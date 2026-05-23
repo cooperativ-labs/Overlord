@@ -2,6 +2,35 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2605230834.0] - 2026-05-23:08:34
+
+### Added
+- Add `ovld add-cwd` to register the current working directory as a project resource (interactive project picker, optional `--project-id`, writes `overlord.json`).
+- Add an **Execution location** control on the project header to switch which registered directory is primary for the current device, with active-state affordances and a path to project resource settings.
+- Register SSH remote working directories as placeholder-device primary resources when saving SSH workspace configuration, so runners can resolve the remote path before the remote machine runs `ovld`.
+- Enforce at most one primary resource per user and device (partial unique index); support `devices.is_placeholder` for SSH-derived device stubs pending real `ovld` registration.
+- Emit structured `[overlord:electron-server-action]` diagnostics from the desktop app for create-project and create-ticket flows to simplify debugging failed server actions in Electron.
+
+### Fixed
+- Clear the previous primary resource on the same device (not across the whole project) when registering a new primary via the protocol API.
+- Route Kanban waiting-response and review alerts through `electronAPI.app.notify` in the desktop shell so notifications match native macOS behavior where supported.
+
+### Changed
+- Show the active execution location label on the project header button instead of a generic resource count.
+- Make execution location rows clickable to set primary, with loading spinner, checkmark, and **Active** badge; keep **Reveal in Finder** for on-device paths in Electron.
+- Surface **Path missing** when the desktop agent cannot verify a local directory on this device.
+- Load objective-scoped fields on the ticket detail screen and thread `objective_id` through ticket events for clearer panel history.
+
+### Security
+- None.
+
+### Refactor
+- Split ticket server actions into focused modules and extract Kanban realtime helpers (`realtime-helpers`, `realtime-subscriptions`) from `useTicketBoardRealtime`.
+
+### Chore
+- Add migration for per-device primary resources and placeholder devices; regenerate Supabase types.
+- Bump workspace and CLI package versions.
+
 ## [0.2605221356.0] - 2026-05-22:13:56
 
 ### Added
