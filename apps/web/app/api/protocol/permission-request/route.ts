@@ -2,12 +2,12 @@ import { after, NextResponse } from 'next/server';
 
 import { internalErrorResponse } from '@/app/api/protocol/_lib';
 import { getTicketIdentifier } from '@/lib/helpers/tickets';
+import { emitWorkflowNotification } from '@/lib/overlord/notifications/orchestrator';
 import {
   resolveAgentToken,
   resolveProtocolOrganizationHintForTicketId
 } from '@/lib/overlord/protocol-auth';
 import { resolveTicketId } from '@/lib/overlord/protocol-db';
-import { sendPushNotification } from '@/lib/overlord/push-notifications';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
 /**
@@ -59,7 +59,7 @@ export async function POST(request: Request) {
     // Verify the ticket belongs to this org
     const { data: ticket } = await supabase
       .from('tickets')
-      .select('id,ticket_id')
+      .select('id,ticket_id,title')
       .eq('id', ticketId)
       .eq('organization_id', organizationId)
       .maybeSingle();
@@ -82,23 +82,37 @@ export async function POST(request: Request) {
       ? `Agent requesting permission to use ${toolName}`
       : 'Agent requesting permission for a tool action';
 
-    await supabase.from('ticket_events').insert({
-      event_type: 'question',
-      is_blocking: true,
-      payload: hookPayload,
-      phase: null,
-      objective_id: session?.objective_id ?? null,
-      summary,
-      ticket_id: ticketId,
-      created_by: userId
-    });
+    const { data: insertedEvent } = await supabase
+      .from('ticket_events')
+      .insert({
+        event_type: 'question',
+        is_blocking: true,
+        payload: hookPayload,
+        phase: null,
+        objective_id: session?.objective_id ?? null,
+        summary,
+        ticket_id: ticketId,
+        created_by: userId
+      })
+      .select('id')
+      .single();
 
     after(async () => {
-      await sendPushNotification(supabase, {
-        title: `Agent Question (${getTicketIdentifier(ticket ?? ticketId)})`,
-        body: summary,
+      await emitWorkflowNotification({
+        supabase,
+        event: {
+          id: insertedEvent?.id ?? null,
+          event_type: 'question',
+          is_blocking: true,
+          payload: hookPayload,
+          phase: null,
+          summary
+        },
         organizationId,
-        data: { ticketId, eventType: 'question' }
+        ticketId,
+        ticketReference: getTicketIdentifier(ticket ?? ticketId),
+        ticketTitle: ticket?.title ?? null,
+        objectiveId: session?.objective_id ?? null
       });
     });
 

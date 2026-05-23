@@ -41,7 +41,7 @@ async function insertObjective(
     completedAt
   }: {
     ticketId: string;
-    state: 'executing' | 'complete';
+    state: 'executing' | 'complete' | 'draft' | 'submitted' | 'future';
     objective: string;
     createdAt: string;
     completedAt?: string | null;
@@ -167,10 +167,14 @@ describe('file_changes objective_id trigger', () => {
       createdAt: '2026-05-12T10:00:00.000Z',
       completedAt: '2026-05-12T10:05:00.000Z'
     });
+    // Sibling submitted objective ensures the trigger picks the session's
+    // objective rather than guessing from ticket state. We can't use a second
+    // 'executing' here because objectives_one_executing_per_ticket_idx
+    // forbids two executing objectives in the same ticket.
     await insertObjective(client, {
       ticketId,
-      state: 'executing',
-      objective: 'older executing',
+      state: 'submitted',
+      objective: 'submitted sibling',
       createdAt: '2026-05-12T10:10:00.000Z'
     });
     const sessionObjectiveId = await insertObjective(client, {

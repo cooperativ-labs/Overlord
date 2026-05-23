@@ -68,8 +68,16 @@ export function TeamSwitcher({
                 size="lg"
                 className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
               >
-                <div className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
-                  <Globe className="size-4" />
+                <div className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg overflow-hidden">
+                  {activeOrg?.logo_url ? (
+                    <img
+                      src={activeOrg.logo_url}
+                      alt={activeOrg.name}
+                      className="size-full object-cover"
+                    />
+                  ) : (
+                    <Globe className="size-4" />
+                  )}
                 </div>
                 <div className="grid flex-1 text-left text-sm leading-tight">
                   <span className="truncate font-medium">{activeLabel}</span>
@@ -105,10 +113,18 @@ export function TeamSwitcher({
                       onClick={() => handleSelect(org.id)}
                       className="group gap-2 p-2"
                     >
-                      <div className="flex size-6 items-center justify-center rounded-md border">
-                        <span className="text-xs font-medium">
-                          {org.name.charAt(0).toUpperCase()}
-                        </span>
+                      <div className="flex size-6 items-center justify-center rounded-md border overflow-hidden">
+                        {org.logo_url ? (
+                          <img
+                            src={org.logo_url}
+                            alt={org.name}
+                            className="size-full object-cover"
+                          />
+                        ) : (
+                          <span className="text-xs font-medium">
+                            {org.name.charAt(0).toUpperCase()}
+                          </span>
+                        )}
                       </div>
                       <span className="flex-1 truncate">{org.name}</span>
                       {selectedOrgId === org.id && <Check className="h-4 w-4" />}

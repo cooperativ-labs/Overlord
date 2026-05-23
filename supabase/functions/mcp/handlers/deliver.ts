@@ -198,12 +198,14 @@ export async function handleDeliver(supabase: SupabaseClient, args: any, ctx: To
       .from('agent_sessions')
       .update({ detached_at: new Date().toISOString(), session_state: 'completed' })
       .eq('id', resolved.session.id),
-    // Mark executing objective(s) as complete
+    // Mark only this session's objective complete — never sweep siblings that
+    // may have raced into 'executing' via auto-advance during deliver.
     supabase
       .from('objectives')
       .update({ state: 'complete', completed_at: completedAt })
+      .eq('id', resolved.session.objective_id)
       .eq('ticket_id', ticketId)
-      .eq('state', 'executing')
+      .in('state', ['executing', 'submitted', 'draft'])
   ]);
 
   await supabase.from('ticket_events').insert({

@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2605231209.0] - 2026-05-23:12:09
+
+### Added
+- Add **`emitWorkflowNotification`** as the canonical server-side entry point for mobile push notifications driven by workflow ticket events, routing title, body, sound, and payload data through the shared objective notification classifier.
+- Show **organization logos** in the team switcher when `logo_url` is set, with Globe icon and initial-letter fallbacks.
+
+### Fixed
+- Fix a **deliver / auto-advance race** that could leave two objectives in `executing` and mark both complete: scope deliver completion to the delivering `objective_id`, enforce at most one executing objective per ticket and one active agent session per objective in the database, and detach prior active sessions before a new attach.
+- Carry the agent's **delivery summary** into the review `status_change` event and push notification so review alerts reflect what was actually delivered.
+
+### Changed
+- Route protocol **`ask`**, **`update`**, **`deliver`**, **`permission-request`**, and auto-advance **`awaiting_approval`** push notifications through the orchestrator so mobile payloads match in-app realtime consumers (including ticket titles in notification headings).
+- Remove reads of dropped **`project_user` SSH and remote-helper** fields from project sidebar payloads; resolve resource directories by `execution_target_id` only.
+
+### Security
+- None.
+
+### Removed
+- Drop the legacy **`devices`** table and orphaned `device_id` / `target_device_id` columns from execution requests and project resource directories.
+- Drop legacy **SSH and remote-helper columns** from `project_user` now that execution targets and SSH credential tables own that configuration.
+
+### Test
+- Add notification orchestrator unit tests; update deliver, auto-advance, and protocol execution-route tests for objective-scoped completion and execution-target claiming.
+
+### Chore
+- Add migrations to remove the devices table, drop `project_user` SSH columns, and enforce single-executing-objective / single-active-session invariants; regenerate Supabase types; bump workspace and CLI package versions.
+
 ## [0.2605231102.0] - 2026-05-23:11:02
 
 ### Added

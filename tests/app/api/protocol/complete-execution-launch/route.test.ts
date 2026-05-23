@@ -37,7 +37,9 @@ describe('POST /api/protocol/complete-execution-launch', () => {
 
   it('returns 404 when the execution target is not registered', async () => {
     mockParseBody();
-    const { findExecutionTargetByFingerprint } = jest.requireMock('@/lib/overlord/execution-targets');
+    const { findExecutionTargetByFingerprint } = jest.requireMock(
+      '@/lib/overlord/execution-targets'
+    );
     findExecutionTargetByFingerprint.mockResolvedValue(null);
 
     const response = await POST(new Request('http://localhost', { method: 'POST' }));
@@ -46,7 +48,9 @@ describe('POST /api/protocol/complete-execution-launch', () => {
 
   it('marks the request launched only for the claiming execution target', async () => {
     mockParseBody();
-    const { findExecutionTargetByFingerprint } = jest.requireMock('@/lib/overlord/execution-targets');
+    const { findExecutionTargetByFingerprint } = jest.requireMock(
+      '@/lib/overlord/execution-targets'
+    );
     findExecutionTargetByFingerprint.mockResolvedValue(EXECUTION_TARGET_ID);
     let updatePayload: unknown;
     const executionUpdate = {

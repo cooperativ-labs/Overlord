@@ -40,7 +40,9 @@ describe('POST /api/protocol/fail-execution-launch', () => {
 
   it('records failure and writes execution_launch_failed for the claiming execution target', async () => {
     mockParseBody();
-    const { findExecutionTargetByFingerprint } = jest.requireMock('@/lib/overlord/execution-targets');
+    const { findExecutionTargetByFingerprint } = jest.requireMock(
+      '@/lib/overlord/execution-targets'
+    );
     findExecutionTargetByFingerprint.mockResolvedValue(EXECUTION_TARGET_ID);
     let updatePayload: unknown;
     const eventsInsert = { insert: jest.fn(async () => ({ error: null })) };

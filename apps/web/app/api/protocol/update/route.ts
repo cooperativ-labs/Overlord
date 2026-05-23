@@ -11,8 +11,8 @@ import {
 } from '@/lib/overlord/agent-notifications';
 import { upsertObjectiveCheckpoint } from '@/lib/overlord/checkpoints';
 import { insertFileChanges } from '@/lib/overlord/file-changes';
+import { emitWorkflowNotification } from '@/lib/overlord/notifications/orchestrator';
 import { resolveSession, resolveTicketId } from '@/lib/overlord/protocol-db';
-import { sendPushNotification } from '@/lib/overlord/push-notifications';
 import { updateSchema } from '@/lib/overlord/validation';
 import {
   resolvePreferredStatusNameByType,
@@ -45,7 +45,7 @@ export async function POST(request: Request) {
     const supabase = createServiceRoleClient();
     const { data: ticket } = await supabase
       .from('tickets')
-      .select('id,ticket_id,project_id')
+      .select('id,ticket_id,project_id,title')
       .eq('id', ticketId)
       .maybeSingle();
     const ticketReference = getTicketIdentifier(ticket ?? ticketId);
@@ -195,48 +195,59 @@ export async function POST(request: Request) {
 
     const notifications = extractAgentNotifications(payload);
     if (notifications.length > 0) {
-      const { error: notificationsError } = await supabase.from('ticket_events').insert(
-        notifications.map(notification => ({
-          event_type: notification.kind === 'question' ? 'question' : 'alert',
-          is_blocking: notification.kind === 'question' ? notification.isBlocking : false,
-          payload: {
-            entry_type: 'agent_notification',
-            level: notification.level,
-            kind: notification.kind,
-            message: notification.message,
-            metadata: notification.metadata,
-            parent_event_id: event.id,
-            title: notification.title ?? null
-          },
-          phase: phase ?? null,
-          objective_id: resolved.session.objective_id,
-          summary: buildAgentNotificationSummary(notification),
-          ticket_id: ticketId,
-          created_by: userId
-        }))
-      );
+      const notificationRows = notifications.map(notification => ({
+        event_type: (notification.kind === 'question' ? 'question' : 'alert') as
+          | 'question'
+          | 'alert',
+        is_blocking: notification.kind === 'question' ? notification.isBlocking : false,
+        payload: {
+          entry_type: 'agent_notification',
+          level: notification.level,
+          kind: notification.kind,
+          message: notification.message,
+          metadata: notification.metadata,
+          parent_event_id: event.id,
+          title: notification.title ?? null
+        } as Record<string, unknown>,
+        phase: phase ?? null,
+        objective_id: resolved.session.objective_id,
+        summary: buildAgentNotificationSummary(notification),
+        ticket_id: ticketId,
+        created_by: userId
+      }));
+
+      const { data: insertedNotificationEvents, error: notificationsError } = await supabase
+        .from('ticket_events')
+        .insert(notificationRows)
+        .select('id');
 
       if (notificationsError) {
         return NextResponse.json({ error: notificationsError.message }, { status: 500 });
       }
 
-      // Send mobile push for agent notifications (questions and alerts)
-      for (const notification of notifications) {
-        const notifTitle =
-          notification.kind === 'question'
-            ? `Agent Question (${ticketReference})`
-            : `Agent Notification (${ticketReference})`;
-        const notifBody =
-          buildAgentNotificationSummary(notification) || 'New agent event received.';
+      // Route mobile push through the canonical orchestrator so the title/body
+      // come from the same shared classifier the in-app realtime consumers use.
+      notificationRows.forEach((row, index) => {
+        const insertedId = insertedNotificationEvents?.[index]?.id ?? null;
         after(async () => {
-          await sendPushNotification(supabase, {
-            title: notifTitle,
-            body: notifBody,
+          await emitWorkflowNotification({
+            supabase,
+            event: {
+              id: insertedId,
+              event_type: row.event_type,
+              is_blocking: row.is_blocking,
+              payload: row.payload,
+              phase: row.phase,
+              summary: row.summary
+            },
             organizationId,
-            data: { ticketId, eventType: notification.kind }
+            ticketId,
+            ticketReference,
+            ticketTitle: ticket?.title ?? null,
+            objectiveId: resolved.session.objective_id
           });
         });
-      }
+      });
     }
 
     if (phase) {
@@ -304,17 +315,41 @@ export async function POST(request: Request) {
       }
 
       if (shouldEmitStatusChange) {
-        const { error: statusChangeError } = await supabase.from('ticket_events').insert({
-          event_type: 'status_change',
-          phase,
-          objective_id: resolved.session.objective_id,
-          summary: 'Objective moved to review.',
-          ticket_id: ticketId,
-          created_by: userId
-        });
+        const reviewSummary = summary?.trim() || 'Objective moved to review.';
+        const { data: statusChangeEvent, error: statusChangeError } = await supabase
+          .from('ticket_events')
+          .insert({
+            event_type: 'status_change',
+            phase,
+            objective_id: resolved.session.objective_id,
+            summary: reviewSummary,
+            ticket_id: ticketId,
+            created_by: userId
+          })
+          .select('id')
+          .single();
         if (statusChangeError) {
           return NextResponse.json({ error: statusChangeError.message }, { status: 500 });
         }
+
+        // Mirror the deliver route: route review notifications through the
+        // orchestrator so update --phase review reaches mobile push too.
+        after(async () => {
+          await emitWorkflowNotification({
+            supabase,
+            event: {
+              id: statusChangeEvent?.id ?? null,
+              event_type: 'status_change',
+              phase,
+              summary: reviewSummary
+            },
+            organizationId,
+            ticketId,
+            ticketReference,
+            ticketTitle: ticket?.title ?? null,
+            objectiveId: resolved.session.objective_id
+          });
+        });
       }
     }
 

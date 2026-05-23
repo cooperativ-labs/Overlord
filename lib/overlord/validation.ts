@@ -387,7 +387,7 @@ export const attachmentGetDownloadUrlSchema = z
 // Device management
 // ---------------------------------------------------------------------------
 
-/** Matches `devices_label_format` in the database. */
+/** Matches `organization_execution_targets_label_format` in the database. */
 export const DEVICE_LABEL_REGEX = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/;
 
 /** get-device: identify (and upsert) the calling device */

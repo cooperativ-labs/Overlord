@@ -163,7 +163,11 @@ describe('scheduleQueuedObjectiveAfterDeliver', () => {
       update: jest.fn(() => ticketUpdate),
       eq: jest.fn(async () => ({ error: null }))
     };
-    const eventsInsert = { insert: jest.fn(async () => ({ error: null })) };
+    const eventsInsertChain = {
+      select: jest.fn(() => eventsInsertChain),
+      single: jest.fn(async () => ({ data: { id: 'evt-1' }, error: null }))
+    };
+    const eventsInsert = { insert: jest.fn(() => eventsInsertChain) };
     const draftQuery = {
       select: jest.fn(() => draftQuery),
       eq: jest.fn(() => draftQuery),
@@ -208,7 +212,12 @@ describe('scheduleQueuedObjectiveAfterDeliver', () => {
     expect(mockSendPushNotification).toHaveBeenCalledWith(
       supabase,
       expect.objectContaining({
-        body: 'Please review the plan first.'
+        body: 'Please review the plan first.',
+        data: expect.objectContaining({
+          eventType: 'awaiting_approval',
+          intent: 'waiting_on_human',
+          objectiveId: 'obj-gated'
+        })
       })
     );
   });

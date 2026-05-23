@@ -7,7 +7,6 @@ import {
   updateTicketInBoards
 } from '@/lib/client-data/tickets/cache';
 import { parseObjectiveAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
-import { isDraftObjectiveWithText } from '@/lib/helpers/tickets';
 import {
   TICKET_CREATED_EVENT,
   TICKET_CREATED_STORAGE_KEY,
@@ -20,6 +19,7 @@ import {
   type TicketOpenedTimestamps,
   type TicketRaisedWhileOpenMap
 } from '@/lib/helpers/ticket-waiting-response';
+import { isDraftObjectiveWithText } from '@/lib/helpers/tickets';
 import {
   isWaitingOnHumanEvent,
   resolveObjectiveNotificationIntent

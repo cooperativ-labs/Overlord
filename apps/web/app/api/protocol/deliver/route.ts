@@ -7,8 +7,8 @@ import { scheduleQueuedObjectiveAfterDeliver } from '@/lib/auto-advance/schedule
 import { getTicketIdentifier } from '@/lib/helpers/tickets';
 import { upsertObjectiveCheckpoint } from '@/lib/overlord/checkpoints';
 import { insertFileChanges } from '@/lib/overlord/file-changes';
+import { emitWorkflowNotification } from '@/lib/overlord/notifications/orchestrator';
 import { resolveSession, resolveTicketId } from '@/lib/overlord/protocol-db';
-import { sendPushNotification } from '@/lib/overlord/push-notifications';
 import { deliverSchema } from '@/lib/overlord/validation';
 import { resolvePreferredStatusNameByType } from '@/lib/ticket-statuses';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
@@ -37,7 +37,7 @@ export async function POST(request: Request) {
     const supabase = createServiceRoleClient();
     const { data: ticket } = await supabase
       .from('tickets')
-      .select('id,ticket_id,project_id')
+      .select('id,ticket_id,project_id,title')
       .eq('id', ticketId)
       .maybeSingle();
     const ticketReference = getTicketIdentifier(ticket ?? ticketId);
@@ -134,14 +134,22 @@ export async function POST(request: Request) {
     // sandbox runtimes with short request windows receive a timely 200 response.
     after(async () => {
       try {
-        // Mark the executing objective as complete first so the next-future
-        // lookup below cannot accidentally re-promote it.
+        // Mark the delivering session's objective as complete. Scope strictly
+        // to this objective_id so a draft that auto-advanced into 'executing'
+        // mid-deliver cannot be swept into 'complete' alongside it.
         const completedAt = new Date().toISOString();
-        await supabase
+        const { error: completeError } = await supabase
           .from('objectives')
           .update({ state: 'complete', completed_at: completedAt })
+          .eq('id', objectiveId)
           .eq('ticket_id', ticketId)
-          .eq('state', 'executing');
+          .in('state', ['executing', 'submitted', 'draft']);
+        if (completeError) {
+          console.error('[protocol:deliver] objective complete error:', completeError.message);
+          Sentry.captureException(completeError, {
+            extra: { ticketId, sessionId, objectiveId }
+          });
+        }
 
         // Close the delivering session before emitting any auto_advance event.
         // Desktop launchers skip auto-advance while a ticket has an active
@@ -245,14 +253,21 @@ export async function POST(request: Request) {
 
         // Emit status_change event so KanbanBoard realtime listener triggers
         // the review sound and highlights has_unopened_review for agent deliveries.
-        await supabase.from('ticket_events').insert({
-          event_type: 'status_change',
-          phase: 'review',
-          summary: 'Ticket delivered and moved to review.',
-          objective_id: objectiveId,
-          ticket_id: ticketId,
-          created_by: userId
-        });
+        // Carry the agent's delivery summary forward so the notification classifier
+        // (and the activity log entry it renders) reflect what was actually delivered.
+        const reviewSummary = summary || 'Ticket delivered and moved to review.';
+        const { data: statusChangeEvent } = await supabase
+          .from('ticket_events')
+          .insert({
+            event_type: 'status_change',
+            phase: 'review',
+            summary: reviewSummary,
+            objective_id: objectiveId,
+            ticket_id: ticketId,
+            created_by: userId
+          })
+          .select('id')
+          .single();
 
         // Generate feed post (fire-and-forget — non-fatal if it fails)
         try {
@@ -268,12 +283,21 @@ export async function POST(request: Request) {
           Sentry.captureException(feedErr, { extra: { ticketId, objectiveId } });
         }
 
-        // Send mobile push notification
-        await sendPushNotification(supabase, {
-          title: `Agent Delivered (${ticketReference})`,
-          body: summary || 'The agent delivered this ticket for review.',
+        // Send mobile push notification via the canonical orchestrator so the
+        // push title/body/data shape match the in-app realtime consumers.
+        await emitWorkflowNotification({
+          supabase,
+          event: {
+            id: statusChangeEvent?.id ?? null,
+            event_type: 'status_change',
+            phase: 'review',
+            summary: reviewSummary
+          },
           organizationId,
-          data: { ticketId, eventType: 'deliver' }
+          ticketId,
+          ticketReference,
+          ticketTitle: ticket?.title ?? null,
+          objectiveId
         });
       } catch (bgErr) {
         console.error('[protocol:deliver] background job error:', bgErr);

@@ -29,12 +29,11 @@ export type ProjectResourceDirectory = {
 
 export type ProjectResourceDirectoriesPayload = {
   resources: ProjectResourceDirectory[];
-  /** Resolved `devices.id` for this org + user + fingerprint when `deviceFingerprint` was provided. */
+  /** Resolved `execution_targets.id` for this org + user + fingerprint when `deviceFingerprint` was provided. */
   matchedDeviceId: string | null;
 };
 
 type Row = Database['public']['Tables']['project_resource_directories']['Row'] & {
-  execution_target_id?: string | null;
   execution_targets?:
     | {
         host: string | null;
@@ -59,7 +58,7 @@ function rowToDto(row: Row): ProjectResourceDirectory {
   const orgRel = target?.organization_execution_targets;
   const orgTargets = Array.isArray(orgRel) ? orgRel : [orgRel];
   const orgTarget = orgTargets[0];
-  const executionTargetId = row.execution_target_id ?? row.device_id ?? null;
+  const executionTargetId = row.execution_target_id ?? null;
   return {
     id: row.id,
     projectId: row.project_id,

@@ -2,8 +2,8 @@ import { after, NextResponse } from 'next/server';
 
 import { internalErrorResponse, parseProtocolBody } from '@/app/api/protocol/_lib';
 import { getTicketIdentifier } from '@/lib/helpers/tickets';
+import { emitWorkflowNotification } from '@/lib/overlord/notifications/orchestrator';
 import { resolveSession, resolveTicketId } from '@/lib/overlord/protocol-db';
-import { sendPushNotification } from '@/lib/overlord/push-notifications';
 import { askSchema } from '@/lib/overlord/validation';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
@@ -19,24 +19,30 @@ export async function POST(request: Request) {
     const supabase = createServiceRoleClient();
     const { data: ticket } = await supabase
       .from('tickets')
-      .select('id,ticket_id')
+      .select('id,ticket_id,title')
       .eq('id', ticketId)
       .maybeSingle();
+    const ticketReference = getTicketIdentifier(ticket ?? ticketId);
     const resolved = await resolveSession(sessionKey, ticketId, organizationId);
     if (!resolved.session) {
       return NextResponse.json({ error: resolved.error }, { status: 404 });
     }
 
-    const { error: insertError } = await supabase.from('ticket_events').insert({
-      event_type: 'question',
-      is_blocking: true,
-      payload,
-      phase: phase ?? 'review',
-      objective_id: resolved.session.objective_id,
-      summary: question,
-      ticket_id: ticketId,
-      created_by: userId
-    });
+    const insertedPhase = phase ?? 'review';
+    const { data: insertedEvent, error: insertError } = await supabase
+      .from('ticket_events')
+      .insert({
+        event_type: 'question',
+        is_blocking: true,
+        payload,
+        phase: insertedPhase,
+        objective_id: resolved.session.objective_id,
+        summary: question,
+        ticket_id: ticketId,
+        created_by: userId
+      })
+      .select('id')
+      .single();
     if (insertError) {
       return NextResponse.json({ error: insertError.message }, { status: 500 });
     }
@@ -50,17 +56,27 @@ export async function POST(request: Request) {
     }
 
     after(async () => {
-      await sendPushNotification(supabase, {
-        title: `Agent Question (${getTicketIdentifier(ticket ?? ticketId)})`,
-        body: question || 'The agent is waiting for your input.',
+      await emitWorkflowNotification({
+        supabase,
+        event: {
+          id: insertedEvent?.id ?? null,
+          event_type: 'question',
+          is_blocking: true,
+          payload,
+          phase: insertedPhase,
+          summary: question
+        },
         organizationId,
-        data: { ticketId, eventType: 'question' }
+        ticketId,
+        ticketReference,
+        ticketTitle: ticket?.title ?? null,
+        objectiveId: resolved.session.objective_id
       });
     });
 
     return NextResponse.json({
       ok: true,
-      status: phase ?? 'review'
+      status: insertedPhase
     });
   } catch (error) {
     return internalErrorResponse(error);

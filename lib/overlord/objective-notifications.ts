@@ -21,7 +21,9 @@ export function isNotificationPayloadRecord(
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-export function getNotificationPayloadMessage(payload: NotificationPayload | unknown): string | null {
+export function getNotificationPayloadMessage(
+  payload: NotificationPayload | unknown
+): string | null {
   if (!isNotificationPayloadRecord(payload)) return null;
   const message = payload.message;
   return typeof message === 'string' && message.trim().length > 0 ? message.trim() : null;
@@ -29,7 +31,9 @@ export function getNotificationPayloadMessage(payload: NotificationPayload | unk
 
 export function isAgentNotificationEvent(event: TicketEvent): boolean {
   if (event.event_type !== 'alert' && event.event_type !== 'question') return false;
-  return isNotificationPayloadRecord(event.payload) && event.payload.entry_type === 'agent_notification';
+  return (
+    isNotificationPayloadRecord(event.payload) && event.payload.entry_type === 'agent_notification'
+  );
 }
 
 export function isWaitingOnHumanEvent(event: TicketEvent): boolean {
@@ -47,7 +51,11 @@ export function getObjectiveNotificationBody(event: TicketEvent, fallback: strin
   return fallback;
 }
 
-function formatTitle(prefix: string, ticketTitle?: string | null, ticketReference?: string | null): string {
+function formatTitle(
+  prefix: string,
+  ticketTitle?: string | null,
+  ticketReference?: string | null
+): string {
   const trimmedTitle = ticketTitle?.trim();
   if (trimmedTitle) {
     return `${prefix}: ${trimmedTitle}`;

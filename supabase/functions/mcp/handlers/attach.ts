@@ -187,6 +187,14 @@ export async function handleAttach(supabase: SupabaseClient, args: any, ctx: Tok
 
   if (!executedObjectiveId) return toolErr('No objective available for execution.');
 
+  // Detach any prior active session for this objective so the new session
+  // satisfies agent_sessions_one_active_per_objective_idx.
+  await supabase
+    .from('agent_sessions')
+    .update({ session_state: 'disconnected', detached_at: new Date().toISOString() })
+    .eq('objective_id', executedObjectiveId)
+    .in('session_state', ['attached', 'idle', 'blocked']);
+
   const sessionKey = crypto.randomUUID();
   const { data: session, error: sessionErr } = await supabase
     .from('agent_sessions')

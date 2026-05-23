@@ -1,11 +1,12 @@
 import type { SshConnectionConfig } from './types';
 
 /**
- * Parse a legacy free-form ssh command string — e.g. "ssh jake@example.com -p 2222" —
+ * Parse a free-form ssh command string — e.g. "ssh jake@example.com -p 2222" —
  * into a structured SshConnectionConfig. Returns null if the string does not parse.
  *
- * This is a transition helper: rows migrated from the `ssh_command` column before
- * structured fields are populated.
+ * Used by the settings form to populate structured fields from the synthesised
+ * sshCommand string (built at read-time from execution_targets /
+ * execution_target_ssh_credentials).
  */
 export function parseLegacySshCommand(
   value: string | null | undefined

@@ -165,6 +165,15 @@ export async function runAttachProtocol(supabase: AttachClient, params: AttachPa
     return { error: 'No objective available for execution.', status: 400 } as const;
   }
 
+  // Detach any prior active session for this objective so the new session
+  // satisfies agent_sessions_one_active_per_objective_idx and the next
+  // re-attach cleanly replaces the old row.
+  await supabase
+    .from('agent_sessions')
+    .update({ session_state: 'disconnected', detached_at: new Date().toISOString() })
+    .eq('objective_id', objectiveExecution.executedObjectiveId)
+    .in('session_state', ['attached', 'idle', 'blocked']);
+
   const { data: session, error: sessionError } = await supabase
     .from('agent_sessions')
     .insert({

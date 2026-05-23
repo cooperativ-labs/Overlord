@@ -18,8 +18,6 @@ export type SidebarProject = {
   sshUser: string | null;
   sshAuthMethod: ProjectSshAuthMethod | null;
   sshPrivateKeyPath: string | null;
-  remoteHelperInstalledAt: string | null;
-  remoteHelperVersion: string | null;
 };
 
 export type CreateProjectResult = {
@@ -53,7 +51,7 @@ export type ProjectUserSshSettingsRow = {
 
 export type ProjectUserLocalSettingsRow = Pick<
   ProjectUserRow,
-  'project_id' | 'local_working_directory' | 'remote_helper_installed_at' | 'remote_helper_version'
+  'project_id' | 'local_working_directory'
 >;
 type ProjectSshSettings = Pick<
   SidebarProject,

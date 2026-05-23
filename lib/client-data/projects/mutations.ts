@@ -89,9 +89,7 @@ function removeProjectFromCache(queryClient: QueryClient, projectId: string) {
 function emptySshFields() {
   return {
     ...emptyProjectSshSettings(),
-    localWorkingDirectory: null,
-    remoteHelperInstalledAt: null,
-    remoteHelperVersion: null
+    localWorkingDirectory: null
   } as const;
 }
 

@@ -150,6 +150,7 @@ export async function createOrganizationAction(input: { name: string }): Promise
 export type UserOrganization = {
   id: number;
   name: string;
+  logo_url: string | null;
 };
 
 export async function getUserOrganizations(): Promise<UserOrganization[]> {
@@ -163,7 +164,7 @@ export async function getUserOrganizations(): Promise<UserOrganization[]> {
   // Defensive membership join (defense in depth; RLS is primary authz).
   const { data } = await supabase
     .from('members')
-    .select('organizations!inner(id,name)')
+    .select('organizations!inner(id,name,logo_url)')
     .eq('user_id', user.id);
   const rows = (data ?? []) as { organizations: UserOrganization | UserOrganization[] | null }[];
   const orgs = rows.flatMap(row =>
@@ -173,7 +174,9 @@ export async function getUserOrganizations(): Promise<UserOrganization[]> {
         ? [row.organizations]
         : []
   );
-  return orgs.map(({ id, name }) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
+  return orgs
+    .map(({ id, name, logo_url }) => ({ id, name, logo_url: logo_url ?? null }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 /**

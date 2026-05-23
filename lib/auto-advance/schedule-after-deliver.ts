@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { createExecutionRequest } from '@/lib/overlord/execution-requests';
-import { sendPushNotification } from '@/lib/overlord/push-notifications';
+import { emitWorkflowNotification } from '@/lib/overlord/notifications/orchestrator';
 import type { Database, Json } from '@/types/database.types';
 
 type ObjectiveClient = SupabaseClient<Database>;
@@ -88,24 +88,35 @@ export async function scheduleQueuedObjectiveAfterDeliver({
       .update({ has_unopened_waiting_response: true, is_read: false })
       .eq('id', ticketId);
 
-    await supabase.from('ticket_events').insert({
-      event_type: 'awaiting_approval',
-      phase: 'execute',
-      summary: nextQueued.approval_reason || 'Queued objective is waiting for your approval.',
-      ticket_id: ticketId,
-      objective_id: nextQueued.id,
-      is_blocking: true,
-      created_by: userId
-    });
+    const awaitingSummary =
+      nextQueued.approval_reason || 'Queued objective is waiting for your approval.';
+    const { data: awaitingEvent } = await supabase
+      .from('ticket_events')
+      .insert({
+        event_type: 'awaiting_approval',
+        phase: 'execute',
+        summary: awaitingSummary,
+        ticket_id: ticketId,
+        objective_id: nextQueued.id,
+        is_blocking: true,
+        created_by: userId
+      })
+      .select('id')
+      .single();
 
-    await sendPushNotification(supabase, {
-      title: `Awaiting approval (${ticketReference})`,
-      body: (nextQueued.approval_reason || 'Queued objective is waiting for your approval.').slice(
-        0,
-        200
-      ),
+    await emitWorkflowNotification({
+      supabase,
+      event: {
+        id: awaitingEvent?.id ?? null,
+        event_type: 'awaiting_approval',
+        is_blocking: true,
+        phase: 'execute',
+        summary: awaitingSummary.slice(0, 200)
+      },
       organizationId,
-      data: { ticketId, eventType: 'awaiting_approval', objectiveId: nextQueued.id }
+      ticketId,
+      ticketReference,
+      objectiveId: nextQueued.id
     });
   }
 

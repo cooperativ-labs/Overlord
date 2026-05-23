@@ -73,9 +73,7 @@ export function TicketProjectSelect({
         sshPort: null,
         sshUser: null,
         sshAuthMethod: null,
-        sshPrivateKeyPath: null,
-        remoteHelperInstalledAt: null,
-        remoteHelperVersion: null
+        sshPrivateKeyPath: null
       })),
     [organizationId, projects]
   );
