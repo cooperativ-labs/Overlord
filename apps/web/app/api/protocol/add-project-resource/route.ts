@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { internalErrorResponse, parseProtocolBody } from '@/app/api/protocol/_lib';
+import { ensureProjectExecutionTarget } from '@/lib/overlord/execution-targets';
 import { upsertDeviceFromProtocol } from '@/lib/overlord/upsert-device';
 import { addProjectResourceSchema } from '@/lib/overlord/validation';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
@@ -38,7 +39,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Project not found.' }, { status: 404 });
     }
 
-    const deviceId = await upsertDeviceFromProtocol(supabase, {
+    const executionTargetId = await upsertDeviceFromProtocol(supabase, {
       organizationId,
       userId,
       deviceFingerprint,
@@ -46,31 +47,37 @@ export async function POST(request: Request) {
       platform: devicePlatform ?? null
     });
 
-    if (!deviceId) {
-      return NextResponse.json({ error: 'Failed to register device.' }, { status: 500 });
+    if (!executionTargetId) {
+      return NextResponse.json({ error: 'Failed to register execution target.' }, { status: 500 });
     }
 
-    // Clear existing primary on this device (a device has exactly one primary
-    // resource, but may be primary for multiple projects across devices).
+    await ensureProjectExecutionTarget(supabase, {
+      projectId,
+      organizationId,
+      userId,
+      executionTargetId
+    });
+
+    // Clear existing primary for this project on this execution target.
     if (isPrimary) {
-      await supabase
+      await (supabase as any)
         .from('project_resource_directories')
         .update({ is_primary: false })
-        .eq('user_id', userId)
-        .eq('device_id', deviceId);
+        .eq('project_id', projectId)
+        .eq('execution_target_id', executionTargetId);
     }
 
-    const { data: inserted, error } = await supabase
+    const { data: inserted, error } = await (supabase as any)
       .from('project_resource_directories')
       .insert({
         user_id: userId,
         project_id: projectId,
-        device_id: deviceId,
+        execution_target_id: executionTargetId,
         directory_path: directoryPath,
         label: label?.trim() || null,
         is_primary: isPrimary ?? false
       })
-      .select('id, directory_path, label, is_primary, device_id')
+      .select('id, directory_path, label, is_primary, execution_target_id')
       .single();
 
     if (error) {
@@ -89,7 +96,8 @@ export async function POST(request: Request) {
         directoryPath: inserted.directory_path,
         label: inserted.label,
         isPrimary: inserted.is_primary,
-        deviceId: inserted.device_id
+        deviceId: inserted.execution_target_id,
+        executionTargetId: inserted.execution_target_id
       },
       project: {
         id: project.id,

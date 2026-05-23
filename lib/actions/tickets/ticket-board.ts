@@ -12,6 +12,7 @@ import {
   mergeRowsById
 } from '@/lib/helpers/scheduled-ticket-visibility';
 import { parseObjectiveAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
+import { isDraftObjectiveWithText } from '@/lib/helpers/tickets';
 import { createClientForRequest } from '@/supabase/utils/server';
 import type { Database } from '@/types/database.types';
 
@@ -46,7 +47,8 @@ function mapBoardTicket(
   raw: RawBoardTicket,
   latestObjectiveAgent: string | null = null,
   latestObjectiveAssignedAgent: Database['public']['Tables']['objectives']['Row']['assigned_agent'] = null,
-  hasExecutingObjective = false
+  hasExecutingObjective = false,
+  hasDraftObjectiveWithText = false
 ) {
   const p = Array.isArray(raw.project) ? raw.project[0] : raw.project;
   const org = Array.isArray(raw.organization) ? raw.organization[0] : raw.organization;
@@ -77,7 +79,8 @@ function mapBoardTicket(
     has_executing_objective: hasExecutingObjective,
     waiting_for_response_at: null as string | null,
     has_unopened_waiting_response: false,
-    objectives_executed_count: 0
+    objectives_executed_count: 0,
+    has_draft_objective_with_text: hasDraftObjectiveWithText
   };
 }
 
@@ -250,11 +253,12 @@ export async function getTicketBoardBootstrapAction(
     Database['public']['Tables']['objectives']['Row']['assigned_agent']
   >();
   const executingObjectiveByTicket = new Set<string>();
+  const hasDraftObjectiveWithTextByTicket = new Set<string>();
 
   if (ticketIds.length > 0) {
     const { data: objectives, error: objectivesError } = await supabase
       .from('objectives')
-      .select('ticket_id,agent_identifier,assigned_agent,state')
+      .select('ticket_id,agent_identifier,assigned_agent,state,objective')
       .in('ticket_id', ticketIds)
       .order('created_at', { ascending: false });
 
@@ -265,6 +269,7 @@ export async function getTicketBoardBootstrapAction(
       agent_identifier: string | null;
       assigned_agent: Database['public']['Tables']['objectives']['Row']['assigned_agent'];
       state: string | null;
+      objective: string | null;
     }>) {
       if (!latestObjectiveAgentByTicket.has(objective.ticket_id)) {
         latestObjectiveAgentByTicket.set(objective.ticket_id, objective.agent_identifier ?? null);
@@ -274,6 +279,9 @@ export async function getTicketBoardBootstrapAction(
       }
       if (objective.state === 'executing') {
         executingObjectiveByTicket.add(objective.ticket_id);
+      }
+      if (isDraftObjectiveWithText(objective)) {
+        hasDraftObjectiveWithTextByTicket.add(objective.ticket_id);
       }
     }
   }
@@ -286,7 +294,8 @@ export async function getTicketBoardBootstrapAction(
         ticket,
         latestObjectiveAgentByTicket.get(ticket.id) ?? null,
         latestObjectiveAssignedAgentByTicket.get(ticket.id) ?? null,
-        executingObjectiveByTicket.has(ticket.id)
+        executingObjectiveByTicket.has(ticket.id),
+        hasDraftObjectiveWithTextByTicket.has(ticket.id)
       )
     ),
     columnPageInfo
@@ -332,6 +341,7 @@ export async function loadMoreTicketsAction({
     Database['public']['Tables']['objectives']['Row']['assigned_agent']
   >();
   const executingObjectiveByTicket = new Set<string>();
+  const hasDraftObjectiveWithTextByTicket = new Set<string>();
   const waitingLatestByTicket = new Map<string, string>();
 
   if (ticketIds.length > 0) {
@@ -341,7 +351,7 @@ export async function loadMoreTicketsAction({
     ] = await Promise.all([
       supabase
         .from('objectives')
-        .select('ticket_id,agent_identifier,assigned_agent,state')
+        .select('ticket_id,agent_identifier,assigned_agent,state,objective')
         .in('ticket_id', ticketIds)
         .order('created_at', { ascending: false }),
       supabase
@@ -361,6 +371,7 @@ export async function loadMoreTicketsAction({
       agent_identifier: string | null;
       assigned_agent: Database['public']['Tables']['objectives']['Row']['assigned_agent'];
       state: string | null;
+      objective: string | null;
     }>) {
       if (!latestObjectiveAgentByTicket.has(objective.ticket_id)) {
         latestObjectiveAgentByTicket.set(objective.ticket_id, objective.agent_identifier ?? null);
@@ -370,6 +381,9 @@ export async function loadMoreTicketsAction({
       }
       if (objective.state === 'executing') {
         executingObjectiveByTicket.add(objective.ticket_id);
+      }
+      if (isDraftObjectiveWithText(objective)) {
+        hasDraftObjectiveWithTextByTicket.add(objective.ticket_id);
       }
     }
 
@@ -389,7 +403,8 @@ export async function loadMoreTicketsAction({
         ticket,
         latestObjectiveAgentByTicket.get(ticket.id) ?? null,
         latestObjectiveAssignedAgentByTicket.get(ticket.id) ?? null,
-        executingObjectiveByTicket.has(ticket.id)
+        executingObjectiveByTicket.has(ticket.id),
+        hasDraftObjectiveWithTextByTicket.has(ticket.id)
       );
       const waitingAt = waitingLatestByTicket.get(ticket.id);
       return waitingAt ? { ...mapped, waiting_for_response_at: waitingAt } : mapped;

@@ -18,6 +18,7 @@ import type { Database } from '@/types/database.types';
 
 import { ExecutionTargetBadge } from './ExecutionTargetBadge';
 import { ExecutionTargetToggle } from './ExecutionTargetToggle';
+import { ObjectivesExecutedBadge } from './ObjectivesExecutedBadge';
 import {
   AttentionIndicators,
   ProjectColorDot,
@@ -58,6 +59,7 @@ export type Ticket = {
   has_unopened_waiting_response?: boolean;
   is_read?: boolean;
   objectives_executed_count?: number;
+  has_draft_objective_with_text?: boolean;
   updated_at?: string;
   delegate?: string | null;
   schedule_id?: number | null;
@@ -190,14 +192,10 @@ function KanbanCardBody({
             <div className="flex shrink-0 items-center gap-1.5">
               <ExecutionTargetBadge executionTarget={ticket.execution_target} className="text-xs" />
               {ticket.schedule_id ? <ScheduleBadge /> : null}
-              {ticket.objectives_executed_count && ticket.objectives_executed_count > 0 ? (
-                <span
-                  className="text-[10px] text-fg3 tabular-nums rounded-full bg-muted px-1.5 py-0.5"
-                  title={`${ticket.objectives_executed_count} objective${ticket.objectives_executed_count === 1 ? '' : 's'} executed`}
-                >
-                  {ticket.objectives_executed_count}×
-                </span>
-              ) : null}
+              <ObjectivesExecutedBadge
+                count={ticket.objectives_executed_count}
+                hasDraftObjectiveWithText={ticket.has_draft_objective_with_text}
+              />
             </div>
           </div>
           {showOrganizationName && ticket.organization_name ? (

@@ -18,32 +18,27 @@ export async function handleUpdateProjectResource(
   if (!deviceFingerprint) return toolErr('deviceFingerprint is required.');
   if (!ctx.userId) return toolErr('Authentication required.');
 
-  // Verify device belongs to this user
-  const { data: device } = await supabase
-    .from('devices')
+  const { data: target } = await supabase
+    .from('execution_targets')
     .select('id')
-    .eq('organization_id', ctx.organizationId)
-    .eq('user_id', ctx.userId)
     .eq('device_fingerprint', deviceFingerprint)
     .maybeSingle();
 
-  if (!device) {
-    return toolErr(
-      'Device not found. Call get_device first to register this device. You can only update resources on your own device.'
-    );
+  if (!target) {
+    return toolErr('Execution target not found. Call get_device first to register this target.');
   }
 
   const { data: existing } = await supabase
     .from('project_resource_directories')
-    .select('id, project_id, device_id')
+    .select('id, project_id, execution_target_id')
     .eq('id', resourceId)
     .eq('user_id', ctx.userId)
     .maybeSingle();
 
   if (!existing) return toolErr('Resource not found.');
 
-  if ((existing as any).device_id !== (device as any).id) {
-    return toolErr('You can only update resources that belong to your current device.');
+  if ((existing as any).execution_target_id !== (target as any).id) {
+    return toolErr('You can only update resources that belong to your current execution target.');
   }
 
   const directoryPath =
@@ -54,12 +49,11 @@ export async function handleUpdateProjectResource(
     rawLabel === null ? null : typeof rawLabel === 'string' ? rawLabel.trim() || null : undefined;
 
   if (isPrimary) {
-    // A device has at most one primary resource — clear by device, not project.
     await supabase
       .from('project_resource_directories')
       .update({ is_primary: false })
-      .eq('user_id', ctx.userId)
-      .eq('device_id', (device as any).id)
+      .eq('project_id', (existing as any).project_id)
+      .eq('execution_target_id', (target as any).id)
       .neq('id', resourceId);
   }
 
@@ -72,7 +66,7 @@ export async function handleUpdateProjectResource(
     .from('project_resource_directories')
     .update(updates)
     .eq('id', resourceId)
-    .select('id, directory_path, label, is_primary, device_id')
+    .select('id, directory_path, label, is_primary, execution_target_id')
     .single();
 
   if (error) return toolErr(`Failed to update resource: ${error.message}`);
@@ -83,7 +77,8 @@ export async function handleUpdateProjectResource(
       directoryPath: (updated as any).directory_path,
       label: (updated as any).label ?? null,
       isPrimary: (updated as any).is_primary,
-      deviceId: (updated as any).device_id
+      deviceId: (updated as any).execution_target_id,
+      executionTargetId: (updated as any).execution_target_id
     }
   });
 }

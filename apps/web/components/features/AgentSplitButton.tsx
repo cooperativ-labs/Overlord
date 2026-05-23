@@ -211,7 +211,11 @@ export function AgentSplitButton({
 
   async function handleLaunch(
     agentValue: AgentSelectorValue = effectiveSelection.agent,
-    options?: { useStoredModelPreference?: boolean; force?: boolean }
+    options?: {
+      useStoredModelPreference?: boolean;
+      force?: boolean;
+      skipRunningConfirm?: boolean;
+    }
   ): Promise<void> {
     if (demo) return;
 
@@ -221,7 +225,7 @@ export function AgentSplitButton({
 
     if (!isCopyValue && (!canRequestExecution || !hasResolvedSelection)) return;
 
-    if (isRunning && !options?.force) {
+    if (isRunning && !options?.force && !options?.skipRunningConfirm) {
       pendingLaunchRef.current = { agentValue, options };
       setShowRunningConfirm(true);
       return;
@@ -318,22 +322,25 @@ export function AgentSplitButton({
       <PopoverTrigger asChild>
         <span className="inline-flex">{runButton}</span>
       </PopoverTrigger>
-      <PopoverContent side="top" className="w-72 p-3 text-sm">
+      <PopoverContent side="top" className="w-80 p-3 text-sm">
         <p className="mb-3 text-foreground">
-          It appears an agent is still working on this ticket. Are you sure you want to launch this
-          objective now?
+          It appears an agent is still working on this ticket. Queue this objective to launch after
+          the current one completes?
         </p>
-        <div className="flex justify-end gap-2">
+        <div className="flex flex-wrap justify-end gap-2">
           <button
             type="button"
             className="rounded-md px-3 py-1.5 text-xs text-muted-foreground hover:bg-accent"
-            onClick={() => setShowRunningConfirm(false)}
+            onClick={() => {
+              setShowRunningConfirm(false);
+              pendingLaunchRef.current = null;
+            }}
           >
             Cancel
           </button>
           <button
             type="button"
-            className="rounded-md bg-primary px-3 py-1.5 text-xs text-primary-foreground hover:bg-primary/90"
+            className="rounded-md border border-input px-3 py-1.5 text-xs hover:bg-accent"
             onClick={() => {
               setShowRunningConfirm(false);
               const pending = pendingLaunchRef.current;
@@ -348,7 +355,26 @@ export function AgentSplitButton({
               pendingLaunchRef.current = null;
             }}
           >
-            Launch Anyway
+            Launch now
+          </button>
+          <button
+            type="button"
+            className="rounded-md bg-primary px-3 py-1.5 text-xs text-primary-foreground hover:bg-primary/90"
+            onClick={() => {
+              setShowRunningConfirm(false);
+              const pending = pendingLaunchRef.current;
+              void handleLaunch(
+                pending?.agentValue ??
+                  (isCopySelectedAgent ? selectedAgent : effectiveSelection.agent),
+                {
+                  ...(pending?.options ?? { useStoredModelPreference: !isCopySelectedAgent }),
+                  skipRunningConfirm: true
+                }
+              );
+              pendingLaunchRef.current = null;
+            }}
+          >
+            Queue
           </button>
         </div>
       </PopoverContent>

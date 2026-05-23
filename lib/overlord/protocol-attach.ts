@@ -324,7 +324,8 @@ export async function runAttachProtocol(supabase: AttachClient, params: AttachPa
   const { promptContext, promptContextSections } = buildPromptContext({
     ticket: {
       ...ticket,
-      objective: objectiveExecution.executedObjective ?? undefined
+      objective: objectiveExecution.executedObjective ?? undefined,
+      objective_id: objectiveExecution.executedObjectiveId ?? null
     },
     recentEvents: recentEvents ?? [],
     history: history ?? [],
@@ -358,7 +359,8 @@ export async function runAttachProtocol(supabase: AttachClient, params: AttachPa
       pendingCheckpointObjectiveIds,
       ticket: {
         ...ticket,
-        objective: objectiveExecution.executedObjective ?? undefined
+        objective: objectiveExecution.executedObjective ?? undefined,
+        objective_id: objectiveExecution.executedObjectiveId ?? null
       }
     }
   } as const;

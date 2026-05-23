@@ -6,8 +6,6 @@
 ovld protocol attach --ticket-id $TICKET_ID
 ```
 
-The response JSON includes `session.sessionKey`. The CLI automatically persists this key to a temp file scoped to the current working directory. All subsequent `ovld protocol` commands (update, deliver, ask, etc.) auto-resolve `--session-key` and `--ticket-id` from this persisted session, so you normally do not need to pass them explicitly. If auto-resolution fails, pass `--session-key <sessionKey>` on every call.
-
 In a git workspace, `attach` automatically creates a local git checkpoint for each executing objective before work begins, stored under `refs/overlord/checkpoints/<objectiveId>`. Pass `--skip-checkpoint` only when intentionally bypassing local provenance.
 
 ## Update

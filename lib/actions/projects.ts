@@ -3,11 +3,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { revalidatePath } from 'next/cache';
 
-import {
-  PROJECT_BASE_SELECT,
-  PROJECT_SSH_PREFERENCE_SELECT,
-  PROJECT_USER_LOCAL_SELECT
-} from '@/lib/actions/project-selects';
+import { PROJECT_BASE_SELECT, PROJECT_USER_LOCAL_SELECT } from '@/lib/actions/project-selects';
 import {
   buildLegacySshCommand,
   type CreateProjectResult,
@@ -29,7 +25,12 @@ import {
 } from '@/lib/diagnostics/server-action';
 import { normalizeHexColor } from '@/lib/helpers/color';
 import { buildProjectPath } from '@/lib/helpers/ticket-path';
+import {
+  ensureProjectExecutionTarget,
+  upsertSshExecutionTarget
+} from '@/lib/overlord/execution-targets';
 import { createClientForRequest } from '@/supabase/utils/server';
+import { createServiceRoleClient } from '@/supabase/utils/service-role';
 import type { Database } from '@/types/database.types';
 
 type ServerSupabase = SupabaseClient<Database>;
@@ -61,23 +62,105 @@ export async function getProjectUserSshSettingsByProjectId(
     return new Map();
   }
 
-  const { data, error } = await supabase
-    .from('project_user')
-    .select(PROJECT_SSH_PREFERENCE_SELECT)
-    .eq('user_id', userId)
+  const { data: projectTargets, error } = await (supabase as any)
+    .from('project_execution_targets')
+    .select('project_id, execution_target_id, execution_targets(host, port, transport)')
     .in('project_id', projectIds);
 
-  if (error || !data) {
+  if (error || !projectTargets || projectTargets.length === 0) {
     return new Map();
   }
 
-  return new Map(
-    data
-      .filter(
-        (row): row is typeof row & { project_id: string } => typeof row.project_id === 'string'
-      )
-      .map(row => [row.project_id, row])
-  );
+  const targetIds = [
+    ...new Set(
+      projectTargets
+        .map((row: { execution_target_id?: string | null }) => row.execution_target_id)
+        .filter((id: string | null | undefined): id is string => Boolean(id))
+    )
+  ];
+  if (targetIds.length === 0) return new Map();
+
+  const [{ data: credentials }, { data: resources }] = await Promise.all([
+    (supabase as any)
+      .from('execution_target_ssh_credentials')
+      .select('execution_target_id, username, auth_method, private_key_path')
+      .eq('user_id', userId)
+      .in('execution_target_id', targetIds),
+    (supabase as any)
+      .from('project_resource_directories')
+      .select('project_id, execution_target_id, directory_path, is_primary, created_at')
+      .in('project_id', projectIds)
+      .in('execution_target_id', targetIds)
+      .order('is_primary', { ascending: false })
+      .order('created_at', { ascending: true })
+  ]);
+
+  const credentialByTarget = new Map<
+    string,
+    { username: string; auth_method: string | null; private_key_path: string | null }
+  >();
+  for (const credential of credentials ?? []) {
+    if (!credentialByTarget.has(credential.execution_target_id)) {
+      credentialByTarget.set(credential.execution_target_id, credential);
+    }
+  }
+
+  const resourceByProjectTarget = new Map<string, string>();
+  for (const resource of resources ?? []) {
+    const key = `${resource.project_id}:${resource.execution_target_id}`;
+    if (!resourceByProjectTarget.has(key)) {
+      resourceByProjectTarget.set(key, resource.directory_path);
+    }
+  }
+
+  const result = new Map<string, ProjectUserSshSettingsRow>();
+  for (const projectTarget of projectTargets as Array<{
+    project_id: string;
+    execution_target_id: string;
+    execution_targets:
+      | { host: string | null; port: number | null; transport: string | null }
+      | { host: string | null; port: number | null; transport: string | null }[]
+      | null;
+  }>) {
+    if (result.has(projectTarget.project_id)) continue;
+
+    const target = Array.isArray(projectTarget.execution_targets)
+      ? projectTarget.execution_targets[0]
+      : projectTarget.execution_targets;
+    if (!target || target.transport !== 'ssh') continue;
+
+    const credential = credentialByTarget.get(projectTarget.execution_target_id);
+    if (!credential) continue;
+
+    const sshHost = trimString(target.host);
+    const sshUser = trimString(credential.username);
+    const sshPort = target.port ?? null;
+    if (!sshHost || !sshUser) continue;
+
+    result.set(projectTarget.project_id, {
+      project_id: projectTarget.project_id,
+      ssh_command: buildLegacySshCommand({
+        projectId: projectTarget.project_id,
+        sshHost,
+        sshPort,
+        sshUser,
+        sshAuthMethod: credential.auth_method as ProjectSshAuthMethod | null,
+        sshPrivateKeyPath: credential.private_key_path,
+        remoteWorkingDirectory: null
+      }),
+      remote_working_directory:
+        resourceByProjectTarget.get(
+          `${projectTarget.project_id}:${projectTarget.execution_target_id}`
+        ) ?? null,
+      ssh_host: sshHost,
+      ssh_port: sshPort,
+      ssh_user: sshUser,
+      ssh_auth_method: credential.auth_method,
+      ssh_private_key_path: credential.private_key_path
+    });
+  }
+
+  return result;
 }
 
 export async function getProjectUserLocalSettingsByProjectId(
@@ -256,28 +339,6 @@ export async function updateProjectWorkingDirectoryAction(input: {
     throw new Error(error.message ?? 'Failed to update project working directory.');
   }
 
-  // Mirror to project_resource_directories so the new resolver sees the value.
-  if (normalized) {
-    const { data: existing } = await supabase
-      .from('project_resource_directories')
-      .select('id')
-      .eq('user_id', user.id)
-      .eq('project_id', input.projectId)
-      .is('device_id', null)
-      .eq('directory_path', normalized)
-      .maybeSingle();
-
-    if (!existing) {
-      await supabase.from('project_resource_directories').insert({
-        user_id: user.id,
-        project_id: input.projectId,
-        device_id: null,
-        directory_path: normalized,
-        is_primary: true
-      });
-    }
-  }
-
   revalidateProjectPaths(input.projectId);
 }
 
@@ -363,42 +424,55 @@ export async function updateProjectSshConfigAction(
       ? input.sshAuthMethod
       : null;
 
-  const payload = {
-    user_id: user.id,
-    project_id: input.projectId,
-    remote_working_directory: trimOrNull(input.remoteWorkingDirectory),
-    ssh_host: trimOrNull(input.sshHost),
-    ssh_port: input.sshPort ?? null,
-    ssh_user: trimOrNull(input.sshUser),
-    ssh_auth_method: authMethod,
-    ssh_private_key_path: trimOrNull(input.sshPrivateKeyPath),
-    ssh_command: buildLegacySshCommand(input),
-    updated_at: new Date().toISOString()
-  };
-
-  const { error } = await supabase.from('project_user').upsert(payload, {
-    onConflict: 'user_id,project_id'
-  });
-
-  if (error) {
-    throw new Error(error?.message ?? 'Failed to update project SSH configuration.');
-  }
-
-  // Mirror the SSH remote directory into the resource manifest so that the
-  // remote device — once it actually runs `ovld` — can pick up its primary
-  // resource without needing a parallel "remote_working_directory" field on
-  // the SSH config. We register a placeholder device keyed on the SSH host;
-  // a future reconciliation step replaces it with the real device fingerprint.
   const remoteDir = trimOrNull(input.remoteWorkingDirectory);
   const sshHost = trimOrNull(input.sshHost);
   const sshUser = trimOrNull(input.sshUser);
-  if (remoteDir && sshHost && sshUser) {
-    await syncSshRemoteResource(supabase, {
+
+  const { data: project, error: projectError } = await supabase
+    .from('projects')
+    .select('organization_id')
+    .eq('id', input.projectId)
+    .maybeSingle();
+  if (projectError || !project) {
+    throw new Error('Project not found.');
+  }
+
+  const serviceSupabase = createServiceRoleClient();
+  if (!sshHost || !sshUser) {
+    await clearProjectSshTargets(serviceSupabase, {
+      userId: user.id,
+      projectId: input.projectId
+    });
+    revalidateProjectPaths(input.projectId);
+    return;
+  }
+
+  const executionTargetId = await upsertSshExecutionTarget(serviceSupabase, {
+    organizationId: project.organization_id,
+    userId: user.id,
+    host: sshHost,
+    port: input.sshPort ?? null,
+    username: sshUser,
+    authMethod,
+    privateKeyPath: trimOrNull(input.sshPrivateKeyPath)
+  });
+
+  if (!executionTargetId) {
+    throw new Error('Failed to register SSH execution target.');
+  }
+
+  await ensureProjectExecutionTarget(serviceSupabase, {
+    projectId: input.projectId,
+    organizationId: project.organization_id,
+    userId: user.id,
+    executionTargetId
+  });
+
+  if (remoteDir) {
+    await syncSshRemoteResource(serviceSupabase, {
       userId: user.id,
       projectId: input.projectId,
-      sshHost,
-      sshUser,
-      sshPort: input.sshPort ?? null,
+      executionTargetId,
       directoryPath: remoteDir
     });
   }
@@ -417,84 +491,65 @@ async function syncSshRemoteResource(
   input: {
     userId: string;
     projectId: string;
-    sshHost: string;
-    sshUser: string;
-    sshPort: number | null;
+    executionTargetId: string;
     directoryPath: string;
   }
 ): Promise<void> {
-  const { data: project, error: projectError } = await supabase
-    .from('projects')
-    .select('organization_id')
-    .eq('id', input.projectId)
-    .maybeSingle();
-  if (projectError || !project) return;
-
-  const portSegment = typeof input.sshPort === 'number' ? `:${input.sshPort}` : '';
-  const fingerprint = `ssh:${input.sshUser}@${input.sshHost}${portSegment}`;
-
-  const { data: existingDevice } = await supabase
-    .from('devices')
-    .select('id')
-    .eq('organization_id', project.organization_id)
-    .eq('user_id', input.userId)
-    .eq('device_fingerprint', fingerprint)
-    .maybeSingle();
-
-  let deviceId = existingDevice?.id ?? null;
-  const now = new Date().toISOString();
-
-  if (!deviceId) {
-    const { data: labelRow } = await supabase.rpc('generate_device_label', {
-      org_id: project.organization_id,
-      hostname: input.sshHost,
-      platform: 'ssh'
-    });
-    const label =
-      typeof labelRow === 'string' && labelRow.length > 0
-        ? labelRow
-        : `ssh-${input.sshHost.replace(/[^a-z0-9-]+/gi, '-').toLowerCase()}`;
-
-    const { data: inserted, error: insertError } = await supabase
-      .from('devices')
-      .insert({
-        organization_id: project.organization_id,
-        user_id: input.userId,
-        device_fingerprint: fingerprint,
-        label,
-        hostname: input.sshHost,
-        platform: 'ssh',
-        is_placeholder: true,
-        last_seen_at: now
-      })
-      .select('id')
-      .single();
-    if (insertError || !inserted) return;
-    deviceId = inserted.id;
-  } else {
-    await supabase
-      .from('devices')
-      .update({ hostname: input.sshHost, last_seen_at: now })
-      .eq('id', deviceId);
-  }
-
-  // Clear any other primary on this device before upserting the new one.
-  await supabase
+  await (supabase as any)
     .from('project_resource_directories')
     .update({ is_primary: false })
-    .eq('user_id', input.userId)
-    .eq('device_id', deviceId);
+    .eq('project_id', input.projectId)
+    .eq('execution_target_id', input.executionTargetId);
 
-  await supabase.from('project_resource_directories').upsert(
+  await (supabase as any).from('project_resource_directories').upsert(
     {
       user_id: input.userId,
       project_id: input.projectId,
-      device_id: deviceId,
+      execution_target_id: input.executionTargetId,
       directory_path: input.directoryPath,
       is_primary: true
     },
-    { onConflict: 'project_id,user_id,device_id,directory_path' }
+    { onConflict: 'project_id,execution_target_id,directory_path' }
   );
+}
+
+async function clearProjectSshTargets(
+  supabase: ServerSupabase,
+  input: {
+    userId: string;
+    projectId: string;
+  }
+): Promise<void> {
+  const { data: credentials } = await (supabase as any)
+    .from('execution_target_ssh_credentials')
+    .select('execution_target_id')
+    .eq('user_id', input.userId);
+
+  const targetIds = [
+    ...new Set(
+      (credentials ?? [])
+        .map((row: { execution_target_id?: string | null }) => row.execution_target_id)
+        .filter((id: string | null | undefined): id is string => Boolean(id))
+    )
+  ];
+  if (targetIds.length === 0) return;
+
+  const { data: projectTargets } = await (supabase as any)
+    .from('project_execution_targets')
+    .select('execution_target_id')
+    .eq('project_id', input.projectId)
+    .in('execution_target_id', targetIds);
+
+  const projectTargetIds = (projectTargets ?? [])
+    .map((row: { execution_target_id?: string | null }) => row.execution_target_id)
+    .filter((id: string | null | undefined): id is string => Boolean(id));
+  if (projectTargetIds.length === 0) return;
+
+  await (supabase as any)
+    .from('execution_target_ssh_credentials')
+    .delete()
+    .eq('user_id', input.userId)
+    .in('execution_target_id', projectTargetIds);
 }
 
 export async function moveProjectToOrganizationAction(input: {

@@ -24,7 +24,7 @@ type RequestExecutionInput = {
   serverMultiplexer?: 'none' | 'tmux' | null;
   tmuxCommand?: string | null;
   targetKind?: 'any' | 'local' | 'ssh';
-  targetDeviceId?: string | null;
+  targetExecutionTargetId?: string | null;
   targetResourceId?: string | null;
 };
 
@@ -159,7 +159,7 @@ export async function createExecutionRequest(
     thinking_level: thinking,
     launch_mode: input.launchMode ?? 'run',
     launch_params: buildLaunchParams(input),
-    target_device_id: input.targetDeviceId ?? null,
+    target_execution_target_id: input.targetExecutionTargetId ?? null,
     target_resource_id: input.targetResourceId ?? null,
     target_kind: input.targetKind ?? 'any',
     status: 'queued',

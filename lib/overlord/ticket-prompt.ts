@@ -39,6 +39,7 @@ type Ticket = {
   id: string;
   title: string | null | undefined;
   objective: string | null;
+  objective_id?: string | null;
   acceptance_criteria: string | null;
   available_tools: string | null;
   constraints?: string | null;

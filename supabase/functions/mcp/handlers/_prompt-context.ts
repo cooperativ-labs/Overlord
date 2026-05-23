@@ -4,6 +4,7 @@ type TicketLike = {
   id: string;
   title: string | null | undefined;
   objective?: string | null;
+  objective_id?: string | null;
   acceptance_criteria: string | null;
   available_tools: string | null;
   constraints?: string | null;
@@ -45,6 +46,7 @@ function formatTicketMetadata(ticket: TicketLike): string {
   return [
     `- **Title:** ${ticket.title?.trim() || '(Untitled)'}`,
     `- **Ticket ID:** ${ticket.id}`,
+    ...(ticket.objective_id ? [`- **Objective ID:** ${ticket.objective_id}`] : []),
     `- **Status:** ${ticket.status ?? 'unknown'}`,
     `- **Project ID:** ${ticket.project_id}`
   ].join('\n');

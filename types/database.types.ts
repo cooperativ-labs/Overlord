@@ -474,6 +474,7 @@ export type Database = {
           attempt_count: number;
           claimed_at: string | null;
           claimed_by_device_id: string | null;
+          claimed_by_execution_target_id: string | null;
           created_at: string;
           failed_at: string | null;
           id: string;
@@ -492,6 +493,7 @@ export type Database = {
           requested_from: string;
           status: string;
           target_device_id: string | null;
+          target_execution_target_id: string | null;
           target_kind: string;
           target_resource_id: string | null;
           thinking_level: string | null;
@@ -503,6 +505,7 @@ export type Database = {
           attempt_count?: number;
           claimed_at?: string | null;
           claimed_by_device_id?: string | null;
+          claimed_by_execution_target_id?: string | null;
           created_at?: string;
           failed_at?: string | null;
           id?: string;
@@ -521,6 +524,7 @@ export type Database = {
           requested_from: string;
           status?: string;
           target_device_id?: string | null;
+          target_execution_target_id?: string | null;
           target_kind?: string;
           target_resource_id?: string | null;
           thinking_level?: string | null;
@@ -532,6 +536,7 @@ export type Database = {
           attempt_count?: number;
           claimed_at?: string | null;
           claimed_by_device_id?: string | null;
+          claimed_by_execution_target_id?: string | null;
           created_at?: string;
           failed_at?: string | null;
           id?: string;
@@ -550,6 +555,7 @@ export type Database = {
           requested_from?: string;
           status?: string;
           target_device_id?: string | null;
+          target_execution_target_id?: string | null;
           target_kind?: string;
           target_resource_id?: string | null;
           thinking_level?: string | null;
@@ -562,6 +568,13 @@ export type Database = {
             columns: ['claimed_by_device_id'];
             isOneToOne: false;
             referencedRelation: 'devices';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'execution_requests_claimed_by_execution_target_id_fkey';
+            columns: ['claimed_by_execution_target_id'];
+            isOneToOne: false;
+            referencedRelation: 'execution_targets';
             referencedColumns: ['id'];
           },
           {
@@ -600,6 +613,13 @@ export type Database = {
             referencedColumns: ['id'];
           },
           {
+            foreignKeyName: 'execution_requests_target_execution_target_id_fkey';
+            columns: ['target_execution_target_id'];
+            isOneToOne: false;
+            referencedRelation: 'execution_targets';
+            referencedColumns: ['id'];
+          },
+          {
             foreignKeyName: 'execution_requests_target_resource_id_fkey';
             columns: ['target_resource_id'];
             isOneToOne: false;
@@ -614,6 +634,101 @@ export type Database = {
             referencedColumns: ['id'];
           }
         ];
+      };
+      execution_target_ssh_credentials: {
+        Row: {
+          auth_method: string;
+          created_at: string;
+          execution_target_id: string;
+          host_key_fingerprint: string | null;
+          id: string;
+          private_key_path: string | null;
+          public_key_fingerprint: string | null;
+          secure_enclave_tag: string | null;
+          updated_at: string;
+          user_id: string;
+          username: string;
+        };
+        Insert: {
+          auth_method?: string;
+          created_at?: string;
+          execution_target_id: string;
+          host_key_fingerprint?: string | null;
+          id?: string;
+          private_key_path?: string | null;
+          public_key_fingerprint?: string | null;
+          secure_enclave_tag?: string | null;
+          updated_at?: string;
+          user_id: string;
+          username: string;
+        };
+        Update: {
+          auth_method?: string;
+          created_at?: string;
+          execution_target_id?: string;
+          host_key_fingerprint?: string | null;
+          id?: string;
+          private_key_path?: string | null;
+          public_key_fingerprint?: string | null;
+          secure_enclave_tag?: string | null;
+          updated_at?: string;
+          user_id?: string;
+          username?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'execution_target_ssh_credentials_execution_target_id_fkey';
+            columns: ['execution_target_id'];
+            isOneToOne: false;
+            referencedRelation: 'execution_targets';
+            referencedColumns: ['id'];
+          }
+        ];
+      };
+      execution_targets: {
+        Row: {
+          created_at: string;
+          device_fingerprint: string | null;
+          host: string;
+          id: string;
+          is_placeholder: boolean;
+          last_seen_at: string | null;
+          name: string | null;
+          placeholder_key: string | null;
+          platform: string | null;
+          port: number;
+          transport: string;
+          updated_at: string;
+        };
+        Insert: {
+          created_at?: string;
+          device_fingerprint?: string | null;
+          host?: string;
+          id?: string;
+          is_placeholder?: boolean;
+          last_seen_at?: string | null;
+          name?: string | null;
+          placeholder_key?: string | null;
+          platform?: string | null;
+          port?: number;
+          transport?: string;
+          updated_at?: string;
+        };
+        Update: {
+          created_at?: string;
+          device_fingerprint?: string | null;
+          host?: string;
+          id?: string;
+          is_placeholder?: boolean;
+          last_seen_at?: string | null;
+          name?: string | null;
+          placeholder_key?: string | null;
+          platform?: string | null;
+          port?: number;
+          transport?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
       };
       feed_posts: {
         Row: {
@@ -1049,6 +1164,48 @@ export type Database = {
           }
         ];
       };
+      organization_execution_targets: {
+        Row: {
+          added_by: string | null;
+          created_at: string;
+          execution_target_id: string;
+          label: string;
+          organization_id: number;
+          updated_at: string;
+        };
+        Insert: {
+          added_by?: string | null;
+          created_at?: string;
+          execution_target_id: string;
+          label: string;
+          organization_id: number;
+          updated_at?: string;
+        };
+        Update: {
+          added_by?: string | null;
+          created_at?: string;
+          execution_target_id?: string;
+          label?: string;
+          organization_id?: number;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'organization_execution_targets_execution_target_id_fkey';
+            columns: ['execution_target_id'];
+            isOneToOne: false;
+            referencedRelation: 'execution_targets';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'organization_execution_targets_organization_id_fkey';
+            columns: ['organization_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          }
+        ];
+      };
       organization_invitations: {
         Row: {
           accepted_by: string | null;
@@ -1282,11 +1439,61 @@ export type Database = {
           }
         ];
       };
+      project_execution_targets: {
+        Row: {
+          added_by: string | null;
+          created_at: string;
+          execution_target_id: string;
+          organization_id: number;
+          project_id: string;
+          updated_at: string;
+        };
+        Insert: {
+          added_by?: string | null;
+          created_at?: string;
+          execution_target_id: string;
+          organization_id: number;
+          project_id: string;
+          updated_at?: string;
+        };
+        Update: {
+          added_by?: string | null;
+          created_at?: string;
+          execution_target_id?: string;
+          organization_id?: number;
+          project_id?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'project_execution_targets_execution_target_id_fkey';
+            columns: ['execution_target_id'];
+            isOneToOne: false;
+            referencedRelation: 'execution_targets';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'project_execution_targets_organization_id_fkey';
+            columns: ['organization_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'project_execution_targets_project_id_fkey';
+            columns: ['project_id'];
+            isOneToOne: false;
+            referencedRelation: 'projects';
+            referencedColumns: ['id'];
+          }
+        ];
+      };
       project_resource_directories: {
         Row: {
           created_at: string;
           device_id: string | null;
           directory_path: string;
+          execution_target_id: string;
           id: string;
           is_primary: boolean;
           label: string | null;
@@ -1298,6 +1505,7 @@ export type Database = {
           created_at?: string;
           device_id?: string | null;
           directory_path: string;
+          execution_target_id: string;
           id?: string;
           is_primary?: boolean;
           label?: string | null;
@@ -1309,6 +1517,7 @@ export type Database = {
           created_at?: string;
           device_id?: string | null;
           directory_path?: string;
+          execution_target_id?: string;
           id?: string;
           is_primary?: boolean;
           label?: string | null;
@@ -1322,6 +1531,13 @@ export type Database = {
             columns: ['device_id'];
             isOneToOne: false;
             referencedRelation: 'devices';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'project_resource_directories_execution_target_id_fkey';
+            columns: ['execution_target_id'];
+            isOneToOne: false;
+            referencedRelation: 'execution_targets';
             referencedColumns: ['id'];
           },
           {
@@ -2154,6 +2370,44 @@ export type Database = {
         };
         Relationships: [];
       };
+      user_execution_targets: {
+        Row: {
+          access_status: string;
+          created_at: string;
+          default_username: string | null;
+          execution_target_id: string;
+          last_connected_at: string | null;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          access_status?: string;
+          created_at?: string;
+          default_username?: string | null;
+          execution_target_id: string;
+          last_connected_at?: string | null;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          access_status?: string;
+          created_at?: string;
+          default_username?: string | null;
+          execution_target_id?: string;
+          last_connected_at?: string | null;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'user_execution_targets_execution_target_id_fkey';
+            columns: ['execution_target_id'];
+            isOneToOne: false;
+            referencedRelation: 'execution_targets';
+            referencedColumns: ['id'];
+          }
+        ];
+      };
       user_integrations: {
         Row: {
           api_key: string;
@@ -2230,6 +2484,10 @@ export type Database = {
         Returns: string;
       };
       generate_device_label: {
+        Args: { hostname: string; org_id: number; platform: string };
+        Returns: string;
+      };
+      generate_execution_target_label: {
         Args: { hostname: string; org_id: number; platform: string };
         Returns: string;
       };

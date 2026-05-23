@@ -15,10 +15,8 @@ export async function handleUpdateDevice(supabase: SupabaseClient, args: any, ct
   if (!ctx.userId) return toolErr('Authentication required.');
 
   const { data: existing } = await supabase
-    .from('devices')
+    .from('execution_targets')
     .select('id')
-    .eq('organization_id', ctx.organizationId)
-    .eq('user_id', ctx.userId)
     .eq('device_fingerprint', deviceFingerprint)
     .maybeSingle();
 
@@ -27,10 +25,11 @@ export async function handleUpdateDevice(supabase: SupabaseClient, args: any, ct
   }
 
   const { data: updated, error } = await supabase
-    .from('devices')
+    .from('organization_execution_targets')
     .update({ label, updated_at: new Date().toISOString() })
-    .eq('id', (existing as any).id)
-    .select('id, label, hostname, platform')
+    .eq('organization_id', ctx.organizationId)
+    .eq('execution_target_id', (existing as any).id)
+    .select('execution_target_id, label, execution_targets(host, platform)')
     .single();
 
   if (error) {
@@ -47,12 +46,16 @@ export async function handleUpdateDevice(supabase: SupabaseClient, args: any, ct
     return toolErr(`Failed to update device label: ${error.message}`);
   }
 
+  const targetRel = (updated as any).execution_targets;
+  const target = Array.isArray(targetRel) ? targetRel[0] : targetRel;
+
   return toolOk({
     device: {
-      id: (updated as any).id,
+      id: (updated as any).execution_target_id,
+      executionTargetId: (updated as any).execution_target_id,
       label: (updated as any).label,
-      hostname: (updated as any).hostname,
-      platform: (updated as any).platform
+      hostname: target?.host ?? null,
+      platform: target?.platform ?? null
     }
   });
 }

@@ -45,7 +45,9 @@ type EventInsert = {
     | 'artifact'
     | 'deliver'
     | 'status_change'
-    | 'alert';
+    | 'alert'
+    | 'awaiting_approval'
+    | 'execution_requested';
   isBlocking?: boolean;
   payload?: Record<string, unknown>;
   phase?: string | null;

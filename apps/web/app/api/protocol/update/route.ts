@@ -242,6 +242,8 @@ export async function POST(request: Request) {
     if (phase) {
       const targetStatusName = await resolveStatusNameForPhase(supabase, organizationId, phase);
       const ticketUpdate: Record<string, unknown> = { status: targetStatusName };
+      const shouldEmitStatusChange =
+        currentTicket?.status !== targetStatusName && phase === 'review';
 
       // If moving to a review-type status, place the ticket at the top of that column
       // and mark it unread so the review indicator appears for the user.
@@ -299,6 +301,20 @@ export async function POST(request: Request) {
         .eq('id', ticketId);
       if (ticketError) {
         return NextResponse.json({ error: ticketError.message }, { status: 500 });
+      }
+
+      if (shouldEmitStatusChange) {
+        const { error: statusChangeError } = await supabase.from('ticket_events').insert({
+          event_type: 'status_change',
+          phase,
+          objective_id: resolved.session.objective_id,
+          summary: 'Objective moved to review.',
+          ticket_id: ticketId,
+          created_by: userId
+        });
+        if (statusChangeError) {
+          return NextResponse.json({ error: statusChangeError.message }, { status: 500 });
+        }
       }
     }
 

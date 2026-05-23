@@ -76,6 +76,10 @@ const data = {
           url: '/docs/workflow/agent-execution'
         },
         {
+          title: 'Execution Targets & Resources',
+          url: '/docs/workflow/execution-targets'
+        },
+        {
           title: 'File changes & checkpoints',
           url: '/docs/workflow/file-changes'
         },

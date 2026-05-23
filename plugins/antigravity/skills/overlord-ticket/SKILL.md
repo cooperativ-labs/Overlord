@@ -12,12 +12,12 @@ Use this skill whenever Antigravity CLI needs to work with Overlord, whether the
 Use this mode when the prompt already contains a ticket ID or explicitly says the session was launched by Overlord.
 
 1. Attach first with `ovld protocol attach --ticket-id <ticket_id>`.
-2. Keep the returned `session.sessionKey` for all follow-up calls.
+2. The attach response prints JSON to stdout containing `session.sessionKey`. The CLI also persists this key automatically so subsequent `ovld protocol` commands in the same working directory resolve it without `--session-key`. If auto-resolution fails, pass `--session-key <sessionKey>` explicitly on every subsequent call.
 3. Treat the Overlord ticket prompt as authoritative for the objective, constraints, and delivery target.
-4. Post updates while working with `ovld protocol update --phase execute`.
+4. Post updates while working: `ovld protocol update --session-key <sessionKey> --ticket-id <ticket_id> --summary "..." --phase execute`.
 5. Follow-up messages after the initial ticket are captured automatically by the installed `UserPromptSubmit` hook. Do not post `user_follow_up` manually unless the hook is unavailable.
-6. If blocked, call `ovld protocol ask` and stop.
-7. Deliver last with `ovld protocol deliver`, including `changeRationales` for each meaningful behavioral file change.
+6. If blocked, call `ovld protocol ask --session-key <sessionKey> --ticket-id <ticket_id> --question "..."` and stop.
+7. Deliver last with `ovld protocol deliver --session-key <sessionKey> --ticket-id <ticket_id> --summary "..."`, including `changeRationales` for each meaningful behavioral file change.
 
 ### Mode 1 Reference
 

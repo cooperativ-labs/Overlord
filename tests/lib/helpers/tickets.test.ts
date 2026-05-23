@@ -1,4 +1,9 @@
-import { deriveTitleFromObjective, getDisplayTitle } from '@/lib/helpers/tickets';
+import {
+  deriveTitleFromObjective,
+  getDisplayTitle,
+  hasNonEmptyObjectiveText,
+  isDraftObjectiveWithText
+} from '@/lib/helpers/tickets';
 
 describe('ticket title helpers', () => {
   it('collapses file mentions to filenames when deriving a title', () => {
@@ -29,5 +34,19 @@ describe('ticket title helpers', () => {
     expect(deriveTitleFromObjective('Follow up with @jake about ticket sequencing')).toBe(
       'Follow up with @jake about ticket sequencing'
     );
+  });
+});
+
+describe('draft objective helpers', () => {
+  it('treats whitespace-only objective text as empty', () => {
+    expect(hasNonEmptyObjectiveText('   ')).toBe(false);
+    expect(hasNonEmptyObjectiveText(null)).toBe(false);
+    expect(hasNonEmptyObjectiveText('Ship it')).toBe(true);
+  });
+
+  it('detects draft objectives with non-empty text', () => {
+    expect(isDraftObjectiveWithText({ state: 'draft', objective: 'Next step' })).toBe(true);
+    expect(isDraftObjectiveWithText({ state: 'draft', objective: '   ' })).toBe(false);
+    expect(isDraftObjectiveWithText({ state: 'submitted', objective: 'Next step' })).toBe(false);
   });
 });

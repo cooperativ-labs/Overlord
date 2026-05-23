@@ -249,7 +249,8 @@ export function ProjectExecutionWorkspaceSelector({
       setResources(prev =>
         prev.map(r => ({
           ...r,
-          isPrimary: r.id === resource.id
+          isPrimary:
+            r.executionTargetId === resource.executionTargetId ? r.id === resource.id : r.isPrimary
         }))
       );
       toast.success(`Switched execution to ${resourceTitle(resource)}`);

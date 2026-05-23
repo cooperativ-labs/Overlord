@@ -32,14 +32,14 @@ export async function handleAddProjectResource(
   // Verify project belongs to the organization
   const { data: project } = await supabase
     .from('projects')
-    .select('id')
+    .select('id, organization_id')
     .eq('id', projectId)
     .eq('organization_id', ctx.organizationId)
     .maybeSingle();
 
   if (!project) return toolErr('Project not found.');
 
-  const deviceId = await upsertDeviceFromProtocol(supabase, {
+  const executionTargetId = await upsertDeviceFromProtocol(supabase, {
     organizationId: ctx.organizationId,
     userId: ctx.userId,
     deviceFingerprint,
@@ -47,15 +47,24 @@ export async function handleAddProjectResource(
     platform: devicePlatform
   });
 
-  if (!deviceId) return toolErr('Failed to register device.');
+  if (!executionTargetId) return toolErr('Failed to register execution target.');
+
+  await supabase.from('project_execution_targets').upsert(
+    {
+      project_id: projectId,
+      execution_target_id: executionTargetId,
+      organization_id: ctx.organizationId,
+      added_by: ctx.userId
+    },
+    { onConflict: 'project_id,execution_target_id' }
+  );
 
   if (isPrimary) {
-    // A device has at most one primary resource — clear by device, not project.
     await supabase
       .from('project_resource_directories')
       .update({ is_primary: false })
-      .eq('user_id', ctx.userId)
-      .eq('device_id', deviceId);
+      .eq('project_id', projectId)
+      .eq('execution_target_id', executionTargetId);
   }
 
   const { data: inserted, error } = await supabase
@@ -63,12 +72,12 @@ export async function handleAddProjectResource(
     .insert({
       user_id: ctx.userId,
       project_id: projectId,
-      device_id: deviceId,
+      execution_target_id: executionTargetId,
       directory_path: directoryPath,
       label,
       is_primary: isPrimary
     })
-    .select('id, directory_path, label, is_primary, device_id')
+    .select('id, directory_path, label, is_primary, execution_target_id')
     .single();
 
   if (error) {
@@ -84,7 +93,8 @@ export async function handleAddProjectResource(
       directoryPath: (inserted as any).directory_path,
       label: (inserted as any).label ?? null,
       isPrimary: (inserted as any).is_primary,
-      deviceId: (inserted as any).device_id
+      deviceId: (inserted as any).execution_target_id,
+      executionTargetId: (inserted as any).execution_target_id
     }
   });
 }

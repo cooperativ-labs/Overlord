@@ -1,32 +1,32 @@
-# Device And Resource Architecture
+# Execution Target And Resource Architecture
 
 ## Scope
 
-This note reviews the current overlap between `devices`, `servers`, `project_user`, and `project_resource_directories`, then proposes a cleaner schema for SSH/execution targeting. It intentionally ignores mobile implementation details for the first version, but calls out the later mobile migration because mobile is currently the main `servers` consumer.
+This note reviews the current overlap between `devices`, `servers`, `project_user`, and `project_resource_directories`, then proposes a cleaner schema for SSH/execution targeting. The target domain term should be `execution_target`, not `device`, because the thing agents execute on may be a laptop, SSH server, VM, container, devbox, codespace, or future hosted runner.
 
 ## Requirement Review
 
-The requirements mostly make sense, with one important correction: a device cannot be both globally unique and directly owned by one `(organization, user)` row. The canonical device identity needs to be independent from organization/user association rows.
+The requirements mostly make sense, with one important correction: an execution target cannot be both globally unique and directly owned by one `(organization, user)` row. The canonical execution target identity needs to be independent from organization/user association rows.
 
 Confirmed requirements:
 
-- A device/server is an execution target with host, port, label, and fingerprint.
+- A device/server should be modeled as an execution target with host, port, label, and fingerprint.
 - A physical or remote execution target can be visible to multiple organizations and users.
-- Device labels should be unique inside an organization so humans and agents can refer to `builder-mac` instead of a UUID or fingerprint.
-- Resource directories should be the authority for project paths, and every resource should point at exactly one device.
+- Organization-local execution target labels should be unique inside an organization so humans and agents can refer to `builder-mac` instead of a UUID or fingerprint. The same target may have different labels in different organizations, and different organizations may reuse the same label.
+- Resource directories should be the authority for project paths, and every resource should point at exactly one execution target.
 - Placeholder devices are needed when a user knows the SSH host/path before the remote machine has registered with `ovld`.
-- SSH keys are per user and per device. Overlord stores references/metadata only, not generated private keys.
-- Adding a device to a project should also associate it with the project organization.
-- First version can ignore mobile and delete legacy SSH configuration.
+- SSH keys are per user and per execution target. Overlord stores references/metadata only, not generated private keys.
+- Adding an execution target to a project should also associate it with the project organization.
+- The first version should remove the legacy mobile `servers` table and temporarily remove that mobile functionality. Mobile can migrate to execution targets later.
 
-Missing or ambiguous requirements to resolve before implementation:
+Resolved design decisions:
 
-- Define canonical identity. Host + port alone is not enough across NAT, reused IPs, dynamic DNS, and SSH aliases. Use a real `device_fingerprint` when known; use a placeholder key like `ssh:{host}:{port}` only until reconciliation.
-- Decide whether host uniqueness is global. The requirement says one host and one port per device, but not that `(host, port)` uniquely identifies a device globally. I would not enforce global uniqueness on host/port.
-- Separate organization labels from device identity. The same device may be called `buildbox` in one org and `linux-ci` in another.
-- Track user access to a device separately from organization visibility. Organization association does not imply every member has SSH credentials.
-- Decide whether "primary folder" is per `(project, device)` or per `(user, project, device)`. The product language points to per-device/project execution, but user-specific paths can differ on the same host. I recommend user-scoped resources for v1.
-- Clarify secret handling. Private key paths are local to the initiating client and should not be treated as portable server-side truth.
+- Canonical identity uses a real `device_fingerprint` when known. Before registration, use a placeholder key like `ssh:{host}:{port}` only until reconciliation.
+- Do not enforce global uniqueness on host/port. Host and port are connection coordinates, not canonical identity.
+- Separate organization labels from target identity. The same target can be called `buildbox` in one org and `linux-ci` in another, and two organizations can both have a `buildbox`.
+- Track user access separately from organization visibility. Organization association does not imply every member has SSH credentials.
+- The primary folder is project-specific and execution-target-specific, not user-specific. If two users operate on the same project on the same target, they should treat the same resource as primary.
+- Private key paths are local hints and should not be treated as portable server-side secret truth.
 
 ## Current Table And App Map
 
@@ -135,11 +135,11 @@ Problem:
 
 ## Proposed Architecture
 
-Use `devices` as the canonical execution target and remove `servers` from desktop/web. Keep `project_user` for project preferences only.
+Use `execution_targets` as the canonical execution target table and remove `servers`. Keep `project_user` for project preferences only.
 
 ### Canonical Tables
 
-#### `devices`
+#### `execution_targets`
 
 One row per actual or placeholder execution target.
 
@@ -165,33 +165,37 @@ Recommended constraints:
 
 Do not include `organization_id` or `user_id` on this table.
 
-#### `organization_devices`
+VM/container note:
+
+- Two VMs on the same physical machine are two execution targets if agents execute inside each VM. Each VM should register its own real `device_fingerprint`; shared host hardware does not collapse them into one row.
+
+#### `organization_execution_targets`
 
 Organization-specific visibility and naming.
 
 Recommended columns:
 
 - `organization_id`
-- `device_id`
+- `execution_target_id`
 - `label`
 - `added_by`
 - timestamps
 
 Recommended constraints:
 
-- primary key `(organization_id, device_id)`
+- primary key `(organization_id, execution_target_id)`
 - unique `(organization_id, label)`
 
-This satisfies "labels unique within organizations" without duplicating devices.
+This satisfies "labels unique within organizations" without duplicating execution targets.
 
-#### `user_devices`
+#### `user_execution_targets`
 
-User-specific access to a device.
+User-specific access to an execution target.
 
 Recommended columns:
 
 - `user_id`
-- `device_id`
+- `execution_target_id`
 - `default_username text null`
 - `access_status text`
 - `last_connected_at`
@@ -199,18 +203,18 @@ Recommended columns:
 
 Recommended constraints:
 
-- primary key `(user_id, device_id)`
+- primary key `(user_id, execution_target_id)`
 
-This models "this user can use this device" independently of organization membership.
+This models "this user can use this execution target" independently of organization membership.
 
-#### `device_ssh_credentials`
+#### `execution_target_ssh_credentials`
 
-Per-user SSH key reference for a device. No private key material.
+Per-user SSH key reference for an execution target. No private key material.
 
 Recommended columns:
 
 - `id uuid primary key`
-- `device_id`
+- `execution_target_id`
 - `user_id`
 - `username`
 - `auth_method text`
@@ -223,28 +227,30 @@ Recommended columns:
 
 Recommended constraints:
 
-- unique `(device_id, user_id, username, auth_method)`
+- unique `(execution_target_id, user_id, username, auth_method)`
 
 For desktop/web v1, `private_key_path` is just a client-local hint. For mobile later, `secure_enclave_tag` can replace the old local credential metadata tied to `servers`.
 
-#### `project_devices`
+Keep this separate from `user_execution_targets` because access and authentication have different lifecycles. A user can have access before credentials are configured, can rotate keys without losing access, and may eventually have multiple auth methods/usernames for the same target.
 
-Which devices are available for a project.
+#### `project_execution_targets`
+
+Which execution targets are available for a project.
 
 Recommended columns:
 
 - `project_id`
-- `device_id`
+- `execution_target_id`
 - `organization_id`
 - `added_by`
 - timestamps
 
 Recommended constraints:
 
-- primary key `(project_id, device_id)`
-- foreign key `(organization_id, device_id)` through `organization_devices` or a trigger that ensures the device belongs to the project organization.
+- primary key `(project_id, execution_target_id)`
+- foreign key `(organization_id, execution_target_id)` through `organization_execution_targets` or a trigger that ensures the target belongs to the project organization.
 
-Adding a device to a project should transactionally upsert `devices`, `organization_devices`, `user_devices`, and `project_devices`.
+Adding an execution target to a project should transactionally upsert `execution_targets`, `organization_execution_targets`, `user_execution_targets`, and `project_execution_targets`.
 
 #### `project_resource_directories`
 
@@ -253,8 +259,7 @@ Keep this as the path authority, but make device association required.
 Recommended columns:
 
 - `project_id`
-- `device_id not null`
-- `user_id not null`
+- `execution_target_id not null`
 - `directory_path`
 - `label`
 - `is_primary`
@@ -262,10 +267,10 @@ Recommended columns:
 
 Recommended constraints:
 
-- unique `(project_id, device_id, user_id, directory_path)`
-- unique `(project_id, device_id, user_id) where is_primary`
+- unique `(project_id, execution_target_id, directory_path)`
+- unique `(project_id, execution_target_id) where is_primary`
 
-I recommend primary per `(project, device, user)` for v1. It lets two users SSH into the same host with different home directories without clobbering each other. If the desired product behavior is truly one shared path per project/device, drop `user_id` from the primary uniqueness and make resources organization-owned instead.
+The primary resource is shared per `(project, execution_target)`. This means two users operating on the same project on the same target see the same primary resource. User-specific SSH credentials still control how each user logs in, but the project path on that target is shared project topology.
 
 ### What To Delete From `project_user`
 
@@ -290,16 +295,16 @@ Keep:
 
 When saving an SSH target before remote registration:
 
-1. Upsert `devices` with `is_placeholder=true`, `placeholder_key='ssh:{host}:{port}'`, `host`, and `port`.
-2. Upsert `organization_devices`, `user_devices`, `device_ssh_credentials`, and `project_devices`.
-3. Upsert `project_resource_directories` for `(project, placeholder device, user, remote path)`.
+1. Upsert `execution_targets` with `is_placeholder=true`, `placeholder_key='ssh:{host}:{port}'`, `host`, and `port`.
+2. Upsert `organization_execution_targets`, `user_execution_targets`, `execution_target_ssh_credentials`, and `project_execution_targets`.
+3. Upsert `project_resource_directories` for `(project, placeholder execution target, remote path)`.
 
 When `ovld` runs on the remote:
 
 1. It calls `get-device` with a real fingerprint, host, and port.
 2. Server looks for an exact placeholder by host/port and project/org/user context.
-3. If found, update that `devices` row with `device_fingerprint`, `is_placeholder=false`, and clear `placeholder_key`.
-4. Existing resources and project/device associations stay attached to the same `device_id`.
+3. If found, update that `execution_targets` row with `device_fingerprint`, `is_placeholder=false`, and clear `placeholder_key`.
+4. Existing resources and project/target associations stay attached to the same `execution_target_id`.
 
 Avoid creating a second real device row and later merging if possible.
 
@@ -307,40 +312,40 @@ Avoid creating a second real device row and later merging if possible.
 
 Web/desktop:
 
-- Replace `SshWorkspaceSection` writes to `project_user` with a "Project devices" flow that writes device, credential, project-device, and resource rows.
-- Replace `remoteWorkingDirectory` reads from `project_user` with the primary resource for the selected device.
-- Update `ProjectExecutionWorkspaceSelector` and `ResourceDirectoryList` to use one primary per `(project, device, user)` consistently.
+- Replace `SshWorkspaceSection` writes to `project_user` with a "Project execution targets" flow that writes target, credential, project-target, and resource rows.
+- Replace `remoteWorkingDirectory` reads from `project_user` with the primary resource for the selected execution target.
+- Update `ProjectExecutionWorkspaceSelector` and `ResourceDirectoryList` to use one primary per `(project, execution_target)` consistently.
 - Remove legacy `project_user` fallbacks from `resolve-project`, `resolve-project-user`, `discover-project`, `claim-execution`, and protocol docs once migration is complete.
 
 Protocol/CLI:
 
-- `get-device` should upsert canonical `devices`, then ensure user/org association rows.
-- `add-project-resource` should require device identity and write `project_devices` if missing.
-- `list-project-resources` should filter by canonical `device_id` and project.
-- `claim-execution` should resolve by `target_resource_id` first, then primary resource for `(project, device, user)`.
-- `add-cwd` remains correct conceptually: it registers current cwd as a resource for the current canonical device and project.
+- `get-device` should become `get-execution-target` at the API/domain layer, while CLI aliases can preserve user-friendly wording during transition.
+- Target registration should upsert canonical `execution_targets`, then ensure user/org association rows.
+- `add-project-resource` should require execution target identity and write `project_execution_targets` if missing.
+- `list-project-resources` should filter by canonical `execution_target_id` and project.
+- `claim-execution` should resolve by `target_resource_id` first, then primary resource for `(project, execution_target)`.
+- `add-cwd` remains correct conceptually: it registers current cwd as a resource for the current canonical execution target and project.
 
-Mobile later:
+Mobile:
 
-- Replace `servers` with `devices`, `user_devices`, and `device_ssh_credentials`.
-- Migrate mobile secure-enclave key metadata from server-local storage to credential IDs or `(device_id, user_id)`.
-- Keep mobile-specific connection status on `user_devices` or a `device_connection_status` table, not canonical `devices`.
+- Drop the current `servers`-backed mobile server functionality in this change instead of preserving legacy support.
+- Later, migrate mobile to `execution_targets`, `user_execution_targets`, and `execution_target_ssh_credentials`.
+- Keep mobile-specific connection status on `user_execution_targets` or a dedicated connection-status table, not canonical `execution_targets`.
 
 ## Migration Plan
 
 1. Add new canonical tables and constraints.
-2. Build a small service layer for device upsert, placeholder upsert, and reconciliation.
+2. Build a small service layer for execution target upsert, placeholder upsert, and reconciliation.
 3. Migrate desktop/web SSH settings:
-   - Create canonical device rows from non-null `project_user.ssh_host`.
+   - Create canonical execution target rows from non-null `project_user.ssh_host`.
    - Create credential rows from `ssh_user`, `ssh_auth_method`, `ssh_private_key_path`.
-   - Create project-device rows.
+   - Create project-target rows.
    - Create resource rows from `remote_working_directory`.
-   - Create local device resource rows from `local_working_directory` where current device identity is known; otherwise leave those to `add-cwd`.
+   - Create local execution target resource rows from `local_working_directory` where current target identity is known; otherwise leave those to `add-cwd`.
 4. Update server actions and protocol routes to new tables.
 5. Remove `project_user` SSH/path columns and legacy fallbacks.
-6. Leave `servers` in place only for mobile until mobile is migrated; do not use it for desktop/web v1.
-7. In a later mobile migration, backfill `servers` into canonical devices and credentials, then drop `servers`.
+6. Remove `servers` and the mobile screens/actions that depend on it. Mobile SSH/server functionality returns later on the execution-target model.
 
 ## Key Decision
 
-The main design decision is whether resources are user-scoped or organization-scoped. Given "SSH keys are each associated with one device and one user" and users may log into the same device as different Unix users, v1 should keep `project_resource_directories.user_id` and enforce primary per `(project_id, device_id, user_id)`.
+The primary resource decision is now settled: resource primary status is shared per `(project_id, execution_target_id)`, not per user. SSH credentials remain user-specific, but project topology on a target is project-level.

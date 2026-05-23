@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { internalErrorResponse, parseProtocolBody } from '@/app/api/protocol/_lib';
+import { findExecutionTargetByFingerprint } from '@/lib/overlord/execution-targets';
 import { completeExecutionLaunchSchema } from '@/lib/overlord/validation';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
@@ -15,14 +16,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Authentication required.' }, { status: 401 });
     }
 
-    const { data: device } = await supabase
-      .from('devices')
-      .select('id')
-      .eq('organization_id', organizationId)
-      .eq('user_id', userId)
-      .eq('device_fingerprint', parsed.data.deviceFingerprint)
-      .maybeSingle();
-    if (!device) return NextResponse.json({ error: 'Device not found.' }, { status: 404 });
+    const executionTargetId = await findExecutionTargetByFingerprint(supabase, {
+      organizationId,
+      userId,
+      deviceFingerprint: parsed.data.deviceFingerprint
+    });
+    if (!executionTargetId) {
+      return NextResponse.json({ error: 'Execution target not found.' }, { status: 404 });
+    }
 
     const { data: updated, error } = await supabase
       .from('execution_requests')
@@ -36,7 +37,7 @@ export async function POST(request: Request) {
       .eq('id', parsed.data.requestId)
       .eq('organization_id', organizationId)
       .eq('requested_by', userId)
-      .eq('claimed_by_device_id', device.id)
+      .eq('claimed_by_execution_target_id', executionTargetId)
       .select('*')
       .maybeSingle();
 

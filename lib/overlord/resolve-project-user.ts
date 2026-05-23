@@ -11,17 +11,9 @@ export type ResolvedProjectUser = {
   localWorkingDirectory: string | null;
 };
 
-type ProjectUserMatchRow = {
-  id: string;
-  user_id: string;
-  project_id: string;
-  local_working_directory: string | null;
-  projects: { id: string; organization_id: number } | null;
-};
-
 type ResourceDirectoryMatchRow = {
   directory_path: string;
-  device_id: string | null;
+  execution_target_id: string | null;
   project_id: string;
   user_id: string;
   projects: { id: string; organization_id: number } | null;
@@ -50,14 +42,17 @@ function scorePathMatch(normalizedDir: string, normalizedCwd: string): number | 
  * Resolve the project_user row for the caller, given the authenticated
  * `userId` and the working directory reported by the agent.
  *
- * Looks first at project_resource_directories (preferring rows with a matching
- * device_id, then any user-scoped row), then falls back to the legacy
- * project_user.local_working_directory column. Once a project is matched, the
- * project_user row for (userId, projectId) is returned.
+ * Looks at project_resource_directories (preferring rows with a matching
+ * execution_target_id, then any user-scoped row). Once a project is matched,
+ * the project_user row for (userId, projectId) is returned.
  */
 export async function resolveProjectUserForAgent(
   supabase: SupabaseClient<Database>,
-  params: { userId: string; workingDirectory: string | null | undefined; deviceId?: string | null }
+  params: {
+    userId: string;
+    workingDirectory: string | null | undefined;
+    deviceId?: string | null;
+  }
 ): Promise<ResolvedProjectUser | null> {
   const { userId, workingDirectory, deviceId } = params;
   if (!workingDirectory?.trim()) return null;
@@ -65,9 +60,11 @@ export async function resolveProjectUserForAgent(
   const normalizedCwd = normalizeDirPath(workingDirectory);
 
   // 1. project_resource_directories — prefer device-scoped rows when matching.
-  const { data: resourceRows } = await supabase
+  const { data: resourceRows } = await (supabase as any)
     .from('project_resource_directories')
-    .select('directory_path, device_id, project_id, user_id, projects!inner(id, organization_id)')
+    .select(
+      'directory_path, execution_target_id, project_id, user_id, projects!inner(id, organization_id)'
+    )
     .eq('user_id', userId);
 
   const resources = (resourceRows ?? []) as unknown as ResourceDirectoryMatchRow[];
@@ -76,7 +73,7 @@ export async function resolveProjectUserForAgent(
     for (const row of resources) {
       const score = scorePathMatch(normalizeDirPath(row.directory_path), normalizedCwd);
       if (score === null) continue;
-      const deviceBoost = deviceId && row.device_id === deviceId ? 1 : 0;
+      const deviceBoost = deviceId && row.execution_target_id === deviceId ? 1 : 0;
       if (
         !best ||
         deviceBoost > best.deviceBoost ||
@@ -105,34 +102,7 @@ export async function resolveProjectUserForAgent(
     }
   }
 
-  // 2. Legacy project_user.local_working_directory fallback.
-  const { data } = await supabase
-    .from('project_user')
-    .select('id, user_id, project_id, local_working_directory, projects!inner(id, organization_id)')
-    .eq('user_id', userId)
-    .not('local_working_directory', 'is', null);
-
-  const rows = (data ?? []) as unknown as ProjectUserMatchRow[];
-  if (rows.length === 0) return null;
-
-  let best: { row: ProjectUserMatchRow; matchLength: number } | null = null;
-  for (const row of rows) {
-    if (!row.local_working_directory) continue;
-    const score = scorePathMatch(normalizeDirPath(row.local_working_directory), normalizedCwd);
-    if (score === null) continue;
-    if (!best || score > best.matchLength) {
-      best = { row, matchLength: score };
-    }
-  }
-
-  if (!best || !best.row.projects) return null;
-  return {
-    projectUserId: best.row.id,
-    userId: best.row.user_id,
-    projectId: best.row.project_id,
-    organizationId: best.row.projects.organization_id,
-    localWorkingDirectory: best.row.local_working_directory
-  };
+  return null;
 }
 
 /**

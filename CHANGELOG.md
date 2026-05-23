@@ -2,6 +2,39 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2605231102.0] - 2026-05-23:11:02
+
+### Added
+- Introduce **execution targets** as the canonical identity for where agents run (local fingerprint, SSH placeholder, or remote host), with organization labels, user access, SSH credential references, and project membership in dedicated tables.
+- Migrate existing `devices` rows, project resource directories, and execution request targeting to `execution_targets` while preserving fingerprints and primary checkout paths.
+- Support SSH **placeholder** targets that reconcile to a real fingerprint when `ovld` first registers on the remote machine, without changing target or resource ids.
+- Add an **objectives executed** count badge on Kanban and list cards, with an orange highlight when a draft objective already has text.
+- Add a shared **objective notification** classifier so board and ticket-detail realtime listeners derive the same desktop titles, bodies, and sounds for waiting-on-human, review, and agent-alert events (including `awaiting_approval`).
+- Let organization admins remove an execution target from project settings when it has no linked resource directories, with automatic pruning of orphaned targets.
+- Add [Execution Targets & Resources](/docs/workflow/execution-targets) documentation with architecture and placeholder-reconciliation diagrams.
+
+### Fixed
+- Scope primary project resources per **(project, execution target)** so switching execution location on one machine does not clear primary flags on other targets.
+- Include `awaiting_approval` blocking events in board waiting-state hydration so approval-gated objectives surface the same waiting indicators as agent questions.
+
+### Changed
+- Point protocol and MCP device/resource handlers, execution request enqueue/claim, and runner targeting at `execution_target_id` instead of legacy per-user `device_id` columns.
+- Thread objectives into agent prompt context assembly for richer launch and attach payloads.
+- Rename agent skill references from “devices” to “execution targets” while keeping the same CLI commands (`get-device`, `list-project-resources`, etc.).
+
+### Security
+- None.
+
+### Documentation
+- Update for-agents context/artifacts and agent-execution docs for execution-target resource modeling.
+- Refresh connector surfaces guidance and `overlord-ticket` device/target references across Cursor, Claude, Codex, Antigravity, and bundled plugin sources.
+
+### Test
+- Add objective-notification classifier tests and prompt-context coverage; update protocol execution-route tests for execution-target claiming.
+
+### Chore
+- Add migrations for execution targets, resource directory retargeting, and org-scoped target deletion; regenerate Supabase types.
+
 ## [0.2605230834.0] - 2026-05-23:08:34
 
 ### Added

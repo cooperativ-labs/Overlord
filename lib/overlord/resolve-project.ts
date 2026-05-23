@@ -10,14 +10,9 @@ type ProjectRow = {
   local_working_directory: string | null;
 };
 
-type ProjectUserJoinRow = {
-  local_working_directory: string | null;
-  projects: { id: string; name: string; organization_id: number } | null;
-};
-
 type ResourceDirectoryJoinRow = {
   directory_path: string;
-  device_id: string | null;
+  execution_target_id: string | null;
   projects: { id: string; name: string; organization_id: number } | null;
 };
 
@@ -63,29 +58,28 @@ function pickBestPathMatch<
 
 /**
  * Resolve a project by matching `workingDirectory` against, in order:
- *   1. project_resource_directories for the given device (if deviceId provided)
+ *   1. project_resource_directories for the given execution target (if provided)
  *   2. project_resource_directories user-wide (org-checked via projects join)
- *   3. Legacy project_user.local_working_directory column
  */
 export async function resolveProjectByWorkingDirectory(
   supabase: SupabaseClient<Database>,
   organizationId: number,
   workingDirectory: string,
   userId?: string | null,
-  deviceId?: string | null
+  executionTargetId?: string | null
 ): Promise<ProjectRow | null> {
   const normalizedCwd = normalizeDirPath(workingDirectory);
 
   // 1 + 2: project_resource_directories (device-scoped first, then user-wide).
   if (userId) {
-    const baseSelect = supabase
+    const baseSelect = (supabase as any)
       .from('project_resource_directories')
-      .select('directory_path, device_id, projects!inner(id, name, organization_id)')
+      .select('directory_path, execution_target_id, projects!inner(id, name, organization_id)')
       .eq('user_id', userId)
       .eq('projects.organization_id', organizationId);
 
-    if (deviceId) {
-      const { data } = await baseSelect.eq('device_id', deviceId);
+    if (executionTargetId) {
+      const { data } = await baseSelect.eq('execution_target_id', executionTargetId);
       const rows = (data ?? []) as unknown as ResourceDirectoryJoinRow[];
       const match = pickBestPathMatch(rows, normalizedCwd, r => r.directory_path);
       if (match?.projects) {
@@ -100,7 +94,7 @@ export async function resolveProjectByWorkingDirectory(
 
     const { data } = await supabase
       .from('project_resource_directories')
-      .select('directory_path, device_id, projects!inner(id, name, organization_id)')
+      .select('directory_path, execution_target_id, projects!inner(id, name, organization_id)')
       .eq('user_id', userId)
       .eq('projects.organization_id', organizationId);
     const rows = (data ?? []) as unknown as ResourceDirectoryJoinRow[];
@@ -113,22 +107,6 @@ export async function resolveProjectByWorkingDirectory(
         local_working_directory: match.directory_path
       };
     }
-  }
-
-  // 3: legacy project_user fallback.
-  let query = supabase
-    .from('project_user')
-    .select('local_working_directory, projects!inner(id, name, organization_id)')
-    .eq('projects.organization_id', organizationId)
-    .not('local_working_directory', 'is', null);
-  if (userId) {
-    query = query.eq('user_id', userId);
-  }
-  const { data } = await query;
-  const rows = (data ?? []) as unknown as ProjectUserJoinRow[];
-  const match = pickBestPathMatch(rows, normalizedCwd, r => r.local_working_directory);
-  if (match?.projects) {
-    return { ...match.projects, local_working_directory: match.local_working_directory };
   }
 
   return null;

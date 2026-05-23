@@ -1,13 +1,13 @@
-# Devices And Checkout Paths
+# Execution Targets And Checkout Paths
 
-Device rows use **(organization_id, user_id, device_fingerprint)**, so the same physical machine can register independently in each org you belong to. Persist a fingerprint per workstation, upsert via `ovld protocol get-device`, then maintain checkout paths via `list-project-resources`, `add-project-resource`, `update-project-resource`, and `update-device` (`ovld protocol help` lists flags).
+Execution targets are canonical rows keyed by a real `device_fingerprint` when known, or by an SSH placeholder until the remote target registers. Organization labels, user access, SSH credential references, and project membership live in separate association rows. Persist a fingerprint per workstation, upsert via `ovld protocol get-device`, then maintain checkout paths via `list-project-resources`, `add-project-resource`, `update-project-resource`, and `update-device` (`ovld protocol help` lists flags).
 
 ```bash
 ovld protocol get-device --device-fingerprint "$OVERLORD_DEVICE_FINGERPRINT"
 ovld protocol list-project-resources --project-id <project_uuid> --device-fingerprint "$OVERLORD_DEVICE_FINGERPRINT"
 ```
 
-`ovld runner start` uses the same device identity and project resource directories to claim queued execution requests from manual Run and auto-advance. `ovld runner once` claims at most one request and exits.
+`ovld runner start` uses the same execution target identity and project resource directories to claim queued execution requests from manual Run and auto-advance. Primary resource directories are scoped per `(project, execution target)`. `ovld runner once` claims at most one request and exits.
 
 ## Choosing `--execution-target`
 

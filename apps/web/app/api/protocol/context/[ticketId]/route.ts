@@ -169,6 +169,7 @@ export async function GET(request: Request, { params }: RouteContext) {
         id: ticket.ticket_id || ticket.id,
         title: ticket.title,
         objective: objectiveResolution.objectiveText,
+        objective_id: objectiveResolution.objectiveId,
         acceptance_criteria: ticket.acceptance_criteria,
         available_tools: ticket.available_tools,
         constraints: ticket.constraints,

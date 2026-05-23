@@ -17,44 +17,50 @@ export async function handleListProjectResources(
   const deviceFingerprint =
     typeof args?.deviceFingerprint === 'string' ? args.deviceFingerprint.trim() : '';
 
-  let deviceId: string | null = null;
+  let executionTargetId: string | null = null;
   if (deviceFingerprint) {
-    const { data: device } = await supabase
-      .from('devices')
+    const { data: target } = await supabase
+      .from('execution_targets')
       .select('id')
-      .eq('organization_id', ctx.organizationId)
-      .eq('user_id', ctx.userId)
       .eq('device_fingerprint', deviceFingerprint)
       .maybeSingle();
-    deviceId = (device as any)?.id ?? null;
+    executionTargetId = (target as any)?.id ?? null;
   }
 
   let query = supabase
     .from('project_resource_directories')
-    .select('id, directory_path, label, is_primary, device_id, devices(label, hostname)')
+    .select(
+      'id, directory_path, label, is_primary, execution_target_id, execution_targets(host, organization_execution_targets(label, organization_id))'
+    )
     .eq('user_id', ctx.userId)
     .eq('project_id', projectId)
     .order('is_primary', { ascending: false })
     .order('created_at', { ascending: true });
 
-  if (deviceId) {
-    query = (query as any).eq('device_id', deviceId);
+  if (executionTargetId) {
+    query = (query as any).eq('execution_target_id', executionTargetId);
   }
 
   const { data, error } = await query;
   if (error) return toolErr(`Failed to list resources: ${error.message}`);
 
   const resources = (data ?? []).map((row: any) => {
-    const deviceRel = row.devices;
-    const device = Array.isArray(deviceRel) ? deviceRel[0] : deviceRel;
-    const deviceLabel = device?.label ?? null;
-    const deviceHostname = device?.hostname ?? null;
+    const targetRel = row.execution_targets;
+    const target = Array.isArray(targetRel) ? targetRel[0] : targetRel;
+    const orgRel = target?.organization_execution_targets;
+    const orgTargets = Array.isArray(orgRel) ? orgRel : [orgRel];
+    const orgTarget =
+      orgTargets.find((target: any) => target?.organization_id === ctx.organizationId) ??
+      orgTargets[0];
+    const deviceLabel = orgTarget?.label ?? null;
+    const deviceHostname = target?.host ?? null;
     return {
       id: row.id,
       directoryPath: row.directory_path,
       label: row.label ?? null,
       isPrimary: row.is_primary,
-      deviceId: row.device_id ?? null,
+      deviceId: row.execution_target_id ?? null,
+      executionTargetId: row.execution_target_id ?? null,
       deviceLabel,
       deviceHostname
     };

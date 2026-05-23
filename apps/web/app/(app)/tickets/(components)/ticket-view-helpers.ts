@@ -68,6 +68,7 @@ export function toBoardTicket(ticket: Ticket): BoardTicket {
     has_unopened_waiting_response: ticket.has_unopened_waiting_response,
     is_read: ticket.is_read,
     objectives_executed_count: ticket.objectives_executed_count,
+    has_draft_objective_with_text: ticket.has_draft_objective_with_text,
     updated_at: ticket.updated_at,
     delegate: ticket.delegate,
     schedule_id: ticket.schedule_id,
@@ -229,6 +230,7 @@ export function buildOptimisticTicket(input: {
     has_unopened_waiting_response: false,
     is_read: true,
     objectives_executed_count: 0,
+    has_draft_objective_with_text: false,
     delegate: null,
     schedule_id: null,
     due_datetime: null

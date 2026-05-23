@@ -12,6 +12,7 @@ import { getDisplayTitle } from '@/lib/helpers/tickets';
 import { cn } from '@/lib/utils';
 
 import type { Ticket } from './KanbanCard';
+import { ObjectivesExecutedBadge } from './ObjectivesExecutedBadge';
 import {
   AttentionIndicators,
   ProjectColorDot,
@@ -270,6 +271,11 @@ export default function TicketListCard({
 
             {/* Schedule badge */}
             {ticket.schedule_id ? <ScheduleBadge /> : null}
+
+            <ObjectivesExecutedBadge
+              count={ticket.objectives_executed_count}
+              hasDraftObjectiveWithText={ticket.has_draft_objective_with_text}
+            />
 
             {/* Timer button */}
             {ticket.project_everhour_project_id ? (

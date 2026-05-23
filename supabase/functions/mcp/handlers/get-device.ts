@@ -36,8 +36,10 @@ export async function handleGetDevice(supabase: SupabaseClient, args: any, ctx: 
   }
 
   const { data: device } = await supabase
-    .from('devices')
-    .select('id, label, hostname, platform, last_seen_at, created_at')
+    .from('execution_targets')
+    .select(
+      'id, host, platform, last_seen_at, created_at, organization_execution_targets(label, organization_id)'
+    )
     .eq('id', deviceId)
     .single();
 
@@ -45,11 +47,18 @@ export async function handleGetDevice(supabase: SupabaseClient, args: any, ctx: 
     return toolErr('Device not found after registration.');
   }
 
+  const orgRel = (device as any).organization_execution_targets;
+  const orgTargets = Array.isArray(orgRel) ? orgRel : [orgRel];
+  const orgTarget =
+    orgTargets.find((target: any) => target?.organization_id === ctx.organizationId) ??
+    orgTargets[0];
+
   return toolOk({
     device: {
       id: (device as any).id,
-      label: (device as any).label,
-      hostname: (device as any).hostname,
+      executionTargetId: (device as any).id,
+      label: orgTarget?.label ?? null,
+      hostname: (device as any).host,
       platform: (device as any).platform,
       lastSeenAt: (device as any).last_seen_at,
       createdAt: (device as any).created_at

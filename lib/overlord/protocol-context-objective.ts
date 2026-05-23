@@ -9,7 +9,7 @@ import type { Database } from '@/types/database.types';
 type ServerSupabase = SupabaseClient<Database>;
 
 export type ResolveProtocolObjectiveResult =
-  | { ok: true; objectiveText: string; feedPostId?: string }
+  | { ok: true; objectiveId: string | null; objectiveText: string; feedPostId?: string }
   | { ok: false; error: string };
 
 /**
@@ -51,19 +51,24 @@ export async function resolveProtocolObjectiveText(input: {
     if (pointerObjectiveId) {
       const { data: linkedObjective } = await supabase
         .from('objectives')
-        .select('objective')
+        .select('id, objective')
         .eq('id', pointerObjectiveId)
         .maybeSingle();
 
       const text = linkedObjective?.objective?.trim();
       if (text) {
-        return { ok: true, objectiveText: text, feedPostId: feedPost.id };
+        return {
+          ok: true,
+          objectiveId: linkedObjective?.id ?? pointerObjectiveId,
+          objectiveText: text,
+          feedPostId: feedPost.id
+        };
       }
     }
 
     const { data: completeObjective } = await supabase
       .from('objectives')
-      .select('objective')
+      .select('id, objective')
       .eq('ticket_id', ticketId)
       .eq('state', 'complete')
       .order('updated_at', { ascending: false })
@@ -72,16 +77,27 @@ export async function resolveProtocolObjectiveText(input: {
 
     const completeText = completeObjective?.objective?.trim();
     if (completeText) {
-      return { ok: true, objectiveText: completeText, feedPostId: feedPost.id };
+      return {
+        ok: true,
+        objectiveId: completeObjective?.id ?? null,
+        objectiveText: completeText,
+        feedPostId: feedPost.id
+      };
     }
 
     const fallback = await resolveLatestTrackedObjective(supabase, ticketId);
     if (fallback) {
-      return { ok: true, objectiveText: fallback, feedPostId: feedPost.id };
+      return {
+        ok: true,
+        objectiveId: fallback.id,
+        objectiveText: fallback.objective,
+        feedPostId: feedPost.id
+      };
     }
 
     return {
       ok: true,
+      objectiveId: pointerObjectiveId,
       objectiveText:
         '_(No objective text on file for this feed post — rely on the feed post section and ticket metadata below.)_',
       feedPostId: feedPost.id
@@ -92,16 +108,16 @@ export async function resolveProtocolObjectiveText(input: {
   if (!tracked) {
     return { ok: false, error: 'No objective found for this ticket.' };
   }
-  return { ok: true, objectiveText: tracked };
+  return { ok: true, objectiveId: tracked.id, objectiveText: tracked.objective };
 }
 
 async function resolveLatestTrackedObjective(
   supabase: ServerSupabase,
   ticketId: string
-): Promise<string | null> {
+): Promise<{ id: string; objective: string } | null> {
   const { data: executingObjective } = await supabase
     .from('objectives')
-    .select('objective')
+    .select('id, objective')
     .eq('ticket_id', ticketId)
     .eq('state', 'executing')
     .order('created_at', { ascending: false })
@@ -109,11 +125,13 @@ async function resolveLatestTrackedObjective(
     .maybeSingle();
 
   const fromExecuting = executingObjective?.objective?.trim();
-  if (fromExecuting) return fromExecuting;
+  if (fromExecuting && executingObjective?.id) {
+    return { id: executingObjective.id, objective: fromExecuting };
+  }
 
   const { data: submittedObjective } = await supabase
     .from('objectives')
-    .select('objective')
+    .select('id, objective')
     .eq('ticket_id', ticketId)
     .eq('state', 'submitted')
     .order('created_at', { ascending: false })
@@ -121,11 +139,13 @@ async function resolveLatestTrackedObjective(
     .maybeSingle();
 
   const fromSubmitted = submittedObjective?.objective?.trim();
-  if (fromSubmitted) return fromSubmitted;
+  if (fromSubmitted && submittedObjective?.id) {
+    return { id: submittedObjective.id, objective: fromSubmitted };
+  }
 
   const { data: draftObjective } = await supabase
     .from('objectives')
-    .select('objective')
+    .select('id, objective')
     .eq('ticket_id', ticketId)
     .eq('state', 'draft')
     .order('created_at', { ascending: false })
@@ -133,5 +153,8 @@ async function resolveLatestTrackedObjective(
     .maybeSingle();
 
   const fromDraft = draftObjective?.objective?.trim();
-  return fromDraft || null;
+  if (fromDraft && draftObjective?.id) {
+    return { id: draftObjective.id, objective: fromDraft };
+  }
+  return null;
 }

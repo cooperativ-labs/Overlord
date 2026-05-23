@@ -12,6 +12,7 @@ import {
   mergeRowsById
 } from '@/lib/helpers/scheduled-ticket-visibility';
 import { parseObjectiveAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
+import { isDraftObjectiveWithText } from '@/lib/helpers/tickets';
 import { createClientForRequest } from '@/supabase/utils/server';
 import type { Database } from '@/types/database.types';
 
@@ -92,6 +93,7 @@ type RawTicket = {
   everhour_task_id: string | null;
   schedule_id: number | null;
   objectives_executed_count?: number;
+  has_draft_objective_with_text?: boolean;
   organization: { name: string } | Array<{ name: string }> | null;
   project:
     | { name: string; color: string; everhour_project_id: string | null }
@@ -348,6 +350,7 @@ export default async function TicketsBoardContent({
   >();
   const waitingQuestionByTicket = new Map<string, string>();
   const executedObjectivesCountByTicket = new Map<string, number>();
+  const hasDraftObjectiveWithTextByTicket = new Map<string, boolean>();
   const latestObjectiveAgentByTicket = new Map<string, string | null>();
   const latestObjectiveAssignedAgentByTicket = new Map<
     string,
@@ -372,7 +375,7 @@ export default async function TicketsBoardContent({
           .order('created_at', { ascending: false }),
         supabase
           .from('objectives')
-          .select('ticket_id,state,agent_identifier,assigned_agent')
+          .select('ticket_id,state,objective,agent_identifier,assigned_agent')
           .in('ticket_id', ticketIds)
           .order('created_at', { ascending: false })
       ]);
@@ -395,6 +398,7 @@ export default async function TicketsBoardContent({
     for (const objective of (objectives ?? []) as Array<{
       ticket_id: string;
       state: string | null;
+      objective: string | null;
       agent_identifier: string | null;
       assigned_agent: Database['public']['Tables']['objectives']['Row']['assigned_agent'];
     }>) {
@@ -409,6 +413,12 @@ export default async function TicketsBoardContent({
           objective.ticket_id,
           (executedObjectivesCountByTicket.get(objective.ticket_id) ?? 0) + 1
         );
+      }
+      if (
+        isDraftObjectiveWithText(objective) &&
+        !hasDraftObjectiveWithTextByTicket.has(objective.ticket_id)
+      ) {
+        hasDraftObjectiveWithTextByTicket.set(objective.ticket_id, true);
       }
       if (
         objective.state === 'executing' &&
@@ -445,6 +455,7 @@ export default async function TicketsBoardContent({
       has_executing_objective: objectiveAgentByTicket.has(ticket.id),
       waiting_for_response_at: waitingQuestionByTicket.get(ticket.id) ?? null,
       objectives_executed_count: executedObjectivesCountByTicket.get(ticket.id) ?? 0,
+      has_draft_objective_with_text: hasDraftObjectiveWithTextByTicket.get(ticket.id) ?? false,
       schedule_id: ticket.schedule_id ?? null
     };
   });

@@ -328,6 +328,7 @@ export type PromptTicketSource = {
     status: string | null;
     priority: Database['public']['Enums']['ticket_priority'] | null;
   };
+  latestObjectiveId: string | null;
   latestObjective: string;
 };
 
@@ -351,7 +352,7 @@ export async function resolvePromptTicketSource(
   if (opts?.preferredObjectiveId) {
     const { data: preferredRow, error: preferredError } = await supabase
       .from('objectives')
-      .select('objective')
+      .select('id, objective')
       .eq('ticket_id', ticketId)
       .eq('id', opts.preferredObjectiveId)
       .maybeSingle();
@@ -364,6 +365,7 @@ export async function resolvePromptTicketSource(
       return {
         source: {
           ticket,
+          latestObjectiveId: preferredRow.id,
           latestObjective: preferredRow.objective
         }
       };
@@ -376,7 +378,7 @@ export async function resolvePromptTicketSource(
   // the submitted state yet.
   const { data: executingObjective } = await supabase
     .from('objectives')
-    .select('objective')
+    .select('id, objective')
     .eq('ticket_id', ticketId)
     .eq('state', 'executing')
     .order('created_at', { ascending: false })
@@ -388,7 +390,7 @@ export async function resolvePromptTicketSource(
     (
       await supabase
         .from('objectives')
-        .select('objective')
+        .select('id, objective')
         .eq('ticket_id', ticketId)
         .eq('state', 'submitted')
         .order('created_at', { ascending: false })
@@ -398,7 +400,7 @@ export async function resolvePromptTicketSource(
     (
       await supabase
         .from('objectives')
-        .select('objective')
+        .select('id, objective')
         .eq('ticket_id', ticketId)
         .eq('state', 'draft')
         .order('created_at', { ascending: false })
@@ -417,6 +419,7 @@ export async function resolvePromptTicketSource(
   return {
     source: {
       ticket,
+      latestObjectiveId: currentObjective.id ?? null,
       latestObjective: currentObjective.objective
     }
   };

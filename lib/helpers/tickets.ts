@@ -47,3 +47,14 @@ export function deriveTitleFromObjective(objective: string): string {
   if (trimmed.length <= 100) return trimmed;
   return trimmed.slice(0, 100) + '…';
 }
+
+export function hasNonEmptyObjectiveText(objective: string | null | undefined): boolean {
+  return (objective ?? '').trim().length > 0;
+}
+
+export function isDraftObjectiveWithText(objective: {
+  state: string | null | undefined;
+  objective: string | null | undefined;
+}): boolean {
+  return objective.state === 'draft' && hasNonEmptyObjectiveText(objective.objective);
+}

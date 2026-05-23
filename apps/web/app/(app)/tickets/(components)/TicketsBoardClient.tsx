@@ -86,6 +86,7 @@ export default function TicketsBoardClient({
         waiting_for_response_at: t.waiting_for_response_at,
         is_read: t.is_read,
         objectives_executed_count: t.objectives_executed_count,
+        has_draft_objective_with_text: t.has_draft_objective_with_text,
         updated_at: t.updated_at,
         schedule_id: t.schedule_id ?? null,
         due_datetime: t.due_datetime

@@ -22,6 +22,7 @@ const TITLES: Record<string, string> = {
   '/docs/workflow': 'Workflow',
   '/docs/workflow/tickets': 'Tickets',
   '/docs/workflow/agent-execution': 'Agent Execution & Runner',
+  '/docs/workflow/execution-targets': 'Execution Targets & Resources',
   '/docs/workflow/updates': 'Updates & Questions',
   '/docs/workflow/review': 'Review & Delivery',
   '/docs/protocol': 'Protocol Reference',

@@ -9,7 +9,7 @@ jest.mock('@/lib/overlord/upsert-device');
 
 const USER_ID = '11111111-1111-4111-8111-111111111111';
 const ORG_ID = 1;
-const DEVICE_ID = 'device-aaa';
+const EXECUTION_TARGET_ID = 'target-aaa';
 const REQUEST_ID = 'req-aaa';
 const PROJECT_ID = 'aaaaaaaa-0000-4000-8000-000000000001';
 
@@ -38,12 +38,10 @@ function buildClaimSupabase({
   candidates = [],
   claimResult = null,
   resourceDirectory = null as { directory_path: string } | null,
-  deviceResource = null as { directory_path: string } | null,
-  projectUser = null as { local_working_directory: string } | null,
   targetResourceRow = null as {
     directory_path: string;
     user_id: string;
-    device_id: string;
+    execution_target_id: string;
   } | null
 } = {}) {
   const claimUpdate = {
@@ -78,17 +76,8 @@ function buildClaimSupabase({
           limit: jest.fn(() => chain),
           maybeSingle: jest.fn(async () => {
             if (targetResourceRow) return { data: targetResourceRow, error: null };
-            if (deviceResource) return { data: deviceResource, error: null };
             return { data: resourceDirectory, error: null };
           })
-        };
-        return chain;
-      }
-      if (table === 'project_user') {
-        const chain = {
-          select: jest.fn(() => chain),
-          eq: jest.fn(() => chain),
-          maybeSingle: jest.fn(async () => ({ data: projectUser, error: null }))
         };
         return chain;
       }
@@ -118,7 +107,7 @@ function baseCandidate(overrides: Partial<Candidate> = {}): Candidate {
     project_id: PROJECT_ID,
     status: 'queued',
     attempt_count: 0,
-    target_device_id: null,
+    target_execution_target_id: null,
     target_kind: 'any',
     target_resource_id: null,
     launch_params: {},
@@ -136,14 +125,14 @@ describe('POST /api/protocol/claim-execution', () => {
     jest.clearAllMocks();
     mockParseBody();
     const { upsertDeviceFromProtocol } = jest.requireMock('@/lib/overlord/upsert-device');
-    upsertDeviceFromProtocol.mockResolvedValue(DEVICE_ID);
+    upsertDeviceFromProtocol.mockResolvedValue(EXECUTION_TARGET_ID);
   });
 
   it('returns null request when no candidates are claimable', async () => {
     const supabase = buildClaimSupabase({
       candidates: [
         baseCandidate({
-          target_device_id: 'other-device',
+          target_execution_target_id: 'other-target',
           launch_params: { workingDirectory: '/repo' }
         })
       ]
@@ -192,19 +181,19 @@ describe('POST /api/protocol/claim-execution', () => {
     );
   });
 
-  it('falls back to project_user.local_working_directory', async () => {
+  it('falls back to the execution target primary project resource directory', async () => {
     const claimed = baseCandidate({ status: 'claimed', launch_params: {} });
     const supabase = buildClaimSupabase({
       candidates: [baseCandidate({ launch_params: {} })],
       claimResult: claimed,
-      projectUser: { local_working_directory: '/from-project-user' }
+      resourceDirectory: { directory_path: '/from-target-resource' }
     });
     const { createServiceRoleClient } = jest.requireMock('@/supabase/utils/service-role');
     createServiceRoleClient.mockReturnValue(supabase);
 
     const response = await POST(new Request('http://localhost', { method: 'POST' }));
     const body = await response.json();
-    expect(body.launch.workingDirectory).toBe('/from-project-user');
+    expect(body.launch.workingDirectory).toBe('/from-target-resource');
   });
 
   it('reclaims an expired claimed request and increments attempt_count', async () => {

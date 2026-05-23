@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { internalErrorResponse, parseProtocolBody } from '@/app/api/protocol/_lib';
+import { findExecutionTargetByFingerprint } from '@/lib/overlord/execution-targets';
 import { updateProjectResourceSchema } from '@/lib/overlord/validation';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
@@ -17,29 +18,25 @@ export async function POST(request: Request) {
 
     const { resourceId, deviceFingerprint, directoryPath, label, isPrimary } = parsed.data;
 
-    // Verify device belongs to this user
-    const { data: device } = await supabase
-      .from('devices')
-      .select('id')
-      .eq('organization_id', organizationId)
-      .eq('user_id', userId)
-      .eq('device_fingerprint', deviceFingerprint)
-      .maybeSingle();
+    const executionTargetId = await findExecutionTargetByFingerprint(supabase, {
+      organizationId,
+      userId,
+      deviceFingerprint
+    });
 
-    if (!device) {
+    if (!executionTargetId) {
       return NextResponse.json(
         {
-          error: 'Device not found. Call get-device first to register this device.',
-          hint: 'You can only update resources on your own device.'
+          error: 'Execution target not found. Call get-device first to register this target.',
+          hint: 'You can only update resources on a target you can access.'
         },
         { status: 403 }
       );
     }
 
-    // Fetch the resource and verify it belongs to this user and device
-    const { data: existing } = await supabase
+    const { data: existing } = await (supabase as any)
       .from('project_resource_directories')
-      .select('id, project_id, device_id')
+      .select('id, project_id, execution_target_id')
       .eq('id', resourceId)
       .eq('user_id', userId)
       .maybeSingle();
@@ -48,21 +45,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Resource not found.' }, { status: 404 });
     }
 
-    if (existing.device_id !== device.id) {
+    if (existing.execution_target_id !== executionTargetId) {
       return NextResponse.json(
-        { error: 'You can only update resources that belong to your current device.' },
+        { error: 'You can only update resources that belong to your current execution target.' },
         { status: 403 }
       );
     }
 
-    // If setting as primary, clear the other primary on this device first
-    // (a device has at most one primary resource).
+    // If setting as primary, clear the other primary for this project/target first.
     if (isPrimary) {
-      await supabase
+      await (supabase as any)
         .from('project_resource_directories')
         .update({ is_primary: false })
-        .eq('user_id', userId)
-        .eq('device_id', device.id)
+        .eq('project_id', existing.project_id)
+        .eq('execution_target_id', executionTargetId)
         .neq('id', resourceId);
     }
 
@@ -71,11 +67,11 @@ export async function POST(request: Request) {
     if (label !== undefined) updates.label = label?.trim() || null;
     if (isPrimary !== undefined) updates.is_primary = isPrimary;
 
-    const { data: updated, error } = await supabase
+    const { data: updated, error } = await (supabase as any)
       .from('project_resource_directories')
       .update(updates)
       .eq('id', resourceId)
-      .select('id, directory_path, label, is_primary, device_id')
+      .select('id, directory_path, label, is_primary, execution_target_id')
       .single();
 
     if (error) return internalErrorResponse(error);
@@ -86,7 +82,8 @@ export async function POST(request: Request) {
         directoryPath: updated.directory_path,
         label: updated.label,
         isPrimary: updated.is_primary,
-        deviceId: updated.device_id
+        deviceId: updated.execution_target_id,
+        executionTargetId: updated.execution_target_id
       }
     });
   } catch (error) {

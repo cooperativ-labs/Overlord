@@ -223,6 +223,9 @@ export async function handleUpdate(supabase: SupabaseClient, args: any, ctx: Tok
   if (phase) {
     const targetStatusName = await resolveStatusNameForPhase(supabase, ctx.organizationId, phase);
     const ticketUpdate: Record<string, unknown> = { status: targetStatusName };
+    const shouldEmitStatusChange =
+      (currentTicket as { status?: string } | null)?.status !== targetStatusName &&
+      phase === 'review';
 
     // If moving to a review-type status, place the ticket at the top of that column
     const statusType = await resolveStatusTypeForName(
@@ -254,6 +257,17 @@ export async function handleUpdate(supabase: SupabaseClient, args: any, ctx: Tok
     }
 
     await supabase.from('tickets').update(ticketUpdate).eq('id', ticketId);
+
+    if (shouldEmitStatusChange) {
+      await supabase.from('ticket_events').insert({
+        event_type: 'status_change',
+        phase,
+        objective_id: resolved.session.objective_id,
+        summary: 'Objective moved to review.',
+        ticket_id: ticketId,
+        created_by: ctx.userId
+      });
+    }
 
     if (statusType === 'review') {
       scheduleGenerateFeedPost({

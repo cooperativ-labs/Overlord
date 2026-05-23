@@ -33,6 +33,7 @@ export type BoardTicket = {
   has_unopened_waiting_response?: boolean;
   is_read?: boolean;
   objectives_executed_count?: number;
+  has_draft_objective_with_text?: boolean;
   updated_at?: string;
   delegate?: string | null;
   schedule_id?: number | null;

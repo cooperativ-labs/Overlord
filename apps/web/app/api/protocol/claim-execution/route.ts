@@ -29,7 +29,7 @@ async function resolveWorkingDirectory(
   supabase: ReturnType<typeof createServiceRoleClient>,
   request: ExecutionRequestRow,
   userId: string,
-  deviceId: string
+  executionTargetId: string
 ): Promise<string | null> {
   const explicit = textFromParams(request.launch_params, 'workingDirectory');
   if (explicit) return explicit;
@@ -37,40 +37,27 @@ async function resolveWorkingDirectory(
   if (request.target_resource_id) {
     const { data } = await supabase
       .from('project_resource_directories')
-      .select('directory_path, device_id, user_id')
+      .select('directory_path, execution_target_id, user_id')
       .eq('id', request.target_resource_id)
       .maybeSingle();
-    if (!data || data.user_id !== userId || data.device_id !== deviceId) return null;
+    if (!data || data.user_id !== userId || data.execution_target_id !== executionTargetId) {
+      return null;
+    }
     return data.directory_path;
   }
 
   if (!request.project_id) return null;
 
-  // Prefer a project_resource_directories row registered for the user on this
-  // exact device. `is_primary` wins so users can pin a primary working
-  // directory per project.
-  const { data: deviceResource } = await supabase
+  const { data: targetResource } = await (supabase as any)
     .from('project_resource_directories')
     .select('directory_path')
     .eq('project_id', request.project_id)
-    .eq('user_id', userId)
-    .eq('device_id', deviceId)
+    .eq('execution_target_id', executionTargetId)
     .order('is_primary', { ascending: false })
     .order('created_at', { ascending: true })
     .limit(1)
     .maybeSingle();
-  if (deviceResource?.directory_path) return deviceResource.directory_path;
-
-  // Fall back to the user's per-project local working directory so devices
-  // that haven't registered an explicit project resource can still claim.
-  const { data: projectUser } = await supabase
-    .from('project_user')
-    .select('local_working_directory')
-    .eq('project_id', request.project_id)
-    .eq('user_id', userId)
-    .maybeSingle();
-
-  return projectUser?.local_working_directory ?? null;
+  return targetResource?.directory_path ?? null;
 }
 
 function claimableByStatus(row: ExecutionRequestRow, nowMs: number): boolean {
@@ -93,15 +80,15 @@ export async function POST(request: Request) {
 
     const { deviceFingerprint, deviceHostname, devicePlatform, leaseSeconds, projectId } =
       parsed.data;
-    const deviceId = await upsertDeviceFromProtocol(supabase, {
+    const executionTargetId = await upsertDeviceFromProtocol(supabase, {
       organizationId,
       userId,
       deviceFingerprint,
       hostname: deviceHostname ?? null,
       platform: devicePlatform ?? null
     });
-    if (!deviceId) {
-      return NextResponse.json({ error: 'Failed to register device.' }, { status: 500 });
+    if (!executionTargetId) {
+      return NextResponse.json({ error: 'Failed to register execution target.' }, { status: 500 });
     }
 
     let query = supabase
@@ -121,10 +108,20 @@ export async function POST(request: Request) {
     const leaseExpiresAt = new Date(now.getTime() + leaseSeconds * 1000).toISOString();
     for (const candidate of candidates ?? []) {
       if (!claimableByStatus(candidate, now.getTime())) continue;
-      if (candidate.target_device_id && candidate.target_device_id !== deviceId) continue;
+      if (
+        candidate.target_execution_target_id &&
+        candidate.target_execution_target_id !== executionTargetId
+      ) {
+        continue;
+      }
 
       const sshCommand = textFromParams(candidate.launch_params, 'sshCommand');
-      const workingDirectory = await resolveWorkingDirectory(supabase, candidate, userId, deviceId);
+      const workingDirectory = await resolveWorkingDirectory(
+        supabase,
+        candidate,
+        userId,
+        executionTargetId
+      );
       if (candidate.target_kind === 'ssh' && !sshCommand) continue;
       if (candidate.project_id && !workingDirectory && !sshCommand) continue;
 
@@ -132,7 +129,7 @@ export async function POST(request: Request) {
         .from('execution_requests')
         .update({
           status: 'claimed',
-          claimed_by_device_id: deviceId,
+          claimed_by_execution_target_id: executionTargetId,
           claimed_at: now.toISOString(),
           lease_expires_at: leaseExpiresAt,
           last_error: null,

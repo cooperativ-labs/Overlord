@@ -182,7 +182,7 @@ Checklist:
 
 - Local Codex launches pass `agent=codex` into the context route
 - Local Codex does not request `bundle` instruction mode (`bundleAgent = null` for Codex)
-- Prompt text explicitly includes the Codex ticket workflow instructions
+- Prompt text explicitly includes the Codex ticket workflow instructions and the `## Task` metadata now includes the resolved current `Objective ID` alongside `Ticket ID`
 - Local Codex plugin installs a `UserPromptSubmit` hook that records follow-up activity through `/api/protocol/hook-event`
 - Local Codex plugin installs a `PermissionRequest` hook that notifies Overlord through `/api/protocol/permission-request` (same blocking question event as Claude)
 - Prompt text does not tell Codex to look for `overlord-local` or a local Codex bundle

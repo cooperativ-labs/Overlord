@@ -40,17 +40,16 @@ export type UpdateProjectSshConfigInput = {
 };
 
 type ProjectUserRow = Database['public']['Tables']['project_user']['Row'];
-export type ProjectUserSshSettingsRow = Pick<
-  ProjectUserRow,
-  | 'project_id'
-  | 'ssh_command'
-  | 'remote_working_directory'
-  | 'ssh_host'
-  | 'ssh_port'
-  | 'ssh_user'
-  | 'ssh_auth_method'
-  | 'ssh_private_key_path'
->;
+export type ProjectUserSshSettingsRow = {
+  project_id: string;
+  ssh_command: string | null;
+  remote_working_directory: string | null;
+  ssh_host: string | null;
+  ssh_port: number | null;
+  ssh_user: string | null;
+  ssh_auth_method: string | null;
+  ssh_private_key_path: string | null;
+};
 
 export type ProjectUserLocalSettingsRow = Pick<
   ProjectUserRow,

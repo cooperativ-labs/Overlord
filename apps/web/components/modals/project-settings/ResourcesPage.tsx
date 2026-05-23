@@ -1,6 +1,6 @@
 'use client';
 
-import { Check, Laptop, Pencil, X } from 'lucide-react';
+import { Check, Laptop, Pencil, Trash2, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -8,6 +8,7 @@ import { ResourceDirectoryList } from '@/components/features/projects/ResourceDi
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
+  deleteOrganizationExecutionTargetAction,
   getUserDevicesAction,
   updateDeviceLabelAction,
   type UserDevice
@@ -44,6 +45,8 @@ export function ResourcesPage({
   const [editingDeviceId, setEditingDeviceId] = useState<string | null>(null);
   const [editingLabel, setEditingLabel] = useState('');
   const [savingDeviceId, setSavingDeviceId] = useState<string | null>(null);
+  const [deletingDeviceId, setDeletingDeviceId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   async function refreshDevices(options?: { showLoading?: boolean }) {
     const showLoading = options?.showLoading !== false;
@@ -89,6 +92,24 @@ export function ResourcesPage({
     }
   }
 
+  async function handleDeleteDevice(device: UserDevice) {
+    if (!device.organizationId) return;
+    setDeletingDeviceId(device.id);
+    setConfirmDeleteId(null);
+    try {
+      await deleteOrganizationExecutionTargetAction({
+        organizationId: device.organizationId,
+        executionTargetId: device.id
+      });
+      setDevices(prev => prev.filter(d => d.id !== device.id));
+      toast.success(`"${device.label}" removed from organization.`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to remove execution target.');
+    } finally {
+      setDeletingDeviceId(null);
+    }
+  }
+
   return (
     <div className="grid gap-6">
       <section className="grid gap-3">
@@ -96,7 +117,8 @@ export function ResourcesPage({
           <h3 className="text-sm font-medium">Your devices</h3>
           <p className="text-xs text-muted-foreground">
             Devices that have connected to Overlord with your account. Rename a device to make it
-            easier to recognize in resource lists.
+            easier to recognize in resource lists. Admins can remove a device from the organization
+            if it has no linked resource directories.
           </p>
         </div>
 
@@ -112,6 +134,9 @@ export function ResourcesPage({
             {devices.map(device => {
               const isEditing = editingDeviceId === device.id;
               const isSaving = savingDeviceId === device.id;
+              const isDeleting = deletingDeviceId === device.id;
+              const isConfirming = confirmDeleteId === device.id;
+              const isBusy = isSaving || isDeleting;
               return (
                 <div
                   key={device.id}
@@ -150,6 +175,7 @@ export function ResourcesPage({
                       </div>
                     )}
                   </div>
+
                   {isEditing ? (
                     <>
                       <Button
@@ -176,16 +202,63 @@ export function ResourcesPage({
                       </Button>
                     </>
                   ) : (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 w-7 p-0 text-muted-foreground"
-                      onClick={() => handleStartEdit(device)}
-                      title="Rename device"
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                    </Button>
+                    <>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 p-0 text-muted-foreground"
+                        onClick={() => handleStartEdit(device)}
+                        disabled={isBusy}
+                        title="Rename device"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+
+                      {device.isAdmin && device.organizationId ? (
+                        isConfirming ? (
+                          <div className="flex items-center gap-1">
+                            <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                              Remove?
+                            </span>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 w-7 p-0 text-destructive hover:bg-destructive/10"
+                              onClick={() => void handleDeleteDevice(device)}
+                              disabled={isDeleting}
+                              title="Confirm removal"
+                            >
+                              <Check className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 w-7 p-0"
+                              onClick={() => setConfirmDeleteId(null)}
+                              disabled={isDeleting}
+                              title="Cancel"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+                            onClick={() => setConfirmDeleteId(device.id)}
+                            disabled={isBusy}
+                            title="Remove from organization"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        )
+                      ) : null}
+                    </>
                   )}
                 </div>
               );

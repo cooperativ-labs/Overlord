@@ -22,7 +22,9 @@ export const protocolEventTypes = [
   'artifact',
   'deliver',
   'status_change',
-  'alert'
+  'alert',
+  'awaiting_approval',
+  'execution_requested'
 ] as const;
 
 export const connectionMethods = [

@@ -4,11 +4,14 @@ jest.mock('@/app/api/protocol/_lib', () => ({
     () => new Response(JSON.stringify({ error: 'internal' }), { status: 500 })
   )
 }));
+jest.mock('@/lib/overlord/execution-targets', () => ({
+  findExecutionTargetByFingerprint: jest.fn()
+}));
 jest.mock('@/supabase/utils/service-role');
 
 const USER_ID = '11111111-1111-4111-8111-111111111111';
 const ORG_ID = 1;
-const DEVICE_ID = 'device-fail';
+const EXECUTION_TARGET_ID = 'target-fail';
 const REQUEST_ID = 'req-fail';
 const TICKET_ID = 'ticket-fail';
 const OBJECTIVE_ID = 'objective-fail';
@@ -35,8 +38,10 @@ function mockParseBody() {
 describe('POST /api/protocol/fail-execution-launch', () => {
   beforeEach(() => jest.clearAllMocks());
 
-  it('records failure and writes execution_launch_failed for the claiming device', async () => {
+  it('records failure and writes execution_launch_failed for the claiming execution target', async () => {
     mockParseBody();
+    const { findExecutionTargetByFingerprint } = jest.requireMock('@/lib/overlord/execution-targets');
+    findExecutionTargetByFingerprint.mockResolvedValue(EXECUTION_TARGET_ID);
     let updatePayload: unknown;
     const eventsInsert = { insert: jest.fn(async () => ({ error: null })) };
     const executionUpdate = {
@@ -57,19 +62,6 @@ describe('POST /api/protocol/fail-execution-launch', () => {
     };
     const supabase = {
       from: jest.fn((table: string) => {
-        if (table === 'devices') {
-          return {
-            select: jest.fn(() => ({
-              eq: jest.fn(() => ({
-                eq: jest.fn(() => ({
-                  eq: jest.fn(() => ({
-                    maybeSingle: jest.fn(async () => ({ data: { id: DEVICE_ID }, error: null }))
-                  }))
-                }))
-              }))
-            }))
-          };
-        }
         if (table === 'execution_requests') return executionUpdate;
         if (table === 'ticket_events') return eventsInsert;
         throw new Error(`unexpected ${table}`);
@@ -94,7 +86,7 @@ describe('POST /api/protocol/fail-execution-launch', () => {
         objective_id: OBJECTIVE_ID,
         payload: expect.objectContaining({
           execution_request_id: REQUEST_ID,
-          device_id: DEVICE_ID
+          execution_target_id: EXECUTION_TARGET_ID
         })
       })
     );

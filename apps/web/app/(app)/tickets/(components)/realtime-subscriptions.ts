@@ -7,6 +7,7 @@ import {
   updateTicketInBoards
 } from '@/lib/client-data/tickets/cache';
 import { parseObjectiveAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
+import { isDraftObjectiveWithText } from '@/lib/helpers/tickets';
 import {
   TICKET_CREATED_EVENT,
   TICKET_CREATED_STORAGE_KEY,
@@ -19,12 +20,15 @@ import {
   type TicketOpenedTimestamps,
   type TicketRaisedWhileOpenMap
 } from '@/lib/helpers/ticket-waiting-response';
+import {
+  isWaitingOnHumanEvent,
+  resolveObjectiveNotificationIntent
+} from '@/lib/overlord/objective-notifications';
 import { createClient } from '@/supabase/utils/client';
 import type { Database } from '@/types/database.types';
 
 import type { Ticket } from './KanbanCard';
 import {
-  getEventMessage,
   getObjectivePayloadId,
   getObjectivePayloadTicketId,
   getSessionPayloadObjectiveId,
@@ -123,7 +127,7 @@ export function setupRealtimeSubscriptions({
     const [{ data: objectives }, { data: sessions }] = await Promise.all([
       supabase
         .from('objectives')
-        .select('state,agent_identifier,assigned_agent')
+        .select('state,objective,agent_identifier,assigned_agent')
         .eq('ticket_id', ticketId)
         .order('created_at', { ascending: false }),
       supabase
@@ -140,9 +144,11 @@ export function setupRealtimeSubscriptions({
     let latestObjectiveAssignedAgent: Objective['assigned_agent'] = null;
     let executingObjectiveAgent: string | null = null;
     let executedObjectivesCount = 0;
+    let hasDraftObjectiveWithText = false;
 
     for (const objective of (objectives ?? []) as Array<{
       state: string | null;
+      objective: string | null;
       agent_identifier: string | null;
       assigned_agent: Objective['assigned_agent'];
     }>) {
@@ -154,6 +160,9 @@ export function setupRealtimeSubscriptions({
       }
       if (objective.state === 'complete') {
         executedObjectivesCount += 1;
+      }
+      if (isDraftObjectiveWithText(objective)) {
+        hasDraftObjectiveWithText = true;
       }
       if (
         objective.state === 'executing' &&
@@ -175,7 +184,8 @@ export function setupRealtimeSubscriptions({
       assigned_agent: parseObjectiveAssignedAgent(latestObjectiveAssignedAgent),
       running_agent: executingObjectiveAgent ?? (isAttached ? session.agent_identifier : null),
       has_executing_objective: executingObjectiveAgent !== null,
-      objectives_executed_count: executedObjectivesCount
+      objectives_executed_count: executedObjectivesCount,
+      has_draft_objective_with_text: hasDraftObjectiveWithText
     });
   };
 
@@ -199,7 +209,7 @@ export function setupRealtimeSubscriptions({
         .from('ticket_events')
         .select('ticket_id,created_at')
         .in('ticket_id', ticketIds)
-        .eq('event_type', 'question')
+        .in('event_type', ['question', 'awaiting_approval'])
         .eq('is_blocking', true)
         .order('created_at', { ascending: false }),
       supabase
@@ -208,7 +218,7 @@ export function setupRealtimeSubscriptions({
         .in('id', ticketIds),
       supabase
         .from('objectives')
-        .select('ticket_id,state,agent_identifier,assigned_agent')
+        .select('ticket_id,state,objective,agent_identifier,assigned_agent')
         .in('ticket_id', ticketIds)
         .order('created_at', { ascending: false })
     ]);
@@ -219,6 +229,7 @@ export function setupRealtimeSubscriptions({
     const latestObjectiveAssignedAgentByTicket = new Map<string, Objective['assigned_agent']>();
     const executingObjectiveAgentByTicket = new Map<string, string>();
     const executedObjectivesCountByTicket = new Map<string, number>();
+    const hasDraftObjectiveWithTextByTicket = new Map<string, boolean>();
     const sessionByTicket = new Map<
       string,
       Pick<AgentSession, 'session_state' | 'agent_identifier'>
@@ -246,6 +257,7 @@ export function setupRealtimeSubscriptions({
     for (const objective of (objectives ?? []) as Array<{
       ticket_id: string;
       state: string | null;
+      objective: string | null;
       agent_identifier: string | null;
       assigned_agent: Objective['assigned_agent'];
     }>) {
@@ -260,6 +272,9 @@ export function setupRealtimeSubscriptions({
           objective.ticket_id,
           (executedObjectivesCountByTicket.get(objective.ticket_id) ?? 0) + 1
         );
+      }
+      if (isDraftObjectiveWithText(objective)) {
+        hasDraftObjectiveWithTextByTicket.set(objective.ticket_id, true);
       }
       if (
         objective.state === 'executing' &&
@@ -295,7 +310,8 @@ export function setupRealtimeSubscriptions({
         running_agent: runningAgent,
         has_executing_objective: executingObjectiveAgentByTicket.has(ticket.id),
         objectives_executed_count:
-          executedObjectivesCountByTicket.get(ticket.id) ?? ticket.objectives_executed_count ?? 0
+          executedObjectivesCountByTicket.get(ticket.id) ?? ticket.objectives_executed_count ?? 0,
+        has_draft_objective_with_text: hasDraftObjectiveWithTextByTicket.get(ticket.id) ?? false
       });
     }
 
@@ -340,8 +356,10 @@ export function setupRealtimeSubscriptions({
     })();
   };
 
-  const handleQuestionEvent = (event: TicketEvent) => {
-    if (!event.is_blocking) return;
+  const handleWaitingOnHumanEvent = (
+    event: TicketEvent,
+    intent: NonNullable<ReturnType<typeof resolveObjectiveNotificationIntent>>
+  ) => {
     if (!refs.ticketIdsRef.current.has(event.ticket_id)) return;
     mergeWaitingQuestionIntoBoards(queryClient, event);
 
@@ -356,12 +374,7 @@ export function setupRealtimeSubscriptions({
     setters.setOpenedWaitingTimestamps(getOpenedWaitingTimestamps());
     setters.setWaitingRaisedWhileOpen(getWaitingRaisedWhileOpenMap());
 
-    const ticket = refs.ticketsByIdRef.current.get(event.ticket_id);
-    const title = ticket?.title?.trim()
-      ? `Agent waiting: ${ticket.title.trim()}`
-      : 'Agent waiting for response';
-
-    sendDesktopNotification(title, getEventMessage(event));
+    sendDesktopNotification(intent.title, intent.body);
     playSound(refs.waitingSoundRef.current);
   };
 
@@ -385,24 +398,22 @@ export function setupRealtimeSubscriptions({
       ...(refs.openTicketIdRef.current !== event.ticket_id ? { is_read: false } : {})
     });
 
-    if (event.phase !== 'review') return;
+    const intent = resolveObjectiveNotificationIntent(event, {
+      ticketTitle: existingTicket?.title,
+      ticketReference: undefined
+    });
+    if (!intent || intent.kind !== 'ready_for_review') return;
 
     playSound(refs.reviewSoundRef.current);
-
-    const reviewTicket = refs.ticketsByIdRef.current.get(event.ticket_id);
-    const reviewTitle = reviewTicket?.title?.trim()
-      ? `Ready for review: ${reviewTicket.title.trim()}`
-      : 'Ticket moved to review';
-    sendDesktopNotification(reviewTitle, 'The agent has delivered this ticket.');
+    sendDesktopNotification(intent.title, intent.body);
   };
 
-  const handleAlertEvent = (event: TicketEvent) => {
+  const handleAlertEvent = (
+    event: TicketEvent,
+    intent: NonNullable<ReturnType<typeof resolveObjectiveNotificationIntent>>
+  ) => {
     if (!refs.ticketIdsRef.current.has(event.ticket_id)) return;
-
-    const ticket = refs.ticketsByIdRef.current.get(event.ticket_id);
-    const title = ticket?.title?.trim() ? `Agent alert: ${ticket.title.trim()}` : 'Agent alert';
-
-    sendDesktopNotification(title, getEventMessage(event));
+    sendDesktopNotification(intent.title, intent.body);
     playSound(refs.alertSoundRef.current);
   };
 
@@ -436,16 +447,22 @@ export function setupRealtimeSubscriptions({
       payload => {
         const event = payload.new;
         if (!refs.ticketIdsRef.current.has(event.ticket_id)) return;
-        if (event.event_type === 'question') {
-          handleQuestionEvent(event);
+        const ticket = refs.ticketsByIdRef.current.get(event.ticket_id);
+        const intent = resolveObjectiveNotificationIntent(event, {
+          ticketTitle: ticket?.title,
+          ticketReference: undefined
+        });
+
+        if (isWaitingOnHumanEvent(event) && intent) {
+          handleWaitingOnHumanEvent(event, intent);
           return;
         }
         if (event.event_type === 'status_change') {
           handleStatusChangeEvent(event);
           return;
         }
-        if (event.event_type === 'alert') {
-          handleAlertEvent(event);
+        if (intent?.kind === 'agent_alert') {
+          handleAlertEvent(event, intent);
         }
       }
     )

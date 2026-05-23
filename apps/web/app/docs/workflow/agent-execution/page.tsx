@@ -35,8 +35,8 @@ The backend never SSHs into your machine and never spawns a local process. If no
 
 1. **Objective exists on the ticket** — usually as \`draft\` (next step) or already \`submitted\` (manual Run).
 2. **Trigger enqueues work** — auto-advance after \`deliver\`, or a human **Run** / \`ovld protocol request-execution\`. Both call the same \`execution_requests\` queue with different idempotency keys.
-3. **Row is \`queued\`** — stores resolved agent, model, thinking, flags, target device/resource, and launch mode. The UI can show “waiting for runner.”
-4. **Runner claims** — \`ovld runner\` calls \`POST /api/protocol/claim-execution\` with the device fingerprint from \`~/.ovld/device.json\`. The row moves to \`claimed\` with a lease.
+3. **Row is \`queued\`** — stores resolved agent, model, thinking, flags, target execution target/resource, and launch mode. The UI can show “waiting for runner.”
+4. **Runner claims** — \`ovld runner\` calls \`POST /api/protocol/claim-execution\` with the device fingerprint from \`~/.ovld/device.json\`. The row moves to \`claimed\` with a lease. The claim payload includes the working directory resolved from [project resource directories](/docs/workflow/execution-targets) on that target.
 5. **Runner launches** — the runner builds \`ovld launch …\` arguments from the claim payload and spawns that process (\`stdio: inherit\` so output appears in the runner’s terminal).
 6. **Runner reports success** — on child \`spawn\`, it calls \`complete-execution-launch\`; the row becomes \`launched\`.
 7. **Next agent attaches** — the new agent process calls \`ovld protocol attach\`, loads ticket context, and executes the \`submitted\` objective.
@@ -80,11 +80,19 @@ All execution triggers (whether automated or manual) write to the unified \`exec
 
 ---
 
+## Execution targets and working directories
+
+Before a runner can launch an agent in the right checkout, Overlord needs an **execution target** (the machine) and **project resource directories** (paths on that target). The runner matches queued rows by fingerprint; \`claim-execution\` picks the explicit \`target_resource_id\` or the primary directory for \`(project, execution_target)\`.
+
+See [Execution Targets & Resources](/docs/workflow/execution-targets) for the data model, SSH placeholder flow, and protocol commands (\`get-device\`, \`list-project-resources\`, \`add-project-resource\`).
+
+---
+
 ## The Terminal Runner (\`ovld runner\`)
 
 The Terminal Runner is a lightweight, long-running CLI process that manages local execution. It handles:
-1. **Device Identity**: Generates a unique UUID fingerprint stored in \`~/.ovld/device.json\` to identify the machine.
-2. **Project Directories**: Resolves working directories from registered project resources on the current device fingerprint.
+1. **Device Identity**: Generates a unique UUID fingerprint stored in \`~/.ovld/device.json\` to identify the machine (linked to a canonical execution target).
+2. **Project Directories**: Resolves working directories from registered project resources on the current execution target fingerprint.
 3. **Queue Polling**: Regularly polls the backend (or subscribes via Supabase Realtime) for compatible queued requests.
 4. **Agent Spawning**: Spawns agent sessions locally by shelling into \`ovld launch\`.
 
@@ -122,6 +130,7 @@ Both execution models utilize the same queue mechanism:
 
 ## Related Pages
 
+- [Execution Targets & Resources](/docs/workflow/execution-targets)
 - [Objectives](/docs/workflow/objectives)
 - [Tickets](/docs/workflow/tickets)
 - [CLI Reference](/docs/surfaces/cli)

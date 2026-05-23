@@ -65,7 +65,7 @@ export async function POST(request: Request) {
           error: 'No project found matching this working directory.',
           hint:
             'Add this directory in project settings under "Resource directories", ' +
-            'or set the legacy "Local working directory" field.'
+            'or run `ovld add-cwd` from the project checkout.'
         },
         { status: 404 }
       );

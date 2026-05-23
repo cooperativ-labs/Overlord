@@ -8,14 +8,9 @@ import { toolErr, toolOk } from '../rpc.ts';
 
 import { upsertDeviceFromProtocol } from './_device-upsert.ts';
 
-type ProjectUserJoinRow = {
-  local_working_directory: string | null;
-  projects: { id: string; name: string; organization_id: number } | null;
-};
-
 type ResourceDirectoryRow = {
   directory_path: string;
-  device_id: string | null;
+  execution_target_id: string | null;
   projects: { id: string; name: string; organization_id: number } | null;
 };
 
@@ -61,17 +56,17 @@ async function resolveProjectByWorkingDirectory(
   organizationId: number,
   workingDirectory: string,
   userId: string | null,
-  deviceId: string | null
+  executionTargetId: string | null
 ) {
   const normalizedCwd = normalizeDirPath(workingDirectory);
 
   if (userId) {
-    if (deviceId) {
+    if (executionTargetId) {
       const { data } = await supabase
         .from('project_resource_directories')
-        .select('directory_path, device_id, projects!inner(id, name, organization_id)')
+        .select('directory_path, execution_target_id, projects!inner(id, name, organization_id)')
         .eq('user_id', userId)
-        .eq('device_id', deviceId)
+        .eq('execution_target_id', executionTargetId)
         .eq('projects.organization_id', organizationId);
       const rows = (data ?? []) as unknown as ResourceDirectoryRow[];
       const match = pickBestPathMatch(rows, normalizedCwd, r => r.directory_path);
@@ -82,7 +77,7 @@ async function resolveProjectByWorkingDirectory(
 
     const { data } = await supabase
       .from('project_resource_directories')
-      .select('directory_path, device_id, projects!inner(id, name, organization_id)')
+      .select('directory_path, execution_target_id, projects!inner(id, name, organization_id)')
       .eq('user_id', userId)
       .eq('projects.organization_id', organizationId);
     const rows = (data ?? []) as unknown as ResourceDirectoryRow[];
@@ -92,20 +87,6 @@ async function resolveProjectByWorkingDirectory(
     }
   }
 
-  let query = supabase
-    .from('project_user')
-    .select('local_working_directory, projects!inner(id, name, organization_id)')
-    .eq('projects.organization_id', organizationId)
-    .not('local_working_directory', 'is', null);
-  if (userId) {
-    query = query.eq('user_id', userId);
-  }
-  const { data } = await query;
-  const rows = (data ?? []) as unknown as ProjectUserJoinRow[];
-  const match = pickBestPathMatch(rows, normalizedCwd, r => r.local_working_directory);
-  if (match?.projects) {
-    return { ...match.projects, local_working_directory: match.local_working_directory };
-  }
   return null;
 }
 

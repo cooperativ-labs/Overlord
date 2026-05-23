@@ -3,8 +3,10 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef } from 'react';
 
+import { sendDesktopNotification } from '@/app/(app)/tickets/(components)/realtime-helpers';
 import { ticketQueryKeys } from '@/lib/client-data/tickets/query-keys';
 import { getTicketIdentifier } from '@/lib/helpers/tickets';
+import { resolveObjectiveNotificationIntent } from '@/lib/overlord/objective-notifications';
 import { createClient } from '@/supabase/utils/client';
 import type { Database } from '@/types/database.types';
 
@@ -13,7 +15,6 @@ type Artifact = Database['public']['Tables']['artifacts']['Row'];
 type AgentSession = Database['public']['Tables']['agent_sessions']['Row'];
 type FileChange = Database['public']['Tables']['file_changes']['Row'];
 type SharedState = Database['public']['Tables']['shared_state']['Row'];
-type JsonValue = Database['public']['Tables']['ticket_events']['Row']['payload'];
 
 const MAX_ROWS = 50;
 
@@ -54,43 +55,8 @@ function pickNewestSession(previous: AgentSession | null, incoming: AgentSession
   return incoming.attached_at > previous.attached_at ? incoming : previous;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function getEventPayload(payload: JsonValue): Record<string, unknown> {
-  return isRecord(payload) ? payload : {};
-}
-
-function isAgentNotificationEvent(event: TicketEvent): boolean {
-  if (event.event_type !== 'alert' && event.event_type !== 'question') return false;
-  const payload = getEventPayload(event.payload);
-  return payload.entry_type === 'agent_notification';
-}
-
 function shouldShowDesktopNotification(event: TicketEvent): boolean {
-  if (event.event_type === 'deliver' || event.event_type === 'question') return true;
-  return isAgentNotificationEvent(event);
-}
-
-function getNotificationTitle(ticketReference: string, event: TicketEvent): string {
-  if (event.event_type === 'question') {
-    return `Agent Question (${ticketReference})`;
-  }
-  if (event.event_type === 'deliver') {
-    return `Agent Delivered (${ticketReference})`;
-  }
-  return `Agent Notification (${ticketReference})`;
-}
-
-function getNotificationBody(event: TicketEvent): string {
-  const payload = getEventPayload(event.payload);
-  const message = typeof payload.message === 'string' ? payload.message.trim() : '';
-  const summary = event.summary?.trim() ?? '';
-  if (summary) return summary;
-  if (message) return message;
-  if (event.event_type === 'deliver') return 'The agent delivered this ticket for review.';
-  return 'New agent event received.';
+  return resolveObjectiveNotificationIntent(event, {}) !== null;
 }
 
 type UseTicketRealtimeOptions = {
@@ -258,13 +224,15 @@ export function useTicketRealtime({
             shouldShowDesktopNotification(incomingEvent) &&
             !notifiedEventIdsRef.current.has(incomingEvent.id)
           ) {
+            const intent = resolveObjectiveNotificationIntent(incomingEvent, {
+              ticketReference: resolvedTicketReference
+            });
+            if (!intent) return;
             notifiedEventIdsRef.current.add(incomingEvent.id);
             if (notifiedEventIdsRef.current.size > 500) {
               notifiedEventIdsRef.current.clear();
             }
-            const title = getNotificationTitle(resolvedTicketReference, incomingEvent);
-            const body = getNotificationBody(incomingEvent);
-            void window.electronAPI?.app?.notify(title, body);
+            sendDesktopNotification(intent.title, intent.body);
           }
         }
       )

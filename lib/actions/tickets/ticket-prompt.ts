@@ -68,7 +68,8 @@ export async function getTicketPromptForCopy(
     ticket: {
       ...source.ticket,
       title: source.ticket.title?.trim(),
-      objective: source.latestObjective
+      objective: source.latestObjective,
+      objective_id: source.latestObjectiveId
     },
     platformUrl,
     context,
@@ -180,6 +181,7 @@ export async function getFeedDiscussPromptForCopy(input: {
       id: ticket.ticket_id || ticket.id,
       title: ticket.title?.trim(),
       objective: objectiveResolution.objectiveText,
+      objective_id: objectiveResolution.objectiveId,
       acceptance_criteria: ticket.acceptance_criteria,
       available_tools: ticket.available_tools,
       constraints: ticket.constraints,

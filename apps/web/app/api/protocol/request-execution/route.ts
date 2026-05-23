@@ -38,7 +38,7 @@ export async function POST(request: Request) {
       serverMultiplexer: parsed.data.serverMultiplexer ?? null,
       tmuxCommand: parsed.data.tmuxCommand ?? null,
       targetKind: parsed.data.targetKind,
-      targetDeviceId: parsed.data.targetDeviceId ?? null,
+      targetExecutionTargetId: parsed.data.targetDeviceId ?? null,
       targetResourceId: parsed.data.targetResourceId ?? null
     });
 

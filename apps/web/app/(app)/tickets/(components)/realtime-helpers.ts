@@ -2,8 +2,6 @@ import type { Database } from '@/types/database.types';
 
 import type { Ticket } from './KanbanCard';
 
-type TicketEvent = Database['public']['Tables']['ticket_events']['Row'];
-
 export type RealtimeBoardTicketRow = {
   id: string;
   title: string | null;
@@ -118,22 +116,12 @@ export function mapRealtimeBoardTicketRow(row: RealtimeBoardTicketRow): Ticket {
     has_unopened_waiting_response: false,
     is_read: row.is_read,
     objectives_executed_count: 0,
+    has_draft_objective_with_text: false,
     updated_at: row.updated_at,
     delegate: row.delegate,
     schedule_id: row.schedule_id,
     due_datetime: row.due_datetime
   };
-}
-
-export function getEventMessage(event: TicketEvent): string {
-  const summary = event.summary?.trim();
-  if (summary) return summary;
-
-  const payload = isRecord(event.payload) ? event.payload : {};
-  const payloadMessage = typeof payload.message === 'string' ? payload.message.trim() : '';
-  if (payloadMessage) return payloadMessage;
-
-  return 'An agent is waiting for your response.';
 }
 
 export function toWaitingByTicket(tickets: Ticket[]): Record<string, string> {

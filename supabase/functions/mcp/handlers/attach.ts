@@ -309,7 +309,11 @@ export async function handleAttach(supabase: SupabaseClient, args: any, ctx: Tok
     objectives: (objectives ?? []) as Array<{ id: string; state: string | null }>
   });
 
-  const resolvedTicket = { ...ticket, objective: executedObjective ?? null };
+  const resolvedTicket = {
+    ...ticket,
+    objective: executedObjective ?? null,
+    objective_id: executedObjectiveId
+  };
   const { promptContext, promptContextSections } = buildPromptContext({
     ticket: resolvedTicket,
     recentEvents: recentEvents ?? [],

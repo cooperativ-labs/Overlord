@@ -118,7 +118,7 @@ Pass these as part of the \`deliver\` payload. Supported types:
 
 User-uploaded files are attached to a specific objective on the ticket, not the ticket itself.
 
-The \`attach\` and \`load-context\` responses include \`attachments\` and \`objectives\` arrays - these surface the \`<attachment-id>\` and \`<objective-id>\` values agents need below. The same data is rendered in the \`Attachments\` and \`Objective IDs\` sections of the assembled prompt context. Use \`attachment-list\` (CLI) / \`list_attachments\` (MCP) to refresh this list mid-session.
+The \`attach\` and \`load-context\` responses include \`attachments\` and \`objectives\` arrays - these surface the \`<attachment-id>\` and \`<objective-id>\` values agents need below. The assembled prompt also renders the currently resolved objective in the top \`## Task\` metadata as \`Objective ID\`, with the broader queue/history still listed in the \`Objective IDs\` section. Use \`attachment-list\` (CLI) / \`list_attachments\` (MCP) to refresh this list mid-session.
 \`--ticket-id\` / \`ticketId\` is optional on attachment commands when an objective or attachment id lets the server derive ticket scope.
 
 \`\`\`bash

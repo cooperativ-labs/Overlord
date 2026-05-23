@@ -4,11 +4,14 @@ jest.mock('@/app/api/protocol/_lib', () => ({
     () => new Response(JSON.stringify({ error: 'internal' }), { status: 500 })
   )
 }));
+jest.mock('@/lib/overlord/execution-targets', () => ({
+  findExecutionTargetByFingerprint: jest.fn()
+}));
 jest.mock('@/supabase/utils/service-role');
 
 const USER_ID = '11111111-1111-4111-8111-111111111111';
 const ORG_ID = 1;
-const DEVICE_ID = 'device-complete';
+const EXECUTION_TARGET_ID = 'target-complete';
 const REQUEST_ID = 'req-complete';
 
 let POST: (request: Request) => Promise<Response>;
@@ -32,35 +35,19 @@ function mockParseBody() {
 describe('POST /api/protocol/complete-execution-launch', () => {
   beforeEach(() => jest.clearAllMocks());
 
-  it('returns 404 when the device is not registered', async () => {
+  it('returns 404 when the execution target is not registered', async () => {
     mockParseBody();
-    const supabase = {
-      from: jest.fn((table: string) => {
-        if (table === 'devices') {
-          return {
-            select: jest.fn(() => ({
-              eq: jest.fn(() => ({
-                eq: jest.fn(() => ({
-                  eq: jest.fn(() => ({
-                    maybeSingle: jest.fn(async () => ({ data: null, error: null }))
-                  }))
-                }))
-              }))
-            }))
-          };
-        }
-        throw new Error(`unexpected ${table}`);
-      })
-    };
-    const { createServiceRoleClient } = jest.requireMock('@/supabase/utils/service-role');
-    createServiceRoleClient.mockReturnValue(supabase);
+    const { findExecutionTargetByFingerprint } = jest.requireMock('@/lib/overlord/execution-targets');
+    findExecutionTargetByFingerprint.mockResolvedValue(null);
 
     const response = await POST(new Request('http://localhost', { method: 'POST' }));
     expect(response.status).toBe(404);
   });
 
-  it('marks the request launched only for the claiming device', async () => {
+  it('marks the request launched only for the claiming execution target', async () => {
     mockParseBody();
+    const { findExecutionTargetByFingerprint } = jest.requireMock('@/lib/overlord/execution-targets');
+    findExecutionTargetByFingerprint.mockResolvedValue(EXECUTION_TARGET_ID);
     let updatePayload: unknown;
     const executionUpdate = {
       update: jest.fn((payload: unknown) => {
@@ -76,19 +63,6 @@ describe('POST /api/protocol/complete-execution-launch', () => {
     };
     const supabase = {
       from: jest.fn((table: string) => {
-        if (table === 'devices') {
-          return {
-            select: jest.fn(() => ({
-              eq: jest.fn(() => ({
-                eq: jest.fn(() => ({
-                  eq: jest.fn(() => ({
-                    maybeSingle: jest.fn(async () => ({ data: { id: DEVICE_ID }, error: null }))
-                  }))
-                }))
-              }))
-            }))
-          };
-        }
         if (table === 'execution_requests') return executionUpdate;
         throw new Error(`unexpected ${table}`);
       })
@@ -105,6 +79,9 @@ describe('POST /api/protocol/complete-execution-launch', () => {
         last_error: null
       })
     );
-    expect(executionUpdate.eq).toHaveBeenCalledWith('claimed_by_device_id', DEVICE_ID);
+    expect(executionUpdate.eq).toHaveBeenCalledWith(
+      'claimed_by_execution_target_id',
+      EXECUTION_TARGET_ID
+    );
   });
 });
