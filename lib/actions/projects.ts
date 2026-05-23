@@ -564,7 +564,9 @@ async function clearProjectSshTargets(
       .map((row: { execution_target_id?: string | null }) => row.execution_target_id)
       .filter((id: string | null | undefined): id is string => Boolean(id))
   );
-  const orphanedTargetIds = sshTargetIds.filter(targetId => !stillReferenced.has(targetId));
+  const orphanedTargetIds = sshTargetIds.filter(
+    (targetId: string) => !stillReferenced.has(targetId)
+  );
   if (orphanedTargetIds.length === 0) return;
 
   await (supabase as any)
