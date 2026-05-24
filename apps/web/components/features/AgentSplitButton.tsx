@@ -4,6 +4,7 @@ import { Bot, Check, ChevronDown, Copy, Loader2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
+import { useProjectSettings } from '@/components/features/projects/ProjectSettingsContext';
 import { useWorkspacePreference } from '@/components/features/projects/useWorkspacePreference';
 import {
   DropdownMenu,
@@ -141,6 +142,7 @@ export function AgentSplitButton({
   const [isLaunching, setIsLaunching] = useState(false);
   const [showRunningConfirm, setShowRunningConfirm] = useState(false);
   const { selection, loaded: selectionLoaded } = useAgentModelPreference();
+  const projectSettingsCtx = useProjectSettings();
   const terminalContext = useTerminalOptional();
   if (!demo && !terminalContext) {
     throw new Error('useTerminal must be used within a TerminalProvider');
@@ -269,7 +271,8 @@ export function AgentSplitButton({
           : undefined,
         thinkingLevel: options?.useStoredModelPreference
           ? (effectiveSelection.thinking ?? undefined)
-          : undefined
+          : undefined,
+        targetExecutionTargetId: projectSettingsCtx?.selectedDeviceId ?? undefined
       });
       if ('error' in result) {
         toast.error('Failed to queue execution', { description: result.error });

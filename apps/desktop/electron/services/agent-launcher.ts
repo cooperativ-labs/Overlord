@@ -445,15 +445,17 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
   const contextMarkdown = await response.text();
 
   const tag = `overlord-${input.ticketId.slice(-8)}-${Date.now()}`;
+  const scratchDir = resolvedCwd ? path.join(resolvedCwd, '.overlord', 'tmp') : os.tmpdir();
+  fs.mkdirSync(scratchDir, { recursive: true });
 
   // Write context to a temp file (avoids shell expansion / quoting issues)
-  const contextFile = path.join(os.tmpdir(), `${tag}-ctx.md`);
+  const contextFile = path.join(scratchDir, `${tag}-ctx.md`);
   fs.writeFileSync(contextFile, contextMarkdown, 'utf-8');
 
   // Write PermissionRequest hook script so Claude notifies Overlord when awaiting tool permission.
   // When the bundle is installed for Claude, the durable hook is already in ~/.claude/settings.json,
   // so we still write a temp settings file as a fallback but prefer the installed one.
-  const { hookScript, settingsFile } = writePermissionRequestHookFiles(tag);
+  const { hookScript, settingsFile } = writePermissionRequestHookFiles(tag, scratchDir);
 
   // Schedule cleanup after 30 minutes
   setTimeout(() => {
@@ -492,7 +494,8 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
     contextRef,
     modelThinkingFlags,
     extraFlags,
-    startPrompt
+    startPrompt,
+    scratchDir
   });
 
   if (isRemote) {
@@ -510,6 +513,9 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
           modelThinkingFlags,
           extraFlags,
           startPrompt,
+          scratchDir: resolvedRemoteCwd
+            ? path.posix.join(resolvedRemoteCwd, '.overlord', 'tmp')
+            : '/tmp',
           useLocalClaudePluginDir: false
         }),
         remoteCwd: resolvedRemoteCwd
@@ -531,6 +537,7 @@ function buildAgentCommand(input: {
   settingsFile: string;
   contextFile: string;
   contextRef: string;
+  scratchDir: string;
   modelThinkingFlags: string;
   extraFlags: string;
   startPrompt: string;
@@ -554,7 +561,7 @@ function buildAgentCommand(input: {
     return `agent${input.modelThinkingFlags}${input.extraFlags ? ` ${input.extraFlags}` : ''} ${input.contextRef}`;
   }
   if (input.agent === 'antigravity') {
-    return `agy --prompt-interactive @${input.contextFile} --add-dir ${shellQuote(os.tmpdir())}${input.extraFlags ? ` ${input.extraFlags}` : ''}`;
+    return `agy --prompt-interactive @${input.contextFile} --add-dir ${shellQuote(input.scratchDir)}${input.extraFlags ? ` ${input.extraFlags}` : ''}`;
   }
   if (input.agent === 'opencode') {
     return `opencode${input.modelThinkingFlags}${input.extraFlags ? ` ${input.extraFlags}` : ''} --prompt ${input.contextRef}`;
@@ -590,7 +597,11 @@ function buildSshWrappedCommand(input: {
     '[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"',
     'export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$HOME/.cargo/bin:$PATH"',
     ...envLines,
-    '_OVLD_REMOTE_CONTEXT_FILE="$(mktemp "${TMPDIR:-/tmp}/overlord-context.XXXXXX.md")"',
+    input.remoteCwd
+      ? `_OVLD_REMOTE_SCRATCH_DIR=${shellQuote(path.posix.join(input.remoteCwd, '.overlord', 'tmp'))}`
+      : '_OVLD_REMOTE_SCRATCH_DIR="${TMPDIR:-/tmp}"',
+    'mkdir -p "$_OVLD_REMOTE_SCRATCH_DIR"',
+    '_OVLD_REMOTE_CONTEXT_FILE="$(mktemp "$_OVLD_REMOTE_SCRATCH_DIR/overlord-context.XXXXXX.md")"',
     'export _OVLD_CTX_FILE="$_OVLD_REMOTE_CONTEXT_FILE"',
     'trap \'rm -f "$_OVLD_REMOTE_CONTEXT_FILE"\' EXIT',
     `if command -v base64 >/dev/null 2>&1; then printf %s ${shellQuote(contextBase64)} | base64 -d > "$_OVLD_REMOTE_CONTEXT_FILE" 2>/dev/null || printf %s ${shellQuote(contextBase64)} | base64 -D > "$_OVLD_REMOTE_CONTEXT_FILE"; elif command -v python3 >/dev/null 2>&1; then python3 -c 'import base64, pathlib, sys; pathlib.Path(sys.argv[1]).write_bytes(base64.b64decode(sys.argv[2]))' "$_OVLD_REMOTE_CONTEXT_FILE" ${shellQuote(contextBase64)}; else printf 'Overlord: base64 or python3 is required on the remote host.\\n' >&2; exit 127; fi`,
@@ -613,12 +624,15 @@ function buildSshWrappedCommand(input: {
  * The hook exits 0 without printing anything, so Claude still shows its normal
  * permission prompt — Overlord only adds an extra UI notification on top.
  */
-function writePermissionRequestHookFiles(tag: string): {
+function writePermissionRequestHookFiles(
+  tag: string,
+  scratchDir: string
+): {
   hookScript: string;
   settingsFile: string;
 } {
-  const hookScript = path.join(os.tmpdir(), `${tag}-perm-hook.sh`);
-  const settingsFile = path.join(os.tmpdir(), `${tag}-settings.json`);
+  const hookScript = path.join(scratchDir, `${tag}-perm-hook.sh`);
+  const settingsFile = path.join(scratchDir, `${tag}-settings.json`);
 
   // The script reads Claude's JSON permission request from stdin, then calls
   // the Overlord API in the background and exits 0 immediately so Claude can

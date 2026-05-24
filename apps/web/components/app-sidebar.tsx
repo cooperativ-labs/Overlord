@@ -68,6 +68,7 @@ type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
   projects: SidebarProject[];
   organizations: UserOrganization[];
   selectedOrgId: number | null;
+  slackEnabled?: boolean;
 };
 
 type ProjectColorMenuProps = {
@@ -248,6 +249,7 @@ export function AppSidebar({
   projects,
   organizations,
   selectedOrgId,
+  slackEnabled = false,
   ...props
 }: AppSidebarProps) {
   const projectsQuery = useProjects(projects);
@@ -495,6 +497,7 @@ export function AppSidebar({
           }
         }}
         initialNav={settingsInitialNav}
+        slackEnabled={slackEnabled}
       />
       <ProjectWorkingDirectoryRequiredModal
         open={projectNeedingDirectory !== null}

@@ -12,7 +12,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { ContextMenu, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
 import type { TicketAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
 import { buildTicketPath } from '@/lib/helpers/ticket-path';
-import { getDisplayTitle } from '@/lib/helpers/tickets';
+import { getDisplayTitle, getTicketIdentifier } from '@/lib/helpers/tickets';
 import { cn } from '@/lib/utils';
 import type { Database } from '@/types/database.types';
 
@@ -37,6 +37,8 @@ export type TicketTag = {
 
 export type Ticket = {
   id: string;
+  ticket_id?: string | null;
+  ticket_sequence?: number | null;
   title: string | null;
   objective: string | null;
   organization_id: number;
@@ -258,7 +260,13 @@ function KanbanCardHoverFooter({ ticket }: { ticket: Ticket }) {
 
           <ExecutionTargetToggle ticketId={ticket.id} executionTarget={ticket.execution_target} />
 
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-1.5">
+            <span
+              className="text-[10px] tabular-nums text-muted-foreground"
+              title={`Ticket ID: ${getTicketIdentifier(ticket)}`}
+            >
+              {getTicketIdentifier(ticket)}
+            </span>
             <DeleteTicketButton
               ticketId={ticket.id}
               ticketLabel={getDisplayTitle(ticket)}

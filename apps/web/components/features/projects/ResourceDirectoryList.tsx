@@ -121,7 +121,7 @@ export function ResourceDirectoryList({ projectId, onResourceDirectoriesChanged 
       const isFirst = items.length === 0;
 
       if (isElectron) {
-        // Desktop path: get device identity and write overlord.json
+        // Desktop path: get device identity and write .overlord/project.json
         let deviceFromElectron:
           | { deviceFingerprint: string; deviceHostname: string; devicePlatform: string }
           | undefined;
@@ -160,7 +160,9 @@ export function ResourceDirectoryList({ projectId, onResourceDirectoriesChanged 
             projectName
           });
           if (!result.ok) {
-            toast.warning(`Added directory, but could not write overlord.json: ${result.error}`);
+            toast.warning(
+              `Added directory, but could not write .overlord/project.json: ${result.error}`
+            );
           }
         }
       } else {
@@ -202,7 +204,9 @@ export function ResourceDirectoryList({ projectId, onResourceDirectoriesChanged 
             projectId
           });
           if (!result.ok) {
-            toast.warning(`Removed directory, but could not update overlord.json: ${result.error}`);
+            toast.warning(
+              `Removed directory, but could not update .overlord/project.json: ${result.error}`
+            );
           }
         }
         await refresh();

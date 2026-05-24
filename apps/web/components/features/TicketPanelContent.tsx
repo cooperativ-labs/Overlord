@@ -135,8 +135,7 @@ export async function TicketPanelContent({
     projectsResult,
     scheduleResult,
     agentSessionResult,
-    objectivesResult,
-    checkpointsResult
+    objectivesResult
   ] = await Promise.all([
     supabase
       .from('ticket_events')
@@ -199,11 +198,7 @@ export async function TicketPanelContent({
         'id,objective,created_at,title,state,agent_identifier,model_identifier,assigned_agent,position,auto_advance,auto_advanced_at,approval_reason,updated_at'
       )
       .eq('ticket_id', ticketId)
-      .order('created_at', { ascending: false }),
-    supabase
-      .from('project_checkpoints')
-      .select('objective_id,git_ref_name,git_commit_id,checkpoint_kind')
-      .eq('ticket_id', ticketId)
+      .order('created_at', { ascending: false })
   ]);
 
   const events = eventsResult.data;
@@ -226,9 +221,6 @@ export async function TicketPanelContent({
           .order('attached_at', { ascending: false })
       : { data: [], error: null };
   const sessionsByObjectiveId = buildSessionsByObjectiveId(objectiveSessionsResult.data);
-  const checkpointsByObjectiveId = Object.fromEntries(
-    (checkpointsResult.data ?? []).map(cp => [cp.objective_id, cp])
-  );
   const editableObjective =
     objectives?.find(objective => objective.state === 'submitted') ??
     objectives?.find(objective => objective.state === 'draft') ??
@@ -240,7 +232,7 @@ export async function TicketPanelContent({
   const projectIdsForSettings = projectOptionsRaw.map(project => project.id);
   const sshEnabled = await isAppFeatureEnabled('ssh');
   const futureObjectivesEnabled = await isAppFeatureEnabled('future-objectives');
-  const gitRevertFeatureEnabled = await isAppFeatureEnabled('objective-git-revert');
+  const slackEnabled = await isAppFeatureEnabled('slack');
   const [sshSettingsByProjectId, localSettingsByProjectId] = await Promise.all([
     getProjectUserSshSettingsByProjectId(supabase, user?.id, projectIdsForSettings),
     getProjectUserLocalSettingsByProjectId(supabase, user?.id, projectIdsForSettings)
@@ -335,19 +327,6 @@ export async function TicketPanelContent({
   const agentCommands: AgentCommands = { launchCommands, resumeCommands };
   const objectiveAttachments = await listObjectiveAttachmentsAction(ticketId).catch(() => []);
   const initialTags = ticket.project_id ? await getTicketTagsAction(ticketId).catch(() => []) : [];
-  const allProjectCheckpointObjectiveIds = ticket.project_id
-    ? (
-        (
-          await supabase
-            .from('project_checkpoints')
-            .select('objective_id')
-            .eq('project_id', ticket.project_id)
-            .not('objective_id', 'is', null)
-        ).data ?? []
-      )
-        .map(checkpoint => checkpoint.objective_id)
-        .filter((objectiveId): objectiveId is string => Boolean(objectiveId))
-    : [];
 
   return (
     <TicketLiveProvider
@@ -392,7 +371,7 @@ export async function TicketPanelContent({
                   <span>Created by agent: {ticket.delegate}</span>
                 </div>
               ) : null}
-              {ticket.source === 'slack' ? (
+              {slackEnabled && ticket.source === 'slack' ? (
                 <div className="mb-3 flex items-center gap-1.5 text-xs text-sky-500/90">
                   <MessageSquare className="h-3.5 w-3.5 shrink-0" />
                   <span>Created via Slack</span>
@@ -457,9 +436,6 @@ export async function TicketPanelContent({
                 remoteWorkingDirectory={projectRemoteWorkingDirectory}
                 sshEnabled={sshEnabled}
                 hasProjectWorkingDirectory={hasProjectWorkingDirectory}
-                checkpointsByObjectiveId={checkpointsByObjectiveId}
-                allProjectCheckpointObjectiveIds={allProjectCheckpointObjectiveIds}
-                gitRevertFeatureEnabled={gitRevertFeatureEnabled}
                 sessionsByObjectiveId={sessionsByObjectiveId}
               />
             </div>

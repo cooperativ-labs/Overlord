@@ -8,7 +8,7 @@ import { useRouter } from 'next/navigation';
 import { KanbanTimerButton } from '@/components/features/everhour/KanbanTimerButton';
 import { ScheduleBadge } from '@/components/features/scheduling/ScheduleBadge';
 import { ContextMenu, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
-import { getDisplayTitle } from '@/lib/helpers/tickets';
+import { getDisplayTitle, getTicketIdentifier } from '@/lib/helpers/tickets';
 import { cn } from '@/lib/utils';
 
 import type { Ticket } from './KanbanCard';
@@ -239,6 +239,12 @@ export default function TicketListCard({
 
           {/* Right metadata row */}
           <div className="flex shrink-0 items-center gap-2">
+            <span
+              className="text-[10px] tabular-nums text-fg3"
+              title={`Ticket ID: ${getTicketIdentifier(ticket)}`}
+            >
+              {getTicketIdentifier(ticket)}
+            </span>
             {/* Agent-created badge */}
             {ticket.delegate ? (
               <span

@@ -38,6 +38,7 @@ import { getUserOrganizations } from '@/lib/actions/organizations';
 import { fetchProfileSettings } from '@/lib/actions/profile-settings';
 import { getProjectsForCurrentUser } from '@/lib/actions/projects';
 import { getUserLaunchPreferenceAction } from '@/lib/actions/user-launch-preference';
+import { isAppFeatureEnabled } from '@/lib/app-features';
 import { isAdminEmail } from '@/lib/auth/admin';
 import {
   createClientForRequest,
@@ -78,7 +79,8 @@ export default async function RootLayout({
     agentModels,
     agentConfigs,
     launchPreference,
-    unreadChangelogEntries
+    unreadChangelogEntries,
+    slackEnabled
   ] = await Promise.all([
     getProjectsForCurrentUser(),
     user ? getUserOrganizations() : Promise.resolve([]),
@@ -86,7 +88,8 @@ export default async function RootLayout({
     getAgentModelsAction(),
     user ? getAllAgentConfigsAction() : Promise.resolve({}),
     user ? getUserLaunchPreferenceAction() : Promise.resolve(null),
-    user ? getUnreadChangelogEntriesAction() : Promise.resolve([])
+    user ? getUnreadChangelogEntriesAction() : Promise.resolve([]),
+    isAppFeatureEnabled('slack')
   ]);
 
   const initialDefaultProjectId = await getRequestDefaultProjectId({
@@ -192,6 +195,7 @@ export default async function RootLayout({
                                 projects={projects}
                                 organizations={organizations}
                                 selectedOrgId={selectedOrgId}
+                                slackEnabled={slackEnabled}
                               />
                               <SidebarInset className="min-h-0 min-w-0 overflow-hidden">
                                 <SidePanelProvider className="flex flex-col overflow-hidden">

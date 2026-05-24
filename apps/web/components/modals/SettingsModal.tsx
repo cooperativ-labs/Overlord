@@ -8,6 +8,7 @@ import {
   Link2,
   Monitor,
   Palette,
+  Server,
   Shield,
   Terminal,
   User
@@ -48,6 +49,7 @@ import { AgentsAndMcpPage } from './settings/AgentsAndMcpPage';
 import { ApplicationPage } from './settings/ApplicationPage';
 import { CliPage } from './settings/CliPage';
 import { CustomizationPage } from './settings/CustomizationPage';
+import { ExecutionTargetsPage } from './settings/ExecutionTargetsPage';
 import { HotkeysPage } from './settings/HotkeysPage';
 import { IntegrationsPage } from './settings/IntegrationsPage';
 import { LinkedAccountsPage } from './settings/LinkedAccountsPage';
@@ -58,6 +60,7 @@ type SettingsModalProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialNav?: SettingsNavSection;
+  slackEnabled?: boolean;
 };
 
 type NavItem = {
@@ -68,6 +71,7 @@ type NavItem = {
 
 const workflowNavItems: NavItem[] = [
   { name: 'Terminal & IDE', icon: Monitor },
+  { name: 'Execution Targets', icon: Server },
   { name: 'MCP & Cloud Agents', icon: Bot },
   { name: 'CLI & Local Agents', icon: Terminal },
   { name: 'Customization', icon: Edit3 }
@@ -88,7 +92,12 @@ const userNavItems: NavItem[] = [
 const navItems: NavItem[] = [...workflowNavItems, ...appNavItems, ...userNavItems];
 export type SettingsNavSection = (typeof navItems)[number]['name'];
 
-export function SettingsModal({ open, onOpenChange, initialNav }: SettingsModalProps) {
+export function SettingsModal({
+  open,
+  onOpenChange,
+  initialNav,
+  slackEnabled = false
+}: SettingsModalProps) {
   const { isElectron } = useElectron();
   const visibleNavItems = navItems.filter(item => !item.electronOnly || isElectron);
   const visibleWorkflowNavItems = workflowNavItems.filter(item => !item.electronOnly || isElectron);
@@ -208,7 +217,9 @@ export function SettingsModal({ open, onOpenChange, initialNav }: SettingsModalP
               </div>
             </header>
             <div className="flex flex-1 flex-col gap-6 overflow-y-auto p-6">
-              {activeNav === 'Integrations' && <IntegrationsPage open={open} />}
+              {activeNav === 'Integrations' && (
+                <IntegrationsPage open={open} slackEnabled={slackEnabled} />
+              )}
               {activeNav === 'MCP & Cloud Agents' && <AgentsAndMcpPage open={open} />}
               {activeNav === 'Customization' && <CustomizationPage open={open} />}
               {activeNav === 'CLI & Local Agents' && <CliPage open={open} />}
@@ -217,6 +228,7 @@ export function SettingsModal({ open, onOpenChange, initialNav }: SettingsModalP
               {activeNav === 'Profile' && <UserProfilePage open={open} />}
               {activeNav === 'Linked Accounts' && <LinkedAccountsPage open={open} />}
               {activeNav === 'Terminal & IDE' && <TerminalPage open={open} />}
+              {activeNav === 'Execution Targets' && <ExecutionTargetsPage open={open} />}
               {activeNav === 'About' && <AboutPage open={open} />}
             </div>
           </main>

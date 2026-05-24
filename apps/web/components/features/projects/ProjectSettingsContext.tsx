@@ -25,6 +25,8 @@ export function resolveExecutionWorkspace(
   return 'local';
 }
 
+export const SELECTED_DEVICE_KEY = 'overlord-selected-device';
+
 type ProjectSettingsContextValue = {
   projectId: string;
   openProjectSettings: (initialNav?: ProjectSettingsNavSection) => void;
@@ -40,6 +42,9 @@ type ProjectSettingsContextValue = {
   effectiveSshCommand: string | null;
   effectiveSshConnectionConfig: SshConnectionConfig | null;
   effectiveRemoteWorkingDirectory: string | null;
+  selectedDeviceId: string | null;
+  setSelectedDevice: (deviceId: string | null, workingDirectory: string | null) => void;
+  selectedDeviceWorkingDirectory: string | null;
 };
 
 const ProjectSettingsContext = createContext<ProjectSettingsContextValue | null>(null);
@@ -72,6 +77,7 @@ type ProjectSettingsProviderProps = {
   }>;
   hasEverhourApiKey: boolean;
   sshFeatureEnabled: boolean;
+  slackEnabled?: boolean;
 };
 
 export function ProjectSettingsProvider({
@@ -91,10 +97,33 @@ export function ProjectSettingsProvider({
   initialEverhourProjectId,
   initialStatuses,
   hasEverhourApiKey,
-  sshFeatureEnabled
+  sshFeatureEnabled,
+  slackEnabled = false
 }: ProjectSettingsProviderProps) {
   const [modalOpen, setModalOpen] = useState(false);
   const [modalInitialNav, setModalInitialNav] = useState<ProjectSettingsNavSection | undefined>();
+  const [selectedDeviceId, setSelectedDeviceIdState] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    return window.localStorage.getItem(`${SELECTED_DEVICE_KEY}:${projectId}`) ?? null;
+  });
+  const [selectedDeviceWorkingDirectory, setSelectedDeviceWorkingDirectory] = useState<
+    string | null
+  >(null);
+
+  const setSelectedDevice = useCallback(
+    (deviceId: string | null, workingDirectory: string | null) => {
+      setSelectedDeviceIdState(deviceId);
+      setSelectedDeviceWorkingDirectory(workingDirectory);
+      if (typeof window !== 'undefined') {
+        if (deviceId) {
+          window.localStorage.setItem(`${SELECTED_DEVICE_KEY}:${projectId}`, deviceId);
+        } else {
+          window.localStorage.removeItem(`${SELECTED_DEVICE_KEY}:${projectId}`);
+        }
+      }
+    },
+    [projectId]
+  );
 
   const hasLocalDirectory =
     typeof initialWorkingDirectory === 'string' &&
@@ -146,30 +175,39 @@ export function ProjectSettingsProvider({
     // Execution is always local; SSH workspace selection is disabled.
   }, []);
 
+  const effectiveWorkingDirectory = selectedDeviceWorkingDirectory ?? localWorkingDirectory;
+
   const value: ProjectSettingsContextValue = useMemo(
     () => ({
       projectId,
       openProjectSettings,
       executionWorkspace: 'local',
       setExecutionWorkspace,
-      hasLocalDirectory,
+      hasLocalDirectory: hasLocalDirectory || Boolean(selectedDeviceWorkingDirectory),
       hasSshDirectory,
       localWorkingDirectory,
       sshCommand,
       sshConnectionConfig,
       remoteWorkingDirectory,
-      effectiveWorkingDirectory: localWorkingDirectory,
+      effectiveWorkingDirectory,
       effectiveSshCommand: null,
       effectiveSshConnectionConfig: null,
-      effectiveRemoteWorkingDirectory: null
+      effectiveRemoteWorkingDirectory: null,
+      selectedDeviceId,
+      setSelectedDevice,
+      selectedDeviceWorkingDirectory
     }),
     [
+      effectiveWorkingDirectory,
       hasLocalDirectory,
       hasSshDirectory,
       localWorkingDirectory,
       openProjectSettings,
       projectId,
+      selectedDeviceId,
+      selectedDeviceWorkingDirectory,
       setExecutionWorkspace,
+      setSelectedDevice,
       sshCommand,
       sshConnectionConfig,
       remoteWorkingDirectory
@@ -198,6 +236,7 @@ export function ProjectSettingsProvider({
         initialStatuses={initialStatuses}
         hasEverhourApiKey={hasEverhourApiKey}
         sshFeatureEnabled={sshFeatureEnabled}
+        slackEnabled={slackEnabled}
         initialNav={modalInitialNav}
       />
     </ProjectSettingsContext.Provider>

@@ -25,6 +25,10 @@
 .DS_Store
 *.pem
 
+# Overlord local scratch
+.overlord/tmp/
+.overlord/logs/
+
 # debug
 npm-debug.log*
 yarn-debug.log*

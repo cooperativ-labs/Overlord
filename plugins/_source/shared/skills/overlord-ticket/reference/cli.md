@@ -56,7 +56,7 @@ ovld protocol deliver --session-key <sessionKey> \
   --change-rationales-json '[{"label":"Short reviewer title","file_path":"path/to/file.ts","summary":"What changed.","why":"Why it changed.","impact":"Behavioral impact.","hunks":[{"header":"@@ -10,6 +10,14 @@"}]}]'
 ```
 
-Use `--payload-json` when the full delivery object fits comfortably inline. For larger delivery payloads, prefer `--payload-file -` and stream the full JSON on stdin so no scratch file needs to be created or removed. If you use `--payload-file`, `--artifacts-file`, or `--change-rationales-file` with a real path, treat that file as ephemeral scratch data outside the repository and remove it after delivery.
+Use `--payload-json` when the full delivery object fits comfortably inline. For larger delivery payloads, prefer `--payload-file -` and stream the full JSON on stdin so no scratch file needs to be created or removed. If you use `--payload-file`, `--artifacts-file`, or `--change-rationales-file` with a real path, treat that file as ephemeral scratch data under `.overlord/tmp` and remove it after delivery.
 
 Ordinary deliver artifacts should use `next_steps`, `test_results`, `migration`, `note`, `url`, or `decision`.
 
@@ -140,12 +140,12 @@ When you need a project ID for a protocol command and the ticket prompt did not 
 
 1. `--project-id` if explicitly provided.
 2. Otherwise, let the CLI match the current working directory (the default behavior of `create`, `prompt`, `discover-project`).
-3. If working-directory resolution returns nothing, read `overlord.json` from the cwd (or any ancestor you have access to) and pass its project id via `--project-id`.
+3. If working-directory resolution returns nothing, read `.overlord/project.json` from the cwd (or any ancestor you have access to) and pass its project id via `--project-id`.
 
 **Over MCP (web agents and hosted tools, where the server cannot see the agent's cwd):**
 
 1. `projectId` (hosted MCP) or `project_id` (local shim) if explicitly provided or found in the ticket/context.
-2. Read `overlord.json` from the directory the user is accessing and pass its project id as `projectId` / `project_id`.
+2. Read `.overlord/project.json` from the directory the user is accessing and pass its project id as `projectId` / `project_id`.
 3. As a last resort, try `workingDirectory` / `working_directory` resolution. If a device fingerprint is available, include `deviceFingerprint` / `device_fingerprint`.
 
-If `overlord.json` contains more than one project, show the user the project **names** from that file and ask which one to use before calling any protocol command — never silently pick one.
+If `.overlord/project.json` contains more than one project, show the user the project **names** from that file and ask which one to use before calling any protocol command — never silently pick one.

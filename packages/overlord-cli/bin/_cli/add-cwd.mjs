@@ -3,7 +3,7 @@
 // `ovld add-cwd` — interactively add the current working directory as a
 // project resource. Lists the user's projects, prompts for a selection,
 // registers cwd as a primary resource for this device, and writes the
-// project entry into the directory's overlord.json file.
+// project entry into the directory's .overlord/project.json file.
 
 import os from 'node:os';
 import path from 'node:path';
@@ -100,7 +100,7 @@ export async function runAddCwdCommand(args) {
 
 Registers a directory (defaulting to the current working directory) as a
 project resource for this device, and writes the project entry into the
-directory's overlord.json file.
+directory's .overlord/project.json file.
 
 When --project-id is omitted, the command lists your projects and prompts
 you to pick one.
@@ -160,7 +160,7 @@ By default the registered resource is marked primary for this device. Pass
   if (!res.ok) {
     if (res.status === 409) {
       output.write(
-        `\nDirectory is already registered for "${project.name}" on this device. Updating overlord.json only.\n`
+        `\nDirectory is already registered for "${project.name}" on this device. Updating .overlord/project.json only.\n`
       );
     } else {
       console.error(
@@ -178,7 +178,7 @@ By default the registered resource is marked primary for this device. Pass
     output.write(`\nWrote ${result.filePath} (${result.action}).\n`);
   } catch (err) {
     output.write(
-      `\nWarning: could not update overlord.json: ${err instanceof Error ? err.message : err}\n`
+      `\nWarning: could not update .overlord/project.json: ${err instanceof Error ? err.message : err}\n`
     );
   }
 

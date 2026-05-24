@@ -26,6 +26,10 @@ Desktop local launches set `OVERLORD_SNAPSHOT_JSON` **only** when the user has e
 
 Manual Run and auto-advance now create durable `execution_requests` rows. A local or remote `ovld runner start` process claims requests for its device/resource and launches them with the existing `ovld launch <agent>` primitive. Desktop terminal IPC remains available as a compatibility launch primitive, but the web Run button and deliver auto-advance path use the execution-request queue instead of requiring Electron to be open. CLI SSH launches remain the terminal-native surface via `ovld launch ... --ssh-command ... --remote-working-directory ...`, and queued requests can carry the same SSH fields for a runner to execute. Shared shell parsing, SSH TTY injection, escaping, and remote tmux wrapping live in [shell-utils.ts](/Users/jake/Development/Cooperativ/Overlord/lib/ssh/shell-utils.ts).
 
+Registered project resource directories use `.overlord/project.json` as the durable local project metadata file. `.overlord/tmp/` and `.overlord/logs/` are reserved for local ephemeral agent data and must be gitignored; do not gitignore the full `.overlord/` directory.
+
+Local desktop launches write context files and fallback hook/settings files into `.overlord/tmp/` when a project working directory is resolved. Remote launches create `$REMOTE_WORKING_DIRECTORY/.overlord/tmp/` for the context file when a remote working directory is known, falling back to remote system temp only when no project resource path is available.
+
 Capability resolver:
 [agent-capabilities.ts](/Users/jake/Development/Cooperativ/Overlord/lib/overlord/agent-capabilities.ts)
 
@@ -118,7 +122,7 @@ Checklist:
 Checklist:
 
 - Onboarding advertises `ovld setup claude` as the connector setup command
-- Connector features list includes: skill (workflow protocol), permission hook, settings merge, slash commands, permission rules
+- Connector features list includes: skill (workflow protocol), permission hook, settings merge, slash commands, permission rules for `ovld protocol` and `.overlord/tmp`
 
 ---
 
@@ -303,7 +307,7 @@ Checklist:
 Checklist:
 
 - Onboarding advertises `ovld setup cursor` as the connector setup command
-- Connector features list includes: local Cursor plugin install and permission rules for ovld protocol & curl
+- Connector features list includes: local Cursor plugin install and permission rules for `ovld protocol`, `curl`, and `.overlord/tmp`
 - Skill text tells the agent to request permission escalation or network access before retrying if `OVERLORD_URL` is unreachable
 - Slash command docs also tell the agent to request permission escalation or network access before retrying if `OVERLORD_URL` is unreachable
 
@@ -472,7 +476,7 @@ Checklist:
 Managed files:
 
 - `~/.config/opencode/AGENTS.md` — Overlord workflow instructions merged in as a delimited section
-- `~/.config/opencode/opencode.json` — `instructions` array and `permission.bash` map merged (allows `ovld protocol *`, `curl -sS -X POST *`, `curl -s -X POST *`)
+- `~/.config/opencode/opencode.json` — `instructions` array and `permission.bash` map merged (allows `ovld protocol *`, `curl -sS -X POST *`, `curl -s -X POST *`, and `.overlord/tmp` scratch commands)
 
 Checklist:
 

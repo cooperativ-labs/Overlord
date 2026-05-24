@@ -2,6 +2,8 @@
 
 import { revalidatePath } from 'next/cache';
 
+import { findExecutionTargetByFingerprint } from '@/lib/overlord/execution-targets';
+import { DEVICE_LABEL_REGEX } from '@/lib/overlord/validation';
 import { createClientForRequest } from '@/supabase/utils/server';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
@@ -14,6 +16,28 @@ export type UserDevice = {
   lastSeenAt: string | null;
   createdAt: string;
   isAdmin: boolean;
+};
+
+export type ProjectDeviceResource = {
+  id: string;
+  directoryPath: string;
+  label: string | null;
+  isPrimary: boolean;
+  createdAt: string;
+};
+
+export type ProjectDevice = {
+  id: string;
+  label: string;
+  hostname: string | null;
+  platform: string | null;
+  lastSeenAt: string | null;
+  resources: ProjectDeviceResource[];
+};
+
+export type ProjectDevicesPayload = {
+  devices: ProjectDevice[];
+  matchedDeviceId: string | null;
 };
 
 export async function getUserDevicesAction(): Promise<UserDevice[]> {
@@ -86,6 +110,11 @@ export async function updateDeviceLabelAction(input: {
   const label = input.label.trim();
   if (!label) {
     throw new Error('Device label is required.');
+  }
+  if (!DEVICE_LABEL_REGEX.test(label)) {
+    throw new Error(
+      'Label must be lowercase kebab-case: only lowercase letters, numbers, and hyphens are allowed (e.g., "raspberry-pi").'
+    );
   }
 
   const supabase = await createClientForRequest();
@@ -180,4 +209,95 @@ export async function deleteOrganizationExecutionTargetAction(input: {
   }
 
   revalidatePath('/');
+}
+
+export async function getProjectDevicesAction({
+  projectId,
+  deviceFingerprint
+}: {
+  projectId: string;
+  deviceFingerprint?: string | null;
+}): Promise<ProjectDevicesPayload> {
+  const supabase = await createClientForRequest();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+  if (!user) return { devices: [], matchedDeviceId: null };
+
+  const fp = deviceFingerprint?.trim();
+  let matchedDeviceId: string | null = null;
+  if (fp) {
+    const { data: project } = await supabase
+      .from('projects')
+      .select('organization_id')
+      .eq('id', projectId)
+      .maybeSingle();
+
+    if (project) {
+      matchedDeviceId = await findExecutionTargetByFingerprint(supabase, {
+        organizationId: project.organization_id,
+        userId: user.id,
+        deviceFingerprint: fp
+      });
+    }
+  }
+
+  const { data: deviceRows, error: devErr } = await (supabase as any)
+    .from('project_execution_targets')
+    .select(
+      'execution_target_id, execution_targets(host, platform, last_seen_at, organization_execution_targets(label))'
+    )
+    .eq('project_id', projectId);
+
+  if (devErr) {
+    console.error('getProjectDevicesAction devices', devErr);
+    return { devices: [], matchedDeviceId };
+  }
+
+  const { data: resourceRows, error: resErr } = await supabase
+    .from('project_resource_directories')
+    .select('id, execution_target_id, directory_path, label, is_primary, created_at')
+    .eq('project_id', projectId)
+    .eq('user_id', user.id)
+    .order('is_primary', { ascending: false })
+    .order('created_at', { ascending: true });
+
+  if (resErr) {
+    console.error('getProjectDevicesAction resources', resErr);
+    return { devices: [], matchedDeviceId };
+  }
+
+  const resourcesByTarget = new Map<string, ProjectDeviceResource[]>();
+  for (const row of resourceRows ?? []) {
+    const targetId = row.execution_target_id;
+    if (!targetId) continue;
+    const arr = resourcesByTarget.get(targetId) ?? [];
+    arr.push({
+      id: row.id,
+      directoryPath: row.directory_path,
+      label: row.label,
+      isPrimary: row.is_primary,
+      createdAt: row.created_at
+    });
+    resourcesByTarget.set(targetId, arr);
+  }
+
+  const devices: ProjectDevice[] = (deviceRows ?? []).map((row: any) => {
+    const target = Array.isArray(row.execution_targets)
+      ? row.execution_targets[0]
+      : row.execution_targets;
+    const orgRel = target?.organization_execution_targets;
+    const orgTarget = Array.isArray(orgRel) ? orgRel[0] : orgRel;
+    const id = row.execution_target_id;
+    return {
+      id,
+      label: orgTarget?.label ?? target?.host ?? 'Unknown device',
+      hostname: target?.host ?? null,
+      platform: target?.platform ?? null,
+      lastSeenAt: target?.last_seen_at ?? null,
+      resources: resourcesByTarget.get(id) ?? []
+    };
+  });
+
+  return { devices, matchedDeviceId };
 }

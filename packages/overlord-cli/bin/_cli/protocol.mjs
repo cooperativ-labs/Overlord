@@ -1839,7 +1839,7 @@ async function protocolAddProjectResource(args) {
       process.stderr.write(`OVERLORD_CONFIG=${result.filePath} (${result.action})\n`);
     } catch (configError) {
       process.stderr.write(
-        `\nWarning: could not write overlord.json: ${configError instanceof Error ? configError.message : configError}\n`
+        `\nWarning: could not write .overlord/project.json: ${configError instanceof Error ? configError.message : configError}\n`
       );
     }
   }
@@ -3097,7 +3097,7 @@ Examples:
   ovld protocol deliver --session-key <key> --ticket-id <ticket_id> --summary "Done"
   ovld protocol deliver --session-key <key> --ticket-id <ticket_id> --summary "Done" --artifacts-file ./artifacts.json
   ovld protocol deliver --session-key <key> --ticket-id <ticket_id> --payload-json '{"summary":"Done","artifacts":[{"type":"note","label":"Delivery","content":"..."}]}'
-  ovld protocol deliver --session-key <key> --ticket-id <ticket_id> --payload-file ./deliver.json
+  ovld protocol deliver --session-key <key> --ticket-id <ticket_id> --payload-file .overlord/tmp/deliver.json
   ovld protocol deliver --session-key <key> --ticket-id <ticket_id> --payload-file -
   ovld protocol deliver --session-key <key> --ticket-id <ticket_id> --summary "Done" --skip-file-change-check
   ovld protocol deliver --session-key <key> --ticket-id <ticket_id> --summary "Done" --timeout 60000

@@ -47,7 +47,10 @@ export default async function ProjectLayout({ children, params }: LayoutProps) {
     getProjectUserLocalSettingsByProjectId(supabase, user?.id, [project.id])
   ]);
   const projectUser = sshByProject.get(project.id);
-  const sshEnabled = await isAppFeatureEnabled('ssh');
+  const [sshEnabled, slackEnabled] = await Promise.all([
+    isAppFeatureEnabled('ssh'),
+    isAppFeatureEnabled('slack')
+  ]);
   const sshSettings = resolveVisibleProjectSshSettings(resolveProjectUserSshSettings(projectUser), {
     sshEnabled
   });
@@ -97,6 +100,7 @@ export default async function ProjectLayout({ children, params }: LayoutProps) {
         statuses={statuses ?? []}
         hasEverhourApiKey={hasEverhourApiKey}
         sshFeatureEnabled={sshEnabled}
+        slackEnabled={slackEnabled}
       >
         {children}
       </ProjectLayoutClient>

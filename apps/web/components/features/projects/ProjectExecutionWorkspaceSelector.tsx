@@ -1,12 +1,13 @@
 'use client';
 
-import { Check, ChevronDown, Folder, FolderOpen, Loader2 } from 'lucide-react';
+import { Check, ChevronDown, Laptop, Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { toast } from 'sonner';
 
-import { useProjectSettings } from '@/components/features/projects/ProjectSettingsContext';
+import {
+  SELECTED_DEVICE_KEY,
+  useProjectSettings
+} from '@/components/features/projects/ProjectSettingsContext';
 import { useElectron } from '@/components/features/terminal/useElectron';
-import { WorkspaceConnectionWarningModal } from '@/components/modals/WorkspaceConnectionWarningModal';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -14,80 +15,27 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
-import {
-  getProjectResourceDirectoriesAction,
-  type ProjectResourceDirectory,
-  setResourceDirectoryPrimaryAction
-} from '@/lib/actions/resource-directories';
+import { getProjectDevicesAction, type ProjectDevice } from '@/lib/actions/devices';
 import { cn } from '@/lib/utils';
-import type { SshConnectionConfig } from '@/lib/workspace/types';
 
 type ProjectExecutionWorkspaceSelectorProps = {
   projectId: string;
 };
-
-type RemoteWorkspacePayload = {
-  mode: 'remote';
-  ssh: SshConnectionConfig;
-  remoteDirectory: string;
-  projectId: string;
-};
-
-type SshFilesystemApi = {
-  checkSshConnection?: (options: RemoteWorkspacePayload) => Promise<{
-    ok: boolean;
-    error?: string;
-  }>;
-  directoryExists?: (options: RemoteWorkspacePayload) => Promise<boolean>;
-};
-
-function normalizeHost(hostname: string | null | undefined): string | null {
-  if (!hostname?.trim()) return null;
-  return hostname.trim().toLowerCase();
-}
-
-function resourceTitle(resource: ProjectResourceDirectory): string {
-  if (resource.label?.trim()) return resource.label.trim();
-  const path = resource.directoryPath;
-  const parts = path.split(/[/\\]/);
-  const last = parts[parts.length - 1];
-  return last || path;
-}
 
 export function ProjectExecutionWorkspaceSelector({
   projectId
 }: ProjectExecutionWorkspaceSelectorProps) {
   const projectSettings = useProjectSettings();
   const { api, isElectron } = useElectron();
-  const [resources, setResources] = useState<ProjectResourceDirectory[]>([]);
+  const [devices, setDevices] = useState<ProjectDevice[]>([]);
   const [matchedDeviceId, setMatchedDeviceId] = useState<string | null>(null);
-  const [localHostname, setLocalHostname] = useState<string | null>(null);
-  const [pathReachableById, setPathReachableById] = useState<Record<string, boolean>>({});
-  const [sshWarningOpen, setSshWarningOpen] = useState(false);
-  const [sshWarningPath, setSshWarningPath] = useState('');
-  const [sshWarningError, setSshWarningError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [switchingId, setSwitchingId] = useState<string | null>(null);
+
+  const selectedDeviceId = projectSettings?.selectedDeviceId ?? null;
 
   useEffect(() => {
     let cancelled = false;
-    async function loadHostHint() {
-      try {
-        const meta = await api?.app?.getHostMetadata?.();
-        if (!cancelled && meta?.hostname) setLocalHostname(meta.hostname);
-      } catch {
-        // optional
-      }
-    }
-    void loadHostHint();
-    return () => {
-      cancelled = true;
-    };
-  }, [api]);
-
-  useEffect(() => {
-    let cancelled = false;
-    async function loadResources() {
+    async function loadDevices() {
       setLoading(true);
       try {
         let deviceFingerprint: string | null = null;
@@ -101,362 +49,200 @@ export function ProjectExecutionWorkspaceSelector({
             deviceFingerprint = null;
           }
         }
-        const { resources: rows, matchedDeviceId: matchedId } =
-          await getProjectResourceDirectoriesAction({
-            projectId,
-            deviceFingerprint
-          });
+        const payload = await getProjectDevicesAction({
+          projectId,
+          deviceFingerprint
+        });
         if (!cancelled) {
-          setResources(rows);
-          setMatchedDeviceId(matchedId);
+          setDevices(payload.devices);
+          setMatchedDeviceId(payload.matchedDeviceId);
         }
       } finally {
         if (!cancelled) setLoading(false);
       }
     }
-    void loadResources();
+    void loadDevices();
     return () => {
       cancelled = true;
     };
   }, [projectId, api]);
 
-  const localNorm = normalizeHost(localHostname);
-
-  function matchesThisDesktop(resource: ProjectResourceDirectory): boolean {
-    if (matchedDeviceId && resource.deviceId) {
-      return resource.deviceId === matchedDeviceId;
-    }
-    if (!localNorm || !resource.deviceId) return false;
-    const dn = normalizeHost(resource.deviceHostname);
-    return Boolean(dn && dn === localNorm);
-  }
-
+  // Auto-select: on desktop default to current device, on web restore from localStorage
   useEffect(() => {
-    const filesystem = api?.filesystem;
-    if (!filesystem?.directoryExists || !resources.length) return;
-    const { directoryExists } = filesystem;
+    if (loading || !projectSettings) return;
+    if (devices.length === 0) return;
 
-    function resourceOnThisDesktop(resource: ProjectResourceDirectory): boolean {
-      if (matchedDeviceId && resource.deviceId) {
-        return resource.deviceId === matchedDeviceId;
-      }
-      const norm = normalizeHost(localHostname);
-      if (!norm || !resource.deviceId) return false;
-      return normalizeHost(resource.deviceHostname) === norm;
+    const storedId =
+      typeof window !== 'undefined'
+        ? window.localStorage.getItem(`${SELECTED_DEVICE_KEY}:${projectId}`)
+        : null;
+
+    let targetId: string | null = null;
+
+    if (isElectron && matchedDeviceId) {
+      const matched = devices.find(d => d.id === matchedDeviceId);
+      if (matched) targetId = matched.id;
     }
 
-    let cancelled = false;
-
-    async function verifyLocalPaths() {
-      const updates: Record<string, boolean> = {};
-      await Promise.all(
-        resources.map(async resource => {
-          if (!resourceOnThisDesktop(resource)) return;
-          try {
-            const ok = await directoryExists({ directory: resource.directoryPath });
-            if (!cancelled) updates[resource.id] = ok;
-          } catch {
-            if (!cancelled) updates[resource.id] = false;
-          }
-        })
-      );
-      if (!cancelled && Object.keys(updates).length) {
-        setPathReachableById(prev => ({ ...prev, ...updates }));
-      }
+    if (!targetId && storedId) {
+      const stored = devices.find(d => d.id === storedId);
+      if (stored) targetId = stored.id;
     }
 
-    void verifyLocalPaths();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [api, resources, matchedDeviceId, localHostname]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function verifySsh() {
-      const filesystem = api?.filesystem as
-        | (NonNullable<Window['electronAPI']>['filesystem'] & SshFilesystemApi)
-        | undefined;
-      const checkSshConnection = filesystem?.checkSshConnection;
-      const directoryExists = filesystem?.directoryExists;
-      if (!checkSshConnection || !directoryExists) return;
-
-      const sshCfg = projectSettings?.sshConnectionConfig;
-      const sshLabel = projectSettings?.sshCommand;
-      const remoteDir = projectSettings?.remoteWorkingDirectory ?? '/';
-
-      if (!sshCfg || !sshLabel) return;
-
-      try {
-        const result = await checkSshConnection({
-          mode: 'remote',
-          ssh: sshCfg,
-          remoteDirectory: remoteDir,
-          projectId
-        });
-
-        if (cancelled) return;
-
-        if (!result.ok) {
-          setSshWarningPath(remoteDir !== '/' ? `${sshLabel} → ${remoteDir}` : sshLabel);
-          setSshWarningError(result.error ?? 'SSH connection failed.');
-          setSshWarningOpen(true);
-          return;
-        }
-
-        const dirExists = await directoryExists({
-          mode: 'remote',
-          ssh: sshCfg,
-          remoteDirectory: remoteDir,
-          projectId
-        });
-
-        if (cancelled) return;
-
-        if (!dirExists) {
-          setSshWarningPath(`${sshLabel} → ${remoteDir}`);
-          setSshWarningError('Remote directory does not exist.');
-          setSshWarningOpen(true);
-        }
-      } catch {
-        /* best-effort */
-      }
+    if (!targetId) {
+      targetId = devices[0].id;
     }
 
-    void verifySsh();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    api,
-    projectSettings?.sshConnectionConfig,
-    projectSettings?.sshCommand,
-    projectSettings?.remoteWorkingDirectory,
-    projectId
-  ]);
-
-  async function handleSetPrimary(resource: ProjectResourceDirectory) {
-    if (resource.isPrimary || switchingId) return;
-    setSwitchingId(resource.id);
-    try {
-      await setResourceDirectoryPrimaryAction({
-        directoryId: resource.id,
-        projectId
-      });
-      setResources(prev =>
-        prev.map(r => ({
-          ...r,
-          isPrimary:
-            r.executionTargetId === resource.executionTargetId ? r.id === resource.id : r.isPrimary
-        }))
-      );
-      toast.success(`Switched execution to ${resourceTitle(resource)}`);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to switch execution location.');
-    } finally {
-      setSwitchingId(null);
+    if (targetId && targetId !== selectedDeviceId) {
+      const device = devices.find(d => d.id === targetId);
+      const primaryResource = device?.resources.find(r => r.isPrimary);
+      projectSettings.setSelectedDevice(targetId, primaryResource?.directoryPath ?? null);
     }
-  }
+  }, [loading, devices, matchedDeviceId, isElectron, projectId, projectSettings, selectedDeviceId]);
 
-  async function handleRevealInFinder(directoryPath: string) {
-    if (!api?.app?.revealFile) return;
-
-    try {
-      await api.app.revealFile(directoryPath);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Could not open in Finder.');
-    }
+  function handleSelectDevice(device: ProjectDevice) {
+    if (!projectSettings) return;
+    const primaryResource = device.resources.find(r => r.isPrimary);
+    projectSettings.setSelectedDevice(device.id, primaryResource?.directoryPath ?? null);
   }
 
   if (!projectSettings) return null;
   const ps = projectSettings;
 
-  const primaryResource = resources.find(r => r.isPrimary);
-  const primaryLabel = primaryResource ? resourceTitle(primaryResource) : null;
+  const selectedDevice = devices.find(d => d.id === selectedDeviceId);
+  const selectedLabel = selectedDevice?.label ?? null;
 
   return (
-    <>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button
-            type="button"
-            className={cn(
-              'mt-1 inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-[11px] text-muted-foreground transition hover:bg-muted/60 hover:text-foreground md:mt-0',
-              resources.length > 0 || ps.hasLocalDirectory
-                ? 'border-border'
-                : 'border-dashed border-muted-foreground/60'
-            )}
-            aria-label="Execution location"
-            title="Switch execution location for this project"
-          >
-            {loading ? (
-              <Loader2 className="h-3 w-3 animate-spin" />
-            ) : (
-              <Folder className="h-3 w-3" />
-            )}
-            <span className="max-w-[12rem] truncate sm:max-w-[16rem]">
-              {loading
-                ? 'Resources'
-                : primaryLabel
-                  ? primaryLabel
-                  : resources.length === 0
-                    ? 'No workspace'
-                    : `${resources.length} resource${resources.length === 1 ? '' : 's'}`}
-            </span>
-            <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground/80" />
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent
-          align="start"
-          className="w-96 max-h-[min(24rem,70vh)] overflow-y-auto p-0"
-        >
-          <div className="border-b px-3 py-2">
-            <p className="text-xs font-medium text-foreground">Execution location</p>
-            <p className="text-[11px] text-muted-foreground">
-              Select which resource directory to use as the primary execution location for this
-              project.
-            </p>
-          </div>
-          {loading ? (
-            <div className="px-3 py-4 text-xs text-muted-foreground">Loading...</div>
-          ) : resources.length === 0 ? (
-            <div className="px-3 py-4 text-xs italic text-muted-foreground">
-              No resource directories yet. Add one in project settings.
-            </div>
-          ) : (
-            <ul className="py-1">
-              {resources.map(resource => {
-                const onThisDevice = matchesThisDesktop(resource);
-                const pathOk =
-                  onThisDevice && resource.id in pathReachableById
-                    ? pathReachableById[resource.id]
-                    : undefined;
-                const otherLabel =
-                  resource.deviceLabel?.trim() || resource.deviceHostname?.trim() || 'Other device';
-                const isSwitching = switchingId === resource.id;
-                return (
-                  <li key={resource.id}>
-                    <button
-                      type="button"
-                      className={cn(
-                        'flex w-full gap-2 border-b border-border/60 px-3 py-2 text-left text-xs last:border-b-0 transition-colors',
-                        resource.isPrimary ? 'bg-primary/5' : 'hover:bg-muted/60 cursor-pointer',
-                        isSwitching && 'opacity-60'
-                      )}
-                      onClick={() => void handleSetPrimary(resource)}
-                      disabled={resource.isPrimary || isSwitching}
-                      title={
-                        resource.isPrimary
-                          ? 'Current execution location'
-                          : `Switch execution to ${resourceTitle(resource)}`
-                      }
-                    >
-                      <div className="flex shrink-0 items-start pt-0.5">
-                        {isSwitching ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
-                        ) : resource.isPrimary ? (
-                          <Check className="h-3.5 w-3.5 text-primary" />
-                        ) : (
-                          <span className="h-3.5 w-3.5" />
-                        )}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <span
-                            className="truncate font-medium text-foreground"
-                            title={resource.directoryPath}
-                          >
-                            {resourceTitle(resource)}
-                          </span>
-                          {resource.isPrimary ? (
-                            <span className="shrink-0 rounded bg-primary/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-primary">
-                              Active
-                            </span>
-                          ) : null}
-                          {onThisDevice && pathOk === false ? (
-                            <span className="shrink-0 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:text-amber-400">
-                              Path missing
-                            </span>
-                          ) : null}
-                        </div>
-                        <p
-                          className="truncate font-mono text-[11px] text-muted-foreground"
-                          title={resource.directoryPath}
-                        >
-                          {resource.directoryPath}
-                        </p>
-                      </div>
-                      <div className="flex shrink-0 flex-col items-end gap-1 pt-0.5">
-                        {onThisDevice && isElectron && api?.app?.revealFile ? (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="h-6 w-6 p-0 text-muted-foreground"
-                            onClick={e => {
-                              e.stopPropagation();
-                              void handleRevealInFinder(resource.directoryPath);
-                            }}
-                            title="See in finder"
-                          >
-                            <FolderOpen className="h-3 w-3" />
-                          </Button>
-                        ) : null}
-                        {onThisDevice ? (
-                          <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-400">
-                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden />
-                            This device
-                          </span>
-                        ) : resource.deviceId ? (
-                          <span
-                            className="inline-flex max-w-[9rem] items-center gap-1 rounded-full border border-border bg-muted/50 px-2 py-0.5 text-[10px] font-medium text-muted-foreground"
-                            title={otherLabel}
-                          >
-                            <span
-                              className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500/80"
-                              aria-hidden
-                            />
-                            <span className="truncate">{otherLabel}</span>
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 rounded-full border border-dashed border-border px-2 py-0.5 text-[10px] text-muted-foreground">
-                            <span
-                              className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50"
-                              aria-hidden
-                            />
-                            Unassigned device
-                          </span>
-                        )}
-                      </div>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className={cn(
+            'mt-1 inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-[11px] text-muted-foreground transition hover:bg-muted/60 hover:text-foreground md:mt-0',
+            devices.length > 0 ? 'border-border' : 'border-dashed border-muted-foreground/60'
           )}
+          aria-label="Execution device"
+          title="Switch execution device for this project"
+        >
+          {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Laptop className="h-3 w-3" />}
+          <span className="max-w-[12rem] truncate sm:max-w-[16rem]">
+            {loading
+              ? 'Devices'
+              : selectedLabel
+                ? selectedLabel
+                : devices.length === 0
+                  ? 'No devices'
+                  : `${devices.length} device${devices.length === 1 ? '' : 's'}`}
+          </span>
+          <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground/80" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="start"
+        className="w-80 max-h-[min(24rem,70vh)] overflow-y-auto p-0"
+      >
+        <div className="border-b px-3 py-2">
+          <p className="text-xs font-medium text-foreground">Execution device</p>
+          <p className="text-[11px] text-muted-foreground">
+            Select which device to use as the execution target for this project.
+          </p>
+        </div>
+        {loading ? (
+          <div className="px-3 py-4 text-xs text-muted-foreground">Loading...</div>
+        ) : devices.length === 0 ? (
+          <div className="px-3 py-4 text-xs italic text-muted-foreground">
+            No devices registered for this project yet. Add a resource directory in project
+            settings.
+          </div>
+        ) : (
+          <ul className="py-1">
+            {devices.map(device => {
+              const isSelected = device.id === selectedDeviceId;
+              const isThisDevice = matchedDeviceId === device.id;
+              const primaryResource = device.resources.find(r => r.isPrimary);
+              return (
+                <li key={device.id}>
+                  <button
+                    type="button"
+                    className={cn(
+                      'flex w-full gap-2 border-b border-border/60 px-3 py-2 text-left text-xs last:border-b-0 transition-colors',
+                      isSelected ? 'bg-primary/5' : 'hover:bg-muted/60 cursor-pointer'
+                    )}
+                    onClick={() => handleSelectDevice(device)}
+                    disabled={isSelected}
+                    title={
+                      isSelected
+                        ? 'Current execution device'
+                        : `Switch execution to ${device.label}`
+                    }
+                  >
+                    <div className="flex shrink-0 items-start pt-0.5">
+                      {isSelected ? (
+                        <Check className="h-3.5 w-3.5 text-primary" />
+                      ) : (
+                        <span className="h-3.5 w-3.5" />
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <Laptop className="h-3 w-3 shrink-0 text-muted-foreground" />
+                        <span className="truncate font-medium text-foreground">{device.label}</span>
+                        {device.platform ? (
+                          <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase text-muted-foreground">
+                            {device.platform}
+                          </span>
+                        ) : null}
+                        {isSelected ? (
+                          <span className="shrink-0 rounded bg-primary/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-primary">
+                            Active
+                          </span>
+                        ) : null}
+                      </div>
+                      {primaryResource ? (
+                        <p
+                          className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground"
+                          title={primaryResource.directoryPath}
+                        >
+                          {primaryResource.directoryPath}
+                        </p>
+                      ) : device.resources.length === 0 ? (
+                        <p className="mt-0.5 text-[11px] italic text-muted-foreground">
+                          No resource directories
+                        </p>
+                      ) : null}
+                    </div>
+                    <div className="flex shrink-0 flex-col items-end gap-1 pt-0.5">
+                      {isThisDevice ? (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-400">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden />
+                          This device
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/50 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                          <span
+                            className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50"
+                            aria-hidden
+                          />
+                          Remote
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
 
-          <DropdownMenuSeparator className="my-0" />
-          <button
-            type="button"
-            className="w-full cursor-pointer px-3 py-2 text-left text-xs hover:bg-muted/60 transition-colors"
-            onClick={() => ps.openProjectSettings('Resources')}
-          >
-            Manage resources...
-          </button>
-        </DropdownMenuContent>
-      </DropdownMenu>
-
-      <WorkspaceConnectionWarningModal
-        open={sshWarningOpen}
-        onOpenChange={setSshWarningOpen}
-        workspaceType="ssh"
-        path={sshWarningPath}
-        error={sshWarningError}
-        onOpenSettings={() => ps.openProjectSettings()}
-      />
-    </>
+        <DropdownMenuSeparator className="my-0" />
+        <button
+          type="button"
+          className="w-full cursor-pointer px-3 py-2 text-left text-xs hover:bg-muted/60 transition-colors"
+          onClick={() => ps.openProjectSettings('Resources')}
+        >
+          Manage devices &amp; resources...
+        </button>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

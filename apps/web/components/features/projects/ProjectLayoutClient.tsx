@@ -61,6 +61,7 @@ type ProjectLayoutClientProps = {
   }>;
   hasEverhourApiKey: boolean;
   sshFeatureEnabled: boolean;
+  slackEnabled?: boolean;
 };
 
 export function ProjectLayoutClient({
@@ -81,7 +82,8 @@ export function ProjectLayoutClient({
   projectEverhourProjectId,
   statuses,
   hasEverhourApiKey,
-  sshFeatureEnabled
+  sshFeatureEnabled,
+  slackEnabled = false
 }: ProjectLayoutClientProps) {
   const { isElectron } = useElectron();
   const pathname = usePathname();
@@ -152,6 +154,7 @@ export function ProjectLayoutClient({
       initialStatuses={initialStatuses}
       hasEverhourApiKey={hasEverhourApiKey}
       sshFeatureEnabled={sshFeatureEnabled}
+      slackEnabled={slackEnabled}
     >
       <ProjectSettingsUrlTrigger />
       <div className="flex flex-1 min-h-0 flex-col gap-5">

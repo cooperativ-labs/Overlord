@@ -29,6 +29,7 @@ type ObjectiveMenuButtonProps = {
   canMarkExecuted?: boolean;
   agentIdentifier?: string | null;
   externalSessionId?: string | null;
+  onEditTitle?: () => void;
 };
 
 export function ObjectiveMenuButton({
@@ -37,7 +38,8 @@ export function ObjectiveMenuButton({
   state,
   canMarkExecuted = true,
   agentIdentifier = null,
-  externalSessionId = null
+  externalSessionId = null,
+  onEditTitle
 }: ObjectiveMenuButtonProps) {
   const [pending, startTransition] = useTransition();
   const [resumeCopied, setResumeCopied] = useState(false);
@@ -93,6 +95,16 @@ export function ObjectiveMenuButton({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
+        {onEditTitle ? (
+          <DropdownMenuItem
+            onSelect={event => {
+              event.preventDefault();
+              onEditTitle();
+            }}
+          >
+            Edit title
+          </DropdownMenuItem>
+        ) : null}
         {resumeCommand ? (
           <DropdownMenuItem
             className="justify-between"

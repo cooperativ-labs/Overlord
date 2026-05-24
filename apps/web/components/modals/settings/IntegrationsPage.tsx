@@ -7,7 +7,13 @@ import { SlackSettings } from '@/components/features/slack/SlackSettings';
 import { Separator } from '@/components/ui/separator';
 import { getEverhourConnectionStatus } from '@/lib/actions/everhour';
 
-export function IntegrationsPage({ open }: { open: boolean }) {
+export function IntegrationsPage({
+  open,
+  slackEnabled = false
+}: {
+  open: boolean;
+  slackEnabled?: boolean;
+}) {
   const [everhourConnected, setEverhourConnected] = useState(false);
   const [everhourUpdatedAt, setEverhourUpdatedAt] = useState<string | null>(null);
   const [everhourStatusLoaded, setEverhourStatusLoaded] = useState(false);
@@ -29,9 +35,9 @@ export function IntegrationsPage({ open }: { open: boolean }) {
 
   return (
     <div className="space-y-6">
-      <SlackSettings open={open} />
+      {slackEnabled ? <SlackSettings open={open} /> : null}
 
-      <Separator />
+      {slackEnabled ? <Separator /> : null}
 
       {everhourStatusLoaded ? (
         <EverhourSettings

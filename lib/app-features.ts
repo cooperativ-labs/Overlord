@@ -16,6 +16,12 @@ export const APP_FEATURE_DEFAULTS = {
       'Shows per-objective checkpoint revert controls and local checkpoint cleanup actions.',
     isEnabled: false
   },
+  slack: {
+    name: 'Slack integration',
+    description:
+      'Shows Slack workspace connection settings and per-project Slack configuration throughout the app.',
+    isEnabled: false
+  },
   ssh: {
     name: 'SSH remote workspaces',
     description:

@@ -74,6 +74,7 @@ export async function requestTicketObjectiveExecutionAction(input: {
   remoteWorkingDirectory?: string | null;
   serverMultiplexer?: 'none' | 'tmux' | null;
   tmuxCommand?: string | null;
+  targetExecutionTargetId?: string | null;
 }): Promise<{ requestId: string; status: string } | { error: string }> {
   try {
     const supabase = await createClientForRequest();
@@ -99,7 +100,8 @@ export async function requestTicketObjectiveExecutionAction(input: {
       remoteWorkingDirectory: input.remoteWorkingDirectory ?? null,
       serverMultiplexer: input.serverMultiplexer ?? null,
       tmuxCommand: input.tmuxCommand ?? null,
-      targetKind: input.sshCommand?.trim() ? 'ssh' : 'any'
+      targetKind: input.sshCommand?.trim() ? 'ssh' : 'any',
+      targetExecutionTargetId: input.targetExecutionTargetId ?? null
     });
 
     revalidateTicketBoards();

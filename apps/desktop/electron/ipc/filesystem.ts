@@ -466,7 +466,7 @@ export function registerFilesystemIpc(): void {
     } catch (error) {
       return {
         ok: false,
-        error: error instanceof Error ? error.message : 'Failed to write overlord.json.'
+        error: error instanceof Error ? error.message : 'Failed to write .overlord/project.json.'
       };
     }
   });
@@ -492,7 +492,7 @@ export function registerFilesystemIpc(): void {
       } catch (error) {
         return {
           ok: false,
-          error: error instanceof Error ? error.message : 'Failed to update overlord.json.'
+          error: error instanceof Error ? error.message : 'Failed to update .overlord/project.json.'
         };
       }
     }

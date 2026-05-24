@@ -60,6 +60,8 @@ type Props = {
   objectiveState?: string | null;
   /** Caps multiline editor height (pixels); scroll stays on the textarea. */
   textareaMaxHeightPx?: number;
+  /** Focus the input when entering edit mode (default true). */
+  autoFocus?: boolean;
 };
 
 export const InlineEditField = forwardRef<InlineEditFieldHandle, Props>(function InlineEditField(
@@ -81,7 +83,8 @@ export const InlineEditField = forwardRef<InlineEditFieldHandle, Props>(function
     children,
     objectiveRowId,
     objectiveState,
-    textareaMaxHeightPx
+    textareaMaxHeightPx,
+    autoFocus = true
   }: Props,
   ref
 ) {
@@ -237,7 +240,7 @@ export const InlineEditField = forwardRef<InlineEditFieldHandle, Props>(function
           <div className={cn(baseInputClass, 'resize-none leading-relaxed relative')}>
             <MentionableTextarea
               ref={inputRef as React.Ref<HTMLTextAreaElement>}
-              autoFocus
+              autoFocus={autoFocus}
               autoListContinuation={autoListContinuation}
               className={cn('w-full focus:outline-none border-none', children && 'pr-3')}
               disabled={pending}
@@ -261,7 +264,7 @@ export const InlineEditField = forwardRef<InlineEditFieldHandle, Props>(function
     return (
       <input
         ref={inputRef as React.Ref<HTMLInputElement>}
-        autoFocus
+        autoFocus={autoFocus}
         className={baseInputClass}
         disabled={pending}
         type="text"

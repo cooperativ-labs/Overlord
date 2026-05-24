@@ -97,7 +97,7 @@ Agent-specific overlay paragraphs (Claude permission-request hook; Codex MCP def
 │   │       ├── cursor.json
 │   │       ├── cursor/
 │   │       │   └── overlays/extra-notes.md
-│   │       ├── overlord.json                      # (codex)
+│   │       ├── .overlord/project.json                      # (codex)
 │   │       └── overlord/
 │   │           └── overlays/extra-notes.md
 │   │

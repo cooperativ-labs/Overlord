@@ -568,3 +568,59 @@ export async function deleteFutureObjectiveAction({
     { organizationId: ticket.organization_id, projectId: ticket.project_id, ticketId }
   ]);
 }
+
+export async function updateObjectiveTitleAction({
+  ticketId,
+  objectiveId,
+  title
+}: {
+  ticketId: string;
+  objectiveId: string;
+  title: string;
+}): Promise<void> {
+  const supabase = await createClientForRequest();
+  await assertTicketAccess(supabase, ticketId);
+
+  const { data: row, error: rowError } = await supabase
+    .from('objectives')
+    .select('id,state')
+    .eq('id', objectiveId)
+    .eq('ticket_id', ticketId)
+    .maybeSingle();
+
+  if (rowError) {
+    throw new Error(rowError.message);
+  }
+  if (!row) {
+    throw new Error('Objective not found.');
+  }
+
+  const normalized = title.trim();
+
+  const { error: updateError } = await supabase
+    .from('objectives')
+    .update({ title: normalized || null })
+    .eq('id', objectiveId);
+
+  if (updateError) {
+    throw new Error(updateError.message);
+  }
+
+  const { data: ticket, error: ticketError } = await supabase
+    .from('tickets')
+    .select('organization_id,project_id')
+    .eq('id', ticketId)
+    .single();
+
+  if (ticketError || !ticket) {
+    throw new Error(ticketError?.message ?? 'Ticket not found.');
+  }
+
+  revalidateTicketBoards();
+  revalidatePath(
+    buildProjectPath({ organizationId: ticket.organization_id, projectId: ticket.project_id })
+  );
+  revalidateTicketDetails([
+    { organizationId: ticket.organization_id, projectId: ticket.project_id, ticketId }
+  ]);
+}

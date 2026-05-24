@@ -76,6 +76,7 @@ export function TicketPanelHeader({
             </div>
           </DropdownMenuContent>
         </DropdownMenu>
+        <span className="text-xs tabular-nums text-muted-foreground">{ticketIdentifier}</span>
         <ExecutionTargetToggle ticketId={ticketId} executionTarget={executionTarget} size="md" />
       </div>
       <div className="flex items-center justify-end gap-3">

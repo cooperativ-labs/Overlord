@@ -8,6 +8,7 @@ import {
   CalendarClock,
   CheckCircle,
   ChevronDown,
+  ChevronUp,
   EllipsisVertical,
   FastForward,
   GripVertical,
@@ -324,20 +325,46 @@ function DemoDraftObjective({ objective }: { objective: DemoObjective }) {
 }
 
 function DemoFutureObjective({ objective }: { objective: DemoObjective }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+
   return (
     <div className="relative flex items-stretch gap-2">
       <div className="flex w-5 shrink-0 items-center justify-center self-stretch text-muted-foreground/40">
         <GripVertical className="h-4 w-4" />
       </div>
       <div className="min-w-0 flex-1 overflow-hidden rounded-xl border border-border/35 bg-muted/20 opacity-70 transition-opacity focus-within:opacity-100">
-        <div>
-          <div className="relative max-h-[3.25rem] overflow-hidden transition-[max-height] duration-200 ease-in-out focus-within:max-h-[500px]">
+        <div
+          onClick={() => {
+            setIsExpanded(true);
+          }}
+        >
+          <div
+            className={cn(
+              'relative overflow-hidden transition-[max-height] duration-200 ease-in-out',
+              isExpanded ? 'max-h-[500px]' : 'max-h-[3.25rem]'
+            )}
+          >
             <div className="px-3 pt-3">
               <p className="whitespace-pre-wrap text-base leading-relaxed text-muted-foreground">
                 {objective.body}
               </p>
             </div>
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-background/80 to-transparent transition-opacity duration-200 focus-within:opacity-0" />
+            {isExpanded ? (
+              <button
+                type="button"
+                className="absolute right-2 top-2 z-10 flex h-6 w-6 items-center justify-center rounded-full border border-border/50 bg-background/90 text-muted-foreground shadow-sm backdrop-blur-sm hover:bg-background hover:text-foreground"
+                aria-label="Collapse objective"
+                onClick={event => {
+                  event.stopPropagation();
+                  setIsExpanded(false);
+                }}
+              >
+                <ChevronUp className="h-3.5 w-3.5" />
+              </button>
+            ) : null}
+            {!isExpanded ? (
+              <div className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-background/80 to-transparent" />
+            ) : null}
           </div>
           <div className="border-t border-border/40">
             <DemoObjectiveAgentControls objective={objective} isFuture />

@@ -19,6 +19,7 @@ type IntegrationsPageProps = {
   organizationId: number;
   initialEverhourProjectId: string | null;
   hasEverhourApiKey: boolean;
+  slackEnabled?: boolean;
   open: boolean;
 };
 
@@ -27,6 +28,7 @@ export function IntegrationsPage({
   organizationId,
   initialEverhourProjectId,
   hasEverhourApiKey,
+  slackEnabled = false,
   open
 }: IntegrationsPageProps) {
   const disconnectEverhourMutation = useDisconnectProjectEverhourMutation();
@@ -79,7 +81,7 @@ export function IntegrationsPage({
 
   return (
     <div className="space-y-6">
-      <ProjectSlackSettings projectId={projectId} open={open} />
+      {slackEnabled ? <ProjectSlackSettings projectId={projectId} open={open} /> : null}
 
       {hasEverhourApiKey ? (
         <>

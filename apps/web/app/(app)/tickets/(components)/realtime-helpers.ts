@@ -4,6 +4,8 @@ import type { Ticket } from './KanbanCard';
 
 export type RealtimeBoardTicketRow = {
   id: string;
+  ticket_id: string | null;
+  ticket_sequence: number;
   title: string | null;
   due_datetime: string | null;
   execution_target: Database['public']['Enums']['ticket_execution_target'];
@@ -94,6 +96,8 @@ export function mapRealtimeBoardTicketRow(row: RealtimeBoardTicketRow): Ticket {
 
   return {
     id: row.id,
+    ticket_id: row.ticket_id,
+    ticket_sequence: row.ticket_sequence,
     title: row.title,
     objective: null,
     organization_id: row.organization_id,

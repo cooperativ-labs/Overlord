@@ -1,7 +1,7 @@
 /**
- * Read/merge/write logic for the per-folder `overlord.json` file.
+ * Read/merge/write logic for the per-folder `.overlord/project.json` file.
  *
- * This file lives at the root of any directory registered as a project resource
+ * This file lives under the `.overlord` folder of any directory registered as a project resource
  * and tells Overlord (and any AI agent reading the folder) which project(s) the
  * folder is associated with. The `_comment` field doubles as a human-readable
  * notice since JSON has no real comment syntax.
@@ -10,10 +10,14 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 
-export const OVERLORD_CONFIG_FILENAME = 'overlord.json';
+export const OVERLORD_CONFIG_DIRNAME = '.overlord';
+export const OVERLORD_CONFIG_FILENAME = 'project.json';
+export const OVERLORD_SCRATCH_DIRNAME = 'tmp';
+export const OVERLORD_LOG_DIRNAME = 'logs';
 
 const FILE_COMMENT =
   'This file lets Overlord (https://www.ovld.ai) identify which project this folder belongs to. It is created automatically when the folder is added as a project resource. DO NOT EDIT MANUALLY.';
+const GITIGNORE_ENTRIES = ['.overlord/tmp/', '.overlord/logs/'];
 
 export type OverlordConfigProject = {
   id: string;
@@ -37,6 +41,44 @@ export type RemoveResult = {
 
 function buildConfig(projects: OverlordConfigProject[]): OverlordConfigFile {
   return { _comment: FILE_COMMENT, projects };
+}
+
+function configDirPath(directoryPath: string): string {
+  return path.join(directoryPath, OVERLORD_CONFIG_DIRNAME);
+}
+
+function configFilePath(directoryPath: string): string {
+  return path.join(configDirPath(directoryPath), OVERLORD_CONFIG_FILENAME);
+}
+
+function scratchDirPath(directoryPath: string): string {
+  return path.join(configDirPath(directoryPath), OVERLORD_SCRATCH_DIRNAME);
+}
+
+async function ensureProjectLocalWorkspace(directoryPath: string): Promise<void> {
+  await fs.mkdir(configDirPath(directoryPath), { recursive: true });
+  await fs.mkdir(scratchDirPath(directoryPath), { recursive: true });
+  await ensureGitignoreEntries(directoryPath);
+}
+
+async function ensureGitignoreEntries(directoryPath: string): Promise<void> {
+  const gitignorePath = path.join(directoryPath, '.gitignore');
+  let raw = '';
+  try {
+    raw = await fs.readFile(gitignorePath, 'utf8');
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+  }
+
+  const lines = raw.split(/\r?\n/);
+  const existing = new Set(lines.map(line => line.trim()));
+  const missing = GITIGNORE_ENTRIES.filter(entry => !existing.has(entry));
+  if (missing.length === 0) return;
+
+  const next = raw.trimEnd()
+    ? `${raw.trimEnd()}\n\n# Overlord local scratch\n${missing.join('\n')}\n`
+    : `# Overlord local scratch\n${missing.join('\n')}\n`;
+  await fs.writeFile(gitignorePath, next, 'utf8');
 }
 
 function isProjectArray(value: unknown): value is OverlordConfigProject[] {
@@ -68,7 +110,7 @@ async function readExistingProjects(filePath: string): Promise<OverlordConfigPro
 }
 
 /**
- * Ensures the directory's `overlord.json` includes an entry for the given
+ * Ensures the directory's `.overlord/project.json` includes an entry for the given
  * project. Creates the file when missing, appends when a new project, no-op
  * when already present (id match). Project name is refreshed on every call.
  */
@@ -77,8 +119,9 @@ export async function upsertLocalOverlordConfig(input: {
   project: OverlordConfigProject;
 }): Promise<UpsertResult> {
   const directoryPath = input.directoryPath;
-  const filePath = path.join(directoryPath, OVERLORD_CONFIG_FILENAME);
+  const filePath = configFilePath(directoryPath);
 
+  await ensureProjectLocalWorkspace(directoryPath);
   const existing = await readExistingProjects(filePath);
 
   if (existing === null) {
@@ -104,7 +147,7 @@ export async function upsertLocalOverlordConfig(input: {
 }
 
 /**
- * Removes the given project id from the directory's `overlord.json`. When the
+ * Removes the given project id from the directory's `.overlord/project.json`. When the
  * resulting projects array would be empty, deletes the file entirely so the
  * folder is left clean. No-ops when the file or entry is absent.
  */
@@ -112,7 +155,7 @@ export async function removeProjectFromLocalOverlordConfig(input: {
   directoryPath: string;
   projectId: string;
 }): Promise<RemoveResult> {
-  const filePath = path.join(input.directoryPath, OVERLORD_CONFIG_FILENAME);
+  const filePath = configFilePath(input.directoryPath);
   const existing = await readExistingProjects(filePath);
 
   if (existing === null) return { filePath, action: 'not-found' };

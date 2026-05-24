@@ -11,6 +11,8 @@ export type BoardDataset = 'board' | 'list' | 'calendar';
 
 export type BoardTicket = {
   id: string;
+  ticket_id?: string | null;
+  ticket_sequence?: number | null;
   title: string | null;
   objective: string | null;
   organization_id: number;

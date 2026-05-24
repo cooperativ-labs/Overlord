@@ -88,6 +88,99 @@ export type UserExecutionTarget = {
   lastSeenAt: string | null;
 };
 
+export type UserExecutionTargetSshCredential = {
+  username: string;
+  authMethod: string;
+  privateKeyPath: string | null;
+  publicKeyFingerprint: string | null;
+  hostKeyFingerprint: string | null;
+};
+
+export type UserExecutionTargetDetailed = UserExecutionTarget & {
+  transport: string;
+  port: number | null;
+  isPlaceholder: boolean;
+  sshCredentials: UserExecutionTargetSshCredential[];
+};
+
+/** Returns execution targets the current user has access to, enriched with transport + SSH credentials. */
+export async function getUserExecutionTargetsWithDetailsAction(): Promise<
+  UserExecutionTargetDetailed[]
+> {
+  const supabase = await createClientForRequest();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data, error } = await (supabase as any)
+    .from('user_execution_targets')
+    .select(
+      'execution_target_id, execution_targets(host, port, transport, platform, last_seen_at, is_placeholder, organization_execution_targets(label, organization_id))'
+    )
+    .eq('user_id', user.id)
+    .order('last_connected_at', { ascending: false, nullsFirst: false });
+
+  if (error) {
+    console.error('getUserExecutionTargetsWithDetailsAction', error);
+    return [];
+  }
+
+  const targets: UserExecutionTargetDetailed[] = (data ?? []).map((row: any) => {
+    const target = Array.isArray(row.execution_targets)
+      ? row.execution_targets[0]
+      : row.execution_targets;
+    const orgRel = target?.organization_execution_targets;
+    const orgTarget = Array.isArray(orgRel) ? orgRel[0] : orgRel;
+    return {
+      id: row.execution_target_id as string,
+      label: (orgTarget?.label ?? target?.host ?? 'Unknown target') as string,
+      hostname: (target?.host ?? null) as string | null,
+      platform: (target?.platform ?? null) as string | null,
+      lastSeenAt: (target?.last_seen_at ?? null) as string | null,
+      transport: (target?.transport ?? 'local') as string,
+      port: (target?.port ?? null) as number | null,
+      isPlaceholder: Boolean(target?.is_placeholder),
+      sshCredentials: [] as UserExecutionTargetSshCredential[]
+    };
+  });
+
+  const targetIds = targets.map(t => t.id);
+  if (targetIds.length === 0) return targets;
+
+  const { data: creds, error: credsError } = await (supabase as any)
+    .from('execution_target_ssh_credentials')
+    .select(
+      'execution_target_id, username, auth_method, private_key_path, public_key_fingerprint, host_key_fingerprint'
+    )
+    .eq('user_id', user.id)
+    .in('execution_target_id', targetIds);
+
+  if (credsError) {
+    console.error('getUserExecutionTargetsWithDetailsAction credentials', credsError);
+    return targets;
+  }
+
+  const credsByTarget = new Map<string, UserExecutionTargetSshCredential[]>();
+  for (const row of (creds ?? []) as any[]) {
+    const list = credsByTarget.get(row.execution_target_id) ?? [];
+    list.push({
+      username: row.username,
+      authMethod: row.auth_method,
+      privateKeyPath: row.private_key_path,
+      publicKeyFingerprint: row.public_key_fingerprint,
+      hostKeyFingerprint: row.host_key_fingerprint
+    });
+    credsByTarget.set(row.execution_target_id, list);
+  }
+
+  for (const target of targets) {
+    target.sshCredentials = credsByTarget.get(target.id) ?? [];
+  }
+
+  return targets;
+}
+
 /** Returns execution targets the current user has access to, for project resource assignment in the browser. */
 export async function getUserExecutionTargetsAction(): Promise<UserExecutionTarget[]> {
   const supabase = await createClientForRequest();

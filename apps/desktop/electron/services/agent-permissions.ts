@@ -38,6 +38,19 @@ function withOptionalBackup(filePath: string, backups: string[]): void {
   if (backup) backups.push(backup);
 }
 
+function projectScratchDirectory(projectDirectory?: string): string | null {
+  if (!projectDirectory) return null;
+  return path.join(projectDirectory, '.overlord', 'tmp');
+}
+
+function projectScratchAllowRules(projectDirectory?: string): string[] {
+  const scratchDir = projectScratchDirectory(projectDirectory);
+  if (!scratchDir) {
+    return [`Read(.overlord/tmp/*)`, `Write(.overlord/tmp/*)`];
+  }
+  return [`Read(${scratchDir}/*)`, `Write(${scratchDir}/*)`];
+}
+
 function configureClaude(projectDirectory?: string): AgentPermissionResult {
   const backups: string[] = [];
   const filePath = projectDirectory
@@ -54,7 +67,7 @@ function configureClaude(projectDirectory?: string): AgentPermissionResult {
         : {};
 
     const existingAllow = asStringArray(permissions.allow);
-    const required = ['Bash(ovld protocol:*)', 'Read(/tmp/*)', 'Write(/tmp/*)'];
+    const required = ['Bash(ovld protocol:*)', ...projectScratchAllowRules(projectDirectory)];
 
     const mergedAllow = Array.from(new Set([...existingAllow, ...required]));
 
@@ -73,7 +86,7 @@ function configureClaude(projectDirectory?: string): AgentPermissionResult {
       ok: true,
       filePath,
       backups,
-      details: `Added ${required.length} allow rules for protocol shell commands and /tmp file access.`
+      details: `Added ${required.length} allow rules for protocol shell commands and .overlord/tmp file access.`
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -104,7 +117,7 @@ function configureCursor(projectDirectory?: string): AgentPermissionResult {
         : {};
 
     const existingAllow = asStringArray(permissions.allow);
-    const required = ['Shell(ovld protocol:*)', 'Read(/tmp/*)', 'Write(/tmp/*)'];
+    const required = ['Shell(ovld protocol:*)', ...projectScratchAllowRules(projectDirectory)];
 
     const mergedAllow = Array.from(new Set([...existingAllow, ...required]));
 
@@ -123,7 +136,7 @@ function configureCursor(projectDirectory?: string): AgentPermissionResult {
       ok: true,
       filePath,
       backups,
-      details: `Added ${required.length} allowed shell command patterns and /tmp file access.`
+      details: `Added ${required.length} allowed shell command patterns and .overlord/tmp file access.`
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -138,9 +151,11 @@ function configureCursor(projectDirectory?: string): AgentPermissionResult {
   }
 }
 
-function configureAntigravity(): AgentPermissionResult {
+function configureAntigravity(projectDirectory?: string): AgentPermissionResult {
   const backups: string[] = [];
   const filePath = path.join(os.homedir(), '.gemini', 'policies', 'overlord-protocol.toml');
+  const scratchPrefix = projectScratchDirectory(projectDirectory) ?? '.overlord/tmp';
+  const scratchPathPrefix = JSON.stringify(`${scratchPrefix}/`);
 
   try {
     withOptionalBackup(filePath, backups);
@@ -155,13 +170,13 @@ function configureAntigravity(): AgentPermissionResult {
       '',
       '[[rule]]',
       'toolName = "read_file"',
-      'pathPrefix = "/tmp/"',
+      `pathPrefix = ${scratchPathPrefix}`,
       'decision = "allow"',
       'priority = 900',
       '',
       '[[rule]]',
       'toolName = "write_file"',
-      'pathPrefix = "/tmp/"',
+      `pathPrefix = ${scratchPathPrefix}`,
       'decision = "allow"',
       'priority = 900',
       ''
@@ -174,7 +189,7 @@ function configureAntigravity(): AgentPermissionResult {
       ok: true,
       filePath,
       backups,
-      details: 'Installed Antigravity policy rules for ovld protocol and /tmp file access.'
+      details: 'Installed Antigravity policy rules for ovld protocol and .overlord/tmp file access.'
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -215,12 +230,13 @@ function configureOpenCode(): AgentPermissionResult {
           '*': 'ask',
           ...bashPermission,
           'ovld protocol *': 'allow',
-          'cat /tmp/*': 'allow',
-          'echo * /tmp/*': 'allow',
-          'tee /tmp/*': 'allow',
-          'cp * /tmp/*': 'allow',
-          'mv * /tmp/*': 'allow',
-          'rm /tmp/*': 'allow'
+          'mkdir -p .overlord/tmp': 'allow',
+          'cat .overlord/tmp/*': 'allow',
+          'echo * .overlord/tmp/*': 'allow',
+          'tee .overlord/tmp/*': 'allow',
+          'cp * .overlord/tmp/*': 'allow',
+          'mv * .overlord/tmp/*': 'allow',
+          'rm .overlord/tmp/*': 'allow'
         }
       }
     };
@@ -232,7 +248,7 @@ function configureOpenCode(): AgentPermissionResult {
       ok: true,
       filePath,
       backups,
-      details: 'Updated OpenCode bash permissions for ovld protocol and /tmp file access.'
+      details: 'Updated OpenCode bash permissions for ovld protocol and .overlord/tmp file access.'
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -253,7 +269,7 @@ export function configureAgentPermissions(
   const results = [
     configureClaude(options.projectDirectory),
     configureCursor(options.projectDirectory),
-    configureAntigravity(),
+    configureAntigravity(options.projectDirectory),
     configureOpenCode()
   ];
 

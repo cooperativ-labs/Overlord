@@ -79,6 +79,8 @@ type TicketsBoardContentProps = {
 
 type RawTicket = {
   id: string;
+  ticket_id: string | null;
+  ticket_sequence: number;
   title: string | null;
   objective?: string | null;
   due_datetime: string | null;
@@ -303,7 +305,7 @@ export default async function TicketsBoardContent({
   const allStatuses = dedupeStatuses(rawStatusRows);
 
   const ticketSelectFields =
-    'id,title,due_datetime,execution_target,status,priority,delegate,is_read,updated_at,board_position,organization_id,project_id,everhour_task_id,schedule_id,organization:organizations(name),project:projects(name,color,everhour_project_id)';
+    'id,ticket_id,ticket_sequence,title,due_datetime,execution_target,status,priority,delegate,is_read,updated_at,board_position,organization_id,project_id,everhour_task_id,schedule_id,organization:organizations(name),project:projects(name,color,everhour_project_id)';
 
   // Always fetch board/list data per status. Calendar data is fetched
   // client-side on demand via TanStack Query prefetch in TicketsBoardClient.

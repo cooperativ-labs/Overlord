@@ -216,6 +216,7 @@ export function DraftObjective({
           <InlineEditField
             ref={editFieldRef}
             alwaysEditing
+            autoFocus={!isFuture}
             autoListContinuation="enter"
             displayClassName="text-base leading-relaxed"
             field="objective"

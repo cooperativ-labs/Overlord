@@ -2,6 +2,40 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2605241345.0] - 2026-05-24:13:45
+
+### Added
+- Move per-resource project binding from root **`overlord.json`** to **`.overlord/project.json`**, with **`.overlord/tmp`** and **`.overlord/logs`** workspaces and automatic **`.gitignore`** entries for scratch paths when a resource is registered.
+- Add a user **Execution Targets** settings page (terminal profiles, SSH targets, and labels) under app settings.
+- Add **Edit title** for objectives from the objective menu via **`updateObjectiveTitleAction`**.
+- Show compact **ticket identifiers** on Kanban cards, list cards, and the ticket panel header.
+- Gate Slack workspace and per-project Slack settings behind a new **`slack` app feature** flag (disabled by default; migration seeds the feature row).
+- Introduce **`RootThemeProvider`** on the root layout so marketing and app routes share one theme stack.
+
+### Fixed
+- Disable auto-focus on the draft objective editor for **future** objectives so expanding a queued objective does not steal keyboard focus.
+- Write agent launch context, permission-hook scratch files, and SSH remote temp files under **`.overlord/tmp`** (or the project checkout) instead of system **`/tmp`**.
+
+### Changed
+- Point desktop agent permission bundles (Claude, Cursor, Antigravity, OpenCode) at **`.overlord/tmp`** read/write rules instead of **`/tmp`**.
+- Hide Slack integration UI in user and project settings unless the **`slack`** app feature is enabled.
+- Simplify the marketing layout theme wiring and highlight the active option in the marketing theme toggle.
+
+### Security
+- None.
+
+### Removed
+- Remove per-objective **checkpoint revert** controls and project-wide checkpoint prune actions from the ticket objectives section.
+
+### Documentation
+- Update protocol **deliver** docs, public protocol help, launch prompts, and **`overlord-ticket`** plugin references for **`.overlord/project.json`** and **`.overlord/tmp/deliver.json`**.
+
+### Test
+- Add **`local-config`** unit tests for **`.overlord/project.json`** creation and gitignore entries.
+
+### Chore
+- Bump workspace and CLI package versions to **`0.2605241345.0`**; replace repo-root **`overlord.json`** with **`.overlord/project.json`**.
+
 ## [0.2605241101.0] - 2026-05-24:11:01
 
 ### Added

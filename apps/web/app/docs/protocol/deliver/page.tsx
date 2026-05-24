@@ -30,12 +30,13 @@ Use \`--payload-json\` when the full delivery object fits inline on the command 
 
 Use \`--payload-file -\` to stream a full delivery JSON payload on stdin. This keeps summaries, artifacts, and change rationales in one structured JSON document without creating a temporary delivery file that needs cleanup.
 
-File-backed payloads are still supported when stdin is not available, but they should be treated as ephemeral scratch data outside the repository.
+File-backed payloads are still supported when stdin is not available, but they should be treated as ephemeral scratch data under 
+        .overlord /tmp
 
 ## Related pages
 
-- [Artifacts](/docs/protocol/artifacts)
-- [Review & delivery](/docs/workflow/review)
+      - [Artifacts](/docs/protocol/artifacts)
+      - [Review & delivery](/docs/workflow/review)
       `}
     </DocsMarkdownPage>
   );

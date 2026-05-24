@@ -94,6 +94,7 @@ type ProjectSettingsModalProps = {
   }>;
   hasEverhourApiKey: boolean;
   sshFeatureEnabled: boolean;
+  slackEnabled?: boolean;
   initialNav?: ProjectSettingsNavSection;
 };
 
@@ -116,6 +117,7 @@ export function ProjectSettingsModal({
   initialStatuses,
   hasEverhourApiKey,
   sshFeatureEnabled,
+  slackEnabled = false,
   initialNav
 }: ProjectSettingsModalProps) {
   const [activeNav, setActiveNav] = useState<string>('Resources');
@@ -234,6 +236,7 @@ export function ProjectSettingsModal({
                   organizationId={organizationId}
                   initialEverhourProjectId={initialEverhourProjectId}
                   hasEverhourApiKey={hasEverhourApiKey}
+                  slackEnabled={slackEnabled}
                   open={open}
                 />
               )}

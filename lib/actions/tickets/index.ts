@@ -19,7 +19,8 @@ export {
   promoteFutureObjectiveAction,
   reorderFutureObjectivesAction,
   setObjectiveAutoAdvanceAction,
-  updateObjectiveBodyAction
+  updateObjectiveBodyAction,
+  updateObjectiveTitleAction
 } from './ticket-objectives';
 export {
   getFeedDiscussPromptForCopy,

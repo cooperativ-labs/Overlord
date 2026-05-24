@@ -46,6 +46,8 @@ export function buildBoardScope(input: {
 export function toBoardTicket(ticket: Ticket): BoardTicket {
   return {
     id: ticket.id,
+    ticket_id: ticket.ticket_id,
+    ticket_sequence: ticket.ticket_sequence,
     title: ticket.title,
     objective: ticket.objective,
     organization_id: ticket.organization_id,

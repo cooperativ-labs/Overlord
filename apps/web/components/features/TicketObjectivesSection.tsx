@@ -17,14 +17,13 @@ import {
   verticalListSortingStrategy
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical, Trash2 } from 'lucide-react';
+import { GripVertical } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
 import { AddTicketObjectiveButton } from '@/components/features/AddTicketObjectiveButton';
 import { DraftObjective } from '@/components/features/DraftObjective';
 import { ObjectiveCollapsibleItem } from '@/components/features/ObjectiveCollapsibleItem';
-import { type ButtonLoadingState, LoadingButton } from '@/components/ui/loading-button';
 import type { ObjectiveAttachment } from '@/lib/actions/attachments';
 import { clearAwaitingApprovalAction, reorderFutureObjectivesAction } from '@/lib/actions/tickets';
 import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
@@ -45,12 +44,6 @@ import type { ObjectiveRow } from '@/types/objectives';
 const reorderFutureObjectivesActionWithRetry = withElectronActionRetry(
   reorderFutureObjectivesAction
 );
-
-type ObjectiveCheckpoint = {
-  git_ref_name: string | null;
-  git_commit_id: string | null;
-  checkpoint_kind: string;
-};
 
 type ObjectiveSessionResume = {
   agentIdentifier: string;
@@ -73,9 +66,6 @@ type TicketObjectivesSectionProps = {
   remoteWorkingDirectory?: string | null;
   sshEnabled?: boolean;
   hasProjectWorkingDirectory?: boolean;
-  checkpointsByObjectiveId?: Record<string, ObjectiveCheckpoint>;
-  allProjectCheckpointObjectiveIds?: string[];
-  gitRevertFeatureEnabled?: boolean;
   sessionsByObjectiveId?: Record<string, ObjectiveSessionResume>;
 };
 
@@ -234,13 +224,8 @@ export function TicketObjectivesSection({
   remoteWorkingDirectory,
   sshEnabled,
   hasProjectWorkingDirectory,
-  checkpointsByObjectiveId,
-  allProjectCheckpointObjectiveIds = [],
-  gitRevertFeatureEnabled = false,
   sessionsByObjectiveId = {}
 }: TicketObjectivesSectionProps) {
-  const [pruneState, setPruneState] = useState<ButtonLoadingState>('default');
-  const [pruneMessage, setPruneMessage] = useState<string | null>(null);
   const objectives = useTicketObjectivesRealtime({
     ticketId,
     initialObjectives
@@ -367,43 +352,6 @@ export function TicketObjectivesSection({
     hasProjectWorkingDirectory
   };
 
-  async function handlePruneCheckpoints() {
-    if (!workingDirectory) {
-      setPruneState('error');
-      setPruneMessage('No working directory is configured for this project.');
-      return;
-    }
-    const pruneCheckpoints = window.electronAPI?.filesystem?.pruneCheckpoints;
-    if (!pruneCheckpoints) {
-      setPruneState('error');
-      setPruneMessage('Checkpoint cleanup is only available in the Overlord desktop app.');
-      return;
-    }
-
-    setPruneState('loading');
-    setPruneMessage(null);
-    try {
-      const result = await pruneCheckpoints({
-        directory: workingDirectory,
-        keepObjectiveIds: allProjectCheckpointObjectiveIds
-      });
-      if (!result.ok) {
-        setPruneState('error');
-        setPruneMessage(result.error ?? 'Failed to prune checkpoints.');
-        return;
-      }
-      setPruneState('success');
-      setPruneMessage(
-        result.pruned.length > 0
-          ? `Pruned ${result.pruned.length} stale checkpoint ref${result.pruned.length === 1 ? '' : 's'}.`
-          : 'No stale checkpoint refs found.'
-      );
-    } catch (error) {
-      setPruneState('error');
-      setPruneMessage(error instanceof Error ? error.message : 'Failed to prune checkpoints.');
-    }
-  }
-
   return (
     <div className="flex flex-col pb-5">
       <div className="px-5">
@@ -419,8 +367,6 @@ export function TicketObjectivesSection({
                   attachments={objectiveAttachments.filter(
                     attachment => attachment.objectiveId === objective.id
                   )}
-                  checkpoint={checkpointsByObjectiveId?.[objective.id] ?? null}
-                  gitRevertFeatureEnabled={gitRevertFeatureEnabled}
                   workingDirectory={workingDirectory}
                   resumeAgentIdentifier={
                     sessionsByObjectiveId[objective.id]?.agentIdentifier ??
@@ -430,33 +376,6 @@ export function TicketObjectivesSection({
                 />
               ))}
             </div>
-            {gitRevertFeatureEnabled ? (
-              <div className="mb-3 flex flex-wrap items-center gap-2">
-                <LoadingButton
-                  buttonState={pruneState}
-                  setButtonState={setPruneState}
-                  reset={true}
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 gap-1 px-2 text-[11px] text-muted-foreground"
-                  text={
-                    <>
-                      <Trash2 className="h-3 w-3" />
-                      Prune stale checkpoints
-                    </>
-                  }
-                  loadingText="Pruning..."
-                  successText="Pruned"
-                  errorText="Prune failed"
-                  disabled={!workingDirectory}
-                  onClick={handlePruneCheckpoints}
-                />
-                {pruneMessage ? (
-                  <p className="text-[11px] text-muted-foreground">{pruneMessage}</p>
-                ) : null}
-              </div>
-            ) : null}
           </>
         ) : null}
 
