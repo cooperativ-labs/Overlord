@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2605241431.0] - 2026-05-24:14:31
+
+### Added
+- None.
+
+### Fixed
+- None.
+
+### Changed
+- Update icon images for agent connector plugins.
+
+### Security
+- None.
+
 ## [0.2605241345.0] - 2026-05-24:13:45
 
 ### Added
