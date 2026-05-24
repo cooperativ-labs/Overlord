@@ -5,7 +5,7 @@ import type { Metadata } from 'next';
 import { Toaster } from 'sonner';
 
 import { ServiceWorkerRegister } from '@/components/pwa/ServiceWorkerRegister';
-import { ThemeProvider } from '@/components/theme-provider';
+import { RootThemeProvider } from '@/components/root-theme-provider';
 import { getSiteMetadataBaseUrl } from '@/lib/env';
 import { displayFont, monoFont } from '@/lib/fonts';
 
@@ -35,16 +35,11 @@ export default async function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${displayFont.variable} ${monoFont.variable}`}>
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="system"
-          enableSystem
-          disableTransitionOnChange
-        >
+        <RootThemeProvider>
           <ServiceWorkerRegister />
           {children}
           <Toaster />
-        </ThemeProvider>
+        </RootThemeProvider>
         <Analytics />
       </body>
     </html>

@@ -57,15 +57,15 @@ export function MarketingThemeToggle() {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-[10rem]">
-        <DropdownMenuItem onClick={() => setTheme('light')}>
+        <DropdownMenuItem onClick={() => setTheme('light')} className={resolved === 'light' ? 'bg-accent' : ''}>
           <Sun className="mr-2 size-4" />
           Light
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setTheme('dark')}>
+        <DropdownMenuItem onClick={() => setTheme('dark')} className={resolved === 'dark' ? 'bg-accent' : ''}>
           <Moon className="mr-2 size-4" />
           Dark
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setTheme('system')}>
+        <DropdownMenuItem onClick={() => setTheme('system')} className={resolved === 'system' ? 'bg-accent' : ''}>
           <Monitor className="mr-2 size-4" />
           System
         </DropdownMenuItem>
