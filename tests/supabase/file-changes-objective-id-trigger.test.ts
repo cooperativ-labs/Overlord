@@ -41,7 +41,7 @@ async function insertObjective(
     completedAt
   }: {
     ticketId: string;
-    state: 'executing' | 'complete' | 'draft' | 'submitted' | 'future';
+    state: 'executing' | 'pending_delivery' | 'complete' | 'draft' | 'submitted' | 'future';
     objective: string;
     createdAt: string;
     completedAt?: string | null;

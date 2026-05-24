@@ -21,6 +21,17 @@
           }
         ]
       }
-    ]
+    ]{{#if hooks.stopCommand}},
+    "Stop": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "{{hooks.stopCommand}}"
+          }
+        ]
+      }
+    ]{{/if}}
   }
 }

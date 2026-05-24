@@ -2,8 +2,9 @@ import * as Sentry from '@sentry/nextjs';
 import { NextResponse } from 'next/server';
 
 import { parseProtocolBody } from '@/app/api/protocol/_lib';
+import { checkDeliveryStatus } from '@/lib/overlord/follow-up-delivery';
 import { isLikelyOverlordAgentLaunchPrompt } from '@/lib/overlord/is-overlord-agent-launch-prompt';
-import { resolveTicketId } from '@/lib/overlord/protocol-db';
+import { resolveSession, resolveTicketId } from '@/lib/overlord/protocol-db';
 import { hookEventSchema } from '@/lib/overlord/validation';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
@@ -16,7 +17,14 @@ export async function POST(request: Request) {
   if (!parsed.ok) return parsed.errorResponse;
 
   try {
-    const { hookType, prompt, ticketId: rawTicketId, turnIndex } = parsed.data;
+    const {
+      followUpIntent,
+      hookType,
+      prompt,
+      sessionKey,
+      ticketId: rawTicketId,
+      turnIndex
+    } = parsed.data;
     const { organizationId, userId } = parsed.tokenContext;
     const promptLength = prompt?.trim().length ?? 0;
 
@@ -81,6 +89,7 @@ export async function POST(request: Request) {
         ticket_id: ticketId,
         created_by: userId,
         payload: {
+          follow_up_intent: followUpIntent ?? 'discussion',
           hook_type: 'UserPromptSubmit',
           turn_index: turnIndex ?? null
         },
@@ -98,6 +107,21 @@ export async function POST(request: Request) {
       }
 
       return okResponse();
+    }
+
+    if (hookType === 'Stop' && sessionKey) {
+      const sessionResult = await resolveSession(sessionKey, ticketId, organizationId);
+      if (sessionResult.session) {
+        const deliveryStatus = await checkDeliveryStatus({ supabase, ticketId });
+
+        console.warn('[protocol:hook-event] stop hook delivery check', {
+          ticketId,
+          deliveryNeeded: deliveryStatus.needed,
+          signals: deliveryStatus.signals
+        });
+
+        return NextResponse.json({ ok: true, deliveryStatus });
+      }
     }
 
     const { error } = await supabase.from('ticket_events').insert({
@@ -122,7 +146,7 @@ export async function POST(request: Request) {
       });
     }
 
-    return okResponse();
+    return NextResponse.json({ ok: true, deliveryStatus: null });
   } catch (error) {
     console.error('[protocol:hook-event] internal error:', error);
     Sentry.captureException(error);

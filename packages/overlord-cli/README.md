@@ -127,7 +127,7 @@ Agents can find docs here: https://www.ovld.ai/docs/for-agents
 - `create` - create a draft ticket without attaching (standalone or follow-up)
 - `prompt` - create a ticket and attach to it immediately (`spawn` is a backward-compatible alias)
 - `record-work` - record already-completed chat work as a ticket in review with a completed objective and trigger feed-post generation
-- `update` - post progress, activity events, and optional change rationales
+- `update` - post progress, discussion/decision events, optional change rationales, and explicit `--begin-follow-up-work` transitions
 - `record-change-rationales` - persist structured change rationales without a normal progress update
 - `ask` - post a blocking question and move the ticket to review
 - `permission-request` - notify Overlord that the agent is requesting tool permission
@@ -150,6 +150,8 @@ Devices are keyed by **(organization, user, fingerprint)** so the same physical 
 Use `create` for future work you want to track, `prompt` for work that should start immediately, and `record-work` for work that was already completed in chat and now needs a review ticket plus feed post. Use multiple tickets when prompts represent different features or goals; use `add-objectives` or `--objectives-json '[{"objective":"Step one"},{"objective":"Step two"}]'` when prompts are sequential steps toward the same feature or goal.
 
 `ovld protocol deliver` accepts either discrete flags like `--summary` / `--artifacts-json`, an inline full payload with `--payload-json '{"summary":"...","artifacts":[...],"changeRationales":[...]}'`, or a file/stdin payload with `--payload-file <path|->`.
+
+After delivery, follow-up messages are recorded as discussion by default. To start implementation again on a delivered/review ticket, call `ovld protocol update --begin-follow-up-work --follow-up-intent execution --summary "Beginning follow-up work."` before moving back to `--phase execute`. Use `--event-type discussion_summary` or `--event-type decision` for important non-file outcomes. Once follow-up execution records a real work signal, such as an execution update, git snapshot, change rationales, deliverables, or explicit `pending_delivery` intent, Overlord marks the objective `pending_delivery` so redelivery is only required for actual post-delivery work.
 
 ## License
 

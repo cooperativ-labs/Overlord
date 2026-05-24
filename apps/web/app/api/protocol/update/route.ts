@@ -11,6 +11,7 @@ import {
 } from '@/lib/overlord/agent-notifications';
 import { upsertObjectiveCheckpoint } from '@/lib/overlord/checkpoints';
 import { insertFileChanges } from '@/lib/overlord/file-changes';
+import { markObjectivePendingDeliveryAfterPriorDelivery } from '@/lib/overlord/follow-up-delivery';
 import { emitWorkflowNotification } from '@/lib/overlord/notifications/orchestrator';
 import { resolveSession, resolveTicketId } from '@/lib/overlord/protocol-db';
 import { updateSchema } from '@/lib/overlord/validation';
@@ -29,9 +30,11 @@ export async function POST(request: Request) {
   try {
     const {
       changeRationales,
+      beginFollowUpWork,
       eventType,
       externalSessionId,
       externalUrl,
+      followUpIntent,
       payload,
       phase,
       snapshot,
@@ -55,9 +58,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: resolved.error }, { status: 404 });
     }
 
-    // Detect when an agent continues working on a ticket that was already delivered.
-    // This typically happens when a user sends a follow-up to a still-running agent.
-    // Auto-transition the ticket back to execute and reactivate the session.
+    // Delivered/review tickets stay in discussion until the agent explicitly
+    // starts follow-up implementation.
     const { data: currentTicket } = await supabase
       .from('tickets')
       .select('status')
@@ -70,7 +72,17 @@ export async function POST(request: Request) {
     const isResumeAfterDelivery =
       currentStatusType === 'review' || currentStatusType === 'complete';
 
-    if (isResumeAfterDelivery) {
+    if (isResumeAfterDelivery && phase === 'execute' && !beginFollowUpWork) {
+      return NextResponse.json(
+        {
+          error:
+            'Delivered/review tickets require beginFollowUpWork=true before moving back to execute.'
+        },
+        { status: 400 }
+      );
+    }
+
+    if (isResumeAfterDelivery && beginFollowUpWork) {
       const executeStatusName = await resolvePreferredStatusNameByType(
         supabase,
         organizationId,
@@ -80,15 +92,19 @@ export async function POST(request: Request) {
         supabase.from('tickets').update({ status: executeStatusName }).eq('id', ticketId),
         supabase
           .from('agent_sessions')
-          .update({ session_state: 'active', detached_at: null })
+          .update({ session_state: 'attached', detached_at: null })
           .eq('id', resolved.session.id),
         supabase.from('ticket_events').insert({
           event_type: 'ticket_reopened',
           phase: 'execute',
           objective_id: resolved.session.objective_id,
-          summary: 'Ticket resumed — agent continued working after delivery.',
+          summary: 'Follow-up work explicitly started after delivery.',
           ticket_id: ticketId,
-          created_by: userId
+          created_by: userId,
+          payload: {
+            follow_up_intent: 'execution',
+            transition: 'begin_follow_up_work'
+          }
         }),
         // Reactivate only the most recently completed objective back to executing.
         // PostgREST ignores .order()/.limit() on UPDATE, so we first fetch the ID
@@ -120,11 +136,19 @@ export async function POST(request: Request) {
       ]);
     }
 
+    const eventPayload = {
+      ...payload,
+      ...(followUpIntent || beginFollowUpWork
+        ? { follow_up_intent: beginFollowUpWork ? 'execution' : followUpIntent }
+        : {}),
+      ...(beginFollowUpWork ? { transition: 'begin_follow_up_work' } : {})
+    };
+
     const { data: event, error: eventError } = await supabase
       .from('ticket_events')
       .insert({
         event_type: eventType ?? 'update',
-        payload,
+        payload: eventPayload,
         phase: phase ?? null,
         objective_id: resolved.session.objective_id,
         summary,
@@ -177,6 +201,24 @@ export async function POST(request: Request) {
         });
         // Non-fatal: continue with update even if rationale insertion fails
       }
+    }
+
+    const pendingDeliveryResult = await markObjectivePendingDeliveryAfterPriorDelivery({
+      supabase: typedSupabase,
+      ticketId,
+      objectiveId: resolved.session.objective_id,
+      signal: {
+        beginFollowUpWork,
+        changeRationales,
+        eventType: eventType ?? 'update',
+        followUpIntent: beginFollowUpWork ? 'execution' : followUpIntent,
+        phase: phase ?? null,
+        payload,
+        snapshot
+      }
+    });
+    if (pendingDeliveryResult.error) {
+      return NextResponse.json({ error: pendingDeliveryResult.error }, { status: 500 });
     }
 
     if (externalUrl !== undefined || externalSessionId !== undefined) {
@@ -300,7 +342,7 @@ export async function POST(request: Request) {
           .from('objectives')
           .update({ state: 'complete', completed_at: completedAt })
           .eq('ticket_id', ticketId)
-          .eq('state', 'executing');
+          .in('state', ['executing', 'pending_delivery']);
         if (objectiveError) {
           return NextResponse.json({ error: objectiveError.message }, { status: 500 });
         }

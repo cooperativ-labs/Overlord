@@ -59,7 +59,8 @@ Phases: \`draft\`, \`execute\`, \`review\`, \`deliver\`, \`complete\`, \`blocked
 Use \`execute\` while actively working.
 
 Event types: \`update\` (default), \`user_follow_up\` (verbatim human follow-ups after the initial
-ticket, normally posted by installed connector hooks), \`alert\` (non-blocking warnings).
+ticket, normally posted by installed connector hooks), \`alert\` (non-blocking warnings),
+\`discussion_summary\`, and \`decision\`.
 
 \`\`\`bash
 # Record a verbatim follow-up only when the connector hook is unavailable
@@ -71,6 +72,34 @@ ovld protocol update \\
 
 You can also attach structured change rationales on any update; see
 [Context &amp; artifacts](/docs/for-agents/context-and-artifacts).
+
+After a prior delivery, Overlord marks the objective \`pending_delivery\` only when follow-up
+execution records work, such as an execution update, git snapshot, change rationale, deliverable
+payload, or explicit \`pending_delivery\` intent. Discussion and decision events stay out of the
+redelivery lifecycle.
+
+### Turn-ended delivery check
+
+When a connector supports it (e.g. Claude Code via the Stop hook), Overlord checks whether the
+session has pending delivery work after each agent turn. The check is non-blocking — it does not
+force delivery after every message. Instead, it returns a \`deliveryStatus\` object that the
+connector can use to guide the agent.
+
+\`\`\`bash
+ovld protocol hook-event \\
+  --hook-type Stop --ticket-id "$TICKET_ID" \\
+  --session-key "$SESSION_KEY"
+\`\`\`
+
+Response when delivery is needed:
+\`\`\`json
+{ "ok": true, "deliveryStatus": { "needed": true, "reason": "...", "signals": ["objective_pending_delivery"] } }
+\`\`\`
+
+Response when no delivery is needed:
+\`\`\`json
+{ "ok": true, "deliveryStatus": { "needed": false, "reason": null, "signals": [] } }
+\`\`\`
 
 ## 3. Ask (only when blocked)
 
@@ -153,6 +182,36 @@ Where \`delivery.json\` contains:
 \`\`\`
 
 Supported artifact types: \`next_steps\`, \`test_results\`, \`migration\`, \`note\`, \`url\`, \`decision\`.
+
+## 5. Post-Delivery Follow-Up
+
+After a successful delivery the ticket moves to review. The session stays open for questions.
+
+**Discussion mode (default):** Answer questions and clarifications without reopening execution.
+Record important non-file outcomes with \`--event-type decision\` or \`--event-type discussion_summary\`.
+These events stay in discussion intent and do not trigger redelivery.
+
+**Entering follow-up execution:** Only begin follow-up execution when the human explicitly asks for
+file or code changes. Before making any changes, signal the intent:
+
+\`\`\`bash
+ovld protocol update \\
+  --session-key "$SESSION_KEY" --ticket-id "$TICKET_ID" \\
+  --begin-follow-up-work --follow-up-intent execution \\
+  --summary "Beginning follow-up: updating the retry timeout as requested."
+\`\`\`
+
+**During follow-up execution:** Post progress updates and record change rationales for every
+file modified, the same as during initial execution.
+
+**Re-delivering:** Once follow-up execution is complete, deliver again with a summary of what changed.
+
+\`\`\`bash
+ovld protocol deliver \\
+  --session-key "$SESSION_KEY" --ticket-id "$TICKET_ID" \\
+  --summary "Follow-up: reduced retry timeout from 30s to 10s as requested." \\
+  --change-rationales-json '[...]'
+\`\`\`
 
 ## Creating new tickets from an agent runtime
 

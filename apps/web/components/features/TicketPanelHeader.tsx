@@ -86,7 +86,7 @@ export function TicketPanelHeader({
             currentProjectId={projectId}
             projects={projects}
           />
-          <div className="h-3.5 w-px bg-border" />
+
           <TicketStatusSelect
             ticketId={ticketId}
             currentStatus={currentStatus}

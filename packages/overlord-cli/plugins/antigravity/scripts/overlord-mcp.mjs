@@ -327,7 +327,8 @@ const tools = [
   },
   {
     name: 'update',
-    description: 'Post an Overlord progress update or activity event.',
+    description:
+      'Post an Overlord progress update or activity event. Use begin_follow_up_work to explicitly reopen delivered/review tickets for follow-up execution.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -341,7 +342,15 @@ const tools = [
           type: 'string',
           enum: ['draft', 'execute', 'review', 'deliver', 'complete', 'blocked', 'cancelled']
         },
-        event_type: { type: 'string', enum: ['update', 'user_follow_up', 'alert'] },
+        event_type: {
+          type: 'string',
+          enum: ['update', 'user_follow_up', 'alert', 'discussion_summary', 'decision']
+        },
+        begin_follow_up_work: { type: 'boolean' },
+        follow_up_intent: {
+          type: 'string',
+          enum: ['discussion', 'execution', 'pending_delivery']
+        },
         external_url: { type: ['string', 'null'] },
         external_session_id: { type: ['string', 'null'] },
         payload: { type: 'object' },
@@ -355,6 +364,8 @@ const tools = [
       summary: args.summary,
       phase: args.phase,
       'event-type': args.event_type,
+      ...(args.begin_follow_up_work ? { 'begin-follow-up-work': true } : {}),
+      'follow-up-intent': args.follow_up_intent,
       'external-url': args.external_url,
       'external-session-id': args.external_session_id,
       'payload-json': args.payload,
@@ -394,7 +405,7 @@ const tools = [
   {
     name: 'record_hook_event',
     description:
-      'Record a hook lifecycle event for a ticket without requiring a session key. Stop is reserved for future lifecycle hooks.',
+      "Record a hook lifecycle event for a ticket. Use hookType='Stop' with a session_key to check whether delivery is needed after a turn ends.",
     inputSchema: {
       type: 'object',
       properties: {
@@ -404,7 +415,16 @@ const tools = [
           description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.'
         },
         prompt: { type: 'string' },
-        turn_index: { type: 'number' }
+        turn_index: { type: 'number' },
+        follow_up_intent: {
+          type: 'string',
+          enum: ['discussion', 'execution', 'pending_delivery']
+        },
+        session_key: {
+          type: 'string',
+          description:
+            'Optional session key for Stop hooks. When provided, the response includes deliveryStatus indicating whether delivery is needed.'
+        }
       },
       required: ['hook_type', 'ticket_id']
     },
@@ -412,7 +432,9 @@ const tools = [
       'hook-type': args.hook_type,
       'ticket-id': args.ticket_id,
       prompt: args.prompt,
-      'turn-index': args.turn_index
+      'turn-index': args.turn_index,
+      'follow-up-intent': args.follow_up_intent,
+      'session-key': args.session_key
     }),
     subcommand: 'hook-event'
   },
@@ -760,6 +782,10 @@ const tools = [
         device_platform: {
           type: 'string',
           description: 'e.g. darwin, linux, win32.'
+        },
+        device_port: {
+          type: 'integer',
+          description: 'SSH port for placeholder reconciliation when multiple targets share the same host.'
         }
       },
       required: ['device_fingerprint']
@@ -771,7 +797,8 @@ const tools = [
         : {}),
       ...(typeof args.device_platform === 'string' && args.device_platform.trim().length > 0
         ? { 'device-platform': args.device_platform }
-        : {})
+        : {}),
+      ...(typeof args.device_port === 'number' ? { 'device-port': args.device_port } : {})
     }),
     subcommand: 'get-device'
   },
@@ -833,7 +860,11 @@ const tools = [
         label: { type: 'string' },
         is_primary: { type: 'boolean' },
         device_hostname: { type: 'string' },
-        device_platform: { type: 'string' }
+        device_platform: { type: 'string' },
+        device_port: {
+          type: 'integer',
+          description: 'SSH port for placeholder reconciliation when multiple targets share the same host.'
+        }
       },
       required: ['project_id', 'device_fingerprint']
     },
@@ -850,7 +881,8 @@ const tools = [
         : {}),
       ...(typeof args.device_platform === 'string' && args.device_platform.trim().length > 0
         ? { 'device-platform': args.device_platform }
-        : {})
+        : {}),
+      ...(typeof args.device_port === 'number' ? { 'device-port': args.device_port } : {})
     }),
     subcommand: 'add-project-resource'
   },
@@ -884,6 +916,40 @@ const tools = [
         : {})
     }),
     subcommand: 'update-project-resource'
+  },
+  {
+    name: 'request_approval_gate',
+    description:
+      'Flip the next queued future objective on this ticket to require manual human approval before it runs. Use sparingly — only when your current work surfaced a question, risk, or decision a human must make before the next objective auto-launches.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        session_key: { type: 'string' },
+        ticket_id: {
+          type: 'string',
+          description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.'
+        },
+        reason: {
+          type: 'string',
+          description:
+            'Why a human must approve before the next objective runs. Rendered in the awaiting-approval banner verbatim.'
+        },
+        objective_id: {
+          type: 'string',
+          description: 'Optional UUID of a specific future objective to gate. Defaults to the next.'
+        }
+      },
+      required: ['session_key', 'ticket_id', 'reason']
+    },
+    toCliFlags: args => ({
+      'session-key': args.session_key,
+      'ticket-id': args.ticket_id,
+      reason: args.reason,
+      ...(typeof args.objective_id === 'string' && args.objective_id.trim().length > 0
+        ? { 'objective-id': args.objective_id }
+        : {})
+    }),
+    subcommand: 'request-approval-gate'
   },
   {
     name: 'request_execution',
@@ -1190,7 +1256,7 @@ async function handleRequest(message) {
       },
       serverInfo: {
         name: 'overlord',
-        version: '0.1.0'
+        version: '0.1.1'
       },
       instructions:
         'Use these tools to drive Overlord ticket workflows through the installed ovld CLI. Names mirror hosted MCP tools (attach, update, deliver, get_device, list_project_resources, …). Session tools need attach/connect. Devices are scoped to organization + user + fingerprint — call get_device before add_project_resource.'

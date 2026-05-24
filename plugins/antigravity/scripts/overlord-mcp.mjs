@@ -327,7 +327,8 @@ const tools = [
   },
   {
     name: 'update',
-    description: 'Post an Overlord progress update or activity event.',
+    description:
+      'Post an Overlord progress update or activity event. Use begin_follow_up_work to explicitly reopen delivered/review tickets for follow-up execution.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -341,7 +342,15 @@ const tools = [
           type: 'string',
           enum: ['draft', 'execute', 'review', 'deliver', 'complete', 'blocked', 'cancelled']
         },
-        event_type: { type: 'string', enum: ['update', 'user_follow_up', 'alert'] },
+        event_type: {
+          type: 'string',
+          enum: ['update', 'user_follow_up', 'alert', 'discussion_summary', 'decision']
+        },
+        begin_follow_up_work: { type: 'boolean' },
+        follow_up_intent: {
+          type: 'string',
+          enum: ['discussion', 'execution', 'pending_delivery']
+        },
         external_url: { type: ['string', 'null'] },
         external_session_id: { type: ['string', 'null'] },
         payload: { type: 'object' },
@@ -355,6 +364,8 @@ const tools = [
       summary: args.summary,
       phase: args.phase,
       'event-type': args.event_type,
+      ...(args.begin_follow_up_work ? { 'begin-follow-up-work': true } : {}),
+      'follow-up-intent': args.follow_up_intent,
       'external-url': args.external_url,
       'external-session-id': args.external_session_id,
       'payload-json': args.payload,
@@ -404,7 +415,11 @@ const tools = [
           description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.'
         },
         prompt: { type: 'string' },
-        turn_index: { type: 'number' }
+        turn_index: { type: 'number' },
+        follow_up_intent: {
+          type: 'string',
+          enum: ['discussion', 'execution', 'pending_delivery']
+        }
       },
       required: ['hook_type', 'ticket_id']
     },
@@ -412,7 +427,8 @@ const tools = [
       'hook-type': args.hook_type,
       'ticket-id': args.ticket_id,
       prompt: args.prompt,
-      'turn-index': args.turn_index
+      'turn-index': args.turn_index,
+      'follow-up-intent': args.follow_up_intent
     }),
     subcommand: 'hook-event'
   },
@@ -1190,7 +1206,7 @@ async function handleRequest(message) {
       },
       serverInfo: {
         name: 'overlord',
-        version: '0.1.0'
+        version: '0.1.1'
       },
       instructions:
         'Use these tools to drive Overlord ticket workflows through the installed ovld CLI. Names mirror hosted MCP tools (attach, update, deliver, get_device, list_project_resources, …). Session tools need attach/connect. Devices are scoped to organization + user + fingerprint — call get_device before add_project_resource.'

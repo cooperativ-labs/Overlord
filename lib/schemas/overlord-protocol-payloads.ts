@@ -38,13 +38,17 @@ export const ArtifactSchema = z.object({
 export type Artifact = z.infer<typeof ArtifactSchema>;
 
 export const EventType = z
-  .enum(['update', 'user_follow_up', 'alert'])
+  .enum(['update', 'user_follow_up', 'alert', 'discussion_summary', 'decision'])
   .default('update')
   .describe('Type of activity event to publish');
 
 export const Phase = z
   .enum(['draft', 'execute', 'review', 'deliver', 'complete', 'blocked', 'cancelled'])
   .default('execute');
+
+export const FollowUpIntent = z
+  .enum(['discussion', 'execution', 'pending_delivery'])
+  .describe('Intent for post-delivery follow-up lifecycle handling');
 
 // Protocol Payloads
 
@@ -69,6 +73,11 @@ export const UpdatePayloadSchema = z.object({
   externalSessionId: z.string().nullable().optional(),
   phase: Phase.optional(),
   eventType: EventType.optional(),
+  beginFollowUpWork: z
+    .boolean()
+    .optional()
+    .describe('Explicitly reopen a delivered/review ticket for follow-up execution'),
+  followUpIntent: FollowUpIntent.optional(),
   changeRationales: z
     .array(ChangeRationaleSchema)
     .optional()

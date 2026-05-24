@@ -8,6 +8,34 @@ import { resolveSession } from '../session.ts';
 import { insertChangeRationales } from './_change-rationales.ts';
 import { upsertObjectiveCheckpoint } from './_checkpoints.ts';
 
+async function markObjectivePendingDeliveryAfterPriorDelivery(
+  supabase: SupabaseClient,
+  input: {
+    ticketId: string;
+    objectiveId: string;
+  }
+): Promise<string | null> {
+  const { data: priorDelivery, error: deliveryError } = await supabase
+    .from('ticket_events')
+    .select('id')
+    .eq('ticket_id', input.ticketId)
+    .eq('event_type', 'deliver')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (deliveryError) return deliveryError.message;
+  if (!priorDelivery) return null;
+
+  const { error } = await supabase
+    .from('objectives')
+    .update({ state: 'pending_delivery' })
+    .eq('id', input.objectiveId)
+    .eq('ticket_id', input.ticketId)
+    .in('state', ['executing', 'submitted', 'draft', 'complete']);
+
+  return error?.message ?? null;
+}
+
 export async function handleRecordChangeRationales(
   supabase: SupabaseClient,
   args: any,
@@ -94,6 +122,12 @@ export async function handleRecordChangeRationales(
     ticketId
   });
   if (rationaleResult.error) return toolErr(rationaleResult.error);
+
+  const pendingDeliveryError = await markObjectivePendingDeliveryAfterPriorDelivery(supabase, {
+    ticketId,
+    objectiveId: resolved.session.objective_id
+  });
+  if (pendingDeliveryError) return toolErr(pendingDeliveryError);
 
   return toolOk({ count: rationaleResult.count, ok: true });
 }

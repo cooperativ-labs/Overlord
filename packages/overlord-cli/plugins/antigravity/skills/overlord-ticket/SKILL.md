@@ -15,7 +15,7 @@ Use this mode when the prompt already contains a ticket ID or explicitly says th
 2. Keep the returned `session.sessionKey` for all follow-up calls.
 3. Treat the Overlord ticket prompt as authoritative for the objective, constraints, and delivery target.
 4. Post updates while working with `ovld protocol update --phase execute`.
-5. Follow-up messages after the initial ticket are captured automatically by the installed `UserPromptSubmit` hook. Do not post `user_follow_up` manually unless the hook is unavailable.
+5. Follow-up messages after the initial ticket are captured automatically by the installed `UserPromptSubmit` hook and stay in discussion intent while the ticket is in review. Do not post `user_follow_up` manually unless the hook is unavailable.
 6. If blocked, call `ovld protocol ask` and stop.
 7. Deliver last with `ovld protocol deliver`, including `changeRationales` for each meaningful behavioral file change.
 
@@ -60,6 +60,14 @@ Event types:
 - `update` for standard progress updates
 - `user_follow_up` for human follow-up messages after the initial ticket when the automatic hook is unavailable
 - `alert` for warnings or non-blocking issues
+- `discussion_summary` for important discussion outcomes that should remain visible on the ticket
+- `decision` for explicit non-file decisions made during follow-up discussion
+
+Post-delivery follow-up modes:
+
+- User follow-up messages default to `discussion` intent while the ticket is in review.
+- Use `ovld protocol update --begin-follow-up-work --follow-up-intent execution --summary "Beginning follow-up work."` before moving a delivered/review ticket back to execution.
+- Use `--follow-up-intent pending_delivery` when implementation is complete but final delivery is still being prepared.
 
 Ask when blocked:
 
@@ -256,12 +264,16 @@ This keeps the ticket feed readable while preserving the full document in versio
 - Always attach first and always deliver last once you are on a ticket.
 - Use `ovld protocol` commands and the plugin's slash commands instead of ad hoc scripts.
 - Do not invent protocol subcommands. Use `ovld protocol help` when unsure.
+- After delivery, answer ordinary questions and clarifications in discussion mode; only begin follow-up execution when the user explicitly asks for file or code changes.
+- When explicit follow-up implementation starts on a delivered/review ticket, call `ovld protocol update --begin-follow-up-work --follow-up-intent execution --summary "Beginning follow-up work."` before code changes or `--phase execute`.
+- During follow-up execution, post progress updates and record change rationales for each file modified, the same as during initial execution.
+- Record important non-file decisions with `--event-type decision` or `--event-type discussion_summary`.
 - The `summary` in deliver is what the PM reads first, so write it as a narrative, not a command list.
 - When a summary or question contains backticks, `$vars`, or other shell-special characters, always use `--summary-file -` (or `--question-file -`) with a single-quoted heredoc (`<<'EOF'`). Never retry by stripping or escaping content — pipe stdin instead.
 - Use `write-context` for facts a future agent session should know.
 - If a protocol or MCP call fails with auth/session errors, run `ovld auth repair` yourself before asking the user to log in again or proceed without Overlord updates.
 - If you must run `ovld auth login`, `--organization-id <id>` is optional — use it only when you want to set a different default organization than the CLI would choose automatically.
 - Do not add or commit changes unless the user explicitly asks you to commit.
-- Delivery is the concluding step. After delivering, stop unless the user follows up or the ticket is reopened.
+- Delivery is the concluding step. After delivering, stop implementation work unless the user explicitly asks for follow-up execution; once follow-up execution is complete, deliver again.
 
-<!-- version: 0.1.2 -->
+<!-- version: 0.1.4 -->

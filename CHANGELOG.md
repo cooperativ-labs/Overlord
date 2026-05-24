@@ -2,6 +2,41 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2605241101.0] - 2026-05-24:11:01
+
+### Added
+- Add **`pending_delivery`** objective state when follow-up execution after a prior delivery produces work that still needs redelivery.
+- Add protocol follow-up controls on **`update`**: **`beginFollowUpWork`** / **`--begin-follow-up-work`** and **`followUpIntent`** / **`--follow-up-intent`** (`discussion`, `execution`, `pending_delivery`) so agents can reopen delivered tickets for execution or signal delivery-in-progress without treating every message as executable work.
+- Add ticket event types **`discussion_summary`** and **`decision`** for important non-file follow-up outcomes that should not force redelivery on their own.
+- Return **`deliveryStatus`** from **`hook-event`** when a Stop hook supplies **`sessionKey`**, indicating whether redelivery is needed and why.
+- Install a Claude **Stop** lifecycle hook that checks pending delivery at end of turn and logs guidance to **`~/.ovld/logs/stop-hook.log`** (non-blocking; does not auto-deliver).
+- Add a security docs page for **external providers** (Gemini summarization, Supabase, Vercel) with links to each vendor’s security posture.
+
+### Fixed
+- Prevent the initial launch prompt from being mis-recorded as **`user_follow_up`** when early lifecycle hooks fire before session context is established.
+- Surface execution-queue failures from the agent launch button with an error toast instead of failing silently.
+
+### Changed
+- After a prior **`deliver`**, mark the objective **`pending_delivery`** only when follow-up work signals are meaningful (execution updates, git snapshots, change rationales, deliverables, or explicit **`pending_delivery`** intent); keep discussion, clarification, and decision traffic out of the redelivery lifecycle.
+- Show **Pending delivery** on objective rows in the ticket panel when follow-up work is ready to deliver again.
+- Let **`deliver`** complete objectives in **`pending_delivery`** as well as **`executing`**.
+- Expand future objectives on focus with an explicit collapse control instead of hover-only expansion.
+- Align Antigravity local MCP with **`request_approval_gate`** and **`device_port`** on **`get_device`** / **`add_project_resource`**; document **`--device-port`** in public protocol help.
+
+### Security
+- None.
+
+### Documentation
+- Expand for-agents **lifecycle** docs for follow-up intents, Stop hooks, and **`deliveryStatus`**.
+- Update public protocol help and users guide for post-delivery follow-up and redelivery rules.
+- Refresh connector-surfaces guidance and **`overlord-ticket`** plugin references across Claude, Cursor, Codex, and Antigravity bundles.
+
+### Test
+- Add **`follow-up-delivery`** unit tests for meaningful work-signal detection and discussion/decision exclusions.
+
+### Chore
+- Add migrations for **`pending_delivery`** objective state and new ticket event types; bump workspace and CLI package versions to **`0.2605241101.0`**; regenerate Supabase types.
+
 ## [0.2605240843.0] - 2026-05-24:08:43
 
 ### Added

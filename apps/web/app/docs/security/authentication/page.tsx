@@ -33,6 +33,7 @@ Local Electron-hosted protocol routes can rely on an additional local secret whe
 
 ## Related pages
 
+- [External providers](/docs/security/external-providers)
 - [Protocol reference](/docs/protocol)
 - [MCP server](/docs/surfaces/mcp-server)
       `}

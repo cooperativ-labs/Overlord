@@ -309,7 +309,11 @@ export async function insertOrderedObjectives(
     )
   );
   const hasActiveObjective = ((existingRows ?? []) as Array<{ state: ObjectiveState | null }>).some(
-    row => row.state === 'draft' || row.state === 'submitted' || row.state === 'executing'
+    row =>
+      row.state === 'draft' ||
+      row.state === 'submitted' ||
+      row.state === 'executing' ||
+      row.state === 'pending_delivery'
   );
   const firstState =
     options.firstState ??
@@ -535,7 +539,7 @@ export async function markSubmittedObjectiveExecuting(
       ).data;
 
   // Re-attach fallback: when there's no submitted/draft objective but the
-  // ticket already has an executing one, return it without changing state.
+  // ticket already has an executing or pending-delivery one, return it without changing state.
   // This makes attach/connect idempotent so an agent that lost its SESSION_KEY
   // mid-run (e.g. in a terminal) can recover by re-attaching.
   if (!launchObjective || !normalizeObjectiveText(launchObjective.objective)) {
@@ -543,7 +547,7 @@ export async function markSubmittedObjectiveExecuting(
       .from('objectives')
       .select('id,objective,state,assigned_agent')
       .eq('ticket_id', ticketId)
-      .eq('state', 'executing')
+      .in('state', ['executing', 'pending_delivery'])
       .order('position', { ascending: true })
       .order('created_at', { ascending: true })
       .limit(1)

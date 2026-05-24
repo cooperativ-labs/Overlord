@@ -1023,6 +1023,8 @@ async function protocolUpdate(args) {
       : {}),
     ...(flags.phase ? { phase: String(flags.phase) } : {}),
     ...(flags['event-type'] ? { eventType: String(flags['event-type']) } : {}),
+    ...(flags['begin-follow-up-work'] !== undefined ? { beginFollowUpWork: true } : {}),
+    ...(flags['follow-up-intent'] ? { followUpIntent: String(flags['follow-up-intent']) } : {}),
     ...(flags['payload-json']
       ? { payload: parseJsonFlag('--payload-json', flags['payload-json']) }
       : {}),
@@ -1204,13 +1206,17 @@ async function protocolHookEvent(args) {
     await resolveProtocolAuthForFlags(flags, ticketId);
   const timeoutMs = resolveTimeout(flags);
 
+  const sessionKey = String(flags['session-key'] ?? process.env.SESSION_KEY ?? '');
+
   const body = {
     hookType,
     ticketId,
     ...(flags.prompt !== undefined ? { prompt: String(flags.prompt) } : {}),
     ...(flags['turn-index'] !== undefined
       ? { turnIndex: parseInt(String(flags['turn-index']), 10) }
-      : {})
+      : {}),
+    ...(flags['follow-up-intent'] ? { followUpIntent: String(flags['follow-up-intent']) } : {}),
+    ...(sessionKey ? { sessionKey } : {})
   };
 
   try {
@@ -2696,14 +2702,22 @@ update:
     --summary <text> or --summary-file <path|->
   Optional:
     --phase <status>          draft | execute | review | deliver | complete | blocked | cancelled
-    --event-type <type>       update | user_follow_up | alert
+    --event-type <type>       update | user_follow_up | alert | discussion_summary | decision
+    --begin-follow-up-work    Explicitly reopen a delivered/review ticket for execution
+    --follow-up-intent <mode> discussion | execution | pending_delivery
     --payload-json <json>     Additional structured payload, for example notifications
     --external-url <url|null> Store or clear a deep link to the live agent session
     --external-session-id <id|null>
     --change-rationales-json <json>
     --change-rationales-file <path>
   Notes:
-    Use phase=execute while actively working. user_follow_up is for verbatim human follow-up messages.
+    Use phase=execute while actively working. For delivered/review tickets, pass
+    --begin-follow-up-work before moving back to execute. user_follow_up is for
+    verbatim human follow-up messages; discussion_summary and decision record
+    important non-file follow-up outcomes. After a prior delivery, execution
+    updates, git snapshots, change rationales, or explicit pending_delivery
+    intent mark the objective as pending_delivery so redelivery is required
+    only when follow-up execution produced work.
     Pass --summary-file - to read the summary from stdin — avoids shell interpretation of backticks,
     quotes, or other special characters in the summary text.
 
@@ -2750,6 +2764,7 @@ hook-event:
   Optional:
     --prompt <text>
     --turn-index <n>
+    --follow-up-intent <mode> discussion | execution | pending_delivery
 
 read-context:
   Purpose:

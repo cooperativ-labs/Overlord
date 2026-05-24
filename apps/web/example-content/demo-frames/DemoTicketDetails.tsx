@@ -330,14 +330,14 @@ function DemoFutureObjective({ objective }: { objective: DemoObjective }) {
         <GripVertical className="h-4 w-4" />
       </div>
       <div className="min-w-0 flex-1 overflow-hidden rounded-xl border border-border/35 bg-muted/20 opacity-70 transition-opacity focus-within:opacity-100">
-        <div className="group/future">
-          <div className="relative max-h-[3.25rem] overflow-hidden transition-[max-height] duration-200 ease-in-out group-hover/future:max-h-[500px] group-focus-within/future:max-h-[500px]">
+        <div>
+          <div className="relative max-h-[3.25rem] overflow-hidden transition-[max-height] duration-200 ease-in-out focus-within:max-h-[500px]">
             <div className="px-3 pt-3">
               <p className="whitespace-pre-wrap text-base leading-relaxed text-muted-foreground">
                 {objective.body}
               </p>
             </div>
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-background/80 to-transparent transition-opacity duration-200 group-hover/future:opacity-0 group-focus-within/future:opacity-0" />
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-background/80 to-transparent transition-opacity duration-200 focus-within:opacity-0" />
           </div>
           <div className="border-t border-border/40">
             <DemoObjectiveAgentControls objective={objective} isFuture />

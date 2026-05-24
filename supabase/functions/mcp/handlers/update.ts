@@ -45,12 +45,77 @@ function readModelIdentifierFromAssignedAgent(assignedAgent: unknown): string | 
   return typeof model === 'string' && model.trim().length > 0 ? model.trim() : null;
 }
 
+function hasMeaningfulCollection(value: unknown): boolean {
+  if (Array.isArray(value)) return value.length > 0;
+  if (value && typeof value === 'object') return Object.keys(value).length > 0;
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+function hasMeaningfulFollowUpWorkSignal(input: {
+  beginFollowUpWork?: boolean;
+  changeRationales?: unknown[];
+  eventType?: string;
+  followUpIntent?: string;
+  phase?: string;
+  payload?: Record<string, unknown>;
+  snapshot?: { diffStat?: string | null; gitCommitId?: string | null } | null;
+}): boolean {
+  if (input.beginFollowUpWork) return false;
+  if ((input.changeRationales?.length ?? 0) > 0) return true;
+  if (input.snapshot?.gitCommitId?.trim()) return true;
+  if (input.snapshot?.diffStat?.trim()) return true;
+  if (input.followUpIntent === 'pending_delivery') return true;
+  if (
+    hasMeaningfulCollection(input.payload?.artifacts) ||
+    hasMeaningfulCollection(input.payload?.deliverables)
+  ) {
+    return true;
+  }
+
+  const isExecutionIntent = input.followUpIntent === 'execution' || input.phase === 'execute';
+  return isExecutionIntent && (input.eventType ?? 'update') === 'update';
+}
+
+async function markObjectivePendingDeliveryAfterPriorDelivery(
+  supabase: SupabaseClient,
+  input: {
+    ticketId: string;
+    objectiveId: string;
+    signal: Parameters<typeof hasMeaningfulFollowUpWorkSignal>[0];
+  }
+): Promise<string | null> {
+  if (!hasMeaningfulFollowUpWorkSignal(input.signal)) return null;
+
+  const { data: priorDelivery, error: deliveryError } = await supabase
+    .from('ticket_events')
+    .select('id')
+    .eq('ticket_id', input.ticketId)
+    .eq('event_type', 'deliver')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (deliveryError) return deliveryError.message;
+  if (!priorDelivery) return null;
+
+  const { error } = await supabase
+    .from('objectives')
+    .update({ state: 'pending_delivery' })
+    .eq('id', input.objectiveId)
+    .eq('ticket_id', input.ticketId)
+    .in('state', ['executing', 'submitted', 'draft', 'complete']);
+
+  return error?.message ?? null;
+}
+
 export async function handleUpdate(supabase: SupabaseClient, args: any, ctx: TokenContext) {
   const {
     sessionKey,
     ticketId: rawTicketId,
     summary,
     phase,
+    beginFollowUpWork = false,
+    followUpIntent,
+    eventType = 'update',
     externalSessionId,
     externalUrl,
     payload = {},
@@ -67,8 +132,8 @@ export async function handleUpdate(supabase: SupabaseClient, args: any, ctx: Tok
   if (!resolved.session) return toolErr(resolved.error ?? 'Session not found.');
   const ticketId = resolved.resolvedTicketId!;
 
-  // Detect when an agent continues working on a ticket that was already delivered.
-  // Auto-transition the ticket back to execute and reactivate the session.
+  // Delivered/review tickets stay in discussion until the agent explicitly
+  // starts follow-up implementation.
   const { data: currentTicket } = await supabase
     .from('tickets')
     .select('status')
@@ -84,7 +149,13 @@ export async function handleUpdate(supabase: SupabaseClient, args: any, ctx: Tok
     : null;
   const isResumeAfterDelivery = currentStatusType === 'review' || currentStatusType === 'complete';
 
-  if (isResumeAfterDelivery) {
+  if (isResumeAfterDelivery && phase === 'execute' && !beginFollowUpWork) {
+    return toolErr(
+      'Delivered/review tickets require beginFollowUpWork=true before moving back to execute.'
+    );
+  }
+
+  if (isResumeAfterDelivery && beginFollowUpWork) {
     const executeStatusName = await resolvePreferredStatusNameByType(
       supabase,
       ctx.organizationId,
@@ -94,15 +165,19 @@ export async function handleUpdate(supabase: SupabaseClient, args: any, ctx: Tok
       supabase.from('tickets').update({ status: executeStatusName }).eq('id', ticketId),
       supabase
         .from('agent_sessions')
-        .update({ session_state: 'active', detached_at: null })
+        .update({ session_state: 'attached', detached_at: null })
         .eq('id', resolved.session.id),
       supabase.from('ticket_events').insert({
         event_type: 'ticket_reopened',
         phase: 'execute',
         objective_id: resolved.session.objective_id,
-        summary: 'Ticket resumed — agent continued working after delivery.',
+        summary: 'Follow-up work explicitly started after delivery.',
         ticket_id: ticketId,
-        created_by: ctx.userId
+        created_by: ctx.userId,
+        payload: {
+          follow_up_intent: 'execution',
+          transition: 'begin_follow_up_work'
+        }
       }),
       supabase
         .from('objectives')
@@ -129,11 +204,19 @@ export async function handleUpdate(supabase: SupabaseClient, args: any, ctx: Tok
     ]);
   }
 
+  const eventPayload = {
+    ...payload,
+    ...(followUpIntent || beginFollowUpWork
+      ? { follow_up_intent: beginFollowUpWork ? 'execution' : followUpIntent }
+      : {}),
+    ...(beginFollowUpWork ? { transition: 'begin_follow_up_work' } : {})
+  };
+
   const { data: event, error: eventErr } = await supabase
     .from('ticket_events')
     .insert({
-      event_type: 'update',
-      payload,
+      event_type: eventType,
+      payload: eventPayload,
       phase: phase ?? null,
       objective_id: resolved.session.objective_id,
       summary,
@@ -182,6 +265,21 @@ export async function handleUpdate(supabase: SupabaseClient, args: any, ctx: Tok
     });
     if (rationaleResult.error) return toolErr(rationaleResult.error);
   }
+
+  const pendingDeliveryError = await markObjectivePendingDeliveryAfterPriorDelivery(supabase, {
+    ticketId,
+    objectiveId: resolved.session.objective_id,
+    signal: {
+      beginFollowUpWork,
+      changeRationales,
+      eventType,
+      followUpIntent: beginFollowUpWork ? 'execution' : followUpIntent,
+      phase,
+      payload,
+      snapshot
+    }
+  });
+  if (pendingDeliveryError) return toolErr(pendingDeliveryError);
 
   if (externalUrl !== undefined || externalSessionId !== undefined) {
     const sessionUpdate: Record<string, string | null> = {};
@@ -253,7 +351,7 @@ export async function handleUpdate(supabase: SupabaseClient, args: any, ctx: Tok
         .from('objectives')
         .update({ state: 'complete', completed_at: new Date().toISOString() })
         .eq('ticket_id', ticketId)
-        .eq('state', 'executing');
+        .in('state', ['executing', 'pending_delivery']);
     }
 
     await supabase.from('tickets').update(ticketUpdate).eq('id', ticketId);

@@ -31,7 +31,7 @@ export type UpsertCheckpointArgs = {
 
 /**
  * Resolve the active objective for a ticket. Falls back to the most recently
- * created objective if none are currently 'executing'.
+ * created objective if none are currently executing or pending delivery.
  */
 async function resolveObjectiveId(
   supabase: SupabaseClient<Database>,
@@ -43,7 +43,7 @@ async function resolveObjectiveId(
     .from('objectives')
     .select('id')
     .eq('ticket_id', ticketId)
-    .eq('state', 'executing')
+    .in('state', ['executing', 'pending_delivery'])
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();

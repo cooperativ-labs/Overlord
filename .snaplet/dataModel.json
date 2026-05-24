@@ -560,6 +560,13 @@
             "session_key"
           ],
           "nullNotDistinct": false
+        },
+        {
+          "name": "agent_sessions_one_active_per_objective_idx",
+          "fields": [
+            "objective_id"
+          ],
+          "nullNotDistinct": false
         }
       ]
     },
@@ -8584,13 +8591,6 @@
           "nullNotDistinct": false
         },
         {
-          "name": "objectives_one_draft_per_ticket_idx",
-          "fields": [
-            "ticket_id"
-          ],
-          "nullNotDistinct": false
-        },
-        {
           "name": "objectives_ticket_position_unique_idx",
           "fields": [
             "position",
@@ -10856,7 +10856,8 @@
         {
           "name": "project_tag_definitions_project_id_label_key",
           "fields": [
-            "project_id"
+            "project_id",
+            "label"
           ],
           "nullNotDistinct": false
         }

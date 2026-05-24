@@ -335,7 +335,7 @@ describe('createExecutionRequest', () => {
         organizationId: ORG_ID,
         requestedFrom: 'manual_run'
       })
-    ).rejects.toThrow('Ticket is not configured for agent execution.');
+    ).rejects.toThrow('Ticket execution target is "human", not "agent".');
   });
 
   it('rejects objectives that are not launchable', async () => {

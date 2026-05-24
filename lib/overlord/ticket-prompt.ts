@@ -232,7 +232,7 @@ function buildAntigravityBundledLocalProtocolSection({
   const discussionGuidance =
     launchMode === 'ask'
       ? '- This is Ask mode: discuss the ticket, do not implement, and do not publish `user_follow_up` events for normal discussion turns.'
-      : '- Follow-up messages after the initial ticket are captured automatically by the installed Antigravity `UserPromptSubmit` hook when it is wired. Do not publish `user_follow_up` manually unless the hook is unavailable.';
+      : '- Follow-up messages after the initial ticket are captured automatically by the installed Antigravity `UserPromptSubmit` hook when it is wired and stay in discussion intent while the ticket is in review. Do not publish `user_follow_up` manually unless the hook is unavailable.';
 
   return `## Overlord Protocol
 
@@ -264,7 +264,7 @@ function buildCodexBundledLocalProtocolSection({
   const discussionGuidance =
     launchMode === 'ask'
       ? '- This is Ask mode: discuss the ticket, do not implement, and do not publish `user_follow_up` events for normal discussion turns.'
-      : '- Follow-up messages after the initial ticket are captured automatically by the installed Codex plugin hook. Do not publish `user_follow_up` manually unless the hook is unavailable.';
+      : '- Follow-up messages after the initial ticket are captured automatically by the installed Codex plugin hook and stay in discussion intent while the ticket is in review. Do not publish `user_follow_up` manually unless the hook is unavailable.';
 
   return `## Overlord Protocol
 
@@ -297,7 +297,7 @@ function buildCodexLocalProtocolSection({
   const eventTypeHelp =
     launchMode === 'ask'
       ? 'Use `--event-type alert` only for non-blocking warnings. Do not publish `user_follow_up` during normal Ask-mode discussion.'
-      : 'Follow-up messages after the initial ticket are captured automatically by the installed Codex plugin hook. Do not publish `user_follow_up` manually unless the hook is unavailable.';
+      : 'Follow-up messages after the initial ticket are captured automatically by the installed Codex plugin hook and stay in discussion intent while the ticket is in review. Do not publish `user_follow_up` manually unless the hook is unavailable. Use `--begin-follow-up-work --follow-up-intent execution` before moving a delivered/review ticket back to execute.';
 
   return `## Overlord Protocol
 
@@ -544,8 +544,8 @@ function buildMcpCloudProtocolSection({
   const mcpSection = mcpUrl ? buildMcpConfigSection(mcpUrl, ticketId) : '';
   const eventTypeHelp =
     launchMode === 'ask'
-      ? 'Optional: `eventType`: "update" | "alert" (do not use `user_follow_up` for normal Ask-mode discussion)'
-      : 'Optional: `eventType`: "update" | "user_follow_up" | "alert"';
+      ? 'Optional: `eventType`: "update" | "alert" | "discussion_summary" | "decision" (do not use `user_follow_up` for normal Ask-mode discussion)'
+      : 'Optional: `eventType`: "update" | "user_follow_up" | "alert" | "discussion_summary" | "decision". Optional: `beginFollowUpWork`: true when explicitly reopening a delivered/review ticket for execution. Optional: `followUpIntent`: "discussion" | "execution" | "pending_delivery".';
 
   return `## Overlord Protocol (MCP)
 
@@ -620,14 +620,14 @@ function buildLocalLaunchNote(context?: PromptContext): string {
 
 function buildLocalEventTypeHelp(launchMode: PromptLaunchMode): string {
   return launchMode === 'ask'
-    ? 'Pass `--event-type <type>` to publish a specific activity event (default: `update`). Available event types: `update`, `alert`. Do not post `user_follow_up` events during normal Ask-mode discussion.'
-    : 'Pass `--event-type <type>` to publish a specific activity event (default: `update`). Available event types:\n- `update` — standard progress update (default)\n- `user_follow_up` — a message or question from the human user when automatic hook capture is unavailable\n- `alert` — surface a warning or non-blocking alert';
+    ? 'Pass `--event-type <type>` to publish a specific activity event (default: `update`). Available event types: `update`, `alert`, `discussion_summary`, `decision`. Do not post `user_follow_up` events during normal Ask-mode discussion.'
+    : 'Pass `--event-type <type>` to publish a specific activity event (default: `update`). Available event types:\n- `update` — standard progress update (default)\n- `user_follow_up` — a message or question from the human user when automatic hook capture is unavailable\n- `alert` — surface a warning or non-blocking alert\n- `discussion_summary` — important discussion outcomes that should remain visible on the ticket\n- `decision` — explicit non-file decisions made during follow-up discussion';
 }
 
 function buildAskModeRules(launchMode: PromptLaunchMode): string {
   return launchMode === 'ask'
     ? '- Do not publish `user_follow_up` activity events for normal Ask-mode conversation turns.\n- **Before doing anything else**, present your current working directory to the user and ask them to confirm it is correct. Do NOT read, write, or modify any files until the user confirms.\n- **You MUST ask the user for explicit confirmation before creating, editing, or deleting any files.** Always present the intended changes and wait for approval.\n- Only save notes when the user explicitly asks. Save those notes as artifacts (Markdown files only when requested).\n- Do not implement or change code unless the user explicitly asks for implementation.'
-    : "- **If your connector does not capture follow-up messages automatically, immediately publish a `user_follow_up` activity event with the user's message recorded verbatim in the summary before doing anything else.**";
+    : "- **If your connector does not capture follow-up messages automatically, immediately publish a `user_follow_up` activity event with the user's message recorded verbatim in the summary before doing anything else.** Use `--follow-up-intent discussion` for ordinary post-delivery conversation.";
 }
 
 function buildLocalCoreRules(launchMode: PromptLaunchMode): string {
@@ -636,10 +636,14 @@ function buildLocalCoreRules(launchMode: PromptLaunchMode): string {
 - Always include \`changeRationales\` when delivering.
 - Record \`changeRationales\` only for meaningful behavioral changes. Skip formatting-only noise.
 - If blocked on human-only work, call \`ask\` and request a follow-up human ticket.
+- After delivery, answer ordinary questions and clarifications in discussion mode; only begin follow-up execution when the user explicitly asks for file or code changes.
+- When explicit follow-up implementation starts on a delivered/review ticket, call \`update\` with \`--begin-follow-up-work --follow-up-intent execution\` before code changes or \`--phase execute\`.
+- During follow-up execution, post progress updates and record change rationales for each file modified, the same as during initial execution.
+- Record important non-file decisions with \`--event-type decision\` or \`--event-type discussion_summary\`.
 - The \`summary\` in deliver is what the PM reads first — write it as a narrative, not a command list.
 - Use \`write-context\` for facts a future agent session should know.
 - **Do not add or commit changes (git commit) unless the user explicitly asks you to commit.**
-- **Delivery is the concluding step.** After delivering, stop working. Do not continue unless the user follows up or the ticket is reopened.
+- **Delivery is the concluding step.** After delivering, stop implementation work unless the user explicitly asks for follow-up execution; once follow-up execution is complete, deliver again.
 - **When creating follow-up tickets, set \`execution_target\` based on who should do the work:**
   - \`agent\` — any task an AI agent can complete in a computer environment (coding, research, document editing, data analysis, etc.)
   - \`human\` — any task requiring human presence or judgment (setting credentials in a third-party UI, sending a letter, making a product or business decision, physical-world actions)
@@ -650,7 +654,7 @@ function buildMcpCoreRules(launchMode: PromptLaunchMode): string {
   const askModeRules =
     launchMode === 'ask'
       ? '- Do not publish `user_follow_up` activity events for normal Ask-mode conversation turns.\n- **Before doing anything else**, present your current working directory to the user and ask them to confirm it is correct. Do NOT read, write, or modify any files until the user confirms.\n- **You MUST ask the user for explicit confirmation before creating, editing, or deleting any files.** Always present the intended changes and wait for approval.\n- Only save notes when the user explicitly asks. Save those notes as artifacts (Markdown files only when requested).\n- Do not implement or change code unless the user explicitly asks for implementation.'
-      : '- If user sends a message, publish `user_follow_up` event immediately with message verbatim.';
+      : '- If user sends a message, publish `user_follow_up` event immediately with message verbatim and `followUpIntent: "discussion"` unless they explicitly request follow-up execution.';
 
   return `- Always attach first; always deliver when done.
 - Post ≥1 update before delivering.
@@ -658,7 +662,11 @@ function buildMcpCoreRules(launchMode: PromptLaunchMode): string {
 - Treat \`changeRationales\` as structured ticket content persisted in the \`file_changes\` table, not as free-form notes.
 - If blocked, create a follow-up ticket.
 - **Do not add or commit changes (git commit) unless the user explicitly asks you to commit.**
-- **Delivery is the concluding step.** After delivering, stop working. Do not continue unless the user follows up or the ticket is reopened.
+- After delivery, answer ordinary questions and clarifications in discussion mode; only begin follow-up execution when the user explicitly asks for file or code changes.
+- When explicit follow-up implementation starts on a delivered/review ticket, call \`update\` with \`beginFollowUpWork: true\` and \`followUpIntent: "execution"\` before code changes or phase \`execute\`.
+- During follow-up execution, post progress updates and include \`changeRationales\` for each file modified, the same as during initial execution.
+- Record important non-file decisions with \`eventType: "decision"\` or \`eventType: "discussion_summary"\`.
+- **Delivery is the concluding step.** After delivering, stop implementation work unless the user explicitly asks for follow-up execution; once follow-up execution is complete, deliver again.
 - **When creating follow-up tickets via \`create_ticket\`, set \`executionTarget\` based on who should do the work:**
   - \`"agent"\` — tasks an AI agent can complete in a computer environment (coding, research, document editing, data analysis, etc.)
   - \`"human"\` — tasks requiring human presence or judgment (setting credentials in a third-party UI, sending a letter, making a product decision, physical-world actions)

@@ -172,6 +172,10 @@ const data = {
           url: '/docs/security/data-boundaries'
         },
         {
+          title: 'External Providers',
+          url: '/docs/security/external-providers'
+        },
+        {
           title: 'Authentication',
           url: '/docs/security/authentication'
         }

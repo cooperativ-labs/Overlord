@@ -261,6 +261,8 @@ Supported activity event types are:
 - `update` for normal progress
 - `user_follow_up` for a human message sent after the initial ticket
 - `alert` for a warning or non-blocking issue
+- `discussion_summary` for important discussion outcomes that should stay on the ticket
+- `decision` for explicit non-file decisions
 
 On connectors that support lifecycle hooks (Claude Code and Codex `UserPromptSubmit`, Cursor IDE `beforeSubmitPrompt` via `~/.cursor/hooks.json` after `ovld setup cursor` / desktop bundle install), follow-up user messages after the initial ticket are captured automatically and appear as `user_follow_up` events in the activity feed. If hooks are unavailable or misconfigured, the agent should publish the message verbatim before continuing:
 
@@ -270,8 +272,26 @@ ovld protocol update \
   --ticket-id <ticket_id> \
   --phase execute \
   --event-type user_follow_up \
+  --follow-up-intent discussion \
   --summary "User follow-up: <verbatim message>"
 ```
+
+Delivered tickets stay in review during ordinary follow-up discussion. Questions, answers, clarifications, decisions, and summaries are recorded as ticket events, but they do not restart execution by themselves. Only when the user explicitly asks for file or code changes should an agent begin follow-up execution. Before making any changes, the agent should first record that transition:
+
+```bash
+ovld protocol update \
+  --session-key <session-key> \
+  --ticket-id <ticket_id> \
+  --begin-follow-up-work \
+  --follow-up-intent execution \
+  --summary "Beginning follow-up work."
+```
+
+During follow-up execution the agent posts progress updates and records change rationales for each file modified, the same as during initial execution. Once the follow-up work is complete, the agent delivers again.
+
+Use `--event-type discussion_summary` or `--event-type decision` for important non-file outcomes that should be easy to find later.
+
+Once follow-up execution actually produces work after a prior delivery, Overlord marks the objective as `pending_delivery`. Work signals include execution updates, git snapshots, change rationale rows, deliverables, or an explicit `--follow-up-intent pending_delivery`. Discussion, clarification, and decision events do not require redelivery by themselves.
 
 ### 5. Ask When Blocked
 

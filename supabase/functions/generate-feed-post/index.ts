@@ -846,7 +846,7 @@ Deno.serve(async (req: Request) => {
       .from('objectives')
       .select('id, objective, agent_identifier, model_identifier')
       .eq('ticket_id', ticketId)
-      .in('state', ['executing', 'complete'])
+      .in('state', ['executing', 'pending_delivery', 'complete'])
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();

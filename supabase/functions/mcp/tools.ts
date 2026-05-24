@@ -143,6 +143,22 @@ export const TOOLS = [
           enum: ['draft', 'execute', 'review', 'deliver', 'complete', 'blocked', 'cancelled'],
           description: 'Current phase. Use "execute" while actively working.'
         },
+        eventType: {
+          type: 'string',
+          enum: ['update', 'user_follow_up', 'alert', 'discussion_summary', 'decision'],
+          description:
+            'Type of event to record. Use discussion_summary/decision for important non-file follow-up outcomes.'
+        },
+        beginFollowUpWork: {
+          type: 'boolean',
+          description:
+            'Required to move a delivered/review ticket back to execute for explicit follow-up implementation.'
+        },
+        followUpIntent: {
+          type: 'string',
+          enum: ['discussion', 'execution', 'pending_delivery'],
+          description: 'Intent for post-delivery follow-up lifecycle handling.'
+        },
         changeRationales: {
           type: 'array',
           description:
@@ -301,7 +317,7 @@ export const TOOLS = [
       openWorldHint: false
     },
     description:
-      "Record a hook lifecycle event for a ticket. Use hookType='UserPromptSubmit' to capture follow-up user messages without requiring a session key. Stop is reserved for future lifecycle hooks.",
+      "Record a hook lifecycle event for a ticket. Use hookType='UserPromptSubmit' to capture follow-up user messages. Use hookType='Stop' with a sessionKey to check whether delivery is needed after a turn ends.",
     inputSchema: {
       type: 'object',
       properties: {
@@ -318,6 +334,17 @@ export const TOOLS = [
           type: 'number',
           description:
             'Optional turn index. UserPromptSubmit skips turn 0 (the initial ticket prompt).'
+        },
+        followUpIntent: {
+          type: 'string',
+          enum: ['discussion', 'execution', 'pending_delivery'],
+          description:
+            'Intent to store on the captured follow-up event. Hooks should default to discussion.'
+        },
+        sessionKey: {
+          type: 'string',
+          description:
+            'Optional session key for Stop hooks. When provided, the response includes deliveryStatus indicating whether delivery is needed.'
         }
       },
       required: ['hookType', 'ticketId']
@@ -1099,6 +1126,11 @@ export const TOOLS = [
         devicePlatform: {
           type: 'string',
           description: "Platform: 'darwin', 'linux', or 'windows'."
+        },
+        devicePort: {
+          type: 'integer',
+          description:
+            'SSH port for placeholder reconciliation when multiple targets share the same host.'
         }
       },
       required: ['projectId', 'directoryPath', 'deviceFingerprint']

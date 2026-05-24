@@ -1670,6 +1670,19 @@ function getPlatformUrl() {
   return process.env.OVERLORD_URL || 'http://localhost:3000';
 }
 
+function printAgentPermissionsDescription() {
+  console.log('Agent permissions pre-approve the `ovld protocol` commands your coding');
+  console.log('agent runs to drive Overlord tickets (attach, update, deliver, etc.) so');
+  console.log('you aren\'t prompted to approve each call mid-task. Without this, the');
+  console.log('agent stalls on permission prompts for every protocol step.');
+  console.log('');
+  console.log('Where each agent\'s permission is written:');
+  console.log('  • Claude Code — ./.claude/settings.local.json (this directory only)');
+  console.log('  • OpenCode    — ~/.config/opencode/opencode.json (global)');
+  console.log('  • Codex       — prints a one-time command to run inside Codex');
+  console.log('Each entry is plain JSON you can review or remove at any time.\n');
+}
+
 function installAgentPermissions(agents, platformUrl) {
   console.log(`\nInstalling agent permissions for: ${agents.join(', ')}`);
   console.log(`Platform URL: ${platformUrl}\n`);
@@ -1878,6 +1891,7 @@ export async function runSetupCommand(args) {
     if (agentsThatNeedPermissions.length > 0) {
       console.log('Agent plugins/connectors prepared successfully!\n');
 
+      printAgentPermissionsDescription();
       const shouldInstallPermissions = await askYesNo(
         'Would you like to configure agent permissions for Overlord protocol access?',
         true
@@ -1923,8 +1937,10 @@ export async function runSetupCommand(args) {
     );
 
     if (agentsThatNeedPermissions.length > 0) {
+      console.log();
+      printAgentPermissionsDescription();
       const shouldInstallPermissions = await askYesNo(
-        '\nWould you like to configure agent permissions for Overlord protocol access?',
+        'Would you like to configure agent permissions for Overlord protocol access?',
         true
       );
 
@@ -1956,8 +1972,10 @@ export async function runSetupCommand(args) {
 
     // Offer permissions setup for single agent install too
     if (['claude', 'codex', 'opencode'].includes(agent)) {
+      console.log();
+      printAgentPermissionsDescription();
       const shouldInstallPermissions = await askYesNo(
-        '\nWould you like to configure agent permissions for Overlord protocol access?',
+        'Would you like to configure agent permissions for Overlord protocol access?',
         true
       );
 

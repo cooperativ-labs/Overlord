@@ -19,7 +19,7 @@ async function resolveObjectiveId(
     .from('objectives')
     .select('id')
     .eq('ticket_id', ticketId)
-    .eq('state', 'executing')
+    .in('state', ['executing', 'pending_delivery'])
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();

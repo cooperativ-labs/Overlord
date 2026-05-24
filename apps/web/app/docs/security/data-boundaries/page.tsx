@@ -34,6 +34,7 @@ If it is written into the ticket, assume it is part of the persistent record for
 ## Related pages
 
 - [Security overview](/docs/security)
+- [External providers](/docs/security/external-providers)
 - [Authentication](/docs/security/authentication)
       `}
     </DocsMarkdownPage>

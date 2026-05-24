@@ -55,8 +55,8 @@ Subcommands:
   update-project-resource     Update a resource directory's path, label, or primary status
 
 Environment fallback:
-  --session-key  <- SESSION_KEY
-  --ticket-id    <- TICKET_ID  (human-readable ticket_id, e.g. 1:899)
+  --session-key  <- SESSION_KEY or auto-persisted session from last attach/connect/prompt in this working directory
+  --ticket-id    <- TICKET_ID  or auto-persisted session (human-readable ticket_id, e.g. 1:899)
   auth/host     <- OVERLORD_URL, optional OVERLORD_ACCESS_TOKEN + OVERLORD_ORGANIZATION_ID, or shared OAuth credentials from ovld auth/Desktop login
   --timeout     <- OVERLORD_TIMEOUT
 
@@ -165,14 +165,22 @@ update:
     --summary <text> or --summary-file <path|->
   Optional:
     --phase <status>          draft | execute | review | deliver | complete | blocked | cancelled
-    --event-type <type>       update | user_follow_up | alert
+    --event-type <type>       update | user_follow_up | alert | discussion_summary | decision
+    --begin-follow-up-work    Explicitly reopen a delivered/review ticket for execution
+    --follow-up-intent <mode> discussion | execution | pending_delivery
     --payload-json <json>     Additional structured payload, for example notifications
     --external-url <url|null> Store or clear a deep link to the live agent session
     --external-session-id <id|null>
     --change-rationales-json <json>
     --change-rationales-file <path>
   Notes:
-    Use phase=execute while actively working. user_follow_up is for verbatim human follow-up messages.
+    Use phase=execute while actively working. For delivered/review tickets, pass
+    --begin-follow-up-work before moving back to execute. user_follow_up is for
+    verbatim human follow-up messages; discussion_summary and decision record
+    important non-file follow-up outcomes. After a prior delivery, execution
+    updates, git snapshots, change rationales, or explicit pending_delivery
+    intent mark the objective as pending_delivery so redelivery is required
+    only when follow-up execution produced work.
     Pass --summary-file - to read the summary from stdin — avoids shell interpretation of backticks,
     quotes, or other special characters in the summary text.
 
@@ -211,14 +219,19 @@ permission-request:
 
 hook-event:
   Purpose:
-    Record a lifecycle hook event for a ticket without requiring a session key.
-    This is primarily used by installed UserPromptSubmit hooks. Stop is reserved for future lifecycle hooks.
+    Record a lifecycle hook event for a ticket.
+    UserPromptSubmit captures follow-up user messages.
+    Stop checks whether the session has pending delivery work after a turn ends.
+    When --session-key is provided with Stop, the response includes a deliveryStatus
+    object indicating whether delivery is needed.
   Required:
     --hook-type <UserPromptSubmit|Stop>
     --ticket-id <ticket_id>
   Optional:
     --prompt <text>
     --turn-index <n>
+    --session-key <key>
+    --follow-up-intent <discussion|execution|pending_delivery>
 
 read-context:
   Purpose:
@@ -383,19 +396,20 @@ record-work:
 attachment-list:
   Required:
     --session-key <key>
-    --ticket-id <ticket_id>
+    one of: --objective-id <id> | --ticket-id <ticket_id>
   Optional:
-    --objective-id <id>       Filter to a single objective
+    --objective-id <id>       Filter to a single objective (also acts as ticket scope)
+    --ticket-id <ticket_id>   List every attachment for a ticket
   Returns:
     JSON array of { id, label, content_type, file_size, objective_id, storage_path, created_at }
 
 attachment-prepare-upload:
   Required:
     --session-key <key>
-    --ticket-id <ticket_id>
     --objective-id <id>
     --file-name <name>
   Optional:
+    --ticket-id <ticket_id>   Derived from --objective-id when omitted
     --label <text>
     --content-type <mime>
     --file-size <bytes>
@@ -404,11 +418,11 @@ attachment-prepare-upload:
 attachment-finalize-upload:
   Required:
     --session-key <key>
-    --ticket-id <ticket_id>
     --objective-id <id>
     --storage-path <path>
     --label <text>
   Optional:
+    --ticket-id <ticket_id>   Derived from --objective-id when omitted
     --content-type <mime>
     --file-size <bytes>
     --metadata-json <json>
@@ -416,19 +430,19 @@ attachment-finalize-upload:
 attachment-download-url:
   Required:
     --session-key <key>
-    --ticket-id <ticket_id>
     one of: --attachment-id <id> | --storage-path <path>
   Optional:
+    --ticket-id <ticket_id>   Derived from --attachment-id / --objective-id when omitted
     --objective-id <id>       Required when using --storage-path
     --expires-in <seconds>
 
 attachment-upload-file:
   Required:
     --session-key <key>
-    --ticket-id <ticket_id>
     --objective-id <id>
     --file <path>
   Optional:
+    --ticket-id <ticket_id>   Derived from --objective-id when omitted
     --file-name <name>        Defaults to basename of --file
     --label <text>            Defaults to file name
     --content-type <mime>     Defaults to application/octet-stream
@@ -440,6 +454,7 @@ get-device:
   Optional:
     --device-hostname <name>
     --device-platform <platform>  (darwin|linux|windows)
+    --device-port <port>          SSH port for placeholder reconciliation
 
 update-device:
   Required:
@@ -462,6 +477,7 @@ add-project-resource:
     --is-primary               Mark as primary directory for this device+project
     --device-hostname <name>
     --device-platform <platform>
+    --device-port <port>       SSH port for placeholder reconciliation
 
 update-project-resource:
   Required:
@@ -533,7 +549,8 @@ Examples:
   ovld protocol create --agent codex --session-key <key> --ticket-id <ticket_id> --objective "Capture follow-up work"
   ovld protocol prompt --agent codex --objective "Implement user auth" --priority high
   ovld protocol update --session-key <key> --ticket-id <ticket_id> --summary "Did X" --phase execute
-  ovld protocol update --session-key <key> --ticket-id <ticket_id> --summary-file ./update.txt --event-type user_follow_up
+  ovld protocol update --session-key <key> --ticket-id <ticket_id> --summary-file ./update.txt --event-type user_follow_up --follow-up-intent discussion
+  ovld protocol update --session-key <key> --ticket-id <ticket_id> --summary "Beginning follow-up work" --begin-follow-up-work --follow-up-intent execution
   ovld protocol record-change-rationales --session-key <key> --ticket-id <ticket_id> --change-rationales-json '[{"label":"...","file_path":"...","summary":"...","why":"...","impact":"...","hunks":[{"header":"@@ ... @@"}]}]'
   ovld protocol ask --session-key <key> --ticket-id <ticket_id> --question-file ./question.txt
   ovld protocol hook-event --hook-type UserPromptSubmit --ticket-id <ticket_id> --prompt "User follow-up" --turn-index 1

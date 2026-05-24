@@ -123,7 +123,7 @@ export interface Objective {
   id: string;
   objective: string;
   title: string | null;
-  state: 'draft' | 'future' | 'submitted' | 'executing' | 'complete';
+  state: 'draft' | 'future' | 'submitted' | 'executing' | 'pending_delivery' | 'complete';
   agent_identifier: string | null;
   model_identifier: string | null;
   assigned_agent: AssignedAgent | null;

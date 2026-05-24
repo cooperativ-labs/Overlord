@@ -249,7 +249,7 @@ export function AgentSplitButton({
 
     setIsLaunching(true);
     try {
-      await requestTicketObjectiveExecutionAction({
+      const result = await requestTicketObjectiveExecutionAction({
         ticketId,
         objectiveId: submitObjectiveId ?? undefined,
         agentIdentifier: agentValue,
@@ -271,6 +271,9 @@ export function AgentSplitButton({
           ? (effectiveSelection.thinking ?? undefined)
           : undefined
       });
+      if ('error' in result) {
+        toast.error('Failed to queue execution', { description: result.error });
+      }
     } catch (error) {
       console.error('Failed to queue execution:', error);
       toast.error('Failed to queue execution', {

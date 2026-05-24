@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import { internalErrorResponse, parseProtocolBody } from '@/app/api/protocol/_lib';
 import { upsertObjectiveCheckpoint } from '@/lib/overlord/checkpoints';
 import { insertFileChanges } from '@/lib/overlord/file-changes';
+import { markObjectivePendingDeliveryAfterPriorDelivery } from '@/lib/overlord/follow-up-delivery';
 import { resolveSession, resolveTicketId } from '@/lib/overlord/protocol-db';
 import { recordChangeRationalesSchema } from '@/lib/overlord/validation';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
@@ -95,6 +96,26 @@ export async function POST(request: Request) {
     });
     if (rationaleResult.error) {
       return NextResponse.json({ error: rationaleResult.error }, { status: 500 });
+    }
+
+    const pendingDeliveryResult = await markObjectivePendingDeliveryAfterPriorDelivery({
+      supabase: typedSupabase,
+      ticketId,
+      objectiveId: resolved.session.objective_id,
+      signal: {
+        changeRationales,
+        eventType: 'update',
+        followUpIntent: 'pending_delivery',
+        phase: phase ?? null,
+        payload: {
+          change_rationale_count: rationaleCount,
+          entry_type: 'file_changes'
+        },
+        snapshot
+      }
+    });
+    if (pendingDeliveryResult.error) {
+      return NextResponse.json({ error: pendingDeliveryResult.error }, { status: 500 });
     }
 
     return NextResponse.json({

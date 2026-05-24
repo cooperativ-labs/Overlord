@@ -2,22 +2,21 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { ticketStatuses } from '@/lib/overlord/types';
-import {
-  resolvePreferredStatusNameByType,
-  resolveStatusNameForPhase,
-  resolveStatusTypeForName
-} from '@/lib/ticket-statuses';
+import { resolveStatusNameForPhase } from '@/lib/ticket-statuses';
 import { createClientForRequest } from '@/supabase/utils/server';
 
 const createConversationEntrySchema = z
   .object({
-    entryType: z.enum(['answer', 'follow_up']).default('follow_up'),
+    entryType: z
+      .enum(['answer', 'follow_up', 'decision', 'discussion_summary'])
+      .default('follow_up'),
     message: z.string().min(1).max(20_000),
     parentEventId: z.string().uuid().optional(),
-    phase: z.enum(ticketStatuses).optional()
+    phase: z.enum(ticketStatuses).optional(),
+    followUpIntent: z.enum(['discussion', 'execution', 'pending_delivery']).optional()
   })
   .superRefine((value, ctx) => {
-    if (value.entryType === 'follow_up' && value.parentEventId) {
+    if (value.parentEventId && value.entryType !== 'answer') {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: 'parentEventId can only be set for answers.',
@@ -39,7 +38,7 @@ export async function POST(request: Request, { params }: RouteContext) {
       );
     }
 
-    const { entryType, message, parentEventId, phase } = parsedBody.data;
+    const { entryType, followUpIntent, message, parentEventId, phase } = parsedBody.data;
     const supabase = await createClientForRequest();
 
     const { data: ticket, error: ticketError } = await supabase
@@ -83,11 +82,17 @@ export async function POST(request: Request, { params }: RouteContext) {
 
     const payload = {
       entry_type: entryType,
+      follow_up_intent: followUpIntent ?? (phase === 'execute' ? 'execution' : 'discussion'),
       parent_event_id: parentEventId ?? null,
       source: 'user',
       message_verbatim: message
     };
-    const eventType = entryType === 'follow_up' ? 'user_follow_up' : 'answer';
+    const eventType =
+      entryType === 'follow_up'
+        ? 'user_follow_up'
+        : entryType === 'decision' || entryType === 'discussion_summary'
+          ? entryType
+          : 'answer';
 
     const { data: event, error: insertError } = await supabase
       .from('ticket_events')
@@ -110,21 +115,12 @@ export async function POST(request: Request, { params }: RouteContext) {
       );
     }
 
-    const currentStatusType = await resolveStatusTypeForName(
-      supabase,
-      ticket.organization_id,
-      ticket.status
-    );
-    const shouldMoveToExecute =
-      entryType === 'answer' &&
-      parentEventId &&
-      !phase &&
-      (currentStatusType === 'review' || ticket.status === 'blocked');
-
-    if (phase || shouldMoveToExecute) {
-      const nextStatusName = phase
-        ? await resolveStatusNameForPhase(supabase, ticket.organization_id, phase)
-        : await resolvePreferredStatusNameByType(supabase, ticket.organization_id, 'execute');
+    if (phase) {
+      const nextStatusName = await resolveStatusNameForPhase(
+        supabase,
+        ticket.organization_id,
+        phase
+      );
       const { error: statusError } = await supabase
         .from('tickets')
         .update({ status: nextStatusName })

@@ -120,7 +120,10 @@ export async function createExecutionRequest(
   if (ticketError) throw new Error(ticketError.message);
   if (!ticket) throw new Error('Ticket not found.');
   if (ticket.execution_target !== 'agent') {
-    throw new Error('Ticket is not configured for agent execution.');
+    throw new Error(
+      `Ticket execution target is "${ticket.execution_target}", not "agent". ` +
+        `Switch the execution target to "agent" in the ticket settings to enable agent runs.`
+    );
   }
 
   const objective = await resolveObjectiveForExecution(supabase, ticket.id, input.objectiveId);

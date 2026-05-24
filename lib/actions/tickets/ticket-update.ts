@@ -74,46 +74,55 @@ export async function requestTicketObjectiveExecutionAction(input: {
   remoteWorkingDirectory?: string | null;
   serverMultiplexer?: 'none' | 'tmux' | null;
   tmuxCommand?: string | null;
-}): Promise<{ requestId: string; status: string }> {
-  const supabase = await createClientForRequest();
-  const ticket = await assertTicketAccess(supabase, input.ticketId);
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
-  if (!user) throw new Error('Authentication required.');
+}): Promise<{ requestId: string; status: string } | { error: string }> {
+  try {
+    const supabase = await createClientForRequest();
+    const ticket = await assertTicketAccess(supabase, input.ticketId);
+    const {
+      data: { user }
+    } = await supabase.auth.getUser();
+    if (!user) return { error: 'Authentication required.' };
 
-  const result = await createExecutionRequest(supabase, {
-    ticketId: input.ticketId,
-    objectiveId: input.objectiveId ?? null,
-    userId: user.id,
-    organizationId: ticket.organization_id,
-    requestedFrom: 'manual_run',
-    agentIdentifier: input.agentIdentifier ?? null,
-    modelIdentifier: input.modelIdentifier ?? null,
-    thinkingLevel: input.thinkingLevel ?? null,
-    launchMode: 'run',
-    flags: input.flags ?? [],
-    workingDirectory: input.workingDirectory ?? null,
-    sshCommand: input.sshCommand ?? null,
-    remoteWorkingDirectory: input.remoteWorkingDirectory ?? null,
-    serverMultiplexer: input.serverMultiplexer ?? null,
-    tmuxCommand: input.tmuxCommand ?? null,
-    targetKind: input.sshCommand?.trim() ? 'ssh' : 'any'
-  });
-
-  revalidateTicketBoards();
-  revalidatePath(
-    buildProjectPath({ organizationId: ticket.organization_id, projectId: ticket.project_id })
-  );
-  revalidateTicketDetails([
-    {
+    const result = await createExecutionRequest(supabase, {
+      ticketId: input.ticketId,
+      objectiveId: input.objectiveId ?? null,
+      userId: user.id,
       organizationId: ticket.organization_id,
-      projectId: ticket.project_id,
-      ticketId: input.ticketId
-    }
-  ]);
+      requestedFrom: 'manual_run',
+      agentIdentifier: input.agentIdentifier ?? null,
+      modelIdentifier: input.modelIdentifier ?? null,
+      thinkingLevel: input.thinkingLevel ?? null,
+      launchMode: 'run',
+      flags: input.flags ?? [],
+      workingDirectory: input.workingDirectory ?? null,
+      sshCommand: input.sshCommand ?? null,
+      remoteWorkingDirectory: input.remoteWorkingDirectory ?? null,
+      serverMultiplexer: input.serverMultiplexer ?? null,
+      tmuxCommand: input.tmuxCommand ?? null,
+      targetKind: input.sshCommand?.trim() ? 'ssh' : 'any'
+    });
 
-  return { requestId: result.request.id, status: result.request.status };
+    revalidateTicketBoards();
+    revalidatePath(
+      buildProjectPath({ organizationId: ticket.organization_id, projectId: ticket.project_id })
+    );
+    revalidateTicketDetails([
+      {
+        organizationId: ticket.organization_id,
+        projectId: ticket.project_id,
+        ticketId: input.ticketId
+      }
+    ]);
+
+    return { requestId: result.request.id, status: result.request.status };
+  } catch (error) {
+    return {
+      error:
+        error instanceof Error && error.message.trim().length > 0
+          ? error.message
+          : 'Failed to queue execution. Check your connection and try again.'
+    };
+  }
 }
 
 export async function updateTicketAction(ticketId: string, formData: FormData) {

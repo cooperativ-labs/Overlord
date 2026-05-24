@@ -74,9 +74,14 @@ export function ObjectiveCollapsibleItem({
   const [safetyDialogOpen, setSafetyDialogOpen] = useState(false);
   const objectiveTimestamp = new Date(objective.created_at).toLocaleString();
   const isExecuting = objective.state === 'executing';
+  const isPendingDelivery = objective.state === 'pending_delivery';
   const agentType = getAgentTypeByIdentifier(objective.agent_identifier);
   const modelIdentifier = objective.model_identifier?.trim() || null;
-  const timestampLabel = isExecuting ? 'Executing since' : 'Completed';
+  const timestampLabel = isExecuting
+    ? 'Executing since'
+    : isPendingDelivery
+      ? 'Pending delivery since'
+      : 'Completed';
   const {
     attachments: objectiveAttachments,
     uploading,
@@ -166,7 +171,7 @@ export function ObjectiveCollapsibleItem({
     <>
       <Collapsible defaultOpen={false}>
         <div className="relative rounded-md overflow-hidden">
-          {isExecuting && (
+          {(isExecuting || isPendingDelivery) && (
             <div className="pointer-events-none absolute inset-0 -translate-x-full animate-[shimmer_2s_linear_infinite] bg-linear-to-r from-transparent via-emerald-500/20 to-transparent " />
           )}
           <div className={' flex items-center overflow-hidden rounded-md pr-1 hover:bg-background'}>
@@ -174,7 +179,7 @@ export function ObjectiveCollapsibleItem({
               <button
                 className={cn(
                   'relative flex flex-1 flex-col rounded-md pl-3 pr-1 py-2 text-left overflow-hidden min-w-0',
-                  !isExecuting && 'hover:bg-background'
+                  !isExecuting && !isPendingDelivery && 'hover:bg-background'
                 )}
                 type="button"
               >
@@ -182,6 +187,8 @@ export function ObjectiveCollapsibleItem({
                   <div className="flex items-center gap-2 min-w-0 flex-1">
                     {objective.state === 'executing' ? (
                       <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />
+                    ) : objective.state === 'pending_delivery' ? (
+                      <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-500" />
                     ) : objective.state === 'complete' ? (
                       <CheckCircle className="h-3.5 w-3.5 shrink-0 text-green-500" />
                     ) : null}

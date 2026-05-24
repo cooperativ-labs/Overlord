@@ -16,6 +16,8 @@ export const protocolEventTypes = [
   'answer',
   'update',
   'user_follow_up',
+  'discussion_summary',
+  'decision',
   'ticket_reopened',
   'context_write',
   'context_read',

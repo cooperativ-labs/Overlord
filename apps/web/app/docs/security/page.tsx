@@ -29,6 +29,7 @@ Treat ticket content as intentional shared record data.
 ## Related pages
 
 - [Data boundaries](/docs/security/data-boundaries)
+- [External providers](/docs/security/external-providers)
 - [Authentication](/docs/security/authentication)
       `}
     </DocsMarkdownPage>

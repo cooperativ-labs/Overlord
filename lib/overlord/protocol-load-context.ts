@@ -37,7 +37,7 @@ export async function runLoadContextProtocol(
     } as const;
   }
 
-  // Prefer the executing objective; fall back to submitted.
+  // Prefer the executing/pending-delivery objective; fall back to submitted.
   // Draft objectives are intentionally hidden from agent context on modern
   // schemas, but we keep a draft fallback for databases that have not picked
   // up the submitted-state migration yet.
@@ -45,7 +45,7 @@ export async function runLoadContextProtocol(
     .from('objectives')
     .select('objective')
     .eq('ticket_id', ticketId)
-    .eq('state', 'executing')
+    .in('state', ['executing', 'pending_delivery'])
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();

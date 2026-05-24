@@ -89,9 +89,11 @@ export const requestApprovalGateSchema = z.object({
 });
 
 const updateEventTypeSchema = z
-  .enum(['update', 'user_follow_up', 'alert'])
+  .enum(['update', 'user_follow_up', 'alert', 'discussion_summary', 'decision'])
   .optional()
   .default('update');
+
+const followUpIntentSchema = z.enum(['discussion', 'execution', 'pending_delivery']);
 
 const changeRationaleHunkSchema = z
   .object({
@@ -140,6 +142,7 @@ export const changeRationaleSchema = z.object({
 });
 
 export const updateSchema = z.object({
+  beginFollowUpWork: z.boolean().optional().default(false),
   changeRationales: z.array(changeRationaleSchema).max(50).optional().default([]),
   externalSessionId: z.string().trim().max(2_048).nullable().optional(),
   externalUrl: z.string().trim().max(2_048).pipe(z.url()).nullable().optional(),
@@ -149,6 +152,7 @@ export const updateSchema = z.object({
   summary: agentText(20_000),
   phase: ticketStatusSchema.optional(),
   eventType: updateEventTypeSchema,
+  followUpIntent: followUpIntentSchema.optional(),
   payload: z.record(z.string(), z.unknown()).optional().default({})
 });
 
@@ -156,7 +160,9 @@ export const hookEventSchema = z.object({
   hookType: z.enum(['UserPromptSubmit', 'Stop']),
   ticketId: ticketIdSchema,
   prompt: agentTextOptional(20_000).optional(),
-  turnIndex: z.number().int().min(0).optional()
+  turnIndex: z.number().int().min(0).optional(),
+  followUpIntent: followUpIntentSchema.optional(),
+  sessionKey: z.string().uuid().optional()
 });
 
 export const readContextSchema = z.object({

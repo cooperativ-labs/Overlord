@@ -167,14 +167,14 @@ export async function handleAttach(supabase: SupabaseClient, args: any, ctx: Tok
   }
 
   // Re-attach fallback: if no submitted/draft objective is available but the
-  // ticket already has an executing one, reuse it. Keeps attach idempotent so
+  // ticket already has an executing or pending-delivery one, reuse it. Keeps attach idempotent so
   // an agent that lost its SESSION_KEY mid-run can recover.
   if (!executedObjectiveId) {
     const { data: executingObjective } = await supabase
       .from('objectives')
       .select('id, objective')
       .eq('ticket_id', ticketId)
-      .eq('state', 'executing')
+      .in('state', ['executing', 'pending_delivery'])
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();

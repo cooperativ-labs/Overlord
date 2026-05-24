@@ -41,7 +41,7 @@ export async function handleRecordHookEvent(
   args: any,
   ctx: TokenContext
 ) {
-  const { hookType, prompt, ticketId: rawTicketId, turnIndex } = args;
+  const { followUpIntent, hookType, prompt, sessionKey, ticketId: rawTicketId, turnIndex } = args;
 
   if (hookType === 'UserPromptSubmit' && turnIndex === 0) {
     return toolOk({ ok: true });
@@ -76,6 +76,7 @@ export async function handleRecordHookEvent(
       ticket_id: ticketId,
       created_by: ctx.userId,
       payload: {
+        follow_up_intent: followUpIntent ?? 'discussion',
         hook_type: 'UserPromptSubmit',
         turn_index: typeof turnIndex === 'number' ? turnIndex : null
       },
@@ -84,6 +85,49 @@ export async function handleRecordHookEvent(
 
     if (error) return toolOk({ ok: true });
     return toolOk({ ok: true });
+  }
+
+  if (hookType === 'Stop' && typeof sessionKey === 'string' && sessionKey) {
+    const { data: session } = await supabase
+      .from('agent_sessions')
+      .select('id, objective:objectives!inner(ticket_id)')
+      .eq('session_key', sessionKey)
+      .eq('objective.ticket_id', ticketId)
+      .maybeSingle();
+
+    if (session) {
+      const { data: objective } = await supabase
+        .from('objectives')
+        .select('id, state')
+        .eq('ticket_id', ticketId)
+        .in('state', ['executing', 'pending_delivery'])
+        .order('position', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+      const needed = objective?.state === 'pending_delivery';
+      const signals: string[] = [];
+
+      if (needed) {
+        signals.push('objective_pending_delivery');
+
+        const { count } = await supabase
+          .from('file_changes')
+          .select('id', { count: 'exact', head: true })
+          .eq('ticket_id', ticketId);
+
+        if (count && count > 0) signals.push('change_rationales_recorded');
+      }
+
+      return toolOk({
+        ok: true,
+        deliveryStatus: {
+          needed,
+          reason: needed ? 'This session has pending work that should be delivered.' : null,
+          signals
+        }
+      });
+    }
   }
 
   const { error } = await supabase.from('ticket_events').insert({
@@ -99,5 +143,5 @@ export async function handleRecordHookEvent(
   });
 
   if (error) return toolOk({ ok: true });
-  return toolOk({ ok: true });
+  return toolOk({ ok: true, deliveryStatus: null });
 }

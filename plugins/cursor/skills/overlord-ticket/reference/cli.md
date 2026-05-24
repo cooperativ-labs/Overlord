@@ -31,6 +31,14 @@ Event types:
 - `update` for standard progress updates
 - `user_follow_up` — only when the Cursor `beforeSubmitPrompt` hook (see `~/.cursor/hooks.json`) is unavailable; the hook normally posts follow-ups to the activity feed
 - `alert` for warnings or non-blocking issues
+- `discussion_summary` for important discussion outcomes that should remain visible on the ticket
+- `decision` for explicit non-file decisions made during follow-up discussion
+
+Post-delivery follow-up modes:
+
+- User follow-up messages default to `discussion` intent while the ticket is in review.
+- Use `ovld protocol update --begin-follow-up-work --follow-up-intent execution --summary "Beginning follow-up work."` before moving a delivered/review ticket back to execution.
+- Use `--follow-up-intent pending_delivery` when implementation is complete but final delivery is still being prepared.
 
 ## Ask
 

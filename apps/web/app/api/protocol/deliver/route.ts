@@ -143,7 +143,7 @@ export async function POST(request: Request) {
           .update({ state: 'complete', completed_at: completedAt })
           .eq('id', objectiveId)
           .eq('ticket_id', ticketId)
-          .in('state', ['executing', 'submitted', 'draft']);
+          .in('state', ['executing', 'pending_delivery', 'submitted', 'draft']);
         if (completeError) {
           console.error('[protocol:deliver] objective complete error:', completeError.message);
           Sentry.captureException(completeError, {

@@ -31,6 +31,7 @@ const agentConfigs = {
     hooks: {
       permissionCommand: '${CLAUDE_PLUGIN_ROOT}/scripts/permission-hook.sh',
       userPromptCommand: '${CLAUDE_PLUGIN_ROOT}/scripts/user-prompt-submit-hook.sh',
+      stopCommand: '${CLAUDE_PLUGIN_ROOT}/scripts/stop-hook.sh',
     },
     readme: {
       title: 'Overlord — Claude Code plugin',

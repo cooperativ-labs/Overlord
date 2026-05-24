@@ -3,6 +3,7 @@
 import {
   ArrowUpCircle,
   ChevronDown,
+  ChevronUp,
   FastForward,
   Loader2,
   PauseCircle,
@@ -125,6 +126,7 @@ export function DraftObjective({
   });
   const isSubmitted = objectiveState === 'submitted';
   const [isAutoAdvancePending, setIsAutoAdvancePending] = useState(false);
+  const [isFutureExpanded, setIsFutureExpanded] = useState(false);
 
   useEffect(() => {
     setAutoAdvanceValue(initialAutoAdvance);
@@ -151,6 +153,11 @@ export function DraftObjective({
     } finally {
       setIsAutoAdvancePending(false);
     }
+  }
+
+  function handleCollapseFutureObjective() {
+    setIsFutureExpanded(false);
+    (document.activeElement as HTMLElement | null)?.blur();
   }
 
   return (
@@ -192,12 +199,18 @@ export function DraftObjective({
           </button>
         </div>
       ) : null} */}
-      <div className={cn(isFuture && 'group/future')}>
+      <div
+        onFocusCapture={() => {
+          if (isFuture) {
+            setIsFutureExpanded(true);
+          }
+        }}
+      >
         <div
           className={cn(
-            'relative',
-            isFuture &&
-              'max-h-[3.25rem] overflow-hidden transition-[max-height] duration-200 ease-in-out group-hover/future:max-h-[500px] group-focus-within/future:max-h-[500px]'
+            'relative transition-[max-height] duration-200 ease-in-out',
+            isFuture && !isFutureExpanded && 'max-h-[3.25rem] overflow-hidden',
+            isFuture && isFutureExpanded && 'max-h-[500px] overflow-hidden'
           )}
         >
           <InlineEditField
@@ -223,8 +236,20 @@ export function DraftObjective({
             variant="textarea"
             workingDirectory={workingDirectory}
           />
-          {isFuture ? (
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-background/80 to-transparent transition-opacity duration-200 group-hover/future:opacity-0 group-focus-within/future:opacity-0" />
+          {isFuture && isFutureExpanded ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="absolute right-2 top-2 z-10 h-6 w-6 rounded-full border border-border/50 bg-background/90 text-muted-foreground shadow-sm backdrop-blur-sm hover:bg-background hover:text-foreground"
+              aria-label="Collapse objective"
+              onClick={handleCollapseFutureObjective}
+            >
+              <ChevronUp className="h-3.5 w-3.5" />
+            </Button>
+          ) : null}
+          {isFuture && !isFutureExpanded ? (
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-background/80 to-transparent" />
           ) : null}
         </div>
         <div className="border-t border-border/40">

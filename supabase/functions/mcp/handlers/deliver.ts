@@ -205,7 +205,7 @@ export async function handleDeliver(supabase: SupabaseClient, args: any, ctx: To
       .update({ state: 'complete', completed_at: completedAt })
       .eq('id', resolved.session.objective_id)
       .eq('ticket_id', ticketId)
-      .in('state', ['executing', 'submitted', 'draft'])
+      .in('state', ['executing', 'pending_delivery', 'submitted', 'draft'])
   ]);
 
   await supabase.from('ticket_events').insert({

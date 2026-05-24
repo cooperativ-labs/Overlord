@@ -34,6 +34,7 @@ const TITLES: Record<string, string> = {
   '/docs/protocol/artifacts': 'Artifacts',
   '/docs/security': 'Security',
   '/docs/security/data-boundaries': 'Data Boundaries',
+  '/docs/security/external-providers': 'External Providers',
   '/docs/security/authentication': 'Authentication'
 };
 

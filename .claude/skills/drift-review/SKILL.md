@@ -182,6 +182,8 @@ When comparing names across surfaces, these are the expected transformations (no
 | Session Key | `sessionKey` | `--session-key` | `sessionKey` | `session_key` |
 | Working Dir | `workingDirectory` | `--working-directory` | `workingDirectory` | `working_directory` |
 | Ordered Objectives | `objectives` | `--objectives-json` / `--objectives-file` | `objectives` | `objectives` mapped to `--objectives-json` |
+| Begin Follow-Up Work | `beginFollowUpWork` | `--begin-follow-up-work` | `beginFollowUpWork` | `begin_follow_up_work` |
+| Follow-Up Intent | `followUpIntent` | `--follow-up-intent` | `followUpIntent` | `follow_up_intent` |
 
 Hosted MCP uses camelCase to match `POST /api/protocol/*` bodies. The local shim uses snake_case because it shells to `ovld protocol` kebab-case flags.
 

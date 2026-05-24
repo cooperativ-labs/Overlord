@@ -2464,7 +2464,13 @@ export type Database = {
         | 'claude_app'
         | 'claude_code'
         | 'other';
-      objective_state: 'future' | 'draft' | 'submitted' | 'executing' | 'complete';
+      objective_state:
+        | 'future'
+        | 'draft'
+        | 'submitted'
+        | 'executing'
+        | 'complete'
+        | 'pending_delivery';
       organization_role: 'VIEWER' | 'AGENT' | 'MANAGER' | 'ADMIN';
       session_state: 'attached' | 'idle' | 'blocked' | 'completed' | 'disconnected';
       ticket_event_type:
@@ -2483,7 +2489,9 @@ export type Database = {
         | 'awaiting_approval'
         | 'auto_advance'
         | 'execution_requested'
-        | 'execution_launch_failed';
+        | 'execution_launch_failed'
+        | 'discussion_summary'
+        | 'decision';
       ticket_execution_target: 'agent' | 'human';
       ticket_priority: 'low' | 'medium' | 'high' | 'urgent';
       ticket_status_type: 'draft' | 'execute' | 'review' | 'complete';
@@ -2616,7 +2624,14 @@ export const Constants = {
   public: {
     Enums: {
       connection_method: ['mcp', 'cli', 'rest', 'chatgpt', 'claude_app', 'claude_code', 'other'],
-      objective_state: ['future', 'draft', 'submitted', 'executing', 'complete'],
+      objective_state: [
+        'future',
+        'draft',
+        'submitted',
+        'executing',
+        'complete',
+        'pending_delivery'
+      ],
       organization_role: ['VIEWER', 'AGENT', 'MANAGER', 'ADMIN'],
       session_state: ['attached', 'idle', 'blocked', 'completed', 'disconnected'],
       ticket_event_type: [
@@ -2635,7 +2650,9 @@ export const Constants = {
         'awaiting_approval',
         'auto_advance',
         'execution_requested',
-        'execution_launch_failed'
+        'execution_launch_failed',
+        'discussion_summary',
+        'decision'
       ],
       ticket_execution_target: ['agent', 'human'],
       ticket_priority: ['low', 'medium', 'high', 'urgent'],
