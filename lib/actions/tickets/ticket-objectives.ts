@@ -21,7 +21,7 @@ export async function markObjectiveExecutedAction(
   const supabase = await createClientForRequest();
   const { data: objective, error: objectiveError } = await supabase
     .from('objectives')
-    .select('id,state,objective,ticket_id')
+    .select('id,state,objective,ticket_id,assigned_agent')
     .eq('id', objectiveId)
     .eq('ticket_id', ticketId)
     .single();
@@ -62,7 +62,8 @@ export async function markObjectiveExecutedAction(
         const { error: insertDraftError } = await supabase.from('objectives').insert({
           ticket_id: ticketId,
           objective: '',
-          state: 'draft'
+          state: 'draft',
+          assigned_agent: objective.assigned_agent ?? null
         });
         if (insertDraftError) {
           throw new Error(insertDraftError.message);
@@ -277,12 +278,25 @@ export async function createEmptyDraftObjectiveAction({
     return;
   }
 
+  // Seed the new objective's assigned_agent from the most recently set agent on this ticket
+  // so that agent selection is preserved across objectives. ONLY apply on creation — once
+  // an agent is set on an objective it should only change if a user or agent explicitly changes it.
+  const { data: latestWithAgent } = await supabase
+    .from('objectives')
+    .select('assigned_agent')
+    .eq('ticket_id', ticketId)
+    .not('assigned_agent', 'is', null)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
   const newState = futureObjectivesEnabled && hasDraft ? 'future' : 'draft';
 
   const { error: insertError } = await supabase.from('objectives').insert({
     ticket_id: ticketId,
     state: newState,
-    objective: ''
+    objective: '',
+    assigned_agent: latestWithAgent?.assigned_agent ?? null
   });
 
   if (insertError) {

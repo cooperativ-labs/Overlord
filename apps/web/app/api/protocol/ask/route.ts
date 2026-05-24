@@ -5,6 +5,7 @@ import { getTicketIdentifier } from '@/lib/helpers/tickets';
 import { emitWorkflowNotification } from '@/lib/overlord/notifications/orchestrator';
 import { resolveSession, resolveTicketId } from '@/lib/overlord/protocol-db';
 import { askSchema } from '@/lib/overlord/validation';
+import { resolveStatusNameForPhase } from '@/lib/ticket-statuses';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
 export async function POST(request: Request) {
@@ -29,6 +30,11 @@ export async function POST(request: Request) {
     }
 
     const insertedPhase = phase ?? 'review';
+    const targetStatusName = await resolveStatusNameForPhase(
+      supabase,
+      organizationId,
+      insertedPhase
+    );
     const { data: insertedEvent, error: insertError } = await supabase
       .from('ticket_events')
       .insert({
@@ -49,7 +55,10 @@ export async function POST(request: Request) {
 
     const { error: ticketError } = await supabase
       .from('tickets')
-      .update({ status: phase ?? 'review', is_read: false })
+      .update({
+        status: targetStatusName,
+        is_read: false
+      })
       .eq('id', ticketId);
     if (ticketError) {
       return NextResponse.json({ error: ticketError.message }, { status: 500 });

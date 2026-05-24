@@ -14,10 +14,7 @@ import { upsertGlobalListViewPreferencesAction } from '@/lib/actions/global-list
 import { upsertProjectUserPreferencesAction } from '@/lib/actions/project-user-preferences';
 import { loadMoreTicketsAction } from '@/lib/actions/tickets';
 import { useTicketTagsBatch } from '@/lib/client-data/tags/hooks';
-import {
-  parseUpdatedAtMsForSort,
-  selectAllTickets
-} from '@/lib/client-data/tickets/board-selectors';
+import { selectAllTickets } from '@/lib/client-data/tickets/board-selectors';
 import { mergeTicketsIntoBoards } from '@/lib/client-data/tickets/cache';
 import { useTicketBoard } from '@/lib/client-data/tickets/hooks';
 import {
@@ -494,17 +491,8 @@ export default function TicketListView({
       else groups.set(ticket.status, [ticket]);
     }
     // Sort within each group by board_position, matching KanbanBoard logic.
-    for (const [statusName, group] of groups) {
-      const statusDef = orderedStatuses.find(s => s.name === statusName);
-      if (statusDef?.status_type === 'complete') {
-        group.sort((a, b) => {
-          const diff = parseUpdatedAtMsForSort(b) - parseUpdatedAtMsForSort(a);
-          if (diff !== 0) return diff;
-          return a.board_position - b.board_position;
-        });
-      } else {
-        group.sort((a, b) => a.board_position - b.board_position);
-      }
+    for (const [, group] of groups) {
+      group.sort((a, b) => a.board_position - b.board_position);
     }
     return groups;
   }, [orderedStatuses, filteredSortedTickets]);
@@ -1007,8 +995,9 @@ export default function TicketListView({
                 draggedStatusName && dropTargetStatusForReorder === status.name;
               const loadMoreState = statusLoadMoreStates.get(status.name);
               const hasMore =
-                loadMoreState?.hasMore ??
-                (initialHasMoreByStatus.get(status.name) ?? 0) >= TICKETS_PAGE_SIZE;
+                status.status_type === 'complete' &&
+                (loadMoreState?.hasMore ??
+                  (initialHasMoreByStatus.get(status.name) ?? 0) >= TICKETS_PAGE_SIZE);
               const isLoadingMore = loadMoreState?.isLoading ?? false;
 
               return (

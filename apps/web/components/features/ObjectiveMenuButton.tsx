@@ -1,8 +1,7 @@
 'use client';
 
-import { Copy, MoreVertical, Trash2 } from 'lucide-react';
-import { useMemo, useTransition } from 'react';
-import { toast } from 'sonner';
+import { Check, Copy, MoreVertical, Trash2 } from 'lucide-react';
+import { useMemo, useState, useTransition } from 'react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -41,6 +40,7 @@ export function ObjectiveMenuButton({
   externalSessionId = null
 }: ObjectiveMenuButtonProps) {
   const [pending, startTransition] = useTransition();
+  const [resumeCopied, setResumeCopied] = useState(false);
   const resumeCommand = useMemo(
     () => buildNativeResumeCommand(agentIdentifier, externalSessionId),
     [agentIdentifier, externalSessionId]
@@ -68,9 +68,10 @@ export function ObjectiveMenuButton({
     if (!resumeCommand) return;
     try {
       await navigator.clipboard.writeText(resumeCommand);
-      toast.success('Resume command copied to clipboard.');
+      setResumeCopied(true);
+      window.setTimeout(() => setResumeCopied(false), 2000);
     } catch {
-      toast.error('Could not copy to clipboard.');
+      setResumeCopied(false);
     }
   }
 
@@ -94,13 +95,14 @@ export function ObjectiveMenuButton({
       <DropdownMenuContent align="end">
         {resumeCommand ? (
           <DropdownMenuItem
+            className="justify-between"
             onSelect={event => {
               event.preventDefault();
               void handleCopyResumeCommand();
             }}
           >
-            <Copy className="mr-2 h-4 w-4" />
             Copy resume command
+            {resumeCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
           </DropdownMenuItem>
         ) : null}
         {canShowMarkComplete ? (

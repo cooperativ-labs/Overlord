@@ -456,7 +456,7 @@ async function fetchOrganizations(platformUrl, accessToken, localSecret) {
   return Array.isArray(data.organizations) ? data.organizations : [];
 }
 
-async function promptForOrganization(organizations, preselectedId = null) {
+export function selectLoginOrganization(organizations, preselectedId = null) {
   if (!organizations.length) {
     throw new Error('No organizations found. Please complete onboarding first.');
   }
@@ -472,42 +472,13 @@ async function promptForOrganization(organizations, preselectedId = null) {
     return match;
   }
 
-  if (organizations.length === 1) {
-    return organizations[0];
-  }
+  return organizations[0];
+}
 
-  if (!process.stdin.isTTY) {
-    throw new Error(
-      'Multiple organizations available but stdin is not a TTY. ' +
-        'Pass --organization-id <id> to select non-interactively.'
-    );
-  }
-
-  const rl = (await import('node:readline')).createInterface({
-    input: process.stdin,
-    output: process.stdout
-  });
-
-  try {
-    for (;;) {
-      console.log('\nOrganizations');
-      organizations.forEach((organization, index) => {
-        console.log(`  ${index + 1}. ${organization.name} (${organization.id})`);
-      });
-
-      const answer = await new Promise(resolve => {
-        rl.question('\nSelect an organization by number: ', resolve);
-      });
-      const selected = Number.parseInt(String(answer).trim(), 10);
-      if (Number.isFinite(selected) && selected >= 1 && selected <= organizations.length) {
-        return organizations[selected - 1];
-      }
-
-      console.log(`Enter a number between 1 and ${organizations.length}.`);
-    }
-  } finally {
-    rl.close();
-  }
+function describeOrganization(organization) {
+  const name = String(organization?.name ?? '').trim();
+  const id = organization?.id;
+  return name ? `${name} (${id})` : `organization ${id}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -567,7 +538,7 @@ export async function authLogin(args = []) {
     credentials.access_token,
     localSecret
   );
-  const selectedOrganization = await promptForOrganization(organizations, preselectedOrganizationId);
+  const selectedOrganization = selectLoginOrganization(organizations, preselectedOrganizationId);
 
   saveCredentials({
     access_token: credentials.access_token,
@@ -577,7 +548,14 @@ export async function authLogin(args = []) {
     platform_url: resolvedPlatformUrl
   });
 
-  console.log('Logged in successfully!');
+  if (organizations.length > 1 && preselectedOrganizationId === null) {
+    console.log(
+      `Logged in successfully. Default organization: ${describeOrganization(selectedOrganization)}. ` +
+        'Ticket-scoped commands override this from the ticket id; use --organization-id to set a different default.'
+    );
+  } else {
+    console.log(`Logged in successfully. Default organization: ${describeOrganization(selectedOrganization)}.`);
+  }
 }
 
 async function printVerboseAuthStatus() {
@@ -660,9 +638,9 @@ export async function runAuthCommand(subcommand, args = []) {
 
 Subcommands:
   login    Authorize the CLI via browser (works locally or over SSH)
-             --organization-id <id>   Pre-select organization non-interactively
-                                      (required when stdin is not a TTY and
-                                      multiple organizations are available)
+             --organization-id <id>   Optional default organization override
+                                      (ticket-scoped commands infer organization
+                                      from ticket ids such as 1:899)
   status   Show current login status (use --verbose for redacted diagnostics)
   repair   Mirror and chmod shared Desktop/CLI credentials when possible
   logout   Remove stored credentials

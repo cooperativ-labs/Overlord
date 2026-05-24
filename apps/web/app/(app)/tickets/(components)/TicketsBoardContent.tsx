@@ -115,28 +115,40 @@ type WaitingQuestionForBoard = Pick<
   'ticket_id' | 'created_at'
 >;
 const INITIAL_TICKETS_PER_STATUS = 20;
+const ALL_TICKETS_PAGE_SIZE = 1000;
 
 async function loadTicketsForStatus(
   supabase: SupabaseClient<Database>,
   {
     status,
+    statusType,
     organizationId,
     projectId,
     ticketSelectFields,
     window
   }: {
     status: string;
+    statusType?: string;
     organizationId?: number;
     projectId?: string;
     ticketSelectFields: string;
     window: { startIso: string; endIso: string } | null;
   }
 ): Promise<RawTicket[]> {
+  if (statusType !== 'complete') {
+    return loadAllTicketsForStatus(supabase, {
+      status,
+      organizationId,
+      projectId,
+      ticketSelectFields
+    });
+  }
+
   let recentQuery = supabase
     .from('tickets')
     .select(ticketSelectFields)
     .eq('status', status)
-    .order('updated_at', { ascending: false })
+    .order('board_position', { ascending: true })
     .limit(INITIAL_TICKETS_PER_STATUS);
 
   if (organizationId !== undefined) {
@@ -185,6 +197,53 @@ async function loadTicketsForStatus(
   );
 }
 
+async function loadAllTicketsForStatus(
+  supabase: SupabaseClient<Database>,
+  {
+    status,
+    organizationId,
+    projectId,
+    ticketSelectFields
+  }: {
+    status: string;
+    organizationId?: number;
+    projectId?: string;
+    ticketSelectFields: string;
+  }
+): Promise<RawTicket[]> {
+  const rows: RawTicket[] = [];
+  let offset = 0;
+
+  while (true) {
+    let query = supabase
+      .from('tickets')
+      .select(ticketSelectFields)
+      .eq('status', status)
+      .order('board_position', { ascending: true })
+      .range(offset, offset + ALL_TICKETS_PAGE_SIZE - 1);
+
+    if (organizationId !== undefined) {
+      query = query.eq('organization_id', organizationId);
+    }
+
+    if (projectId !== undefined) {
+      query = query.eq('project_id', projectId);
+    }
+
+    const { data, error } = await query;
+    if (error) {
+      throw error;
+    }
+
+    const batch = (data ?? []) as unknown as RawTicket[];
+    rows.push(...batch);
+    if (batch.length < ALL_TICKETS_PAGE_SIZE) {
+      return rows;
+    }
+    offset += ALL_TICKETS_PAGE_SIZE;
+  }
+}
+
 export default async function TicketsBoardContent({
   organizationId,
   showOrganizationName = false,
@@ -224,10 +283,6 @@ export default async function TicketsBoardContent({
     : 0;
   const scheduledWindow = getScheduledTicketVisibilityWindow(scheduledVisibilityDays);
 
-  // In cross-org mode (no org filter), we show the union of all status names
-  // across organizations so custom statuses remain visible on /u.
-  const isCrossOrg = organizationId === undefined;
-
   let statusesQuery = supabase
     .from('ticket_statuses')
     .select('organization_id,name,position,status_type')
@@ -250,79 +305,25 @@ export default async function TicketsBoardContent({
   const ticketSelectFields =
     'id,title,due_datetime,execution_target,status,priority,delegate,is_read,updated_at,board_position,organization_id,project_id,everhour_task_id,schedule_id,organization:organizations(name),project:projects(name,color,everhour_project_id)';
 
-  // Always fetch board/list data (per-status). Calendar data is fetched
+  // Always fetch board/list data per status. Calendar data is fetched
   // client-side on demand via TanStack Query prefetch in TicketsBoardClient.
-  // Cross-org boards bulk-fetch (no per-status filter) to avoid N×status
-  // queries when showing the union of status names across organizations.
-  const ticketQueriesPromise = isCrossOrg
-    ? Promise.all([
-        (async () => {
-          try {
-            let query = supabase
-              .from('tickets')
-              .select(ticketSelectFields)
-              .order('updated_at', { ascending: false })
-              .limit(INITIAL_TICKETS_PER_STATUS * Math.max(allStatuses.length, 1));
-
-            if (projectId !== undefined) {
-              query = query.eq('project_id', projectId);
-            }
-
-            const { data: recentTickets, error: recentError } = await query;
-            if (recentError) {
-              return { data: [], error: recentError };
-            }
-
-            if (!scheduledWindow) {
-              return { data: recentTickets ?? [], error: null };
-            }
-
-            let scheduledQuery = supabase
-              .from('tickets')
-              .select(ticketSelectFields)
-              .not('schedule_id', 'is', null)
-              .gte('due_datetime', scheduledWindow.startIso)
-              .lte('due_datetime', scheduledWindow.endIso)
-              .order('due_datetime', { ascending: true })
-              .limit(100);
-
-            if (projectId !== undefined) {
-              scheduledQuery = scheduledQuery.eq('project_id', projectId);
-            }
-
-            const { data: scheduledTickets, error: scheduledError } = await scheduledQuery;
-            if (scheduledError) {
-              return { data: [], error: scheduledError };
-            }
-
-            return {
-              data: mergeRowsById(
-                (recentTickets ?? []) as RawTicket[],
-                (scheduledTickets ?? []) as RawTicket[]
-              ),
-              error: null
-            };
-          } catch (error) {
-            return { data: [], error };
-          }
-        })()
-      ])
-    : Promise.all(
-        allStatuses.map(async status => {
-          try {
-            const data = await loadTicketsForStatus(supabase, {
-              status: status.name,
-              organizationId,
-              projectId,
-              ticketSelectFields,
-              window: scheduledWindow
-            });
-            return { data, error: null };
-          } catch (error) {
-            return { data: [], error };
-          }
-        })
-      );
+  const ticketQueriesPromise = Promise.all(
+    allStatuses.map(async status => {
+      try {
+        const data = await loadTicketsForStatus(supabase, {
+          status: status.name,
+          statusType: status.status_type,
+          organizationId,
+          projectId,
+          ticketSelectFields,
+          window: scheduledWindow
+        });
+        return { data, error: null };
+      } catch (error) {
+        return { data: [], error };
+      }
+    })
+  );
 
   const [ticketResults, everhourIntegrationResult] = await Promise.all([
     ticketQueriesPromise,
@@ -405,7 +406,13 @@ export default async function TicketsBoardContent({
       if (!latestObjectiveAgentByTicket.has(objective.ticket_id)) {
         latestObjectiveAgentByTicket.set(objective.ticket_id, objective.agent_identifier ?? null);
       }
-      if (!latestObjectiveAssignedAgentByTicket.has(objective.ticket_id)) {
+      // Use the most recently created objective that has a non-null assigned_agent, so that
+      // a newly created empty draft (which inherits from the prior objective) doesn't shadow
+      // the actual agent selection with a null value.
+      if (
+        !latestObjectiveAssignedAgentByTicket.has(objective.ticket_id) &&
+        objective.assigned_agent !== null
+      ) {
         latestObjectiveAssignedAgentByTicket.set(objective.ticket_id, objective.assigned_agent);
       }
       if (objective.state === 'complete') {

@@ -289,7 +289,7 @@ describe('pending mutations', () => {
 });
 
 describe('selectColumnGroups', () => {
-  it('sorts complete columns by updated_at desc and other columns by board_position', () => {
+  it('sorts all columns by board_position', () => {
     const state = freshState([
       makeTicket({ id: 'a', status: 'next-up', board_position: 2 }),
       makeTicket({ id: 'b', status: 'next-up', board_position: 0 }),
@@ -309,7 +309,7 @@ describe('selectColumnGroups', () => {
 
     const { groups } = selectColumnGroups(state);
     expect(groups.get('next-up')!.map(t => t.id)).toEqual(['b', 'a']);
-    expect(groups.get('complete')!.map(t => t.id)).toEqual(['d', 'c']);
+    expect(groups.get('complete')!.map(t => t.id)).toEqual(['c', 'd']);
   });
 
   it('places tickets whose status is unknown into uncategorized', () => {

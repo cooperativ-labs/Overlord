@@ -30,7 +30,7 @@ async function findSshPlaceholderId(
       .eq('host', host)
       .eq('transport', 'ssh');
 
-  if (input.port != null) {
+  if (typeof input.port === 'number') {
     const { data } = await baseQuery().eq('port', normalizePort(input.port)).maybeSingle();
     return (data as any)?.id ?? null;
   }

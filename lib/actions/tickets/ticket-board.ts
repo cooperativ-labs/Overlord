@@ -20,6 +20,8 @@ import type { ServerSupabase } from './internals';
 
 const TICKET_BOARD_SELECT =
   'id,title,due_datetime,execution_target,status,priority,is_read,updated_at,board_position,organization_id,project_id,everhour_task_id,schedule_id,delegate,organization:organizations(name),project:projects(name,color,everhour_project_id)';
+const COMPLETE_TICKETS_PAGE_SIZE = 20;
+const ALL_TICKETS_PAGE_SIZE = 1000;
 
 type RawBoardTicket = {
   id: string;
@@ -88,11 +90,13 @@ async function loadBoardTicketsForStatus(
   supabase: ServerSupabase,
   {
     status,
+    statusType,
     organizationId,
     projectId,
     window
   }: {
     status: string;
+    statusType?: string;
     organizationId?: number;
     projectId?: string;
     window: { startIso: string; endIso: string } | null;
@@ -101,12 +105,27 @@ async function loadBoardTicketsForStatus(
   tickets: RawBoardTicket[];
   pageInfo: { cutoff: string | null; hasMore: boolean };
 }> {
+  if (statusType !== 'complete') {
+    const rows = await loadAllBoardTicketsForStatus(supabase, {
+      status,
+      organizationId,
+      projectId
+    });
+    return {
+      tickets: rows,
+      pageInfo: {
+        cutoff: null,
+        hasMore: false
+      }
+    };
+  }
+
   let recentQuery = supabase
     .from('tickets')
     .select(TICKET_BOARD_SELECT)
     .eq('status', status)
-    .order('updated_at', { ascending: false })
-    .limit(20);
+    .order('board_position', { ascending: true })
+    .limit(COMPLETE_TICKETS_PAGE_SIZE);
 
   if (organizationId !== undefined) {
     recentQuery = recentQuery.eq('organization_id', organizationId);
@@ -126,7 +145,7 @@ async function loadBoardTicketsForStatus(
       tickets: rows,
       pageInfo: {
         cutoff: rows.at(-1)?.updated_at ?? null,
-        hasMore: rows.length === 20
+        hasMore: rows.length === COMPLETE_TICKETS_PAGE_SIZE
       }
     };
   }
@@ -159,9 +178,53 @@ async function loadBoardTicketsForStatus(
     tickets: mergeRowsById(recentRows, scheduledRows),
     pageInfo: {
       cutoff: recentRows.at(-1)?.updated_at ?? null,
-      hasMore: recentRows.length === 20
+      hasMore: recentRows.length === COMPLETE_TICKETS_PAGE_SIZE
     }
   };
+}
+
+async function loadAllBoardTicketsForStatus(
+  supabase: ServerSupabase,
+  {
+    status,
+    organizationId,
+    projectId
+  }: {
+    status: string;
+    organizationId?: number;
+    projectId?: string;
+  }
+): Promise<RawBoardTicket[]> {
+  const rows: RawBoardTicket[] = [];
+  let offset = 0;
+
+  while (true) {
+    let query = supabase
+      .from('tickets')
+      .select(TICKET_BOARD_SELECT)
+      .eq('status', status)
+      .order('board_position', { ascending: true })
+      .range(offset, offset + ALL_TICKETS_PAGE_SIZE - 1);
+
+    if (organizationId !== undefined) {
+      query = query.eq('organization_id', organizationId);
+    }
+    if (projectId !== undefined) {
+      query = query.eq('project_id', projectId);
+    }
+
+    const { data, error } = await query;
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    const batch = (data ?? []) as RawBoardTicket[];
+    rows.push(...batch);
+    if (batch.length < ALL_TICKETS_PAGE_SIZE) {
+      return rows;
+    }
+    offset += ALL_TICKETS_PAGE_SIZE;
+  }
 }
 
 export async function getTicketStatusesAction(organizationId?: number): Promise<BoardStatus[]> {
@@ -231,6 +294,7 @@ export async function getTicketBoardBootstrapAction(
       statuses.map(status =>
         loadBoardTicketsForStatus(supabase, {
           status: status.name,
+          statusType: status.status_type,
           organizationId,
           projectId,
           window: scheduledWindow
@@ -274,7 +338,12 @@ export async function getTicketBoardBootstrapAction(
       if (!latestObjectiveAgentByTicket.has(objective.ticket_id)) {
         latestObjectiveAgentByTicket.set(objective.ticket_id, objective.agent_identifier ?? null);
       }
-      if (!latestObjectiveAssignedAgentByTicket.has(objective.ticket_id)) {
+      // Use the most recently created objective that has a non-null assigned_agent, so that
+      // a newly created empty draft without an assigned_agent doesn't shadow the actual selection.
+      if (
+        !latestObjectiveAssignedAgentByTicket.has(objective.ticket_id) &&
+        objective.assigned_agent !== null
+      ) {
         latestObjectiveAssignedAgentByTicket.set(objective.ticket_id, objective.assigned_agent);
       }
       if (objective.state === 'executing') {
@@ -376,7 +445,12 @@ export async function loadMoreTicketsAction({
       if (!latestObjectiveAgentByTicket.has(objective.ticket_id)) {
         latestObjectiveAgentByTicket.set(objective.ticket_id, objective.agent_identifier ?? null);
       }
-      if (!latestObjectiveAssignedAgentByTicket.has(objective.ticket_id)) {
+      // Use the most recently created objective that has a non-null assigned_agent, so that
+      // a newly created empty draft without an assigned_agent doesn't shadow the actual selection.
+      if (
+        !latestObjectiveAssignedAgentByTicket.has(objective.ticket_id) &&
+        objective.assigned_agent !== null
+      ) {
         latestObjectiveAssignedAgentByTicket.set(objective.ticket_id, objective.assigned_agent);
       }
       if (objective.state === 'executing') {

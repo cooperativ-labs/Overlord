@@ -1,6 +1,6 @@
 ---
 name: agent-connector-update
-description: Use when changing how Overlord integrates with any agent connector (Claude Code, Codex, Cursor, Antigravity CLI, OpenCode) — adding/removing protocol operations, changing launch commands, modifying bundle/plugin install behavior, updating slash commands, or altering permission/hook wiring. Enforces parity across all agents, the four protocol surfaces (API/CLI/MCP/plugin docs), and keeps the connector surfaces and drift-review documentation in sync.
+description: Use when changing how Overlord integrates with any agent connector (Claude Code, Codex, Cursor, Gemini CLI, OpenCode) — adding/removing protocol operations, changing launch commands, modifying bundle/plugin install behavior, updating slash commands, or altering permission/hook wiring. Enforces parity across all agents, the four protocol surfaces (API/CLI/MCP/plugin docs), and keeps the connector surfaces and drift-review documentation in sync.
 allowed-tools: Read, Edit, Write, Bash, Grep, Glob
 user-invocable: true
 ---
@@ -40,16 +40,16 @@ Every connector change must be evaluated along **both** axes. Walk them in order
 
 ### Axis 1 — Apply across all agent plugins and bundles
 
-The five primary CLI agents are: **Claude Code, Codex, Cursor, Antigravity CLI, OpenCode** (plus **Pi** as launch-only). Bundle-backed: `claude`, `cursor`, `antigravity`, `opencode`. Legacy-prompt-only: `codex`, `pi`.
+The five agents are: **Claude Code, Codex, Cursor, Gemini CLI, OpenCode**. Bundle-backed: `claude`, `cursor`, `opencode`. Legacy-prompt-only: `codex`, `gemini`.
 
-For any connector behavior change, ask: *does each agent need the equivalent change?* Some changes are agent-specific (e.g., a Claude permission hook does not apply to Antigravity), but the decision must be deliberate and reflected in the surfaces doc.
+For any connector behavior change, ask: *does each agent need the equivalent change?* Some changes are agent-specific (e.g., a Claude permission hook does not apply to Gemini), but the decision must be deliberate and reflected in the surfaces doc.
 
 For each affected agent, verify and update as needed:
 
 1. **Bundle / plugin installer** — `electron/services/agent-bundle/installer.ts`, `electron/services/overlord-plugin.ts`, and templates in `electron/services/agent-bundle/templates.ts` (`CLAUDE_SKILL_CONTENT`, `OPENCODE_AGENTS_SECTION`, etc.)
-2. **Slash commands** — `electron/services/agent-bundle/slash-commands.ts` for Claude/Cursor/OpenCode home directories. Antigravity slash commands live in `plugins/antigravity/commands/` (Markdown with `$ARGUMENTS`, installed via `agy plugin install`). OpenCode requires `agent: build` frontmatter.
-3. **Plugin skills** — the `overlord-ticket` SKILL.md in `plugins/claude/skills/`, `plugins/cursor/skills/`, `plugins/overlord/skills/` (Codex), and `plugins/antigravity/skills/`. Keep workflow instructions consistent.
-4. **Local MCP shims** — `plugins/overlord/scripts/overlord-mcp.mjs` (Codex) and `plugins/antigravity/scripts/overlord-mcp.mjs` (Antigravity; staged to `~/.ovld/antigravity/scripts/` with absolute paths patched post-install).
+2. **Slash commands** — `electron/services/agent-bundle/slash-commands.ts`. Note format differences: Claude/Cursor/OpenCode are Markdown with `$ARGUMENTS`; Gemini is TOML with `{{args}}`; OpenCode requires `agent: build` frontmatter.
+3. **Plugin skills** — the `overlord-ticket` SKILL.md in `plugins/claude/skills/`, `plugins/cursor/skills/`, and `plugins/overlord/skills/` (the Codex plugin). Keep workflow instructions consistent.
+4. **Local Codex MCP shim** — `plugins/overlord/scripts/overlord-mcp.mjs` (this is how Codex reaches the protocol locally).
 5. **Launch service** — `electron/services/agent-launcher.ts`. Verify model flag, thinking/effort flag, and prompt-passing convention for each agent (see the per-agent command patterns in `CONNECTOR_SURFACES.md`).
 6. **Capability resolver** — `lib/overlord/agent-capabilities.ts`. If bundle eligibility, instruction mode, or a new capability flag changes, update this.
 7. **Context route + prompt builder** — `app/api/protocol/context/[ticketId]/route.ts` and `lib/overlord/ticket-prompt.ts`. The `agent=` param branches are the per-agent prompt customization point.
@@ -66,7 +66,7 @@ Any new or changed protocol operation must be exposed (or deliberately not expos
 | API route | `app/api/protocol/<op>/route.ts` (or `apps/web/app/api/protocol/...`) | REST, kebab-case path, body keys `snake_case` |
 | CLI subcommand | `packages/overlord-cli/bin/_cli/protocol.mjs` | `ovld protocol <op>`, `--kebab-case` flags |
 | MCP tool | `supabase/functions/mcp/tools.ts` and `plugins/overlord/scripts/overlord-mcp.mjs` | `snake_case` tool name and parameters; CLI artifact tools keep `<verb>_<noun>` shape |
-| Plugin skill docs | `plugins/{claude,cursor,overlord,antigravity}/skills/overlord-ticket/SKILL.md` | Documents which CLI/MCP commands the agent should use |
+| Plugin skill docs | `plugins/{claude,cursor,overlord}/skills/overlord-ticket/SKILL.md` | Documents which CLI/MCP commands the agent should use |
 
 For any new operation:
 
@@ -119,19 +119,18 @@ If a code change adds a new managed file, a new `ovld setup` target, a new proto
 4. increment the version number of the updated plugins, bundles, commands, connectors, etc. (the bottom of each should always have a version number in the following format: `<!-- version: 1.0.0 -->`)
 4. Update `CONNECTOR_SURFACES.md` and `.claude/skills/drift-review/SKILL.md` to reflect the new reality.
 5. As a final pass, invoke the `drift-review` skill (or mentally walk its Phase 3 checks) to confirm no surface was missed.
-6. In your deliver summary, list which agents and surfaces were touched, and call out any deliberate asymmetries (e.g., "Antigravity intentionally has no permission hook — policy rules only").
+6. In your deliver summary, list which agents and surfaces were touched, and call out any deliberate asymmetries (e.g., "Gemini intentionally not updated because it has no permission hook").
 
 ## Common pitfalls
 
 - Adding an MCP tool but forgetting the corresponding CLI subcommand (or vice versa).
 - Adding a new flag to the API but not threading it through `protocol.mjs` `parseFlags()` or the MCP `inputSchema`.
 - Adding a new bundle-managed file but not updating the manifest entry in `~/.ovld/bundle-manifest.json` (or its plugin equivalent).
-- Updating slash command content for Claude/Cursor/OpenCode but forgetting Antigravity plugin commands in `plugins/antigravity/commands/`.
-- Updating the launcher's model flag for Claude (`--model`) but forgetting that Codex uses `-c model_reasoning_effort=` and Antigravity has no model/thinking launch flags.
-- Updating Antigravity MCP/hook paths in source but forgetting post-install absolute path patching in `setup.mjs` / `installer.ts`.
+- Updating slash command content for Claude/Cursor/OpenCode but forgetting Gemini's TOML format with `{{args}}`.
+- Updating the launcher's model flag for Claude (`--model`) but forgetting that Codex uses `-c model_reasoning_effort=` and Gemini uses `--thinking-level`.
 - Updating `electron/services/agent-launcher.ts` without updating the matching command pattern documented in `CONNECTOR_SURFACES.md`.
 - Forgetting to remove legacy bundle entries when an agent moves between bundle modes (see Codex bundle migration cleanup).
 
 </agent-connector-update>
 
-<!-- version: 1.1.0 -->
+<!-- version: 1.0.0 -->

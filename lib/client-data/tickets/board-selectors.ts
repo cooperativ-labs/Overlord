@@ -26,9 +26,8 @@ export type SortedColumns = {
   uncategorized: BoardTicket[];
 };
 
-// Mirrors the existing KanbanBoard grouping/sort behavior. Complete-status
-// columns sort by updated_at descending then board_position; everything else
-// sorts strictly by board_position.
+// Mirrors the existing KanbanBoard grouping/sort behavior. All columns sort
+// strictly by board_position.
 export function selectColumnGroups(state: TicketBoardState): SortedColumns {
   const sortedColumns = selectStatusesSorted(state);
   const groups = new Map<string, BoardTicket[]>();
@@ -42,16 +41,7 @@ export function selectColumnGroups(state: TicketBoardState): SortedColumns {
   }
 
   for (const [name, bucket] of groups) {
-    const status = state.ticketStatusesByName[name];
-    if (status?.status_type === 'complete') {
-      bucket.sort((a, b) => {
-        const updatedDiff = parseUpdatedAtMsForSort(b) - parseUpdatedAtMsForSort(a);
-        if (updatedDiff !== 0) return updatedDiff;
-        return a.board_position - b.board_position;
-      });
-    } else {
-      bucket.sort((a, b) => a.board_position - b.board_position);
-    }
+    bucket.sort((a, b) => a.board_position - b.board_position);
   }
   uncategorized.sort((a, b) => a.board_position - b.board_position);
 
@@ -72,11 +62,4 @@ export function selectIsWaiting(state: TicketBoardState, ticketId: string): bool
 
 export function selectPendingMutations(state: TicketBoardState, ticketId: string) {
   return state.pendingMutationsByEntityId[ticketId] ?? [];
-}
-
-export function parseUpdatedAtMsForSort(ticket: { updated_at?: string | null }): number {
-  const raw = ticket.updated_at;
-  if (raw === null || raw === undefined || raw === '') return -1;
-  const parsed = Date.parse(raw);
-  return Number.isFinite(parsed) ? parsed : -1;
 }

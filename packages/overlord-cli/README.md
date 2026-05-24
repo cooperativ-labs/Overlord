@@ -83,7 +83,7 @@ ovld doctor
 
 **Antigravity:** Gemini CLI is deprecated. Use `ovld setup antigravity` and `ovld launch antigravity --ticket-id <ticket_id>`. Antigravity manages model selection internally.
 
-For ticket-scoped protocol and launch commands, `ticket_id` values such as `1:899` carry the organization id. The CLI uses that first, then `--organization-id` for UUID compatibility, then stored auth.
+For ticket-scoped protocol and launch commands, `ticket_id` values such as `1:899` carry the organization id. The CLI uses that first, then `--organization-id` for UUID compatibility, then stored auth. `ovld auth login` stores the first available organization as a default when an account belongs to multiple organizations; pass `--organization-id <id>` only when you want a different default.
 
 ## Requirements
 

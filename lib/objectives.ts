@@ -607,7 +607,10 @@ export async function markSubmittedObjectiveExecuting(
         state: 'draft',
         objective: '',
         ticket_id: ticketId,
-        created_by: createdBy ?? null
+        created_by: createdBy ?? null,
+        // Seed with the executing objective's assigned_agent so agent selection is preserved.
+        // Only applied on creation — the agent can only be changed by an explicit user/agent action.
+        assigned_agent: launchObjective.assigned_agent ?? null
       });
       if (insertDraftError) {
         throw new Error(insertDraftError.message);

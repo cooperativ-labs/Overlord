@@ -97,7 +97,7 @@ For the `record-change-rationales` command and full payload shape with optional 
 - When a summary or question contains backticks, `$vars`, or other shell-special characters, always use `--summary-file -` (or `--question-file -`) with a single-quoted heredoc (`<<'EOF'`). Never retry by stripping or escaping content — pipe stdin instead. See [reference/shell-escaping.md](reference/shell-escaping.md).
 - Use `write-context` for facts a future agent session should know.
 - If a protocol or MCP call fails with auth/session errors, run `ovld auth repair` yourself before asking the user to log in again or proceed without Overlord updates.
-- If you must run `ovld auth login`, always include `--organization-id <id>` — use the organization ID from the ticket prompt context to select the organization non-interactively and avoid a blocking TTY prompt.
+- If you must run `ovld auth login`, `--organization-id <id>` is optional — use it only when you want to set a different default organization than the CLI would choose automatically.
 - Do not add or commit changes unless the user explicitly asks you to commit.
 - Do not create or rely on a local Codex `AGENTS.md` bundle for Overlord.
 - Delivery is the concluding step. After delivering, stop unless the user follows up or the ticket is reopened.
@@ -110,5 +110,5 @@ For the `record-change-rationales` command and full payload shape with optional 
 - [reference/context.md](reference/context.md) — Shared state, attachments, and large artifact policy
 - [reference/shell-escaping.md](reference/shell-escaping.md) — Heredoc stdin piping for special characters in summaries and payloads
 
-<!-- version: 0.5.5 -->
+<!-- version: 0.5.6 -->
 

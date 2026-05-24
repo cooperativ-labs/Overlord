@@ -527,10 +527,7 @@ async function clearProjectSshTargets(
     .map(
       (row: {
         execution_target_id?: string | null;
-        execution_targets?:
-          | { transport?: string | null }
-          | { transport?: string | null }[]
-          | null;
+        execution_targets?: { transport?: string | null } | { transport?: string | null }[] | null;
       }) => {
         const target = Array.isArray(row.execution_targets)
           ? row.execution_targets[0]

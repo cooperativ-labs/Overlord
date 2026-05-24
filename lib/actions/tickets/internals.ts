@@ -1,5 +1,6 @@
 'use server';
 
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { revalidatePath } from 'next/cache';
 
 import { buildTicketPath } from '@/lib/helpers/ticket-path';
@@ -11,6 +12,7 @@ import type { Database } from '@/types/database.types';
 
 export type ServerSupabase = Awaited<ReturnType<typeof createClientForRequest>>;
 export type TicketStatusType = Database['public']['Enums']['ticket_status_type'];
+type TicketPositionSupabase = SupabaseClient<Database>;
 
 export type TicketScheduleRow = {
   created_at: string;
@@ -271,7 +273,11 @@ export async function createScheduledDuplicateIfNeeded(
 export async function updateTicketStatusAndSchedule(
   supabase: ServerSupabase,
   ticketId: string,
-  status: string
+  status: string,
+  options?: {
+    createdBy?: string;
+    objectiveId?: string | null;
+  }
 ): Promise<Array<{ organizationId: number; projectId: string | null; ticketId: string }>> {
   const { data: existingTicket, error: existingTicketError } = await supabase
     .from('tickets')
@@ -294,16 +300,28 @@ export async function updateTicketStatusAndSchedule(
     throw new Error(error?.message ?? 'Failed to update ticket status.');
   }
 
-  await supabase.from('ticket_events').insert({
-    event_type: 'status_change',
-    phase: status,
-    summary: `Status changed to ${status}.`,
-    ticket_id: ticketId
-  });
+  const statusChanged = existingTicket.status !== status;
+
+  if (statusChanged) {
+    await assignTicketToColumnStart(supabase, ticketId, status, existingTicket.organization_id);
+
+    await supabase.from('ticket_events').insert({
+      event_type: 'status_change',
+      phase: status,
+      objective_id: options?.objectiveId ?? undefined,
+      summary: `Status changed to ${status}.`,
+      ticket_id: ticketId,
+      created_by: options?.createdBy
+    });
+  }
 
   const nextStatusType = await resolveStatusType(supabase, existingTicket.organization_id, status);
 
-  if (nextStatusType !== 'complete' || status.trim().toLowerCase() === 'cancelled') {
+  if (
+    !statusChanged ||
+    nextStatusType !== 'complete' ||
+    status.trim().toLowerCase() === 'cancelled'
+  ) {
     return [
       {
         organizationId: data.organization_id,
@@ -525,7 +543,7 @@ export async function resolveTicketProjectAndOrganization(
 }
 
 export async function assignTicketToColumnStart(
-  supabase: Awaited<ReturnType<typeof createClientForRequest>>,
+  supabase: TicketPositionSupabase,
   ticketId: string,
   status: string,
   organizationId: number
@@ -555,7 +573,7 @@ export async function assignTicketToColumnStart(
 }
 
 export async function assignTicketToColumnEnd(
-  supabase: Awaited<ReturnType<typeof createClientForRequest>>,
+  supabase: TicketPositionSupabase,
   ticketId: string,
   status: string,
   organizationId: number

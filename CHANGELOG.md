@@ -2,6 +2,37 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2605240843.0] - 2026-05-24:08:43
+
+### Added
+- Seed new draft objectives with the ticket’s most recent **`assigned_agent`** so agent selection carries across objectives without manual re-pick.
+
+### Fixed
+- Resolve organization names when Supabase returns a joined **`organizations`** row as an object (not only as an array) on **`GET /api/auth/organizations`** and **`GET /api/protocol/projects`**.
+- Show the correct assigned agent on Kanban and list cards when the newest objective is an empty draft with a null **`assigned_agent`** (prefer the latest objective that actually has an agent set).
+- Assign tickets to the **top of the target column** on manual and drag-driven status changes via **`updateTicketStatusAndSchedule`**, reducing review→complete position jumps after drop.
+
+### Changed
+- Order **all board and list columns** by **`board_position`** only (including complete); remove **`updated_at`**-based sorting that could fight drag order and cause cards to jump.
+- Load **all tickets** for non-complete columns on initial board fetch (paginated internally); keep **load more** pagination only for **complete** columns.
+- On realtime **`status_change`** events, bump **`board_position`** to the column top when the target status type is **review** or **complete** (not review-only).
+- Default CLI login to the **first organization** when several are available (no interactive picker); print which org is the default and note that ticket-scoped commands infer org from ticket ids.
+- Replace resume-command copy **toasts** with an inline check affordance on the objective menu.
+- Clarify the public **security** docs: linked repo contents are not sent to Overlord; describe routing, desktop Current Changes, and the repo operations profile.
+
+### Security
+- None.
+
+### Documentation
+- Add a **security-audit** Overskill skill for reviewing auth, RLS, and protocol surfaces against project conventions.
+
+### Test
+- Add **`selectLoginOrganization`** CLI auth tests and protocol **projects** route coverage for organization name resolution.
+- Update board reducer tests for unified **`board_position`** sorting.
+
+### Chore
+- Bump workspace and CLI package versions to **`0.2605240843.0`**; regenerate Supabase types.
+
 ## [0.2605231209.0] - 2026-05-23:12:09
 
 ### Added

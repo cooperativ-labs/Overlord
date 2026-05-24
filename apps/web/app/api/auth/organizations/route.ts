@@ -40,9 +40,15 @@ export async function GET(request: Request) {
   }
 
   return NextResponse.json({
-    organizations: (memberships ?? []).map(row => ({
-      id: row.organization_id,
-      name: Array.isArray(row.organizations) ? (row.organizations[0]?.name ?? '') : ''
-    }))
+    organizations: (memberships ?? []).map(row => {
+      const organization = Array.isArray(row.organizations)
+        ? row.organizations[0]
+        : row.organizations;
+
+      return {
+        id: row.organization_id,
+        name: organization?.name ?? ''
+      };
+    })
   });
 }

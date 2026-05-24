@@ -6,6 +6,14 @@ import { internalErrorResponse } from '@/app/api/protocol/_lib';
 import { resolveAgentToken } from '@/lib/overlord/protocol-auth';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
+function getOrganizationName(
+  organization: { name: string } | Array<{ name: string }> | null | undefined
+) {
+  if (!organization) return null;
+  if (Array.isArray(organization)) return organization[0]?.name ?? null;
+  return organization.name ?? null;
+}
+
 export async function GET(request: Request) {
   const authResult = await resolveAgentToken(request);
   if (authResult.error) return authResult.error;
@@ -34,7 +42,7 @@ export async function GET(request: Request) {
           id: project.id,
           name: project.name,
           organizationId: project.organization_id,
-          organizationName: project.organization[0].name
+          organizationName: getOrganizationName(project.organization)
         })) ?? []
     });
   } catch (error) {

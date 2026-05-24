@@ -374,10 +374,6 @@ export default function KanbanBoard({
     (ticketList: Ticket[]) => {
       const groups = new Map<string, Ticket[]>();
       const uncategorized: Ticket[] = [];
-      const getUpdatedAtMs = (ticket: Ticket) => {
-        const value = ticket.updated_at ? Date.parse(ticket.updated_at) : Number.NaN;
-        return Number.isNaN(value) ? -1 : value;
-      };
 
       for (const col of sortedColumns) {
         groups.set(col.id, []);
@@ -395,23 +391,14 @@ export default function KanbanBoard({
         if (!visibleSlugs.has(slug)) {
           continue;
         }
-        const isCompleteColumn = columnById.get(slug)?.statusType === 'complete';
-        if (isCompleteColumn) {
-          colTickets.sort((a, b) => {
-            const updatedAtDiff = getUpdatedAtMs(b) - getUpdatedAtMs(a);
-            if (updatedAtDiff !== 0) return updatedAtDiff;
-            return a.board_position - b.board_position;
-          });
-        } else {
-          colTickets.sort((a, b) => a.board_position - b.board_position);
-        }
+        colTickets.sort((a, b) => a.board_position - b.board_position);
       }
 
       uncategorized.sort((a, b) => a.board_position - b.board_position);
 
       return { groups, uncategorized };
     },
-    [columnById, sortedColumns, visibleSlugs]
+    [sortedColumns, visibleSlugs]
   );
 
   const { groups: columnTickets, uncategorized } = useMemo(
@@ -784,8 +771,9 @@ export default function KanbanBoard({
                 const colTickets = columnTickets.get(col.id) ?? [];
                 const loadMoreState = columnLoadMoreStates.get(col.id);
                 const hasMore =
-                  loadMoreState?.hasMore ??
-                  (initialHasMoreByColumn.get(col.id) ?? 0) >= TICKETS_PAGE_SIZE;
+                  col.statusType === 'complete' &&
+                  (loadMoreState?.hasMore ??
+                    (initialHasMoreByColumn.get(col.id) ?? 0) >= TICKETS_PAGE_SIZE);
                 const isLoadingMore = loadMoreState?.isLoading ?? false;
                 return (
                   <KanbanColumn

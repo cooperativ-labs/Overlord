@@ -1,6 +1,7 @@
 import type { QueryClient } from '@tanstack/react-query';
 
 import {
+  getBoardEntries,
   mergeTicketsIntoBoards,
   mergeWaitingQuestionIntoBoards,
   reconcileRealtimeTicketRow,
@@ -382,15 +383,19 @@ export function setupRealtimeSubscriptions({
     if (!event.phase) return;
     if (!refs.ticketIdsRef.current.has(event.ticket_id)) return;
 
-    const shouldMoveToTopOfReview = event.phase === 'review' && event.objective_id !== null;
+    const targetStatus = event.phase;
+    const targetType = getBoardEntries(queryClient)
+      .map(([, state]) => state.ticketStatusesByName[targetStatus]?.status_type)
+      .find(statusType => statusType !== undefined);
+    const shouldMoveToTop = targetType === 'review' || targetType === 'complete';
     const existingTicket = refs.ticketsByIdRef.current.get(event.ticket_id);
     updateTicketInBoards(queryClient, event.ticket_id, {
-      status: event.phase,
+      status: targetStatus,
       board_position:
-        shouldMoveToTopOfReview && existingTicket
+        shouldMoveToTop && existingTicket
           ? getTopBoardPositionForStatus(
               [...refs.ticketsByIdRef.current.values()],
-              event.phase,
+              targetStatus,
               event.ticket_id
             )
           : existingTicket?.board_position,

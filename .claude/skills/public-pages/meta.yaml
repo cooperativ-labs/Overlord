@@ -1,5 +1,8 @@
 slug: public-pages
 name: public-pages
+description: Use when adding or changing pages that must be reachable without
+  signing in. Requires updating lib/auth/public-routes.ts so middleware and the
+  web auth gate allow unauthenticated access.
 tags: []
 compat: []
-sha256: 61c1c8ecdccd67c86adf14e66362a3a83ce23dee5cd2e0db864fb2feedffc022
+sha256: 92565e32adb472239bc7ffa6dc6bb8b9b672dfcd7fd240d4abfe0e9a67220ff7

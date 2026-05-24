@@ -35,6 +35,7 @@ Overlord uses Supabase OAuth access tokens for protocol and MCP authentication.
   - `refresh_token`
   - `organization_id`
   - `platform_url`
+- When an account belongs to multiple organizations, `ovld auth login` stores the first available organization as the default instead of prompting. Ticket-scoped protocol commands override that default from human-readable ticket ids such as `1:899`; pass `--organization-id <id>` to set a different login default.
 - The CLI refreshes access tokens automatically with the OAuth refresh token flow.
 - Desktop-installed CLI wrappers default `OVERLORD_URL` to `https://www.ovld.ai`.
 - For local dev against the web app on `http://localhost:3000`, explicitly override it before login or protocol commands:

@@ -58,7 +58,7 @@ Checklist:
 - Settings merge preserves user's existing hooks and permissions (no clobber)
 - Skill text tells the agent to request permission escalation or network access before retrying if `OVERLORD_URL` is unreachable
 - Skill text tells the agent to run `ovld auth repair` itself on protocol/MCP auth failures before asking the user to log in again or proceed without Overlord updates
-- Skill text tells the agent to try `ovld auth repair` before `ovld auth login --organization-id <id>` when shared credentials look stale; `--organization-id` is required in non-TTY environments with multiple organizations
+- Skill text tells the agent to try `ovld auth repair` before `ovld auth login` when shared credentials look stale; `--organization-id <id>` is optional for choosing a different login default
 - Slash command docs also tell the agent to request permission escalation or network access before retrying if `OVERLORD_URL` is unreachable
 - Manifest entry written to `~/.ovld/bundle-manifest.json`
 
@@ -187,7 +187,7 @@ Checklist:
 - Local Codex plugin installs a `PermissionRequest` hook that notifies Overlord through `/api/protocol/permission-request` (same blocking question event as Claude)
 - Prompt text does not tell Codex to look for `overlord-local` or a local Codex bundle
 - Prompt text tells Codex to run `ovld auth repair` itself on protocol auth failures before asking the user to log in again or proceed without Overlord updates
-- Prompt text tells Codex to try `ovld auth repair` before `ovld auth login --organization-id <id>` when shared credentials look stale; `--organization-id` is required in non-TTY environments with multiple organizations
+- Prompt text tells Codex to try `ovld auth repair` before `ovld auth login` when shared credentials look stale; `--organization-id <id>` is optional for choosing a different login default
 - Thinking/effort flag uses `-c model_reasoning_effort=<value>` (TOML inline format)
 - Desktop local launches intentionally stay on the direct Electron path instead of delegating to `ovld launch`; `ovld launch` is the copy/paste surface and remote shell entrypoint
 - Desktop SSH launches use the same Codex expect/context-file behavior with the context file created on the remote host before Codex starts

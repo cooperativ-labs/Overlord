@@ -191,6 +191,35 @@ for (const modulePath of [
     }
   });
 
+  test(`${modulePath} selectLoginOrganization defaults to the first available organization`, async () => {
+    const { selectLoginOrganization } = await importFresh(modulePath);
+
+    assert.deepEqual(
+      selectLoginOrganization([
+        { id: 1, name: 'One' },
+        { id: 16, name: 'Sixteen' }
+      ]),
+      { id: 1, name: 'One' }
+    );
+  });
+
+  test(`${modulePath} selectLoginOrganization honors --organization-id`, async () => {
+    const { selectLoginOrganization } = await importFresh(modulePath);
+
+    assert.deepEqual(
+      selectLoginOrganization([
+        { id: 1, name: 'One' },
+        { id: 16, name: 'Sixteen' }
+      ], 16),
+      { id: 16, name: 'Sixteen' }
+    );
+
+    assert.throws(
+      () => selectLoginOrganization([{ id: 1, name: 'One' }], 16),
+      /Organization 16 is not available/
+    );
+  });
+
   test(`${modulePath} resolveLoginPlatformUrl defaults to localhost when running from the source tree`, async () => {
     await withTempHome(async () => {
       const { resolveLoginPlatformUrl } = await importFresh(modulePath);
