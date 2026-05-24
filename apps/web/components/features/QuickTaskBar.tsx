@@ -22,8 +22,8 @@ import { submitTicketObjectiveAction } from '@/lib/actions/tickets';
 import {
   useCreateTicketMutation,
   useUpdateTicketAssignmentMutation,
-  useUpdateTicketExecutionTargetMutation,
-  useUpdateTicketFieldsMutation
+  useUpdateTicketFieldsMutation,
+  useUpdateTicketForHumanMutation
 } from '@/lib/client-data/tickets/mutations';
 import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
 import { isLaunchAgentTypeValue } from '@/lib/helpers/agent-types';
@@ -44,8 +44,6 @@ type ProjectOption = {
   ssh_command?: string | null;
   remote_working_directory?: string | null;
 };
-
-type ExecutionTarget = 'agent' | 'human';
 
 type QuickTaskBarProps = {
   defaultProjectId: string | null;
@@ -84,7 +82,7 @@ export function QuickTaskBar({ defaultProjectId, projects, sshEnabled }: QuickTa
   const [selectedProjectId, setSelectedProjectId] = useState<string>(() =>
     resolveProjectId(projects, defaultProjectId)
   );
-  const [executionTarget, setExecutionTarget] = useState<ExecutionTarget>('agent');
+  const [forHuman, setForHuman] = useState(false);
   const [stagedFiles, setStagedFiles] = useState<StagedFile[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeMenu, setActiveMenu] = useState<null | 'project' | 'model'>(null);
@@ -99,7 +97,7 @@ export function QuickTaskBar({ defaultProjectId, projects, sshEnabled }: QuickTa
   const createTicketMutation = useCreateTicketMutation();
   const updateAssignmentMutation = useUpdateTicketAssignmentMutation();
   const updateFieldsMutation = useUpdateTicketFieldsMutation();
-  const updateExecutionTargetMutation = useUpdateTicketExecutionTargetMutation();
+  const updateForHumanMutation = useUpdateTicketForHumanMutation();
 
   const selectedProject = projects.find(p => p.id === selectedProjectId) ?? null;
   const resolvedDefaultProjectId = resolveProjectId(projects, defaultProjectId);
@@ -294,7 +292,7 @@ export function QuickTaskBar({ defaultProjectId, projects, sshEnabled }: QuickTa
           agent_session_state: null,
           status: 'draft',
           priority: 'medium',
-          execution_target: executionTarget,
+          for_human: forHuman,
           assigned_agent: null,
           board_position: 0,
           waiting_for_response_at: null,
@@ -318,15 +316,15 @@ export function QuickTaskBar({ defaultProjectId, projects, sshEnabled }: QuickTa
       // Background tasks: assignment, execution target, title, attachments
       void (async () => {
         try {
-          if (executionTarget === 'agent') {
+          if (!forHuman) {
             await updateAssignmentMutation.mutateAsync({
               ticketId: createdTicket.id,
               selection: objectiveSelection
             });
           } else {
-            await updateExecutionTargetMutation.mutateAsync({
+            await updateForHumanMutation.mutateAsync({
               ticketId: createdTicket.id,
-              executionTarget: 'human'
+              forHuman: true
             });
           }
 
@@ -518,10 +516,10 @@ export function QuickTaskBar({ defaultProjectId, projects, sshEnabled }: QuickTa
               <button
                 type="button"
                 aria-label="Assign to agent"
-                onClick={() => setExecutionTarget('agent')}
+                onClick={() => setForHuman(false)}
                 className={cn(
                   'flex h-7 w-7 items-center justify-center rounded-full transition-colors',
-                  executionTarget === 'agent'
+                  !forHuman
                     ? 'bg-background text-foreground shadow-sm'
                     : 'text-muted-foreground hover:text-foreground'
                 )}
@@ -531,10 +529,10 @@ export function QuickTaskBar({ defaultProjectId, projects, sshEnabled }: QuickTa
               <button
                 type="button"
                 aria-label="Assign to human"
-                onClick={() => setExecutionTarget('human')}
+                onClick={() => setForHuman(true)}
                 className={cn(
                   'flex h-7 w-7 items-center justify-center rounded-full transition-colors',
-                  executionTarget === 'human'
+                  forHuman
                     ? 'bg-background text-foreground shadow-sm'
                     : 'text-muted-foreground hover:text-foreground'
                 )}

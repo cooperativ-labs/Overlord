@@ -353,7 +353,7 @@ export async function TicketPanelContent({
           currentStatus={ticket.status ?? ''}
           statusOptions={[...statusOptions]}
           closePath={closePath}
-          executionTarget={ticket.execution_target ?? 'agent'}
+          forHuman={ticket.for_human ?? false}
         />
 
         <TimerWithTimeEntries

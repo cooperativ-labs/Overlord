@@ -180,7 +180,7 @@ Optional:
 --priority <low|medium|high|urgent>
 --acceptance-criteria <text>
 --available-tools <text>
---execution-target <agent|human>
+--for-human
 --delegate <model>
 \`\`\`
 

@@ -50,7 +50,7 @@ describe('buildFeedDiscussLayeredTaskMarkdown', () => {
         sliceObjectiveText: 'Implement X',
         acceptanceCriteria: 'Tests pass',
         constraints: 'None',
-        executionTarget: 'agent'
+        forHuman: false
       },
       fileChanges: [
         {

@@ -27,7 +27,7 @@ export type BoardTicket = {
   has_executing_objective?: boolean;
   status: string;
   priority: string;
-  execution_target: string;
+  for_human: boolean;
   assigned_agent: unknown | null;
   board_position: number;
   organization_name?: string | null;

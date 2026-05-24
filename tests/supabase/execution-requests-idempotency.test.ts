@@ -49,7 +49,7 @@ describe('execution_requests idempotency', () => {
       .insert({
         organization_id: orgId,
         title: 'Idempotency test ticket',
-        execution_target: 'agent',
+        for_human: false,
         created_by: USER_ID
       })
       .select('id')

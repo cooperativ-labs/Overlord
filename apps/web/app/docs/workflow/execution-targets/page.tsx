@@ -117,7 +117,7 @@ ovld protocol update-project-resource --resource-id <uuid> --is-primary true
 
 \`ovld runner start\` uses the same fingerprint and registered resources when claiming queued requests. Use \`--device-fingerprint\` or \`OVERLORD_DEVICE_FINGERPRINT\` when matching a specific target.
 
-For ticket routing (agent vs human work), \`--execution-target\` on \`ovld protocol create\` is a separate concept — see the [CLI reference](/docs/for-agents/cli-reference).
+For ticket routing (agent vs human work), \`--for-human\` on \`ovld protocol create\` is a separate concept — see the [CLI reference](/docs/for-agents/cli-reference).
 
 ---
 

@@ -159,7 +159,7 @@ export function NewTicketModal({
           agent_session_state: null,
           status: 'draft',
           priority: 'medium',
-          execution_target: 'agent',
+          for_human: false,
           assigned_agent: null,
           board_position: 0,
           waiting_for_response_at: null,

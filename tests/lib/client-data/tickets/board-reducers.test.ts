@@ -35,7 +35,7 @@ function makeTicket(overrides: Partial<BoardTicket> = {}): BoardTicket {
     project_id: 'project-1',
     status: 'next-up',
     priority: 'medium',
-    execution_target: 'agent',
+    for_human: false,
     assigned_agent: null,
     board_position: 0,
     is_read: true,

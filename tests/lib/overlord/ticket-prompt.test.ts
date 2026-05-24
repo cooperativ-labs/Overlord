@@ -20,7 +20,7 @@ describe('Codex bundle prompt routing', () => {
         available_tools: null,
         constraints: null,
         output_format: null,
-        execution_target: 'agent',
+        for_human: false,
         project_id: 'project-123',
         status: 'draft',
         priority: 'medium'
@@ -48,7 +48,7 @@ describe('Codex bundle prompt routing', () => {
         available_tools: null,
         constraints: null,
         output_format: null,
-        execution_target: 'agent',
+        for_human: false,
         project_id: 'project-123',
         status: 'draft',
         priority: 'medium'
@@ -76,7 +76,7 @@ describe('Codex bundle prompt routing', () => {
         available_tools: null,
         constraints: null,
         output_format: null,
-        execution_target: 'agent',
+        for_human: false,
         project_id: 'project-123',
         status: 'draft',
         priority: 'medium'
@@ -105,7 +105,7 @@ describe('Codex bundle prompt routing', () => {
         available_tools: null,
         constraints: null,
         output_format: null,
-        execution_target: 'agent',
+        for_human: false,
         project_id: 'project-123',
         status: 'draft',
         priority: 'medium'
@@ -135,7 +135,7 @@ describe('Cursor bundled prompt routing', () => {
     available_tools: null,
     constraints: null,
     output_format: null,
-    execution_target: 'agent' as const,
+    for_human: false as const,
     project_id: 'project-123',
     status: 'draft',
     priority: 'medium' as const
@@ -169,7 +169,7 @@ describe('Antigravity bundled prompt routing', () => {
         available_tools: null,
         constraints: null,
         output_format: null,
-        execution_target: 'agent',
+        for_human: false,
         project_id: 'project-123',
         status: 'draft',
         priority: 'medium'
@@ -199,7 +199,7 @@ describe('Antigravity bundled prompt routing', () => {
         available_tools: null,
         constraints: null,
         output_format: null,
-        execution_target: 'agent',
+        for_human: false,
         project_id: 'project-123',
         status: 'draft',
         priority: 'medium'
@@ -229,7 +229,7 @@ describe('OpenCode bundled prompt routing', () => {
         available_tools: null,
         constraints: null,
         output_format: null,
-        execution_target: 'agent',
+        for_human: false,
         project_id: 'project-123',
         status: 'draft',
         priority: 'medium'

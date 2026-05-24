@@ -32,7 +32,7 @@ export async function handleCreateTicket(supabase: SupabaseClient, args: any, ct
     objectives: rawObjectives,
     acceptanceCriteria = '',
     availableTools = '',
-    executionTarget = 'human',
+    forHuman = false,
     priority = 'medium',
     delegate = null
   } = args;
@@ -82,14 +82,14 @@ export async function handleCreateTicket(supabase: SupabaseClient, args: any, ct
       available_tools: availableTools,
       created_by: createdBy,
       delegate: ticketDelegate,
-      execution_target: executionTarget,
+      for_human: forHuman,
       organization_id: sourceTicket.organization_id,
       priority,
       project_id: sourceTicket.project_id,
       status: draftStatusName,
       title: nextTitle
     })
-    .select('id, ticket_id, organization_id, project_id, execution_target')
+    .select('id, ticket_id, organization_id, project_id, for_human')
     .single();
 
   if (createErr || !created) return toolErr(createErr?.message ?? 'Failed to create ticket.');
@@ -119,7 +119,7 @@ export async function handleCreateTicket(supabase: SupabaseClient, args: any, ct
         entry_type: 'follow_up_ticket'
       },
       objective_id: resolved.session.objective_id,
-      summary: `Created follow-up ticket ${createdRef} (${created.execution_target}).`,
+      summary: `Created follow-up ticket ${createdRef} (${created.for_human ? 'human' : 'agent'}).`,
       ticket_id: ticketId,
       created_by: createdBy
     })
@@ -129,7 +129,7 @@ export async function handleCreateTicket(supabase: SupabaseClient, args: any, ct
     ok: true,
     objectives: insertedObjectives,
     ticket: {
-      executionTarget: created.execution_target,
+      forHuman: created.for_human,
       id: created.id,
       organizationId: created.organization_id,
       projectId: created.project_id,

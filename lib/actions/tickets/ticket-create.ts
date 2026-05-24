@@ -268,7 +268,7 @@ export async function createTicketAction(formData: FormData, organizationId?: nu
     description: formData.get('objective') ?? formData.get('description'),
     availableTools: formData.get('availableTools'),
     acceptanceCriteria: formData.get('acceptanceCriteria'),
-    executionTarget: formData.get('executionTarget')
+    forHuman: formData.get('forHuman') === 'true'
   });
 
   if (!parsed.success) {
@@ -281,7 +281,7 @@ export async function createTicketAction(formData: FormData, organizationId?: nu
   const insertPayload: {
     acceptance_criteria: string | null;
     available_tools: string;
-    execution_target: Database['public']['Enums']['ticket_execution_target'];
+    for_human: boolean;
     status: string;
     title: string;
     organization_id: number;
@@ -289,7 +289,7 @@ export async function createTicketAction(formData: FormData, organizationId?: nu
   } = {
     acceptance_criteria: parsed.data.acceptanceCriteria || null,
     available_tools: parsed.data.availableTools,
-    execution_target: parsed.data.executionTarget,
+    for_human: parsed.data.forHuman,
     status: await resolveNewTicketDraftStatus(supabase, selected.organizationId),
     title: parsed.data.title || deriveTitleFromObjective(parsed.data.description),
     organization_id: selected.organizationId,

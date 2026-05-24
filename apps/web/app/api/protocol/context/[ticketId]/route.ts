@@ -155,7 +155,7 @@ export async function GET(request: Request, { params }: RouteContext) {
           sliceObjectiveText: objectiveResolution.objectiveText,
           acceptanceCriteria: ticket.acceptance_criteria,
           constraints: ticket.constraints,
-          executionTarget: ticket.execution_target
+          forHuman: ticket.for_human
         }
       });
       if (!append.ok) {
@@ -174,7 +174,7 @@ export async function GET(request: Request, { params }: RouteContext) {
         available_tools: ticket.available_tools,
         constraints: ticket.constraints,
         output_format: ticket.output_format,
-        execution_target: ticket.execution_target,
+        for_human: ticket.for_human,
         project_id: ticket.project_id,
         status: ticket.status,
         priority: ticket.priority

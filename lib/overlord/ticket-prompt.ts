@@ -44,7 +44,7 @@ type Ticket = {
   available_tools: string | null;
   constraints?: string | null;
   output_format?: string | null;
-  execution_target: 'agent' | 'human' | null;
+  for_human: boolean | null;
   project_id: string | null;
   status: string | null;
   priority: string | number | null;
@@ -533,7 +533,7 @@ ${settingsJson}
 - \`read_context\` / \`write_context\` — persist findings across sessions
 - \`deliver\` — deliver completed work
 - \`record_work\` — record completed-from-chat work as a ticket in \`review\` with a completed objective and trigger feed-post generation in one call (use instead of \`create_ticket\` + \`attach\` + \`deliver\` when the work is already done in the chat)
-- \`create_ticket\` — create a follow-up ticket; set \`executionTarget\` to \`"agent"\` for computer-executable work or \`"human"\` for tasks requiring human presence/judgment`;
+- \`create_ticket\` — create a follow-up ticket; set \`forHuman\` to \`false\` for computer-executable work or \`true\` for tasks requiring human presence/judgment`;
 }
 
 function buildMcpCloudProtocolSection({
@@ -598,7 +598,7 @@ The \`attach\` response includes an \`attachments\` array with the IDs needed be
 
 ### 6 — create_ticket (optional)
 
-Create a follow-up ticket. Set \`executionTarget\` to \`"agent"\` for tasks an AI can complete in a computer environment (coding, research, document editing) or \`"human"\` for tasks requiring human presence or judgment (setting credentials in a third-party UI, sending a letter, making a product decision).
+Create a follow-up ticket. Set \`forHuman\` to \`false\` for tasks an AI can complete in a computer environment (coding, research, document editing) or \`true\` for tasks requiring human presence or judgment (setting credentials in a third-party UI, sending a letter, making a product decision).
 
 ### 7 — deliver (always last)
 
@@ -644,9 +644,9 @@ function buildLocalCoreRules(launchMode: PromptLaunchMode): string {
 - Use \`write-context\` for facts a future agent session should know.
 - **Do not add or commit changes (git commit) unless the user explicitly asks you to commit.**
 - **Delivery is the concluding step.** After delivering, stop implementation work unless the user explicitly asks for follow-up execution; once follow-up execution is complete, deliver again.
-- **When creating follow-up tickets, set \`execution_target\` based on who should do the work:**
-  - \`agent\` — any task an AI agent can complete in a computer environment (coding, research, document editing, data analysis, etc.)
-  - \`human\` — any task requiring human presence or judgment (setting credentials in a third-party UI, sending a letter, making a product or business decision, physical-world actions)
+- **When creating follow-up tickets, set \`for_human\` based on who should do the work:**
+  - \`false\` — any task an AI agent can complete in a computer environment (coding, research, document editing, data analysis, etc.)
+  - \`true\` — any task requiring human presence or judgment (setting credentials in a third-party UI, sending a letter, making a product or business decision, physical-world actions)
 ${buildAskModeRules(launchMode)}`;
 }
 
@@ -667,9 +667,9 @@ function buildMcpCoreRules(launchMode: PromptLaunchMode): string {
 - During follow-up execution, post progress updates and include \`changeRationales\` for each file modified, the same as during initial execution.
 - Record important non-file decisions with \`eventType: "decision"\` or \`eventType: "discussion_summary"\`.
 - **Delivery is the concluding step.** After delivering, stop implementation work unless the user explicitly asks for follow-up execution; once follow-up execution is complete, deliver again.
-- **When creating follow-up tickets via \`create_ticket\`, set \`executionTarget\` based on who should do the work:**
-  - \`"agent"\` — tasks an AI agent can complete in a computer environment (coding, research, document editing, data analysis, etc.)
-  - \`"human"\` — tasks requiring human presence or judgment (setting credentials in a third-party UI, sending a letter, making a product decision, physical-world actions)
+- **When creating follow-up tickets via \`create_ticket\`, set \`forHuman\` based on who should do the work:**
+  - \`false\` — tasks an AI agent can complete in a computer environment (coding, research, document editing, data analysis, etc.)
+  - \`true\` — tasks requiring human presence or judgment (setting credentials in a third-party UI, sending a letter, making a product decision, physical-world actions)
 ${askModeRules}`;
 }
 

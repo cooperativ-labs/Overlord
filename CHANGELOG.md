@@ -2,6 +2,42 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2605241542.0] - 2026-05-24:15:42
+
+### Added
+- None.
+
+### Fixed
+- None.
+
+### Changed
+- Replace ticket **`execution_target`** enum (`agent` | `human`) with boolean **`for_human`** (`false` = agent, `true` = human; default **agent**).
+- Rename protocol and CLI assignment flag to **`--for-human`** (boolean); **`--execution-target agent|human`** remains accepted temporarily for older scripts.
+- Show Human/Agent assignment on Kanban and list cards via a compact toggle; relabel the ticket panel control to **Ticket assignment**.
+- Skip auto-enqueueing execution requests when **`for_human`** is true.
+- Align ticket create, prompt, spawn, attach, record-work, and board realtime payloads with **`for_human`**.
+
+### Security
+- None.
+
+### Removed
+- Remove **`ExecutionTargetToggle`** from ticket cards (replaced by **`IsHumanToggle`**).
+
+### Deprecated
+- Deprecate ticket-level **`execution_target`** / **`ticket_execution_target`** in favor of **`for_human`** (machine **execution targets** for runners and project resources are unchanged).
+
+### Refactor
+- Extract **`DeviceResourceList`** from project settings **Resources** page to separate ticket assignment from device/resource management UI.
+
+### Test
+- Update ticket prompt, execution-request, and board reducer tests for **`for_human`**.
+
+### Documentation
+- Update public protocol help, **`overlord-ticket`** plugin references, and create/prompt/spawn command docs for **`--for-human`**.
+
+### Chore
+- Add migration **`20260524143000_tickets_for_human.sql`**; bump workspace and CLI package versions to **`0.2605241542.0`**; regenerate Supabase types.
+
 ## [0.2605241431.0] - 2026-05-24:14:31
 
 ### Added

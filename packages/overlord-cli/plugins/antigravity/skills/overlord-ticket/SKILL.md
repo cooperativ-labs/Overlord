@@ -217,9 +217,9 @@ ovld protocol get-device --device-fingerprint "$OVERLORD_DEVICE_FINGERPRINT"
 ovld protocol list-project-resources --project-id <project_uuid> --device-fingerprint "$OVERLORD_DEVICE_FINGERPRINT"
 ```
 
-### Choosing `--execution-target`
+### Choosing `--for-human`
 
-Pass `--execution-target agent` or `--execution-target human` (default: `human`) when creating tickets.
+Pass `--for-human agent` or `--for-human human` (default: `human`) when creating tickets.
 
 - **`agent`** — any task an AI agent can complete in a computer environment: coding, internet research, document editing, data analysis, automated testing, etc.
 - **`human`** — any task requiring human presence or judgment: setting credentials or tokens in a third-party UI (e.g. Vercel, AWS), sending physical mail, making a product or business decision, physical-world actions.

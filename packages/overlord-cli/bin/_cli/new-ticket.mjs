@@ -48,10 +48,25 @@ function parseFlags(args) {
 
 function buildUsage(commandName) {
   if (commandName === 'prompt') {
-    return 'Usage: ovld prompt --objectives-json \'[{"objective":"..."}]\' [--objectives-file <path>] [--title "..."] [--acceptance-criteria "..."] [--available-tools "..."] [--execution-target agent|human] [--priority low|medium|high|urgent] [--project-id <id>] [--agent <agent>] [--model <identifier>] [--delegate <agent>]';
+    return 'Usage: ovld prompt --objectives-json \'[{"objective":"..."}]\' [--objectives-file <path>] [--title "..."] [--acceptance-criteria "..."] [--available-tools "..."] [--for-human] [--priority low|medium|high|urgent] [--project-id <id>] [--agent <agent>] [--model <identifier>] [--delegate <agent>]';
   }
 
-  return 'Usage: ovld create --objectives-json \'[{"objective":"..."}]\' [--objectives-file <path>] [--title "..."] [--acceptance-criteria "..."] [--available-tools "..."] [--execution-target agent|human] [--priority low|medium|high|urgent] [--project-id <id>] [--agent <agent>] [--model <identifier>] [--delegate <agent>]';
+  return 'Usage: ovld create --objectives-json \'[{"objective":"..."}]\' [--objectives-file <path>] [--title "..."] [--acceptance-criteria "..."] [--available-tools "..."] [--for-human] [--priority low|medium|high|urgent] [--project-id <id>] [--agent <agent>] [--model <identifier>] [--delegate <agent>]';
+}
+
+function resolveForHumanFlag(flags) {
+  if (flags['for-human'] !== undefined) {
+    const raw = flags['for-human'];
+    if (raw === true) return true;
+    const normalized = String(raw).trim().toLowerCase();
+    return normalized === '' || normalized === 'true' || normalized === '1';
+  }
+
+  if (flags['execution-target'] !== undefined) {
+    return String(flags['execution-target']).trim().toLowerCase() === 'human';
+  }
+
+  return false;
 }
 
 function ensureObjective(commandName, objective) {
@@ -331,7 +346,7 @@ async function runTicketCreationFlow(args, { commandName, launchAgent }) {
     title: String(flags.title ?? ''),
     acceptanceCriteria: String(flags['acceptance-criteria'] ?? ''),
     availableTools: String(flags['available-tools'] ?? ''),
-    executionTarget: String(flags['execution-target'] ?? 'agent'),
+    forHuman: resolveForHumanFlag(flags),
     priority: String(flags.priority ?? 'medium'),
     projectId: selectedProject.id,
     ...(ticketDelegate ? { delegate: ticketDelegate } : {})

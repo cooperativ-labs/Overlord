@@ -9,7 +9,7 @@ import { resolveTicketCreatorUserId } from './_ticket-creator.ts';
 
 const PRIORITY_ORDER = ['low', 'medium', 'high', 'urgent'] as const;
 
-export const DEFAULT_EXECUTION_TARGET = 'agent';
+export const DEFAULT_FOR_HUMAN = false;
 
 export type TicketDraft = {
   title: string;
@@ -237,14 +237,14 @@ export async function createDraftTicket(
     .from('tickets')
     .insert({
       created_by: createdBy,
-      execution_target: DEFAULT_EXECUTION_TARGET,
+      for_human: DEFAULT_FOR_HUMAN,
       organization_id: ctx.organizationId,
       priority: draft.priority,
       project_id: project?.id ?? null,
       status: draftStatusName,
       title: draft.title
     })
-    .select('id, ticket_id, organization_id, project_id, execution_target, status, title')
+    .select('id, ticket_id, organization_id, project_id, for_human, status, title')
     .single();
 
   if (createTicketError || !createdTicket) {
@@ -288,6 +288,6 @@ export async function createDraftTicket(
     reference: ticketReference,
     status: createdTicket.status,
     title: createdTicket.title ?? draft.title,
-    executionTarget: createdTicket.execution_target
+    forHuman: createdTicket.for_human
   };
 }

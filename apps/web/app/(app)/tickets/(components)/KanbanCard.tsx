@@ -12,12 +12,12 @@ import { Card, CardContent } from '@/components/ui/card';
 import { ContextMenu, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
 import type { TicketAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
 import { buildTicketPath } from '@/lib/helpers/ticket-path';
-import { getDisplayTitle, getTicketIdentifier } from '@/lib/helpers/tickets';
+import { getDisplayTitle } from '@/lib/helpers/tickets';
 import { cn } from '@/lib/utils';
 import type { Database } from '@/types/database.types';
 
 import { ExecutionTargetBadge } from './ExecutionTargetBadge';
-import { ExecutionTargetToggle } from './ExecutionTargetToggle';
+import { IsHumanToggle } from './IsHumanToggle';
 import { ObjectivesExecutedBadge } from './ObjectivesExecutedBadge';
 import {
   AttentionIndicators,
@@ -53,7 +53,7 @@ export type Ticket = {
   has_executing_objective?: boolean;
   status: string;
   priority: string;
-  execution_target: Database['public']['Enums']['ticket_execution_target'];
+  for_human: boolean;
   assigned_agent: TicketAssignedAgent | null;
   board_position: number;
   organization_name?: string | null;
@@ -192,7 +192,7 @@ function KanbanCardBody({
               )}
             </div>
             <div className="flex shrink-0 items-center gap-1.5">
-              <ExecutionTargetBadge executionTarget={ticket.execution_target} className="text-xs" />
+              <ExecutionTargetBadge forHuman={ticket.for_human} className="text-xs" />
               {ticket.schedule_id ? <ScheduleBadge /> : null}
               <ObjectivesExecutedBadge
                 count={ticket.objectives_executed_count}
@@ -229,12 +229,18 @@ function KanbanCardBody({
       ) : (
         <div className="h-2" />
       )}
-      <KanbanCardHoverFooter ticket={ticket} />
+      <KanbanCardHoverFooter ticket={ticket} ticket_id={ticket.ticket_id} />
     </CardContent>
   );
 }
 
-function KanbanCardHoverFooter({ ticket }: { ticket: Ticket }) {
+function KanbanCardHoverFooter({
+  ticket,
+  ticket_id
+}: {
+  ticket: Ticket;
+  ticket_id?: string | null;
+}) {
   const stopPropagation = (event: React.MouseEvent | React.PointerEvent) => {
     event.stopPropagation();
   };
@@ -258,14 +264,14 @@ function KanbanCardHoverFooter({ ticket }: { ticket: Ticket }) {
             />
           ) : null}
 
-          <ExecutionTargetToggle ticketId={ticket.id} executionTarget={ticket.execution_target} />
+          <IsHumanToggle ticketId={ticket.id} forHuman={ticket.for_human} />
 
           <div className="ml-auto flex items-center gap-1.5">
             <span
               className="text-[10px] tabular-nums text-muted-foreground"
-              title={`Ticket ID: ${getTicketIdentifier(ticket)}`}
+              title={`Ticket ID: ${ticket_id}`}
             >
-              {getTicketIdentifier(ticket)}
+              {ticket_id}
             </span>
             <DeleteTicketButton
               ticketId={ticket.id}

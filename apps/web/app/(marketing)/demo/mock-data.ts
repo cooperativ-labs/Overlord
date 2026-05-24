@@ -6,7 +6,7 @@ export type DemoTicket = {
   objective: string;
   status: 'draft' | 'execute' | 'review';
   priority: 'high' | 'medium' | 'low';
-  execution_target: 'agent' | 'human';
+  for_human: boolean;
   agent_session_state: 'attached' | 'idle' | 'completed' | null;
   running_agent: string | null;
   latest_objective_agent: string | null;
@@ -243,7 +243,7 @@ export const DEMO_TICKETS: DemoTicket[] = [
       'Create a GameContext provider that manages player state (health, score, position), game phase (menu, playing, paused, game-over), and level data. Use useReducer for predictable state transitions. Include TypeScript types for the full game state shape.',
     status: 'draft',
     priority: 'medium',
-    execution_target: 'agent',
+    for_human: false,
     agent_session_state: null,
     running_agent: null,
     latest_objective_agent: null,
@@ -258,7 +258,7 @@ export const DEMO_TICKETS: DemoTicket[] = [
       'Create a 32x32 sprite sheet for the player character with idle, walk (4 frames), jump, and attack animations. Export as PNG with transparent background. Follow the existing color palette defined in the design doc.',
     status: 'draft',
     priority: 'medium',
-    execution_target: 'human',
+    for_human: true,
     agent_session_state: null,
     running_agent: null,
     latest_objective_agent: null,
@@ -274,7 +274,7 @@ export const DEMO_TICKETS: DemoTicket[] = [
       'Build a pathfinding module using A* that enemies can use to navigate the tile map toward the player. Support configurable heuristics and path smoothing. Enemies should recalculate paths when the player moves more than 3 tiles from the last target.',
     status: 'draft',
     priority: 'medium',
-    execution_target: 'agent',
+    for_human: false,
     agent_session_state: null,
     running_agent: null,
     latest_objective_agent: null,
@@ -289,7 +289,7 @@ export const DEMO_TICKETS: DemoTicket[] = [
       'Create a SaveManager that serializes game state (player position, score, current level, inventory) to localStorage. Support multiple save slots, auto-save on level completion, and a load screen that previews each save with timestamp and level name.',
     status: 'draft',
     priority: 'low',
-    execution_target: 'agent',
+    for_human: false,
     agent_session_state: null,
     running_agent: null,
     latest_objective_agent: null,
@@ -306,7 +306,7 @@ export const DEMO_TICKETS: DemoTicket[] = [
       'Add keyboard-driven player movement (WASD + arrow keys) with smooth acceleration and deceleration. Implement AABB collision detection against the tile map. Handle slope tiles and one-way platforms. Write unit tests for the collision math.',
     status: 'draft',
     priority: 'high',
-    execution_target: 'agent',
+    for_human: false,
     agent_session_state: null,
     running_agent: null,
     latest_objective_agent: null,
@@ -321,7 +321,7 @@ export const DEMO_TICKETS: DemoTicket[] = [
       'Create a browser-based level editor component. Users should be able to paint tiles onto a grid, select from a tile palette, save/load level JSON, and preview the level in-game. Use the existing TileSet component for the palette.',
     status: 'draft',
     priority: 'medium',
-    execution_target: 'agent',
+    for_human: false,
     agent_session_state: null,
     running_agent: null,
     latest_objective_agent: null,
@@ -338,7 +338,7 @@ export const DEMO_TICKETS: DemoTicket[] = [
       'Build the main menu screen with animated title text, a "Start Game" button, a "Settings" button, and a "Quit" button. Add keyboard navigation support. Include a starfield background animation using canvas.',
     status: 'review',
     priority: 'medium',
-    execution_target: 'agent',
+    for_human: false,
     agent_session_state: 'completed',
     running_agent: null,
     latest_objective_agent: 'claude-code',
@@ -353,7 +353,7 @@ export const DEMO_TICKETS: DemoTicket[] = [
       'Implement an AudioManager class that handles loading, playing, and mixing sound effects and music tracks. Support volume control, fade in/out, and looping. Use Web Audio API for low-latency playback. Add sound effects for jump, collect, and hit events.',
     status: 'review',
     priority: 'medium',
-    execution_target: 'agent',
+    for_human: false,
     agent_session_state: 'completed',
     running_agent: null,
     latest_objective_agent: 'claude-code',

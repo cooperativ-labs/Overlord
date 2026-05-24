@@ -2086,7 +2086,7 @@ export type Database = {
           delegate: string | null;
           due_datetime: string | null;
           everhour_task_id: string | null;
-          execution_target: Database['public']['Enums']['ticket_execution_target'];
+          for_human: boolean;
           has_unopened_waiting_response: boolean;
           id: string;
           is_read: boolean;
@@ -2117,7 +2117,7 @@ export type Database = {
           delegate?: string | null;
           due_datetime?: string | null;
           everhour_task_id?: string | null;
-          execution_target?: Database['public']['Enums']['ticket_execution_target'];
+          for_human?: boolean;
           has_unopened_waiting_response?: boolean;
           id?: string;
           is_read?: boolean;
@@ -2148,7 +2148,7 @@ export type Database = {
           delegate?: string | null;
           due_datetime?: string | null;
           everhour_task_id?: string | null;
-          execution_target?: Database['public']['Enums']['ticket_execution_target'];
+          for_human?: boolean;
           has_unopened_waiting_response?: boolean;
           id?: string;
           is_read?: boolean;

@@ -267,6 +267,24 @@ function resolveTimeout(flags) {
   return DEFAULT_TIMEOUT_MS;
 }
 
+function resolveForHumanFlag(flags) {
+  if (flags['for-human'] !== undefined) {
+    const raw = flags['for-human'];
+    if (raw === true) return true;
+    if (raw === false) return false;
+    const normalized = String(raw).trim().toLowerCase();
+    if (normalized === '' || normalized === 'true' || normalized === '1') return true;
+    if (normalized === 'false' || normalized === '0') return false;
+    throw new Error('--for-human must be a boolean flag or one of true/false.');
+  }
+
+  if (flags['execution-target'] !== undefined) {
+    return String(flags['execution-target']).trim().toLowerCase() === 'human';
+  }
+
+  return undefined;
+}
+
 function parseRepeatedCliFlags(args, name) {
   const result = [];
   const prefix = `--${name}=`;
@@ -2161,6 +2179,7 @@ async function protocolPrompt(args) {
   const personal = Boolean(flags.personal);
   const workingDirectory =
     flags['working-directory'] ?? (!flags['project-id'] && !personal ? process.cwd() : undefined);
+  const forHuman = resolveForHumanFlag(flags);
 
   const body = {
     ...objectiveInput,
@@ -2176,7 +2195,7 @@ async function protocolPrompt(args) {
       ? { acceptanceCriteria: String(flags['acceptance-criteria']) }
       : {}),
     ...(flags['available-tools'] ? { availableTools: String(flags['available-tools']) } : {}),
-    ...(flags['execution-target'] ? { executionTarget: String(flags['execution-target']) } : {}),
+    ...(forHuman !== undefined ? { forHuman } : {}),
     delegate: resolveProtocolTicketDelegate(flags, modelIdentifier, agentIdentifier),
     ...(flags['parent-session-key']
       ? { parentSessionKey: String(flags['parent-session-key']) }
@@ -2248,6 +2267,7 @@ async function protocolCreateTicket(args) {
   const timeoutMs = resolveTimeout(flags);
   const agentIdentifier = resolveProtocolAgentIdentifier(flags);
   const modelIdentifier = resolveProtocolModelIdentifier(flags);
+  const forHuman = resolveForHumanFlag(flags);
 
   const hasSessionContext = Boolean(sessionKey && ticketId);
 
@@ -2263,7 +2283,7 @@ async function protocolCreateTicket(args) {
         ? { acceptanceCriteria: String(flags['acceptance-criteria']) }
         : {}),
       ...(flags['available-tools'] ? { availableTools: String(flags['available-tools']) } : {}),
-      ...(flags['execution-target'] ? { executionTarget: String(flags['execution-target']) } : {}),
+      ...(forHuman !== undefined ? { forHuman } : {}),
       delegate: resolveProtocolTicketDelegate(flags, modelIdentifier, agentIdentifier)
     };
 
@@ -2303,7 +2323,7 @@ async function protocolCreateTicket(args) {
       ? { acceptanceCriteria: String(flags['acceptance-criteria']) }
       : {}),
     ...(flags['available-tools'] ? { availableTools: String(flags['available-tools']) } : {}),
-    ...(flags['execution-target'] ? { executionTarget: String(flags['execution-target']) } : {}),
+    ...(forHuman !== undefined ? { forHuman } : {}),
     delegate: resolveProtocolTicketDelegate(flags, modelIdentifier, agentIdentifier)
   };
 
@@ -2825,7 +2845,8 @@ prompt:
     --working-directory <path> Override cwd for project resolution (default: cwd)
     --acceptance-criteria <text>
     --available-tools <text>
-    --execution-target <t>    agent | human
+    --for-human               Mark the new ticket as requiring a human
+    --execution-target <t>    Deprecated alias: agent | human
     --delegate <model>        Model or delegate identifier that created the ticket
     --parent-session-key <key>
     --parent-ticket-id <ticket_id>
@@ -2864,7 +2885,8 @@ create:
     --priority <level>        low | medium | high | urgent
     --acceptance-criteria <text>
     --available-tools <text>
-    --execution-target <t>    agent | human
+    --for-human               Mark the new ticket as requiring a human
+    --execution-target <t>    Deprecated alias: agent | human
     --delegate <model>        Model or delegate identifier that created the ticket
     --agent <identifier>
     --model <identifier>

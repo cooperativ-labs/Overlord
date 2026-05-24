@@ -3,42 +3,40 @@
 import { Bot, User } from 'lucide-react';
 import { type ComponentType, useEffect, useState } from 'react';
 
-import { useUpdateTicketExecutionTargetMutation } from '@/lib/client-data/tickets/mutations';
-import { capitalizeFirst, ticketExecutionTargetOptions } from '@/lib/options';
-import type { Database } from '@/types/database.types';
+import { useUpdateTicketForHumanMutation } from '@/lib/client-data/tickets/mutations';
+import { ticketForHumanOptions } from '@/lib/options';
 
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../ui/select';
 
-type ExecutionTarget = Database['public']['Enums']['ticket_execution_target'];
 type ExecutionTargetIconProps = { className?: string };
 
-const executionTargetIconMap: Record<ExecutionTarget, ComponentType<ExecutionTargetIconProps>> = {
+const executionTargetIconMap: Record<'agent' | 'human', ComponentType<ExecutionTargetIconProps>> = {
   agent: Bot,
   human: User
 };
 
 type Props = {
   ticketId: string;
-  currentExecutionTarget: ExecutionTarget;
+  currentForHuman: boolean;
 };
 
-export function TicketExecutionTargetSelect({ ticketId, currentExecutionTarget }: Props) {
-  const [executionTarget, setExecutionTarget] = useState(currentExecutionTarget);
-  const mutation = useUpdateTicketExecutionTargetMutation();
+export function TicketExecutionTargetSelect({ ticketId, currentForHuman }: Props) {
+  const [forHuman, setForHuman] = useState(currentForHuman);
+  const mutation = useUpdateTicketForHumanMutation();
 
   useEffect(() => {
-    setExecutionTarget(currentExecutionTarget);
-  }, [currentExecutionTarget]);
+    setForHuman(currentForHuman);
+  }, [currentForHuman]);
 
   function handleChange(value: string) {
-    const nextExecutionTarget = value as ExecutionTarget;
-    const previousExecutionTarget = executionTarget;
-    setExecutionTarget(nextExecutionTarget);
+    const nextForHuman = value === 'true';
+    const previousForHuman = forHuman;
+    setForHuman(nextForHuman);
     mutation.mutate(
-      { ticketId, executionTarget: nextExecutionTarget },
+      { ticketId, forHuman: nextForHuman },
       {
         onError: () => {
-          setExecutionTarget(previousExecutionTarget);
+          setForHuman(previousForHuman);
         }
       }
     );
@@ -46,23 +44,23 @@ export function TicketExecutionTargetSelect({ ticketId, currentExecutionTarget }
 
   return (
     <Select
-      value={executionTarget}
+      value={String(forHuman)}
       disabled={mutation.isPending}
       onValueChange={handleChange}
-      aria-label="Execution target"
+      aria-label="Ticket assignment"
     >
       <SelectTrigger
-        id="ticket-execution-target-select"
-        aria-label="Select execution target"
+        id="ticket-for-human-select"
+        aria-label="Select ticket assignment"
         className="h-6 w-auto rounded-md border bg-transparent px-3 text-xs font-base hover:bg-muted"
       >
-        {capitalizeFirst(executionTarget)}
+        {forHuman ? 'Human' : 'Agent'}
       </SelectTrigger>
       <SelectContent>
-        {ticketExecutionTargetOptions.map(({ value, label }) => {
-          const Icon = executionTargetIconMap[value];
+        {ticketForHumanOptions.map(({ value, label }) => {
+          const Icon = executionTargetIconMap[value ? 'human' : 'agent'];
           return (
-            <SelectItem key={value} value={value}>
+            <SelectItem key={String(value)} value={String(value)}>
               <span className="flex w-full items-center justify-between gap-2">
                 <span>{label}</span>
                 <Icon className="size-3.5 text-muted-foreground" aria-hidden="true" />

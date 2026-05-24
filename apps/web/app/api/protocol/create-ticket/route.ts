@@ -19,7 +19,7 @@ export async function POST(request: Request) {
       acceptanceCriteria,
       availableTools,
       delegate,
-      executionTarget,
+      forHuman,
       objectives,
       priority,
       sessionKey,
@@ -72,14 +72,14 @@ export async function POST(request: Request) {
         available_tools: availableTools,
         created_by: createdBy,
         delegate: ticketDelegate,
-        execution_target: executionTarget,
+        for_human: forHuman,
         organization_id: sourceTicket.organization_id,
         priority,
         project_id: sourceTicket.project_id,
         status: draftStatusName,
         title: nextTitle
       })
-      .select('id,ticket_id,organization_id,project_id,execution_target')
+      .select('id,ticket_id,organization_id,project_id,for_human')
       .single();
 
     if (createTicketError || !createdTicket) {
@@ -125,12 +125,12 @@ export async function POST(request: Request) {
       payload: {
         created_ticket_id: createdTicket.id,
         created_ticket_reference: createdReference,
-        created_ticket_execution_target: createdTicket.execution_target,
+        created_ticket_for_human: createdTicket.for_human,
         delegate: ticketDelegate,
         entry_type: 'follow_up_ticket'
       },
       objective_id: resolved.session.objective_id,
-      summary: `Created follow-up ticket ${createdReference} (${createdTicket.execution_target}).`,
+      summary: `Created follow-up ticket ${createdReference} (${createdTicket.for_human ? 'human' : 'agent'}).`,
       ticket_id: ticketId,
       created_by: createdBy
     });
@@ -143,7 +143,7 @@ export async function POST(request: Request) {
       ok: true,
       objectives: insertedObjectives,
       ticket: {
-        executionTarget: createdTicket.execution_target,
+        forHuman: createdTicket.for_human,
         id: createdTicket.id,
         organizationId: createdTicket.organization_id,
         projectId: createdTicket.project_id,

@@ -155,7 +155,7 @@ export const CreateTicketPayloadSchema = z.object({
   title: z.string().describe('Title for the follow-up ticket'),
   objective: z.string().describe('What needs to be done'),
   acceptanceCriteria: z.string().describe('How to verify the work is complete'),
-  executionTarget: z.enum(['human', 'agent']).describe('Who should execute this ticket')
+  forHuman: z.boolean().describe('Whether this ticket requires a human rather than an agent')
 });
 export type CreateTicketPayload = z.infer<typeof CreateTicketPayloadSchema>;
 

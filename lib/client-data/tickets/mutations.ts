@@ -35,8 +35,8 @@ import {
   reorderTicketsAction,
   updateTicketAssignedAgentAction,
   updateTicketDueDateAction,
-  updateTicketExecutionTargetAction,
   updateTicketFieldAction,
+  updateTicketForHumanAction,
   updateTicketStatusAction
 } from '@/lib/actions/tickets';
 import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
@@ -85,9 +85,7 @@ const updateTicketAssignedAgentActionWithRetry = withElectronActionRetry(
   updateTicketAssignedAgentAction
 );
 const updateTicketDueDateActionWithRetry = withElectronActionRetry(updateTicketDueDateAction);
-const updateTicketExecutionTargetActionWithRetry = withElectronActionRetry(
-  updateTicketExecutionTargetAction
-);
+const updateTicketForHumanActionWithRetry = withElectronActionRetry(updateTicketForHumanAction);
 const updateTicketFieldActionWithRetry = withElectronActionRetry(updateTicketFieldAction);
 const updateTicketStatusActionWithRetry = withElectronActionRetry(updateTicketStatusAction);
 
@@ -383,37 +381,36 @@ export function useUpdateTicketAssignmentMutation(): UseMutationResult<
 
 // ---- execution target ---------------------------------------------------
 
-export type UpdateTicketExecutionTargetInput = {
+export type UpdateTicketForHumanInput = {
   ticketId: string;
-  executionTarget: Database['public']['Enums']['ticket_execution_target'];
+  forHuman: boolean;
 };
 
-type UpdateTicketExecutionTargetContext = {
+type UpdateTicketForHumanContext = {
   snapshot: [readonly unknown[], TicketBoardState][];
   previousDetail: BoardTicket | null | undefined;
 };
 
-export function useUpdateTicketExecutionTargetMutation(): UseMutationResult<
+export function useUpdateTicketForHumanMutation(): UseMutationResult<
   void,
   Error,
-  UpdateTicketExecutionTargetInput,
-  UpdateTicketExecutionTargetContext
+  UpdateTicketForHumanInput,
+  UpdateTicketForHumanContext
 > {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: input =>
-      updateTicketExecutionTargetActionWithRetry(input.ticketId, input.executionTarget),
+    mutationFn: input => updateTicketForHumanActionWithRetry(input.ticketId, input.forHuman),
     onMutate: input => {
       const snapshot = snapshotBoards(qc);
       const previousDetail = qc.getQueryData<BoardTicket | null>(
         ticketQueryKeys.ticketById(input.ticketId)
       );
       applyToAllBoards(qc, state =>
-        updateTicketFields(state, input.ticketId, { execution_target: input.executionTarget })
+        updateTicketFields(state, input.ticketId, { for_human: input.forHuman })
       );
       qc.setQueryData<BoardTicket | null>(ticketQueryKeys.ticketById(input.ticketId), previous => {
         if (!previous) return previous;
-        return { ...previous, execution_target: input.executionTarget };
+        return { ...previous, for_human: input.forHuman };
       });
       return { snapshot, previousDetail };
     },

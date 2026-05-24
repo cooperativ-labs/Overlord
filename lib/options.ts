@@ -2,9 +2,8 @@ import type { Database } from '@/types/database.types';
 
 type TicketStatusType = Database['public']['Enums']['ticket_status_type'];
 type TicketPriority = Database['public']['Enums']['ticket_priority'];
-type TicketExecutionTarget = Database['public']['Enums']['ticket_execution_target'];
 
-export type Option<T extends string = string> = {
+export type Option<T extends string | boolean = string> = {
   value: T;
   label: string;
 };
@@ -23,9 +22,9 @@ export const ticketPriorityOptions: Option<TicketPriority>[] = [
   { value: 'urgent', label: 'Urgent' }
 ];
 
-export const ticketExecutionTargetOptions: Option<TicketExecutionTarget>[] = [
-  { value: 'agent', label: 'Agent' },
-  { value: 'human', label: 'Human' }
+export const ticketForHumanOptions: Option<boolean>[] = [
+  { value: false, label: 'Agent' },
+  { value: true, label: 'Human' }
 ];
 
 export function getOptionLabel<T extends string>(options: Option<T>[], value: T): string {

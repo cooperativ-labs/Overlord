@@ -79,7 +79,7 @@ export default function TicketsBoardClient({
         latest_objective_agent: t.latest_objective_agent,
         status: t.status,
         priority: t.priority,
-        execution_target: t.execution_target,
+        for_human: t.for_human,
         assigned_agent: t.assigned_agent,
         board_position: t.board_position,
         organization_name: t.organization_name,

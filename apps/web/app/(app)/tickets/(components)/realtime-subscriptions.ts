@@ -87,7 +87,7 @@ export function setupRealtimeSubscriptions({
     let query = supabase
       .from('tickets')
       .select(
-        'id,ticket_id,ticket_sequence,title,due_datetime,execution_target,status,priority,delegate,is_read,updated_at,board_position,organization_id,project_id,everhour_task_id,schedule_id,organization:organizations(name),project:projects(name,color,everhour_project_id)'
+        'id,ticket_id,ticket_sequence,title,due_datetime,for_human,status,priority,delegate,is_read,updated_at,board_position,organization_id,project_id,everhour_task_id,schedule_id,organization:organizations(name),project:projects(name,color,everhour_project_id)'
       )
       .eq('id', ticketId)
       .limit(1);

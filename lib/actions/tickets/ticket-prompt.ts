@@ -103,7 +103,7 @@ export async function getFeedDiscussPromptForCopy(input: {
   const { data: ticket, error: ticketError } = await supabase
     .from('tickets')
     .select(
-      'id,ticket_id,organization_id,title,acceptance_criteria,available_tools,execution_target,project_id,status,priority,constraints,output_format'
+      'id,ticket_id,organization_id,title,acceptance_criteria,available_tools,for_human,project_id,status,priority,constraints,output_format'
     )
     .eq('id', input.ticketId)
     .single();
@@ -168,7 +168,7 @@ export async function getFeedDiscussPromptForCopy(input: {
       sliceObjectiveText: objectiveResolution.objectiveText,
       acceptanceCriteria: ticket.acceptance_criteria,
       constraints: ticket.constraints,
-      executionTarget: ticket.execution_target
+      forHuman: ticket.for_human
     }
   });
 
@@ -186,7 +186,7 @@ export async function getFeedDiscussPromptForCopy(input: {
       available_tools: ticket.available_tools,
       constraints: ticket.constraints,
       output_format: ticket.output_format,
-      execution_target: ticket.execution_target,
+      for_human: ticket.for_human,
       project_id: ticket.project_id,
       status: ticket.status,
       priority: ticket.priority

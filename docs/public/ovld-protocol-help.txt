@@ -292,7 +292,7 @@ prompt:
     --working-directory <path> Override cwd for project resolution (default: cwd)
     --acceptance-criteria <text>
     --available-tools <text>
-    --execution-target <t>    agent | human
+    --for-human <t>    agent | human
     --delegate <model>        Model or delegate identifier that created the ticket
     --parent-session-key <key>
     --parent-ticket-id <ticket_id>
@@ -331,7 +331,7 @@ create:
     --priority <level>        low | medium | high | urgent
     --acceptance-criteria <text>
     --available-tools <text>
-    --execution-target <t>    agent | human
+    --for-human <t>    agent | human
     --delegate <model>        Model or delegate identifier that created the ticket
     --agent <identifier>
     --model <identifier>

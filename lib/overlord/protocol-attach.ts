@@ -99,7 +99,7 @@ async function resolvePendingCheckpointObjectiveIds(input: {
  * IMPORTANT: Keep this in sync with supabase/functions/mcp/handlers/attach.ts.
  */
 export const TICKET_AGENT_FIELDS =
-  'id,title,ticket_id,status,priority,board_position,organization_id,project_id,execution_target,context,constraints,available_tools,acceptance_criteria,output_format,created_at,updated_at,ticket_sequence,everhour_task_id,created_by';
+  'id,title,ticket_id,status,priority,board_position,organization_id,project_id,for_human,context,constraints,available_tools,acceptance_criteria,output_format,created_at,updated_at,ticket_sequence,everhour_task_id,created_by';
 
 export type AttachParams = {
   ticketId: string;

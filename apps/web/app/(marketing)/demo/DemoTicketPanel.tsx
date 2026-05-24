@@ -207,13 +207,13 @@ export function DemoTicketPanel({ ticket, onClose, onDiscuss, onRun }: DemoTicke
               variant="outline"
               className={cn(
                 'gap-1 rounded-full text-[11px]',
-                ticket.execution_target === 'agent'
+                ticket.for_human === false
                   ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200'
                   : 'border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-200'
               )}
             >
-              {ticket.execution_target === 'agent' ? <Bot className="h-3 w-3" /> : null}
-              {ticket.execution_target}
+              {ticket.for_human === false ? <Bot className="h-3 w-3" /> : null}
+              {ticket.for_human ? 'Human' : 'Agent'}
             </Badge>
             <StatusBadge state={ticket.agent_session_state} />
           </div>

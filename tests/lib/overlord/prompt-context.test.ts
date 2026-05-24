@@ -10,7 +10,7 @@ describe('buildPromptContextSections', () => {
         objective_id: 'objective-123',
         acceptance_criteria: null,
         available_tools: null,
-        execution_target: 'agent',
+        for_human: false,
         project_id: 'project-456',
         status: 'next-up',
         priority: 'medium'
@@ -29,7 +29,7 @@ describe('buildPromptContextSections', () => {
         objective: 'Update the prompt header metadata.',
         acceptance_criteria: null,
         available_tools: null,
-        execution_target: 'agent',
+        for_human: false,
         project_id: 'project-456',
         status: 'next-up',
         priority: 'medium'

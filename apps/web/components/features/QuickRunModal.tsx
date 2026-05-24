@@ -172,7 +172,7 @@ export function QuickRunModal({
           agent_session_state: null,
           status: 'next-up',
           priority: 'medium',
-          execution_target: 'agent',
+          for_human: false,
           assigned_agent: null,
           board_position: 0,
           waiting_for_response_at: null,

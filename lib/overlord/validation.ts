@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { connectionMethods, ticketExecutionTargets, ticketStatuses } from '@/lib/overlord/types';
+import { connectionMethods, ticketStatuses } from '@/lib/overlord/types';
 
 /**
  * Normalize free-form agent text before storage.
@@ -14,7 +14,7 @@ export function normalizeAgentText(s: string): string {
 
 const ticketStatusSchema = z.enum(ticketStatuses);
 const connectionMethodSchema = z.enum(connectionMethods);
-const ticketExecutionTargetSchema = z.enum(ticketExecutionTargets);
+const forHumanSchema = z.boolean().optional().default(false);
 
 /** Required agent-authored text field with normalization applied after trim. */
 const agentText = (max: number) => z.string().trim().min(1).max(max).transform(normalizeAgentText);
@@ -46,7 +46,7 @@ export const createTicketSchema = z.object({
   description: agentText(20_000),
   availableTools: agentTextOptional(20_000).optional().default(''),
   acceptanceCriteria: agentTextOptional(20_000).optional().default(''),
-  executionTarget: ticketExecutionTargetSchema.default('agent')
+  forHuman: forHumanSchema
 });
 
 export const searchTicketsSchema = z.object({
@@ -217,7 +217,7 @@ export const createStandaloneTicketSchema = z.object({
   objectives: objectivesArrayField,
   availableTools: agentTextOptional(20_000).optional().default(''),
   acceptanceCriteria: agentTextOptional(20_000).optional().default(''),
-  executionTarget: ticketExecutionTargetSchema.default('agent'),
+  forHuman: forHumanSchema,
   priority: z.enum(['low', 'medium', 'high', 'urgent']).default('medium'),
   projectId: z.string().optional(),
   personal: z.boolean().optional().default(false),
@@ -232,7 +232,7 @@ export const createFollowUpTicketSchema = z.object({
   objectives: objectivesArrayField,
   availableTools: agentTextOptional(20_000).optional().default(''),
   acceptanceCriteria: agentTextOptional(20_000).optional().default(''),
-  executionTarget: ticketExecutionTargetSchema.default('human'),
+  forHuman: forHumanSchema,
   priority: z.enum(['low', 'medium', 'high', 'urgent']).default('medium'),
   delegate: z.string().trim().max(120).optional()
 });
@@ -302,7 +302,7 @@ export const spawnSchema = z.object({
   objectives: objectivesArrayField,
   acceptanceCriteria: agentTextOptional(20_000).optional().default(''),
   availableTools: agentTextOptional(20_000).optional().default(''),
-  executionTarget: ticketExecutionTargetSchema.default('agent'),
+  forHuman: forHumanSchema,
   priority: z.enum(['low', 'medium', 'high', 'urgent']).default('medium'),
   projectId: z.string().optional(),
   personal: z.boolean().optional().default(false),

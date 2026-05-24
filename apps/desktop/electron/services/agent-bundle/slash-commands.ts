@@ -158,7 +158,7 @@ disable-model-invocation: true
 Create a draft Overlord ticket from the user's request.
 
 Use \`$ARGUMENTS\` as the input.
-If it already contains flags such as \`--title\`, \`--priority\`, \`--project-id\`, \`--execution-target\`, \`--objectives-json\`, or \`--objectives-file\`, pass those flags through after \`ovld protocol create --agent claude-code\`.
+If it already contains flags such as \`--title\`, \`--priority\`, \`--project-id\`, \`--for-human\`, \`--objectives-json\`, or \`--objectives-file\`, pass those flags through after \`ovld protocol create --agent claude-code\`.
 Otherwise, treat \`$ARGUMENTS\` as the objective text and run:
 \`ovld protocol create --agent claude-code --objective "<objective>"\`
 
@@ -179,7 +179,7 @@ disable-model-invocation: true
 Create a new Overlord ticket from the user's request.
 
 Use \`$ARGUMENTS\` as the input.
-If it already contains flags such as \`--title\`, \`--priority\`, \`--project-id\`, \`--execution-target\`, \`--objectives-json\`, or \`--objectives-file\`, pass those flags through after \`ovld protocol prompt --agent claude-code\`.
+If it already contains flags such as \`--title\`, \`--priority\`, \`--project-id\`, \`--for-human\`, \`--objectives-json\`, or \`--objectives-file\`, pass those flags through after \`ovld protocol prompt --agent claude-code\`.
 Otherwise, treat \`$ARGUMENTS\` as the objective text and run:
 \`ovld protocol prompt --agent claude-code --objective "<objective>"\`
 
@@ -303,7 +303,7 @@ Rules:
       path: path.join(base, 'create.md'),
       content: `Create a draft Overlord ticket from the user's request.
 
-The text after \`/create\` is the objective unless it already includes raw flags such as \`--title\`, \`--priority\`, \`--project-id\`, \`--execution-target\`, \`--objectives-json\`, or \`--objectives-file\`.
+The text after \`/create\` is the objective unless it already includes raw flags such as \`--title\`, \`--priority\`, \`--project-id\`, \`--for-human\`, \`--objectives-json\`, or \`--objectives-file\`.
 
 If raw flags are present, run:
 \`ovld protocol create --agent cursor <raw arguments>\`
@@ -321,7 +321,7 @@ After the command succeeds, report the new \`TICKET_ID\`.`
       path: path.join(base, 'prompt.md'),
       content: `Create a new Overlord ticket from the user's request.
 
-The text after \`/prompt\` is the objective unless it already includes raw flags such as \`--title\`, \`--priority\`, \`--project-id\`, \`--execution-target\`, \`--objectives-json\`, or \`--objectives-file\`.
+The text after \`/prompt\` is the objective unless it already includes raw flags such as \`--title\`, \`--priority\`, \`--project-id\`, \`--for-human\`, \`--objectives-json\`, or \`--objectives-file\`.
 
 If raw flags are present, run:
 \`ovld protocol prompt --agent cursor <raw arguments>\`
@@ -472,7 +472,7 @@ agent: build
 Create a draft Overlord ticket from the user's request.
 
 Use \`$ARGUMENTS\` as the input.
-If it already contains flags such as \`--title\`, \`--priority\`, \`--project-id\`, or \`--execution-target\`, pass those flags through after \`ovld protocol create --agent opencode\`.
+If it already contains flags such as \`--title\`, \`--priority\`, \`--project-id\`, or \`--for-human\`, pass those flags through after \`ovld protocol create --agent opencode\`.
 Otherwise, treat \`$ARGUMENTS\` as the objective text and run:
 \`ovld protocol create --agent opencode --objective "<objective>"\`
 
@@ -490,7 +490,7 @@ agent: build
 Create a new Overlord ticket from the user's request.
 
 Use \`$ARGUMENTS\` as the input.
-If it already contains flags such as \`--title\`, \`--priority\`, \`--project-id\`, or \`--execution-target\`, pass those flags through after \`ovld protocol prompt --agent opencode\`.
+If it already contains flags such as \`--title\`, \`--priority\`, \`--project-id\`, or \`--for-human\`, pass those flags through after \`ovld protocol prompt --agent opencode\`.
 Otherwise, treat \`$ARGUMENTS\` as the objective text and run:
 \`ovld protocol prompt --agent opencode --objective "<objective>"\`
 

@@ -1,5 +1,3 @@
-import type { Database } from '@/types/database.types';
-
 import type { Ticket } from './KanbanCard';
 
 export type RealtimeBoardTicketRow = {
@@ -8,7 +6,7 @@ export type RealtimeBoardTicketRow = {
   ticket_sequence: number;
   title: string | null;
   due_datetime: string | null;
-  execution_target: Database['public']['Enums']['ticket_execution_target'];
+  for_human: boolean;
   status: string;
   priority: string;
   delegate: string | null;
@@ -112,7 +110,7 @@ export function mapRealtimeBoardTicketRow(row: RealtimeBoardTicketRow): Ticket {
     has_executing_objective: false,
     status: row.status,
     priority: row.priority,
-    execution_target: row.execution_target,
+    for_human: row.for_human,
     assigned_agent: null,
     board_position: row.board_position,
     organization_name: organization?.name ?? null,

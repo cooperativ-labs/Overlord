@@ -110,7 +110,7 @@ For the `record-change-rationales` command and full payload shape with optional 
 
 - [reference/cli.md](reference/cli.md) — Full protocol command syntax, flags, phases, ticket creation, and project discovery
 - [reference/mcp.md](reference/mcp.md) — MCP tool naming, key casing, hosted vs local shim defaults
-- [reference/devices.md](reference/devices.md) — Device fingerprints, project resources, and `--execution-target`
+- [reference/devices.md](reference/devices.md) — Device fingerprints, project resources, and `--for-human`
 - [reference/context.md](reference/context.md) — Shared state, attachments, and large artifact policy
 - [reference/shell-escaping.md](reference/shell-escaping.md) — Heredoc stdin piping for special characters in summaries and payloads
 

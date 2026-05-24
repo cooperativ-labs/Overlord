@@ -33,7 +33,7 @@ type TicketRow = {
   ticket_id: string;
   organization_id: number;
   project_id: string | null;
-  execution_target: string | null;
+  for_human: boolean | null;
 };
 
 type ObjectiveRow = {
@@ -112,17 +112,16 @@ export async function createExecutionRequest(
 ): Promise<ExecutionRequestResponse> {
   const { data: ticket, error: ticketError } = await supabase
     .from('tickets')
-    .select('id,ticket_id,organization_id,project_id,execution_target')
+    .select('id,ticket_id,organization_id,project_id,for_human')
     .eq('id', input.ticketId)
     .eq('organization_id', input.organizationId)
     .maybeSingle();
 
   if (ticketError) throw new Error(ticketError.message);
   if (!ticket) throw new Error('Ticket not found.');
-  if (ticket.execution_target !== 'agent') {
+  if (ticket.for_human) {
     throw new Error(
-      `Ticket execution target is "${ticket.execution_target}", not "agent". ` +
-        `Switch the execution target to "agent" in the ticket settings to enable agent runs.`
+      'Ticket is marked for human execution. Switch it back to agent in the ticket settings to enable agent runs.'
     );
   }
 

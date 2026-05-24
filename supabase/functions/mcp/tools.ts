@@ -893,7 +893,7 @@ export const TOOLS = [
         objectives: OBJECTIVES_ARRAY_SCHEMA,
         acceptanceCriteria: { type: 'string' },
         availableTools: { type: 'string' },
-        executionTarget: { type: 'string', enum: ['agent', 'human'], default: 'human' },
+        forHuman: { type: 'boolean', default: false },
         priority: { type: 'string', enum: ['low', 'medium', 'high', 'urgent'], default: 'medium' },
         delegate: {
           type: 'string',

@@ -15,7 +15,7 @@ import {
  * IMPORTANT: Keep this in sync with lib/overlord/protocol-attach.ts (TICKET_AGENT_FIELDS).
  */
 const TICKET_AGENT_FIELDS =
-  'id,title,ticket_id,status,priority,board_position,organization_id,project_id,execution_target,context,constraints,available_tools,acceptance_criteria,output_format,created_at,updated_at,ticket_sequence,everhour_task_id,created_by';
+  'id,title,ticket_id,status,priority,board_position,organization_id,project_id,for_human,context,constraints,available_tools,acceptance_criteria,output_format,created_at,updated_at,ticket_sequence,everhour_task_id,created_by';
 
 async function resolvePendingCheckpointObjectiveIds(input: {
   supabase: SupabaseClient;

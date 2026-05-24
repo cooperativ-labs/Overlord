@@ -198,7 +198,7 @@ export async function handleRecordWork(supabase: SupabaseClient, args: any, ctx:
       board_position: topBoardPosition,
       created_by: createdBy,
       delegate: ticketDelegate,
-      execution_target: 'agent',
+      for_human: false,
       is_read: false,
       organization_id: organizationId,
       priority,
@@ -206,7 +206,7 @@ export async function handleRecordWork(supabase: SupabaseClient, args: any, ctx:
       status: reviewStatusName,
       title: nextTitle
     })
-    .select('id,ticket_id,organization_id,project_id,execution_target,status,ticket_sequence')
+    .select('id,ticket_id,organization_id,project_id,for_human,status,ticket_sequence')
     .single();
   if (ticketError || !ticket) return toolErr(ticketError?.message ?? 'Failed to create ticket.');
 
@@ -327,7 +327,7 @@ export async function handleRecordWork(supabase: SupabaseClient, args: any, ctx:
       projectId: ticket.project_id,
       personal: ticket.project_id === null,
       status: ticket.status,
-      executionTarget: ticket.execution_target
+      forHuman: ticket.for_human
     },
     objective: { id: objectiveRow.id, state: 'complete' },
     objectives: [{ id: objectiveRow.id, state: 'complete' }, ...queuedObjectives],

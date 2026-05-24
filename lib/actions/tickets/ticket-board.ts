@@ -19,7 +19,7 @@ import type { Database } from '@/types/database.types';
 import type { ServerSupabase } from './internals';
 
 const TICKET_BOARD_SELECT =
-  'id,ticket_id,ticket_sequence,title,due_datetime,execution_target,status,priority,is_read,updated_at,board_position,organization_id,project_id,everhour_task_id,schedule_id,delegate,organization:organizations(name),project:projects(name,color,everhour_project_id)';
+  'id,ticket_id,ticket_sequence,title,due_datetime,for_human,status,priority,is_read,updated_at,board_position,organization_id,project_id,everhour_task_id,schedule_id,delegate,organization:organizations(name),project:projects(name,color,everhour_project_id)';
 const COMPLETE_TICKETS_PAGE_SIZE = 20;
 const ALL_TICKETS_PAGE_SIZE = 1000;
 
@@ -29,7 +29,7 @@ type RawBoardTicket = {
   ticket_sequence: number;
   title: string | null;
   due_datetime: string | null;
-  execution_target: Database['public']['Enums']['ticket_execution_target'];
+  for_human: boolean;
   status: string;
   priority: string;
   is_read: boolean;
@@ -63,7 +63,7 @@ function mapBoardTicket(
     title: raw.title,
     objective: null,
     due_datetime: raw.due_datetime,
-    execution_target: raw.execution_target,
+    for_human: raw.for_human,
     status: raw.status,
     priority: raw.priority,
     assigned_agent: parseObjectiveAssignedAgent(latestObjectiveAssignedAgent),

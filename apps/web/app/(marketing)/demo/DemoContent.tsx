@@ -94,17 +94,17 @@ function DemoKanbanCard({
             variant="outline"
             className={cn(
               'gap-1 rounded-full px-2.5 py-0 text-[11px] font-medium',
-              ticket.execution_target === 'agent'
+              ticket.for_human === false
                 ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:border-emerald-400/30 dark:bg-emerald-400/10 dark:text-emerald-200'
                 : 'border-amber-500/30 bg-amber-500/10 text-amber-800 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-200'
             )}
           >
-            {ticket.execution_target === 'agent' ? (
+            {ticket.for_human === false ? (
               <Bot className="h-3 w-3" />
             ) : (
               <UserRound className="h-3 w-3" />
             )}
-            {ticket.execution_target === 'agent' ? 'Agent' : 'Human'}
+            {ticket.for_human === false ? 'Agent' : 'Human'}
           </Badge>
         </div>
         <div className="mt-auto flex items-center justify-end gap-2 pt-2">

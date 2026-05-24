@@ -143,7 +143,7 @@ export async function runRecordWorkProtocol(supabase: RecordClient, params: Reco
       board_position: topBoardPosition,
       created_by: createdBy,
       delegate: ticketDelegate,
-      execution_target: 'agent',
+      for_human: false,
       is_read: false,
       organization_id: organizationId,
       priority,
@@ -151,7 +151,7 @@ export async function runRecordWorkProtocol(supabase: RecordClient, params: Reco
       status: reviewStatusName,
       title: nextTitle
     })
-    .select('id,ticket_id,organization_id,project_id,execution_target,status,ticket_sequence')
+    .select('id,ticket_id,organization_id,project_id,for_human,status,ticket_sequence')
     .single();
 
   if (ticketError || !ticket) {
@@ -301,7 +301,7 @@ export async function runRecordWorkProtocol(supabase: RecordClient, params: Reco
         organizationId: ticket.organization_id,
         projectId: ticket.project_id,
         personal: ticket.project_id === null,
-        executionTarget: ticket.execution_target,
+        forHuman: ticket.for_human,
         status: ticket.status,
         ticketId: ticket.ticket_id,
         ticketSequence: ticket.ticket_sequence

@@ -18,7 +18,7 @@ function buildSupabase(handlers: TableHandlers) {
   };
 }
 
-function ticketQuery(ticketOverrides: Partial<{ execution_target: string | null }> = {}) {
+function ticketQuery(ticketOverrides: Partial<{ for_human: boolean | null }> = {}) {
   const chain = {
     select: jest.fn(() => chain),
     eq: jest.fn(() => chain),
@@ -28,7 +28,7 @@ function ticketQuery(ticketOverrides: Partial<{ execution_target: string | null 
         ticket_id: '1:999',
         organization_id: ORG_ID,
         project_id: PROJECT_ID,
-        execution_target: 'agent',
+        for_human: false,
         ...ticketOverrides
       },
       error: null
@@ -325,7 +325,7 @@ describe('createExecutionRequest', () => {
 
   it('rejects non-agent tickets', async () => {
     const supabase = buildSupabase({
-      tickets: () => ticketQuery({ execution_target: 'human' })
+      tickets: () => ticketQuery({ for_human: true })
     });
 
     await expect(
@@ -335,7 +335,9 @@ describe('createExecutionRequest', () => {
         organizationId: ORG_ID,
         requestedFrom: 'manual_run'
       })
-    ).rejects.toThrow('Ticket execution target is "human", not "agent".');
+    ).rejects.toThrow(
+      'Ticket is marked for human execution. Switch it back to agent in the ticket settings to enable agent runs.'
+    );
   });
 
   it('rejects objectives that are not launchable', async () => {

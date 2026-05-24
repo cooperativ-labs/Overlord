@@ -21,7 +21,7 @@ export type FeedDiscussTicketIntent = {
   sliceObjectiveText: string;
   acceptanceCriteria: string | null;
   constraints: string | null;
-  executionTarget: 'agent' | 'human' | null;
+  forHuman: boolean | null;
 };
 
 export type FeedDiscussLayeredTaskInput = {
@@ -110,7 +110,12 @@ export function buildFeedDiscussLayeredTaskMarkdown(input: FeedDiscussLayeredTas
     intentParts.push('**Constraints:** _(none on file)_', '');
   }
 
-  intentParts.push(`**Execution target:** ${ticketIntent.executionTarget ?? 'unknown'}`, '');
+  intentParts.push(
+    `**Execution target:** ${
+      ticketIntent.forHuman === null ? 'unknown' : ticketIntent.forHuman ? 'human' : 'agent'
+    }`,
+    ''
+  );
 
   const changeLines = fileChanges.map(
     row =>

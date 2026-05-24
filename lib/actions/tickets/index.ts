@@ -40,8 +40,8 @@ export {
   updateTicketAction,
   updateTicketAssignedAgentAction,
   updateTicketDueDateAction,
-  updateTicketExecutionTargetAction,
   updateTicketFieldAction,
+  updateTicketForHumanAction,
   updateTicketPriorityAction,
   updateTicketStatusAction
 } from './ticket-update';

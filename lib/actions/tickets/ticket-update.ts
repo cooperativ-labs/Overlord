@@ -133,7 +133,7 @@ export async function updateTicketAction(ticketId: string, formData: FormData) {
     description: formData.get('objective') ?? formData.get('description'),
     availableTools: formData.get('availableTools'),
     acceptanceCriteria: formData.get('acceptanceCriteria'),
-    executionTarget: formData.get('executionTarget')
+    forHuman: formData.get('forHuman') === 'true'
   });
 
   if (!parsed.success) {
@@ -146,7 +146,7 @@ export async function updateTicketAction(ticketId: string, formData: FormData) {
     .update({
       acceptance_criteria: parsed.data.acceptanceCriteria || null,
       available_tools: parsed.data.availableTools,
-      execution_target: parsed.data.executionTarget,
+      for_human: parsed.data.forHuman,
       title: parsed.data.title || null
     })
     .eq('id', ticketId)
@@ -290,31 +290,24 @@ export async function updateTicketPriorityAction(
   ]);
 }
 
-export async function updateTicketExecutionTargetAction(
-  ticketId: string,
-  executionTarget: Database['public']['Enums']['ticket_execution_target']
-) {
-  if (executionTarget !== 'agent' && executionTarget !== 'human') {
-    throw new Error('Invalid execution target.');
-  }
-
+export async function updateTicketForHumanAction(ticketId: string, forHuman: boolean) {
   const supabase = await createClientForRequest();
   await assertTicketAccess(supabase, ticketId);
 
   const { data, error } = await supabase
     .from('tickets')
-    .update({ execution_target: executionTarget })
+    .update({ for_human: forHuman })
     .eq('id', ticketId)
     .select('organization_id,project_id')
     .single();
 
   if (error || !data) {
-    throw new Error(error?.message ?? 'Failed to update ticket execution target.');
+    throw new Error(error?.message ?? 'Failed to update ticket assignment.');
   }
 
   await supabase.from('ticket_events').insert({
     event_type: 'system',
-    summary: `Execution target updated to ${executionTarget}.`,
+    summary: `Ticket assignment updated to ${forHuman ? 'human' : 'agent'}.`,
     ticket_id: ticketId
   });
 

@@ -8,7 +8,7 @@ import { useRouter } from 'next/navigation';
 import { KanbanTimerButton } from '@/components/features/everhour/KanbanTimerButton';
 import { ScheduleBadge } from '@/components/features/scheduling/ScheduleBadge';
 import { ContextMenu, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
-import { getDisplayTitle, getTicketIdentifier } from '@/lib/helpers/tickets';
+import { getDisplayTitle } from '@/lib/helpers/tickets';
 import { cn } from '@/lib/utils';
 
 import type { Ticket } from './KanbanCard';
@@ -77,12 +77,12 @@ function getTicketCheckboxColors(projectColor: string | null | undefined) {
 }
 
 const executionTargetConfig = {
-  agent: {
+  false: {
     Icon: Bot,
     className: 'text-emerald-600 dark:text-emerald-400',
     title: 'Agent ticket'
   },
-  human: {
+  true: {
     Icon: UserRound,
     className: 'text-amber-700 dark:text-amber-400',
     title: 'Human ticket'
@@ -130,7 +130,7 @@ export default function TicketListCard({
     Icon: ExecutionIcon,
     className: executionIconClass,
     title: executionTitle
-  } = executionTargetConfig[ticket.execution_target];
+  } = executionTargetConfig[String(ticket.for_human) as 'true' | 'false'];
 
   return (
     <ContextMenu>
@@ -241,9 +241,9 @@ export default function TicketListCard({
           <div className="flex shrink-0 items-center gap-2">
             <span
               className="text-[10px] tabular-nums text-fg3"
-              title={`Ticket ID: ${getTicketIdentifier(ticket)}`}
+              title={`Ticket ID: ${ticket.ticket_id}`}
             >
-              {getTicketIdentifier(ticket)}
+              {ticket.ticket_id}
             </span>
             {/* Agent-created badge */}
             {ticket.delegate ? (

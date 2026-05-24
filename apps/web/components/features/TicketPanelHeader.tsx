@@ -1,7 +1,7 @@
 import { ArrowRightToLine, EllipsisVertical } from 'lucide-react';
 import Link from 'next/link';
 
-import { ExecutionTargetToggle } from '@/app/(app)/tickets/(components)/ExecutionTargetToggle';
+import { IsHumanToggle } from '@/app/(app)/tickets/(components)/IsHumanToggle';
 import { CopyTicketIdentifierButton } from '@/components/features/CopyTicketIdentifierButton';
 import { DeleteTicketButton } from '@/components/features/DeleteTicketButton';
 import { TicketProjectSelect } from '@/components/features/TicketProjectSelect';
@@ -12,9 +12,6 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
-import type { Database } from '@/types/database.types';
-
-type ExecutionTarget = Database['public']['Enums']['ticket_execution_target'];
 
 type ProjectOption = {
   id: string;
@@ -32,7 +29,7 @@ type TicketPanelHeaderProps = {
   currentStatus: string;
   statusOptions: string[];
   closePath: string;
-  executionTarget: ExecutionTarget;
+  forHuman: boolean;
 };
 
 export function TicketPanelHeader({
@@ -44,7 +41,7 @@ export function TicketPanelHeader({
   currentStatus,
   statusOptions,
   closePath,
-  executionTarget
+  forHuman
 }: TicketPanelHeaderProps) {
   return (
     <div className="relative flex items-center justify-between gap-2 overflow-hidden border-b px-4 py-2.5">
@@ -77,7 +74,7 @@ export function TicketPanelHeader({
           </DropdownMenuContent>
         </DropdownMenu>
         <span className="text-xs tabular-nums text-muted-foreground">{ticketIdentifier}</span>
-        <ExecutionTargetToggle ticketId={ticketId} executionTarget={executionTarget} size="md" />
+        <IsHumanToggle ticketId={ticketId} forHuman={forHuman} size="md" />
       </div>
       <div className="flex items-center justify-end gap-3">
         <div className="flex items-center gap-1.5">

@@ -28,7 +28,7 @@ type TicketLike = {
   available_tools: string | null;
   constraints?: string | null;
   output_format?: string | null;
-  execution_target: 'agent' | 'human' | null;
+  for_human: boolean | null;
   project_id: string | null;
   status: string | null;
   priority: string | number | null;

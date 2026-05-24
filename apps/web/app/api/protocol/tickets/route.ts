@@ -36,7 +36,7 @@ export async function POST(request: Request) {
       acceptanceCriteria,
       availableTools,
       delegate,
-      executionTarget,
+      forHuman,
       objectives,
       personal,
       priority,
@@ -121,14 +121,14 @@ export async function POST(request: Request) {
         available_tools: availableTools,
         created_by: createdBy,
         delegate: delegate || null,
-        execution_target: executionTarget,
+        for_human: forHuman,
         organization_id: resolvedOrganizationId,
         priority,
         project_id: personal ? null : resolvedProjectId,
         status: draftStatusName,
         title: nextTitle
       })
-      .select('id, ticket_id, organization_id, project_id, execution_target, status')
+      .select('id, ticket_id, organization_id, project_id, for_human, status')
       .single();
 
     if (ticketError || !ticket) {
@@ -147,7 +147,7 @@ export async function POST(request: Request) {
       ok: true,
       objectives: insertedObjectives,
       ticket: {
-        executionTarget: ticket.execution_target,
+        forHuman: ticket.for_human,
         id: ticket.id,
         organizationId: ticket.organization_id,
         projectId: ticket.project_id,

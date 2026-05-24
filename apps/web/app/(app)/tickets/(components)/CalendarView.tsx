@@ -372,7 +372,7 @@ export default function CalendarView({
         agent_session_state: null,
         status: 'draft',
         priority: 'medium',
-        execution_target: 'agent',
+        for_human: false,
         assigned_agent: null,
         board_position: 0,
         due_datetime: dueDatetime,

@@ -23,7 +23,7 @@ export type SpawnParams = {
   objectives: OrderedObjectiveInput[];
   acceptanceCriteria: string;
   availableTools: string;
-  executionTarget: 'agent' | 'human';
+  forHuman: boolean;
   priority: 'low' | 'medium' | 'high' | 'urgent';
   projectId?: string;
   personal?: boolean;
@@ -53,7 +53,7 @@ export async function runSpawnProtocol(supabase: SpawnClient, params: SpawnParam
     objectives,
     acceptanceCriteria,
     availableTools,
-    executionTarget,
+    forHuman,
     priority,
     projectId,
     personal = false,
@@ -118,14 +118,14 @@ export async function runSpawnProtocol(supabase: SpawnClient, params: SpawnParam
       available_tools: availableTools,
       created_by: createdBy,
       delegate: ticketDelegate,
-      execution_target: executionTarget,
+      for_human: forHuman,
       organization_id: organizationId,
       priority,
       project_id: personal ? null : (resolvedProjectId ?? null),
       status: executeStatusName,
       title: nextTitle
     })
-    .select('id,ticket_id,organization_id,project_id,execution_target,status,ticket_sequence')
+    .select('id,ticket_id,organization_id,project_id,for_human,status,ticket_sequence')
     .single();
 
   if (ticketError || !ticket) {
@@ -247,7 +247,7 @@ export async function runSpawnProtocol(supabase: SpawnClient, params: SpawnParam
         organizationId: ticket.organization_id,
         projectId: ticket.project_id,
         personal: ticket.project_id === null,
-        executionTarget: ticket.execution_target,
+        forHuman: ticket.for_human,
         status: ticket.status,
         ticketId: ticket.ticket_id,
         ticketSequence: ticket.ticket_sequence

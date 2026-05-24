@@ -162,7 +162,7 @@ export async function createScheduledDuplicateIfNeeded(
   const { data: sourceTicket, error: sourceTicketError } = await supabase
     .from('tickets')
     .select(
-      'acceptance_criteria,available_tools,constraints,context,delegate,due_datetime,execution_target,id,organization_id,output_format,priority,project_id,schedule_id,title'
+      'acceptance_criteria,available_tools,constraints,context,delegate,due_datetime,for_human,id,organization_id,output_format,priority,project_id,schedule_id,title'
     )
     .eq('id', ticketId)
     .single();
@@ -209,7 +209,7 @@ export async function createScheduledDuplicateIfNeeded(
       context: sourceTicket.context,
       delegate: sourceTicket.delegate,
       due_datetime: nextDueDatetime.toISOString(),
-      execution_target: sourceTicket.execution_target,
+      for_human: sourceTicket.for_human,
       organization_id: sourceTicket.organization_id,
       output_format: sourceTicket.output_format,
       priority: sourceTicket.priority,
@@ -341,7 +341,7 @@ export type PromptTicketSource = {
     title: string | null;
     acceptance_criteria: string | null;
     available_tools: string | null;
-    execution_target: Database['public']['Enums']['ticket_execution_target'] | null;
+    for_human: boolean | null;
     project_id: string | null;
     status: string | null;
     priority: Database['public']['Enums']['ticket_priority'] | null;
@@ -358,7 +358,7 @@ export async function resolvePromptTicketSource(
   const { data: ticket, error } = await supabase
     .from('tickets')
     .select(
-      'id, organization_id, title, acceptance_criteria, available_tools, execution_target, project_id, status, priority'
+      'id, organization_id, title, acceptance_criteria, available_tools, for_human, project_id, status, priority'
     )
     .eq('id', ticketId)
     .single();

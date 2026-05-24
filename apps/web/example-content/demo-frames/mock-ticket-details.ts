@@ -17,7 +17,7 @@ export const DEMO_TICKET_DETAILS = {
   project_name: 'Overlord',
   project_color: '#2dd4bf',
   status: 'execute',
-  execution_target: 'agent' as const,
+  for_human: false as const,
   due_label: 'Due in 3 days',
   schedule_label: 'No schedule',
   tags: [

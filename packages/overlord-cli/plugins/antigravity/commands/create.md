@@ -6,7 +6,7 @@ argument-hint: <objective or raw flags>
 Create a draft Overlord ticket from the user's request.
 
 Use `$ARGUMENTS` as the input.
-If it already contains flags such as `--title`, `--priority`, `--project-id`, or `--execution-target`, pass those flags through after `ovld protocol create --agent antigravity`.
+If it already contains flags such as `--title`, `--priority`, `--project-id`, or `--for-human`, pass those flags through after `ovld protocol create --agent antigravity`.
 Otherwise, treat `$ARGUMENTS` as the objective text and run:
 `ovld protocol create --agent antigravity --objective "<objective>"`
 

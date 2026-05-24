@@ -11,7 +11,7 @@ export async function POST(
 
   const { data: ticket } = await supabase
     .from('tickets')
-    .select('title,acceptance_criteria,available_tools,execution_target')
+    .select('title,acceptance_criteria,available_tools,for_human')
     .eq('id', ticketId)
     .single();
   const { data: nonEmptyObjective } = await supabase
@@ -29,7 +29,7 @@ export async function POST(
     !nonEmptyObjective &&
     !ticket.acceptance_criteria &&
     !ticket.available_tools &&
-    ticket.execution_target === 'agent';
+    ticket.for_human === false;
 
   if (isEmpty) {
     await supabase.from('tickets').delete().eq('id', ticketId);

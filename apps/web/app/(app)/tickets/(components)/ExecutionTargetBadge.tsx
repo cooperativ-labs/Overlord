@@ -4,33 +4,31 @@ import { Bot, UserRound } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import type { Database } from '@/types/database.types';
-
-type ExecutionTarget = Database['public']['Enums']['ticket_execution_target'];
 
 const executionTargetTheme = {
-  agent: {
+  false: {
     badgeClassName:
       'border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:border-emerald-400/30 dark:bg-emerald-400/10 dark:text-emerald-200',
     label: 'Agent',
     Icon: Bot
   },
-  human: {
+  true: {
     badgeClassName:
       'border-amber-500/30 bg-amber-500/10 text-amber-800 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-200',
     label: 'Human',
     Icon: UserRound
   }
-} as const;
+} satisfies Record<'true' | 'false', { badgeClassName: string; label: string; Icon: typeof Bot }>;
 
 export function ExecutionTargetBadge({
-  executionTarget,
+  forHuman,
   className
 }: {
-  executionTarget: ExecutionTarget;
+  forHuman: boolean;
   className?: string;
 }) {
-  const { badgeClassName, Icon, label } = executionTargetTheme[executionTarget];
+  const { badgeClassName, Icon, label } =
+    executionTargetTheme[String(forHuman) as 'true' | 'false'];
 
   return (
     <Badge
