@@ -7,7 +7,8 @@ import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import type { EffectiveTicketTag, ProjectTagDefinition } from '@/lib/actions/tags';
+import type { EffectiveTicketTag } from '@/types/tags';
+import type { ProjectTagDefinition } from '@/types/tags';
 import {
   useApplyTagMutation,
   useProjectTagDefinitions,
@@ -31,7 +32,7 @@ export function TicketTagEditor({ ticketId, projectId, initialTags }: TicketTagE
   const removeMutation = useRemoveTagMutation(ticketId, projectId);
 
   const activeDefinitions = (allDefinitions ?? []).filter(d => d.is_active);
-  const appliedIds = new Set(tags.map(t => t.tagDefinitionId));
+  const appliedIds = new Set(tags.map(t => t.id));
 
   async function handleToggle(def: ProjectTagDefinition) {
     const previousTags = tags;
@@ -41,7 +42,7 @@ export function TicketTagEditor({ ticketId, projectId, initialTags }: TicketTagE
       setPendingAction('remove');
 
       // Optimistic remove
-      setTags(prev => prev.filter(t => t.tagDefinitionId !== def.id));
+      setTags(prev => prev.filter(t => t.id !== def.id));
       try {
         await removeMutation.mutateAsync(def.id);
       } catch (err) {
@@ -57,7 +58,7 @@ export function TicketTagEditor({ ticketId, projectId, initialTags }: TicketTagE
 
       // Optimistic add
       const newTag: EffectiveTicketTag = {
-        tagDefinitionId: def.id,
+        id: def.id,
         key: def.key,
         label: def.label,
         color: def.color,
@@ -82,7 +83,7 @@ export function TicketTagEditor({ ticketId, projectId, initialTags }: TicketTagE
     <div className="flex flex-wrap items-center gap-1.5">
       {tags.map(tag => (
         <Badge
-          key={tag.tagDefinitionId}
+          key={tag.id}
           variant="secondary"
           className="flex items-center gap-1 pr-1 text-xs"
           style={
@@ -98,7 +99,7 @@ export function TicketTagEditor({ ticketId, projectId, initialTags }: TicketTagE
             className="ml-0.5 rounded-sm opacity-60 hover:opacity-100 transition-opacity"
             onClick={() =>
               handleToggle({
-                id: tag.tagDefinitionId,
+                id: tag.id,
                 key: tag.key,
                 label: tag.label,
                 color: tag.color,
@@ -112,7 +113,7 @@ export function TicketTagEditor({ ticketId, projectId, initialTags }: TicketTagE
             disabled={isPending}
             aria-label={`Remove ${tag.label} tag`}
           >
-            {pendingTagId === tag.tagDefinitionId && pendingAction === 'remove' ? (
+            {pendingTagId === tag.id && pendingAction === 'remove' ? (
               <Loader2 className="h-2.5 w-2.5 animate-spin" />
             ) : (
               <X className="h-2.5 w-2.5" />

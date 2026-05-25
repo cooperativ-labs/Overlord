@@ -20,7 +20,6 @@ import { AgentSessionBadge } from './AgentSessionBadge';
 import { LiveActivityFeed } from './LiveActivityFeed';
 import { LiveArtifacts } from './LiveArtifacts';
 import { LiveFileChanges } from './LiveFileChanges';
-import { SharedStateSection } from './SharedStateSection';
 
 type TicketPanelLiveProps = {
   ticketId: string;
@@ -38,7 +37,7 @@ export function TicketPanelLive({
   workspaceRoot
 }: TicketPanelLiveProps) {
   const queryClient = useQueryClient();
-  const { events, artifacts, fileChanges, session, sharedState } = useTicketLive();
+  const { events, artifacts, fileChanges, session } = useTicketLive();
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
@@ -110,11 +109,10 @@ export function TicketPanelLive({
         />
       </section>
 
-      {(sharedState?.length ?? 0) > 0 || fileChanges.length > 0 || artifacts.length > 0 ? (
+      {fileChanges.length > 0 || artifacts.length > 0 ? (
         <>
           <Separator className="mb-6" />
           <div className="grid gap-6">
-            <SharedStateSection sharedState={sharedState ?? []} />
             <LiveFileChanges
               editorScheme={editorScheme}
               fileChanges={fileChanges}

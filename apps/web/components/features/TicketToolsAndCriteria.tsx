@@ -1,6 +1,8 @@
 'use client';
 
 import { InlineEditField } from '@/components/features/InlineEditField';
+import { useTicketLive } from '@/components/features/TicketLiveProvider';
+import { SharedStateList } from '@/components/features/TicketPanelLive/SharedStateSection';
 import {
   Accordion,
   AccordionContent,
@@ -19,6 +21,8 @@ export function TicketToolsAndCriteria({
   availableTools,
   acceptanceCriteria
 }: TicketToolsAndCriteriaProps) {
+  const { sharedState } = useTicketLive();
+
   return (
     <Accordion type="multiple">
       <AccordionItem value="acceptance-criteria" className="border-b-0">
@@ -52,6 +56,16 @@ export function TicketToolsAndCriteria({
               placeholder="None specified — click to add."
               ticketId={ticketId}
             />
+          </div>
+        </AccordionContent>
+      </AccordionItem>
+      <AccordionItem value="shared-state" className="border-b-0">
+        <AccordionTrigger className="eyebrow text-xs py-3 hover:no-underline">
+          Shared State
+        </AccordionTrigger>
+        <AccordionContent>
+          <div className="pl-2 pb-2">
+            <SharedStateList sharedState={sharedState} />
           </div>
         </AccordionContent>
       </AccordionItem>

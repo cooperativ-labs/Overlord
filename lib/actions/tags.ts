@@ -3,33 +3,7 @@
 import { revalidatePath } from 'next/cache';
 
 import { createClientForRequest } from '@/supabase/utils/server';
-
-export type ProjectTagDefinition = {
-  id: string;
-  project_id: string;
-  key: string;
-  label: string;
-  description: string | null;
-  color: string | null;
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
-};
-
-export type TicketTagAssignment = {
-  tag_definition_id: string;
-  source: string;
-  applied_at: string;
-  definition: ProjectTagDefinition;
-};
-
-export type EffectiveTicketTag = {
-  tagDefinitionId: string;
-  key: string;
-  label: string;
-  color: string | null;
-  sources: string[];
-};
+import type { ProjectTagDefinition, EffectiveTicketTag } from '@/types/tags';
 
 export async function listProjectTagDefinitionsAction(
   projectId: string
@@ -110,7 +84,7 @@ export async function getTicketTagsAction(ticketId: string): Promise<EffectiveTi
       existing.sources.push(row.source);
     } else {
       byTagId.set(row.tag_definition_id, {
-        tagDefinitionId: row.tag_definition_id,
+        id: row.tag_definition_id,
         key: def.key,
         label: def.label,
         color: def.color,
@@ -148,7 +122,7 @@ export async function getTicketTagsBatchAction(
       existing.sources.push(row.source);
     } else {
       map.set(row.tag_definition_id, {
-        tagDefinitionId: row.tag_definition_id,
+        id: row.tag_definition_id,
         key: def.key,
         label: def.label,
         color: def.color,

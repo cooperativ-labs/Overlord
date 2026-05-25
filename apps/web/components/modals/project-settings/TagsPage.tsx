@@ -10,9 +10,9 @@ import { Input } from '@/components/ui/input';
 import {
   createProjectTagDefinitionAction,
   listProjectTagDefinitionsAction,
-  type ProjectTagDefinition,
   updateProjectTagDefinitionAction
 } from '@/lib/actions/tags';
+import type { ProjectTagDefinition } from '@/types/tags';
 
 type TagsPageProps = {
   projectId: string;

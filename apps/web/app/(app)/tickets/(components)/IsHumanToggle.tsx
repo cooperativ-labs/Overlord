@@ -11,20 +11,28 @@ const sizeClasses = {
   md: { button: 'h-7 w-7', icon: 'h-4 w-4' }
 };
 
-export function IsHumanToggle({
-  ticketId,
-  forHuman,
-  size = 'sm',
-  className
-}: {
-  ticketId: string;
+type IsHumanToggleBaseProps = {
   forHuman: boolean;
   size?: 'sm' | 'md';
   className?: string;
-}) {
+};
+
+type IsHumanTogglePersistedProps = IsHumanToggleBaseProps & {
+  ticketId: string;
+  onForHumanChange?: never;
+};
+
+type IsHumanToggleDraftProps = IsHumanToggleBaseProps & {
+  ticketId?: never;
+  onForHumanChange: (forHuman: boolean) => void;
+};
+
+export function IsHumanToggle(props: IsHumanTogglePersistedProps | IsHumanToggleDraftProps) {
+  const { forHuman, size = 'sm', className } = props;
   const [current, setCurrent] = useState(forHuman);
   const updateForHumanMutation = useUpdateTicketForHumanMutation();
   const { button: btnCls, icon: iconCls } = sizeClasses[size];
+  const isDraft = 'onForHumanChange' in props && props.onForHumanChange !== undefined;
 
   useEffect(() => {
     setCurrent(forHuman);
@@ -34,8 +42,12 @@ export function IsHumanToggle({
     if (nextForHuman === current) return;
     const prev = current;
     setCurrent(nextForHuman);
+    if (isDraft) {
+      props.onForHumanChange(nextForHuman);
+      return;
+    }
     updateForHumanMutation.mutate(
-      { ticketId, forHuman: nextForHuman },
+      { ticketId: props.ticketId, forHuman: nextForHuman },
       { onError: () => setCurrent(prev) }
     );
   };
@@ -51,7 +63,7 @@ export function IsHumanToggle({
         type="button"
         aria-label="Assign to agent"
         aria-pressed={!current}
-        disabled={updateForHumanMutation.isPending}
+        disabled={!isDraft && updateForHumanMutation.isPending}
         onClick={event => {
           event.stopPropagation();
           handleSetForHuman(false);
@@ -70,7 +82,7 @@ export function IsHumanToggle({
         type="button"
         aria-label="Assign to human"
         aria-pressed={current}
-        disabled={updateForHumanMutation.isPending}
+        disabled={!isDraft && updateForHumanMutation.isPending}
         onClick={event => {
           event.stopPropagation();
           handleSetForHuman(true);

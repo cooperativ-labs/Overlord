@@ -3,7 +3,10 @@
  * Centralised here to prevent drift between views.
  */
 
+import { applyUserTagToTicketAction } from '@/lib/actions/tags';
 import type { SidebarProject } from '@/lib/actions/project-types';
+import { updateTicketForHumanAction } from '@/lib/actions/tickets';
+import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
 import type {
   BoardBootstrap,
   BoardScope,
@@ -12,7 +15,7 @@ import type {
 } from '@/lib/client-data/tickets/board-types';
 import { deriveTitleFromObjective } from '@/lib/helpers/tickets';
 
-import type { Ticket } from './KanbanCard';
+import type { Ticket } from '@/types/tickets';
 
 /**
  * Capitalises and joins a hyphenated status slug.
@@ -79,7 +82,11 @@ export function toBoardTicket(ticket: Ticket): BoardTicket {
 }
 
 export function toViewTicket(ticket: BoardTicket): Ticket {
-  return ticket as Ticket;
+  return {
+    ...ticket,
+    ticket_id: ticket.ticket_id ?? null,
+    assigned_agent: (ticket.assigned_agent ?? null) as Ticket['assigned_agent']
+  };
 }
 
 export function buildBoardBootstrap(input: {
@@ -185,6 +192,12 @@ export function getTicketPositionInStatus(
   return Math.min(...statusTickets.map(ticket => ticket.board_position)) - 1;
 }
 
+export type BlankTicketCreateOptions = {
+  projectId?: string | null;
+  forHuman?: boolean;
+  tagDefinitionIds?: string[];
+};
+
 export function buildOptimisticTicket(input: {
   id: string;
   objective: string;
@@ -192,20 +205,31 @@ export function buildOptimisticTicket(input: {
   position: 'top' | 'bottom';
   tickets: Ticket[];
   organizationId?: number;
-  projectId?: string;
+  projectId?: string | null;
+  selectedProject?: SidebarProject | null;
   defaultProject?: SidebarProject | null;
+  forHuman?: boolean;
 }): Ticket {
   const { tickets, projectId } = input;
   const referenceTicket =
     tickets.find(ticket => (projectId ? ticket.project_id === projectId : true)) ?? tickets[0];
-  const optimisticProject = resolveOptimisticTicketProject({
-    projectId,
-    defaultProject: input.defaultProject,
-    referenceTicket
-  });
+  const optimisticProject = input.selectedProject
+    ? {
+        project_id: input.selectedProject.id,
+        project_name: input.selectedProject.name,
+        project_color: input.selectedProject.color,
+        project_everhour_project_id: input.selectedProject.everhourProjectId ?? null,
+        organization_id: input.selectedProject.organizationId
+      }
+    : resolveOptimisticTicketProject({
+        projectId: projectId ?? undefined,
+        defaultProject: input.defaultProject,
+        referenceTicket
+      });
 
   return {
     id: input.id,
+    ticket_id: null,
     title: deriveTitleFromObjective(input.objective),
     objective: input.objective,
     organization_id:
@@ -224,7 +248,7 @@ export function buildOptimisticTicket(input: {
     has_executing_objective: false,
     status: input.status,
     priority: 'medium',
-    for_human: false,
+    for_human: input.forHuman ?? false,
     assigned_agent: null,
     board_position: getTicketPositionInStatus(tickets, input.status, input.position),
     organization_name: referenceTicket?.organization_name ?? null,
@@ -237,4 +261,26 @@ export function buildOptimisticTicket(input: {
     schedule_id: null,
     due_datetime: null
   };
+}
+
+const updateTicketForHumanActionWithRetry = withElectronActionRetry(updateTicketForHumanAction);
+const applyUserTagToTicketActionWithRetry = withElectronActionRetry(applyUserTagToTicketAction);
+
+export async function finalizeBlankTicketOptions({
+  ticketId,
+  options
+}: {
+  ticketId: string;
+  options?: BlankTicketCreateOptions;
+}) {
+  if (!options) return;
+
+  if (options.forHuman) {
+    await updateTicketForHumanActionWithRetry(ticketId, true);
+  }
+
+  const tagIds = options.tagDefinitionIds ?? [];
+  if (tagIds.length > 0) {
+    await Promise.all(tagIds.map(tagId => applyUserTagToTicketActionWithRetry(ticketId, tagId)));
+  }
 }

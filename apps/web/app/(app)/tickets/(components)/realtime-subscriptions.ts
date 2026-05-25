@@ -28,7 +28,7 @@ import {
 import { createClient } from '@/supabase/utils/client';
 import type { Database } from '@/types/database.types';
 
-import type { Ticket } from './KanbanCard';
+import type { Ticket } from '@/types/tickets';
 import {
   getObjectivePayloadId,
   getObjectivePayloadTicketId,

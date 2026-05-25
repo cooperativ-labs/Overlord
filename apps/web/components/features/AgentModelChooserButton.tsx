@@ -18,7 +18,7 @@ import { updateTicketAssignedAgentAction } from '@/lib/actions/tickets';
 import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
 import type { AgentModelSelection } from '@/lib/helpers/agent-model-preference';
 import { getAgentTypeByValue } from '@/lib/helpers/agent-types';
-import type { TicketAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
+import type { TicketAssignedAgent } from '@/lib/client-data/tickets/board-types';
 import { cn } from '@/lib/utils';
 
 const updateTicketAssignedAgentActionWithRetry = withElectronActionRetry(

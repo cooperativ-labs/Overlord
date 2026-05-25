@@ -10,11 +10,11 @@ import { KanbanTimerButton } from '@/components/features/everhour/KanbanTimerBut
 import { ScheduleBadge } from '@/components/features/scheduling/ScheduleBadge';
 import { Card, CardContent } from '@/components/ui/card';
 import { ContextMenu, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
-import type { TicketAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
+import type { Ticket, } from '@/types/tickets';
 import { buildTicketPath } from '@/lib/helpers/ticket-path';
 import { getDisplayTitle } from '@/lib/helpers/tickets';
 import { cn } from '@/lib/utils';
-import type { Database } from '@/types/database.types';
+
 
 import { ExecutionTargetBadge } from './ExecutionTargetBadge';
 import { IsHumanToggle } from './IsHumanToggle';
@@ -24,50 +24,6 @@ import {
   ProjectColorDot,
   TicketPriorityContextMenu
 } from './TicketCardPrimitives';
-
-type SessionState = Database['public']['Enums']['session_state'];
-
-export type TicketTag = {
-  tagDefinitionId: string;
-  key: string;
-  label: string;
-  color: string | null;
-  sources: string[];
-};
-
-export type Ticket = {
-  id: string;
-  ticket_id?: string | null;
-  ticket_sequence?: number | null;
-  title: string | null;
-  objective: string | null;
-  organization_id: number;
-  project_id: string | null;
-  project_name?: string | null;
-  project_color?: string | null;
-  project_everhour_project_id?: string | null;
-  everhour_task_id?: string | null;
-  agent_session_state?: SessionState | null;
-  running_agent?: string | null;
-  latest_objective_agent?: string | null;
-  has_executing_objective?: boolean;
-  status: string;
-  priority: string;
-  for_human: boolean;
-  assigned_agent: TicketAssignedAgent | null;
-  board_position: number;
-  organization_name?: string | null;
-  waiting_for_response_at?: string | null;
-  has_unopened_waiting_response?: boolean;
-  is_read?: boolean;
-  objectives_executed_count?: number;
-  has_draft_objective_with_text?: boolean;
-  updated_at?: string;
-  delegate?: string | null;
-  schedule_id?: number | null;
-  due_datetime?: string | null;
-  tags?: TicketTag[];
-};
 
 export default function KanbanCard({
   ticket,
@@ -127,9 +83,9 @@ export default function KanbanCard({
             isDragging ? 'opacity-40' : '',
             isAgentRunning && 'animate-pulse border-emerald-500/40',
             isSelected &&
-              'border-gray-600/60 dark:border-gray-500/70 bg-gray-100/90 dark:bg-gray-900/40',
+            'border-gray-600/60 dark:border-gray-500/70 bg-gray-100/90 dark:bg-gray-900/40',
             hasUnopenedReview &&
-              'border-sky-500/40 bg-sky-50/60 bg-linear-to-br from-sky-300/18 to-transparent dark:bg-sky-950/25'
+            'border-sky-500/40 bg-sky-50/60 bg-linear-to-br from-sky-300/18 to-transparent dark:bg-sky-950/25'
           )}
           style={style}
           onClick={() => router.push(ticketPath)}
@@ -208,7 +164,7 @@ function KanbanCardBody({
           <div className="mt-1.5 flex flex-wrap items-center gap-1">
             {ticket.tags.map(tag => (
               <span
-                key={tag.tagDefinitionId}
+                key={tag.id}
                 className="inline-flex items-center gap-0.5 rounded px-1 py-0 text-[10px] font-medium text-muted-foreground bg-muted"
                 style={
                   tag.color ? { backgroundColor: `${tag.color}22`, color: tag.color } : undefined

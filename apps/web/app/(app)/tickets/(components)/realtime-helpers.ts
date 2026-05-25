@@ -1,4 +1,4 @@
-import type { Ticket } from './KanbanCard';
+import type { Ticket } from '@/types/tickets';
 
 export type RealtimeBoardTicketRow = {
   id: string;

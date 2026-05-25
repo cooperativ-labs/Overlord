@@ -1,15 +1,11 @@
+import type { EffectiveTicketTag } from '@/types/tags';
+
 import { parseTicketListFilters, type TicketListFilters } from './ticket-list-filters';
 
 export const USER_LIST_FILTERS_KEY = 'overlord:user-ticket-list-filters';
 
 export type TicketTagFilterOption = {
   id: string;
-  label: string;
-  color: string | null;
-};
-
-type TicketTagLike = {
-  tagDefinitionId: string;
   label: string;
   color: string | null;
 };
@@ -22,16 +18,16 @@ export function areFilterIdsEqual(left: string[], right: string[]): boolean {
 }
 
 export function buildTagFilterOptions(
-  tagsByTicketId: Record<string, TicketTagLike[] | undefined> | undefined
+  tagsByTicketId: Record<string, EffectiveTicketTag[] | undefined> | undefined
 ): TicketTagFilterOption[] {
   if (!tagsByTicketId) return [];
 
   const byId = new Map<string, TicketTagFilterOption>();
   for (const tags of Object.values(tagsByTicketId)) {
     for (const tag of tags ?? []) {
-      if (!byId.has(tag.tagDefinitionId)) {
-        byId.set(tag.tagDefinitionId, {
-          id: tag.tagDefinitionId,
+      if (!byId.has(tag.id)) {
+        byId.set(tag.id, {
+          id: tag.id,
           label: tag.label,
           color: tag.color
         });

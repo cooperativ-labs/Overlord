@@ -1,5 +1,9 @@
 slug: security-audit
 name: security-audit
-tags: []
+description: Standardized workflow for external-facing security audits with executive summaries, product-surface sections, and dated reports in security-audits/.
+tags:
+  - security
+  - audit
+  - documentation
 compat: []
 sha256: 2b3e6e6293d4d6f9cd9002d0f323d8def468d1c234c2e9978cbd8b6a5fdee55c

@@ -48,12 +48,15 @@ import {
 } from '@/lib/helpers/ticket-waiting-response';
 
 import KanbanBoardToolbar from './KanbanBoardToolbar';
-import KanbanCard, { type Ticket } from './KanbanCard';
+import KanbanCard from './KanbanCard';
+import type { Ticket } from '@/types/tickets';
 import KanbanColumn from './KanbanColumn';
 import {
+  type BlankTicketCreateOptions,
   buildBoardBootstrap,
   buildBoardScope,
   buildOptimisticTicket,
+  finalizeBlankTicketOptions,
   formatStatusLabel,
   getPathTicketId,
   toBoardTicket,
@@ -104,7 +107,7 @@ export default function KanbanBoard({
   const queryClient = useQueryClient();
   const [, startTransition] = useTransition();
   const projectSettings = useProjectSettings();
-  const { defaultProject } = useDefaultProject();
+  const { defaultProject, projects: sidebarProjects } = useDefaultProject();
   const boardScope = useMemo(
     () => buildBoardScope({ organizationId, projectId }),
     [organizationId, projectId]
@@ -205,8 +208,8 @@ export default function KanbanBoard({
   // includes the dragged card immediately (no startTransition deferral).
   const dragAdjustedTickets = activeDragStatus
     ? tickets.map(t =>
-        t.id === activeDragStatus.ticketId ? { ...t, status: activeDragStatus.status } : t
-      )
+      t.id === activeDragStatus.ticketId ? { ...t, status: activeDragStatus.status } : t
+    )
     : tickets;
 
   const {
@@ -246,7 +249,7 @@ export default function KanbanBoard({
     return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name));
   }, [projectId, tickets]);
   const tagOptions = useMemo(
-    () => buildTagFilterOptions(tagsByTicketId as Record<string, Ticket['tags']> | undefined),
+    () => buildTagFilterOptions(tagsByTicketId),
     [tagsByTicketId]
   );
 
@@ -324,7 +327,7 @@ export default function KanbanBoard({
           const matchesTag =
             selectedTagIds.length === 0 ||
             (tagsByTicketId?.[t.id] ?? []).some(tag =>
-              selectedTagIds.includes(tag.tagDefinitionId)
+              selectedTagIds.includes(tag.id)
             );
           return matchesProject && matchesTag;
         })
@@ -658,12 +661,18 @@ export default function KanbanBoard({
   async function handleCreateTicket(
     status: string,
     objective: string,
-    position: 'top' | 'bottom' = 'top'
+    position: 'top' | 'bottom' = 'top',
+    options?: BlankTicketCreateOptions
   ) {
     const trimmedObjective = objective.trim();
     if (!trimmedObjective) {
       return;
     }
+    const effectiveProjectId = options?.projectId ?? projectId ?? null;
+    const selectedProject =
+      effectiveProjectId != null
+        ? (sidebarProjects.find(p => p.id === effectiveProjectId) ?? null)
+        : null;
     const clientTicketId = crypto.randomUUID();
     const optimisticTicket = buildOptimisticTicket({
       id: clientTicketId,
@@ -671,20 +680,23 @@ export default function KanbanBoard({
       status,
       position,
       tickets: workingTickets.current,
-      organizationId,
-      projectId,
-      defaultProject
+      organizationId: selectedProject?.organizationId ?? organizationId,
+      projectId: effectiveProjectId,
+      selectedProject,
+      defaultProject,
+      forHuman: options?.forHuman
     });
 
     try {
-      await createTicketMutation.mutateAsync({
+      const result = await createTicketMutation.mutateAsync({
         optimisticTicket: toBoardTicket(optimisticTicket),
         status,
         objective: trimmedObjective,
-        organizationId,
+        organizationId: selectedProject?.organizationId ?? organizationId,
         projectId: optimisticTicket.project_id ?? undefined,
         placement: position
       });
+      void finalizeBlankTicketOptions({ ticketId: result.id, options }).catch(() => { });
     } catch {
       // useCreateTicketMutation restores the previous cache snapshot.
     }
@@ -693,10 +705,16 @@ export default function KanbanBoard({
   async function handleCreateAndOpenTicket(
     status: string,
     objective: string,
-    position: 'top' | 'bottom' = 'top'
+    position: 'top' | 'bottom' = 'top',
+    options?: BlankTicketCreateOptions
   ) {
     const trimmedObjective = objective.trim();
     if (!trimmedObjective) return;
+    const effectiveProjectId = options?.projectId ?? projectId ?? null;
+    const selectedProject =
+      effectiveProjectId != null
+        ? (sidebarProjects.find(p => p.id === effectiveProjectId) ?? null)
+        : null;
     const clientTicketId = crypto.randomUUID();
     const optimisticTicket = buildOptimisticTicket({
       id: clientTicketId,
@@ -704,9 +722,11 @@ export default function KanbanBoard({
       status,
       position,
       tickets: workingTickets.current,
-      organizationId,
-      projectId,
-      defaultProject
+      organizationId: selectedProject?.organizationId ?? organizationId,
+      projectId: effectiveProjectId,
+      selectedProject,
+      defaultProject,
+      forHuman: options?.forHuman
     });
 
     try {
@@ -714,10 +734,11 @@ export default function KanbanBoard({
         optimisticTicket: toBoardTicket(optimisticTicket),
         status,
         objective: trimmedObjective,
-        organizationId,
+        organizationId: selectedProject?.organizationId ?? organizationId,
         projectId: optimisticTicket.project_id ?? undefined,
         placement: position
       });
+      void finalizeBlankTicketOptions({ ticketId: result.id, options }).catch(() => { });
       router.push(
         buildTicketPath({ projectId: result.projectId, ticketId: result.id }) + '?focus=objective'
       );

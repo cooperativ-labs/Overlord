@@ -13,7 +13,7 @@ import type { TicketListFilters } from '@/lib/helpers/ticket-list-filters';
 
 import CalendarView from './CalendarView';
 import KanbanBoard from './KanbanBoard';
-import type { Ticket } from './KanbanCard';
+import type { Ticket } from '@/types/tickets';
 import TicketListView from './TicketListView';
 import { TicketViewContext } from './TicketViewContext';
 
@@ -66,6 +66,7 @@ export default function TicketsBoardClient({
       scope: boardScope,
       tickets: tickets.map(t => ({
         id: t.id,
+        ticket_id: t.ticket_id,
         title: t.title,
         objective: t.objective ?? null,
         organization_id: t.organization_id,

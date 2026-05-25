@@ -53,7 +53,7 @@ import {
 import { deriveTitleFromObjective, getDisplayTitle } from '@/lib/helpers/tickets';
 import { cn } from '@/lib/utils';
 
-import type { Ticket } from './KanbanCard';
+import type { Ticket } from '@/types/tickets';
 import {
   buildBoardBootstrap,
   buildBoardScope,
@@ -196,7 +196,7 @@ export default function CalendarView({
   const updateStatusMutation = useUpdateTicketStatusMutation();
   const { defaultProject } = useDefaultProject();
   const tagOptions = useMemo(
-    () => buildTagFilterOptions(tagsByTicketId as Record<string, Ticket['tags']> | undefined),
+    () => buildTagFilterOptions(tagsByTicketId),
     [tagsByTicketId]
   );
 
@@ -246,7 +246,7 @@ export default function CalendarView({
       if (
         selectedTagIds.length > 0 &&
         !(tagsByTicketId?.[ticket.id] ?? []).some(tag =>
-          selectedTagIds.includes(tag.tagDefinitionId)
+          selectedTagIds.includes(tag.id)
         )
       ) {
         continue;
@@ -357,6 +357,7 @@ export default function CalendarView({
 
       const optimisticTicket: Ticket = {
         id: clientTicketId,
+        ticket_id: null,
         title: deriveTitleFromObjective(trimmed),
         objective: trimmed,
         organization_id:

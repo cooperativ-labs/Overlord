@@ -11,7 +11,9 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { cn } from '@/lib/utils';
 
 import BlankTicketCard from './BlankTicketCard';
-import KanbanCard, { type Ticket } from './KanbanCard';
+import KanbanCard from './KanbanCard';
+import type { BlankTicketCreateOptions } from './ticket-view-helpers';
+import type { Ticket } from '@/types/tickets';
 
 const EMPTY_FILE_MENTION_PATHS: string[] = [];
 
@@ -47,12 +49,14 @@ export default function KanbanColumn({
   onCreateTicket: (
     status: string,
     objective: string,
-    position: 'top' | 'bottom'
+    position: 'top' | 'bottom',
+    options?: BlankTicketCreateOptions
   ) => Promise<void> | void;
   onCreateAndOpenTicket?: (
     status: string,
     objective: string,
-    position: 'top' | 'bottom'
+    position: 'top' | 'bottom',
+    options?: BlankTicketCreateOptions
   ) => Promise<void> | void;
   onMarkRead?: (ticketId: string) => void;
   onMarkUnread?: (ticketId: string) => void;
@@ -156,6 +160,7 @@ export default function KanbanColumn({
               inputId={inputId}
               status={column.id}
               position="top"
+              boardProjectId={projectId}
               fileMentionPaths={fileMentionPaths}
               workingDirectory={workingDirectory}
               onCreateTicket={onCreateTicket}
@@ -194,6 +199,7 @@ export default function KanbanColumn({
                       inputId={inputId}
                       status={column.id}
                       position="bottom"
+                      boardProjectId={projectId}
                       fileMentionPaths={fileMentionPaths}
                       workingDirectory={workingDirectory}
                       onCreateTicket={onCreateTicket}

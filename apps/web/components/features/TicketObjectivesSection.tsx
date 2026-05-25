@@ -28,10 +28,7 @@ import type { ObjectiveAttachment } from '@/lib/actions/attachments';
 import { clearAwaitingApprovalAction, reorderFutureObjectivesAction } from '@/lib/actions/tickets';
 import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
 import type { LaunchAgentType } from '@/lib/helpers/agent-types';
-import {
-  parseObjectiveAssignedAgent,
-  type TicketAssignedAgent
-} from '@/lib/helpers/ticket-assigned-agent';
+import type { TicketAssignedAgent } from '@/types/tickets';
 import { useTicketObjectivesRealtime } from '@/lib/hooks/use-ticket-objectives-realtime';
 import {
   sortObjectivesByCreatedAtAscending,
@@ -40,6 +37,7 @@ import {
 import type { AgentCommands } from '@/lib/overlord/launch-commands';
 import { cn } from '@/lib/utils';
 import type { ObjectiveRow } from '@/types/objectives';
+import { parseObjectiveAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
 
 const reorderFutureObjectivesActionWithRetry = withElectronActionRetry(
   reorderFutureObjectivesAction

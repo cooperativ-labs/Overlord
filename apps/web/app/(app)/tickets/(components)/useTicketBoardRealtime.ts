@@ -16,7 +16,7 @@ import {
   type TicketRaisedWhileOpenMap
 } from '@/lib/helpers/ticket-waiting-response';
 
-import type { Ticket } from './KanbanCard';
+import type { Ticket } from '@/types/tickets';
 import { initAudioRefs, mergeWaitingByTicket, toWaitingByTicket } from './realtime-helpers';
 import { setupRealtimeSubscriptions } from './realtime-subscriptions';
 

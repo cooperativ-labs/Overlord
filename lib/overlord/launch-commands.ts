@@ -1,5 +1,5 @@
 import type { LaunchAgentType } from '@/lib/helpers/agent-types';
-import type { TicketAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
+import type { TicketAssignedAgent } from '@/types/tickets';
 import type { SshConnectionConfig } from '@/lib/workspace/types';
 
 type LaunchCommandOptions = {

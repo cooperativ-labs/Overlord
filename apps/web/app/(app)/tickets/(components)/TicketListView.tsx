@@ -41,11 +41,13 @@ import {
 import { getDisplayTitle } from '@/lib/helpers/tickets';
 import { cn } from '@/lib/utils';
 
-import type { Ticket } from './KanbanCard';
+import type { Ticket } from '@/types/tickets';
 import {
+  type BlankTicketCreateOptions,
   buildBoardBootstrap,
   buildBoardScope,
   buildOptimisticTicket,
+  finalizeBlankTicketOptions,
   formatStatusLabel,
   getPathTicketId,
   toBoardTicket,
@@ -204,7 +206,7 @@ export default function TicketListView({
   const reorderMutation = useReorderTicketsMutation();
   const { mutate: markTicketRead } = useMarkTicketReadMutation();
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
-  const { defaultProject } = useDefaultProject();
+  const { defaultProject, projects: sidebarProjects } = useDefaultProject();
 
   const visibleTicketIds = useMemo(() => tickets.map(t => t.id), [tickets]);
   const { data: tagsByTicketId } = useTicketTagsBatch(visibleTicketIds);
@@ -216,7 +218,7 @@ export default function TicketListView({
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>(() =>
     normalizeStringList(
       initialListFilters?.selected_statuses ??
-        storedListFilters?.selected_statuses ?? [...DEFAULT_SELECTED_STATUSES]
+      storedListFilters?.selected_statuses ?? [...DEFAULT_SELECTED_STATUSES]
     )
   );
   const [filterProjectIds, setFilterProjectIds] = useState<string[]>(() => {
@@ -326,7 +328,7 @@ export default function TicketListView({
     return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name));
   }, [tickets]);
   const tagOptions = useMemo(
-    () => buildTagFilterOptions(tagsByTicketId as Record<string, Ticket['tags']> | undefined),
+    () => buildTagFilterOptions(tagsByTicketId),
     [tagsByTicketId]
   );
 
@@ -431,7 +433,7 @@ export default function TicketListView({
     }
     if (filterTagIds.length > 0) {
       filtered = filtered.filter(ticket =>
-        (tagsByTicketId?.[ticket.id] ?? []).some(tag => filterTagIds.includes(tag.tagDefinitionId))
+        (tagsByTicketId?.[ticket.id] ?? []).some(tag => filterTagIds.includes(tag.id))
       );
     }
 
@@ -870,11 +872,17 @@ export default function TicketListView({
   async function handleCreateTicket(
     status: string,
     objective: string,
-    position: 'top' | 'bottom' = 'top'
+    position: 'top' | 'bottom' = 'top',
+    options?: BlankTicketCreateOptions
   ) {
     const trimmed = objective.trim();
     if (!trimmed) return;
 
+    const effectiveProjectId = options?.projectId ?? projectId ?? null;
+    const selectedProject =
+      effectiveProjectId != null
+        ? (sidebarProjects.find(p => p.id === effectiveProjectId) ?? null)
+        : null;
     const clientTicketId = crypto.randomUUID();
     const optimisticTicket = buildOptimisticTicket({
       id: clientTicketId,
@@ -882,49 +890,61 @@ export default function TicketListView({
       status,
       position,
       tickets,
-      organizationId,
-      projectId,
-      defaultProject
-    });
-
-    await createTicketMutation.mutateAsync({
-      optimisticTicket: toBoardTicket(optimisticTicket),
-      status,
-      objective: trimmed,
-      organizationId,
-      projectId: optimisticTicket.project_id ?? undefined,
-      placement: position
-    });
-  }
-
-  async function handleCreateAndOpenTicket(
-    status: string,
-    objective: string,
-    position: 'top' | 'bottom' = 'top'
-  ) {
-    const trimmed = objective.trim();
-    if (!trimmed) return;
-
-    const clientTicketId = crypto.randomUUID();
-    const optimisticTicket = buildOptimisticTicket({
-      id: clientTicketId,
-      objective: trimmed,
-      status,
-      position,
-      tickets,
-      organizationId,
-      projectId,
-      defaultProject
+      organizationId: selectedProject?.organizationId ?? organizationId,
+      projectId: effectiveProjectId,
+      selectedProject,
+      defaultProject,
+      forHuman: options?.forHuman
     });
 
     const result = await createTicketMutation.mutateAsync({
       optimisticTicket: toBoardTicket(optimisticTicket),
       status,
       objective: trimmed,
-      organizationId,
+      organizationId: selectedProject?.organizationId ?? organizationId,
       projectId: optimisticTicket.project_id ?? undefined,
       placement: position
     });
+    void finalizeBlankTicketOptions({ ticketId: result.id, options }).catch(() => { });
+  }
+
+  async function handleCreateAndOpenTicket(
+    status: string,
+    objective: string,
+    position: 'top' | 'bottom' = 'top',
+    options?: BlankTicketCreateOptions
+  ) {
+    const trimmed = objective.trim();
+    if (!trimmed) return;
+
+    const effectiveProjectId = options?.projectId ?? projectId ?? null;
+    const selectedProject =
+      effectiveProjectId != null
+        ? (sidebarProjects.find(p => p.id === effectiveProjectId) ?? null)
+        : null;
+    const clientTicketId = crypto.randomUUID();
+    const optimisticTicket = buildOptimisticTicket({
+      id: clientTicketId,
+      objective: trimmed,
+      status,
+      position,
+      tickets,
+      organizationId: selectedProject?.organizationId ?? organizationId,
+      projectId: effectiveProjectId,
+      selectedProject,
+      defaultProject,
+      forHuman: options?.forHuman
+    });
+
+    const result = await createTicketMutation.mutateAsync({
+      optimisticTicket: toBoardTicket(optimisticTicket),
+      status,
+      objective: trimmed,
+      organizationId: selectedProject?.organizationId ?? organizationId,
+      projectId: optimisticTicket.project_id ?? undefined,
+      placement: position
+    });
+    void finalizeBlankTicketOptions({ ticketId: result.id, options }).catch(() => { });
 
     const path = buildTicketPath({
       projectId: result.projectId,

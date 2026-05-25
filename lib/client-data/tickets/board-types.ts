@@ -3,6 +3,21 @@
 // imports. This module is consumed by reducers and selectors and may be reused
 // by the desktop, web, or mobile shells.
 
+type EffectiveTicketTag = {
+  id: string;
+  key: string;
+  label: string;
+  color: string | null;
+  sources: string[];
+};
+export type LaunchAgentType = 'claude' | 'codex' | 'cursor' | 'antigravity' | 'opencode' | 'pi';
+export type SessionStateEnum = 'attached' | 'idle' | 'blocked' | 'completed' | 'disconnected';
+export type TicketAssignedAgent = {
+  agent: LaunchAgentType;
+  model: string | null;
+  thinking: string | null;
+};
+
 export type BoardScope =
   | { kind: 'user'; organizationId?: number }
   | { kind: 'project'; projectId: string; organizationId?: number };
@@ -21,7 +36,7 @@ export type BoardTicket = {
   project_color?: string | null;
   project_everhour_project_id?: string | null;
   everhour_task_id?: string | null;
-  agent_session_state?: string | null;
+  agent_session_state?: SessionStateEnum | null;
   running_agent?: string | null;
   latest_objective_agent?: string | null;
   has_executing_objective?: boolean;
@@ -40,6 +55,7 @@ export type BoardTicket = {
   delegate?: string | null;
   schedule_id?: number | null;
   due_datetime?: string | null;
+  tags?: EffectiveTicketTag[];
 };
 
 export type BoardStatus = {

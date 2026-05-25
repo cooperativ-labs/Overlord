@@ -5,12 +5,7 @@ import {
   type LaunchAgentType
 } from '@/lib/helpers/agent-types';
 import type { Json } from '@/types/database.types';
-
-export type TicketAssignedAgent = {
-  agent: LaunchAgentType;
-  model: string | null;
-  thinking: string | null;
-};
+import type { TicketAssignedAgent } from '@/types/tickets';
 
 function isRecord(value: Json): value is Record<string, Json | undefined> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);

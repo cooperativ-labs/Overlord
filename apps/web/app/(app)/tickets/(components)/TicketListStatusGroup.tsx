@@ -10,8 +10,8 @@ import { buildTicketPath } from '@/lib/helpers/ticket-path';
 import { cn } from '@/lib/utils';
 
 import BlankTicketCard from './BlankTicketCard';
-import type { Ticket } from './KanbanCard';
-import { formatStatusLabel } from './ticket-view-helpers';
+import type { Ticket } from '@/types/tickets';
+import { formatStatusLabel, type BlankTicketCreateOptions } from './ticket-view-helpers';
 import TicketListCard from './TicketListCard';
 import type { TicketListStatus, TicketListStatusStyle } from './TicketListView.types';
 
@@ -51,12 +51,14 @@ type TicketListStatusGroupProps = {
   onCreateTicket: (
     status: string,
     objective: string,
-    position: 'top' | 'bottom'
+    position: 'top' | 'bottom',
+    options?: BlankTicketCreateOptions
   ) => Promise<void> | void;
   onCreateAndOpenTicket: (
     status: string,
     objective: string,
-    position: 'top' | 'bottom'
+    position: 'top' | 'bottom',
+    options?: BlankTicketCreateOptions
   ) => Promise<void> | void;
   hasMore?: boolean;
   isLoadingMore?: boolean;
@@ -222,6 +224,7 @@ export function TicketListStatusGroup({
                 position="top"
                 expand={false}
                 closeOnSubmit
+                boardProjectId={projectId}
                 fileMentionPaths={EMPTY_FILE_MENTION_PATHS}
                 onCreateTicket={onCreateTicket}
                 onCreateAndOpenTicket={onCreateAndOpenTicket}
@@ -249,9 +252,9 @@ export function TicketListStatusGroup({
                   const ticketPath = ticketUrlBase
                     ? `${ticketUrlBase}/${ticket.id}`
                     : buildTicketPath({
-                        projectId: ticket.project_id,
-                        ticketId: ticket.id
-                      });
+                      projectId: ticket.project_id,
+                      ticketId: ticket.id
+                    });
                   const isSelected = pathname === ticketPath;
                   return (
                     <TicketListCard

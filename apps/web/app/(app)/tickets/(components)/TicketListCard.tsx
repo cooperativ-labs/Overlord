@@ -11,7 +11,7 @@ import { ContextMenu, ContextMenuItem, ContextMenuTrigger } from '@/components/u
 import { getDisplayTitle } from '@/lib/helpers/tickets';
 import { cn } from '@/lib/utils';
 
-import type { Ticket } from './KanbanCard';
+import type { Ticket } from '@/types/tickets';
 import { ObjectivesExecutedBadge } from './ObjectivesExecutedBadge';
 import {
   AttentionIndicators,
@@ -221,7 +221,7 @@ export default function TicketListCard({
               <div className="mt-0.5 flex flex-wrap items-center gap-1">
                 {ticket.tags.map(tag => (
                   <span
-                    key={tag.tagDefinitionId}
+                    key={tag.id}
                     className="inline-flex items-center gap-0.5 rounded px-1 py-0 text-[10px] font-medium text-muted-foreground bg-muted"
                     style={
                       tag.color

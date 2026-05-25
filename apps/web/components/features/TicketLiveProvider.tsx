@@ -4,7 +4,7 @@ import { type ComponentProps, createContext, useContext, useState } from 'react'
 
 import { readDefaultAgentTriggerFromStorage } from '@/lib/helpers/agent-trigger';
 import { type AgentSelectorValue } from '@/lib/helpers/agent-types';
-import type { TicketAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
+import type { TicketAssignedAgent } from '@/types/tickets';
 import { useTicketRealtime } from '@/lib/hooks/use-ticket-realtime';
 import type { Database } from '@/types/database.types';
 

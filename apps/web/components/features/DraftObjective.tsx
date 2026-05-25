@@ -35,7 +35,7 @@ import {
   getLaunchAgentTypeByIdentifier,
   type LaunchAgentType
 } from '@/lib/helpers/agent-types';
-import type { TicketAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
+import type { TicketAssignedAgent } from '@/types/tickets';
 import type { AgentCommands } from '@/lib/overlord/launch-commands';
 import { cn } from '@/lib/utils';
 

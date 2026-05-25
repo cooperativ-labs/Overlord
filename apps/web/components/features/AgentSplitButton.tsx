@@ -26,7 +26,7 @@ import {
   isLaunchAgentTypeValue,
   type LaunchAgentType
 } from '@/lib/helpers/agent-types';
-import type { TicketAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
+import type { TicketAssignedAgent } from '@/types/tickets';
 import { cn } from '@/lib/utils';
 import type { Database } from '@/types/database.types';
 
@@ -36,7 +36,7 @@ import { useAgentModelPreference } from './AgentModelSelector';
 
 const DEMO_TERMINAL_CONTEXT: TerminalContextValue = {
   isElectron: true,
-  launchAgent: async () => {}
+  launchAgent: async () => { }
 };
 
 type SessionState = Database['public']['Enums']['session_state'];
@@ -184,7 +184,7 @@ export function AgentSplitButton({
   const isDisabled = demo
     ? false
     : (!canRequestExecution && !isCopySelectedAgent) ||
-      (!isCopySelectedAgent && !hasResolvedSelection);
+    (!isCopySelectedAgent && !hasResolvedSelection);
   const styles = sizeStyles[size];
   const defaultActionLabel = 'Run';
   const primaryActionLabel = isCopySelectedAgent
@@ -352,7 +352,7 @@ export function AgentSplitButton({
               const pending = pendingLaunchRef.current;
               void handleLaunch(
                 pending?.agentValue ??
-                  (isCopySelectedAgent ? selectedAgent : effectiveSelection.agent),
+                (isCopySelectedAgent ? selectedAgent : effectiveSelection.agent),
                 {
                   ...(pending?.options ?? { useStoredModelPreference: !isCopySelectedAgent }),
                   force: true
@@ -371,7 +371,7 @@ export function AgentSplitButton({
               const pending = pendingLaunchRef.current;
               void handleLaunch(
                 pending?.agentValue ??
-                  (isCopySelectedAgent ? selectedAgent : effectiveSelection.agent),
+                (isCopySelectedAgent ? selectedAgent : effectiveSelection.agent),
                 {
                   ...(pending?.options ?? { useStoredModelPreference: !isCopySelectedAgent }),
                   skipRunningConfirm: true
@@ -404,7 +404,7 @@ export function AgentSplitButton({
         'inline-flex items-stretch rounded-md border border-input bg-background text-sm shadow-sm transition-all',
         !isDisabled && 'hover:bg-accent hover:text-accent-foreground',
         isActive &&
-          'animate-pulse border-emerald-600/80 ring-1 ring-emerald-600/70 shadow-[0_0_10px_3px_hsl(var(--emerald-600)/0.4)]'
+        'animate-pulse border-emerald-600/80 ring-1 ring-emerald-600/70 shadow-[0_0_10px_3px_hsl(var(--emerald-600)/0.4)]'
       )}
     >
       {runButtonWithTooltip}
