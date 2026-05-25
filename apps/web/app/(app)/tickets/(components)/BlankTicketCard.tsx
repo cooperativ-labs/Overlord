@@ -1,7 +1,7 @@
 'use client';
 
 import { Check, Tag } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 
 import { MentionableTextarea } from '@/components/features/MentionableTextarea';
 import { useDefaultProject } from '@/components/features/projects/DefaultProjectContext';
@@ -87,6 +87,13 @@ export default function BlankTicketCard({
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
+  const valueRef = useRef(value);
+  const handleDismissRef = useRef<(currentValue: string) => Promise<void>>(async () => {});
+  const instanceId = useId().replace(/:/g, '');
+  const projectMenuScopeClass = `blank-ticket-project-menu-${instanceId}`;
+  const tagMenuScopeClass = `blank-ticket-tag-menu-${instanceId}`;
+
+  valueRef.current = value;
 
   const selectedProject = useMemo(
     () => projects.find(project => project.id === selectedProjectId) ?? null,
@@ -175,6 +182,33 @@ export default function BlankTicketCard({
     ]
   );
 
+  handleDismissRef.current = handleBlur;
+
+  useEffect(() => {
+    const isInsideCardUi = (target: Node) => {
+      if (cardRef.current?.contains(target)) return true;
+      if (!(target instanceof Element)) return false;
+      return Boolean(
+        target.closest(`.${projectMenuScopeClass}`) || target.closest(`.${tagMenuScopeClass}`)
+      );
+    };
+
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node) || isInsideCardUi(target)) return;
+
+      const active = document.activeElement;
+      const isThisCardFocused =
+        active === inputRef.current || Boolean(cardRef.current?.contains(active));
+      if (!isThisCardFocused) return;
+
+      void handleDismissRef.current(valueRef.current);
+    };
+
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => document.removeEventListener('pointerdown', onPointerDown);
+  }, [projectMenuScopeClass, tagMenuScopeClass]);
+
   const handleKeyDown = useCallback(
     async (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
       if (e.key === 'Escape') {
@@ -252,15 +286,6 @@ export default function BlankTicketCard({
           value={value}
           onValueChange={setValue}
           mentionPaths={effectiveMentionPaths}
-          onBlur={e => {
-            const value = e.target.value;
-            window.setTimeout(() => {
-              if (cardRef.current?.contains(document.activeElement)) {
-                return;
-              }
-              void handleBlur(value);
-            }, 0);
-          }}
           onKeyDown={e => {
             void handleKeyDown(e);
           }}
@@ -271,7 +296,10 @@ export default function BlankTicketCard({
           }
           rows={expand ? 7 : 4}
         />
-        <div className="mt-1 flex items-center justify-between gap-2 px-1">
+        <div
+          className="mt-1 flex items-center justify-between gap-2 px-1"
+          onMouseDown={event => event.preventDefault()}
+        >
           {onCreateAndOpenTicket ? (
             <p className="text-[11px] text-muted-foreground/50">⌘↵ to save &amp; open</p>
           ) : (
@@ -292,7 +320,6 @@ export default function BlankTicketCard({
                         : 'Choose project for new ticket'
                     }
                     disabled={isCreating}
-                    onMouseDown={event => event.preventDefault()}
                   >
                     <ProjectColorDot
                       color={selectedProject?.color ?? defaultProject?.color}
@@ -301,7 +328,10 @@ export default function BlankTicketCard({
                     />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-52">
+                <DropdownMenuContent
+                  align="end"
+                  className={cn('w-52', projectMenuScopeClass)}
+                >
                   {projects.map(project => (
                     <DropdownMenuItem
                       key={project.id}
@@ -334,12 +364,11 @@ export default function BlankTicketCard({
                     )}
                     aria-label="Add tags to new ticket"
                     disabled={isCreating}
-                    onMouseDown={event => event.preventDefault()}
                   >
                     <Tag className="h-3.5 w-3.5" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuContent align="end" className={cn('w-48', tagMenuScopeClass)}>
                   {activeTagDefinitions.map(definition => (
                     <DropdownMenuCheckboxItem
                       key={definition.id}

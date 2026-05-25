@@ -46,7 +46,7 @@ Break findings down by product surface rather than by file list. Choose the surf
 - Authenticated application flows
 - API routes and server actions
 - Database and Supabase policies
-- Edge functions, background jobs, and integrations
+- Edge functions, background jobs, and integrations (REVIEW EACH EDGE FUNCTION TO DETERMINE IF HAS SECURITY BUILT IN, OR REQUIRES JWT AUTHENTICATION)
 - Client-side secrets, tokens, and configuration
 - Logging, telemetry, and error reporting
 - Infrastructure and deployment configuration
@@ -173,12 +173,6 @@ security-audits/2026-05-25.md
 Example metadata block:
 
 ```markdown
-## Audit Metadata
 
-- Date: 2026-05-25
-- AI model: GPT-5 Codex
-- Scope: Public site authentication, API routes, and Supabase RLS policies
-- Method: Repository code review and configuration inspection
-```
 
 <!-- version: 1.1.0 -->
