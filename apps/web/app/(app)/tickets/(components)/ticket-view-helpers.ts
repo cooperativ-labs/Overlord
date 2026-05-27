@@ -3,18 +3,17 @@
  * Centralised here to prevent drift between views.
  */
 
-import { applyUserTagToTicketAction } from '@/lib/actions/tags';
 import type { SidebarProject } from '@/lib/actions/project-types';
+import { applyUserTagToTicketAction } from '@/lib/actions/tags';
 import { updateTicketForHumanAction } from '@/lib/actions/tickets';
-import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
 import type {
   BoardBootstrap,
   BoardScope,
   BoardStatus,
   BoardTicket
 } from '@/lib/client-data/tickets/board-types';
+import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
 import { deriveTitleFromObjective } from '@/lib/helpers/tickets';
-
 import type { Ticket } from '@/types/tickets';
 
 /**

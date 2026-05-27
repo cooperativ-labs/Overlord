@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 
 import { createClientForRequest } from '@/supabase/utils/server';
-import type { ProjectTagDefinition, EffectiveTicketTag } from '@/types/tags';
+import type { EffectiveTicketTag, ProjectTagDefinition } from '@/types/tags';
 
 export async function listProjectTagDefinitionsAction(
   projectId: string

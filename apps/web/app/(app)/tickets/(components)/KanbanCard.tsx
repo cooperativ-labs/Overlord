@@ -10,11 +10,10 @@ import { KanbanTimerButton } from '@/components/features/everhour/KanbanTimerBut
 import { ScheduleBadge } from '@/components/features/scheduling/ScheduleBadge';
 import { Card, CardContent } from '@/components/ui/card';
 import { ContextMenu, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
-import type { Ticket, } from '@/types/tickets';
 import { buildTicketPath } from '@/lib/helpers/ticket-path';
 import { getDisplayTitle } from '@/lib/helpers/tickets';
 import { cn } from '@/lib/utils';
-
+import type { Ticket } from '@/types/tickets';
 
 import { ExecutionTargetBadge } from './ExecutionTargetBadge';
 import { IsHumanToggle } from './IsHumanToggle';
@@ -83,9 +82,9 @@ export default function KanbanCard({
             isDragging ? 'opacity-40' : '',
             isAgentRunning && 'animate-pulse border-emerald-500/40',
             isSelected &&
-            'border-gray-600/60 dark:border-gray-500/70 bg-gray-100/90 dark:bg-gray-900/40',
+              'border-gray-600/60 dark:border-gray-500/70 bg-gray-100/90 dark:bg-gray-900/40',
             hasUnopenedReview &&
-            'border-sky-500/40 bg-sky-50/60 bg-linear-to-br from-sky-300/18 to-transparent dark:bg-sky-950/25'
+              'border-sky-500/40 bg-sky-50/60 bg-linear-to-br from-sky-300/18 to-transparent dark:bg-sky-950/25'
           )}
           style={style}
           onClick={() => router.push(ticketPath)}

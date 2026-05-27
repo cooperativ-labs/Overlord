@@ -35,9 +35,9 @@ import {
   getLaunchAgentTypeByIdentifier,
   type LaunchAgentType
 } from '@/lib/helpers/agent-types';
-import type { TicketAssignedAgent } from '@/types/tickets';
 import type { AgentCommands } from '@/lib/overlord/launch-commands';
 import { cn } from '@/lib/utils';
+import type { TicketAssignedAgent } from '@/types/tickets';
 
 const promoteFutureObjectiveActionWithRetry = withElectronActionRetry(promoteFutureObjectiveAction);
 

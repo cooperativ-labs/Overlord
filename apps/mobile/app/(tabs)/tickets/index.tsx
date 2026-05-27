@@ -12,6 +12,7 @@ import { Ionicons } from '@/lib/icons';
 import { useSelectedProject } from '@/lib/selected-project-context';
 import { getSupabase } from '@/lib/supabase';
 import { isTransientNetworkError } from '@/lib/transient-network-error';
+import { normalizeTicketExecutionTarget, type TicketListItemRow } from '@/lib/types';
 
 import {
   ALL_PROJECTS_LABEL,
@@ -31,10 +32,6 @@ import {
 import { TicketsResults } from './components/TicketsResults';
 import { TicketsScreenFilters } from './components/TicketsScreenFilters';
 import { createTicketsScreenStyles } from './components/TicketsScreenStyles';
-import {
-  normalizeTicketExecutionTarget,
-  type TicketListItemRow
-} from '@/lib/types';
 
 const TICKETS_FILTER_PREFERENCES_KEY = 'mobile-ticket-screen-filters';
 

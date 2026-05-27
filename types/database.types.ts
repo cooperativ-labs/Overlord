@@ -359,6 +359,7 @@ export type Database = {
           oauth_state: string | null;
           pkce_verifier: string | null;
           refresh_token: string | null;
+          requester_ip: string | null;
           user_code: string;
           user_id: string | null;
         };
@@ -374,6 +375,7 @@ export type Database = {
           oauth_state?: string | null;
           pkce_verifier?: string | null;
           refresh_token?: string | null;
+          requester_ip?: string | null;
           user_code: string;
           user_id?: string | null;
         };
@@ -389,6 +391,7 @@ export type Database = {
           oauth_state?: string | null;
           pkce_verifier?: string | null;
           refresh_token?: string | null;
+          requester_ip?: string | null;
           user_code?: string;
           user_id?: string | null;
         };

@@ -52,8 +52,8 @@ import {
 } from '@/lib/helpers/ticket-tag-filters';
 import { deriveTitleFromObjective, getDisplayTitle } from '@/lib/helpers/tickets';
 import { cn } from '@/lib/utils';
-
 import type { Ticket } from '@/types/tickets';
+
 import {
   buildBoardBootstrap,
   buildBoardScope,
@@ -195,10 +195,7 @@ export default function CalendarView({
   const updateDueDateMutation = useUpdateTicketDueDateMutation();
   const updateStatusMutation = useUpdateTicketStatusMutation();
   const { defaultProject } = useDefaultProject();
-  const tagOptions = useMemo(
-    () => buildTagFilterOptions(tagsByTicketId),
-    [tagsByTicketId]
-  );
+  const tagOptions = useMemo(() => buildTagFilterOptions(tagsByTicketId), [tagsByTicketId]);
 
   const saveListFilters = useCallback(
     (nextTagIds: string[]) => {
@@ -245,9 +242,7 @@ export default function CalendarView({
     for (const ticket of tickets) {
       if (
         selectedTagIds.length > 0 &&
-        !(tagsByTicketId?.[ticket.id] ?? []).some(tag =>
-          selectedTagIds.includes(tag.id)
-        )
+        !(tagsByTicketId?.[ticket.id] ?? []).some(tag => selectedTagIds.includes(tag.id))
       ) {
         continue;
       }

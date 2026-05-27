@@ -9,11 +9,11 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
+import type { Ticket } from '@/types/tickets';
 
 import BlankTicketCard from './BlankTicketCard';
 import KanbanCard from './KanbanCard';
 import type { BlankTicketCreateOptions } from './ticket-view-helpers';
-import type { Ticket } from '@/types/tickets';
 
 const EMPTY_FILE_MENTION_PATHS: string[] = [];
 

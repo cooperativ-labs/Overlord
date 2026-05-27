@@ -10,10 +10,10 @@ import BoardHydrationBoundary from '@/lib/client-data/tickets/BoardHydrationBoun
 import { defaultBoardFetcher } from '@/lib/client-data/tickets/fetchers';
 import { ticketQueryKeys } from '@/lib/client-data/tickets/query-keys';
 import type { TicketListFilters } from '@/lib/helpers/ticket-list-filters';
+import type { Ticket } from '@/types/tickets';
 
 import CalendarView from './CalendarView';
 import KanbanBoard from './KanbanBoard';
-import type { Ticket } from '@/types/tickets';
 import TicketListView from './TicketListView';
 import { TicketViewContext } from './TicketViewContext';
 

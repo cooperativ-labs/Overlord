@@ -40,8 +40,8 @@ import {
 } from '@/lib/helpers/ticket-waiting-response';
 import { getDisplayTitle } from '@/lib/helpers/tickets';
 import { cn } from '@/lib/utils';
-
 import type { Ticket } from '@/types/tickets';
+
 import {
   type BlankTicketCreateOptions,
   buildBoardBootstrap,
@@ -58,8 +58,7 @@ import { TicketListToolbar } from './TicketListToolbar';
 import type {
   SortKey,
   TicketListProjectOption,
-  TicketListStatusStyle,
-  TicketTagFilterOption
+  TicketListStatusStyle
 } from './TicketListView.types';
 import { useTicketBoardRealtime } from './useTicketBoardRealtime';
 
@@ -218,7 +217,7 @@ export default function TicketListView({
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>(() =>
     normalizeStringList(
       initialListFilters?.selected_statuses ??
-      storedListFilters?.selected_statuses ?? [...DEFAULT_SELECTED_STATUSES]
+        storedListFilters?.selected_statuses ?? [...DEFAULT_SELECTED_STATUSES]
     )
   );
   const [filterProjectIds, setFilterProjectIds] = useState<string[]>(() => {
@@ -327,10 +326,7 @@ export default function TicketListView({
     }
     return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name));
   }, [tickets]);
-  const tagOptions = useMemo(
-    () => buildTagFilterOptions(tagsByTicketId),
-    [tagsByTicketId]
-  );
+  const tagOptions = useMemo(() => buildTagFilterOptions(tagsByTicketId), [tagsByTicketId]);
 
   const saveListFilters = useCallback(
     (
@@ -880,7 +876,7 @@ export default function TicketListView({
 
     const effectiveProjectId = options?.projectId ?? projectId ?? null;
     const selectedProject =
-      effectiveProjectId != null
+      effectiveProjectId !== null
         ? (sidebarProjects.find(p => p.id === effectiveProjectId) ?? null)
         : null;
     const clientTicketId = crypto.randomUUID();
@@ -905,7 +901,7 @@ export default function TicketListView({
       projectId: optimisticTicket.project_id ?? undefined,
       placement: position
     });
-    void finalizeBlankTicketOptions({ ticketId: result.id, options }).catch(() => { });
+    void finalizeBlankTicketOptions({ ticketId: result.id, options }).catch(() => {});
   }
 
   async function handleCreateAndOpenTicket(
@@ -919,7 +915,7 @@ export default function TicketListView({
 
     const effectiveProjectId = options?.projectId ?? projectId ?? null;
     const selectedProject =
-      effectiveProjectId != null
+      effectiveProjectId !== null
         ? (sidebarProjects.find(p => p.id === effectiveProjectId) ?? null)
         : null;
     const clientTicketId = crypto.randomUUID();
@@ -944,7 +940,7 @@ export default function TicketListView({
       projectId: optimisticTicket.project_id ?? undefined,
       placement: position
     });
-    void finalizeBlankTicketOptions({ ticketId: result.id, options }).catch(() => { });
+    void finalizeBlankTicketOptions({ ticketId: result.id, options }).catch(() => {});
 
     const path = buildTicketPath({
       projectId: result.projectId,

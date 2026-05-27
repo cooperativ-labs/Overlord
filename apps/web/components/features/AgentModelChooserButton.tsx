@@ -15,10 +15,10 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { AgentModel } from '@/lib/actions/agent-models';
 import { updateTicketAssignedAgentAction } from '@/lib/actions/tickets';
+import type { TicketAssignedAgent } from '@/lib/client-data/tickets/board-types';
 import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
 import type { AgentModelSelection } from '@/lib/helpers/agent-model-preference';
 import { getAgentTypeByValue } from '@/lib/helpers/agent-types';
-import type { TicketAssignedAgent } from '@/lib/client-data/tickets/board-types';
 import { cn } from '@/lib/utils';
 
 const updateTicketAssignedAgentActionWithRetry = withElectronActionRetry(

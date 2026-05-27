@@ -10,8 +10,8 @@ import { ScheduleBadge } from '@/components/features/scheduling/ScheduleBadge';
 import { ContextMenu, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { getDisplayTitle } from '@/lib/helpers/tickets';
 import { cn } from '@/lib/utils';
-
 import type { Ticket } from '@/types/tickets';
+
 import { ObjectivesExecutedBadge } from './ObjectivesExecutedBadge';
 import {
   AttentionIndicators,

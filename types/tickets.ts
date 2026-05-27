@@ -1,5 +1,6 @@
-import type { EffectiveTicketTag } from '@/types/tags';
 import type { LaunchAgentType } from '@/lib/helpers/agent-types';
+import type { EffectiveTicketTag } from '@/types/tags';
+
 import { Database } from './database.types';
 import { SessionStateEnum } from './sessions';
 

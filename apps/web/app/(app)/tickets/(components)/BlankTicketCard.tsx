@@ -20,8 +20,8 @@ import type { TextareaHandle } from '@/lib/types/text-control';
 import { cn } from '@/lib/utils';
 
 import { IsHumanToggle } from './IsHumanToggle';
-import { ProjectColorDot } from './TicketCardPrimitives';
 import type { BlankTicketCreateOptions } from './ticket-view-helpers';
+import { ProjectColorDot } from './TicketCardPrimitives';
 
 type BlankTicketCardProps = {
   inputId: string;
@@ -328,10 +328,7 @@ export default function BlankTicketCard({
                     />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  align="end"
-                  className={cn('w-52', projectMenuScopeClass)}
-                >
+                <DropdownMenuContent align="end" className={cn('w-52', projectMenuScopeClass)}>
                   {projects.map(project => (
                     <DropdownMenuItem
                       key={project.id}

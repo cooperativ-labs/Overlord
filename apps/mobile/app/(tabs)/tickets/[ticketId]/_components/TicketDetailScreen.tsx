@@ -28,7 +28,6 @@ import {
 } from '@/lib/server-device-credentials';
 import { getSupabase } from '@/lib/supabase';
 import { isTransientNetworkError } from '@/lib/transient-network-error';
-import { normalizeTicketExecutionTarget } from '@/lib/types';
 import type {
   AgentModelSelection,
   Objective,
@@ -37,6 +36,7 @@ import type {
   TicketDetailRow,
   TicketEvent
 } from '@/lib/types';
+import { normalizeTicketExecutionTarget } from '@/lib/types';
 import { generateKey, installPublicKey, isSSHSupported, verifyConnection } from '@/modules/ssh';
 
 import { formatStatusName, type TicketStatusDefinition } from '../../components/shared';

@@ -38,9 +38,7 @@ export async function POST(request: Request) {
   // Codes with no IP (legacy rows) are excluded from the count so old data
   // does not spuriously block new requests.
   if (clientIp) {
-    const windowStart = new Date(
-      Date.now() - RATE_LIMIT_WINDOW_MINUTES * 60 * 1000
-    ).toISOString();
+    const windowStart = new Date(Date.now() - RATE_LIMIT_WINDOW_MINUTES * 60 * 1000).toISOString();
 
     const { count, error: countError } = await supabase
       .from('device_auth_codes')

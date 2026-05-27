@@ -164,8 +164,8 @@ export default async function HomePage() {
               Stop Juggling Agents.
             </h1>
             <p className="mx-auto max-w-2xl text-lg leading-8 text-stone-600 dark:text-slate-300 sm:text-xl">
-              Overlord is the AI agent coordination layer that works with every tool you already
-              use.
+              Overlord is the AI agent management and coordination layer that works with every tool
+              you already use.
             </p>
           </div>
 
