@@ -19,6 +19,7 @@ async function markObjectivePendingDeliveryAfterPriorDelivery(
     .from('ticket_events')
     .select('id')
     .eq('ticket_id', input.ticketId)
+    .eq('objective_id', input.objectiveId)
     .eq('event_type', 'deliver')
     .order('created_at', { ascending: false })
     .limit(1)
