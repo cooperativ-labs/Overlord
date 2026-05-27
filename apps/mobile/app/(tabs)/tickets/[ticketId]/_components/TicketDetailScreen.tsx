@@ -28,11 +28,13 @@ import {
 } from '@/lib/server-device-credentials';
 import { getSupabase } from '@/lib/supabase';
 import { isTransientNetworkError } from '@/lib/transient-network-error';
+import { normalizeTicketExecutionTarget } from '@/lib/types';
 import type {
   AgentModelSelection,
   Objective,
   Server,
   TicketDetail,
+  TicketDetailRow,
   TicketEvent
 } from '@/lib/types';
 import { generateKey, installPublicKey, isSSHSupported, verifyConnection } from '@/modules/ssh';
@@ -135,7 +137,7 @@ export default function TicketDetailScreen() {
         supabase
           .from('tickets')
           .select(
-            'id, organization_id, title, status, priority, execution_target, due_datetime, ticket_sequence, context, constraints, acceptance_criteria, created_at, updated_at, project_id'
+            'id, organization_id, title, status, priority, for_human, due_datetime, ticket_sequence, context, constraints, acceptance_criteria, created_at, updated_at, project_id, ticket_id'
           )
           .eq('id', ticketId)
           .single(),
@@ -183,8 +185,9 @@ export default function TicketDetailScreen() {
       }
 
       if (ticketRes.data) {
-        setTicket(ticketRes.data as unknown as TicketDetail);
-        setSelectedProjectId((ticketRes.data as unknown as TicketDetail).project_id ?? null);
+        const normalizedTicket = normalizeTicketExecutionTarget(ticketRes.data as TicketDetailRow);
+        setTicket(normalizedTicket);
+        setSelectedProjectId(normalizedTicket.project_id ?? null);
       } else if (ticketRes.error) {
         setTicket(null);
         setSelectedProjectId(null);

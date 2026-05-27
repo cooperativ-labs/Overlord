@@ -31,11 +31,13 @@ export function TicketTitleField({
   futureObjectivesEnabled = false
 }: TicketTitleFieldProps) {
   const objectives = useTicketObjectivesRealtime({ ticketId, initialObjectives });
+  const latestObjective =
+    [...objectives].sort((a, b) => (b.position ?? 0) - (a.position ?? 0))[0] ?? null;
   const editableObjective =
     objectives.find(objective => objective.state === 'draft') ??
     (futureObjectivesEnabled ? objectives.find(objective => objective.state === 'future') : null) ??
     objectives.find(objective => objective.state === 'submitted') ??
-    null;
+    latestObjective;
   const objectiveText = (editableObjective?.objective ?? fallbackObjective ?? '').trim();
 
   const [titleValue, setTitleValue] = useState(initialTitle);

@@ -174,7 +174,7 @@ export function QuickCreateTicketModal({ visible, onClose, defaultProjectId }: P
           title,
           status: 'draft',
           priority: 'medium',
-          execution_target: 'agent',
+          for_human: false,
           organization_id: selectedProject.organization_id,
           project_id: selectedProject.id,
           acceptance_criteria:

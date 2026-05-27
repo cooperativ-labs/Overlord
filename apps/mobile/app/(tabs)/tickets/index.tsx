@@ -31,6 +31,10 @@ import {
 import { TicketsResults } from './components/TicketsResults';
 import { TicketsScreenFilters } from './components/TicketsScreenFilters';
 import { createTicketsScreenStyles } from './components/TicketsScreenStyles';
+import {
+  normalizeTicketExecutionTarget,
+  type TicketListItemRow
+} from '@/lib/types';
 
 const TICKETS_FILTER_PREFERENCES_KEY = 'mobile-ticket-screen-filters';
 
@@ -155,7 +159,7 @@ export default function TicketsScreen() {
         let q = supabase
           .from('tickets')
           .select(
-            'id, organization_id, title, status, priority, execution_target, ticket_sequence, due_datetime, created_at, updated_at, project_id, board_position'
+            'id, organization_id, title, status, priority, for_human, ticket_sequence, due_datetime, created_at, updated_at, project_id, board_position'
           )
           .order('updated_at', { ascending: false })
           .limit(100);
@@ -232,8 +236,8 @@ export default function TicketsScreen() {
           }
           setStatusDefinitions((statusRows ?? []) as TicketStatusDefinition[]);
           setTickets(
-            data.map(t => ({
-              ...t,
+            (data as TicketListItemRow[]).map(t => ({
+              ...normalizeTicketExecutionTarget(t),
               assigned_agent: assignedByTicket.get(t.id) ?? null,
               has_executing_objective: executingTicketIds.has(t.id),
               tags: [...(tagMap.get(t.id)?.values() ?? [])].sort((a, b) =>

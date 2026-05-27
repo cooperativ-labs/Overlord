@@ -99,6 +99,13 @@ export interface TicketListItem {
   has_executing_objective?: boolean;
 }
 
+export type TicketListItemRow = Omit<
+  TicketListItem,
+  'execution_target' | 'assigned_agent' | 'has_executing_objective'
+> & {
+  for_human: boolean;
+};
+
 /** Full ticket detail view. */
 export interface TicketDetail {
   id: string;
@@ -116,6 +123,30 @@ export interface TicketDetail {
   created_at: string;
   updated_at: string;
   project_id: string | null;
+}
+
+export type TicketDetailRow = Omit<TicketDetail, 'execution_target'> & {
+  for_human: boolean;
+};
+
+type TicketExecutionTargetRow = {
+  for_human: boolean | null | undefined;
+};
+
+export function executionTargetFromForHuman(
+  forHuman: TicketExecutionTargetRow['for_human']
+): TicketExecutionTarget {
+  return forHuman ? 'human' : 'agent';
+}
+
+export function normalizeTicketExecutionTarget<T extends TicketExecutionTargetRow>(
+  ticket: T
+): Omit<T, 'for_human'> & { execution_target: TicketExecutionTarget } {
+  const { for_human, ...rest } = ticket;
+  return {
+    ...rest,
+    execution_target: executionTargetFromForHuman(for_human)
+  };
 }
 
 /** Objective linked to a ticket. */

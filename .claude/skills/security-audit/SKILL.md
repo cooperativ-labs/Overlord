@@ -82,7 +82,7 @@ Every audit should follow this structure:
 
 ```markdown
 # Security Audit - YYYY-MM-DD
-
+∑
 ## Executive Summary
 
 - Overall risk posture
