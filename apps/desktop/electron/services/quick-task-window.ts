@@ -401,5 +401,9 @@ export function initQuickTaskWindow(options: { platformUrl: string; isDev: boole
   // Touch the default session so cookies are shared with main window.
   void session.defaultSession;
 
+  // Pre-create the hidden window so the first hotkey press does not pay the
+  // BrowserWindow creation and initial navigation cost.
+  ensureWindow();
+
   registerQuickTaskHotkey();
 }

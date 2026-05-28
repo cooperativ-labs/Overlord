@@ -62,6 +62,8 @@ type Props = {
   textareaMaxHeightPx?: number;
   /** Focus the input when entering edit mode (default true). */
   autoFocus?: boolean;
+  /** Called after a value is successfully saved, with the new value. */
+  onSave?: (value: string) => void;
 };
 
 export const InlineEditField = forwardRef<InlineEditFieldHandle, Props>(function InlineEditField(
@@ -84,7 +86,8 @@ export const InlineEditField = forwardRef<InlineEditFieldHandle, Props>(function
     objectiveRowId,
     objectiveState,
     textareaMaxHeightPx,
-    autoFocus = true
+    autoFocus = true,
+    onSave
   }: Props,
   ref
 ) {
@@ -193,6 +196,7 @@ export const InlineEditField = forwardRef<InlineEditFieldHandle, Props>(function
         await updateFieldsMutation.mutateAsync({ ticketId, patch: { [field]: value } });
       }
       setSavedValue(value);
+      onSave?.(value);
       if (!alwaysEditing) {
         setEditing(false);
       }

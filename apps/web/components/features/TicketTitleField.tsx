@@ -75,6 +75,7 @@ export function TicketTitleField({
         field="title"
         initialValue={titleValue}
         inputClassName="text-xl font-semibold tracking-tight pr-10"
+        onSave={setTitleValue}
         placeholder="Untitled — click to add a title"
         ticketId={ticketId}
       />

@@ -63,6 +63,19 @@ type QuickTaskWindowApi = {
   onShown: (cb: () => void) => () => void;
 };
 
+type IdleCallbackHandle = number;
+type IdleDeadline = {
+  didTimeout: boolean;
+  timeRemaining: () => number;
+};
+type IdleScheduler = {
+  requestIdleCallback?: (
+    callback: (deadline: IdleDeadline) => void,
+    options?: { timeout: number }
+  ) => IdleCallbackHandle;
+  cancelIdleCallback?: (handle: IdleCallbackHandle) => void;
+};
+
 function getQuickTaskApi(): QuickTaskWindowApi | null {
   if (typeof window === 'undefined') return null;
   const api = (window as unknown as { electronAPI?: { quickTask?: QuickTaskWindowApi } })
@@ -86,6 +99,7 @@ export function QuickTaskBar({ defaultProjectId, projects, sshEnabled }: QuickTa
   const [stagedFiles, setStagedFiles] = useState<StagedFile[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeMenu, setActiveMenu] = useState<null | 'project' | 'model'>(null);
+  const [mentionPathsEnabled, setMentionPathsEnabled] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -111,8 +125,35 @@ export function QuickTaskBar({ defaultProjectId, projects, sshEnabled }: QuickTa
   });
 
   const { files: mentionPaths } = useWorkspaceFileTree({
-    workingDirectory: workspace.effectiveWorkingDirectory
+    workingDirectory: workspace.effectiveWorkingDirectory,
+    enabled: mentionPathsEnabled
   });
+
+  useEffect(() => {
+    if (mentionPathsEnabled) return;
+    const scheduler = window as Window & IdleScheduler;
+    if (typeof scheduler.requestIdleCallback === 'function') {
+      const handle = scheduler.requestIdleCallback(() => {
+        setMentionPathsEnabled(true);
+      }, { timeout: 1500 });
+      return () => {
+        scheduler.cancelIdleCallback?.(handle);
+      };
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setMentionPathsEnabled(true);
+    }, 300);
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [mentionPathsEnabled]);
+
+  useEffect(() => {
+    if (!mentionPathsEnabled && objective.includes('@')) {
+      setMentionPathsEnabled(true);
+    }
+  }, [mentionPathsEnabled, objective]);
 
   // Auto-resize textarea + window height.
   // We send the bar's offsetTop so the Electron host can pin the bar to a
