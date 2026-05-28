@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2605281741.0] - 2026-05-28:17:41
+
+### Added
+- None.
+
+### Fixed
+- None.
+
+### Changed
+- None.
+
+### Security
+- None.
+
+### Performance
+- Pre-create the hidden Electron Quick Task window at desktop startup so the first global hotkey press opens immediately without paying BrowserWindow creation and initial page load cost.
+
 ## [0.2605280904.0] - 2026-05-28:09:04
 
 ### Added
