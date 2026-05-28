@@ -24,6 +24,17 @@ export const metadata: Metadata = {
   },
   alternates: {
     canonical: 'https://www.ovld.ai'
+  },
+  openGraph: {
+    title: 'Overlord',
+    description: 'Stop juggling AI agents. Organize and launch agent work with Overlord.',
+    images: ['/images/social/overlord-header.png']
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Overlord',
+    description: 'Stop juggling AI agents. Organize and launch agent work with Overlord.',
+    images: ['/images/social/overlord-header.png']
   }
 };
 

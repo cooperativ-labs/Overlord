@@ -32,7 +32,7 @@ None material. Antigravity intentionally omits `--model` / `--thinking` on launc
 
 ### Documentation Drift
 
-- **Acceptable:** `docs/public/Marketing-and-positioning.md` still names Gemini as a competitor runtime (not Overlord connector setup).
+- **Acceptable:** `docs/public/value-proposition.md` still names Gemini as a competitor runtime (not Overlord connector setup).
 - **Acceptable:** `feed-page-functionality.md` describes Google Gemini API for feed generation (product feature, not CLI connector).
 - **Acceptable:** `ai/feature-plans/antigravity-connector-migration.md` retains historical `ovld setup gemini` references as migration spec.
 

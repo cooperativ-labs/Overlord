@@ -6,6 +6,11 @@ describe('isPublicRoute', () => {
     expect(isPublicRoute('/changelog/release-1-0')).toBe(true);
   });
 
+  it('treats the anatomy page as public', () => {
+    expect(isPublicRoute('/anatomy')).toBe(true);
+    expect(isPublicRoute('/anatomy-extra')).toBe(false);
+  });
+
   it('does not treat unrelated paths as public', () => {
     expect(isPublicRoute('/changelogging')).toBe(false);
   });

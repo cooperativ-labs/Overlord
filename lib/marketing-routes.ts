@@ -1,6 +1,13 @@
 const MARKETING_EXACT_PATHS = new Set(['/']);
 
-const MARKETING_PATH_PREFIXES = ['/about', '/changelog', '/compare', '/demo', '/problems'];
+const MARKETING_PATH_PREFIXES = [
+  '/about',
+  '/changelog',
+  '/compare',
+  '/demo',
+  '/problems',
+  `/anatomy`
+];
 
 export function isMarketingRoute(pathname: string): boolean {
   if (MARKETING_EXACT_PATHS.has(pathname)) {

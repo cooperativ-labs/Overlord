@@ -10,66 +10,48 @@ The result is a Kanban-style workflow where humans plan and agents execute, with
 
 ### What Problem Does This Solve?
 
-| Challenge                                              | Overlord Solution                                                                |
-| ------------------------------------------------------ | -------------------------------------------------------------------------------- |
-| Agent sessions lose context between runs               | Tickets persist objectives, history, attachments, and shared state in Postgres   |
-| Each agent has its own bespoke launcher and config     | Unified `ovld protocol` CLI + MCP server speaks to every supported agent         |
-| Hard to track what an agent actually changed and why   | Agents record `changeRationales` per file as part of the deliver step            |
-| Running work on the right machine is manual            | Devices register themselves; tickets target a project resource and SSH if needed |
-| Plans, tickets, and code drift apart                   | One ticket holds many ordered objectives sharing the same context and artifacts  |
-| Multiple humans + agents stepping on each other        | Sessions, attach state, and approval gates are first-class in the protocol       |
+| Challenge                                                    | Overlord Solution                                            |
+|--------------------------------------------------------------|--------------------------------------------------------------|
+| Users lose track of context between prompts                  | Structured Kanban workflow lets you thoroughly plan prompts and prompt sequences |
+| Agent sessions lose context between runs                     | Tickets persist objectives, history, attachments, and shared state in Postgres |
+| Hard to track what an agent actually changed and why         | Agents record `changeRationales` per file as part of the deliver step |
+| Agent lock-in: hard to switch between different agents between each turn | Assign any agent you want to each objective.                 |
+| Plans, tickets, and code drift apart                         | One ticket holds many ordered objectives sharing the same context and artifacts |
+
 
 ### Architecture
-
-```mermaid
-graph TB
-    User[Human Operator]
-    Desktop[Overlord Desktop<br/>Electron app]
-    Web[Overlord Web<br/>Next.js + Supabase]
-    Mobile[Overlord Mobile<br/>Expo / React Native]
-
-    User --> Desktop
-    User --> Web
-    User --> Mobile
-
-    Desktop --> Protocol[Protocol API<br/>ovld CLI + MCP server]
-    Web --> Protocol
-    Mobile --> Protocol
-
-    Protocol --> DB[(Supabase<br/>Postgres + RLS)]
-
-    subgraph Project["Project — mapped to a Git Repository"]
-      direction TB
-      T1[Ticket]
-      T2[Ticket]
-      T1 --> O1[Objective 1]
-      T1 --> O2[Objective 2]
-      T1 --> O3[Objective 3]
-      T1 --> Ctx[Shared Context<br/>artifacts • attachments • history]
-      T2 --> O4[Objective]
-    end
-
-    DB --- Project
-
-    O1 -.attach.-> S1[Agent Session<br/>Claude Code]
-    O2 -.attach.-> S2[Agent Session<br/>Codex]
-    O3 -.attach.-> S3[Agent Session<br/>Cursor]
-    O4 -.attach.-> S4[Agent Session<br/>Remote Agent]
-
-    S1 --> Device1[Local Device]
-    S2 --> Device1
-    S3 --> Device2[Remote Device<br/>via SSH target]
-    S4 --> Cloud[Cloud Runner]
-
-    style Protocol fill:#e1f5ff,color:#000000
-    style DB fill:#f0f0f0,color:#000000
-    style Project fill:#fff4e1,color:#000000
-    style Ctx fill:#fef3c7,color:#000000
-```
 
 **Key relationship:** one **objective** maps to one **agent session**. A **ticket** is home to one or more objectives plus their shared context. Tickets live inside a **project**, and a project is mapped to a **git repository** (and optionally a working device).
 
 ## Core Concepts
+
+
+```mermaid
+graph LR
+    subgraph Project["📁 Project"]
+
+       
+        Resources["Resources & Config"]
+
+    end
+    subgraph Ticket["🎫 Ticket"]
+        direction TB
+        O1["Objective 1"]
+        O2["Objective 2"]
+        O3["Objective 3"]
+        SC["📝 Shared Context"]
+    end
+
+    S1["🤖 Agent Session 1"]
+    S2["🤖 Agent Session 2"]
+    S3["🤖 Agent Session 3"]
+
+    Project --> Ticket
+    O1 --> S1
+    O2 --> S2
+    O3 --> S3
+    
+```
 
 ### Project 📁
 
@@ -95,21 +77,17 @@ Everything attached to the ticket that survives across objectives: `write-contex
 
 A structured record per modified file describing **what** changed, **why**, and the **impact**. Agents emit these during `deliver`, producing an audit trail that lives alongside the diff and survives long after the session ends.
 
-### Device 💻
-
-A registered machine (laptop, remote workstation, cloud runner) that can execute tickets. Devices are fingerprinted and can be selected as execution targets, including over SSH for remote project resources.
-
 ### Project Resource 🔌
 
 A typed resource attached to a project — an SSH target, a working directory, a database, etc. Resources let a ticket say "run me against *this* environment" without hard-coding paths in the prompt.
 
-### Approval Gate ✋
-
-An explicit pause point. An agent can call `request_approval_gate` before taking a risky or irreversible action and wait for a human to acknowledge from the desktop or web app.
-
 ### Connectors 🔗
 
 Per-agent integrations that launch the right CLI with the right plugin, hooks, and permissions. Claude Code, Codex, Cursor, OpenCode, and Antigravity each have a connector that maps Overlord's protocol onto their native session model.
+
+### Device 💻
+
+A registered machine (laptop, remote workstation, cloud runner) that can execute tickets. Devices are fingerprinted and can be selected as execution targets, including over SSH for remote project resources.
 
 ### Protocol Surfaces 🛰️
 

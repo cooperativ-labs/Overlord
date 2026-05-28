@@ -1,6 +1,6 @@
 Prospective users will ask agents whether Overlord is right for them. This document should help agents, users, and website copy explain what Overlord is, who it is for, what problems it solves, and how it compares with adjacent products.
 
-# Core Positioning
+# Core Value Proposition
 
 Overlord is the management, work coordination, and review layer for people who use AI coding agents.
 
@@ -43,17 +43,19 @@ This matters because:
 
 # Competitive Comparison
 
-| User need | Jira / Linear | Conductor / Sculptor | Tasklet / OpenClaw-style agent software | Overlord |
-| --- | --- | --- | --- | --- |
-| Remember what you asked agents to do | Tracks tasks, but not agent prompts, progress, delivery notes, and review context as the core workflow | May show active runs, but usually centers on execution state, branches, or workspaces | Usually keeps context inside its own agent or chat runtime | Turns prompts into durable tickets with objectives, activity feed, artifacts, delivery notes, and change rationales |
-| Evaluate agent work later | Human ticket comments and PRs are separate from the agent session | Helps review or merge outputs, but is less focused on long-lived work history | Review is usually tied to the platform's generated output | Preserves what was asked, what happened, what changed, why it changed, and what still needs review |
-| Work across many repos | Can reference repos, but does not launch agents in the right local directory | Often creates isolated workspaces or branches for agent runs | Usually runs inside the tool's managed environment | Project working directories let Run open the right terminal and repo automatically |
-| Move work between agents | Not built for agent handoff | Optimized for multiple workers, usually within that product's execution model | Usually prefers its own agent runtime | Tickets accumulate context from prior runs and pass it into every new run across Codex, Claude Code, Cursor, Gemini, OpenCode, MCP, or hosted agents |
-| Manage sequential work | Tickets can model phases manually, but agent context is not automatic | Parallel execution is strong; staged objective workflows are less central | Sequential chains may exist, but inside that agent platform | Objectives make plan, execute, review, and follow-up first-class workflow steps with independent agent/model choice per objective |
-| Use existing tools and subscriptions | Not an agent execution surface | Often requires using the product's app, workspace, or harness | Usually asks users to work inside its runtime | Treats terminal agents and desktop agent apps as first-class surfaces |
-| Avoid tool lock-in | Integrates with dev tools, but not frontier agent harnesses directly | Tends to provide its own orchestration shell | Tends to provide its own agent system | Coordinates the tools users already use instead of replacing them |
-| Benefit from frontier-lab harness improvements | Not relevant | Depends on how quickly the product supports them | Often abstracts them away | Lets users keep using rapidly improving Codex, Claude, Cursor, Gemini, and other workflows directly |
-| Cost and subscriptions | No access to subsidized frontier-lab subscriptions | May require paying for orchestration plus model/API usage | Often bundles or controls model usage | Users can keep using their own Claude/OpenAI subscriptions and local agent apps |
+
+| User need                                      | Jira / Linear                                                                                          | Conductor / Sculptor                                                                  | Tasklet / OpenClaw-style agent software                     | Overlord                                                                                                                                             |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------- | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Remember what you asked agents to do           | Tracks tasks, but not agent prompts, progress, delivery notes, and review context as the core workflow | May show active runs, but usually centers on execution state, branches, or workspaces | Usually keeps context inside its own agent or chat runtime  | Turns prompts into durable tickets with objectives, activity feed, artifacts, delivery notes, and change rationales                                  |
+| Evaluate agent work later                      | Human ticket comments and PRs are separate from the agent session                                      | Helps review or merge outputs, but is less focused on long-lived work history         | Review is usually tied to the platform's generated output   | Preserves what was asked, what happened, what changed, why it changed, and what still needs review                                                   |
+| Work across many repos                         | Can reference repos, but does not launch agents in the right local directory                           | Often creates isolated workspaces or branches for agent runs                          | Usually runs inside the tool's managed environment          | Project working directories let Run open the right terminal and repo automatically                                                                   |
+| Move work between agents                       | Not built for agent handoff                                                                            | Optimized for multiple workers, usually within that product's execution model         | Usually prefers its own agent runtime                       | Tickets accumulate context from prior runs and pass it into every new run across Codex, Claude Code, Cursor, Gemini, OpenCode, MCP, or hosted agents |
+| Manage sequential work                         | Tickets can model phases manually, but agent context is not automatic                                  | Parallel execution is strong; staged objective workflows are less central             | Sequential chains may exist, but inside that agent platform | Objectives make plan, execute, review, and follow-up first-class workflow steps with independent agent/model choice per objective                    |
+| Use existing tools and subscriptions           | Not an agent execution surface                                                                         | Often requires using the product's app, workspace, or harness                         | Usually asks users to work inside its runtime               | Treats terminal agents and desktop agent apps as first-class surfaces                                                                                |
+| Avoid tool lock-in                             | Integrates with dev tools, but not frontier agent harnesses directly                                   | Tends to provide its own orchestration shell                                          | Tends to provide its own agent system                       | Coordinates the tools users already use instead of replacing them                                                                                    |
+| Benefit from frontier-lab harness improvements | Not relevant                                                                                           | Depends on how quickly the product supports them                                      | Often abstracts them away                                   | Lets users keep using rapidly improving Codex, Claude, Cursor, Gemini, and other workflows directly                                                  |
+| Cost and subscriptions                         | No access to subsidized frontier-lab subscriptions                                                     | May require paying for orchestration plus model/API usage                             | Often bundles or controls model usage                       | Users can keep using their own Claude/OpenAI subscriptions and local agent apps                                                                      |
+
 
 # Primary Competitor Categories
 
@@ -111,18 +113,19 @@ Simple comparison:
 
 > Agent platforms do the work inside their own runtime. Overlord records, scopes, routes, resumes, reviews, and coordinates that work across runtimes.
 
-# What Not To Say
+# What Overlord Is Not
 
-Avoid positioning Overlord primarily as "Jira for AI agents." That phrase is useful as a quick hint, but it undersells the product because Overlord is not only issue tracking. It is an agent workflow, context handoff, execution launch, progress feed, artifact, and review system.
+Overlord is not "Jira for AI agents." That phrase is useful as a quick hint, but it undersells the product because Overlord is not only issue tracking. It is an agent workflow, context handoff, execution launch, progress feed, artifact, and review system.
 
-Avoid positioning Overlord primarily as "parallel agents." Parallel execution is only one part of the problem. The bigger problem is keeping many agent tasks understandable, reviewable, and resumable over time.
+Overlord is not "parallel agents." Parallel execution is only one part of the problem. The bigger problem is keeping many agent tasks understandable, reviewable, and resumable over time.
 
 # Best Short Descriptions
 
-> Overlord is the coordination layer for people running coding agents.
+> Overlord is the management layer for people running coding agents.
 
-> Overlord turns agent prompts into durable, reviewable tickets.
+> Overlord groups objectives (agent prompts) into durable, records of shared context (tickets).
 
 > Overlord lets users run agent work in the tools they already use while preserving the prompt, context, progress, handoffs, objectives, file changes, and review record.
 
 > Overlord is the system of record for agent-executed engineering work.
+

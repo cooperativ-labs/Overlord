@@ -10,7 +10,7 @@ const marketingPositioningPath = path.join(
   '..',
   'docs',
   'public',
-  'Marketing-and-positioning.md'
+  'value-proposition.md'
 );
 
 function escapeHtml(value: string) {
@@ -30,7 +30,7 @@ export async function GET() {
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Overlord Marketing and Positioning Context</title>
+<title>Overlord Value Proposition Context</title>
 </head>
 <body>
 <pre>${escapeHtml(content)}</pre>

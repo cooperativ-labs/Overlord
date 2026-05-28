@@ -3,6 +3,7 @@ import { isMarketingRoute } from '@/lib/marketing-routes';
 describe('isMarketingRoute', () => {
   it('matches marketing paths', () => {
     expect(isMarketingRoute('/')).toBe(true);
+    expect(isMarketingRoute('/anatomy')).toBe(true);
     expect(isMarketingRoute('/about')).toBe(true);
     expect(isMarketingRoute('/changelog')).toBe(true);
     expect(isMarketingRoute('/changelog/2026-01-01')).toBe(true);

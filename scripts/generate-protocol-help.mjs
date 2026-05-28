@@ -18,7 +18,7 @@ const protocolHelpPath = resolve(docsPublicDir, 'ovld-protocol-help.txt');
 const manifestPath = resolve(repoRoot, 'lib', 'agent-docs-manifest.json');
 
 const MANIFEST_ORDER = [
-  'Marketing-and-positioning.md',
+  'value-proposition.md',
   'new-user-onboarding.md',
   'users-guide.md',
   'overlord-examples.md',
@@ -94,7 +94,9 @@ try {
   writeFileSync(protocolHelpPath, help, 'utf8');
   console.log('[generate-protocol-help] Written to', protocolHelpPath);
 } catch {
-  console.log('[generate-protocol-help] ovld not available, skipping protocol help (existing file kept).');
+  console.log(
+    '[generate-protocol-help] ovld not available, skipping protocol help (existing file kept).'
+  );
 }
 
 syncAgentDocsManifest();

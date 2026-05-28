@@ -27,6 +27,13 @@ export function HomepageHeader() {
       </Link>
 
       <div className="flex items-center gap-1 sm:gap-3">
+        {/* <Button
+          asChild
+          variant="ghost"
+          className="hidden text-stone-600 hover:bg-stone-200/80 hover:text-stone-900 sm:inline-flex dark:text-slate-300 dark:hover:bg-white/5 dark:hover:text-white"
+        >
+          <Link href="/anatomy">Anatomy</Link>
+        </Button> */}
         <Button
           asChild
           variant="ghost"

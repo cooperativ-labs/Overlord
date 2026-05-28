@@ -181,6 +181,14 @@ export default async function HomePage() {
                   Try the interactive demo
                 </Link>
               </Button> */}
+            {/* <Button
+              asChild
+              size="lg"
+              variant="outline"
+              className="h-14 rounded-full border-stone-300 bg-white px-8 text-base text-stone-900 shadow-sm hover:bg-stone-50 dark:border-white/15 dark:bg-white/5 dark:text-white dark:shadow-none dark:hover:bg-white/10 dark:hover:text-white"
+            >
+              <Link href="/anatomy">View anatomy</Link>
+            </Button> */}
             <Button
               asChild
               size="lg"

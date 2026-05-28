@@ -1,9 +1,9 @@
 [
   {
-    "slug": "Marketing-and-positioning",
-    "filename": "Marketing-and-positioning.md",
-    "title": "Core Positioning",
-    "description": "Overlord is the management, work coordination, and review layer for people who use coding agents."
+    "slug": "value-proposition",
+    "filename": "value-proposition.md",
+    "title": "Core Value Proposition",
+    "description": "Overlord is the management, work coordination, and review layer for people who use AI coding agents."
   },
   {
     "slug": "new-user-onboarding",
@@ -28,5 +28,11 @@
     "filename": "feed-page-functionality.md",
     "title": "Feed Page Functionality",
     "description": "The `/feed` page is the activity feed for AI-assisted work in Overlord. It is designed to answer a practical question for a user or reviewer: what did agents recently do across my projects, what ch..."
+  },
+  {
+    "slug": "auto-advance-flow",
+    "filename": "auto-advance-flow.md",
+    "title": "Objective Auto-Advance Flow",
+    "description": "Auto-advance and manual Run share one launch path: the backend decides **what** should run, writes a durable `execution_requests` row, and a capable machine runs **`ovld runner`** to claim that row..."
   }
 ]

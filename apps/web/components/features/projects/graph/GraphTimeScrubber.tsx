@@ -55,7 +55,8 @@ export function GraphTimeScrubber({
 
     const playDurationMs = 6000;
     const startReal = performance.now();
-    const startVirtual = currentMs >= maxMs ? minMs : currentMs;
+    const boundsMinMs = new Date(bounds.min).getTime();
+    const startVirtual = currentMs >= maxMs ? boundsMinMs : currentMs;
 
     const step = (now: number) => {
       const elapsed = now - startReal;
@@ -74,7 +75,7 @@ export function GraphTimeScrubber({
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
     };
-  }, [isPlaying, bounds?.min, bounds?.max, currentMs, maxMs, onChange, onPlayToggle]);
+  }, [isPlaying, bounds, currentMs, maxMs, onChange, onPlayToggle]);
 
   if (!bounds) {
     return (

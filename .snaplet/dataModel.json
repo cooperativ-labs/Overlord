@@ -2579,6 +2579,20 @@
           "maxLength": null
         },
         {
+          "id": "public.device_auth_codes.requester_ip",
+          "name": "requester_ip",
+          "columnName": "requester_ip",
+          "type": "text",
+          "isRequired": false,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
           "name": "users",
           "type": "users",
           "isRequired": false,
@@ -15672,10 +15686,10 @@
           "maxLength": null
         },
         {
-          "id": "public.tickets.execution_target",
-          "name": "execution_target",
-          "columnName": "execution_target",
-          "type": "ticket_execution_target",
+          "id": "public.tickets.for_human",
+          "name": "for_human",
+          "columnName": "for_human",
+          "type": "bool",
           "isRequired": true,
           "kind": "scalar",
           "isList": false,
@@ -18642,6 +18656,9 @@
           "name": "future"
         },
         {
+          "name": "pending_delivery"
+        },
+        {
           "name": "submitted"
         }
       ]
@@ -18708,7 +18725,13 @@
           "name": "context_write"
         },
         {
+          "name": "decision"
+        },
+        {
           "name": "deliver"
+        },
+        {
+          "name": "discussion_summary"
         },
         {
           "name": "execution_launch_failed"

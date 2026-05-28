@@ -2,7 +2,7 @@
   "name": "@overlord/web",
   "private": true,
   "scripts": {
-    "dev": "node ../../node_modules/next/dist/bin/next dev",
+    "dev": "node ../../node_modules/next/dist/bin/next dev --webpack",
     "prebuild": "node ../../scripts/generate-protocol-help.mjs",
     "build": "node ../../node_modules/next/dist/bin/next build",
     "start": "node ../../node_modules/next/dist/bin/next start",

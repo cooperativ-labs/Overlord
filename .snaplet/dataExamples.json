@@ -753,6 +753,32 @@
     "description": "This column stores the OAuth/OIDC state value (the anti-CSRF “oauth_state”) associated with a device-based login request for Overlord’s AI-coding-agent management. It is generated when initiating the device authorization flow and later validated when completing the token exchange to ensure the response matches the original request."
   },
   {
+    "input": "public device_auth_codes requester_ip",
+    "examples": [
+      "203.0.113.15",
+      "198.51.100.42",
+      "192.0.2.77",
+      "203.0.113.99",
+      "198.51.100.8",
+      "192.0.2.204",
+      "185.23.120.14",
+      "91.198.174.63",
+      "45.147.233.21",
+      "103.21.244.9",
+      "66.102.7.101",
+      "172.16.5.34",
+      "10.0.0.58",
+      "10.12.34.90",
+      "172.31.255.1",
+      "2607:f8b0:4005:805::200e",
+      "2001:db8:85a3::8a2e:370:7334",
+      "2a02:6b8:85::12",
+      "2404:6800:4003:c01::6a",
+      "fd00:1234:5678::9abc"
+    ],
+    "description": "This column stores the IP address of the client/requester that initiated the device authorization flow for public.device_auth_codes (e.g., the source IP recorded when generating the device auth code)."
+  },
+  {
     "input": "public early_access_requests name",
     "examples": [
       "Ava Thompson",

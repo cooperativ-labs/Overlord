@@ -74,7 +74,6 @@ export function TicketPanelHeader({
           </DropdownMenuContent>
         </DropdownMenu>
         <span className="text-xs tabular-nums text-muted-foreground">{ticketIdentifier}</span>
-        <IsHumanToggle ticketId={ticketId} forHuman={forHuman} size="md" />
       </div>
       <div className="flex items-center justify-end gap-3">
         <div className="flex items-center gap-1.5">

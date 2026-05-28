@@ -2,6 +2,7 @@ import { Bot, MessageSquare } from 'lucide-react';
 import { headers } from 'next/headers';
 import fs from 'node:fs/promises';
 
+import { IsHumanToggle } from '@/app/(app)/tickets/(components)/IsHumanToggle';
 import { TimerWithTimeEntries } from '@/components/features/everhour/TimerWithTimeEntries';
 import { DueDateEditor } from '@/components/features/scheduling/DueDateEditor';
 import { ScheduleEditor } from '@/components/features/scheduling/ScheduleEditor';
@@ -388,6 +389,7 @@ export async function TicketPanelContent({
               </div>
 
               <div className="mb-4 flex flex-wrap items-center gap-2">
+                <IsHumanToggle ticketId={ticketId} forHuman={ticket.for_human ?? false} size="md" />
                 <DueDateEditor initialDueDatetime={ticket.due_datetime} ticketId={ticketId} />
                 <ScheduleEditor
                   ticketId={ticketId}

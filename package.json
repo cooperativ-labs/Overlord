@@ -62,7 +62,7 @@
     "electron:clean": "rm -rf release apps/desktop/dist-electron apps/web/.next",
     "electron:pack:run": "node scripts/run-packed-electron.mjs",
     "electron:build-main": "node node_modules/esbuild/bin/esbuild apps/desktop/electron/main.ts --bundle --platform=node --target=node20 --outfile=apps/desktop/dist-electron/main.js --external:electron '--external:*.node' --format=cjs --sourcemap && node node_modules/esbuild/bin/esbuild apps/desktop/electron/preload.ts --bundle --platform=node --target=node20 --outfile=apps/desktop/dist-electron/preload.js --external:electron '--external:*.node' --format=cjs --sourcemap",
-    "electron:dev:web": "cd apps/web && node ../../node_modules/next/dist/bin/next dev",
+    "electron:dev:web": "cd apps/web && node ../../node_modules/next/dist/bin/next dev --webpack",
     "electron:dev": "yarn electron:build-main && node node_modules/concurrently/dist/bin/concurrently.js \"yarn electron:dev:web\" \"node node_modules/wait-on/bin/wait-on http://localhost:3000 && node node_modules/electron/cli.js .\"",
     "electron:build-web": "cd apps/web && node ../../node_modules/next/dist/bin/next build",
     "electron:build": "node scripts/electron-build.mjs",
