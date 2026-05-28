@@ -1,6 +1,6 @@
 'use client';
 
-import { Settings } from 'lucide-react';
+import { Network, Settings } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 
@@ -53,8 +53,10 @@ export function ProjectSettingsSection({
   const hasSavedWorkingDirectory =
     savedWorkingDirectory.trim().length > 0 && !isWorkingDirectoryNone(savedWorkingDirectory);
   const isCurrentChangesView = pathname.startsWith(`/projects/${projectId}/current-changes`);
+  const isGraphView = pathname.startsWith(`/projects/${projectId}/graph`);
   const workBoardHref = buildProjectPath({ projectId });
   const currentChangesHref = `/projects/${projectId}/current-changes`;
+  const graphHref = `/projects/${projectId}/graph`;
   const currentChangesToggleDisabled = !isCurrentChangesView && !hasSavedWorkingDirectory;
   const currentChangesToggleTitle = currentChangesToggleDisabled
     ? 'Link a project directory to inspect current changes'
@@ -181,45 +183,60 @@ export function ProjectSettingsSection({
           </div>
           <ProjectExecutionWorkspaceSelector projectId={projectId} />
 
-          {isElectron && (
-            <div className="ml-auto flex flex-wrap items-center justify-end gap-2 ">
+          <div className="ml-auto flex flex-wrap items-center justify-end gap-2 ">
               <div className="relative flex items-center overflow-hidden rounded-lg border bg-muted/80 p-1">
                 <span aria-hidden className="pointer-events-none absolute inset-0bg-muted/40" />
                 <button
                   type="button"
                   className={cn(
                     'relative z-10 rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
-                    !isCurrentChangesView
+                    !isCurrentChangesView && !isGraphView
                       ? 'bg-background text-foreground shadow-sm'
                       : 'text-muted-foreground hover:text-foreground'
                   )}
                   onClick={() => router.push(workBoardHref)}
-                  aria-pressed={!isCurrentChangesView}
+                  aria-pressed={!isCurrentChangesView && !isGraphView}
                   title="Open Work Board"
                 >
                   Work Board
                 </button>
+                {isElectron && (
+                  <button
+                    type="button"
+                    className={cn(
+                      'relative z-10 overflow-hidden rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
+                      isCurrentChangesView
+                        ? 'bg-background text-foreground shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground'
+                    )}
+                    onClick={() => router.push(currentChangesHref)}
+                    disabled={currentChangesToggleDisabled}
+                    aria-pressed={isCurrentChangesView}
+                    title={currentChangesToggleTitle}
+                  >
+                    {!isCurrentChangesView && !currentChangesToggleDisabled ? (
+                      <span className="pointer-events-none absolute inset-0 -translate-x-full " />
+                    ) : null}
+                    <span className="relative z-10">Current Changes</span>
+                  </button>
+                )}
                 <button
                   type="button"
                   className={cn(
-                    'relative z-10 overflow-hidden rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
-                    isCurrentChangesView
+                    'relative z-10 flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
+                    isGraphView
                       ? 'bg-background text-foreground shadow-sm'
                       : 'text-muted-foreground hover:text-foreground'
                   )}
-                  onClick={() => router.push(currentChangesHref)}
-                  disabled={currentChangesToggleDisabled}
-                  aria-pressed={isCurrentChangesView}
-                  title={currentChangesToggleTitle}
+                  onClick={() => router.push(graphHref)}
+                  aria-pressed={isGraphView}
+                  title="Open Graph"
                 >
-                  {!isCurrentChangesView && !currentChangesToggleDisabled ? (
-                    <span className="pointer-events-none absolute inset-0 -translate-x-full " />
-                  ) : null}
-                  <span className="relative z-10">Current Changes</span>
+                  <Network className="h-3 w-3" aria-hidden="true" />
+                  Graph
                 </button>
               </div>
             </div>
-          )}
         </div>
       </div>
 
