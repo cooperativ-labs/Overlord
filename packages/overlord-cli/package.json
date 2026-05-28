@@ -1,6 +1,6 @@
 {
   "name": "overlord-cli",
-  "version": "0.2605241542.0",
+  "version": "0.2605280904.0",
   "description": "Overlord CLI — launch AI agents on tickets from anywhere",
   "homepage": "https://www.ovld.ai/docs/",
   "type": "module",

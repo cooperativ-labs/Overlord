@@ -24,7 +24,7 @@ import { createClientForRequest } from '@/supabase/utils/server';
 export const metadata: Metadata = {
   title: 'Overlord | Management, Work Coordination, and Review for Coding Agents',
   description:
-    'Overlord turns coding-agent prompts into durable, reviewable tickets with objectives, progress, context, handoffs, artifacts, file-change rationales, and delivery history.'
+    'Overlord helps you manage and coordinate agent work by turning prompts into durable, reviewable objectives, progress, context, handoffs, artifacts, file-change rationales, and delivery history.'
 };
 
 const agentIcons = [

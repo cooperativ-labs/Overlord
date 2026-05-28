@@ -34,9 +34,12 @@ export async function GET(request: Request) {
     profilePreferences: profileSettings?.preferences
   });
 
+  const projectId = searchParams.get('projectId') ?? undefined;
+
   const { data, error } = await searchTickets(supabase, {
     limit: 6,
     organizationId: organizationId ?? undefined,
+    projectId,
     query: rawQuery,
     select:
       'id,title,ticket_id,ticket_sequence,project_id,organization_id,status,project:projects(name)'

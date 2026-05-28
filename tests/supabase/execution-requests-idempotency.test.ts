@@ -1,9 +1,9 @@
 import { createExecutionRequest } from '@/lib/overlord/execution-requests';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
+import { env } from 'node:process';
 
 const LOCAL_SUPABASE_URL = 'http://127.0.0.1:54321';
-const LOCAL_SERVICE_ROLE_KEY =
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU';
+const LOCAL_SERVICE_ROLE_KEY = process.env.LOCAL_SERVICE_ROLE_KEY;
 
 const USER_ID = '11111111-1111-4111-8111-111111111111';
 

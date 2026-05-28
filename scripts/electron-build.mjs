@@ -28,8 +28,8 @@
  */
 
 import { spawnSync } from 'node:child_process';
-import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { copyFileSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { pickRuntimeEnv } from './electron-runtime-allowlist.mjs';
@@ -191,3 +191,22 @@ run(
 run(
   `yarn electron-builder --config apps/desktop/electron-builder.yml${isDirMode ? ' --dir' : ''}${getElectronBuilderTargetFlag()}`
 );
+
+// ---------------------------------------------------------------------------
+// Step 7 — Re-sign .app bundles on macOS (fixes Invalid Page crash on macOS 15+)
+// ---------------------------------------------------------------------------
+
+if (process.platform === 'darwin') {
+  const releaseDir = resolve(ROOT, 'release');
+  const macDirs = ['mac-arm64', 'mac', 'mac-x64']
+    .map(name => join(releaseDir, name))
+    .filter(dir => {
+      try { return readdirSync(dir).includes('Overlord.app'); } catch { return false; }
+    })
+    .sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs);
+
+  for (const dir of macDirs) {
+    const appPath = join(dir, 'Overlord.app');
+    run(`codesign --force --deep --sign - "${appPath}"`);
+  }
+}

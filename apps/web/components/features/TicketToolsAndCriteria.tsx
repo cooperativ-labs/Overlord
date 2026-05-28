@@ -59,7 +59,7 @@ export function TicketToolsAndCriteria({
           </div>
         </AccordionContent>
       </AccordionItem>
-      <AccordionItem value="shared-state" className="border-b-0">
+      {/* <AccordionItem value="shared-state" className="border-b-0">
         <AccordionTrigger className="eyebrow text-xs py-3 hover:no-underline">
           Shared State
         </AccordionTrigger>
@@ -68,7 +68,7 @@ export function TicketToolsAndCriteria({
             <SharedStateList sharedState={sharedState} />
           </div>
         </AccordionContent>
-      </AccordionItem>
+      </AccordionItem> */}
     </Accordion>
   );
 }

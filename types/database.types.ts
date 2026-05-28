@@ -2415,6 +2415,58 @@ export type Database = {
           why: string;
         }[];
       };
+      get_project_graph: {
+        Args: {
+          p_include_completed?: boolean;
+          p_limit?: number;
+          p_project_id: string;
+          p_since?: string;
+          p_ticket_ids?: string[];
+          p_until?: string;
+        };
+        Returns: {
+          attribution_source: string;
+          change_kind: string;
+          checkpoint_id: string;
+          confidence: string;
+          created_at: string;
+          event_id: string;
+          file_name: string;
+          file_path: string;
+          hunks: Json;
+          id: string;
+          impact: string;
+          label: string;
+          objective_id: string;
+          session_id: string;
+          summary: string;
+          ticket_data: Json;
+          ticket_id: string;
+          updated_at: string;
+          why: string;
+        }[];
+      };
+      get_project_hotspots: {
+        Args: {
+          p_directory?: string;
+          p_include_completed?: boolean;
+          p_limit?: number;
+          p_project_id: string;
+          p_window_days?: number;
+        };
+        Returns: {
+          file_name: string;
+          file_path: string;
+          high_impact_count: number;
+          impact_score: number;
+          last_activity: string;
+          low_impact_count: number;
+          medium_impact_count: number;
+          rationale_count: number;
+          ticket_count: number;
+          ticket_ids: string[];
+        }[];
+      };
       has_org_role: {
         Args: {
           allowed_roles: Database['public']['Enums']['organization_role'][];

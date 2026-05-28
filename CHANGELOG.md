@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2605280904.0] - 2026-05-28:09:04
+
+### Added
+- Add a new project graph experience at `projects/[projectId]/graph` with force-layout canvas, hotspot mode, search/filter controls, time scrubber, details panel, mobile list fallback, and export helpers.
+- Add project graph API routes for graph data and hotspot data under `/api/projects/[projectId]/graph` and `/api/projects/[projectId]/graph/hotspots`.
+- Add Supabase RPC migrations for project graph and hotspot queries.
+- Add client data fetchers/hooks and graph view-model utilities to support interactive graph loading and realtime updates.
+
+### Fixed
+- Update execution-request idempotency coverage to align tests with current behavior.
+
+### Changed
+- Update ticket search API behavior to support graph-driven ticket discovery flows.
+- Update project layout and ticket tools surfaces to expose project graph navigation and controls.
+- Refresh marketing homepage content to reflect latest product messaging.
+
+### Security
+- None.
+
+### Test
+- Add graph smoke, Mermaid export, and view-model tests for the new project graph feature set.
+
+### Chore
+- Add graph/rendering dependencies and lockfile updates (including `@xyflow/react` and `d3-force`) and update Electron build script wiring for the release.
+
 ## [0.2605241542.0] - 2026-05-24:15:42
 
 ### Added

@@ -164,8 +164,8 @@ export function ProjectLayoutClient({
           initialColor={projectColor}
           initialWorkingDirectory={projectWorkingDirectory}
         />
-        {selectedSegment === 'current-changes' ? children : board}
-        {selectedSegment === 'current-changes' ? null : children}
+        {selectedSegment === 'current-changes' || selectedSegment === 'graph' ? children : board}
+        {selectedSegment === 'current-changes' || selectedSegment === 'graph' ? null : children}
       </div>
     </ProjectSettingsProvider>
   );
