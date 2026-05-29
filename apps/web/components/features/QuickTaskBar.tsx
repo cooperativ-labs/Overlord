@@ -18,7 +18,7 @@ import {
   prepareObjectiveAttachmentUploadAction
 } from '@/lib/actions/attachments';
 import { generateTicketTitleAction } from '@/lib/actions/generate-title';
-import { submitTicketObjectiveAction } from '@/lib/actions/tickets';
+import { requestTicketObjectiveExecutionAction } from '@/lib/actions/tickets';
 import {
   useCreateTicketMutation,
   useUpdateTicketAssignmentMutation,
@@ -107,7 +107,7 @@ export function QuickTaskBar({ defaultProjectId, projects, sshEnabled }: QuickTa
 
   const { selection: defaultSelection, loaded: selectionLoaded } = useAgentModelPreference();
   const [objectiveSelection, setObjectiveSelection] = useState(defaultSelection);
-  const { isElectron, launchAgent } = useTerminal();
+  const { isElectron } = useTerminal();
   const createTicketMutation = useCreateTicketMutation();
   const updateAssignmentMutation = useUpdateTicketAssignmentMutation();
   const updateFieldsMutation = useUpdateTicketFieldsMutation();
@@ -389,37 +389,36 @@ export function QuickTaskBar({ defaultProjectId, projects, sshEnabled }: QuickTa
       setStagedFiles([]);
       handleClose();
 
-      if (shouldLaunch && isElectron && isLaunchAgentTypeValue(objectiveSelection.agent)) {
+      if (shouldLaunch && isLaunchAgentTypeValue(objectiveSelection.agent) && !forHuman) {
         try {
-          await submitTicketObjectiveAction(createdTicket.id);
-          await launchAgent({
+          const result = await requestTicketObjectiveExecutionAction({
             ticketId: createdTicket.id,
-            agent: objectiveSelection.agent,
-            organizationId: selectedProject.organization_id,
-            cwd:
+            agentIdentifier: objectiveSelection.agent,
+            workingDirectory:
               workspace.executionWorkspace === 'local'
-                ? (workspace.effectiveWorkingDirectory ?? undefined)
-                : undefined,
+                ? (workspace.effectiveWorkingDirectory ?? null)
+                : null,
             sshCommand:
               workspace.executionWorkspace === 'ssh'
-                ? (workspace.effectiveSshCommand ?? undefined)
-                : undefined,
+                ? (workspace.effectiveSshCommand ?? null)
+                : null,
             remoteWorkingDirectory:
               workspace.executionWorkspace === 'ssh'
-                ? (workspace.effectiveRemoteWorkingDirectory ?? undefined)
-                : undefined,
-            launchMode: 'run',
-            model: objectiveSelection.model ?? undefined,
-            thinking: objectiveSelection.thinking ?? undefined,
-            projectId: selectedProject.id
+                ? (workspace.effectiveRemoteWorkingDirectory ?? null)
+                : null,
+            modelIdentifier: objectiveSelection.model ?? null,
+            thinkingLevel: objectiveSelection.thinking ?? null
           });
+          if ('error' in result) {
+            throw new Error(result.error);
+          }
         } catch (error) {
-          console.error('Failed to launch agent:', error);
-          toast.error('Failed to launch agent.', {
+          console.error('Failed to queue execution:', error);
+          toast.error('Failed to queue execution.', {
             description:
               error instanceof Error && error.message.trim().length > 0
                 ? error.message
-                : 'Check your terminal settings and try again.'
+                : 'Check your runner configuration and try again.'
           });
         }
       }

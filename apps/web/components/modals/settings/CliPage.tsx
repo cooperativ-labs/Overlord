@@ -1396,7 +1396,13 @@ export function CliPage({ open }: { open: boolean }) {
           </Accordion>
 
           <div className="rounded-md border px-3 py-3 grid gap-4">
-            <p className="text-sm font-medium">Local agent configuration</p>
+            <div className="grid gap-1">
+              <p className="text-sm font-medium">Local agent configuration</p>
+              <p className="text-xs text-muted-foreground">
+                These settings apply to agents launched from Overlord, so you can customize how
+                Overlord starts each local agent.
+              </p>
+            </div>
             <div className="grid gap-4">
               <Select
                 value={selectedLocalAgent}
