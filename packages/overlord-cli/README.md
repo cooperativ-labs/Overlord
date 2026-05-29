@@ -60,6 +60,8 @@ Common commands:
 ovld auth login
 ovld auth status
 ovld attach
+ovld claude "Refactor the auth middleware" --model opus --thinking high
+ovld codex "Investigate the memory leak" -- --search --full-auto
 ovld create "Investigate the failing build" --agent codex
 ovld prompt "Draft a fix for the onboarding flow"
 ovld version
@@ -85,6 +87,8 @@ ovld doctor
 
 For ticket-scoped protocol and launch commands, `ticket_id` values such as `1:899` carry the organization id. The CLI uses that first, then `--organization-id` for UUID compatibility, then stored auth. `ovld auth login` stores the first available organization as a default when an account belongs to multiple organizations; pass `--organization-id <id>` only when you want a different default.
 
+When `ovld launch` has an explicit `--working-directory`, or when you run it from a registered project directory containing `.overlord/project.json`, it exports `TMPDIR`, `TMP`, `TEMP`, and `OVERLORD_TMPDIR` to that project's `.overlord/tmp/` directory before spawning the agent. Otherwise it falls back to the system temp directory.
+
 ## Requirements
 
 - Node.js 20 or newer
@@ -96,6 +100,7 @@ Find full CLI docs here: https://www.ovld.ai/docs/surfaces/cli
 
 Top-level commands (see `ovld help`):
 
+- `<agent> "<prompt>"` - create a ticket from the prompt (project inferred from the current directory) and launch the agent on it in one step, e.g. `ovld claude "fix the flaky login test" --model opus`. Built-in agents need an installed connector (`ovld setup <agent>`, override with `--allow-uninstalled`); your custom agents launch by id. Flags after a standalone `--` pass through to the agent binary.
 - `attach` - search tickets and launch an agent interactively (`ovld attach [ticketId] [agent]`)
 - `create` - create a ticket with numbered project selection; supports `--agent`, `--model`, `--delegate` (same delegate flags as `ovld protocol create`)
 - `prompt` - create a ticket, then launch an agent on it

@@ -29,6 +29,7 @@ function printHelp(primaryCommand) {
 Primary command: ${primaryCommand}
 
 Usage:
+  ${primaryCommand} <agent> "<prompt>" [flags]  Create a ticket from the prompt and launch the agent on it
   ${primaryCommand} attach [ticketId] [agent]  Search tickets and launch an agent (interactive)
   ${primaryCommand} create "<objective>"       Create a ticket with numbered project selection; supports --agent/--model/--delegate
   ${primaryCommand} prompt "<objective>"       Create a ticket, then launch an agent on it
@@ -48,6 +49,10 @@ Usage:
   ${primaryCommand} help                       Show this help message
 
 Agents:
+  ${primaryCommand} <agent> "<prompt>" [--model <id>] [--thinking <level>] [-- <agent flags>]
+    Built-in agents (claude, codex, cursor, antigravity, opencode) must have an
+    installed connector (${primaryCommand} setup <agent>); your custom agents launch by id.
+    Anything after a standalone -- is forwarded verbatim to the agent binary.
   Use ${primaryCommand} protocol help for ticket lifecycle commands.
   Key protocol commands: auth-status, discover-project, create, prompt, attach, connect, load-context.
 
@@ -172,9 +177,20 @@ export async function runCli({ primaryCommand }) {
     command === 'connect' ||
     command === 'restart' ||
     command === 'run' ||
-    command === 'resume'
+    command === 'resume' ||
+    command === 'launch-custom'
   ) {
     await runLauncherCommand(command, rest);
+    return;
+  }
+
+  // Direct agent launch: `ovld <agent> "<prompt>" [flags]`. Built-in agents
+  // dispatch immediately; an unknown command with a candidate objective may be
+  // a user's custom agent, so we let direct-launch resolve and report it.
+  const { isBuiltinLaunchAgent, runDirectLaunch } = await import('./direct-launch.mjs');
+  const hasCandidateObjective = rest.some(arg => !arg.startsWith('--'));
+  if (isBuiltinLaunchAgent(command) || hasCandidateObjective) {
+    await runDirectLaunch(command, rest);
     return;
   }
 

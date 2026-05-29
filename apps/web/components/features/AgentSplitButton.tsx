@@ -26,6 +26,8 @@ import {
   isLaunchAgentTypeValue,
   type LaunchAgentType
 } from '@/lib/helpers/agent-types';
+import { buildCustomAgentValues, resolveCustomAgentCommand } from '@/lib/helpers/custom-agent';
+import { CUSTOM_AGENTS_CONFIG_KEY } from '@/lib/schemas/agent-config';
 import { cn } from '@/lib/utils';
 import type { Database } from '@/types/database.types';
 import type { TicketAssignedAgent } from '@/types/tickets';
@@ -50,6 +52,7 @@ type AgentSplitButtonProps = {
   organizationId?: number;
   projectId?: string | null;
   agentFlags?: Partial<Record<LaunchAgentType, string[]>>;
+  agentPreCommands?: Partial<Record<LaunchAgentType, string>>;
   commands?: Record<LaunchAgentType, string>;
   workingDirectory?: string | null;
   sshCommand?: string | null;
@@ -126,6 +129,7 @@ export function AgentSplitButton({
   ticketId,
   projectId,
   agentFlags,
+  agentPreCommands,
   workingDirectory,
   sshCommand,
   remoteWorkingDirectory,
@@ -141,7 +145,7 @@ export function AgentSplitButton({
   const [copied, setCopied] = useState(false);
   const [isLaunching, setIsLaunching] = useState(false);
   const [showRunningConfirm, setShowRunningConfirm] = useState(false);
-  const { selection, loaded: selectionLoaded } = useAgentModelPreference();
+  const { selection, configs, loaded: selectionLoaded } = useAgentModelPreference();
   const projectSettingsCtx = useProjectSettings();
   const terminalContext = useTerminalOptional();
   if (!demo && !terminalContext) {
@@ -249,12 +253,40 @@ export function AgentSplitButton({
 
     if (!isLaunchAgentTypeValue(agentValue)) return;
 
+    // When the active selection targets a user-defined custom agent, resolve its
+    // launch-command template (placeholders filled from the model/thinking choice)
+    // and queue it as a custom execution. The runner launches it via the generic
+    // PTY path (desktop) or `ovld launch-custom` (CLI).
+    const customAgentId = effectiveSelection.customAgentId ?? null;
+    let customCommand: string | undefined;
+    let resolvedAgentIdentifier: string = agentValue;
+    if (customAgentId) {
+      const customAgents = configs[CUSTOM_AGENTS_CONFIG_KEY]?.customAgents ?? [];
+      const customAgent = customAgents.find(agent => agent.id === customAgentId);
+      if (!customAgent) {
+        toast.error('Custom agent not found', {
+          description: 'Re-select an agent in the model selector and try again.'
+        });
+        return;
+      }
+      customCommand = resolveCustomAgentCommand(
+        customAgent.commandTemplate,
+        buildCustomAgentValues(
+          customAgent,
+          effectiveSelection.model ?? null,
+          effectiveSelection.thinking ?? null
+        )
+      );
+      resolvedAgentIdentifier = customAgent.id;
+    }
+
     setIsLaunching(true);
     try {
       const result = await requestTicketObjectiveExecutionAction({
         ticketId,
         objectiveId: submitObjectiveId ?? undefined,
-        agentIdentifier: agentValue,
+        agentIdentifier: resolvedAgentIdentifier,
+        customCommand,
         workingDirectory:
           workspace.executionWorkspace === 'local'
             ? (effectiveWorkingDirectory ?? undefined)
@@ -265,7 +297,8 @@ export function AgentSplitButton({
           workspace.executionWorkspace === 'ssh'
             ? (effectiveRemoteWorkingDirectory ?? undefined)
             : null,
-        flags: agentFlags?.[agentValue],
+        flags: customAgentId ? undefined : agentFlags?.[agentValue],
+        preCommand: customAgentId ? undefined : agentPreCommands?.[agentValue],
         modelIdentifier: options?.useStoredModelPreference
           ? (effectiveSelection.model ?? undefined)
           : undefined,

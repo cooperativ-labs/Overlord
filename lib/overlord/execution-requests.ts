@@ -18,6 +18,9 @@ type RequestExecutionInput = {
   thinkingLevel?: string | null;
   launchMode?: 'run' | 'ask';
   flags?: string[];
+  preCommand?: string | null;
+  /** Fully-resolved custom-agent launch command; when set, agentIdentifier is a custom slug. */
+  customCommand?: string | null;
   workingDirectory?: string | null;
   sshCommand?: string | null;
   remoteWorkingDirectory?: string | null;
@@ -65,6 +68,8 @@ function normalizeAgent(value: string | null | undefined): LaunchAgentType {
 function buildLaunchParams(input: RequestExecutionInput): Json {
   return {
     flags: input.flags ?? [],
+    preCommand: normalizeOptionalText(input.preCommand),
+    customCommand: normalizeOptionalText(input.customCommand),
     workingDirectory: normalizeOptionalText(input.workingDirectory),
     sshCommand: normalizeOptionalText(input.sshCommand),
     remoteWorkingDirectory: normalizeOptionalText(input.remoteWorkingDirectory),
@@ -127,7 +132,13 @@ export async function createExecutionRequest(
 
   const objective = await resolveObjectiveForExecution(supabase, ticket.id, input.objectiveId);
   const assigned = parseObjectiveAssignedAgent(objective.assigned_agent);
-  const agent = normalizeAgent(assigned?.agent ?? input.agentIdentifier ?? null);
+  // A resolved custom command means agentIdentifier is a user-defined custom-agent slug,
+  // not a built-in LaunchAgentType — preserve it verbatim so the runner can fetch the
+  // stored customCommand and launch the generic PTY path.
+  const customCommand = normalizeOptionalText(input.customCommand);
+  const agent = customCommand
+    ? (normalizeOptionalText(input.agentIdentifier) ?? 'claude')
+    : normalizeAgent(assigned?.agent ?? input.agentIdentifier ?? null);
   const model = assigned?.model ?? normalizeOptionalText(input.modelIdentifier) ?? null;
   const thinking = assigned?.thinking ?? normalizeOptionalText(input.thinkingLevel) ?? null;
   const requestedFrom = input.requestedFrom.trim();

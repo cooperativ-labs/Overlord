@@ -133,9 +133,12 @@ export function QuickTaskBar({ defaultProjectId, projects, sshEnabled }: QuickTa
     if (mentionPathsEnabled) return;
     const scheduler = window as Window & IdleScheduler;
     if (typeof scheduler.requestIdleCallback === 'function') {
-      const handle = scheduler.requestIdleCallback(() => {
-        setMentionPathsEnabled(true);
-      }, { timeout: 1500 });
+      const handle = scheduler.requestIdleCallback(
+        () => {
+          setMentionPathsEnabled(true);
+        },
+        { timeout: 1500 }
+      );
       return () => {
         scheduler.cancelIdleCallback?.(handle);
       };

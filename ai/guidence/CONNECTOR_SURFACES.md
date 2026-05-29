@@ -28,7 +28,7 @@ Manual Run and auto-advance now create durable `execution_requests` rows. A loca
 
 Registered project resource directories use `.overlord/project.json` as the durable local project metadata file. `.overlord/tmp/` and `.overlord/logs/` are reserved for local ephemeral agent data and must be gitignored; do not gitignore the full `.overlord/` directory.
 
-Local desktop launches write context files and fallback hook/settings files into `.overlord/tmp/` when a project working directory is resolved. Remote launches create `$REMOTE_WORKING_DIRECTORY/.overlord/tmp/` for the context file when a remote working directory is known, falling back to remote system temp only when no project resource path is available.
+Local desktop launches write context files and fallback hook/settings files into `.overlord/tmp/` when a project working directory is resolved, and export `TMPDIR`, `TMP`, `TEMP`, and `OVERLORD_TMPDIR` to that same directory for the spawned agent process. Remote launches create `$REMOTE_WORKING_DIRECTORY/.overlord/tmp/` for the context file when a remote working directory is known, export the same temp env vars there, and fall back to remote system temp only when no project resource path is available.
 
 Capability resolver:
 [agent-capabilities.ts](/Users/jake/Development/Cooperativ/Overlord/lib/overlord/agent-capabilities.ts)
@@ -106,6 +106,7 @@ Checklist:
 - `instructionMode=bundle` is passed to context route when bundle is installed
 - Model flag: `--model`; thinking/effort flag: `--effort`
 - Desktop local launches intentionally do **not** shell out to `ovld launch`; they prefetch context, write temp hook/settings files, and avoid shell-quoting edge cases before spawning Claude directly
+- Desktop local launches export `TMPDIR`, `TMP`, `TEMP`, and `OVERLORD_TMPDIR` to the resolved project `.overlord/tmp/` directory when a project working directory is known
 - Desktop SSH launches use the same direct main-process command builder, omit local-only temp Claude settings/plugin paths on the remote host, and wrap the final remote agent command over system SSH
 
 ### 4. Onboarding
@@ -195,6 +196,7 @@ Checklist:
 - Thinking/effort flag uses `-c model_reasoning_effort=<value>` (TOML inline format)
 - Desktop local launches intentionally stay on the direct Electron path instead of delegating to `ovld launch`; `ovld launch` is the copy/paste surface and remote shell entrypoint
 - Desktop SSH launches use the same Codex expect/context-file behavior with the context file created on the remote host before Codex starts
+- `ovld launch` exports `TMPDIR`, `TMP`, `TEMP`, and `OVERLORD_TMPDIR` to the resolved project `.overlord/tmp/` directory when `--working-directory` is provided or the current directory is a registered project
 
 ### 3. Cloud / headless Codex setup
 
@@ -238,6 +240,7 @@ Checklist:
 - `ovld launch codex` is the documented primary launch command
 - `ovld connect codex` remains a compatibility alias for one-command launches
 - `ovld launch` infers organization scope from human-readable ticket ids like `1:899`; `--organization-id` remains a legacy compatibility flag for UUID ticket ids. It also supports Desktop-parity shell flags: `--working-directory`, `--launch-mode`, `--model`, `--thinking`, repeated `--flag`, `--ssh-command`, `--remote-working-directory`, `--server-multiplexer`, and `--tmux-command`
+- `ovld launch` uses project-local `.overlord/tmp/` as the agent temp root when it has an explicit working directory or is started inside a registered project; otherwise it falls back to the system temp directory
 
 ### 6. Demo / product copy
 
@@ -296,6 +299,7 @@ Checklist:
 - No permission hook
 - `beforeSubmitPrompt` hook (Cursor IDE hooks) calls `POST /api/protocol/hook-event` when `TICKET_ID`, `OVERLORD_ACCESS_TOKEN`, and `OVERLORD_URL` / `OVERLORD_CONNECTOR_URL` are present in the agent environment (same contract as Claude/Codex `UserPromptSubmit`)
 - Model flag: `--model` (no thinking/effort flag for Cursor)
+- Desktop and CLI launches export `TMPDIR`, `TMP`, `TEMP`, and `OVERLORD_TMPDIR` to the resolved project `.overlord/tmp/` directory when a project working directory is known
 
 ### 3. Onboarding
 
@@ -425,6 +429,7 @@ Checklist:
 - No model/thinking launch flags — Antigravity manages models internally
 - Desktop local launches intentionally stay on the direct Electron path; `ovld launch antigravity` is the copy/paste and remote-shell entrypoint
 - Desktop SSH launches keep Antigravity's no-model/no-thinking asymmetry and pass the remote context file to `agy --prompt-interactive`
+- Antigravity receives `--add-dir <project>/.overlord/tmp` when a project working directory is known, and desktop/CLI launches export `TMPDIR`, `TMP`, `TEMP`, and `OVERLORD_TMPDIR` to that same directory
 
 ### 7. Deliberate asymmetries
 
@@ -520,6 +525,7 @@ Checklist:
 - Bundle supported — when installed, `instructionMode=bundle` is passed and slim prompt is used
 - Model flag: `--model` (no thinking/effort flag for OpenCode)
 - `--prompt` flag is required (unlike other agents that take the prompt as a positional argument)
+- Desktop and CLI launches export `TMPDIR`, `TMP`, `TEMP`, and `OVERLORD_TMPDIR` to the resolved project `.overlord/tmp/` directory when a project working directory is known
 
 ### 4. Onboarding
 
@@ -564,6 +570,7 @@ Checklist:
 - Model flag: `--model`; thinking flag: `--thinking` (off, minimal, low, medium, high, xhigh)
 - Native resume command: `pi --resume <session-id>` (used by `selectRestartSessionCommand`)
 - A dedicated Pi extension package installed under `~/.pi/agent/extensions/overlord/` is planned as a follow-up to promote Pi to bundle mode
+- Desktop and CLI launches export `TMPDIR`, `TMP`, `TEMP`, and `OVERLORD_TMPDIR` to the resolved project `.overlord/tmp/` directory when a project working directory is known
 
 ### 2. Onboarding
 

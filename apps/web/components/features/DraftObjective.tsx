@@ -58,6 +58,7 @@ type DraftObjectiveProps = {
   assignedAgent?: TicketAssignedAgent | null;
   projectId?: string | null;
   agentFlags?: Partial<Record<LaunchAgentType, string[]>>;
+  agentPreCommands?: Partial<Record<LaunchAgentType, string>>;
   agentCommands?: AgentCommands;
   sshCommand?: string | null;
   remoteWorkingDirectory?: string | null;
@@ -79,6 +80,7 @@ export function DraftObjective({
   assignedAgent,
   projectId,
   agentFlags,
+  agentPreCommands,
   agentCommands,
   sshCommand,
   remoteWorkingDirectory,
@@ -388,6 +390,7 @@ export function DraftObjective({
                     organizationId={organizationId}
                     projectId={projectId ?? null}
                     agentFlags={agentFlags}
+                    agentPreCommands={agentPreCommands}
                     commands={splitButtonCommands}
                     workingDirectory={workingDirectory}
                     sshCommand={sshCommand ?? null}

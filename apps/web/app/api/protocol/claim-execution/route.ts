@@ -162,6 +162,8 @@ export async function POST(request: Request) {
           thinking: claimed.thinking_level,
           launchMode: claimed.launch_mode,
           flags: stringArrayFromParams(claimed.launch_params, 'flags'),
+          preCommand: textFromParams(claimed.launch_params, 'preCommand'),
+          customCommand: textFromParams(claimed.launch_params, 'customCommand'),
           workingDirectory,
           sshCommand,
           remoteWorkingDirectory: textFromParams(claimed.launch_params, 'remoteWorkingDirectory'),

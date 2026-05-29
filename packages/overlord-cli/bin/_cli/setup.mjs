@@ -485,6 +485,24 @@ function writeManifest(manifest) {
   writeJsonFile(MANIFEST_FILE, manifest);
 }
 
+/**
+ * Quietly report whether an agent connector is installed: present in the bundle
+ * manifest with all of its recorded files still on disk. Unlike `doctorAgent`,
+ * this logs nothing and ignores version/hash staleness — a stale-but-present
+ * connector can still launch. Used to gate `ovld <agent>` direct launches.
+ */
+export function isAgentConnectorInstalled(agent) {
+  const manifest = readManifest();
+  const entry = manifest[agent];
+  if (!entry || !Array.isArray(entry.files)) return false;
+  return entry.files.every(file => fs.existsSync(file));
+}
+
+/** The built-in agents whose connectors are currently installed. */
+export function listInstalledConnectors() {
+  return supportedAgents.filter(agent => isAgentConnectorInstalled(agent));
+}
+
 function slashCommandFiles(agent) {
   if (agent === 'claude') {
     const base = path.join(os.homedir(), '.claude', 'commands');

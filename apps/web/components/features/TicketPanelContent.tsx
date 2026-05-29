@@ -258,6 +258,14 @@ export async function TicketPanelContent({
     opencode: agentConfigs.opencode?.flags ?? [],
     pi: agentConfigs.pi?.flags ?? []
   };
+  const agentPreCommands: Partial<Record<LaunchAgentType, string>> = {
+    claude: agentConfigs.claude?.preCommand,
+    codex: agentConfigs.codex?.preCommand,
+    cursor: agentConfigs.cursor?.preCommand,
+    antigravity: agentConfigs.antigravity?.preCommand,
+    opencode: agentConfigs.opencode?.preCommand,
+    pi: agentConfigs.pi?.preCommand
+  };
   const ticketIdentifier = getTicketIdentifier(ticket);
   const statusOptions = statuses?.map(s => s.name) ?? fallbackStatuses;
 
@@ -318,6 +326,7 @@ export async function TicketPanelContent({
     organizationId,
     workingDirectory,
     agentFlags,
+    agentPreCommands,
     assignedAgent
   });
   const resumeCommands = buildResumeCommands({
@@ -384,7 +393,6 @@ export async function TicketPanelContent({
                   initialTitle={ticket.title ?? ''}
                   fallbackObjective={ticket.context ?? ''}
                   initialObjectives={objectives ?? []}
-                  futureObjectivesEnabled={futureObjectivesEnabled}
                 />
               </div>
 
@@ -433,6 +441,7 @@ export async function TicketPanelContent({
                 assignedAgent={assignedAgent}
                 projectId={activeProjectId}
                 agentFlags={agentFlags}
+                agentPreCommands={agentPreCommands}
                 agentCommands={agentCommands}
                 sshCommand={projectSshCommand}
                 remoteWorkingDirectory={projectRemoteWorkingDirectory}

@@ -7,14 +7,20 @@ import { createClientForRequest } from '@/supabase/utils/server';
 const AI_TITLE_THRESHOLD = 100;
 
 /**
- * Generates a ticket title from an objective string.
+ * Generates a ticket title from one or more objective strings.
  *
  * - If the objective is <= 100 characters, returns it directly (truncated to 60).
  * - If > 100 characters and the user has AI title generation enabled, calls Gemini.
  * - Falls back to truncation if Gemini fails or is disabled.
  */
-export async function generateTicketTitleAction(objective: string): Promise<string> {
-  const normalized = objective.trim();
+export async function generateTicketTitleAction(objective: string | string[]): Promise<string> {
+  const normalized = Array.isArray(objective)
+    ? objective
+        .map(item => item.trim())
+        .filter(Boolean)
+        .map((item, index) => `${index + 1}. ${item}`)
+        .join('\n')
+    : objective.trim();
   if (!normalized) return 'Untitled';
 
   // Short objectives: use full text as title (with standard normalization)

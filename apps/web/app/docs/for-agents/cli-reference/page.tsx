@@ -197,6 +197,12 @@ ovld protocol prompt --agent claude-code \\
 Shares most flags with \`create\`, plus \`--parent-session-key\`, \`--parent-ticket-id\`, and
 \`--metadata-json\`. Returns ticket/session JSON and prints \`SESSION_KEY\` / \`TICKET_ID\` on stderr.
 
+> Top-level shortcut: \`ovld <agent> "<prompt>"\` (e.g. \`ovld claude "fix the flaky test" --model opus\`)
+> composes \`prompt\` + \`launch\` in one step — it creates the ticket from your prompt (project
+> inferred from the working directory) and launches the agent locally. Built-in agents require an
+> installed connector; custom agents launch by id. Flags after a standalone \`--\` pass through to the
+> agent binary. See the [CLI guide](/docs/surfaces/cli#launch-an-agent-in-one-line).
+
 ## record-work
 
 Record work the agent already completed in chat as a ticket in \`review\` with a completed

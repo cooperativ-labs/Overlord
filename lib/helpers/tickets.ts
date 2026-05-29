@@ -48,6 +48,37 @@ export function deriveTitleFromObjective(objective: string): string {
   return trimmed.slice(0, 100) + '…';
 }
 
+type ObjectiveTitleInput = {
+  objective: string | null;
+  position?: number | null;
+  created_at?: string | null;
+};
+
+export function buildTicketTitleObjectiveInput(
+  objectives: ObjectiveTitleInput[],
+  fallbackObjective?: string | null
+): string {
+  const sortedObjectives = [...objectives].sort((a, b) => {
+    const positionDelta = (a.position ?? 0) - (b.position ?? 0);
+    if (positionDelta !== 0) return positionDelta;
+    return (a.created_at ?? '').localeCompare(b.created_at ?? '');
+  });
+
+  const objectiveTexts = sortedObjectives
+    .map(objective => objective.objective?.trim() ?? '')
+    .filter(Boolean);
+
+  if (objectiveTexts.length === 0) {
+    return fallbackObjective?.trim() ?? '';
+  }
+
+  if (objectiveTexts.length === 1) {
+    return objectiveTexts[0];
+  }
+
+  return objectiveTexts.map((objective, index) => `${index + 1}. ${objective}`).join('\n');
+}
+
 export function hasNonEmptyObjectiveText(objective: string | null | undefined): boolean {
   return (objective ?? '').trim().length > 0;
 }

@@ -9,6 +9,7 @@ import { type ButtonLoadingState, LoadingButton } from '@/components/ui/loading-
 import { generateTicketTitleAction } from '@/lib/actions/generate-title';
 import { useUpdateTicketFieldsMutation } from '@/lib/client-data/tickets/mutations';
 import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
+import { buildTicketTitleObjectiveInput } from '@/lib/helpers/tickets';
 import { useTicketObjectivesRealtime } from '@/lib/hooks/use-ticket-objectives-realtime';
 import { cn } from '@/lib/utils';
 import type { ObjectiveRow } from '@/types/objectives';
@@ -20,25 +21,16 @@ type TicketTitleFieldProps = {
   initialTitle: string;
   fallbackObjective: string;
   initialObjectives: ObjectiveRow[];
-  futureObjectivesEnabled?: boolean;
 };
 
 export function TicketTitleField({
   ticketId,
   initialTitle,
   fallbackObjective,
-  initialObjectives,
-  futureObjectivesEnabled = false
+  initialObjectives
 }: TicketTitleFieldProps) {
   const objectives = useTicketObjectivesRealtime({ ticketId, initialObjectives });
-  const latestObjective =
-    [...objectives].sort((a, b) => (b.position ?? 0) - (a.position ?? 0))[0] ?? null;
-  const editableObjective =
-    objectives.find(objective => objective.state === 'draft') ??
-    (futureObjectivesEnabled ? objectives.find(objective => objective.state === 'future') : null) ??
-    objectives.find(objective => objective.state === 'submitted') ??
-    latestObjective;
-  const objectiveText = (editableObjective?.objective ?? fallbackObjective ?? '').trim();
+  const objectiveText = buildTicketTitleObjectiveInput(objectives, fallbackObjective);
 
   const [titleValue, setTitleValue] = useState(initialTitle);
   const [buttonState, setButtonState] = useState<ButtonLoadingState>('default');

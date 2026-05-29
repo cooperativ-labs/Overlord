@@ -9,6 +9,12 @@ export type AgentModelSelection = {
   agent: LaunchAgentType;
   model: string | null;
   thinking: string | null;
+  /**
+   * When set, the selection targets a user-defined custom agent (see
+   * lib/schemas/agent-config CustomAgent). `agent` then holds a placeholder
+   * built-in value; `customAgentId` is authoritative for display/launch.
+   */
+  customAgentId?: string | null;
 };
 
 export type UserLaunchPreference = AgentModelSelection;
@@ -58,6 +64,20 @@ export function resolveAgentModelSelection(
 ): AgentModelSelection {
   if (launchPreference && isLaunchAgentTypeValue(launchPreference.agent)) {
     return resolveAgentSelectionForAgent(configs, launchPreference.agent, launchPreference);
+  }
+
+  // A non-built-in agent string means the user last selected a custom agent.
+  if (
+    launchPreference &&
+    launchPreference.agent &&
+    !isLaunchAgentTypeValue(launchPreference.agent)
+  ) {
+    return {
+      agent: 'claude',
+      model: launchPreference.model ?? null,
+      thinking: launchPreference.thinking ?? null,
+      customAgentId: launchPreference.agent
+    };
   }
 
   for (const agent of LAUNCH_AGENT_VALUES) {

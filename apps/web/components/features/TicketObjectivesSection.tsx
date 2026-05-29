@@ -59,6 +59,7 @@ type TicketObjectivesSectionProps = {
   assignedAgent?: TicketAssignedAgent | null;
   projectId?: string | null;
   agentFlags?: Partial<Record<LaunchAgentType, string[]>>;
+  agentPreCommands?: Partial<Record<LaunchAgentType, string>>;
   agentCommands?: AgentCommands;
   sshCommand?: string | null;
   remoteWorkingDirectory?: string | null;
@@ -76,6 +77,7 @@ type SharedObjectiveItemProps = {
   assignedAgent?: TicketAssignedAgent | null;
   projectId?: string | null;
   agentFlags?: Partial<Record<LaunchAgentType, string[]>>;
+  agentPreCommands?: Partial<Record<LaunchAgentType, string>>;
   agentCommands?: AgentCommands;
   sshCommand?: string | null;
   remoteWorkingDirectory?: string | null;
@@ -109,6 +111,7 @@ function ObjectiveEditableItem({
       }
       projectId={shared.projectId}
       agentFlags={shared.agentFlags}
+      agentPreCommands={shared.agentPreCommands}
       agentCommands={shared.agentCommands}
       sshCommand={shared.sshCommand}
       remoteWorkingDirectory={shared.remoteWorkingDirectory}
@@ -217,6 +220,7 @@ export function TicketObjectivesSection({
   assignedAgent,
   projectId,
   agentFlags,
+  agentPreCommands,
   agentCommands,
   sshCommand,
   remoteWorkingDirectory,
@@ -343,6 +347,7 @@ export function TicketObjectivesSection({
     assignedAgent,
     projectId,
     agentFlags,
+    agentPreCommands,
     agentCommands,
     sshCommand,
     remoteWorkingDirectory,

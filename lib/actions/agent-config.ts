@@ -1,6 +1,11 @@
 'use server';
 
-import { type AgentConfig, agentConfigSchema } from '@/lib/schemas/agent-config';
+import {
+  type AgentConfig,
+  agentConfigSchema,
+  CUSTOM_AGENTS_CONFIG_KEY,
+  type CustomAgent
+} from '@/lib/schemas/agent-config';
 import { createClientForRequest } from '@/supabase/utils/server';
 
 export async function getAgentConfigAction(agentType: string): Promise<AgentConfig | null> {
@@ -147,6 +152,36 @@ export async function updateAgentFlagsAction(
   flags: string[]
 ): Promise<AgentConfig> {
   return upsertAgentConfigAction(agentType, { flags });
+}
+
+export async function updateAgentPreCommandAction(
+  agentType: string,
+  preCommand: string
+): Promise<AgentConfig> {
+  const trimmed = preCommand.trim();
+  return upsertAgentConfigAction(agentType, {
+    preCommand: trimmed.length > 0 ? trimmed : undefined
+  });
+}
+
+export async function updateAgentVisibilityAction(
+  agentType: string,
+  visibility: { hidden?: boolean; hiddenModels?: string[] }
+): Promise<AgentConfig> {
+  return upsertAgentConfigAction(agentType, {
+    ...(visibility.hidden !== undefined ? { hidden: visibility.hidden } : {}),
+    ...(visibility.hiddenModels !== undefined ? { hiddenModels: visibility.hiddenModels } : {})
+  });
+}
+
+export async function getCustomAgentsAction(): Promise<CustomAgent[]> {
+  const config = await getAgentConfigAction(CUSTOM_AGENTS_CONFIG_KEY);
+  return config?.customAgents ?? [];
+}
+
+export async function saveCustomAgentsAction(customAgents: CustomAgent[]): Promise<CustomAgent[]> {
+  const saved = await upsertAgentConfigAction(CUSTOM_AGENTS_CONFIG_KEY, { customAgents });
+  return saved.customAgents ?? [];
 }
 
 export async function updateAgentModelPreferenceAction(

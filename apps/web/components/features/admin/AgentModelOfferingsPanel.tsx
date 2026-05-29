@@ -72,7 +72,8 @@ export function AgentModelOfferingsPanel({ initialModels }: Props) {
         <div>
           <h2 className="text-lg font-semibold text-foreground">Model offerings</h2>
           <p className="text-sm text-muted-foreground">
-            Choose which synced models appear in the rest of the interface.
+            Set the default models offered to users. Members can further hide or reveal these in
+            their own CLI settings, so this controls defaults rather than hard visibility.
           </p>
         </div>
         <div className="text-sm text-muted-foreground">{models.length} synced models</div>

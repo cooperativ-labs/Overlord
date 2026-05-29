@@ -100,6 +100,9 @@ export type LaunchTerminalAgentParams = {
   remoteWorkingDirectory?: string;
   launchMode?: 'run' | 'ask';
   flags?: string[];
+  preCommand?: string;
+  /** Fully-resolved custom-agent launch command (placeholders already substituted). */
+  customCommand?: string;
   model?: string;
   thinking?: string;
   projectId?: string | null;

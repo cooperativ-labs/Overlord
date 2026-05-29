@@ -40,6 +40,16 @@ With the plugins installed you can create a ticket from the web app, the desktop
 
 Launch the ticket from the desktop app. The agent runs in its own terminal, streams updates into Overlord, and waits for you to review the delivery before anything lands.
 
+### Prefer the terminal? Launch in one line
+
+If you live in the terminal, skip the UI entirely. From a registered project directory, \`ovld <agent> "<prompt>"\` creates a ticket from your prompt and launches the agent on it in a single command:
+
+\`\`\`bash
+ovld claude "add a health check endpoint" --model opus
+\`\`\`
+
+See the [CLI guide](/docs/surfaces/cli#launch-an-agent-in-one-line) for the full flag reference.
+
 ### Next steps
 
 - [Agent plugins](/docs/agent-plugins)

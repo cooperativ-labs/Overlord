@@ -69,6 +69,8 @@ export async function requestTicketObjectiveExecutionAction(input: {
   modelIdentifier?: string | null;
   thinkingLevel?: string | null;
   flags?: string[];
+  preCommand?: string | null;
+  customCommand?: string | null;
   workingDirectory?: string | null;
   sshCommand?: string | null;
   remoteWorkingDirectory?: string | null;
@@ -95,6 +97,8 @@ export async function requestTicketObjectiveExecutionAction(input: {
       thinkingLevel: input.thinkingLevel ?? null,
       launchMode: 'run',
       flags: input.flags ?? [],
+      preCommand: input.preCommand ?? null,
+      customCommand: input.customCommand ?? null,
       workingDirectory: input.workingDirectory ?? null,
       sshCommand: input.sshCommand ?? null,
       remoteWorkingDirectory: input.remoteWorkingDirectory ?? null,

@@ -2,6 +2,34 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2605290912.0] - 2026-05-29:09:12
+
+### Added
+- Add one-line CLI agent launch: `ovld <agent> "<prompt>"` creates a ticket from your prompt (project inferred from the working directory) and starts the agent locally, with Overlord flags before `--` and native agent flags after.
+- Add `GET /api/protocol/agents` so the CLI can list built-in agents and the authenticated user's custom agents when resolving direct launches.
+- Add user-defined **custom agents** with launch-command templates and `{{placeholder}}` substitution; launch them from the model selector, ticket Run flow, desktop terminal, runner claims, and `ovld <custom-id>`.
+- Add per-user **pre-command** support (e.g. run Claude through `ollama`) on desktop and protocol execution launches.
+- Add CLI settings controls to hide or show offered agents and models, configure pre-commands, and manage custom agents.
+- Add `buildTicketTitleObjectiveInput` so AI-generated ticket titles consider all objectives on the ticket, not only the latest editable one.
+
+### Fixed
+- None.
+
+### Changed
+- Treat admin **model offerings** as org defaults; members can hide agents or individual models in their own CLI settings without admin changing offerings.
+- Route agent scratch files through the project `.overlord/tmp/` directory by exporting `TMPDIR`, `TMP`, `TEMP`, and `OVERLORD_TMPDIR` on desktop and `ovld launch` (including SSH remote launches); Antigravity also receives `--add-dir` for that path when a project working directory is known.
+- Extend marketing Claude model thinking options with **xhigh** where applicable.
+
+### Security
+- None.
+
+### Test
+- Add CLI direct-launch parsing and dispatch tests.
+- Add unit tests for multi-objective ticket title input building.
+
+### Documentation
+- Document one-line `ovld <agent>` launch in the quick start, CLI surface guide, and for-agents CLI reference; update the Overlord CLI README and connector surfaces guidance for project-local temp directories.
+
 ## [0.2605281741.0] - 2026-05-28:17:41
 
 ### Added

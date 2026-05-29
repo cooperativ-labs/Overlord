@@ -1,6 +1,6 @@
 'use client';
 
-import { Check, Info } from 'lucide-react';
+import { Bot, Check, Info } from 'lucide-react';
 import Image from 'next/image';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -12,7 +12,8 @@ import {
 import { type AgentModel, getAgentModelsAction } from '@/lib/actions/agent-models';
 import {
   getUserLaunchPreferenceAction,
-  updateUserLaunchAgentPreferenceAction
+  updateUserLaunchAgentPreferenceAction,
+  upsertUserLaunchPreferenceAction
 } from '@/lib/actions/user-launch-preference';
 import {
   type AgentModelSelection,
@@ -21,7 +22,12 @@ import {
   type UserLaunchPreference
 } from '@/lib/helpers/agent-model-preference';
 import { AGENT_TYPES, type LaunchAgentType } from '@/lib/helpers/agent-types';
-import type { AgentConfig } from '@/lib/schemas/agent-config';
+import { getModelPlaceholder, getThinkingPlaceholder } from '@/lib/helpers/custom-agent';
+import {
+  type AgentConfig,
+  CUSTOM_AGENTS_CONFIG_KEY,
+  type CustomAgent
+} from '@/lib/schemas/agent-config';
 import { cn } from '@/lib/utils';
 
 type AgentModelSelectorProps = {
@@ -34,6 +40,12 @@ type AgentModelSelectorProps = {
   demo?: boolean;
   /** When set, uses this catalog instead of the fetched/offered-models cache. */
   catalogModels?: AgentModel[];
+  /**
+   * User agent configs (visibility + custom agents). Defaults to the module
+   * cache populated by AgentModelsPrefetch. Pass explicitly from the settings
+   * page so visibility toggles re-render the selector immediately.
+   */
+  userConfigs?: Record<string, AgentConfig>;
 };
 
 const AGENT_MODEL_SELECTION_EVENT = 'overlord:agent-model-selection-changed';
@@ -143,6 +155,8 @@ function syncConfigsForSelection(
   current: Record<string, AgentConfig>,
   nextSelection: AgentModelSelection
 ): Record<string, AgentConfig> {
+  // Custom-agent selections don't map to a built-in agent config row.
+  if (nextSelection.customAgentId) return current;
   return {
     ...current,
     [nextSelection.agent]: {
@@ -168,11 +182,22 @@ export function AgentModelSelector({
   onAgentSelect,
   inline = false,
   demo = false,
-  catalogModels
+  catalogModels,
+  userConfigs
 }: AgentModelSelectorProps) {
   const { models: fetchedModels, loading: fetchedLoading } = useAgentModels();
   const models = catalogModels ?? fetchedModels;
   const loading = catalogModels ? false : fetchedLoading;
+
+  // Visibility + custom agents come from the user's saved configs. In demo mode
+  // everything stays visible and nothing persists.
+  const configs = demo ? {} : (userConfigs ?? cachedConfigs ?? {});
+  const customAgents: CustomAgent[] = demo
+    ? []
+    : (configs[CUSTOM_AGENTS_CONFIG_KEY]?.customAgents ?? []);
+  const selectedCustomAgent = value.customAgentId
+    ? (customAgents.find(agent => agent.id === value.customAgentId) ?? null)
+    : null;
 
   const modelsByAgent = useMemo(() => {
     const grouped: Record<string, AgentModel[]> = {};
@@ -183,11 +208,34 @@ export function AgentModelSelector({
     return grouped;
   }, [models]);
 
-  const antigravityManagesModels = value.agent === 'antigravity';
-  const currentModels = antigravityManagesModels ? [] : (modelsByAgent[value.agent] ?? []);
+  // Built-in agents the user has not hidden (the currently selected one always shows).
+  const visibleBuiltInAgents = AGENT_MODEL_OPTIONS.filter(
+    agent => !configs[agent.value]?.hidden || value.agent === agent.value
+  );
+
+  const hiddenModelsForAgent = configs[value.agent]?.hiddenModels ?? [];
+  const antigravityManagesModels = !selectedCustomAgent && value.agent === 'antigravity';
+  const currentModels =
+    antigravityManagesModels || selectedCustomAgent
+      ? []
+      : (modelsByAgent[value.agent] ?? []).filter(m => !hiddenModelsForAgent.includes(m.model_id));
   const selectedModel = currentModels.find(m => m.model_id === value.model);
-  const thinkingEnabled = value.agent !== 'codex' && !antigravityManagesModels;
-  const thinkingOptions = thinkingEnabled ? (selectedModel?.thinking_options ?? []) : [];
+
+  const customModelPlaceholder = selectedCustomAgent
+    ? getModelPlaceholder(selectedCustomAgent)
+    : null;
+  const customThinkingPlaceholder = selectedCustomAgent
+    ? getThinkingPlaceholder(selectedCustomAgent)
+    : null;
+
+  const thinkingEnabled = selectedCustomAgent
+    ? Boolean(customThinkingPlaceholder)
+    : value.agent !== 'codex' && !antigravityManagesModels;
+  const thinkingOptions = selectedCustomAgent
+    ? (customThinkingPlaceholder?.options.map(option => option.value) ?? [])
+    : thinkingEnabled
+      ? (selectedModel?.thinking_options ?? [])
+      : [];
 
   const handleAgentChange = useCallback(
     (agent: LaunchAgentType) => {
@@ -196,7 +244,12 @@ export function AgentModelSelector({
         return;
       }
 
-      const newSelection: AgentModelSelection = { agent, model: null, thinking: null };
+      const newSelection: AgentModelSelection = {
+        agent,
+        model: null,
+        thinking: null,
+        customAgentId: null
+      };
       onChange(newSelection);
       if (!demo) {
         void updateUserLaunchAgentPreferenceAction(agent);
@@ -205,19 +258,47 @@ export function AgentModelSelector({
     [demo, onAgentSelect, onChange]
   );
 
+  const handleCustomAgentSelect = useCallback(
+    (customAgent: CustomAgent) => {
+      const newSelection: AgentModelSelection = {
+        agent: value.agent,
+        model: null,
+        thinking: null,
+        customAgentId: customAgent.id
+      };
+      onChange(newSelection);
+      if (!demo) {
+        void upsertUserLaunchPreferenceAction({
+          agent: customAgent.id as AgentModelSelection['agent'],
+          model: null,
+          thinking: null
+        });
+      }
+    },
+    [demo, onChange, value.agent]
+  );
+
   const handleModelChange = useCallback(
     (modelId: string | null) => {
       const newSelection: AgentModelSelection = {
         agent: value.agent,
         model: modelId,
-        thinking: null
+        thinking: null,
+        customAgentId: value.customAgentId ?? null
       };
       onChange(newSelection);
-      if (!demo) {
+      if (demo) return;
+      if (value.customAgentId) {
+        void upsertUserLaunchPreferenceAction({
+          agent: value.customAgentId as AgentModelSelection['agent'],
+          model: modelId,
+          thinking: null
+        });
+      } else {
         void updateAgentModelPreferenceAction(value.agent, modelId, null);
       }
     },
-    [demo, onChange, value.agent]
+    [demo, onChange, value.agent, value.customAgentId]
   );
 
   const handleThinkingChange = useCallback(
@@ -225,14 +306,22 @@ export function AgentModelSelector({
       const newSelection: AgentModelSelection = {
         agent: value.agent,
         model: value.model,
-        thinking
+        thinking,
+        customAgentId: value.customAgentId ?? null
       };
       onChange(newSelection);
-      if (!demo) {
+      if (demo) return;
+      if (value.customAgentId) {
+        void upsertUserLaunchPreferenceAction({
+          agent: value.customAgentId as AgentModelSelection['agent'],
+          model: value.model,
+          thinking
+        });
+      } else {
         void updateAgentModelPreferenceAction(value.agent, value.model, thinking);
       }
     },
-    [demo, onChange, value.agent, value.model]
+    [demo, onChange, value.agent, value.model, value.customAgentId]
   );
 
   return (
@@ -242,8 +331,8 @@ export function AgentModelSelector({
         <p className="mb-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
           Agent
         </p>
-        {AGENT_MODEL_OPTIONS.map(agent => {
-          const isSelected = value.agent === agent.value;
+        {visibleBuiltInAgents.map(agent => {
+          const isSelected = !selectedCustomAgent && value.agent === agent.value;
           return (
             <button
               key={agent.value}
@@ -268,14 +357,60 @@ export function AgentModelSelector({
             </button>
           );
         })}
+        {customAgents.map(customAgent => {
+          const isSelected = value.customAgentId === customAgent.id;
+          return (
+            <button
+              key={customAgent.id}
+              type="button"
+              onClick={() => handleCustomAgentSelect(customAgent)}
+              className={cn(
+                'flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors',
+                isSelected ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'
+              )}
+            >
+              <span className="flex h-4 w-4 items-center justify-center">
+                <Bot className="h-3 w-3" aria-hidden />
+              </span>
+              <span className="truncate">{customAgent.name}</span>
+              {isSelected && <Check className="ml-auto h-3 w-3 shrink-0" />}
+            </button>
+          );
+        })}
       </div>
 
       {/* Model column */}
       <div className={cn('flex flex-col gap-0.5', inline ? 'w-full' : 'min-w-[160px]')}>
         <p className="mb-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-          Model
+          {selectedCustomAgent ? (customModelPlaceholder?.label ?? 'Model') : 'Model'}
         </p>
-        {antigravityManagesModels ? (
+        {selectedCustomAgent ? (
+          customModelPlaceholder && customModelPlaceholder.options.length > 0 ? (
+            <div className="max-h-[220px] overflow-y-auto">
+              {customModelPlaceholder.options.map(option => {
+                const isSelected = value.model === option.value;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => handleModelChange(option.value)}
+                    className={cn(
+                      'flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors',
+                      isSelected ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'
+                    )}
+                  >
+                    <span className="truncate">{option.label}</span>
+                    {isSelected && <Check className="ml-auto h-3 w-3 shrink-0" />}
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="px-2 py-1.5 text-xs leading-relaxed text-muted-foreground">
+              This agent has no model options.
+            </p>
+          )
+        ) : antigravityManagesModels ? (
           <p className="px-2 py-1.5 text-xs leading-relaxed text-muted-foreground">
             Antigravity chooses models in its own UI.
           </p>
@@ -338,7 +473,7 @@ export function AgentModelSelector({
       {thinkingEnabled && thinkingOptions.length > 0 && (
         <div className={cn('flex flex-col gap-0.5', inline ? 'w-full' : 'min-w-[90px]')}>
           <p className="mb-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-            Thinking
+            {selectedCustomAgent ? (customThinkingPlaceholder?.label ?? 'Thinking') : 'Thinking'}
           </p>
           <button
             type="button"
@@ -379,6 +514,7 @@ export function useAgentModelPreference(): {
   selection: AgentModelSelection;
   setSelection: (s: AgentModelSelection) => void;
   selectAgent: (agent: LaunchAgentType) => void;
+  configs: Record<string, AgentConfig>;
   loaded: boolean;
 } {
   const instanceId = useRef(Math.random().toString(36).slice(2));
@@ -477,5 +613,5 @@ export function useAgentModelPreference(): {
     [configs, launchPreference]
   );
 
-  return { selection, setSelection: updateSelection, selectAgent, loaded };
+  return { selection, setSelection: updateSelection, selectAgent, configs, loaded };
 }

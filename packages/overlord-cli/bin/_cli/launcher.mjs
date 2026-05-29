@@ -17,6 +17,29 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PACKAGE_CLAUDE_PLUGIN_DIR = path.resolve(__dirname, '..', '..', 'plugins', 'claude');
 const REPO_CLAUDE_PLUGIN_DIR = path.resolve(__dirname, '..', '..', '..', '..', 'plugins', 'claude');
 
+function resolveLaunchScratchDir(workingDirectory, { explicit = false } = {}) {
+  const trimmed = typeof workingDirectory === 'string' ? workingDirectory.trim() : '';
+  const candidate = trimmed || process.cwd();
+  const useProjectScratch =
+    explicit || fs.existsSync(path.join(candidate, '.overlord', 'project.json'));
+  if (!useProjectScratch) {
+    return os.tmpdir();
+  }
+  const scratchDir = path.join(candidate, '.overlord', 'tmp');
+  fs.mkdirSync(scratchDir, { recursive: true });
+  return scratchDir;
+}
+
+function withLaunchTempEnv(baseEnv, scratchDir) {
+  return {
+    ...baseEnv,
+    TMPDIR: scratchDir,
+    TMP: scratchDir,
+    TEMP: scratchDir,
+    OVERLORD_TMPDIR: scratchDir
+  };
+}
+
 function claudeSourcePluginDir() {
   if (fs.existsSync(PACKAGE_CLAUDE_PLUGIN_DIR)) return PACKAGE_CLAUDE_PLUGIN_DIR;
   if (fs.existsSync(REPO_CLAUDE_PLUGIN_DIR)) return REPO_CLAUDE_PLUGIN_DIR;
@@ -53,8 +76,8 @@ function getInstructionMode(agent) {
   return 'legacy';
 }
 
-function buildAgyLaunchArgv({ contextFile, mode, sessionId, extraArgs }) {
-  const argv = [...extraArgs, '--add-dir', os.tmpdir()];
+function buildAgyLaunchArgv({ contextFile, scratchDir, mode, sessionId, extraArgs }) {
+  const argv = [...extraArgs, '--add-dir', scratchDir];
   if (mode === 'resume') {
     const agySessionId = sessionId?.trim();
     if (agySessionId) {
@@ -98,8 +121,27 @@ const agentIdentifierMap = {
 
 const supportedAgents = ['claude', 'codex', 'cursor', 'antigravity', 'opencode', 'pi'];
 
+// Re-exported under clearer names for the direct-launch dispatcher in index.mjs.
+export { supportedAgents as BUILTIN_LAUNCH_AGENTS, agentIdentifierMap };
+
 function shellQuote(value) {
   return `'${String(value).replace(/'/g, `'\\''`)}'`;
+}
+
+/**
+ * Run an agent binary, optionally routed through a user-defined pre-command
+ * (e.g. `ollama` to run claude-code through Ollama). When a pre-command is set,
+ * its first token becomes the executable and the agent binary + args follow it:
+ *   preCommand="ollama"  →  ollama claude <args...>
+ */
+function execAgentBinary(binary, args, opts, preCommand) {
+  const pre = typeof preCommand === 'string' ? preCommand.trim() : '';
+  if (pre) {
+    const preTokens = pre.split(/\s+/).filter(Boolean);
+    execFileSync(preTokens[0], [...preTokens.slice(1), binary, ...args], opts);
+    return;
+  }
+  execFileSync(binary, args, opts);
 }
 
 function toTomlString(value) {
@@ -178,6 +220,9 @@ function buildRemoteLaunchCommand(agent, options) {
   if (options.launchMode === 'ask') {
     nestedParts.push('--launch-mode', 'ask');
   }
+  if (options.preCommand) {
+    nestedParts.push('--pre-command', shellQuote(options.preCommand));
+  }
   if (options.model) {
     nestedParts.push('--model', shellQuote(options.model));
   }
@@ -234,6 +279,7 @@ Options:
   --model <identifier>              Preferred model identifier
   --thinking <level>                Agent reasoning/effort level
   --flag <value>                    Extra agent flag (repeatable)
+  --pre-command <command>           Command to run before the agent binary (e.g. ollama)
   --ssh-command <command>           Launch remotely over SSH by running ovld on the target host
   --remote-working-directory <path> Change to this path on the remote host before launch
   --server-multiplexer <none|tmux>  Wrap remote launches in tmux
@@ -307,6 +353,10 @@ async function runAgent(agent, mode = 'run', options = {}) {
     process.chdir(options.workingDirectory);
   }
 
+  const scratchDir = resolveLaunchScratchDir(options.workingDirectory, {
+    explicit: Boolean(options.workingDirectory)
+  });
+
   const launchOrganizationId = resolveLaunchOrganizationId(
     ticketId,
     options.organizationId,
@@ -344,13 +394,13 @@ async function runAgent(agent, mode = 'run', options = {}) {
     agent
   );
 
-  const childEnv = {
+  const childEnv = withLaunchTempEnv({
     ...process.env,
     AGENT_IDENTIFIER: agentIdentifierMap[agent],
     ...(resolvedLaunchOrganizationId
       ? { OVERLORD_ORGANIZATION_ID: String(resolvedLaunchOrganizationId) }
       : {})
-  };
+  }, scratchDir);
   const extraArgs = buildExtraArgs(agent, options);
 
   try {
@@ -363,7 +413,7 @@ async function runAgent(agent, mode = 'run', options = {}) {
           : ['--continue', context];
         args.unshift(...extraArgs);
         if (pluginDir) args.unshift('--plugin-dir', pluginDir);
-        execFileSync('claude', args, { stdio: 'inherit', env: childEnv });
+        execAgentBinary('claude', args, { stdio: 'inherit', env: childEnv }, options.preCommand);
       } else {
         const args = [
           '--append-system-prompt',
@@ -372,11 +422,7 @@ async function runAgent(agent, mode = 'run', options = {}) {
           'Begin working on this ticket. Start by calling the attach endpoint, then proceed with the objective described in your system prompt.'
         ];
         if (pluginDir) args.unshift('--plugin-dir', pluginDir);
-        execFileSync(
-          'claude',
-          args,
-          { stdio: 'inherit', env: childEnv }
-        );
+        execAgentBinary('claude', args, { stdio: 'inherit', env: childEnv }, options.preCommand);
       }
     } else if (agent === 'codex') {
       if (mode === 'resume') {
@@ -385,12 +431,22 @@ async function runAgent(agent, mode = 'run', options = {}) {
           ? ['resume', codexSessionId, context]
           : ['resume', '--last', context];
         args.splice(1, 0, ...extraArgs);
-        execFileSync('codex', args, { stdio: 'inherit', env: childEnv });
+        execAgentBinary('codex', args, { stdio: 'inherit', env: childEnv }, options.preCommand);
       } else {
-        execFileSync('codex', [...extraArgs, context], { stdio: 'inherit', env: childEnv });
+        execAgentBinary(
+          'codex',
+          [...extraArgs, context],
+          { stdio: 'inherit', env: childEnv },
+          options.preCommand
+        );
       }
     } else if (agent === 'cursor') {
-      execFileSync('agent', [...extraArgs, context], { stdio: 'inherit', env: childEnv });
+      execAgentBinary(
+        'agent',
+        [...extraArgs, context],
+        { stdio: 'inherit', env: childEnv },
+        options.preCommand
+      );
     } else if (agent === 'opencode') {
       if (mode === 'resume') {
         const openCodeSessionId = process.env.OPENCODE_SESSION_ID?.trim();
@@ -398,12 +454,14 @@ async function runAgent(agent, mode = 'run', options = {}) {
           ? ['--continue', '--session', openCodeSessionId, '--prompt', context]
           : ['--continue', '--prompt', context];
         args.unshift(...extraArgs);
-        execFileSync('opencode', args, { stdio: 'inherit', env: childEnv });
+        execAgentBinary('opencode', args, { stdio: 'inherit', env: childEnv }, options.preCommand);
       } else {
-        execFileSync('opencode', [...extraArgs, '--prompt', context], {
-          stdio: 'inherit',
-          env: childEnv
-        });
+        execAgentBinary(
+          'opencode',
+          [...extraArgs, '--prompt', context],
+          { stdio: 'inherit', env: childEnv },
+          options.preCommand
+        );
       }
     } else if (agent === 'pi') {
       if (mode === 'resume') {
@@ -412,27 +470,34 @@ async function runAgent(agent, mode = 'run', options = {}) {
           ? ['--session', piSessionId, context]
           : ['--continue', context];
         args.unshift(...extraArgs);
-        execFileSync('pi', args, { stdio: 'inherit', env: childEnv });
+        execAgentBinary('pi', args, { stdio: 'inherit', env: childEnv }, options.preCommand);
       } else {
-        execFileSync('pi', [...extraArgs, context], { stdio: 'inherit', env: childEnv });
+        execAgentBinary(
+          'pi',
+          [...extraArgs, context],
+          { stdio: 'inherit', env: childEnv },
+          options.preCommand
+        );
       }
     } else if (agent === 'antigravity') {
       const tag = `overlord-${ticketId.slice(-8)}-${Date.now()}`;
-      const contextFile = path.join(os.tmpdir(), `${tag}-ctx.md`);
+      const contextFile = path.join(scratchDir, `${tag}-ctx.md`);
       fs.writeFileSync(contextFile, context, 'utf-8');
       setTimeout(() => { try { fs.unlinkSync(contextFile); } catch { /* already gone */ } }, 30 * 60_000).unref();
 
       const agySessionId =
         process.env.AGY_SESSION_ID?.trim() ?? process.env.GEMINI_SESSION_ID?.trim();
-      execFileSync(
+      execAgentBinary(
         'agy',
         buildAgyLaunchArgv({
           contextFile,
+          scratchDir,
           mode,
           sessionId: agySessionId,
           extraArgs
         }),
-        { stdio: 'inherit', env: childEnv }
+        { stdio: 'inherit', env: childEnv },
+        options.preCommand
       );
     }
   } catch (error) {
@@ -460,9 +525,86 @@ async function runAgent(agent, mode = 'run', options = {}) {
   }
 }
 
+/**
+ * Launch a user-defined custom agent. The resolved launch command (with all
+ * `{{token}}` placeholders already substituted) is passed via --command; we
+ * fetch the ticket context and run `<command> <context>` in the shell.
+ */
+async function runCustomAgent(args) {
+  const { flags } = parseLauncherArgs(args);
+  const command = typeof flags.command === 'string' ? flags.command.trim() : '';
+  const ticketId = typeof flags['ticket-id'] === 'string' ? flags['ticket-id'].trim() : '';
+  if (!command) {
+    console.error('Missing required option: --command "<resolved launch command>"');
+    process.exit(1);
+  }
+  if (ticketId) {
+    process.env.TICKET_ID = ticketId;
+  }
+  const resolvedTicketId = process.env.TICKET_ID;
+  if (!resolvedTicketId) {
+    console.error('Missing required environment variable: TICKET_ID');
+    process.exit(1);
+  }
+
+  if (typeof flags['working-directory'] === 'string' && flags['working-directory'].trim()) {
+    process.chdir(flags['working-directory'].trim());
+  }
+
+  const scratchDir = resolveLaunchScratchDir(flags['working-directory'], {
+    explicit: typeof flags['working-directory'] === 'string' && flags['working-directory'].trim().length > 0
+  });
+
+  const launchOrganizationId = resolveLaunchOrganizationId(
+    resolvedTicketId,
+    flags['organization-id'],
+    null
+  );
+  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveAuth({
+    organizationIdHint: launchOrganizationId
+  });
+  const resolvedLaunchOrganizationId = resolveLaunchOrganizationId(
+    resolvedTicketId,
+    flags['organization-id'],
+    organizationId
+  );
+  // Custom agents have no Overlord plugin/bundle; use the generic "claude" context.
+  const context = await fetchContext(
+    platformUrl,
+    bearerToken,
+    localSecret,
+    resolvedLaunchOrganizationId,
+    resolvedTicketId,
+    'claude'
+  );
+
+  const childEnv = withLaunchTempEnv({
+    ...process.env,
+    AGENT_IDENTIFIER: 'custom',
+    ...(resolvedLaunchOrganizationId
+      ? { OVERLORD_ORGANIZATION_ID: String(resolvedLaunchOrganizationId) }
+      : {})
+  }, scratchDir);
+
+  try {
+    execFileSync('sh', ['-lc', `${command} ${shellQuote(context)}`], {
+      stdio: 'inherit',
+      env: childEnv
+    });
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  }
+}
+
 export async function runLauncherCommand(command, args) {
   if (args[0] === '--help' || args[0] === '-h' || args[0] === 'help') {
     printLauncherHelp();
+    return;
+  }
+
+  if (command === 'launch-custom') {
+    await runCustomAgent(args);
     return;
   }
 
@@ -486,6 +628,7 @@ export async function runLauncherCommand(command, args) {
     launchMode: flags['launch-mode'] === 'ask' ? 'ask' : 'run',
     model: typeof flags.model === 'string' ? flags.model.trim() : '',
     thinking: typeof flags.thinking === 'string' ? flags.thinking.trim() : '',
+    preCommand: typeof flags['pre-command'] === 'string' ? flags['pre-command'].trim() : '',
     flags: repeatedFlags,
     organizationId:
       typeof flags['organization-id'] === 'string' ? flags['organization-id'].trim() : '',

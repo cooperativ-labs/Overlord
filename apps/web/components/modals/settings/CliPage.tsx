@@ -1,6 +1,6 @@
 'use client';
 
-import { Check, Copy, FolderOpen, X } from 'lucide-react';
+import { Bot, Check, Copy, FolderOpen, Plus, Trash2, X } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
@@ -38,7 +38,15 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select';
-import { getAllAgentConfigsAction, updateAgentFlagsAction } from '@/lib/actions/agent-config';
+import {
+  getAllAgentConfigsAction,
+  getCustomAgentsAction,
+  saveCustomAgentsAction,
+  updateAgentFlagsAction,
+  updateAgentPreCommandAction,
+  updateAgentVisibilityAction
+} from '@/lib/actions/agent-config';
+import { type AgentModel, getAgentModelsAction } from '@/lib/actions/agent-models';
 import {
   DEFAULT_AGENT_TRIGGER_STORAGE_KEY,
   readDefaultAgentTriggerFromStorage
@@ -50,6 +58,8 @@ import {
   LAUNCH_AGENT_VALUES,
   type LaunchAgentType
 } from '@/lib/helpers/agent-types';
+import { extractTemplateTokens } from '@/lib/helpers/custom-agent';
+import type { CustomAgent, CustomAgentPlaceholder } from '@/lib/schemas/agent-config';
 import { cn } from '@/lib/utils';
 
 type SlashCommandConfig = {
@@ -362,11 +372,461 @@ function getSlashActionMeta(status: SlashStatusEntry['status'] | undefined): Plu
 }
 
 function DefaultAgentSelector() {
-  const { selection, setSelection, selectAgent } = useAgentModelPreference();
+  const { selection, setSelection, selectAgent, configs } = useAgentModelPreference();
 
   return (
     <div className="rounded-md border bg-muted/30 p-3">
-      <AgentModelSelector value={selection} onChange={setSelection} onAgentSelect={selectAgent} />
+      <AgentModelSelector
+        value={selection}
+        onChange={setSelection}
+        onAgentSelect={selectAgent}
+        userConfigs={configs}
+      />
+    </div>
+  );
+}
+
+function RobotAgentLabel({ name }: { name: string }) {
+  return (
+    <span className="flex items-center gap-2">
+      <Bot className="h-4 w-4" aria-hidden />
+      <span>{name}</span>
+    </span>
+  );
+}
+
+/**
+ * Lets users choose which admin-offered agents and models appear in their model
+ * selector. Admin offerings are the default set; hiding here is purely per-user.
+ */
+function AgentVisibilitySection({ open }: { open: boolean }) {
+  const [offeredModels, setOfferedModels] = useState<AgentModel[]>([]);
+  const [hiddenAgents, setHiddenAgents] = useState<Record<string, boolean>>({});
+  const [hiddenModels, setHiddenModels] = useState<Record<string, string[]>>({});
+
+  useEffect(() => {
+    if (!open) return;
+    void (async () => {
+      try {
+        const [models, configs] = await Promise.all([
+          getAgentModelsAction(),
+          getAllAgentConfigsAction()
+        ]);
+        setOfferedModels(models);
+        const nextHiddenAgents: Record<string, boolean> = {};
+        const nextHiddenModels: Record<string, string[]> = {};
+        Object.entries(configs).forEach(([agentType, config]) => {
+          if (config.hidden) nextHiddenAgents[agentType] = true;
+          if (config.hiddenModels?.length) nextHiddenModels[agentType] = config.hiddenModels;
+        });
+        setHiddenAgents(nextHiddenAgents);
+        setHiddenModels(nextHiddenModels);
+      } catch (error) {
+        console.error('Failed to load agent visibility:', error);
+      }
+    })();
+  }, [open]);
+
+  const modelsByAgent = offeredModels.reduce<Record<string, AgentModel[]>>((grouped, model) => {
+    (grouped[model.agent_type] ??= []).push(model);
+    return grouped;
+  }, {});
+
+  async function toggleAgent(agent: LaunchAgentType, show: boolean) {
+    setHiddenAgents(current => ({ ...current, [agent]: !show }));
+    try {
+      await updateAgentVisibilityAction(agent, { hidden: !show });
+    } catch (error) {
+      console.error('Failed to update agent visibility:', error);
+    }
+  }
+
+  function toggleModel(agent: LaunchAgentType, modelId: string, show: boolean) {
+    setHiddenModels(current => {
+      const existing = current[agent] ?? [];
+      const next = show ? existing.filter(id => id !== modelId) : [...existing, modelId];
+      void updateAgentVisibilityAction(agent, { hiddenModels: next }).catch(error =>
+        console.error('Failed to update model visibility:', error)
+      );
+      return { ...current, [agent]: next };
+    });
+  }
+
+  return (
+    <div className="grid gap-4">
+      <div className="grid gap-1">
+        <p className="text-sm font-medium">Available agents & models</p>
+        <p className="text-xs text-muted-foreground">
+          Choose which agents and models appear in your model selector. Your admin sets the
+          defaults; hiding here only affects your account.
+        </p>
+      </div>
+      <Accordion type="multiple" className="flex flex-col gap-2">
+        {LAUNCH_AGENT_VALUES.map(agent => {
+          const agentModels = modelsByAgent[agent] ?? [];
+          const agentShown = !hiddenAgents[agent];
+          const hidden = hiddenModels[agent] ?? [];
+          return (
+            <AccordionItem
+              key={agent}
+              value={agent}
+              className="rounded-md border bg-muted/30 px-3 last:border-b"
+            >
+              <AccordionTrigger className="hover:no-underline">
+                <div className="flex w-full items-center justify-between gap-3 pr-2">
+                  <span className="text-xs font-medium">
+                    <AgentNameWithLogo agent={agent} label={AGENT_LABELS[agent] ?? agent} />
+                  </span>
+                  <span className="text-[11px] text-muted-foreground">
+                    {agentShown ? 'Shown' : 'Hidden'}
+                  </span>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent>
+                <div className="grid gap-3">
+                  <label className="flex items-center gap-2 text-xs">
+                    <Checkbox
+                      checked={agentShown}
+                      onCheckedChange={checked => void toggleAgent(agent, checked === true)}
+                    />
+                    Show this agent in my selector
+                  </label>
+                  {agentModels.length > 0 ? (
+                    <div className="grid gap-1.5">
+                      <p className="text-[11px] font-medium text-muted-foreground">Models</p>
+                      {agentModels.map(model => (
+                        <label key={model.model_id} className="flex items-center gap-2 text-xs">
+                          <Checkbox
+                            checked={!hidden.includes(model.model_id)}
+                            disabled={!agentShown}
+                            onCheckedChange={checked =>
+                              toggleModel(agent, model.model_id, checked === true)
+                            }
+                          />
+                          <span className="truncate">{model.display_name}</span>
+                        </label>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-muted-foreground">
+                      No models offered for this agent.
+                    </p>
+                  )}
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          );
+        })}
+      </Accordion>
+    </div>
+  );
+}
+
+type CustomAgentDraft = {
+  id: string;
+  name: string;
+  commandTemplate: string;
+  /** token -> editable placeholder fields */
+  placeholders: Record<
+    string,
+    { label: string; role: CustomAgentPlaceholder['role']; optionsText: string }
+  >;
+};
+
+function slugify(value: string): string {
+  return (
+    value
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'custom-agent'
+  );
+}
+
+function parseOptionsText(text: string): { value: string; label: string }[] {
+  return text
+    .split('\n')
+    .map(line => line.trim())
+    .filter(Boolean)
+    .map(line => {
+      const [value, ...rest] = line.split('|');
+      const trimmedValue = value.trim();
+      const label = rest.join('|').trim();
+      return { value: trimmedValue, label: label || trimmedValue };
+    })
+    .filter(option => option.value.length > 0);
+}
+
+function placeholdersToOptionsText(placeholder: CustomAgentPlaceholder): string {
+  return placeholder.options
+    .map(option =>
+      option.label && option.label !== option.value
+        ? `${option.value} | ${option.label}`
+        : option.value
+    )
+    .join('\n');
+}
+
+function emptyDraft(): CustomAgentDraft {
+  return { id: '', name: '', commandTemplate: '', placeholders: {} };
+}
+
+/**
+ * CRUD UI for user-defined custom agents. Each agent maps a launch-command
+ * template (with `{{token}}` placeholders) to predefined option sets that drive
+ * the model/effort columns of the shared model selector.
+ */
+function CustomAgentsSection({ open }: { open: boolean }) {
+  const [customAgents, setCustomAgents] = useState<CustomAgent[]>([]);
+  const [draft, setDraft] = useState<CustomAgentDraft | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    void (async () => {
+      try {
+        setCustomAgents(await getCustomAgentsAction());
+      } catch (error) {
+        console.error('Failed to load custom agents:', error);
+      }
+    })();
+  }, [open]);
+
+  const detectedTokens = draft ? extractTemplateTokens(draft.commandTemplate) : [];
+
+  function startCreate() {
+    setDraft(emptyDraft());
+  }
+
+  function startEdit(agent: CustomAgent) {
+    const placeholders: CustomAgentDraft['placeholders'] = {};
+    for (const placeholder of agent.placeholders) {
+      placeholders[placeholder.token] = {
+        label: placeholder.label,
+        role: placeholder.role,
+        optionsText: placeholdersToOptionsText(placeholder)
+      };
+    }
+    setDraft({
+      id: agent.id,
+      name: agent.name,
+      commandTemplate: agent.commandTemplate,
+      placeholders
+    });
+  }
+
+  function updateDraftPlaceholder(
+    token: string,
+    patch: Partial<{ label: string; role: CustomAgentPlaceholder['role']; optionsText: string }>
+  ) {
+    setDraft(current => {
+      if (!current) return current;
+      const existing = current.placeholders[token] ?? {
+        label: token,
+        role: 'other',
+        optionsText: ''
+      };
+      return {
+        ...current,
+        placeholders: { ...current.placeholders, [token]: { ...existing, ...patch } }
+      };
+    });
+  }
+
+  async function persist(nextAgents: CustomAgent[]) {
+    setSaving(true);
+    try {
+      const saved = await saveCustomAgentsAction(nextAgents);
+      setCustomAgents(saved);
+      setDraft(null);
+    } catch (error) {
+      console.error('Failed to save custom agents:', error);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleSaveDraft() {
+    if (!draft) return;
+    const name = draft.name.trim();
+    const commandTemplate = draft.commandTemplate.trim();
+    if (!name || !commandTemplate) return;
+    const id = draft.id || `${slugify(name)}-${Math.random().toString(36).slice(2, 6)}`;
+    const placeholders: CustomAgentPlaceholder[] = detectedTokens.map(token => {
+      const fields = draft.placeholders[token] ?? { label: token, role: 'other', optionsText: '' };
+      return {
+        token,
+        label: fields.label.trim() || token,
+        role: fields.role,
+        options: parseOptionsText(fields.optionsText)
+      };
+    });
+    const nextAgent: CustomAgent = { id, name, commandTemplate, placeholders };
+    const others = customAgents.filter(agent => agent.id !== id);
+    await persist([...others, nextAgent]);
+  }
+
+  async function handleDelete(id: string) {
+    await persist(customAgents.filter(agent => agent.id !== id));
+  }
+
+  return (
+    <div className="grid gap-4">
+      <div className="grid gap-1">
+        <p className="text-sm font-medium">Custom agents</p>
+        <p className="text-xs text-muted-foreground">
+          Define your own agents by mapping a launch command to predefined options. Use{' '}
+          <code className="rounded bg-muted px-1">{'{{token}}'}</code> placeholders, e.g.{' '}
+          <code className="rounded bg-muted px-1">
+            ollama claude {'{{model}}'} --effort {'{{effort}}'}
+          </code>
+          , then set the options for each token. They appear in your model selector with a robot
+          icon.
+        </p>
+      </div>
+
+      {customAgents.length > 0 ? (
+        <div className="grid gap-2">
+          {customAgents.map(agent => (
+            <div
+              key={agent.id}
+              className="flex items-start justify-between gap-3 rounded-md border bg-background p-3"
+            >
+              <div className="grid gap-1">
+                <p className="text-xs font-medium">
+                  <RobotAgentLabel name={agent.name} />
+                </p>
+                <code className="break-all text-[11px] text-muted-foreground">
+                  {agent.commandTemplate}
+                </code>
+              </div>
+              <div className="flex shrink-0 gap-1">
+                <Button type="button" variant="outline" size="sm" onClick={() => startEdit(agent)}>
+                  Edit
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => void handleDelete(agent.id)}
+                  aria-label={`Delete ${agent.name}`}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {draft ? (
+        <div className="grid gap-3 rounded-md border bg-muted/30 p-3">
+          <div className="grid gap-1.5">
+            <label className="text-xs font-medium">Name</label>
+            <input
+              type="text"
+              value={draft.name}
+              placeholder="e.g., Claude via Ollama"
+              onChange={e =>
+                setDraft(current => (current ? { ...current, name: e.target.value } : current))
+              }
+              className="w-full rounded border bg-background px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+          <div className="grid gap-1.5">
+            <label className="text-xs font-medium">Launch command template</label>
+            <input
+              type="text"
+              value={draft.commandTemplate}
+              placeholder="ollama claude {{model}} --effort {{effort}}"
+              onChange={e =>
+                setDraft(current =>
+                  current ? { ...current, commandTemplate: e.target.value } : current
+                )
+              }
+              className="w-full rounded border bg-background px-3 py-2 font-mono text-xs focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+          {detectedTokens.length > 0 ? (
+            <div className="grid gap-2">
+              <p className="text-[11px] font-medium text-muted-foreground">Placeholders</p>
+              {detectedTokens.map(token => {
+                const fields = draft.placeholders[token] ?? {
+                  label: token,
+                  role: 'other' as const,
+                  optionsText: ''
+                };
+                return (
+                  <div key={token} className="grid gap-2 rounded-md border bg-background p-2">
+                    <div className="flex items-center gap-2">
+                      <code className="rounded bg-muted px-1 text-[11px]">{`{{${token}}}`}</code>
+                      <input
+                        type="text"
+                        value={fields.label}
+                        placeholder="Label"
+                        onChange={e => updateDraftPlaceholder(token, { label: e.target.value })}
+                        className="flex-1 rounded border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
+                      />
+                      <Select
+                        value={fields.role}
+                        onValueChange={value =>
+                          updateDraftPlaceholder(token, {
+                            role: value as CustomAgentPlaceholder['role']
+                          })
+                        }
+                      >
+                        <SelectTrigger className="w-28 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="model">Model</SelectItem>
+                          <SelectItem value="thinking">Effort</SelectItem>
+                          <SelectItem value="other">Other</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <textarea
+                      value={fields.optionsText}
+                      placeholder={'Options, one per line\nvalue | Label'}
+                      onChange={e => updateDraftPlaceholder(token, { optionsText: e.target.value })}
+                      rows={3}
+                      className="w-full rounded border bg-background px-2 py-1 font-mono text-[11px] focus:outline-none focus:ring-2 focus:ring-ring"
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-[11px] text-muted-foreground">
+              Add <code className="rounded bg-muted px-1">{'{{token}}'}</code> placeholders to the
+              template to configure their options.
+            </p>
+          )}
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              size="sm"
+              disabled={saving || !draft.name.trim() || !draft.commandTemplate.trim()}
+              onClick={() => void handleSaveDraft()}
+            >
+              {saving ? 'Saving…' : 'Save agent'}
+            </Button>
+            <Button type="button" variant="ghost" size="sm" onClick={() => setDraft(null)}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="gap-2 justify-self-start"
+          onClick={startCreate}
+        >
+          <Plus className="h-3.5 w-3.5" />
+          Add custom agent
+        </Button>
+      )}
     </div>
   );
 }
@@ -378,6 +838,7 @@ export function CliPage({ open }: { open: boolean }) {
     useState<LaunchAgentType>('claude');
   const [selectedLocalAgent, setSelectedLocalAgent] = useState<LaunchAgentType>('claude');
   const [agentFlags, setAgentFlags] = useState<Record<string, string[]>>({});
+  const [agentPreCommands, setAgentPreCommands] = useState<Record<string, string>>({});
   const [flagInput, setFlagInput] = useState('');
   const [commandCopied, setCommandCopied] = useState(false);
 
@@ -517,10 +978,13 @@ export function CliPage({ open }: { open: boolean }) {
       try {
         const configs = await getAllAgentConfigsAction();
         const flags: Record<string, string[]> = {};
+        const preCommands: Record<string, string> = {};
         Object.entries(configs).forEach(([agentType, config]) => {
           flags[agentType] = config.flags ?? [];
+          if (config.preCommand) preCommands[agentType] = config.preCommand;
         });
         setAgentFlags(flags);
+        setAgentPreCommands(preCommands);
       } catch (error) {
         console.error('Failed to load agent configs:', error);
       }
@@ -588,6 +1052,21 @@ export function CliPage({ open }: { open: boolean }) {
     setFlagInput('');
   }
 
+  async function handleSavePreCommand(agent: string, value: string) {
+    const trimmed = value.trim();
+    setAgentPreCommands(current => {
+      const next = { ...current };
+      if (trimmed) next[agent] = trimmed;
+      else delete next[agent];
+      return next;
+    });
+    try {
+      await updateAgentPreCommandAction(agent, trimmed);
+    } catch (error) {
+      console.error('Failed to save pre-command:', error);
+    }
+  }
+
   async function handleRemoveFlag(agent: string, index: number) {
     const newFlags = { ...agentFlags };
     newFlags[agent] = (newFlags[agent] ?? []).filter((_, i) => i !== index);
@@ -599,10 +1078,16 @@ export function CliPage({ open }: { open: boolean }) {
     }
   }
 
+  function buildLocalAgentCommand(agent: string): string {
+    const preCommand = agentPreCommands[agent]?.trim();
+    const flags = (agentFlags[agent] ?? []).join(' ');
+    return ['ovld restart', agent, preCommand ? `--pre-command ${preCommand}` : '', flags]
+      .filter(Boolean)
+      .join(' ');
+  }
+
   async function handleCopyCommand() {
-    const flags = (agentFlags[selectedLocalAgent] ?? []).join(' ');
-    const command = `ovld restart ${selectedLocalAgent}${flags ? ` ${flags}` : ''}`;
-    await navigator.clipboard.writeText(command);
+    await navigator.clipboard.writeText(buildLocalAgentCommand(selectedLocalAgent));
     setCommandCopied(true);
     setTimeout(() => setCommandCopied(false), 2000);
   }
@@ -930,6 +1415,33 @@ export function CliPage({ open }: { open: boolean }) {
               </Select>
               <div className="space-y-3">
                 <div className="space-y-2">
+                  <label className="text-xs font-medium text-foreground">Pre-command</label>
+                  <input
+                    type="text"
+                    placeholder="e.g., ollama"
+                    value={agentPreCommands[selectedLocalAgent] ?? ''}
+                    onChange={e =>
+                      setAgentPreCommands(current => ({
+                        ...current,
+                        [selectedLocalAgent]: e.target.value
+                      }))
+                    }
+                    onBlur={e => void handleSavePreCommand(selectedLocalAgent, e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        void handleSavePreCommand(selectedLocalAgent, e.currentTarget.value);
+                      }
+                    }}
+                    className="w-full rounded border bg-background px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    Runs before the agent binary, wrapping it — e.g.{' '}
+                    <code className="rounded bg-muted px-1">ollama</code> launches{' '}
+                    <code className="rounded bg-muted px-1">ollama {selectedLocalAgent} …</code>
+                  </p>
+                </div>
+                <div className="space-y-2">
                   <label className="text-xs font-medium text-foreground">Command flags</label>
                   <div className="flex gap-2">
                     <input
@@ -993,11 +1505,7 @@ export function CliPage({ open }: { open: boolean }) {
                     </button>
                   </div>
                   <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs">
-                    {`ovld restart ${selectedLocalAgent}${
-                      (agentFlags[selectedLocalAgent] ?? []).length > 0
-                        ? ` ${(agentFlags[selectedLocalAgent] ?? []).join(' ')}`
-                        : ''
-                    }`}
+                    {buildLocalAgentCommand(selectedLocalAgent)}
                   </pre>
                 </div>
               </div>
@@ -1005,6 +1513,10 @@ export function CliPage({ open }: { open: boolean }) {
           </div>
         </>
       ) : null}
+
+      <AgentVisibilitySection open={open} />
+
+      <CustomAgentsSection open={open} />
 
       <div className="grid gap-4">
         <div className="grid gap-1">

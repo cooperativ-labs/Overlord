@@ -135,7 +135,7 @@ async function fetchClaudeModels(): Promise<AgentModelRow[]> {
 function extractClaudeThinkingOptions(modelId: string): string[] {
   // Claude 4.x models support extended thinking with budget levels.
   if (modelId.includes('opus') || modelId.includes('sonnet') || modelId.includes('haiku')) {
-    return ['low', 'medium', 'high', 'max'];
+    return ['low', 'medium', 'high', 'xhigh', 'max'];
   }
   return [];
 }

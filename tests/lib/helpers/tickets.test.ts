@@ -1,4 +1,5 @@
 import {
+  buildTicketTitleObjectiveInput,
   deriveTitleFromObjective,
   getDisplayTitle,
   hasNonEmptyObjectiveText,
@@ -33,6 +34,40 @@ describe('ticket title helpers', () => {
   it('keeps non-file mentions unchanged', () => {
     expect(deriveTitleFromObjective('Follow up with @jake about ticket sequencing')).toBe(
       'Follow up with @jake about ticket sequencing'
+    );
+  });
+
+  it('builds title context from every objective regardless of state', () => {
+    expect(
+      buildTicketTitleObjectiveInput([
+        {
+          objective: 'Final polish after implementation',
+          position: 2,
+          created_at: '2026-01-03T00:00:00Z'
+        },
+        {
+          objective: 'Plan the ticket title generation flow',
+          position: 0,
+          created_at: '2026-01-01T00:00:00Z'
+        },
+        {
+          objective: 'Implement multi-objective title summaries',
+          position: 1,
+          created_at: '2026-01-02T00:00:00Z'
+        }
+      ])
+    ).toBe(
+      [
+        '1. Plan the ticket title generation flow',
+        '2. Implement multi-objective title summaries',
+        '3. Final polish after implementation'
+      ].join('\n')
+    );
+  });
+
+  it('falls back to context only when no objective text exists', () => {
+    expect(buildTicketTitleObjectiveInput([{ objective: '   ', position: 0 }], 'Fallback')).toBe(
+      'Fallback'
     );
   });
 });

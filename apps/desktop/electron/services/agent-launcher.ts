@@ -35,6 +35,15 @@ type LaunchAgentInput = {
   launchMode?: AgentLaunchMode;
   /** Extra CLI flags from local agent configuration (e.g. --enable-auto-mode). */
   flags?: string[];
+  /** Command prepended before the agent binary (e.g. `ollama` to run via Ollama). */
+  preCommand?: string;
+  /**
+   * Fully-resolved launch command for a user-defined custom agent (all `{{token}}`
+   * placeholders already substituted). When set, the PTY runs this command with the
+   * fetched ticket context appended as the final argument, bypassing the built-in
+   * agent command builders. Mirrors the CLI `ovld launch-custom` path.
+   */
+  customCommand?: string;
   /** Preferred model ID (e.g. 'claude-opus-4-6'). Passed as --model flag. */
   model?: string;
   /** Preferred thinking/effort level (e.g. 'high', 'max'). Passed as agent-specific flag. */
@@ -330,6 +339,9 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
   const launchMode = input.launchMode ?? 'run';
   const launchSessionId = crypto.randomUUID();
   const isRemote = Boolean(input.sshCommand?.trim());
+  // A resolved custom-agent command bypasses the built-in agent binaries; it fetches
+  // context using the generic "claude" instruction set, same as `ovld launch-custom`.
+  const customCommand = input.customCommand?.trim() ? input.customCommand.trim() : null;
   // Check if the Overlord local bundle is installed for this agent
   const bundleAgent =
     input.agent === 'claude' ||
@@ -363,7 +375,7 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
     OVERLORD_CONNECTOR_URL: connectorUrl,
     OVERLORD_ACCESS_TOKEN: launchAuth.bearerToken,
     TICKET_ID: input.ticketId,
-    AGENT_IDENTIFIER: agentIdentifierMap[input.agent],
+    AGENT_IDENTIFIER: customCommand ? 'custom' : agentIdentifierMap[input.agent],
     OVERLORD_MODEL_IDENTIFIER: input.model ?? '',
     MODEL_IDENTIFIER: input.model ?? '',
     OVERLORD_LOCAL_SECRET: process.env.OVERLORD_LOCAL_SECRET ?? '',
@@ -445,8 +457,8 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
   const contextMarkdown = await response.text();
 
   const tag = `overlord-${input.ticketId.slice(-8)}-${Date.now()}`;
-  const scratchDir = resolvedCwd ? path.join(resolvedCwd, '.overlord', 'tmp') : os.tmpdir();
-  fs.mkdirSync(scratchDir, { recursive: true });
+  const scratchDir = resolveLaunchScratchDir(resolvedCwd);
+  const launchTempEnv = buildLaunchTempEnv(scratchDir);
 
   // Write context to a temp file (avoids shell expansion / quoting issues)
   const contextFile = path.join(scratchDir, `${tag}-ctx.md`);
@@ -477,7 +489,9 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
 
   // Build model/thinking flags per agent
   const modelThinkingFlags = buildModelThinkingFlags(input.agent, input.model, input.thinking);
-  const codexBaseCommand = `codex${modelThinkingFlags}${extraFlags ? ` ${extraFlags}` : ''}`;
+  // Optional user-defined pre-command (e.g. `ollama`) that wraps the agent binary.
+  const preCommandPrefix = input.preCommand?.trim() ? `${input.preCommand.trim()} ` : '';
+  const codexBaseCommand = `${preCommandPrefix}codex${modelThinkingFlags}${extraFlags ? ` ${extraFlags}` : ''}`;
   const codexLaunchEnv: Record<string, string> = {};
   if (input.agent === 'codex') {
     codexLaunchEnv._OVLD_CODEX_CMD = codexBaseCommand;
@@ -494,8 +508,10 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
     contextRef,
     modelThinkingFlags,
     extraFlags,
+    preCommandPrefix,
     startPrompt,
-    scratchDir
+    scratchDir,
+    customCommand
   });
 
   if (isRemote) {
@@ -512,11 +528,13 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
           contextRef: '"$(cat "$_OVLD_REMOTE_CONTEXT_FILE")"',
           modelThinkingFlags,
           extraFlags,
+          preCommandPrefix,
           startPrompt,
           scratchDir: resolvedRemoteCwd
             ? path.posix.join(resolvedRemoteCwd, '.overlord', 'tmp')
             : '/tmp',
-          useLocalClaudePluginDir: false
+          useLocalClaudePluginDir: false,
+          customCommand
         }),
         remoteCwd: resolvedRemoteCwd
       }),
@@ -527,7 +545,7 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
   return {
     command,
     cwd: resolvedCwd,
-    env: { ...launchEnv, ...codexLaunchEnv }
+    env: { ...launchEnv, ...launchTempEnv, ...codexLaunchEnv }
   };
 }
 
@@ -540,9 +558,22 @@ function buildAgentCommand(input: {
   scratchDir: string;
   modelThinkingFlags: string;
   extraFlags: string;
+  /** User-defined pre-command prefix (already trailing-spaced), e.g. "ollama ". */
+  preCommandPrefix?: string;
   startPrompt: string;
   useLocalClaudePluginDir?: boolean;
+  /** Fully-resolved custom-agent command; when set, bypasses the built-in builders. */
+  customCommand?: string | null;
 }): string {
+  // A custom agent runs its fully-resolved command with the ticket context appended
+  // as the final argument (same shape as the CLI `ovld launch-custom` path).
+  if (input.customCommand?.trim()) {
+    return `${input.customCommand.trim()} ${input.contextRef}`;
+  }
+
+  // The pre-command wraps whatever agent binary follows, e.g. `ollama claude ...`.
+  const pre = input.preCommandPrefix ?? '';
+
   if (input.agent === 'claude') {
     // When the bundle is installed, the durable hook is in ~/.claude/settings.json,
     // so we don't need to pass a temporary --settings file.
@@ -551,23 +582,24 @@ function buildAgentCommand(input: {
       : ` --settings ${shellQuote(input.settingsFile)}`;
     const pluginDir = input.useLocalClaudePluginDir === false ? null : claudeSourcePluginDir();
     const pluginArg = pluginDir ? ` --plugin-dir ${shellQuote(pluginDir)}` : '';
-    return `claude${pluginArg} --append-system-prompt ${input.contextRef}${settingsArg}${input.modelThinkingFlags}${input.extraFlags ? ` ${input.extraFlags}` : ''} ${shellQuote(input.startPrompt)}`;
+    return `${pre}claude${pluginArg} --append-system-prompt ${input.contextRef}${settingsArg}${input.modelThinkingFlags}${input.extraFlags ? ` ${input.extraFlags}` : ''} ${shellQuote(input.startPrompt)}`;
   }
 
   if (input.agent === 'codex') {
+    // Codex routes through the _OVLD_CODEX_CMD env var, which already carries the prefix.
     return buildInteractiveCodexCommand({ fallbackPromptRef: input.contextRef });
   }
   if (input.agent === 'cursor') {
-    return `agent${input.modelThinkingFlags}${input.extraFlags ? ` ${input.extraFlags}` : ''} ${input.contextRef}`;
+    return `${pre}agent${input.modelThinkingFlags}${input.extraFlags ? ` ${input.extraFlags}` : ''} ${input.contextRef}`;
   }
   if (input.agent === 'antigravity') {
-    return `agy --prompt-interactive @${input.contextFile} --add-dir ${shellQuote(input.scratchDir)}${input.extraFlags ? ` ${input.extraFlags}` : ''}`;
+    return `${pre}agy --prompt-interactive @${input.contextFile} --add-dir ${shellQuote(input.scratchDir)}${input.extraFlags ? ` ${input.extraFlags}` : ''}`;
   }
   if (input.agent === 'opencode') {
-    return `opencode${input.modelThinkingFlags}${input.extraFlags ? ` ${input.extraFlags}` : ''} --prompt ${input.contextRef}`;
+    return `${pre}opencode${input.modelThinkingFlags}${input.extraFlags ? ` ${input.extraFlags}` : ''} --prompt ${input.contextRef}`;
   }
   if (input.agent === 'pi') {
-    return `pi${input.modelThinkingFlags}${input.extraFlags ? ` ${input.extraFlags}` : ''} ${input.contextRef}`;
+    return `${pre}pi${input.modelThinkingFlags}${input.extraFlags ? ` ${input.extraFlags}` : ''} ${input.contextRef}`;
   }
   throw new Error(`Unknown agent type: ${input.agent}`);
 }
@@ -601,6 +633,10 @@ function buildSshWrappedCommand(input: {
       ? `_OVLD_REMOTE_SCRATCH_DIR=${shellQuote(path.posix.join(input.remoteCwd, '.overlord', 'tmp'))}`
       : '_OVLD_REMOTE_SCRATCH_DIR="${TMPDIR:-/tmp}"',
     'mkdir -p "$_OVLD_REMOTE_SCRATCH_DIR"',
+    'export TMPDIR="$_OVLD_REMOTE_SCRATCH_DIR"',
+    'export TMP="$_OVLD_REMOTE_SCRATCH_DIR"',
+    'export TEMP="$_OVLD_REMOTE_SCRATCH_DIR"',
+    'export OVERLORD_TMPDIR="$_OVLD_REMOTE_SCRATCH_DIR"',
     '_OVLD_REMOTE_CONTEXT_FILE="$(mktemp "$_OVLD_REMOTE_SCRATCH_DIR/overlord-context.XXXXXX.md")"',
     'export _OVLD_CTX_FILE="$_OVLD_REMOTE_CONTEXT_FILE"',
     'trap \'rm -f "$_OVLD_REMOTE_CONTEXT_FILE"\' EXIT',
@@ -717,6 +753,23 @@ function describeLocalCwdProblem(cwd: string): string | null {
 
 function shellQuote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+function resolveLaunchScratchDir(workingDirectory?: string): string {
+  const scratchDir = workingDirectory
+    ? path.join(workingDirectory, '.overlord', 'tmp')
+    : os.tmpdir();
+  fs.mkdirSync(scratchDir, { recursive: true });
+  return scratchDir;
+}
+
+function buildLaunchTempEnv(scratchDir: string): Record<string, string> {
+  return {
+    TMPDIR: scratchDir,
+    TMP: scratchDir,
+    TEMP: scratchDir,
+    OVERLORD_TMPDIR: scratchDir
+  };
 }
 
 function isCodexPluginInstalled(): boolean {

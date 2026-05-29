@@ -7,6 +7,7 @@ type LaunchCommandOptions = {
   workingDirectory?: string | null;
   launchMode?: 'run' | 'ask' | null;
   flags?: string[] | null;
+  preCommand?: string | null;
   model?: string | null;
   thinking?: string | null;
   sshCommand?: string | SshConnectionConfig | null;
@@ -49,6 +50,7 @@ type BuildLaunchCommandsInput = {
     tmuxCommand?: string | null;
   } | null;
   agentFlags?: Partial<Record<LaunchAgentType, string[]>>;
+  agentPreCommands?: Partial<Record<LaunchAgentType, string>>;
   assignedAgent?: TicketAssignedAgent | null;
 };
 
@@ -100,6 +102,7 @@ function normalizeAgentLaunchOptions(
     organizationId: input.organizationId,
     launchMode: 'run',
     flags: input.agentFlags?.[agent] ?? [],
+    preCommand: input.agentPreCommands?.[agent] ?? null,
     model: assignedAgent?.model ?? null,
     thinking: assignedAgent?.thinking ?? null,
     sshCommand: input.sshCommand,
@@ -124,6 +127,7 @@ export function buildAgentLaunchCommand(
   }
 
   pushOptionalFlag(parts, '--working-directory', options.workingDirectory ?? null);
+  pushOptionalFlag(parts, '--pre-command', options.preCommand ?? null);
 
   if (options.launchMode === 'ask') {
     parts.push('--launch-mode', 'ask');
@@ -172,6 +176,7 @@ export function buildLaunchCommands({
   remoteWorkingDirectory,
   serverMultiplexer,
   agentFlags,
+  agentPreCommands,
   assignedAgent
 }: BuildLaunchCommandsInput): LaunchCommands {
   const contextUrl = `${platformUrl}/api/protocol/context/${ticketId}`;
@@ -184,6 +189,7 @@ export function buildLaunchCommands({
     remoteWorkingDirectory,
     serverMultiplexer,
     agentFlags,
+    agentPreCommands,
     assignedAgent
   };
 

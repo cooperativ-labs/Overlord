@@ -17,6 +17,8 @@ type ClaimedLaunchParams = {
   thinking: string | null;
   launchMode: 'run' | 'ask';
   flags: string[];
+  preCommand: string | null;
+  customCommand: string | null;
   workingDirectory: string | null;
   sshCommand: string | null;
   remoteWorkingDirectory: string | null;
@@ -136,6 +138,8 @@ export function useExecutionRequestLauncher({
               remoteWorkingDirectory: launch.remoteWorkingDirectory ?? undefined,
               launchMode: launch.launchMode,
               flags: launch.flags,
+              preCommand: launch.preCommand ?? undefined,
+              customCommand: launch.customCommand ?? undefined,
               model: launch.model ?? undefined,
               thinking: launch.thinking ?? undefined
             });

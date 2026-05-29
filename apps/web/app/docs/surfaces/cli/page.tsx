@@ -59,6 +59,31 @@ ovld attach
 ovld launch cursor --ticket-id <ticket_id> --working-directory <path>
 \`\`\`
 
+## Launch an agent in one line
+
+\`ovld <agent> "<prompt>"\` creates a ticket from your prompt — inferring the project from the current directory — and immediately launches the agent on it. You get all of Overlord's tracking without opening the desktop or web UI.
+
+\`\`\`bash
+# Built-in agent; project inferred from cwd, model + effort applied to the ticket
+ovld claude "refactor the auth middleware" --model opus --thinking high
+
+# Forward native agent flags verbatim after a standalone --
+ovld codex "investigate the memory leak" -- --search --full-auto
+
+# Explicit project + human-review ticket
+ovld cursor "tidy the dashboard styles" --project-id <uuid> --for-human
+
+# Long prompts can be piped in
+echo "summarize today's diffs" | ovld claude
+
+# Launch one of your custom agents by id
+ovld ollama-claude "summarize today's diffs" --model qwen2.5-coder
+\`\`\`
+
+- Built-in agents must have an installed connector (\`ovld setup <agent>\`); pass \`--allow-uninstalled\` to override.
+- Overlord flags (\`--model\`, \`--thinking\`, \`--project-id\`, \`--personal\`, \`--for-human\`, \`--priority\`, \`--title\`, \`--working-directory\`, repeatable \`--flag\`, \`--pre-command\`, and the remote/SSH flags) are consumed by the CLI; everything after \`--\` is forwarded to the agent binary.
+- If no project resolves from the current directory, register it first with \`ovld add-cwd\` or pass \`--project-id\`.
+
 ## Terminal runner
 
 When the web or desktop app enqueues an execution request (Run or auto-advance), a local **runner** claims the row and spawns \`ovld launch\` for you. The backend does not open terminals.
