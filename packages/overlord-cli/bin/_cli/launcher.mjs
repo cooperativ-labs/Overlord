@@ -6,6 +6,7 @@
  */
 
 import { execFileSync } from 'node:child_process';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -90,12 +91,21 @@ function buildAgyLaunchArgv({ contextFile, scratchDir, mode, sessionId, extraArg
   return argv;
 }
 
-async function fetchContext(platformUrl, bearerToken, localSecret, organizationId, ticketId, agent) {
+async function fetchContext(platformUrl, bearerToken, localSecret, organizationId, ticketId, agent, options = {}) {
   const params = new URLSearchParams({
     context: 'cli',
     agent,
     instructionMode: getInstructionMode(agent)
   });
+  if (options.launchMode === 'ask') params.set('mode', 'ask');
+  if (options.sessionId) params.set('sessionId', options.sessionId);
+  if (options.workspace) params.set('workspace', options.workspace);
+  if (options.feedPostId) {
+    params.set('feedPostId', options.feedPostId);
+    if (typeof options.initialQuestion === 'string') {
+      params.set('initialQuestion', options.initialQuestion);
+    }
+  }
   const url = `${platformUrl}/api/protocol/context/${ticketId}?${params.toString()}`;
   const response = await fetch(url, {
     headers: buildAuthHeaders(bearerToken, localSecret, organizationId)
@@ -107,7 +117,10 @@ async function fetchContext(platformUrl, bearerToken, localSecret, organizationI
     );
   }
 
-  return response.text();
+  const context = await response.text();
+  const workingDirectory = response.headers.get('X-Working-Directory') ?? '';
+  const humanTicketId = response.headers.get('X-Ticket-Id') ?? '';
+  return { context, workingDirectory, humanTicketId };
 }
 
 const agentIdentifierMap = {
@@ -284,6 +297,8 @@ Options:
   --remote-working-directory <path> Change to this path on the remote host before launch
   --server-multiplexer <none|tmux>  Wrap remote launches in tmux
   --tmux-command <template>         Remote tmux template; use {script} as the placeholder
+  --feed-post-id <uuid>             Include a feed post in the context (desktop feed discuss)
+  --initial-question <text>         First user question for feed discuss (paired with --feed-post-id)
 
 Notes:
   - ovld launch is the primary user-facing launcher.
@@ -370,7 +385,10 @@ async function runAgent(agent, mode = 'run', options = {}) {
     options.organizationId,
     organizationId
   );
-  if (options.sshCommand?.trim()) {
+  const launchSessionId = crypto.randomUUID();
+  const isRemote = Boolean(options.sshCommand?.trim());
+
+  if (isRemote) {
     const remoteCommand = buildRemoteLaunchCommand(agent, {
       ...options,
       organizationId: resolvedLaunchOrganizationId
@@ -385,18 +403,40 @@ async function runAgent(agent, mode = 'run', options = {}) {
     }
   }
 
-  const context = await fetchContext(
+  const { context, workingDirectory: apiWorkingDirectory, humanTicketId } = await fetchContext(
     platformUrl,
     bearerToken,
     localSecret,
     resolvedLaunchOrganizationId,
     ticketId,
-    agent
+    agent,
+    {
+      launchMode: options.launchMode,
+      sessionId: launchSessionId,
+      workspace: isRemote ? 'ssh' : undefined,
+      feedPostId: options.feedPostId,
+      initialQuestion: options.initialQuestion
+    }
   );
+
+  if (humanTicketId) {
+    process.env.TICKET_ID = humanTicketId;
+  }
+
+  if (!options.workingDirectory && apiWorkingDirectory) {
+    try {
+      process.chdir(apiWorkingDirectory);
+    } catch {
+      // Best-effort; the agent will run in the current directory.
+    }
+  }
 
   const childEnv = withLaunchTempEnv({
     ...process.env,
     AGENT_IDENTIFIER: agentIdentifierMap[agent],
+    OVERLORD_LAUNCH_SESSION_ID: launchSessionId,
+    OVERLORD_MODEL_IDENTIFIER: options.model ?? '',
+    MODEL_IDENTIFIER: options.model ?? '',
     ...(resolvedLaunchOrganizationId
       ? { OVERLORD_ORGANIZATION_ID: String(resolvedLaunchOrganizationId) }
       : {})
@@ -568,19 +608,27 @@ async function runCustomAgent(args) {
     flags['organization-id'],
     organizationId
   );
+  const launchSessionId = crypto.randomUUID();
+  const feedPostId = typeof flags['feed-post-id'] === 'string' ? flags['feed-post-id'].trim() : '';
+  const initialQuestion = typeof flags['initial-question'] === 'string' ? flags['initial-question'].trim() : '';
   // Custom agents have no Overlord plugin/bundle; use the generic "claude" context.
-  const context = await fetchContext(
+  const { context } = await fetchContext(
     platformUrl,
     bearerToken,
     localSecret,
     resolvedLaunchOrganizationId,
     resolvedTicketId,
-    'claude'
+    'claude',
+    {
+      sessionId: launchSessionId,
+      ...(feedPostId ? { feedPostId, initialQuestion } : {})
+    }
   );
 
   const childEnv = withLaunchTempEnv({
     ...process.env,
     AGENT_IDENTIFIER: 'custom',
+    OVERLORD_LAUNCH_SESSION_ID: launchSessionId,
     ...(resolvedLaunchOrganizationId
       ? { OVERLORD_ORGANIZATION_ID: String(resolvedLaunchOrganizationId) }
       : {})
@@ -639,7 +687,9 @@ export async function runLauncherCommand(command, args) {
         : '',
     serverMultiplexer:
       flags['server-multiplexer'] === 'tmux' ? 'tmux' : 'none',
-    tmuxCommand: typeof flags['tmux-command'] === 'string' ? flags['tmux-command'].trim() : ''
+    tmuxCommand: typeof flags['tmux-command'] === 'string' ? flags['tmux-command'].trim() : '',
+    feedPostId: typeof flags['feed-post-id'] === 'string' ? flags['feed-post-id'].trim() : '',
+    initialQuestion: typeof flags['initial-question'] === 'string' ? flags['initial-question'].trim() : ''
   };
 
   if (normalizedCommand === 'run') {

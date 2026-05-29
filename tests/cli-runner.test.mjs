@@ -70,6 +70,27 @@ test('buildLaunchArgs includes ssh fields for remote claims', () => {
   );
 });
 
+test('buildLaunchArgs includes feed post fields when present', () => {
+  assert.deepEqual(
+    buildLaunchArgs({
+      ticketId: '1:44',
+      agent: 'claude',
+      feedPostId: 'post-uuid-123',
+      initialQuestion: 'What does this mean?'
+    }),
+    [
+      'launch',
+      'claude',
+      '--ticket-id',
+      '1:44',
+      '--feed-post-id',
+      'post-uuid-123',
+      '--initial-question',
+      'What does this mean?'
+    ]
+  );
+});
+
 test('readOrCreateDeviceFingerprint reuses an explicit flag', () => {
   assert.equal(readOrCreateDeviceFingerprint({ 'device-fingerprint': 'fp-explicit' }), 'fp-explicit');
 });

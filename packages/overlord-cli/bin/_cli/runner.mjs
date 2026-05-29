@@ -131,6 +131,8 @@ export function buildLaunchArgs(launch) {
   }
   if (launch.serverMultiplexer === 'tmux') args.push('--server-multiplexer', 'tmux');
   if (launch.tmuxCommand) args.push('--tmux-command', launch.tmuxCommand);
+  if (launch.feedPostId) args.push('--feed-post-id', launch.feedPostId);
+  if (launch.initialQuestion) args.push('--initial-question', launch.initialQuestion);
   return args;
 }
 

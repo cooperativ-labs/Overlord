@@ -39,7 +39,9 @@ const VALUE_FLAGS = new Set([
   'ssh-command',
   'remote-working-directory',
   'server-multiplexer',
-  'tmux-command'
+  'tmux-command',
+  'feed-post-id',
+  'initial-question'
 ]);
 
 const BOOLEAN_FLAGS = new Set(['personal', 'for-human', 'allow-uninstalled']);
@@ -52,7 +54,9 @@ const FORWARDED_VALUE_FLAGS = [
   'ssh-command',
   'remote-working-directory',
   'server-multiplexer',
-  'tmux-command'
+  'tmux-command',
+  'feed-post-id',
+  'initial-question'
 ];
 
 export function isBuiltinLaunchAgent(name) {
