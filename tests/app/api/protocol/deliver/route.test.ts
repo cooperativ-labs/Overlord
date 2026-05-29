@@ -106,9 +106,10 @@ function buildSupabase() {
   const insertedEvents: Array<Record<string, unknown>> = [];
   const ticketEventsInsertChain = {
     select: jest.fn(() => ticketEventsInsertChain),
-    single: jest
-      .fn()
-      .mockImplementation(async () => ({ data: { id: `event-${insertedEvents.length}` }, error: null }))
+    single: jest.fn().mockImplementation(async () => ({
+      data: { id: `event-${insertedEvents.length}` },
+      error: null
+    }))
   };
   const ticketEvents = {
     insert: jest.fn((payload: Record<string, unknown>) => {

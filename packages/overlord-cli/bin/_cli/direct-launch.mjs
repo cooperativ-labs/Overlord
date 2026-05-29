@@ -216,7 +216,7 @@ Overlord flags:
   --model <identifier>          Preferred model (sets the ticket delegate and is forwarded to the agent)
   --thinking <level>            Agent reasoning/effort level
   --flag <value>                Extra agent flag (repeatable)
-  --pre-command <command>       Command to run before the agent binary (e.g. ollama)
+  --pre-command <command>       Shell command to run before the agent binary (e.g. ollama, agent-pod)
   --project-id <uuid>           Target project (skips working-directory resolution)
   --personal                    Create the ticket in your personal project
   --for-human                   Create a human-review ticket

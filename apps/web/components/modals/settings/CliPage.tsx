@@ -1424,7 +1424,7 @@ export function CliPage({ open }: { open: boolean }) {
                   <label className="text-xs font-medium text-foreground">Pre-command</label>
                   <input
                     type="text"
-                    placeholder="e.g., ollama"
+                    placeholder="e.g., ollama or agent-pod"
                     value={agentPreCommands[selectedLocalAgent] ?? ''}
                     onChange={e =>
                       setAgentPreCommands(current => ({
@@ -1442,7 +1442,7 @@ export function CliPage({ open }: { open: boolean }) {
                     className="w-full rounded border bg-background px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
                   />
                   <p className="text-[11px] text-muted-foreground">
-                    Runs before the agent binary, wrapping it — e.g.{' '}
+                    Runs in your shell before the agent binary, wrapping it — e.g.{' '}
                     <code className="rounded bg-muted px-1">ollama</code> launches{' '}
                     <code className="rounded bg-muted px-1">ollama {selectedLocalAgent} …</code>
                   </p>

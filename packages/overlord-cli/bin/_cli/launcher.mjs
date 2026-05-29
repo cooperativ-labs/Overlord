@@ -137,24 +137,53 @@ const supportedAgents = ['claude', 'codex', 'cursor', 'antigravity', 'opencode',
 // Re-exported under clearer names for the direct-launch dispatcher in index.mjs.
 export { supportedAgents as BUILTIN_LAUNCH_AGENTS, agentIdentifierMap };
 
+/** @internal Test-only overrides for launcher subprocess calls. */
+export const launcherTestHooks = {
+  execFileSync: null,
+  shell: null,
+  platform: null
+};
+
 function shellQuote(value) {
   return `'${String(value).replace(/'/g, `'\\''`)}'`;
 }
 
+function resolveLauncherShell() {
+  const platform = launcherTestHooks.platform ?? process.platform;
+  if (platform === 'win32') {
+    return null;
+  }
+  return launcherTestHooks.shell ?? process.env.SHELL ?? 'sh';
+}
+
 /**
  * Run an agent binary, optionally routed through a user-defined pre-command
- * (e.g. `ollama` to run claude-code through Ollama). When a pre-command is set,
- * its first token becomes the executable and the agent binary + args follow it:
- *   preCommand="ollama"  →  ollama claude <args...>
+ * (e.g. `ollama` to run claude-code through Ollama). On POSIX shells, execute
+ * the wrapper through the user's interactive login shell so aliases, functions,
+ * and PATH customizations are available:
+ *   preCommand="agent-pod"  →  $SHELL -ilc 'agent-pod codex <args...>'
+ *
+ * The shell must be interactive (`-i`), not just a login shell (`-l`): zsh only
+ * sources ~/.zshrc — and bash only sources ~/.bashrc — for interactive shells.
+ * Wrappers like agent-pod are commonly installed as a shell alias in ~/.zshrc
+ * (its documented default), so a plain `-lc` login shell never sees them and
+ * fails with `command not found`.
  */
 function execAgentBinary(binary, args, opts, preCommand) {
+  const exec = launcherTestHooks.execFileSync ?? execFileSync;
   const pre = typeof preCommand === 'string' ? preCommand.trim() : '';
   if (pre) {
+    const shell = resolveLauncherShell();
+    if (shell) {
+      const command = [pre, shellQuote(binary), ...args.map(arg => shellQuote(arg))].join(' ');
+      exec(shell, ['-ilc', command], opts);
+      return;
+    }
     const preTokens = pre.split(/\s+/).filter(Boolean);
-    execFileSync(preTokens[0], [...preTokens.slice(1), binary, ...args], opts);
+    exec(preTokens[0], [...preTokens.slice(1), binary, ...args], opts);
     return;
   }
-  execFileSync(binary, args, opts);
+  exec(binary, args, opts);
 }
 
 function toTomlString(value) {
@@ -292,7 +321,7 @@ Options:
   --model <identifier>              Preferred model identifier
   --thinking <level>                Agent reasoning/effort level
   --flag <value>                    Extra agent flag (repeatable)
-  --pre-command <command>           Command to run before the agent binary (e.g. ollama)
+  --pre-command <command>           Shell command to run before the agent binary (e.g. ollama, agent-pod)
   --ssh-command <command>           Launch remotely over SSH by running ovld on the target host
   --remote-working-directory <path> Change to this path on the remote host before launch
   --server-multiplexer <none|tmux>  Wrap remote launches in tmux

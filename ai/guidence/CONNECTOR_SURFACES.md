@@ -195,6 +195,7 @@ Checklist:
 - Prompt text tells Codex to run `ovld auth repair` itself on protocol auth failures before asking the user to log in again or proceed without Overlord updates
 - Prompt text tells Codex to try `ovld auth repair` before `ovld auth login` when shared credentials look stale; `--organization-id <id>` is optional for choosing a different login default
 - Thinking/effort flag uses `-c model_reasoning_effort=<value>` (TOML inline format)
+- `--pre-command` runs through the user's interactive login shell (`$SHELL -ilc`) on POSIX before the Codex binary, so shell wrappers such as `agent-pod`, aliases, functions, and shell-initialized PATH entries resolve the same way they do in an interactive terminal. The shell must be interactive (`-i`), not just login (`-l`): zsh/bash only source `~/.zshrc` / `~/.bashrc` for interactive shells, which is where wrappers like agent-pod install their alias by default
 - Desktop local launches intentionally stay on the direct Electron path instead of delegating to `ovld launch`; `ovld launch` is the copy/paste surface and remote shell entrypoint
 - Desktop SSH launches use the same Codex expect/context-file behavior with the context file created on the remote host before Codex starts
 - `ovld launch` exports `TMPDIR`, `TMP`, `TEMP`, and `OVERLORD_TMPDIR` to the resolved project `.overlord/tmp/` directory when `--working-directory` is provided or the current directory is a registered project

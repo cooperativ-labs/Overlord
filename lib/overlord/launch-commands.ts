@@ -121,9 +121,9 @@ export function buildDirectAgentCommand(
   agent: LaunchAgentType,
   options: DirectAgentCommandOptions = {}
 ): string {
+  const preCommand = options.preCommand?.trim();
   const parts = [
-    ...(options.preCommand?.trim().split(/\s+/).filter(Boolean) ?? []),
-    directAgentBinary(agent)
+    preCommand ? `${preCommand} ${directAgentBinary(agent)}` : directAgentBinary(agent)
   ];
 
   if (options.includeModelPlaceholder ?? true) {

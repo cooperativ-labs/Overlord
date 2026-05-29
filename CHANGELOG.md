@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2605291450.0] - 2026-05-29:14:50
+
+### Added
+- None.
+
+### Fixed
+- None.
+
+### Changed
+- Run CLI **`--pre-command`** wrappers through your interactive login shell on POSIX (`$SHELL -ilc`) so aliases, functions, and PATH customizations (e.g. **agent-pod**) resolve the same way they do in a normal terminal.
+- Treat **`--pre-command`** as a single shell command in direct-agent command previews instead of splitting on whitespace.
+- Sync **Claude Mythos** models with extended thinking options and list them ahead of Opus in the agent model catalog.
+- Route Quick Task ticket submissions through **`requestTicketObjectiveExecutionAction`** and clarify CLI settings copy for local agent configuration.
+
+### Security
+- None.
+
+### Test
+- Add CLI launcher tests that **`--pre-command`** uses an interactive login shell on POSIX.
+
+### Documentation
+- Document POSIX **`--pre-command`** shell behavior in connector surfaces guidance and the CLI docs page.
+
 ## [0.2605291046.0] - 2026-05-29:10:46
 
 ### Added

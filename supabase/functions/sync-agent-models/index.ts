@@ -134,14 +134,15 @@ async function fetchClaudeModels(): Promise<AgentModelRow[]> {
 
 function extractClaudeThinkingOptions(modelId: string): string[] {
   // Claude 4.x models support extended thinking with budget levels.
-  if (modelId.includes('opus') || modelId.includes('sonnet') || modelId.includes('haiku')) {
+  if (modelId.includes('mythos') || modelId.includes('opus') || modelId.includes('sonnet')) {
     return ['low', 'medium', 'high', 'xhigh', 'max'];
   }
   return [];
 }
 
 function getClaudeSortOrder(modelId: string): number {
-  if (modelId.includes('opus-4')) return 10;
+  if (modelId.includes('mythos-4')) return 10;
+  if (modelId.includes('opus-4')) return 20;
   if (modelId.includes('sonnet-4')) return 20;
   if (modelId.includes('haiku-4')) return 30;
   if (modelId.includes('opus')) return 40;
