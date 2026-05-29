@@ -155,14 +155,16 @@ function getClaudeSortOrder(modelId: string): number {
 // Provider: OpenAI (Codex)
 // ---------------------------------------------------------------------------
 
-// OpenAI doesn't expose capabilities via API, so we use a lookup map
-const OPENAI_REASONING_MODELS: Record<string, string[]> = {
-  o3: ['low', 'medium', 'high'],
-  'o3-mini': ['low', 'medium', 'high'],
-  'o3-pro': ['low', 'medium', 'high'],
-  'o4-mini': ['low', 'medium', 'high'],
-  o4: ['low', 'medium', 'high']
-};
+// Reasoning-effort levels accepted by the Codex CLI's
+// `-c model_reasoning_effort="<level>"` flag for the gpt-5 / codex-5 family.
+// The OpenAI API does not expose these per-model, so we apply the full
+// supported ladder to every reasoning-capable Codex model.
+const CODEX_REASONING_LEVELS = ['minimal', 'low', 'medium', 'high', 'xhigh'];
+
+// Substrings identifying gpt-5 variants that are NOT reasoning models and so
+// must not advertise reasoning-effort options even though they pass the Codex
+// compatibility filter (e.g. the chat-tuned and search models).
+const OPENAI_NON_REASONING_MARKERS = ['chat-latest', 'search-api'];
 
 async function fetchOpenAIModels(): Promise<AgentModelRow[]> {
   if (!OPENAI_API_KEY) return [];
@@ -187,8 +189,8 @@ async function fetchOpenAIModels(): Promise<AgentModelRow[]> {
 
     if (!isCodexCompatibleModel(id)) continue;
 
-    // Check if this is a reasoning model
-    const thinkingOptions = getOpenAIThinkingOptions(id);
+    // Codex reasoning models expose model_reasoning_effort via the CLI.
+    const thinkingOptions = getCodexThinkingOptions(id);
     const isRecommended = id.startsWith('gpt-5') || id.startsWith('codex-5');
 
     models.push({
@@ -206,12 +208,12 @@ async function fetchOpenAIModels(): Promise<AgentModelRow[]> {
   return models;
 }
 
-function getOpenAIThinkingOptions(modelId: string): string[] {
+function getCodexThinkingOptions(modelId: string): string[] {
   const id = modelId.toLowerCase();
-  for (const [prefix, options] of Object.entries(OPENAI_REASONING_MODELS)) {
-    if (id.startsWith(prefix)) return options;
+  if (OPENAI_NON_REASONING_MARKERS.some(marker => id.includes(marker))) {
+    return [];
   }
-  return [];
+  return [...CODEX_REASONING_LEVELS];
 }
 
 function getOpenAISortOrder(modelId: string): number {
@@ -378,10 +380,14 @@ Deno.serve(async (req: Request) => {
     results.gemini = { count: 0 };
   }
 
-  // Upsert all models
+  // Upsert all models. ignoreDuplicates defaults to false, so on a
+  // (agent_type, model_id) conflict every column — including thinking_options —
+  // is overwritten. This guarantees each sync ALWAYS refreshes the reasoning
+  // levels for existing rows, not just newly inserted ones.
   if (allModels.length > 0) {
     const { error } = await supabase.from('agent_models').upsert(allModels, {
-      onConflict: 'agent_type,model_id'
+      onConflict: 'agent_type,model_id',
+      ignoreDuplicates: false
     });
 
     if (error) {
