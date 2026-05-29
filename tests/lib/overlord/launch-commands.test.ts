@@ -1,5 +1,6 @@
 import {
   buildAgentLaunchCommand,
+  buildDirectAgentCommand,
   buildLaunchCommands,
   buildNativeResumeCommand,
   buildRawLaunchCommand
@@ -32,6 +33,27 @@ describe('buildAgentLaunchCommand', () => {
     ).toBe(
       "ovld launch claude --ticket-id 'ticket-123' --ssh-command 'ssh devbox' --remote-working-directory '/srv/app' --server-multiplexer tmux --tmux-command 'tmux new-session -A -s overlord bash {script}'"
     );
+  });
+});
+
+describe('buildDirectAgentCommand', () => {
+  it('shows the native Claude invocation with pre-command, placeholders, and flags', () => {
+    expect(
+      buildDirectAgentCommand('claude', {
+        preCommand: 'ai-pod',
+        flags: ['--dangerously-skip-permissions']
+      })
+    ).toBe(
+      'ai-pod claude --model <model> --effort <effort> --dangerously-skip-permissions <prompt>'
+    );
+  });
+
+  it('uses agent-specific prompt and effort conventions', () => {
+    expect(buildDirectAgentCommand('codex')).toBe(
+      'codex --model <model> -c model_reasoning_effort="<effort>" <prompt>'
+    );
+    expect(buildDirectAgentCommand('opencode')).toBe('opencode --model <model> --prompt <prompt>');
+    expect(buildDirectAgentCommand('antigravity')).toBe('agy --prompt-interactive <prompt>');
   });
 });
 

@@ -2,6 +2,13 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import {
+  DEFAULT_RUNNER_TERMINAL_PROFILE,
+  normalizeRunnerTerminalProfile,
+  RUNNER_TERMINAL_PROFILE_PREFERENCE_KEY,
+  type RunnerTerminalProfile,
+  runnerTerminalProfileToJson
+} from '@/lib/helpers/runner-terminal-settings';
 import { createClientForRequest } from '@/supabase/utils/server';
 import type { Database } from '@/types/database.types';
 
@@ -160,6 +167,74 @@ export async function saveEditorSchemeAction(editorScheme: string): Promise<stri
   }
 
   return upsertProfileEditorScheme(supabase, user.id, editorScheme);
+}
+
+export async function getRunnerTerminalProfileAction(): Promise<RunnerTerminalProfile> {
+  const supabase = await createClientForRequest();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+  if (!user) {
+    throw new Error('Unauthorized');
+  }
+
+  const settings = await fetchProfileSettings(supabase, user.id);
+  const preferences =
+    settings?.preferences && typeof settings.preferences === 'object'
+      ? (settings.preferences as Record<string, unknown>)
+      : {};
+  return normalizeRunnerTerminalProfile(preferences[RUNNER_TERMINAL_PROFILE_PREFERENCE_KEY]);
+}
+
+export async function saveRunnerTerminalProfileAction(
+  profile: RunnerTerminalProfile
+): Promise<RunnerTerminalProfile> {
+  const supabase = await createClientForRequest();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+  if (!user) {
+    throw new Error('Unauthorized');
+  }
+
+  const { data: existing, error: loadError } = await supabase
+    .from('profiles')
+    .select('preferences')
+    .eq('id', user.id)
+    .maybeSingle();
+  if (loadError) {
+    throw new Error(loadError.message ?? 'Failed to load profile settings.');
+  }
+
+  const current =
+    existing?.preferences &&
+    typeof existing.preferences === 'object' &&
+    !Array.isArray(existing.preferences)
+      ? (existing.preferences as Record<string, unknown>)
+      : {};
+  const nextProfile = normalizeRunnerTerminalProfile(profile);
+  const preferences = {
+    ...current,
+    [RUNNER_TERMINAL_PROFILE_PREFERENCE_KEY]: runnerTerminalProfileToJson(nextProfile)
+  };
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .upsert({ id: user.id, preferences }, { onConflict: 'id' })
+    .select('preferences')
+    .single();
+
+  if (error) {
+    throw new Error(error.message ?? 'Failed to save runner terminal settings.');
+  }
+
+  const savedPreferences =
+    data?.preferences && typeof data.preferences === 'object' && !Array.isArray(data.preferences)
+      ? (data.preferences as Record<string, unknown>)
+      : {};
+  return normalizeRunnerTerminalProfile(
+    savedPreferences[RUNNER_TERMINAL_PROFILE_PREFERENCE_KEY] ?? DEFAULT_RUNNER_TERMINAL_PROFILE
+  );
 }
 
 export async function getDefaultProjectAction(): Promise<string | null> {

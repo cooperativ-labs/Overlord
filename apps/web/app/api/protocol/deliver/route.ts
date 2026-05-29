@@ -253,9 +253,9 @@ export async function POST(request: Request) {
 
         // Emit status_change event so KanbanBoard realtime listener triggers
         // the review sound and highlights has_unopened_review for agent deliveries.
-        // Carry the agent's delivery summary forward so the notification classifier
-        // (and the activity log entry it renders) reflect what was actually delivered.
-        const reviewSummary = summary || 'Ticket delivered and moved to review.';
+        // Keep the detailed reviewer narrative on the deliver event itself so the
+        // review transition only contributes new status information.
+        const reviewSummary = 'Ticket delivered and moved to review.';
         const { data: statusChangeEvent } = await supabase
           .from('ticket_events')
           .insert({

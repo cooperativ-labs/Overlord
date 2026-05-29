@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { internalErrorResponse, parseProtocolBody } from '@/app/api/protocol/_lib';
+import { normalizeRunnerTerminalProfile } from '@/lib/helpers/runner-terminal-settings';
 import { createExecutionRequest } from '@/lib/overlord/execution-requests';
 import { resolveTicketId } from '@/lib/overlord/protocol-db';
 import { requestExecutionSchema } from '@/lib/overlord/validation';
@@ -37,6 +38,9 @@ export async function POST(request: Request) {
       remoteWorkingDirectory: parsed.data.remoteWorkingDirectory ?? null,
       serverMultiplexer: parsed.data.serverMultiplexer ?? null,
       tmuxCommand: parsed.data.tmuxCommand ?? null,
+      runnerTerminalProfile: parsed.data.runnerTerminalProfile
+        ? normalizeRunnerTerminalProfile(parsed.data.runnerTerminalProfile)
+        : null,
       targetKind: parsed.data.targetKind,
       targetExecutionTargetId: parsed.data.targetDeviceId ?? null,
       targetResourceId: parsed.data.targetResourceId ?? null

@@ -2,6 +2,32 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2605291046.0] - 2026-05-29:10:46
+
+### Added
+- Add shared native agent command previews via `buildDirectAgentCommand` in CLI settings, terminal settings, and the marketing demo.
+- Add per-user **runner terminal profile** (terminal app, launch mode, custom hotkey, tmux host and command) stored in profile preferences for the local `ovld` runner.
+- Add web settings actions to load and save runner terminal profile outside the desktop app.
+- Add macOS terminal launcher support in `ovld` runner so claimed executions can open Terminal, iTerm, Warp, Ghostty, Kitty, Hyper, Alacritty, custom apps, or tmux with your saved profile.
+
+### Fixed
+- None.
+
+### Changed
+- Let **Terminal** settings in the web app configure the local runner even when not using the desktop app; copy explains settings apply to your local runner.
+- Attach the saved runner terminal profile to ticket execution requests and protocol `request-execution` / `claim-execution` launch params so remote claims honor your terminal preferences.
+- Update marketing demo CLI samples to use native direct-agent command previews and include Antigravity and Pi in the agent list.
+
+### Security
+- None.
+
+### Test
+- Add CLI runner tests for terminal open-command building and terminal-backed launch completion.
+- Add unit tests for `buildDirectAgentCommand`.
+
+### Documentation
+- Update connector surfaces guidance for launch-command native previews and demo settings paths.
+
 ## [0.2605290912.0] - 2026-05-29:09:12
 
 ### Added

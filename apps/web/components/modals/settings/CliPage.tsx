@@ -59,6 +59,7 @@ import {
   type LaunchAgentType
 } from '@/lib/helpers/agent-types';
 import { extractTemplateTokens } from '@/lib/helpers/custom-agent';
+import { buildDirectAgentCommand } from '@/lib/overlord/launch-commands';
 import type { CustomAgent, CustomAgentPlaceholder } from '@/lib/schemas/agent-config';
 import { cn } from '@/lib/utils';
 
@@ -1079,11 +1080,10 @@ export function CliPage({ open }: { open: boolean }) {
   }
 
   function buildLocalAgentCommand(agent: string): string {
-    const preCommand = agentPreCommands[agent]?.trim();
-    const flags = (agentFlags[agent] ?? []).join(' ');
-    return ['ovld restart', agent, preCommand ? `--pre-command ${preCommand}` : '', flags]
-      .filter(Boolean)
-      .join(' ');
+    return buildDirectAgentCommand(agent as LaunchAgentType, {
+      preCommand: agentPreCommands[agent],
+      flags: agentFlags[agent] ?? []
+    });
   }
 
   async function handleCopyCommand() {

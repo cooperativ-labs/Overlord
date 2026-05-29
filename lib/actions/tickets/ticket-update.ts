@@ -12,6 +12,8 @@ import { createTicketSchema } from '@/lib/overlord/validation';
 import { createClientForRequest } from '@/supabase/utils/server';
 import type { Database } from '@/types/database.types';
 
+import { getRunnerTerminalProfileAction } from '../profile-settings';
+
 import {
   assertTicketAccess,
   revalidateTicketBoards,
@@ -104,6 +106,7 @@ export async function requestTicketObjectiveExecutionAction(input: {
       remoteWorkingDirectory: input.remoteWorkingDirectory ?? null,
       serverMultiplexer: input.serverMultiplexer ?? null,
       tmuxCommand: input.tmuxCommand ?? null,
+      runnerTerminalProfile: await getRunnerTerminalProfileAction(),
       targetKind: input.sshCommand?.trim() ? 'ssh' : 'any',
       targetExecutionTargetId: input.targetExecutionTargetId ?? null
     });

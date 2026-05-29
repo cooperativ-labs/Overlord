@@ -479,6 +479,7 @@ export const requestExecutionSchema = z.object({
   remoteWorkingDirectory: z.string().trim().max(1024).nullable().optional(),
   serverMultiplexer: z.enum(['none', 'tmux']).optional(),
   tmuxCommand: z.string().trim().max(1024).nullable().optional(),
+  runnerTerminalProfile: z.record(z.string(), z.unknown()).nullable().optional(),
   targetKind: executionRequestTargetKindSchema.optional().default('any'),
   targetDeviceId: z.string().uuid().nullable().optional(),
   targetResourceId: z.string().uuid().nullable().optional()

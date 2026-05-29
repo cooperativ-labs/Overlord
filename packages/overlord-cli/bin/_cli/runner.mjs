@@ -8,11 +8,13 @@ import path from 'node:path';
 
 const OVLD_ENTRY = process.argv[1];
 const DEVICE_FILE = path.join(os.homedir(), '.ovld', 'device.json');
+const DEFAULT_TMUX_COMMAND = 'tmux new-session bash {script}';
 
 /** @internal Test-only overrides for protocol/launch subprocess calls. */
 export const runnerTestHooks = {
   execFileSync: null,
-  spawn: null
+  spawn: null,
+  platform: null
 };
 
 function printRunnerHelp(primaryCommand = 'ovld') {
@@ -136,6 +138,162 @@ export function buildLaunchArgs(launch) {
   return args;
 }
 
+function shellQuote(value) {
+  return `'${String(value).replace(/'/g, `'\\''`)}'`;
+}
+
+function appleScriptString(value) {
+  return `"${String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+}
+
+function normalizeRunnerTerminalProfile(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  return {
+    terminalApp: typeof value.terminalApp === 'string' ? value.terminalApp : 'default',
+    terminalLaunchMode:
+      typeof value.terminalLaunchMode === 'string' ? value.terminalLaunchMode : 'tab',
+    terminalCustomHotkey:
+      typeof value.terminalCustomHotkey === 'string' ? value.terminalCustomHotkey : '',
+    customTerminalApp:
+      typeof value.customTerminalApp === 'string' ? value.customTerminalApp : '',
+    terminalTmuxHostApp:
+      typeof value.terminalTmuxHostApp === 'string' ? value.terminalTmuxHostApp : 'terminal',
+    customTerminalTmuxHostApp:
+      typeof value.customTerminalTmuxHostApp === 'string'
+        ? value.customTerminalTmuxHostApp
+        : '',
+    terminalTmuxCommand:
+      typeof value.terminalTmuxCommand === 'string' && value.terminalTmuxCommand.trim()
+        ? value.terminalTmuxCommand
+        : DEFAULT_TMUX_COMMAND
+  };
+}
+
+function buildRunnerLaunchShellCommand(args, deviceFingerprint) {
+  return [
+    `export OVERLORD_DEVICE_FINGERPRINT=${shellQuote(deviceFingerprint)}`,
+    `exec ${shellQuote(process.execPath)} ${[OVLD_ENTRY, ...args].map(shellQuote).join(' ')}`
+  ].join('\n');
+}
+
+function writeRunnerLaunchScript(launchCommand) {
+  const dir = path.join(os.tmpdir(), 'ovld-runner');
+  fs.mkdirSync(dir, { recursive: true });
+  const scriptPath = path.join(
+    dir,
+    `launch-${process.pid}-${Date.now()}-${crypto.randomUUID()}.sh`
+  );
+  fs.writeFileSync(scriptPath, `#!/usr/bin/env bash\nset -e\n${launchCommand}\n`, {
+    mode: 0o700
+  });
+  return scriptPath;
+}
+
+function buildTmuxCommand(template, scriptPath) {
+  const resolvedTemplate =
+    typeof template === 'string' && template.trim().includes('{script}')
+      ? template.trim()
+      : DEFAULT_TMUX_COMMAND;
+  return resolvedTemplate.replaceAll('{script}', shellQuote(scriptPath));
+}
+
+function terminalAppName(profile) {
+  if (profile.terminalApp === 'custom') return profile.customTerminalApp.trim();
+  const appMap = {
+    default: 'Terminal',
+    terminal: 'Terminal',
+    iterm: 'iTerm',
+    warp: 'Warp',
+    ghostty: 'Ghostty',
+    alacritty: 'Alacritty',
+    kitty: 'Kitty',
+    hyper: 'Hyper'
+  };
+  return appMap[profile.terminalApp] ?? '';
+}
+
+export function buildRunnerTerminalOpenCommand(
+  profileValue,
+  launchCommand,
+  platform = process.platform
+) {
+  const profile = normalizeRunnerTerminalProfile(profileValue);
+  if (!profile) return null;
+
+  const command =
+    profile.terminalApp === 'tmux'
+      ? buildTmuxCommand(profile.terminalTmuxCommand, writeRunnerLaunchScript(launchCommand))
+      : launchCommand;
+
+  if (profile.terminalApp === 'tmux' && platform !== 'darwin') {
+    return command;
+  }
+
+  if (platform !== 'darwin') return null;
+
+  const appName =
+    profile.terminalApp === 'tmux'
+      ? terminalAppName({
+          ...profile,
+          terminalApp: profile.terminalTmuxHostApp,
+          customTerminalApp: profile.customTerminalTmuxHostApp
+        })
+      : terminalAppName(profile);
+  if (!appName) return null;
+
+  if (appName === 'iTerm') {
+    return [
+      'osascript',
+      '-e',
+      shellQuote('tell application "iTerm"'),
+      '-e',
+      shellQuote(`create window with default profile command ${appleScriptString(command)}`),
+      '-e',
+      shellQuote('activate'),
+      '-e',
+      shellQuote('end tell')
+    ].join(' ');
+  }
+
+  return [
+    'osascript',
+    '-e',
+    shellQuote(
+      `tell application ${appleScriptString(appName)} to do script ${appleScriptString(command)}`
+    ),
+    '-e',
+    shellQuote(`tell application ${appleScriptString(appName)} to activate`)
+  ].join(' ');
+}
+
+function spawnLaunchProcess(args, claim, deviceFingerprint) {
+  const spawnImpl = runnerTestHooks.spawn ?? spawn;
+  const launchCommand = buildRunnerLaunchShellCommand(args, deviceFingerprint);
+  const terminalCommand = buildRunnerTerminalOpenCommand(
+    claim.launch?.runnerTerminalProfile,
+    launchCommand,
+    runnerTestHooks.platform ?? process.platform
+  );
+
+  if (!terminalCommand) {
+    return {
+      child: spawnImpl(process.execPath, [OVLD_ENTRY, ...args], {
+        stdio: 'inherit',
+        env: { ...process.env, OVERLORD_DEVICE_FINGERPRINT: deviceFingerprint }
+      }),
+      completeOnClose: false
+    };
+  }
+
+  return {
+    child: spawnImpl('sh', ['-lc', terminalCommand], {
+      stdio: 'inherit',
+      env: { ...process.env, OVERLORD_DEVICE_FINGERPRINT: deviceFingerprint }
+    }),
+    completeOnClose: true
+  };
+}
+
 export async function launchClaimedRequest(claim, deviceFingerprint) {
   const requestId = claim.request?.id;
   if (!requestId || !claim.launch?.agent || !claim.launch?.ticketId) return false;
@@ -146,13 +304,10 @@ export async function launchClaimedRequest(claim, deviceFingerprint) {
   );
 
   await new Promise((resolve, reject) => {
-    const spawnImpl = runnerTestHooks.spawn ?? spawn;
-    const child = spawnImpl(process.execPath, [OVLD_ENTRY, ...args], {
-      stdio: 'inherit',
-      env: { ...process.env, OVERLORD_DEVICE_FINGERPRINT: deviceFingerprint }
-    });
+    const { child, completeOnClose } = spawnLaunchProcess(args, claim, deviceFingerprint);
 
     child.once('spawn', () => {
+      if (completeOnClose) return;
       try {
         completeLaunch(requestId, deviceFingerprint);
       } catch (error) {
@@ -170,6 +325,19 @@ export async function launchClaimedRequest(claim, deviceFingerprint) {
     });
 
     child.once('close', code => {
+      if (completeOnClose && (!code || code === 0)) {
+        try {
+          completeLaunch(requestId, deviceFingerprint);
+        } catch (error) {
+          process.stderr.write(`[runner] failed to mark request launched: ${error}\n`);
+        }
+      } else if (completeOnClose && code) {
+        try {
+          failLaunch(requestId, deviceFingerprint, `terminal launcher exited with code ${code}`);
+        } catch {
+          // Preserve the launcher exit below.
+        }
+      }
       if (code && code !== 0) {
         process.stderr.write(`[runner] launch process exited with code ${code}\n`);
       }

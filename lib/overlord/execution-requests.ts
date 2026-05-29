@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { isLaunchAgentTypeValue, type LaunchAgentType } from '@/lib/helpers/agent-types';
+import type { RunnerTerminalProfile } from '@/lib/helpers/runner-terminal-settings';
 import { parseObjectiveAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
 import type { Database, Json } from '@/types/database.types';
 
@@ -26,6 +27,7 @@ type RequestExecutionInput = {
   remoteWorkingDirectory?: string | null;
   serverMultiplexer?: 'none' | 'tmux' | null;
   tmuxCommand?: string | null;
+  runnerTerminalProfile?: RunnerTerminalProfile | null;
   targetKind?: 'any' | 'local' | 'ssh';
   targetExecutionTargetId?: string | null;
   targetResourceId?: string | null;
@@ -74,7 +76,8 @@ function buildLaunchParams(input: RequestExecutionInput): Json {
     sshCommand: normalizeOptionalText(input.sshCommand),
     remoteWorkingDirectory: normalizeOptionalText(input.remoteWorkingDirectory),
     serverMultiplexer: input.serverMultiplexer ?? null,
-    tmuxCommand: normalizeOptionalText(input.tmuxCommand)
+    tmuxCommand: normalizeOptionalText(input.tmuxCommand),
+    runnerTerminalProfile: input.runnerTerminalProfile ?? null
   };
 }
 

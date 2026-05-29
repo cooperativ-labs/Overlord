@@ -50,6 +50,7 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { LAUNCH_AGENT_VALUES, type LaunchAgentType } from '@/lib/helpers/agent-types';
+import { buildDirectAgentCommand } from '@/lib/overlord/launch-commands';
 
 type NavItem = { name: string; icon: React.ElementType };
 
@@ -273,7 +274,7 @@ function DemoProfileSettings() {
 }
 
 function DemoCliSettings() {
-  const [selectedLocalAgent, setSelectedLocalAgent] = useState('claude');
+  const [selectedLocalAgent, setSelectedLocalAgent] = useState<LaunchAgentType>('claude');
   const [flagInput, setFlagInput] = useState('');
   const [agentFlags, setAgentFlags] = useState<Record<string, string[]>>({
     claude: ['--enable-auto-mode'],
@@ -284,11 +285,13 @@ function DemoCliSettings() {
   const [commandCopied, setCommandCopied] = useState(false);
 
   const agents: readonly LaunchAgentType[] = LAUNCH_AGENT_VALUES;
-  const agentLabels: Record<string, string> = {
+  const agentLabels: Record<LaunchAgentType, string> = {
     claude: 'Claude',
+    antigravity: 'Antigravity',
     cursor: 'Cursor',
     codex: 'Codex',
-    opencode: 'OpenCode'
+    opencode: 'OpenCode',
+    pi: 'Pi'
   };
 
   const pluginGroups = [
@@ -423,8 +426,9 @@ function DemoCliSettings() {
   }
 
   function handleCopyCommand() {
-    const flags = (agentFlags[selectedLocalAgent] ?? []).join(' ');
-    const command = `ovld restart ${selectedLocalAgent}${flags ? ` ${flags}` : ''}`;
+    const command = buildDirectAgentCommand(selectedLocalAgent, {
+      flags: agentFlags[selectedLocalAgent] ?? []
+    });
     void navigator.clipboard.writeText(command).catch(() => undefined);
     setCommandCopied(true);
     setTimeout(() => setCommandCopied(false), 2000);
@@ -484,7 +488,10 @@ function DemoCliSettings() {
             --enable-auto-mode enabled by default.
           </p>
         </div>
-        <Select value={selectedLocalAgent} onValueChange={setSelectedLocalAgent}>
+        <Select
+          value={selectedLocalAgent}
+          onValueChange={value => setSelectedLocalAgent(value as LaunchAgentType)}
+        >
           <SelectTrigger>
             <SelectValue placeholder="Select agent" />
           </SelectTrigger>
@@ -561,11 +568,9 @@ function DemoCliSettings() {
               </button>
             </div>
             <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs">
-              {`ovld restart ${selectedLocalAgent}${
-                (agentFlags[selectedLocalAgent] ?? []).length > 0
-                  ? ` ${(agentFlags[selectedLocalAgent] ?? []).join(' ')}`
-                  : ''
-              }`}
+              {buildDirectAgentCommand(selectedLocalAgent, {
+                flags: agentFlags[selectedLocalAgent] ?? []
+              })}
             </pre>
           </div>
         </div>

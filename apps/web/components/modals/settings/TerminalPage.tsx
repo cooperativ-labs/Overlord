@@ -15,22 +15,23 @@ import {
   SelectValue
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { getEditorSchemeAction, saveEditorSchemeAction } from '@/lib/actions/profile-settings';
+import {
+  getEditorSchemeAction,
+  getRunnerTerminalProfileAction,
+  saveEditorSchemeAction,
+  saveRunnerTerminalProfileAction
+} from '@/lib/actions/profile-settings';
 import {
   DEFAULT_EDITOR_SCHEME,
   EDITOR_SCHEME_OPTIONS,
   getEditorSchemeLabel
 } from '@/lib/helpers/editor-scheme';
+import {
+  DEFAULT_RUNNER_TERMINAL_PROFILE,
+  type RunnerTerminalProfile
+} from '@/lib/helpers/runner-terminal-settings';
 
-type TerminalProfileState = {
-  terminalApp: string;
-  terminalLaunchMode: string;
-  terminalCustomHotkey: string;
-  customTerminalApp: string;
-  terminalTmuxHostApp: string;
-  customTerminalTmuxHostApp: string;
-  terminalTmuxCommand: string;
-};
+type TerminalProfileState = RunnerTerminalProfile;
 
 const externalTerminalAppOptions = [
   { value: 'default', label: 'System Default' },
@@ -75,15 +76,7 @@ const PROFILE_KEYS = {
   tmuxCommand: 'externalTerminalTmuxCommand'
 } as const;
 
-const DEFAULT_TERMINAL_PROFILE: TerminalProfileState = {
-  terminalApp: 'default',
-  terminalLaunchMode: 'tab',
-  terminalCustomHotkey: '',
-  customTerminalApp: '',
-  terminalTmuxHostApp: 'terminal',
-  customTerminalTmuxHostApp: '',
-  terminalTmuxCommand: DEFAULT_TMUX_COMMAND
-};
+const DEFAULT_TERMINAL_PROFILE: TerminalProfileState = DEFAULT_RUNNER_TERMINAL_PROFILE;
 
 export function TerminalPage({ open }: { open: boolean }) {
   const { api, isElectron } = useElectron();
@@ -133,25 +126,28 @@ export function TerminalPage({ open }: { open: boolean }) {
   }
 
   useEffect(() => {
-    if (!api || !open) return;
-    Promise.all([
-      api.settings.get<string>(PROFILE_KEYS.app),
-      api.settings.get<string>(PROFILE_KEYS.launchMode),
-      api.settings.get<string>(PROFILE_KEYS.customApp),
-      api.settings.get<string>(PROFILE_KEYS.customHotkey),
-      api.settings.get<string>(PROFILE_KEYS.tmuxHostApp),
-      api.settings.get<string>(PROFILE_KEYS.customTmuxHostApp),
-      api.settings.get<string>(PROFILE_KEYS.tmuxCommand)
-    ]).then(
-      ([
-        appValue,
-        launchModeValue,
-        customAppValue,
-        customHotkeyValue,
-        tmuxHostAppValue,
-        customTmuxHostAppValue,
-        tmuxCommandValue
-      ]) => {
+    if (!open) return;
+    let cancelled = false;
+    async function loadTerminalProfile() {
+      if (api) {
+        const [
+          appValue,
+          launchModeValue,
+          customAppValue,
+          customHotkeyValue,
+          tmuxHostAppValue,
+          customTmuxHostAppValue,
+          tmuxCommandValue
+        ] = await Promise.all([
+          api.settings.get<string>(PROFILE_KEYS.app),
+          api.settings.get<string>(PROFILE_KEYS.launchMode),
+          api.settings.get<string>(PROFILE_KEYS.customApp),
+          api.settings.get<string>(PROFILE_KEYS.customHotkey),
+          api.settings.get<string>(PROFILE_KEYS.tmuxHostApp),
+          api.settings.get<string>(PROFILE_KEYS.customTmuxHostApp),
+          api.settings.get<string>(PROFILE_KEYS.tmuxCommand)
+        ]);
+        if (cancelled) return;
         setTerminalProfile({
           terminalApp: appValue || DEFAULT_TERMINAL_PROFILE.terminalApp,
           terminalLaunchMode: launchModeValue || DEFAULT_TERMINAL_PROFILE.terminalLaunchMode,
@@ -173,27 +169,41 @@ export function TerminalPage({ open }: { open: boolean }) {
               ? tmuxCommandValue
               : DEFAULT_TERMINAL_PROFILE.terminalTmuxCommand
         });
+        return;
       }
-    );
+
+      const savedProfile = await getRunnerTerminalProfileAction();
+      if (!cancelled) setTerminalProfile(savedProfile);
+    }
+    void loadTerminalProfile();
+    return () => {
+      cancelled = true;
+    };
   }, [api, open]);
 
   async function updateTerminalProfile(field: keyof TerminalProfileState, value: string) {
-    setTerminalProfile(current => ({
-      ...current,
+    const nextProfile = {
+      ...terminalProfile,
       [field]: value
-    }));
-
-    const settingKeyByField: Record<keyof TerminalProfileState, string> = {
-      terminalApp: PROFILE_KEYS.app,
-      terminalLaunchMode: PROFILE_KEYS.launchMode,
-      terminalCustomHotkey: PROFILE_KEYS.customHotkey,
-      customTerminalApp: PROFILE_KEYS.customApp,
-      terminalTmuxHostApp: PROFILE_KEYS.tmuxHostApp,
-      customTerminalTmuxHostApp: PROFILE_KEYS.customTmuxHostApp,
-      terminalTmuxCommand: PROFILE_KEYS.tmuxCommand
     };
-    const settingKey = settingKeyByField[field];
-    await api?.settings.set(settingKey, value);
+    setTerminalProfile(nextProfile);
+
+    if (api) {
+      const settingKeyByField: Record<keyof TerminalProfileState, string> = {
+        terminalApp: PROFILE_KEYS.app,
+        terminalLaunchMode: PROFILE_KEYS.launchMode,
+        terminalCustomHotkey: PROFILE_KEYS.customHotkey,
+        customTerminalApp: PROFILE_KEYS.customApp,
+        terminalTmuxHostApp: PROFILE_KEYS.tmuxHostApp,
+        customTerminalTmuxHostApp: PROFILE_KEYS.customTmuxHostApp,
+        terminalTmuxCommand: PROFILE_KEYS.tmuxCommand
+      };
+      await api.settings.set(settingKeyByField[field], value);
+      return;
+    }
+
+    const saved = await saveRunnerTerminalProfileAction(nextProfile);
+    setTerminalProfile(saved);
   }
 
   function handleTerminalCustomHotkeyKeyDown(event: KeyboardEvent<HTMLInputElement>) {
@@ -269,7 +279,7 @@ export function TerminalPage({ open }: { open: boolean }) {
               clipRule="evenodd"
             />
           </svg>
-          Terminal agent controls are only available in the Overlord desktop app.
+          These settings are saved for your local runner.
         </div>
       )}
       <div className="grid gap-4 rounded-lg border p-4">
@@ -284,7 +294,6 @@ export function TerminalPage({ open }: { open: boolean }) {
           <Select
             value={profile.terminalApp}
             onValueChange={value => void updateTerminalProfile('terminalApp', value)}
-            disabled={!isElectron}
           >
             <SelectTrigger id="local-terminal-app">
               <SelectValue placeholder="Select terminal" />
@@ -307,7 +316,6 @@ export function TerminalPage({ open }: { open: boolean }) {
                 onChange={event =>
                   void updateTerminalProfile('customTerminalApp', event.target.value)
                 }
-                disabled={!isElectron}
               />
               <p className="text-xs text-muted-foreground">
                 Overlord will open this app and type the launch command into the active terminal
@@ -322,7 +330,6 @@ export function TerminalPage({ open }: { open: boolean }) {
                 <Select
                   value={profile.terminalTmuxHostApp}
                   onValueChange={value => void updateTerminalProfile('terminalTmuxHostApp', value)}
-                  disabled={!isElectron}
                 >
                   <SelectTrigger id="local-tmux-host-app">
                     <SelectValue placeholder="Select terminal" />
@@ -348,7 +355,6 @@ export function TerminalPage({ open }: { open: boolean }) {
                     onChange={event =>
                       void updateTerminalProfile('customTerminalTmuxHostApp', event.target.value)
                     }
-                    disabled={!isElectron}
                   />
                 </div>
               )}
@@ -361,7 +367,6 @@ export function TerminalPage({ open }: { open: boolean }) {
                   onChange={event =>
                     void updateTerminalProfile('terminalTmuxCommand', event.target.value)
                   }
-                  disabled={!isElectron}
                   rows={2}
                 />
                 <p className="text-xs text-muted-foreground">
@@ -378,7 +383,6 @@ export function TerminalPage({ open }: { open: boolean }) {
               <Select
                 value={profile.terminalLaunchMode}
                 onValueChange={value => void updateTerminalProfile('terminalLaunchMode', value)}
-                disabled={!isElectron}
               >
                 <SelectTrigger id="local-terminal-launch-mode">
                   <SelectValue placeholder="Select behavior" />
@@ -428,7 +432,6 @@ export function TerminalPage({ open }: { open: boolean }) {
               value={profile.terminalCustomHotkey}
               onKeyDown={event => handleTerminalCustomHotkeyKeyDown(event)}
               readOnly
-              disabled={!isElectron}
             />
             <p className="text-xs text-muted-foreground">
               Overlord will activate {selectedTerminalLabel}, send this hotkey to trigger your

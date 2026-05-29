@@ -7,6 +7,7 @@ import test from 'node:test';
 
 import {
   buildLaunchArgs,
+  buildRunnerTerminalOpenCommand,
   launchClaimedRequest,
   readOrCreateDeviceFingerprint,
   runnerTestHooks,
@@ -91,6 +92,47 @@ test('buildLaunchArgs includes feed post fields when present', () => {
   );
 });
 
+test('buildRunnerTerminalOpenCommand returns null without a runner terminal profile', () => {
+  assert.equal(buildRunnerTerminalOpenCommand(null, 'ovld launch codex', 'darwin'), null);
+});
+
+test('buildRunnerTerminalOpenCommand maps web terminal profile to macOS Terminal', () => {
+  const command = buildRunnerTerminalOpenCommand(
+    {
+      terminalApp: 'terminal',
+      terminalLaunchMode: 'tab',
+      terminalCustomHotkey: '',
+      customTerminalApp: '',
+      terminalTmuxHostApp: 'terminal',
+      customTerminalTmuxHostApp: '',
+      terminalTmuxCommand: 'tmux new-session bash {script}'
+    },
+    'ovld launch codex',
+    'darwin'
+  );
+  assert.match(command, /^osascript /);
+  assert.match(command, /Terminal/);
+  assert.match(command, /ovld launch codex/);
+});
+
+test('buildRunnerTerminalOpenCommand maps tmux profile to a launch script', () => {
+  const command = buildRunnerTerminalOpenCommand(
+    {
+      terminalApp: 'tmux',
+      terminalLaunchMode: 'tab',
+      terminalCustomHotkey: '',
+      customTerminalApp: '',
+      terminalTmuxHostApp: 'terminal',
+      customTerminalTmuxHostApp: '',
+      terminalTmuxCommand: 'tmux new-session bash {script}'
+    },
+    'ovld launch codex',
+    'linux'
+  );
+  assert.match(command, /^tmux new-session bash '/);
+  assert.match(command, /ovld-runner\/launch-/);
+});
+
 test('readOrCreateDeviceFingerprint reuses an explicit flag', () => {
   assert.equal(readOrCreateDeviceFingerprint({ 'device-fingerprint': 'fp-explicit' }), 'fp-explicit');
 });
@@ -169,6 +211,52 @@ test('launchClaimedRequest completes launch and marks the request launched on sp
   } finally {
     runnerTestHooks.execFileSync = null;
     runnerTestHooks.spawn = null;
+    runnerTestHooks.platform = null;
+  }
+});
+
+test('launchClaimedRequest completes terminal-profile launches after opener exits', async () => {
+  const protocolCalls = [];
+  runnerTestHooks.platform = 'darwin';
+  runnerTestHooks.execFileSync = (_file, argv) => {
+    protocolCalls.push(argv[2]);
+    return '{}';
+  };
+  runnerTestHooks.spawn = (_file, argv) => {
+    assert.equal(_file, 'sh');
+    assert.deepEqual(argv.slice(0, 1), ['-lc']);
+    const child = new EventEmitter();
+    queueMicrotask(() => child.emit('spawn'));
+    queueMicrotask(() => child.emit('close', 0));
+    return child;
+  };
+
+  try {
+    await launchClaimedRequest(
+      {
+        request: { id: 'req-terminal-launch' },
+        launch: {
+          ticketId: '1:53',
+          agent: 'codex',
+          runnerTerminalProfile: {
+            terminalApp: 'terminal',
+            terminalLaunchMode: 'tab',
+            terminalCustomHotkey: '',
+            customTerminalApp: '',
+            terminalTmuxHostApp: 'terminal',
+            customTerminalTmuxHostApp: '',
+            terminalTmuxCommand: 'tmux new-session bash {script}'
+          },
+          flags: []
+        }
+      },
+      'fp-terminal'
+    );
+    assert.deepEqual(protocolCalls, ['complete-execution-launch']);
+  } finally {
+    runnerTestHooks.execFileSync = null;
+    runnerTestHooks.spawn = null;
+    runnerTestHooks.platform = null;
   }
 });
 

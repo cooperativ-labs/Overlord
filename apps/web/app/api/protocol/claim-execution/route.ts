@@ -25,6 +25,12 @@ function stringArrayFromParams(params: Json, key: string): string[] {
   return value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
 }
 
+function jsonFromParams(params: Json, key: string): Json | null {
+  if (!isRecord(params)) return null;
+  const value = params[key];
+  return typeof value === 'undefined' ? null : value;
+}
+
 async function resolveWorkingDirectory(
   supabase: ReturnType<typeof createServiceRoleClient>,
   request: ExecutionRequestRow,
@@ -168,7 +174,8 @@ export async function POST(request: Request) {
           sshCommand,
           remoteWorkingDirectory: textFromParams(claimed.launch_params, 'remoteWorkingDirectory'),
           serverMultiplexer: textFromParams(claimed.launch_params, 'serverMultiplexer'),
-          tmuxCommand: textFromParams(claimed.launch_params, 'tmuxCommand')
+          tmuxCommand: textFromParams(claimed.launch_params, 'tmuxCommand'),
+          runnerTerminalProfile: jsonFromParams(claimed.launch_params, 'runnerTerminalProfile')
         }
       });
     }

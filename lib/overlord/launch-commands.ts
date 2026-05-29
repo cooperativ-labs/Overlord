@@ -18,6 +18,14 @@ type LaunchCommandOptions = {
   } | null;
 };
 
+type DirectAgentCommandOptions = {
+  flags?: string[] | null;
+  preCommand?: string | null;
+  includeModelPlaceholder?: boolean;
+  includeThinkingPlaceholder?: boolean;
+  promptPlaceholder?: string;
+};
+
 /**
  * Derive a legacy free-form ssh command string from a structured SshConnectionConfig.
  * Used to wrap launch commands for external terminals that still need a raw ssh invocation.
@@ -86,6 +94,61 @@ function pushOptionalFlag(parts: string[], name: string, value: string | null | 
   const trimmed = value?.trim();
   if (!trimmed) return;
   parts.push(name, shellQuote(trimmed));
+}
+
+function pushDirectModelPlaceholder(parts: string[], agent: LaunchAgentType) {
+  if (agent === 'antigravity') return;
+  parts.push('--model', '<model>');
+}
+
+function pushDirectThinkingPlaceholder(parts: string[], agent: LaunchAgentType) {
+  if (agent === 'claude') {
+    parts.push('--effort', '<effort>');
+  } else if (agent === 'codex') {
+    parts.push('-c', 'model_reasoning_effort="<effort>"');
+  } else if (agent === 'pi') {
+    parts.push('--thinking', '<effort>');
+  }
+}
+
+function directAgentBinary(agent: LaunchAgentType): string {
+  if (agent === 'cursor') return 'agent';
+  if (agent === 'antigravity') return 'agy';
+  return agent;
+}
+
+export function buildDirectAgentCommand(
+  agent: LaunchAgentType,
+  options: DirectAgentCommandOptions = {}
+): string {
+  const parts = [
+    ...(options.preCommand?.trim().split(/\s+/).filter(Boolean) ?? []),
+    directAgentBinary(agent)
+  ];
+
+  if (options.includeModelPlaceholder ?? true) {
+    pushDirectModelPlaceholder(parts, agent);
+  }
+
+  if (options.includeThinkingPlaceholder ?? true) {
+    pushDirectThinkingPlaceholder(parts, agent);
+  }
+
+  for (const flag of options.flags ?? []) {
+    const trimmed = flag.trim();
+    if (trimmed) parts.push(trimmed);
+  }
+
+  const promptPlaceholder = options.promptPlaceholder ?? '<prompt>';
+  if (agent === 'antigravity') {
+    parts.push('--prompt-interactive', promptPlaceholder);
+  } else if (agent === 'opencode') {
+    parts.push('--prompt', promptPlaceholder);
+  } else {
+    parts.push(promptPlaceholder);
+  }
+
+  return parts.join(' ');
 }
 
 function hasOrganizationInTicketId(ticketId: string): boolean {

@@ -89,7 +89,7 @@ Managed files (Markdown format):
 - Human CLI launcher:
   [launcher.mjs](/Users/jake/Development/Cooperativ/Overlord/packages/overlord-cli/bin/_cli/launcher.mjs)
 - Shared copy-command builder:
-  [launch-commands.ts](/Users/jake/Development/Cooperativ/Overlord/lib/overlord/launch-commands.ts)
+  [launch-commands.ts](/Users/jake/Development/Cooperativ/Overlord/lib/overlord/launch-commands.ts) — also renders the local settings native command preview
 
 Command pattern:
 
@@ -167,7 +167,7 @@ Checklist:
 - Human CLI launcher:
   [launcher.mjs](/Users/jake/Development/Cooperativ/Overlord/packages/overlord-cli/bin/_cli/launcher.mjs)
 - Shared copy-command builder:
-  [launch-commands.ts](/Users/jake/Development/Cooperativ/Overlord/lib/overlord/launch-commands.ts)
+  [launch-commands.ts](/Users/jake/Development/Cooperativ/Overlord/lib/overlord/launch-commands.ts) — also renders the local settings native command preview
 - Context route:
   [route.ts](/Users/jake/Development/Cooperativ/Overlord/apps/web/app/api/protocol/context/[ticketId]/route.ts)
 - Prompt builder:
@@ -190,6 +190,7 @@ Checklist:
 - Prompt text explicitly includes the Codex ticket workflow instructions and the `## Task` metadata now includes the resolved current `Objective ID` alongside `Ticket ID`
 - Local Codex plugin installs a `UserPromptSubmit` hook that records follow-up activity through `/api/protocol/hook-event`
 - Local Codex plugin installs a `PermissionRequest` hook that notifies Overlord through `/api/protocol/permission-request` (same blocking question event as Claude)
+- Agent delivery narratives stay on the `deliver` event; the follow-on review `status_change` event uses generic transition text so the activity feed does not duplicate the delivery summary
 - Prompt text does not tell Codex to look for `overlord-local` or a local Codex bundle
 - Prompt text tells Codex to run `ovld auth repair` itself on protocol auth failures before asking the user to log in again or proceed without Overlord updates
 - Prompt text tells Codex to try `ovld auth repair` before `ovld auth login` when shared credentials look stale; `--organization-id <id>` is optional for choosing a different login default
@@ -245,7 +246,7 @@ Checklist:
 ### 6. Demo / product copy
 
 - Demo settings page:
-  [DemoSettings.tsx](/Users/jake/Development/Cooperativ/Overlord/app/demo/DemoSettings.tsx)
+  [DemoSettings.tsx](/Users/jake/Development/Cooperativ/Overlord/apps/web/app/(marketing)/demo/DemoSettings.tsx)
 
 Checklist:
 
@@ -411,7 +412,7 @@ Checklist:
 - Human CLI launcher:
   [launcher.mjs](/Users/jake/Development/Cooperativ/Overlord/packages/overlord-cli/bin/_cli/launcher.mjs)
 - Shared copy-command builder:
-  [launch-commands.ts](/Users/jake/Development/Cooperativ/Overlord/lib/overlord/launch-commands.ts)
+  [launch-commands.ts](/Users/jake/Development/Cooperativ/Overlord/lib/overlord/launch-commands.ts) — also renders the local settings native command preview
 
 Command pattern:
 
@@ -458,7 +459,7 @@ Checklist:
 ### 9. Demo / product copy
 
 - Demo settings page:
-  [DemoSettings.tsx](/Users/jake/Development/Cooperativ/Overlord/apps/web/app/demo/DemoSettings.tsx)
+  [DemoSettings.tsx](/Users/jake/Development/Cooperativ/Overlord/apps/web/app/(marketing)/demo/DemoSettings.tsx)
 
 Checklist:
 
@@ -553,7 +554,7 @@ Checklist:
 - Human CLI launcher:
   [launcher.mjs](/Users/jake/Development/Cooperativ/Overlord/packages/overlord-cli/bin/_cli/launcher.mjs)
 - Shared copy-command builder:
-  [launch-commands.ts](/Users/jake/Development/Cooperativ/Overlord/lib/overlord/launch-commands.ts)
+  [launch-commands.ts](/Users/jake/Development/Cooperativ/Overlord/lib/overlord/launch-commands.ts) — also renders the local settings native command preview
 
 Command pattern:
 
