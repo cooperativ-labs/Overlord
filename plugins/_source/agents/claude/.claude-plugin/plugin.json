@@ -10,7 +10,6 @@
   "repository": "https://github.com/cooperativ/overlord",
   "license": "UNLICENSED",
   "keywords": ["overlord", "tickets", "agents", "workflow", "protocol", "claude-code"],
-  "hooks": "./hooks/hooks.json",
   "userConfig": {
     "overlord_url": {
       "type": "string",
