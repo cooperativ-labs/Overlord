@@ -1446,6 +1446,22 @@ export function CliPage({ open }: { open: boolean }) {
                     <code className="rounded bg-muted px-1">ollama</code> launches{' '}
                     <code className="rounded bg-muted px-1">ollama {selectedLocalAgent} …</code>
                   </p>
+                  {agentPreCommands[selectedLocalAgent] ? (
+                    <div className="rounded-md border border-yellow-500/40 bg-yellow-50/50 p-2.5 dark:bg-yellow-900/10">
+                      <p className="text-[11px] text-yellow-800 dark:text-yellow-300">
+                        If this command runs inside a container, make sure{' '}
+                        <code className="rounded bg-yellow-100 px-1 dark:bg-yellow-900/30">
+                          overlord-cli
+                        </code>{' '}
+                        is installed there so agents can communicate with Overlord.
+                      </p>
+                      <p className="mt-1 text-[11px] text-yellow-700 dark:text-yellow-400">
+                        <code className="rounded bg-yellow-100 px-1 dark:bg-yellow-900/30">
+                          npm install -g overlord-cli
+                        </code>
+                      </p>
+                    </div>
+                  ) : null}
                 </div>
                 <div className="space-y-2">
                   <label className="text-xs font-medium text-foreground">Command flags</label>

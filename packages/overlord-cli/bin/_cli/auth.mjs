@@ -500,7 +500,27 @@ function parseOrganizationFlag(args) {
   return parsed;
 }
 
+function parseTokenFlag(args) {
+  const index = args.findIndex(arg => arg === '--token' || arg.startsWith('--token='));
+  if (index === -1) return null;
+  const raw = args[index].includes('=') ? args[index].split('=')[1] : args[index + 1];
+  if (!raw || typeof raw !== 'string') {
+    throw new Error('--token requires a value (e.g. --token oat_…)');
+  }
+  const trimmed = raw.trim();
+  if (!trimmed.startsWith('oat_')) {
+    throw new Error('--token value must be an agent token starting with oat_');
+  }
+  return trimmed;
+}
+
 export async function authLogin(args = []) {
+  const agentToken = parseTokenFlag(args);
+
+  if (agentToken) {
+    return authLoginWithAgentToken(agentToken, args);
+  }
+
   const preselectedOrganizationId = parseOrganizationFlag(args);
   const storedCredentials = loadCredentials();
   const platformUrl = resolveLoginPlatformUrl(null, storedCredentials?.platform_url ?? null);
@@ -556,6 +576,27 @@ export async function authLogin(args = []) {
   } else {
     console.log(`Logged in successfully. Default organization: ${describeOrganization(selectedOrganization)}.`);
   }
+}
+
+async function authLoginWithAgentToken(agentToken, args) {
+  const preselectedOrganizationId = parseOrganizationFlag(args);
+  const storedCredentials = loadCredentials();
+  const platformUrl = resolveLoginPlatformUrl(null, storedCredentials?.platform_url ?? null);
+
+  saveCredentials({
+    agent_token: agentToken,
+    platform_url: platformUrl,
+    ...(preselectedOrganizationId !== null ? { organization_id: preselectedOrganizationId } : {})
+  });
+
+  console.log(`Agent token saved. The CLI will use this token for all protocol commands.`);
+  if (preselectedOrganizationId !== null) {
+    console.log(`  Default organization: ${preselectedOrganizationId}`);
+  } else {
+    console.log(`  Organization will be derived from your token's membership.`);
+  }
+  console.log(`  Platform URL: ${platformUrl}`);
+  console.log(`\nTo remove: ovld auth logout`);
 }
 
 async function printVerboseAuthStatus() {
@@ -638,6 +679,8 @@ export async function runAuthCommand(subcommand, args = []) {
 
 Subcommands:
   login    Authorize the CLI via browser (works locally or over SSH)
+             --token <oat_…>          Persist an agent token from Settings → Agents & MCP.
+                                      Skips the browser flow; token never expires.
              --organization-id <id>   Optional default organization override
                                       (ticket-scoped commands infer organization
                                       from ticket ids such as 1:899)

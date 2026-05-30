@@ -2,6 +2,32 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2605300746.0] - 2026-05-30:07:46
+
+### Added
+- Add a dedicated **Agent Tokens** settings page for creating, listing, and revoking per-user `oat_…` tokens, with a copyable **`ovld auth login --token`** snippet for each new token.
+- Add CLI **`ovld auth login --token <oat_…>`** to persist durable agent tokens without a browser OAuth flow.
+- Add protocol and CLI support for **`OVERLORD_AGENT_TOKEN`**: long-lived bearer tokens that authenticate headless and CI runs and derive organization membership when no org hint is provided.
+
+### Fixed
+- Ensure protocol **`deliver`** completes objective state transitions and auto-advance scheduling before the HTTP response returns, preventing missed auto-advance when serverless functions are recycled.
+- Fix MCP **`deliver`** so the agent session closes before auto-advance events fire, preventing desktop launchers from skipping the next queued objective.
+
+### Changed
+- Move agent token management out of **MCP & Cloud Agents** into the new **Agent Tokens** settings page; MCP setup links there for token creation.
+- Prefer **`OVERLORD_AGENT_TOKEN`** over OAuth refresh in the CLI when an agent token is configured via environment or saved credentials.
+- Show a CLI settings note when a **pre-command** may run inside a container, reminding you to install **`overlord-cli`** in that environment.
+- Extend Codex-compatible model offerings with **minimal** and **xhigh** reasoning levels.
+
+### Security
+- None.
+
+### Test
+- Add protocol auth tests for **`oat_`** agent token resolution, organization hints, and rejection paths.
+
+### Documentation
+- Document **`OVERLORD_AGENT_TOKEN`** and **`ovld auth login --token`** in the for-agents CLI reference and protocol help.
+
 ## [0.2605291450.0] - 2026-05-29:14:50
 
 ### Added

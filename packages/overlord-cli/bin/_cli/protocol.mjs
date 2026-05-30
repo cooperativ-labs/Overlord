@@ -2614,7 +2614,7 @@ Subcommands:
 Environment fallback:
   --session-key  <- SESSION_KEY or auto-persisted session from last attach/connect/prompt in this working directory
   --ticket-id    <- TICKET_ID  or auto-persisted session (human-readable ticket_id, e.g. 1:899)
-  auth/host     <- OVERLORD_URL, optional OVERLORD_ACCESS_TOKEN + OVERLORD_ORGANIZATION_ID, or shared OAuth credentials from ovld auth/Desktop login
+  auth/host     <- OVERLORD_URL, OVERLORD_AGENT_TOKEN (durable; best for headless/CI), optional OVERLORD_ACCESS_TOKEN + OVERLORD_ORGANIZATION_ID, or shared OAuth credentials from ovld auth/Desktop login
   --timeout     <- OVERLORD_TIMEOUT
 
 Common flags:

@@ -26,7 +26,8 @@ All subcommands honor these environment variables so you don't have to pass flag
 SESSION_KEY=<key>        # falls back to --session-key
 TICKET_ID=<ticket_id>           # falls back to --ticket-id
 OVERLORD_URL=<url>       # API host
-OVERLORD_ORGANIZATION_ID=<id>  # legacy org scope for UUID ticket ids and non-ticket commands
+OVERLORD_AGENT_TOKEN=<oat_…>   # durable per-user token (Settings → Agents & MCP); best for headless/CI. Also accepted by: ovld auth login --token <oat_…>
+OVERLORD_ORGANIZATION_ID=<id>  # legacy org scope for UUID ticket ids and non-ticket commands; optional with OVERLORD_AGENT_TOKEN
 OVERLORD_TIMEOUT=<ms>    # falls back to --timeout
 AGENT_IDENTIFIER=<name>  # falls back to --agent (default: claude-code)
 \`\`\`

@@ -79,19 +79,21 @@ function parseStoredCredentialsData(parsed, { requireAuthData = false } = {}) {
     typeof parsed.access_token_expires_at === 'string'
       ? parsed.access_token_expires_at.trim()
       : '';
+  const agentToken = normalizeAgentToken(parsed.agent_token);
   const organizationId =
     typeof parsed.organization_id === 'number' && Number.isFinite(parsed.organization_id)
       ? parsed.organization_id
       : null;
 
   if (!platformUrl) return null;
-  if (requireAuthData && !refreshToken) return null;
+  if (requireAuthData && !refreshToken && !agentToken) return null;
 
   return {
     platform_url: platformUrl,
     ...(refreshToken ? { refresh_token: refreshToken } : {}),
     ...(accessToken ? { access_token: accessToken } : {}),
     ...(accessTokenExpiresAt ? { access_token_expires_at: accessTokenExpiresAt } : {}),
+    ...(agentToken ? { agent_token: agentToken } : {}),
     ...(organizationId ? { organization_id: organizationId } : {}),
     ...(typeof parsed.user_email === 'string' && parsed.user_email.trim()
       ? { user_email: parsed.user_email.trim() }
@@ -116,6 +118,7 @@ function normalizeCredentialsForSave(data) {
     ...(parsed.access_token_expires_at
       ? { access_token_expires_at: parsed.access_token_expires_at }
       : {}),
+    ...(parsed.agent_token ? { agent_token: parsed.agent_token } : {}),
     ...(parsed.organization_id ? { organization_id: parsed.organization_id } : {}),
     ...(parsed.user_email ? { user_email: parsed.user_email } : {}),
     ...(parsed.updated_at ? { updated_at: parsed.updated_at } : {})
@@ -181,9 +184,12 @@ function selectStoredCredentials() {
         requireAuthData: true
       })
     }
-  ].filter(candidate => candidate.credentials?.refresh_token);
+  ].filter(candidate => candidate.credentials?.refresh_token || candidate.credentials?.agent_token);
 
   if (candidates.length === 0) return null;
+
+  const agentTokenCandidate = candidates.find(c => c.credentials?.agent_token);
+  if (agentTokenCandidate) return agentTokenCandidate;
 
   const fresh = candidates.filter(candidate => isAccessTokenFresh(candidate.credentials));
   const pool = fresh.length > 0 ? fresh : candidates;
@@ -551,6 +557,27 @@ export async function resolveAuth(options = {}) {
       ? runtime.local_secret
       : '';
 
+  const envAgentToken = normalizeAgentToken(process.env.OVERLORD_AGENT_TOKEN);
+  if (envAgentToken) {
+    const envOrganizationId =
+      typeof process.env.OVERLORD_ORGANIZATION_ID === 'string'
+        ? Number.parseInt(process.env.OVERLORD_ORGANIZATION_ID, 10)
+        : null;
+    const resolvedOrganizationId =
+      organizationIdHint ?? (Number.isFinite(envOrganizationId) ? envOrganizationId : null);
+
+    // Agent tokens are long-lived and never need refreshing. Organization is
+    // optional — the platform derives it from the token owner's membership when
+    // no hint is supplied, so a headless CLI keeps working without Desktop.
+    return {
+      platformUrl,
+      bearerToken: envAgentToken,
+      localSecret,
+      organizationId: resolvedOrganizationId,
+      authMode: 'agent_token'
+    };
+  }
+
   const envAccessToken = normalizeAccessToken(process.env.OVERLORD_ACCESS_TOKEN);
   if (envAccessToken) {
     const envOrganizationId =
@@ -573,6 +600,16 @@ export async function resolveAuth(options = {}) {
         authMode: 'oauth_env'
       };
     }
+  }
+
+  if (creds?.agent_token) {
+    return {
+      platformUrl,
+      bearerToken: creds.agent_token,
+      localSecret,
+      organizationId: organizationIdHint ?? creds.organization_id ?? null,
+      authMode: 'agent_token'
+    };
   }
 
   if (!creds) {
@@ -649,10 +686,15 @@ export async function getAuthStatus() {
     };
   }
 
+  const envAgentToken = normalizeAgentToken(process.env.OVERLORD_AGENT_TOKEN);
   const envAccessToken = normalizeAccessToken(process.env.OVERLORD_ACCESS_TOKEN);
   let tokenSource = 'fallback';
-  if (envAccessToken && isEnvAccessTokenUsable(envAccessToken)) {
+  if (envAgentToken) {
+    tokenSource = 'OVERLORD_AGENT_TOKEN';
+  } else if (envAccessToken && isEnvAccessTokenUsable(envAccessToken)) {
     tokenSource = 'OVERLORD_ACCESS_TOKEN';
+  } else if (creds?.agent_token) {
+    tokenSource = getCredentialFileSource() + ' (agent token)';
   } else if (creds?.refresh_token) {
     tokenSource = getCredentialFileSource();
   }
@@ -702,6 +744,14 @@ export function repairCredentials() {
 function normalizeAccessToken(value) {
   if (typeof value !== 'string') return '';
   return value.trim();
+}
+
+const AGENT_TOKEN_PREFIX = 'oat_';
+
+function normalizeAgentToken(value) {
+  if (typeof value !== 'string') return '';
+  const trimmed = value.trim();
+  return trimmed.startsWith(AGENT_TOKEN_PREFIX) ? trimmed : '';
 }
 
 function isEnvAccessTokenUsable(accessToken) {

@@ -8,6 +8,7 @@ import { getPublicMcpUrl } from '../helpers/public-url.ts';
 import { toolErr, toolOk } from '../rpc.ts';
 import { resolveSession } from '../session.ts';
 
+import { scheduleAutoAdvanceAfterDeliver } from './_auto-advance.ts';
 import { insertChangeRationales } from './_change-rationales.ts';
 import { upsertObjectiveCheckpoint } from './_checkpoints.ts';
 import { resolvePreferredStatusNameByType } from './_status-resolution.ts';
@@ -173,49 +174,62 @@ export async function handleDeliver(supabase: SupabaseClient, args: any, ctx: To
     );
   }
 
-  // Place delivered ticket at the top of the review column
-  const { data: headTickets } = await supabase
-    .from('tickets')
-    .select('board_position')
-    .eq('organization_id', ctx.organizationId)
-    .eq('status', reviewStatusName)
-    .neq('id', ticketId)
-    .order('board_position', { ascending: true })
-    .limit(1);
-  const topBoardPosition =
-    ((headTickets as { board_position: number }[] | null)?.[0]?.board_position ?? 0) - 1;
+  // Mark objective complete and close session before auto-advance so that
+  // Desktop launchers see no active session when the execution_requested
+  // event arrives.
   const completedAt = new Date().toISOString();
-
   await Promise.all([
-    supabase
-      .from('tickets')
-      .update({
-        status: reviewStatusName,
-        board_position: topBoardPosition
-      })
-      .eq('id', ticketId),
-    supabase
-      .from('agent_sessions')
-      .update({ detached_at: new Date().toISOString(), session_state: 'completed' })
-      .eq('id', resolved.session.id),
-    // Mark only this session's objective complete — never sweep siblings that
-    // may have raced into 'executing' via auto-advance during deliver.
     supabase
       .from('objectives')
       .update({ state: 'complete', completed_at: completedAt })
       .eq('id', resolved.session.objective_id)
       .eq('ticket_id', ticketId)
-      .in('state', ['executing', 'pending_delivery', 'submitted', 'draft'])
+      .in('state', ['executing', 'pending_delivery', 'submitted', 'draft']),
+    supabase
+      .from('agent_sessions')
+      .update({ detached_at: new Date().toISOString(), session_state: 'completed' })
+      .eq('id', resolved.session.id)
   ]);
 
-  await supabase.from('ticket_events').insert({
-    event_type: 'status_change',
-    phase: 'review',
-    summary: 'Ticket delivered and moved to review.',
-    objective_id: resolved.session.objective_id,
-    ticket_id: ticketId,
-    created_by: ctx.userId
+  // Auto-advance: queue the next draft objective when it has auto_advance
+  // enabled, or emit an awaiting_approval event when gated.
+  const queueResult = await scheduleAutoAdvanceAfterDeliver({
+    supabase,
+    ticketId,
+    userId: ctx.userId,
+    organizationId: ctx.organizationId
   });
+
+  if (!queueResult.advanced) {
+    // Place delivered ticket at the top of the review column
+    const { data: headTickets } = await supabase
+      .from('tickets')
+      .select('board_position')
+      .eq('organization_id', ctx.organizationId)
+      .eq('status', reviewStatusName)
+      .neq('id', ticketId)
+      .order('board_position', { ascending: true })
+      .limit(1);
+    const topBoardPosition =
+      ((headTickets as { board_position: number }[] | null)?.[0]?.board_position ?? 0) - 1;
+
+    await supabase
+      .from('tickets')
+      .update({
+        status: reviewStatusName,
+        board_position: topBoardPosition
+      })
+      .eq('id', ticketId);
+
+    await supabase.from('ticket_events').insert({
+      event_type: 'status_change',
+      phase: 'review',
+      summary: 'Ticket delivered and moved to review.',
+      objective_id: resolved.session.objective_id,
+      ticket_id: ticketId,
+      created_by: ctx.userId
+    });
+  }
 
   scheduleGenerateFeedPost({
     supabase,

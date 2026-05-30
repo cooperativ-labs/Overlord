@@ -4,6 +4,7 @@ import {
   Bot,
   Edit3,
   Info,
+  Key,
   Keyboard,
   Link2,
   Monitor,
@@ -46,6 +47,7 @@ import {
 
 import { AboutPage } from './settings/AboutPage';
 import { AgentsAndMcpPage } from './settings/AgentsAndMcpPage';
+import { AgentTokensPage } from './settings/AgentTokensPage';
 import { ApplicationPage } from './settings/ApplicationPage';
 import { CliPage } from './settings/CliPage';
 import { CustomizationPage } from './settings/CustomizationPage';
@@ -86,6 +88,7 @@ const appNavItems: NavItem[] = [
 
 const userNavItems: NavItem[] = [
   { name: 'Profile', icon: User },
+  { name: 'Agent Tokens', icon: Key },
   { name: 'Linked Accounts', icon: Shield }
 ];
 
@@ -220,7 +223,10 @@ export function SettingsModal({
               {activeNav === 'Integrations' && (
                 <IntegrationsPage open={open} slackEnabled={slackEnabled} />
               )}
-              {activeNav === 'MCP & Cloud Agents' && <AgentsAndMcpPage open={open} />}
+              {activeNav === 'MCP & Cloud Agents' && (
+                <AgentsAndMcpPage open={open} onNavigate={setActiveNav} />
+              )}
+              {activeNav === 'Agent Tokens' && <AgentTokensPage open={open} />}
               {activeNav === 'Customization' && <CustomizationPage open={open} />}
               {activeNav === 'CLI & Local Agents' && <CliPage open={open} />}
               {activeNav === 'Application' && <ApplicationPage />}

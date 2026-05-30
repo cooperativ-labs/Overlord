@@ -70,8 +70,11 @@ export type ProtocolAuthContext = {
   userId: string;
   organizationId: number;
   tokenValue: string;
-  authMethod: 'oauth_jwt' | 'local_dev_token';
+  authMethod: 'oauth_jwt' | 'local_dev_token' | 'agent_token';
 };
+
+/** Per-user agent tokens (`OVERLORD_AGENT_TOKEN`) are minted in Settings → Agents & MCP. */
+const AGENT_TOKEN_PREFIX = 'oat_';
 
 function extractBearerToken(request: Request): string | null {
   const authHeader = request.headers.get('authorization');
@@ -125,6 +128,95 @@ function resolveLocalDevTokenContext(
     organizationId: organizationIdOverride ?? LOCAL_DEV_ORGANIZATION_ID,
     tokenValue: providedToken,
     authMethod: 'local_dev_token'
+  };
+}
+
+function hashAgentToken(token: string): string {
+  return crypto.createHash('sha256').update(token, 'utf8').digest('hex');
+}
+
+/**
+ * Resolves a per-user agent token (`oat_` prefix). These are long-lived, hashed
+ * tokens stored in `user_agent_tokens`, identical to the MCP agent-token path
+ * (supabase/functions/mcp/auth.ts). They carry no expiry, so a CLI running apart
+ * from Desktop can stay authenticated without an OAuth refresh loop.
+ *
+ * The organization is derived from the user's membership: the ticket/header hint
+ * is honored when the user belongs to that org, otherwise their lowest org id is
+ * used. Unlike OAuth, a missing hint is not an error.
+ */
+async function resolveAgentTokenContext(
+  providedToken: string,
+  organizationIdHint: number | null
+): Promise<{ context: ProtocolAuthContext | null; error: NextResponse | null }> {
+  const supabase = createServiceRoleClient();
+  const tokenHash = hashAgentToken(providedToken);
+
+  const { data: tokenRow, error: tokenError } = await supabase
+    .from('user_agent_tokens')
+    .select('user_id')
+    .eq('token_hash', tokenHash)
+    .maybeSingle();
+
+  if (tokenError) {
+    return {
+      context: null,
+      error: NextResponse.json({ error: tokenError.message }, { status: 500 })
+    };
+  }
+
+  if (!tokenRow) {
+    // Unknown/revoked token — fall through to the standard invalid-token response.
+    return { context: null, error: null };
+  }
+
+  let organizationId: number | null = null;
+
+  if (organizationIdHint !== null && Number.isFinite(organizationIdHint)) {
+    const { data: targetMember } = await supabase
+      .from('members')
+      .select('organization_id')
+      .eq('user_id', tokenRow.user_id)
+      .eq('organization_id', organizationIdHint)
+      .maybeSingle();
+    organizationId = targetMember?.organization_id ?? null;
+  }
+
+  if (organizationId === null) {
+    const { data: member } = await supabase
+      .from('members')
+      .select('organization_id')
+      .eq('user_id', tokenRow.user_id)
+      .order('organization_id', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    organizationId = member?.organization_id ?? null;
+  }
+
+  if (organizationId === null) {
+    return {
+      context: null,
+      error: NextResponse.json(
+        { error: 'Agent token is not a member of any organization.' },
+        { status: 403 }
+      )
+    };
+  }
+
+  // Fire-and-forget last-used bookkeeping; never blocks the request.
+  void supabase
+    .from('user_agent_tokens')
+    .update({ last_used_at: new Date().toISOString() })
+    .eq('token_hash', tokenHash);
+
+  return {
+    context: {
+      userId: tokenRow.user_id,
+      organizationId,
+      tokenValue: providedToken,
+      authMethod: 'agent_token'
+    },
+    error: null
   };
 }
 
@@ -234,6 +326,27 @@ export async function resolveProtocolAuth(
     return {
       context: localDevContext,
       error: null
+    };
+  }
+
+  // Agent token path — prefix-routed so we never attempt JWT validation on it.
+  if (providedToken.startsWith(AGENT_TOKEN_PREFIX)) {
+    const agentResult = await resolveAgentTokenContext(
+      providedToken,
+      organizationIdOverride ?? parseOrganizationIdHeader(request)
+    );
+    if (agentResult.error) {
+      return { context: null, error: agentResult.error };
+    }
+    if (agentResult.context) {
+      return { context: agentResult.context, error: null };
+    }
+    return {
+      context: null,
+      error: NextResponse.json(
+        { error: `Invalid bearer token. ${reauthInstructions}` },
+        { status: 401 }
+      )
     };
   }
 

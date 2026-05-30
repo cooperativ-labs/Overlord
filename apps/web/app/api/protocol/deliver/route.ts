@@ -129,82 +129,48 @@ export async function POST(request: Request) {
       'review'
     );
 
-    // Fast-ack: return immediately after persisting the minimal deliver event.
-    // Artifact inserts and status updates are deferred via after() so that constrained
-    // sandbox runtimes with short request windows receive a timely 200 response.
+    // ── Critical state transitions ──────────────────────────────────────
+    // These MUST complete before returning so that the objective is reliably
+    // marked complete and the next auto-advance objective is queued even if
+    // the serverless function is recycled after the response is sent.
+
+    const completedAt = new Date().toISOString();
+
+    const [completeResult] = await Promise.all([
+      supabase
+        .from('objectives')
+        .update({ state: 'complete', completed_at: completedAt })
+        .eq('id', objectiveId)
+        .eq('ticket_id', ticketId)
+        .in('state', ['executing', 'pending_delivery', 'submitted', 'draft']),
+      supabase
+        .from('agent_sessions')
+        .update({
+          detached_at: new Date().toISOString(),
+          session_state: 'completed'
+        })
+        .eq('id', sessionId)
+    ]);
+    if (completeResult.error) {
+      console.error('[protocol:deliver] objective complete error:', completeResult.error.message);
+      Sentry.captureException(completeResult.error, {
+        extra: { ticketId, sessionId, objectiveId }
+      });
+    }
+
+    const queueResult = await scheduleQueuedObjectiveAfterDeliver({
+      supabase: typedSupabase,
+      ticketId,
+      userId,
+      organizationId,
+      ticketReference
+    });
+
+    // ── Deferred work ───────────────────────────────────────────────────
+    // Artifact inserts, ticket status updates, feed posts, and
+    // notifications are non-critical and safe to defer via after().
     after(async () => {
       try {
-        // Mark the delivering session's objective as complete. Scope strictly
-        // to this objective_id so a draft that auto-advanced into 'executing'
-        // mid-deliver cannot be swept into 'complete' alongside it.
-        const completedAt = new Date().toISOString();
-        const { error: completeError } = await supabase
-          .from('objectives')
-          .update({ state: 'complete', completed_at: completedAt })
-          .eq('id', objectiveId)
-          .eq('ticket_id', ticketId)
-          .in('state', ['executing', 'pending_delivery', 'submitted', 'draft']);
-        if (completeError) {
-          console.error('[protocol:deliver] objective complete error:', completeError.message);
-          Sentry.captureException(completeError, {
-            extra: { ticketId, sessionId, objectiveId }
-          });
-        }
-
-        // Close the delivering session before emitting any auto_advance event.
-        // Desktop launchers skip auto-advance while a ticket has an active
-        // session; if the event arrives first, the launch can be skipped forever.
-        await supabase
-          .from('agent_sessions')
-          .update({
-            detached_at: new Date().toISOString(),
-            session_state: 'completed'
-          })
-          .eq('id', sessionId);
-
-        // Auto-advance scheduler: prefer the current draft objective (when it has
-        // content), otherwise the earliest future objective. Desktop observers
-        // launch auto_advance=true rows; gated rows wait for human approval.
-        const queueResult = await scheduleQueuedObjectiveAfterDeliver({
-          supabase: typedSupabase,
-          ticketId,
-          userId,
-          organizationId,
-          ticketReference
-        });
-
-        if (queueResult.advanced) {
-          if (artifacts.length) {
-            const artifactRows = artifacts.map(artifact => ({
-              artifact_type: artifact.type,
-              content: artifact.content ?? null,
-              event_id: eventId,
-              label: artifact.label,
-              metadata: artifact.metadata,
-              objective_id: objectiveId,
-              ticket_id: ticketId,
-              uri: artifact.uri ?? null,
-              created_by: userId
-            }));
-            await supabase.from('artifacts').insert(artifactRows);
-          }
-
-          try {
-            const { error: feedError } = await supabase.functions.invoke('generate-feed-post', {
-              body: { ticketId, objectiveId, organizationId }
-            });
-            if (feedError) {
-              console.error('[protocol:deliver] feed post generation failed:', feedError.message);
-              Sentry.captureException(feedError, { extra: { ticketId, objectiveId } });
-            }
-          } catch (feedErr) {
-            console.error('[protocol:deliver] feed post generation error:', feedErr);
-            Sentry.captureException(feedErr, { extra: { ticketId, objectiveId } });
-          }
-
-          return;
-        }
-
         if (artifacts.length) {
           const artifactRows = artifacts.map(artifact => ({
             artifact_type: artifact.type,
@@ -225,6 +191,21 @@ export async function POST(request: Request) {
             });
           }
         }
+
+        try {
+          const { error: feedError } = await supabase.functions.invoke('generate-feed-post', {
+            body: { ticketId, objectiveId, organizationId }
+          });
+          if (feedError) {
+            console.error('[protocol:deliver] feed post generation failed:', feedError.message);
+            Sentry.captureException(feedError, { extra: { ticketId, objectiveId } });
+          }
+        } catch (feedErr) {
+          console.error('[protocol:deliver] feed post generation error:', feedErr);
+          Sentry.captureException(feedErr, { extra: { ticketId, objectiveId } });
+        }
+
+        if (queueResult.advanced) return;
 
         // Place delivered ticket at the top of the review column
         const { data: headTickets } = await supabase
@@ -251,10 +232,6 @@ export async function POST(request: Request) {
           Sentry.captureException(ticketError, { extra: { ticketId } });
         }
 
-        // Emit status_change event so KanbanBoard realtime listener triggers
-        // the review sound and highlights has_unopened_review for agent deliveries.
-        // Keep the detailed reviewer narrative on the deliver event itself so the
-        // review transition only contributes new status information.
         const reviewSummary = 'Ticket delivered and moved to review.';
         const { data: statusChangeEvent } = await supabase
           .from('ticket_events')
@@ -269,22 +246,6 @@ export async function POST(request: Request) {
           .select('id')
           .single();
 
-        // Generate feed post (fire-and-forget — non-fatal if it fails)
-        try {
-          const { error: feedError } = await supabase.functions.invoke('generate-feed-post', {
-            body: { ticketId, objectiveId, organizationId }
-          });
-          if (feedError) {
-            console.error('[protocol:deliver] feed post generation failed:', feedError.message);
-            Sentry.captureException(feedError, { extra: { ticketId, objectiveId } });
-          }
-        } catch (feedErr) {
-          console.error('[protocol:deliver] feed post generation error:', feedErr);
-          Sentry.captureException(feedErr, { extra: { ticketId, objectiveId } });
-        }
-
-        // Send mobile push notification via the canonical orchestrator so the
-        // push title/body/data shape match the in-app realtime consumers.
         await emitWorkflowNotification({
           supabase,
           event: {

@@ -57,7 +57,7 @@ Agents:
   Key protocol commands: auth-status, discover-project, create, prompt, attach, connect, load-context.
 
 Auth:
-  ${primaryCommand} auth login               Authorize CLI via browser
+  ${primaryCommand} auth login               Authorize CLI via browser or --token <oat_…>
   ${primaryCommand} auth status              Show login status
   ${primaryCommand} auth repair              Repair shared Desktop/CLI credentials
   ${primaryCommand} auth logout              Remove stored credentials
