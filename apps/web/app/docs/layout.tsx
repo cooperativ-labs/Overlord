@@ -60,6 +60,24 @@ const data = {
       ]
     },
     {
+      title: 'Authentication',
+      url: '/docs/authentication',
+      items: [
+        {
+          title: 'Overview',
+          url: '/docs/authentication'
+        },
+        {
+          title: 'OAuth',
+          url: '/docs/authentication/oauth'
+        },
+        {
+          title: 'Agent Token',
+          url: '/docs/authentication/agent-token'
+        }
+      ]
+    },
+    {
       title: 'Workflow',
       url: '/docs/workflow',
       items: [

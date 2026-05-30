@@ -181,6 +181,12 @@ export default function DocsPage() {
               MCP and cloud-agent integration &rarr;
             </Link>
             <Link
+              href="/docs/authentication"
+              className="rounded-lg border bg-card p-4 text-sm hover:bg-accent transition-colors"
+            >
+              Authentication: OAuth and agent tokens &rarr;
+            </Link>
+            <Link
               href="/docs/security"
               className="rounded-lg border bg-card p-4 text-sm hover:bg-accent transition-colors"
             >

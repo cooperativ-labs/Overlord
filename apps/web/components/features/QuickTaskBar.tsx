@@ -269,21 +269,10 @@ export function QuickTaskBar({ defaultProjectId, projects, sshEnabled }: QuickTa
     requestAnimationFrame(() => autoResize());
   }, [autoResize]);
 
-  async function uploadStagedFiles(ticketId: string): Promise<void> {
+  async function uploadStagedFiles(ticketId: string, objectiveId: string): Promise<void> {
     if (stagedFiles.length === 0) return;
     try {
       const supabase = createClient();
-      const { data: objectiveRow } = await supabase
-        .from('objectives')
-        .select('id')
-        .eq('ticket_id', ticketId)
-        .order('created_at', { ascending: true })
-        .limit(1)
-        .maybeSingle();
-
-      const objectiveId = objectiveRow?.id;
-      if (!objectiveId) return;
-
       await Promise.all(
         stagedFiles.map(async ({ file }) => {
           const draft = await prepareObjectiveAttachmentUploadAction(ticketId, objectiveId, {
@@ -363,7 +352,8 @@ export function QuickTaskBar({ defaultProjectId, projects, sshEnabled }: QuickTa
           if (!forHuman) {
             await updateAssignmentMutation.mutateAsync({
               ticketId: createdTicket.id,
-              selection: objectiveSelection
+              selection: objectiveSelection,
+              objectiveId: createdTicket.objectiveId
             });
           } else {
             await updateForHumanMutation.mutateAsync({
@@ -375,14 +365,14 @@ export function QuickTaskBar({ defaultProjectId, projects, sshEnabled }: QuickTa
           const title = await generateTicketTitleActionWithRetry(trimmed);
           await updateFieldsMutation.mutateAsync({
             ticketId: createdTicket.id,
-            patch: { title, objective: trimmed }
+            patch: { title }
           });
         } catch (error) {
           console.error('Failed to finalize ticket:', error);
         }
 
         if (filesToUpload.length > 0) {
-          await uploadStagedFiles(createdTicket.id);
+          await uploadStagedFiles(createdTicket.id, createdTicket.objectiveId);
         }
       })();
       setObjective('');
@@ -393,6 +383,7 @@ export function QuickTaskBar({ defaultProjectId, projects, sshEnabled }: QuickTa
         try {
           const result = await requestTicketObjectiveExecutionAction({
             ticketId: createdTicket.id,
+            objectiveId: createdTicket.objectiveId,
             agentIdentifier: objectiveSelection.agent,
             workingDirectory:
               workspace.executionWorkspace === 'local'

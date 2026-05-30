@@ -42,7 +42,6 @@ import {
 import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
 import type { AgentModelSelection } from '@/lib/helpers/agent-model-preference';
 import { createTicketAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
-import type { Database } from '@/types/database.types';
 
 import {
   clearPendingMutation,
@@ -103,6 +102,7 @@ export type CreateTicketInput = {
 
 export type CreateTicketResult = {
   id: string;
+  objectiveId: string;
   organizationId: number;
   projectId: string | null;
   title: string | null;
@@ -170,7 +170,7 @@ export function useCreateBlankTicketMutation(): UseMutationResult<
   { organizationId?: number; projectId?: string | null }
 > {
   return useMutation({
-    mutationFn: input => createBlankTicketAction(input.organizationId, input.projectId)
+    mutationFn: input => createBlankTicketActionWithRetry(input.organizationId, input.projectId)
   });
 }
 
@@ -352,6 +352,7 @@ export function useMarkTicketReadMutation(): UseMutationResult<
 export type UpdateTicketAssignmentInput = {
   ticketId: string;
   selection: AgentModelSelection;
+  objectiveId?: string | null;
 };
 
 type UpdateTicketAssignmentContext = { snapshot: [readonly unknown[], TicketBoardState][] };
@@ -364,7 +365,12 @@ export function useUpdateTicketAssignmentMutation(): UseMutationResult<
 > {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: input => updateTicketAssignedAgentActionWithRetry(input.ticketId, input.selection),
+    mutationFn: input =>
+      updateTicketAssignedAgentActionWithRetry(
+        input.ticketId,
+        input.selection,
+        input.objectiveId ?? null
+      ),
     onMutate: input => {
       const snapshot = snapshotBoards(qc);
       const assigned = createTicketAssignedAgent(input.selection);

@@ -17,7 +17,6 @@ import { upsertDraftObjective } from '@/lib/objectives';
 import { createTicketSchema } from '@/lib/overlord/validation';
 import { resolveNamedStatus } from '@/lib/ticket-statuses';
 import { createClientForRequest } from '@/supabase/utils/server';
-import type { Database } from '@/types/database.types';
 
 import {
   assignTicketToColumnEnd,
@@ -138,8 +137,9 @@ export async function createTicketInColumnAction(
     throw new Error(error?.message ?? 'Failed to create ticket.');
   }
 
+  let objectiveId: string;
   try {
-    await upsertDraftObjective(supabase, data.id, trimmedObjective);
+    objectiveId = await upsertDraftObjective(supabase, data.id, trimmedObjective);
     if (position === 'bottom') {
       await assignTicketToColumnEnd(supabase, data.id, statusForInsert, data.organization_id);
     } else {
@@ -176,7 +176,13 @@ export async function createTicketInColumnAction(
   revalidateTicketDetails([
     { organizationId: data.organization_id, projectId: data.project_id, ticketId: data.id }
   ]);
-  return { id: data.id, organizationId: data.organization_id, projectId: data.project_id, title };
+  return {
+    id: data.id,
+    objectiveId,
+    organizationId: data.organization_id,
+    projectId: data.project_id,
+    title
+  };
 }
 
 export async function createCalendarTicketAction(

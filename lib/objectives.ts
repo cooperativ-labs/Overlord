@@ -351,7 +351,7 @@ export async function upsertDraftObjective(
   ticketId: string,
   objective: string | null | undefined,
   createdBy?: string | null
-) {
+): Promise<string> {
   const normalizedObjective = normalizeObjectiveText(objective);
   const { data: editableObjective, error: editableObjectiveError } = await supabase
     .from('objectives')
@@ -376,18 +376,23 @@ export async function upsertDraftObjective(
         throw new Error(updateDraftError.message);
       }
     }
-    return;
+    return editableObjective.id;
   }
 
-  const { error: insertDraftError } = await supabase.from('objectives').insert({
-    state: 'draft',
-    objective: normalizedObjective,
-    ticket_id: ticketId,
-    created_by: createdBy ?? null
-  });
-  if (insertDraftError) {
-    throw new Error(insertDraftError.message);
+  const { data: insertedDraft, error: insertDraftError } = await supabase
+    .from('objectives')
+    .insert({
+      state: 'draft',
+      objective: normalizedObjective,
+      ticket_id: ticketId,
+      created_by: createdBy ?? null
+    })
+    .select('id')
+    .single();
+  if (insertDraftError || !insertedDraft) {
+    throw new Error(insertDraftError?.message ?? 'Failed to create draft objective.');
   }
+  return insertedDraft.id;
 }
 
 export async function submitDraftObjective(
