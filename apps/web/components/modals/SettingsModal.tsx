@@ -228,7 +228,7 @@ export function SettingsModal({
               )}
               {activeNav === 'Agent Tokens' && <AgentTokensPage open={open} />}
               {activeNav === 'Customization' && <CustomizationPage open={open} />}
-              {activeNav === 'CLI & Local Agents' && <CliPage open={open} />}
+              {activeNav === 'CLI & Local Agents' && <CliPage open={open} onNavigate={setActiveNav} />}
               {activeNav === 'Application' && <ApplicationPage />}
               {activeNav === 'Hotkeys' && <HotkeysPage />}
               {activeNav === 'Profile' && <UserProfilePage open={open} />}

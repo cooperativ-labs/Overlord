@@ -1,6 +1,6 @@
 'use client';
 
-import { Bot, Check, Copy, FolderOpen, Plus, Trash2, X } from 'lucide-react';
+import { ArrowRight, Bot, Check, Copy, FolderOpen, Plus, Trash2, X } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
@@ -94,32 +94,32 @@ type SlashStatusEntry = {
 
 type AgentPluginInstallOption =
   | {
-      key: string;
-      agentKey: string;
-      label: string;
-      description: string;
-      kind: 'bundle';
-      bundleAgent: BundleAgent;
-      supportNote?: string;
-    }
+    key: string;
+    agentKey: string;
+    label: string;
+    description: string;
+    kind: 'bundle';
+    bundleAgent: BundleAgent;
+    supportNote?: string;
+  }
   | {
-      key: string;
-      agentKey: string;
-      label: string;
-      description: string;
-      kind: 'service';
-      serviceKey: 'overlord-plugin';
-      supportNote?: string;
-    }
+    key: string;
+    agentKey: string;
+    label: string;
+    description: string;
+    kind: 'service';
+    serviceKey: 'overlord-plugin';
+    supportNote?: string;
+  }
   | {
-      key: string;
-      agentKey: string;
-      label: string;
-      description: string;
-      kind: 'slash';
-      slashAgent: SlashAgent;
-      supportNote?: string;
-    };
+    key: string;
+    agentKey: string;
+    label: string;
+    description: string;
+    kind: 'slash';
+    slashAgent: SlashAgent;
+    supportNote?: string;
+  };
 
 type PluginActionMeta = {
   label: 'Install' | 'Update' | 'Repair' | 'Remove';
@@ -832,7 +832,7 @@ function CustomAgentsSection({ open }: { open: boolean }) {
   );
 }
 
-export function CliPage({ open }: { open: boolean }) {
+export function CliPage({ open, onNavigate }: { open: boolean, onNavigate?: (section: string) => void }) {
   const { isElectron, api } = useElectron();
 
   const [selectedDefaultAgentTrigger, setSelectedDefaultAgentTrigger] =
@@ -1453,8 +1453,19 @@ export function CliPage({ open }: { open: boolean }) {
                         <code className="rounded bg-yellow-100 px-1 dark:bg-yellow-900/30">
                           overlord-cli
                         </code>{' '}
-                        is installed there so agents can communicate with Overlord.
+                        is installed there so agents can communicate with Overlord. We recommend generating a token and using the <code className="rounded bg-yellow-100 px-1 dark:bg-yellow-900/30">ovld auth login --token <oat…></code> command to persist it in your environment.
                       </p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="w-fit"
+                        onClick={() => onNavigate?.('Agent Tokens')}
+                      >
+                        Manage agent tokens
+                        <ArrowRight className="h-3.5 w-3.5" />
+                      </Button>
+
                       <p className="mt-1 text-[11px] text-yellow-700 dark:text-yellow-400">
                         <code className="rounded bg-yellow-100 px-1 dark:bg-yellow-900/30">
                           npm install -g overlord-cli
@@ -1722,26 +1733,26 @@ export function CliPage({ open }: { open: boolean }) {
                                       ? bundleStatus?.status === 'installed'
                                         ? handleUninstallBundle(bundleStatus.agent, option.key)
                                         : bundleStatus?.status === 'partial' ||
-                                            bundleStatus?.status === 'error' ||
-                                            bundleStatus?.status === 'stale'
+                                          bundleStatus?.status === 'error' ||
+                                          bundleStatus?.status === 'stale'
                                           ? handleRepairBundle(bundleStatus.agent, option.key)
                                           : handleInstallBundle(option.bundleAgent, option.key)
                                       : option.kind === 'service'
                                         ? serviceStatus?.status === 'installed'
                                           ? handleUninstallService(option.key)
                                           : serviceStatus?.status === 'partial' ||
-                                              serviceStatus?.status === 'error'
+                                            serviceStatus?.status === 'error'
                                             ? handleRepairService(option.key)
                                             : handleInstallService(option.key)
                                         : !slashStatus || slashStatus.status === 'not_installed'
                                           ? handleInstallSlashCommands(
-                                              option.slashAgent,
-                                              option.key
-                                            )
+                                            option.slashAgent,
+                                            option.key
+                                          )
                                           : handleUninstallSlashCommands(
-                                              option.slashAgent,
-                                              option.key
-                                            );
+                                            option.slashAgent,
+                                            option.key
+                                          );
                                   if (isRemove || option.kind === 'slash') {
                                     void baseAction();
                                     return;
