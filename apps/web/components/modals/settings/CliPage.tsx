@@ -1453,7 +1453,8 @@ export function CliPage({ open, onNavigate }: { open: boolean, onNavigate?: (sec
                         <code className="rounded bg-yellow-100 px-1 dark:bg-yellow-900/30">
                           overlord-cli
                         </code>{' '}
-                        is installed there so agents can communicate with Overlord. We recommend generating a token and using the <code className="rounded bg-yellow-100 px-1 dark:bg-yellow-900/30">ovld auth login --token <oat…></code> command to persist it in your environment.
+
+                        is installed there so agents can communicate with Overlord. We recommend generating a token and using the <code className="rounded bg-yellow-100 px-1 dark:bg-yellow-900/30">ovld auth login --token {`<oat…>`}</code> command to persist it in your environment.
                       </p>
                       <Button
                         type="button"
