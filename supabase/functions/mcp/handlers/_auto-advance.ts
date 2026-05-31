@@ -16,8 +16,10 @@ const LAUNCH_AGENTS = [
 function parseAssignedAgent(value: unknown): AssignedAgent {
   if (!value) return null;
   if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
     return {
-      agent: LAUNCH_AGENTS.includes(value as (typeof LAUNCH_AGENTS)[number]) ? value : 'claude',
+      agent: LAUNCH_AGENTS.includes(trimmed as (typeof LAUNCH_AGENTS)[number]) ? trimmed : trimmed,
       model: null,
       thinking: null
     };
@@ -25,9 +27,8 @@ function parseAssignedAgent(value: unknown): AssignedAgent {
   if (typeof value !== 'object' || Array.isArray(value)) return null;
   const rec = value as Record<string, unknown>;
   if (typeof rec.agent !== 'string') return null;
-  const agent = LAUNCH_AGENTS.includes(rec.agent as (typeof LAUNCH_AGENTS)[number])
-    ? rec.agent
-    : 'claude';
+  const agent = rec.agent.trim();
+  if (!agent) return null;
   const model = typeof rec.model === 'string' ? rec.model : null;
   const thinking = model && typeof rec.thinking === 'string' ? rec.thinking : null;
   return { agent, model, thinking };
@@ -76,7 +77,11 @@ export async function scheduleAutoAdvanceAfterDeliver(input: {
     }
 
     const assigned = parseAssignedAgent(nextDraft.assigned_agent);
-    const agentIdentifier = assigned?.agent ?? 'claude';
+    if (!assigned?.agent) {
+      console.error('[mcp:deliver] auto-advance skipped: no assigned agent on next objective');
+      return { advanced: false };
+    }
+    const agentIdentifier = assigned.agent;
     const completedAt = new Date().toISOString();
 
     await supabase

@@ -1,9 +1,8 @@
 'use client';
 
-import { type KeyboardEvent, useCallback, useEffect, useState } from 'react';
-
 import { ArrowRight, Check, Copy, X } from 'lucide-react';
 import Image from 'next/image';
+import { type KeyboardEvent, useCallback, useEffect, useState } from 'react';
 
 import { useElectron } from '@/components/features/terminal/useElectron';
 import {

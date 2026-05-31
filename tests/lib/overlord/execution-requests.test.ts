@@ -1,4 +1,5 @@
 import { createExecutionRequest } from '@/lib/overlord/execution-requests';
+import { NO_ASSIGNED_AGENT_ERROR } from '@/lib/overlord/resolve-execution-agent';
 
 const USER_ID = '11111111-1111-4111-8111-111111111111';
 const ORG_ID = 1;
@@ -61,7 +62,7 @@ function objectiveQuery(
           ticket_id: TICKET_UUID,
           state: 'draft',
           objective: 'Ship the feature',
-          assigned_agent: null,
+          assigned_agent: { agent: 'codex', model: null, thinking: null },
           ...objective
         },
         error: null
@@ -136,6 +137,36 @@ describe('createExecutionRequest', () => {
     jest.restoreAllMocks();
   });
 
+  it('queues execution for a custom assigned agent when a custom command is provided', async () => {
+    let inserted: unknown;
+    const supabase = buildSupabase({
+      tickets: () => ticketQuery(),
+      objectives: () =>
+        objectiveQuery({
+          assigned_agent: { agent: 'my-harness', model: 'local-llm', thinking: null }
+        }),
+      execution_requests: () => executionRequestInsert({ captureInsert: row => (inserted = row) }),
+      ticket_events: () => ticketEventsInsert()
+    });
+
+    await createExecutionRequest(supabase as never, {
+      ticketId: TICKET_UUID,
+      objectiveId: OBJECTIVE_ID,
+      userId: USER_ID,
+      organizationId: ORG_ID,
+      requestedFrom: 'manual_run',
+      customCommand: 'my-harness --run'
+    });
+
+    expect(inserted).toEqual(
+      expect.objectContaining({
+        agent_identifier: 'my-harness',
+        model_identifier: 'local-llm',
+        thinking_level: null
+      })
+    );
+  });
+
   it('promotes a draft objective to submitted before inserting the request', async () => {
     const objectiveChain = objectiveQuery();
     let objectiveUpdate: unknown;
@@ -193,13 +224,13 @@ describe('createExecutionRequest', () => {
     );
   });
 
-  it('prefers objective assignment over caller defaults for agent/model/thinking', async () => {
+  it('uses only the objective assignment for agent/model/thinking', async () => {
     let inserted: unknown;
     const supabase = buildSupabase({
       tickets: () => ticketQuery(),
       objectives: () =>
         objectiveQuery({
-          assigned_agent: { agent: 'claude', model: 'opus', thinking: 'high' }
+          assigned_agent: { agent: 'codex', model: 'gpt-5.4', thinking: 'high' }
         }),
       execution_requests: () => executionRequestInsert({ captureInsert: row => (inserted = row) }),
       ticket_events: () => ticketEventsInsert()
@@ -211,47 +242,55 @@ describe('createExecutionRequest', () => {
       userId: USER_ID,
       organizationId: ORG_ID,
       requestedFrom: 'manual_run',
-      agentIdentifier: 'codex',
-      modelIdentifier: 'gpt-5',
-      thinkingLevel: 'low'
-    });
-
-    expect(inserted).toEqual(
-      expect.objectContaining({
-        agent_identifier: 'claude',
-        model_identifier: 'opus',
-        thinking_level: 'high'
-      })
-    );
-  });
-
-  it('uses explicit API agent/model/thinking when the objective has no assignment', async () => {
-    let inserted: unknown;
-    const supabase = buildSupabase({
-      tickets: () => ticketQuery(),
-      objectives: () => objectiveQuery(),
-      execution_requests: () => executionRequestInsert({ captureInsert: row => (inserted = row) }),
-      ticket_events: () => ticketEventsInsert()
-    });
-
-    await createExecutionRequest(supabase as never, {
-      ticketId: TICKET_UUID,
-      objectiveId: OBJECTIVE_ID,
-      userId: USER_ID,
-      organizationId: ORG_ID,
-      requestedFrom: 'manual_run',
-      agentIdentifier: 'codex',
-      modelIdentifier: 'gpt-5',
+      agentIdentifier: 'claude',
+      modelIdentifier: 'opus',
       thinkingLevel: 'low'
     });
 
     expect(inserted).toEqual(
       expect.objectContaining({
         agent_identifier: 'codex',
-        model_identifier: 'gpt-5',
-        thinking_level: 'low'
+        model_identifier: 'gpt-5.4',
+        thinking_level: 'high'
       })
     );
+  });
+
+  it('rejects execution when the objective has no assigned agent', async () => {
+    const supabase = buildSupabase({
+      tickets: () => ticketQuery(),
+      objectives: () => objectiveQuery({ assigned_agent: null })
+    });
+
+    await expect(
+      createExecutionRequest(supabase as never, {
+        ticketId: TICKET_UUID,
+        objectiveId: OBJECTIVE_ID,
+        userId: USER_ID,
+        organizationId: ORG_ID,
+        requestedFrom: 'manual_run',
+        agentIdentifier: 'codex',
+        modelIdentifier: 'gpt-5',
+        thinkingLevel: 'low'
+      })
+    ).rejects.toThrow(NO_ASSIGNED_AGENT_ERROR);
+  });
+
+  it('rejects auto-advance when the next objective has no assigned agent', async () => {
+    const supabase = buildSupabase({
+      tickets: () => ticketQuery(),
+      objectives: () => objectiveQuery({ assigned_agent: null })
+    });
+
+    await expect(
+      createExecutionRequest(supabase as never, {
+        ticketId: TICKET_UUID,
+        objectiveId: OBJECTIVE_ID,
+        userId: USER_ID,
+        organizationId: ORG_ID,
+        requestedFrom: 'auto_advance'
+      })
+    ).rejects.toThrow(NO_ASSIGNED_AGENT_ERROR);
   });
 
   it('derives auto_advance idempotency key when none is provided', async () => {
@@ -361,7 +400,10 @@ describe('createExecutionRequest', () => {
     const events = ticketEventsInsert();
     const supabase = buildSupabase({
       tickets: () => ticketQuery(),
-      objectives: () => objectiveQuery(),
+      objectives: () =>
+        objectiveQuery({
+          assigned_agent: { agent: 'codex', model: 'gpt-5.4', thinking: null }
+        }),
       execution_requests: () => executionRequestInsert({}),
       ticket_events: () => events
     });
@@ -380,8 +422,8 @@ describe('createExecutionRequest', () => {
         event_type: 'execution_requested',
         payload: expect.objectContaining({
           requested_from: 'auto_advance',
-          agent_identifier: 'claude',
-          model_identifier: null,
+          agent_identifier: 'codex',
+          model_identifier: 'gpt-5.4',
           thinking_level: null,
           target_kind: 'ssh'
         })

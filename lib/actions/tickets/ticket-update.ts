@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 
 import type { AgentModelSelection } from '@/lib/helpers/agent-model-preference';
-import { createObjectiveAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
+import { assignedAgentSelectionToJson } from '@/lib/helpers/ticket-assigned-agent';
 import { buildProjectPath } from '@/lib/helpers/ticket-path';
 import { upsertDraftObjective } from '@/lib/objectives';
 import { submitDraftObjective } from '@/lib/objectives';
@@ -572,7 +572,7 @@ export async function updateTicketAssignedAgentAction(
 
   const { error } = await supabase
     .from('objectives')
-    .update({ assigned_agent: createObjectiveAssignedAgent(selection) })
+    .update({ assigned_agent: assignedAgentSelectionToJson(selection) })
     .eq('id', targetObjectiveId)
     .eq('ticket_id', ticketId);
 

@@ -174,10 +174,16 @@ export async function runAttachProtocol(supabase: AttachClient, params: AttachPa
     .eq('objective_id', objectiveExecution.executedObjectiveId)
     .in('session_state', ['attached', 'idle', 'blocked']);
 
+  const { data: executingObjective } = await supabase
+    .from('objectives')
+    .select('agent_identifier')
+    .eq('id', objectiveExecution.executedObjectiveId)
+    .single();
+
   const { data: session, error: sessionError } = await supabase
     .from('agent_sessions')
     .insert({
-      agent_identifier: agentIdentifier,
+      agent_identifier: executingObjective?.agent_identifier ?? agentIdentifier,
       connection_method: connectionMethod,
       external_session_id: externalSessionId?.trim() || null,
       metadata,

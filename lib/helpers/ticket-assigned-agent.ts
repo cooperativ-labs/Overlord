@@ -15,7 +15,15 @@ function isLaunchAgent(value: string): value is LaunchAgentType {
   return LAUNCH_AGENT_VALUES.includes(value as LaunchAgentType);
 }
 
-export function createTicketAssignedAgent(selection: AgentModelSelection): TicketAssignedAgent {
+export function assignedAgentSelectionToJson(selection: AgentModelSelection): Json {
+  if (selection.customAgentId) {
+    return {
+      agent: selection.customAgentId,
+      model: selection.model ?? null,
+      thinking: selection.model ? (selection.thinking ?? null) : null
+    };
+  }
+
   return {
     agent: selection.agent,
     model: selection.model ?? null,
@@ -23,28 +31,66 @@ export function createTicketAssignedAgent(selection: AgentModelSelection): Ticke
   };
 }
 
+export function createTicketAssignedAgent(selection: AgentModelSelection): TicketAssignedAgent {
+  const parsed = parseTicketAssignedAgent(assignedAgentSelectionToJson(selection));
+  if (!parsed) {
+    throw new Error('Failed to build ticket agent assignment.');
+  }
+  return parsed;
+}
+
 export function parseTicketAssignedAgent(value: Json | null): TicketAssignedAgent | null {
   if (!value) return null;
 
   if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    if (isLaunchAgent(trimmed)) {
+      return {
+        agent: trimmed,
+        model: null,
+        thinking: null,
+        customAgentId: null
+      };
+    }
+
     return {
-      agent: getLaunchAgentTypeByIdentifier(value),
+      agent: getLaunchAgentTypeByIdentifier(trimmed),
       model: null,
-      thinking: null
+      thinking: null,
+      customAgentId: trimmed
     };
   }
 
-  if (!isRecord(value) || typeof value.agent !== 'string' || !isLaunchAgent(value.agent)) {
+  if (!isRecord(value) || typeof value.agent !== 'string') {
     return null;
   }
+
+  const agent = value.agent.trim();
+  if (!agent) return null;
 
   const model = typeof value.model === 'string' ? value.model : null;
   const thinking = model && typeof value.thinking === 'string' ? value.thinking : null;
 
+  if (isLaunchAgent(agent)) {
+    return {
+      agent,
+      model,
+      thinking,
+      customAgentId: null
+    };
+  }
+
+  const customAgentId =
+    typeof value.customAgentId === 'string' && value.customAgentId.trim().length > 0
+      ? value.customAgentId.trim()
+      : agent;
+
   return {
-    agent: value.agent,
+    agent: getLaunchAgentTypeByIdentifier(customAgentId),
     model,
-    thinking
+    thinking,
+    customAgentId
   };
 }
 
@@ -54,5 +100,5 @@ export const parseObjectiveAssignedAgent = parseTicketAssignedAgent;
 export function getAssignedAgentIdentifier(
   assignedAgent: TicketAssignedAgent | null | undefined
 ): string | null {
-  return assignedAgent?.agent ?? null;
+  return assignedAgent?.customAgentId ?? assignedAgent?.agent ?? null;
 }

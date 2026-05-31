@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { generateTitleWithGemini } from '@/lib/ai/generate-ticket-title';
 import { parseTicketAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
 import { deriveTitleFromObjective } from '@/lib/helpers/tickets';
+import { requireExecutionAgentFromAssignment } from '@/lib/overlord/resolve-execution-agent';
 import type { Database, Json } from '@/types/database.types';
 
 export type ObjectiveState = Database['public']['Enums']['objective_state'];
@@ -579,16 +580,22 @@ export async function markSubmittedObjectiveExecuting(
     return { didExecute: false, executedObjective: null };
   }
 
+  const assignedAgent = requireExecutionAgentFromAssignment(
+    launchObjective.assigned_agent ?? executionSnapshot?.objectiveAssignedAgent ?? null
+  );
+
   const { error: executeError } = await supabase
     .from('objectives')
     .update({
       state: 'executing',
-      agent_identifier: executionSnapshot?.agentIdentifier ?? null,
-      model_identifier: resolveObjectiveModelIdentifier({
-        metadata: executionSnapshot?.metadata,
-        objectiveAssignedAgent:
-          executionSnapshot?.objectiveAssignedAgent ?? launchObjective.assigned_agent
-      }),
+      agent_identifier: assignedAgent.agentIdentifier,
+      model_identifier:
+        assignedAgent.modelIdentifier ??
+        resolveObjectiveModelIdentifier({
+          metadata: executionSnapshot?.metadata,
+          objectiveAssignedAgent:
+            executionSnapshot?.objectiveAssignedAgent ?? launchObjective.assigned_agent
+        }),
       completed_at: null
     })
     .eq('id', launchObjective.id);

@@ -1,8 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-import { isLaunchAgentTypeValue, type LaunchAgentType } from '@/lib/helpers/agent-types';
 import type { RunnerTerminalProfile } from '@/lib/helpers/runner-terminal-settings';
-import { parseObjectiveAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
+import { requireExecutionAgentFromAssignment } from '@/lib/overlord/resolve-execution-agent';
 import type { Database, Json } from '@/types/database.types';
 
 type ExecutionClient = SupabaseClient<Database>;
@@ -60,11 +59,6 @@ export type ExecutionRequestResponse = {
 function normalizeOptionalText(value: string | null | undefined): string | null {
   const trimmed = value?.trim();
   return trimmed ? trimmed : null;
-}
-
-function normalizeAgent(value: string | null | undefined): LaunchAgentType {
-  const normalized = normalizeOptionalText(value);
-  return normalized && isLaunchAgentTypeValue(normalized) ? normalized : 'claude';
 }
 
 function buildLaunchParams(input: RequestExecutionInput): Json {
@@ -134,16 +128,16 @@ export async function createExecutionRequest(
   }
 
   const objective = await resolveObjectiveForExecution(supabase, ticket.id, input.objectiveId);
-  const assigned = parseObjectiveAssignedAgent(objective.assigned_agent);
-  // A resolved custom command means agentIdentifier is a user-defined custom-agent slug,
-  // not a built-in LaunchAgentType — preserve it verbatim so the runner can fetch the
-  // stored customCommand and launch the generic PTY path.
+  const assigned = requireExecutionAgentFromAssignment(objective.assigned_agent);
   const customCommand = normalizeOptionalText(input.customCommand);
-  const agent = customCommand
-    ? (normalizeOptionalText(input.agentIdentifier) ?? 'claude')
-    : normalizeAgent(assigned?.agent ?? input.agentIdentifier ?? null);
-  const model = assigned?.model ?? normalizeOptionalText(input.modelIdentifier) ?? null;
-  const thinking = assigned?.thinking ?? normalizeOptionalText(input.thinkingLevel) ?? null;
+  if (assigned.customAgentId && !customCommand) {
+    throw new Error(
+      'Assigned custom agent is missing a launch command. Re-select the agent and try again.'
+    );
+  }
+  const agent = assigned.agentIdentifier;
+  const model = assigned.modelIdentifier;
+  const thinking = assigned.thinkingLevel;
   const requestedFrom = input.requestedFrom.trim();
   const idempotencyKey =
     normalizeOptionalText(input.idempotencyKey) ??

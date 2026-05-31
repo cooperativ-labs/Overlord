@@ -347,15 +347,53 @@ export function QuickTaskBar({ defaultProjectId, projects, sshEnabled }: QuickTa
       });
 
       // Background tasks: assignment, execution target, title, attachments
+      if (shouldLaunch && isLaunchAgentTypeValue(objectiveSelection.agent) && !forHuman) {
+        try {
+          await updateAssignmentMutation.mutateAsync({
+            ticketId: createdTicket.id,
+            selection: objectiveSelection,
+            objectiveId: createdTicket.objectiveId
+          });
+
+          const result = await requestTicketObjectiveExecutionAction({
+            ticketId: createdTicket.id,
+            objectiveId: createdTicket.objectiveId,
+            workingDirectory:
+              workspace.executionWorkspace === 'local'
+                ? (workspace.effectiveWorkingDirectory ?? null)
+                : null,
+            sshCommand:
+              workspace.executionWorkspace === 'ssh'
+                ? (workspace.effectiveSshCommand ?? null)
+                : null,
+            remoteWorkingDirectory:
+              workspace.executionWorkspace === 'ssh'
+                ? (workspace.effectiveRemoteWorkingDirectory ?? null)
+                : null
+          });
+          if ('error' in result) {
+            throw new Error(result.error);
+          }
+        } catch (error) {
+          console.error('Failed to queue execution:', error);
+          toast.error('Failed to queue execution.', {
+            description:
+              error instanceof Error && error.message.trim().length > 0
+                ? error.message
+                : 'Check your runner configuration and try again.'
+          });
+        }
+      }
+
       void (async () => {
         try {
-          if (!forHuman) {
+          if (!forHuman && !shouldLaunch) {
             await updateAssignmentMutation.mutateAsync({
               ticketId: createdTicket.id,
               selection: objectiveSelection,
               objectiveId: createdTicket.objectiveId
             });
-          } else {
+          } else if (forHuman) {
             await updateForHumanMutation.mutateAsync({
               ticketId: createdTicket.id,
               forHuman: true
@@ -378,41 +416,6 @@ export function QuickTaskBar({ defaultProjectId, projects, sshEnabled }: QuickTa
       setObjective('');
       setStagedFiles([]);
       handleClose();
-
-      if (shouldLaunch && isLaunchAgentTypeValue(objectiveSelection.agent) && !forHuman) {
-        try {
-          const result = await requestTicketObjectiveExecutionAction({
-            ticketId: createdTicket.id,
-            objectiveId: createdTicket.objectiveId,
-            agentIdentifier: objectiveSelection.agent,
-            workingDirectory:
-              workspace.executionWorkspace === 'local'
-                ? (workspace.effectiveWorkingDirectory ?? null)
-                : null,
-            sshCommand:
-              workspace.executionWorkspace === 'ssh'
-                ? (workspace.effectiveSshCommand ?? null)
-                : null,
-            remoteWorkingDirectory:
-              workspace.executionWorkspace === 'ssh'
-                ? (workspace.effectiveRemoteWorkingDirectory ?? null)
-                : null,
-            modelIdentifier: objectiveSelection.model ?? null,
-            thinkingLevel: objectiveSelection.thinking ?? null
-          });
-          if ('error' in result) {
-            throw new Error(result.error);
-          }
-        } catch (error) {
-          console.error('Failed to queue execution:', error);
-          toast.error('Failed to queue execution.', {
-            description:
-              error instanceof Error && error.message.trim().length > 0
-                ? error.message
-                : 'Check your runner configuration and try again.'
-          });
-        }
-      }
     } catch (error) {
       console.error('Failed to create ticket:', error);
       toast.error('Failed to create ticket.');

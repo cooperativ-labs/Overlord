@@ -8,6 +8,7 @@ export type TicketAssignedAgent = {
   agent: LaunchAgentType;
   model: string | null;
   thinking: string | null;
+  customAgentId?: string | null;
 };
 
 export type TicketType = Database['public']['Tables']['tickets']['Row'];

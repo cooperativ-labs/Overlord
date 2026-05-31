@@ -16,8 +16,10 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   getTicketPromptForCopy,
-  requestTicketObjectiveExecutionAction
+  requestTicketObjectiveExecutionAction,
+  updateTicketAssignedAgentAction
 } from '@/lib/actions/tickets';
+import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
 import type { AgentModelSelection } from '@/lib/helpers/agent-model-preference';
 import { readDefaultAgentTriggerFromStorage } from '@/lib/helpers/agent-trigger';
 import {
@@ -27,6 +29,11 @@ import {
   type LaunchAgentType
 } from '@/lib/helpers/agent-types';
 import { buildCustomAgentValues, resolveCustomAgentCommand } from '@/lib/helpers/custom-agent';
+import { assignedAgentSelectionToJson } from '@/lib/helpers/ticket-assigned-agent';
+import {
+  NO_ASSIGNED_AGENT_ERROR,
+  parseExecutionAgentFromAssignment
+} from '@/lib/overlord/resolve-execution-agent';
 import { CUSTOM_AGENTS_CONFIG_KEY } from '@/lib/schemas/agent-config';
 import { cn } from '@/lib/utils';
 import type { Database } from '@/types/database.types';
@@ -122,6 +129,10 @@ const COPY_PROMPT_LABELS = {
 type CopyPromptOption = keyof typeof COPY_PROMPT_LABELS;
 
 const COPY_PROMPT_OPTIONS: CopyPromptOption[] = ['copy-local', 'copy-cloud'];
+
+const updateTicketAssignedAgentActionWithRetry = withElectronActionRetry(
+  updateTicketAssignedAgentAction
+);
 
 export function AgentSplitButton({
   selectedAgent,
@@ -253,6 +264,31 @@ export function AgentSplitButton({
 
     if (!isLaunchAgentTypeValue(agentValue)) return;
 
+    const persistedAssignment = parseExecutionAgentFromAssignment(
+      assignedAgentSelectionToJson(effectiveSelection)
+    );
+    if (!persistedAssignment) {
+      toast.error('No agent assigned', { description: NO_ASSIGNED_AGENT_ERROR });
+      return;
+    }
+
+    try {
+      await updateTicketAssignedAgentActionWithRetry(
+        ticketId,
+        effectiveSelection,
+        submitObjectiveId ?? null
+      );
+    } catch (error) {
+      console.error('Failed to save agent assignment:', error);
+      toast.error('Failed to save agent assignment', {
+        description:
+          error instanceof Error && error.message.trim().length > 0
+            ? error.message
+            : 'Select an agent and try again.'
+      });
+      return;
+    }
+
     // When the active selection targets a user-defined custom agent, resolve its
     // launch-command template (placeholders filled from the model/thinking choice)
     // and queue it as a custom execution. The runner launches it via the generic
@@ -285,7 +321,6 @@ export function AgentSplitButton({
       const result = await requestTicketObjectiveExecutionAction({
         ticketId,
         objectiveId: submitObjectiveId ?? undefined,
-        agentIdentifier: resolvedAgentIdentifier,
         customCommand,
         workingDirectory:
           workspace.executionWorkspace === 'local'
@@ -299,12 +334,6 @@ export function AgentSplitButton({
             : null,
         flags: customAgentId ? undefined : agentFlags?.[agentValue],
         preCommand: customAgentId ? undefined : agentPreCommands?.[agentValue],
-        modelIdentifier: options?.useStoredModelPreference
-          ? (effectiveSelection.model ?? undefined)
-          : undefined,
-        thinkingLevel: options?.useStoredModelPreference
-          ? (effectiveSelection.thinking ?? undefined)
-          : undefined,
         targetExecutionTargetId: projectSettingsCtx?.selectedDeviceId ?? undefined
       });
       if ('error' in result) {

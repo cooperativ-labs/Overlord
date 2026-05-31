@@ -15,7 +15,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { AgentModel } from '@/lib/actions/agent-models';
 import { updateTicketAssignedAgentAction } from '@/lib/actions/tickets';
-import type { TicketAssignedAgent } from '@/lib/client-data/tickets/board-types';
+import type { TicketAssignedAgent } from '@/types/tickets';
 import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
 import type { AgentModelSelection } from '@/lib/helpers/agent-model-preference';
 import { getAgentTypeByValue } from '@/lib/helpers/agent-types';
@@ -45,7 +45,10 @@ function isSameAssigned(
   if (left === right) return true;
   if (left === null || right === null) return false;
   return (
-    left.agent === right.agent && left.model === right.model && left.thinking === right.thinking
+    left.agent === right.agent &&
+    left.model === right.model &&
+    left.thinking === right.thinking &&
+    (left.customAgentId ?? null) === (right.customAgentId ?? null)
   );
 }
 

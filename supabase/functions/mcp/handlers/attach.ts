@@ -111,9 +111,26 @@ export async function handleAttach(supabase: SupabaseClient, args: any, ctx: Tok
         .maybeSingle()
     ).data;
 
+  function resolveStoredAgentIdentifier(assignedAgent: unknown): string | null {
+    if (!assignedAgent) return null;
+    if (typeof assignedAgent === 'string') {
+      const trimmed = assignedAgent.trim();
+      return trimmed || null;
+    }
+    if (typeof assignedAgent !== 'object' || Array.isArray(assignedAgent)) return null;
+    const agent = (assignedAgent as { agent?: unknown }).agent;
+    if (typeof agent !== 'string') return null;
+    const trimmed = agent.trim();
+    return trimmed || null;
+  }
+
   let executedObjective: string | null = null;
   let executedObjectiveId: string | null = null;
   if (draftObjective && draftObjective.objective.trim().length > 0) {
+    const storedAgentIdentifier = resolveStoredAgentIdentifier(draftObjective.assigned_agent);
+    if (!storedAgentIdentifier) {
+      return toolErr('No agent was assigned to this objective. Select an agent before running.');
+    }
     const objectiveAssignedModel =
       draftObjective.assigned_agent &&
       typeof draftObjective.assigned_agent === 'object' &&
@@ -151,7 +168,7 @@ export async function handleAttach(supabase: SupabaseClient, args: any, ctx: Tok
       .from('objectives')
       .update({
         state: 'executing',
-        agent_identifier: agentIdentifier ?? null,
+        agent_identifier: storedAgentIdentifier,
         model_identifier: metadataModel ?? objectiveAssignedModel,
         completed_at: null
       })
@@ -195,11 +212,17 @@ export async function handleAttach(supabase: SupabaseClient, args: any, ctx: Tok
     .eq('objective_id', executedObjectiveId)
     .in('session_state', ['attached', 'idle', 'blocked']);
 
+  const { data: executingObjectiveRow } = await supabase
+    .from('objectives')
+    .select('agent_identifier')
+    .eq('id', executedObjectiveId)
+    .single();
+
   const sessionKey = crypto.randomUUID();
   const { data: session, error: sessionErr } = await supabase
     .from('agent_sessions')
     .insert({
-      agent_identifier: agentIdentifier,
+      agent_identifier: executingObjectiveRow?.agent_identifier ?? agentIdentifier,
       connection_method: connectionMethod,
       external_session_id:
         typeof externalSessionId === 'string' && externalSessionId.trim().length > 0
