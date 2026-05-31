@@ -12,7 +12,8 @@ import {
   Server,
   Shield,
   Terminal,
-  User
+  User,
+  X
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
@@ -25,7 +26,13 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator
 } from '@/components/ui/breadcrumb';
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogTitle
+} from '@/components/ui/dialog';
 import {
   Select,
   SelectContent,
@@ -218,6 +225,10 @@ export function SettingsModal({
                   </BreadcrumbList>
                 </Breadcrumb>
               </div>
+              <DialogClose className="ml-auto flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground ring-offset-background transition-colors hover:bg-accent hover:text-accent-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+                <X className="size-5" />
+                <span className="sr-only">Close settings</span>
+              </DialogClose>
             </header>
             <div className="flex flex-1 flex-col gap-6 overflow-y-auto p-6">
               {activeNav === 'Integrations' && (
