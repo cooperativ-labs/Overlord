@@ -247,7 +247,9 @@ export function SettingsModal({
               {activeNav === 'Profile' && <UserProfilePage open={open} />}
               {activeNav === 'Linked Accounts' && <LinkedAccountsPage open={open} />}
               {activeNav === 'Terminal & IDE' && <TerminalPage open={open} />}
-              {activeNav === 'Execution Targets' && <ExecutionTargetsPage open={open} />}
+              {activeNav === 'Execution Targets' && (
+                <ExecutionTargetsPage open={open} onNavigate={setActiveNav} />
+              )}
               {activeNav === 'About' && <AboutPage open={open} />}
             </div>
           </main>

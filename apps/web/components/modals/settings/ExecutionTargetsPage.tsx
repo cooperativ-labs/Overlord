@@ -2,6 +2,9 @@
 
 import { type KeyboardEvent, useCallback, useEffect, useState } from 'react';
 
+import { ArrowRight, Check, Copy, X } from 'lucide-react';
+import Image from 'next/image';
+
 import { useElectron } from '@/components/features/terminal/useElectron';
 import {
   Accordion,
@@ -10,6 +13,7 @@ import {
   AccordionTrigger
 } from '@/components/ui/accordion';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -21,9 +25,23 @@ import {
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import {
+  getExecutionTargetAgentConfigsAction,
+  updateExecutionTargetAgentConfigAction
+} from '@/lib/actions/execution-target-agent-config';
+import {
+  getUserExecutionTargetsAction,
   getUserExecutionTargetsWithDetailsAction,
+  type UserExecutionTarget,
   type UserExecutionTargetDetailed
 } from '@/lib/actions/resource-directories';
+import {
+  getAgentTypeByValue,
+  LAUNCH_AGENT_VALUES,
+  type LaunchAgentType
+} from '@/lib/helpers/agent-types';
+import { buildDirectAgentCommand } from '@/lib/overlord/launch-commands';
+import type { AgentLaunchConfig, TargetAgentConfigs } from '@/lib/schemas/target-agent-config';
+import { cn } from '@/lib/utils';
 
 type TerminalProfileState = {
   terminalApp: string;
@@ -88,6 +106,51 @@ const PROFILE_FIELDS: (keyof TerminalProfileState)[] = [
   'terminalTmuxCommand'
 ];
 
+const AGENTS: readonly LaunchAgentType[] = LAUNCH_AGENT_VALUES;
+
+const AGENT_LABELS: Record<string, string> = {
+  claude: 'Claude',
+  cursor: 'Cursor',
+  codex: 'Codex',
+  opencode: 'OpenCode',
+  pi: 'Pi'
+};
+
+const COPY_AGENT_LABELS: Record<string, string> = {
+  'copy-local': 'For Local',
+  'copy-cloud': 'For Cloud',
+  'copy-terminal': 'For Terminal'
+};
+
+function AgentNameWithLogo({
+  agent,
+  label,
+  iconClassName = 'h-4 w-4'
+}: {
+  agent: string;
+  label: string;
+  iconClassName?: string;
+}) {
+  if (agent in COPY_AGENT_LABELS) {
+    return <span>{label}</span>;
+  }
+
+  const agentType = getAgentTypeByValue(agent as LaunchAgentType);
+
+  return (
+    <span className="flex items-center gap-2">
+      <Image
+        src={agentType.icon}
+        alt={agentType.label}
+        width={16}
+        height={16}
+        className={cn(iconClassName, agentType.invertDark ? 'dark:invert' : '')}
+      />
+      <span>{label}</span>
+    </span>
+  );
+}
+
 function settingKey(targetId: string, field: keyof TerminalProfileState): string {
   return `executionTarget.${targetId}.${field}`;
 }
@@ -112,11 +175,26 @@ function authMethodLabel(method: string): string {
   }
 }
 
-export function ExecutionTargetsPage({ open }: { open: boolean }) {
+export function ExecutionTargetsPage({
+  open,
+  onNavigate
+}: {
+  open: boolean;
+  onNavigate?: (section: string) => void;
+}) {
   const { api, isElectron } = useElectron();
   const [targets, setTargets] = useState<UserExecutionTargetDetailed[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const [selectedLocalAgent, setSelectedLocalAgent] = useState<LaunchAgentType>('claude');
+  const [localTargets, setLocalTargets] = useState<UserExecutionTarget[]>([]);
+  const [selectedLocalTargetId, setSelectedLocalTargetId] = useState<string>('');
+  const [targetAgentConfigs, setTargetAgentConfigs] = useState<Record<string, TargetAgentConfigs>>(
+    {}
+  );
+  const [flagInput, setFlagInput] = useState('');
+  const [commandCopied, setCommandCopied] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -140,6 +218,103 @@ export function ExecutionTargetsPage({ open }: { open: boolean }) {
       cancelled = true;
     };
   }, [open]);
+
+  useEffect(() => {
+    if (!open || !isElectron) return;
+    void (async () => {
+      try {
+        const [lt, configs] = await Promise.all([
+          getUserExecutionTargetsAction(),
+          getExecutionTargetAgentConfigsAction()
+        ]);
+        setLocalTargets(lt);
+        setTargetAgentConfigs(configs);
+        setSelectedLocalTargetId(current =>
+          current && lt.some(t => t.id === current) ? current : (lt[0]?.id ?? '')
+        );
+      } catch (err) {
+        console.error('Failed to load execution target agent configs:', err);
+      }
+    })();
+  }, [isElectron, open]);
+
+  function currentAgentConfig(targetId: string, agent: string): AgentLaunchConfig {
+    return targetAgentConfigs[targetId]?.[agent] ?? { flags: [] };
+  }
+
+  async function persistAgentConfig(agent: string, next: AgentLaunchConfig) {
+    const targetId = selectedLocalTargetId;
+    if (!targetId) return;
+    setTargetAgentConfigs(current => {
+      const forTarget = { ...(current[targetId] ?? {}) };
+      if (next.flags.length === 0 && !next.preCommand?.trim()) {
+        delete forTarget[agent];
+      } else {
+        forTarget[agent] = next;
+      }
+      return { ...current, [targetId]: forTarget };
+    });
+    try {
+      const saved = await updateExecutionTargetAgentConfigAction(targetId, agent, next);
+      setTargetAgentConfigs(current => ({ ...current, [targetId]: saved }));
+    } catch (err) {
+      console.error('Failed to save target agent config:', err);
+    }
+  }
+
+  async function handleAddFlag() {
+    const flag = flagInput.trim();
+    if (!flag || !selectedLocalTargetId) return;
+    const config = currentAgentConfig(selectedLocalTargetId, selectedLocalAgent);
+    if (!config.flags.includes(flag)) {
+      await persistAgentConfig(selectedLocalAgent, {
+        ...config,
+        flags: [...config.flags, flag]
+      });
+    }
+    setFlagInput('');
+  }
+
+  async function handleSavePreCommand(agent: string, value: string) {
+    if (!selectedLocalTargetId) return;
+    const config = currentAgentConfig(selectedLocalTargetId, agent);
+    const trimmed = value.trim();
+    await persistAgentConfig(agent, { ...config, preCommand: trimmed || undefined });
+  }
+
+  async function handleRemoveFlag(agent: string, index: number) {
+    if (!selectedLocalTargetId) return;
+    const config = currentAgentConfig(selectedLocalTargetId, agent);
+    await persistAgentConfig(agent, {
+      ...config,
+      flags: config.flags.filter((_, i) => i !== index)
+    });
+  }
+
+  function handlePreCommandInput(agent: string, value: string) {
+    const targetId = selectedLocalTargetId;
+    if (!targetId) return;
+    setTargetAgentConfigs(current => {
+      const forTarget = { ...(current[targetId] ?? {}) };
+      const config = forTarget[agent] ?? { flags: [] };
+      forTarget[agent] = { ...config, preCommand: value };
+      return { ...current, [targetId]: forTarget };
+    });
+  }
+
+  function buildLocalAgentCommand(agent: string): string {
+    const config = currentAgentConfig(selectedLocalTargetId, agent);
+    return buildDirectAgentCommand(agent as LaunchAgentType, {
+      preCommand: config.preCommand,
+      flags: config.flags
+    });
+  }
+
+  async function handleCopyCommand() {
+    await navigator.clipboard.writeText(buildLocalAgentCommand(selectedLocalAgent));
+    setCommandCopied(true);
+    setTimeout(() => setCommandCopied(false), 2000);
+  }
 
   return (
     <div className="grid gap-6">
@@ -190,6 +365,180 @@ export function ExecutionTargetsPage({ open }: { open: boolean }) {
           ))}
         </Accordion>
       )}
+
+      {isElectron ? (
+        <div className="rounded-md border px-3 py-3 grid gap-4">
+          <div className="grid gap-1">
+            <p className="text-sm font-medium">Local agent configuration</p>
+            <p className="text-xs text-muted-foreground">
+              These settings apply to agents launched from Overlord on the selected execution
+              target, so you can customize how Overlord starts each local agent per target.
+            </p>
+          </div>
+          <div className="grid gap-4">
+            {localTargets.length === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                No execution targets yet. Launch an agent locally (or add a remote SSH target to a
+                project) to create one, then configure its launch flags here.
+              </p>
+            ) : (
+              <Select value={selectedLocalTargetId} onValueChange={setSelectedLocalTargetId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select execution target" />
+                </SelectTrigger>
+                <SelectContent>
+                  {localTargets.map(target => (
+                    <SelectItem key={target.id} value={target.id}>
+                      {target.label}
+                      {target.hostname ? ` · ${target.hostname}` : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            <Select
+              value={selectedLocalAgent}
+              onValueChange={value => setSelectedLocalAgent(value as LaunchAgentType)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select agent" />
+              </SelectTrigger>
+              <SelectContent>
+                {AGENTS.map(agent => (
+                  <SelectItem key={agent} value={agent}>
+                    <AgentNameWithLogo agent={agent} label={AGENT_LABELS[agent] ?? agent} />
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="space-y-3">
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-foreground">Pre-command</label>
+                <input
+                  type="text"
+                  placeholder="e.g., ollama or agent-pod"
+                  value={
+                    currentAgentConfig(selectedLocalTargetId, selectedLocalAgent).preCommand ?? ''
+                  }
+                  onChange={e => handlePreCommandInput(selectedLocalAgent, e.target.value)}
+                  onBlur={e => void handleSavePreCommand(selectedLocalAgent, e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      void handleSavePreCommand(selectedLocalAgent, e.currentTarget.value);
+                    }
+                  }}
+                  className="w-full rounded border bg-background px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Runs in your shell before the agent binary, wrapping it — e.g.{' '}
+                  <code className="rounded bg-muted px-1">ollama</code> launches{' '}
+                  <code className="rounded bg-muted px-1">ollama {selectedLocalAgent} …</code>
+                </p>
+                {currentAgentConfig(selectedLocalTargetId, selectedLocalAgent).preCommand ? (
+                  <div className="rounded-md border border-yellow-500/40 bg-yellow-50/50 p-2.5 dark:bg-yellow-900/10">
+                    <p className="text-[11px] text-yellow-800 dark:text-yellow-300">
+                      If this command runs inside a container, make sure{' '}
+                      <code className="rounded bg-yellow-100 px-1 dark:bg-yellow-900/30">
+                        overlord-cli
+                      </code>{' '}
+                      is installed{' '}
+                      <code className="rounded bg-yellow-100 px-1 dark:bg-yellow-900/30">
+                        npm install -g overlord-cli
+                      </code>{' '}
+                      there so agents can communicate with Overlord. We recommend generating a token
+                      and using the{' '}
+                      <code className="rounded bg-yellow-100 px-1 dark:bg-yellow-900/30">
+                        ovld auth login --token {`<oat…>`}
+                      </code>{' '}
+                      command to persist it in your environment.
+                    </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="mt-2 w-fit"
+                      onClick={() => onNavigate?.('Agent Tokens')}
+                    >
+                      Manage agent tokens
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                ) : null}
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-foreground">Command flags</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="e.g., --enable-auto-mode"
+                    value={flagInput}
+                    onChange={e => setFlagInput(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        void handleAddFlag();
+                      }
+                    }}
+                    className="flex-1 rounded border bg-background px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void handleAddFlag()}
+                    className="rounded border bg-muted px-3 py-2 text-xs font-medium hover:bg-muted/80"
+                  >
+                    Add
+                  </button>
+                </div>
+              </div>
+              {currentAgentConfig(selectedLocalTargetId, selectedLocalAgent).flags.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex flex-wrap gap-2">
+                    {currentAgentConfig(selectedLocalTargetId, selectedLocalAgent).flags.map(
+                      (flag, index) => (
+                        <div
+                          key={index}
+                          className="flex items-center gap-2 rounded-md bg-muted px-2.5 py-1"
+                        >
+                          <code className="text-xs font-medium">{flag}</code>
+                          <button
+                            type="button"
+                            onClick={() => void handleRemoveFlag(selectedLocalAgent, index)}
+                            className="rounded p-0.5 hover:bg-muted-foreground/20"
+                            title="Remove flag"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                      )
+                    )}
+                  </div>
+                </div>
+              )}
+              <div className="space-y-2 rounded-md border bg-muted/30 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-medium text-foreground">Command</p>
+                  <button
+                    type="button"
+                    onClick={() => void handleCopyCommand()}
+                    className="shrink-0 rounded p-1 hover:bg-muted"
+                    title="Copy command"
+                  >
+                    {commandCopied ? (
+                      <Check className="h-3.5 w-3.5 text-green-500" />
+                    ) : (
+                      <Copy className="h-3.5 w-3.5 text-muted-foreground" />
+                    )}
+                  </button>
+                </div>
+                <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs">
+                  {buildLocalAgentCommand(selectedLocalAgent)}
+                </pre>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
