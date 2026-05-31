@@ -43,7 +43,8 @@ function buildClaimSupabase({
     user_id: string;
     execution_target_id: string;
   } | null,
-  targetAgentFlags = undefined as Record<string, unknown> | null | undefined
+  targetAgentFlags = undefined as Record<string, unknown> | null | undefined,
+  targetAgentFlagsError = null as { message: string } | null
 } = {}) {
   const claimUpdate = {
     update: jest.fn(() => claimUpdate),
@@ -98,11 +99,17 @@ function buildClaimSupabase({
           select: jest.fn(() => chain),
           eq: jest.fn(() => chain),
           maybeSingle: jest.fn(async () => ({
-            data: targetAgentFlags === undefined ? null : { agent_flags: targetAgentFlags },
-            error: null
+            data:
+              targetAgentFlagsError || targetAgentFlags === undefined
+                ? null
+                : { agent_flags: targetAgentFlags },
+            error: targetAgentFlagsError
           }))
         };
         return chain;
+      }
+      if (table === 'ticket_events') {
+        return { insert: jest.fn(async () => ({ error: null })) };
       }
       throw new Error(`unexpected table ${table}`);
     }),
@@ -248,6 +255,48 @@ describe('POST /api/protocol/claim-execution', () => {
     expect(body.launch.preCommand).toBe('global-pre');
   });
 
+  it('does not fall back to launch_params when the target explicitly clears the agent config', async () => {
+    const launchParams = {
+      workingDirectory: '/repo',
+      flags: ['--from-request'],
+      preCommand: 'global-pre'
+    };
+    const supabase = buildClaimSupabase({
+      candidates: [baseCandidate({ launch_params: launchParams })],
+      claimResult: baseCandidate({ status: 'claimed', launch_params: launchParams }),
+      targetAgentFlags: { claude: { flags: [] } }
+    });
+    const { createServiceRoleClient } = jest.requireMock('@/supabase/utils/service-role');
+    createServiceRoleClient.mockReturnValue(supabase);
+
+    const response = await POST(new Request('http://localhost', { method: 'POST' }));
+    const body = await response.json();
+    expect(body.launch.flags).toEqual([]);
+    expect(body.launch.preCommand).toBeNull();
+  });
+
+  it('fails closed (no claim, no fallback flags) when target-config lookup errors', async () => {
+    const launchParams = {
+      workingDirectory: '/repo',
+      flags: ['--from-request'],
+      preCommand: 'global-pre'
+    };
+    const supabase = buildClaimSupabase({
+      candidates: [baseCandidate({ launch_params: launchParams })],
+      claimResult: baseCandidate({ status: 'claimed', launch_params: launchParams }),
+      targetAgentFlagsError: { message: 'connection reset' }
+    });
+    const { createServiceRoleClient } = jest.requireMock('@/supabase/utils/service-role');
+    createServiceRoleClient.mockReturnValue(supabase);
+
+    const response = await POST(new Request('http://localhost', { method: 'POST' }));
+    // Candidate skipped: no fallback launch payload returned, and the request is
+    // never claimed (left queued for retry) so a transient config error cannot
+    // strand the request.
+    await expect(response.json()).resolves.toEqual({ request: null });
+    expect(supabase.claimUpdate.update).not.toHaveBeenCalled();
+  });
+
   it('reclaims an expired claimed request and increments attempt_count', async () => {
     const expiredLease = new Date(Date.now() - 60_000).toISOString();
     const claimed = baseCandidate({
@@ -276,6 +325,57 @@ describe('POST /api/protocol/claim-execution', () => {
     expect(supabase.claimUpdate.update).toHaveBeenCalledWith(
       expect.objectContaining({ attempt_count: 2 })
     );
+  });
+
+  it('reclaims a stale launching request after the lease expires', async () => {
+    const expiredLease = new Date(Date.now() - 60_000).toISOString();
+    const claimed = baseCandidate({
+      status: 'claimed',
+      attempt_count: 3,
+      lease_expires_at: expiredLease,
+      launch_params: { workingDirectory: '/repo' }
+    });
+    const supabase = buildClaimSupabase({
+      candidates: [
+        baseCandidate({
+          status: 'launching',
+          attempt_count: 2,
+          lease_expires_at: expiredLease,
+          launch_params: { workingDirectory: '/repo' }
+        })
+      ],
+      claimResult: claimed
+    });
+    const { createServiceRoleClient } = jest.requireMock('@/supabase/utils/service-role');
+    createServiceRoleClient.mockReturnValue(supabase);
+
+    const response = await POST(new Request('http://localhost', { method: 'POST' }));
+    expect(response.status).toBe(200);
+    // The stale launching row is guarded by status+expired-lease, then re-claimed.
+    expect(supabase.claimUpdate.eq).toHaveBeenCalledWith('status', 'launching');
+    expect(supabase.claimUpdate.lt).toHaveBeenCalled();
+    expect(supabase.claimUpdate.update).toHaveBeenCalledWith(
+      expect.objectContaining({ attempt_count: 3 })
+    );
+  });
+
+  it('does not reclaim a launching request before lease expiry', async () => {
+    const futureLease = new Date(Date.now() + 60_000).toISOString();
+    const supabase = buildClaimSupabase({
+      candidates: [
+        baseCandidate({
+          status: 'launching',
+          lease_expires_at: futureLease,
+          launch_params: { workingDirectory: '/repo' }
+        })
+      ],
+      claimResult: null
+    });
+    const { createServiceRoleClient } = jest.requireMock('@/supabase/utils/service-role');
+    createServiceRoleClient.mockReturnValue(supabase);
+
+    const response = await POST(new Request('http://localhost', { method: 'POST' }));
+    await expect(response.json()).resolves.toEqual({ request: null });
   });
 
   it('does not reclaim a claimed request before lease expiry', async () => {

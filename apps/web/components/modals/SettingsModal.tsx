@@ -246,7 +246,9 @@ export function SettingsModal({
               {activeNav === 'Hotkeys' && <HotkeysPage />}
               {activeNav === 'Profile' && <UserProfilePage open={open} />}
               {activeNav === 'Linked Accounts' && <LinkedAccountsPage open={open} />}
-              {activeNav === 'Terminal & IDE' && <TerminalPage open={open} />}
+              {activeNav === 'Terminal & IDE' && (
+                <TerminalPage open={open} onNavigate={setActiveNav} />
+              )}
               {activeNav === 'Execution Targets' && (
                 <ExecutionTargetsPage open={open} onNavigate={setActiveNav} />
               )}

@@ -74,7 +74,7 @@ export function mergeAgentLaunchConfig(
 
   if ('preCommand' in update) {
     const next = update.preCommand;
-    if (next == null || (typeof next === 'string' && next.trim() === '')) {
+    if (next === null || next === undefined || (typeof next === 'string' && next.trim() === '')) {
       delete merged.preCommand;
     } else {
       merged.preCommand = next;

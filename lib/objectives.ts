@@ -313,6 +313,7 @@ export async function insertOrderedObjectives(
     row =>
       row.state === 'draft' ||
       row.state === 'submitted' ||
+      row.state === 'launching' ||
       row.state === 'executing' ||
       row.state === 'pending_delivery'
   );
@@ -422,8 +423,8 @@ export async function submitDraftObjective(
       };
     }
 
-    // Already submitted — nothing to do; let the caller proceed normally.
-    if (data.state === 'submitted') {
+    // Already submitted or launching — nothing to do; let the caller proceed.
+    if (data.state === 'submitted' || data.state === 'launching') {
       return {
         error: null,
         didSubmit: false,
@@ -516,33 +517,30 @@ export async function markSubmittedObjectiveExecuting(
   executionSnapshot?: ObjectiveExecutionSnapshot,
   createdBy?: string | null
 ) {
-  const { data: submittedObjective, error: submittedError } = await supabase
-    .from('objectives')
-    .select('id,objective,state,assigned_agent')
-    .eq('ticket_id', ticketId)
-    .eq('state', 'submitted')
-    .order('position', { ascending: true })
-    .order('created_at', { ascending: true })
-    .limit(1)
-    .maybeSingle<DraftObjective>();
-
-  if (submittedError) {
-    throw new Error(submittedError.message);
+  // Unified launch-objective selection (shared by REST attach, connect, and
+  // spawn — every caller of this function). Prefer `launching` (the new
+  // pre-attach state) first, then the legacy `submitted` state, then `draft`,
+  // each ordered by position then created_at so the oldest queued objective
+  // wins. The hosted MCP attach handler mirrors this same order.
+  let launchObjective: DraftObjective | null = null;
+  for (const state of ['launching', 'submitted', 'draft'] as const) {
+    const { data, error } = await supabase
+      .from('objectives')
+      .select('id,objective,state,assigned_agent')
+      .eq('ticket_id', ticketId)
+      .eq('state', state)
+      .order('position', { ascending: true })
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle<DraftObjective>();
+    if (error) {
+      throw new Error(error.message);
+    }
+    if (data) {
+      launchObjective = data;
+      break;
+    }
   }
-
-  const launchObjective = submittedObjective
-    ? submittedObjective
-    : (
-        await supabase
-          .from('objectives')
-          .select('id,objective,state,assigned_agent')
-          .eq('ticket_id', ticketId)
-          .eq('state', 'draft')
-          .order('position', { ascending: true })
-          .order('created_at', { ascending: true })
-          .limit(1)
-          .maybeSingle<DraftObjective>()
-      ).data;
 
   // Re-attach fallback: when there's no submitted/draft objective but the
   // ticket already has an executing or pending-delivery one, return it without changing state.

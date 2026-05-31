@@ -223,6 +223,7 @@ export async function TicketPanelContent({
       : { data: [], error: null };
   const sessionsByObjectiveId = buildSessionsByObjectiveId(objectiveSessionsResult.data);
   const editableObjective =
+    objectives?.find(objective => objective.state === 'launching') ??
     objectives?.find(objective => objective.state === 'submitted') ??
     objectives?.find(objective => objective.state === 'draft') ??
     null;

@@ -126,7 +126,7 @@ export async function upsertAgentConfigAction(
   const mergedConfig: AgentConfig = { ...existingConfig, ...configWithoutPreCommand };
   if ('preCommand' in config) {
     const next = preCommandUpdate;
-    if (next == null || (typeof next === 'string' && next.trim() === '')) {
+    if (next === null || next === undefined || (typeof next === 'string' && next.trim() === '')) {
       delete mergedConfig.preCommand;
     } else {
       mergedConfig.preCommand = next;

@@ -86,30 +86,29 @@ export async function handleAttach(supabase: SupabaseClient, args: any, ctx: Tok
     return toolErr('Ticket not found or access denied.');
   }
 
-  // Mark submitted objective as executing. If the database does not yet accept
-  // submitted objectives, fall back to the newest draft so launch still works.
+  // Mark the launchable objective as executing. This MUST use the same
+  // selection order as REST attach (lib/objectives.ts markSubmittedObjectiveExecuting):
+  // prefer `launching` (the new pre-attach state), then legacy `submitted`,
+  // then `draft`, each ordered by position then created_at so the oldest
+  // queued objective wins. Previously this handler ordered created_at DESC
+  // (newest) and ignored `launching`, diverging from REST.
   // Objective must be resolved BEFORE creating the session (session uses objective_id).
-  const { data: submittedObjective } = await supabase
-    .from('objectives')
-    .select('id, objective, assigned_agent')
-    .eq('ticket_id', ticketId)
-    .eq('state', 'submitted')
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  const draftObjective =
-    submittedObjective ??
-    (
-      await supabase
-        .from('objectives')
-        .select('id, objective, assigned_agent')
-        .eq('ticket_id', ticketId)
-        .eq('state', 'draft')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle()
-    ).data;
+  let draftObjective: { id: string; objective: string; assigned_agent: unknown } | null = null;
+  for (const state of ['launching', 'submitted', 'draft']) {
+    const { data } = await supabase
+      .from('objectives')
+      .select('id, objective, assigned_agent')
+      .eq('ticket_id', ticketId)
+      .eq('state', state)
+      .order('position', { ascending: true })
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    if (data) {
+      draftObjective = data;
+      break;
+    }
+  }
 
   function resolveStoredAgentIdentifier(assignedAgent: unknown): string | null {
     if (!assignedAgent) return null;
@@ -192,7 +191,8 @@ export async function handleAttach(supabase: SupabaseClient, args: any, ctx: Tok
       .select('id, objective')
       .eq('ticket_id', ticketId)
       .in('state', ['executing', 'pending_delivery'])
-      .order('created_at', { ascending: false })
+      .order('position', { ascending: true })
+      .order('created_at', { ascending: true })
       .limit(1)
       .maybeSingle();
 
@@ -236,6 +236,60 @@ export async function handleAttach(supabase: SupabaseClient, args: any, ctx: Tok
     .single();
 
   if (sessionErr || !session) return toolErr('Failed to create session.');
+
+  // Phase 4 (mirror of lib/overlord/protocol-attach.ts): the session now exists,
+  // so the launch genuinely succeeded — mark the matching execution request
+  // `launched`. Prefer the request id threaded through attach metadata, fall
+  // back to the active request for this objective, and treat a missing request
+  // (non-runner manual launch) as a no-op so attach still succeeds.
+  {
+    const metadataRecord =
+      metadata && typeof metadata === 'object' && !Array.isArray(metadata)
+        ? (metadata as Record<string, unknown>)
+        : null;
+    const selectionRecord =
+      metadataRecord &&
+      metadataRecord.selection &&
+      typeof metadataRecord.selection === 'object' &&
+      !Array.isArray(metadataRecord.selection)
+        ? (metadataRecord.selection as Record<string, unknown>)
+        : null;
+    const rawRequestId =
+      (typeof metadataRecord?.executionRequestId === 'string' &&
+        metadataRecord.executionRequestId.trim()) ||
+      (typeof selectionRecord?.executionRequestId === 'string' &&
+        selectionRecord.executionRequestId.trim()) ||
+      null;
+    const launchedPatch = {
+      status: 'launched',
+      launched_session_id: session.id,
+      launched_at: new Date().toISOString(),
+      lease_expires_at: null,
+      last_error: null
+    };
+    let marked = false;
+    if (rawRequestId) {
+      const { data } = await supabase
+        .from('execution_requests')
+        .update(launchedPatch)
+        .eq('id', rawRequestId)
+        .eq('organization_id', organizationId)
+        .in('status', ['queued', 'claimed', 'launching'])
+        .select('id')
+        .maybeSingle();
+      marked = Boolean(data);
+    }
+    if (!marked) {
+      await supabase
+        .from('execution_requests')
+        .update(launchedPatch)
+        .eq('organization_id', organizationId)
+        .eq('objective_id', executedObjectiveId)
+        .in('status', ['queued', 'claimed', 'launching'])
+        .select('id')
+        .maybeSingle();
+    }
+  }
 
   const previousStatus = ticket.status;
   const previousStatusType = await resolveStatusTypeForName(

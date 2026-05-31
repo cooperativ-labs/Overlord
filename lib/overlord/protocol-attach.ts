@@ -42,6 +42,79 @@ function isMetadataRecord(value: Json): value is Record<string, Json | undefined
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
+/**
+ * Pull the originating execution request id out of attach metadata. The runner
+ * threads `OVERLORD_EXECUTION_REQUEST_ID` into attach metadata (directly or
+ * under `selection`); this lets attach mark the exact request launched.
+ */
+function executionRequestIdFromMetadata(metadata: Json): string | null {
+  if (!isMetadataRecord(metadata)) return null;
+  const direct = metadata.executionRequestId;
+  if (typeof direct === 'string' && direct.trim()) return direct.trim();
+  const selection = metadata.selection;
+  if (isMetadataRecord(selection as Json)) {
+    const fromSelection = (selection as Record<string, Json | undefined>).executionRequestId;
+    if (typeof fromSelection === 'string' && fromSelection.trim()) return fromSelection.trim();
+  }
+  return null;
+}
+
+/**
+ * Phase 4: attach is the source of truth for a successful launch. After the
+ * agent_sessions row exists, mark the matching execution request `launched`.
+ *
+ * Matching rule (do not depend solely on env propagation):
+ * - Prefer the request whose id equals attach metadata `executionRequestId`.
+ * - Fallback: the active (queued/claimed/launching) request for this objective,
+ *   so the happy path still works when the env var is dropped.
+ * - Non-runner manual launch (no request at all): no row to update, so this is
+ *   a no-op. Attach must still succeed.
+ *
+ * Failures here never fail attach — the session already exists.
+ */
+async function markMatchingExecutionRequestLaunched(input: {
+  supabase: AttachClient;
+  organizationId: number;
+  objectiveId: string;
+  sessionId: string;
+  metadata: Json;
+}): Promise<void> {
+  const { supabase, organizationId, objectiveId, sessionId, metadata } = input;
+  const patch = {
+    status: 'launched' as const,
+    launched_session_id: sessionId,
+    launched_at: new Date().toISOString(),
+    lease_expires_at: null,
+    last_error: null
+  };
+
+  try {
+    const requestId = executionRequestIdFromMetadata(metadata);
+    if (requestId) {
+      const { data } = await supabase
+        .from('execution_requests')
+        .update(patch)
+        .eq('id', requestId)
+        .eq('organization_id', organizationId)
+        .in('status', ['queued', 'claimed', 'launching'])
+        .select('id')
+        .maybeSingle();
+      if (data) return;
+    }
+
+    await supabase
+      .from('execution_requests')
+      .update(patch)
+      .eq('organization_id', organizationId)
+      .eq('objective_id', objectiveId)
+      .in('status', ['queued', 'claimed', 'launching'])
+      .select('id')
+      .maybeSingle();
+  } catch (err) {
+    console.error('[attach] failed to mark execution request launched:', err);
+  }
+}
+
 function resolveSessionWorkingDirectory(input: {
   localWorkingDirectory: string | null | undefined;
   remoteWorkingDirectory: string | null | undefined;
@@ -196,6 +269,16 @@ export async function runAttachProtocol(supabase: AttachClient, params: AttachPa
   if (sessionError || !session) {
     return { error: 'Failed to create session.', status: 500 } as const;
   }
+
+  // Phase 4: the session now exists, so the launch genuinely succeeded — mark
+  // the matching execution request `launched` (no-op for non-runner launches).
+  await markMatchingExecutionRequestLaunched({
+    supabase,
+    organizationId,
+    objectiveId: objectiveExecution.executedObjectiveId,
+    sessionId: session.id,
+    metadata
+  });
 
   // Fire-and-forget: generate objective title immediately without blocking attach
   if (objectiveExecution.didExecute && objectiveExecution.executedObjectiveId) {

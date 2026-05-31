@@ -79,7 +79,7 @@ export async function requestTicketObjectiveExecutionAction(input: {
   serverMultiplexer?: 'none' | 'tmux' | null;
   tmuxCommand?: string | null;
   targetExecutionTargetId?: string | null;
-}): Promise<{ requestId: string; status: string } | { error: string }> {
+}): Promise<{ requestId: string; status: string; reused: boolean } | { error: string }> {
   try {
     const supabase = await createClientForRequest();
     const ticket = await assertTicketAccess(supabase, input.ticketId);
@@ -123,7 +123,7 @@ export async function requestTicketObjectiveExecutionAction(input: {
       }
     ]);
 
-    return { requestId: result.request.id, status: result.request.status };
+    return { requestId: result.request.id, status: result.request.status, reused: result.reused };
   } catch (error) {
     return {
       error:

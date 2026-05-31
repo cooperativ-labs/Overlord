@@ -1,8 +1,8 @@
 'use server';
 
 import {
-  type AgentLaunchConfigUpdate,
   agentLaunchConfigSchema,
+  type AgentLaunchConfigUpdate,
   mergeAgentLaunchConfig,
   parseTargetAgentConfigs,
   type TargetAgentConfigs
@@ -73,13 +73,10 @@ export async function updateExecutionTargetAgentConfigAction(
   const current = configs[trimmedAgent] ?? agentLaunchConfigSchema.parse({});
   const merged = mergeAgentLaunchConfig(current, config);
 
-  // Drop the agent entry entirely when it carries no flags and no pre-command,
-  // keeping the stored jsonb minimal.
-  if (merged.flags.length === 0 && !merged.preCommand) {
-    delete configs[trimmedAgent];
-  } else {
-    configs[trimmedAgent] = merged;
-  }
+  // Preserve an explicit empty config so clearing flags/pre-command on a target
+  // remains a real override instead of falling back to the request-captured
+  // global config during claim-time launch resolution.
+  configs[trimmedAgent] = merged;
 
   const { error: updateError } = await supabase
     .from('user_execution_targets')

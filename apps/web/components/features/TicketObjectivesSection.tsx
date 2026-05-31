@@ -237,7 +237,10 @@ export function TicketObjectivesSection({
     () =>
       sortObjectivesByCreatedAtAscending(
         objectives.filter(
-          objective => objective.state === 'draft' || objective.state === 'submitted'
+          objective =>
+            objective.state === 'draft' ||
+            objective.state === 'submitted' ||
+            objective.state === 'launching'
         )
       ),
     [objectives]
@@ -302,6 +305,7 @@ export function TicketObjectivesSection({
       objective.state !== 'draft' &&
       (!futureObjectivesEnabled || objective.state !== 'future') &&
       objective.state !== 'submitted' &&
+      objective.state !== 'launching' &&
       objective.objective.trim().length > 0
   );
   const orderedExecutedObjectives = sortObjectivesByPositionThenCreatedAt(executedObjectives);

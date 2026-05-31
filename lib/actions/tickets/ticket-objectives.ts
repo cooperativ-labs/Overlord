@@ -42,7 +42,10 @@ export async function markObjectiveExecutedAction(
     throw new Error(executeError.message);
   }
 
-  const shouldPromoteNextFuture = objective.state === 'draft' || objective.state === 'submitted';
+  const shouldPromoteNextFuture =
+    objective.state === 'draft' ||
+    objective.state === 'submitted' ||
+    objective.state === 'launching';
   if (shouldPromoteNextFuture) {
     const promotedFuture = await promoteNextFutureDraft(supabase, ticketId);
 
@@ -200,8 +203,13 @@ export async function updateObjectiveBodyAction({
   if (!row) {
     throw new Error('Objective not found.');
   }
-  if (row.state !== 'draft' && row.state !== 'future' && row.state !== 'submitted') {
-    throw new Error('Only draft, future, or submitted objectives can be edited here.');
+  if (
+    row.state !== 'draft' &&
+    row.state !== 'future' &&
+    row.state !== 'submitted' &&
+    row.state !== 'launching'
+  ) {
+    throw new Error('Only draft, future, submitted, or launching objectives can be edited here.');
   }
 
   const normalized = body.trim();
@@ -344,7 +352,7 @@ export async function setObjectiveAutoAdvanceAction({
     .update(updates)
     .eq('id', objectiveId)
     .eq('ticket_id', ticketId)
-    .in('state', ['draft', 'submitted', 'future']);
+    .in('state', ['draft', 'submitted', 'future', 'launching']);
 
   if (error) {
     throw new Error(error.message);

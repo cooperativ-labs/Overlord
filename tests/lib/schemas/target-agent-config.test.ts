@@ -45,10 +45,7 @@ describe('normalizeAgentLaunchConfig', () => {
 describe('mergeAgentLaunchConfig', () => {
   it('clears pre-command when update sends null (server-action JSON)', () => {
     expect(
-      mergeAgentLaunchConfig(
-        { flags: ['--x'], preCommand: 'ollama' },
-        { preCommand: null }
-      )
+      mergeAgentLaunchConfig({ flags: ['--x'], preCommand: 'ollama' }, { preCommand: null })
     ).toEqual({ flags: ['--x'] });
   });
 
@@ -60,10 +57,7 @@ describe('mergeAgentLaunchConfig', () => {
 
   it('leaves pre-command unchanged when update omits preCommand', () => {
     expect(
-      mergeAgentLaunchConfig(
-        { flags: ['--x'], preCommand: 'ollama' },
-        { flags: ['--y'] }
-      )
+      mergeAgentLaunchConfig({ flags: ['--x'], preCommand: 'ollama' }, { flags: ['--y'] })
     ).toEqual({ flags: ['--y'], preCommand: 'ollama' });
   });
 

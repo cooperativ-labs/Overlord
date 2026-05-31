@@ -48,6 +48,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       request: result.request,
+      // True when an already-active request was reused/re-queued (Phase 3),
+      // so callers can surface "relaunching" instead of "queued".
+      reused: result.reused,
       ticket: {
         id: result.ticket.id,
         ticketId: result.ticket.ticket_id,

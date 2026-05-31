@@ -95,7 +95,10 @@ export function DraftObjective({
   const showAgentControls = assignedAgent !== undefined;
   const isFuture = objectiveState === 'future';
   const canToggleAutoAdvance =
-    objectiveState === 'draft' || objectiveState === 'submitted' || objectiveState === 'future';
+    objectiveState === 'draft' ||
+    objectiveState === 'submitted' ||
+    objectiveState === 'launching' ||
+    objectiveState === 'future';
   const [autoAdvanceValue, setAutoAdvanceValue] = useState(initialAutoAdvance);
   const splitButtonCommands = useMemo<Record<LaunchAgentType, string>>(
     () => ({
@@ -126,7 +129,9 @@ export function DraftObjective({
     objectiveId,
     initialAttachments
   });
-  const isSubmitted = objectiveState === 'submitted';
+  // `launching` is the new pre-attach state; render it with the same
+  // affordances as the legacy `submitted` state.
+  const isSubmitted = objectiveState === 'submitted' || objectiveState === 'launching';
   const [isAutoAdvancePending, setIsAutoAdvancePending] = useState(false);
   const [isFutureExpanded, setIsFutureExpanded] = useState(false);
 

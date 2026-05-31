@@ -27,6 +27,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { LoadingButton } from '@/components/ui/loading-button';
+import { TruncatedPath } from '@/components/ui/truncated-path';
 import {
   deleteOrganizationExecutionTargetAction,
   getProjectDevicesAction,
@@ -585,15 +586,13 @@ export function DeviceResourceList({ open, projectId }: Props) {
                                 {resource.label ? (
                                   <span className="font-medium">{resource.label}</span>
                                 ) : null}
-                                <span
+                                <TruncatedPath
+                                  path={resource.directoryPath}
                                   className={cn(
-                                    'block truncate font-mono text-[11px]',
+                                    'font-mono text-[11px]',
                                     resource.label ? 'text-muted-foreground' : 'text-foreground'
                                   )}
-                                  title={resource.directoryPath}
-                                >
-                                  {resource.directoryPath}
-                                </span>
+                                />
                               </div>
                             )}
                           </div>

@@ -73,7 +73,7 @@ export async function markObjectivePendingDeliveryAfterPriorDelivery(input: {
     .update({ state: 'pending_delivery' })
     .eq('id', input.objectiveId)
     .eq('ticket_id', input.ticketId)
-    .in('state', ['executing', 'submitted', 'draft', 'complete'])
+    .in('state', ['executing', 'submitted', 'launching', 'draft', 'complete'])
     .select('id')
     .maybeSingle();
 

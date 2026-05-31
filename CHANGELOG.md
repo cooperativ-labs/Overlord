@@ -2,6 +2,34 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2605311843.0] - 2026-05-31:18:43
+
+### Added
+- Introduce objective state **`launching`** as the pre-attach queue state when Run or auto-advance creates an execution request (displayed like the legacy **submitted** state in the ticket UI).
+- Move **terminal launch settings** (app, tab/window mode, tmux, custom hotkeys) onto each **Execution Target** so you configure how Overlord opens a terminal per machine.
+- Enforce at most **one active execution request per objective** in the database, preventing duplicate queue rows from racing Run clicks.
+
+### Fixed
+- Reuse the existing queued/claimed/**launching** execution request when Run or auto-advance fires again for the same objective, emitting a runner wake-up event instead of inserting a duplicate row.
+- Mark execution requests **`launched`** only when the agent **attaches**, not when the runner spawns the launch process—so a spawn that never attaches can be retried instead of appearing stuck.
+- Unify **attach** objective selection across REST, MCP, **connect**, and **spawn** so the same objective wins regardless of entry surface.
+- Fail closed on per-target agent config lookup errors during **claim-execution** instead of silently falling back to stale request-captured flags.
+
+### Changed
+- Align the full launch lifecycle: **draft → launching → executing**, with execution request statuses **queued → claimed → launching → launched** (or **failed**).
+- Simplify the **Terminal** settings page to editor/file-link preferences; terminal app configuration now lives under **Execution Targets**.
+- Tighten **execution_requests.status** to **queued | claimed | launching | launched | failed**; legacy **cancelled**/**expired** rows migrate to **failed**.
+- Thread the execution request id through the runner launch so attach can mark the exact request that spawned.
+
+### Security
+- None.
+
+### Test
+- Add execution-request dedup, stale-relaunch, attach-parity, claim-execution, auto-advance, and target-agent-flags tests for the unified launch pipeline.
+
+### Documentation
+- Update **Agent Execution & Runner** docs for the **`launching`** objective state, request reuse on repeat Run, and attach-as-source-of-truth for **launched**.
+
 ## [0.2605310708.0] - 2026-05-31:07:08
 
 ### Added

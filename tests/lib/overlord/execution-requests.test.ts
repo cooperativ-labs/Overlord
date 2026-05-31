@@ -79,6 +79,9 @@ function executionRequestInsert(options: {
   duplicate?: boolean;
   existingId?: string;
   captureInsert?: (row: unknown) => void;
+  /** Pre-check / race lookup result for the active-objective query (Phase 3). */
+  activeRequest?: Record<string, unknown> | null;
+  captureResetUpdate?: (update: unknown) => void;
 }) {
   const insertedRow = {
     id: 'req-1',
@@ -92,6 +95,7 @@ function executionRequestInsert(options: {
     thinking_level: null,
     target_kind: 'any'
   };
+  const activeRequest = options.activeRequest ?? null;
 
   return {
     insert: jest.fn((row: unknown) => {
@@ -107,9 +111,33 @@ function executionRequestInsert(options: {
         }))
       };
     }),
+    // Phase 3 stale-row reset (reuseActiveRequest): update(...).eq().select().single()
+    update: jest.fn((update: unknown) => {
+      options.captureResetUpdate?.(update);
+      const chain = {
+        eq: jest.fn(() => chain),
+        in: jest.fn(() => chain),
+        select: jest.fn(() => chain),
+        maybeSingle: jest.fn(async () => ({
+          data: activeRequest ? { ...activeRequest, status: 'queued' } : insertedRow,
+          error: null
+        })),
+        single: jest.fn(async () => ({
+          data: activeRequest ? { ...activeRequest, status: 'queued' } : insertedRow,
+          error: null
+        }))
+      };
+      return chain;
+    }),
     select: jest.fn(() => {
       const chain = {
         eq: jest.fn(() => chain),
+        in: jest.fn(() => chain),
+        order: jest.fn(() => chain),
+        limit: jest.fn(() => chain),
+        // Active-objective pre-check / race lookup.
+        maybeSingle: jest.fn(async () => ({ data: activeRequest, error: null })),
+        // Legacy idempotency_key fallback.
         single: jest.fn(async () => ({
           data: { ...insertedRow, id: options.existingId ?? 'req-existing' },
           error: null
@@ -167,7 +195,7 @@ describe('createExecutionRequest', () => {
     );
   });
 
-  it('promotes a draft objective to submitted before inserting the request', async () => {
+  it('promotes a draft objective to launching before inserting the request', async () => {
     const objectiveChain = objectiveQuery();
     let objectiveUpdate: unknown;
     objectiveChain.update = jest.fn((update: unknown) => {
@@ -189,8 +217,8 @@ describe('createExecutionRequest', () => {
       requestedFrom: 'manual_run'
     });
 
-    expect(objectiveUpdate).toEqual({ state: 'submitted' });
-    expect(result.objective.state).toBe('submitted');
+    expect(objectiveUpdate).toEqual({ state: 'launching' });
+    expect(result.objective.state).toBe('launching');
   });
 
   it('sets auto_advanced_at when requestedFrom is auto_advance', async () => {
@@ -218,7 +246,7 @@ describe('createExecutionRequest', () => {
 
     expect(objectiveUpdate).toEqual(
       expect.objectContaining({
-        state: 'submitted',
+        state: 'launching',
         auto_advanced_at: expect.any(String)
       })
     );
@@ -259,7 +287,8 @@ describe('createExecutionRequest', () => {
   it('rejects execution when the objective has no assigned agent', async () => {
     const supabase = buildSupabase({
       tickets: () => ticketQuery(),
-      objectives: () => objectiveQuery({ assigned_agent: null })
+      objectives: () => objectiveQuery({ assigned_agent: null }),
+      execution_requests: () => executionRequestInsert({})
     });
 
     await expect(
@@ -279,7 +308,8 @@ describe('createExecutionRequest', () => {
   it('rejects auto-advance when the next objective has no assigned agent', async () => {
     const supabase = buildSupabase({
       tickets: () => ticketQuery(),
-      objectives: () => objectiveQuery({ assigned_agent: null })
+      objectives: () => objectiveQuery({ assigned_agent: null }),
+      execution_requests: () => executionRequestInsert({})
     });
 
     await expect(
@@ -360,6 +390,146 @@ describe('createExecutionRequest', () => {
     });
 
     expect(result.request.id).toBe('req-existing');
+  });
+
+  it('reuses the active request and emits a wake-up event on a duplicate manual run', async () => {
+    const active = {
+      id: 'req-active',
+      organization_id: ORG_ID,
+      ticket_id: TICKET_UUID,
+      objective_id: OBJECTIVE_ID,
+      status: 'queued'
+    };
+    const ticketEventsCapture = {
+      insert: jest.fn(async () => ({ error: null }))
+    };
+    const supabase = buildSupabase({
+      tickets: () => ticketQuery(),
+      objectives: () => objectiveQuery({ state: 'launching' }),
+      execution_requests: () => executionRequestInsert({ activeRequest: active }),
+      ticket_events: () => ticketEventsCapture
+    });
+
+    const result = await createExecutionRequest(supabase as never, {
+      ticketId: TICKET_UUID,
+      objectiveId: OBJECTIVE_ID,
+      userId: USER_ID,
+      organizationId: ORG_ID,
+      requestedFrom: 'manual_run'
+    });
+
+    expect(result.reused).toBe(true);
+    expect(result.request.id).toBe('req-active');
+    expect(ticketEventsCapture.insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event_type: 'execution_requested',
+        payload: expect.objectContaining({ reused_execution_request: true })
+      })
+    );
+  });
+
+  it('resets a stale launching request to queued before re-queueing', async () => {
+    let resetUpdate: Record<string, unknown> | undefined;
+    const active = {
+      id: 'req-stale',
+      organization_id: ORG_ID,
+      ticket_id: TICKET_UUID,
+      objective_id: OBJECTIVE_ID,
+      status: 'launching'
+    };
+    const supabase = buildSupabase({
+      tickets: () => ticketQuery(),
+      objectives: () => objectiveQuery({ state: 'launching' }),
+      execution_requests: () =>
+        executionRequestInsert({
+          activeRequest: active,
+          captureResetUpdate: u => (resetUpdate = u as Record<string, unknown>)
+        }),
+      ticket_events: () => ticketEventsInsert()
+    });
+
+    const result = await createExecutionRequest(supabase as never, {
+      ticketId: TICKET_UUID,
+      objectiveId: OBJECTIVE_ID,
+      userId: USER_ID,
+      organizationId: ORG_ID,
+      requestedFrom: 'manual_run'
+    });
+
+    expect(result.reused).toBe(true);
+    expect(resetUpdate).toEqual(
+      expect.objectContaining({
+        status: 'queued',
+        claimed_at: null,
+        lease_expires_at: null
+      })
+    );
+  });
+
+  it('does not re-queue an active request that became terminal during reuse', async () => {
+    const active = {
+      id: 'req-raced',
+      organization_id: ORG_ID,
+      ticket_id: TICKET_UUID,
+      objective_id: OBJECTIVE_ID,
+      status: 'launching'
+    };
+    const latestTerminal = {
+      ...active,
+      status: 'launched',
+      lease_expires_at: null
+    };
+    const ticketEventsCapture = {
+      insert: jest.fn(async () => ({ error: null }))
+    };
+    let executionRequestCall = 0;
+    const supabase = buildSupabase({
+      tickets: () => ticketQuery(),
+      objectives: () => objectiveQuery({ state: 'launching' }),
+      execution_requests: () => {
+        executionRequestCall += 1;
+        if (executionRequestCall === 1) {
+          const activeLookup = {
+            select: jest.fn(() => activeLookup),
+            eq: jest.fn(() => activeLookup),
+            in: jest.fn(() => activeLookup),
+            order: jest.fn(() => activeLookup),
+            limit: jest.fn(() => activeLookup),
+            maybeSingle: jest.fn(async () => ({ data: active, error: null }))
+          };
+          return activeLookup;
+        }
+        if (executionRequestCall === 2) {
+          const reset = {
+            update: jest.fn(() => reset),
+            eq: jest.fn(() => reset),
+            in: jest.fn(() => reset),
+            select: jest.fn(() => reset),
+            maybeSingle: jest.fn(async () => ({ data: null, error: null }))
+          };
+          return reset;
+        }
+        const latestLookup = {
+          select: jest.fn(() => latestLookup),
+          eq: jest.fn(() => latestLookup),
+          maybeSingle: jest.fn(async () => ({ data: latestTerminal, error: null }))
+        };
+        return latestLookup;
+      },
+      ticket_events: () => ticketEventsCapture
+    });
+
+    const result = await createExecutionRequest(supabase as never, {
+      ticketId: TICKET_UUID,
+      objectiveId: OBJECTIVE_ID,
+      userId: USER_ID,
+      organizationId: ORG_ID,
+      requestedFrom: 'manual_run'
+    });
+
+    expect(result.reused).toBe(true);
+    expect(result.request.status).toBe('launched');
+    expect(ticketEventsCapture.insert).not.toHaveBeenCalled();
   });
 
   it('rejects non-agent tickets', async () => {

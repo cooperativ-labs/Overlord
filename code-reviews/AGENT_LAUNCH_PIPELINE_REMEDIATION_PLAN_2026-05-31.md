@@ -18,11 +18,41 @@ Use this as the desired end state for queued agent execution:
 6. The agent calls attach. Attach creates the `agent_sessions` row, moves the objective to `executing`, and only then marks the matching execution request `launched` with `launched_session_id`.
 7. If launch starts but attach never happens, a stale `launching` request becomes reclaimable/retriable instead of being silently stuck as successful.
 
+### Naming: two distinct `launching` values
+
+`launching` appears on two different tables with two different lifespans. They
+are intentionally separate and an implementer must not assume they are the same
+flag:
+
+| Value | Column | Set when | Cleared/advanced when |
+|-------|--------|----------|-----------------------|
+| objective `launching` | `objectives.state` (new enum value, Phase 2) | request is created (`draft -> launching`) | attach moves it to `executing` |
+| request `launching` | `execution_requests.status` (already in the check constraint) | runner finishes spawning the launch (post-claim) | attach marks it `launched`, or the watchdog resets it to `queued` |
+
+So an objective can be `launching` while its request is still `queued` or
+`claimed`; the request only becomes `launching` after the runner spawns. Keep the
+shared word because Decision 3 ties the objective state to the "launching"
+concept, but document this table everywhere the states are described so the
+distinction is explicit. Any new diagram or doc must label which table a
+`launching` refers to.
+
 ## Phase 1: Unify Attach Objective Selection
 
 Addresses finding 1.
 
-Implement the objective transition once and call it from both REST attach and hosted MCP attach.
+Implement the objective transition once and call it from every surface that
+currently performs it. `markSubmittedObjectiveExecuting` has **four** callers
+today, not two — all must route through the shared transition:
+
+- `lib/overlord/protocol-attach.ts:154` (REST attach)
+- `lib/overlord/protocol-connect.ts:46` (lightweight attach variant)
+- `lib/overlord/protocol-spawn.ts:145` (`spawn` — creates a session immediately and bypasses the runner queue)
+- `supabase/functions/mcp/handlers/attach.ts` (hosted MCP attach, the divergent reimplementation)
+
+Changing the selection order to prefer `launching` first also changes
+`connect`/`spawn` behavior, so they must be migrated and tested together, not
+just REST + MCP. `spawn`'s "create session immediately" semantics stay the same;
+only the objective-selection/transition step is unified.
 
 Preferred implementation:
 
@@ -37,16 +67,26 @@ Preferred implementation:
   - promote the next `future` objective to `draft`
   - create one blank `draft` only if no future objective was promoted and no draft exists
   - seed the new draft's `assigned_agent` from the executing objective
-- Update `lib/objectives.ts` so `markSubmittedObjectiveExecuting` becomes a compatibility wrapper around the shared transition. Prefer a new internal name like `markLaunchObjectiveExecuting`, but keep the old export until call sites are migrated.
-- Replace the duplicated objective-selection block in `supabase/functions/mcp/handlers/attach.ts` with the same RPC call.
+- **Resolve `agent_identifier` and `model_identifier` in TypeScript and pass them
+  to the RPC as parameters.** Do not re-implement
+  `requireExecutionAgentFromAssignment` or `resolveObjectiveModelIdentifier`
+  (`lib/objectives.ts:592-598`) in PL/pgSQL — the model is derived from the
+  attach-time `metadata`/`selection` payload, which the RPC cannot see otherwise.
+  The RPC owns only the SQL-atomic parts (select-next, transition, future
+  promotion, draft seeding); the TS caller owns agent/model resolution. This
+  keeps the metadata-parsing logic in one tested TS location and limits the
+  TS→SQL port to the parts that genuinely need to be atomic in the database.
+- Update `lib/objectives.ts` so `markSubmittedObjectiveExecuting` becomes a compatibility wrapper around the shared transition (resolving agent/model in TS, then calling the RPC). Prefer a new internal name like `markLaunchObjectiveExecuting`, but keep the old export until call sites are migrated.
+- Replace the duplicated objective-selection block in `supabase/functions/mcp/handlers/attach.ts` with the same RPC call, resolving agent/model in the handler before invoking it.
 
 Verification:
 
-- Add parity tests for REST attach and MCP attach covering:
+- Add parity tests for REST attach, `connect`, `spawn`, and MCP attach covering:
   - oldest `launching`/legacy `submitted` objective wins by `position`, then `created_at`
   - future objective promotion
   - assigned-agent carryover to the new draft
   - idempotent re-attach to an existing `executing` objective
+  - model resolution from attach-time metadata still matches REST behavior across all four callers
 
 ## Phase 2: Replace New `submitted` Writes With `launching`
 
@@ -61,6 +101,7 @@ Implementation steps:
 - Keep `submitDraftObjective` / `discuss-objective` writing `submitted` for legacy/discussion semantics until that state is repurposed later.
 - Update readers that currently look for `submitted` to also include `launching`, preferring `launching` first:
   - `lib/objectives.ts`
+  - `lib/overlord/execution-requests.ts` — `resolveObjectiveForExecution` (`execution-requests.ts:78`) filters the launchable objective by state and must treat `launching` as launchable so a re-resolve does not skip an already-queued objective
   - `lib/overlord/protocol-context-objective.ts`
   - `lib/overlord/protocol-load-context.ts`
   - `lib/actions/tickets/internals.ts`
@@ -81,23 +122,38 @@ Addresses finding 2.
 
 Manual Run should be idempotent for an objective while a launch is active, but a repeated click must wake/relaunch the already queued work.
 
+### Dedup mechanism: the active-state partial index, not the idempotency key
+
+The existing schema already has `unique (organization_id, idempotency_key)`
+(`supabase/migrations/20260521113000_add_execution_requests.sql:32`), and the
+insert path catches `23505` and **returns the existing row**
+(`lib/overlord/execution-requests.ts:186`). If the manual-run key were made fully
+deterministic (`manual_run:<objectiveId>`), then after a request reaches `failed`
+or `launched`, a new click would collide on that constraint and return the stale
+terminal-state row — which breaks both the "do not reuse `failed`/`launched`
+rows" rule below and Decision 2's relaunch intent. So the active-request dedup
+must come from the new partial index, and the idempotency key must NOT become
+fully deterministic.
+
 Implementation steps:
 
 - Define active request statuses as `queued`, `claimed`, and `launching`.
-- Add a partial unique index on `execution_requests(objective_id)` for active statuses.
-- Change manual-run idempotency to be deterministic at the objective level while active. Do not include a random UUID for `manual_run`.
+- Add a partial unique index on `execution_requests(objective_id) WHERE status IN ('queued','claimed','launching')`. **This** is the mechanism that prevents two active requests for one objective.
+- Keep the manual-run `idempotency_key` non-deterministic (retain the random suffix, e.g. `manual_run:<objectiveId>:<randomUUID>`), OR make `idempotency_key` nullable for manual runs. The point is that terminal-state (`failed`/`launched`) rows must not block a later legitimate relaunch via the `(org, idempotency_key)` constraint. Dedup of *active* requests is handled entirely by the partial index above, not the key.
 - Before inserting a manual request, query for an active request on the same `objective_id`.
   - If one exists, return it with a flag such as `reused: true`.
   - Insert a new `execution_requested` ticket event with payload `{ reused_execution_request: true }` so Desktop's runner listener wakes up.
   - If the existing row is stale `claimed` or stale `launching`, reset it to `queued` before emitting the event.
-- Do not reuse `failed` or `launched` rows. A new click after a real failure should create a new request.
+- Handle the insert race explicitly: if two clicks/tabs pass the pre-check simultaneously, the second insert hits the **partial `objective_id` index** (a `23505` on a different constraint than the idempotency key). Catch it, look up the active row by `objective_id`, and return it with `reused: true` plus the wake-up event — the same outcome as the pre-check path.
+- Do not reuse `failed` or `launched` rows. Because the active-state index does not cover terminal states and the idempotency key stays non-deterministic, a new click after a real failure inserts a fresh request as intended.
 - Update `requestTicketObjectiveExecutionAction` and the protocol route response to expose whether the request was reused.
 - Keep the user-facing behavior simple: the Run button still says queueing/launching; repeated clicks do not create duplicate agents.
 
 Verification:
 
 - Unit test duplicate manual Run returns the same request and writes a wake-up event.
-- API test double-click / two-tab insertion race hits the unique index and returns the existing active row.
+- API test double-click / two-tab insertion race hits the **partial `objective_id`** index and returns the existing active row (assert the conflict is resolved by `objective_id`, not by the idempotency key).
+- Test that a click after a `failed`/`launched` request for the same objective inserts a NEW request (confirms the idempotency key is not blocking relaunch).
 - Runner test verifies a re-emitted `execution_requested` event causes a queued row to be claimed.
 
 ## Phase 4: Make Runner Success Attach-Aware
@@ -113,12 +169,16 @@ Implementation steps:
   - Runner generates `OVERLORD_EXECUTION_REQUEST_ID` and `OVERLORD_LAUNCH_SESSION_ID` before starting `ovld launch`.
   - `ovld launch` accepts/preserves `--launch-session-id` or env `OVERLORD_LAUNCH_SESSION_ID` instead of always generating a hidden ID.
   - `ovld protocol attach` automatically includes `executionRequestId` and `launchSessionId` from env in metadata.
-- In REST attach and hosted MCP attach, after creating the `agent_sessions` row, update the matching execution request to:
+- In REST attach and hosted MCP attach, after creating the `agent_sessions` row, find the matching execution request and update it to:
   - `status = 'launched'`
   - `launched_session_id = session.id`
   - `launched_at = now()`
   - `lease_expires_at = null`
-- Update claim logic so stale `launching` rows become claimable again after a bounded timeout.
+- Matching rule (do not depend solely on env propagation):
+  - Prefer the request whose id equals the attach metadata `executionRequestId` (threaded from `OVERLORD_EXECUTION_REQUEST_ID`).
+  - **Fallback:** if that metadata is absent or does not resolve, match the active `launching` (or `claimed`) execution request for the same `objective_id`. This keeps the happy path working when the env var is dropped between runner and attach.
+  - **Non-runner launches** (a manual `ovld launch` with no execution request at all): there is no row to update, so request completion is a no-op. Attach must continue to succeed and create the session exactly as it does today. Do not error when no matching request is found.
+- Update claim logic so stale `launching` rows become claimable again after a bounded timeout (the watchdog also covers the case where env threading failed and attach could not match the request, so it eventually returns to `queued`).
 - Add a ticket event when a `launching` row times out or is reset for relaunch, so the UI can explain why Run is available again.
 - Update Desktop `useExecutionRequestLauncher` and CLI `runner.mjs` so terminal opener success marks `launching`, not `launched`.
 
@@ -200,12 +260,12 @@ Implementation steps:
   - runner/workflow docs
   - plugin reference docs
   - CLI README/help
-- Keep true low-level fingerprint concepts only where unavoidable, but prefer `execution-target fingerprint` in public help and docs. If time allows, rename CLI flags like `--device-fingerprint` to `--execution-target-fingerprint`; otherwise document that as a follow-up because it touches runner identity, project-resource, and setup commands broadly.
+- **Explicit scope decision on `fingerprint`:** Decision 6 says remove the legacy *terminology* entirely. "Device fingerprint" is a genuinely distinct lower-level concept — the hardware/runner identity used to register and match a runner — not an alias for "execution target." We therefore keep the `fingerprint` concept but rename the user-facing surface of it: the term in public help/docs becomes `execution-target fingerprint`, and the CLI flag `--device-fingerprint` is renamed to `--execution-target-fingerprint` (with the old flag removed, consistent with the no-aliases rule). This is a deliberate, in-scope rename, not a time-permitting maybe. If the fingerprint rename must be split out for sequencing reasons (it touches runner identity, project-resource, and setup commands broadly), track it as an explicit named follow-up ticket rather than leaving "device" language in shipped help — do not silently drop it.
 - Regenerate plugin output if source templates under `plugins/_source` change.
 
 Verification:
 
-- `rg "target-device|targetDevice|selectedDevice|Execution device| device"` should have no launch-surface hits except deliberate low-level fingerprint compatibility notes.
+- `rg "target-device|targetDevice|selectedDevice|Execution device|device-fingerprint| device"` should have no launch-surface hits. If the fingerprint rename is deferred to its own follow-up ticket, the only allowed remaining hits are `*-fingerprint` flags, and that follow-up ticket must be linked in the plan/PR.
 - CLI protocol tests should cover `--target-execution-target-id`.
 - Local MCP shim tests/catalog checks should cover `target_execution_target_id`.
 
@@ -277,7 +337,8 @@ Final runtime set:
 Implementation steps:
 
 - Remove `cancelled` and `expired` from validation and docs.
-- Add a migration that maps any existing `expired` rows to `failed` with `last_error = 'Execution request expired.'` and any `cancelled` rows to `failed` or a future explicit cancellation implementation.
+- Add a migration that maps any existing `expired` rows to `failed` with `last_error = 'Execution request expired.'` and any `cancelled` rows to `failed` with `last_error = 'Execution request cancelled.'`.
+- **Preserve the original status in the migration** (record it in `last_error` as above, or in a dedicated column/metadata field) so the cancel-vs-fail distinction is recoverable. Folding `cancelled` into `failed` otherwise loses the signal between user-cancelled and genuinely-failed launches, which an explicit cancellation feature would later need to reconstruct.
 - Replace the DB check constraint with the final runtime set.
 - Update generated types after migration.
 - Update docs in `apps/web/app/docs/workflow/agent-execution/page.tsx`, protocol docs, CLI help, and plugin references.
@@ -302,8 +363,8 @@ Because these changes touch connector and protocol surfaces, update all affected
 
 ## Suggested Implementation Order
 
-1. Add migrations for objective `launching`, execution-request active uniqueness, and status cleanup.
-2. Update `createExecutionRequest`, duplicate/relaunch handling, and tests.
+1. Settle the manual-run idempotency-key strategy (Phase 3) **before** writing the active-uniqueness migration, since the key decision determines whether terminal-state rows can block relaunch. Then add migrations for objective `launching`, the partial active-uniqueness index on `execution_requests(objective_id)`, and status cleanup.
+2. Update `createExecutionRequest`, duplicate/relaunch handling (non-deterministic key + active-index dedup), and tests.
 3. Update REST/MCP attach parity and attach-aware request completion.
 4. Update CLI/Desktop runner behavior to set `launching` and pass request/session metadata.
 5. Update UI shared Run builder, selected target hook, and Quick Task Bar.

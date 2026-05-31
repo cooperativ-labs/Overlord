@@ -275,11 +275,21 @@ function spawnLaunchProcess(args, claim, deviceFingerprint) {
     runnerTestHooks.platform ?? process.platform
   );
 
+  // Phase 4: thread the execution request id to the launched process so the
+  // agent's `ovld protocol attach` can mark this exact request `launched`.
+  // Attach falls back to matching by objective when this is absent, so this is
+  // a precision aid, not a correctness requirement.
+  const launchEnv = {
+    ...process.env,
+    OVERLORD_DEVICE_FINGERPRINT: deviceFingerprint,
+    ...(claim.request?.id ? { OVERLORD_EXECUTION_REQUEST_ID: claim.request.id } : {})
+  };
+
   if (!terminalCommand) {
     return {
       child: spawnImpl(process.execPath, [OVLD_ENTRY, ...args], {
         stdio: 'inherit',
-        env: { ...process.env, OVERLORD_DEVICE_FINGERPRINT: deviceFingerprint }
+        env: launchEnv
       }),
       completeOnClose: false
     };
@@ -288,7 +298,7 @@ function spawnLaunchProcess(args, claim, deviceFingerprint) {
   return {
     child: spawnImpl('sh', ['-lc', terminalCommand], {
       stdio: 'inherit',
-      env: { ...process.env, OVERLORD_DEVICE_FINGERPRINT: deviceFingerprint }
+      env: launchEnv
     }),
     completeOnClose: true
   };

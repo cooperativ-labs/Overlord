@@ -2528,7 +2528,8 @@ export type Database = {
         | 'submitted'
         | 'executing'
         | 'complete'
-        | 'pending_delivery';
+        | 'pending_delivery'
+        | 'launching';
       organization_role: 'VIEWER' | 'AGENT' | 'MANAGER' | 'ADMIN';
       session_state: 'attached' | 'idle' | 'blocked' | 'completed' | 'disconnected';
       ticket_event_type:
@@ -2688,7 +2689,8 @@ export const Constants = {
         'submitted',
         'executing',
         'complete',
-        'pending_delivery'
+        'pending_delivery',
+        'launching'
       ],
       organization_role: ['VIEWER', 'AGENT', 'MANAGER', 'ADMIN'],
       session_state: ['attached', 'idle', 'blocked', 'completed', 'disconnected'],

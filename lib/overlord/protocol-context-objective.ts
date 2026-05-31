@@ -133,7 +133,7 @@ async function resolveLatestTrackedObjective(
     .from('objectives')
     .select('id, objective')
     .eq('ticket_id', ticketId)
-    .eq('state', 'submitted')
+    .in('state', ['launching', 'submitted'])
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();

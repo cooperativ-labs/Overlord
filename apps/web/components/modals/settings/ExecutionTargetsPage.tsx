@@ -252,11 +252,7 @@ export function ExecutionTargetsPage({
     setTargetAgentConfigs(current => {
       const forTarget = { ...(current[targetId] ?? {}) };
       const merged = mergeAgentLaunchConfig(forTarget[agent] ?? { flags: [] }, update);
-      if (merged.flags.length === 0 && !merged.preCommand?.trim()) {
-        delete forTarget[agent];
-      } else {
-        forTarget[agent] = merged;
-      }
+      forTarget[agent] = merged;
       return { ...current, [targetId]: forTarget };
     });
     try {

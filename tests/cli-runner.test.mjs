@@ -180,7 +180,7 @@ test('runOnce exits cleanly when claim-execution returns no request', async () =
   }
 });
 
-test('launchClaimedRequest completes launch and marks the request launched on spawn', async () => {
+test('launchClaimedRequest completes launch (server marks the request launching) on spawn', async () => {
   const protocolCalls = [];
   runnerTestHooks.execFileSync = (_file, argv) => {
     protocolCalls.push(argv[2]);

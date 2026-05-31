@@ -142,7 +142,7 @@ export async function POST(request: Request) {
         .update({ state: 'complete', completed_at: completedAt })
         .eq('id', objectiveId)
         .eq('ticket_id', ticketId)
-        .in('state', ['executing', 'pending_delivery', 'submitted', 'draft']),
+        .in('state', ['executing', 'pending_delivery', 'submitted', 'launching', 'draft']),
       supabase
         .from('agent_sessions')
         .update({

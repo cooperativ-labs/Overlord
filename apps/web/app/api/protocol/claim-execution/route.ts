@@ -69,7 +69,10 @@ async function resolveWorkingDirectory(
 
 function claimableByStatus(row: ExecutionRequestRow, nowMs: number): boolean {
   if (row.status === 'queued') return true;
-  if (row.status !== 'claimed') return false;
+  // Phase 4: a stale `launching` row (runner spawned but the agent never
+  // attached) is reclaimable for relaunch once its lease expires, same as a
+  // stale `claimed` row.
+  if (row.status !== 'claimed' && row.status !== 'launching') return false;
   if (!row.lease_expires_at) return true;
   return Date.parse(row.lease_expires_at) < nowMs;
 }
@@ -103,7 +106,7 @@ export async function POST(request: Request) {
       .select('*')
       .eq('organization_id', organizationId)
       .eq('requested_by', userId)
-      .in('status', ['queued', 'claimed'])
+      .in('status', ['queued', 'claimed', 'launching'])
       .order('created_at', { ascending: true })
       .limit(25);
     if (projectId) query = query.eq('project_id', projectId);
@@ -132,6 +135,45 @@ export async function POST(request: Request) {
       if (candidate.target_kind === 'ssh' && !sshCommand) continue;
       if (candidate.project_id && !workingDirectory && !sshCommand) continue;
 
+      // Resolve the per-target agent config BEFORE claiming so a transient
+      // config-lookup failure cannot leave the request leased without a launch
+      // payload. Per-target local agent config wins over the flags/pre-command
+      // captured in launch_params (which come from the user's global agent
+      // config at request time), since the claiming target may differ from
+      // where the request was made.
+      const targetLaunch = await resolveTargetAgentLaunch(
+        supabase,
+        userId,
+        executionTargetId,
+        candidate.agent_identifier
+      );
+      if (targetLaunch.kind === 'error') {
+        // Fail closed: do NOT fall back to request-captured flags on a genuine
+        // lookup error. Leave the request queued so it can be retried, record
+        // the failure for the UI/observability, and skip this candidate.
+        console.error('[claim-execution] target agent config lookup failed', {
+          executionRequestId: candidate.id,
+          executionTargetId,
+          agent: candidate.agent_identifier,
+          error: targetLaunch.error
+        });
+        await supabase.from('ticket_events').insert({
+          event_type: 'system',
+          phase: 'execute',
+          summary: 'Could not load the execution target launch configuration; retrying.',
+          ticket_id: candidate.ticket_id,
+          objective_id: candidate.objective_id,
+          created_by: userId,
+          payload: {
+            execution_request_id: candidate.id,
+            execution_target_id: executionTargetId,
+            agent_identifier: candidate.agent_identifier,
+            target_config_error: targetLaunch.error
+          }
+        });
+        continue;
+      }
+
       let claimUpdate = supabase
         .from('execution_requests')
         .update({
@@ -146,8 +188,8 @@ export async function POST(request: Request) {
         .select('*');
 
       claimUpdate =
-        candidate.status === 'claimed'
-          ? claimUpdate.eq('status', 'claimed').lt('lease_expires_at', now.toISOString())
+        candidate.status === 'claimed' || candidate.status === 'launching'
+          ? claimUpdate.eq('status', candidate.status).lt('lease_expires_at', now.toISOString())
           : claimUpdate.eq('status', 'queued');
 
       const { data: claimed, error: claimError } = await claimUpdate.maybeSingle();
@@ -160,16 +202,6 @@ export async function POST(request: Request) {
         .eq('id', claimed.ticket_id)
         .single();
 
-      // Per-target local agent config wins over the flags/pre-command captured in
-      // launch_params (which come from the user's global agent config at request
-      // time), since the claiming target may differ from where the request was made.
-      const targetLaunch = await resolveTargetAgentLaunch(
-        supabase,
-        userId,
-        executionTargetId,
-        claimed.agent_identifier
-      );
-
       return NextResponse.json({
         request: claimed,
         launch: {
@@ -178,12 +210,14 @@ export async function POST(request: Request) {
           model: claimed.model_identifier,
           thinking: claimed.thinking_level,
           launchMode: claimed.launch_mode,
-          flags: targetLaunch
-            ? targetLaunch.flags
-            : stringArrayFromParams(claimed.launch_params, 'flags'),
-          preCommand: targetLaunch
-            ? targetLaunch.preCommand
-            : textFromParams(claimed.launch_params, 'preCommand'),
+          flags:
+            targetLaunch.kind === 'configured'
+              ? targetLaunch.flags
+              : stringArrayFromParams(claimed.launch_params, 'flags'),
+          preCommand:
+            targetLaunch.kind === 'configured'
+              ? targetLaunch.preCommand
+              : textFromParams(claimed.launch_params, 'preCommand'),
           customCommand: textFromParams(claimed.launch_params, 'customCommand'),
           workingDirectory,
           sshCommand,

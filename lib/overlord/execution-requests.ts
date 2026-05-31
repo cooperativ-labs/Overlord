@@ -50,10 +50,20 @@ type ObjectiveRow = {
 
 type ExecutionRequestRow = Database['public']['Tables']['execution_requests']['Row'];
 
+/**
+ * Statuses that represent an in-flight execution request for an objective. A
+ * partial unique index on `execution_requests(objective_id) WHERE status IN
+ * (...these...)` guarantees at most one active request per objective; this list
+ * must stay in sync with that index (see the Phase 3 migration).
+ */
+export const ACTIVE_REQUEST_STATUSES = ['queued', 'claimed', 'launching'] as const;
+
 export type ExecutionRequestResponse = {
   request: ExecutionRequestRow;
   ticket: TicketRow;
   objective: ObjectiveRow;
+  /** True when an existing active request was reused/re-queued instead of inserting a new one. */
+  reused: boolean;
 };
 
 function normalizeOptionalText(value: string | null | undefined): string | null {
@@ -89,7 +99,7 @@ async function resolveObjectiveForExecution(
     query = query.eq('id', objectiveId);
   } else {
     query = query
-      .in('state', ['draft', 'submitted'])
+      .in('state', ['draft', 'submitted', 'launching'])
       .order('position', { ascending: true })
       .order('created_at', { ascending: true })
       .limit(1);
@@ -101,11 +111,117 @@ async function resolveObjectiveForExecution(
 
   const objectiveText = data.objective?.trim() ?? '';
   if (!objectiveText) throw new Error('Objective is empty.');
-  if (data.state !== 'draft' && data.state !== 'submitted') {
+  // `launching` is launchable too: re-resolving an already-queued objective
+  // (e.g. a relaunch click) must not be rejected.
+  if (data.state !== 'draft' && data.state !== 'submitted' && data.state !== 'launching') {
     throw new Error(`Objective is not launchable from state "${data.state}".`);
   }
 
   return data as ObjectiveRow;
+}
+
+/**
+ * Find the single in-flight (`queued`/`claimed`/`launching`) execution request
+ * for an objective, if any. The Phase 3 partial unique index guarantees at most
+ * one, but we order newest-first defensively.
+ */
+async function findActiveRequestForObjective(
+  supabase: ExecutionClient,
+  organizationId: number,
+  objectiveId: string
+): Promise<ExecutionRequestRow | null> {
+  const { data, error } = await supabase
+    .from('execution_requests')
+    .select('*')
+    .eq('organization_id', organizationId)
+    .eq('objective_id', objectiveId)
+    .in('status', ACTIVE_REQUEST_STATUSES as unknown as string[])
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return (data as ExecutionRequestRow | null) ?? null;
+}
+
+async function findExecutionRequestById(
+  supabase: ExecutionClient,
+  organizationId: number,
+  requestId: string
+): Promise<ExecutionRequestRow | null> {
+  const { data, error } = await supabase
+    .from('execution_requests')
+    .select('*')
+    .eq('organization_id', organizationId)
+    .eq('id', requestId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return (data as ExecutionRequestRow | null) ?? null;
+}
+
+/**
+ * Reuse an already-active execution request instead of inserting a duplicate
+ * (Phase 3 / Decision 2). A stale `claimed`/`launching` row is reset to
+ * `queued` so a runner can re-claim it (covers the case where the runner
+ * claimed the job but the terminal never opened), and a fresh
+ * `execution_requested` event is emitted so Desktop's runner listener wakes up
+ * and (re)launches the queued work.
+ */
+async function reuseActiveRequest(
+  supabase: ExecutionClient,
+  existing: ExecutionRequestRow,
+  ticket: TicketRow,
+  objective: ObjectiveRow,
+  requestedFrom: string,
+  userId: string
+): Promise<ExecutionRequestResponse> {
+  let request = existing;
+  if (existing.status !== 'queued') {
+    const { data: reset, error: resetError } = await supabase
+      .from('execution_requests')
+      .update({
+        status: 'queued',
+        claimed_by_execution_target_id: null,
+        claimed_at: null,
+        lease_expires_at: null,
+        last_error: null
+      })
+      .eq('id', existing.id)
+      .eq('organization_id', ticket.organization_id)
+      .eq('objective_id', objective.id)
+      .eq('status', existing.status)
+      .in('status', ['claimed', 'launching'])
+      .select('*')
+      .maybeSingle();
+    if (resetError) throw new Error(resetError.message);
+    if (reset) {
+      request = reset as ExecutionRequestRow;
+    } else {
+      // The row changed after the active pre-check. Do not convert a terminal
+      // request back to queued or emit a wake-up event; return the latest row as
+      // an idempotent no-op so the caller can surface the current status.
+      const latest = await findExecutionRequestById(supabase, ticket.organization_id, existing.id);
+      if (!latest) {
+        throw new Error('Execution request disappeared before it could be re-queued.');
+      }
+      return { request: latest, ticket, objective, reused: true };
+    }
+  }
+
+  await supabase.from('ticket_events').insert({
+    event_type: 'execution_requested',
+    phase: 'execute',
+    summary: 'Re-queued the existing objective execution for a runner.',
+    ticket_id: ticket.id,
+    objective_id: objective.id,
+    created_by: userId,
+    payload: {
+      execution_request_id: request.id,
+      requested_from: requestedFrom,
+      reused_execution_request: true
+    }
+  });
+
+  return { request, ticket, objective, reused: true };
 }
 
 export async function createExecutionRequest(
@@ -128,6 +244,28 @@ export async function createExecutionRequest(
   }
 
   const objective = await resolveObjectiveForExecution(supabase, ticket.id, input.objectiveId);
+
+  // Phase 3 dedup: if there is already an in-flight request for this objective,
+  // reuse/re-queue it instead of creating a duplicate. This is what makes a
+  // repeated Run click relaunch the already-queued work rather than spawning a
+  // second agent.
+  const requestedFrom = input.requestedFrom.trim();
+  const activeExisting = await findActiveRequestForObjective(
+    supabase,
+    ticket.organization_id,
+    objective.id
+  );
+  if (activeExisting) {
+    return reuseActiveRequest(
+      supabase,
+      activeExisting,
+      ticket as TicketRow,
+      objective,
+      requestedFrom,
+      input.userId
+    );
+  }
+
   const assigned = requireExecutionAgentFromAssignment(objective.assigned_agent);
   const customCommand = normalizeOptionalText(input.customCommand);
   if (assigned.customAgentId && !customCommand) {
@@ -138,23 +276,25 @@ export async function createExecutionRequest(
   const agent = assigned.agentIdentifier;
   const model = assigned.modelIdentifier;
   const thinking = assigned.thinkingLevel;
-  const requestedFrom = input.requestedFrom.trim();
   const idempotencyKey =
     normalizeOptionalText(input.idempotencyKey) ??
     (requestedFrom === 'auto_advance'
       ? `auto_advance:${objective.id}`
       : `${requestedFrom}:${objective.id}:${crypto.randomUUID()}`);
 
+  // New launch requests move draft -> launching (Phase 2). The legacy
+  // `submitted` state is left for the discuss/submit path; readers treat
+  // `launching` identically to `submitted` for now.
   if (objective.state === 'draft') {
     const update: Database['public']['Tables']['objectives']['Update'] = {
-      state: 'submitted'
+      state: 'launching'
     };
     if (requestedFrom === 'auto_advance') {
       update.auto_advanced_at = new Date().toISOString();
     }
     const { error } = await supabase.from('objectives').update(update).eq('id', objective.id);
     if (error) throw new Error(error.message);
-    objective.state = 'submitted';
+    objective.state = 'launching';
   }
 
   const insert = {
@@ -182,9 +322,30 @@ export async function createExecutionRequest(
     .select('*')
     .single();
 
-  let request = inserted;
+  const request = inserted;
   if (insertError) {
     if (insertError.code !== '23505') throw new Error(insertError.message);
+
+    // A 23505 here is a lost insert race. It can be either the active-objective
+    // partial index (another tab/click queued first) or the legacy
+    // (org, idempotency_key) constraint. Prefer resolving by the active
+    // objective row — the same outcome as the pre-check path — and fall back to
+    // the idempotency key only when no active row exists.
+    const raceActive = await findActiveRequestForObjective(
+      supabase,
+      ticket.organization_id,
+      objective.id
+    );
+    if (raceActive) {
+      return reuseActiveRequest(
+        supabase,
+        raceActive,
+        ticket as TicketRow,
+        objective,
+        requestedFrom,
+        input.userId
+      );
+    }
 
     const { data: existing, error: existingError } = await supabase
       .from('execution_requests')
@@ -195,7 +356,12 @@ export async function createExecutionRequest(
     if (existingError || !existing) {
       throw new Error(existingError?.message ?? 'Execution request already exists.');
     }
-    request = existing;
+    return {
+      request: existing as ExecutionRequestRow,
+      ticket: ticket as TicketRow,
+      objective,
+      reused: true
+    };
   }
   if (!request) {
     throw new Error('Failed to create execution request.');
@@ -221,5 +387,5 @@ export async function createExecutionRequest(
     }
   });
 
-  return { request, ticket: ticket as TicketRow, objective };
+  return { request, ticket: ticket as TicketRow, objective, reused: false };
 }

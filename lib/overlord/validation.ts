@@ -464,14 +464,15 @@ export const updateProjectResourceSchema = z.object({
 // ---------------------------------------------------------------------------
 
 export const executionRequestTargetKindSchema = z.enum(['any', 'local', 'ssh']);
+// Only the statuses the runtime actually writes (ticket 1:1288 Phase 10).
+// `cancelled`/`expired` were never written by the runtime and are folded into
+// `failed` (with the original status preserved in last_error).
 export const executionRequestStatusSchema = z.enum([
   'queued',
   'claimed',
   'launching',
   'launched',
-  'failed',
-  'cancelled',
-  'expired'
+  'failed'
 ]);
 
 export const requestExecutionSchema = z.object({

@@ -73,7 +73,7 @@ export async function insertOrderedObjectives(
     )
   );
   const hasActiveObjective = ((existingRows ?? []) as Array<{ state: string | null }>).some(row =>
-    ['draft', 'submitted', 'executing'].includes(row.state ?? '')
+    ['draft', 'submitted', 'launching', 'executing'].includes(row.state ?? '')
   );
   const firstState =
     options.firstState ??
