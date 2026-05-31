@@ -42,7 +42,8 @@ function buildClaimSupabase({
     directory_path: string;
     user_id: string;
     execution_target_id: string;
-  } | null
+  } | null,
+  targetAgentFlags = undefined as Record<string, unknown> | null | undefined
 } = {}) {
   const claimUpdate = {
     update: jest.fn(() => claimUpdate),
@@ -87,6 +88,17 @@ function buildClaimSupabase({
           eq: jest.fn(() => chain),
           single: jest.fn(async () => ({
             data: { id: 'ticket-uuid', ticket_id: '1:100', project_id: PROJECT_ID },
+            error: null
+          }))
+        };
+        return chain;
+      }
+      if (table === 'user_execution_targets') {
+        const chain = {
+          select: jest.fn(() => chain),
+          eq: jest.fn(() => chain),
+          maybeSingle: jest.fn(async () => ({
+            data: targetAgentFlags === undefined ? null : { agent_flags: targetAgentFlags },
             error: null
           }))
         };
@@ -194,6 +206,46 @@ describe('POST /api/protocol/claim-execution', () => {
     const response = await POST(new Request('http://localhost', { method: 'POST' }));
     const body = await response.json();
     expect(body.launch.workingDirectory).toBe('/from-target-resource');
+  });
+
+  it('overrides launch_params flags/preCommand with the claiming target config', async () => {
+    const launchParams = {
+      workingDirectory: '/repo',
+      flags: ['--from-request'],
+      preCommand: 'global-pre'
+    };
+    const supabase = buildClaimSupabase({
+      candidates: [baseCandidate({ launch_params: launchParams })],
+      claimResult: baseCandidate({ status: 'claimed', launch_params: launchParams }),
+      targetAgentFlags: { claude: { flags: ['--from-target'], preCommand: 'target-pre' } }
+    });
+    const { createServiceRoleClient } = jest.requireMock('@/supabase/utils/service-role');
+    createServiceRoleClient.mockReturnValue(supabase);
+
+    const response = await POST(new Request('http://localhost', { method: 'POST' }));
+    const body = await response.json();
+    expect(body.launch.flags).toEqual(['--from-target']);
+    expect(body.launch.preCommand).toBe('target-pre');
+  });
+
+  it('falls back to launch_params flags when the target has no config for the agent', async () => {
+    const launchParams = {
+      workingDirectory: '/repo',
+      flags: ['--from-request'],
+      preCommand: 'global-pre'
+    };
+    const supabase = buildClaimSupabase({
+      candidates: [baseCandidate({ launch_params: launchParams })],
+      claimResult: baseCandidate({ status: 'claimed', launch_params: launchParams }),
+      targetAgentFlags: { codex: { flags: ['--other'] } }
+    });
+    const { createServiceRoleClient } = jest.requireMock('@/supabase/utils/service-role');
+    createServiceRoleClient.mockReturnValue(supabase);
+
+    const response = await POST(new Request('http://localhost', { method: 'POST' }));
+    const body = await response.json();
+    expect(body.launch.flags).toEqual(['--from-request']);
+    expect(body.launch.preCommand).toBe('global-pre');
   });
 
   it('reclaims an expired claimed request and increments attempt_count', async () => {

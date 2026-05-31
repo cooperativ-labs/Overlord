@@ -2,7 +2,7 @@
   "name": "Overlord",
   "description": "Overlord is a platform for managing AI agent workflows.",
   "author": "Overlord",
-  "version": "0.2605300746.0",
+  "version": "0.2605310708.0",
   "private": true,
   "main": "apps/desktop/dist-electron/main.js",
   "workspaces": [
@@ -29,7 +29,7 @@
     "mobile:android": "yarn workspace @overlord/mobile android",
     "mobile:clean": "yarn workspace @overlord/mobile clean",
     "generate": "supabase migration up &&node scripts/generate-supabase-types.js local && yarn fix",
-    "new": "rm -rf node_modules && yarn cache clean && yarn install",
+    "new": "rm -rf node_modules && rm -rf /apps/web/.next && yarn cache clean && yarn install",
     "nuke": "yarn install && supabase db reset && supabase start && supabase status && yarn generate",
     "build": "yarn workspace @overlord/web build && yarn sentry:sourcemaps",
     "build:web": "yarn workspace @overlord/web build",

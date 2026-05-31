@@ -2269,6 +2269,7 @@ export type Database = {
       user_execution_targets: {
         Row: {
           access_status: string;
+          agent_flags: Json;
           created_at: string;
           default_username: string | null;
           execution_target_id: string;
@@ -2278,6 +2279,7 @@ export type Database = {
         };
         Insert: {
           access_status?: string;
+          agent_flags?: Json;
           created_at?: string;
           default_username?: string | null;
           execution_target_id: string;
@@ -2287,6 +2289,7 @@ export type Database = {
         };
         Update: {
           access_status?: string;
+          agent_flags?: Json;
           created_at?: string;
           default_username?: string | null;
           execution_target_id?: string;

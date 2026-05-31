@@ -156,6 +156,16 @@ export const updateSchema = z.object({
   payload: z.record(z.string(), z.unknown()).optional().default({})
 });
 
+export const heartbeatSchema = z.object({
+  sessionKey: z.string().uuid(),
+  ticketId: ticketIdSchema,
+  phase: ticketStatusSchema.optional(),
+  percent: z.number().min(0).max(100).optional(),
+  note: agentTextOptional(2_000).optional(),
+  externalSessionId: z.string().trim().max(2_048).nullable().optional(),
+  externalUrl: z.string().trim().max(2_048).pipe(z.url()).nullable().optional()
+});
+
 export const hookEventSchema = z.object({
   hookType: z.enum(['UserPromptSubmit', 'Stop']),
   ticketId: ticketIdSchema,

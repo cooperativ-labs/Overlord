@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { internalErrorResponse, parseProtocolBody } from '@/app/api/protocol/_lib';
+import { resolveTargetAgentLaunch } from '@/lib/overlord/target-agent-flags';
 import { upsertDeviceFromProtocol } from '@/lib/overlord/upsert-device';
 import { claimExecutionSchema } from '@/lib/overlord/validation';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
@@ -159,6 +160,16 @@ export async function POST(request: Request) {
         .eq('id', claimed.ticket_id)
         .single();
 
+      // Per-target local agent config wins over the flags/pre-command captured in
+      // launch_params (which come from the user's global agent config at request
+      // time), since the claiming target may differ from where the request was made.
+      const targetLaunch = await resolveTargetAgentLaunch(
+        supabase,
+        userId,
+        executionTargetId,
+        claimed.agent_identifier
+      );
+
       return NextResponse.json({
         request: claimed,
         launch: {
@@ -167,8 +178,12 @@ export async function POST(request: Request) {
           model: claimed.model_identifier,
           thinking: claimed.thinking_level,
           launchMode: claimed.launch_mode,
-          flags: stringArrayFromParams(claimed.launch_params, 'flags'),
-          preCommand: textFromParams(claimed.launch_params, 'preCommand'),
+          flags: targetLaunch
+            ? targetLaunch.flags
+            : stringArrayFromParams(claimed.launch_params, 'flags'),
+          preCommand: targetLaunch
+            ? targetLaunch.preCommand
+            : textFromParams(claimed.launch_params, 'preCommand'),
           customCommand: textFromParams(claimed.launch_params, 'customCommand'),
           workingDirectory,
           sshCommand,

@@ -15,6 +15,7 @@ Use this mode when the prompt already contains a ticket ID or explicitly says th
 2. The attach response prints JSON to stdout containing `session.sessionKey`. The CLI also persists this key automatically so subsequent `ovld protocol` commands in the same working directory resolve it without `--session-key`. If auto-resolution fails, pass `--session-key <sessionKey>` explicitly on every subsequent call.
 3. Treat the Overlord ticket prompt as authoritative for the objective, constraints, and delivery target.
 4. Post updates while working: `ovld protocol update --session-key <sessionKey> --ticket-id <ticket_id> --summary "..." --phase execute`.
+   During long mechanical stretches with nothing meaningful to post, send `ovld protocol heartbeat --session-key <sessionKey> --ticket-id <ticket_id> [--phase execute] [--percent <0-100>] [--note "..."]` instead of an empty update.
 5. Follow-up messages after the initial ticket are captured automatically by the installed `UserPromptSubmit` hook and stay in discussion intent while the ticket is in review. Do not post `user_follow_up` manually unless the hook is unavailable.
 6. If blocked, call `ovld protocol ask --session-key <sessionKey> --ticket-id <ticket_id> --question "..."` and stop.
 7. Deliver last with `ovld protocol deliver --session-key <sessionKey> --ticket-id <ticket_id> --summary "..."`, including `changeRationales` for each meaningful behavioral file change.
@@ -34,6 +35,14 @@ Update:
 ```bash
 ovld protocol update --session-key <sessionKey> --ticket-id $TICKET_ID --summary "What you did and why." --phase execute
 ```
+
+Heartbeat:
+
+```bash
+ovld protocol heartbeat --session-key <sessionKey> --ticket-id $TICKET_ID --phase execute --percent 40 --note "Running the integration suite"
+```
+
+Use `heartbeat` for liveness pings and transient UI telemetry when you have no meaningful narrative summary to post. It updates the attached session without creating a ticket event.
 
 When the summary contains backticks, quotes, or other special shell characters, pipe it via stdin to prevent shell interpretation:
 
@@ -279,4 +288,4 @@ This keeps the ticket feed readable while preserving the full document in versio
 - Do not add or commit changes unless the user explicitly asks you to commit.
 - Delivery is the concluding step. After delivering, stop implementation work unless the user explicitly asks for follow-up execution; once follow-up execution is complete, deliver again.
 
-<!-- version: 0.1.5 -->
+<!-- version: 0.1.6 -->

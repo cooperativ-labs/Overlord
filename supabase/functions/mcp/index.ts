@@ -27,6 +27,7 @@ import { handleDeliver } from './handlers/deliver.ts';
 import { handleDiscoverProject } from './handlers/discover-project.ts';
 import { handleDiscussObjective } from './handlers/discuss-objective.ts';
 import { handleGetDevice } from './handlers/get-device.ts';
+import { handleHeartbeat } from './handlers/heartbeat.ts';
 import { handleListProjectResources } from './handlers/list-project-resources.ts';
 import { handleReadContext } from './handlers/read-context.ts';
 import { handleRecordChangeRationales } from './handlers/record-change-rationales.ts';
@@ -304,6 +305,8 @@ Deno.serve(async (req: Request) => {
         result = await handleDiscussObjective(supabase, toolArgs, requestContext);
       } else if (toolName === 'update') {
         result = await handleUpdate(supabase, toolArgs, requestContext);
+      } else if (toolName === 'heartbeat') {
+        result = await handleHeartbeat(supabase, toolArgs, requestContext);
       } else if (toolName === 'ask') {
         result = await handleAsk(supabase, toolArgs, requestContext);
       } else if (toolName === 'request_approval_gate') {

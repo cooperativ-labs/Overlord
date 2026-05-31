@@ -2,6 +2,32 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2605310708.0] - 2026-05-31:07:08
+
+### Added
+- Add protocol **`heartbeat`** (`ovld protocol heartbeat`, MCP `heartbeat`, `POST /api/protocol/heartbeat`) so agents can send liveness pings and transient telemetry (phase, percent, note) without creating ticket events.
+- Scope **local agent configuration** (command flags and pre-command) per **execution target** instead of globally per user, with backfill from existing settings so launch behavior is preserved.
+
+### Fixed
+- None.
+
+### Changed
+- Apply per-target launch flags and pre-command from **`claim-execution`** when a runner claims work, so the claiming machine's settings win over flags captured at request time.
+- Reorganize **CLI & Local Agents** settings around an execution-target selector for configuring pre-commands and launch flags per target.
+- Label Codex reasoning controls as **Effort** in the agent model selector (other agents remain **Thinking**).
+
+### Security
+- None.
+
+### Test
+- Add protocol heartbeat API, CLI, MCP, and validation tests.
+- Add unit tests for per-target agent launch config resolution and schema parsing.
+- Extend **`claim-execution`** tests for per-target flag and pre-command override behavior.
+
+### Documentation
+- Add a dedicated **Authentication** docs section (OAuth vs agent token) with guidance for container and remote execution targets.
+- Document **`heartbeat`** in the protocol docs, for-agents lifecycle/CLI reference, and agent plugin skills.
+
 ## [0.2605300746.0] - 2026-05-30:07:46
 
 ### Added

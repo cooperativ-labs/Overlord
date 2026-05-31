@@ -374,6 +374,40 @@ const tools = [
     subcommand: 'update'
   },
   {
+    name: 'heartbeat',
+    description:
+      'Send a lightweight Overlord liveness ping without posting a ticket event. Optional phase/percent/note telemetry is stored on the session row.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        session_key: { type: 'string' },
+        ticket_id: {
+          type: 'string',
+          description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.'
+        },
+        phase: {
+          type: 'string',
+          enum: ['draft', 'execute', 'review', 'deliver', 'complete', 'blocked', 'cancelled']
+        },
+        percent: { type: 'number' },
+        note: { type: 'string' },
+        external_url: { type: ['string', 'null'] },
+        external_session_id: { type: ['string', 'null'] }
+      },
+      required: ['session_key', 'ticket_id']
+    },
+    toCliFlags: args => ({
+      'session-key': args.session_key,
+      'ticket-id': args.ticket_id,
+      phase: args.phase,
+      percent: args.percent,
+      note: args.note,
+      'external-url': args.external_url,
+      'external-session-id': args.external_session_id
+    }),
+    subcommand: 'heartbeat'
+  },
+  {
     name: 'record_change_rationales',
     description: 'Persist structured change rationale rows without posting a separate update.',
     inputSchema: {

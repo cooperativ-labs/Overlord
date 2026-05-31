@@ -10,6 +10,7 @@ export default [
   js.configs.recommended,
   {
     ignores: [
+      '.overlord/**',
       '**/.next/**',
       'apps/desktop/dist-electron/**',
       'node_modules/**',

@@ -19,6 +19,7 @@ export function HomepageHeader() {
             width={45}
             height={50}
             className="shrink-0 overflow-hidden"
+            loading="eager"
           />
         </div>
         <p className="font-display hidden text-lg font-semibold tracking-tight text-stone-900 sm:block dark:text-white">

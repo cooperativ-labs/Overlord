@@ -12,7 +12,7 @@ import { displayFont, monoFont } from '@/lib/fonts';
 export const metadata: Metadata = {
   metadataBase: new URL(getSiteMetadataBaseUrl()),
   title: 'Overlord',
-  description: 'Stop juggling AI agents. Organize and launch agent work with Overlord.',
+  description: 'Stop juggling AI agents. Organize, manage, and launch agent work with Overlord.',
   icons: {
     apple: '/images/256.png'
   },
@@ -27,7 +27,7 @@ export const metadata: Metadata = {
   },
   openGraph: {
     title: 'Overlord',
-    description: 'Stop juggling AI agents. Organize and launch agent work with Overlord.',
+    description: 'Stop juggling AI agents. Organize, manage, and launch agent work with Overlord.',
     images: ['/images/social/overlord-header.png']
   },
   twitter: {

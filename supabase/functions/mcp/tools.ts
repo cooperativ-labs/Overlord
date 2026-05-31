@@ -227,6 +227,52 @@ export const TOOLS = [
     }
   },
   {
+    name: 'heartbeat',
+    annotations: {
+      title: 'Send Heartbeat',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false
+    },
+    description:
+      'Send a lightweight liveness ping for an attached ticket session without creating a ticket event. Optional phase/percent/note telemetry is stored on the session row for transient UI progress.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sessionKey: { type: 'string', description: 'Session key from attach.' },
+        ticketId: {
+          type: 'string',
+          description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.'
+        },
+        phase: {
+          type: 'string',
+          enum: ['draft', 'execute', 'review', 'deliver', 'complete', 'blocked', 'cancelled'],
+          description: 'Optional transient lifecycle phase for UI telemetry.'
+        },
+        percent: {
+          type: 'number',
+          description: 'Optional percent-complete estimate from 0 to 100.'
+        },
+        note: {
+          type: 'string',
+          description: 'Optional short liveness note, for example "running tests".'
+        },
+        externalUrl: {
+          type: ['string', 'null'],
+          description:
+            'Optional agent dashboard URL for this session. Pass null to clear a previously stored link.'
+        },
+        externalSessionId: {
+          type: ['string', 'null'],
+          description:
+            'Optional native session id returned by the agent runtime (for example Claude/Codex resume ids). Pass null to clear.'
+        }
+      },
+      required: ['sessionKey', 'ticketId']
+    }
+  },
+  {
     name: 'record_change_rationales',
     annotations: {
       title: 'Record Change Rationales',

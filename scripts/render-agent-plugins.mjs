@@ -126,7 +126,7 @@ const agentConfigs = {
         '- Project resolution: `discover_project`',
         '- Ticket search: `search_tickets` — keyword search + status/filter (same filters as `ovld protocol search-tickets`)',
         '- Ticket session flow: `attach`, `connect`, `load_ticket_context` (CLI `load-context` only; not on hosted MCP), `prompt`',
-        '- Progress and review flow: `update`, `record_change_rationales`, `ask`, `deliver`',
+        '- Progress and review flow: `update`, `heartbeat`, `record_change_rationales`, `ask`, `deliver`',
         '- Shared context: `read_context`, `write_context`',
         '- Objective attachments: `list_attachments`, `prepare_attachment_upload`, `finalize_attachment_upload`, `get_attachment_download_url`, `upload_attachment_file`',
         '- Local runner queue: `request_execution`, `claim_execution`, `complete_execution_launch`, `fail_execution_launch`',

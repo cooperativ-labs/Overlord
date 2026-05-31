@@ -19,6 +19,7 @@ export default function AuthLayout({
             className="h-32 w-32 object-contain rounded-4xl"
             width={128}
             height={128}
+            loading="eager"
           />
         </div>
 

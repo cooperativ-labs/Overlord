@@ -14,6 +14,14 @@ In a git workspace, `attach` automatically creates a local git checkpoint for ea
 ovld protocol update --session-key <sessionKey> --ticket-id $TICKET_ID --summary "What you did and why." --phase execute
 ```
 
+## Heartbeat
+
+```bash
+ovld protocol heartbeat --session-key <sessionKey> --ticket-id $TICKET_ID --phase execute --percent 40 --note "Running the integration suite"
+```
+
+Use `heartbeat` for liveness pings and transient UI telemetry when you have no meaningful narrative summary to post. It updates the attached session without creating a ticket event.
+
 Supported `--phase` values:
 
 - `draft`
@@ -34,7 +42,7 @@ Event types:
 - `discussion_summary` for important discussion outcomes that should remain visible on the ticket
 - `decision` for explicit non-file decisions made during follow-up discussion
 
-Post-delivery follow-up modes:
+- Post-delivery follow-up modes:
 
 - User follow-up messages default to `discussion` intent while the ticket is in review.
 - Use `ovld protocol update --begin-follow-up-work --follow-up-intent execution --summary "Beginning follow-up work."` before moving a delivered/review ticket back to execution.

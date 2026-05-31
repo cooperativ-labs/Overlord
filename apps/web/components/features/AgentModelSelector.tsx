@@ -151,6 +151,17 @@ function CursorAutoTooltipLabel() {
   );
 }
 
+export function getAgentThinkingLabel(agent: LaunchAgentType): 'Thinking' | 'Effort' {
+  return agent === 'codex' ? 'Effort' : 'Thinking';
+}
+
+export function supportsBuiltInThinkingSelection(
+  agent: LaunchAgentType,
+  antigravityManagesModels: boolean
+): boolean {
+  return !antigravityManagesModels && agent !== 'cursor';
+}
+
 function syncConfigsForSelection(
   current: Record<string, AgentConfig>,
   nextSelection: AgentModelSelection
@@ -230,7 +241,7 @@ export function AgentModelSelector({
 
   const thinkingEnabled = selectedCustomAgent
     ? Boolean(customThinkingPlaceholder)
-    : value.agent !== 'codex' && !antigravityManagesModels;
+    : supportsBuiltInThinkingSelection(value.agent, antigravityManagesModels);
   const thinkingOptions = selectedCustomAgent
     ? (customThinkingPlaceholder?.options.map(option => option.value) ?? [])
     : thinkingEnabled
@@ -473,7 +484,9 @@ export function AgentModelSelector({
       {thinkingEnabled && thinkingOptions.length > 0 && (
         <div className={cn('flex flex-col gap-0.5', inline ? 'w-full' : 'min-w-[90px]')}>
           <p className="mb-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-            {selectedCustomAgent ? (customThinkingPlaceholder?.label ?? 'Thinking') : 'Thinking'}
+            {selectedCustomAgent
+              ? (customThinkingPlaceholder?.label ?? 'Thinking')
+              : getAgentThinkingLabel(value.agent)}
           </p>
           <button
             type="button"

@@ -72,6 +72,7 @@ ovld protocol discover-project --working-directory /path/to/repo --device-finger
 ovld protocol attach --ticket-id <ticket_id>
 ovld protocol search-tickets --query "auth refactor" --status next-up,execute
 ovld protocol update --session-key <session-key> --ticket-id <ticket_id> --summary "Working on it" --phase execute
+ovld protocol heartbeat --session-key <session-key> --ticket-id <ticket_id> --phase execute --percent 50 --note "Running tests"
 ovld runner start
 ovld setup
 ovld setup codex
@@ -133,6 +134,7 @@ Agents can find docs here: https://www.ovld.ai/docs/for-agents
 - `prompt` - create a ticket and attach to it immediately (`spawn` is a backward-compatible alias)
 - `record-work` - record already-completed chat work as a ticket in review with a completed objective and trigger feed-post generation
 - `update` - post progress, discussion/decision events, optional change rationales, and explicit `--begin-follow-up-work` transitions
+- `heartbeat` - send a lightweight liveness ping plus optional transient `phase` / `percent` / `note` telemetry without creating a ticket event
 - `record-change-rationales` - persist structured change rationales without a normal progress update
 - `ask` - post a blocking question and move the ticket to review
 - `permission-request` - notify Overlord that the agent is requesting tool permission
@@ -156,7 +158,7 @@ Use `create` for future work you want to track, `prompt` for work that should st
 
 `ovld protocol deliver` accepts either discrete flags like `--summary` / `--artifacts-json`, an inline full payload with `--payload-json '{"summary":"...","artifacts":[...],"changeRationales":[...]}'`, or a file/stdin payload with `--payload-file <path|->`.
 
-After delivery, follow-up messages are recorded as discussion by default. To start implementation again on a delivered/review ticket, call `ovld protocol update --begin-follow-up-work --follow-up-intent execution --summary "Beginning follow-up work."` before moving back to `--phase execute`. Use `--event-type discussion_summary` or `--event-type decision` for important non-file outcomes. Once follow-up execution records a real work signal, such as an execution update, git snapshot, change rationales, deliverables, or explicit `pending_delivery` intent, Overlord marks the objective `pending_delivery` so redelivery is only required for actual post-delivery work.
+After delivery, follow-up messages are recorded as discussion by default. To start implementation again on a delivered/review ticket, call `ovld protocol update --begin-follow-up-work --follow-up-intent execution --summary "Beginning follow-up work."` before moving back to `--phase execute`. Use `--event-type discussion_summary` or `--event-type decision` for important non-file outcomes. Once follow-up execution records a real work signal, such as an execution update, git snapshot, change rationales, deliverables, or explicit `pending_delivery` intent, Overlord marks the objective `pending_delivery` so redelivery is only required for actual post-delivery work. Use `ovld protocol heartbeat` during long-running mechanical work when you need liveness without adding activity-feed noise.
 
 ## License
 

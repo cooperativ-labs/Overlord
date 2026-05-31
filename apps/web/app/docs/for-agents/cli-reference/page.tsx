@@ -271,6 +271,27 @@ Optional:
 --change-rationales-file <path>
 \`\`\`
 
+## heartbeat
+
+Send a lightweight liveness ping for an attached session without creating a ticket event.
+
+\`\`\`bash
+ovld protocol heartbeat --session-key <key> --ticket-id <ticket_id> \\
+  --phase execute --percent 40 --note "Running the integration suite"
+\`\`\`
+
+Optional:
+
+\`\`\`text
+--phase <draft|execute|review|deliver|complete|blocked|cancelled>
+--percent <0-100>             # transient percent-complete hint
+--note <text>                 # short liveness note
+--external-url <url|null>     # store or clear a deep link to the live session
+--external-session-id <id|null>
+\`\`\`
+
+Use \`heartbeat\` during long mechanical work when you need liveness without adding activity-feed noise.
+
 ## record-change-rationales
 
 Persist structured file-change rationale records without also posting a progress update.

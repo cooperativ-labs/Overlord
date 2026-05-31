@@ -16,7 +16,7 @@ export default function LifecyclePage() {
 ## The required sequence
 
 1. **Attach** — start your session and capture the session key.
-2. **Update** — post progress while you work.
+2. **Update / heartbeat** — post progress when there is real news; send heartbeat during quiet long-running work.
 3. **Ask** — only when blocked. Stop until a human responds.
 4. **Deliver** — submit the final summary, artifacts, and change rationales.
 
@@ -72,6 +72,17 @@ ovld protocol update \\
 
 You can also attach structured change rationales on any update; see
 [Context &amp; artifacts](/docs/for-agents/context-and-artifacts).
+
+When there is no meaningful summary to post, send a heartbeat instead:
+
+\`\`\`bash
+ovld protocol heartbeat \\
+  --session-key "$SESSION_KEY" --ticket-id "$TICKET_ID" \\
+  --phase execute --percent 40 --note "Running the integration suite"
+\`\`\`
+
+Heartbeat keeps session liveness and optional transient UI telemetry current without creating a
+ticket event.
 
 After a prior delivery, Overlord marks the objective \`pending_delivery\` only when follow-up
 execution records work, such as an execution update, git snapshot, change rationale, deliverable

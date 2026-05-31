@@ -42,11 +42,17 @@ import {
   getAllAgentConfigsAction,
   getCustomAgentsAction,
   saveCustomAgentsAction,
-  updateAgentFlagsAction,
-  updateAgentPreCommandAction,
   updateAgentVisibilityAction
 } from '@/lib/actions/agent-config';
 import { type AgentModel, getAgentModelsAction } from '@/lib/actions/agent-models';
+import {
+  getExecutionTargetAgentConfigsAction,
+  updateExecutionTargetAgentConfigAction
+} from '@/lib/actions/execution-target-agent-config';
+import {
+  getUserExecutionTargetsAction,
+  type UserExecutionTarget
+} from '@/lib/actions/resource-directories';
 import {
   DEFAULT_AGENT_TRIGGER_STORAGE_KEY,
   readDefaultAgentTriggerFromStorage
@@ -61,6 +67,7 @@ import {
 import { extractTemplateTokens } from '@/lib/helpers/custom-agent';
 import { buildDirectAgentCommand } from '@/lib/overlord/launch-commands';
 import type { CustomAgent, CustomAgentPlaceholder } from '@/lib/schemas/agent-config';
+import type { AgentLaunchConfig, TargetAgentConfigs } from '@/lib/schemas/target-agent-config';
 import { cn } from '@/lib/utils';
 
 type SlashCommandConfig = {
@@ -94,32 +101,32 @@ type SlashStatusEntry = {
 
 type AgentPluginInstallOption =
   | {
-    key: string;
-    agentKey: string;
-    label: string;
-    description: string;
-    kind: 'bundle';
-    bundleAgent: BundleAgent;
-    supportNote?: string;
-  }
+      key: string;
+      agentKey: string;
+      label: string;
+      description: string;
+      kind: 'bundle';
+      bundleAgent: BundleAgent;
+      supportNote?: string;
+    }
   | {
-    key: string;
-    agentKey: string;
-    label: string;
-    description: string;
-    kind: 'service';
-    serviceKey: 'overlord-plugin';
-    supportNote?: string;
-  }
+      key: string;
+      agentKey: string;
+      label: string;
+      description: string;
+      kind: 'service';
+      serviceKey: 'overlord-plugin';
+      supportNote?: string;
+    }
   | {
-    key: string;
-    agentKey: string;
-    label: string;
-    description: string;
-    kind: 'slash';
-    slashAgent: SlashAgent;
-    supportNote?: string;
-  };
+      key: string;
+      agentKey: string;
+      label: string;
+      description: string;
+      kind: 'slash';
+      slashAgent: SlashAgent;
+      supportNote?: string;
+    };
 
 type PluginActionMeta = {
   label: 'Install' | 'Update' | 'Repair' | 'Remove';
@@ -832,14 +839,23 @@ function CustomAgentsSection({ open }: { open: boolean }) {
   );
 }
 
-export function CliPage({ open, onNavigate }: { open: boolean, onNavigate?: (section: string) => void }) {
+export function CliPage({
+  open,
+  onNavigate
+}: {
+  open: boolean;
+  onNavigate?: (section: string) => void;
+}) {
   const { isElectron, api } = useElectron();
 
   const [selectedDefaultAgentTrigger, setSelectedDefaultAgentTrigger] =
     useState<LaunchAgentType>('claude');
   const [selectedLocalAgent, setSelectedLocalAgent] = useState<LaunchAgentType>('claude');
-  const [agentFlags, setAgentFlags] = useState<Record<string, string[]>>({});
-  const [agentPreCommands, setAgentPreCommands] = useState<Record<string, string>>({});
+  const [localTargets, setLocalTargets] = useState<UserExecutionTarget[]>([]);
+  const [selectedLocalTargetId, setSelectedLocalTargetId] = useState<string>('');
+  const [targetAgentConfigs, setTargetAgentConfigs] = useState<Record<string, TargetAgentConfigs>>(
+    {}
+  );
   const [flagInput, setFlagInput] = useState('');
   const [commandCopied, setCommandCopied] = useState(false);
 
@@ -977,17 +993,19 @@ export function CliPage({ open, onNavigate }: { open: boolean, onNavigate?: (sec
     if (!open || !isElectron) return;
     void (async () => {
       try {
-        const configs = await getAllAgentConfigsAction();
-        const flags: Record<string, string[]> = {};
-        const preCommands: Record<string, string> = {};
-        Object.entries(configs).forEach(([agentType, config]) => {
-          flags[agentType] = config.flags ?? [];
-          if (config.preCommand) preCommands[agentType] = config.preCommand;
-        });
-        setAgentFlags(flags);
-        setAgentPreCommands(preCommands);
+        const [targets, configs] = await Promise.all([
+          getUserExecutionTargetsAction(),
+          getExecutionTargetAgentConfigsAction()
+        ]);
+        setLocalTargets(targets);
+        setTargetAgentConfigs(configs);
+        setSelectedLocalTargetId(current =>
+          current && targets.some(target => target.id === current)
+            ? current
+            : (targets[0]?.id ?? '')
+        );
       } catch (error) {
-        console.error('Failed to load agent configs:', error);
+        console.error('Failed to load execution target agent configs:', error);
       }
     })();
   }, [isElectron, open]);
@@ -1032,57 +1050,78 @@ export function CliPage({ open, onNavigate }: { open: boolean, onNavigate?: (sec
     setPluginActionMessages(current => ({ ...current, [key]: message }));
   }, []);
 
-  async function handleAddFlag() {
-    if (!flagInput.trim()) return;
+  function currentAgentConfig(targetId: string, agent: string): AgentLaunchConfig {
+    return targetAgentConfigs[targetId]?.[agent] ?? { flags: [] };
+  }
 
-    const newFlags = { ...agentFlags };
-    if (!newFlags[selectedLocalAgent]) {
-      newFlags[selectedLocalAgent] = [];
-    }
-
-    const flag = flagInput.trim();
-    if (!newFlags[selectedLocalAgent].includes(flag)) {
-      newFlags[selectedLocalAgent].push(flag);
-      setAgentFlags(newFlags);
-      try {
-        await updateAgentFlagsAction(selectedLocalAgent, newFlags[selectedLocalAgent]);
-      } catch (error) {
-        console.error('Failed to save agent flags:', error);
+  // Optimistically update the selected target's config for one agent, then persist.
+  async function persistAgentConfig(agent: string, next: AgentLaunchConfig) {
+    const targetId = selectedLocalTargetId;
+    if (!targetId) return;
+    setTargetAgentConfigs(current => {
+      const forTarget = { ...(current[targetId] ?? {}) };
+      if (next.flags.length === 0 && !next.preCommand?.trim()) {
+        delete forTarget[agent];
+      } else {
+        forTarget[agent] = next;
       }
+      return { ...current, [targetId]: forTarget };
+    });
+    try {
+      const saved = await updateExecutionTargetAgentConfigAction(targetId, agent, next);
+      setTargetAgentConfigs(current => ({ ...current, [targetId]: saved }));
+    } catch (error) {
+      console.error('Failed to save target agent config:', error);
+    }
+  }
+
+  async function handleAddFlag() {
+    const flag = flagInput.trim();
+    if (!flag || !selectedLocalTargetId) return;
+    const config = currentAgentConfig(selectedLocalTargetId, selectedLocalAgent);
+    if (!config.flags.includes(flag)) {
+      await persistAgentConfig(selectedLocalAgent, {
+        ...config,
+        flags: [...config.flags, flag]
+      });
     }
     setFlagInput('');
   }
 
   async function handleSavePreCommand(agent: string, value: string) {
+    if (!selectedLocalTargetId) return;
+    const config = currentAgentConfig(selectedLocalTargetId, agent);
     const trimmed = value.trim();
-    setAgentPreCommands(current => {
-      const next = { ...current };
-      if (trimmed) next[agent] = trimmed;
-      else delete next[agent];
-      return next;
-    });
-    try {
-      await updateAgentPreCommandAction(agent, trimmed);
-    } catch (error) {
-      console.error('Failed to save pre-command:', error);
-    }
+    await persistAgentConfig(agent, { ...config, preCommand: trimmed || undefined });
   }
 
   async function handleRemoveFlag(agent: string, index: number) {
-    const newFlags = { ...agentFlags };
-    newFlags[agent] = (newFlags[agent] ?? []).filter((_, i) => i !== index);
-    setAgentFlags(newFlags);
-    try {
-      await updateAgentFlagsAction(agent, newFlags[agent]);
-    } catch (error) {
-      console.error('Failed to save agent flags:', error);
-    }
+    if (!selectedLocalTargetId) return;
+    const config = currentAgentConfig(selectedLocalTargetId, agent);
+    await persistAgentConfig(agent, {
+      ...config,
+      flags: config.flags.filter((_, i) => i !== index)
+    });
+  }
+
+  // Live-edit the pre-command text without persisting on every keystroke; the
+  // input persists on blur / Enter via handleSavePreCommand.
+  function handlePreCommandInput(agent: string, value: string) {
+    const targetId = selectedLocalTargetId;
+    if (!targetId) return;
+    setTargetAgentConfigs(current => {
+      const forTarget = { ...(current[targetId] ?? {}) };
+      const config = forTarget[agent] ?? { flags: [] };
+      forTarget[agent] = { ...config, preCommand: value };
+      return { ...current, [targetId]: forTarget };
+    });
   }
 
   function buildLocalAgentCommand(agent: string): string {
+    const config = currentAgentConfig(selectedLocalTargetId, agent);
     return buildDirectAgentCommand(agent as LaunchAgentType, {
-      preCommand: agentPreCommands[agent],
-      flags: agentFlags[agent] ?? []
+      preCommand: config.preCommand,
+      flags: config.flags
     });
   }
 
@@ -1399,11 +1438,31 @@ export function CliPage({ open, onNavigate }: { open: boolean, onNavigate?: (sec
             <div className="grid gap-1">
               <p className="text-sm font-medium">Local agent configuration</p>
               <p className="text-xs text-muted-foreground">
-                These settings apply to agents launched from Overlord, so you can customize how
-                Overlord starts each local agent.
+                These settings apply to agents launched from Overlord on the selected execution
+                target, so you can customize how Overlord starts each local agent per target.
               </p>
             </div>
             <div className="grid gap-4">
+              {localTargets.length === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  No execution targets yet. Launch an agent locally (or add a remote SSH target to a
+                  project) to create one, then configure its launch flags here.
+                </p>
+              ) : (
+                <Select value={selectedLocalTargetId} onValueChange={setSelectedLocalTargetId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select execution target" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {localTargets.map(target => (
+                      <SelectItem key={target.id} value={target.id}>
+                        {target.label}
+                        {target.hostname ? ` · ${target.hostname}` : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
               <Select
                 value={selectedLocalAgent}
                 onValueChange={value => setSelectedLocalAgent(value as LaunchAgentType)}
@@ -1425,13 +1484,10 @@ export function CliPage({ open, onNavigate }: { open: boolean, onNavigate?: (sec
                   <input
                     type="text"
                     placeholder="e.g., ollama or agent-pod"
-                    value={agentPreCommands[selectedLocalAgent] ?? ''}
-                    onChange={e =>
-                      setAgentPreCommands(current => ({
-                        ...current,
-                        [selectedLocalAgent]: e.target.value
-                      }))
+                    value={
+                      currentAgentConfig(selectedLocalTargetId, selectedLocalAgent).preCommand ?? ''
                     }
+                    onChange={e => handlePreCommandInput(selectedLocalAgent, e.target.value)}
                     onBlur={e => void handleSavePreCommand(selectedLocalAgent, e.target.value)}
                     onKeyDown={e => {
                       if (e.key === 'Enter') {
@@ -1446,15 +1502,19 @@ export function CliPage({ open, onNavigate }: { open: boolean, onNavigate?: (sec
                     <code className="rounded bg-muted px-1">ollama</code> launches{' '}
                     <code className="rounded bg-muted px-1">ollama {selectedLocalAgent} …</code>
                   </p>
-                  {agentPreCommands[selectedLocalAgent] ? (
+                  {currentAgentConfig(selectedLocalTargetId, selectedLocalAgent).preCommand ? (
                     <div className="rounded-md border border-yellow-500/40 bg-yellow-50/50 p-2.5 dark:bg-yellow-900/10">
                       <p className="text-[11px] text-yellow-800 dark:text-yellow-300">
                         If this command runs inside a container, make sure{' '}
                         <code className="rounded bg-yellow-100 px-1 dark:bg-yellow-900/30">
                           overlord-cli
                         </code>{' '}
-
-                        is installed there so agents can communicate with Overlord. We recommend generating a token and using the <code className="rounded bg-yellow-100 px-1 dark:bg-yellow-900/30">ovld auth login --token {`<oat…>`}</code> command to persist it in your environment.
+                        is installed there so agents can communicate with Overlord. We recommend
+                        generating a token and using the{' '}
+                        <code className="rounded bg-yellow-100 px-1 dark:bg-yellow-900/30">
+                          ovld auth login --token {`<oat…>`}
+                        </code>{' '}
+                        command to persist it in your environment.
                       </p>
                       <Button
                         type="button"
@@ -1500,25 +1560,27 @@ export function CliPage({ open, onNavigate }: { open: boolean, onNavigate?: (sec
                     </button>
                   </div>
                 </div>
-                {(agentFlags[selectedLocalAgent] ?? []).length > 0 && (
+                {currentAgentConfig(selectedLocalTargetId, selectedLocalAgent).flags.length > 0 && (
                   <div className="space-y-2">
                     <div className="flex flex-wrap gap-2">
-                      {(agentFlags[selectedLocalAgent] ?? []).map((flag, index) => (
-                        <div
-                          key={index}
-                          className="flex items-center gap-2 rounded-md bg-muted px-2.5 py-1"
-                        >
-                          <code className="text-xs font-medium">{flag}</code>
-                          <button
-                            type="button"
-                            onClick={() => void handleRemoveFlag(selectedLocalAgent, index)}
-                            className="rounded p-0.5 hover:bg-muted-foreground/20"
-                            title="Remove flag"
+                      {currentAgentConfig(selectedLocalTargetId, selectedLocalAgent).flags.map(
+                        (flag, index) => (
+                          <div
+                            key={index}
+                            className="flex items-center gap-2 rounded-md bg-muted px-2.5 py-1"
                           >
-                            <X className="h-3 w-3" />
-                          </button>
-                        </div>
-                      ))}
+                            <code className="text-xs font-medium">{flag}</code>
+                            <button
+                              type="button"
+                              onClick={() => void handleRemoveFlag(selectedLocalAgent, index)}
+                              className="rounded p-0.5 hover:bg-muted-foreground/20"
+                              title="Remove flag"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                        )
+                      )}
                     </div>
                   </div>
                 )}
@@ -1734,26 +1796,26 @@ export function CliPage({ open, onNavigate }: { open: boolean, onNavigate?: (sec
                                       ? bundleStatus?.status === 'installed'
                                         ? handleUninstallBundle(bundleStatus.agent, option.key)
                                         : bundleStatus?.status === 'partial' ||
-                                          bundleStatus?.status === 'error' ||
-                                          bundleStatus?.status === 'stale'
+                                            bundleStatus?.status === 'error' ||
+                                            bundleStatus?.status === 'stale'
                                           ? handleRepairBundle(bundleStatus.agent, option.key)
                                           : handleInstallBundle(option.bundleAgent, option.key)
                                       : option.kind === 'service'
                                         ? serviceStatus?.status === 'installed'
                                           ? handleUninstallService(option.key)
                                           : serviceStatus?.status === 'partial' ||
-                                            serviceStatus?.status === 'error'
+                                              serviceStatus?.status === 'error'
                                             ? handleRepairService(option.key)
                                             : handleInstallService(option.key)
                                         : !slashStatus || slashStatus.status === 'not_installed'
                                           ? handleInstallSlashCommands(
-                                            option.slashAgent,
-                                            option.key
-                                          )
+                                              option.slashAgent,
+                                              option.key
+                                            )
                                           : handleUninstallSlashCommands(
-                                            option.slashAgent,
-                                            option.key
-                                          );
+                                              option.slashAgent,
+                                              option.key
+                                            );
                                   if (isRemove || option.kind === 'slash') {
                                     void baseAction();
                                     return;

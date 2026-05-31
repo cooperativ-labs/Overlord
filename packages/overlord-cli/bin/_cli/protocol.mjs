@@ -1063,6 +1063,56 @@ async function protocolUpdate(args) {
 }
 
 // ---------------------------------------------------------------------------
+// heartbeat
+// ---------------------------------------------------------------------------
+
+async function protocolHeartbeat(args) {
+  const flags = parseFlags(args);
+  const { sessionKey, ticketId } = resolveSessionFlags(flags);
+  if (!sessionKey) throw new Error('--session-key is required (or set SESSION_KEY)');
+  if (!ticketId) throw new Error('--ticket-id is required (or set TICKET_ID)');
+
+  const { platformUrl, bearerToken, localSecret, organizationId } =
+    await resolveProtocolAuthForFlags(flags, ticketId);
+  const timeoutMs = resolveTimeout(flags);
+  const externalSessionId = resolveExternalSessionId(flags);
+  const percent =
+    flags.percent !== undefined && flags.percent !== true ? Number(flags.percent) : undefined;
+
+  if (percent !== undefined && (!Number.isFinite(percent) || percent < 0 || percent > 100)) {
+    throw new Error('--percent must be a number between 0 and 100');
+  }
+
+  const body = {
+    sessionKey,
+    ticketId,
+    ...(flags.phase ? { phase: String(flags.phase) } : {}),
+    ...(percent !== undefined ? { percent } : {}),
+    ...(flags.note ? { note: String(flags.note) } : {}),
+    ...(externalSessionId !== undefined ? { externalSessionId } : {}),
+    ...(flags['external-url']
+      ? {
+          externalUrl:
+            String(flags['external-url']).trim().toLowerCase() === 'null'
+              ? null
+              : String(flags['external-url'])
+        }
+      : {})
+  };
+
+  const data = await apiPost(
+    platformUrl,
+    bearerToken,
+    localSecret,
+    organizationId,
+    '/api/protocol/heartbeat',
+    body,
+    timeoutMs
+  );
+  console.log(JSON.stringify(data, null, 2));
+}
+
+// ---------------------------------------------------------------------------
 // record-change-rationales
 // ---------------------------------------------------------------------------
 
@@ -2588,6 +2638,7 @@ Subcommands:
   prompt                    Create a ticket and attach to it immediately
   record-work               Record completed-from-chat work as a ticket in review + feed post (no attach)
   update                    Post progress, activity events, and optional change rationales
+  heartbeat                 Send a lightweight liveness ping without creating a ticket event
   record-change-rationales  Persist structured change rationales without a progress update
   ask                       Post a blocking question and move the ticket to review
   request-approval-gate     Flip auto_advance=false on the next queued future objective
@@ -2740,6 +2791,23 @@ update:
     only when follow-up execution produced work.
     Pass --summary-file - to read the summary from stdin — avoids shell interpretation of backticks,
     quotes, or other special characters in the summary text.
+
+heartbeat:
+  Purpose:
+    Send a lightweight liveness ping for an attached session without adding activity-feed noise
+  Required:
+    --session-key <key>
+    --ticket-id <ticket_id>
+  Optional:
+    --phase <status>          draft | execute | review | deliver | complete | blocked | cancelled
+    --percent <0-100>         Optional percent-complete hint for transient UI progress
+    --note <text>             Optional short note, e.g. "Running the integration suite"
+    --external-url <url|null> Store or clear a deep link to the live agent session
+    --external-session-id <id|null>
+  Notes:
+    Heartbeat only updates session liveness plus transient telemetry on the session row.
+    It does not create a ticket event and should be used when you are still working but have
+    nothing meaningful to post via update.
 
 record-change-rationales:
   Purpose:
@@ -3209,6 +3277,10 @@ EOF
   }
   if (subcommand === 'update') {
     await protocolUpdate(args);
+    return;
+  }
+  if (subcommand === 'heartbeat') {
+    await protocolHeartbeat(args);
     return;
   }
   if (subcommand === 'record-change-rationales') {

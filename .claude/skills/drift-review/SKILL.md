@@ -96,6 +96,7 @@ Create a matrix comparing operations across all six surfaces:
 | Operation         | API Route              | CLI Subcommand         | MCP Tool               | Plugin Docs | Public Docs | CLI README |
 |-------------------|------------------------|------------------------|------------------------|-------------|-------------|------------|
 | Attach            | POST /protocol/attach  | ovld protocol attach   | attach                 | Y / N       | Y / N       | Y / N      |
+| Heartbeat         | POST /protocol/heartbeat | ovld protocol heartbeat | heartbeat            | Y / N       | Y / N       | Y / N      |
 | Discover Project  | POST /protocol/disc... | ovld protocol disc...  | discover_project       | Y / N       | Y / N       | Y / N      |
 | ...               | ...                    | ...                    | ...                    | ...         | ...         | ...        |
 ```
@@ -125,6 +126,7 @@ An operation exists in multiple surfaces but parameters differ:
 - Different default values for the same parameter across surfaces
 - Different validation rules
 - Different response shapes for the same operation
+- Session-only operations like `heartbeat` accidentally creating durable ticket events on one surface but not others
 
 #### 3d. Documentation Drift
 - Agent plugin skills referencing operations or parameters that no longer exist

@@ -1,5 +1,15 @@
+import type { Metadata } from 'next';
+
 import { HomepageFooter } from '@/components/marketing/HomepageFooter';
 import { HomepageHeader } from '@/components/marketing/HomepageHeader';
+import { getSiteMetadataBaseUrl } from '@/lib/env';
+
+export const metadata: Metadata = {
+  metadataBase: new URL(getSiteMetadataBaseUrl()),
+  alternates: {
+    canonical: 'https://www.ovld.ai'
+  }
+};
 
 export default function MarketingLayout({
   children

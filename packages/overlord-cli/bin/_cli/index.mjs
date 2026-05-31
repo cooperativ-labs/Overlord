@@ -54,7 +54,7 @@ Agents:
     installed connector (${primaryCommand} setup <agent>); your custom agents launch by id.
     Anything after a standalone -- is forwarded verbatim to the agent binary.
   Use ${primaryCommand} protocol help for ticket lifecycle commands.
-  Key protocol commands: auth-status, discover-project, create, prompt, attach, connect, load-context.
+  Key protocol commands: auth-status, discover-project, create, prompt, attach, connect, load-context, heartbeat.
 
 Auth:
   ${primaryCommand} auth login               Authorize CLI via browser or --token <oat_…>

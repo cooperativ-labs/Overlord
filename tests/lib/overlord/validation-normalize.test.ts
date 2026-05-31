@@ -1,5 +1,6 @@
 import {
   deliverSchema,
+  heartbeatSchema,
   hookEventSchema,
   normalizeAgentText,
   updateSchema
@@ -63,6 +64,18 @@ describe('deliverSchema normalization', () => {
       artifacts: [{ type: 'note', label: 'Note', content: 'line1\r\nline2' }]
     });
     expect(result.artifacts[0].content).toBe('line1\nline2');
+  });
+});
+
+describe('heartbeatSchema normalization', () => {
+  const base = {
+    sessionKey: 'a1b2c3d4-e5f6-4789-8abc-def012345678',
+    ticketId: '1:1'
+  };
+
+  it('normalizes CRLF in note', () => {
+    const result = heartbeatSchema.parse({ ...base, note: 'line1\r\nline2' });
+    expect(result.note).toBe('line1\nline2');
   });
 });
 

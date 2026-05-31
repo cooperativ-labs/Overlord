@@ -15,6 +15,7 @@ Use this mode when the prompt already contains a ticket ID or explicitly says th
 2. The attach response prints JSON to stdout containing `session.sessionKey`. The CLI also persists this key automatically so subsequent `ovld protocol` commands in the same working directory resolve it without `--session-key`. If auto-resolution fails, pass `--session-key <sessionKey>` explicitly on every subsequent call.
 3. Treat the Overlord ticket prompt as authoritative for the objective, constraints, and delivery target.
 4. Post updates while working: `ovld protocol update --session-key <sessionKey> --ticket-id <ticket_id> --summary "..." --phase execute`.
+   During long mechanical stretches with nothing meaningful to post, send `ovld protocol heartbeat --session-key <sessionKey> --ticket-id <ticket_id> [--phase execute] [--percent <0-100>] [--note "..."]` instead of an empty update.
 5. Follow-up messages after the initial ticket are captured automatically by the installed {{hookDescription}} and stay in discussion intent while the ticket is in review. Do not post `user_follow_up` manually unless the hook is unavailable.
 6. If blocked, call `ovld protocol ask --session-key <sessionKey> --ticket-id <ticket_id> --question "..."` and stop.
 7. Deliver last with `ovld protocol deliver --session-key <sessionKey> --ticket-id <ticket_id> --summary "..."`, including `changeRationales` for each meaningful behavioral file change.
@@ -114,4 +115,4 @@ For the `record-change-rationales` command and full payload shape with optional 
 - [reference/context.md](reference/context.md) — Shared state, attachments, and large artifact policy
 - [reference/shell-escaping.md](reference/shell-escaping.md) — Heredoc stdin piping for special characters in summaries and payloads
 
-<!-- version: 0.5.8 -->
+<!-- version: 0.5.9 -->

@@ -26,6 +26,7 @@ The protocol surface currently includes:
 - prompt
 - record-work
 - update
+- heartbeat
 - record-change-rationales
 - ask
 - permission-request
@@ -36,7 +37,7 @@ The protocol surface currently includes:
 
 ## What these commands do
 
-They let an agent resolve the right project, bind to a ticket, report progress, persist file-level rationale, share reusable context, manage artifacts, ask for help, request tool permission, and return final work in a structured way.
+They let an agent resolve the right project, bind to a ticket, report progress, send liveness heartbeats, persist file-level rationale, share reusable context, manage artifacts, ask for help, request tool permission, and return final work in a structured way.
 
 ## create vs. prompt
 
@@ -50,6 +51,7 @@ Both create tickets from an agent session, but they differ in intent:
 
 - [Attach](/docs/protocol/attach)
 - [Update](/docs/protocol/update)
+- [Heartbeat](/docs/protocol/heartbeat)
 - [Ask](/docs/protocol/ask)
 - [Deliver](/docs/protocol/deliver)
 - [Context](/docs/protocol/context)

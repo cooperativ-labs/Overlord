@@ -2,7 +2,8 @@ import { createExecutionRequest } from '@/lib/overlord/execution-requests';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
 const LOCAL_SUPABASE_URL = 'http://127.0.0.1:54321';
-const LOCAL_SERVICE_ROLE_KEY = process.env.LOCAL_SERVICE_ROLE_KEY ?? '';
+const LOCAL_SUPABASE_SECRET_KEY =
+  process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
 
 const USER_ID = '11111111-1111-4111-8111-111111111111';
 
@@ -15,7 +16,7 @@ describe('execution_requests idempotency', () => {
   beforeAll(async () => {
     process.env.SUPABASE_URL ??= LOCAL_SUPABASE_URL;
     process.env.NEXT_PUBLIC_SUPABASE_URL ??= LOCAL_SUPABASE_URL;
-    process.env.SUPABASE_SERVICE_ROLE_KEY ??= LOCAL_SERVICE_ROLE_KEY;
+    process.env.SUPABASE_SECRET_KEY ??= LOCAL_SUPABASE_SECRET_KEY;
     supabase = createServiceRoleClient();
     await supabase.auth.admin.createUser({
       user_metadata: {},
@@ -26,7 +27,7 @@ describe('execution_requests idempotency', () => {
   });
 
   afterAll(async () => {
-    await supabase.auth.admin.deleteUser(USER_ID);
+    await supabase?.auth.admin.deleteUser(USER_ID);
   });
 
   beforeEach(async () => {

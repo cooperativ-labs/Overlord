@@ -1,6 +1,7 @@
 /** @type {import('jest').Config} */
 module.exports = {
   testEnvironment: 'node',
+  setupFiles: ['<rootDir>/tests/jest.setup.ts'],
   transform: {
     '^.+\\.tsx?$': ['ts-jest', { tsconfig: { moduleResolution: 'node' } }]
   },
