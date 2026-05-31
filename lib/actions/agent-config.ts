@@ -89,9 +89,13 @@ export async function getAllAgentConfigsByUserIdAction(
   return configs;
 }
 
+type AgentConfigUpdate = Omit<Partial<AgentConfig>, 'preCommand'> & {
+  preCommand?: string | null;
+};
+
 export async function upsertAgentConfigAction(
   agentType: string,
-  config: Partial<AgentConfig>
+  config: AgentConfigUpdate
 ): Promise<AgentConfig> {
   const supabase = await createClientForRequest();
   const {
@@ -118,11 +122,16 @@ export async function upsertAgentConfigAction(
     existingConfig = agentConfigSchema.parse(existing.config);
   }
 
-  // Merge with new config
-  const mergedConfig = {
-    ...existingConfig,
-    ...config
-  };
+  const { preCommand: preCommandUpdate, ...configWithoutPreCommand } = config;
+  const mergedConfig: AgentConfig = { ...existingConfig, ...configWithoutPreCommand };
+  if ('preCommand' in config) {
+    const next = preCommandUpdate;
+    if (next == null || (typeof next === 'string' && next.trim() === '')) {
+      delete mergedConfig.preCommand;
+    } else {
+      mergedConfig.preCommand = next;
+    }
+  }
 
   const validated = agentConfigSchema.parse(mergedConfig);
 
@@ -160,7 +169,7 @@ export async function updateAgentPreCommandAction(
 ): Promise<AgentConfig> {
   const trimmed = preCommand.trim();
   return upsertAgentConfigAction(agentType, {
-    preCommand: trimmed.length > 0 ? trimmed : undefined
+    preCommand: trimmed.length > 0 ? trimmed : null
   });
 }
 

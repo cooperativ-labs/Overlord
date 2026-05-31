@@ -39,7 +39,12 @@ import {
   type LaunchAgentType
 } from '@/lib/helpers/agent-types';
 import { buildDirectAgentCommand } from '@/lib/overlord/launch-commands';
-import type { AgentLaunchConfig, TargetAgentConfigs } from '@/lib/schemas/target-agent-config';
+import {
+  type AgentLaunchConfig,
+  type AgentLaunchConfigUpdate,
+  mergeAgentLaunchConfig,
+  type TargetAgentConfigs
+} from '@/lib/schemas/target-agent-config';
 import { cn } from '@/lib/utils';
 
 type TerminalProfileState = {
@@ -241,20 +246,21 @@ export function ExecutionTargetsPage({
     return targetAgentConfigs[targetId]?.[agent] ?? { flags: [] };
   }
 
-  async function persistAgentConfig(agent: string, next: AgentLaunchConfig) {
+  async function persistAgentConfig(agent: string, update: AgentLaunchConfigUpdate) {
     const targetId = selectedLocalTargetId;
     if (!targetId) return;
     setTargetAgentConfigs(current => {
       const forTarget = { ...(current[targetId] ?? {}) };
-      if (next.flags.length === 0 && !next.preCommand?.trim()) {
+      const merged = mergeAgentLaunchConfig(forTarget[agent] ?? { flags: [] }, update);
+      if (merged.flags.length === 0 && !merged.preCommand?.trim()) {
         delete forTarget[agent];
       } else {
-        forTarget[agent] = next;
+        forTarget[agent] = merged;
       }
       return { ...current, [targetId]: forTarget };
     });
     try {
-      const saved = await updateExecutionTargetAgentConfigAction(targetId, agent, next);
+      const saved = await updateExecutionTargetAgentConfigAction(targetId, agent, update);
       setTargetAgentConfigs(current => ({ ...current, [targetId]: saved }));
     } catch (err) {
       console.error('Failed to save target agent config:', err);
@@ -276,9 +282,10 @@ export function ExecutionTargetsPage({
 
   async function handleSavePreCommand(agent: string, value: string) {
     if (!selectedLocalTargetId) return;
-    const config = currentAgentConfig(selectedLocalTargetId, agent);
     const trimmed = value.trim();
-    await persistAgentConfig(agent, { ...config, preCommand: trimmed || undefined });
+    await persistAgentConfig(agent, {
+      preCommand: trimmed.length > 0 ? trimmed : null
+    });
   }
 
   async function handleRemoveFlag(agent: string, index: number) {

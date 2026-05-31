@@ -1,4 +1,5 @@
 import {
+  mergeAgentLaunchConfig,
   normalizeAgentLaunchConfig,
   parseTargetAgentConfigs
 } from '@/lib/schemas/target-agent-config';
@@ -37,6 +38,39 @@ describe('normalizeAgentLaunchConfig', () => {
     expect(normalizeAgentLaunchConfig({ flags: [], preCommand: ' ollama ' })).toEqual({
       flags: [],
       preCommand: 'ollama'
+    });
+  });
+});
+
+describe('mergeAgentLaunchConfig', () => {
+  it('clears pre-command when update sends null (server-action JSON)', () => {
+    expect(
+      mergeAgentLaunchConfig(
+        { flags: ['--x'], preCommand: 'ollama' },
+        { preCommand: null }
+      )
+    ).toEqual({ flags: ['--x'] });
+  });
+
+  it('clears pre-command when update sends a blank string', () => {
+    expect(
+      mergeAgentLaunchConfig({ flags: [], preCommand: 'ollama' }, { preCommand: '   ' })
+    ).toEqual({ flags: [] });
+  });
+
+  it('leaves pre-command unchanged when update omits preCommand', () => {
+    expect(
+      mergeAgentLaunchConfig(
+        { flags: ['--x'], preCommand: 'ollama' },
+        { flags: ['--y'] }
+      )
+    ).toEqual({ flags: ['--y'], preCommand: 'ollama' });
+  });
+
+  it('sets a new pre-command when provided', () => {
+    expect(mergeAgentLaunchConfig({ flags: [] }, { preCommand: ' agent-pod ' })).toEqual({
+      flags: [],
+      preCommand: 'agent-pod'
     });
   });
 });

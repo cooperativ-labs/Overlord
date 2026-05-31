@@ -1,9 +1,9 @@
 'use server';
 
 import {
-  type AgentLaunchConfig,
+  type AgentLaunchConfigUpdate,
   agentLaunchConfigSchema,
-  normalizeAgentLaunchConfig,
+  mergeAgentLaunchConfig,
   parseTargetAgentConfigs,
   type TargetAgentConfigs
 } from '@/lib/schemas/target-agent-config';
@@ -48,7 +48,7 @@ export async function getExecutionTargetAgentConfigsAction(): Promise<
 export async function updateExecutionTargetAgentConfigAction(
   executionTargetId: string,
   agentType: string,
-  config: Partial<AgentLaunchConfig>
+  config: AgentLaunchConfigUpdate
 ): Promise<TargetAgentConfigs> {
   const supabase = await createClientForRequest();
   const {
@@ -71,9 +71,7 @@ export async function updateExecutionTargetAgentConfigAction(
 
   const configs = parseTargetAgentConfigs(existing.agent_flags);
   const current = configs[trimmedAgent] ?? agentLaunchConfigSchema.parse({});
-  const merged = normalizeAgentLaunchConfig(
-    agentLaunchConfigSchema.parse({ ...current, ...config })
-  );
+  const merged = mergeAgentLaunchConfig(current, config);
 
   // Drop the agent entry entirely when it carries no flags and no pre-command,
   // keeping the stored jsonb minimal.

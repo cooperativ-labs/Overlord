@@ -15,6 +15,11 @@ export const agentLaunchConfigSchema = z.object({
 
 export type AgentLaunchConfig = z.infer<typeof agentLaunchConfigSchema>;
 
+/** Partial update; `preCommand: null` clears a stored pre-command (survives server-action JSON). */
+export type AgentLaunchConfigUpdate = Omit<Partial<AgentLaunchConfig>, 'preCommand'> & {
+  preCommand?: string | null;
+};
+
 /**
  * Map of agent type -> launch config for one execution target. Stored as the
  * `agent_flags` jsonb column on `user_execution_targets`.
@@ -51,4 +56,30 @@ export function normalizeAgentLaunchConfig(config: AgentLaunchConfig): AgentLaun
   );
   const preCommand = config.preCommand?.trim();
   return preCommand ? { flags, preCommand } : { flags };
+}
+
+/**
+ * Merge a stored config with a partial update. Uses `preCommand: null` (or blank
+ * string) to clear; omitted `preCommand` leaves the existing value unchanged.
+ * Server actions strip `undefined`, so callers must send `null` to clear.
+ */
+export function mergeAgentLaunchConfig(
+  current: AgentLaunchConfig,
+  update: AgentLaunchConfigUpdate
+): AgentLaunchConfig {
+  const merged: AgentLaunchConfig = {
+    flags: update.flags ?? current.flags,
+    ...(current.preCommand !== undefined ? { preCommand: current.preCommand } : {})
+  };
+
+  if ('preCommand' in update) {
+    const next = update.preCommand;
+    if (next == null || (typeof next === 'string' && next.trim() === '')) {
+      delete merged.preCommand;
+    } else {
+      merged.preCommand = next;
+    }
+  }
+
+  return normalizeAgentLaunchConfig(agentLaunchConfigSchema.parse(merged));
 }
