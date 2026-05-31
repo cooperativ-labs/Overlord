@@ -4,7 +4,6 @@ import { Folder } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { useElectron } from '@/components/features/terminal/useElectron';
-import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
@@ -14,8 +13,7 @@ import {
 } from '@/components/ui/dialog';
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import { LoadingButton } from '@/components/ui/loading-button';
-import { useUpdateProjectWorkingDirectoryMutation } from '@/lib/client-data/projects/mutations';
-import { WORKING_DIRECTORY_NONE } from '@/lib/helpers/project-working-directory';
+import { addProjectResourceDirectoryAction } from '@/lib/actions/resource-directories';
 
 type ProjectWorkingDirectoryRequiredModalProps = {
   open: boolean;
@@ -34,7 +32,6 @@ export function ProjectWorkingDirectoryRequiredModal({
   onLinked
 }: ProjectWorkingDirectoryRequiredModalProps) {
   const { api, isElectron } = useElectron();
-  const updateWorkingDirectoryMutation = useUpdateProjectWorkingDirectoryMutation();
   const [selectFolderState, setSelectFolderState] = useState<ButtonLoadingState>('default');
   const [skipState, setSkipState] = useState<ButtonLoadingState>('default');
   const [error, setError] = useState<string | null>(null);
@@ -50,7 +47,7 @@ export function ProjectWorkingDirectoryRequiredModal({
   }, [open, project?.id]);
 
   async function handleSelectFolder() {
-    if (!project || !isElectron || !api?.terminal?.chooseDirectory) {
+    if (!project || !isElectron || !api?.terminal?.chooseDirectory || !api.app.getDeviceIdentity) {
       return;
     }
 
@@ -83,9 +80,14 @@ export function ProjectWorkingDirectoryRequiredModal({
     }
 
     try {
-      await updateWorkingDirectoryMutation.mutateAsync({
+      const identity = await api.app.getDeviceIdentity();
+      await addProjectResourceDirectoryAction({
         projectId: project.id,
-        workingDirectory: chosenPath
+        directoryPath: chosenPath,
+        isPrimary: true,
+        deviceFingerprint: identity.deviceFingerprint,
+        deviceHostname: identity.hostname,
+        devicePlatform: identity.platform
       });
 
       setSelectFolderState('success');
@@ -113,18 +115,8 @@ export function ProjectWorkingDirectoryRequiredModal({
     setSkipState('loading');
     setError(null);
 
-    try {
-      await updateWorkingDirectoryMutation.mutateAsync({
-        projectId: project.id,
-        workingDirectory: WORKING_DIRECTORY_NONE
-      });
-
-      setSkipState('success');
-      onOpenChange(false);
-    } catch (updateError) {
-      setSkipState('error');
-      setError(updateError instanceof Error ? updateError.message : 'Failed to save preference.');
-    }
+    setSkipState('success');
+    onOpenChange(false);
   }
 
   return (

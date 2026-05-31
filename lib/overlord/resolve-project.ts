@@ -7,7 +7,6 @@ type ProjectRow = {
   id: string;
   name: string;
   organization_id: number;
-  local_working_directory: string | null;
 };
 
 type ResourceDirectoryJoinRow = {
@@ -33,9 +32,11 @@ function normalizeDirPath(dir: string): string {
   return normalized.toLowerCase();
 }
 
-function pickBestPathMatch<
-  T extends { directory_path?: string | null; local_working_directory?: string | null }
->(rows: T[], normalizedCwd: string, getPath: (row: T) => string | null | undefined): T | null {
+function pickBestPathMatch<T>(
+  rows: T[],
+  normalizedCwd: string,
+  getPath: (row: T) => string | null | undefined
+): T | null {
   const exact = rows.find(row => {
     const p = getPath(row);
     return p ? normalizeDirPath(p) === normalizedCwd : false;
@@ -86,8 +87,7 @@ export async function resolveProjectByWorkingDirectory(
         return {
           id: match.projects.id,
           name: match.projects.name,
-          organization_id: match.projects.organization_id,
-          local_working_directory: match.directory_path
+          organization_id: match.projects.organization_id
         };
       }
     }
@@ -103,8 +103,7 @@ export async function resolveProjectByWorkingDirectory(
       return {
         id: match.projects.id,
         name: match.projects.name,
-        organization_id: match.projects.organization_id,
-        local_working_directory: match.directory_path
+        organization_id: match.projects.organization_id
       };
     }
   }

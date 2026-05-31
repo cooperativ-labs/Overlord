@@ -214,20 +214,13 @@ export async function createFirstProjectWithDirectory(input: {
   organizationId: number;
 }> {
   try {
-    const supabase = await createClientForRequest();
     const created = await createProject({
       organizationId: input.organizationId,
       name: input.name,
       color: input.color
     });
 
-    // Only persist a working directory when the user actually picked one.
-    // The resource-directory insert and the legacy fallback write are separate
-    // round-trips that can race with Supabase's refresh-token rotation mid-
-    // request; if we always fire them - even for null directories - we double
-    // the chance of session churn and surface Next.js' generic "An unexpected
-    // response was received from the server" when a later call fails after the
-    // project has already been created.
+    // Only persist a resource directory when the user actually picked one.
     const trimmedDirectory = input.workingDirectory?.trim() ?? '';
     if (trimmedDirectory.length > 0) {
       try {
@@ -254,38 +247,6 @@ export async function createFirstProjectWithDirectory(input: {
             : new Error(`Failed to add initial resource directory: ${String(error)}`),
           { extra: { projectId: created.id, organizationId: created.organizationId } }
         );
-      }
-
-      const {
-        data: { user }
-      } = await supabase.auth.getUser();
-
-      if (user) {
-        try {
-          const { error } = await supabase.from('project_user').upsert(
-            {
-              user_id: user.id,
-              project_id: created.id,
-              local_working_directory: trimmedDirectory,
-              updated_at: new Date().toISOString()
-            },
-            { onConflict: 'user_id,project_id' }
-          );
-
-          if (error) {
-            throw error;
-          }
-        } catch (error) {
-          // Keep the onboarding flow moving even if the legacy fallback write
-          // fails; the resource directory row is the source of truth for new
-          // project resolution.
-          Sentry.captureException(
-            error instanceof Error
-              ? error
-              : new Error(`Failed to persist legacy working directory: ${String(error)}`),
-            { extra: { projectId: created.id, organizationId: created.organizationId } }
-          );
-        }
       }
     }
 

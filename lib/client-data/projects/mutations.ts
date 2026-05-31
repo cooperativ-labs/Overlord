@@ -14,8 +14,7 @@ import {
   moveProjectToOrganizationAction,
   updateProjectColorAction,
   updateProjectNameAction,
-  updateProjectSshConfigAction,
-  updateProjectWorkingDirectoryAction
+  updateProjectSshConfigAction
 } from '@/lib/actions/projects';
 import { updateTicketFields } from '@/lib/client-data/tickets/board-reducers';
 import type { TicketBoardState } from '@/lib/client-data/tickets/board-types';
@@ -97,9 +96,6 @@ const createProjectWithRetry = withElectronActionRetry(createProject);
 const moveProjectToOrganizationWithRetry = withElectronActionRetry(moveProjectToOrganizationAction);
 const updateProjectColorWithRetry = withElectronActionRetry(updateProjectColorAction);
 const updateProjectNameWithRetry = withElectronActionRetry(updateProjectNameAction);
-const updateProjectWorkingDirectoryWithRetry = withElectronActionRetry(
-  updateProjectWorkingDirectoryAction
-);
 const updateProjectSshConfigWithRetry = withElectronActionRetry(updateProjectSshConfigAction);
 const disconnectProjectFromEverhourWithRetry = withElectronActionRetry(
   disconnectProjectFromEverhourAction
@@ -187,68 +183,6 @@ export function useUpdateProjectNameMutation() {
     onMutate: input => {
       const snapshot = snapshotProjectState(queryClient);
       patchProjectCache(queryClient, input.projectId, { name: input.name.trim() });
-      return snapshot;
-    },
-    onError: (_error, _input, snapshot) => {
-      if (snapshot) restoreProjectState(queryClient, snapshot);
-    }
-  });
-}
-
-export function useUpdateProjectWorkingDirectoryMutation() {
-  const queryClient = useQueryClient();
-
-  const mutationFn = async (input: { projectId: string; workingDirectory: string | null }) => {
-    try {
-      await updateProjectWorkingDirectoryWithRetry(input);
-    } catch (error) {
-      const normalizedWorkingDirectory =
-        typeof input.workingDirectory === 'string' ? input.workingDirectory.trim() : '';
-      const isClearingDirectory = normalizedWorkingDirectory.length === 0;
-      const fallbackMessage = isClearingDirectory
-        ? 'Failed to clear the project working directory. Please try again.'
-        : `Failed to save "${normalizedWorkingDirectory}" as the project working directory.`;
-
-      if (error instanceof Error) {
-        const message = error.message.toLowerCase();
-
-        if (message.includes('must be signed in')) {
-          throw new Error('Your session expired. Sign in again to update the working directory.', {
-            cause: error
-          });
-        }
-        if (message.includes('row-level security')) {
-          throw new Error('You do not have permission to update this project working directory.', {
-            cause: error
-          });
-        }
-        if (message.includes('invalid') && message.includes('directory')) {
-          throw new Error(
-            'The selected path is not valid for this project. Choose a different folder.',
-            { cause: error }
-          );
-        }
-
-        throw new Error(fallbackMessage, { cause: error });
-      }
-
-      throw new Error(
-        'Something went wrong while updating the project working directory. Please try again.',
-        { cause: error }
-      );
-    }
-  };
-
-  return useMutation({
-    mutationFn,
-    onMutate: input => {
-      const snapshot = snapshotProjectState(queryClient);
-      patchProjectCache(queryClient, input.projectId, {
-        localWorkingDirectory:
-          typeof input.workingDirectory === 'string' && input.workingDirectory.trim().length > 0
-            ? input.workingDirectory.trim()
-            : null
-      });
       return snapshot;
     },
     onError: (_error, _input, snapshot) => {

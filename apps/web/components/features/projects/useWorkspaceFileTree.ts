@@ -44,8 +44,9 @@ export function useWorkspaceFileTree(
   const projectSettings = useProjectSettings();
 
   // File mentions intentionally ignore the execution workspace selector.
-  const effectiveWorkingDirectory =
-    projectSettings?.localWorkingDirectory ?? propWorkingDirectory ?? null;
+  const effectiveWorkingDirectory = projectSettings
+    ? projectSettings.effectiveWorkingDirectory
+    : (propWorkingDirectory ?? null);
 
   const [files, setFiles] = useState<string[]>(fileMentionPaths);
   const [loading, setLoading] = useState(false);

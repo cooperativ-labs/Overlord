@@ -86,7 +86,7 @@ export async function resolveProjectUserForAgent(
       // Look up the project_user row for (userId, projectId).
       const { data: pu } = await supabase
         .from('project_user')
-        .select('id, local_working_directory')
+        .select('id')
         .eq('user_id', userId)
         .eq('project_id', best.row.project_id)
         .maybeSingle();
@@ -96,7 +96,7 @@ export async function resolveProjectUserForAgent(
           userId,
           projectId: best.row.project_id,
           organizationId: best.row.projects.organization_id,
-          localWorkingDirectory: pu.local_working_directory ?? best.row.directory_path
+          localWorkingDirectory: best.row.directory_path
         };
       }
     }

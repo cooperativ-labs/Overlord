@@ -2243,7 +2243,7 @@ async function protocolPrompt(args) {
 
   // When --project-id is not provided, auto-send cwd as workingDirectory so
   // the server can resolve the project from the caller's project_user
-  // local_working_directory setting.
+  // project resource directory setting.
   const personal = Boolean(flags.personal);
   const workingDirectory =
     flags['working-directory'] ?? (!flags['project-id'] && !personal ? process.cwd() : undefined);
@@ -2920,7 +2920,7 @@ prompt:
   Purpose:
     Create a ticket and attach to it in one call.
     When --project-id is omitted, automatically resolves the project from the
-    current working directory (matching against the caller's project_user.local_working_directory).
+    current working directory (matching against the caller's project resource directories).
   Required:
     --objective <text>
     or: --objectives-json <json> / --objectives-file <path|-> with [{ "objective": "...", "title": "...", "autoAdvance": true }]
@@ -3028,7 +3028,7 @@ record-work:
   Notes:
     Project resolution mirrors \`prompt\`: if --project-id is not set and --personal is not used,
     the CLI sends cwd as workingDirectory and the API matches it against your configured
-    project_user.local_working_directory rows. If no match, the API returns 400 — re-run with
+    project_resource_directories rows. If no match, the API returns 400 — re-run with
     --project-id <id> or --personal.
     Use this for completed-from-chat work. If you still need to execute the work, use \`create\`
     for a draft ticket or \`prompt\` to create and start execution immediately.

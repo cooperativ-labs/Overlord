@@ -1,5 +1,3 @@
-import type { Database } from '@/types/database.types';
-
 export type ProjectSshAuthMethod = 'agent' | 'key' | 'tailscale';
 
 export type SidebarProject = {
@@ -37,7 +35,6 @@ export type UpdateProjectSshConfigInput = {
   sshPrivateKeyPath: string | null;
 };
 
-type ProjectUserRow = Database['public']['Tables']['project_user']['Row'];
 export type ProjectUserSshSettingsRow = {
   project_id: string;
   ssh_command: string | null;
@@ -49,10 +46,10 @@ export type ProjectUserSshSettingsRow = {
   ssh_private_key_path: string | null;
 };
 
-export type ProjectUserLocalSettingsRow = Pick<
-  ProjectUserRow,
-  'project_id' | 'local_working_directory'
->;
+export type ProjectUserLocalSettingsRow = {
+  project_id: string;
+  local_working_directory: string | null;
+};
 type ProjectSshSettings = Pick<
   SidebarProject,
   | 'sshCommand'

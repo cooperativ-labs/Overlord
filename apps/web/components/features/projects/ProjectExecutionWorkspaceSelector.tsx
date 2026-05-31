@@ -8,7 +8,6 @@ import {
   useProjectSettings
 } from '@/components/features/projects/ProjectSettingsContext';
 import { useElectron } from '@/components/features/terminal/useElectron';
-import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -93,10 +92,15 @@ export function ProjectExecutionWorkspaceSelector({
       targetId = devices[0].id;
     }
 
-    if (targetId && targetId !== selectedDeviceId) {
-      const device = devices.find(d => d.id === targetId);
-      const primaryResource = device?.resources.find(r => r.isPrimary);
-      projectSettings.setSelectedDevice(targetId, primaryResource?.directoryPath ?? null);
+    const targetDevice = devices.find(d => d.id === targetId);
+    const targetPrimaryDirectory =
+      targetDevice?.resources.find(r => r.isPrimary)?.directoryPath ?? null;
+    if (
+      targetId &&
+      (targetId !== selectedDeviceId ||
+        projectSettings.selectedDeviceWorkingDirectory !== targetPrimaryDirectory)
+    ) {
+      projectSettings.setSelectedDevice(targetId, targetPrimaryDirectory);
     }
   }, [loading, devices, matchedDeviceId, isElectron, projectId, projectSettings, selectedDeviceId]);
 

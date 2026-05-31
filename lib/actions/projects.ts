@@ -3,7 +3,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { revalidatePath } from 'next/cache';
 
-import { PROJECT_BASE_SELECT, PROJECT_USER_LOCAL_SELECT } from '@/lib/actions/project-selects';
+import { PROJECT_BASE_SELECT } from '@/lib/actions/project-selects';
 import {
   buildLegacySshCommand,
   type CreateProjectResult,
@@ -29,6 +29,7 @@ import {
   ensureProjectExecutionTarget,
   upsertSshExecutionTarget
 } from '@/lib/overlord/execution-targets';
+import { getPrimaryProjectResourceDirectoriesByProjectId } from '@/lib/resource-directories/primary-resource';
 import { createClientForRequest } from '@/supabase/utils/server';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 import type { Database } from '@/types/database.types';
@@ -168,26 +169,19 @@ export async function getProjectUserLocalSettingsByProjectId(
   userId: string | null | undefined,
   projectIds: string[]
 ): Promise<Map<string, ProjectUserLocalSettingsRow>> {
-  if (!userId || projectIds.length === 0) {
-    return new Map();
-  }
-
-  const { data, error } = await supabase
-    .from('project_user')
-    .select(PROJECT_USER_LOCAL_SELECT)
-    .eq('user_id', userId)
-    .in('project_id', projectIds);
-
-  if (error || !data) {
-    return new Map();
-  }
+  const resources = await getPrimaryProjectResourceDirectoriesByProjectId(supabase, {
+    userId,
+    projectIds
+  });
 
   return new Map(
-    data
-      .filter(
-        (row): row is typeof row & { project_id: string } => typeof row.project_id === 'string'
-      )
-      .map(row => [row.project_id, row])
+    [...resources.values()].map(resource => [
+      resource.projectId,
+      {
+        project_id: resource.projectId,
+        local_working_directory: resource.directoryPath
+      }
+    ])
   );
 }
 
@@ -299,42 +293,6 @@ export async function updateProjectNameAction(input: {
 
   if (error || !data) {
     throw new Error(error?.message ?? 'Failed to update project name.');
-  }
-
-  revalidateProjectPaths(input.projectId);
-}
-
-export async function updateProjectWorkingDirectoryAction(input: {
-  projectId: string;
-  workingDirectory: string | null;
-}): Promise<void> {
-  const normalized =
-    typeof input.workingDirectory === 'string' && input.workingDirectory.trim().length > 0
-      ? input.workingDirectory.trim()
-      : null;
-
-  const supabase = await createClientForRequest();
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    throw new Error('You must be signed in to update the project working directory.');
-  }
-
-  const { error } = await supabase.from('project_user').upsert(
-    {
-      user_id: user.id,
-      project_id: input.projectId,
-      local_working_directory: normalized,
-      updated_at: new Date().toISOString()
-    },
-    { onConflict: 'user_id,project_id' }
-  );
-
-  if (error) {
-    console.error('updateProjectWorkingDirectoryAction', error ?? 'no error message');
-    throw new Error(error.message ?? 'Failed to update project working directory.');
   }
 
   revalidateProjectPaths(input.projectId);

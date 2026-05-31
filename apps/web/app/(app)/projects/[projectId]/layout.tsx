@@ -9,10 +9,7 @@ import {
   resolveProjectUserSshSettings,
   resolveVisibleProjectSshSettings
 } from '@/lib/actions/project-types';
-import {
-  getProjectUserLocalSettingsByProjectId,
-  getProjectUserSshSettingsByProjectId
-} from '@/lib/actions/projects';
+import { getProjectUserSshSettingsByProjectId } from '@/lib/actions/projects';
 import { isAppFeatureEnabled } from '@/lib/app-features';
 import { createClientForRequest } from '@/supabase/utils/server';
 
@@ -42,10 +39,7 @@ export default async function ProjectLayout({ children, params }: LayoutProps) {
     notFound();
   }
 
-  const [sshByProject, localByProject] = await Promise.all([
-    getProjectUserSshSettingsByProjectId(supabase, user?.id, [project.id]),
-    getProjectUserLocalSettingsByProjectId(supabase, user?.id, [project.id])
-  ]);
+  const sshByProject = await getProjectUserSshSettingsByProjectId(supabase, user?.id, [project.id]);
   const projectUser = sshByProject.get(project.id);
   const [sshEnabled, slackEnabled] = await Promise.all([
     isAppFeatureEnabled('ssh'),
@@ -54,8 +48,7 @@ export default async function ProjectLayout({ children, params }: LayoutProps) {
   const sshSettings = resolveVisibleProjectSshSettings(resolveProjectUserSshSettings(projectUser), {
     sshEnabled
   });
-  const projectUserLocal = localByProject.get(project.id);
-  const projectWorkingDirectory = projectUserLocal?.local_working_directory ?? null;
+  const projectWorkingDirectory = null;
 
   const [{ data: everhourIntegration }, { data: statuses }] = await Promise.all([
     supabase

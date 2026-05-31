@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 
 import { assertOrgMembership } from '@/app/api/projects/_lib';
 import { listProjectFiles, resolveLinkedDirectory } from '@/lib/filesystem/project-file-tree';
+import { getPrimaryProjectResourceDirectoriesByProjectId } from '@/lib/resource-directories/primary-resource';
 import { createClientForRequest } from '@/supabase/utils/server';
 
 type RouteContext = { params: Promise<{ projectId: string }> };
@@ -37,14 +38,14 @@ export async function GET(_request: Request, { params }: RouteContext) {
       return NextResponse.json({ error: 'Forbidden.' }, { status: 403 });
     }
 
-    const { data: projectUser } = await supabase
-      .from('project_user')
-      .select('local_working_directory')
-      .eq('user_id', user.id)
-      .eq('project_id', project.id)
-      .maybeSingle();
+    const primaryResources = await getPrimaryProjectResourceDirectoriesByProjectId(supabase, {
+      userId: user.id,
+      projectIds: [project.id]
+    });
 
-    const resolvedRoot = resolveLinkedDirectory(projectUser?.local_working_directory ?? null);
+    const resolvedRoot = resolveLinkedDirectory(
+      primaryResources.get(project.id)?.directoryPath ?? null
+    );
     if (resolvedRoot) {
       const stat = await fs.stat(resolvedRoot).catch(() => null);
       if (stat?.isDirectory()) {

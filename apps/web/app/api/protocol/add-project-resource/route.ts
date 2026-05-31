@@ -4,6 +4,7 @@ import { internalErrorResponse, parseProtocolBody } from '@/app/api/protocol/_li
 import { ensureProjectExecutionTarget } from '@/lib/overlord/execution-targets';
 import { upsertDeviceFromProtocol } from '@/lib/overlord/upsert-device';
 import { addProjectResourceSchema } from '@/lib/overlord/validation';
+import { targetHasProjectResourceDirectory } from '@/lib/resource-directories/primary-resource';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
 export async function POST(request: Request) {
@@ -60,8 +61,15 @@ export async function POST(request: Request) {
       executionTargetId
     });
 
+    const shouldSetPrimary =
+      isPrimary ??
+      !(await targetHasProjectResourceDirectory(supabase, {
+        projectId,
+        executionTargetId
+      }));
+
     // Clear existing primary for this project on this execution target.
-    if (isPrimary) {
+    if (shouldSetPrimary) {
       await (supabase as any)
         .from('project_resource_directories')
         .update({ is_primary: false })
@@ -77,7 +85,7 @@ export async function POST(request: Request) {
         execution_target_id: executionTargetId,
         directory_path: directoryPath,
         label: label?.trim() || null,
-        is_primary: isPrimary ?? false
+        is_primary: shouldSetPrimary
       })
       .select('id, directory_path, label, is_primary, execution_target_id')
       .single();

@@ -276,7 +276,7 @@ prompt:
   Purpose:
     Create a ticket and attach to it in one call.
     When --project-id is omitted, automatically resolves the project from the
-    current working directory (matching against the caller's project_user.local_working_directory).
+    current working directory (matching against the caller's project resource directories).
   Required:
     --objective <text>
     or: --objectives-json <json> / --objectives-file <path|-> with [{ "objective": "...", "title": "...", "autoAdvance": true }]
@@ -384,7 +384,7 @@ record-work:
   Notes:
     Project resolution mirrors `prompt`: if --project-id is not set and --personal is not used,
     the CLI sends cwd as workingDirectory and the API matches it against your configured
-    project_user.local_working_directory rows. If no match, the API returns 400 — re-run with
+    project_resource_directories rows. If no match, the API returns 400 — re-run with
     --project-id <id> or --personal.
     Use this for completed-from-chat work. If you still need to execute the work, use `create`
     for a draft ticket or `prompt` to create and start execution immediately.
@@ -578,4 +578,3 @@ EOF
   ovld protocol add-project-resource --project-id <project-uuid> --directory /path/to/repo --device-fingerprint $OVERLORD_DEVICE_FINGERPRINT --label "main checkout" --is-primary
   ovld protocol update-project-resource --resource-id <resource-uuid> --device-fingerprint $OVERLORD_DEVICE_FINGERPRINT --label "docs branch"
   ovld protocol update-project-resource --resource-id <resource-uuid> --device-fingerprint $OVERLORD_DEVICE_FINGERPRINT --is-primary true
-

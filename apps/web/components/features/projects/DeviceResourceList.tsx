@@ -292,9 +292,6 @@ export function DeviceResourceList({ open, projectId }: Props) {
 
     setAdding(true);
     try {
-      const allResources = projectDevices.flatMap(d => d.resources);
-      const isFirst = allResources.length === 0;
-
       if (isElectron) {
         let deviceFromElectron:
           | { deviceFingerprint: string; deviceHostname: string; devicePlatform: string }
@@ -318,7 +315,6 @@ export function DeviceResourceList({ open, projectId }: Props) {
           projectId,
           directoryPath: trimmed,
           label: newLabel.trim() || null,
-          isPrimary: isFirst,
           ...(deviceFromElectron
             ? {
                 deviceFingerprint: deviceFromElectron.deviceFingerprint,
@@ -348,7 +344,6 @@ export function DeviceResourceList({ open, projectId }: Props) {
           projectId,
           directoryPath: trimmed,
           label: newLabel.trim() || null,
-          isPrimary: isFirst,
           deviceId: selectedTargetId
         });
       }

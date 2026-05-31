@@ -110,7 +110,7 @@ export async function GET(request: Request, { params }: RouteContext) {
     }
 
     // Managed JJ/git-worktree workspaces are prepared on the **client** (Electron / `ovld`)
-    // where `local_working_directory` exists. The API only returns configured paths.
+    // where the project resource directory exists. The API only returns configured paths.
 
     const resolvedWorkingDirectory =
       requestedWorkspace === 'ssh'

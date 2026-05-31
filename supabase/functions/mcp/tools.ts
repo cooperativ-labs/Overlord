@@ -767,7 +767,7 @@ export const TOOLS = [
         workingDirectory: {
           type: 'string',
           description:
-            'Absolute path of the repository root. Matched against project_user.local_working_directory when projectId is not provided.'
+            'Absolute path of the repository root. Matched against project resource directories when projectId is not provided.'
         },
         personal: {
           type: 'boolean',

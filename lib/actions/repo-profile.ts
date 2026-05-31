@@ -3,6 +3,7 @@
 import * as Sentry from '@sentry/nextjs';
 
 import type { RepoOperationsProfile } from '@/lib/repo-profile/types';
+import { getPrimaryProjectResourceDirectoriesByProjectId } from '@/lib/resource-directories/primary-resource';
 import { createClientForRequest } from '@/supabase/utils/server';
 
 export type ProjectProfileData =
@@ -19,14 +20,12 @@ export async function getProjectProfileDataAction(projectId: string): Promise<Pr
     return { ok: false, error: 'Not authenticated.' };
   }
 
-  const [projectResult, projectUserResult] = await Promise.all([
+  const [projectResult, primaryResources] = await Promise.all([
     supabase.from('projects').select('operations_profile_fingerprint').eq('id', projectId).single(),
-    supabase
-      .from('project_user')
-      .select('local_working_directory')
-      .eq('user_id', user.id)
-      .eq('project_id', projectId)
-      .maybeSingle()
+    getPrimaryProjectResourceDirectoriesByProjectId(supabase, {
+      userId: user.id,
+      projectIds: [projectId]
+    })
   ]);
 
   if (projectResult.error || !projectResult.data) {
@@ -38,7 +37,7 @@ export async function getProjectProfileDataAction(projectId: string): Promise<Pr
 
   return {
     ok: true,
-    localDirectory: projectUserResult.data?.local_working_directory ?? null,
+    localDirectory: primaryResources.get(projectId)?.directoryPath ?? null,
     currentFingerprint: projectResult.data.operations_profile_fingerprint ?? null
   };
 }

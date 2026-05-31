@@ -71,7 +71,7 @@ async function resolveProjectByWorkingDirectory(
       const rows = (data ?? []) as unknown as ResourceDirectoryRow[];
       const match = pickBestPathMatch(rows, normalizedCwd, r => r.directory_path);
       if (match?.projects) {
-        return { ...match.projects, local_working_directory: match.directory_path };
+        return match.projects;
       }
     }
 
@@ -83,7 +83,7 @@ async function resolveProjectByWorkingDirectory(
     const rows = (data ?? []) as unknown as ResourceDirectoryRow[];
     const match = pickBestPathMatch(rows, normalizedCwd, r => r.directory_path);
     if (match?.projects) {
-      return { ...match.projects, local_working_directory: match.directory_path };
+      return match.projects;
     }
   }
 

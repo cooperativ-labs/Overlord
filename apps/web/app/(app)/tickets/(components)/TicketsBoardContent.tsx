@@ -13,6 +13,7 @@ import {
 } from '@/lib/helpers/scheduled-ticket-visibility';
 import { parseObjectiveAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
 import { isDraftObjectiveWithText } from '@/lib/helpers/tickets';
+import { getPrimaryProjectResourceDirectoriesByProjectId } from '@/lib/resource-directories/primary-resource';
 import { createClientForRequest } from '@/supabase/utils/server';
 import type { Database } from '@/types/database.types';
 
@@ -480,22 +481,18 @@ export default async function TicketsBoardContent({
     const {
       data: { user: currentUser }
     } = await supabase.auth.getUser();
-    const { data: projectUserForMentions } = currentUser
-      ? await supabase
-          .from('project_user')
-          .select('local_working_directory')
-          .eq('user_id', currentUser.id)
-          .eq('project_id', effectiveMentionProjectId)
-          .limit(1)
-          .maybeSingle()
-      : { data: null };
+    const primaryResources = currentUser
+      ? await getPrimaryProjectResourceDirectoriesByProjectId(supabase, {
+          userId: currentUser.id,
+          projectIds: [effectiveMentionProjectId]
+        })
+      : new Map();
+    const primaryDirectory = primaryResources.get(effectiveMentionProjectId)?.directoryPath ?? null;
 
     if (isElectronRequest) {
-      kanbanWorkingDirectory = projectUserForMentions?.local_working_directory ?? null;
+      kanbanWorkingDirectory = primaryDirectory;
     } else {
-      const resolvedProjectDirectory = resolveLinkedDirectory(
-        projectUserForMentions?.local_working_directory
-      );
+      const resolvedProjectDirectory = resolveLinkedDirectory(primaryDirectory);
       if (resolvedProjectDirectory) {
         kanbanWorkingDirectory = resolvedProjectDirectory;
         try {

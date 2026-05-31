@@ -29,6 +29,9 @@
 .overlord/tmp/
 .overlord/logs/
 
+# Claude Code runtime (transient lock/metadata)
+.claude/scheduled_tasks.lock
+
 # debug
 npm-debug.log*
 yarn-debug.log*

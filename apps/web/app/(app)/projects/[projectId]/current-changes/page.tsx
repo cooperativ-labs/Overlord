@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 
 import { CurrentChangesPage } from '@/components/features/projects/CurrentChangesPage';
+import { getPrimaryProjectResourceDirectoriesByProjectId } from '@/lib/resource-directories/primary-resource';
 import { createClientForRequest } from '@/supabase/utils/server';
 
 type PageProps = {
@@ -36,13 +37,11 @@ export default async function ProjectCurrentChangesPage({ params, searchParams }
 
   let workingDirectory: string | null = null;
   if (user?.id) {
-    const { data: projectUser } = await supabase
-      .from('project_user')
-      .select('local_working_directory')
-      .eq('user_id', user.id)
-      .eq('project_id', project.id)
-      .maybeSingle();
-    workingDirectory = projectUser?.local_working_directory ?? null;
+    const primaryResources = await getPrimaryProjectResourceDirectoriesByProjectId(supabase, {
+      userId: user.id,
+      projectIds: [project.id]
+    });
+    workingDirectory = primaryResources.get(project.id)?.directoryPath ?? null;
   }
 
   return (

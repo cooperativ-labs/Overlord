@@ -18,6 +18,7 @@ import {
   ticketFilterSelectionsEqual,
   ticketIdsTouchingCurrentChanges
 } from '@/components/features/projects/current-changes/view-model';
+import { useProjectSettings } from '@/components/features/projects/ProjectSettingsContext';
 import { useElectron } from '@/components/features/terminal/useElectron';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import {
@@ -50,6 +51,7 @@ export function CurrentChangesPage({
 }: CurrentChangesPageProps) {
   const queryClient = useQueryClient();
   const { api, isElectron } = useElectron();
+  const projectSettings = useProjectSettings();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -58,18 +60,22 @@ export function CurrentChangesPage({
     () => new Set(initialTicketIds ?? [])
   );
   const [diffViewMode, setDiffViewMode] = useState<DiffViewMode>('inline');
-  const hasLocalDirectory = !!workingDirectory && !isWorkingDirectoryNone(workingDirectory);
+  const effectiveWorkingDirectory = projectSettings
+    ? projectSettings.effectiveWorkingDirectory
+    : workingDirectory;
+  const hasLocalDirectory =
+    !!effectiveWorkingDirectory && !isWorkingDirectoryNone(effectiveWorkingDirectory);
   const canInspectChanges = hasLocalDirectory;
   const branchesQuery = useGitBranchesQuery({
     api: api?.filesystem,
     canInspectChanges,
-    directory: workingDirectory,
+    directory: effectiveWorkingDirectory,
     isElectron
   });
   const statusQuery = useGitStatusQuery({
     api: api?.filesystem,
     canInspectChanges,
-    directory: workingDirectory,
+    directory: effectiveWorkingDirectory,
     isElectron
   });
   const statusResponse = statusQuery.data ?? null;
@@ -77,7 +83,7 @@ export function CurrentChangesPage({
   const { allSettled: allGitDiffsSettled, filterMap: gitDiffFilterByPath } = useGitDiffFilterMap({
     api: api?.filesystem,
     canInspectChanges,
-    directory: workingDirectory,
+    directory: effectiveWorkingDirectory,
     files: statusFiles,
     isElectron
   });
@@ -85,7 +91,7 @@ export function CurrentChangesPage({
     projectId,
     files: statusFiles,
     repoRoot: statusResponse?.repoRoot ?? null,
-    workingDirectory
+    workingDirectory: effectiveWorkingDirectory
   });
   useCurrentChangesRealtime({
     enabled: isElectron && canInspectChanges,
@@ -96,7 +102,7 @@ export function CurrentChangesPage({
   const diffQuery = useGitDiffQuery({
     api: api?.filesystem,
     canInspectChanges,
-    directory: workingDirectory,
+    directory: effectiveWorkingDirectory,
     file: selectedStatusFile,
     isElectron
   });
@@ -113,10 +119,10 @@ export function CurrentChangesPage({
     await branchesQuery.refetch();
     await statusQuery.refetch();
     await fileChangesQuery.refetch();
-    if (workingDirectory) {
+    if (effectiveWorkingDirectory) {
       await queryClient.invalidateQueries({
         exact: false,
-        queryKey: ['current-changes', 'diff', workingDirectory]
+        queryKey: ['current-changes', 'diff', effectiveWorkingDirectory]
       });
     }
     await diffQuery.refetch();
@@ -127,7 +133,7 @@ export function CurrentChangesPage({
       buildEnrichedCurrentChangeFiles({
         files: statusFiles,
         ...(isElectron && canInspectChanges ? { gitDiffFilterByPath } : {}),
-        pathRoots: [statusResponse?.repoRoot ?? null, workingDirectory],
+        pathRoots: [statusResponse?.repoRoot ?? null, effectiveWorkingDirectory],
         rationales: fileChanges
       }),
     [
@@ -137,7 +143,7 @@ export function CurrentChangesPage({
       isElectron,
       statusFiles,
       statusResponse?.repoRoot,
-      workingDirectory
+      effectiveWorkingDirectory
     ]
   );
 
@@ -292,7 +298,7 @@ export function CurrentChangesPage({
     );
   }
 
-  const displayDirectory = workingDirectory!;
+  const displayDirectory = effectiveWorkingDirectory!;
   const selectedFile = enrichedFiles.find(file => file.path === selectedPath) ?? null;
 
   return (
@@ -349,7 +355,7 @@ export function CurrentChangesPage({
                 selectedFilePath={selectedFile.path}
                 selectedTicketIds={selectedTicketIds}
                 viewMode={diffViewMode}
-                workingDirectory={workingDirectory}
+                workingDirectory={effectiveWorkingDirectory}
                 onFilterByTicket={focusTicketFilter}
                 onToggleTicketFilter={toggleTicketFilter}
                 onViewModeChange={setDiffViewMode}

@@ -50,8 +50,12 @@ export function ProjectSettingsSection({
   const [colorError, setColorError] = useState<string | null>(null);
   const [colorPopoverOpen, setColorPopoverOpen] = useState(false);
   const nameInputRef = useRef<HTMLInputElement>(null);
+  const effectiveWorkingDirectory = projectSettings
+    ? (projectSettings.effectiveWorkingDirectory ?? '')
+    : savedWorkingDirectory;
   const hasSavedWorkingDirectory =
-    savedWorkingDirectory.trim().length > 0 && !isWorkingDirectoryNone(savedWorkingDirectory);
+    effectiveWorkingDirectory.trim().length > 0 &&
+    !isWorkingDirectoryNone(effectiveWorkingDirectory);
   const isCurrentChangesView = pathname.startsWith(`/projects/${projectId}/current-changes`);
   const isGraphView = pathname.startsWith(`/projects/${projectId}/graph`);
   const workBoardHref = buildProjectPath({ projectId });

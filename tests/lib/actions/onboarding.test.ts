@@ -27,15 +27,7 @@ describe('createFirstProjectWithDirectory', () => {
     jest.clearAllMocks();
   });
 
-  it('registers the initial directory as a resource and keeps the legacy working-directory field in sync', async () => {
-    const upsert = jest.fn().mockResolvedValue({ error: null });
-    const getUser = jest.fn().mockResolvedValue({ data: { user: { id: 'user-1' } } });
-    const supabase = {
-      auth: { getUser },
-      from: jest.fn().mockReturnValue({ upsert })
-    } as never;
-
-    mockCreateClientForRequest.mockResolvedValue(supabase);
+  it('registers the initial directory as a primary resource without syncing the removed legacy field', async () => {
     mockCreateProject.mockResolvedValue({
       id: 'project-1',
       organizationId: 42
@@ -51,6 +43,7 @@ describe('createFirstProjectWithDirectory', () => {
       devicePlatform: 'darwin'
     });
 
+    expect(mockCreateClientForRequest).not.toHaveBeenCalled();
     expect(mockCreateProject).toHaveBeenCalledWith({
       organizationId: 42,
       name: 'Agent orchestration',
@@ -64,15 +57,6 @@ describe('createFirstProjectWithDirectory', () => {
       deviceHostname: 'codex-mac',
       devicePlatform: 'darwin'
     });
-    expect(upsert).toHaveBeenCalledWith(
-      {
-        user_id: 'user-1',
-        project_id: 'project-1',
-        local_working_directory: '/workspace/Overlord',
-        updated_at: expect.any(String)
-      },
-      { onConflict: 'user_id,project_id' }
-    );
     expect(mockCaptureException).not.toHaveBeenCalled();
   });
 });

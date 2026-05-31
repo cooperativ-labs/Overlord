@@ -8,6 +8,7 @@ import {
   upsertExecutionTargetFromProtocol
 } from '@/lib/overlord/execution-targets';
 import { defaultDirectoryLabel } from '@/lib/resource-directories/labels';
+import { targetHasProjectResourceDirectory } from '@/lib/resource-directories/primary-resource';
 import { createClientForRequest } from '@/supabase/utils/server';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 import type { Database } from '@/types/database.types';
@@ -327,7 +328,14 @@ export async function addProjectResourceDirectoryAction(input: {
     executionTargetId: resolvedExecutionTargetId
   });
 
-  if (input.isPrimary) {
+  const shouldSetPrimary =
+    input.isPrimary ??
+    !(await targetHasProjectResourceDirectory(serviceSupabase, {
+      projectId: input.projectId,
+      executionTargetId: resolvedExecutionTargetId
+    }));
+
+  if (shouldSetPrimary) {
     await serviceSupabase
       .from('project_resource_directories')
       .update({ is_primary: false })
@@ -354,7 +362,7 @@ export async function addProjectResourceDirectoryAction(input: {
     execution_target_id: resolvedExecutionTargetId,
     directory_path: directoryPath,
     label,
-    is_primary: input.isPrimary ?? false
+    is_primary: shouldSetPrimary
   });
 
   if (error) {

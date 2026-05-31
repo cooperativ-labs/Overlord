@@ -123,7 +123,7 @@ Use this mode when the conversation starts normally and the user asks you to cre
 
 1. If the user wants to create tickets (and does not ask to start execution), run `ovld protocol create --agent antigravity --objectives-json '[{"objective":"..."}]'`.
    - When `--session-key` and `--ticket-id` are provided, it creates a follow-up draft.
-   - When session flags are omitted, it resolves the project by matching current working directory (or `--working-directory`) to Overlord `local_working_directory`, then creates a standalone draft.
+   - When session flags are omitted, it resolves the project by matching current working directory (or `--working-directory`) to Overlord project resource directories, then creates a standalone draft.
    - Pass multiple items in `--objectives-json` when creating ordered steps for the same feature or goal.
 2. Default to `create` for new tickets. Only use `/overlord:prompt` or `ovld protocol prompt --agent antigravity --objectives-json '[{"objective":"..."}]'` when the user explicitly asks to create and execute immediately.
    `prompt` creates the ticket in `execute` status and attaches immediately.
@@ -276,4 +276,4 @@ This keeps the ticket feed readable while preserving the full document in versio
 - Do not add or commit changes unless the user explicitly asks you to commit.
 - Delivery is the concluding step. After delivering, stop implementation work unless the user explicitly asks for follow-up execution; once follow-up execution is complete, deliver again.
 
-<!-- version: 0.1.5 -->
+<!-- version: 0.1.6 -->

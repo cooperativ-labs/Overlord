@@ -60,7 +60,7 @@ Use this mode when the conversation starts normally and the user asks Claude to 
 
 1. If the user wants to create tickets (and does not ask to start execution), use `/overlord:create` or run `ovld protocol create --agent claude-code --objectives-json '[{"objective":"..."}]'`.
    - When `--session-key` and `--ticket-id` are provided, it creates a follow-up draft.
-   - When session flags are omitted, it resolves the project by matching current working directory (or `--working-directory`) to Overlord `local_working_directory`, then creates a standalone draft.
+   - When session flags are omitted, it resolves the project by matching current working directory (or `--working-directory`) to Overlord project resource directories, then creates a standalone draft.
    - Pass multiple items in `--objectives-json` when creating ordered steps for the same feature or goal.
    - If the user wants to **add more objectives to an existing ticket** (not create a new ticket), use `ovld protocol add-objectives --ticket-id <ticket_id> --objectives-json '[{"objective":"..."}]'` instead.
 2. Default to `create` for new tickets. Only use `/overlord:prompt` or `ovld protocol prompt --agent claude-code --objectives-json '[{"objective":"..."}]'` when the user explicitly asks to create and execute immediately.
@@ -114,5 +114,5 @@ For the `record-change-rationales` command and full payload shape with optional 
 - [reference/context.md](reference/context.md) — Shared state, attachments, and large artifact policy
 - [reference/shell-escaping.md](reference/shell-escaping.md) — Heredoc stdin piping for special characters in summaries and payloads
 
-<!-- version: 0.5.9 -->
+<!-- version: 0.5.10 -->
 
