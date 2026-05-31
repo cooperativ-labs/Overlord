@@ -27,8 +27,12 @@ Options:
   --device-fingerprint <fp>  Override runner device identity
   --poll-interval-ms <ms>    Poll interval for start mode (default 3000)
   --project-id <uuid>        Only claim requests for one project
+  --organization-id <id>     Only poll one organization (also OVERLORD_ORGANIZATION_ID).
+                             Default: poll every organization you belong to.
 
 The runner claims durable execution requests and launches them with \`${primaryCommand} launch\`.
+By default it drains queued requests from all of your organizations, so a single
+runner serves every org without needing one instance per org.
 `);
 }
 
@@ -89,7 +93,7 @@ function protocolJson(subcommand, args, env) {
   return stdout.trim() ? JSON.parse(stdout) : {};
 }
 
-function claimExecution(flags, deviceFingerprint) {
+function claimExecution(flags, deviceFingerprint, organizationId) {
   const args = [
     '--device-fingerprint',
     deviceFingerprint,
@@ -98,10 +102,80 @@ function claimExecution(flags, deviceFingerprint) {
     '--device-platform',
     process.platform
   ];
+  // An explicit organization id scopes this claim to one org. The CLI turns it
+  // into the `x-organization-id` header, which OAuth-authenticated protocol
+  // requests require and the server validates against the user's membership.
+  if (organizationId) {
+    args.push('--organization-id', String(organizationId));
+  }
   if (typeof flags['project-id'] === 'string') {
     args.push('--project-id', flags['project-id']);
   }
   return protocolJson('claim-execution', args, { OVERLORD_DEVICE_FINGERPRINT: deviceFingerprint });
+}
+
+function listOrganizationIds(deviceFingerprint) {
+  const data = protocolJson('list-organizations', [], {
+    OVERLORD_DEVICE_FINGERPRINT: deviceFingerprint
+  });
+  const organizations = Array.isArray(data.organizations) ? data.organizations : [];
+  return organizations
+    .map(organization => organization?.id)
+    .filter(id => Number.isInteger(id) && id > 0)
+    .map(id => String(id));
+}
+
+function resolvePinnedOrganizationId(flags) {
+  const fromFlag =
+    typeof flags['organization-id'] === 'string' ? flags['organization-id'].trim() : '';
+  if (fromFlag) return fromFlag;
+  const fromEnv = process.env.OVERLORD_ORGANIZATION_ID?.trim();
+  return fromEnv || '';
+}
+
+// Re-discover the user's organizations periodically so a runner picks up newly
+// joined orgs without a restart, without hitting the API on every poll.
+const ORGANIZATION_REFRESH_MS = 60_000;
+
+/**
+ * Resolves which organizations a poll pass should claim from.
+ *
+ * - When the user pins an org (`--organization-id` flag or
+ *   `OVERLORD_ORGANIZATION_ID`), only that org is polled.
+ * - Otherwise the runner discovers every org the authenticated user belongs to
+ *   and polls each one. If discovery fails or returns nothing, it falls back to
+ *   the credential default (an empty scope id) so behavior never regresses.
+ */
+export function createOrganizationScope(flags, deviceFingerprint) {
+  const pinned = resolvePinnedOrganizationId(flags);
+  if (pinned) {
+    return { pinned: true, resolve: () => [pinned] };
+  }
+
+  let cache = [];
+  let fetchedAt = 0;
+  return {
+    pinned: false,
+    resolve() {
+      const now = Date.now();
+      if (cache.length === 0 || now - fetchedAt >= ORGANIZATION_REFRESH_MS) {
+        try {
+          const ids = listOrganizationIds(deviceFingerprint);
+          fetchedAt = now;
+          // Keep the last known good list on a transient empty result.
+          if (ids.length > 0) cache = ids;
+        } catch (error) {
+          process.stderr.write(
+            `[runner] could not list organizations (${
+              error instanceof Error ? error.message : error
+            }); using the default organization\n`
+          );
+        }
+      }
+      // Empty string = "no override", i.e. the org stored in credentials.
+      return cache.length > 0 ? cache : [''];
+    }
+  };
 }
 
 function completeLaunch(requestId, deviceFingerprint) {
@@ -358,14 +432,34 @@ export async function launchClaimedRequest(claim, deviceFingerprint) {
   return true;
 }
 
-export async function runOnce(flags, deviceFingerprint) {
-  const claim = claimExecution(flags, deviceFingerprint);
-  if (!claim.request) {
-    process.stderr.write('[runner] no queued execution requests\n');
-    return false;
+export async function runOnce(flags, deviceFingerprint, organizationScope) {
+  const scope = organizationScope ?? createOrganizationScope(flags, deviceFingerprint);
+  const organizationIds = scope.resolve();
+
+  let launchedAny = false;
+  for (const organizationId of organizationIds) {
+    let claim;
+    try {
+      claim = claimExecution(flags, deviceFingerprint, organizationId);
+    } catch (error) {
+      // A single organization failing (transient API/auth error) must not stop
+      // the runner from servicing the others.
+      process.stderr.write(
+        `[runner] claim failed for organization ${organizationId || 'default'}: ${
+          error instanceof Error ? error.message : error
+        }\n`
+      );
+      continue;
+    }
+    if (!claim.request) continue;
+    await launchClaimedRequest(claim, deviceFingerprint);
+    launchedAny = true;
   }
-  await launchClaimedRequest(claim, deviceFingerprint);
-  return true;
+
+  if (!launchedAny) {
+    process.stderr.write('[runner] no queued execution requests\n');
+  }
+  return launchedAny;
 }
 
 function sleep(ms) {
@@ -408,10 +502,18 @@ export async function runRunnerCommand(subcommand, args, primaryCommand = 'ovld'
       typeof flags['poll-interval-ms'] === 'string'
         ? Math.max(1000, Number.parseInt(flags['poll-interval-ms'], 10) || 3000)
         : 3000;
+    // Build the organization scope once so its discovery cache persists across
+    // polls instead of refetching the org list every iteration.
+    const organizationScope = createOrganizationScope(flags, deviceFingerprint);
     process.stderr.write(`[runner] started with device ${deviceFingerprint}\n`);
+    process.stderr.write(
+      organizationScope.pinned
+        ? `[runner] polling a single organization\n`
+        : `[runner] polling every organization you belong to\n`
+    );
     for (;;) {
       try {
-        const launched = await runOnce(flags, deviceFingerprint);
+        const launched = await runOnce(flags, deviceFingerprint, organizationScope);
         if (!launched) await sleep(pollIntervalMs);
       } catch (error) {
         process.stderr.write(`[runner] ${error instanceof Error ? error.message : error}\n`);

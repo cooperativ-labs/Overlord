@@ -2,6 +2,35 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2605312007.0] - 2026-05-31:20:07
+
+### Added
+- Add protocol **`list-organizations`** (`ovld protocol list-organizations`, MCP `list_organizations`, `POST /api/protocol/organizations`) so agents and runners can discover every organization the authenticated user or agent token belongs to.
+- Poll **every organization you belong to** from a single **`ovld runner`** instance by default, with **`--organization-id`** or **`OVERLORD_ORGANIZATION_ID`** to pin a runner to one org.
+- Add shared **`AgentIcon`**, **`ProjectColorDot`**, **`SettingsDialogShell`**, and **`useCopyToClipboard`** components so agent icons, project swatches, settings layout, and clipboard feedback stay consistent across the app.
+- Extend Claude 4.x model sync with an **`ultracode`** extended-thinking level.
+
+### Fixed
+- None.
+
+### Changed
+- Refactor Organization, Project, and User settings modals onto the shared **`SettingsDialogShell`** layout (sidebar nav, mobile select, breadcrumbs).
+- Centralize agent icon dark-mode inversion through **`AgentIcon`** instead of repeating inline **`Image`** markup.
+- Centralize project-color swatches and readable foreground selection for ticket calendar and list views.
+
+### Security
+- None.
+
+### Refactor
+- Deduplicate inline hex parsing and luminance helpers into **`lib/helpers/color`**.
+
+### Test
+- Add runner tests for multi-org discovery and explicit org pinning.
+- Add unit tests for shared color helpers.
+
+### Documentation
+- Document **`list-organizations`** and multi-org runner polling in the CLI README and for-agents CLI reference.
+
 ## [0.2605311843.0] - 2026-05-31:18:43
 
 ### Added

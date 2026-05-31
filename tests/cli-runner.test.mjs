@@ -180,6 +180,50 @@ test('runOnce exits cleanly when claim-execution returns no request', async () =
   }
 });
 
+test('runOnce polls every organization the user belongs to', async () => {
+  const claimedOrgs = [];
+  runnerTestHooks.execFileSync = (_file, argv) => {
+    const subcommand = argv[2];
+    if (subcommand === 'list-organizations') {
+      return JSON.stringify({ organizations: [{ id: 1, name: 'Org A' }, { id: 7, name: 'Org B' }] });
+    }
+    if (subcommand === 'claim-execution') {
+      const idx = argv.indexOf('--organization-id');
+      claimedOrgs.push(idx === -1 ? null : argv[idx + 1]);
+      return JSON.stringify({ request: null });
+    }
+    return '{}';
+  };
+  try {
+    assert.equal(await runOnce({}, 'fp-multi'), false);
+    // Every organization is claimed from, each scoped by its own org id.
+    assert.deepEqual(claimedOrgs, ['1', '7']);
+  } finally {
+    runnerTestHooks.execFileSync = null;
+  }
+});
+
+test('runOnce honors an explicit --organization-id pin without discovery', async () => {
+  const subcommands = [];
+  let pinnedOrg = null;
+  runnerTestHooks.execFileSync = (_file, argv) => {
+    subcommands.push(argv[2]);
+    if (argv[2] === 'claim-execution') {
+      const idx = argv.indexOf('--organization-id');
+      pinnedOrg = idx === -1 ? null : argv[idx + 1];
+    }
+    return JSON.stringify({ request: null });
+  };
+  try {
+    assert.equal(await runOnce({ 'organization-id': '7' }, 'fp-pin'), false);
+    assert.equal(pinnedOrg, '7');
+    // A pinned org must never trigger organization discovery.
+    assert.ok(!subcommands.includes('list-organizations'));
+  } finally {
+    runnerTestHooks.execFileSync = null;
+  }
+});
+
 test('launchClaimedRequest completes launch (server marks the request launching) on spawn', async () => {
   const protocolCalls = [];
   runnerTestHooks.execFileSync = (_file, argv) => {

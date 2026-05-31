@@ -30,6 +30,7 @@ import {
 } from '@/lib/helpers/agent-types';
 import { buildCustomAgentValues, resolveCustomAgentCommand } from '@/lib/helpers/custom-agent';
 import { assignedAgentSelectionToJson } from '@/lib/helpers/ticket-assigned-agent';
+import { useCopyToClipboard } from '@/lib/hooks/use-copy-to-clipboard';
 import {
   NO_ASSIGNED_AGENT_ERROR,
   parseExecutionAgentFromAssignment
@@ -153,7 +154,7 @@ export function AgentSplitButton({
   submitObjectiveId,
   demo = false
 }: AgentSplitButtonProps) {
-  const [copied, setCopied] = useState(false);
+  const { copied, copy } = useCopyToClipboard();
   const [isLaunching, setIsLaunching] = useState(false);
   const [showRunningConfirm, setShowRunningConfirm] = useState(false);
   const { selection, configs, loaded: selectionLoaded } = useAgentModelPreference();
@@ -256,9 +257,7 @@ export function AgentSplitButton({
         submitObjectiveId ?? undefined
       );
       if (error || !prompt) return;
-      await navigator.clipboard.writeText(prompt);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      await copy(prompt);
       return;
     }
 

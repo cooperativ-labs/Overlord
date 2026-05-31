@@ -15,6 +15,7 @@ import {
   LAUNCH_AGENT_VALUES,
   type LaunchAgentType
 } from '@/lib/helpers/agent-types';
+import { useCopyToClipboard } from '@/lib/hooks/use-copy-to-clipboard';
 import { AgentCommands, buildNativeResumeCommand } from '@/lib/overlord/launch-commands';
 
 type QuickstartCommands = Record<LaunchAgentType, string>;
@@ -29,17 +30,11 @@ type CliQuickstartProps = {
 };
 
 function CommandCopyButton({ value }: { value: string }) {
-  const [copied, setCopied] = useState(false);
+  const { copied, copy } = useCopyToClipboard();
 
   async function handleCopy() {
     if (!value) return;
-    try {
-      await navigator.clipboard.writeText(value);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
-    } catch {
-      setCopied(false);
-    }
+    await copy(value);
   }
 
   return (

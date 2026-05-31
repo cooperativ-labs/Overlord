@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { useDefaultProject } from '@/components/features/projects/DefaultProjectContext';
+import { ProjectColorDot } from '@/components/features/projects/ProjectColorDot';
 import { ProjectWorkingDirectoryRequiredModal } from '@/components/features/projects/ProjectWorkingDirectoryRequiredModal';
 import { useElectron } from '@/components/features/terminal/useElectron';
 import {
@@ -88,13 +89,7 @@ export function DefaultProjectChooser({ className }: { className?: string }) {
           {projects.map(project => (
             <SelectItem key={project.id} value={project.id}>
               <div className="flex items-center gap-2">
-                <span
-                  className="h-3 w-3 rounded-full border"
-                  style={{
-                    backgroundColor: project.color,
-                    borderColor: project.color
-                  }}
-                />
+                <ProjectColorDot color={project.color} className="h-3 w-3 border" withBorder />
                 <span>{project.name}</span>
               </div>
             </SelectItem>

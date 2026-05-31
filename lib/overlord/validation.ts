@@ -504,6 +504,11 @@ export const claimExecutionSchema = z.object({
   projectId: z.string().uuid().optional()
 });
 
+// Listing the caller's organizations carries no payload; org/user scope comes
+// entirely from the resolved token context. Kept as an object schema so it flows
+// through the standard `parseProtocolBody` auth path like every other command.
+export const listOrganizationsSchema = z.object({});
+
 export const completeExecutionLaunchSchema = z.object({
   requestId: z.string().uuid(),
   deviceFingerprint: z.string().trim().min(1).max(128),

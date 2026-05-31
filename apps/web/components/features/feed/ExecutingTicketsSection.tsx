@@ -1,9 +1,9 @@
 'use client';
 
 import { Activity } from 'lucide-react';
-import Image from 'next/image';
 import Link from 'next/link';
 
+import { AgentIcon } from '@/components/features/AgentIcon';
 import type { ExecutingFeedTicket } from '@/lib/actions/feed';
 import { getAgentTypeByIdentifier } from '@/lib/helpers/agent-types';
 import { buildTicketPath } from '@/lib/helpers/ticket-path';
@@ -49,12 +49,11 @@ export function ExecutingTicketsSection({ tickets }: ExecutingTicketsSectionProp
               <div className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
                 {agentType ? (
                   <>
-                    <Image
-                      src={agentType.icon}
+                    <AgentIcon
+                      agentType={agentType}
+                      size={12}
                       alt={`${agentType.label} icon`}
-                      width={12}
-                      height={12}
-                      className={`h-3 w-3 shrink-0 ${agentType.invertDark ? 'dark:invert' : ''}`}
+                      className="h-3 w-3 shrink-0"
                     />
                     <span>{agentType.label}</span>
                   </>

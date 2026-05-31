@@ -1,9 +1,9 @@
 'use client';
 
 import { ChevronDown } from 'lucide-react';
-import Image from 'next/image';
 import { useEffect, useRef, useState, useTransition } from 'react';
 
+import { AgentIcon } from '@/components/features/AgentIcon';
 import {
   AgentModelSelector,
   useAgentModelPreference,
@@ -143,14 +143,7 @@ export function AgentModelChooserButton({
               disabled={disabled}
               aria-label={triggerLabel}
             >
-              <Image
-                src={agent.icon}
-                alt=""
-                width={14}
-                height={14}
-                aria-hidden
-                className={cn('h-3.5 w-3.5 shrink-0', agent.invertDark ? 'dark:invert' : '')}
-              />
+              <AgentIcon agentType={agent} size={14} alt="" className="h-3.5 w-3.5 shrink-0" />
               {compact ? null : <span className="truncate">{label}</span>}
               <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
             </Button>

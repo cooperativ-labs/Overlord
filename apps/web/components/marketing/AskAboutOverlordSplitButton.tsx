@@ -12,6 +12,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 import { getAgentTypeByValue } from '@/lib/helpers/agent-types';
+import { useCopyToClipboard } from '@/lib/hooks/use-copy-to-clipboard';
 import { cn } from '@/lib/utils';
 
 const ASK_PROMPT =
@@ -57,16 +58,13 @@ type AskAboutOverlordSplitButtonProps = {
 
 export function AskAboutOverlordSplitButton({ className }: AskAboutOverlordSplitButtonProps) {
   const [selectedProvider, setSelectedProvider] = useState<AskProvider>('chatgpt');
-  const [copied, setCopied] = useState(false);
+  const { copied, copy } = useCopyToClipboard();
 
   async function handleAction({ provider = selectedProvider }: { provider?: AskProvider } = {}) {
     if (provider === 'copy') {
-      try {
-        await navigator.clipboard.writeText(ASK_PROMPT);
-        setCopied(true);
+      if (await copy(ASK_PROMPT)) {
         toast.success('Prompt copied to clipboard');
-        setTimeout(() => setCopied(false), 2000);
-      } catch {
+      } else {
         toast.error('Failed to copy prompt');
       }
       return;

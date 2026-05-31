@@ -39,6 +39,7 @@ import {
   useUpdateTicketDueDateMutation,
   useUpdateTicketStatusMutation
 } from '@/lib/client-data/tickets/mutations';
+import { getReadableForeground, parseHexColor } from '@/lib/helpers/color';
 import {
   normalizeTicketListFilters,
   type TicketListFilters
@@ -66,31 +67,6 @@ import { TicketTagFilterDropdown } from './TicketTagFilterDropdown';
 
 const DAY_HEADERS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-function parseHexColor(value: string): { r: number; g: number; b: number } | null {
-  const normalized = value.trim();
-  const hex = normalized.startsWith('#') ? normalized.slice(1) : normalized;
-
-  if (hex.length === 3) {
-    const [r, g, b] = hex.split('');
-    if (!r || !g || !b) return null;
-    return {
-      r: Number.parseInt(r + r, 16),
-      g: Number.parseInt(g + g, 16),
-      b: Number.parseInt(b + b, 16)
-    };
-  }
-
-  if (hex.length === 6) {
-    return {
-      r: Number.parseInt(hex.slice(0, 2), 16),
-      g: Number.parseInt(hex.slice(2, 4), 16),
-      b: Number.parseInt(hex.slice(4, 6), 16)
-    };
-  }
-
-  return null;
-}
-
 function getCalendarTicketColors(projectColor: string | null | undefined) {
   if (!projectColor) {
     return {
@@ -113,8 +89,7 @@ function getCalendarTicketColors(projectColor: string | null | undefined) {
     };
   }
 
-  const luminance = (0.2126 * rgb.r + 0.7152 * rgb.g + 0.0722 * rgb.b) / 255;
-  const foreground = luminance > 0.6 ? '#111827' : '#ffffff';
+  const foreground = getReadableForeground(rgb);
   const checkboxBorderColor =
     foreground === '#111827' ? 'rgba(17, 24, 39, 0.35)' : 'rgba(255, 255, 255, 0.45)';
   const checkboxBackgroundColor =

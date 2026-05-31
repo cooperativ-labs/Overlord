@@ -2049,6 +2049,24 @@ async function protocolClaimExecution(args) {
   console.log(JSON.stringify(data, null, 2));
 }
 
+async function protocolListOrganizations(args) {
+  const flags = parseFlags(args);
+  const { platformUrl, bearerToken, localSecret, organizationId } =
+    await resolveProtocolAuthForFlags(flags);
+  const timeoutMs = resolveTimeout(flags);
+
+  const data = await apiPost(
+    platformUrl,
+    bearerToken,
+    localSecret,
+    organizationId,
+    '/api/protocol/organizations',
+    {},
+    timeoutMs
+  );
+  console.log(JSON.stringify(data, null, 2));
+}
+
 async function protocolCompleteExecutionLaunch(args) {
   const flags = parseFlags(args);
   const { platformUrl, bearerToken, localSecret, organizationId } =
@@ -2644,6 +2662,7 @@ Subcommands:
   request-approval-gate     Flip auto_advance=false on the next queued future objective
   request-execution         Queue an objective for local/remote runner execution
   claim-execution           Claim one queued execution request for this device
+  list-organizations        List organizations the authenticated user belongs to
   complete-execution-launch Mark a claimed execution request launched
   fail-execution-launch     Mark a claimed execution request failed
   permission-request        Notify Overlord that the agent is requesting tool permission
@@ -3139,6 +3158,12 @@ claim-execution:
     --lease-seconds <n>
     --project-id <uuid>
 
+list-organizations:
+  Purpose:
+    Print every organization the authenticated user (or agent token) belongs to.
+    The runner uses this to poll all of your organizations, not just the one
+    stored at login. Takes no required flags.
+
 complete-execution-launch:
   Required:
     --request-id <uuid>        (or EXECUTION_REQUEST_ID env var)
@@ -3184,6 +3209,7 @@ Examples:
   ovld protocol attachment-download-url --session-key <key> --attachment-id <attachment-id>
   ovld protocol request-execution --ticket-id 1:899 --agent codex --requested-from manual_run
   ovld protocol claim-execution --device-fingerprint $OVERLORD_DEVICE_FINGERPRINT
+  ovld protocol list-organizations
   ovld protocol deliver --session-key <key> --ticket-id <ticket_id> --summary "Done"
   ovld protocol deliver --session-key <key> --ticket-id <ticket_id> --summary "Done" --artifacts-file ./artifacts.json
   ovld protocol deliver --session-key <key> --ticket-id <ticket_id> --payload-json '{"summary":"Done","artifacts":[{"type":"note","label":"Delivery","content":"..."}]}'
@@ -3301,6 +3327,10 @@ EOF
   }
   if (subcommand === 'claim-execution') {
     await protocolClaimExecution(args);
+    return;
+  }
+  if (subcommand === 'list-organizations') {
+    await protocolListOrganizations(args);
     return;
   }
   if (subcommand === 'complete-execution-launch') {

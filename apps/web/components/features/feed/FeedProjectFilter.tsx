@@ -1,5 +1,6 @@
 'use client';
 
+import { ProjectColorDot } from '@/components/features/projects/ProjectColorDot';
 import {
   Select,
   SelectContent,
@@ -33,10 +34,7 @@ export function FeedProjectFilter({ projects, value, onChange }: FeedProjectFilt
         {projects.map(project => (
           <SelectItem key={project.id} value={project.id}>
             <span className="flex items-center gap-2">
-              <span
-                className="inline-block h-2 w-2 rounded-full"
-                style={{ backgroundColor: project.color }}
-              />
+              <ProjectColorDot color={project.color} />
               {project.name}
             </span>
           </SelectItem>

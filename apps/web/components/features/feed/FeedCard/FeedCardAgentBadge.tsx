@@ -1,5 +1,4 @@
-import Image from 'next/image';
-
+import { AgentIcon } from '@/components/features/AgentIcon';
 import { getAgentTypeByIdentifier } from '@/lib/helpers/agent-types';
 
 type FeedCardAgentBadgeProps = {
@@ -15,13 +14,7 @@ export function FeedCardAgentBadge({ agentIdentifier, state }: FeedCardAgentBadg
   if (agentType) {
     return (
       <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted p-0.5 text-[10px] font-semibold text-muted-foreground">
-        <Image
-          src={agentType.icon}
-          alt={agentType.label}
-          width={10}
-          height={10}
-          className={agentType.invertDark ? 'dark:invert' : ''}
-        />
+        <AgentIcon agentType={agentType} size={10} />
         {/* {agentType.label} */}
         {isExecuting ? (
           <span className="ml-0.5 h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse" />

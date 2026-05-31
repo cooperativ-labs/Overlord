@@ -149,10 +149,11 @@ Agents can find docs here: https://www.ovld.ai/docs/for-agents
 - `get-device` / `update-device` - register the caller machine (per organization + user + fingerprint) and rename its label
 - `list-project-resources` / `add-project-resource` / `update-project-resource` - manage filesystem directories tied to a project device
 - `request-execution` / `claim-execution` / `complete-execution-launch` / `fail-execution-launch` - durable runner queue operations used by auto-advance and manual Run
+- `list-organizations` - list every organization the authenticated user (or agent token) belongs to; the runner uses this to poll all of your organizations, not just the one stored at login
 
 Devices are keyed by **(organization, user, fingerprint)** so the same physical workstation can appear once per org session.
 
-`ovld runner start` keeps a foreground runner alive for CLI-only or remote hosts. It claims compatible execution requests for the current device and launches the assigned agent/model with `ovld launch`; `ovld runner once` claims at most one request and exits.
+`ovld runner start` keeps a foreground runner alive for CLI-only or remote hosts. It claims compatible execution requests for the current device and launches the assigned agent/model with `ovld launch`; `ovld runner once` claims at most one request and exits. By default a single runner drains queued requests from **every organization you belong to**, so you do not need one runner per org. Pin it to a single org with `--organization-id <id>` or `OVERLORD_ORGANIZATION_ID`.
 
 Use `create` for future work you want to track, `prompt` for work that should start immediately, and `record-work` for work that was already completed in chat and now needs a review ticket plus feed post. Use multiple tickets when prompts represent different features or goals; use `add-objectives` or `--objectives-json '[{"objective":"Step one"},{"objective":"Step two"}]'` when prompts are sequential steps toward the same feature or goal.
 

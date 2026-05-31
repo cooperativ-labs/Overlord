@@ -1,13 +1,14 @@
 'use client';
 
-import Image from 'next/image';
 import { useState } from 'react';
 import { toast } from 'sonner';
 
+import { AgentIcon } from '@/components/features/AgentIcon';
 import { Button } from '@/components/ui/button';
 import { updateOnboardingProgressAction } from '@/lib/actions/onboarding';
 import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
 import { AGENT_TYPES, type LaunchAgentType } from '@/lib/helpers/agent-types';
+import { useCopyToClipboard } from '@/lib/hooks/use-copy-to-clipboard';
 import { cn } from '@/lib/utils';
 
 const updateOnboardingProgressActionWithRetry = withElectronActionRetry(
@@ -72,14 +73,10 @@ const AGENT_INSTALL_INFO: Record<LaunchAgentType, AgentInstallInfo> = {
 };
 
 function CopyButton({ value, label }: { value: string; label?: string }) {
-  const [copied, setCopied] = useState(false);
+  const { copied, copy } = useCopyToClipboard();
 
   async function handleCopy() {
-    try {
-      await navigator.clipboard.writeText(value);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
+    if (!(await copy(value))) {
       toast.error('Could not copy to clipboard');
     }
   }
@@ -144,13 +141,7 @@ export function AgentSetupStep({ initialPreferredAgent, onContinue }: Props) {
                 : 'border-input hover:bg-accent hover:text-accent-foreground'
             )}
           >
-            <Image
-              src={agent.icon}
-              alt={agent.label}
-              width={28}
-              height={28}
-              className={agent.invertDark ? 'dark:invert' : ''}
-            />
+            <AgentIcon agentType={agent} size={28} />
             <span className="text-xs font-medium">{agent.label}</span>
           </button>
         ))}

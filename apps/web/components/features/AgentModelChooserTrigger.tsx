@@ -1,8 +1,8 @@
 'use client';
 
 import { ChevronDown } from 'lucide-react';
-import Image from 'next/image';
 
+import { AgentIcon } from '@/components/features/AgentIcon';
 import { useAgentModels } from '@/components/features/AgentModelSelector';
 import { Button } from '@/components/ui/button';
 import type { AgentModel } from '@/lib/actions/agent-models';
@@ -50,13 +50,7 @@ export function AgentModelChooserTrigger({
       aria-haspopup="true"
       aria-label="Choose agent and model"
     >
-      <Image
-        src={agent.icon}
-        alt={`${agent.label} icon`}
-        width={14}
-        height={14}
-        className={cn('h-3.5 w-3.5', agent.invertDark ? 'dark:invert' : '')}
-      />
+      <AgentIcon agentType={agent} size={14} alt={`${agent.label} icon`} className="h-3.5 w-3.5" />
       <span className="truncate">{label}</span>
       <ChevronDown
         className={cn(

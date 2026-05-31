@@ -1,9 +1,9 @@
 'use client';
 
 import { AlertTriangle, CheckCircle, ChevronDown, FastForward, Loader2 } from 'lucide-react';
-import Image from 'next/image';
 import { useState, useTransition } from 'react';
 
+import { AgentIcon } from '@/components/features/AgentIcon';
 import { MarkdownContent } from '@/components/features/MarkdownContent';
 import {
   ObjectiveAttachmentList,
@@ -121,15 +121,11 @@ export function ObjectiveCollapsibleItem({
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <span className="flex shrink-0 items-center">
-                            <Image
-                              src={agentType.icon}
+                            <AgentIcon
+                              agentType={agentType}
+                              size={14}
                               alt={`${agentType.label} icon`}
-                              width={14}
-                              height={14}
-                              className={cn(
-                                'h-3.5 w-3.5',
-                                agentType.invertDark ? 'dark:invert' : ''
-                              )}
+                              className="h-3.5 w-3.5"
                             />
                           </span>
                         </TooltipTrigger>

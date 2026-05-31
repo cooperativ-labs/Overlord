@@ -1,9 +1,9 @@
 'use client';
 
 import { ArrowRight, Check, Copy, X } from 'lucide-react';
-import Image from 'next/image';
 import { type KeyboardEvent, useCallback, useEffect, useState } from 'react';
 
+import { AgentIcon } from '@/components/features/AgentIcon';
 import { useElectron } from '@/components/features/terminal/useElectron';
 import {
   Accordion,
@@ -38,6 +38,7 @@ import {
   LAUNCH_AGENT_VALUES,
   type LaunchAgentType
 } from '@/lib/helpers/agent-types';
+import { useCopyToClipboard } from '@/lib/hooks/use-copy-to-clipboard';
 import { buildDirectAgentCommand } from '@/lib/overlord/launch-commands';
 import {
   type AgentLaunchConfig,
@@ -45,7 +46,6 @@ import {
   mergeAgentLaunchConfig,
   type TargetAgentConfigs
 } from '@/lib/schemas/target-agent-config';
-import { cn } from '@/lib/utils';
 
 type TerminalProfileState = {
   terminalApp: string;
@@ -143,13 +143,7 @@ function AgentNameWithLogo({
 
   return (
     <span className="flex items-center gap-2">
-      <Image
-        src={agentType.icon}
-        alt={agentType.label}
-        width={16}
-        height={16}
-        className={cn(iconClassName, agentType.invertDark ? 'dark:invert' : '')}
-      />
+      <AgentIcon agentType={agentType} size={16} className={iconClassName} />
       <span>{label}</span>
     </span>
   );
@@ -198,7 +192,7 @@ export function ExecutionTargetsPage({
     {}
   );
   const [flagInput, setFlagInput] = useState('');
-  const [commandCopied, setCommandCopied] = useState(false);
+  const { copied: commandCopied, copy: copyCommand } = useCopyToClipboard();
 
   useEffect(() => {
     if (!open) return;
@@ -313,9 +307,7 @@ export function ExecutionTargetsPage({
   }
 
   async function handleCopyCommand() {
-    await navigator.clipboard.writeText(buildLocalAgentCommand(selectedLocalAgent));
-    setCommandCopied(true);
-    setTimeout(() => setCommandCopied(false), 2000);
+    await copyCommand(buildLocalAgentCommand(selectedLocalAgent));
   }
 
   return (

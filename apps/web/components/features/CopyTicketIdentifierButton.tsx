@@ -1,7 +1,8 @@
 'use client';
 
 import { Check, Copy } from 'lucide-react';
-import { useState } from 'react';
+
+import { useCopyToClipboard } from '@/lib/hooks/use-copy-to-clipboard';
 
 type Props = {
   value: string;
@@ -10,19 +11,12 @@ type Props = {
 };
 
 export function CopyTicketIdentifierButton({ value, className, ariaLabel }: Props) {
-  const [copied, setCopied] = useState(false);
+  const { copied, copy } = useCopyToClipboard();
 
   async function handleClick(e: React.MouseEvent) {
     e.preventDefault();
     e.stopPropagation();
-
-    try {
-      await navigator.clipboard.writeText(value);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // ignore clipboard errors
-    }
+    await copy(value);
   }
 
   return (

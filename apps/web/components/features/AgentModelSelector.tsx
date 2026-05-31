@@ -1,9 +1,9 @@
 'use client';
 
 import { Bot, Check, Info } from 'lucide-react';
-import Image from 'next/image';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { AgentIcon } from '@/components/features/AgentIcon';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   getAllAgentConfigsAction,
@@ -355,13 +355,7 @@ export function AgentModelSelector({
               )}
             >
               <span className="flex h-4 w-4 items-center justify-center">
-                <Image
-                  src={agent.icon}
-                  alt={agent.label}
-                  width={12}
-                  height={12}
-                  className={cn(agent.invertDark ? 'dark:invert' : '')}
-                />
+                <AgentIcon agentType={agent} size={12} />
               </span>
               <span className="truncate">{agent.label}</span>
               {isSelected && <Check className="ml-auto h-3 w-3 shrink-0" />}

@@ -452,6 +452,8 @@ them directly.
 \`\`\`bash
 ovld protocol request-execution \\
   --ticket-id <ticket_id> --agent codex --requested-from manual_run
+# List the organizations you belong to (the runner polls all of them by default)
+ovld protocol list-organizations
 ovld protocol claim-execution \\
   --device-fingerprint "$OVERLORD_DEVICE_FINGERPRINT"
 ovld protocol complete-execution-launch \\

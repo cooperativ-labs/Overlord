@@ -1,3 +1,4 @@
+import { ProjectColorDot } from '@/components/features/projects/ProjectColorDot';
 import type { FeedPost } from '@/lib/actions/feed';
 
 import { FeedTicketLink } from '../FeedTicketLink';
@@ -27,10 +28,7 @@ export function FeedCardMetaLine({
       <span>{dateStr}</span>
       <span className="text-fg3/40">&middot;</span>
       <span className="inline-flex items-center gap-1">
-        <span
-          className="inline-block h-2 w-2 rounded-full"
-          style={{ backgroundColor: post.project_color }}
-        />
+        <ProjectColorDot color={post.project_color} />
         {post.project_name}
       </span>
       <span className="text-fg3/40">&middot;</span>

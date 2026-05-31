@@ -12,32 +12,6 @@ import {
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator
-} from '@/components/ui/breadcrumb';
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '@/components/ui/select';
-import {
-  Sidebar,
-  SidebarContent,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarProvider
-} from '@/components/ui/sidebar';
 import type { ProjectSshAuthMethod } from '@/lib/actions/project-types';
 import type { Database } from '@/types/database.types';
 
@@ -49,15 +23,11 @@ import { IntegrationsPage } from './project-settings/IntegrationsPage';
 import { ResourcesPage } from './project-settings/ResourcesPage';
 import { TagsPage } from './project-settings/TagsPage';
 import { WorkflowPage } from './project-settings/WorkflowPage';
+import { SettingsDialogShell, type SettingsNavItem } from './SettingsDialogShell';
 
 type TicketStatusType = Database['public']['Enums']['ticket_status_type'];
 
-type NavItem = {
-  name: string;
-  icon: React.ElementType;
-};
-
-const navItems: NavItem[] = [
+const navItems: SettingsNavItem[] = [
   { name: 'General', icon: Settings },
   { name: 'Resources', icon: FolderTree },
   { name: 'Workflow', icon: GitBranch },
@@ -134,124 +104,65 @@ export function ProjectSettingsModal({
   }, [open, initialNav]);
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="h-dvh max-h-dvh w-full max-w-full overflow-hidden p-0 md:h-auto md:max-h-[680px] md:max-w-[900px] lg:max-w-[1000px]">
-        <DialogTitle className="sr-only">Project settings</DialogTitle>
-        <DialogDescription className="sr-only">
-          Customize your project settings here.
-        </DialogDescription>
-        <SidebarProvider className="items-start">
-          <Sidebar collapsible="none" className="hidden md:flex md:w-52">
-            <SidebarContent>
-              <SidebarGroup>
-                <SidebarGroupContent>
-                  <SidebarMenu>
-                    {navItems.map(item => (
-                      <SidebarMenuItem key={item.name}>
-                        <SidebarMenuButton
-                          isActive={item.name === activeNav}
-                          onClick={() => setActiveNav(item.name)}
-                        >
-                          <item.icon />
-                          <span>{item.name}</span>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    ))}
-                  </SidebarMenu>
-                </SidebarGroupContent>
-              </SidebarGroup>
-            </SidebarContent>
-          </Sidebar>
-          <main className="flex h-dvh flex-1 flex-col overflow-hidden md:max-h-[680px]">
-            <header className="flex shrink-0 items-center gap-2 border-b px-4 py-3">
-              {/* Mobile: page selector dropdown */}
-              <div className="flex w-full items-center md:hidden">
-                <Select value={activeNav} onValueChange={setActiveNav}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {navItems.map(item => (
-                      <SelectItem key={item.name} value={item.name}>
-                        <div className="flex items-center gap-2">
-                          <item.icon className="h-4 w-4" />
-                          <span>{item.name}</span>
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              {/* Desktop: breadcrumb */}
-              <div className="hidden items-center gap-2 md:flex">
-                <Breadcrumb>
-                  <BreadcrumbList>
-                    <BreadcrumbItem>
-                      <BreadcrumbLink href="#">Project settings</BreadcrumbLink>
-                    </BreadcrumbItem>
-                    <BreadcrumbSeparator />
-                    <BreadcrumbItem>
-                      <BreadcrumbPage>{activeNav}</BreadcrumbPage>
-                    </BreadcrumbItem>
-                  </BreadcrumbList>
-                </Breadcrumb>
-              </div>
-            </header>
-            <div className="flex flex-1 flex-col gap-6 overflow-y-auto p-6">
-              {activeNav === 'General' && (
-                <GeneralPage
-                  open={open}
-                  projectId={projectId}
-                  organizationId={organizationId}
-                  initialName={initialName}
-                  initialColor={initialColor}
-                />
-              )}
-              {activeNav === 'Resources' && (
-                <ResourcesPage
-                  open={open}
-                  projectId={projectId}
-                  initialSshHost={initialSshHost}
-                  initialSshPort={initialSshPort}
-                  initialSshUser={initialSshUser}
-                  initialSshAuthMethod={initialSshAuthMethod}
-                  initialSshPrivateKeyPath={initialSshPrivateKeyPath}
-                  initialRemoteWorkingDirectory={initialRemoteWorkingDirectory}
-                  sshFeatureEnabled={sshFeatureEnabled}
-                />
-              )}
-              {activeNav === 'Workflow' && (
-                <WorkflowPage
-                  projectId={projectId}
-                  organizationId={organizationId}
-                  initialStatuses={initialStatuses}
-                />
-              )}
+    <SettingsDialogShell
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Project settings"
+      description="Customize your project settings here."
+      navGroups={[{ items: navItems }]}
+      activeNav={activeNav}
+      onActiveNavChange={setActiveNav}
+    >
+      {activeNav === 'General' && (
+        <GeneralPage
+          open={open}
+          projectId={projectId}
+          organizationId={organizationId}
+          initialName={initialName}
+          initialColor={initialColor}
+        />
+      )}
+      {activeNav === 'Resources' && (
+        <ResourcesPage
+          open={open}
+          projectId={projectId}
+          initialSshHost={initialSshHost}
+          initialSshPort={initialSshPort}
+          initialSshUser={initialSshUser}
+          initialSshAuthMethod={initialSshAuthMethod}
+          initialSshPrivateKeyPath={initialSshPrivateKeyPath}
+          initialRemoteWorkingDirectory={initialRemoteWorkingDirectory}
+          sshFeatureEnabled={sshFeatureEnabled}
+        />
+      )}
+      {activeNav === 'Workflow' && (
+        <WorkflowPage
+          projectId={projectId}
+          organizationId={organizationId}
+          initialStatuses={initialStatuses}
+        />
+      )}
 
-              {activeNav === 'Tags' && <TagsPage open={open} projectId={projectId} />}
-              {activeNav === 'Feed' && <FeedPage open={open} projectId={projectId} />}
-              {activeNav === 'Integrations' && (
-                <IntegrationsPage
-                  projectId={projectId}
-                  organizationId={organizationId}
-                  initialEverhourProjectId={initialEverhourProjectId}
-                  hasEverhourApiKey={hasEverhourApiKey}
-                  slackEnabled={slackEnabled}
-                  open={open}
-                />
-              )}
-              {activeNav === 'Checkpoints' && <CheckpointsPage open={open} projectId={projectId} />}
-              {activeNav === 'Danger zone' && (
-                <DangerZonePage
-                  projectId={projectId}
-                  projectName={initialName}
-                  onOpenChange={onOpenChange}
-                />
-              )}
-            </div>
-          </main>
-        </SidebarProvider>
-      </DialogContent>
-    </Dialog>
+      {activeNav === 'Tags' && <TagsPage open={open} projectId={projectId} />}
+      {activeNav === 'Feed' && <FeedPage open={open} projectId={projectId} />}
+      {activeNav === 'Integrations' && (
+        <IntegrationsPage
+          projectId={projectId}
+          organizationId={organizationId}
+          initialEverhourProjectId={initialEverhourProjectId}
+          hasEverhourApiKey={hasEverhourApiKey}
+          slackEnabled={slackEnabled}
+          open={open}
+        />
+      )}
+      {activeNav === 'Checkpoints' && <CheckpointsPage open={open} projectId={projectId} />}
+      {activeNav === 'Danger zone' && (
+        <DangerZonePage
+          projectId={projectId}
+          projectName={initialName}
+          onOpenChange={onOpenChange}
+        />
+      )}
+    </SettingsDialogShell>
   );
 }
