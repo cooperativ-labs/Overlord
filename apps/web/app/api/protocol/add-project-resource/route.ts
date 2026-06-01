@@ -4,7 +4,11 @@ import { internalErrorResponse, parseProtocolBody } from '@/app/api/protocol/_li
 import { ensureProjectExecutionTarget } from '@/lib/overlord/execution-targets';
 import { upsertDeviceFromProtocol } from '@/lib/overlord/upsert-device';
 import { addProjectResourceSchema } from '@/lib/overlord/validation';
-import { targetHasProjectResourceDirectory } from '@/lib/resource-directories/primary-resource';
+import {
+  assertCanManagePrimary,
+  clearTargetPrimary,
+  shouldAutoPrimary
+} from '@/lib/resource-directories/primary-resource';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
 export async function POST(request: Request) {
@@ -61,20 +65,25 @@ export async function POST(request: Request) {
       executionTargetId
     });
 
+    try {
+      await assertCanManagePrimary(supabase, { userId, projectId, executionTargetId });
+    } catch (authError) {
+      return NextResponse.json(
+        { error: authError instanceof Error ? authError.message : 'Not authorized.' },
+        { status: 403 }
+      );
+    }
+
     const shouldSetPrimary =
       isPrimary ??
-      !(await targetHasProjectResourceDirectory(supabase, {
+      (await shouldAutoPrimary(supabase, {
         projectId,
         executionTargetId
       }));
 
     // Clear existing primary for this project on this execution target.
     if (shouldSetPrimary) {
-      await (supabase as any)
-        .from('project_resource_directories')
-        .update({ is_primary: false })
-        .eq('project_id', projectId)
-        .eq('execution_target_id', executionTargetId);
+      await clearTargetPrimary(supabase, projectId, executionTargetId);
     }
 
     const { data: inserted, error } = await (supabase as any)

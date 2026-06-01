@@ -40,10 +40,9 @@ export function createClient() {
 
   return createBrowserClient(getSupabaseUrl(), getSupabasePublishableKey(), {
     cookieOptions: getSupabaseCookieOptions(),
-    auth: isElectron
-      ? {
-          autoRefreshToken: false
-        }
-      : undefined
+    auth: {
+      ...(isElectron ? { autoRefreshToken: false } : {}),
+      experimental: { passkey: true }
+    }
   });
 }

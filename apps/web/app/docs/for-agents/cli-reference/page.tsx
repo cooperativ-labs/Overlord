@@ -449,7 +449,13 @@ These commands are for local or remote runner processes that claim queued execut
 requests from manual Run and auto-advance. Normal agent sessions usually do not call
 them directly.
 
+If a user reports that "\`ovld runner\` is randomly executing", the usual cause is an
+existing queued or launching execution request that the runner later claimed. Start by
+checking runner-visible queue state, then clear the specific objective when needed.
+
 \`\`\`bash
+ovld runner status
+ovld runner clear 8974e557-bec4-4984-b12c-be46bd63207c
 ovld protocol request-execution \\
   --ticket-id <ticket_id> --agent codex --requested-from manual_run
 # List the organizations you belong to (the runner polls all of them by default)
@@ -459,7 +465,7 @@ ovld protocol claim-execution \\
 ovld protocol list-execution-requests \\
   --device-fingerprint "$OVERLORD_DEVICE_FINGERPRINT"
 ovld protocol clear-execution-requests \\
-  --objective-id <objective-id>
+  --objective-id 8974e557-bec4-4984-b12c-be46bd63207c
 ovld protocol clear-execution-requests --clear-all
 ovld protocol complete-execution-launch \\
   --request-id <execution-request-id> \\

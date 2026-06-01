@@ -11,6 +11,7 @@ const USER_ID = '11111111-1111-4111-8111-111111111111';
 const ORG_ID = 1;
 const EXECUTION_TARGET_ID = 'target-aaa';
 const REQUEST_ID = 'req-aaa';
+const OBJECTIVE_ID = 'obj-aaa';
 const PROJECT_ID = 'aaaaaaaa-0000-4000-8000-000000000001';
 
 let POST: (request: Request) => Promise<Response>;
@@ -40,12 +41,23 @@ function buildClaimSupabase({
   resourceDirectory = null as { directory_path: string } | null,
   targetResourceRow = null as {
     directory_path: string;
-    user_id: string;
     execution_target_id: string;
+    project_id?: string;
   } | null,
   targetAgentFlags = undefined as Record<string, unknown> | null | undefined,
-  targetAgentFlagsError = null as { message: string } | null
+  targetAgentFlagsError = null as { message: string } | null,
+  objectiveStates = { [OBJECTIVE_ID]: 'draft' } as Record<string, string>,
+  memberOrgIds = [ORG_ID] as number[],
+  targetOrgIds = [ORG_ID] as number[]
 } = {}) {
+  const ticketEventsInsert = jest.fn(async () => ({ error: null }));
+  const staleFailUpdate = {
+    update: jest.fn(() => staleFailUpdate),
+    eq: jest.fn(() => staleFailUpdate),
+    in: jest.fn(() => staleFailUpdate),
+    select: jest.fn(async () => ({ data: [{ id: REQUEST_ID }], error: null }))
+  };
+
   const claimUpdate = {
     update: jest.fn(() => claimUpdate),
     eq: jest.fn(() => claimUpdate),
@@ -62,13 +74,28 @@ function buildClaimSupabase({
     limit: jest.fn(async () => ({ data: candidates, error: null }))
   };
 
+  const objectivesQuery = {
+    select: jest.fn(() => objectivesQuery),
+    in: jest.fn(async (_column: string, ids: string[]) => ({
+      data: ids.map(id => ({ id, state: objectiveStates[id] ?? 'draft' })),
+      error: null
+    }))
+  };
+
   let executionRequestsCalls = 0;
 
   return {
     from: jest.fn((table: string) => {
       if (table === 'execution_requests') {
         executionRequestsCalls += 1;
-        return executionRequestsCalls === 1 ? queueQuery : claimUpdate;
+        if (executionRequestsCalls === 1) return queueQuery;
+        if (executionRequestsCalls === 2 && objectiveStates[OBJECTIVE_ID] === 'complete') {
+          return staleFailUpdate;
+        }
+        return claimUpdate;
+      }
+      if (table === 'objectives') {
+        return objectivesQuery;
       }
       if (table === 'project_resource_directories') {
         const chain = {
@@ -109,18 +136,44 @@ function buildClaimSupabase({
         return chain;
       }
       if (table === 'ticket_events') {
-        return { insert: jest.fn(async () => ({ error: null })) };
+        return { insert: ticketEventsInsert };
+      }
+      if (table === 'members') {
+        // Org-agnostic claim: orgs the user is a member of.
+        const chain = {
+          select: jest.fn(() => chain),
+          eq: jest.fn(async () => ({
+            data: memberOrgIds.map(id => ({ organization_id: id })),
+            error: null
+          }))
+        };
+        return chain;
+      }
+      if (table === 'organization_execution_targets') {
+        // Orgs the claiming target is shared with.
+        const chain = {
+          select: jest.fn(() => chain),
+          eq: jest.fn(async () => ({
+            data: targetOrgIds.map(id => ({ organization_id: id })),
+            error: null
+          }))
+        };
+        return chain;
       }
       throw new Error(`unexpected table ${table}`);
     }),
     queueQuery,
-    claimUpdate
+    claimUpdate,
+    staleFailUpdate,
+    objectivesQuery,
+    ticketEventsInsert
   };
 }
 
 function baseCandidate(overrides: Partial<Candidate> = {}): Candidate {
   return {
     id: REQUEST_ID,
+    objective_id: OBJECTIVE_ID,
     organization_id: ORG_ID,
     ticket_id: 'ticket-uuid',
     project_id: PROJECT_ID,
@@ -378,6 +431,31 @@ describe('POST /api/protocol/claim-execution', () => {
     await expect(response.json()).resolves.toEqual({ request: null });
   });
 
+  it('fails active requests when the objective is no longer launchable', async () => {
+    const supabase = buildClaimSupabase({
+      candidates: [
+        baseCandidate({
+          status: 'launching',
+          lease_expires_at: new Date(Date.now() - 60_000).toISOString(),
+          launch_params: { workingDirectory: '/repo' }
+        })
+      ],
+      objectiveStates: { [OBJECTIVE_ID]: 'complete' }
+    });
+    const { createServiceRoleClient } = jest.requireMock('@/supabase/utils/service-role');
+    createServiceRoleClient.mockReturnValue(supabase);
+
+    const response = await POST(new Request('http://localhost', { method: 'POST' }));
+    await expect(response.json()).resolves.toEqual({ request: null });
+    expect(supabase.staleFailUpdate.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'failed',
+        last_error: expect.stringContaining('no longer launchable')
+      })
+    );
+    expect(supabase.claimUpdate.update).not.toHaveBeenCalled();
+  });
+
   it('does not reclaim a claimed request before lease expiry', async () => {
     const futureLease = new Date(Date.now() + 60_000).toISOString();
     const supabase = buildClaimSupabase({
@@ -395,5 +473,82 @@ describe('POST /api/protocol/claim-execution', () => {
 
     const response = await POST(new Request('http://localhost', { method: 'POST' }));
     await expect(response.json()).resolves.toEqual({ request: null });
+  });
+
+  it('returns null without claiming when no member org shares the claiming target', async () => {
+    const supabase = buildClaimSupabase({
+      candidates: [baseCandidate({ launch_params: { workingDirectory: '/repo' } })],
+      // User is a member of org 1, but the target is only shared with org 2.
+      memberOrgIds: [ORG_ID],
+      targetOrgIds: [2]
+    });
+    const { createServiceRoleClient } = jest.requireMock('@/supabase/utils/service-role');
+    createServiceRoleClient.mockReturnValue(supabase);
+
+    const response = await POST(new Request('http://localhost', { method: 'POST' }));
+    await expect(response.json()).resolves.toEqual({ request: null });
+    // No candidate query was even run.
+    expect(supabase.queueQuery.limit).not.toHaveBeenCalled();
+  });
+
+  const MISSING_PRIMARY_ERROR =
+    'No primary resource directory is set for this project on this execution target.';
+
+  it('rejects a target_resource_id whose project does not match the request (Finding #3 defense)', async () => {
+    const supabase = buildClaimSupabase({
+      // Resource lives on the claiming target but belongs to a different project,
+      // so resolveWorkingDirectory must not return its path; the request then
+      // hits the missing-primary backstop instead of launching a foreign repo.
+      candidates: [baseCandidate({ launch_params: {}, target_resource_id: 'resource-foreign' })],
+      targetResourceRow: {
+        directory_path: '/foreign/repo',
+        execution_target_id: EXECUTION_TARGET_ID,
+        project_id: 'some-other-project'
+      }
+    });
+    const { createServiceRoleClient } = jest.requireMock('@/supabase/utils/service-role');
+    createServiceRoleClient.mockReturnValue(supabase);
+
+    const response = await POST(new Request('http://localhost', { method: 'POST' }));
+    await expect(response.json()).resolves.toEqual({ request: null });
+    expect(supabase.ticketEventsInsert).toHaveBeenCalledWith(
+      expect.objectContaining({ payload: expect.objectContaining({ missing_primary: true }) })
+    );
+  });
+
+  it('records a missing-primary backstop event and skips a project request with no primary', async () => {
+    const supabase = buildClaimSupabase({
+      // Project request, no explicit workingDirectory and no resolvable primary.
+      candidates: [baseCandidate({ launch_params: {}, last_error: null })],
+      resourceDirectory: null
+    });
+    const { createServiceRoleClient } = jest.requireMock('@/supabase/utils/service-role');
+    createServiceRoleClient.mockReturnValue(supabase);
+
+    const response = await POST(new Request('http://localhost', { method: 'POST' }));
+    await expect(response.json()).resolves.toEqual({ request: null });
+    expect(supabase.ticketEventsInsert).toHaveBeenCalledWith(
+      expect.objectContaining({ payload: expect.objectContaining({ missing_primary: true }) })
+    );
+    // Finding #5: the condition is stamped on the request so a re-poll does not
+    // re-emit. The only execution_requests.update on this path is that stamp —
+    // no claim happened.
+    expect(supabase.claimUpdate.update).toHaveBeenCalledWith({ last_error: MISSING_PRIMARY_ERROR });
+  });
+
+  it('does not re-emit the missing-primary event when already flagged (Finding #5)', async () => {
+    const supabase = buildClaimSupabase({
+      // Same condition, but the request already carries the missing-primary error
+      // from a prior poll, so the event must not be inserted again.
+      candidates: [baseCandidate({ launch_params: {}, last_error: MISSING_PRIMARY_ERROR })],
+      resourceDirectory: null
+    });
+    const { createServiceRoleClient } = jest.requireMock('@/supabase/utils/service-role');
+    createServiceRoleClient.mockReturnValue(supabase);
+
+    const response = await POST(new Request('http://localhost', { method: 'POST' }));
+    await expect(response.json()).resolves.toEqual({ request: null });
+    expect(supabase.ticketEventsInsert).not.toHaveBeenCalled();
+    expect(supabase.claimUpdate.update).not.toHaveBeenCalled();
   });
 });

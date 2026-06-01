@@ -22,6 +22,8 @@
  *   node scripts/electron-build.mjs --platform mac --mac-arch arm64
  *                                                     → build Apple Silicon macOS artifacts
  *   node scripts/electron-build.mjs --platform linux     → build Linux artifacts
+ *   node scripts/electron-build.mjs --platform linux --linux-arch amd64
+ *                                                     → build Linux amd64 artifacts
  *   node scripts/electron-build.mjs --platform linux --linux-arch arm64
  *                                                     → build Linux ARM64 artifacts
  *   node scripts/electron-build.mjs --dir                → build + unpackaged app dir only
@@ -37,6 +39,7 @@ import { pickRuntimeEnv } from './electron-runtime-allowlist.mjs';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
 const isDirMode = process.argv.includes('--dir');
+const electronBuilderTargetFlag = getElectronBuilderTargetFlag();
 
 function readFlagValue(flagName) {
   const args = process.argv.slice(2);
@@ -88,11 +91,12 @@ function getMacArchFlag(requestedMacArch) {
 function getLinuxArchFlag(requestedLinuxArch) {
   if (!requestedLinuxArch) return '';
 
+  if (requestedLinuxArch === 'amd64') return ' --x64';
   if (requestedLinuxArch === 'x64') return ' --x64';
   if (requestedLinuxArch === 'arm64') return ' --arm64';
 
   console.error(`\x1b[31m[build] Unsupported --linux-arch value: ${requestedLinuxArch}\x1b[0m`);
-  console.error('       Expected one of: x64, arm64');
+  console.error('       Expected one of: amd64, x64, arm64');
   process.exit(1);
 }
 
@@ -133,6 +137,36 @@ function run(cmd, env) {
     console.error(`\x1b[31m[build] Command failed: ${cmd}\x1b[0m`);
     process.exit(result.status ?? 1);
   }
+}
+
+function commandExists(commandName) {
+  const result = spawnSync('sh', ['-lc', `command -v ${commandName}`], {
+    stdio: 'ignore'
+  });
+  return result.status === 0;
+}
+
+function ensureLinuxPackagingTools() {
+  const missing = [
+    ['ar', 'binutils'],
+    ['gzip', 'gzip']
+  ].filter(([commandName]) => !commandExists(commandName));
+
+  if (missing.length === 0) return;
+
+  console.error('\x1b[31m[build] Missing Linux packaging tool(s):\x1b[0m');
+  for (const [commandName, packageName] of missing) {
+    console.error(`       ${commandName} (install package: ${packageName})`);
+  }
+  console.error('       Debian package generation requires these tools.');
+  process.exit(1);
+}
+
+function isLinuxPackagingRequested() {
+  const requestedPlatform = readFlagValue('--platform');
+  if (requestedPlatform === 'linux') return true;
+  if (requestedPlatform) return false;
+  return process.platform === 'linux';
 }
 
 // ---------------------------------------------------------------------------
@@ -188,8 +222,12 @@ run(
 // Step 6 — electron-builder
 // ---------------------------------------------------------------------------
 
+if (!isDirMode && isLinuxPackagingRequested()) {
+  ensureLinuxPackagingTools();
+}
+
 run(
-  `yarn electron-builder --config apps/desktop/electron-builder.yml${isDirMode ? ' --dir' : ''}${getElectronBuilderTargetFlag()}`
+  `yarn electron-builder --config apps/desktop/electron-builder.yml${isDirMode ? ' --dir' : ''}${electronBuilderTargetFlag}`
 );
 
 // ---------------------------------------------------------------------------

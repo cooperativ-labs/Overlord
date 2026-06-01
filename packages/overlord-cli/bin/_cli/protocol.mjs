@@ -85,6 +85,18 @@ async function resolveProtocolMetadata(flags = {}, base = {}) {
     metadata.model = modelIdentifier;
   }
 
+  // Thread the originating execution request id (set by the runner via
+  // OVERLORD_EXECUTION_REQUEST_ID, or an explicit flag) into attach metadata so
+  // the server marks that exact request `launched` instead of falling back to
+  // matching by objective.
+  const executionRequestId =
+    (typeof flags['execution-request-id'] === 'string'
+      ? flags['execution-request-id'].trim()
+      : '') || process.env.OVERLORD_EXECUTION_REQUEST_ID?.trim();
+  if (executionRequestId) {
+    metadata.executionRequestId = executionRequestId;
+  }
+
   const snapshot = await resolveSnapshotContext(flags);
   if (snapshot) {
     metadata.snapshot = snapshot;

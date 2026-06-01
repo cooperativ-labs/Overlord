@@ -1,16 +1,26 @@
-import { execFileSync } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { promisify } from 'node:util';
 
 import { listProjectFiles } from '@/lib/filesystem/project-file-tree';
 
-function runGit(cwd: string, args: string[]): string {
-  return execFileSync('git', args, {
+const execFileAsync = promisify(execFile);
+
+async function runGit(cwd: string, args: string[]): Promise<string> {
+  const { stdout } = await execFileAsync('git', args, {
     cwd,
     encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'pipe']
+    maxBuffer: 10 * 1024 * 1024
   });
+  return stdout;
+}
+
+async function initGitRepository(cwd: string): Promise<void> {
+  await runGit(cwd, ['init', '--initial-branch=main']);
+  await runGit(cwd, ['config', 'user.email', 'project-file-tree@test.local']);
+  await runGit(cwd, ['config', 'user.name', 'Project File Tree Test']);
 }
 
 async function writeFile(filePath: string, contents: string): Promise<void> {
@@ -30,7 +40,7 @@ describe('project file tree helpers', () => {
 
   it('includes tracked hidden-directory files and deep tracked files in git repositories', async () => {
     tempDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'ovld-project-tree-'));
-    runGit(tempDirectory, ['init']);
+    await initGitRepository(tempDirectory);
 
     const deepSegments = Array.from({ length: 9 }, (_, index) => `level-${index + 1}`);
     const deepFilePath = path.join(tempDirectory, ...deepSegments, 'deep-file.ts');
@@ -41,7 +51,7 @@ describe('project file tree helpers', () => {
     await writeFile(path.join(tempDirectory, '.gitignore'), 'ignored.log\n');
     await writeFile(path.join(tempDirectory, 'ignored.log'), 'ignore me\n');
 
-    runGit(tempDirectory, ['add', '.github/workflows/ci.yml', deepFilePath, 'src/index.ts']);
+    await runGit(tempDirectory, ['add', '.github/workflows/ci.yml', deepFilePath, 'src/index.ts']);
 
     const result = await listProjectFiles(tempDirectory);
 
@@ -54,13 +64,13 @@ describe('project file tree helpers', () => {
 
   it('returns paths relative to the selected working directory inside a git repository', async () => {
     tempDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'ovld-project-tree-'));
-    runGit(tempDirectory, ['init']);
+    await initGitRepository(tempDirectory);
 
     const packageRoot = path.join(tempDirectory, 'packages/app');
     await writeFile(path.join(packageRoot, 'src/index.ts'), 'export const app = true;\n');
     await writeFile(path.join(tempDirectory, 'README.md'), '# repo\n');
 
-    runGit(tempDirectory, ['add', 'packages/app/src/index.ts', 'README.md']);
+    await runGit(tempDirectory, ['add', 'packages/app/src/index.ts', 'README.md']);
 
     const result = await listProjectFiles(packageRoot);
 

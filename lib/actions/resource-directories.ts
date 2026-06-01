@@ -8,7 +8,11 @@ import {
   upsertExecutionTargetFromProtocol
 } from '@/lib/overlord/execution-targets';
 import { defaultDirectoryLabel } from '@/lib/resource-directories/labels';
-import { targetHasProjectResourceDirectory } from '@/lib/resource-directories/primary-resource';
+import {
+  assertCanManagePrimary,
+  clearTargetPrimary,
+  shouldAutoPrimary
+} from '@/lib/resource-directories/primary-resource';
 import { createClientForRequest } from '@/supabase/utils/server';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 import type { Database } from '@/types/database.types';
@@ -252,10 +256,12 @@ export async function getProjectResourceDirectoriesAction({
     }
   }
 
+  // Target-scoped listing: show every directory on the project's targets (RLS
+  // limits this to org members) so the shared primary is visible regardless of
+  // who added it.
   const { data, error } = await supabase
     .from('project_resource_directories')
     .select('*, execution_targets(host, organization_execution_targets(label, organization_id))')
-    .eq('user_id', user.id)
     .eq('project_id', projectId)
     .order('is_primary', { ascending: false })
     .order('created_at', { ascending: true });
@@ -328,19 +334,21 @@ export async function addProjectResourceDirectoryAction(input: {
     executionTargetId: resolvedExecutionTargetId
   });
 
+  await assertCanManagePrimary(serviceSupabase, {
+    userId: user.id,
+    projectId: input.projectId,
+    executionTargetId: resolvedExecutionTargetId
+  });
+
   const shouldSetPrimary =
     input.isPrimary ??
-    !(await targetHasProjectResourceDirectory(serviceSupabase, {
+    (await shouldAutoPrimary(serviceSupabase, {
       projectId: input.projectId,
       executionTargetId: resolvedExecutionTargetId
     }));
 
   if (shouldSetPrimary) {
-    await serviceSupabase
-      .from('project_resource_directories')
-      .update({ is_primary: false })
-      .eq('project_id', input.projectId)
-      .eq('execution_target_id', resolvedExecutionTargetId);
+    await clearTargetPrimary(serviceSupabase, input.projectId, resolvedExecutionTargetId);
   }
 
   let label = input.label?.trim() || null;
@@ -379,6 +387,7 @@ export async function removeProjectResourceDirectoryAction(input: {
   projectId: string;
 }): Promise<void> {
   const supabase = await createClientForRequest();
+  const serviceSupabase = createServiceRoleClient();
   const {
     data: { user }
   } = await supabase.auth.getUser();
@@ -386,15 +395,50 @@ export async function removeProjectResourceDirectoryAction(input: {
     throw new Error('You must be signed in to remove a resource directory.');
   }
 
-  const { error } = await supabase
+  const { data: existing } = await serviceSupabase
+    .from('project_resource_directories')
+    .select('execution_target_id, is_primary')
+    .eq('id', input.directoryId)
+    .eq('project_id', input.projectId)
+    .maybeSingle();
+
+  if (!existing?.execution_target_id) {
+    throw new Error('Resource directory not found.');
+  }
+
+  await assertCanManagePrimary(serviceSupabase, {
+    userId: user.id,
+    projectId: input.projectId,
+    executionTargetId: existing.execution_target_id
+  });
+
+  const { error } = await serviceSupabase
     .from('project_resource_directories')
     .delete()
-    .eq('id', input.directoryId)
-    .eq('user_id', user.id);
+    .eq('id', input.directoryId);
 
   if (error) {
     console.error('removeProjectResourceDirectoryAction', error);
     throw new Error(error.message ?? 'Failed to remove resource directory.');
+  }
+
+  // If we removed the primary, promote the oldest remaining directory for this
+  // (project, target) so the target is never left with directories but no primary.
+  if (existing.is_primary) {
+    const { data: next } = await serviceSupabase
+      .from('project_resource_directories')
+      .select('id')
+      .eq('project_id', input.projectId)
+      .eq('execution_target_id', existing.execution_target_id)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    if (next?.id) {
+      await serviceSupabase
+        .from('project_resource_directories')
+        .update({ is_primary: true })
+        .eq('id', next.id);
+    }
   }
 
   revalidateProjectPaths(input.projectId);
@@ -405,6 +449,7 @@ export async function setResourceDirectoryPrimaryAction(input: {
   projectId: string;
 }): Promise<void> {
   const supabase = await createClientForRequest();
+  const serviceSupabase = createServiceRoleClient();
   const {
     data: { user }
   } = await supabase.auth.getUser();
@@ -412,28 +457,29 @@ export async function setResourceDirectoryPrimaryAction(input: {
     throw new Error('You must be signed in to update a resource directory.');
   }
 
-  const { data: existing } = await supabase
+  const { data: existing } = await serviceSupabase
     .from('project_resource_directories')
     .select('execution_target_id')
     .eq('id', input.directoryId)
-    .eq('user_id', user.id)
+    .eq('project_id', input.projectId)
     .maybeSingle();
 
   if (!existing?.execution_target_id) {
     throw new Error('Resource directory not found.');
   }
 
-  await supabase
-    .from('project_resource_directories')
-    .update({ is_primary: false })
-    .eq('project_id', input.projectId)
-    .eq('execution_target_id', existing.execution_target_id);
+  await assertCanManagePrimary(serviceSupabase, {
+    userId: user.id,
+    projectId: input.projectId,
+    executionTargetId: existing.execution_target_id
+  });
 
-  const { error } = await supabase
+  await clearTargetPrimary(serviceSupabase, input.projectId, existing.execution_target_id);
+
+  const { error } = await serviceSupabase
     .from('project_resource_directories')
     .update({ is_primary: true })
-    .eq('id', input.directoryId)
-    .eq('user_id', user.id);
+    .eq('id', input.directoryId);
 
   if (error) {
     console.error('setResourceDirectoryPrimaryAction', error);
@@ -443,12 +489,83 @@ export async function setResourceDirectoryPrimaryAction(input: {
   revalidateProjectPaths(input.projectId);
 }
 
+/**
+ * Transfer or donate target ownership. Setting `ownerUserId` to a user makes the
+ * target personal to that user (in this org); setting it to `null` donates the
+ * target to the organization (any project editor may then manage directories).
+ * Gated to an org ADMIN or the target's current owner.
+ */
+export async function setExecutionTargetOwnershipAction(input: {
+  targetId: string;
+  organizationId: number;
+  ownerUserId: string | null;
+}): Promise<void> {
+  const supabase = await createClientForRequest();
+  const serviceSupabase = createServiceRoleClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+  if (!user) {
+    throw new Error('You must be signed in to change target ownership.');
+  }
+
+  const { data: existing } = await serviceSupabase
+    .from('organization_execution_targets')
+    .select('owner_user_id')
+    .eq('organization_id', input.organizationId)
+    .eq('execution_target_id', input.targetId)
+    .maybeSingle();
+
+  if (!existing) {
+    throw new Error('Execution target is not associated with this organization.');
+  }
+
+  const { data: adminRow } = await serviceSupabase
+    .from('members')
+    .select('role')
+    .eq('organization_id', input.organizationId)
+    .eq('user_id', user.id)
+    .eq('role', 'ADMIN')
+    .limit(1);
+  const isAdmin = (adminRow ?? []).length > 0;
+  const isCurrentOwner = existing.owner_user_id === user.id;
+
+  if (!isAdmin && !isCurrentOwner) {
+    throw new Error('Only an organization admin or the current owner may change target ownership.');
+  }
+
+  const { error } = await serviceSupabase
+    .from('organization_execution_targets')
+    .update({ owner_user_id: input.ownerUserId })
+    .eq('organization_id', input.organizationId)
+    .eq('execution_target_id', input.targetId);
+
+  if (error) {
+    console.error('setExecutionTargetOwnershipAction', error);
+    throw new Error(error.message ?? 'Failed to change target ownership.');
+  }
+}
+
+/** Claim personal ownership of a target on behalf of the signed-in user. */
+export async function claimExecutionTargetAction(input: {
+  targetId: string;
+  organizationId: number;
+}): Promise<void> {
+  const supabase = await createClientForRequest();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error('You must be signed in to claim a target.');
+  await setExecutionTargetOwnershipAction({ ...input, ownerUserId: user.id });
+}
+
 export async function updateResourceDirectoryLabelAction(input: {
   directoryId: string;
   projectId: string;
   label: string | null;
 }): Promise<void> {
   const supabase = await createClientForRequest();
+  const serviceSupabase = createServiceRoleClient();
   const {
     data: { user }
   } = await supabase.auth.getUser();
@@ -456,12 +573,28 @@ export async function updateResourceDirectoryLabelAction(input: {
     throw new Error('You must be signed in to update a resource directory.');
   }
 
+  const { data: existing } = await serviceSupabase
+    .from('project_resource_directories')
+    .select('execution_target_id')
+    .eq('id', input.directoryId)
+    .eq('project_id', input.projectId)
+    .maybeSingle();
+
+  if (!existing?.execution_target_id) {
+    throw new Error('Resource directory not found.');
+  }
+
+  await assertCanManagePrimary(serviceSupabase, {
+    userId: user.id,
+    projectId: input.projectId,
+    executionTargetId: existing.execution_target_id
+  });
+
   const trimmed = input.label?.trim();
-  const { error } = await supabase
+  const { error } = await serviceSupabase
     .from('project_resource_directories')
     .update({ label: trimmed && trimmed.length > 0 ? trimmed : null })
-    .eq('id', input.directoryId)
-    .eq('user_id', user.id);
+    .eq('id', input.directoryId);
 
   if (error) {
     console.error('updateResourceDirectoryLabelAction', error);

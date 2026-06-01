@@ -2,6 +2,38 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2606011152.0] - 2026-06-01:11:52
+
+### Added
+- Add **passkey** sign-in on the auth form and a **Passkeys** settings page to register, rename, and remove WebAuthn credentials.
+- Add **execution target ownership** (`organization_execution_targets.owner_user_id`): targets default to **personal** (only the owner manages directories and primaries) or can be **donated** to the organization so any project editor (ADMIN/MANAGER) may manage them.
+- Add **`setExecutionTargetOwnershipAction`** and device-resource UI to claim a target as personal or donate it to the org.
+- Add ranked **`search_tickets`** Postgres RPC with **`pg_trgm`** indexes and weighted full-text vectors so ticket search ranks exact identifiers, title matches, and prefix hits ahead of recency.
+- Show a **markdown file icon** on live file-change cards for `.md` paths.
+
+### Fixed
+- Fix ticket search returning full-text hits ordered by **`updated_at`** instead of relevance, and failing to surface strong title matches when weaker full-text rows already existed.
+- Fix **`complete-execution-launch`** and **`fail-execution-launch`** filtering by the token’s default org, which could 404 after a runner claimed work for a different organization on the same target.
+- Resolve claim-time working directories from the **primary** resource only (no fallback to arbitrary directories on the target).
+- Validate **`target_resource_id`** at claim against the requesting project and claiming execution target.
+- Improve file-change parsing for markdown links, editor location suffixes, and trailing path annotations.
+
+### Changed
+- Route web, API, and MCP ticket search through the shared **`search_tickets`** RPC instead of duplicated client-side query logic.
+- Rebuild **`tickets.search_vector`** with weighted fields (title and ticket id = **A**, first objective = **B**).
+- Fail **`request-execution`** at enqueue time when no primary directory exists for the project on the chosen target, with a claim-time backstop event if a row still reaches the runner without one.
+- Enforce resource-directory write authority via **`assertCanManagePrimary`** on server actions, protocol routes, and MCP handlers, with matching RLS (**`can_manage_project_resource_directory`**).
+- Extend the Electron release upload script with explicit **platform/arch targets** and clearer artifact validation.
+
+### Security
+- Add RLS and shared MCP resource-authority checks so only the target owner (personal) or org project editors (org-owned) may mutate project resource directories.
+
+### Test
+- Add regression tests for ranked ticket search, execution-target ownership, resource-directory authority, primary-resource resolution, and org-agnostic launch lifecycle routes.
+
+### Documentation
+- Add **`docs/target-scoped-resources.md`** and refresh execution-target docs for ownership, primary resolution, and multi-org runner behavior.
+
 ## [0.2606010745.0] - 2026-06-01:07:45
 
 ### Added

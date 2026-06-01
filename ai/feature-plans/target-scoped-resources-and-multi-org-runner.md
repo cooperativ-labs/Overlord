@@ -293,3 +293,77 @@ them; 6 is the UX surface for ownership.
 - Whether a target-agnostic (`any`) run should hard-error at request time, or only
   the specific-target run (proposed: error in both, but the `any` check is "no
   primary on *any* reachable target"). DECISION: Error in both.
+
+---
+
+## Implementation status (executed 2026-06-01)
+
+All seven phases are implemented and tests-first where the harness can run them.
+
+- **Phase 0** — Migrations `20260601100000_execution_target_ownership.sql`
+  (nullable `owner_user_id` + partial index) and
+  `20260601100100_resource_directory_ownership_rls.sql`
+  (`can_manage_project_resource_directory` SQL helper, ownership-aware
+  insert/update/delete policies, org-member SELECT). `owner_user_id` synced into
+  `types/database.types.ts` by hand (no live Supabase to run `yarn generate`/
+  `yarn seed:sync` — run both when a stack is available). RLS behavior covered by
+  `tests/supabase/project-resource-directory-ownership-rls.test.ts` (runs against a
+  live local stack).
+- **Phase 1** — `lib/resource-directories/primary-resource.ts`: dropped the user
+  filter; `targetHasPrimaryResourceDirectory` / `shouldAutoPrimary` /
+  `resolveTargetOwnership` / `canManagePrimary` / `assertCanManagePrimary` /
+  `clearTargetPrimary`. Unit-tested.
+- **Phase 2** — Server action, REST add/update, edge MCP add/update (shared
+  `supabase/functions/mcp/handlers/_resource-authority.ts`), and
+  `syncSshRemoteResource` unified on the helpers; remove promotes the next
+  directory; `setExecutionTargetOwnershipAction` added. Unit-tested.
+- **Phase 3** — `getProjectUserLocalSettingsByProjectId` /
+  `getProjectUserSshSettingsByProjectId` / `getProjectResourceDirectoriesAction` /
+  `getProjectDevicesAction` / file-tree route resolve the target-scoped primary.
+- **Phase 4** — `claim-execution` is org-agnostic (member-orgs ∩ target-sharing
+  orgs), working-dir fallback is the (project, target) primary only, missing-primary
+  records a `ticket_event` backstop; the CLI does a single org-agnostic poll when
+  unpinned (`createClaimOrganizationScope`).
+- **Phase 5** — `createExecutionRequest` throws at request time when no primary
+  (names project + target for a specific target, project for `any`), skipped when an
+  explicit working dir / ssh command / resource is supplied.
+- **Phase 6** — `ensureAssociations` sets `owner_user_id` on first insert only;
+  self-registered + SSH targets default personal; SSH form accepts
+  `organizationOwned`; `getProjectDevicesAction` returns `ownerUserId` + `canManage`;
+  `DeviceResourceList` shows a Personal/Org-owned badge and gates edit affordances on
+  `canManage`. (A dedicated owner-transfer control in the UI calls
+  `setExecutionTargetOwnershipAction` — the action and the per-device permission
+  signal are in place; the explicit transfer button can be added on the target
+  settings surface.)
+
+## Launch-pipeline alignment (Codex review remediation, 2026-06-01)
+
+`code-reviews/AGENT_LAUNCH_PIPELINE_REVIEW_2026-06-01.md` flagged where the
+multi-org runner work left the launch lifecycle out of step with the
+org-agnostic decision (G3). Resolved:
+
+- **Finding #1 — post-claim lifecycle is now org-agnostic too.** The runner
+  claims across every target-sharing member org, so `complete-execution-launch`
+  and `fail-execution-launch` must not pin to the token's default org (a request
+  claimed for org B would otherwise 404 and leave the row `claimed` until lease
+  expiry, risking duplicate agents). New `findUserExecutionTargetByFingerprint`
+  resolves the target by user only; both routes now match the request by `id` +
+  `requested_by` + `claimed_by_execution_target_id` with **no** org filter.
+- **Finding #2 — left as designed.** Claims are intentionally org-agnostic; the
+  `--organization-id` pin remains a fan-out hint for list/clear only. No change.
+- **Finding #3 — explicit `targetResourceId` is validated before it is trusted.**
+  `createExecutionRequest` now asserts the resource exists, belongs to the
+  ticket's project, and (when a target is pinned) lives on that target — closing
+  the hole where a caller could point a project run at another project's checkout
+  and skip the no-primary guard. `claim-execution`'s `resolveWorkingDirectory`
+  also compares `project_id` as defense-in-depth.
+- **Finding #4 — execution request id is threaded end-to-end.** `ovld protocol
+  attach` reads `OVERLORD_EXECUTION_REQUEST_ID` (or `--execution-request-id`)
+  into attach metadata, and the runner's terminal-profile launch script now
+  exports it (the direct-spawn path already inherited it), so attach marks the
+  exact request `launched` instead of falling back to objective matching.
+- **Finding #5 — the missing-primary backstop no longer spams.** The G4
+  claim-time backstop stamps `execution_requests.last_error` and emits the
+  `ticket_event` only on the transition into the missing-primary state; a runner
+  polling every few seconds no longer floods the activity feed. `last_error` is
+  cleared on a successful claim, so a recurrence re-notifies.

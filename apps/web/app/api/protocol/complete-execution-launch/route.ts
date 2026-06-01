@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { internalErrorResponse, parseProtocolBody } from '@/app/api/protocol/_lib';
-import { findExecutionTargetByFingerprint } from '@/lib/overlord/execution-targets';
+import { findUserExecutionTargetByFingerprint } from '@/lib/overlord/execution-targets';
 import { completeExecutionLaunchSchema } from '@/lib/overlord/validation';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
@@ -11,13 +11,16 @@ export async function POST(request: Request) {
 
   try {
     const supabase = createServiceRoleClient();
-    const { organizationId, userId } = parsed.tokenContext;
+    const { userId } = parsed.tokenContext;
     if (!userId) {
       return NextResponse.json({ error: 'Authentication required.' }, { status: 401 });
     }
 
-    const executionTargetId = await findExecutionTargetByFingerprint(supabase, {
-      organizationId,
+    // Org-agnostic (G3): the runner claims across all of the user's
+    // target-sharing orgs, so this lifecycle call must resolve the target and
+    // request by user + claiming target, not the token's default org. Pinning
+    // to the default org would 404 a request claimed for a different org.
+    const executionTargetId = await findUserExecutionTargetByFingerprint(supabase, {
       userId,
       deviceFingerprint: parsed.data.deviceFingerprint
     });
@@ -38,7 +41,6 @@ export async function POST(request: Request) {
         last_error: null
       })
       .eq('id', parsed.data.requestId)
-      .eq('organization_id', organizationId)
       .eq('requested_by', userId)
       .eq('claimed_by_execution_target_id', executionTargetId)
       .eq('status', 'claimed')
@@ -54,7 +56,6 @@ export async function POST(request: Request) {
       .from('execution_requests')
       .select('*')
       .eq('id', parsed.data.requestId)
-      .eq('organization_id', organizationId)
       .eq('requested_by', userId)
       .eq('claimed_by_execution_target_id', executionTargetId)
       .in('status', ['launching', 'launched'])

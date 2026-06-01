@@ -5,6 +5,8 @@ import { type SupabaseClient } from '@supabase/supabase-js';
 import { type TokenContext } from '../auth.ts';
 import { toolErr, toolOk } from '../rpc.ts';
 
+import { canManageProjectResource, clearTargetPrimary } from './_resource-authority.ts';
+
 export async function handleUpdateProjectResource(
   supabase: SupabaseClient,
   args: any,
@@ -18,27 +20,25 @@ export async function handleUpdateProjectResource(
   if (!deviceFingerprint) return toolErr('deviceFingerprint is required.');
   if (!ctx.userId) return toolErr('Authentication required.');
 
-  const { data: target } = await supabase
-    .from('execution_targets')
-    .select('id')
-    .eq('device_fingerprint', deviceFingerprint)
-    .maybeSingle();
-
-  if (!target) {
-    return toolErr('Execution target not found. Call get_device first to register this target.');
-  }
-
   const { data: existing } = await supabase
     .from('project_resource_directories')
     .select('id, project_id, execution_target_id')
     .eq('id', resourceId)
-    .eq('user_id', ctx.userId)
     .maybeSingle();
 
   if (!existing) return toolErr('Resource not found.');
 
-  if ((existing as any).execution_target_id !== (target as any).id) {
-    return toolErr('You can only update resources that belong to your current execution target.');
+  // Authorization is target-ownership-based: on a shared target the primary is
+  // shared, so anyone who can manage the (project, target) may update it.
+  const canManage = await canManageProjectResource(supabase, {
+    userId: ctx.userId,
+    projectId: (existing as any).project_id,
+    executionTargetId: (existing as any).execution_target_id
+  });
+  if (!canManage) {
+    return toolErr(
+      'You do not have permission to manage resource directories for this project on this target.'
+    );
   }
 
   const directoryPath =
@@ -49,12 +49,11 @@ export async function handleUpdateProjectResource(
     rawLabel === null ? null : typeof rawLabel === 'string' ? rawLabel.trim() || null : undefined;
 
   if (isPrimary) {
-    await supabase
-      .from('project_resource_directories')
-      .update({ is_primary: false })
-      .eq('project_id', (existing as any).project_id)
-      .eq('execution_target_id', (target as any).id)
-      .neq('id', resourceId);
+    await clearTargetPrimary(
+      supabase,
+      (existing as any).project_id,
+      (existing as any).execution_target_id
+    );
   }
 
   const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };

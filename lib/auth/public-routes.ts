@@ -7,6 +7,7 @@ const PUBLIC_EXACT_PATHS = new Set([
   '/compare',
   '/early-access',
   '/docs',
+  '/downloads',
   '/llms.txt',
   '/llms-full.txt',
   '/overlord-context',

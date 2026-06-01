@@ -24,6 +24,12 @@ export type SshExecutionTargetInput = {
   privateKeyPath?: string | null;
   label?: string | null;
   hostKeyFingerprint?: string | null;
+  /**
+   * Ownership for the target's org association when first created. `undefined`
+   * defaults to personal (the registering user); pass `null` to make it
+   * organization-owned.
+   */
+  ownerUserId?: string | null;
 };
 
 function db(supabase: SupabaseClient<Database>): AnySupabase {
@@ -87,30 +93,44 @@ async function ensureAssociations(
     executionTargetId: string;
     label?: string | null;
     defaultUsername?: string | null;
+    /**
+     * Per-org owner to set when the org↔target association is first created.
+     * Ignored on conflict — ownership only changes via
+     * `setExecutionTargetOwnershipAction`. `undefined`/`null` => org-owned.
+     */
+    ownerUserId?: string | null;
   }
 ): Promise<void> {
-  let targetLabel = input.label?.trim() || null;
-  if (!targetLabel) {
-    const { data: existingOrgTarget } = await db(supabase)
-      .from('organization_execution_targets')
-      .select('label')
-      .eq('organization_id', input.organizationId)
-      .eq('execution_target_id', input.executionTargetId)
-      .maybeSingle();
-    targetLabel =
-      existingOrgTarget?.label ??
-      (await generateLabel(supabase, input.organizationId, input.defaultUsername, 'target'));
-  }
+  const { data: existingOrgTarget } = await db(supabase)
+    .from('organization_execution_targets')
+    .select('label')
+    .eq('organization_id', input.organizationId)
+    .eq('execution_target_id', input.executionTargetId)
+    .maybeSingle();
 
-  await db(supabase).from('organization_execution_targets').upsert(
-    {
-      organization_id: input.organizationId,
-      execution_target_id: input.executionTargetId,
-      label: targetLabel,
-      added_by: input.userId
-    },
-    { onConflict: 'organization_id,execution_target_id' }
-  );
+  const targetLabel =
+    input.label?.trim() ||
+    existingOrgTarget?.label ||
+    (await generateLabel(supabase, input.organizationId, input.defaultUsername, 'target'));
+
+  if (existingOrgTarget) {
+    // Refresh the label/added_by but never overwrite ownership on re-registration.
+    await db(supabase)
+      .from('organization_execution_targets')
+      .update({ label: targetLabel, added_by: input.userId })
+      .eq('organization_id', input.organizationId)
+      .eq('execution_target_id', input.executionTargetId);
+  } else {
+    await db(supabase)
+      .from('organization_execution_targets')
+      .insert({
+        organization_id: input.organizationId,
+        execution_target_id: input.executionTargetId,
+        label: targetLabel,
+        added_by: input.userId,
+        owner_user_id: input.ownerUserId ?? null
+      });
+  }
 
   await db(supabase)
     .from('user_execution_targets')
@@ -232,7 +252,9 @@ export async function upsertExecutionTargetFromProtocol(
     organizationId: input.organizationId,
     userId: input.userId,
     executionTargetId: targetId,
-    defaultUsername: null
+    defaultUsername: null,
+    // A self-registered machine (laptop running `ovld`) defaults to personal.
+    ownerUserId: input.userId
   });
 
   return targetId;
@@ -296,7 +318,9 @@ export async function upsertSshExecutionTarget(
     userId: input.userId,
     executionTargetId: targetId,
     label,
-    defaultUsername: username
+    defaultUsername: username,
+    // SSH targets default to personal unless the caller opts into org-owned.
+    ownerUserId: input.ownerUserId === undefined ? input.userId : input.ownerUserId
   });
 
   await db(supabase)
@@ -334,6 +358,37 @@ export async function findExecutionTargetByFingerprint(
     )
     .eq('device_fingerprint', fingerprint)
     .eq('organization_execution_targets.organization_id', input.organizationId)
+    .eq('user_execution_targets.user_id', input.userId)
+    .maybeSingle();
+
+  return data?.id ?? null;
+}
+
+/**
+ * Resolve a user's execution target by fingerprint without scoping to an org.
+ *
+ * The runner is org-agnostic (G3): `claim-execution` returns work from any org
+ * the user belongs to that shares the target, so the post-claim lifecycle
+ * (`complete`/`fail`) must not be pinned to the token's default org — otherwise
+ * a target claimed for org B but resolved with a default of org A would 404.
+ * A target belongs to a user via `user_execution_targets`, which is the only
+ * identity these calls need; the caller still gates the request row by
+ * `requested_by` and `claimed_by_execution_target_id`.
+ */
+export async function findUserExecutionTargetByFingerprint(
+  supabase: SupabaseClient<Database>,
+  input: {
+    userId: string;
+    deviceFingerprint: string;
+  }
+): Promise<string | null> {
+  const fingerprint = input.deviceFingerprint.trim();
+  if (!fingerprint) return null;
+
+  const { data } = await db(supabase)
+    .from('execution_targets')
+    .select('id, user_execution_targets!inner(user_id)')
+    .eq('device_fingerprint', fingerprint)
     .eq('user_execution_targets.user_id', input.userId)
     .maybeSingle();
 

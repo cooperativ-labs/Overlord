@@ -238,6 +238,9 @@ export function createElectronClient(accessToken: string) {
       headers: {
         Authorization: `Bearer ${accessToken}`
       }
+    },
+    auth: {
+      experimental: { passkey: true }
     }
   });
 }
@@ -263,6 +266,9 @@ export async function createClientForRequest() {
           // Ignore write attempts from Server Components.
         }
       }
+    },
+    auth: {
+      experimental: { passkey: true }
     }
   });
 }

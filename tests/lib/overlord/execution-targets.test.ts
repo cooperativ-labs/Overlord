@@ -54,16 +54,24 @@ describe('upsertExecutionTargetFromProtocol', () => {
         ...executionTargets,
         update
       }),
-      organization_execution_targets: () => ({
-        select: jest.fn(() => ({
-          eq: jest.fn(() => ({
+      organization_execution_targets: () => {
+        const updateChain = {
+          eq: jest.fn(() => updateChain),
+          then: (resolve: (v: unknown) => unknown) => Promise.resolve({ error: null }).then(resolve)
+        };
+        return {
+          select: jest.fn(() => ({
             eq: jest.fn(() => ({
-              maybeSingle: jest.fn(async () => ({ data: { label: 'ssh-box' }, error: null }))
+              eq: jest.fn(() => ({
+                // Existing association -> update branch (ownership preserved).
+                maybeSingle: jest.fn(async () => ({ data: { label: 'ssh-box' }, error: null }))
+              }))
             }))
-          }))
-        })),
-        upsert: jest.fn(async () => ({ error: null }))
-      }),
+          })),
+          update: jest.fn(() => updateChain),
+          insert: jest.fn(async () => ({ error: null }))
+        };
+      },
       user_execution_targets: () => ({
         upsert: jest.fn(async () => ({ error: null }))
       })
@@ -113,11 +121,15 @@ describe('upsertExecutionTargetFromProtocol', () => {
         select: jest.fn(() => ({
           eq: jest.fn(() => ({
             eq: jest.fn(() => ({
+              // No existing association -> insert branch (owner set on creation).
               maybeSingle: jest.fn(async () => ({ data: null, error: null }))
             }))
           }))
         })),
-        upsert: jest.fn(async () => ({ error: null }))
+        update: jest.fn(() => ({
+          eq: jest.fn(() => ({ eq: jest.fn(async () => ({ error: null })) }))
+        })),
+        insert: jest.fn(async () => ({ error: null }))
       }),
       user_execution_targets: () => ({
         upsert: jest.fn(async () => ({ error: null }))
@@ -135,5 +147,47 @@ describe('upsertExecutionTargetFromProtocol', () => {
     expect(targetId).toBe('new-target-id');
     expect(insert).toHaveBeenCalled();
     expect(executionTargets.eq).not.toHaveBeenCalledWith('port', expect.anything());
+  });
+
+  it('defaults a self-registered target to personal ownership on first association', async () => {
+    const executionTargets = buildExecutionTargetsQuery([
+      { data: null, error: null }, // no existing fingerprint
+      { data: [], error: null }, // no placeholder match
+      { data: { id: 'new-target-id' }, error: null }
+    ]);
+    const insert = jest.fn(() => ({
+      select: jest.fn(() => ({
+        single: jest.fn(async () => ({ data: { id: 'new-target-id' }, error: null }))
+      }))
+    }));
+
+    const orgInsert = jest.fn(async () => ({ error: null }));
+    const supabase = buildSupabase({
+      execution_targets: () => ({ ...executionTargets, insert }),
+      organization_execution_targets: () => ({
+        select: jest.fn(() => ({
+          eq: jest.fn(() => ({
+            eq: jest.fn(() => ({
+              maybeSingle: jest.fn(async () => ({ data: null, error: null }))
+            }))
+          }))
+        })),
+        update: jest.fn(() => ({
+          eq: jest.fn(() => ({ eq: jest.fn(async () => ({ error: null })) }))
+        })),
+        insert: orgInsert
+      }),
+      user_execution_targets: () => ({ upsert: jest.fn(async () => ({ error: null })) })
+    });
+
+    await upsertExecutionTargetFromProtocol(supabase, {
+      organizationId: ORG_ID,
+      userId: USER_ID,
+      deviceFingerprint: FINGERPRINT,
+      hostname: 'my-laptop',
+      platform: 'darwin'
+    });
+
+    expect(orgInsert).toHaveBeenCalledWith(expect.objectContaining({ owner_user_id: USER_ID }));
   });
 });

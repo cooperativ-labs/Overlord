@@ -10,6 +10,7 @@ import {
   persistObjectivePositions,
   promoteNextFutureDraft
 } from '@/lib/objectives';
+import { failActiveExecutionRequestsForObjective } from '@/lib/overlord/execution-requests';
 import { createClientForRequest } from '@/supabase/utils/server';
 
 import { assertTicketAccess, revalidateTicketBoards, revalidateTicketDetails } from './internals';
@@ -87,6 +88,17 @@ export async function markObjectiveExecutedAction(
   const {
     data: { user }
   } = await supabase.auth.getUser();
+
+  if (user) {
+    await failActiveExecutionRequestsForObjective({
+      supabase,
+      organizationId: ticket.organization_id,
+      objectiveId,
+      requestedBy: user.id
+    }).catch(err =>
+      console.error('[markObjectiveExecuted] failed to cancel active execution request:', err)
+    );
+  }
   if (user && objective.objective) {
     const { generateAndSetObjectiveTitle } = await import('@/lib/objectives');
     generateAndSetObjectiveTitle(supabase, objectiveId, objective.objective, user.id).catch(err =>

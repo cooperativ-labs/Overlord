@@ -1,8 +1,11 @@
 import { NextResponse } from 'next/server';
 
 import { internalErrorResponse, parseProtocolBody } from '@/app/api/protocol/_lib';
-import { findExecutionTargetByFingerprint } from '@/lib/overlord/execution-targets';
 import { updateProjectResourceSchema } from '@/lib/overlord/validation';
+import {
+  assertCanManagePrimary,
+  clearTargetPrimary
+} from '@/lib/resource-directories/primary-resource';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
 export async function POST(request: Request) {
@@ -11,55 +14,42 @@ export async function POST(request: Request) {
 
   try {
     const supabase = createServiceRoleClient();
-    const { organizationId, userId } = parsed.tokenContext;
+    const { userId } = parsed.tokenContext;
     if (!userId) {
       return NextResponse.json({ error: 'Authentication required.' }, { status: 401 });
     }
 
-    const { resourceId, deviceFingerprint, directoryPath, label, isPrimary } = parsed.data;
-
-    const executionTargetId = await findExecutionTargetByFingerprint(supabase, {
-      organizationId,
-      userId,
-      deviceFingerprint
-    });
-
-    if (!executionTargetId) {
-      return NextResponse.json(
-        {
-          error: 'Execution target not found. Call get-device first to register this target.',
-          hint: 'You can only update resources on a target you can access.'
-        },
-        { status: 403 }
-      );
-    }
+    const { resourceId, directoryPath, label, isPrimary } = parsed.data;
 
     const { data: existing } = await (supabase as any)
       .from('project_resource_directories')
       .select('id, project_id, execution_target_id')
       .eq('id', resourceId)
-      .eq('user_id', userId)
       .maybeSingle();
 
     if (!existing) {
       return NextResponse.json({ error: 'Resource not found.' }, { status: 404 });
     }
 
-    if (existing.execution_target_id !== executionTargetId) {
+    // Authorization is target-ownership-based, not "your own row": on a shared
+    // target the primary is shared, so anyone who can manage the (project,
+    // target) may update its directories.
+    try {
+      await assertCanManagePrimary(supabase, {
+        userId,
+        projectId: existing.project_id,
+        executionTargetId: existing.execution_target_id
+      });
+    } catch (authError) {
       return NextResponse.json(
-        { error: 'You can only update resources that belong to your current execution target.' },
+        { error: authError instanceof Error ? authError.message : 'Not authorized.' },
         { status: 403 }
       );
     }
 
-    // If setting as primary, clear the other primary for this project/target first.
+    // If setting as primary, clear the other primary for this (project, target) first.
     if (isPrimary) {
-      await (supabase as any)
-        .from('project_resource_directories')
-        .update({ is_primary: false })
-        .eq('project_id', existing.project_id)
-        .eq('execution_target_id', executionTargetId)
-        .neq('id', resourceId);
+      await clearTargetPrimary(supabase, existing.project_id, existing.execution_target_id);
     }
 
     const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };

@@ -6,6 +6,11 @@ import { type TokenContext } from '../auth.ts';
 import { toolErr, toolOk } from '../rpc.ts';
 
 import { upsertDeviceFromProtocol } from './_device-upsert.ts';
+import {
+  canManageProjectResource,
+  clearTargetPrimary,
+  shouldAutoPrimary
+} from './_resource-authority.ts';
 
 export async function handleAddProjectResource(
   supabase: SupabaseClient,
@@ -23,7 +28,7 @@ export async function handleAddProjectResource(
   if (!ctx.userId) return toolErr('Authentication required.');
 
   const label = typeof args?.label === 'string' ? args.label.trim() || null : null;
-  const isPrimary = args?.isPrimary === true;
+  const explicitPrimary = typeof args?.isPrimary === 'boolean' ? args.isPrimary : undefined;
   const deviceHostname =
     typeof args?.deviceHostname === 'string' ? args.deviceHostname.trim() : null;
   const devicePlatform =
@@ -64,12 +69,24 @@ export async function handleAddProjectResource(
     { onConflict: 'project_id,execution_target_id' }
   );
 
+  const canManage = await canManageProjectResource(supabase, {
+    userId: ctx.userId,
+    projectId,
+    executionTargetId
+  });
+  if (!canManage) {
+    return toolErr(
+      'You do not have permission to manage resource directories for this project on this target.'
+    );
+  }
+
+  // Auto-promote the first directory (no primary yet) on this (project, target),
+  // matching the server-action and REST add paths.
+  const isPrimary =
+    explicitPrimary ?? (await shouldAutoPrimary(supabase, { projectId, executionTargetId }));
+
   if (isPrimary) {
-    await supabase
-      .from('project_resource_directories')
-      .update({ is_primary: false })
-      .eq('project_id', projectId)
-      .eq('execution_target_id', executionTargetId);
+    await clearTargetPrimary(supabase, projectId, executionTargetId);
   }
 
   const { data: inserted, error } = await supabase

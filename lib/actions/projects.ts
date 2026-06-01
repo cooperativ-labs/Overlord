@@ -29,7 +29,11 @@ import {
   ensureProjectExecutionTarget,
   upsertSshExecutionTarget
 } from '@/lib/overlord/execution-targets';
-import { getPrimaryProjectResourceDirectoriesByProjectId } from '@/lib/resource-directories/primary-resource';
+import {
+  assertCanManagePrimary,
+  clearTargetPrimary,
+  getPrimaryProjectResourceDirectoriesByProjectId
+} from '@/lib/resource-directories/primary-resource';
 import { createClientForRequest } from '@/supabase/utils/server';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 import type { Database } from '@/types/database.types';
@@ -410,7 +414,10 @@ export async function updateProjectSshConfigAction(
     port: input.sshPort ?? null,
     username: sshUser,
     authMethod,
-    privateKeyPath: trimOrNull(input.sshPrivateKeyPath)
+    privateKeyPath: trimOrNull(input.sshPrivateKeyPath),
+    // Organization-owned targets have no single owner; personal targets are
+    // owned by the registrant (the default in upsertSshExecutionTarget).
+    ownerUserId: input.organizationOwned ? null : user.id
   });
 
   if (!executionTargetId) {
@@ -451,11 +458,13 @@ async function syncSshRemoteResource(
     directoryPath: string;
   }
 ): Promise<void> {
-  await (supabase as any)
-    .from('project_resource_directories')
-    .update({ is_primary: false })
-    .eq('project_id', input.projectId)
-    .eq('execution_target_id', input.executionTargetId);
+  await assertCanManagePrimary(supabase, {
+    userId: input.userId,
+    projectId: input.projectId,
+    executionTargetId: input.executionTargetId
+  });
+
+  await clearTargetPrimary(supabase, input.projectId, input.executionTargetId);
 
   await (supabase as any).from('project_resource_directories').upsert(
     {

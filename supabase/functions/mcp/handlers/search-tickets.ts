@@ -13,39 +13,37 @@ function sanitizeQuery(value: string): string {
     .slice(0, 120);
 }
 
-function buildWebSearchQuery(value: string): string {
-  const terms = value
-    .split(/\s+/)
-    .filter(Boolean)
-    .map(term => (term.endsWith('*') ? term : `${term}*`));
-  return terms.join(' ');
-}
-
-function escapeLikePattern(value: string): string {
-  return value.replace(/[%_]/g, match => `\\${match}`);
-}
-
 function normalizeTicketSearchQuery(value: string) {
+  const rawTrimmed = value.trim().slice(0, 120);
   const sanitized = sanitizeQuery(value);
   return {
     sanitized,
-    textSearchQuery: sanitized ? buildWebSearchQuery(sanitized) : ''
+    exactTicketId: /^[0-9]+:[0-9]+$/.test(rawTrimmed) ? rawTrimmed : null
   };
 }
 
-function applySharedFilters(q: any, opts: any) {
-  let next = q;
-  if (opts.organizationId) next = next.eq('organization_id', opts.organizationId);
-  if (opts.statuses?.length) {
-    next = next.in('status', opts.statuses);
-  } else if (!opts.includeCompleted) {
-    next = next.neq('status', 'complete');
-  }
-  if (opts.projectId) next = next.eq('project_id', opts.projectId);
-  if (opts.createdBy) next = next.eq('created_by', opts.createdBy);
-  if (opts.updatedAfter) next = next.gte('updated_at', opts.updatedAfter);
-  if (opts.updatedBefore) next = next.lte('updated_at', opts.updatedBefore);
-  return next;
+type RankedTicketSearchRow = {
+  id: string;
+  title: string | null;
+  ticket_id: string | null;
+  ticket_sequence: number | null;
+  project_id: string | null;
+  organization_id: number | null;
+  status: string | null;
+  project_name: string | null;
+};
+
+function mapRankedTicketRow(row: RankedTicketSearchRow) {
+  return {
+    id: row.id,
+    title: row.title,
+    ticket_id: row.ticket_id,
+    ticket_sequence: row.ticket_sequence,
+    project_id: row.project_id,
+    organization_id: row.organization_id,
+    status: row.status,
+    project: row.project_name !== null ? { name: row.project_name } : null
+  };
 }
 
 export async function handleSearchTickets(supabase: SupabaseClient, args: any, ctx: TokenContext) {
@@ -61,70 +59,28 @@ export async function handleSearchTickets(supabase: SupabaseClient, args: any, c
   const updatedAfter = typeof args?.updatedAfter === 'string' ? args.updatedAfter : undefined;
   const updatedBefore = typeof args?.updatedBefore === 'string' ? args.updatedBefore : undefined;
 
-  const select =
-    'id,title,ticket_id,ticket_sequence,project_id,organization_id,status,project:projects(name)';
-  const { sanitized, textSearchQuery } = normalizeTicketSearchQuery(query);
+  const { sanitized, exactTicketId } = normalizeTicketSearchQuery(query);
 
-  let baseQuery = supabase
-    .from('tickets')
-    .select(select)
-    .order('updated_at', { ascending: false })
-    .limit(normalizedLimit);
-
-  baseQuery = applySharedFilters(baseQuery, {
-    organizationId: ctx.organizationId,
-    includeCompleted,
-    statuses,
-    projectId,
-    createdBy,
-    updatedAfter,
-    updatedBefore
-  });
-
-  if (!sanitized || !textSearchQuery) {
-    const { data, error } = await baseQuery;
-    if (error) return toolErr(error.message);
-    return toolOk({ tickets: data ?? [], count: (data ?? []).length });
-  }
-
-  const { data, error } = await baseQuery.textSearch('search_vector', textSearchQuery, {
-    config: 'english',
-    type: 'websearch'
+  const { data, error } = await supabase.rpc('search_tickets', {
+    p_query: sanitized,
+    p_exact_ticket_id: exactTicketId,
+    p_organization_id: ctx.organizationId,
+    p_limit: normalizedLimit,
+    p_include_completed: includeCompleted,
+    p_statuses: statuses?.length ? statuses : undefined,
+    p_project_id: projectId,
+    p_created_by: createdBy,
+    p_updated_after: updatedAfter,
+    p_updated_before: updatedBefore
   });
 
   if (error) {
     return toolErr(error.message);
   }
 
-  if ((data?.length ?? 0) > 0) {
-    return toolOk({ tickets: data ?? [], count: data!.length });
-  }
-
-  const escapedPattern = escapeLikePattern(sanitized);
-  let fallbackQuery = supabase
-    .from('tickets')
-    .select(select)
-    .or(`title.ilike.%${escapedPattern}%,ticket_id.ilike.%${escapedPattern}%`)
-    .order('updated_at', { ascending: false })
-    .limit(normalizedLimit);
-
-  fallbackQuery = applySharedFilters(fallbackQuery, {
-    organizationId: ctx.organizationId,
-    includeCompleted,
-    statuses,
-    projectId,
-    createdBy,
-    updatedAfter,
-    updatedBefore
-  });
-
-  const fallbackResult = await fallbackQuery;
-  if (fallbackResult.error) {
-    return toolErr(fallbackResult.error.message);
-  }
-
+  const tickets = ((data ?? []) as RankedTicketSearchRow[]).map(mapRankedTicketRow);
   return toolOk({
-    tickets: fallbackResult.data ?? [],
-    count: (fallbackResult.data ?? []).length
+    tickets,
+    count: tickets.length
   });
 }

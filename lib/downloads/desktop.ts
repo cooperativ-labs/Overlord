@@ -77,26 +77,28 @@ export const desktopPlatforms: DesktopPlatformEntry[] = [
   {
     id: 'linux',
     label: 'Linux',
-    description: 'Broad distro support with a portable AppImage and Debian package.',
+    description: 'Linux amd64 (x86_64) builds with a portable AppImage and Debian package.',
     betaLabel: 'Beta',
     manifestFileName: 'latest-linux.yml',
     variants: [
       {
         id: 'appimage',
-        label: 'Download AppImage',
-        description: 'Portable build with the broadest compatibility across distros.',
-        fileName: `Overlord-${CURRENT_DESKTOP_VERSION}-linux-x64.AppImage`,
+        label: 'Download amd64 AppImage',
+        description: 'Portable amd64 build with the broadest compatibility across x86_64 distros.',
+        fileName: `Overlord-${CURRENT_DESKTOP_VERSION}-linux-x86_64.AppImage`,
         formatLabel: 'AppImage',
-        supportLabel: 'x64',
+        manifestFileName: 'latest-linux-amd64.yml',
+        supportLabel: 'amd64 / x86_64',
         isRecommended: true
       },
       {
         id: 'deb',
-        label: 'Download .deb',
-        description: 'Better desktop integration for Debian and Ubuntu systems.',
+        label: 'Download amd64 .deb',
+        description: 'amd64 package with better desktop integration for Debian and Ubuntu systems.',
         fileName: `Overlord-${CURRENT_DESKTOP_VERSION}-linux-amd64.deb`,
         formatLabel: '.deb',
-        supportLabel: 'Debian/Ubuntu'
+        manifestFileName: 'latest-linux-amd64.yml',
+        supportLabel: 'amd64 Debian/Ubuntu'
       }
     ]
   }

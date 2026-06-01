@@ -54,7 +54,7 @@ yarn generate  # Regenerate from local Supabase
 
 
 ## Notes for AI Assistants
-
+- Always use `===` / `!==` for equality checks instead of `==` / `!=`
 - Always check `types/database.types.ts` for the latest schema
 - Use server actions for database mutations
 - Use Supabase Edge Functions for any webhooks or background tasks

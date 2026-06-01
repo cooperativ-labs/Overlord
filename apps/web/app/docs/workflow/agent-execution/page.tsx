@@ -7,7 +7,9 @@ import { RunnerArchitectureDiagram } from '../../_components/runner-architecture
 import { RunnerSequenceDiagram } from '../../_components/runner-sequence-diagram';
 
 export const metadata: Metadata = {
-  title: 'Agent Execution & Runner'
+  title: 'Agent Execution & Runner',
+  description:
+    'How ovld runner claims queued execution requests, why it may launch work automatically, and how to clear an execution request by objective id.'
 };
 
 const INTRO = `
@@ -83,7 +85,16 @@ All execution triggers (whether automated or manual) write to the unified \`exec
 
 Before a runner can launch an agent in the right checkout, Overlord needs an **execution target** (the machine) and **project resource directories** (paths on that target). The runner matches queued rows by fingerprint; \`claim-execution\` picks the explicit \`target_resource_id\` or the primary directory for \`(project, execution_target)\`.
 
-See [Execution Targets & Resources](/docs/workflow/execution-targets) for the data model, SSH placeholder flow, and protocol commands (\`get-device\`, \`list-project-resources\`, \`add-project-resource\`).
+### Working directory resolution
+
+For each candidate row the runner resolves the working directory in priority order:
+
+1. **Explicit \`workingDirectory\` in \`launch_params\`** — used as-is (SSH command flows).
+2. **\`target_resource_id\` set** — looks up the path from \`project_resource_directories\` and verifies it lives on the claiming target.
+3. **Fallback: \`(project, target)\` primary** — selects the \`is_primary = true\` row for \`(project_id, execution_target_id)\`. Primary is **target-scoped** — no user filter is applied; all users on a project share the same primary checkout per target.
+4. **No primary found** — a \`ticket_event\` backstop is recorded and the request is skipped (fail-closed). Overlord also validates at request time that a primary exists before inserting a queue row.
+
+See [Execution Targets & Resources](/docs/workflow/execution-targets) for the data model, SSH placeholder flow, primary semantics, target ownership, and protocol commands (\`get-device\`, \`list-project-resources\`, \`add-project-resource\`).
 
 ---
 
@@ -94,6 +105,8 @@ The Terminal Runner is a lightweight, long-running CLI process that manages loca
 2. **Project Directories**: Resolves working directories from registered project resources on the current execution target fingerprint.
 3. **Queue Polling**: Regularly polls the backend (or subscribes via Supabase Realtime) for compatible queued requests.
 4. **Agent Spawning**: Spawns agent sessions locally by shelling into \`ovld launch\`.
+
+The runner is **org-agnostic**: one runner process on a target claims queued work for every organization the authenticated user belongs to that has that target registered. You do not need a separate runner per organization — the server computes the intersection of the user's member orgs and the orgs sharing the target.
 
 ### CLI Commands
 
@@ -119,6 +132,33 @@ ovld runner clear-all
 - \`--device-fingerprint <fingerprint>\`: Manually override the runner's device identity (or set the \`OVERLORD_DEVICE_FINGERPRINT\` environment variable).
 - \`--poll-interval-ms <ms>\`: Adjust the polling interval when running in \`start\` mode (default is \`3000\`, minimum \`1000\`).
 - \`--project-id <uuid>\`: Restrict the runner to only claim requests belonging to a specific project.
+
+---
+
+## Troubleshooting: "Why is \`ovld runner\` randomly executing?"
+
+Usually it is not random. A previous **Run** action or an **auto-advance** objective created an active row in \`execution_requests\`, and a local \`ovld runner\` later claimed it.
+
+Check the visible queue first:
+
+\`\`\`bash
+ovld runner status
+\`\`\`
+
+Clear one objective if you know the objective id:
+
+\`\`\`bash
+ovld runner clear 8974e557-bec4-4984-b12c-be46bd63207c
+\`\`\`
+
+Or use the protocol command directly:
+
+\`\`\`bash
+ovld protocol clear-execution-requests \\
+  --objective-id 8974e557-bec4-4984-b12c-be46bd63207c
+\`\`\`
+
+Use \`clear-all\` only when you want to drop every active queue row visible to the current auth scope.
 
 ---
 

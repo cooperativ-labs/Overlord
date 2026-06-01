@@ -1,5 +1,6 @@
 import {
   buildDiffHref,
+  isMarkdownFile,
   parseFileChanges,
   toAttributionFilePaths
 } from '@/lib/helpers/file-changes';
@@ -119,5 +120,24 @@ describe('file change helpers', () => {
       'lib/helpers/file-changes.ts',
       'tests/lib/helpers/file-changes.test.ts'
     ]);
+  });
+
+  describe('isMarkdownFile', () => {
+    it('returns true for .md and .markdown extensions', () => {
+      expect(isMarkdownFile('README.md')).toBe(true);
+      expect(isMarkdownFile('docs/spec.markdown')).toBe(true);
+      expect(isMarkdownFile('file.MD')).toBe(true);
+      expect(isMarkdownFile('another-file.MARKDOWN')).toBe(true);
+      expect(isMarkdownFile('  spaces-around.md  ')).toBe(true);
+    });
+
+    it('returns false for other extensions or nullish inputs', () => {
+      expect(isMarkdownFile('index.ts')).toBe(false);
+      expect(isMarkdownFile('styles.css')).toBe(false);
+      expect(isMarkdownFile('no-extension')).toBe(false);
+      expect(isMarkdownFile('')).toBe(false);
+      expect(isMarkdownFile(null)).toBe(false);
+      expect(isMarkdownFile(undefined)).toBe(false);
+    });
   });
 });

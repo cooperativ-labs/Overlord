@@ -58,6 +58,66 @@ type ExecutionRequestRow = Database['public']['Tables']['execution_requests']['R
  */
 export const ACTIVE_REQUEST_STATUSES = ['queued', 'claimed', 'launching'] as const;
 
+/** Objective states that may still be queued or claimed by a runner. */
+export const EXECUTION_LAUNCHABLE_OBJECTIVE_STATES = ['draft', 'submitted', 'launching'] as const;
+
+const STALE_EXECUTION_REQUEST_REASON =
+  'Objective is no longer launchable; active execution request cancelled.';
+
+export function isObjectiveLaunchableForExecution(state: string): boolean {
+  return (EXECUTION_LAUNCHABLE_OBJECTIVE_STATES as readonly string[]).includes(state);
+}
+
+export async function failActiveExecutionRequestsForObjective({
+  supabase,
+  organizationId,
+  objectiveId,
+  reason = STALE_EXECUTION_REQUEST_REASON,
+  requestedBy
+}: {
+  supabase: ExecutionClient;
+  organizationId: number;
+  objectiveId: string;
+  reason?: string;
+  requestedBy?: string | null;
+}): Promise<{ failedCount: number }> {
+  const failedAt = new Date().toISOString();
+  let query = supabase
+    .from('execution_requests')
+    .update({
+      status: 'failed',
+      failed_at: failedAt,
+      claimed_by_execution_target_id: null,
+      claimed_at: null,
+      lease_expires_at: null,
+      last_error: reason
+    })
+    .eq('organization_id', organizationId)
+    .eq('objective_id', objectiveId)
+    .in('status', ACTIVE_REQUEST_STATUSES as unknown as string[]);
+
+  if (requestedBy) {
+    query = query.eq('requested_by', requestedBy);
+  }
+
+  const { data, error } = await query.select('id');
+  if (error) throw new Error(error.message);
+  return { failedCount: data?.length ?? 0 };
+}
+
+export async function loadObjectiveStatesById(
+  supabase: ExecutionClient,
+  objectiveIds: string[]
+): Promise<Map<string, string>> {
+  const uniqueIds = [...new Set(objectiveIds.filter(id => id.trim().length > 0))];
+  if (uniqueIds.length === 0) return new Map();
+
+  const { data, error } = await supabase.from('objectives').select('id,state').in('id', uniqueIds);
+  if (error) throw new Error(error.message);
+
+  return new Map((data ?? []).map(row => [row.id, row.state]));
+}
+
 export type ExecutionRequestResponse = {
   request: ExecutionRequestRow;
   ticket: TicketRow;
@@ -99,7 +159,7 @@ async function resolveObjectiveForExecution(
     query = query.eq('id', objectiveId);
   } else {
     query = query
-      .in('state', ['draft', 'submitted', 'launching'])
+      .in('state', [...EXECUTION_LAUNCHABLE_OBJECTIVE_STATES])
       .order('position', { ascending: true })
       .order('created_at', { ascending: true })
       .limit(1);
@@ -113,7 +173,7 @@ async function resolveObjectiveForExecution(
   if (!objectiveText) throw new Error('Objective is empty.');
   // `launching` is launchable too: re-resolving an already-queued objective
   // (e.g. a relaunch click) must not be rejected.
-  if (data.state !== 'draft' && data.state !== 'submitted' && data.state !== 'launching') {
+  if (!isObjectiveLaunchableForExecution(data.state)) {
     throw new Error(`Objective is not launchable from state "${data.state}".`);
   }
 
@@ -224,6 +284,119 @@ async function reuseActiveRequest(
   return { request, ticket, objective, reused: true };
 }
 
+async function resolveTargetLabel(
+  supabase: ExecutionClient,
+  organizationId: number,
+  executionTargetId: string
+): Promise<string> {
+  const { data } = await supabase
+    .from('organization_execution_targets')
+    .select('label')
+    .eq('organization_id', organizationId)
+    .eq('execution_target_id', executionTargetId)
+    .maybeSingle();
+  return data?.label ?? 'this target';
+}
+
+/**
+ * G4: refuse to queue a project run when no primary resource directory is set
+ * for where it would execute. Names the project (and target, for a specific
+ * target) so the user knows what to fix. Skipped when the caller supplies an
+ * explicit working directory / ssh command / resource, since those don't rely
+ * on the primary.
+ */
+async function assertPrimaryExistsForRequest(
+  supabase: ExecutionClient,
+  input: RequestExecutionInput,
+  projectId: string
+): Promise<void> {
+  if (
+    normalizeOptionalText(input.workingDirectory) ||
+    normalizeOptionalText(input.sshCommand) ||
+    input.targetResourceId
+  ) {
+    return;
+  }
+
+  const { data: project } = await supabase
+    .from('projects')
+    .select('name')
+    .eq('id', projectId)
+    .maybeSingle();
+  const projectName = project?.name ?? 'this project';
+
+  if (input.targetExecutionTargetId) {
+    const { data: primary } = await supabase
+      .from('project_resource_directories')
+      .select('id')
+      .eq('project_id', projectId)
+      .eq('execution_target_id', input.targetExecutionTargetId)
+      .eq('is_primary', true)
+      .limit(1);
+    if ((primary ?? []).length === 0) {
+      const targetLabel = await resolveTargetLabel(
+        supabase,
+        input.organizationId,
+        input.targetExecutionTargetId
+      );
+      throw new Error(
+        `No primary directory is set for "${projectName}" on "${targetLabel}". Set a primary directory before running.`
+      );
+    }
+    return;
+  }
+
+  // Target-agnostic ('any') run: require a primary on at least one of the
+  // project's targets (reachable, since project targets live in the project's
+  // org and the requester is a member).
+  const { data: primaries } = await supabase
+    .from('project_resource_directories')
+    .select('id')
+    .eq('project_id', projectId)
+    .eq('is_primary', true)
+    .limit(1);
+  if ((primaries ?? []).length === 0) {
+    throw new Error(
+      `No primary directory is set for "${projectName}" on any execution target. Set a primary directory before running.`
+    );
+  }
+}
+
+/**
+ * Finding #3 (launch-pipeline review): an explicit `targetResourceId` bypasses
+ * the primary-directory guard, so it must be validated against the request
+ * before it is trusted. Resource directories are target-scoped (not per-user),
+ * but they still belong to exactly one project and one execution target — a
+ * caller must not be able to point a project run at a directory from another
+ * project (which would launch the wrong checkout) or a different target.
+ */
+async function assertTargetResourceMatchesRequest(
+  supabase: ExecutionClient,
+  input: RequestExecutionInput,
+  ticket: TicketRow
+): Promise<void> {
+  if (!input.targetResourceId) return;
+
+  const { data: resource, error } = await supabase
+    .from('project_resource_directories')
+    .select('project_id, execution_target_id')
+    .eq('id', input.targetResourceId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!resource) {
+    throw new Error('Selected resource directory was not found.');
+  }
+  if (!ticket.project_id || resource.project_id !== ticket.project_id) {
+    throw new Error("Selected resource directory does not belong to this ticket's project.");
+  }
+  if (
+    input.targetExecutionTargetId &&
+    resource.execution_target_id !== input.targetExecutionTargetId
+  ) {
+    throw new Error('Selected resource directory is not on the requested execution target.');
+  }
+}
+
 export async function createExecutionRequest(
   supabase: ExecutionClient,
   input: RequestExecutionInput
@@ -244,6 +417,15 @@ export async function createExecutionRequest(
   }
 
   const objective = await resolveObjectiveForExecution(supabase, ticket.id, input.objectiveId);
+
+  // Finding #3: validate an explicit resource selection before it is trusted to
+  // skip the primary guard below.
+  await assertTargetResourceMatchesRequest(supabase, input, ticket as TicketRow);
+
+  // G4: a project run must have a primary directory where it will execute.
+  if (ticket.project_id) {
+    await assertPrimaryExistsForRequest(supabase, input, ticket.project_id);
+  }
 
   // Phase 3 dedup: if there is already an in-flight request for this objective,
   // reuse/re-queue it instead of creating a duplicate. This is what makes a

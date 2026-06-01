@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server';
 
 import { internalErrorResponse, parseProtocolBody } from '@/app/api/protocol/_lib';
+import {
+  failActiveExecutionRequestsForObjective,
+  isObjectiveLaunchableForExecution,
+  loadObjectiveStatesById
+} from '@/lib/overlord/execution-requests';
 import { resolveTargetAgentLaunch } from '@/lib/overlord/target-agent-flags';
 import { upsertDeviceFromProtocol } from '@/lib/overlord/upsert-device';
 import { claimExecutionSchema } from '@/lib/overlord/validation';
@@ -8,6 +13,13 @@ import { createServiceRoleClient } from '@/supabase/utils/service-role';
 import type { Database, Json } from '@/types/database.types';
 
 type ExecutionRequestRow = Database['public']['Tables']['execution_requests']['Row'];
+
+// Stored on `execution_requests.last_error` when a project request reaches claim
+// without a primary directory on the claiming target (G4 backstop). Used to emit
+// the ticket event only once per transition into the error so a runner polling
+// every few seconds does not flood the activity feed.
+const MISSING_PRIMARY_ERROR =
+  'No primary resource directory is set for this project on this execution target.';
 
 function isRecord(value: Json): value is Record<string, Json | undefined> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -35,19 +47,27 @@ function jsonFromParams(params: Json, key: string): Json | null {
 async function resolveWorkingDirectory(
   supabase: ReturnType<typeof createServiceRoleClient>,
   request: ExecutionRequestRow,
-  userId: string,
   executionTargetId: string
 ): Promise<string | null> {
   const explicit = textFromParams(request.launch_params, 'workingDirectory');
   if (explicit) return explicit;
 
   if (request.target_resource_id) {
+    // Resource directories are target-scoped, not per-user: a directory chosen on
+    // a shared target may have been added by another user. Guard that it lives on
+    // the claiming target AND (defense-in-depth for Finding #3) belongs to this
+    // request's project — request creation already validates this, but the claim
+    // path must not launch a foreign-project checkout if a bad row slips through.
     const { data } = await supabase
       .from('project_resource_directories')
-      .select('directory_path, execution_target_id, user_id')
+      .select('directory_path, execution_target_id, project_id')
       .eq('id', request.target_resource_id)
       .maybeSingle();
-    if (!data || data.user_id !== userId || data.execution_target_id !== executionTargetId) {
+    if (
+      !data ||
+      data.execution_target_id !== executionTargetId ||
+      (request.project_id && data.project_id !== request.project_id)
+    ) {
       return null;
     }
     return data.directory_path;
@@ -55,14 +75,15 @@ async function resolveWorkingDirectory(
 
   if (!request.project_id) return null;
 
+  // Fall back to the (project, target) primary. Only the primary defines the
+  // working directory; if there is none, return null so the caller can record a
+  // missing-primary backstop event (G4) instead of launching in an arbitrary dir.
   const { data: targetResource } = await (supabase as any)
     .from('project_resource_directories')
     .select('directory_path')
     .eq('project_id', request.project_id)
     .eq('execution_target_id', executionTargetId)
-    .order('is_primary', { ascending: false })
-    .order('created_at', { ascending: true })
-    .limit(1)
+    .eq('is_primary', true)
     .maybeSingle();
   return targetResource?.directory_path ?? null;
 }
@@ -101,10 +122,33 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Failed to register execution target.' }, { status: 500 });
     }
 
+    // Org-agnostic claim (G3): the runner token identifies the *user*, not an
+    // org. Claim queued work across every org the user is a member of that also
+    // shares the claiming target. `organizationId` from the token is only a
+    // default hint and is no longer used to scope the poll.
+    const { data: memberRows } = await supabase
+      .from('members')
+      .select('organization_id')
+      .eq('user_id', userId);
+    const memberOrgIds = new Set((memberRows ?? []).map(row => row.organization_id));
+
+    const { data: targetOrgRows } = await supabase
+      .from('organization_execution_targets')
+      .select('organization_id')
+      .eq('execution_target_id', executionTargetId);
+    const allowedOrgIds = [
+      ...new Set(
+        (targetOrgRows ?? []).map(row => row.organization_id).filter(id => memberOrgIds.has(id))
+      )
+    ];
+    if (allowedOrgIds.length === 0) {
+      return NextResponse.json({ request: null });
+    }
+
     let query = supabase
       .from('execution_requests')
       .select('*')
-      .eq('organization_id', organizationId)
+      .in('organization_id', allowedOrgIds)
       .eq('requested_by', userId)
       .in('status', ['queued', 'claimed', 'launching'])
       .order('created_at', { ascending: true })
@@ -114,9 +158,31 @@ export async function POST(request: Request) {
     const { data: candidates, error } = await query;
     if (error) return internalErrorResponse(error);
 
+    const objectiveStates = await loadObjectiveStatesById(
+      supabase,
+      (candidates ?? []).map(candidate => candidate.objective_id)
+    );
+
     const now = new Date();
     const leaseExpiresAt = new Date(now.getTime() + leaseSeconds * 1000).toISOString();
     for (const candidate of candidates ?? []) {
+      const objectiveState = objectiveStates.get(candidate.objective_id);
+      if (!objectiveState || !isObjectiveLaunchableForExecution(objectiveState)) {
+        await failActiveExecutionRequestsForObjective({
+          supabase,
+          organizationId: candidate.organization_id,
+          objectiveId: candidate.objective_id,
+          requestedBy: userId
+        }).catch(err => {
+          console.error('[claim-execution] failed to cancel stale execution request', {
+            executionRequestId: candidate.id,
+            objectiveId: candidate.objective_id,
+            error: err instanceof Error ? err.message : err
+          });
+        });
+        continue;
+      }
+
       if (!claimableByStatus(candidate, now.getTime())) continue;
       if (
         candidate.target_execution_target_id &&
@@ -129,11 +195,39 @@ export async function POST(request: Request) {
       const workingDirectory = await resolveWorkingDirectory(
         supabase,
         candidate,
-        userId,
         executionTargetId
       );
       if (candidate.target_kind === 'ssh' && !sshCommand) continue;
-      if (candidate.project_id && !workingDirectory && !sshCommand) continue;
+      if (candidate.project_id && !workingDirectory && !sshCommand) {
+        // Fail-closed backstop to G4: a project request reached claim with no
+        // primary directory on this target. Leave it queued for retry and record
+        // the missing primary instead of silently skipping it. Only emit the
+        // ticket event on the transition into the error (tracked via
+        // `last_error`) so a runner polling every few seconds does not flood the
+        // activity feed with duplicates. `last_error` is cleared when the request
+        // is later claimed, so a recurrence re-notifies.
+        if (candidate.last_error !== MISSING_PRIMARY_ERROR) {
+          await supabase
+            .from('execution_requests')
+            .update({ last_error: MISSING_PRIMARY_ERROR })
+            .eq('id', candidate.id);
+          await supabase.from('ticket_events').insert({
+            event_type: 'system',
+            phase: 'execute',
+            summary: MISSING_PRIMARY_ERROR,
+            ticket_id: candidate.ticket_id,
+            objective_id: candidate.objective_id,
+            created_by: userId,
+            payload: {
+              execution_request_id: candidate.id,
+              execution_target_id: executionTargetId,
+              project_id: candidate.project_id,
+              missing_primary: true
+            }
+          });
+        }
+        continue;
+      }
 
       // Resolve the per-target agent config BEFORE claiming so a transient
       // config-lookup failure cannot leave the request leased without a launch

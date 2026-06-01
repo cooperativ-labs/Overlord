@@ -1,6 +1,14 @@
 'use client';
 
-import { Check, ChevronDown, ChevronRight, FolderOpen, Laptop, Monitor } from 'lucide-react';
+import {
+  ArrowRightLeft,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  FolderOpen,
+  Laptop,
+  Monitor
+} from 'lucide-react';
 import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 
@@ -25,8 +33,10 @@ import {
 } from '@/lib/actions/devices';
 import {
   addProjectResourceDirectoryAction,
+  claimExecutionTargetAction,
   getUserExecutionTargetsAction,
   removeProjectResourceDirectoryAction,
+  setExecutionTargetOwnershipAction,
   setResourceDirectoryPrimaryAction,
   updateResourceDirectoryLabelAction,
   type UserExecutionTarget
@@ -60,6 +70,9 @@ export function DeviceResourceList({ open, projectId }: Props) {
   const [editingResourceLabel, setEditingResourceLabel] = useState('');
   const [savingResourceId, setSavingResourceId] = useState<string | null>(null);
   const [, startTransition] = useTransition();
+
+  // Ownership transfer state
+  const [transferringTargetId, setTransferringTargetId] = useState<string | null>(null);
 
   // Add new resource directory state
   const [newPath, setNewPath] = useState('');
@@ -238,6 +251,36 @@ export function DeviceResourceList({ open, projectId }: Props) {
     });
   }
 
+  async function handleClaimTarget(deviceId: string, organizationId: number) {
+    setTransferringTargetId(deviceId);
+    try {
+      await claimExecutionTargetAction({ targetId: deviceId, organizationId });
+      await refreshAll({ showLoading: false });
+      toast.success('Target claimed as personal.');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to claim target.');
+    } finally {
+      setTransferringTargetId(null);
+    }
+  }
+
+  async function handleDonateTarget(deviceId: string, organizationId: number) {
+    setTransferringTargetId(deviceId);
+    try {
+      await setExecutionTargetOwnershipAction({
+        targetId: deviceId,
+        organizationId,
+        ownerUserId: null
+      });
+      await refreshAll({ showLoading: false });
+      toast.success('Target donated to organization.');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to donate target.');
+    } finally {
+      setTransferringTargetId(null);
+    }
+  }
+
   async function handleRevealInFinder(directoryPath: string) {
     if (!api?.app?.revealFile) return;
     try {
@@ -388,6 +431,8 @@ export function DeviceResourceList({ open, projectId }: Props) {
             const resources = projectDevice?.resources ?? [];
             const primaryResource = resources.find(r => r.isPrimary);
             const isExpanded = expandedDeviceIds.has(device.id);
+            const canManage = projectDevice?.canManage ?? false;
+            const isOrgOwned = projectDevice ? projectDevice.ownerUserId === null : false;
 
             return (
               <div key={device.id} className="rounded-md border">
@@ -442,6 +487,43 @@ export function DeviceResourceList({ open, projectId }: Props) {
                     )}
                   </div>
 
+                  {projectDevice ? (
+                    <div className="flex shrink-0 items-center gap-1">
+                      <span
+                        className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground"
+                        title={
+                          isOrgOwned
+                            ? 'Organization-owned: any project editor can manage directories'
+                            : 'Personal target: only the owner can manage directories'
+                        }
+                      >
+                        {isOrgOwned ? 'Org-owned' : 'Personal'}
+                      </span>
+                      {canManage && projectDevice.organizationId ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-5 gap-1 px-1.5 text-[10px] text-muted-foreground hover:text-foreground"
+                          disabled={transferringTargetId === device.id}
+                          title={
+                            isOrgOwned
+                              ? 'Claim this target as personal to your account'
+                              : 'Donate this target to the organization'
+                          }
+                          onClick={() =>
+                            isOrgOwned
+                              ? void handleClaimTarget(device.id, projectDevice.organizationId!)
+                              : void handleDonateTarget(device.id, projectDevice.organizationId!)
+                          }
+                        >
+                          <ArrowRightLeft className="h-3 w-3" />
+                          {isOrgOwned ? 'Claim' : 'Make org-owned'}
+                        </Button>
+                      ) : null}
+                    </div>
+                  ) : null}
+
                   <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
                     {resources.length} resource{resources.length !== 1 ? 's' : ''}
                   </span>
@@ -474,6 +556,7 @@ export function DeviceResourceList({ open, projectId }: Props) {
                         setEditingResourceLabel={setEditingResourceLabel}
                         isSaving={savingResourceId === resource.id}
                         canReveal={Boolean(isElectron && api?.app?.revealFile)}
+                        canManage={canManage}
                         onSaveLabel={() => void handleSaveResourceLabel(resource.id)}
                         onCancelEdit={handleCancelEditResource}
                         onStartEdit={() => handleStartEditResource(resource)}

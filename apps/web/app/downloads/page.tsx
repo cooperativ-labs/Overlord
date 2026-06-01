@@ -30,7 +30,7 @@ const recommendedMessages = {
   macos:
     'We detected macOS and highlighted the Apple Silicon installer first. Intel downloads are listed below if your Mac uses an Intel chip.',
   linux:
-    'We detected Linux and highlighted the portable AppImage first. Linux downloads are currently in beta.',
+    'We detected Linux and highlighted the portable amd64 AppImage first. Linux downloads are currently in beta.',
   windows:
     'Windows builds are not published yet, so all currently available desktop downloads are shown below.',
   unknown:
@@ -226,8 +226,8 @@ export default async function DownloadsPage() {
               Mac if you are unsure which chip your machine uses.
             </p>
             <p>
-              Linux downloads are in beta. AppImage is the recommended default; `.deb` is available
-              for Debian-based systems.
+              Linux downloads are in beta and currently support amd64/x86_64 desktops. AppImage is
+              the recommended default; `.deb` is available for Debian-based amd64 systems.
             </p>
             <p>Windows installers are not published yet.</p>
           </CardContent>

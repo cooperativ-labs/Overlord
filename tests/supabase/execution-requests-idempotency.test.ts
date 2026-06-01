@@ -63,7 +63,8 @@ describe('execution_requests idempotency', () => {
       .insert({
         ticket_id: ticketId,
         state: 'draft',
-        objective: 'Run the idempotency check'
+        objective: 'Run the idempotency check',
+        assigned_agent: { agent: 'codex', model: null, thinking: null }
       })
       .select('id')
       .single();

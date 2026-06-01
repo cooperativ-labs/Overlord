@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { internalErrorResponse, parseProtocolBody } from '@/app/api/protocol/_lib';
-import { findExecutionTargetByFingerprint } from '@/lib/overlord/execution-targets';
+import { findUserExecutionTargetByFingerprint } from '@/lib/overlord/execution-targets';
 import { failExecutionLaunchSchema } from '@/lib/overlord/validation';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
@@ -11,13 +11,15 @@ export async function POST(request: Request) {
 
   try {
     const supabase = createServiceRoleClient();
-    const { organizationId, userId } = parsed.tokenContext;
+    const { userId } = parsed.tokenContext;
     if (!userId) {
       return NextResponse.json({ error: 'Authentication required.' }, { status: 401 });
     }
 
-    const executionTargetId = await findExecutionTargetByFingerprint(supabase, {
-      organizationId,
+    // Org-agnostic (G3): resolve the target and request by user + claiming
+    // target, not the token's default org, so a request claimed for any of the
+    // user's target-sharing orgs can be marked failed (see complete route).
+    const executionTargetId = await findUserExecutionTargetByFingerprint(supabase, {
       userId,
       deviceFingerprint: parsed.data.deviceFingerprint
     });
@@ -35,7 +37,6 @@ export async function POST(request: Request) {
         last_error: parsed.data.error
       })
       .eq('id', parsed.data.requestId)
-      .eq('organization_id', organizationId)
       .eq('requested_by', userId)
       .eq('claimed_by_execution_target_id', executionTargetId)
       .select('*')

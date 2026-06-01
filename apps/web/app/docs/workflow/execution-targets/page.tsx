@@ -59,7 +59,9 @@ When you click **Run** or auto-advance enqueues an objective, \`execution_reques
 - \`target_execution_target_id\` — which machine should run the agent
 - \`target_resource_id\` — optional explicit resource; otherwise the primary directory for that project/target pair
 
-\`ovld runner\` claims rows whose target matches its fingerprint (from \`~/.ovld/device.json\`). \`claim-execution\` resolves the working directory from the target resource, or falls back to the primary \`project_resource_directories\` row for \`(project_id, execution_target_id)\`.
+\`ovld runner\` claims rows whose target matches its fingerprint (from \`~/.ovld/device.json\`). It is **org-agnostic**: a single runner process serves queued work across every organization the user belongs to that also shares the claiming target. \`claim-execution\` computes the intersection of (user's member orgs) and (orgs that include the target) to scope the queue, so a developer's laptop can pick up requests from all their organizations without separate runner instances.
+
+\`claim-execution\` resolves the working directory from the target resource, or falls back to the primary \`project_resource_directories\` row for \`(project_id, execution_target_id)\`. If no primary exists, the request is skipped and a backstop event is recorded rather than launching in an unknown directory.
 
 See [Agent Execution & Runner](/docs/workflow/agent-execution) for the full queue lifecycle, leasing, and launch sequence.
 
@@ -77,11 +79,27 @@ const AFTER_ARCHITECTURE = `
 
 **Primary** means “use this path when the execution request does not specify a resource.” Constraints:
 
-- At most one \`is_primary=true\` row per \`(project_id, execution_target_id)\`.
-- Primary is **project topology**, not per-user: two teammates working on the same project on the same target share the same primary checkout.
-- SSH credentials remain **per user**; only the directory path is shared at the project/target level.
+- At most one \`is_primary=true\` row per \`(project_id, execution_target_id)\` — enforced by a partial unique index.
+- Primary is **project topology**, not per-user: two teammates working on the same project on the same target share the same primary checkout path.
+- SSH credentials remain **per user** (stored in \`execution_target_ssh_credentials\`); only the directory path is shared at the project/target level.
+- The first directory added for a (project, target) auto-promotes to primary. If you remove the primary, the next oldest directory for that pair is promoted automatically.
 
 When you add a resource from the desktop app or protocol, setting \`is_primary\` clears any other primary on that same project and target.
+
+---
+
+## Target ownership
+
+\`organization_execution_targets\` has a nullable \`owner_user_id\` that controls who may manage directories on the target within that organization.
+
+| Ownership | Who can manage directories |
+| --- | --- |
+| **Personal** (\`owner_user_id\` set) | Only the owner may add, remove, or change the primary for any project on this target (in this org). |
+| **Organization-owned** (\`owner_user_id\` null) | Any user with **ADMIN** or **MANAGER** role on the project may manage directories. VIEWERs are read-only. |
+
+In both cases, all org members may **read** the primary (so they can see the project's working directory). The write authority is enforced in both application code (\`assertCanManagePrimary\`) and RLS (\`can_manage_project_resource_directory()\` SQL helper).
+
+Self-registered targets (local \`ovld runner\` startup) default to personal (owner = the registering user). SSH targets added from the web app can be marked organization-owned at creation time. Ownership can be transferred later by an org admin or the current owner.
 
 ---
 

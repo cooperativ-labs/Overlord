@@ -8,6 +8,8 @@ native addon caveat that can fail Electron builds on macOS/zsh.
 - Root script: `yarn electron:build-main`
 - Desktop workspace script: `yarn workspace @overlord/desktop build-main`
 - Full production package flow: `yarn electron:build`
+- Linux amd64 production package flow: `yarn electron:build:linux:amd64`
+- Linux amd64 upload flow for an already-bumped version: `yarn electron:upload:linux:amd64:no-bump`
 
 These scripts compile:
 
@@ -40,3 +42,28 @@ confirm the command includes quoted native-module externalization:
 
 Do not replace this with `--loader:.node=...`; Electron should load native
 addons at runtime from `node_modules`.
+
+## Linux amd64 releases
+
+Linux amd64 maps to Electron Builder's `x64` target. The AppImage artifact is
+named with Electron Builder's `linux-x86_64` architecture label, while the
+Debian artifact is named with Debian's `linux-amd64` architecture:
+
+- `Overlord-<version>-linux-x86_64.AppImage`
+- `Overlord-<version>-linux-amd64.deb`
+- `latest-linux.yml`
+
+To add Linux packages to the current release version, run the Linux upload from
+a Linux host with production environment variables available. The `.deb` target
+requires `ar` from `binutils`; gzip is used for package compression.
+
+```bash
+yarn electron:upload:linux:amd64:no-bump
+```
+
+The upload script stores the versioned Linux manifest as both
+`latest-linux-amd64.yml` and `latest-linux-x64.yml`, then publishes
+`latest-linux.yml` at the updater feed root.
+
+The Debian target uses gzip package compression so local Linux builds do not
+depend on host `xz` being installed.

@@ -197,6 +197,7 @@ From the desktop app, open the ticket and launch it with the desired connector. 
 
 Auto-advance and the web Run button enqueue durable execution requests. Keep `ovld runner start` running on a workstation or remote host to claim those requests and launch the assigned agent/model without requiring the desktop app to stay open.
 Use `ovld runner status` to inspect the local runner's visible queue, `ovld runner clear <objective_id>` to clear one active queue row, and `ovld runner clear-all` to clear all visible active rows.
+If someone asks why `ovld runner` is "randomly executing", the usual answer is that a prior Run action or auto-advance already queued work. Clear one request with `ovld runner clear 8974e557-bec4-4984-b12c-be46bd63207c` or `ovld protocol clear-execution-requests --objective-id 8974e557-bec4-4984-b12c-be46bd63207c`.
 
 From the CLI, use:
 

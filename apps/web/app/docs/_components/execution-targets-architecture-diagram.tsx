@@ -61,7 +61,7 @@ export function ExecutionTargetsArchitectureDiagram() {
             <DiagramBox>
               <strong>organization_execution_targets</strong>
               <p className="mt-1 text-xs text-muted-foreground">
-                org-scoped label (e.g. builder-mac)
+                org-scoped label · owner_user_id (personal vs. org-owned)
               </p>
             </DiagramBox>
             <DiagramBox>

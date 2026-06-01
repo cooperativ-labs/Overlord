@@ -18,14 +18,13 @@ function buildWebSearchQuery(value: string): string {
   return terms.join(' ');
 }
 
-function escapeLikePattern(value: string): string {
-  return value.replace(/[%_]/g, match => `\\${match}`);
-}
-
 export function normalizeTicketSearchQuery(value: string) {
+  const rawTrimmed = value.trim().slice(0, 120);
   const sanitized = sanitizeQuery(value);
   return {
     sanitized,
+    rawTrimmed,
+    exactTicketId: /^[0-9]+:[0-9]+$/.test(rawTrimmed) ? rawTrimmed : null,
     textSearchQuery: sanitized ? buildWebSearchQuery(sanitized) : ''
   };
 }
@@ -40,79 +39,73 @@ type SearchTicketsOptions = {
   createdBy?: string;
   updatedAfter?: string;
   updatedBefore?: string;
-  select?: string;
 };
 
-function applySharedFilters<T extends { eq: any; in: any; neq: any; gte: any; lte: any }>(
-  q: T,
-  opts: SearchTicketsOptions
-): T {
-  let next = q;
-  if (opts.organizationId) next = next.eq('organization_id', opts.organizationId);
-  if (opts.statuses?.length) {
-    next = next.in('status', opts.statuses);
-  } else if (!opts.includeCompleted) {
-    next = next.neq('status', 'complete');
-  }
-  if (opts.projectId) next = next.eq('project_id', opts.projectId);
-  if (opts.createdBy) next = next.eq('created_by', opts.createdBy);
-  if (opts.updatedAfter) next = next.gte('updated_at', opts.updatedAfter);
-  if (opts.updatedBefore) next = next.lte('updated_at', opts.updatedBefore);
-  return next;
+type RankedTicketSearchRow = {
+  id: string;
+  title: string | null;
+  ticket_id: string | null;
+  ticket_sequence: number | null;
+  project_id: string | null;
+  organization_id: number | null;
+  status: string | null;
+  project_name: string | null;
+  search_rank: number | null;
+};
+
+export type TicketSearchResult = {
+  id: string;
+  title: string | null;
+  ticket_id: string | null;
+  ticket_sequence: number | null;
+  project_id: string | null;
+  organization_id: number | null;
+  status: string | null;
+  project: {
+    name: string | null;
+  } | null;
+};
+
+function mapRankedTicketRow(row: RankedTicketSearchRow): TicketSearchResult {
+  return {
+    id: row.id,
+    title: row.title,
+    ticket_id: row.ticket_id,
+    ticket_sequence: row.ticket_sequence,
+    project_id: row.project_id,
+    organization_id: row.organization_id,
+    status: row.status,
+    project: row.project_name !== null ? { name: row.project_name } : null
+  };
 }
 
 export async function searchTickets(
   supabase: SupabaseClient<Database>,
   options: SearchTicketsOptions
 ) {
-  const {
-    limit = 8,
-    query = '',
-    select = 'id,title,ticket_id,ticket_sequence,project_id,organization_id,status,project:projects(name)'
-  } = options;
-
+  const { limit = 8, query = '' } = options;
   const normalizedLimit = Math.min(Math.max(limit, 1), 50);
-  const { sanitized, textSearchQuery } = normalizeTicketSearchQuery(query);
+  const { sanitized, exactTicketId } = normalizeTicketSearchQuery(query);
 
-  let baseQuery = supabase
-    .from('tickets')
-    .select(select)
-    .order('updated_at', { ascending: false })
-    .limit(normalizedLimit);
-
-  baseQuery = applySharedFilters(baseQuery, options);
-
-  if (!sanitized || !textSearchQuery) {
-    const { data, error } = await baseQuery;
-    return { data, error };
-  }
-
-  const { data, error } = await baseQuery.textSearch('search_vector', textSearchQuery, {
-    config: 'english',
-    type: 'websearch'
+  const { data, error } = await supabase.rpc('search_tickets', {
+    p_query: sanitized,
+    p_exact_ticket_id: exactTicketId,
+    p_organization_id: options.organizationId ?? undefined,
+    p_limit: normalizedLimit,
+    p_include_completed: options.includeCompleted ?? false,
+    p_statuses: options.statuses?.length ? options.statuses : undefined,
+    p_project_id: options.projectId ?? undefined,
+    p_created_by: options.createdBy ?? undefined,
+    p_updated_after: options.updatedAfter ?? undefined,
+    p_updated_before: options.updatedBefore ?? undefined
   });
 
   if (error) {
     return { data: null, error };
   }
 
-  if ((data?.length ?? 0) > 0) {
-    return { data, error: null };
-  }
-
-  const escapedPattern = escapeLikePattern(sanitized);
-  let fallbackQuery = supabase
-    .from('tickets')
-    .select(select)
-    .or(`title.ilike.%${escapedPattern}%,ticket_id.ilike.%${escapedPattern}%`)
-    .order('updated_at', { ascending: false })
-    .limit(normalizedLimit);
-
-  fallbackQuery = applySharedFilters(fallbackQuery, options);
-
-  const fallbackResult = await fallbackQuery;
   return {
-    data: fallbackResult.data,
-    error: fallbackResult.error
+    data: ((data ?? []) as RankedTicketSearchRow[]).map(mapRankedTicketRow),
+    error: null
   };
 }

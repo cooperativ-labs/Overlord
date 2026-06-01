@@ -116,3 +116,9 @@ export function toAttributionFilePaths(content: string): string[] {
     .map(entry => entry.path)
     .filter(path => path.includes('/') || path.includes('.'));
 }
+
+export function isMarkdownFile(path: string | undefined | null): boolean {
+  if (!path) return false;
+  const cleanPath = path.trim().toLowerCase();
+  return cleanPath.endsWith('.md') || cleanPath.endsWith('.markdown');
+}

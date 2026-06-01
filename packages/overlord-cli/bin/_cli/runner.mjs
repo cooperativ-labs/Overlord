@@ -171,13 +171,17 @@ function resolvePinnedOrganizationId(flags) {
 const ORGANIZATION_REFRESH_MS = 60_000;
 
 /**
- * Resolves which organizations a poll pass should claim from.
+ * Resolves which organizations a fan-out pass (list / clear-all) should act on.
  *
  * - When the user pins an org (`--organization-id` flag or
- *   `OVERLORD_ORGANIZATION_ID`), only that org is polled.
- * - Otherwise the runner discovers every org the authenticated user belongs to
- *   and polls each one. If discovery fails or returns nothing, it falls back to
- *   the credential default (an empty scope id) so behavior never regresses.
+ *   `OVERLORD_ORGANIZATION_ID`), only that org is used.
+ * - Otherwise the runner discovers every org the authenticated user belongs to.
+ *   If discovery fails or returns nothing, it falls back to the credential
+ *   default (an empty scope id) so behavior never regresses.
+ *
+ * NOTE: this is for the per-org fan-out commands. The claim poll uses
+ * {@link createClaimOrganizationScope}, which is org-agnostic — the server's
+ * `claim-execution` is authoritative and spans the user's target-sharing orgs.
  */
 export function createOrganizationScope(flags, deviceFingerprint) {
   const pinned = resolvePinnedOrganizationId(flags);
@@ -209,6 +213,17 @@ export function createOrganizationScope(flags, deviceFingerprint) {
       return cache.length > 0 ? cache : [''];
     }
   };
+}
+
+/**
+ * Resolves the org scope for the claim poll (G3). A pinned org still scopes the
+ * poll; otherwise the runner does a single org-agnostic poll (empty scope) and
+ * lets the server claim across every org the user belongs to that shares the
+ * claiming target — no org discovery or per-org looping needed.
+ */
+export function createClaimOrganizationScope(flags) {
+  const pinned = resolvePinnedOrganizationId(flags);
+  return { pinned: Boolean(pinned), resolve: () => [pinned || ''] };
 }
 
 function completeLaunch(requestId, deviceFingerprint) {
@@ -276,11 +291,19 @@ function normalizeRunnerTerminalProfile(value) {
   };
 }
 
-function buildRunnerLaunchShellCommand(args, deviceFingerprint) {
-  return [
-    `export OVERLORD_DEVICE_FINGERPRINT=${shellQuote(deviceFingerprint)}`,
+function buildRunnerLaunchShellCommand(args, deviceFingerprint, executionRequestId) {
+  const lines = [`export OVERLORD_DEVICE_FINGERPRINT=${shellQuote(deviceFingerprint)}`];
+  // Terminal-profile launches run this generated script in a fresh shell, so the
+  // request id must be exported here too (the direct-spawn path inherits it via
+  // the child env). Without it, attach in the new terminal falls back to
+  // objective matching.
+  if (executionRequestId) {
+    lines.push(`export OVERLORD_EXECUTION_REQUEST_ID=${shellQuote(executionRequestId)}`);
+  }
+  lines.push(
     `exec ${shellQuote(process.execPath)} ${[OVLD_ENTRY, ...args].map(shellQuote).join(' ')}`
-  ].join('\n');
+  );
+  return lines.join('\n');
 }
 
 function writeRunnerLaunchScript(launchCommand) {
@@ -375,7 +398,7 @@ export function buildRunnerTerminalOpenCommand(
 
 function spawnLaunchProcess(args, claim, deviceFingerprint) {
   const spawnImpl = runnerTestHooks.spawn ?? spawn;
-  const launchCommand = buildRunnerLaunchShellCommand(args, deviceFingerprint);
+  const launchCommand = buildRunnerLaunchShellCommand(args, deviceFingerprint, claim.request?.id);
   const terminalCommand = buildRunnerTerminalOpenCommand(
     claim.launch?.runnerTerminalProfile,
     launchCommand,
@@ -466,7 +489,7 @@ export async function launchClaimedRequest(claim, deviceFingerprint) {
 }
 
 export async function runOnce(flags, deviceFingerprint, organizationScope) {
-  const scope = organizationScope ?? createOrganizationScope(flags, deviceFingerprint);
+  const scope = organizationScope ?? createClaimOrganizationScope(flags);
   const organizationIds = scope.resolve();
 
   let launchedAny = false;

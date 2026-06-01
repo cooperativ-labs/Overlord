@@ -33,6 +33,12 @@ export type UpdateProjectSshConfigInput = {
   sshUser: string | null;
   sshAuthMethod: ProjectSshAuthMethod | null;
   sshPrivateKeyPath: string | null;
+  /**
+   * When true, the SSH target is registered as organization-owned (any project
+   * editor may manage its directories) rather than personal to the registrant.
+   * Only honored when the target is first created.
+   */
+  organizationOwned?: boolean;
 };
 
 export type ProjectUserSshSettingsRow = {

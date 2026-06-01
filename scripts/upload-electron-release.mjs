@@ -1,14 +1,19 @@
 #!/usr/bin/env node
 /* global Buffer, console, process */
 /**
- * Build and upload the macOS ARM Electron desktop release.
+ * Build and upload Electron desktop release artifacts.
  *
- * Fixed target:
+ * Default target:
  *   - macOS arm64
  *
+ * Examples:
+ *   node scripts/upload-electron-release.mjs
+ *   node scripts/upload-electron-release.mjs --target linux:amd64 --no-bump
+ *   node scripts/upload-electron-release.mjs --platform linux --linux-arch amd64 --no-bump
+ *
  * This script bumps the patch version, syncs the CLI package version, builds
- * the Apple Silicon macOS target, uploads the artifacts to
- * app-downloads/electron/<version>/, and publishes the root update manifest.
+ * the requested target, uploads the artifacts to app-downloads/electron/<version>/,
+ * and publishes the matching update manifest.
  */
 
 import { readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
@@ -23,7 +28,7 @@ const ROOT = resolve(__dirname, '..');
 const BUCKET = 'app-downloads';
 const PREFIX = 'electron';
 const RETAIN_VERSION_COUNT = 3;
-const RELEASE_TARGETS = [{ platform: 'mac', arch: 'arm64', publishRootManifest: true }];
+const DEFAULT_RELEASE_TARGETS = [{ platform: 'mac', arch: 'arm64', publishRootManifest: true }];
 
 const ARTIFACT_PATTERNS = {
   mac: {
@@ -36,7 +41,12 @@ const ARTIFACT_PATTERNS = {
   },
   linux: {
     required: (linuxArch) => [
-      { label: 'Linux AppImage', pattern: new RegExp(`^Overlord-.*-linux-${linuxArch}\\.AppImage$`) },
+      {
+        label: 'Linux AppImage',
+        pattern: new RegExp(
+          `^Overlord-.*-linux-${linuxArch === 'x64' ? '(?:x86_64|x64)' : linuxArch}\\.AppImage$`
+        )
+      },
       { label: 'latest-linux.yml', pattern: /^latest-linux\.yml$/ }
     ],
     optional: (linuxArch) => [
@@ -200,7 +210,9 @@ function getManifestUploadNames(platform, arch) {
     return arch === 'arm64' ? ['latest-mac-arm64.yml', 'latest-mac.yml'] : ['latest-mac-x64.yml'];
   }
 
-  return arch === 'x64' ? ['latest-linux-x64.yml'] : ['latest-linux-arm64.yml'];
+  return arch === 'x64'
+    ? ['latest-linux-amd64.yml', 'latest-linux-x64.yml']
+    : ['latest-linux-arm64.yml'];
 }
 
 function getRootManifestName(platform) {
@@ -215,6 +227,117 @@ function getBuildArgs(target) {
     args.push('--linux-arch', target.arch);
   }
   return args;
+}
+
+function readFlagValue(args, flagName) {
+  const inline = args.find((arg) => arg.startsWith(`${flagName}=`));
+  if (inline) {
+    return inline.slice(flagName.length + 1);
+  }
+
+  const index = args.indexOf(flagName);
+  if (index === -1) return null;
+  return args[index + 1] ?? null;
+}
+
+function readFlagValues(args, flagName) {
+  const values = [];
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i];
+    if (arg.startsWith(`${flagName}=`)) {
+      values.push(arg.slice(flagName.length + 1));
+      continue;
+    }
+    if (arg === flagName && args[i + 1]) {
+      values.push(args[i + 1]);
+      i += 1;
+    }
+  }
+  return values;
+}
+
+function normalizeReleaseTarget(platform, arch) {
+  if (platform === 'mac') {
+    const normalizedArch = arch || 'arm64';
+    if (normalizedArch !== 'arm64' && normalizedArch !== 'x64') {
+      console.error(`[upload] Unsupported mac arch: ${normalizedArch}`);
+      console.error('         Expected one of: arm64, x64');
+      process.exit(1);
+    }
+    return {
+      platform,
+      arch: normalizedArch,
+      publishRootManifest: normalizedArch === 'arm64'
+    };
+  }
+
+  if (platform === 'linux') {
+    const normalizedArch = arch === 'amd64' || !arch ? 'x64' : arch;
+    if (normalizedArch !== 'x64' && normalizedArch !== 'arm64') {
+      console.error(`[upload] Unsupported linux arch: ${arch}`);
+      console.error('         Expected one of: amd64, x64, arm64');
+      process.exit(1);
+    }
+    return {
+      platform,
+      arch: normalizedArch,
+      publishRootManifest: normalizedArch === 'x64'
+    };
+  }
+
+  console.error(`[upload] Unsupported platform: ${platform}`);
+  console.error('         Expected one of: mac, linux');
+  process.exit(1);
+}
+
+function parseReleaseTarget(value) {
+  const match = value.match(/^([^:/]+)[:/]([^:/]+)$/);
+  if (!match) {
+    console.error(`[upload] Invalid --target value: ${value}`);
+    console.error('         Expected format: mac:arm64, mac:x64, linux:amd64, linux:x64, or linux:arm64');
+    process.exit(1);
+  }
+  return normalizeReleaseTarget(match[1], match[2]);
+}
+
+function parseReleaseTargets(args) {
+  const targetValues = readFlagValues(args, '--target');
+  const requestedPlatform = readFlagValue(args, '--platform');
+
+  if (targetValues.length > 0 && requestedPlatform) {
+    console.error('[upload] Use either --target or --platform/--*-arch, not both.');
+    process.exit(1);
+  }
+
+  if (targetValues.length > 0) {
+    return targetValues.map(parseReleaseTarget);
+  }
+
+  if (requestedPlatform) {
+    const requestedMacArch = readFlagValue(args, '--mac-arch');
+    const requestedLinuxArch = readFlagValue(args, '--linux-arch');
+    if (requestedPlatform === 'mac' && requestedLinuxArch) {
+      console.error('[upload] --linux-arch is only valid with --platform linux.');
+      process.exit(1);
+    }
+    if (requestedPlatform === 'linux' && requestedMacArch) {
+      console.error('[upload] --mac-arch is only valid with --platform mac.');
+      process.exit(1);
+    }
+    return [
+      normalizeReleaseTarget(
+        requestedPlatform,
+        requestedPlatform === 'mac' ? requestedMacArch : requestedLinuxArch
+      )
+    ];
+  }
+
+  return DEFAULT_RELEASE_TARGETS;
+}
+
+function getTargetLabel(target) {
+  const archLabel = target.platform === 'linux' && target.arch === 'x64' ? 'amd64' : target.arch;
+  return `${target.platform}/${archLabel}`;
 }
 
 function parseBumpMode(args) {
@@ -427,6 +550,7 @@ async function removeStoragePaths(supabase, paths) {
 async function main() {
   const args = process.argv.slice(2);
   const bumpMode = parseBumpMode(args);
+  const releaseTargets = parseReleaseTargets(args);
 
   loadEnv();
 
@@ -471,12 +595,12 @@ async function main() {
   });
 
   console.log(
-    `[upload] Building and uploading ${RELEASE_TARGETS.length} release target(s): ${RELEASE_TARGETS.map(
-      (target) => `${target.platform}/${target.arch}`
+    `[upload] Building and uploading ${releaseTargets.length} release target(s): ${releaseTargets.map(
+      (target) => getTargetLabel(target)
     ).join(', ')}`
   );
 
-  for (const target of RELEASE_TARGETS) {
+  for (const target of releaseTargets) {
     await buildAndUploadTarget(supabase, version, target);
   }
 
@@ -495,10 +619,14 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
 }
 
 export {
+  DEFAULT_RELEASE_TARGETS,
   RETAIN_VERSION_COUNT,
+  getManifestUploadNames,
+  getTargetLabel,
   getStoredVersions,
   getVersionRetentionPlan,
   isDirectoryEntry,
   parseBumpMode,
+  parseReleaseTargets,
   prefixLatestYamlPaths
 };

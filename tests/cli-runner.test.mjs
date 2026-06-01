@@ -181,13 +181,12 @@ test('runOnce exits cleanly when claim-execution returns no request', async () =
   }
 });
 
-test('runOnce polls every organization the user belongs to', async () => {
+test('runOnce does a single org-agnostic poll when unpinned', async () => {
   const claimedOrgs = [];
+  const subcommands = [];
   runnerTestHooks.execFileSync = (_file, argv) => {
     const subcommand = argv[2];
-    if (subcommand === 'list-organizations') {
-      return JSON.stringify({ organizations: [{ id: 1, name: 'Org A' }, { id: 7, name: 'Org B' }] });
-    }
+    subcommands.push(subcommand);
     if (subcommand === 'claim-execution') {
       const idx = argv.indexOf('--organization-id');
       claimedOrgs.push(idx === -1 ? null : argv[idx + 1]);
@@ -197,8 +196,10 @@ test('runOnce polls every organization the user belongs to', async () => {
   };
   try {
     assert.equal(await runOnce({}, 'fp-multi'), false);
-    // Every organization is claimed from, each scoped by its own org id.
-    assert.deepEqual(claimedOrgs, ['1', '7']);
+    // The server claims across all the user's target-sharing orgs in one pass,
+    // so the runner polls once without an org id and never discovers orgs.
+    assert.deepEqual(claimedOrgs, [null]);
+    assert.ok(!subcommands.includes('list-organizations'));
   } finally {
     runnerTestHooks.execFileSync = null;
   }

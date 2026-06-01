@@ -1,6 +1,6 @@
 'use client';
 
-import { GalleryVerticalEnd } from 'lucide-react';
+import { Fingerprint, GalleryVerticalEnd } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import * as React from 'react';
@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input';
 import { type ButtonLoadingState, LoadingButton } from '@/components/ui/loading-button';
 import { signIn, signInWithBitbucket, signInWithGithub, signUp } from '@/lib/actions/auth';
 import { cn } from '@/lib/utils';
+import { createClient } from '@/supabase/utils/client';
 
 type AuthMode = 'login' | 'signup';
 
@@ -49,6 +50,7 @@ export function AuthForm({
   const [githubButtonState, setGithubButtonState] = React.useState<ButtonLoadingState>('default');
   const [bitbucketButtonState, setBitbucketButtonState] =
     React.useState<ButtonLoadingState>('default');
+  const [passkeyButtonState, setPasskeyButtonState] = React.useState<ButtonLoadingState>('default');
   const [formError, setFormError] = React.useState<string | undefined>(initialError);
 
   const isLogin = mode === 'login';
@@ -142,6 +144,30 @@ export function AuthForm({
     } catch {
       setFormError('Something went wrong. Please try again.');
       setBitbucketButtonState('error');
+    }
+  };
+
+  const handlePasskeySignIn = async () => {
+    setPasskeyButtonState('loading');
+    setFormError(undefined);
+    try {
+      const supabase = createClient();
+      const { data, error: passkeyError } = await supabase.auth.signInWithPasskey();
+      if (passkeyError) {
+        setFormError(passkeyError.message ?? 'Passkey sign-in failed.');
+        setPasskeyButtonState('error');
+      } else if (data?.session) {
+        setPasskeyButtonState('success');
+        const redirectPath = next ?? '/u';
+        navigateAfterAuth(redirectPath);
+      }
+    } catch (err) {
+      if (err instanceof Error && err.name === 'NotAllowedError') {
+        setFormError('Passkey sign-in was cancelled.');
+      } else {
+        setFormError('Something went wrong. Please try again.');
+      }
+      setPasskeyButtonState('error');
     }
   };
 
@@ -334,6 +360,25 @@ export function AuthForm({
           loadingText="Redirecting..."
           errorText="Bitbucket sign-in failed"
         />
+
+        {isLogin && (
+          <LoadingButton
+            type="button"
+            variant="outline"
+            buttonState={passkeyButtonState}
+            setButtonState={setPasskeyButtonState}
+            onClick={() => void handlePasskeySignIn()}
+            text={
+              <span className="flex items-center justify-center gap-2">
+                <Fingerprint className="size-4 shrink-0" />
+                Sign in with passkey
+              </span>
+            }
+            loadingText="Waiting for device..."
+            successText="Signed in"
+            errorText="Passkey sign-in failed"
+          />
+        )}
       </div>
 
       {isLogin ? (

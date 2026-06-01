@@ -1,4 +1,8 @@
-import { createExecutionRequest } from '@/lib/overlord/execution-requests';
+import {
+  createExecutionRequest,
+  failActiveExecutionRequestsForObjective,
+  isObjectiveLaunchableForExecution
+} from '@/lib/overlord/execution-requests';
 import { NO_ASSIGNED_AGENT_ERROR } from '@/lib/overlord/resolve-execution-agent';
 
 const USER_ID = '11111111-1111-4111-8111-111111111111';
@@ -9,10 +13,45 @@ const PROJECT_ID = 'aaaaaaaa-0000-4000-8000-000000000001';
 
 type TableHandlers = Record<string, () => unknown>;
 
+function projectsQuery(name = 'Test Project') {
+  const chain = {
+    select: jest.fn(() => chain),
+    eq: jest.fn(() => chain),
+    maybeSingle: jest.fn(async () => ({ data: { name }, error: null }))
+  };
+  return chain;
+}
+
+// G4 primary check: project_resource_directories.select('id')...eq('is_primary', true).limit(1)
+function primaryResourceQuery(hasPrimary: boolean) {
+  const chain = {
+    select: jest.fn(() => chain),
+    eq: jest.fn(() => chain),
+    limit: jest.fn(async () => ({ data: hasPrimary ? [{ id: 'dir-1' }] : [], error: null }))
+  };
+  return chain;
+}
+
+function orgExecutionTargetsQuery(label = 'my-target') {
+  const chain = {
+    select: jest.fn(() => chain),
+    eq: jest.fn(() => chain),
+    maybeSingle: jest.fn(async () => ({ data: { label }, error: null }))
+  };
+  return chain;
+}
+
 function buildSupabase(handlers: TableHandlers) {
+  // Default to "a primary exists" so the G4 guard passes unless a test overrides.
+  const withDefaults: TableHandlers = {
+    projects: () => projectsQuery(),
+    project_resource_directories: () => primaryResourceQuery(true),
+    organization_execution_targets: () => orgExecutionTargetsQuery(),
+    ...handlers
+  };
   return {
     from: jest.fn((table: string) => {
-      const handler = handlers[table];
+      const handler = withDefaults[table];
       if (!handler) throw new Error(`unexpected table: ${table}`);
       return handler();
     })
@@ -151,6 +190,55 @@ function executionRequestInsert(options: {
 function ticketEventsInsert() {
   return { insert: jest.fn(async () => ({ error: null })) };
 }
+
+describe('isObjectiveLaunchableForExecution', () => {
+  it('allows draft, submitted, and launching', () => {
+    expect(isObjectiveLaunchableForExecution('draft')).toBe(true);
+    expect(isObjectiveLaunchableForExecution('submitted')).toBe(true);
+    expect(isObjectiveLaunchableForExecution('launching')).toBe(true);
+  });
+
+  it('rejects terminal or in-flight execution states', () => {
+    expect(isObjectiveLaunchableForExecution('complete')).toBe(false);
+    expect(isObjectiveLaunchableForExecution('executing')).toBe(false);
+    expect(isObjectiveLaunchableForExecution('future')).toBe(false);
+  });
+});
+
+describe('failActiveExecutionRequestsForObjective', () => {
+  it('marks active requests failed and clears the lease', async () => {
+    const captureUpdate = jest.fn();
+    const chain = {
+      update: jest.fn((patch: unknown) => {
+        captureUpdate(patch);
+        return chain;
+      }),
+      eq: jest.fn(() => chain),
+      in: jest.fn(() => chain),
+      select: jest.fn(async () => ({ data: [{ id: 'req-1' }], error: null }))
+    };
+    const supabase = buildSupabase({
+      execution_requests: () => chain
+    });
+
+    const result = await failActiveExecutionRequestsForObjective({
+      supabase: supabase as never,
+      organizationId: ORG_ID,
+      objectiveId: OBJECTIVE_ID,
+      requestedBy: USER_ID
+    });
+
+    expect(result.failedCount).toBe(1);
+    expect(captureUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'failed',
+        lease_expires_at: null,
+        last_error: expect.stringContaining('no longer launchable')
+      })
+    );
+    expect(chain.in).toHaveBeenCalledWith('status', ['queued', 'claimed', 'launching']);
+  });
+});
 
 describe('createExecutionRequest', () => {
   beforeEach(() => {
@@ -599,5 +687,195 @@ describe('createExecutionRequest', () => {
         })
       })
     );
+  });
+
+  describe('G4 — no primary directory throws at request time', () => {
+    it('throws naming project + target for a specific-target run with no primary', async () => {
+      const captureInsert = jest.fn();
+      const supabase = buildSupabase({
+        tickets: () => ticketQuery(),
+        objectives: () => objectiveQuery(),
+        execution_requests: () => executionRequestInsert({ captureInsert }),
+        ticket_events: () => ticketEventsInsert(),
+        projects: () => projectsQuery('Overlord'),
+        project_resource_directories: () => primaryResourceQuery(false),
+        organization_execution_targets: () => orgExecutionTargetsQuery('my-laptop')
+      });
+
+      await expect(
+        createExecutionRequest(supabase as never, {
+          ticketId: TICKET_UUID,
+          objectiveId: OBJECTIVE_ID,
+          userId: USER_ID,
+          organizationId: ORG_ID,
+          requestedFrom: 'manual_run',
+          targetExecutionTargetId: 'target-xyz'
+        })
+      ).rejects.toThrow('No primary directory is set for "Overlord" on "my-laptop"');
+      // Nothing was queued.
+      expect(captureInsert).not.toHaveBeenCalled();
+    });
+
+    it('throws for a target-agnostic run when the project has no primary anywhere', async () => {
+      const captureInsert = jest.fn();
+      const supabase = buildSupabase({
+        tickets: () => ticketQuery(),
+        objectives: () => objectiveQuery(),
+        execution_requests: () => executionRequestInsert({ captureInsert }),
+        ticket_events: () => ticketEventsInsert(),
+        projects: () => projectsQuery('Overlord'),
+        project_resource_directories: () => primaryResourceQuery(false)
+      });
+
+      await expect(
+        createExecutionRequest(supabase as never, {
+          ticketId: TICKET_UUID,
+          objectiveId: OBJECTIVE_ID,
+          userId: USER_ID,
+          organizationId: ORG_ID,
+          requestedFrom: 'manual_run',
+          targetKind: 'any'
+        })
+      ).rejects.toThrow('No primary directory is set for "Overlord" on any execution target');
+      expect(captureInsert).not.toHaveBeenCalled();
+    });
+
+    it('does not check the primary when an explicit resource is supplied', async () => {
+      const captureInsert = jest.fn();
+      // Resource validation query: select('project_id, execution_target_id').eq('id').maybeSingle()
+      const resourceLookup = {
+        select: jest.fn(() => resourceLookup),
+        eq: jest.fn(() => resourceLookup),
+        maybeSingle: jest.fn(async () => ({
+          data: { project_id: PROJECT_ID, execution_target_id: 'target-xyz' },
+          error: null
+        }))
+      };
+      const supabase = buildSupabase({
+        tickets: () => ticketQuery(),
+        objectives: () => objectiveQuery(),
+        execution_requests: () => executionRequestInsert({ captureInsert }),
+        ticket_events: () => ticketEventsInsert(),
+        project_resource_directories: () => resourceLookup
+      });
+
+      await createExecutionRequest(supabase as never, {
+        ticketId: TICKET_UUID,
+        objectiveId: OBJECTIVE_ID,
+        userId: USER_ID,
+        organizationId: ORG_ID,
+        requestedFrom: 'manual_run',
+        targetResourceId: 'resource-1',
+        targetExecutionTargetId: 'target-xyz'
+      });
+
+      expect(captureInsert).toHaveBeenCalled();
+    });
+
+    it('does not check the primary when an explicit working directory is supplied', async () => {
+      const captureInsert = jest.fn();
+      const supabase = buildSupabase({
+        tickets: () => ticketQuery(),
+        objectives: () => objectiveQuery(),
+        execution_requests: () => executionRequestInsert({ captureInsert }),
+        ticket_events: () => ticketEventsInsert(),
+        // Would throw if consulted, but the explicit dir short-circuits the check.
+        project_resource_directories: () => primaryResourceQuery(false)
+      });
+
+      await createExecutionRequest(supabase as never, {
+        ticketId: TICKET_UUID,
+        objectiveId: OBJECTIVE_ID,
+        userId: USER_ID,
+        organizationId: ORG_ID,
+        requestedFrom: 'manual_run',
+        workingDirectory: '/explicit/dir'
+      });
+
+      expect(captureInsert).toHaveBeenCalled();
+    });
+  });
+
+  describe('Finding #3 — explicit targetResourceId is validated before it is trusted', () => {
+    function resourceLookup(resource: { project_id: string; execution_target_id: string } | null) {
+      const chain = {
+        select: jest.fn(() => chain),
+        eq: jest.fn(() => chain),
+        maybeSingle: jest.fn(async () => ({ data: resource, error: null }))
+      };
+      return chain;
+    }
+
+    it('rejects a resource from a different project', async () => {
+      const captureInsert = jest.fn();
+      const supabase = buildSupabase({
+        tickets: () => ticketQuery(),
+        objectives: () => objectiveQuery(),
+        execution_requests: () => executionRequestInsert({ captureInsert }),
+        ticket_events: () => ticketEventsInsert(),
+        project_resource_directories: () =>
+          resourceLookup({ project_id: 'other-project', execution_target_id: 'target-xyz' })
+      });
+
+      await expect(
+        createExecutionRequest(supabase as never, {
+          ticketId: TICKET_UUID,
+          objectiveId: OBJECTIVE_ID,
+          userId: USER_ID,
+          organizationId: ORG_ID,
+          requestedFrom: 'manual_run',
+          targetResourceId: 'resource-foreign'
+        })
+      ).rejects.toThrow("does not belong to this ticket's project");
+      expect(captureInsert).not.toHaveBeenCalled();
+    });
+
+    it('rejects a resource that lives on a different target than requested', async () => {
+      const captureInsert = jest.fn();
+      const supabase = buildSupabase({
+        tickets: () => ticketQuery(),
+        objectives: () => objectiveQuery(),
+        execution_requests: () => executionRequestInsert({ captureInsert }),
+        ticket_events: () => ticketEventsInsert(),
+        project_resource_directories: () =>
+          resourceLookup({ project_id: PROJECT_ID, execution_target_id: 'target-A' })
+      });
+
+      await expect(
+        createExecutionRequest(supabase as never, {
+          ticketId: TICKET_UUID,
+          objectiveId: OBJECTIVE_ID,
+          userId: USER_ID,
+          organizationId: ORG_ID,
+          requestedFrom: 'manual_run',
+          targetResourceId: 'resource-1',
+          targetExecutionTargetId: 'target-B'
+        })
+      ).rejects.toThrow('is not on the requested execution target');
+      expect(captureInsert).not.toHaveBeenCalled();
+    });
+
+    it('rejects a resource id that does not exist', async () => {
+      const captureInsert = jest.fn();
+      const supabase = buildSupabase({
+        tickets: () => ticketQuery(),
+        objectives: () => objectiveQuery(),
+        execution_requests: () => executionRequestInsert({ captureInsert }),
+        ticket_events: () => ticketEventsInsert(),
+        project_resource_directories: () => resourceLookup(null)
+      });
+
+      await expect(
+        createExecutionRequest(supabase as never, {
+          ticketId: TICKET_UUID,
+          objectiveId: OBJECTIVE_ID,
+          userId: USER_ID,
+          organizationId: ORG_ID,
+          requestedFrom: 'manual_run',
+          targetResourceId: 'resource-missing'
+        })
+      ).rejects.toThrow('Selected resource directory was not found.');
+      expect(captureInsert).not.toHaveBeenCalled();
+    });
   });
 });

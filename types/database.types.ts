@@ -1104,6 +1104,7 @@ export type Database = {
           execution_target_id: string;
           label: string;
           organization_id: number;
+          owner_user_id: string | null;
           updated_at: string;
         };
         Insert: {
@@ -1112,6 +1113,7 @@ export type Database = {
           execution_target_id: string;
           label: string;
           organization_id: number;
+          owner_user_id?: string | null;
           updated_at?: string;
         };
         Update: {
@@ -1120,6 +1122,7 @@ export type Database = {
           execution_target_id?: string;
           label?: string;
           organization_id?: number;
+          owner_user_id?: string | null;
           updated_at?: string;
         };
         Relationships: [
@@ -2369,12 +2372,29 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      build_ticket_prefix_tsquery: {
+        Args: { p_query: string };
+        Returns: unknown;
+      };
+      build_ticket_search_vector: {
+        Args: {
+          p_first_objective: string;
+          p_identifier: string;
+          p_title: string;
+        };
+        Returns: unknown;
+      };
       can_access_ticket: { Args: { p_ticket_id: string }; Returns: boolean };
+      can_manage_project_resource_directory: {
+        Args: { p_execution_target_id: string; p_project_id: string };
+        Returns: boolean;
+      };
       can_write_ticket: { Args: { p_ticket_id: string }; Returns: boolean };
       create_organization_for_current_user: {
         Args: { target_name: string };
         Returns: number;
       };
+      escape_like_pattern: { Args: { p_value: string }; Returns: string };
       first_ticket_objective_text: {
         Args: { p_ticket_id: string };
         Returns: string;
@@ -2498,6 +2518,31 @@ export type Database = {
       schedule_smallint_array_between: {
         Args: { max_value: number; min_value: number; payload: number[] };
         Returns: boolean;
+      };
+      search_tickets: {
+        Args: {
+          p_created_by?: string;
+          p_exact_ticket_id?: string;
+          p_include_completed?: boolean;
+          p_limit?: number;
+          p_organization_id?: number;
+          p_project_id?: string;
+          p_query?: string;
+          p_statuses?: string[];
+          p_updated_after?: string;
+          p_updated_before?: string;
+        };
+        Returns: {
+          id: string;
+          organization_id: number;
+          project_id: string;
+          project_name: string;
+          search_rank: number;
+          status: string;
+          ticket_id: string;
+          ticket_sequence: number;
+          title: string;
+        }[];
       };
       seed_default_ticket_statuses_for_organization: {
         Args: { target_organization_id: number };

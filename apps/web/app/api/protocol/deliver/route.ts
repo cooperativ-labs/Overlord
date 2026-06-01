@@ -6,6 +6,7 @@ import { internalErrorResponse, parseProtocolBody } from '@/app/api/protocol/_li
 import { scheduleQueuedObjectiveAfterDeliver } from '@/lib/auto-advance/schedule-after-deliver';
 import { getTicketIdentifier } from '@/lib/helpers/tickets';
 import { upsertObjectiveCheckpoint } from '@/lib/overlord/checkpoints';
+import { failActiveExecutionRequestsForObjective } from '@/lib/overlord/execution-requests';
 import { insertFileChanges } from '@/lib/overlord/file-changes';
 import { emitWorkflowNotification } from '@/lib/overlord/notifications/orchestrator';
 import { resolveSession, resolveTicketId } from '@/lib/overlord/protocol-db';
@@ -157,6 +158,18 @@ export async function POST(request: Request) {
         extra: { ticketId, sessionId, objectiveId }
       });
     }
+
+    await failActiveExecutionRequestsForObjective({
+      supabase: typedSupabase,
+      organizationId,
+      objectiveId,
+      requestedBy: userId
+    }).catch(err => {
+      console.error('[protocol:deliver] failed to cancel active execution request:', err);
+      Sentry.captureException(err instanceof Error ? err : new Error(String(err)), {
+        extra: { ticketId, objectiveId }
+      });
+    });
 
     const queueResult = await scheduleQueuedObjectiveAfterDeliver({
       supabase: typedSupabase,

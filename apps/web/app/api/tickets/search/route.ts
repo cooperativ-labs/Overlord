@@ -40,9 +40,7 @@ export async function GET(request: Request) {
     limit: 6,
     organizationId: organizationId ?? undefined,
     projectId,
-    query: rawQuery,
-    select:
-      'id,title,ticket_id,ticket_sequence,project_id,organization_id,status,project:projects(name)'
+    query: rawQuery
   });
 
   if (error) {

@@ -110,6 +110,14 @@ ovld runner clear <objective_id>  # Clear one active queue row
 ovld runner clear-all  # Clear every active queue row visible to the caller
 ```
 
+If `ovld runner` appears to start work "randomly", inspect the queue first. In practice the runner is usually claiming a request created earlier by manual Run or auto-advance:
+
+```bash
+ovld runner status
+ovld runner clear 8974e557-bec4-4984-b12c-be46bd63207c
+ovld protocol clear-execution-requests --objective-id 8974e557-bec4-4984-b12c-be46bd63207c
+```
+
 Protocol operations used by the runner:
 
 | Operation | API | CLI |

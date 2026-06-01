@@ -27,7 +27,13 @@ linux:
     - AppImage
     - deb
   category: Development
+  executableName: overlord
   icon: apps/web/public/images/512.png
+  maintainer: Cooperativ, Inc. <jake@cooperativ.io>
+
+deb:
+  packageName: overlord
+  compression: gz
 
 asarUnpack:
   - "packages/overlord-cli/**/*"

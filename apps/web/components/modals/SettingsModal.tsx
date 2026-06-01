@@ -3,6 +3,7 @@
 import {
   Bot,
   Edit3,
+  Fingerprint,
   Info,
   Key,
   Keyboard,
@@ -28,6 +29,7 @@ import { ExecutionTargetsPage } from './settings/ExecutionTargetsPage';
 import { HotkeysPage } from './settings/HotkeysPage';
 import { IntegrationsPage } from './settings/IntegrationsPage';
 import { LinkedAccountsPage } from './settings/LinkedAccountsPage';
+import { PasskeysPage } from './settings/PasskeysPage';
 import { TerminalPage } from './settings/TerminalPage';
 import { UserProfilePage } from './settings/UserProfilePage';
 import {
@@ -60,6 +62,7 @@ const appNavItems: SettingsNavItem[] = [
 
 const userNavItems: SettingsNavItem[] = [
   { name: 'Profile', icon: User },
+  { name: 'Passkeys', icon: Fingerprint },
   { name: 'Agent Tokens', icon: Key },
   { name: 'Linked Accounts', icon: Shield }
 ];
@@ -118,6 +121,7 @@ export function SettingsModal({
       {activeNav === 'Application' && <ApplicationPage />}
       {activeNav === 'Hotkeys' && <HotkeysPage />}
       {activeNav === 'Profile' && <UserProfilePage open={open} />}
+      {activeNav === 'Passkeys' && <PasskeysPage open={open} />}
       {activeNav === 'Linked Accounts' && <LinkedAccountsPage open={open} />}
       {activeNav === 'Terminal & IDE' && <TerminalPage open={open} onNavigate={setActiveNav} />}
       {activeNav === 'Execution Targets' && (

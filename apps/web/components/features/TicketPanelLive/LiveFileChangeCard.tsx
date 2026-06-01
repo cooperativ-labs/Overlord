@@ -6,7 +6,8 @@ import { useState } from 'react';
 
 import { ExternalLink } from '@/components/features/ExternalLink';
 import { Button } from '@/components/ui/button';
-import { buildDiffHref } from '@/lib/helpers/file-changes';
+import { MarkdownIcon } from '@/components/ui/markdown-icon';
+import { buildDiffHref, isMarkdownFile } from '@/lib/helpers/file-changes';
 import { cn } from '@/lib/utils';
 import type { Database } from '@/types/database.types';
 
@@ -51,7 +52,11 @@ export function LiveFileChangeCard({
         ) : (
           <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
         )}
-        <FileCode2 className="h-4 w-4 shrink-0 text-muted-foreground" />
+        {isMarkdownFile(fileChange.file_name || fileChange.file_path) ? (
+          <MarkdownIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
+        ) : (
+          <FileCode2 className="h-4 w-4 shrink-0 text-muted-foreground" />
+        )}
         <span className="min-w-0 flex-1 truncate text-sm font-medium">{fileChange.file_name}</span>
         <span className="shrink-0 text-[11px] text-muted-foreground">{dateStr}</span>
       </button>

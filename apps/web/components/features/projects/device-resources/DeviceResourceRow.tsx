@@ -15,6 +15,8 @@ type DeviceResourceRowProps = {
   setEditingResourceLabel: (value: string) => void;
   isSaving: boolean;
   canReveal: boolean;
+  /** Whether the current user may manage this target's directories/primary. */
+  canManage?: boolean;
   onSaveLabel: () => void;
   onCancelEdit: () => void;
   onStartEdit: () => void;
@@ -30,6 +32,7 @@ export function DeviceResourceRow({
   setEditingResourceLabel,
   isSaving,
   canReveal,
+  canManage = true,
   onSaveLabel,
   onCancelEdit,
   onStartEdit,
@@ -111,23 +114,32 @@ export function DeviceResourceRow({
               <FolderOpen className="h-3.5 w-3.5" />
             </Button>
           ) : null}
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-7 w-7 p-0 text-muted-foreground"
-            onClick={onStartEdit}
-            title={resource.label ? 'Edit label' : 'Add label'}
-          >
-            <Pencil className="h-3.5 w-3.5" />
-          </Button>
+          {canManage ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 w-7 p-0 text-muted-foreground"
+              onClick={onStartEdit}
+              title={resource.label ? 'Edit label' : 'Add label'}
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </Button>
+          ) : null}
           <Button
             type="button"
             variant="ghost"
             size="sm"
             className="h-7 w-7 p-0"
-            title={resource.isPrimary ? 'Primary directory' : 'Set as primary'}
-            onClick={() => (resource.isPrimary ? undefined : onSetPrimary())}
+            title={
+              resource.isPrimary
+                ? 'Primary directory'
+                : canManage
+                  ? 'Set as primary'
+                  : 'Only the target owner or a project editor can change the primary'
+            }
+            disabled={!canManage}
+            onClick={() => (resource.isPrimary || !canManage ? undefined : onSetPrimary())}
           >
             {resource.isPrimary ? (
               <Star className="h-3.5 w-3.5 fill-current text-amber-500" />
@@ -135,16 +147,18 @@ export function DeviceResourceRow({
               <StarOff className="h-3.5 w-3.5 text-muted-foreground" />
             )}
           </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
-            onClick={onRemove}
-            title="Remove"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
+          {canManage ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+              onClick={onRemove}
+              title="Remove"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          ) : null}
         </>
       )}
     </div>

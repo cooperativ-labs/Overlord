@@ -5,7 +5,7 @@ jest.mock('@/app/api/protocol/_lib', () => ({
   )
 }));
 jest.mock('@/lib/overlord/execution-targets', () => ({
-  findExecutionTargetByFingerprint: jest.fn()
+  findUserExecutionTargetByFingerprint: jest.fn()
 }));
 jest.mock('@/supabase/utils/service-role');
 
@@ -37,10 +37,10 @@ describe('POST /api/protocol/complete-execution-launch', () => {
 
   it('returns 404 when the execution target is not registered', async () => {
     mockParseBody();
-    const { findExecutionTargetByFingerprint } = jest.requireMock(
+    const { findUserExecutionTargetByFingerprint } = jest.requireMock(
       '@/lib/overlord/execution-targets'
     );
-    findExecutionTargetByFingerprint.mockResolvedValue(null);
+    findUserExecutionTargetByFingerprint.mockResolvedValue(null);
 
     const response = await POST(new Request('http://localhost', { method: 'POST' }));
     expect(response.status).toBe(404);
@@ -48,10 +48,10 @@ describe('POST /api/protocol/complete-execution-launch', () => {
 
   it('marks the request launching (not launched) for the claiming execution target', async () => {
     mockParseBody();
-    const { findExecutionTargetByFingerprint } = jest.requireMock(
+    const { findUserExecutionTargetByFingerprint } = jest.requireMock(
       '@/lib/overlord/execution-targets'
     );
-    findExecutionTargetByFingerprint.mockResolvedValue(EXECUTION_TARGET_ID);
+    findUserExecutionTargetByFingerprint.mockResolvedValue(EXECUTION_TARGET_ID);
     let updatePayload: Record<string, unknown> | undefined;
     const executionUpdate = {
       update: jest.fn((payload: Record<string, unknown>) => {
@@ -91,14 +91,19 @@ describe('POST /api/protocol/complete-execution-launch', () => {
       EXECUTION_TARGET_ID
     );
     expect(executionUpdate.eq).toHaveBeenCalledWith('status', 'claimed');
+    // Finding #1 (org-agnostic lifecycle): no organization filter, so a request
+    // claimed for a non-default org is still completed by id + requested_by +
+    // claiming target.
+    expect(executionUpdate.eq).not.toHaveBeenCalledWith('organization_id', expect.anything());
+    expect(executionUpdate.eq).toHaveBeenCalledWith('requested_by', USER_ID);
   });
 
   it('is idempotent when attach has already marked the request launched', async () => {
     mockParseBody();
-    const { findExecutionTargetByFingerprint } = jest.requireMock(
+    const { findUserExecutionTargetByFingerprint } = jest.requireMock(
       '@/lib/overlord/execution-targets'
     );
-    findExecutionTargetByFingerprint.mockResolvedValue(EXECUTION_TARGET_ID);
+    findUserExecutionTargetByFingerprint.mockResolvedValue(EXECUTION_TARGET_ID);
 
     const staleCompleteUpdate = {
       update: jest.fn(() => staleCompleteUpdate),

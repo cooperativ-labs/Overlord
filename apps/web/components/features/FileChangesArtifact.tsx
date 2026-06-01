@@ -1,5 +1,8 @@
+import { FileCode2 } from 'lucide-react';
+
 import { ExternalLink } from '@/components/features/ExternalLink';
-import { buildDiffHref, parseFileChanges } from '@/lib/helpers/file-changes';
+import { MarkdownIcon } from '@/components/ui/markdown-icon';
+import { buildDiffHref, isMarkdownFile, parseFileChanges } from '@/lib/helpers/file-changes';
 
 type Props = {
   content: string;
@@ -32,25 +35,29 @@ export function FileChangesArtifact({ content, workspaceRoot, editorScheme }: Pr
           ? displayPath.slice(0, displayPath.lastIndexOf('/'))
           : '';
         const href = canLink ? buildDiffHref(path, workspaceRoot, editorScheme) : undefined;
+        const isMd = isMarkdownFile(path);
+        const Icon = isMd ? MarkdownIcon : FileCode2;
 
         return (
           <li className="text-xs" key={path}>
             {href ? (
               <ExternalLink
-                className="inline-flex flex-wrap items-baseline gap-1 rounded hover:underline underline-offset-4 text-primary"
+                className="inline-flex flex-wrap items-center gap-1.5 rounded hover:underline underline-offset-4 text-primary"
                 href={href}
                 title={`Open diff for ${path} in editor`}
               >
+                <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                 <span className="font-medium">{filename}</span>
                 {dir && <span className="text-muted-foreground">{dir}</span>}
               </ExternalLink>
             ) : (
-              <span className="inline-flex flex-wrap items-baseline gap-1">
+              <span className="inline-flex flex-wrap items-center gap-1.5">
+                <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                 <span className="font-medium text-foreground">{filename}</span>
                 {dir && <span className="text-muted-foreground">{dir}</span>}
               </span>
             )}
-            {note && <p className="mt-0.5 pl-3 text-muted-foreground">{note}</p>}
+            {note && <p className="mt-0.5 pl-5 text-muted-foreground">{note}</p>}
           </li>
         );
       })}

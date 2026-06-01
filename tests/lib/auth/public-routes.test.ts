@@ -19,4 +19,10 @@ describe('isPublicRoute', () => {
     expect(isPublicRoute('/unsubscribe')).toBe(true);
     expect(isPublicRoute('/unsubscribed')).toBe(false);
   });
+
+  it('treats downloads as public without exposing similarly named paths', () => {
+    expect(isPublicRoute('/downloads')).toBe(true);
+    expect(isPublicRoute('/downloads/desktop')).toBe(true);
+    expect(isPublicRoute('/downloaded')).toBe(false);
+  });
 });

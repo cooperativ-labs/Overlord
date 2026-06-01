@@ -33,6 +33,14 @@ export type ProjectDevice = {
   platform: string | null;
   lastSeenAt: string | null;
   resources: ProjectDeviceResource[];
+  organizationId: number | null;
+  /** Per-org owner of the target. `null` => organization-owned. */
+  ownerUserId: string | null;
+  /**
+   * Whether the current user may manage this target's directories/primary
+   * (owner on a personal target, or a project editor on an org-owned target).
+   */
+  canManage: boolean;
 };
 
 export type ProjectDevicesPayload = {
@@ -245,7 +253,7 @@ export async function getProjectDevicesAction({
   const { data: deviceRows, error: devErr } = await (supabase as any)
     .from('project_execution_targets')
     .select(
-      'execution_target_id, execution_targets(host, platform, last_seen_at, organization_execution_targets(label))'
+      'execution_target_id, organization_id, execution_targets(host, platform, last_seen_at, organization_execution_targets(label, organization_id, owner_user_id))'
     )
     .eq('project_id', projectId);
 
@@ -254,11 +262,32 @@ export async function getProjectDevicesAction({
     return { devices: [], matchedDeviceId };
   }
 
+  // Resolve whether the current user is a project editor (ADMIN/MANAGER) in the
+  // project's org, to decide manage permission on org-owned targets.
+  const { data: projectRow } = await supabase
+    .from('projects')
+    .select('organization_id')
+    .eq('id', projectId)
+    .maybeSingle();
+  let userIsProjectEditor = false;
+  if (projectRow?.organization_id) {
+    const { data: roleRows } = await supabase
+      .from('members')
+      .select('role')
+      .eq('organization_id', projectRow.organization_id)
+      .eq('user_id', user.id)
+      .in('role', ['ADMIN', 'MANAGER'])
+      .limit(1);
+    userIsProjectEditor = (roleRows ?? []).length > 0;
+  }
+
+  // Directories are target-scoped, not per-user: list every directory on the
+  // project's targets (RLS still limits visibility to org members) so the shared
+  // primary is shown regardless of who added it.
   const { data: resourceRows, error: resErr } = await supabase
     .from('project_resource_directories')
     .select('id, execution_target_id, directory_path, label, is_primary, created_at')
     .eq('project_id', projectId)
-    .eq('user_id', user.id)
     .order('is_primary', { ascending: false })
     .order('created_at', { ascending: true });
 
@@ -287,15 +316,23 @@ export async function getProjectDevicesAction({
       ? row.execution_targets[0]
       : row.execution_targets;
     const orgRel = target?.organization_execution_targets;
-    const orgTarget = Array.isArray(orgRel) ? orgRel[0] : orgRel;
+    const orgTargets = Array.isArray(orgRel) ? orgRel : orgRel ? [orgRel] : [];
+    // Pick the association for this project's org (a target may be shared across orgs).
+    const orgTarget =
+      orgTargets.find((o: any) => o?.organization_id === row.organization_id) ?? orgTargets[0];
     const id = row.execution_target_id;
+    const ownerUserId = orgTarget?.owner_user_id ?? null;
+    const canManage = ownerUserId ? ownerUserId === user.id : userIsProjectEditor;
     return {
       id,
       label: orgTarget?.label ?? target?.host ?? 'Unknown device',
       hostname: target?.host ?? null,
       platform: target?.platform ?? null,
       lastSeenAt: target?.last_seen_at ?? null,
-      resources: resourcesByTarget.get(id) ?? []
+      resources: resourcesByTarget.get(id) ?? [],
+      organizationId: row.organization_id ?? null,
+      ownerUserId,
+      canManage
     };
   });
 
