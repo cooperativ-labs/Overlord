@@ -74,7 +74,7 @@ export default function KanbanColumn({
     statusType === 'execute'
       ? 'bg-blue-500/5'
       : statusType === 'complete'
-        ? 'bg-green-500/10'
+        ? 'bg-emerald-500/10'
         : statusType === 'review'
           ? 'bg-cyan-500/10'
           : 'bg-muted/30';

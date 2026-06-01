@@ -71,3 +71,60 @@ export function parseTicketListFilters(raw: unknown): TicketListFilters {
     filter_project_id: obj.filter_project_id
   });
 }
+
+/** Statuses selected by default before a user customises their list filter. */
+export const DEFAULT_SELECTED_STATUSES = ['draft', 'execute', 'review'] as const;
+
+/** Order-sensitive equality for two string lists. */
+export function areStringListsEqual(left: string[], right: string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+/** Order-insensitive equality for two project-filter id lists. */
+export function areProjectFilterIdsEqual(left: string[], right: string[]): boolean {
+  if (left.length !== right.length) return false;
+  const sortedLeft = [...left].sort();
+  const sortedRight = [...right].sort();
+  return sortedLeft.every((value, index) => value === sortedRight[index]);
+}
+
+/**
+ * Builds the ordered list of status filter options: the default statuses first
+ * (in canonical order), then any remaining available statuses, deduplicated.
+ */
+export function buildStatusFilterOptions(availableStatuses: string[]): string[] {
+  const seen = new Set<string>();
+  const next: string[] = [];
+
+  for (const status of DEFAULT_SELECTED_STATUSES) {
+    if (seen.has(status)) continue;
+    seen.add(status);
+    next.push(status);
+  }
+
+  for (const status of availableStatuses) {
+    if (seen.has(status)) continue;
+    seen.add(status);
+    next.push(status);
+  }
+
+  return next;
+}
+
+/**
+ * Drops selected statuses that are no longer available. Returns the current
+ * selection unchanged when there is nothing to sanitise, and falls back to the
+ * full available set if filtering would leave nothing selected.
+ */
+export function sanitizeSelectedStatuses(current: string[], availableStatuses: string[]): string[] {
+  if (availableStatuses.length === 0) {
+    return current;
+  }
+  if (current.length === 0) {
+    return current;
+  }
+
+  const availableSet = new Set(availableStatuses);
+  const next = current.filter(status => availableSet.has(status));
+  return next.length > 0 ? next : availableStatuses;
+}

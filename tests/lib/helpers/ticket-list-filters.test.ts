@@ -1,7 +1,12 @@
 import {
+  areProjectFilterIdsEqual,
+  areStringListsEqual,
+  buildStatusFilterOptions,
+  DEFAULT_SELECTED_STATUSES,
   normalizeStringList,
   normalizeTicketListFilters,
-  parseTicketListFilters
+  parseTicketListFilters,
+  sanitizeSelectedStatuses
 } from '@/lib/helpers/ticket-list-filters';
 
 describe('ticket list filter helpers', () => {
@@ -83,5 +88,38 @@ describe('ticket list filter helpers', () => {
       filter_project_ids: [],
       filter_tag_ids: []
     });
+  });
+});
+
+describe('status filter helpers', () => {
+  it('compares string lists order-sensitively', () => {
+    expect(areStringListsEqual(['a', 'b'], ['a', 'b'])).toBe(true);
+    expect(areStringListsEqual(['a', 'b'], ['b', 'a'])).toBe(false);
+    expect(areStringListsEqual(['a'], ['a', 'b'])).toBe(false);
+  });
+
+  it('compares project filter ids order-insensitively', () => {
+    expect(areProjectFilterIdsEqual(['a', 'b'], ['b', 'a'])).toBe(true);
+    expect(areProjectFilterIdsEqual(['a'], ['a', 'b'])).toBe(false);
+    expect(areProjectFilterIdsEqual([], [])).toBe(true);
+  });
+
+  it('builds status filter options with defaults first then remaining, deduplicated', () => {
+    expect(buildStatusFilterOptions(['execute', 'next-up', 'complete', 'draft'])).toEqual([
+      ...DEFAULT_SELECTED_STATUSES,
+      'next-up',
+      'complete'
+    ]);
+    expect(buildStatusFilterOptions([])).toEqual([...DEFAULT_SELECTED_STATUSES]);
+  });
+
+  it('sanitizes selected statuses against the available set', () => {
+    // returns current untouched when there is nothing to sanitise
+    expect(sanitizeSelectedStatuses(['execute'], [])).toEqual(['execute']);
+    expect(sanitizeSelectedStatuses([], ['draft', 'execute'])).toEqual([]);
+    // drops statuses no longer available
+    expect(sanitizeSelectedStatuses(['draft', 'gone'], ['draft', 'execute'])).toEqual(['draft']);
+    // falls back to all available when filtering empties the selection
+    expect(sanitizeSelectedStatuses(['gone'], ['draft', 'execute'])).toEqual(['draft', 'execute']);
   });
 });

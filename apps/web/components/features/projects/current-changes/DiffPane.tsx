@@ -1,11 +1,10 @@
-import { Bot, ChevronDown, Columns2, Filter, Info, Loader2, RotateCcw } from 'lucide-react';
+import { Bot, ChevronDown, Columns2, Filter, Info, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { ParsedUnifiedDiff } from '@/lib/git/unified-diff';
 import { buildTicketPath } from '@/lib/helpers/ticket-path';
@@ -14,14 +13,11 @@ import { cn } from '@/lib/utils';
 
 import type { DiffViewMode } from '../CurrentChangesPage';
 
-import {
-  buildHunkMatches,
-  formatStatus,
-  lineNumber,
-  ticketReviewHighlightClasses
-} from './helpers';
-import { HunkPopoverContent } from './HunkPopoverContent';
-import type { EnrichedCurrentChangeFile, FileChangeRecord, TicketSummary } from './types';
+import { DiffHunk } from './DiffHunk';
+import { buildHunkMatches, formatAgentName, formatSnapshotSummary, formatStatus } from './helpers';
+import { groupRationalesByObjective, ObjectiveRationaleGroups } from './ObjectiveRationaleGroups';
+import { SecondaryTicketBadge } from './SecondaryTicketBadge';
+import type { EnrichedCurrentChangeFile } from './types';
 
 type DiffPaneProps = {
   diff: ParsedUnifiedDiff | null;
@@ -37,189 +33,6 @@ type DiffPaneProps = {
   onToggleTicketFilter: (ticketId: string) => void;
   onViewModeChange: (mode: DiffViewMode) => void;
 };
-
-function formatAgentName(agent: string | null | undefined) {
-  if (agent === 'claude-code') return 'Claude Code';
-  if (agent === 'codex') return 'Codex';
-  if (agent === 'opencode') return 'OpenCode';
-  if (agent === 'cursor') return 'Cursor';
-  if (agent === 'antigravity') return 'Antigravity';
-  if (agent === 'pi') return 'Pi';
-  return 'Agent';
-}
-
-function SecondaryTicketBadge({
-  isSelected,
-  projectId,
-  ticket,
-  onFilter,
-  onToggle
-}: {
-  isSelected: boolean;
-  projectId: string;
-  ticket: TicketSummary;
-  onFilter: () => void;
-  onToggle: () => void;
-}) {
-  return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          className={cn(
-            'inline-flex max-w-[220px] items-center gap-1 truncate rounded-full border px-2 py-0.5 text-[10px] hover:bg-muted',
-            ticketReviewHighlightClasses(ticket.status_type),
-            isSelected
-              ? 'border-primary bg-primary/10 text-primary'
-              : 'bg-background text-foreground'
-          )}
-          aria-pressed={isSelected}
-        >
-          <span className="truncate">
-            {ticket.title?.trim() || `Ticket ${getTicketIdentifier(ticket)}`}
-          </span>
-          {ticket.status ? <span className="text-muted-foreground">· {ticket.status}</span> : null}
-        </button>
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-80">
-        <div className="space-y-3">
-          <div className="space-y-1">
-            <Link
-              className="text-sm font-medium text-foreground underline-offset-4 hover:underline"
-              href={buildTicketPath({ projectId, ticketId: ticket.id })}
-            >
-              {ticket.title?.trim() || `Ticket ${getTicketIdentifier(ticket)}`}
-            </Link>
-            <p className="text-xs text-muted-foreground">
-              {ticket.objective?.trim() || 'No ticket objective yet.'}
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              className="h-7 gap-1 px-2 text-[11px]"
-              onClick={onFilter}
-            >
-              <Filter className="h-3 w-3" />
-              Show only this ticket
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-7 px-2 text-[11px]"
-              onClick={onToggle}
-            >
-              {isSelected ? 'Remove from filter' : 'Add to filter'}
-            </Button>
-          </div>
-        </div>
-      </PopoverContent>
-    </Popover>
-  );
-}
-
-type ObjectiveGroup = {
-  objectiveId: string | null;
-  objectiveText: string | null;
-  hasCheckpoint: boolean;
-  rationales: FileChangeRecord[];
-};
-
-function groupRationalesByObjective(rationales: FileChangeRecord[]): ObjectiveGroup[] {
-  const groups = new Map<string, ObjectiveGroup>();
-  for (const rationale of rationales) {
-    const key = rationale.objective?.id ?? '__none__';
-    let group = groups.get(key);
-    if (!group) {
-      group = {
-        objectiveId: rationale.objective?.id ?? null,
-        objectiveText: rationale.objective?.objective ?? null,
-        hasCheckpoint: false,
-        rationales: []
-      };
-      groups.set(key, group);
-    }
-    group.rationales.push(rationale);
-    if (rationale.checkpoint?.git_commit_id) group.hasCheckpoint = true;
-  }
-  return [...groups.values()];
-}
-
-function ObjectiveRationaleGroups({
-  groups,
-  onRevert
-}: {
-  groups: ObjectiveGroup[];
-  onRevert: (objectiveId: string) => void;
-}) {
-  if (groups.length === 0) return null;
-  return (
-    <div className="space-y-3">
-      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-        Rationales by objective
-      </p>
-      {groups.map((group, index) => (
-        <div
-          key={group.objectiveId ?? `none-${index}`}
-          className="rounded-md border bg-muted/20 p-2"
-        >
-          <div className="flex items-start justify-between gap-2">
-            <p className="min-w-0 flex-1 text-xs text-foreground">
-              {group.objectiveText?.trim() || (group.objectiveId ? 'Objective' : 'No objective')}
-            </p>
-            {group.objectiveId && group.hasCheckpoint ? (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 shrink-0 gap-1 px-1.5 text-[11px] text-muted-foreground hover:text-foreground"
-                    onClick={() => onRevert(group.objectiveId!)}
-                  >
-                    <RotateCcw className="h-3 w-3" />
-                    Revert
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="left">
-                  Restore the working tree to this objective&apos;s checkpoint
-                </TooltipContent>
-              </Tooltip>
-            ) : null}
-          </div>
-          <ul className="mt-1.5 space-y-1.5">
-            {group.rationales.map(rationale => (
-              <li key={rationale.id} className="text-[11px] text-muted-foreground">
-                <span className="font-medium text-foreground">{rationale.label}</span>
-                {rationale.summary ? <> — {rationale.summary}</> : null}
-                {rationale.why || rationale.impact ? (
-                  <span className="mt-0.5 block">
-                    {rationale.why ? <em>Why: {rationale.why}. </em> : null}
-                    {rationale.impact ? <em>Impact: {rationale.impact}.</em> : null}
-                  </span>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function formatSnapshotSummary(
-  file: EnrichedCurrentChangeFile['primaryFileChange']
-): string | null {
-  if (!file) return null;
-  const parts: string[] = [];
-  const gitCommitId = file.checkpoint?.git_commit_id ?? null;
-  if (file.checkpoint_id) parts.push('checkpointed');
-  if (gitCommitId) parts.push(`git ${gitCommitId.slice(0, 8)}`);
-  return parts.length > 0 ? parts.join(' · ') : null;
-}
 
 export function DiffPane({
   diff,
@@ -506,168 +319,19 @@ export function DiffPane({
               No diff preview is available for this file yet.
             </div>
           ) : (
-            diff.hunks.map(hunk => {
-              const matches = buildHunkMatches(file.rationales, file.file, hunk);
-
-              return (
-                <div key={hunk.id} className="overflow-hidden rounded-md border bg-background">
-                  <div className="flex items-center justify-between gap-3 border-b bg-muted/40 px-3 py-1 font-mono text-[10px] text-muted-foreground">
-                    <span className="truncate">{hunk.header}</span>
-                    {matches.length > 0 ? (
-                      <span className="shrink-0 rounded-full border border-primary/20 bg-primary/10 px-1.5 py-0.5 text-[9px] text-primary">
-                        {matches.length} linked
-                      </span>
-                    ) : null}
-                  </div>
-                  <div className="font-mono text-xs">
-                    {showSideBySide ? (
-                      <div className="grid grid-cols-2">
-                        <div className="border-r bg-muted/20">
-                          <p className="border-b bg-muted/40 px-3 py-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-                            Old
-                          </p>
-                          {hunk.lines.map(line => {
-                            const isChanged = line.kind !== 'add';
-                            return (
-                              <div
-                                key={`${line.key}-old`}
-                                className={cn(
-                                  'grid grid-cols-[44px_minmax(0,1fr)] items-start gap-2 px-3 py-0.5',
-                                  line.kind === 'del' && 'bg-rose-500/10',
-                                  line.kind === 'context' && 'text-muted-foreground',
-                                  isChanged && 'hover:bg-muted/60'
-                                )}
-                              >
-                                <span className="select-none text-right text-[10px] text-muted-foreground">
-                                  {lineNumber(line.oldLineNumber)}
-                                </span>
-                                <span className="min-w-0 whitespace-pre-wrap break-all text-foreground">
-                                  {line.kind === 'add' ? '' : line.kind === 'del' ? '-' : ' '}
-                                  {line.kind === 'add' ? '' : line.content}
-                                </span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                        <div>
-                          <p className="border-b bg-muted/40 px-3 py-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-                            New
-                          </p>
-                          {hunk.lines.map(line => {
-                            const isChanged = line.kind !== 'del';
-                            const popoverKey = `${hunk.id}:${line.key}`;
-                            const row = (
-                              <div
-                                className={cn(
-                                  'grid grid-cols-[44px_minmax(0,1fr)] items-start gap-2 px-3 py-0.5 text-left',
-                                  line.kind === 'add' && 'bg-emerald-500/10',
-                                  line.kind === 'context' && 'text-muted-foreground',
-                                  isChanged && 'hover:bg-muted/60'
-                                )}
-                              >
-                                <span className="select-none text-right text-[10px] text-muted-foreground">
-                                  {lineNumber(line.newLineNumber)}
-                                </span>
-                                <span className="min-w-0 whitespace-pre-wrap break-all text-foreground">
-                                  {line.kind === 'del' ? '' : line.kind === 'add' ? '+' : ' '}
-                                  {line.kind === 'del' ? '' : line.content}
-                                </span>
-                              </div>
-                            );
-
-                            if (!isChanged) {
-                              return <div key={line.key}>{row}</div>;
-                            }
-
-                            return (
-                              <Popover
-                                key={line.key}
-                                open={openPopoverKey === popoverKey}
-                                onOpenChange={open => setOpenPopoverKey(open ? popoverKey : null)}
-                              >
-                                <PopoverTrigger asChild>
-                                  <button
-                                    type="button"
-                                    className="w-full"
-                                    onClick={() => setOpenPopoverKey(popoverKey)}
-                                  >
-                                    {row}
-                                  </button>
-                                </PopoverTrigger>
-                                <PopoverContent align="start" className="w-[420px]">
-                                  <HunkPopoverContent
-                                    fileTickets={file.tickets}
-                                    matches={matches}
-                                    projectId={projectId}
-                                    onFilterByTicket={onFilterByTicket}
-                                  />
-                                </PopoverContent>
-                              </Popover>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ) : (
-                      hunk.lines.map(line => {
-                        const isChanged = line.kind !== 'context';
-                        const popoverKey = `${hunk.id}:${line.key}`;
-                        const row = (
-                          <div
-                            className={cn(
-                              'grid grid-cols-[44px_44px_minmax(0,1fr)] items-start gap-2 px-3 py-0.5 text-left',
-                              line.kind === 'add' && 'bg-emerald-500/10',
-                              line.kind === 'del' && 'bg-rose-500/10',
-                              isChanged && 'hover:bg-muted/60'
-                            )}
-                          >
-                            <span className="select-none text-right text-[10px] text-muted-foreground">
-                              {lineNumber(line.oldLineNumber)}
-                            </span>
-                            <span className="select-none text-right text-[10px] text-muted-foreground">
-                              {lineNumber(line.newLineNumber)}
-                            </span>
-                            <span className="min-w-0 whitespace-pre-wrap break-all text-foreground">
-                              {line.kind === 'add' ? '+' : line.kind === 'del' ? '-' : ' '}
-                              {line.content}
-                            </span>
-                          </div>
-                        );
-
-                        if (!isChanged) {
-                          return <div key={line.key}>{row}</div>;
-                        }
-
-                        return (
-                          <Popover
-                            key={line.key}
-                            open={openPopoverKey === popoverKey}
-                            onOpenChange={open => setOpenPopoverKey(open ? popoverKey : null)}
-                          >
-                            <PopoverTrigger asChild>
-                              <button
-                                type="button"
-                                className="w-full"
-                                onClick={() => setOpenPopoverKey(popoverKey)}
-                              >
-                                {row}
-                              </button>
-                            </PopoverTrigger>
-                            <PopoverContent align="start" className="w-[420px]">
-                              <HunkPopoverContent
-                                fileTickets={file.tickets}
-                                matches={matches}
-                                projectId={projectId}
-                                onFilterByTicket={onFilterByTicket}
-                              />
-                            </PopoverContent>
-                          </Popover>
-                        );
-                      })
-                    )}
-                  </div>
-                </div>
-              );
-            })
+            diff.hunks.map(hunk => (
+              <DiffHunk
+                key={hunk.id}
+                hunk={hunk}
+                matches={buildHunkMatches(file.rationales, file.file, hunk)}
+                showSideBySide={showSideBySide}
+                openPopoverKey={openPopoverKey}
+                setOpenPopoverKey={setOpenPopoverKey}
+                fileTickets={file.tickets}
+                projectId={projectId}
+                onFilterByTicket={onFilterByTicket}
+              />
+            ))
           )}
         </div>
       </div>

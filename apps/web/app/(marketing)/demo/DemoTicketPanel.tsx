@@ -1,12 +1,14 @@
 'use client';
 
 import { ArrowRightToLine, Bot, ChevronDown, MessageSquare } from 'lucide-react';
-import Image from 'next/image';
 import { useEffect, useState } from 'react';
 
+import { AgentIcon } from '@/components/features/AgentIcon';
+import { ProjectColorDot } from '@/components/features/projects/ProjectColorDot';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
+import { getAgentTypeByValue } from '@/lib/helpers/agent-types';
 import { cn } from '@/lib/utils';
 
 import { DEMO_ACTIVITY, type DemoTicket } from './mock-data';
@@ -50,11 +52,10 @@ export function DemoTicketPanel({ ticket, onClose, onDiscuss, onRun }: DemoTicke
   const [modelOpen, setModelOpen] = useState(false);
   const [visibleActivityCount, setVisibleActivityCount] = useState(0);
 
-  const agentIcon =
-    ticket.latest_objective_agent === 'codex'
-      ? '/images/icons/codex.svg'
-      : '/images/icons/claude-code.svg';
-  const agentLabel = ticket.latest_objective_agent === 'codex' ? 'Codex' : 'Claude Code';
+  const agentType = getAgentTypeByValue(
+    ticket.latest_objective_agent === 'codex' ? 'codex' : 'claude'
+  );
+  const agentLabel = agentType.label;
 
   // Animate activity cards appearing one by one
   useEffect(() => {
@@ -83,13 +84,7 @@ export function DemoTicketPanel({ ticket, onClose, onDiscuss, onRun }: DemoTicke
             variant="outline"
             onClick={() => setModelOpen(!modelOpen)}
           >
-            <Image
-              src={agentIcon}
-              alt={`${agentLabel} icon`}
-              width={14}
-              height={14}
-              className="h-3.5 w-3.5"
-            />
+            <AgentIcon agentType={agentType} className="h-3.5 w-3.5" alt={`${agentLabel} icon`} />
             <span className="hidden sm:inline">Sonnet 4</span>
             <ChevronDown className="h-3 w-3 text-muted-foreground" />
           </Button>
@@ -139,21 +134,21 @@ export function DemoTicketPanel({ ticket, onClose, onDiscuss, onRun }: DemoTicke
               {
                 agent: 'Claude Code',
                 model: 'Claude Sonnet 4',
-                icon: '/images/icons/claude-code.svg',
+                value: 'claude' as const,
                 selected: true
               },
               {
                 agent: 'Claude Code',
                 model: 'Claude Opus 4',
-                icon: '/images/icons/claude-code.svg',
+                value: 'claude' as const,
                 selected: false
               },
-              { agent: 'Codex', model: 'o3', icon: '/images/icons/codex.svg', selected: false },
-              { agent: 'Cursor', model: 'Auto', icon: '/images/icons/cursor.svg', selected: false },
+              { agent: 'Codex', model: 'o3', value: 'codex' as const, selected: false },
+              { agent: 'Cursor', model: 'Auto', value: 'cursor' as const, selected: false },
               {
                 agent: 'Antigravity',
                 model: 'Antigravity default',
-                icon: '/images/icons/antigravity.svg',
+                value: 'antigravity' as const,
                 selected: false
               }
             ].map(item => (
@@ -165,12 +160,10 @@ export function DemoTicketPanel({ ticket, onClose, onDiscuss, onRun }: DemoTicke
                 )}
                 onClick={() => setModelOpen(false)}
               >
-                <Image
-                  src={item.icon}
-                  alt={item.agent}
-                  width={14}
-                  height={14}
+                <AgentIcon
+                  agentType={getAgentTypeByValue(item.value)}
                   className="h-3.5 w-3.5"
+                  alt={item.agent}
                 />
                 <span className="font-medium">{item.agent}</span>
                 <span className="text-muted-foreground">{item.model}</span>
@@ -194,10 +187,7 @@ export function DemoTicketPanel({ ticket, onClose, onDiscuss, onRun }: DemoTicke
               className="gap-1.5 rounded-full text-[11px]"
               style={{ borderColor: ticket.project_color + '60' }}
             >
-              <span
-                className="h-2 w-2 rounded-[2px]"
-                style={{ backgroundColor: ticket.project_color }}
-              />
+              <ProjectColorDot color={ticket.project_color} />
               {ticket.project_name}
             </Badge>
             <Badge variant="secondary" className="rounded-full text-[11px] capitalize">

@@ -1,7 +1,33 @@
 import type { ParsedDiffHunk, ParsedUnifiedDiff } from '@/lib/git/unified-diff';
 import type { Json } from '@/types/database.types';
 
-import type { FileChangeRecord, GitStatusFile, RationaleHunk } from './types';
+import type {
+  EnrichedCurrentChangeFile,
+  FileChangeRecord,
+  GitStatusFile,
+  RationaleHunk
+} from './types';
+
+export function formatAgentName(agent: string | null | undefined): string {
+  if (agent === 'claude-code') return 'Claude Code';
+  if (agent === 'codex') return 'Codex';
+  if (agent === 'opencode') return 'OpenCode';
+  if (agent === 'cursor') return 'Cursor';
+  if (agent === 'antigravity') return 'Antigravity';
+  if (agent === 'pi') return 'Pi';
+  return 'Agent';
+}
+
+export function formatSnapshotSummary(
+  file: EnrichedCurrentChangeFile['primaryFileChange']
+): string | null {
+  if (!file) return null;
+  const parts: string[] = [];
+  const gitCommitId = file.checkpoint?.git_commit_id ?? null;
+  if (file.checkpoint_id) parts.push('checkpointed');
+  if (gitCommitId) parts.push(`git ${gitCommitId.slice(0, 8)}`);
+  return parts.length > 0 ? parts.join(' · ') : null;
+}
 
 function normalizeRoot(value: string): string {
   return value.replace(/\\/g, '/').replace(/\/+$/g, '');

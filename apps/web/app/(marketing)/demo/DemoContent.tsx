@@ -1,15 +1,17 @@
 'use client';
 
 import { ArrowLeft, Bot, Moon, Sun, TerminalSquare, UserRound } from 'lucide-react';
-import Image from 'next/image';
 import Link from 'next/link';
 import { useTheme } from 'next-themes';
 import { useCallback, useMemo, useRef, useState } from 'react';
 
+import { AgentIcon } from '@/components/features/AgentIcon';
+import { ProjectColorDot } from '@/components/features/projects/ProjectColorDot';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { getAgentTypeByValue } from '@/lib/helpers/agent-types';
 import { cn } from '@/lib/utils';
 
 import { DemoCurrentChangesPage } from './DemoCurrentChangesPage';
@@ -47,9 +49,7 @@ function DemoKanbanCard({
 
   const activeAgentIdentifier = ticket.running_agent ?? ticket.latest_objective_agent;
   const agentType = activeAgentIdentifier
-    ? activeAgentIdentifier === 'codex'
-      ? { icon: '/images/icons/codex.svg', label: 'Codex' }
-      : { icon: '/images/icons/claude-code.svg', label: 'Claude Code' }
+    ? getAgentTypeByValue(activeAgentIdentifier === 'codex' ? 'codex' : 'claude')
     : null;
 
   return (
@@ -78,12 +78,10 @@ function DemoKanbanCard({
       <CardContent className="flex h-full flex-col p-3">
         <div className="min-w-0 space-y-1">
           <div className="flex items-start gap-2">
-            <span
-              className="mt-1 block h-2.5 w-2.5 shrink-0 rounded-[2px] border"
-              style={{
-                backgroundColor: ticket.project_color,
-                borderColor: ticket.project_color
-              }}
+            <ProjectColorDot
+              color={ticket.project_color}
+              withBorder
+              className="mt-1 block h-2.5 w-2.5 shrink-0 border"
               title={ticket.project_name}
             />
             <h4 className="text-sm font-medium leading-snug">{ticket.title}</h4>
@@ -110,12 +108,10 @@ function DemoKanbanCard({
         <div className="mt-auto flex items-center justify-end gap-2 pt-2">
           {agentType && (
             <p className="flex items-center gap-1.5 text-[10px] text-muted-foreground/70">
-              <Image
-                src={agentType.icon}
-                alt={`${agentType.label} icon`}
-                width={12}
-                height={12}
+              <AgentIcon
+                agentType={agentType}
                 className="h-3 w-3 shrink-0"
+                alt={`${agentType.label} icon`}
               />
               <span className="truncate">{agentType.label}</span>
             </p>
@@ -353,10 +349,7 @@ export function DemoContent() {
                   >
                     {/* Project header */}
                     <div className="flex flex-wrap items-center gap-3 border-b px-6 py-3">
-                      <span
-                        className="h-3 w-3 rounded-[3px]"
-                        style={{ backgroundColor: DEMO_PROJECT.color }}
-                      />
+                      <ProjectColorDot color={DEMO_PROJECT.color} className="h-3 w-3" />
                       <h2 className="text-sm font-semibold">{DEMO_PROJECT.name}</h2>
                       <span className="text-xs text-muted-foreground">
                         {DEMO_PROJECT.description}

@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowUp, Bot, Loader2, Plus, User, X } from 'lucide-react';
+import { ArrowUp, Bot, Loader2, Plus, User } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -32,63 +32,23 @@ import { deriveTitleFromObjective } from '@/lib/helpers/tickets';
 import { cn } from '@/lib/utils';
 import { createClient } from '@/supabase/utils/client';
 
-const generateTicketTitleActionWithRetry = withElectronActionRetry(generateTicketTitleAction);
+import { ProjectPickerPanel } from './quick-task-bar/ProjectPickerPanel';
+import {
+  getQuickTaskApi,
+  type IdleScheduler,
+  type ProjectOption,
+  resolveProjectId,
+  type StagedFile
+} from './quick-task-bar/quick-task-helpers';
+import { StagedFilesRow } from './quick-task-bar/StagedFilesRow';
 
-type ProjectOption = {
-  id: string;
-  name: string;
-  color: string;
-  everhour_project_id: string | null;
-  organization_id: number;
-  local_working_directory?: string | null;
-  ssh_command?: string | null;
-  remote_working_directory?: string | null;
-};
+const generateTicketTitleActionWithRetry = withElectronActionRetry(generateTicketTitleAction);
 
 type QuickTaskBarProps = {
   defaultProjectId: string | null;
   projects: ProjectOption[];
   sshEnabled?: boolean;
 };
-
-type StagedFile = {
-  id: string;
-  file: File;
-};
-
-type QuickTaskWindowApi = {
-  close: () => Promise<unknown>;
-  setHeight: (height: number) => Promise<unknown>;
-  setBounds?: (args: { height: number; barOffsetTop: number }) => Promise<unknown>;
-  onShown: (cb: () => void) => () => void;
-};
-
-type IdleCallbackHandle = number;
-type IdleDeadline = {
-  didTimeout: boolean;
-  timeRemaining: () => number;
-};
-type IdleScheduler = {
-  requestIdleCallback?: (
-    callback: (deadline: IdleDeadline) => void,
-    options?: { timeout: number }
-  ) => IdleCallbackHandle;
-  cancelIdleCallback?: (handle: IdleCallbackHandle) => void;
-};
-
-function getQuickTaskApi(): QuickTaskWindowApi | null {
-  if (typeof window === 'undefined') return null;
-  const api = (window as unknown as { electronAPI?: { quickTask?: QuickTaskWindowApi } })
-    .electronAPI;
-  return api?.quickTask ?? null;
-}
-
-function resolveProjectId(projects: ProjectOption[], defaultProjectId: string | null): string {
-  if (defaultProjectId && projects.some(project => project.id === defaultProjectId)) {
-    return defaultProjectId;
-  }
-  return projects[0]?.id ?? '';
-}
 
 export function QuickTaskBar({ defaultProjectId, projects, sshEnabled }: QuickTaskBarProps) {
   const [objective, setObjective] = useState('');
@@ -475,26 +435,7 @@ export function QuickTaskBar({ defaultProjectId, projects, sshEnabled }: QuickTa
           disabled={isSubmitting}
         />
 
-        {stagedFiles.length > 0 ? (
-          <div className="electron-no-drag flex flex-wrap gap-1.5">
-            {stagedFiles.map(({ id, file }) => (
-              <span
-                key={id}
-                className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-muted/60 px-2.5 py-0.5 text-xs"
-              >
-                <span className="max-w-[180px] truncate">{file.name}</span>
-                <button
-                  type="button"
-                  onClick={() => handleRemoveFile(id)}
-                  className="text-muted-foreground hover:text-foreground"
-                  aria-label={`Remove ${file.name}`}
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </span>
-            ))}
-          </div>
-        ) : null}
+        <StagedFilesRow stagedFiles={stagedFiles} onRemoveFile={handleRemoveFile} />
 
         <div
           ref={controlBarRef}
@@ -610,35 +551,14 @@ export function QuickTaskBar({ defaultProjectId, projects, sshEnabled }: QuickTa
       </div>
 
       {activeMenu === 'project' ? (
-        <div className="electron-no-drag max-h-[260px] overflow-y-auto rounded-xl border  bg-background/95 p-1  backdrop-blur-md m-4">
-          {projects.length === 0 ? (
-            <div className="px-2 py-2 text-xs text-muted-foreground">No projects</div>
-          ) : (
-            projects.map(project => (
-              <button
-                key={project.id}
-                type="button"
-                onClick={() => {
-                  setSelectedProjectId(project.id);
-                  setActiveMenu(null);
-                }}
-                className={cn(
-                  'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted',
-                  project.id === selectedProjectId && 'bg-muted/60'
-                )}
-              >
-                <span
-                  className="h-3 w-3 rounded-[4px] border"
-                  style={{
-                    backgroundColor: project.color,
-                    borderColor: project.color
-                  }}
-                />
-                <span className="truncate">{project.name}</span>
-              </button>
-            ))
-          )}
-        </div>
+        <ProjectPickerPanel
+          projects={projects}
+          selectedProjectId={selectedProjectId}
+          onSelect={projectId => {
+            setSelectedProjectId(projectId);
+            setActiveMenu(null);
+          }}
+        />
       ) : null}
 
       {activeMenu === 'model' ? (

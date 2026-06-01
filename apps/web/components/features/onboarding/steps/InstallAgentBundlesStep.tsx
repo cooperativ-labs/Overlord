@@ -6,17 +6,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useElectron } from '@/components/features/terminal/useElectron';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import type { BundleStatusEntry } from '@/lib/helpers/agent-bundles';
 
 type Props = {
   onContinue: () => void;
-};
-
-type BundleStatusEntry = {
-  agent: 'claude' | 'cursor' | 'antigravity' | 'opencode';
-  status: 'installed' | 'stale' | 'partial' | 'not_installed' | 'error';
-  version: string | null;
-  installedVersion: string | null;
-  details: string;
 };
 
 const AGENTS: Array<BundleStatusEntry['agent']> = ['claude', 'cursor', 'antigravity', 'opencode'];

@@ -6,8 +6,6 @@ import {
   DragOverlay,
   type DragStartEvent,
   PointerSensor,
-  useDraggable,
-  useDroppable,
   useSensor,
   useSensors
 } from '@dnd-kit/core';
@@ -24,9 +22,9 @@ import {
   startOfWeek,
   subMonths
 } from 'date-fns';
-import { Check, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
 
 import { useDefaultProject } from '@/components/features/projects/DefaultProjectContext';
 import { Button } from '@/components/ui/button';
@@ -39,7 +37,6 @@ import {
   useUpdateTicketDueDateMutation,
   useUpdateTicketStatusMutation
 } from '@/lib/client-data/tickets/mutations';
-import { getReadableForeground, parseHexColor } from '@/lib/helpers/color';
 import {
   normalizeTicketListFilters,
   type TicketListFilters
@@ -51,10 +48,11 @@ import {
   readStoredListFilters,
   writeStoredListFilters
 } from '@/lib/helpers/ticket-tag-filters';
-import { deriveTitleFromObjective, getDisplayTitle } from '@/lib/helpers/tickets';
-import { cn } from '@/lib/utils';
+import { deriveTitleFromObjective } from '@/lib/helpers/tickets';
 import type { Ticket } from '@/types/tickets';
 
+import { CalendarDayCell } from './calendar/CalendarDayCell';
+import { CalendarTicketOverlay } from './calendar/CalendarTicketOverlay';
 import {
   buildBoardBootstrap,
   buildBoardScope,
@@ -66,43 +64,6 @@ import TicketsViewControls from './TicketsViewControls';
 import { TicketTagFilterDropdown } from './TicketTagFilterDropdown';
 
 const DAY_HEADERS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
-function getCalendarTicketColors(projectColor: string | null | undefined) {
-  if (!projectColor) {
-    return {
-      backgroundColor: undefined,
-      borderColor: undefined,
-      color: undefined,
-      checkboxBorderColor: undefined,
-      checkboxBackgroundColor: undefined
-    };
-  }
-
-  const rgb = parseHexColor(projectColor);
-  if (!rgb) {
-    return {
-      backgroundColor: projectColor,
-      borderColor: projectColor,
-      color: '#111827',
-      checkboxBorderColor: 'rgba(17, 24, 39, 0.35)',
-      checkboxBackgroundColor: 'rgba(255, 255, 255, 0.18)'
-    };
-  }
-
-  const foreground = getReadableForeground(rgb);
-  const checkboxBorderColor =
-    foreground === '#111827' ? 'rgba(17, 24, 39, 0.35)' : 'rgba(255, 255, 255, 0.45)';
-  const checkboxBackgroundColor =
-    foreground === '#111827' ? 'rgba(255, 255, 255, 0.18)' : 'rgba(255, 255, 255, 0.12)';
-
-  return {
-    backgroundColor: projectColor,
-    borderColor: projectColor,
-    color: foreground,
-    checkboxBorderColor,
-    checkboxBackgroundColor
-  };
-}
 
 type CalendarViewProps = {
   tickets: Ticket[];
@@ -487,242 +448,6 @@ export default function CalendarView({
           {activeTicket ? <CalendarTicketOverlay ticket={activeTicket} /> : null}
         </DragOverlay>
       </DndContext>
-    </div>
-  );
-}
-
-function CalendarNewTicketInput({
-  dateKey,
-  onSubmit,
-  onClose
-}: {
-  dateKey: string;
-  onSubmit: (dateKey: string, objective: string) => void;
-  onClose: () => void;
-}) {
-  const [value, setValue] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  useEffect(() => {
-    textareaRef.current?.focus();
-  }, []);
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      onClose();
-      return;
-    }
-    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-      e.preventDefault();
-      if (isSubmitting) return;
-      const trimmed = e.currentTarget.value.trim();
-      if (!trimmed) {
-        onClose();
-        return;
-      }
-      setIsSubmitting(true);
-      onSubmit(dateKey, trimmed);
-    }
-  };
-
-  const handleBlur = (e: React.FocusEvent<HTMLTextAreaElement>) => {
-    if (isSubmitting) return;
-    const trimmed = e.target.value.trim();
-    if (trimmed) {
-      setIsSubmitting(true);
-      onSubmit(dateKey, trimmed);
-    } else {
-      onClose();
-    }
-  };
-
-  return (
-    <div
-      className="mt-0.5 rounded border border-border/60 bg-background shadow-sm"
-      onClick={e => e.stopPropagation()}
-    >
-      <textarea
-        ref={textareaRef}
-        value={value}
-        onChange={e => setValue(e.target.value)}
-        onKeyDown={handleKeyDown}
-        onBlur={handleBlur}
-        disabled={isSubmitting}
-        placeholder="Write an objective…"
-        rows={2}
-        className="w-full resize-none rounded bg-transparent px-1.5 py-1 text-xs outline-none placeholder:text-muted-foreground/50"
-      />
-    </div>
-  );
-}
-
-function CalendarDayCell({
-  dateKey,
-  day,
-  tickets,
-  inCurrentMonth,
-  isToday: today,
-  completeStatusName,
-  completingTicketId,
-  isCreating,
-  onStartCreating,
-  onCloseCreating,
-  onCreateTicket,
-  onTicketComplete,
-  onTicketClick
-}: {
-  dateKey: string;
-  day: Date;
-  tickets: Ticket[];
-  inCurrentMonth: boolean;
-  isToday: boolean;
-  completeStatusName?: string;
-  completingTicketId: string | null;
-  isCreating: boolean;
-  onStartCreating: (dateKey: string) => void;
-  onCloseCreating: () => void;
-  onCreateTicket: (dateKey: string, objective: string) => void;
-  onTicketComplete: (ticketId: string) => void;
-  onTicketClick: (ticket: Ticket) => void;
-}) {
-  const { setNodeRef, isOver } = useDroppable({ id: dateKey });
-
-  return (
-    <div
-      ref={setNodeRef}
-      className={cn(
-        'min-h-[100px] border-b border-r p-1 transition-colors',
-        !inCurrentMonth && 'bg-muted/30',
-        isOver && 'bg-primary/10'
-      )}
-      onClick={() => {
-        if (!isCreating) onStartCreating(dateKey);
-      }}
-    >
-      <div className="mb-0.5 flex items-center justify-between px-0.5">
-        <span
-          className={cn(
-            'inline-flex h-6 w-6 items-center justify-center rounded-full text-xs',
-            today && 'bg-primary text-primary-foreground font-semibold',
-            !today && !inCurrentMonth && 'text-muted-foreground/50',
-            !today && inCurrentMonth && 'text-foreground'
-          )}
-        >
-          {format(day, 'd')}
-        </span>
-      </div>
-      <div className="flex flex-col gap-0.5">
-        {tickets.map(ticket => (
-          <DraggableCalendarTicket
-            key={ticket.id}
-            ticket={ticket}
-            completeStatusName={completeStatusName}
-            isCompleting={completingTicketId === ticket.id}
-            onComplete={() => onTicketComplete(ticket.id)}
-            onClick={() => onTicketClick(ticket)}
-          />
-        ))}
-        {isCreating && (
-          <CalendarNewTicketInput
-            dateKey={dateKey}
-            onSubmit={onCreateTicket}
-            onClose={onCloseCreating}
-          />
-        )}
-      </div>
-    </div>
-  );
-}
-
-function DraggableCalendarTicket({
-  ticket,
-  completeStatusName,
-  isCompleting,
-  onComplete,
-  onClick
-}: {
-  ticket: Ticket;
-  completeStatusName?: string;
-  isCompleting: boolean;
-  onComplete: () => void;
-  onClick: () => void;
-}) {
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: ticket.id });
-  const normalizedTicketStatus = ticket.status.trim().toLowerCase();
-  const normalizedCompleteStatus = completeStatusName?.trim().toLowerCase();
-  const isComplete =
-    normalizedCompleteStatus !== undefined && normalizedTicketStatus === normalizedCompleteStatus;
-  const ticketColors = getCalendarTicketColors(ticket.project_color);
-
-  return (
-    <div
-      ref={setNodeRef}
-      className={cn(
-        'group flex cursor-grab items-center gap-1 rounded border px-1.5 py-1 text-xs transition-[opacity,colors] hover:brightness-[0.98]',
-        !ticket.project_color && 'border-transparent hover:bg-accent',
-        isDragging && 'opacity-40',
-        isComplete && 'opacity-45'
-      )}
-      style={ticketColors}
-      onClick={e => {
-        e.stopPropagation();
-        onClick();
-      }}
-      {...listeners}
-      {...attributes}
-    >
-      {completeStatusName ? (
-        <button
-          type="button"
-          aria-label={isComplete ? 'Ticket completed' : 'Mark ticket complete'}
-          aria-pressed={isComplete}
-          disabled={isComplete || isCompleting}
-          className={cn(
-            'flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-[4px] border transition-colors',
-            isComplete ? 'bg-current text-black/80' : 'text-transparent',
-            (isComplete || isCompleting) && 'cursor-default'
-          )}
-          style={{
-            borderColor: ticket.project_color ? ticketColors.checkboxBorderColor : undefined,
-            backgroundColor:
-              isComplete && ticket.project_color
-                ? ticketColors.color
-                : ticket.project_color
-                  ? ticketColors.checkboxBackgroundColor
-                  : undefined,
-            color: isComplete && ticket.project_color ? ticket.project_color : undefined
-          }}
-          onPointerDown={e => {
-            e.stopPropagation();
-          }}
-          onClick={e => {
-            e.stopPropagation();
-            onComplete();
-          }}
-        >
-          <Check className="h-3 w-3" />
-        </button>
-      ) : null}
-      <span className="truncate">{getDisplayTitle(ticket)}</span>
-    </div>
-  );
-}
-
-function CalendarTicketOverlay({ ticket }: { ticket: Ticket }) {
-  const ticketColors = getCalendarTicketColors(ticket.project_color);
-
-  return (
-    <div
-      className="flex items-center gap-1 rounded border px-2 py-1 text-xs shadow-lg"
-      style={{
-        backgroundColor: ticketColors.backgroundColor ?? 'var(--card)',
-        borderColor: ticketColors.borderColor,
-        color: ticketColors.color
-      }}
-    >
-      <span className="truncate">{getDisplayTitle(ticket)}</span>
     </div>
   );
 }

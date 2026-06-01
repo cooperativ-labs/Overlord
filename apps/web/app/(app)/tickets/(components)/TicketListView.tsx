@@ -24,8 +24,13 @@ import {
   useUpdateTicketStatusMutation
 } from '@/lib/client-data/tickets/mutations';
 import {
+  areProjectFilterIdsEqual,
+  areStringListsEqual,
+  buildStatusFilterOptions,
+  DEFAULT_SELECTED_STATUSES,
   normalizeStringList,
   normalizeTicketListFilters,
+  sanitizeSelectedStatuses,
   type TicketListFilters
 } from '@/lib/helpers/ticket-list-filters';
 import { buildTicketPath } from '@/lib/helpers/ticket-path';
@@ -63,54 +68,10 @@ import type {
 import { useTicketBoardRealtime } from './useTicketBoardRealtime';
 
 const PRIORITY_ORDER = ['critical', 'high', 'medium', 'low'];
-const DEFAULT_SELECTED_STATUSES = ['draft', 'execute', 'review'] as const;
 const PERSONAL_PROJECT_FILTER_ID = '__personal__';
 const TICKETS_PAGE_SIZE = 20;
 /** Sentinel for "drop after last status" - not a real status name. */
 const STATUS_REORDER_DROP_END = '__overlord_status_reorder_end__';
-
-function areStringListsEqual(left: string[], right: string[]): boolean {
-  return left.length === right.length && left.every((value, index) => value === right[index]);
-}
-
-function areProjectFilterIdsEqual(left: string[], right: string[]): boolean {
-  if (left.length !== right.length) return false;
-  const sortedLeft = [...left].sort();
-  const sortedRight = [...right].sort();
-  return sortedLeft.every((value, index) => value === sortedRight[index]);
-}
-
-function buildStatusFilterOptions(availableStatuses: string[]): string[] {
-  const seen = new Set<string>();
-  const next: string[] = [];
-
-  for (const status of DEFAULT_SELECTED_STATUSES) {
-    if (seen.has(status)) continue;
-    seen.add(status);
-    next.push(status);
-  }
-
-  for (const status of availableStatuses) {
-    if (seen.has(status)) continue;
-    seen.add(status);
-    next.push(status);
-  }
-
-  return next;
-}
-
-function sanitizeSelectedStatuses(current: string[], availableStatuses: string[]): string[] {
-  if (availableStatuses.length === 0) {
-    return current;
-  }
-  if (current.length === 0) {
-    return current;
-  }
-
-  const availableSet = new Set(availableStatuses);
-  const next = current.filter(status => availableSet.has(status));
-  return next.length > 0 ? next : availableStatuses;
-}
 
 function getStatusStyle(statusType: string | undefined, statusName: string): TicketListStatusStyle {
   if (statusType === 'execute')

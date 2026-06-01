@@ -1,19 +1,6 @@
 'use client';
 
-import {
-  Check,
-  ChevronDown,
-  ChevronRight,
-  Folder,
-  FolderOpen,
-  Laptop,
-  Monitor,
-  Pencil,
-  Star,
-  StarOff,
-  Trash2,
-  X
-} from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, FolderOpen, Laptop, Monitor } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 
@@ -27,7 +14,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { LoadingButton } from '@/components/ui/loading-button';
-import { TruncatedPath } from '@/components/ui/truncated-path';
 import {
   deleteOrganizationExecutionTargetAction,
   getProjectDevicesAction,
@@ -47,6 +33,10 @@ import {
 } from '@/lib/actions/resource-directories';
 import { defaultDirectoryLabel } from '@/lib/resource-directories/labels';
 import { cn } from '@/lib/utils';
+
+import { partitionDevicesByProject } from './device-resources/device-resource-helpers';
+import { DeviceLabelControls } from './device-resources/DeviceLabelControls';
+import { DeviceResourceRow } from './device-resources/DeviceResourceRow';
 
 type Props = {
   open: boolean;
@@ -361,17 +351,10 @@ export function DeviceResourceList({ open, projectId }: Props) {
 
   // Computed
 
-  const projectDeviceIds = new Set(projectDevices.map(d => d.id));
-  const projectDeviceMap = new Map(projectDevices.map(d => [d.id, d]));
-
-  const devicesWithProjectInfo = devices.map(device => ({
-    device,
-    projectDevice: projectDeviceMap.get(device.id) ?? null,
-    hasResources: projectDeviceIds.has(device.id)
-  }));
-
-  const devicesInProject = devicesWithProjectInfo.filter(d => d.hasResources);
-  const devicesNotInProject = devicesWithProjectInfo.filter(d => !d.hasResources);
+  const { devicesInProject, devicesNotInProject } = partitionDevicesByProject(
+    devices,
+    projectDevices
+  );
 
   const selectedTarget = executionTargets.find(t => t.id === selectedTargetId);
   const canAddInBrowser = !isElectron && executionTargets.length > 0;
@@ -463,214 +446,42 @@ export function DeviceResourceList({ open, projectId }: Props) {
                     {resources.length} resource{resources.length !== 1 ? 's' : ''}
                   </span>
 
-                  {isEditing ? (
-                    <>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 w-7 p-0"
-                        onClick={() => void handleSaveDeviceLabel(device.id)}
-                        disabled={isSaving || !editingDeviceLabel.trim()}
-                        title="Save"
-                      >
-                        <Check className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 w-7 p-0"
-                        onClick={handleCancelEditDevice}
-                        disabled={isSaving}
-                        title="Cancel"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </Button>
-                    </>
-                  ) : (
-                    <>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 w-7 p-0 text-muted-foreground"
-                        onClick={() => handleStartEditDevice(device)}
-                        disabled={isBusy}
-                        title="Rename device"
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
-
-                      {device.isAdmin && device.organizationId ? (
-                        isConfirming ? (
-                          <div className="flex items-center gap-1">
-                            <span className="text-[10px] text-muted-foreground whitespace-nowrap">
-                              Remove?
-                            </span>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 w-7 p-0 text-destructive hover:bg-destructive/10"
-                              onClick={() => void handleDeleteDevice(device)}
-                              disabled={isDeleting}
-                              title="Confirm removal"
-                            >
-                              <Check className="h-3.5 w-3.5" />
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 w-7 p-0"
-                              onClick={() => setConfirmDeleteId(null)}
-                              disabled={isDeleting}
-                              title="Cancel"
-                            >
-                              <X className="h-3.5 w-3.5" />
-                            </Button>
-                          </div>
-                        ) : (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
-                            onClick={() => setConfirmDeleteId(device.id)}
-                            disabled={isBusy}
-                            title="Remove from organization"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        )
-                      ) : null}
-                    </>
-                  )}
+                  <DeviceLabelControls
+                    isEditing={isEditing}
+                    isSaving={isSaving}
+                    isDeleting={isDeleting}
+                    isConfirming={isConfirming}
+                    isBusy={isBusy}
+                    canSaveLabel={Boolean(editingDeviceLabel.trim())}
+                    showDelete={Boolean(device.isAdmin && device.organizationId)}
+                    onSave={() => void handleSaveDeviceLabel(device.id)}
+                    onCancel={handleCancelEditDevice}
+                    onStartEdit={() => handleStartEditDevice(device)}
+                    onRequestDelete={() => setConfirmDeleteId(device.id)}
+                    onCancelDelete={() => setConfirmDeleteId(null)}
+                    onConfirmDelete={() => void handleDeleteDevice(device)}
+                  />
                 </div>
 
                 {isExpanded && resources.length > 0 ? (
                   <div className="border-t bg-muted/30 px-2.5 py-1.5">
-                    {resources.map(resource => {
-                      const isEditingRes = editingResourceId === resource.id;
-                      const isSavingRes = savingResourceId === resource.id;
-                      return (
-                        <div key={resource.id} className="flex items-center gap-2 py-1.5 text-xs">
-                          <Folder className="ml-5 h-3 w-3 shrink-0 text-muted-foreground" />
-                          <div className="min-w-0 flex-1">
-                            {isEditingRes ? (
-                              <Input
-                                value={editingResourceLabel}
-                                onChange={event => setEditingResourceLabel(event.target.value)}
-                                placeholder="Label (optional)"
-                                className="h-7 text-xs"
-                                disabled={isSavingRes}
-                                autoFocus
-                                onKeyDown={event => {
-                                  if (event.key === 'Enter') {
-                                    event.preventDefault();
-                                    void handleSaveResourceLabel(resource.id);
-                                  }
-                                  if (event.key === 'Escape') {
-                                    handleCancelEditResource();
-                                  }
-                                }}
-                              />
-                            ) : (
-                              <div className="min-w-0">
-                                {resource.label ? (
-                                  <span className="font-medium">{resource.label}</span>
-                                ) : null}
-                                <TruncatedPath
-                                  path={resource.directoryPath}
-                                  className={cn(
-                                    'font-mono text-[11px]',
-                                    resource.label ? 'text-muted-foreground' : 'text-foreground'
-                                  )}
-                                />
-                              </div>
-                            )}
-                          </div>
-                          {isEditingRes ? (
-                            <>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 w-7 p-0"
-                                onClick={() => void handleSaveResourceLabel(resource.id)}
-                                disabled={isSavingRes}
-                                title="Save label"
-                              >
-                                <Check className="h-3.5 w-3.5" />
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 w-7 p-0"
-                                onClick={handleCancelEditResource}
-                                disabled={isSavingRes}
-                                title="Cancel"
-                              >
-                                <X className="h-3.5 w-3.5" />
-                              </Button>
-                            </>
-                          ) : (
-                            <>
-                              {isElectron && api?.app?.revealFile ? (
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-7 w-7 p-0 text-muted-foreground"
-                                  onClick={() => void handleRevealInFinder(resource.directoryPath)}
-                                  title="See in Finder"
-                                >
-                                  <FolderOpen className="h-3.5 w-3.5" />
-                                </Button>
-                              ) : null}
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 w-7 p-0 text-muted-foreground"
-                                onClick={() => handleStartEditResource(resource)}
-                                title={resource.label ? 'Edit label' : 'Add label'}
-                              >
-                                <Pencil className="h-3.5 w-3.5" />
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 w-7 p-0"
-                                title={resource.isPrimary ? 'Primary directory' : 'Set as primary'}
-                                onClick={() =>
-                                  resource.isPrimary ? undefined : handleSetPrimary(resource.id)
-                                }
-                              >
-                                {resource.isPrimary ? (
-                                  <Star className="h-3.5 w-3.5 fill-current text-amber-500" />
-                                ) : (
-                                  <StarOff className="h-3.5 w-3.5 text-muted-foreground" />
-                                )}
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
-                                onClick={() => handleRemoveResource(resource.id)}
-                                title="Remove"
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </Button>
-                            </>
-                          )}
-                        </div>
-                      );
-                    })}
+                    {resources.map(resource => (
+                      <DeviceResourceRow
+                        key={resource.id}
+                        resource={resource}
+                        isEditing={editingResourceId === resource.id}
+                        editingResourceLabel={editingResourceLabel}
+                        setEditingResourceLabel={setEditingResourceLabel}
+                        isSaving={savingResourceId === resource.id}
+                        canReveal={Boolean(isElectron && api?.app?.revealFile)}
+                        onSaveLabel={() => void handleSaveResourceLabel(resource.id)}
+                        onCancelEdit={handleCancelEditResource}
+                        onStartEdit={() => handleStartEditResource(resource)}
+                        onReveal={() => void handleRevealInFinder(resource.directoryPath)}
+                        onSetPrimary={() => handleSetPrimary(resource.id)}
+                        onRemove={() => handleRemoveResource(resource.id)}
+                      />
+                    ))}
                   </div>
                 ) : null}
 
@@ -740,90 +551,21 @@ export function DeviceResourceList({ open, projectId }: Props) {
                         )}
                       </div>
 
-                      {isEditing ? (
-                        <>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 w-7 p-0"
-                            onClick={() => void handleSaveDeviceLabel(device.id)}
-                            disabled={isSaving || !editingDeviceLabel.trim()}
-                            title="Save"
-                          >
-                            <Check className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 w-7 p-0"
-                            onClick={handleCancelEditDevice}
-                            disabled={isSaving}
-                            title="Cancel"
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </Button>
-                        </>
-                      ) : (
-                        <>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 w-7 p-0 text-muted-foreground"
-                            onClick={() => handleStartEditDevice(device)}
-                            disabled={isBusy}
-                            title="Rename device"
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
-
-                          {device.isAdmin && device.organizationId ? (
-                            isConfirming ? (
-                              <div className="flex items-center gap-1">
-                                <span className="text-[10px] text-muted-foreground whitespace-nowrap">
-                                  Remove?
-                                </span>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-7 w-7 p-0 text-destructive hover:bg-destructive/10"
-                                  onClick={() => void handleDeleteDevice(device)}
-                                  disabled={isDeleting}
-                                  title="Confirm removal"
-                                >
-                                  <Check className="h-3.5 w-3.5" />
-                                </Button>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-7 w-7 p-0"
-                                  onClick={() => setConfirmDeleteId(null)}
-                                  disabled={isDeleting}
-                                  title="Cancel"
-                                >
-                                  <X className="h-3.5 w-3.5" />
-                                </Button>
-                              </div>
-                            ) : (
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
-                                onClick={() => setConfirmDeleteId(device.id)}
-                                disabled={isBusy}
-                                title="Remove from organization"
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </Button>
-                            )
-                          ) : null}
-                        </>
-                      )}
+                      <DeviceLabelControls
+                        isEditing={isEditing}
+                        isSaving={isSaving}
+                        isDeleting={isDeleting}
+                        isConfirming={isConfirming}
+                        isBusy={isBusy}
+                        canSaveLabel={Boolean(editingDeviceLabel.trim())}
+                        showDelete={Boolean(device.isAdmin && device.organizationId)}
+                        onSave={() => void handleSaveDeviceLabel(device.id)}
+                        onCancel={handleCancelEditDevice}
+                        onStartEdit={() => handleStartEditDevice(device)}
+                        onRequestDelete={() => setConfirmDeleteId(device.id)}
+                        onCancelDelete={() => setConfirmDeleteId(null)}
+                        onConfirmDelete={() => void handleDeleteDevice(device)}
+                      />
                     </div>
                   );
                 })}

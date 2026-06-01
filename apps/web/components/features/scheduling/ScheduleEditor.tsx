@@ -31,24 +31,24 @@ import {
   upsertTicketScheduleAction
 } from '@/lib/actions/ticket-schedules';
 import type { DayNumber, PeriodType, WeekDayType } from '@/lib/schedulingEngine/helpers/types';
-import type { ScheduleInput } from '@/lib/schemas/schedule';
 import { cn } from '@/lib/utils';
 
 import {
-  getDayLabel,
-  getDefaultSchedule,
-  getOrdinalLabel,
-  summarizeSchedule
-} from './schedule-utils';
+  createDefaultState,
+  createStateFromInitialSchedule,
+  getValidationMessage,
+  LAST_DAY_OF_MONTH,
+  LAST_WEEK_OF_MONTH,
+  normalizeDaysOfMonth,
+  normalizeWeeksOfMonth,
+  type ScheduleEditorInitialSchedule,
+  type ScheduleState,
+  stateToInput
+} from './schedule-editor-helpers';
+import { summarizeSchedule } from './schedule-utils';
+import { DayToggles, MonthDayToggles, WeekOfMonthToggles } from './ScheduleToggles';
 
-export type ScheduleEditorInitialSchedule = {
-  daysOfMonth?: number[];
-  daysOfWeek: WeekDayType[];
-  periodInterval: number;
-  periodType: PeriodType;
-  timezone: string;
-  weeksOfMonth?: number[];
-};
+export type { ScheduleEditorInitialSchedule } from './schedule-editor-helpers';
 
 type ScheduleEditorProps = {
   ticketId: string;
@@ -56,214 +56,6 @@ type ScheduleEditorProps = {
   initialSchedule?: ScheduleEditorInitialSchedule | null;
   onScheduleChange?: (hasSchedule: boolean) => void;
 };
-
-type ScheduleState = {
-  periodType: PeriodType;
-  periodInterval: number;
-  daysOfWeek: WeekDayType[];
-  daysOfMonth?: number[];
-  weeksOfMonth?: number[];
-  timezone: string;
-  time: string;
-  monthlyMode: 'dayOfMonth' | 'weekOfMonth';
-};
-
-const LAST_DAY_OF_MONTH = 32;
-const LAST_WEEK_OF_MONTH = 5;
-
-function uniqueSorted(values: number[]) {
-  return [...new Set(values)].sort((left, right) => left - right);
-}
-
-function normalizeDaysOfMonth(daysOfMonth?: number[] | null): number[] {
-  return uniqueSorted(
-    (daysOfMonth ?? [])
-      .map(day => (day >= 29 && day <= 31 ? LAST_DAY_OF_MONTH : day))
-      .filter(day => (day >= 1 && day <= 28) || day === LAST_DAY_OF_MONTH)
-  );
-}
-
-function normalizeWeeksOfMonth(weeksOfMonth?: number[] | null): number[] {
-  return uniqueSorted(
-    (weeksOfMonth ?? [])
-      .map(week => (week >= 4 && week <= 5 ? LAST_WEEK_OF_MONTH : week))
-      .filter(week => (week >= 1 && week <= 3) || week === LAST_WEEK_OF_MONTH)
-  );
-}
-
-function createStateFromInitialSchedule(
-  initialSchedule: ScheduleEditorInitialSchedule
-): ScheduleState {
-  const daysOfWeek = initialSchedule.daysOfWeek ?? [];
-  const daysOfMonth = normalizeDaysOfMonth(initialSchedule.daysOfMonth);
-  const weeksOfMonth = normalizeWeeksOfMonth(initialSchedule.weeksOfMonth);
-
-  return {
-    periodType: initialSchedule.periodType,
-    periodInterval: initialSchedule.periodInterval,
-    daysOfWeek,
-    daysOfMonth: daysOfMonth.length > 0 ? daysOfMonth : undefined,
-    weeksOfMonth: weeksOfMonth.length > 0 ? weeksOfMonth : undefined,
-    timezone: initialSchedule.timezone,
-    time: extractTimeFromDaysOfWeek(daysOfWeek),
-    monthlyMode: weeksOfMonth.length > 0 ? 'weekOfMonth' : 'dayOfMonth'
-  };
-}
-
-function createDefaultState(): ScheduleState {
-  const defaults = getDefaultSchedule();
-
-  return {
-    periodType: defaults.periodType,
-    periodInterval: defaults.periodInterval,
-    daysOfWeek: defaults.daysOfWeek,
-    daysOfMonth: undefined,
-    weeksOfMonth: undefined,
-    timezone: defaults.timezone,
-    time: '09:00',
-    monthlyMode: 'dayOfMonth'
-  };
-}
-
-function stateToInput(state: ScheduleState): ScheduleInput {
-  const input: ScheduleInput = {
-    periodType: state.periodType,
-    periodInterval: state.periodInterval,
-    timezone: state.timezone
-  };
-
-  if (state.periodType === 'd') {
-    input.daysOfWeek = [{ dayNum: 1, times: [state.time || '09:00'] }];
-  } else if (state.periodType === 'w') {
-    input.daysOfWeek = state.daysOfWeek.map(d => ({
-      dayNum: d.dayNum,
-      times: [state.time || '09:00']
-    }));
-  } else if (state.periodType === 'm') {
-    if (state.monthlyMode === 'dayOfMonth') {
-      input.daysOfMonth = normalizeDaysOfMonth(state.daysOfMonth);
-    } else {
-      input.weeksOfMonth = normalizeWeeksOfMonth(state.weeksOfMonth);
-      input.daysOfWeek = state.daysOfWeek.map(d => ({
-        dayNum: d.dayNum,
-        times: [state.time || '09:00']
-      }));
-    }
-  }
-
-  return input;
-}
-
-function extractTimeFromDaysOfWeek(daysOfWeek: WeekDayType[]): string {
-  for (const day of daysOfWeek) {
-    if (day.times?.length > 0) return day.times[0];
-  }
-  return '09:00';
-}
-
-// --- Day toggle buttons for daily/weekly ---
-
-function DayToggles({
-  selectedDays,
-  onToggle
-}: {
-  selectedDays: Set<number>;
-  onToggle: (day: DayNumber) => void;
-}) {
-  const days: DayNumber[] = [1, 2, 3, 4, 5, 6, 0]; // Mon-Sun
-  return (
-    <div className="flex gap-1">
-      {days.map(day => (
-        <button
-          key={day}
-          type="button"
-          onClick={() => onToggle(day)}
-          className={cn(
-            'flex h-7 w-8 items-center justify-center rounded-md border text-xs font-medium transition-colors',
-            selectedDays.has(day)
-              ? 'border-primary bg-primary text-primary-foreground'
-              : 'border-input bg-background hover:bg-muted'
-          )}
-        >
-          {getDayLabel(day)}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-// --- Day of month toggles for monthly ---
-
-function MonthDayToggles({
-  selectedDays,
-  onToggle
-}: {
-  selectedDays: Set<number>;
-  onToggle: (day: number) => void;
-}) {
-  const rows = [
-    [1, 2, 3, 4, 5, 6, 7],
-    [8, 9, 10, 11, 12, 13, 14],
-    [15, 16, 17, 18, 19, 20, 21],
-    [22, 23, 24, 25, 26, 27, 28],
-    [LAST_DAY_OF_MONTH]
-  ];
-
-  return (
-    <div className="flex flex-col gap-1">
-      {rows.map((row, i) => (
-        <div key={i} className="flex gap-1">
-          {row.map(day => (
-            <button
-              key={day}
-              type="button"
-              onClick={() => onToggle(day)}
-              className={cn(
-                'flex h-6 min-w-7 items-center justify-center rounded border text-[10px] font-medium transition-colors',
-                selectedDays.has(day)
-                  ? 'border-primary bg-primary text-primary-foreground'
-                  : 'border-input bg-background hover:bg-muted'
-              )}
-            >
-              {day === LAST_DAY_OF_MONTH ? 'Last' : day}
-            </button>
-          ))}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// --- Week of month selector ---
-
-function WeekOfMonthToggles({
-  selectedWeeks,
-  onToggle
-}: {
-  selectedWeeks: Set<number>;
-  onToggle: (week: number) => void;
-}) {
-  const weeks = [1, 2, 3, LAST_WEEK_OF_MONTH];
-  return (
-    <div className="flex gap-1">
-      {weeks.map(week => (
-        <button
-          key={week}
-          type="button"
-          onClick={() => onToggle(week)}
-          className={cn(
-            'flex h-7 items-center justify-center rounded-md border px-2 text-xs font-medium transition-colors',
-            selectedWeeks.has(week)
-              ? 'border-primary bg-primary text-primary-foreground'
-              : 'border-input bg-background hover:bg-muted'
-          )}
-        >
-          {getOrdinalLabel(week)}
-        </button>
-      ))}
-    </div>
-  );
-}
 
 // --- Main component ---
 
@@ -388,32 +180,6 @@ export function ScheduleEditor({
       setSchedule(savedScheduleRef.current);
     }
   }, []);
-
-  function getValidationMessage(state: ScheduleState): string | null {
-    if (state.periodType === 'd') {
-      return null;
-    }
-    if (state.periodType === 'w') {
-      return state.daysOfWeek.length > 0 ? null : 'Choose at least one weekday for this schedule.';
-    }
-    if (state.periodType === 'm') {
-      if (state.monthlyMode === 'dayOfMonth') {
-        return (state.daysOfMonth?.length ?? 0) > 0
-          ? null
-          : 'Choose at least one day of the month for this schedule.';
-      }
-      if ((state.weeksOfMonth?.length ?? 0) === 0 && state.daysOfWeek.length === 0) {
-        return 'Choose a week of the month and at least one weekday for this schedule.';
-      }
-      if ((state.weeksOfMonth?.length ?? 0) === 0) {
-        return 'Choose a week of the month for this schedule.';
-      }
-      return state.daysOfWeek.length > 0
-        ? null
-        : 'Choose at least one weekday for this monthly schedule.';
-    }
-    return 'Choose a valid schedule type.';
-  }
 
   function updateSchedule(partial: Partial<ScheduleState>) {
     setSaveButtonState('default');

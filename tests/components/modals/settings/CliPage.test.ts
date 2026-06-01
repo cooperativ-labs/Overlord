@@ -1,4 +1,4 @@
-import { getAgentSelectorLabel } from '@/components/modals/settings/CliPage';
+import { getAgentSelectorLabel } from '@/components/modals/settings/cli/cli-page-constants';
 
 describe('CliPage helper labels', () => {
   it('returns labels for copy prompt selector values', () => {
