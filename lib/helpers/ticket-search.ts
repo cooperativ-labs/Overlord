@@ -24,7 +24,7 @@ export function normalizeTicketSearchQuery(value: string) {
   return {
     sanitized,
     rawTrimmed,
-    exactTicketId: /^[0-9]+:[0-9]+$/.test(rawTrimmed) ? rawTrimmed : null,
+    exactTicketId: /^[0-9]+:[0-9]+$/.test(rawTrimmed) ? rawTrimmed : undefined,
     textSearchQuery: sanitized ? buildWebSearchQuery(sanitized) : ''
   };
 }

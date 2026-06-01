@@ -5,7 +5,7 @@ describe('normalizeTicketSearchQuery', () => {
     expect(normalizeTicketSearchQuery('  auth!!  refactor  ')).toEqual({
       sanitized: 'auth refactor',
       rawTrimmed: 'auth!!  refactor',
-      exactTicketId: null,
+      exactTicketId: undefined,
       textSearchQuery: 'auth* refactor*'
     });
   });
