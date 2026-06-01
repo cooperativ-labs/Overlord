@@ -2,6 +2,8 @@ import type { Metadata } from 'next';
 import Image from 'next/image';
 import { Suspense } from 'react';
 
+import { DocsHeading } from '../../_components/docs-heading';
+
 import { AgentPluginsTabs } from './agent-plugins-tabs';
 
 export const metadata: Metadata = {
@@ -12,7 +14,9 @@ export default function AgentPluginsPage() {
   return (
     <main className="flex max-w-5xl flex-1 flex-col gap-8 p-6 md:p-10">
       <div className="space-y-4">
-        <h1 className="text-3xl font-bold tracking-tight">Agent Plugins</h1>
+        <DocsHeading as="h1" className="text-3xl font-bold tracking-tight">
+          Agent Plugins
+        </DocsHeading>
         <p className="text-lg leading-7 text-muted-foreground">
           Plugins are the bridge between your coding agent and Overlord. Install them once and
           Overlord can launch tickets through that agent, stream updates back, and record the
@@ -21,9 +25,9 @@ export default function AgentPluginsPage() {
       </div>
 
       <section className="space-y-4">
-        <h2 className="text-2xl font-semibold tracking-tight">
+        <DocsHeading as="h2" className="text-2xl font-semibold tracking-tight">
           Step 1 — Install the packaged plugins from Overlord
-        </h2>
+        </DocsHeading>
         <p className="leading-7 text-muted-foreground">
           The desktop app and the CLI both ship the Overlord-managed connector bundles. In the
           desktop app, open <span className="font-medium">Settings → CLI &amp; Local Agents</span>,
@@ -50,9 +54,9 @@ export default function AgentPluginsPage() {
       </section>
 
       <section className="space-y-4">
-        <h2 className="text-2xl font-semibold tracking-tight">
+        <DocsHeading as="h2" className="text-2xl font-semibold tracking-tight">
           Step 2 — Register the plugin in your agent
-        </h2>
+        </DocsHeading>
         <p className="leading-7 text-muted-foreground">
           Once the plugin files exist on disk, tell your agent where to find them. Pick the tab that
           matches your setup.
@@ -63,7 +67,9 @@ export default function AgentPluginsPage() {
       </section>
 
       <section className="space-y-4">
-        <h2 className="text-2xl font-semibold tracking-tight">Slash commands</h2>
+        <DocsHeading as="h2" className="text-2xl font-semibold tracking-tight">
+          Slash commands
+        </DocsHeading>
         <p className="leading-7 text-muted-foreground">
           Installing an Overlord plugin or running <code>ovld setup &lt;agent&gt;</code> registers a
           set of slash commands you can use mid-session in Claude Code, Cursor, Antigravity CLI, and
@@ -111,7 +117,9 @@ export default function AgentPluginsPage() {
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-2xl font-semibold tracking-tight">Keeping plugins up to date</h2>
+        <DocsHeading as="h2" className="text-2xl font-semibold tracking-tight">
+          Keeping plugins up to date
+        </DocsHeading>
         <p className="leading-7 text-muted-foreground">
           When the Overlord desktop app updates, rerun the prepare step in{' '}
           <span className="font-medium">Settings → CLI &amp; Local Agents</span>. If you manage your

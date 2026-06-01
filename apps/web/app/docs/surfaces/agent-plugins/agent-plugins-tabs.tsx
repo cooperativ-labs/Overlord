@@ -5,6 +5,8 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
+import { DocsHeading } from '../../_components/docs-heading';
+
 function Screenshot({
   src,
   alt,
@@ -77,7 +79,9 @@ export function AgentPluginsTabs() {
       <TabsContent value="claude-desktop" className="space-y-4">
         <div className="space-y-4 rounded-xl border bg-card p-5">
           <div className="space-y-2">
-            <h3 className="font-semibold">Confirm the automatic Claude plugin install</h3>
+            <DocsHeading as="h3" className="font-semibold">
+              Confirm the automatic Claude plugin install
+            </DocsHeading>
             <p className="text-sm leading-6 text-muted-foreground">
               Overlord installs the Claude plugin automatically when you enable Claude from Overlord
               settings. In Claude, this flow is only for confirming the plugin is active and
@@ -148,7 +152,9 @@ export function AgentPluginsTabs() {
       <TabsContent value="codex-desktop" className="space-y-4">
         <div className="space-y-4 rounded-xl border bg-card p-5">
           <div className="space-y-2">
-            <h3 className="font-semibold">Install from Overlord Local Plugins</h3>
+            <DocsHeading as="h3" className="font-semibold">
+              Install from Overlord Local Plugins
+            </DocsHeading>
             <p className="text-sm leading-6 text-muted-foreground">
               The Codex desktop app can browse the packaged plugin bundle that Overlord installed on
               your machine. You do not need to hand-edit config files.
@@ -193,7 +199,9 @@ export function AgentPluginsTabs() {
 
         <div className="space-y-4 rounded-xl border bg-card p-5">
           <div className="space-y-2">
-            <h3 className="font-semibold">Remove the Codex plugin</h3>
+            <DocsHeading as="h3" className="font-semibold">
+              Remove the Codex plugin
+            </DocsHeading>
             <p className="text-sm leading-6 text-muted-foreground">
               Removing the plugin uses the same Codex plugins screen. Open the installed Overlord
               plugin and use Codex&apos;s remove action.

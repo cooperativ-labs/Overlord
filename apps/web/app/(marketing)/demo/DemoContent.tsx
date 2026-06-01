@@ -413,7 +413,6 @@ export function DemoContent() {
                       <DemoTicketPanel
                         ticket={selectedTicket}
                         onClose={() => setSelectedTicket(null)}
-                        onDiscuss={handleDiscuss}
                         onRun={handleRun}
                       />
                     </div>

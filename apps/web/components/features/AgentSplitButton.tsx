@@ -75,6 +75,8 @@ type AgentSplitButtonProps = {
   submitObjectiveId?: string | null;
   /** Marketing/demo surfaces: show Run chrome without launching or copying. */
   demo?: boolean;
+  /** Called when Run is clicked in demo mode (e.g. marketing /demo fake terminal). */
+  onDemoRun?: () => void;
 };
 
 const sizeStyles: Record<
@@ -152,7 +154,8 @@ export function AgentSplitButton({
   agentSessionState,
   size = 'default',
   submitObjectiveId,
-  demo = false
+  demo = false,
+  onDemoRun
 }: AgentSplitButtonProps) {
   const { copied, copy } = useCopyToClipboard();
   const [isLaunching, setIsLaunching] = useState(false);
@@ -235,7 +238,10 @@ export function AgentSplitButton({
       skipRunningConfirm?: boolean;
     }
   ): Promise<void> {
-    if (demo) return;
+    if (demo) {
+      onDemoRun?.();
+      return;
+    }
 
     const isCopyLocalValue = agentValue === 'copy-local';
     const isCopyCloudValue = agentValue === 'copy-cloud';

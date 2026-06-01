@@ -12,6 +12,8 @@ import {
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
+import { DocsHeading } from './_components/docs-heading';
+
 export const metadata: Metadata = {
   title: 'Documentation',
   description: 'Documentation for Overlord AI'
@@ -22,7 +24,9 @@ export default function DocsPage() {
     <>
       <div className="flex flex-1 flex-col gap-8 p-6 md:p-10 max-w-4xl">
         <div className="space-y-4">
-          <h1 className="text-3xl font-bold tracking-tight">Introduction</h1>
+          <DocsHeading as="h1" className="text-3xl font-bold tracking-tight">
+            Introduction
+          </DocsHeading>
           <p className="text-lg text-muted-foreground leading-7">
             Overlord is a management, work coordination, and review layer for AI-assisted
             engineering work. It keeps the ticket, progress, review, and delivery record in one
@@ -31,7 +35,9 @@ export default function DocsPage() {
         </div>
 
         <div className="space-y-3">
-          <h2 className="text-xl font-semibold tracking-tight">The mental model</h2>
+          <DocsHeading as="h2" className="text-xl font-semibold tracking-tight">
+            The mental model
+          </DocsHeading>
           <div className="grid gap-3">
             <div className="rounded-lg border bg-card p-4">
               <p className="font-medium">The objective is the unit of work.</p>
@@ -64,7 +70,9 @@ export default function DocsPage() {
         </div>
 
         <div className="space-y-3">
-          <h2 className="text-xl font-semibold tracking-tight">Product surfaces</h2>
+          <DocsHeading as="h2" className="text-xl font-semibold tracking-tight">
+            Product surfaces
+          </DocsHeading>
           <p className="text-muted-foreground">
             Five parts serve the same ticket-centered workflow.
           </p>
@@ -98,7 +106,9 @@ export default function DocsPage() {
         </div>
 
         <div className="space-y-3">
-          <h2 className="text-xl font-semibold tracking-tight">How it works</h2>
+          <DocsHeading as="h2" className="text-xl font-semibold tracking-tight">
+            How it works
+          </DocsHeading>
           <div className="space-y-4">
             <WorkflowStep
               step={1}
@@ -128,7 +138,9 @@ export default function DocsPage() {
         </div>
 
         <div className="space-y-3">
-          <h2 className="text-xl font-semibold tracking-tight">Quick start</h2>
+          <DocsHeading as="h2" className="text-xl font-semibold tracking-tight">
+            Quick start
+          </DocsHeading>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="rounded-lg border bg-card p-4">
               <p className="text-sm font-medium">1. Create a project</p>
@@ -160,7 +172,9 @@ export default function DocsPage() {
         </div>
 
         <div className="space-y-3">
-          <h2 className="text-xl font-semibold tracking-tight">Next steps</h2>
+          <DocsHeading as="h2" className="text-xl font-semibold tracking-tight">
+            Next steps
+          </DocsHeading>
           <div className="grid gap-2">
             <Link
               href="/docs/surfaces/desktop-app"

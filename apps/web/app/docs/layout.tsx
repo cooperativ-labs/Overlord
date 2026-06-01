@@ -6,6 +6,7 @@ import { Separator } from '@/components/ui/separator';
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 
 import { DocsBreadcrumb } from './_components/docs-breadcrumb';
+import { DocsLayoutClient } from './_components/docs-layout-client';
 import type { DocsNavData } from './_components/docs-nav';
 
 export const metadata: Metadata = {
@@ -219,7 +220,7 @@ export default function DocsLayout({
               <DocsBreadcrumb />
             </div>
           </header>
-          {children}
+          <DocsLayoutClient>{children}</DocsLayoutClient>
         </SidebarInset>
       </SidebarProvider>
     </ThemeProvider>

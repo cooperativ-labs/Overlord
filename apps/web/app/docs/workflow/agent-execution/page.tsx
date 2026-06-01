@@ -1,7 +1,6 @@
 import type { Metadata } from 'next';
 
-import { MarkdownContent } from '@/components/features/MarkdownContent';
-
+import { DocsMarkdownContent } from '../../_components/docs-markdown-content';
 import { DocsMarkdownPage } from '../../_components/docs-markdown-page';
 import { RunnerArchitectureDiagram } from '../../_components/runner-architecture-diagram';
 import { RunnerSequenceDiagram } from '../../_components/runner-sequence-diagram';
@@ -189,13 +188,13 @@ export default function AgentExecutionPage() {
       title="Agent Execution & Runner"
       lead="Overlord coordinates ticket progress, but agent processes run in the host-local environment best suited to the task."
     >
-      <MarkdownContent className="prose-headings:scroll-mt-24">{INTRO}</MarkdownContent>
+      <DocsMarkdownContent className="prose-headings:scroll-mt-24">{INTRO}</DocsMarkdownContent>
       <RunnerArchitectureDiagram />
-      <MarkdownContent className="prose-headings:scroll-mt-24">
+      <DocsMarkdownContent className="prose-headings:scroll-mt-24">
         {AFTER_ARCHITECTURE}
-      </MarkdownContent>
+      </DocsMarkdownContent>
       <RunnerSequenceDiagram />
-      <MarkdownContent className="prose-headings:scroll-mt-24">{REST}</MarkdownContent>
+      <DocsMarkdownContent className="prose-headings:scroll-mt-24">{REST}</DocsMarkdownContent>
     </DocsMarkdownPage>
   );
 }

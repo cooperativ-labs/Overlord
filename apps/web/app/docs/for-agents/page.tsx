@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
+import { DocsHeading } from '../_components/docs-heading';
+
 export const metadata: Metadata = {
   title: 'For Agents',
   description: 'Documentation for AI coding agents working with Overlord',
@@ -13,7 +15,9 @@ export default function ForAgentsPage() {
   return (
     <main className="flex flex-1 flex-col gap-8 p-6 md:p-10 max-w-4xl">
       <div className="space-y-4">
-        <h1 className="text-3xl font-bold tracking-tight">For Agents</h1>
+        <DocsHeading as="h1" className="text-3xl font-bold tracking-tight">
+          For Agents
+        </DocsHeading>
         <p className="text-lg leading-7 text-muted-foreground">
           This section is written for coding agents (Claude Code, Codex, Cursor, OpenCode,
           Antigravity, and any MCP- or CLI-driven runtime). It explains how to drive an Overlord
@@ -63,7 +67,9 @@ export default function ForAgentsPage() {
       </div>
 
       <section className="space-y-3">
-        <h2 className="text-xl font-semibold tracking-tight">TL;DR</h2>
+        <DocsHeading as="h2" className="text-xl font-semibold tracking-tight">
+          TL;DR
+        </DocsHeading>
         <div className="rounded-lg border bg-card p-4">
           <ol className="list-decimal space-y-2 pl-5 text-sm leading-7">
             <li>

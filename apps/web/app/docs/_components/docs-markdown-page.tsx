@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 
-import { MarkdownContent } from '@/components/features/MarkdownContent';
+import { DocsHeading } from './docs-heading';
+import { DocsMarkdownContent } from './docs-markdown-content';
 
 type DocsMarkdownPageProps = {
   title: string;
@@ -12,7 +13,7 @@ type DocsMarkdownPageProps = {
 export function DocsMarkdownPage({ title, lead, children }: DocsMarkdownPageProps) {
   const body =
     typeof children === 'string' ? (
-      <MarkdownContent className="prose-headings:scroll-mt-24">{children}</MarkdownContent>
+      <DocsMarkdownContent className="prose-headings:scroll-mt-24">{children}</DocsMarkdownContent>
     ) : (
       <div className="flex flex-col gap-8">{children}</div>
     );
@@ -20,7 +21,9 @@ export function DocsMarkdownPage({ title, lead, children }: DocsMarkdownPageProp
   return (
     <main className="flex flex-1 flex-col gap-8 p-6 md:p-10 max-w-4xl">
       <div className="space-y-4">
-        <h1 className="text-3xl font-bold tracking-tight">{title}</h1>
+        <DocsHeading as="h1" className="text-3xl font-bold tracking-tight">
+          {title}
+        </DocsHeading>
         {lead ? <p className="text-lg leading-7 text-muted-foreground">{lead}</p> : null}
       </div>
       {body}

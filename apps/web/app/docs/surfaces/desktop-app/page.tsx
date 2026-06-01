@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import Image from 'next/image';
 
+import { DocsHeading } from '../../_components/docs-heading';
+
 export const metadata: Metadata = {
   title: 'Desktop App'
 };
@@ -30,14 +32,18 @@ export default function DesktopAppPage() {
   return (
     <main className="flex max-w-5xl flex-1 flex-col gap-8 p-6 md:p-10">
       <div className="space-y-4">
-        <h1 className="text-3xl font-bold tracking-tight">Desktop App</h1>
+        <DocsHeading as="h1" className="text-3xl font-bold tracking-tight">
+          Desktop App
+        </DocsHeading>
         <p className="text-lg leading-7 text-muted-foreground">
           The desktop app is a thin local wrapper around the web app with access to your machine.
         </p>
       </div>
 
       <section className="space-y-4">
-        <h2 className="text-2xl font-semibold tracking-tight">What it adds</h2>
+        <DocsHeading as="h2" className="text-2xl font-semibold tracking-tight">
+          What it adds
+        </DocsHeading>
         <p className="leading-7 text-muted-foreground">
           The desktop app provides local capabilities that a browser cannot.
         </p>
@@ -54,7 +60,9 @@ export default function DesktopAppPage() {
 
       <section className="space-y-6">
         <div className="space-y-2">
-          <h2 className="text-2xl font-semibold tracking-tight">Product Surfaces</h2>
+          <DocsHeading as="h2" className="text-2xl font-semibold tracking-tight">
+            Product Surfaces
+          </DocsHeading>
           <p className="leading-7 text-muted-foreground">
             The desktop app also packages local agent connectors so Claude and Codex can work on
             Overlord tickets without leaving their native app surfaces.
@@ -64,7 +72,9 @@ export default function DesktopAppPage() {
         <div className="grid gap-6">
           <div className="space-y-4 rounded-xl border bg-card p-6">
             <div className="space-y-2">
-              <h3 className="text-xl font-semibold tracking-tight">Claude Desktop</h3>
+              <DocsHeading as="h3" className="text-xl font-semibold tracking-tight">
+                Claude Desktop
+              </DocsHeading>
               <p className="text-sm leading-6 text-muted-foreground">
                 Use the Claude desktop app as an idea-to-ticket and ticket-to-execution surface.
                 Overlord keeps the workflow centered on tickets while Claude handles the live
@@ -84,7 +94,9 @@ export default function DesktopAppPage() {
 
           <div className="space-y-4 rounded-xl border bg-card p-6">
             <div className="space-y-2">
-              <h3 className="text-xl font-semibold tracking-tight">Codex Desktop</h3>
+              <DocsHeading as="h3" className="text-xl font-semibold tracking-tight">
+                Codex Desktop
+              </DocsHeading>
               <p className="text-sm leading-6 text-muted-foreground">
                 Codex works well as the hands-on execution surface for linked repositories. The
                 bundled Overlord plugin gives Codex durable ticket lifecycle instructions plus a
@@ -117,7 +129,9 @@ export default function DesktopAppPage() {
       </section>
 
       <section className="space-y-4">
-        <h2 className="text-2xl font-semibold tracking-tight">Local agent connectors</h2>
+        <DocsHeading as="h2" className="text-2xl font-semibold tracking-tight">
+          Local agent connectors
+        </DocsHeading>
         <p className="leading-7 text-muted-foreground">
           Overlord packages these connectors in both the desktop app and the CLI. In the desktop
           app, install them from{' '}
@@ -134,7 +148,9 @@ export default function DesktopAppPage() {
       </section>
 
       <section className="space-y-4">
-        <h2 className="text-2xl font-semibold tracking-tight">Change Viewer</h2>
+        <DocsHeading as="h2" className="text-2xl font-semibold tracking-tight">
+          Change Viewer
+        </DocsHeading>
         <p className="leading-7 text-muted-foreground">
           The desktop app also includes a built-in diff browser for linked repositories.
         </p>
@@ -150,7 +166,9 @@ export default function DesktopAppPage() {
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-2xl font-semibold tracking-tight">Related pages</h2>
+        <DocsHeading as="h2" className="text-2xl font-semibold tracking-tight">
+          Related pages
+        </DocsHeading>
         <ul className="list-disc space-y-2 pl-6 text-sm leading-7">
           <li>
             <a className="underline-offset-2 hover:underline" href="/docs/agent-plugins">

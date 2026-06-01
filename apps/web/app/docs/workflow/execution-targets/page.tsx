@@ -1,7 +1,6 @@
 import type { Metadata } from 'next';
 
-import { MarkdownContent } from '@/components/features/MarkdownContent';
-
+import { DocsMarkdownContent } from '../../_components/docs-markdown-content';
 import { DocsMarkdownPage } from '../../_components/docs-markdown-page';
 import { ExecutionTargetsArchitectureDiagram } from '../../_components/execution-targets-architecture-diagram';
 import { ExecutionTargetsPlaceholderDiagram } from '../../_components/execution-targets-placeholder-diagram';
@@ -167,13 +166,13 @@ export default function ExecutionTargetsPage() {
       title="Execution Targets & Resources"
       lead="Execution targets are where agents run; project resource directories are the checkout paths on those targets. Together they drive working-directory resolution for the runner and launch commands."
     >
-      <MarkdownContent className="prose-headings:scroll-mt-24">{INTRO}</MarkdownContent>
+      <DocsMarkdownContent className="prose-headings:scroll-mt-24">{INTRO}</DocsMarkdownContent>
       <ExecutionTargetsArchitectureDiagram />
-      <MarkdownContent className="prose-headings:scroll-mt-24">
+      <DocsMarkdownContent className="prose-headings:scroll-mt-24">
         {AFTER_ARCHITECTURE}
-      </MarkdownContent>
+      </DocsMarkdownContent>
       <ExecutionTargetsPlaceholderDiagram />
-      <MarkdownContent className="prose-headings:scroll-mt-24">{AFTER_PLACEHOLDER}</MarkdownContent>
+      <DocsMarkdownContent className="prose-headings:scroll-mt-24">{AFTER_PLACEHOLDER}</DocsMarkdownContent>
     </DocsMarkdownPage>
   );
 }

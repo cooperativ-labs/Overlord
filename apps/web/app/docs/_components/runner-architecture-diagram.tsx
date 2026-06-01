@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react';
 
+import { DocsHeading } from './docs-heading';
+
 function DiagramBox({ children }: { children: ReactNode }) {
   return (
     <div className="rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground shadow-sm">
@@ -24,9 +26,12 @@ function DiagramArrow({ label }: { label?: string }) {
 function Swimlane({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="rounded-xl border border-dashed border-border/80 bg-muted/20 p-4">
-      <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+      <DocsHeading
+        as="h3"
+        className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+      >
         {title}
-      </h3>
+      </DocsHeading>
       <div className="flex flex-col items-stretch gap-2 sm:items-center">{children}</div>
     </section>
   );

@@ -1,14 +1,18 @@
 'use client';
 
-import { ArrowRightToLine, Bot, ChevronDown, MessageSquare } from 'lucide-react';
+import { ArrowRightToLine, Bot, ChevronDown, Copy, EllipsisVertical, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
-import { AgentIcon } from '@/components/features/AgentIcon';
 import { ProjectColorDot } from '@/components/features/projects/ProjectColorDot';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu';
 import { Separator } from '@/components/ui/separator';
-import { getAgentTypeByValue } from '@/lib/helpers/agent-types';
+import { DemoObjectivesSection } from '../../../example-content/demo-frames/DemoObjectivesSection';
 import { cn } from '@/lib/utils';
 
 import { DEMO_ACTIVITY, type DemoTicket } from './mock-data';
@@ -16,9 +20,12 @@ import { DEMO_ACTIVITY, type DemoTicket } from './mock-data';
 type DemoTicketPanelProps = {
   ticket: DemoTicket;
   onClose: () => void;
-  onDiscuss: () => void;
   onRun: () => void;
 };
+
+function toTicketIdentifier(ticketId: string) {
+  return ticketId.replace('demo-', '1:');
+}
 
 function StatusBadge({ state }: { state: DemoTicket['agent_session_state'] }) {
   if (!state) return null;
@@ -48,16 +55,84 @@ function PhaseIndicator({ phase }: { phase: string }) {
   return <span className={cn('h-2 w-2 rounded-full', colors[phase] ?? 'bg-slate-400')} />;
 }
 
-export function DemoTicketPanel({ ticket, onClose, onDiscuss, onRun }: DemoTicketPanelProps) {
-  const [modelOpen, setModelOpen] = useState(false);
+function DemoTicketPanelHeader({
+  ticket,
+  onClose
+}: {
+  ticket: DemoTicket;
+  onClose: () => void;
+}) {
+  const ticketIdentifier = toTicketIdentifier(ticket.id);
+
+  return (
+    <div className="relative flex items-center justify-between gap-2 overflow-hidden border-b px-4 py-2.5">
+      <div className="flex items-center gap-2">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button aria-label="Ticket actions" className="h-7 w-7" size="icon" variant="ghost">
+              <EllipsisVertical className="h-3.5 w-3.5" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-52">
+            <div className="flex items-center justify-between gap-2 px-2 py-1.5 text-sm">
+              <span>
+                Ticket ID: <strong>{ticketIdentifier}</strong>
+              </span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6"
+                aria-label="Copy full ticket identifier"
+              >
+                <Copy className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+            <div className="flex items-center justify-between gap-2 px-2 py-1.5 text-sm text-muted-foreground">
+              <span>Delete ticket</span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                aria-label="Delete ticket"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <span className="text-xs tabular-nums text-muted-foreground">{ticketIdentifier}</span>
+      </div>
+      <div className="flex items-center justify-end gap-3">
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            className="inline-flex h-7 max-w-[180px] items-center gap-1.5 rounded-md border border-input bg-background px-2 text-xs shadow-sm"
+          >
+            <ProjectColorDot color={ticket.project_color} className="h-2.5 w-2.5 shrink-0" />
+            <span className="truncate font-medium">{ticket.project_name}</span>
+            <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
+          </button>
+          <button
+            type="button"
+            className="inline-flex h-7 items-center gap-1 rounded-full border border-input bg-background px-2.5 text-[11px] capitalize shadow-sm"
+          >
+            {ticket.status}
+            <ChevronDown className="h-3 w-3 text-muted-foreground" />
+          </button>
+        </div>
+        <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={onClose}>
+          <ArrowRightToLine className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+export function DemoTicketPanel({ ticket, onClose, onRun }: DemoTicketPanelProps) {
   const [visibleActivityCount, setVisibleActivityCount] = useState(0);
 
-  const agentType = getAgentTypeByValue(
-    ticket.latest_objective_agent === 'codex' ? 'codex' : 'claude'
-  );
-  const agentLabel = agentType.label;
-
-  // Animate activity cards appearing one by one
   useEffect(() => {
     if (ticket.status !== 'draft' && visibleActivityCount < DEMO_ACTIVITY.length) {
       const timer = setTimeout(() => {
@@ -67,120 +142,18 @@ export function DemoTicketPanel({ ticket, onClose, onDiscuss, onRun }: DemoTicke
     }
   }, [visibleActivityCount, ticket.status]);
 
-  // Reset animation when ticket changes
   useEffect(() => {
     setVisibleActivityCount(0);
   }, [ticket.id]);
 
   return (
     <div className="flex h-full flex-col overflow-hidden border-l bg-card">
-      {/* Header with agent controls */}
-      <div className="flex items-center justify-end gap-2 border-b px-4 py-2">
-        <div className="flex items-center gap-1.5">
-          {/* Model chooser */}
-          <Button
-            className="h-7 gap-1.5 px-2 text-xs"
-            size="sm"
-            variant="outline"
-            onClick={() => setModelOpen(!modelOpen)}
-          >
-            <AgentIcon agentType={agentType} className="h-3.5 w-3.5" alt={`${agentLabel} icon`} />
-            <span className="hidden sm:inline">Sonnet 4</span>
-            <ChevronDown className="h-3 w-3 text-muted-foreground" />
-          </Button>
+      <DemoTicketPanelHeader ticket={ticket} onClose={onClose} />
 
-          {/* Discuss button */}
-          <Button
-            className="h-7 gap-1 px-2 text-xs"
-            size="sm"
-            variant="outline"
-            onClick={onDiscuss}
-          >
-            <MessageSquare className="h-3.5 w-3.5" />
-            Discuss
-          </Button>
-
-          {/* Run button (split-style) */}
-          <div className="inline-flex items-stretch rounded-md border border-input bg-background text-sm shadow-sm">
-            <button
-              type="button"
-              className="inline-flex cursor-pointer items-center gap-1 rounded-l-md px-2 text-xs font-medium transition-colors hover:bg-accent hover:text-accent-foreground h-7"
-              onClick={onRun}
-            >
-              <Bot className="h-3.5 w-3.5" />
-              <span>Run</span>
-            </button>
-            <button
-              type="button"
-              className="inline-flex cursor-pointer items-center rounded-r-md border-l px-1.5 transition-colors hover:bg-accent hover:text-accent-foreground h-7"
-              onClick={onRun}
-            >
-              <ChevronDown className="h-3 w-3 text-muted-foreground" />
-            </button>
-          </div>
-
-          <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={onClose}>
-            <ArrowRightToLine className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
-
-      {/* Model selector dropdown - appears below header */}
-      {modelOpen && (
-        <div className="animate-in fade-in slide-in-from-top-1 border-b bg-popover p-3">
-          <p className="mb-2 text-xs font-medium text-muted-foreground">Choose agent & model</p>
-          <div className="space-y-1">
-            {[
-              {
-                agent: 'Claude Code',
-                model: 'Claude Sonnet 4',
-                value: 'claude' as const,
-                selected: true
-              },
-              {
-                agent: 'Claude Code',
-                model: 'Claude Opus 4',
-                value: 'claude' as const,
-                selected: false
-              },
-              { agent: 'Codex', model: 'o3', value: 'codex' as const, selected: false },
-              { agent: 'Cursor', model: 'Auto', value: 'cursor' as const, selected: false },
-              {
-                agent: 'Antigravity',
-                model: 'Antigravity default',
-                value: 'antigravity' as const,
-                selected: false
-              }
-            ].map(item => (
-              <button
-                key={`${item.agent}-${item.model}`}
-                className={cn(
-                  'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors hover:bg-accent',
-                  item.selected && 'bg-accent'
-                )}
-                onClick={() => setModelOpen(false)}
-              >
-                <AgentIcon
-                  agentType={getAgentTypeByValue(item.value)}
-                  className="h-3.5 w-3.5"
-                  alt={item.agent}
-                />
-                <span className="font-medium">{item.agent}</span>
-                <span className="text-muted-foreground">{item.model}</span>
-                {item.selected && <span className="ml-auto text-emerald-500">&#10003;</span>}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Scrollable body */}
       <div className="flex-1 overflow-y-auto">
         <div className="space-y-5 p-4">
-          {/* Title */}
           <h2 className="text-lg font-semibold leading-snug">{ticket.title}</h2>
 
-          {/* Metadata row */}
           <div className="flex flex-wrap items-center gap-2">
             <Badge
               variant="outline"
@@ -208,19 +181,17 @@ export function DemoTicketPanel({ ticket, onClose, onDiscuss, onRun }: DemoTicke
             <StatusBadge state={ticket.agent_session_state} />
           </div>
 
-          {/* Objective */}
           <div className="space-y-2">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-              Objective
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Objectives
             </p>
-            <p className="text-sm leading-relaxed text-foreground/90">{ticket.objective}</p>
+            <DemoObjectivesSection onRun={onRun} />
           </div>
 
           <Separator />
 
-          {/* Activity feed */}
           <div className="space-y-3">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
               Activity
             </p>
             {ticket.status === 'draft' || visibleActivityCount === 0 ? (
@@ -231,7 +202,6 @@ export function DemoTicketPanel({ ticket, onClose, onDiscuss, onRun }: DemoTicke
                   .reverse()
                   .slice(-visibleActivityCount)
                   .map((event, index) => {
-                    // Only animate the newest (top) card
                     const isNewest = index === 0;
                     return (
                       <div

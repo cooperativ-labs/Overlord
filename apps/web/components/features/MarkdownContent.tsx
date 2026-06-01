@@ -1,13 +1,15 @@
 'use client';
 
+import { useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
 import { ExternalLink } from '@/components/features/ExternalLink';
+import { createMarkdownHeadingComponents } from '@/components/features/markdown/create-heading-components';
 import { Badge } from '@/components/ui/badge';
 import { getCollapsedFileMentionLabel } from '@/lib/helpers/file-mentions';
 
-type MarkdownContentProps = {
+export type MarkdownContentProps = {
   children: string;
   className?: string;
   /** Compact mode reduces heading sizes and spacing for inline use */
@@ -16,6 +18,10 @@ type MarkdownContentProps = {
   variant?: 'default' | 'changelog';
   editorScheme?: string | null;
   workspaceRoot?: string | null;
+  /** Adds slug ids and share-link buttons to markdown headings (docs pages). */
+  headingAnchors?: {
+    registerHeadingSlug: (text: string) => string;
+  };
 };
 
 /**
@@ -28,7 +34,8 @@ export function MarkdownContent({
   compact = false,
   variant = 'default',
   editorScheme,
-  workspaceRoot
+  workspaceRoot,
+  headingAnchors
 }: MarkdownContentProps) {
   const proseBaseClasses =
     'prose prose-neutral prose-sm max-w-none text-foreground dark:prose-invert prose-headings:text-foreground prose-p:text-foreground prose-p:whitespace-pre-wrap prose-li:text-foreground prose-strong:text-foreground prose-code:text-foreground prose-a:text-primary prose-blockquote:text-muted-foreground prose-hr:border-border prose-th:text-foreground prose-td:text-foreground';
@@ -41,11 +48,18 @@ export function MarkdownContent({
       ? `changelog-body overflow-hidden ${className}`.trim()
       : `${proseClasses} overflow-hidden ${className}`.trim();
 
+  const headingComponents = useMemo(
+    () =>
+      headingAnchors ? createMarkdownHeadingComponents(headingAnchors) : undefined,
+    [headingAnchors]
+  );
+
   return (
     <div className={wrapperClass}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
+          ...headingComponents,
           // Open links in new tab
           a: ({ children: linkChildren, href, ...props }) => {
             if (href?.startsWith('mention:')) {
