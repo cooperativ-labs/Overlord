@@ -132,11 +132,11 @@ export default async function RootLayout({
         // Existing user with org+project — check tutorial progress
         const progress = await getOnboardingState();
         onboardingState = progress;
-        const hasCompletedTutorial = progress.onboardingCompletedStep >= 4;
+        const hasCompletedTutorial = progress.onboardingCompletedStep >= 3;
         const hasSkipped = progress.onboardingSkipped;
         if (!hasCompletedTutorial && !hasSkipped) {
           tutorialAutoOpen = true;
-          tutorialAutoStep = Math.max(3, progress.onboardingCompletedStep + 1);
+          tutorialAutoStep = Math.max(2, progress.onboardingCompletedStep + 1);
         }
       }
     }

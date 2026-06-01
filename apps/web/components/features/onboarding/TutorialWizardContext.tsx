@@ -4,8 +4,8 @@ import { createContext, useContext, useEffect, useState } from 'react';
 
 import type { OnboardingState } from '@/lib/actions/onboarding';
 
-const DESKTOP_SETUP_START_STEP = 3;
-const DESKTOP_SETUP_LAST_STEP = 5;
+const DESKTOP_SETUP_START_STEP = 2;
+const DESKTOP_SETUP_LAST_STEP = 4;
 
 function getNextDesktopStep(state: OnboardingState | null): number | null {
   if (!state || state.desktopSetupDone) return null;
@@ -25,7 +25,7 @@ type TutorialWizardContextValue = {
 
 const TutorialWizardContext = createContext<TutorialWizardContextValue>({
   isOpen: false,
-  startAtStep: 3,
+  startAtStep: 2,
   initialState: null,
   updateState: () => undefined,
   openTutorial: () => undefined,
@@ -69,7 +69,10 @@ export function TutorialProvider({
     const onElectron = !!window.electronAPI?.isElectron;
     if (!onElectron) return;
 
-    const webDone = state.onboardingCompletedStep >= 4 || state.onboardingSkipped;
+    // Web flow is now 2 steps (org → download app); connecting a resource is
+    // desktop-only, so the web portion is "done" once completedStep reaches 2.
+    // Keep this in sync with WEB_TOTAL_STEPS in TutorialWizard.tsx.
+    const webDone = state.onboardingCompletedStep >= 2 || state.onboardingSkipped;
     const nextDesktopStep = getNextDesktopStep(state);
 
     if (webDone && nextDesktopStep !== null && !isOpen) {
@@ -84,7 +87,7 @@ export function TutorialProvider({
   }
 
   function openTutorial(opts?: { startAtStep?: number }) {
-    setStartAtStep(opts?.startAtStep ?? getNextDesktopStep(state) ?? 3);
+    setStartAtStep(opts?.startAtStep ?? getNextDesktopStep(state) ?? 2);
     setIsOpen(true);
   }
 

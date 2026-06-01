@@ -1,18 +1,15 @@
 'use client';
 
-import * as Sentry from '@sentry/nextjs';
-import { FolderKanban, FolderSearch } from 'lucide-react';
-import { useRouter } from 'next/navigation';
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 
+import { CliSetupStep } from '@/components/features/onboarding/steps/CliSetupStep';
+import { ConnectorSetupStep } from '@/components/features/onboarding/steps/ConnectorSetupStep';
+import { ConnectResourceStep } from '@/components/features/onboarding/steps/ConnectResourceStep';
 import { DownloadAppStep } from '@/components/features/onboarding/steps/DownloadAppStep';
-import {
-  DEFAULT_PROJECT_COLOR,
-  ProjectColorSetter
-} from '@/components/features/projects/ProjectColorSetter';
+import { NameProjectStep } from '@/components/features/onboarding/steps/NameProjectStep';
+import { TerminalSettingsStep } from '@/components/features/onboarding/steps/TerminalSettingsStep';
 import { useElectron } from '@/components/features/terminal/useElectron';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Button } from '@/components/ui/button';
 import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
@@ -20,19 +17,17 @@ import { LoadingButton } from '@/components/ui/loading-button';
 import type { OnboardingState } from '@/lib/actions/onboarding';
 import {
   createFirstOrganization,
-  createFirstProjectWithDirectory,
+  createOnboardingTicketAction,
   updateOnboardingProgressAction
 } from '@/lib/actions/onboarding';
 import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
 import { cn } from '@/lib/utils';
 
 const createFirstOrganizationWithRetry = withElectronActionRetry(createFirstOrganization);
-const createFirstProjectWithDirectoryWithRetry = withElectronActionRetry(
-  createFirstProjectWithDirectory
-);
 const updateOnboardingProgressActionWithRetry = withElectronActionRetry(
   updateOnboardingProgressAction
 );
+const createOnboardingTicketActionWithRetry = withElectronActionRetry(createOnboardingTicketAction);
 
 type OnboardingWizardProps = {
   initialState: OnboardingState;
@@ -43,60 +38,93 @@ type OnboardingWizardProps = {
  *
  * Flow:
  *   1 — Create organization  (skipped if exists)
- *   2 — Download the Desktop App (skipped on Electron)
- *       - "I'll use the web app for now" → goes to step 3
- *   3 — Create first project
- *       - After creation → redirect to /u
+ *   2 — Download Desktop App (web only)
+ *       - Download → finish here; setup continues in the desktop app
+ *       - Continue without the app → web path below
+ *   3a (Electron) — Connect a resource (folder browser) → Terminal → Connectors
+ *   3b (web decline) — Name project → CLI setup (install, auth, `ovld add-cwd`)
+ *   →   Completion: create first draft ticket + hard refresh
+ *
+ * Registering an execution target needs either the desktop app or the CLI.
+ * Web users who download the app finish setup there; web users who decline just
+ * name a project (the browser can't read an absolute path), then the CLI-setup
+ * step tells them to run `ovld add-cwd` from that folder to register this
+ * machine as an execution target and link it to the project.
  */
 
-type OnboardingStep = 'organization' | 'download-app' | 'project';
+type OnboardingStep =
+  | 'organization'
+  | 'download-app'
+  | 'connect-resource'
+  | 'name-project'
+  | 'terminal-settings'
+  | 'agent-connectors'
+  | 'cli-setup';
 
 export function OnboardingWizard({ initialState }: OnboardingWizardProps) {
-  const router = useRouter();
-  const { api, isElectron } = useElectron();
+  const { isElectron } = useElectron();
 
   const isInvitedUser = !!initialState.invitedOrganizationId;
 
-  // Determine starting step
   const getInitialStep = (): OnboardingStep => {
-    // Invited users skip org + project creation
-    if (isInvitedUser) return 'download-app';
+    if (isInvitedUser) return isElectron ? 'connect-resource' : 'download-app';
     if (!initialState.hasOrganizations) return 'organization';
-    if (!initialState.hasProjects) return 'download-app';
-    return 'download-app';
+    return isElectron ? 'connect-resource' : 'download-app';
   };
 
   const [currentStep, setCurrentStep] = useState<OnboardingStep>(getInitialStep);
+  // Web only: set when the user chooses to continue without the desktop app,
+  // which reveals the Connect Resource + CLI setup steps.
+  const [declinedDesktopApp, setDeclinedDesktopApp] = useState(false);
 
-  // Step labels for progress bar — invited users only see Download App
-  const steps: { key: OnboardingStep; label: string }[] = isInvitedUser
-    ? [{ key: 'download-app', label: 'Desktop App' }]
-    : [
-        { key: 'organization', label: 'Organization' },
-        { key: 'download-app', label: 'Desktop App' },
-        { key: 'project', label: 'Project' }
-      ];
+  // Build visible steps based on platform
+  const allSteps: { key: OnboardingStep; label: string }[] = [];
+  if (!isInvitedUser) {
+    allSteps.push({ key: 'organization', label: 'Organization' });
+  }
+  if (!isElectron) {
+    allSteps.push({ key: 'download-app', label: 'Desktop App' });
+  }
+  if (isElectron) {
+    // On the desktop app the connection registers an execution target directly.
+    allSteps.push({ key: 'connect-resource', label: 'Connect Resource' });
+    allSteps.push({ key: 'terminal-settings', label: 'Terminal' });
+    allSteps.push({ key: 'agent-connectors', label: 'Connectors' });
+  } else if (declinedDesktopApp) {
+    // Web users who skip the desktop app just name a project (no folder picker —
+    // the browser can't read a real path), then register their machine as an
+    // execution target via the CLI.
+    allSteps.push({ key: 'name-project', label: 'Name Project' });
+    allSteps.push({ key: 'cli-setup', label: 'CLI Setup' });
+  }
 
-  const currentIndex = steps.findIndex(s => s.key === currentStep);
-  const progressPercent = steps.length > 1 ? (currentIndex / (steps.length - 1)) * 100 : 100;
+  const currentIndex = allSteps.findIndex(s => s.key === currentStep);
+  const progressPercent = allSteps.length > 1 ? (currentIndex / (allSteps.length - 1)) * 100 : 100;
 
-  // Step 1 — Organization
+  // State shared across steps
   const [organizationName, setOrganizationName] = useState(
     initialState.userName ? `${initialState.userName}'s organization` : 'My organization'
   );
   const [organizationId, setOrganizationId] = useState<number | null>(
-    initialState.firstOrganizationId
+    initialState.firstOrganizationId ?? initialState.invitedOrganizationId
   );
   const [orgError, setOrgError] = useState<string | null>(null);
   const [orgButtonState, setOrgButtonState] = useState<ButtonLoadingState>('default');
 
-  // Step 3 — Project
-  const [projectName, setProjectName] = useState('');
-  const [projectColor, setProjectColor] = useState(DEFAULT_PROJECT_COLOR);
+  const [createdProjectId, setCreatedProjectId] = useState<string | null>(null);
+  const [createdProjectName, setCreatedProjectName] = useState('');
+  const [executionTargetId, setExecutionTargetId] = useState<string | null>(null);
   const [workingDirectory, setWorkingDirectory] = useState('');
-  const [projectError, setProjectError] = useState<string | null>(null);
-  const [projectButtonState, setProjectButtonState] = useState<ButtonLoadingState>('default');
-  const directoryInputRef = useRef<HTMLInputElement>(null);
+
+  function nextStep() {
+    const idx = allSteps.findIndex(s => s.key === currentStep);
+    const next = allSteps[idx + 1];
+    if (next) {
+      setCurrentStep(next.key);
+    } else {
+      void completeOnboarding();
+    }
+  }
 
   async function handleCreateOrganization() {
     const trimmed = organizationName.trim();
@@ -110,8 +138,7 @@ export function OnboardingWizard({ initialState }: OnboardingWizardProps) {
       const result = await createFirstOrganizationWithRetry({ name: trimmed });
       setOrganizationId(result.organizationId);
       setOrgButtonState('success');
-      // After org creation, go to download app step
-      setCurrentStep('download-app');
+      nextStep();
     } catch (error) {
       setOrgButtonState('error');
       setOrgError(error instanceof Error ? error.message : 'Failed to create organization.');
@@ -119,121 +146,73 @@ export function OnboardingWizard({ initialState }: OnboardingWizardProps) {
   }
 
   async function handleDownloadAppContinue() {
-    await updateOnboardingProgressActionWithRetry({ completedStep: 3 });
-    if (isInvitedUser) {
-      // Invited users skip project creation and go straight to the app
-      await updateOnboardingProgressActionWithRetry({ completedStep: 4, skipped: true });
-      router.push('/u');
-      return;
-    }
-    setCurrentStep('project');
+    // Web-only step. Choosing to continue without the desktop app opens the
+    // Connect Resource + CLI setup path. Set the flag before navigating so the
+    // step list (computed on render) includes those steps.
+    setDeclinedDesktopApp(true);
+    await updateOnboardingProgressActionWithRetry({ completedStep: 2 });
+    setCurrentStep('name-project');
   }
 
-  async function handleChooseDirectory() {
-    setProjectError(null);
-    if (isElectron && api) {
-      try {
-        const chosenPath = await api.terminal.chooseDirectory();
-        if (!chosenPath) return;
-        setWorkingDirectory(chosenPath);
-        return;
-      } catch (err) {
-        Sentry.captureException(err);
-        console.error('handleChooseDirectory', err);
-      }
-    }
-    const w =
-      typeof window !== 'undefined'
-        ? (window as Window & { showDirectoryPicker?(): Promise<{ name: string }> })
-        : null;
-    if (w?.showDirectoryPicker) {
-      try {
-        const handle = await w.showDirectoryPicker();
-        setWorkingDirectory(handle.name);
-      } catch (err) {
-        if ((err as Error).name !== 'AbortError') {
-          setProjectError('Could not access the selected folder.');
-        } else {
-          Sentry.captureException(err);
-          console.error('handleChooseDirectory', err);
-        }
-      }
-      return;
-    }
-    directoryInputRef.current?.click();
+  function handleProjectNamed(result: {
+    projectId: string;
+    organizationId: number;
+    projectName: string;
+  }) {
+    setCreatedProjectId(result.projectId);
+    setCreatedProjectName(result.projectName);
+    setOrganizationId(result.organizationId);
+    void updateOnboardingProgressActionWithRetry({ completedStep: 3 }).then(() => {
+      nextStep();
+    });
   }
 
-  function handleWebDirectoryInputChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = e.target.files;
-    if (!files?.length) return;
-    const firstPath = (files[0] as File & { webkitRelativePath?: string }).webkitRelativePath;
-    const folderName = firstPath ? firstPath.split('/')[0] : '';
-    e.target.value = '';
-    if (folderName) setWorkingDirectory(folderName);
+  function handleResourceConnected(result: {
+    projectId: string;
+    organizationId: number;
+    executionTargetId: string | null;
+    workingDirectory: string;
+  }) {
+    setCreatedProjectId(result.projectId);
+    setOrganizationId(result.organizationId);
+    setExecutionTargetId(result.executionTargetId);
+    setWorkingDirectory(result.workingDirectory);
+    void updateOnboardingProgressActionWithRetry({ completedStep: 3 }).then(() => {
+      nextStep();
+    });
   }
 
-  async function handleCreateProject() {
-    if (!organizationId) {
-      setProjectError('Organization is required before creating a project.');
-      return;
-    }
-    const trimmedName = projectName.trim();
-    if (!trimmedName) {
-      setProjectError('Project name is required.');
-      return;
-    }
-    setProjectButtonState('loading');
-    setProjectError(null);
+  function handleTerminalSettingsContinue() {
+    void updateOnboardingProgressActionWithRetry({ completedStep: 4 }).then(() => {
+      nextStep();
+    });
+  }
+
+  function handleConnectorsContinue() {
+    void updateOnboardingProgressActionWithRetry({ completedStep: 5 }).then(() => {
+      void completeOnboarding();
+    });
+  }
+
+  async function completeOnboarding() {
     try {
-      let deviceIdentity: { deviceFingerprint: string; hostname: string; platform: string } | null =
-        null;
-      if (isElectron && api?.app?.getDeviceIdentity) {
-        try {
-          deviceIdentity = await api.app.getDeviceIdentity();
-        } catch (error) {
-          Sentry.captureException(error);
-          console.error('handleCreateProject:getDeviceIdentity', error);
-        }
+      if (createdProjectId && organizationId) {
+        await createOnboardingTicketActionWithRetry({
+          projectId: createdProjectId,
+          organizationId
+        });
       }
-
-      const createResult = await createFirstProjectWithDirectoryWithRetry({
-        organizationId,
-        name: trimmedName,
-        color: projectColor,
-        workingDirectory: workingDirectory.trim() || null,
-        ...(deviceIdentity
-          ? {
-              deviceFingerprint: deviceIdentity.deviceFingerprint,
-              deviceHostname: deviceIdentity.hostname,
-              devicePlatform: deviceIdentity.platform
-            }
-          : {})
-      });
-      const trimmedDirectory = workingDirectory.trim();
-      const createdProjectId = createResult?.projectId;
-      if (
-        trimmedDirectory &&
-        createdProjectId &&
-        isElectron &&
-        api?.filesystem?.writeOverlordConfig
-      ) {
-        try {
-          await api.filesystem.writeOverlordConfig({
-            directory: trimmedDirectory,
-            projectId: createdProjectId,
-            projectName: trimmedName
-          });
-        } catch (error) {
-          Sentry.captureException(error);
-        }
-      }
-      setProjectButtonState('success');
-      await updateOnboardingProgressActionWithRetry({ completedStep: 4, skipped: true });
-      router.push('/u');
-    } catch (error) {
-      setProjectButtonState('error');
-      setProjectError(error instanceof Error ? error.message : 'Failed to create project.');
+    } catch {
+      // Non-blocking — the ticket is a nice-to-have, not critical
     }
+
+    await updateOnboardingProgressActionWithRetry({
+      completedStep: 6,
+      ...(isElectron ? { desktopSetupDone: true, desktopCompletedStep: 6 } : {})
+    });
+
+    // Hard refresh to ensure all caches are cleared
+    window.location.href = '/u';
   }
 
   return (
@@ -244,7 +223,7 @@ export function OnboardingWizard({ initialState }: OnboardingWizardProps) {
           <div>
             <h1 className="text-lg font-semibold tracking-tight">Get started</h1>
             <p className="text-muted-foreground text-sm">
-              {`Step ${currentIndex + 1} of ${steps.length} — ${steps[currentIndex].label}`}
+              {`Step ${currentIndex + 1} of ${allSteps.length} — ${allSteps[currentIndex]?.label ?? ''}`}
             </p>
           </div>
 
@@ -256,7 +235,7 @@ export function OnboardingWizard({ initialState }: OnboardingWizardProps) {
               />
             </div>
             <div className="mt-1.5 flex justify-between">
-              {steps.map(step => (
+              {allSteps.map(step => (
                 <span
                   key={step.key}
                   className={cn(
@@ -283,21 +262,6 @@ export function OnboardingWizard({ initialState }: OnboardingWizardProps) {
                   Start by creating a workspace for your projects, tickets, and agent runs.
                 </p>
               </div>
-
-              {/* <div className="rounded-xl border p-4">
-                <div className="flex items-start gap-3">
-                  <div className="bg-primary/10 text-primary flex h-10 w-10 shrink-0 items-center justify-center rounded-full">
-                    <Building2 className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold">Your workspace home</p>
-                    <p className="text-muted-foreground text-sm">
-                      Invite teammates later. For now, just give your workspace a clear name so you
-                      can start organizing work.
-                    </p>
-                  </div>
-                </div>
-              </div> */}
 
               <FieldGroup>
                 <Field>
@@ -346,136 +310,36 @@ export function OnboardingWizard({ initialState }: OnboardingWizardProps) {
             />
           )}
 
-          {currentStep === 'project' && (
-            <div className="flex flex-col gap-6">
-              <div>
-                <h2 className="text-xl font-semibold tracking-tight">Create your first project</h2>
-                <p className="text-muted-foreground mt-1 text-sm">
-                  Projects give tickets a home and tell Overlord where agents should work.
-                </p>
-              </div>
+          {currentStep === 'connect-resource' && (
+            <ConnectResourceStep
+              organizationId={organizationId}
+              onConnected={handleResourceConnected}
+            />
+          )}
 
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="rounded-xl border p-4">
-                  <div className="flex items-start gap-3">
-                    <div className="bg-primary/10 text-primary flex h-10 w-10 shrink-0 items-center justify-center rounded-full">
-                      <FolderKanban className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold">One project, one codebase</p>
-                      <p className="text-muted-foreground text-sm">
-                        Use a project for each repo or product area you want agents to work in.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                <div className="rounded-xl border p-4">
-                  <div className="flex items-start gap-3">
-                    <div className="bg-primary/10 text-primary flex h-10 w-10 shrink-0 items-center justify-center rounded-full">
-                      <FolderSearch className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold">Attach a working directory</p>
-                      <p className="text-muted-foreground text-sm">
-                        In the desktop app, agent terminals open directly in this folder.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
+          {currentStep === 'name-project' && (
+            <NameProjectStep organizationId={organizationId} onCreated={handleProjectNamed} />
+          )}
 
-              <FieldGroup>
-                <Field>
-                  <FieldLabel htmlFor="onboarding-project-name">Project name</FieldLabel>
-                  <Input
-                    id="onboarding-project-name"
-                    autoFocus
-                    value={projectName}
-                    onChange={event => {
-                      setProjectName(event.target.value);
-                      if (projectError) setProjectError(null);
-                    }}
-                    placeholder="Agent orchestration"
-                    aria-invalid={!!projectError}
-                    aria-describedby={projectError ? 'onboarding-project-error' : undefined}
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel>Project color</FieldLabel>
-                  <ProjectColorSetter
-                    value={projectColor}
-                    onSelect={color => {
-                      setProjectColor(color);
-                      if (projectError) setProjectError(null);
-                    }}
-                  />
-                </Field>
-                {isElectron ? (
-                  <Field>
-                    <FieldLabel htmlFor="onboarding-working-directory">Local directory</FieldLabel>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Input
-                        id="onboarding-working-directory"
-                        value={workingDirectory}
-                        onChange={event => setWorkingDirectory(event.target.value)}
-                        placeholder="/absolute/path/to/your/project"
-                        className="min-w-[260px] flex-1"
-                      />
-                      <input
-                        ref={directoryInputRef}
-                        type="file"
-                        {...({
-                          webkitdirectory: '',
-                          directory: ''
-                        } as React.InputHTMLAttributes<HTMLInputElement>)}
-                        multiple
-                        className="hidden"
-                        aria-hidden
-                        tabIndex={-1}
-                        onChange={handleWebDirectoryInputChange}
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={handleChooseDirectory}
-                      >
-                        Choose folder
-                      </Button>
-                    </div>
-                    <FieldDescription>
-                      When you run agents for this project, terminals will open in this directory.
-                    </FieldDescription>
-                  </Field>
-                ) : null}
-                {projectError ? (
-                  <Alert id="onboarding-project-error" variant="destructive" role="alert">
-                    <AlertDescription>{projectError}</AlertDescription>
-                  </Alert>
-                ) : null}
-                <Field>
-                  <div className="flex items-center gap-3">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCurrentStep('download-app')}
-                    >
-                      Back
-                    </Button>
-                    <LoadingButton
-                      buttonState={projectButtonState}
-                      setButtonState={setProjectButtonState}
-                      text="Create project"
-                      loadingText="Creating…"
-                      successText="Created"
-                      errorText="Retry"
-                      onClick={handleCreateProject}
-                    />
-                  </div>
-                </Field>
-              </FieldGroup>
-            </div>
+          {currentStep === 'terminal-settings' && executionTargetId && (
+            <TerminalSettingsStep
+              executionTargetId={executionTargetId}
+              onContinue={handleTerminalSettingsContinue}
+            />
+          )}
+
+          {currentStep === 'agent-connectors' && (
+            <ConnectorSetupStep
+              onContinue={handleConnectorsContinue}
+              projectDirectory={workingDirectory || undefined}
+            />
+          )}
+
+          {currentStep === 'cli-setup' && (
+            <CliSetupStep
+              projectName={createdProjectName || undefined}
+              onContinue={() => void completeOnboarding()}
+            />
           )}
         </div>
       </div>

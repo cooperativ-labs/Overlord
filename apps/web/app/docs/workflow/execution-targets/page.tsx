@@ -172,7 +172,9 @@ export default function ExecutionTargetsPage() {
         {AFTER_ARCHITECTURE}
       </DocsMarkdownContent>
       <ExecutionTargetsPlaceholderDiagram />
-      <DocsMarkdownContent className="prose-headings:scroll-mt-24">{AFTER_PLACEHOLDER}</DocsMarkdownContent>
+      <DocsMarkdownContent className="prose-headings:scroll-mt-24">
+        {AFTER_PLACEHOLDER}
+      </DocsMarkdownContent>
     </DocsMarkdownPage>
   );
 }

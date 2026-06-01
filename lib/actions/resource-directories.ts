@@ -283,7 +283,7 @@ export async function addProjectResourceDirectoryAction(input: {
   deviceHostname?: string | null;
   devicePlatform?: string | null;
   isPrimary?: boolean;
-}): Promise<{ projectName: string }> {
+}): Promise<{ projectName: string; executionTargetId: string | null }> {
   const directoryPath = input.directoryPath.trim();
   if (!directoryPath) {
     throw new Error('Directory path is required.');
@@ -379,7 +379,7 @@ export async function addProjectResourceDirectoryAction(input: {
   }
 
   revalidateProjectPaths(input.projectId);
-  return { projectName: project.name };
+  return { projectName: project.name, executionTargetId: resolvedExecutionTargetId };
 }
 
 export async function removeProjectResourceDirectoryAction(input: {

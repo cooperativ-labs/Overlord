@@ -8,10 +8,7 @@ import { useDocsHeadingSlug } from './docs-heading-slug-provider';
 
 export function DocsMarkdownContent(props: Omit<MarkdownContentProps, 'headingAnchors'>) {
   const { registerHeadingSlug } = useDocsHeadingSlug();
-  const headingAnchors = useMemo(
-    () => ({ registerHeadingSlug }),
-    [registerHeadingSlug]
-  );
+  const headingAnchors = useMemo(() => ({ registerHeadingSlug }), [registerHeadingSlug]);
 
   return <MarkdownContent {...props} headingAnchors={headingAnchors} />;
 }

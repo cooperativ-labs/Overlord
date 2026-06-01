@@ -12,8 +12,9 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 import { Separator } from '@/components/ui/separator';
-import { DemoObjectivesSection } from '../../../example-content/demo-frames/DemoObjectivesSection';
 import { cn } from '@/lib/utils';
+
+import { DemoObjectivesSection } from '../../../example-content/demo-frames/DemoObjectivesSection';
 
 import { DEMO_ACTIVITY, type DemoTicket } from './mock-data';
 
@@ -55,13 +56,7 @@ function PhaseIndicator({ phase }: { phase: string }) {
   return <span className={cn('h-2 w-2 rounded-full', colors[phase] ?? 'bg-slate-400')} />;
 }
 
-function DemoTicketPanelHeader({
-  ticket,
-  onClose
-}: {
-  ticket: DemoTicket;
-  onClose: () => void;
-}) {
+function DemoTicketPanelHeader({ ticket, onClose }: { ticket: DemoTicket; onClose: () => void }) {
   const ticketIdentifier = toTicketIdentifier(ticket.id);
 
   return (

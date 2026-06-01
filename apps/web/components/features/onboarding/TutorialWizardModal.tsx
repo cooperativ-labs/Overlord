@@ -10,10 +10,10 @@ export function TutorialWizardModal() {
 
   if (!isOpen || !initialState) return null;
 
-  // Prevent accidental close while creating org/project (steps 1–2).
+  // Prevent accidental close while creating org or connecting resource (steps 1–2).
   // Once the user has an org + project (or we start at step 3+), allow dismissal.
   const needsWorkspace = !initialState.hasOrganizations || !initialState.hasProjects;
-  const allowDismiss = !needsWorkspace || startAtStep >= 3;
+  const allowDismiss = !needsWorkspace || startAtStep >= 2;
 
   return (
     <Dialog

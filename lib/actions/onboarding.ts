@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 
 import { createProject } from '@/lib/actions/projects';
 import { addProjectResourceDirectoryAction } from '@/lib/actions/resource-directories';
+import { createTicketInColumnAction } from '@/lib/actions/tickets/ticket-create';
 import type { LaunchAgentType } from '@/lib/helpers/agent-types';
 import { createClientForRequest } from '@/supabase/utils/server';
 
@@ -212,6 +213,7 @@ export async function createFirstProjectWithDirectory(input: {
 }): Promise<{
   projectId: string;
   organizationId: number;
+  executionTargetId: string | null;
 }> {
   try {
     const created = await createProject({
@@ -222,9 +224,10 @@ export async function createFirstProjectWithDirectory(input: {
 
     // Only persist a resource directory when the user actually picked one.
     const trimmedDirectory = input.workingDirectory?.trim() ?? '';
+    let executionTargetId: string | null = null;
     if (trimmedDirectory.length > 0) {
       try {
-        await addProjectResourceDirectoryAction({
+        const resourceResult = await addProjectResourceDirectoryAction({
           projectId: created.id,
           directoryPath: trimmedDirectory,
           isPrimary: true,
@@ -236,6 +239,7 @@ export async function createFirstProjectWithDirectory(input: {
               }
             : {})
         });
+        executionTargetId = resourceResult.executionTargetId;
       } catch (error) {
         // The project row is committed; reporting failure here would make the
         // UI look like nothing worked and tempt the user into a retry that
@@ -252,10 +256,31 @@ export async function createFirstProjectWithDirectory(input: {
 
     return {
       projectId: created.id,
-      organizationId: created.organizationId
+      organizationId: created.organizationId,
+      executionTargetId
     };
   } catch (error) {
     console.error('createFirstProjectWithDirectory', error);
     throw error;
   }
+}
+
+const ONBOARDING_TICKET_OBJECTIVE =
+  'conduct a code review of this repository, save it as a Markdown file, then create objectives on this ticket for the top three most critical fixes';
+
+export async function createOnboardingTicketAction(input: {
+  projectId: string;
+  organizationId: number;
+}): Promise<{ ticketId: string }> {
+  const ticketId = crypto.randomUUID();
+  const result = await createTicketInColumnAction(
+    'draft',
+    ONBOARDING_TICKET_OBJECTIVE,
+    ticketId,
+    input.organizationId,
+    input.projectId,
+    'top',
+    true
+  );
+  return { ticketId: result.id };
 }

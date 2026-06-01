@@ -11,13 +11,8 @@ type Props = {
   title?: string;
 };
 
-const STORAGE_BASE =
-  (process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, '') ??
-    'https://zitmmhvbilhjjdwgxlfm.supabase.co') +
-  '/storage/v1/object/public/app-downloads/electron';
-
-// We use the downloads page for actual version resolution. These are kept as
-// deep-links to the /downloads page so the version is always current.
+// We use the downloads page for actual version resolution so the version is
+// always current.
 const DOWNLOAD_PAGE = '/downloads';
 
 const BENEFITS = [
@@ -81,24 +76,29 @@ export function DownloadAppStep({ onContinue, title }: Props) {
           Continue
         </Button>
       ) : (
-        <div className="flex flex-wrap items-center gap-3">
-          <Button asChild>
-            <a href={DOWNLOAD_PAGE} target="_blank" rel="noopener noreferrer">
-              <Download className="h-4 w-4" />
-              Download for macOS
-            </a>
-          </Button>
-          <Button variant="ghost" size="sm" onClick={onContinue} className="text-muted-foreground">
-            I'll use the web app for now →
-          </Button>
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <Button asChild>
+              <a href={DOWNLOAD_PAGE} target="_blank" rel="noopener noreferrer">
+                <Download className="h-4 w-4" />
+                Download for macOS
+              </a>
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onContinue}
+              className="text-muted-foreground"
+            >
+              Continue without desktop app →
+            </Button>
+          </div>
+          <p className="text-muted-foreground text-xs">
+            After downloading, open the app and sign in with the same account — it installs the CLI
+            and guides you through setup. Or continue here and we'll help you set up the CLI
+            yourself.
+          </p>
         </div>
-      )}
-
-      {!isElectron && (
-        <p className="text-muted-foreground text-xs">
-          After downloading, open the app and sign in with the same account. You can continue setup
-          in the browser and finish the rest of this tutorial there too.
-        </p>
       )}
     </div>
   );

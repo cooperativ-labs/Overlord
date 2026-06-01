@@ -1,18 +1,12 @@
 'use client';
 
-import * as Sentry from '@sentry/nextjs';
-import { Building2, FolderKanban, FolderSearch } from 'lucide-react';
-import { useRouter } from 'next/navigation';
-import { useRef, useState } from 'react';
+import { Building2 } from 'lucide-react';
+import { useState } from 'react';
 
-import { CliInstallStep } from '@/components/features/onboarding/steps/CliInstallStep';
 import { ConnectorSetupStep } from '@/components/features/onboarding/steps/ConnectorSetupStep';
+import { ConnectResourceStep } from '@/components/features/onboarding/steps/ConnectResourceStep';
 import { DownloadAppStep } from '@/components/features/onboarding/steps/DownloadAppStep';
-import { TicketFlowStep } from '@/components/features/onboarding/steps/TicketFlowStep';
-import {
-  DEFAULT_PROJECT_COLOR,
-  ProjectColorSetter
-} from '@/components/features/projects/ProjectColorSetter';
+import { TerminalSettingsStep } from '@/components/features/onboarding/steps/TerminalSettingsStep';
 import { useElectron } from '@/components/features/terminal/useElectron';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -23,66 +17,62 @@ import { LoadingButton } from '@/components/ui/loading-button';
 import type { OnboardingState } from '@/lib/actions/onboarding';
 import {
   createFirstOrganization,
-  createFirstProjectWithDirectory,
+  createOnboardingTicketAction,
   updateOnboardingProgressAction
 } from '@/lib/actions/onboarding';
 import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
-import { refreshElectronRoute } from '@/lib/electron-auth/route-refresh';
 import { cn } from '@/lib/utils';
 
 import { useTutorialWizard } from './TutorialWizardContext';
 
 /**
- * Unified onboarding wizard.
+ * Unified onboarding wizard used in the modal context.
  *
  * Steps:
  *   1 — Create organization  (skipped if exists)
- *   2 — Create first project (skipped if exists)
- *   3 — Desktop: Install CLI | Web: Download app
- *   4 — Desktop: Agent connectors | Web: How tickets work
- *   5 — Desktop only: How tickets work
+ *   2 — Desktop: Connect a resource | Web: Download app
+ *   3 — Desktop: Terminal settings
+ *   4 — Desktop: Agent connectors
+ *   →   Completion: create first draft ticket + hard refresh
  *
- * Desktop steps (3) appear even if the user already completed the web flow,
- * because `desktopSetupDone` is tracked independently.
+ * Connecting a resource registers an execution target, which only the desktop
+ * app can do — so on the web the flow ends after Download App. Desktop steps
+ * (2-4) appear even after the web flow because `desktopSetupDone` is tracked
+ * independently, and the user connects their repo when they open the app.
  */
 
-const WEB_TOTAL_STEPS = 4;
-const DESKTOP_TOTAL_STEPS = 5;
-const TUTORIAL_START_STEP = 3;
+const WEB_TOTAL_STEPS = 2;
+const DESKTOP_TOTAL_STEPS = 4;
+const TUTORIAL_START_STEP = 2;
 
 const createFirstOrganizationWithRetry = withElectronActionRetry(createFirstOrganization);
-const createFirstProjectWithDirectoryWithRetry = withElectronActionRetry(
-  createFirstProjectWithDirectory
-);
 const updateOnboardingProgressActionWithRetry = withElectronActionRetry(
   updateOnboardingProgressAction
 );
+const createOnboardingTicketActionWithRetry = withElectronActionRetry(createOnboardingTicketAction);
 
 type TutorialWizardProps = {
   initialState: OnboardingState;
-  /** Which step to start at. Steps 1–2 are skipped if org/project already exist. */
   startAtStep: number;
   onClose: () => void;
 };
 
 export function TutorialWizard({ initialState, startAtStep, onClose }: TutorialWizardProps) {
-  const router = useRouter();
-  const { api, isElectron } = useElectron();
+  const { isElectron } = useElectron();
   const { updateState } = useTutorialWizard();
   const totalSteps = isElectron ? DESKTOP_TOTAL_STEPS : WEB_TOTAL_STEPS;
 
   const stepLabels: Record<number, string> = isElectron
     ? {
         1: 'Organization',
-        2: 'Project',
-        3: 'Install CLI',
-        4: 'Agent connectors',
-        5: 'How it works'
+        2: 'Connect Resource',
+        3: 'Terminal',
+        4: 'Connectors'
       }
-    : { 1: 'Organization', 2: 'Project', 3: 'Desktop App', 4: 'How it works' };
+    : { 1: 'Organization', 2: 'Desktop App' };
 
-  const fullVisibleSteps = isElectron ? [1, 2, 3, 4, 5] : [1, 2, 3, 4];
-  const tutorialVisibleSteps = isElectron ? [3, 4, 5] : [3, 4];
+  const fullVisibleSteps = isElectron ? [1, 2, 3, 4] : [1, 2];
+  const tutorialVisibleSteps = isElectron ? [2, 3, 4] : [2];
 
   const isTutorialOnlyFlow = startAtStep >= TUTORIAL_START_STEP;
   const visibleSteps = isTutorialOnlyFlow ? tutorialVisibleSteps : fullVisibleSteps;
@@ -113,13 +103,10 @@ export function TutorialWizard({ initialState, startAtStep, onClose }: TutorialW
   const [orgError, setOrgError] = useState<string | null>(null);
   const [orgButtonState, setOrgButtonState] = useState<ButtonLoadingState>('default');
 
-  // Step 2 — Project
-  const [projectName, setProjectName] = useState('');
-  const [projectColor, setProjectColor] = useState(DEFAULT_PROJECT_COLOR);
+  // Shared state from resource connection
+  const [createdProjectId, setCreatedProjectId] = useState<string | null>(null);
+  const [executionTargetId, setExecutionTargetId] = useState<string | null>(null);
   const [workingDirectory, setWorkingDirectory] = useState('');
-  const [projectError, setProjectError] = useState<string | null>(null);
-  const [projectButtonState, setProjectButtonState] = useState<ButtonLoadingState>('default');
-  const directoryInputRef = useRef<HTMLInputElement>(null);
 
   const canSkip = currentStep >= TUTORIAL_START_STEP;
   const currentVisibleIndex = visibleSteps.indexOf(currentStep);
@@ -164,30 +151,47 @@ export function TutorialWizard({ initialState, startAtStep, onClose }: TutorialW
     const completedIndex = visibleSteps.indexOf(completedStepNumber);
     const nextStep = completedIndex >= 0 ? visibleSteps[completedIndex + 1] : undefined;
     if (!nextStep) {
-      const update = isElectron
-        ? {
-            completedStep: totalSteps,
-            desktopCompletedStep: DESKTOP_TOTAL_STEPS,
-            desktopSetupDone: true
-          }
-        : { completedStep: totalSteps };
-      await updateOnboardingProgressActionWithRetry(update);
-      updateState({
-        onboardingCompletedStep: Math.max(initialState.onboardingCompletedStep, totalSteps),
-        ...(isElectron
-          ? {
-              desktopCompletedStep: DESKTOP_TOTAL_STEPS,
-              desktopSetupDone: true
-            }
-          : {})
-      });
-      onClose();
+      await completeOnboarding();
     } else {
       setCurrentStep(nextStep);
     }
   }
 
-  // --- Step 1 handlers ---
+  async function completeOnboarding() {
+    try {
+      if (createdProjectId && organizationId) {
+        await createOnboardingTicketActionWithRetry({
+          projectId: createdProjectId,
+          organizationId
+        });
+      }
+    } catch {
+      // Non-blocking
+    }
+
+    const update = isElectron
+      ? {
+          completedStep: totalSteps,
+          desktopCompletedStep: DESKTOP_TOTAL_STEPS,
+          desktopSetupDone: true
+        }
+      : { completedStep: totalSteps };
+    await updateOnboardingProgressActionWithRetry(update);
+    updateState({
+      onboardingCompletedStep: Math.max(initialState.onboardingCompletedStep, totalSteps),
+      ...(isElectron
+        ? {
+            desktopCompletedStep: DESKTOP_TOTAL_STEPS,
+            desktopSetupDone: true
+          }
+        : {})
+    });
+    onClose();
+    // Hard refresh so the newly created project, execution target, and first
+    // draft ticket are reflected everywhere (matches the full-page onboarding flow).
+    window.location.href = '/u';
+  }
+
   async function handleCreateOrganization() {
     const trimmed = organizationName.trim();
     if (!trimmed) {
@@ -207,86 +211,17 @@ export function TutorialWizard({ initialState, startAtStep, onClose }: TutorialW
     }
   }
 
-  // --- Step 2 handlers ---
-  async function handleChooseDirectory() {
-    setProjectError(null);
-    if (isElectron && api) {
-      const chosenPath = await api.terminal.chooseDirectory();
-      if (!chosenPath) return;
-      setWorkingDirectory(chosenPath);
-      return;
-    }
-    const w =
-      typeof window !== 'undefined'
-        ? (window as Window & { showDirectoryPicker?(): Promise<{ name: string }> })
-        : null;
-    if (w?.showDirectoryPicker) {
-      try {
-        const handle = await w.showDirectoryPicker();
-        setWorkingDirectory(handle.name);
-      } catch (err) {
-        if ((err as Error).name !== 'AbortError') {
-          setProjectError('Could not access the selected folder.');
-        }
-      }
-      return;
-    }
-    directoryInputRef.current?.click();
-  }
-
-  function handleWebDirectoryInputChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = e.target.files;
-    if (!files?.length) return;
-    const firstPath = (files[0] as File & { webkitRelativePath?: string }).webkitRelativePath;
-    const folderName = firstPath ? firstPath.split('/')[0] : '';
-    e.target.value = '';
-    if (folderName) setWorkingDirectory(folderName);
-  }
-
-  async function handleCreateProject() {
-    if (!organizationId) {
-      setProjectError('Organization is required before creating a project.');
-      return;
-    }
-    const trimmedName = projectName.trim();
-    if (!trimmedName) {
-      setProjectError('Project name is required.');
-      return;
-    }
-    setProjectButtonState('loading');
-    setProjectError(null);
-    try {
-      let deviceIdentity: { deviceFingerprint: string; hostname: string; platform: string } | null =
-        null;
-      if (isElectron && api?.app?.getDeviceIdentity) {
-        try {
-          deviceIdentity = await api.app.getDeviceIdentity();
-        } catch (error) {
-          Sentry.captureException(error);
-          console.error('handleCreateProject:getDeviceIdentity', error);
-        }
-      }
-
-      await createFirstProjectWithDirectoryWithRetry({
-        organizationId,
-        name: trimmedName,
-        color: projectColor,
-        workingDirectory: workingDirectory.trim() || null,
-        ...(deviceIdentity
-          ? {
-              deviceFingerprint: deviceIdentity.deviceFingerprint,
-              deviceHostname: deviceIdentity.hostname,
-              devicePlatform: deviceIdentity.platform
-            }
-          : {})
-      });
-      setProjectButtonState('success');
-      await refreshElectronRoute(router);
-      setCurrentStep(3);
-    } catch (error) {
-      setProjectButtonState('error');
-      setProjectError(error instanceof Error ? error.message : 'Failed to create project.');
-    }
+  function handleResourceConnected(result: {
+    projectId: string;
+    organizationId: number;
+    executionTargetId: string | null;
+    workingDirectory: string;
+  }) {
+    setCreatedProjectId(result.projectId);
+    setOrganizationId(result.organizationId);
+    setExecutionTargetId(result.executionTargetId);
+    setWorkingDirectory(result.workingDirectory);
+    void handleStepComplete(2);
   }
 
   return (
@@ -397,156 +332,28 @@ export function TutorialWizard({ initialState, startAtStep, onClose }: TutorialW
           </div>
         )}
 
-        {currentStep === 2 && (
-          <div className="flex flex-col gap-6">
-            <div>
-              <h2 className="text-xl font-semibold tracking-tight">Create your first project</h2>
-              <p className="text-muted-foreground mt-1 text-sm">
-                Projects give tickets a home and tell Overlord where agents should work.
-              </p>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-xl border p-4">
-                <div className="flex items-start gap-3">
-                  <div className="bg-primary/10 text-primary flex h-10 w-10 shrink-0 items-center justify-center rounded-full">
-                    <FolderKanban className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold">One project, one codebase</p>
-                    <p className="text-muted-foreground text-sm">
-                      Use a project for each repo or product area you want agents to work in.
-                    </p>
-                  </div>
-                </div>
-              </div>
-              <div className="rounded-xl border p-4">
-                <div className="flex items-start gap-3">
-                  <div className="bg-primary/10 text-primary flex h-10 w-10 shrink-0 items-center justify-center rounded-full">
-                    <FolderSearch className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold">Attach a working directory</p>
-                    <p className="text-muted-foreground text-sm">
-                      In the desktop app, agent terminals open directly in this folder.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <FieldGroup>
-              <Field>
-                <FieldLabel htmlFor="onboarding-project-name">Project name</FieldLabel>
-                <Input
-                  id="onboarding-project-name"
-                  value={projectName}
-                  onChange={event => {
-                    setProjectName(event.target.value);
-                    if (projectError) setProjectError(null);
-                  }}
-                  placeholder="Overlord Webapp"
-                  aria-invalid={!!projectError}
-                  aria-describedby={projectError ? 'onboarding-project-error' : undefined}
-                />
-              </Field>
-              <Field>
-                <FieldLabel>Project color</FieldLabel>
-                <ProjectColorSetter
-                  value={projectColor}
-                  onSelect={color => {
-                    setProjectColor(color);
-                    if (projectError) setProjectError(null);
-                  }}
-                />
-              </Field>
-              {isElectron ? (
-                <Field>
-                  <FieldLabel htmlFor="onboarding-working-directory">Local directory</FieldLabel>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Input
-                      id="onboarding-working-directory"
-                      value={workingDirectory}
-                      onChange={event => setWorkingDirectory(event.target.value)}
-                      placeholder="/absolute/path/to/your/project"
-                      className="min-w-[260px] flex-1"
-                    />
-                    <input
-                      ref={directoryInputRef}
-                      type="file"
-                      {...({
-                        webkitdirectory: '',
-                        directory: ''
-                      } as React.InputHTMLAttributes<HTMLInputElement>)}
-                      multiple
-                      className="hidden"
-                      aria-hidden
-                      tabIndex={-1}
-                      onChange={handleWebDirectoryInputChange}
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={handleChooseDirectory}
-                    >
-                      Choose folder
-                    </Button>
-                  </div>
-                  <FieldDescription>
-                    When you run agents for this project, terminals will open in this directory.
-                  </FieldDescription>
-                </Field>
-              ) : null}
-              {projectError ? (
-                <Alert id="onboarding-project-error" variant="destructive" role="alert">
-                  <AlertDescription>{projectError}</AlertDescription>
-                </Alert>
-              ) : null}
-              <Field>
-                <div className="flex items-center gap-3">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setCurrentStep(1)}
-                  >
-                    Back
-                  </Button>
-                  <LoadingButton
-                    buttonState={projectButtonState}
-                    setButtonState={setProjectButtonState}
-                    text="Create project"
-                    loadingText="Creating…"
-                    successText="Created"
-                    errorText="Retry"
-                    onClick={handleCreateProject}
-                  />
-                </div>
-              </Field>
-            </FieldGroup>
-          </div>
-        )}
-
-        {currentStep === 3 &&
+        {currentStep === 2 &&
           (isElectron ? (
-            <CliInstallStep onContinue={() => void handleStepComplete(3)} />
-          ) : (
-            <DownloadAppStep onContinue={() => void handleStepComplete(3)} />
-          ))}
-
-        {currentStep === 4 &&
-          (isElectron ? (
-            <ConnectorSetupStep
-              onContinue={() => void handleStepComplete(4)}
-              projectDirectory={workingDirectory.trim() || undefined}
+            <ConnectResourceStep
+              organizationId={organizationId}
+              onConnected={handleResourceConnected}
             />
           ) : (
-            <TicketFlowStep onContinue={() => void handleStepComplete(4)} />
+            <DownloadAppStep onContinue={() => void handleStepComplete(2)} />
           ))}
 
-        {currentStep === 5 && isElectron && (
-          <TicketFlowStep onContinue={() => void handleStepComplete(5)} />
+        {currentStep === 3 && isElectron && (
+          <TerminalSettingsStep
+            executionTargetId={executionTargetId ?? ''}
+            onContinue={() => void handleStepComplete(3)}
+          />
+        )}
+
+        {currentStep === 4 && isElectron && (
+          <ConnectorSetupStep
+            onContinue={() => void handleStepComplete(4)}
+            projectDirectory={workingDirectory || undefined}
+          />
         )}
       </div>
     </div>

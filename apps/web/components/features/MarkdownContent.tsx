@@ -49,8 +49,7 @@ export function MarkdownContent({
       : `${proseClasses} overflow-hidden ${className}`.trim();
 
   const headingComponents = useMemo(
-    () =>
-      headingAnchors ? createMarkdownHeadingComponents(headingAnchors) : undefined,
+    () => (headingAnchors ? createMarkdownHeadingComponents(headingAnchors) : undefined),
     [headingAnchors]
   );
 

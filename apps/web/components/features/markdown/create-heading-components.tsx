@@ -1,7 +1,7 @@
 'use client';
 
-import type { Components } from 'react-markdown';
 import type { ReactNode } from 'react';
+import type { Components } from 'react-markdown';
 
 import { MarkdownHeadingAnchor } from '@/components/features/markdown/MarkdownHeadingAnchor';
 import { getPlainTextFromReactNode } from '@/lib/helpers/markdown-plain-text';
