@@ -158,7 +158,7 @@ Checklist:
 - Plugin install removes any legacy Overlord-managed Codex `AGENTS.md` section
 - Plugin install removes any legacy Codex bundle manifest entry from `~/.ovld/bundle-manifest.json`
 - Skill text and MCP shim tell Codex to request permission escalation or network access before retrying if `OVERLORD_URL` is unreachable
-- Local MCP shim exposes the local runner queue tools (`request_execution`, `claim_execution`, `complete_execution_launch`, `fail_execution_launch`) to match Antigravity's local shim. Hosted MCP intentionally leaves those runner tools out until hosted remote runners are supported end-to-end.
+- Local MCP shim exposes the local runner queue tools (`request_execution`, `claim_execution`, `list_execution_requests`, `clear_execution_requests`, `complete_execution_launch`, `fail_execution_launch`) to match Antigravity's local shim. Hosted MCP intentionally leaves those runner tools out until hosted remote runners are supported end-to-end.
 
 ### 2. Local launch path
 
@@ -617,6 +617,8 @@ when one surface changes, check the others against this table.
 | permission-request            | `POST /api/protocol/permission-request`           | `permission-request` (hook-only) | —                                              |
 | request-execution             | `POST /api/protocol/request-execution`             | `request-execution`              | `request_execution` (local shim)               |
 | claim-execution               | `POST /api/protocol/claim-execution`               | `claim-execution`                | `claim_execution` (local shim)                 |
+| list-execution-requests       | `POST /api/protocol/list-execution-requests`       | `list-execution-requests`        | `list_execution_requests` (local shim)         |
+| clear-execution-requests      | `POST /api/protocol/clear-execution-requests`      | `clear-execution-requests`       | `clear_execution_requests` (local shim)        |
 | complete-execution-launch     | `POST /api/protocol/complete-execution-launch`     | `complete-execution-launch`      | `complete_execution_launch` (local shim)       |
 | fail-execution-launch         | `POST /api/protocol/fail-execution-launch`         | `fail-execution-launch`          | `fail_execution_launch` (local shim)           |
 | read-context                  | `POST /api/protocol/read-context`                 | `read-context`                   | `read_context`                                 |

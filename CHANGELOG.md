@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2606010745.0] - 2026-06-01:07:45
+
+### Added
+- Add protocol **`list-execution-requests`** (`ovld protocol list-execution-requests`, MCP `list_execution_requests`, `POST /api/protocol/list-execution-requests`) so runners and agents can inspect the active queue (**queued**, **claimed**, **launching**) visible to the current device.
+- Add protocol **`clear-execution-requests`** (`ovld protocol clear-execution-requests`, MCP `clear_execution_requests`, `POST /api/protocol/clear-execution-requests`) to fail active queue rows for one objective or wholesale with **`--clear-all`**.
+- Extend **`ovld runner status`** to include the active queue for the runner’s device (and org scope), and add **`ovld runner clear <objective_id>`** and **`ovld runner clear-all`** as convenience wrappers over the clear protocol.
+
+### Fixed
+- None.
+
+### Changed
+- None.
+
+### Security
+- None.
+
+### Test
+- Add API, CLI protocol, and runner tests for listing and clearing execution requests.
+
+### Documentation
+- Document queue list/clear protocol operations and runner commands in the CLI README, for-agents CLI reference, agent-execution workflow docs, and connector surfaces matrix.
+
 ## [0.2606010644.0] - 2026-06-01:06:44
 
 ### Added

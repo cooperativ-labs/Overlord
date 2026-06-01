@@ -196,6 +196,7 @@ Default to `create` when you want to capture future work as a draft. Use `prompt
 From the desktop app, open the ticket and launch it with the desired connector. Overlord starts the agent in the linked working directory and includes the ticket prompt, ticket ID, and protocol instructions.
 
 Auto-advance and the web Run button enqueue durable execution requests. Keep `ovld runner start` running on a workstation or remote host to claim those requests and launch the assigned agent/model without requiring the desktop app to stay open.
+Use `ovld runner status` to inspect the local runner's visible queue, `ovld runner clear <objective_id>` to clear one active queue row, and `ovld runner clear-all` to clear all visible active rows.
 
 From the CLI, use:
 

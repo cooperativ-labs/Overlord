@@ -593,6 +593,96 @@ test('claim-execution posts device fingerprint from flag', async () => {
   });
 });
 
+test('list-execution-requests posts queue filter payload', async () => {
+  const previousFetch = global.fetch;
+  const previousOverlordUrl = process.env.OVERLORD_URL;
+  const previousAgentToken = process.env.OVERLORD_ACCESS_TOKEN;
+  const previousOrganizationId = process.env.OVERLORD_ORGANIZATION_ID;
+  const previousLog = console.log;
+  const calls = [];
+
+  try {
+    process.env.OVERLORD_URL = 'https://www.ovld.ai';
+    process.env.OVERLORD_ACCESS_TOKEN = 'test-agent-token';
+    process.env.OVERLORD_ORGANIZATION_ID = '42';
+
+    global.fetch = async (url, init = {}) => {
+      calls.push({ url: String(url), body: init.body });
+      return new Response(JSON.stringify({ requests: [] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    };
+    console.log = () => {};
+
+    await runProtocolCommand('list-execution-requests', [
+      '--device-fingerprint',
+      'fp-cli-test',
+      '--project-id',
+      'aaaaaaaa-0000-4000-8000-000000000001'
+    ]);
+  } finally {
+    global.fetch = previousFetch;
+    console.log = previousLog;
+    if (previousOverlordUrl === undefined) delete process.env.OVERLORD_URL;
+    else process.env.OVERLORD_URL = previousOverlordUrl;
+    if (previousAgentToken === undefined) delete process.env.OVERLORD_ACCESS_TOKEN;
+    else process.env.OVERLORD_ACCESS_TOKEN = previousAgentToken;
+    if (previousOrganizationId === undefined) delete process.env.OVERLORD_ORGANIZATION_ID;
+    else process.env.OVERLORD_ORGANIZATION_ID = previousOrganizationId;
+  }
+
+  assert.equal(calls[0].url, 'https://www.ovld.ai/api/protocol/list-execution-requests');
+  assert.deepEqual(JSON.parse(calls[0].body), {
+    deviceFingerprint: 'fp-cli-test',
+    projectId: 'aaaaaaaa-0000-4000-8000-000000000001'
+  });
+});
+
+test('clear-execution-requests posts objective-id or clear-all payload', async () => {
+  const previousFetch = global.fetch;
+  const previousOverlordUrl = process.env.OVERLORD_URL;
+  const previousAgentToken = process.env.OVERLORD_ACCESS_TOKEN;
+  const previousOrganizationId = process.env.OVERLORD_ORGANIZATION_ID;
+  const previousLog = console.log;
+  const calls = [];
+
+  try {
+    process.env.OVERLORD_URL = 'https://www.ovld.ai';
+    process.env.OVERLORD_ACCESS_TOKEN = 'test-agent-token';
+    process.env.OVERLORD_ORGANIZATION_ID = '42';
+
+    global.fetch = async (url, init = {}) => {
+      calls.push({ url: String(url), body: init.body });
+      return new Response(JSON.stringify({ clearedCount: 0, requests: [] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    };
+    console.log = () => {};
+
+    await runProtocolCommand('clear-execution-requests', ['--objective-id', 'req-objective']);
+    await runProtocolCommand('clear-execution-requests', ['--clear-all']);
+  } finally {
+    global.fetch = previousFetch;
+    console.log = previousLog;
+    if (previousOverlordUrl === undefined) delete process.env.OVERLORD_URL;
+    else process.env.OVERLORD_URL = previousOverlordUrl;
+    if (previousAgentToken === undefined) delete process.env.OVERLORD_ACCESS_TOKEN;
+    else process.env.OVERLORD_ACCESS_TOKEN = previousAgentToken;
+    if (previousOrganizationId === undefined) delete process.env.OVERLORD_ORGANIZATION_ID;
+    else process.env.OVERLORD_ORGANIZATION_ID = previousOrganizationId;
+  }
+
+  assert.equal(calls[0].url, 'https://www.ovld.ai/api/protocol/clear-execution-requests');
+  assert.deepEqual(JSON.parse(calls[0].body), {
+    objectiveId: 'req-objective'
+  });
+  assert.deepEqual(JSON.parse(calls[1].body), {
+    clearAll: true
+  });
+});
+
 test('complete-execution-launch and fail-execution-launch post expected payloads', async () => {
   const previousFetch = global.fetch;
   const previousOverlordUrl = process.env.OVERLORD_URL;

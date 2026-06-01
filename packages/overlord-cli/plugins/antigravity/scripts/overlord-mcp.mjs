@@ -1055,6 +1055,40 @@ const tools = [
     subcommand: 'claim-execution'
   },
   {
+    name: 'list_execution_requests',
+    description: 'List active execution requests in the local runner queue.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        device_fingerprint: { type: 'string' },
+        project_id: { type: 'string' }
+      }
+    },
+    toCliFlags: args => ({
+      'device-fingerprint': args.device_fingerprint,
+      'project-id': args.project_id
+    }),
+    subcommand: 'list-execution-requests'
+  },
+  {
+    name: 'clear_execution_requests',
+    description: 'Clear active execution requests from the local runner queue.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        objective_id: { type: 'string' },
+        clear_all: { type: 'boolean' },
+        project_id: { type: 'string' }
+      }
+    },
+    toCliFlags: args => ({
+      'objective-id': args.objective_id,
+      ...(args.clear_all ? { 'clear-all': true } : {}),
+      'project-id': args.project_id
+    }),
+    subcommand: 'clear-execution-requests'
+  },
+  {
     name: 'complete_execution_launch',
     description: 'Mark a claimed execution request as launched.',
     inputSchema: {

@@ -456,6 +456,11 @@ ovld protocol request-execution \\
 ovld protocol list-organizations
 ovld protocol claim-execution \\
   --device-fingerprint "$OVERLORD_DEVICE_FINGERPRINT"
+ovld protocol list-execution-requests \\
+  --device-fingerprint "$OVERLORD_DEVICE_FINGERPRINT"
+ovld protocol clear-execution-requests \\
+  --objective-id <objective-id>
+ovld protocol clear-execution-requests --clear-all
 ovld protocol complete-execution-launch \\
   --request-id <execution-request-id> \\
   --device-fingerprint "$OVERLORD_DEVICE_FINGERPRINT" \\

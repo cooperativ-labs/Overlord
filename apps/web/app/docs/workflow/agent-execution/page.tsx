@@ -104,8 +104,14 @@ ovld runner start
 # Claim and execute a single queued request, then exit
 ovld runner once
 
-# Inspect and display the local runner's device identity
+# Inspect the local runner device identity plus visible active queue rows
 ovld runner status
+
+# Clear one active queue row by objective id
+ovld runner clear <objective-uuid>
+
+# Clear every active queue row visible to the caller
+ovld runner clear-all
 \`\`\`
 
 ### Command Options

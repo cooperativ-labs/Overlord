@@ -31,11 +31,15 @@ Subcommands:
   prompt                    Create a ticket and attach to it immediately
   record-work               Record completed-from-chat work as a ticket in review + feed post (no attach)
   update                    Post progress, activity events, and optional change rationales
+  heartbeat                 Send a lightweight liveness ping without creating a ticket event
   record-change-rationales  Persist structured change rationales without a progress update
   ask                       Post a blocking question and move the ticket to review
   request-approval-gate     Flip auto_advance=false on the next queued future objective
   request-execution         Queue an objective for local/remote runner execution
   claim-execution           Claim one queued execution request for this device
+  list-organizations        List organizations the authenticated user belongs to
+  list-execution-requests   List active execution requests in the runner queue
+  clear-execution-requests  Clear active execution requests by objective or wholesale
   complete-execution-launch Mark a claimed execution request launched
   fail-execution-launch     Mark a claimed execution request failed
   permission-request        Notify Overlord that the agent is requesting tool permission
@@ -183,6 +187,23 @@ update:
     only when follow-up execution produced work.
     Pass --summary-file - to read the summary from stdin — avoids shell interpretation of backticks,
     quotes, or other special characters in the summary text.
+
+heartbeat:
+  Purpose:
+    Send a lightweight liveness ping for an attached session without adding activity-feed noise
+  Required:
+    --session-key <key>
+    --ticket-id <ticket_id>
+  Optional:
+    --phase <status>          draft | execute | review | deliver | complete | blocked | cancelled
+    --percent <0-100>         Optional percent-complete hint for transient UI progress
+    --note <text>             Optional short note, e.g. "Running the integration suite"
+    --external-url <url|null> Store or clear a deep link to the live agent session
+    --external-session-id <id|null>
+  Notes:
+    Heartbeat only updates session liveness plus transient telemetry on the session row.
+    It does not create a ticket event and should be used when you are still working but have
+    nothing meaningful to post via update.
 
 record-change-rationales:
   Purpose:
@@ -514,6 +535,31 @@ claim-execution:
     --lease-seconds <n>
     --project-id <uuid>
 
+list-organizations:
+  Purpose:
+    Print every organization the authenticated user (or agent token) belongs to.
+    The runner uses this to poll all of your organizations, not just the one
+    stored at login. Takes no required flags.
+
+list-execution-requests:
+  Purpose:
+    List active execution requests ('queued', 'claimed', 'launching') visible to
+    the caller. When --device-fingerprint is provided, queued rows are filtered
+    to work this execution target could claim and in-flight rows are limited to
+    rows already claimed by this target.
+  Optional:
+    --device-fingerprint <fp>  Filter queue visibility to one execution target
+    --project-id <uuid>        Restrict to one project
+
+clear-execution-requests:
+  Purpose:
+    Clear active execution requests from the runner queue by marking them failed.
+  Required:
+    --objective-id <uuid>      Clear one objective's active request
+    or: --clear-all            Clear every active request visible to the caller
+  Optional:
+    --project-id <uuid>        Restrict clear-all to one project
+
 complete-execution-launch:
   Required:
     --request-id <uuid>        (or EXECUTION_REQUEST_ID env var)
@@ -559,6 +605,10 @@ Examples:
   ovld protocol attachment-download-url --session-key <key> --attachment-id <attachment-id>
   ovld protocol request-execution --ticket-id 1:899 --agent codex --requested-from manual_run
   ovld protocol claim-execution --device-fingerprint $OVERLORD_DEVICE_FINGERPRINT
+  ovld protocol list-organizations
+  ovld protocol list-execution-requests --device-fingerprint $OVERLORD_DEVICE_FINGERPRINT
+  ovld protocol clear-execution-requests --objective-id <objective-uuid>
+  ovld protocol clear-execution-requests --clear-all
   ovld protocol deliver --session-key <key> --ticket-id <ticket_id> --summary "Done"
   ovld protocol deliver --session-key <key> --ticket-id <ticket_id> --summary "Done" --artifacts-file ./artifacts.json
   ovld protocol deliver --session-key <key> --ticket-id <ticket_id> --payload-json '{"summary":"Done","artifacts":[{"type":"note","label":"Delivery","content":"..."}]}'
@@ -578,3 +628,4 @@ EOF
   ovld protocol add-project-resource --project-id <project-uuid> --directory /path/to/repo --device-fingerprint $OVERLORD_DEVICE_FINGERPRINT --label "main checkout" --is-primary
   ovld protocol update-project-resource --resource-id <resource-uuid> --device-fingerprint $OVERLORD_DEVICE_FINGERPRINT --label "docs branch"
   ovld protocol update-project-resource --resource-id <resource-uuid> --device-fingerprint $OVERLORD_DEVICE_FINGERPRINT --is-primary true
+

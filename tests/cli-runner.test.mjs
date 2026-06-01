@@ -11,6 +11,7 @@ import {
   launchClaimedRequest,
   readOrCreateDeviceFingerprint,
   runnerTestHooks,
+  runRunnerCommand,
   runOnce
 } from '../packages/overlord-cli/bin/_cli/runner.mjs';
 
@@ -222,6 +223,111 @@ test('runOnce honors an explicit --organization-id pin without discovery', async
   } finally {
     runnerTestHooks.execFileSync = null;
   }
+});
+
+test('runner status prints device metadata plus the active queue', async () => {
+  const previousLog = console.log;
+  let printed = '';
+  runnerTestHooks.execFileSync = (_file, argv) => {
+    const subcommand = argv[2];
+    if (subcommand === 'get-device') {
+      return JSON.stringify({ device: { id: 'dev-1', label: 'work-mac', fingerprint: 'fp-status' } });
+    }
+    if (subcommand === 'list-organizations') {
+      return JSON.stringify({ organizations: [{ id: 1, name: 'Org A' }, { id: 7, name: 'Org B' }] });
+    }
+    if (subcommand === 'list-execution-requests') {
+      const idx = argv.indexOf('--organization-id');
+      const orgId = idx === -1 ? 'default' : argv[idx + 1];
+      return JSON.stringify({
+        requests: [{ id: `req-${orgId}`, objective_id: `obj-${orgId}`, status: 'queued' }]
+      });
+    }
+    return '{}';
+  };
+  console.log = value => {
+    printed = String(value);
+  };
+
+  try {
+    await runRunnerCommand('status', ['--device-fingerprint', 'fp-status']);
+  } finally {
+    runnerTestHooks.execFileSync = null;
+    console.log = previousLog;
+  }
+
+  const body = JSON.parse(printed);
+  assert.equal(body.device.label, 'work-mac');
+  assert.equal(body.queue.length, 2);
+  assert.deepEqual(
+    body.queue.map(item => item.id),
+    ['req-1', 'req-7']
+  );
+});
+
+test('runner clear forwards objective clearing across all organizations', async () => {
+  const previousLog = console.log;
+  let printed = '';
+  const calls = [];
+  runnerTestHooks.execFileSync = (_file, argv) => {
+    const subcommand = argv[2];
+    calls.push({ subcommand, argv: [...argv] });
+    if (subcommand === 'list-organizations') {
+      return JSON.stringify({ organizations: [{ id: 1, name: 'Org A' }, { id: 7, name: 'Org B' }] });
+    }
+    if (subcommand === 'clear-execution-requests') {
+      return JSON.stringify({ clearedCount: 1, requests: [{ id: 'req-clear' }] });
+    }
+    return '{}';
+  };
+  console.log = value => {
+    printed = String(value);
+  };
+
+  try {
+    await runRunnerCommand('clear', ['objective-uuid', '--device-fingerprint', 'fp-clear']);
+  } finally {
+    runnerTestHooks.execFileSync = null;
+    console.log = previousLog;
+  }
+
+  const clearCalls = calls.filter(call => call.subcommand === 'clear-execution-requests');
+  assert.equal(clearCalls.length, 2);
+  assert.ok(clearCalls.every(call => call.argv.includes('--objective-id')));
+  assert.ok(clearCalls.every(call => call.argv.includes('objective-uuid')));
+  assert.equal(JSON.parse(printed).clearedCount, 2);
+});
+
+test('runner clear-all forwards queue clearing across all organizations', async () => {
+  const previousLog = console.log;
+  let printed = '';
+  const calls = [];
+  runnerTestHooks.execFileSync = (_file, argv) => {
+    const subcommand = argv[2];
+    calls.push({ subcommand, argv: [...argv] });
+    if (subcommand === 'list-organizations') {
+      return JSON.stringify({ organizations: [{ id: 1, name: 'Org A' }, { id: 7, name: 'Org B' }] });
+    }
+    if (subcommand === 'clear-execution-requests') {
+      return JSON.stringify({ clearedCount: 2, requests: [{ id: 'req-a' }, { id: 'req-b' }] });
+    }
+    return '{}';
+  };
+  console.log = value => {
+    printed = String(value);
+  };
+
+  try {
+    await runRunnerCommand('clear-all', ['--device-fingerprint', 'fp-clear-all']);
+  } finally {
+    runnerTestHooks.execFileSync = null;
+    console.log = previousLog;
+  }
+
+  const clearCalls = calls.filter(call => call.subcommand === 'clear-execution-requests');
+  assert.equal(clearCalls.length, 2);
+  assert.ok(clearCalls.every(call => call.argv.includes('--clear-all')));
+  assert.equal(JSON.parse(printed).clearedCount, 4);
 });
 
 test('launchClaimedRequest completes launch (server marks the request launching) on spawn', async () => {

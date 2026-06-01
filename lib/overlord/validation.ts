@@ -509,6 +509,21 @@ export const claimExecutionSchema = z.object({
 // through the standard `parseProtocolBody` auth path like every other command.
 export const listOrganizationsSchema = z.object({});
 
+export const listExecutionRequestsSchema = z.object({
+  deviceFingerprint: z.string().trim().min(1).max(128).optional(),
+  projectId: z.string().uuid().optional()
+});
+
+export const clearExecutionRequestsSchema = z
+  .object({
+    objectiveId: z.string().uuid().optional(),
+    clearAll: z.boolean().optional().default(false),
+    projectId: z.string().uuid().optional()
+  })
+  .refine(input => input.clearAll || typeof input.objectiveId === 'string', {
+    error: 'Pass objectiveId or clearAll=true.'
+  });
+
 export const completeExecutionLaunchSchema = z.object({
   requestId: z.string().uuid(),
   deviceFingerprint: z.string().trim().min(1).max(128),

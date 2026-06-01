@@ -95,8 +95,14 @@ ovld runner start
 # Process one queued request, then exit
 ovld runner once
 
-# Show this machine's device fingerprint (~/.ovld/device.json)
+# Show this machine's device record plus visible active queue rows
 ovld runner status
+
+# Clear one active queue row by objective id
+ovld runner clear <objective-uuid>
+
+# Clear every active queue row visible to the caller
+ovld runner clear-all
 \`\`\`
 
 Common options: \`--poll-interval-ms\`, \`--device-fingerprint\` (or \`OVERLORD_DEVICE_FINGERPRINT\`), \`--project-id\`.

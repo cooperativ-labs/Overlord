@@ -22,6 +22,8 @@ function printRunnerHelp(primaryCommand = 'ovld') {
   ${primaryCommand} runner once [options]
   ${primaryCommand} runner start [options]
   ${primaryCommand} runner status [options]
+  ${primaryCommand} runner clear <objective_id> [options]
+  ${primaryCommand} runner clear-all [options]
 
 Options:
   --device-fingerprint <fp>  Override runner device identity
@@ -112,6 +114,37 @@ function claimExecution(flags, deviceFingerprint, organizationId) {
     args.push('--project-id', flags['project-id']);
   }
   return protocolJson('claim-execution', args, { OVERLORD_DEVICE_FINGERPRINT: deviceFingerprint });
+}
+
+function listExecutionRequests(flags, deviceFingerprint, organizationId) {
+  const args = ['--device-fingerprint', deviceFingerprint];
+  if (organizationId) {
+    args.push('--organization-id', String(organizationId));
+  }
+  if (typeof flags['project-id'] === 'string') {
+    args.push('--project-id', flags['project-id']);
+  }
+  return protocolJson('list-execution-requests', args, {
+    OVERLORD_DEVICE_FINGERPRINT: deviceFingerprint
+  });
+}
+
+function clearExecutionRequests(flags, deviceFingerprint, organizationId, options = {}) {
+  const args = [];
+  if (organizationId) {
+    args.push('--organization-id', String(organizationId));
+  }
+  if (typeof flags['project-id'] === 'string') {
+    args.push('--project-id', flags['project-id']);
+  }
+  if (options.clearAll) {
+    args.push('--clear-all');
+  } else if (options.objectiveId) {
+    args.push('--objective-id', options.objectiveId);
+  }
+  return protocolJson('clear-execution-requests', args, {
+    OVERLORD_DEVICE_FINGERPRINT: deviceFingerprint
+  });
 }
 
 function listOrganizationIds(deviceFingerprint) {
@@ -466,6 +499,58 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+async function collectQueue(flags, deviceFingerprint, organizationScope) {
+  const scope = organizationScope ?? createOrganizationScope(flags, deviceFingerprint);
+  const queue = [];
+  const errors = [];
+
+  for (const organizationId of scope.resolve()) {
+    try {
+      const data = listExecutionRequests(flags, deviceFingerprint, organizationId);
+      for (const request of data.requests ?? []) {
+        queue.push({
+          organizationId: organizationId || null,
+          ...request
+        });
+      }
+    } catch (error) {
+      errors.push({
+        organizationId: organizationId || null,
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  }
+
+  return { queue, errors, pinned: scope.pinned };
+}
+
+async function clearQueue(flags, deviceFingerprint, organizationScope, options) {
+  const scope = organizationScope ?? createOrganizationScope(flags, deviceFingerprint);
+  let clearedCount = 0;
+  const cleared = [];
+  const errors = [];
+
+  for (const organizationId of scope.resolve()) {
+    try {
+      const data = clearExecutionRequests(flags, deviceFingerprint, organizationId, options);
+      clearedCount += data.clearedCount ?? 0;
+      for (const request of data.requests ?? []) {
+        cleared.push({
+          organizationId: organizationId || null,
+          ...request
+        });
+      }
+    } catch (error) {
+      errors.push({
+        organizationId: organizationId || null,
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  }
+
+  return { clearedCount, cleared, errors, pinned: scope.pinned };
+}
+
 export async function runRunnerCommand(subcommand, args, primaryCommand = 'ovld') {
   if (!subcommand || subcommand === 'help' || subcommand === '--help' || subcommand === '-h') {
     printRunnerHelp(primaryCommand);
@@ -476,6 +561,7 @@ export async function runRunnerCommand(subcommand, args, primaryCommand = 'ovld'
   const deviceFingerprint = readOrCreateDeviceFingerprint(flags);
 
   if (subcommand === 'status') {
+    const organizationScope = createOrganizationScope(flags, deviceFingerprint);
     const data = protocolJson(
       'get-device',
       [
@@ -488,7 +574,38 @@ export async function runRunnerCommand(subcommand, args, primaryCommand = 'ovld'
       ],
       { OVERLORD_DEVICE_FINGERPRINT: deviceFingerprint }
     );
-    console.log(JSON.stringify({ ok: true, device: data.device }, null, 2));
+    const queue = await collectQueue(flags, deviceFingerprint, organizationScope);
+    console.log(
+      JSON.stringify(
+        {
+          ok: true,
+          device: data.device,
+          queue: queue.queue,
+          queueErrors: queue.errors
+        },
+        null,
+        2
+      )
+    );
+    return;
+  }
+
+  if (subcommand === 'clear') {
+    const objectiveId = typeof args[0] === 'string' && !args[0].startsWith('--') ? args[0] : '';
+    if (!objectiveId) {
+      console.error(`Usage: ${primaryCommand} runner clear <objective_id> [options]`);
+      process.exit(1);
+    }
+    const remainingArgs = objectiveId ? args.slice(1) : args;
+    const clearFlags = parseFlags(remainingArgs);
+    const queue = await clearQueue(clearFlags, deviceFingerprint, null, { objectiveId });
+    console.log(JSON.stringify({ ok: true, ...queue }, null, 2));
+    return;
+  }
+
+  if (subcommand === 'clear-all') {
+    const queue = await clearQueue(flags, deviceFingerprint, null, { clearAll: true });
+    console.log(JSON.stringify({ ok: true, ...queue }, null, 2));
     return;
   }
 

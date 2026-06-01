@@ -96,7 +96,7 @@ Idempotency keys differ from auto-advance so repeated manual launches are allowe
 | `launching` | Launch in progress |
 | `launched` | Child process started; `launched_session_id` set when known |
 | `failed` | Launch error recorded in `last_error` |
-| `cancelled` / `expired` | No longer eligible |
+| `failed` | Launch failed or the queue row was cleared manually |
 
 Duplicate auto-advance for the same objective is prevented by the unique `(organization_id, idempotency_key)` constraint. Stale claims can expire via `lease_expires_at` and be retried.
 
@@ -105,7 +105,9 @@ Duplicate auto-advance for the same objective is prevented by the unique `(organ
 ```bash
 ovld runner once    # Claim and launch one queued request, then exit
 ovld runner start   # Poll (or Realtime) and claim continuously
-ovld runner status  # Inspect local runner identity
+ovld runner status  # Inspect local runner identity and visible queue
+ovld runner clear <objective_id>  # Clear one active queue row
+ovld runner clear-all  # Clear every active queue row visible to the caller
 ```
 
 Protocol operations used by the runner:
@@ -114,6 +116,8 @@ Protocol operations used by the runner:
 | --- | --- | --- |
 | Enqueue | `POST /api/protocol/request-execution` | `ovld protocol request-execution` |
 | Claim | `POST /api/protocol/claim-execution` | `ovld protocol claim-execution` |
+| List | `POST /api/protocol/list-execution-requests` | `ovld protocol list-execution-requests` |
+| Clear | `POST /api/protocol/clear-execution-requests` | `ovld protocol clear-execution-requests` |
 | Success | `POST /api/protocol/complete-execution-launch` | `ovld protocol complete-execution-launch` |
 | Failure | `POST /api/protocol/fail-execution-launch` | `ovld protocol fail-execution-launch` |
 

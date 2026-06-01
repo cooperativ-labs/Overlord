@@ -2067,6 +2067,58 @@ async function protocolListOrganizations(args) {
   console.log(JSON.stringify(data, null, 2));
 }
 
+async function protocolListExecutionRequests(args) {
+  const flags = parseFlags(args);
+  const { platformUrl, bearerToken, localSecret, organizationId } =
+    await resolveProtocolAuthForFlags(flags);
+  const timeoutMs = resolveTimeout(flags);
+
+  const data = await apiPost(
+    platformUrl,
+    bearerToken,
+    localSecret,
+    organizationId,
+    '/api/protocol/list-execution-requests',
+    {
+      ...(typeof flags['device-fingerprint'] === 'string'
+        ? { deviceFingerprint: flags['device-fingerprint'] }
+        : {}),
+      ...(typeof flags['project-id'] === 'string' ? { projectId: flags['project-id'] } : {})
+    },
+    timeoutMs
+  );
+  console.log(JSON.stringify(data, null, 2));
+}
+
+async function protocolClearExecutionRequests(args) {
+  const flags = parseFlags(args);
+  const { platformUrl, bearerToken, localSecret, organizationId } =
+    await resolveProtocolAuthForFlags(flags);
+  const timeoutMs = resolveTimeout(flags);
+
+  const clearAll = flags['clear-all'] === true || flags['clear-all'] === 'true';
+  const objectiveId = typeof flags['objective-id'] === 'string' ? flags['objective-id'].trim() : '';
+  if (!clearAll && !objectiveId) {
+    console.error('Error: --objective-id is required unless --clear-all is set');
+    process.exit(1);
+  }
+
+  const data = await apiPost(
+    platformUrl,
+    bearerToken,
+    localSecret,
+    organizationId,
+    '/api/protocol/clear-execution-requests',
+    {
+      ...(objectiveId ? { objectiveId } : {}),
+      ...(clearAll ? { clearAll: true } : {}),
+      ...(typeof flags['project-id'] === 'string' ? { projectId: flags['project-id'] } : {})
+    },
+    timeoutMs
+  );
+  console.log(JSON.stringify(data, null, 2));
+}
+
 async function protocolCompleteExecutionLaunch(args) {
   const flags = parseFlags(args);
   const { platformUrl, bearerToken, localSecret, organizationId } =
@@ -2663,6 +2715,8 @@ Subcommands:
   request-execution         Queue an objective for local/remote runner execution
   claim-execution           Claim one queued execution request for this device
   list-organizations        List organizations the authenticated user belongs to
+  list-execution-requests   List active execution requests in the runner queue
+  clear-execution-requests  Clear active execution requests by objective or wholesale
   complete-execution-launch Mark a claimed execution request launched
   fail-execution-launch     Mark a claimed execution request failed
   permission-request        Notify Overlord that the agent is requesting tool permission
@@ -3164,6 +3218,25 @@ list-organizations:
     The runner uses this to poll all of your organizations, not just the one
     stored at login. Takes no required flags.
 
+list-execution-requests:
+  Purpose:
+    List active execution requests ('queued', 'claimed', 'launching') visible to
+    the caller. When --device-fingerprint is provided, queued rows are filtered
+    to work this execution target could claim and in-flight rows are limited to
+    rows already claimed by this target.
+  Optional:
+    --device-fingerprint <fp>  Filter queue visibility to one execution target
+    --project-id <uuid>        Restrict to one project
+
+clear-execution-requests:
+  Purpose:
+    Clear active execution requests from the runner queue by marking them failed.
+  Required:
+    --objective-id <uuid>      Clear one objective's active request
+    or: --clear-all            Clear every active request visible to the caller
+  Optional:
+    --project-id <uuid>        Restrict clear-all to one project
+
 complete-execution-launch:
   Required:
     --request-id <uuid>        (or EXECUTION_REQUEST_ID env var)
@@ -3210,6 +3283,9 @@ Examples:
   ovld protocol request-execution --ticket-id 1:899 --agent codex --requested-from manual_run
   ovld protocol claim-execution --device-fingerprint $OVERLORD_DEVICE_FINGERPRINT
   ovld protocol list-organizations
+  ovld protocol list-execution-requests --device-fingerprint $OVERLORD_DEVICE_FINGERPRINT
+  ovld protocol clear-execution-requests --objective-id <objective-uuid>
+  ovld protocol clear-execution-requests --clear-all
   ovld protocol deliver --session-key <key> --ticket-id <ticket_id> --summary "Done"
   ovld protocol deliver --session-key <key> --ticket-id <ticket_id> --summary "Done" --artifacts-file ./artifacts.json
   ovld protocol deliver --session-key <key> --ticket-id <ticket_id> --payload-json '{"summary":"Done","artifacts":[{"type":"note","label":"Delivery","content":"..."}]}'
@@ -3331,6 +3407,14 @@ EOF
   }
   if (subcommand === 'list-organizations') {
     await protocolListOrganizations(args);
+    return;
+  }
+  if (subcommand === 'list-execution-requests') {
+    await protocolListExecutionRequests(args);
+    return;
+  }
+  if (subcommand === 'clear-execution-requests') {
+    await protocolClearExecutionRequests(args);
     return;
   }
   if (subcommand === 'complete-execution-launch') {
