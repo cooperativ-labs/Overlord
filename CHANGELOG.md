@@ -2,6 +2,34 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2606010644.0] - 2026-06-01:06:44
+
+### Added
+- Add optional tooltips on **`ProjectColorDot`** for clearer project identification in dense views.
+
+### Fixed
+- Improve validation and error messaging when a project has no primary resource directory on an execution target (onboarding, protocol **`add-project-resource`**, and runner flows).
+
+### Changed
+- Resolve project checkout paths from **target-scoped primary resource directories** (`project_resource_directories`) instead of per-user **`local_working_directory`** on **`project_user`**.
+- Use emerald styling for **complete** Kanban columns instead of green for clearer visual distinction.
+
+### Security
+- None.
+
+### Removed
+- Drop legacy **`project_user.local_working_directory`**; **`project_resource_directories`** is the sole source of truth for where a project lives on each execution target.
+
+### Refactor
+- Centralize primary resource directory reads in **`getPrimaryProjectResourceDirectoriesByProjectId`** and align web, API, protocol, and CLI consumers.
+- Split large settings and ticket UI modules into focused subcomponents (calendar day cells, CLI settings sections, device resource rows, diff hunks, schedule editor toggles, Quick Task Bar picker/staged files, agent model selector store).
+
+### Test
+- Trim onboarding tests that covered removed **`local_working_directory`** writes on **`project_user`**.
+
+### Documentation
+- Update protocol help and agent plugin skills to reflect target-scoped project resource directories.
+
 ## [0.2605312007.0] - 2026-05-31:20:07
 
 ### Added
