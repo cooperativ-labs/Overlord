@@ -26,7 +26,10 @@ export function RetryExecutionButton({
     setButtonState('loading');
     const result = await requestTicketObjectiveExecutionAction({
       ticketId,
-      objectiveId: objectiveId ?? undefined
+      objectiveId: objectiveId ?? undefined,
+      // Relaunch on the same execution target the objective was originally
+      // queued for, rather than letting any runner pick it up.
+      inheritTargetFromObjective: true
     });
     if ('error' in result) {
       setButtonState('error');

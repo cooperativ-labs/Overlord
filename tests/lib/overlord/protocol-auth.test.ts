@@ -13,7 +13,13 @@ jest.mock('@/supabase/utils/service-role', () => ({
   createServiceRoleClient: jest.fn()
 }));
 
-import { resolveProtocolAuth } from '@/lib/overlord/protocol-auth';
+import { jwtVerify } from 'jose';
+import { randomUUID } from 'node:crypto';
+
+import {
+  resolveProtocolAuth,
+  resolveProtocolOrganizationHintForBody
+} from '@/lib/overlord/protocol-auth';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
 type Result = { data: unknown; error: unknown };
@@ -26,6 +32,10 @@ function makeClient(handlers: {
   agentToken?: Result;
   memberTarget?: Result;
   memberDefault?: Result;
+  project?: Result;
+  resource?: Result;
+  objective?: Result;
+  request?: Result;
 }) {
   function makeBuilder(table: string) {
     const state = { isUpdate: false, eqs: {} as Record<string, unknown> };
@@ -52,6 +62,18 @@ function makeClient(handlers: {
               ? (handlers.memberTarget ?? { data: null, error: null })
               : (handlers.memberDefault ?? { data: null, error: null })
           );
+        }
+        if (table === 'projects') {
+          return Promise.resolve(handlers.project ?? { data: null, error: null });
+        }
+        if (table === 'project_resource_directories') {
+          return Promise.resolve(handlers.resource ?? { data: null, error: null });
+        }
+        if (table === 'objectives') {
+          return Promise.resolve(handlers.objective ?? { data: null, error: null });
+        }
+        if (table === 'execution_requests') {
+          return Promise.resolve(handlers.request ?? { data: null, error: null });
         }
         return Promise.resolve({ data: null, error: null });
       }
@@ -165,5 +187,100 @@ describe('resolveProtocolAuth', () => {
 
     expect(result.context).toBeNull();
     expect(result.error?.status).toBe(403);
+  });
+
+  it('rejects an organization hint the agent token owner does not belong to (403)', async () => {
+    (createServiceRoleClient as jest.Mock).mockReturnValue(
+      makeClient({
+        agentToken: { data: { user_id: 'user-1' }, error: null },
+        // Not a member of the requested org, and no silent fall-back to another.
+        memberTarget: { data: null, error: null },
+        memberDefault: { data: { organization_id: 7 }, error: null }
+      })
+    );
+
+    const result = await resolveProtocolAuth(
+      agentTokenRequest('oat_abc123', { 'x-organization-id': '99' })
+    );
+
+    expect(result.context).toBeNull();
+    expect(result.error?.status).toBe(403);
+  });
+
+  it('resolves an OAuth session organization from membership when no hint is given', async () => {
+    (jwtVerify as jest.Mock).mockResolvedValueOnce({ payload: { sub: 'user-1' } });
+    (createServiceRoleClient as jest.Mock).mockReturnValue(
+      makeClient({ memberDefault: { data: { organization_id: 5 }, error: null } })
+    );
+
+    const result = await resolveProtocolAuth(agentTokenRequest('jwt-token'));
+
+    expect(result.error).toBeNull();
+    expect(result.context?.organizationId).toBe(5);
+    expect(result.context?.authMethod).toBe('oauth_jwt');
+  });
+
+  it('honors an OAuth organization hint when the user is a member', async () => {
+    (jwtVerify as jest.Mock).mockResolvedValueOnce({ payload: { sub: 'user-1' } });
+    (createServiceRoleClient as jest.Mock).mockReturnValue(
+      makeClient({ memberTarget: { data: { organization_id: 3 }, error: null } })
+    );
+
+    const result = await resolveProtocolAuth(
+      agentTokenRequest('jwt-token', { 'x-organization-id': '3' })
+    );
+
+    expect(result.error).toBeNull();
+    expect(result.context?.organizationId).toBe(3);
+    expect(result.context?.authMethod).toBe('oauth_jwt');
+  });
+
+  it('rejects an OAuth organization hint the user does not belong to (403)', async () => {
+    (jwtVerify as jest.Mock).mockResolvedValueOnce({ payload: { sub: 'user-1' } });
+    (createServiceRoleClient as jest.Mock).mockReturnValue(
+      makeClient({ memberTarget: { data: null, error: null } })
+    );
+
+    const result = await resolveProtocolAuth(
+      agentTokenRequest('jwt-token', { 'x-organization-id': '99' })
+    );
+
+    expect(result.context).toBeNull();
+    expect(result.error?.status).toBe(403);
+  });
+
+  it('resolves organization hints from sessionless body object ids', async () => {
+    (createServiceRoleClient as jest.Mock)
+      .mockReturnValueOnce(makeClient({ project: { data: { organization_id: 16 }, error: null } }))
+      .mockReturnValueOnce(
+        makeClient({
+          resource: {
+            data: { projects: { organization_id: 17 } },
+            error: null
+          }
+        })
+      )
+      .mockReturnValueOnce(
+        makeClient({
+          objective: {
+            data: { tickets: { organization_id: 18 } },
+            error: null
+          }
+        })
+      )
+      .mockReturnValueOnce(makeClient({ request: { data: { organization_id: 19 }, error: null } }));
+
+    await expect(resolveProtocolOrganizationHintForBody({ projectId: randomUUID() })).resolves.toBe(
+      16
+    );
+    await expect(
+      resolveProtocolOrganizationHintForBody({ resourceId: randomUUID() })
+    ).resolves.toBe(17);
+    await expect(
+      resolveProtocolOrganizationHintForBody({ objectiveId: randomUUID() })
+    ).resolves.toBe(18);
+    await expect(resolveProtocolOrganizationHintForBody({ requestId: randomUUID() })).resolves.toBe(
+      19
+    );
   });
 });

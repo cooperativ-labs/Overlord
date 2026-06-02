@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { buildAuthHeaders, resolveAuth } from './credentials.mjs';
+import { resolveAuth, searchTicketsAcrossOrganizations } from './credentials.mjs';
 import { runCreateCommand } from './new-ticket.mjs';
 
 /**
@@ -33,23 +33,10 @@ function parseFlags(args, knownFlags) {
   return result;
 }
 
-async function apiPost(url, token, localSecret, organizationId, body) {
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      ...buildAuthHeaders(token, localSecret, organizationId),
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(body)
-  });
-
-  const data = await res.json().catch(() => ({}));
-
-  if (!res.ok) {
-    throw new Error(`API error (${res.status}): ${data.error ?? JSON.stringify(data)}`);
-  }
-
-  return data;
+function parseOrganizationId(value) {
+  if (typeof value !== 'string' && typeof value !== 'number') return null;
+  const parsed = Number.parseInt(String(value), 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
 export async function ticketsCreate(args) {
@@ -57,22 +44,20 @@ export async function ticketsCreate(args) {
 }
 
 export async function ticketsList(args) {
-  const flags = parseFlags(args, ['status', 'include-completed']);
+  const flags = parseFlags(args, ['status', 'include-completed', 'organization-id']);
 
-  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveAuth();
+  const auth = await resolveAuth();
 
   const body = {
     includeCompleted: flags['include-completed'] !== false,
     ...(flags.status ? { statuses: [String(flags.status)] } : {})
   };
 
-  const data = await apiPost(
-    `${platformUrl}/api/protocol/search-tickets`,
-    bearerToken,
-    localSecret,
-    organizationId,
-    body
-  );
+  // Organization-agnostic: searches every organization you belong to unless
+  // --organization-id scopes it to one.
+  const data = await searchTicketsAcrossOrganizations(auth, body, {
+    organizationId: parseOrganizationId(flags['organization-id'])
+  });
 
   if (!data.tickets?.length) {
     console.log('No tickets found.');

@@ -139,7 +139,7 @@ An operation exists in multiple surfaces but parameters differ:
 #### 3e. Launch Command Drift
 - `ovld launch` help text, accepted flags, and alias behavior diverge from `lib/overlord/launch-commands.ts`
 - Ticket copy surfaces emit stale launcher names (`ovld connect`) or omit required launch flags
-- Ticket-scoped commands disagree on organization resolution precedence: `ticket_id` prefix first, explicit `--organization-id` / `x-organization-id` second, stored OAuth organization last
+- Organization resolution drifts between surfaces: ticket ids should infer org from the human-readable prefix, object-scoped sessionless calls should infer org from stable ids such as `projectId` / `resourceId` / `objectiveId` / `requestId`, browse/search flows should fan out across memberships, and explicit `--organization-id` / `x-organization-id` should remain a single-org override rather than a stored default
 - Desktop launch behavior changed but `CONNECTOR_SURFACES.md` no longer documents the deliberate asymmetry
 
 ### Phase 4: Generate the Drift Report
@@ -199,4 +199,4 @@ If no drift is found, confirm alignment and note the operation count.
 
 </drift-review>
 
-<!-- version: 1.0.7 -->
+<!-- version: 1.0.8 -->

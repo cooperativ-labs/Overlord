@@ -351,6 +351,26 @@ async function ensureDefaultStatusesForOrganization(input: {
   organizationId: number;
   supabase: Awaited<ReturnType<typeof createClientForRequest>>;
 }): Promise<void> {
+  // Default statuses are seeded at organization creation by the
+  // seed_default_ticket_statuses_for_organization SECURITY DEFINER function, so
+  // for any existing organization they are already present. Check first and
+  // skip the insert when they exist: the ticket_statuses INSERT RLS policy
+  // requires the ADMIN role, but project creation only requires AGENT+, so an
+  // invited non-admin member would otherwise hit an RLS violation here.
+  const { data: existing, error: selectError } = await input.supabase
+    .from('ticket_statuses')
+    .select('name')
+    .eq('organization_id', input.organizationId)
+    .limit(1);
+
+  if (selectError) {
+    throw new Error(selectError.message ?? 'Failed to read project statuses.');
+  }
+
+  if (existing && existing.length > 0) {
+    return;
+  }
+
   const { error } = await input.supabase.from('ticket_statuses').upsert(
     defaultProjectStatuses.map(status => ({
       organization_id: input.organizationId,

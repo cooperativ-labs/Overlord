@@ -79,6 +79,13 @@ export async function requestTicketObjectiveExecutionAction(input: {
   serverMultiplexer?: 'none' | 'tmux' | null;
   tmuxCommand?: string | null;
   targetExecutionTargetId?: string | null;
+  /**
+   * When no explicit `targetExecutionTargetId` is supplied, inherit the target
+   * the objective's most recent execution request was pinned to. Used by Retry
+   * so a relaunch stays on the originally-selected execution target instead of
+   * silently becoming target-agnostic and running on a different machine.
+   */
+  inheritTargetFromObjective?: boolean;
 }): Promise<{ requestId: string; status: string; reused: boolean } | { error: string }> {
   try {
     const supabase = await createClientForRequest();
@@ -87,6 +94,18 @@ export async function requestTicketObjectiveExecutionAction(input: {
       data: { user }
     } = await supabase.auth.getUser();
     if (!user) return { error: 'Authentication required.' };
+
+    let targetExecutionTargetId = input.targetExecutionTargetId ?? null;
+    if (!targetExecutionTargetId && input.inheritTargetFromObjective && input.objectiveId) {
+      const { data: priorRequest } = await supabase
+        .from('execution_requests')
+        .select('target_execution_target_id')
+        .eq('objective_id', input.objectiveId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      targetExecutionTargetId = priorRequest?.target_execution_target_id ?? null;
+    }
 
     const result = await createExecutionRequest(supabase, {
       ticketId: input.ticketId,
@@ -108,7 +127,7 @@ export async function requestTicketObjectiveExecutionAction(input: {
       tmuxCommand: input.tmuxCommand ?? null,
       runnerTerminalProfile: await getRunnerTerminalProfileAction(),
       targetKind: input.sshCommand?.trim() ? 'ssh' : 'any',
-      targetExecutionTargetId: input.targetExecutionTargetId ?? null
+      targetExecutionTargetId
     });
 
     revalidateTicketBoards();

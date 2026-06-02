@@ -8,8 +8,8 @@ Use it before shipping any connector-related change. If one surface changes, che
 
 | Agent       | Local connector                                                                             | Cloud/headless connector                                                                                                                    |
 | ----------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| Claude Code | Overlord bundle (skill + permission hook + `UserPromptSubmit` hook) via `ovld setup claude` | `/api/mcp` with shared OAuth credentials or explicit `OVERLORD_ACCESS_TOKEN` + `OVERLORD_ORGANIZATION_ID` override                          |
-| Codex       | Home-local chat plugin via Desktop app Settings → CLI                                       | `/api/mcp` with shared OAuth credentials or explicit `OVERLORD_ACCESS_TOKEN` + `OVERLORD_ORGANIZATION_ID` override (`~/.codex/config.toml`) |
+| Claude Code | Overlord bundle (skill + permission hook + `UserPromptSubmit` hook) via `ovld setup claude` | `/api/mcp` with shared OAuth credentials; `OVERLORD_ORGANIZATION_ID` is only an explicit per-call override when a tool cannot infer scope |
+| Codex       | Home-local chat plugin via Desktop app Settings → CLI                                       | `/api/mcp` with shared OAuth credentials; `OVERLORD_ORGANIZATION_ID` is only an explicit per-call override when a tool cannot infer scope (`~/.codex/config.toml`) |
 | Cursor      | Local Cursor plugin via `ovld setup cursor`                                                 | —                                                                                                                                           |
 | Antigravity CLI | Overlord plugin via `agy plugin install` / `ovld setup antigravity`                      | —                                                                                                                                           |
 | OpenCode    | Overlord bundle (AGENTS.md + config) via `ovld setup opencode`                              | —                                                                                                                                           |
@@ -62,7 +62,7 @@ Checklist:
 - Settings merge preserves user's existing hooks and permissions (no clobber)
 - Skill text tells the agent to request permission escalation or network access before retrying if `OVERLORD_URL` is unreachable
 - Skill text tells the agent to run `ovld auth repair` itself on protocol/MCP auth failures before asking the user to log in again or proceed without Overlord updates
-- Skill text tells the agent to try `ovld auth repair` before `ovld auth login` when shared credentials look stale; `--organization-id <id>` is optional for choosing a different login default
+- Skill text tells the agent to try `ovld auth repair` before `ovld auth login` when shared credentials look stale; `--organization-id <id>` is optional and scopes a command/login validation without creating a stored default
 - Slash command docs also tell the agent to request permission escalation or network access before retrying if `OVERLORD_URL` is unreachable
 - Manifest entry written to `~/.ovld/bundle-manifest.json`
 
@@ -193,7 +193,7 @@ Checklist:
 - Agent delivery narratives stay on the `deliver` event; the follow-on review `status_change` event uses generic transition text so the activity feed does not duplicate the delivery summary
 - Prompt text does not tell Codex to look for `overlord-local` or a local Codex bundle
 - Prompt text tells Codex to run `ovld auth repair` itself on protocol auth failures before asking the user to log in again or proceed without Overlord updates
-- Prompt text tells Codex to try `ovld auth repair` before `ovld auth login` when shared credentials look stale; `--organization-id <id>` is optional for choosing a different login default
+- Prompt text tells Codex to try `ovld auth repair` before `ovld auth login` when shared credentials look stale; `--organization-id <id>` is optional and scopes a command/login validation without creating a stored default
 - Thinking/effort flag uses `-c model_reasoning_effort=<value>` (TOML inline format)
 - `--pre-command` runs through the user's interactive login shell (`$SHELL -ilc`) on POSIX before the Codex binary, so shell wrappers such as `agent-pod`, aliases, functions, and shell-initialized PATH entries resolve the same way they do in an interactive terminal. The shell must be interactive (`-i`), not just login (`-l`): zsh/bash only source `~/.zshrc` / `~/.bashrc` for interactive shells, which is where wrappers like agent-pod install their alias by default
 - Desktop local launches intentionally stay on the direct Electron path instead of delegating to `ovld launch`; `ovld launch` is the copy/paste surface and remote shell entrypoint
@@ -213,7 +213,7 @@ Checklist:
 
 - Codex cloud instructions point to `~/.codex/config.toml`
 - Codex cloud instructions use `/api/mcp`
-- Codex cloud instructions use shared OAuth credentials where supported; manual overrides use `OVERLORD_ACCESS_TOKEN` plus `OVERLORD_ORGANIZATION_ID`
+- Codex cloud instructions use shared OAuth credentials where supported; manual overrides may add `OVERLORD_ORGANIZATION_ID` only when a command needs an explicit single-org scope
 - Codex cloud guidance is clearly separated from the local plugin path
 
 ### 4. Onboarding
@@ -637,7 +637,7 @@ Notes:
 - `discover-project` accepts `projectId` / `--project-id` / `project_id` as an explicit shortcut, or `workingDirectory` / `--working-directory` / `working_directory` for path matching. Device identity fields (`deviceFingerprint`, `deviceHostname`, `devicePlatform`) are accepted across API, CLI, hosted MCP, and local shims so directory matching can prefer resource directories for the current device.
 - `agentIdentifier` and `connectionMethod` are required by the API but defaulted client-side: CLI defaults to `<agent>`/`cli`, MCP defaults to `mcp`.
 - `externalSessionId` is accepted on `attach`, `connect`, `update`, `heartbeat`, and `hook-event`, allowing active sessions to expose a native resume id before delivery.
-- Organization scope for ticket-scoped protocol calls is resolved in this order: organization id embedded in human-readable `ticket_id` (for example `1:899`), then explicit `--organization-id` / `x-organization-id`, then stored OAuth organization.
+- Organization scope is never stored as a default. Ticket-scoped protocol calls resolve from the organization id embedded in human-readable `ticket_id` (for example `1:899`) before auth. Sessionless object-scoped calls resolve from stable object ids such as `projectId`, `resourceId`, `objectiveId`, or `requestId`; browse/search flows fan out across memberships. Explicit `--organization-id` / `x-organization-id` remains a single-org override and must name an organization the identity belongs to.
 - `deliver` accepts optional `artifacts` (defaults to `[]`), `changeRationales`, `snapshot`, and `checkpoint` metadata — same as `deliverSchema` in `/Users/jake/Development/Cooperativ/Overlord/lib/overlord/validation.ts`. The CLI can send the full delivery object via `--payload-json <json>` or `--payload-file <path|->`; when either full-payload flag is used, do not also pass `--summary`, `--artifacts-*`, or `--change-rationales-*`. Local git checkpoints are created on `attach` (per executing objective), not `deliver`; `--skip-checkpoint` is an `attach` flag.
 - Objective arrays are accepted on `create`, `prompt`, and `record-work` as ordered `objectives` arrays of `{ objective, title?, autoAdvance?, assignedAgent? }`. CLI flags are `--objectives-json` / `--objectives-file`; hosted MCP uses camelCase fields and the local shim uses snake_case inputs mapped to those CLI flags.
 - `add-objectives` appends ordered objectives to an existing ticket. Index 0 is the first newly added objective to execute; later indexes queue after it. Agent docs must distinguish this from creating multiple tickets: use multiple tickets for different features/goals, and same-ticket objectives for sequential steps toward one feature/goal.

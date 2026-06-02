@@ -5,7 +5,7 @@ import { ZodType } from 'zod';
 import {
   type ProtocolAuthContext,
   resolveAgentToken,
-  resolveProtocolOrganizationHintForTicketId
+  resolveProtocolOrganizationHintForBody
 } from '@/lib/overlord/protocol-auth';
 
 type ParseOk<T> = { ok: true; data: T; tokenContext: ProtocolAuthContext };
@@ -18,11 +18,7 @@ export async function parseProtocolBody<T>(
 ): Promise<ParseResult<T>> {
   try {
     const body = await request.json();
-    const rawTicketId = typeof body?.ticketId === 'string' ? body.ticketId.trim() : '';
-    const organizationHint =
-      rawTicketId.length > 0
-        ? await resolveProtocolOrganizationHintForTicketId({ ticketId: rawTicketId })
-        : null;
+    const organizationHint = await resolveProtocolOrganizationHintForBody(body);
     const authResult = await resolveAgentToken(request, organizationHint);
     if (authResult.error) {
       return { ok: false, errorResponse: authResult.error };

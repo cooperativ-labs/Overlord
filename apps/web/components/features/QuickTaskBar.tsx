@@ -10,6 +10,7 @@ import {
   useAgentModelPreference
 } from '@/components/features/AgentModelSelector';
 import { MentionableTextarea } from '@/components/features/MentionableTextarea';
+import { SELECTED_DEVICE_KEY } from '@/components/features/projects/ProjectSettingsContext';
 import { useWorkspaceFileTree } from '@/components/features/projects/useWorkspaceFileTree';
 import { useWorkspacePreference } from '@/components/features/projects/useWorkspacePreference';
 import { useTerminal } from '@/components/features/terminal/TerminalProvider';
@@ -25,6 +26,7 @@ import {
   useUpdateTicketFieldsMutation,
   useUpdateTicketForHumanMutation
 } from '@/lib/client-data/tickets/mutations';
+import { claimAndLaunchQueuedExecutions } from '@/lib/electron/queued-execution-launch';
 import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
 import { isLaunchAgentTypeValue } from '@/lib/helpers/agent-types';
 import { dispatchTicketCreatedEvent } from '@/lib/helpers/ticket-board-events';
@@ -67,7 +69,7 @@ export function QuickTaskBar({ defaultProjectId, projects, sshEnabled }: QuickTa
 
   const { selection: defaultSelection, loaded: selectionLoaded } = useAgentModelPreference();
   const [objectiveSelection, setObjectiveSelection] = useState(defaultSelection);
-  const { isElectron } = useTerminal();
+  const { isElectron, launchAgent } = useTerminal();
   const createTicketMutation = useCreateTicketMutation();
   const updateAssignmentMutation = useUpdateTicketAssignmentMutation();
   const updateFieldsMutation = useUpdateTicketFieldsMutation();
@@ -315,24 +317,45 @@ export function QuickTaskBar({ defaultProjectId, projects, sshEnabled }: QuickTa
             objectiveId: createdTicket.objectiveId
           });
 
+          // Respect the execution target the user picked for this project on the
+          // project page (persisted to localStorage by the workspace selector).
+          // When a specific target is selected we pin it and let the runner
+          // resolve the (project, target) primary directory on that machine,
+          // rather than forcing this device's local path onto a remote target.
+          const selectedDeviceId =
+            typeof window !== 'undefined'
+              ? window.localStorage.getItem(`${SELECTED_DEVICE_KEY}:${createdTicket.projectId}`)
+              : null;
+
           const result = await requestTicketObjectiveExecutionAction({
             ticketId: createdTicket.id,
             objectiveId: createdTicket.objectiveId,
-            workingDirectory:
-              workspace.executionWorkspace === 'local'
-                ? (workspace.effectiveWorkingDirectory ?? null)
-                : null,
-            sshCommand:
-              workspace.executionWorkspace === 'ssh'
-                ? (workspace.effectiveSshCommand ?? null)
-                : null,
-            remoteWorkingDirectory:
-              workspace.executionWorkspace === 'ssh'
-                ? (workspace.effectiveRemoteWorkingDirectory ?? null)
-                : null
+            ...(selectedDeviceId
+              ? { targetExecutionTargetId: selectedDeviceId }
+              : {
+                  workingDirectory:
+                    workspace.executionWorkspace === 'local'
+                      ? (workspace.effectiveWorkingDirectory ?? null)
+                      : null,
+                  sshCommand:
+                    workspace.executionWorkspace === 'ssh'
+                      ? (workspace.effectiveSshCommand ?? null)
+                      : null,
+                  remoteWorkingDirectory:
+                    workspace.executionWorkspace === 'ssh'
+                      ? (workspace.effectiveRemoteWorkingDirectory ?? null)
+                      : null
+                })
           });
           if ('error' in result) {
             throw new Error(result.error);
+          }
+          if (isElectron) {
+            await claimAndLaunchQueuedExecutions({
+              organizationId: createdTicket.organizationId,
+              launchAgent,
+              requestId: result.requestId
+            });
           }
         } catch (error) {
           console.error('Failed to queue execution:', error);

@@ -2,6 +2,37 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2606021930.0] - 2026-06-02:19:30
+
+### Added
+- Add inline **tag picker** on Kanban card hovers (`KanbanCardTagSelector`) to apply or remove project tags without opening the ticket.
+- Add **`resolveOrganizations`** and **`fetchProjectsAcrossOrganizations`** so **`ovld add-cwd`**, standalone **`ovld prompt`** / **`ovld create`**, and **`ovld search-tickets`** / **`ovld tickets search`** list and search across every organization you belong to.
+- Add **`resolveProtocolOrganizationHintForBody`** so sessionless protocol routes infer organization from **`projectId`**, **`resourceId`**, **`objectiveId`**, or **`requestId`** in the request body before auth membership checks.
+- Add shared **`claimAndLaunchQueuedExecutions`** so Desktop **immediately claims and launches** after **Quick Task Bar**, **Quick Run**, or **Agent Split Button** enqueue; **`claim-execution`** accepts an optional **`requestId`** to pin a specific queued row.
+- Add **`inheritTargetFromObjective`** on **`requestTicketObjectiveExecutionAction`** so **Retry** re-queues on the same execution target as the prior request.
+
+### Fixed
+- Fix **`ovld auth login`** silently pinning **`organizations[0]`** as a stored default org, which blocked multi-org CLI workflows.
+- Fix **OAuth protocol auth** returning **400** when **`x-organization-id`** was omitted; OAuth now resolves organization from membership like agent tokens.
+- Fix **Agent Split Button** in the side panel ignoring the selected execution target when rendered outside **`ProjectSettingsProvider`** (reads the persisted workspace **`localStorage`** key).
+- Fix **Quick Task Bar** ignoring the project-page execution-target selection and always sending local/SSH workspace paths.
+- Fix **project creation** failing for invited non-admin members when default ticket statuses already existed (skip redundant **`ticket_statuses`** insert that required ADMIN RLS).
+- Fix **`discover-project`** and **`record-work`** only matching projects in one organization when no explicit org header was sent.
+
+### Changed
+- Make the CLI **organization-agnostic**: login stores identity only; **`ovld auth status --verbose`** lists all memberships; **`--organization-id`** validates or scopes a single command without persisting a default.
+- Reject explicit org hints with **403** when the caller is not a member of that organization (no silent fallback to another org).
+- Route **`QuickRunModal`** through the execution-request queue and immediate Desktop claim instead of calling **`launchAgent`** directly.
+
+### Security
+- Return **403** (not silent fallback) when **`x-organization-id`** or body-derived org hints name an organization the authenticated identity does not belong to.
+
+### Test
+- Extend **`protocol-auth`** and CLI credentials tests for membership-based org resolution, body hints, and cross-org search.
+
+### Documentation
+- Update MCP auth, connector surfaces, OAuth docs, and agent plugin skills for org-agnostic CLI and protocol scoping.
+
 ## [0.2606021051.0] - 2026-06-02:10:51
 
 ### Added

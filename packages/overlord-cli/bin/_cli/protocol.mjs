@@ -5,7 +5,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { buildAuthHeaders, getAuthStatus, resolveAuth } from './credentials.mjs';
+import {
+  buildAuthHeaders,
+  getAuthStatus,
+  resolveAuth,
+  searchTicketsAcrossOrganizations
+} from './credentials.mjs';
 
 /**
  * Parse simple CLI flags: --key value or --key=value
@@ -2619,9 +2624,7 @@ async function protocolAddObjectives(args) {
 
 async function protocolSearchTickets(args) {
   const flags = parseFlags(args);
-  const { platformUrl, bearerToken, localSecret, organizationId } =
-    await resolveProtocolAuthForFlags(flags);
-  const timeoutMs = resolveTimeout(flags);
+  const auth = await resolveProtocolAuthForFlags(flags);
 
   const statuses = flags.status
     ? String(flags.status)
@@ -2646,15 +2649,11 @@ async function protocolSearchTickets(args) {
     ...(flags['updated-before'] ? { updatedBefore: String(flags['updated-before']) } : {})
   };
 
-  const data = await apiPost(
-    platformUrl,
-    bearerToken,
-    localSecret,
-    organizationId,
-    '/api/protocol/search-tickets',
-    body,
-    timeoutMs
-  );
+  // Organization-agnostic: with no --organization-id this fans out across every
+  // organization you belong to and merges the results; an explicit org scopes it.
+  const data = await searchTicketsAcrossOrganizations(auth, body, {
+    organizationId: auth.organizationId ?? null
+  });
   console.log(JSON.stringify(data, null, 2));
 }
 

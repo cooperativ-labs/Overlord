@@ -4,7 +4,10 @@ import { Bot, Check, ChevronDown, Copy, Loader2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
-import { useProjectSettings } from '@/components/features/projects/ProjectSettingsContext';
+import {
+  SELECTED_DEVICE_KEY,
+  useProjectSettings
+} from '@/components/features/projects/ProjectSettingsContext';
 import { useWorkspacePreference } from '@/components/features/projects/useWorkspacePreference';
 import {
   DropdownMenu,
@@ -19,6 +22,7 @@ import {
   requestTicketObjectiveExecutionAction,
   updateTicketAssignedAgentAction
 } from '@/lib/actions/tickets';
+import { claimAndLaunchQueuedExecutions } from '@/lib/electron/queued-execution-launch';
 import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
 import type { AgentModelSelection } from '@/lib/helpers/agent-model-preference';
 import { readDefaultAgentTriggerFromStorage } from '@/lib/helpers/agent-trigger';
@@ -141,6 +145,7 @@ export function AgentSplitButton({
   selectedAgent,
   onSelectAgent,
   ticketId,
+  organizationId,
   projectId,
   agentFlags,
   agentPreCommands,
@@ -166,7 +171,9 @@ export function AgentSplitButton({
   if (!demo && !terminalContext) {
     throw new Error('useTerminal must be used within a TerminalProvider');
   }
-  const { isElectron } = demo ? DEMO_TERMINAL_CONTEXT : (terminalContext as TerminalContextValue);
+  const { isElectron, launchAgent } = demo
+    ? DEMO_TERMINAL_CONTEXT
+    : (terminalContext as TerminalContextValue);
   const workspace = useWorkspacePreference({
     projectId,
     workingDirectory,
@@ -229,6 +236,20 @@ export function AgentSplitButton({
       onSelectAgent(configuredDefault);
     }
   }, [activeAgentIdentifier, demo, onSelectAgent, selectedAgent]);
+
+  // Resolve the selected execution target. Inside a ProjectSettingsProvider the
+  // context is authoritative and reactive; but the ticket detail panel is
+  // teleported outside that provider (SidePanelSlot lifts its content into the
+  // SidePanel rendered higher in the tree), so there `useProjectSettings()` is
+  // null. Fall back to the localStorage key the workspace selector persists to,
+  // read at launch time so the latest selection is always used.
+  function resolveSelectedDeviceId(): string | undefined {
+    if (projectSettingsCtx?.selectedDeviceId) return projectSettingsCtx.selectedDeviceId;
+    if (typeof window !== 'undefined' && projectId) {
+      return window.localStorage.getItem(`${SELECTED_DEVICE_KEY}:${projectId}`) ?? undefined;
+    }
+    return undefined;
+  }
 
   async function handleLaunch(
     agentValue: AgentSelectorValue = effectiveSelection.agent,
@@ -339,10 +360,16 @@ export function AgentSplitButton({
             : null,
         flags: customAgentId ? undefined : agentFlags?.[agentValue],
         preCommand: customAgentId ? undefined : agentPreCommands?.[agentValue],
-        targetExecutionTargetId: projectSettingsCtx?.selectedDeviceId ?? undefined
+        targetExecutionTargetId: resolveSelectedDeviceId()
       });
       if ('error' in result) {
         toast.error('Failed to queue execution', { description: result.error });
+      } else if (isElectron && organizationId) {
+        await claimAndLaunchQueuedExecutions({
+          organizationId,
+          launchAgent,
+          requestId: result.requestId
+        });
       }
     } catch (error) {
       console.error('Failed to queue execution:', error);

@@ -102,7 +102,9 @@ test(`${MODULE_PATH} resolveAuth falls back to stored credentials when env OAuth
 
     assert.equal(result.platformUrl, 'https://www.ovld.ai');
     assert.equal(result.bearerToken, 'stored-access-token');
-    assert.equal(result.organizationId, 7);
+    // Org-agnostic: stored credentials never act as a default organization, so
+    // org resolves to null and the platform derives it from membership.
+    assert.equal(result.organizationId, null);
     assert.equal(result.authMode, 'oauth');
 
     const status = await getAuthStatus();
@@ -112,18 +114,20 @@ test(`${MODULE_PATH} resolveAuth falls back to stored credentials when env OAuth
   });
 });
 
-test(`${MODULE_PATH} resolveAuth rejects OVERLORD_ACCESS_TOKEN without organization scope`, async () => {
+test(`${MODULE_PATH} resolveAuth allows OVERLORD_ACCESS_TOKEN without an organization (org-agnostic)`, async () => {
   await withTempHome(async () => {
     process.env.OVERLORD_URL = 'https://www.ovld.ai';
     process.env.OVERLORD_ACCESS_TOKEN = 'env-access-token';
     delete process.env.OVERLORD_ORGANIZATION_ID;
 
     const { resolveAuth } = await importFresh(MODULE_PATH);
+    const result = await resolveAuth();
 
-    await assert.rejects(
-      resolveAuth(),
-      /OVERLORD_ACCESS_TOKEN requires OVERLORD_ORGANIZATION_ID/
-    );
+    // No OVERLORD_ORGANIZATION_ID is no longer an error: the organization is left
+    // unset so the platform resolves it from the token owner's membership.
+    assert.equal(result.bearerToken, 'env-access-token');
+    assert.equal(result.organizationId, null);
+    assert.equal(result.authMode, 'oauth_env');
   });
 });
 
@@ -142,7 +146,8 @@ test(`${MODULE_PATH} resolveAuth uses stored CLI credentials from credentials.cl
 
     assert.equal(result.platformUrl, 'https://www.ovld.ai');
     assert.equal(result.bearerToken, 'stored-access-token');
-    assert.equal(result.organizationId, 7);
+    // Org-agnostic: a stored organization_id is not used as a default org.
+    assert.equal(result.organizationId, null);
     assert.equal(result.authMode, 'oauth');
   });
 });
@@ -262,7 +267,8 @@ test(`${MODULE_PATH} getAuthStatus reports CLI credential sources`, async () => 
     assert.equal(status.platformUrl, 'https://www.ovld.ai');
     assert.equal(status.tokenSource, 'credentials.cli.json');
     assert.equal(status.tokenPresent, true);
-    assert.equal(status.organizationId, 7);
+    // Org-agnostic: no stored default organization is surfaced in status.
+    assert.equal(status.organizationId, null);
     assert.equal(status.authMode, 'oauth');
     assert.equal(status.credentialsFileExists, true);
   });

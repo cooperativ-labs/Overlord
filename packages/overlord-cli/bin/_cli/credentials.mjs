@@ -584,12 +584,12 @@ export async function resolveAuth(options = {}) {
       typeof process.env.OVERLORD_ORGANIZATION_ID === 'string'
         ? Number.parseInt(process.env.OVERLORD_ORGANIZATION_ID, 10)
         : null;
-    const resolvedOrganizationId = organizationIdHint ?? envOrganizationId;
-    if (!Number.isFinite(resolvedOrganizationId)) {
-      throw new Error(
-        'OVERLORD_ACCESS_TOKEN requires OVERLORD_ORGANIZATION_ID so protocol requests stay scoped.'
-      );
-    }
+    // Organization is no longer required up front. When neither a per-action hint
+    // nor an explicit OVERLORD_ORGANIZATION_ID override is present, the platform
+    // resolves the organization from the token owner's membership, so the CLI stays
+    // org-agnostic instead of pinning a single default.
+    const resolvedOrganizationId =
+      organizationIdHint ?? (Number.isFinite(envOrganizationId) ? envOrganizationId : null);
 
     if (isEnvAccessTokenUsable(envAccessToken)) {
       return {
@@ -603,11 +603,14 @@ export async function resolveAuth(options = {}) {
   }
 
   if (creds?.agent_token) {
+    // Stored credentials never act as a default organization. Org is taken from the
+    // per-action hint (ticket id or --organization-id) and otherwise left to the
+    // platform's membership lookup.
     return {
       platformUrl,
       bearerToken: creds.agent_token,
       localSecret,
-      organizationId: organizationIdHint ?? creds.organization_id ?? null,
+      organizationId: organizationIdHint ?? null,
       authMode: 'agent_token'
     };
   }
@@ -641,19 +644,18 @@ export async function resolveAuth(options = {}) {
       }
     }
 
-    if (!Number.isFinite(nextCredentials.organization_id)) {
-      throw new Error('Overlord login is missing an organization selection. Run `ovld auth login` again.');
-    }
-
     if (!nextCredentials.access_token) {
       throw new Error('No OAuth access token is available. Run `ovld auth login` again.');
     }
 
+    // OAuth sessions are not bound to a stored default organization. The platform
+    // derives the organization from the signed-in user's membership when no
+    // per-action hint is supplied, keeping the CLI org-agnostic.
     return {
       platformUrl,
       bearerToken: nextCredentials.access_token,
       localSecret,
-      organizationId: organizationIdHint ?? nextCredentials.organization_id,
+      organizationId: organizationIdHint ?? null,
       authMode: 'oauth'
     };
   }
@@ -665,6 +667,122 @@ export async function resolveAuth(options = {}) {
     organizationId: null,
     authMode: 'local_fallback'
   };
+}
+
+/**
+ * Lists every organization the authenticated identity belongs to.
+ *
+ * This is the org-agnostic replacement for a stored "default organization": the
+ * caller's identity (OAuth session or agent token) resolves to the full set of
+ * memberships, and commands fan out or prompt over that list instead of assuming
+ * a single org. Works for OAuth, agent tokens, and local-dev alike because
+ * `/api/protocol/organizations` resolves the caller through the standard
+ * protocol auth path.
+ *
+ * @param {{ platformUrl: string, bearerToken: string, localSecret?: string }} auth
+ * @returns {Promise<Array<{ id: number, name: string }>>}
+ */
+export async function resolveOrganizations(auth) {
+  const { platformUrl, bearerToken, localSecret } = auth;
+  let res;
+  try {
+    res = await fetch(`${platformUrl}/api/protocol/organizations`, {
+      method: 'POST',
+      headers: {
+        ...buildAuthHeaders(bearerToken, localSecret),
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({})
+    });
+  } catch (error) {
+    throw describeNetworkError(error, `Failed to list organizations from ${platformUrl}`);
+  }
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(
+      `Failed to list organizations (${res.status}): ${data.error ?? JSON.stringify(data)}`
+    );
+  }
+
+  return Array.isArray(data.organizations)
+    ? data.organizations
+        .map(org => ({ id: org.id, name: typeof org.name === 'string' ? org.name : '' }))
+        .filter(org => Number.isFinite(org.id))
+    : [];
+}
+
+/**
+ * Searches tickets across every organization the identity belongs to.
+ *
+ * Organization-agnostic by default: with no explicit organization it resolves the
+ * membership list and fans out the per-org search, merging and de-duplicating by
+ * ticket id. An explicit `organizationId` (from --organization-id) scopes the
+ * search to that single org instead. There is no default-org fallback.
+ *
+ * @param {{ platformUrl: string, bearerToken: string, localSecret?: string }} auth
+ * @param {Record<string, unknown>} body search-tickets request body
+ * @param {{ organizationId?: number | null }} [options]
+ * @returns {Promise<{ tickets: unknown[], count: number }>}
+ */
+export async function searchTicketsAcrossOrganizations(auth, body, options = {}) {
+  const { platformUrl, bearerToken, localSecret } = auth;
+  const explicitOrganizationId =
+    Number.isFinite(options.organizationId) ? options.organizationId : null;
+
+  const post = async organizationId => {
+    const res = await fetch(`${platformUrl}/api/protocol/search-tickets`, {
+      method: 'POST',
+      headers: {
+        ...buildAuthHeaders(bearerToken, localSecret, organizationId),
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(
+        `Failed to search tickets (${res.status}): ${data.error ?? JSON.stringify(data)}`
+      );
+    }
+    return Array.isArray(data.tickets) ? data.tickets : [];
+  };
+
+  if (explicitOrganizationId !== null) {
+    const tickets = await post(explicitOrganizationId);
+    return { tickets, count: tickets.length };
+  }
+
+  const organizations = await resolveOrganizations(auth);
+  if (!organizations.length) {
+    const tickets = await post(null);
+    return { tickets, count: tickets.length };
+  }
+
+  const results = await Promise.allSettled(organizations.map(org => post(org.id)));
+  const failures = results
+    .map((result, index) => ({ result, organization: organizations[index] }))
+    .filter(({ result }) => result.status === 'rejected');
+  if (failures.length > 0) {
+    const detail = failures
+      .map(({ result, organization }) => {
+        const reason = result.status === 'rejected' ? result.reason : null;
+        const message = reason instanceof Error ? reason.message : String(reason);
+        return `${organization.name || `organization ${organization.id}`} (${organization.id}): ${message}`;
+      })
+      .join('; ');
+    throw new Error(`Ticket search returned partial failures: ${detail}`);
+  }
+
+  const perOrg = results.map(result => (result.status === 'fulfilled' ? result.value : []));
+  const byId = new Map();
+  for (const ticket of perOrg.flat()) {
+    if (ticket && ticket.id && !byId.has(ticket.id)) {
+      byId.set(ticket.id, ticket);
+    }
+  }
+  const tickets = [...byId.values()];
+  return { tickets, count: tickets.length };
 }
 
 export async function getAuthStatus() {

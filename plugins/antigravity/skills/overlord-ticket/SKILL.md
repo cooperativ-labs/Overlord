@@ -284,8 +284,8 @@ This keeps the ticket feed readable while preserving the full document in versio
 - When a summary or question contains backticks, `$vars`, or other shell-special characters, always use `--summary-file -` (or `--question-file -`) with a single-quoted heredoc (`<<'EOF'`). Never retry by stripping or escaping content — pipe stdin instead.
 - Use `write-context` for facts a future agent session should know.
 - If a protocol or MCP call fails with auth/session errors, run `ovld auth repair` yourself before asking the user to log in again or proceed without Overlord updates.
-- If you must run `ovld auth login`, `--organization-id <id>` is optional — use it only when you want to set a different default organization than the CLI would choose automatically.
+- If you must run `ovld auth login`, `--organization-id <id>` is optional — it validates/scopes that login or command but does not create a stored default organization.
 - Do not add or commit changes unless the user explicitly asks you to commit.
 - Delivery is the concluding step. After delivering, stop implementation work unless the user explicitly asks for follow-up execution; once follow-up execution is complete, deliver again.
 
-<!-- version: 0.1.7 -->
+<!-- version: 0.1.8 -->

@@ -178,8 +178,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Authentication required.' }, { status: 401 });
     }
 
-    const { deviceFingerprint, deviceHostname, devicePlatform, leaseSeconds, projectId } =
-      parsed.data;
+    const {
+      deviceFingerprint,
+      deviceHostname,
+      devicePlatform,
+      leaseSeconds,
+      projectId,
+      requestId
+    } = parsed.data;
     const executionTargetId = await upsertDeviceFromProtocol(supabase, {
       organizationId,
       userId,
@@ -222,6 +228,7 @@ export async function POST(request: Request) {
       .in('status', ['queued', 'claimed', 'launching'])
       .order('created_at', { ascending: true })
       .limit(25);
+    if (requestId) query = query.eq('id', requestId).limit(1);
     if (projectId) query = query.eq('project_id', projectId);
 
     const { data: candidates, error } = await query;

@@ -48,9 +48,11 @@ ovld auth login
 ovld auth status
 \`\`\`
 
+Login stores your identity only — the CLI is organization-agnostic and keeps no default organization. \`ovld auth status --verbose\` lists every organization you belong to. Each command resolves its organization from the ticket id (e.g. \`1:1263\`), an explicit \`--organization-id\`, or your membership, and commands such as \`ovld add-cwd\`, \`ovld create\`, and \`ovld tickets list\` span all of your organizations.
+
 Optional flags:
 
-- \`--organization-id <id>\` — set a non-default organization. Ticket-scoped commands still infer the organization from ticket ids such as \`1:1263\`, so you only need this to change the default for non-ticket commands.
+- \`--organization-id <id>\` — scope a non-ticket command to a single organization. It is validated against your membership but no longer stored as a default.
 
 If a call later returns \`401\`, repair the shared credentials before logging in again:
 

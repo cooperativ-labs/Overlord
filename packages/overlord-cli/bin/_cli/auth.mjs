@@ -13,6 +13,8 @@ import {
   loadCredentials,
   loadRuntime,
   repairCredentials,
+  resolveAuth,
+  resolveOrganizations,
   saveCredentials
 } from './credentials.mjs';
 
@@ -558,24 +560,48 @@ export async function authLogin(args = []) {
     credentials.access_token,
     localSecret
   );
-  const selectedOrganization = selectLoginOrganization(organizations, preselectedOrganizationId);
+
+  // The CLI is organization-agnostic: login stores the identity only, never a
+  // default organization. `--organization-id` is still validated so a typo is
+  // caught early, but it is no longer persisted — every command resolves its org
+  // from the ticket id, an explicit --organization-id, or your membership.
+  if (preselectedOrganizationId !== null) {
+    selectLoginOrganization(organizations, preselectedOrganizationId);
+  }
 
   saveCredentials({
     access_token: credentials.access_token,
     access_token_expires_at: credentials.access_token_expires_at ?? undefined,
     refresh_token: credentials.refresh_token,
-    organization_id: selectedOrganization.id,
     platform_url: resolvedPlatformUrl
   });
 
-  if (organizations.length > 1 && preselectedOrganizationId === null) {
+  console.log('Logged in successfully.');
+  printOrganizationMemberships(organizations);
+  if (preselectedOrganizationId !== null) {
     console.log(
-      `Logged in successfully. Default organization: ${describeOrganization(selectedOrganization)}. ` +
-        'Ticket-scoped commands override this from the ticket id; use --organization-id to set a different default.'
+      `\nNote: --organization-id is no longer stored as a default. ` +
+        'Commands resolve their organization from the ticket id, an explicit --organization-id, or your membership.'
     );
-  } else {
-    console.log(`Logged in successfully. Default organization: ${describeOrganization(selectedOrganization)}.`);
   }
+}
+
+function printOrganizationMemberships(organizations) {
+  if (!organizations.length) {
+    console.log('  You are not yet a member of any organization. Complete onboarding in Overlord first.');
+    return;
+  }
+
+  if (organizations.length === 1) {
+    console.log(`  Organization: ${describeOrganization(organizations[0])}`);
+    return;
+  }
+
+  console.log(`  Member of ${organizations.length} organizations:`);
+  for (const organization of organizations) {
+    console.log(`    - ${describeOrganization(organization)}`);
+  }
+  console.log('  Commands resolve their organization from the ticket id or --organization-id.');
 }
 
 async function authLoginWithAgentToken(agentToken, args) {
@@ -583,20 +609,40 @@ async function authLoginWithAgentToken(agentToken, args) {
   const storedCredentials = loadCredentials();
   const platformUrl = resolveLoginPlatformUrl(null, storedCredentials?.platform_url ?? null);
 
+  // Agent-token login stores the identity only — never a default organization.
   saveCredentials({
     agent_token: agentToken,
-    platform_url: platformUrl,
-    ...(preselectedOrganizationId !== null ? { organization_id: preselectedOrganizationId } : {})
+    platform_url: platformUrl
   });
 
   console.log(`Agent token saved. The CLI will use this token for all protocol commands.`);
+  console.log(`  Organizations are resolved from your token's membership per command.`);
   if (preselectedOrganizationId !== null) {
-    console.log(`  Default organization: ${preselectedOrganizationId}`);
-  } else {
-    console.log(`  Organization will be derived from your token's membership.`);
+    console.log(
+      `  Note: --organization-id is no longer stored as a default; pass it per command (or use a ticket id) to scope an action.`
+    );
   }
   console.log(`  Platform URL: ${platformUrl}`);
   console.log(`\nTo remove: ovld auth logout`);
+}
+
+async function printOrganizationMembershipStatus() {
+  try {
+    const auth = await resolveAuth();
+    const organizations = await resolveOrganizations(auth);
+    if (!organizations.length) {
+      console.log('  Organizations: none (not a member of any organization)');
+      return;
+    }
+    console.log(`  Organizations (${organizations.length}):`);
+    for (const organization of organizations) {
+      console.log(`    - ${describeOrganization(organization)}`);
+    }
+  } catch (error) {
+    console.log(
+      `  Organizations: unavailable (${error instanceof Error ? error.message : String(error)})`
+    );
+  }
 }
 
 async function printVerboseAuthStatus() {
@@ -617,7 +663,9 @@ async function printVerboseAuthStatus() {
   console.log(`  Token source: ${status.tokenSource}`);
   console.log(`  Token present: ${status.tokenPresent ? 'yes' : 'no'}`);
   console.log(`  Auth mode: ${status.authMode}`);
-  console.log(`  Organization ID: ${status.organizationId ?? 'none'}`);
+  if (status.isLoggedIn) {
+    await printOrganizationMembershipStatus();
+  }
   if (status.error) {
     console.log(`  Error: ${status.error}`);
   }
@@ -681,10 +729,11 @@ Subcommands:
   login    Authorize the CLI via browser (works locally or over SSH)
              --token <oat_…>          Persist an agent token from Settings → Agents & MCP.
                                       Skips the browser flow; token never expires.
-             --organization-id <id>   Optional default organization override
-                                      (ticket-scoped commands infer organization
-                                      from ticket ids such as 1:899)
-  status   Show current login status (use --verbose for redacted diagnostics)
+             --organization-id <id>   Optional. Validated against your membership but
+                                      no longer stored as a default — the CLI is
+                                      organization-agnostic. Scope a command with a
+                                      ticket id (e.g. 1:899) or --organization-id.
+  status   Show current login status (use --verbose to list your organizations)
   repair   Mirror and chmod shared Desktop/CLI credentials when possible
   logout   Remove stored credentials
 `);

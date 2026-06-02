@@ -89,7 +89,7 @@ ovld doctor
 
 **Antigravity:** Gemini CLI is deprecated. Use `ovld setup antigravity` and `ovld launch antigravity --ticket-id <ticket_id>`. Antigravity manages model selection internally.
 
-For ticket-scoped protocol and launch commands, `ticket_id` values such as `1:899` carry the organization id. The CLI uses that first, then `--organization-id` for UUID compatibility, then stored auth. `ovld auth login` stores the first available organization as a default when an account belongs to multiple organizations; pass `--organization-id <id>` only when you want a different default.
+The CLI is organization-agnostic: `ovld auth login` stores your identity only and never a default organization. Your identity (OAuth session or agent token) resolves to the list of organizations you belong to — see `ovld auth status --verbose`. Each command resolves its organization from the `ticket_id` (values such as `1:899` carry the organization id), then an explicit `--organization-id`, otherwise from your membership. Commands that browse or search — `ovld add-cwd`, `ovld create`/`ovld prompt`, `ovld tickets list`, and `ovld protocol search-tickets` — span every organization you belong to. Actions against an organization you are not a member of return a clear permission error rather than silently falling back to another org.
 
 When `ovld launch` has an explicit `--working-directory`, or when you run it from a registered project directory containing `.overlord/project.json`, it exports `TMPDIR`, `TMP`, `TEMP`, and `OVERLORD_TMPDIR` to that project's `.overlord/tmp/` directory before spawning the agent. Otherwise it falls back to the system temp directory.
 

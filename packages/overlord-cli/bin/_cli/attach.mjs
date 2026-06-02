@@ -9,7 +9,7 @@
  *   ovld attach <ticketId> <agent>      # non-interactive: launch immediately
  */
 
-import { buildAuthHeaders, resolveAuth } from './credentials.mjs';
+import { resolveAuth, searchTicketsAcrossOrganizations } from './credentials.mjs';
 import { runLauncherCommand } from './launcher.mjs';
 
 const AGENTS = ['claude', 'cursor', 'codex', 'antigravity', 'opencode'];
@@ -58,26 +58,15 @@ function statusColor(status) {
 
 // ─── API ──────────────────────────────────────────────────────────────────────
 
-async function searchTickets(platformUrl, bearerToken, localSecret, organizationId, query) {
-  const res = await fetch(`${platformUrl}/api/protocol/search-tickets`, {
-    method: 'POST',
-    headers: {
-      ...buildAuthHeaders(bearerToken, localSecret, organizationId),
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      includeCompleted: false,
-      query,
-      limit: MAX_VISIBLE
-    })
+// Organization-agnostic ticket search: spans every organization the identity
+// belongs to (no default org) by delegating to the shared fan-out helper.
+async function searchTickets(auth, query) {
+  const { tickets } = await searchTicketsAcrossOrganizations(auth, {
+    includeCompleted: false,
+    query,
+    limit: MAX_VISIBLE
   });
-
-  if (!res.ok) {
-    throw new Error(`Failed to search tickets (${res.status}): ${await res.text()}`);
-  }
-
-  const data = await res.json();
-  return data.tickets ?? [];
+  return tickets ?? [];
 }
 
 // ─── Interactive prompt ───────────────────────────────────────────────────────
@@ -287,7 +276,7 @@ function runInteractivePrompt({ label, items = [], search, prefix = '' }) {
 export async function runAttachCommand(args) {
   const [ticketIdArg, agentArg] = args;
 
-  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveAuth();
+  const auth = await resolveAuth();
 
   // ── Phase 1: Ticket selection ──────────────────────────────────────────────
 
@@ -301,8 +290,7 @@ export async function runAttachCommand(args) {
 
     const selectedTicket = await runInteractivePrompt({
       label: 'Search tickets',
-      search: nextQuery =>
-        searchTickets(platformUrl, bearerToken, localSecret, organizationId, nextQuery)
+      search: nextQuery => searchTickets(auth, nextQuery)
     });
 
     if (!selectedTicket) {

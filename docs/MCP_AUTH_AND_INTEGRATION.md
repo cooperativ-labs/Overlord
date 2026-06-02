@@ -5,13 +5,13 @@ Overlord uses Supabase OAuth access tokens for protocol and MCP authentication.
 ## Current auth model
 
 - MCP and protocol routes authenticate with `Authorization: Bearer <OAuth access token>`.
-- Ticket-scoped protocol and MCP calls infer organization scope from a human-readable `ticket_id` first (for example `1:899`), then `x-organization-id`, then the stored/default organization.
-- The bearer token is verified as a Supabase JWT via the Supabase JWKS endpoint. The resolved `sub` claim is cross-checked against the `members` table to confirm the user belongs to the given organization.
+- Ticket-scoped protocol and MCP calls infer organization scope from a human-readable `ticket_id` first (for example `1:899`). Sessionless object-scoped calls infer scope from stable ids such as `projectId`, `resourceId`, `objectiveId`, or `requestId`; browse/search flows resolve the caller's full membership list and fan out. `x-organization-id` remains an explicit single-org override.
+- The bearer token is verified as a Supabase JWT via the Supabase JWKS endpoint. The resolved `sub` claim is cross-checked against the `members` table to confirm the user belongs to the inferred or explicit organization.
 - Desktop and CLI read shared OAuth credentials from `~/.ovld`.
 - Headless or remote shells can inject:
   - `OVERLORD_URL`
   - `OVERLORD_ACCESS_TOKEN`
-  - `OVERLORD_ORGANIZATION_ID`
+  - `OVERLORD_ORGANIZATION_ID` when an explicit single-org override is needed
 - Local development may additionally protect routes with `OVERLORD_LOCAL_SECRET` (checked via `x-overlord-local-secret`), but bearer auth is still OAuth.
 
 `agent_tokens`, `AGENT_TOKEN`, `/api/auth/token`, and `/api/auth/check-token` are removed.
@@ -22,20 +22,19 @@ Overlord uses Supabase OAuth access tokens for protocol and MCP authentication.
 
 - Sign in through Overlord Desktop.
 - Desktop stores the shared OAuth session and refreshes it as needed.
-- Launched agents receive `OVERLORD_ACCESS_TOKEN` and `OVERLORD_ORGANIZATION_ID` in their env.
+- Launched agents receive `OVERLORD_ACCESS_TOKEN`; `OVERLORD_ORGANIZATION_ID` is only needed for explicit single-org overrides.
 
 ### CLI
 
 - If a shared session already exists but looks stale, run `ovld auth repair` first.
 - If repair does not restore access, run `ovld auth login`.
 - The CLI fetches OAuth config from `GET /api/auth/config` (returns `supabase_url`, `cli_client_id`, `cli_redirect_uri`).
-- The CLI stores:
+- The CLI stores identity only:
   - `access_token`
   - `access_token_expires_at`
   - `refresh_token`
-  - `organization_id`
   - `platform_url`
-- When an account belongs to multiple organizations, `ovld auth login` stores the first available organization as the default instead of prompting. Ticket-scoped protocol commands override that default from human-readable ticket ids such as `1:899`; pass `--organization-id <id>` to set a different login default.
+- The CLI does not store a default organization. `ovld auth status --verbose` lists every organization the identity belongs to; pass `--organization-id <id>` only to validate/scope a specific command to one organization.
 - The CLI refreshes access tokens automatically with the OAuth refresh token flow.
 - Desktop-installed CLI wrappers default `OVERLORD_URL` to `https://www.ovld.ai`.
 - For local dev against the web app on `http://localhost:3000`, explicitly override it before login or protocol commands:

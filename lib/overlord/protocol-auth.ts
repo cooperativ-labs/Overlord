@@ -53,6 +53,106 @@ export async function resolveProtocolOrganizationHintForTicketId({
   return data.organization_id;
 }
 
+async function resolveProtocolOrganizationHintForProjectId(
+  projectId: string
+): Promise<number | null> {
+  const supabase = createServiceRoleClient();
+  const { data, error } = await supabase
+    .from('projects')
+    .select('organization_id')
+    .eq('id', projectId.trim())
+    .maybeSingle();
+
+  if (error || !data || typeof data.organization_id !== 'number') return null;
+  return data.organization_id;
+}
+
+async function resolveProtocolOrganizationHintForResourceId(
+  resourceId: string
+): Promise<number | null> {
+  const supabase = createServiceRoleClient();
+  const { data, error } = await supabase
+    .from('project_resource_directories')
+    .select('projects!inner(organization_id)')
+    .eq('id', resourceId.trim())
+    .maybeSingle();
+
+  if (error || !data) return null;
+  const project = Array.isArray(data.projects) ? data.projects[0] : data.projects;
+  return typeof project?.organization_id === 'number' ? project.organization_id : null;
+}
+
+async function resolveProtocolOrganizationHintForObjectiveId(
+  objectiveId: string
+): Promise<number | null> {
+  const supabase = createServiceRoleClient();
+  const { data, error } = await supabase
+    .from('objectives')
+    .select('tickets!inner(organization_id)')
+    .eq('id', objectiveId.trim())
+    .maybeSingle();
+
+  if (error || !data) return null;
+  const ticket = Array.isArray(data.tickets) ? data.tickets[0] : data.tickets;
+  return typeof ticket?.organization_id === 'number' ? ticket.organization_id : null;
+}
+
+async function resolveProtocolOrganizationHintForRequestId(
+  requestId: string
+): Promise<number | null> {
+  const supabase = createServiceRoleClient();
+  const { data, error } = await supabase
+    .from('execution_requests')
+    .select('organization_id')
+    .eq('id', requestId.trim())
+    .maybeSingle();
+
+  if (error || !data || typeof data.organization_id !== 'number') return null;
+  return data.organization_id;
+}
+
+/**
+ * Resolves a single-organization protocol hint from stable object identifiers in
+ * a request body before auth membership checks. This prevents sessionless
+ * commands from falling back to the caller's first membership when the payload
+ * already names an object that belongs to a different organization.
+ */
+export async function resolveProtocolOrganizationHintForBody(
+  body: unknown
+): Promise<number | null> {
+  if (!body || typeof body !== 'object') return null;
+  const record = body as Record<string, unknown>;
+
+  if (typeof record.ticketId === 'string' && record.ticketId.trim()) {
+    const fromTicket = await resolveProtocolOrganizationHintForTicketId({
+      ticketId: record.ticketId.trim()
+    });
+    if (fromTicket !== null) return fromTicket;
+  }
+
+  if (typeof record.projectId === 'string' && record.projectId.trim()) {
+    const fromProject = await resolveProtocolOrganizationHintForProjectId(record.projectId);
+    if (fromProject !== null) return fromProject;
+  }
+
+  if (typeof record.resourceId === 'string' && record.resourceId.trim()) {
+    const fromResource = await resolveProtocolOrganizationHintForResourceId(record.resourceId);
+    if (fromResource !== null) return fromResource;
+  }
+
+  if (typeof record.objectiveId === 'string' && record.objectiveId.trim()) {
+    const fromObjective = await resolveProtocolOrganizationHintForObjectiveId(record.objectiveId);
+    if (fromObjective !== null) return fromObjective;
+  }
+
+  if (typeof record.requestId === 'string' && record.requestId.trim()) {
+    const fromRequest = await resolveProtocolOrganizationHintForRequestId(record.requestId);
+    if (fromRequest !== null) return fromRequest;
+  }
+
+  return null;
+}
+
 let cachedJwks: ReturnType<typeof createRemoteJWKSet> | null = null;
 let cachedIssuer: string | null = null;
 
@@ -136,14 +236,83 @@ function hashAgentToken(token: string): string {
 }
 
 /**
+ * Resolves the organization a protocol request runs in from the caller's
+ * membership. There is no stored "default organization": the identity (OAuth
+ * session, agent token, or local dev) resolves to the set of organizations it
+ * belongs to, and the request is scoped within that set.
+ *
+ * - An explicit hint (ticket id, `x-organization-id`, or `--organization-id`)
+ *   must name an organization the caller belongs to. If it does not, that is a
+ *   permission error (403) — never a silent fall-back to another org.
+ * - With no hint, the request is scoped to the caller's organization membership.
+ *   A caller with no memberships gets a clear 403.
+ *
+ * Shared by the OAuth and agent-token paths so both behave identically.
+ */
+async function resolveOrganizationMembership(
+  supabase: ReturnType<typeof createServiceRoleClient>,
+  userId: string,
+  organizationIdHint: number | null
+): Promise<{ organizationId: number | null; error: NextResponse | null }> {
+  if (organizationIdHint !== null && Number.isFinite(organizationIdHint)) {
+    const { data: targetMember, error } = await supabase
+      .from('members')
+      .select('organization_id')
+      .eq('user_id', userId)
+      .eq('organization_id', organizationIdHint)
+      .maybeSingle();
+
+    if (error) {
+      return {
+        organizationId: null,
+        error: NextResponse.json({ error: error.message }, { status: 500 })
+      };
+    }
+
+    if (!targetMember) {
+      return {
+        organizationId: null,
+        error: NextResponse.json(
+          {
+            error:
+              `You are not a member of organization ${organizationIdHint}, or it does not exist. ` +
+              'Choose an organization you belong to (run `ovld protocol list-organizations`).'
+          },
+          { status: 403 }
+        )
+      };
+    }
+
+    return { organizationId: targetMember.organization_id, error: null };
+  }
+
+  const { data: member, error } = await supabase
+    .from('members')
+    .select('organization_id')
+    .eq('user_id', userId)
+    .order('organization_id', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    return {
+      organizationId: null,
+      error: NextResponse.json({ error: error.message }, { status: 500 })
+    };
+  }
+
+  return { organizationId: member?.organization_id ?? null, error: null };
+}
+
+/**
  * Resolves a per-user agent token (`oat_` prefix). These are long-lived, hashed
  * tokens stored in `user_agent_tokens`, identical to the MCP agent-token path
  * (supabase/functions/mcp/auth.ts). They carry no expiry, so a CLI running apart
  * from Desktop can stay authenticated without an OAuth refresh loop.
  *
- * The organization is derived from the user's membership: the ticket/header hint
- * is honored when the user belongs to that org, otherwise their lowest org id is
- * used. Unlike OAuth, a missing hint is not an error.
+ * The organization is resolved from the user's membership via
+ * resolveOrganizationMembership: a ticket/header hint is honored when the user
+ * belongs to that org (403 otherwise), and a missing hint scopes to membership.
  */
 async function resolveAgentTokenContext(
   providedToken: string,
@@ -170,27 +339,13 @@ async function resolveAgentTokenContext(
     return { context: null, error: null };
   }
 
-  let organizationId: number | null = null;
-
-  if (organizationIdHint !== null && Number.isFinite(organizationIdHint)) {
-    const { data: targetMember } = await supabase
-      .from('members')
-      .select('organization_id')
-      .eq('user_id', tokenRow.user_id)
-      .eq('organization_id', organizationIdHint)
-      .maybeSingle();
-    organizationId = targetMember?.organization_id ?? null;
-  }
-
-  if (organizationId === null) {
-    const { data: member } = await supabase
-      .from('members')
-      .select('organization_id')
-      .eq('user_id', tokenRow.user_id)
-      .order('organization_id', { ascending: true })
-      .limit(1)
-      .maybeSingle();
-    organizationId = member?.organization_id ?? null;
+  const { organizationId, error: orgError } = await resolveOrganizationMembership(
+    supabase,
+    tokenRow.user_id,
+    organizationIdHint
+  );
+  if (orgError) {
+    return { context: null, error: orgError };
   }
 
   if (organizationId === null) {
@@ -239,36 +394,24 @@ async function resolveOAuthJwtContext(
     return { context: null, error: null };
   }
 
-  if (organizationIdHint === null) {
-    return {
-      context: null,
-      error: NextResponse.json(
-        { error: 'OAuth-authenticated protocol requests must include x-organization-id.' },
-        { status: 400 }
-      )
-    };
-  }
-
+  // OAuth sessions are org-agnostic, matching the agent-token path: an explicit
+  // hint must name an org the user belongs to (403 otherwise), and a missing hint
+  // is resolved from membership rather than rejected with a required header.
   const supabase = createServiceRoleClient();
-  const { data: member, error: memberError } = await supabase
-    .from('members')
-    .select('organization_id')
-    .eq('user_id', userId)
-    .eq('organization_id', organizationIdHint)
-    .maybeSingle();
-
-  if (memberError) {
-    return {
-      context: null,
-      error: NextResponse.json({ error: memberError.message }, { status: 500 })
-    };
+  const { organizationId, error: orgError } = await resolveOrganizationMembership(
+    supabase,
+    userId,
+    organizationIdHint
+  );
+  if (orgError) {
+    return { context: null, error: orgError };
   }
 
-  if (!member) {
+  if (organizationId === null) {
     return {
       context: null,
       error: NextResponse.json(
-        { error: 'Selected organization is not available to this OAuth session.' },
+        { error: 'This account is not a member of any organization.' },
         { status: 403 }
       )
     };
@@ -277,7 +420,7 @@ async function resolveOAuthJwtContext(
   return {
     context: {
       userId,
-      organizationId: member.organization_id,
+      organizationId,
       tokenValue: providedToken,
       authMethod: 'oauth_jwt'
     },

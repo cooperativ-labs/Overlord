@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 
 import { internalErrorResponse, parseProtocolBody } from '@/app/api/protocol/_lib';
 import { runRecordWorkProtocol } from '@/lib/overlord/protocol-record-work';
+import { resolveProjectByWorkingDirectory } from '@/lib/overlord/resolve-project';
 import { upsertDeviceFromProtocol } from '@/lib/overlord/upsert-device';
 import { recordWorkSchema } from '@/lib/overlord/validation';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
@@ -36,10 +37,44 @@ export async function POST(request: Request) {
     } = parsed.data;
     const { organizationId, userId } = parsed.tokenContext;
 
+    let effectiveOrganizationId = organizationId;
+    let effectiveProjectId = projectId;
+
+    if (
+      !personal &&
+      !effectiveProjectId &&
+      workingDirectory &&
+      userId &&
+      !request.headers.get('x-organization-id')
+    ) {
+      const { data: memberships, error: membershipError } = await supabase
+        .from('members')
+        .select('organization_id')
+        .eq('user_id', userId)
+        .order('organization_id', { ascending: true });
+
+      if (membershipError) return internalErrorResponse(membershipError);
+
+      for (const membership of memberships ?? []) {
+        const matched = await resolveProjectByWorkingDirectory(
+          supabase,
+          membership.organization_id,
+          workingDirectory,
+          userId,
+          null
+        );
+        if (matched) {
+          effectiveOrganizationId = matched.organization_id;
+          effectiveProjectId = matched.id;
+          break;
+        }
+      }
+    }
+
     let deviceId: string | null = null;
     if (userId && deviceFingerprint) {
       deviceId = await upsertDeviceFromProtocol(supabase, {
-        organizationId,
+        organizationId: effectiveOrganizationId,
         userId,
         deviceFingerprint,
         hostname: deviceHostname ?? null,
@@ -54,7 +89,7 @@ export async function POST(request: Request) {
       acceptanceCriteria,
       availableTools,
       priority,
-      projectId,
+      projectId: effectiveProjectId,
       personal,
       workingDirectory,
       artifacts,
@@ -64,7 +99,7 @@ export async function POST(request: Request) {
       modelIdentifier: typeof metadata?.model === 'string' ? metadata.model : null,
       connectionMethod,
       metadata: metadata as Record<string, never>,
-      organizationId,
+      organizationId: effectiveOrganizationId,
       userId,
       deviceId
     });

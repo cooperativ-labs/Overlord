@@ -24,11 +24,13 @@ import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import { LoadingButton } from '@/components/ui/loading-button';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { generateTicketTitleAction } from '@/lib/actions/generate-title';
+import { requestTicketObjectiveExecutionAction } from '@/lib/actions/tickets';
 import {
   useCreateTicketMutation,
   useUpdateTicketAssignmentMutation,
   useUpdateTicketFieldsMutation
 } from '@/lib/client-data/tickets/mutations';
+import { claimAndLaunchQueuedExecutions } from '@/lib/electron/queued-execution-launch';
 import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
 import { buildTicketPath } from '@/lib/helpers/ticket-path';
 import { deriveTitleFromObjective } from '@/lib/helpers/tickets';
@@ -210,26 +212,30 @@ export function QuickRunModal({
             });
           }
 
-          await launchAgent({
+          const result = await requestTicketObjectiveExecutionAction({
             ticketId: createdTicket.id,
-            agent: objectiveSelection.agent,
-            organizationId: createdTicket.organizationId,
-            cwd:
+            objectiveId: createdTicket.objectiveId,
+            workingDirectory:
               workspace.executionWorkspace === 'local'
-                ? (workspace.effectiveWorkingDirectory ?? undefined)
-                : undefined,
+                ? (workspace.effectiveWorkingDirectory ?? null)
+                : null,
             sshCommand:
               workspace.executionWorkspace === 'ssh'
-                ? (workspace.effectiveSshCommand ?? undefined)
-                : undefined,
+                ? (workspace.effectiveSshCommand ?? null)
+                : null,
             remoteWorkingDirectory:
               workspace.executionWorkspace === 'ssh'
-                ? (workspace.effectiveRemoteWorkingDirectory ?? undefined)
-                : undefined,
-            launchMode: 'run',
-            model: objectiveSelection.model ?? undefined,
-            thinking: objectiveSelection.thinking ?? undefined,
-            projectId: isPersonalTicket ? undefined : selectedProjectId
+                ? (workspace.effectiveRemoteWorkingDirectory ?? null)
+                : null
+          });
+          if ('error' in result) {
+            throw new Error(result.error);
+          }
+
+          await claimAndLaunchQueuedExecutions({
+            organizationId: createdTicket.organizationId,
+            launchAgent,
+            requestId: result.requestId
           });
           router.push(
             buildTicketPath({

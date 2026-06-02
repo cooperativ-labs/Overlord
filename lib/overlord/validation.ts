@@ -503,7 +503,8 @@ export const claimExecutionSchema = z.object({
   deviceHostname: z.string().trim().max(256).optional(),
   devicePlatform: z.string().trim().max(64).optional(),
   leaseSeconds: z.number().int().min(30).max(3600).optional().default(300),
-  projectId: z.string().uuid().optional()
+  projectId: z.string().uuid().optional(),
+  requestId: z.string().uuid().optional()
 });
 
 // Listing the caller's organizations carries no payload; org/user scope comes

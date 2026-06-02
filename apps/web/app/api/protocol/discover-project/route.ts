@@ -51,13 +51,38 @@ export async function POST(request: Request) {
       });
     }
 
-    const project = await resolveProjectByWorkingDirectory(
+    let project = await resolveProjectByWorkingDirectory(
       supabase,
       organizationId,
       workingDirectory!,
       userId,
       deviceId
     );
+
+    if (!project && !request.headers.get('x-organization-id') && userId) {
+      const { data: memberships, error: membershipError } = await supabase
+        .from('members')
+        .select('organization_id')
+        .eq('user_id', userId)
+        .order('organization_id', { ascending: true });
+
+      if (membershipError) return internalErrorResponse(membershipError);
+
+      for (const membership of memberships ?? []) {
+        if (membership.organization_id === organizationId) continue;
+        const matched = await resolveProjectByWorkingDirectory(
+          supabase,
+          membership.organization_id,
+          workingDirectory!,
+          userId,
+          null
+        );
+        if (matched) {
+          project = matched;
+          break;
+        }
+      }
+    }
 
     if (!project) {
       return NextResponse.json(

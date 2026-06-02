@@ -4,7 +4,7 @@ import readline from 'node:readline';
 import { stdin as input, stdout as output } from 'node:process';
 import fs from 'node:fs';
 
-import { buildAuthHeaders, resolveAuth } from './credentials.mjs';
+import { buildAuthHeaders, resolveAuth, resolveOrganizations } from './credentials.mjs';
 import { runLauncherCommand } from './launcher.mjs';
 
 const PROMPT_AGENT_IDENTIFIERS = {
@@ -232,7 +232,57 @@ async function fetchProjects(platformUrl, bearerToken, localSecret, organization
     );
   }
 
-  return Array.isArray(data.projects) ? sortProjects(data.projects) : [];
+  return Array.isArray(data.projects) ? data.projects : [];
+}
+
+/**
+ * Lists projects across every organization the identity belongs to.
+ *
+ * The CLI is organization-agnostic: instead of listing only a single default
+ * org's projects, it resolves the membership list and fans out the per-org
+ * projects query, then merges and de-duplicates by project id. Each project
+ * carries its own `organizationId`, so the caller scopes follow-up writes (ticket
+ * creation, resource registration) to the chosen project's org — no default org.
+ *
+ * @param {{ platformUrl: string, bearerToken: string, localSecret?: string }} auth
+ */
+export async function fetchProjectsAcrossOrganizations(auth) {
+  const { platformUrl, bearerToken, localSecret } = auth;
+  const organizations = await resolveOrganizations(auth);
+
+  // No memberships resolved (or a backend that scopes by membership anyway): fall
+  // back to a single unscoped query so the command still works.
+  if (!organizations.length) {
+    return sortProjects(await fetchProjects(platformUrl, bearerToken, localSecret, null));
+  }
+
+  const results = await Promise.allSettled(
+    organizations.map(org => fetchProjects(platformUrl, bearerToken, localSecret, org.id))
+  );
+  const failures = results
+    .map((result, index) => ({ result, organization: organizations[index] }))
+    .filter(({ result }) => result.status === 'rejected');
+  if (failures.length > 0) {
+    const detail = failures
+      .map(({ result, organization }) => {
+        const reason = result.status === 'rejected' ? result.reason : null;
+        const message = reason instanceof Error ? reason.message : String(reason);
+        return `${organization.name || `organization ${organization.id}`} (${organization.id}): ${message}`;
+      })
+      .join('; ');
+    throw new Error(`Project listing returned partial failures: ${detail}`);
+  }
+
+  const perOrg = results.map(result => (result.status === 'fulfilled' ? result.value : []));
+
+  const byId = new Map();
+  for (const project of perOrg.flat()) {
+    if (project && project.id && !byId.has(project.id)) {
+      byId.set(project.id, project);
+    }
+  }
+
+  return sortProjects([...byId.values()]);
 }
 
 async function createTicket(platformUrl, bearerToken, localSecret, organizationId, body) {
@@ -312,8 +362,9 @@ async function runTicketCreationFlow(args, { commandName, launchAgent }) {
   const { flags } = parseFlags(args);
   const objectiveInput = await resolveObjectiveInput(flags);
 
-  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveAuth();
-  const projects = await fetchProjects(platformUrl, bearerToken, localSecret, organizationId);
+  const auth = await resolveAuth();
+  const { platformUrl, bearerToken, localSecret } = auth;
+  const projects = await fetchProjectsAcrossOrganizations(auth);
 
   if (!projects.length) {
     throw new Error('No projects available. Create a project first.');
@@ -327,6 +378,10 @@ async function runTicketCreationFlow(args, { commandName, launchAgent }) {
       prompt: 'Select a project by number:',
       renderItem: project => projectLabel(project)
     }));
+
+  // The ticket is created in the organization that owns the chosen project,
+  // never a stored default org.
+  const organizationId = selectedProject.organizationId ?? null;
 
   const selectedAgent = launchAgent
     ? (resolveAgent(typeof flags.agent === 'string' ? flags.agent : '') ??

@@ -12,7 +12,7 @@ import { stdin as input, stdout as output } from 'node:process';
 
 import { buildAuthHeaders, resolveAuth } from './credentials.mjs';
 import { upsertLocalOverlordConfig } from './local-config.mjs';
-import { parseNumberedSelection, sortProjects } from './new-ticket.mjs';
+import { fetchProjectsAcrossOrganizations, parseNumberedSelection } from './new-ticket.mjs';
 import { readOrCreateDeviceFingerprint } from './runner.mjs';
 
 function parseFlags(args) {
@@ -39,19 +39,6 @@ function parseFlags(args) {
 function projectLabel(project) {
   const organizationName = String(project.organizationName ?? '').trim();
   return organizationName ? `${project.name} — ${organizationName}` : project.name;
-}
-
-async function fetchProjects(platformUrl, bearerToken, localSecret, organizationId) {
-  const res = await fetch(`${platformUrl}/api/protocol/projects`, {
-    headers: buildAuthHeaders(bearerToken, localSecret, organizationId)
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw new Error(
-      `Failed to list projects (${res.status}): ${data.error ?? JSON.stringify(data)}`
-    );
-  }
-  return Array.isArray(data.projects) ? sortProjects(data.projects) : [];
 }
 
 async function promptForProject(projects, cwd) {
@@ -118,9 +105,10 @@ By default the registered resource is marked primary for this device. Pass
 
   const isPrimary = !(flags.primary === 'false' || flags.primary === false);
 
-  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveAuth({});
+  const auth = await resolveAuth({});
+  const { platformUrl, bearerToken, localSecret } = auth;
 
-  const projects = await fetchProjects(platformUrl, bearerToken, localSecret, organizationId);
+  const projects = await fetchProjectsAcrossOrganizations(auth);
   let project = null;
   if (typeof flags['project-id'] === 'string' && flags['project-id'].trim()) {
     const wanted = flags['project-id'].trim();
@@ -138,6 +126,10 @@ By default the registered resource is marked primary for this device. Pass
   }
 
   const deviceFingerprint = readOrCreateDeviceFingerprint(flags);
+
+  // Register the resource in the organization that owns the chosen project,
+  // never a stored default org.
+  const organizationId = project.organizationId ?? null;
 
   const body = {
     projectId: project.id,

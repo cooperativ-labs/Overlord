@@ -17,6 +17,7 @@ import type { Ticket } from '@/types/tickets';
 
 import { ExecutionTargetBadge } from './ExecutionTargetBadge';
 import { IsHumanToggle } from './IsHumanToggle';
+import { KanbanCardTagSelector } from './KanbanCardTagSelector';
 import { ObjectivesExecutedBadge } from './ObjectivesExecutedBadge';
 import {
   AttentionIndicators,
@@ -220,6 +221,12 @@ function KanbanCardHoverFooter({
           ) : null}
 
           <IsHumanToggle ticketId={ticket.id} forHuman={ticket.for_human} />
+
+          <KanbanCardTagSelector
+            ticketId={ticket.id}
+            projectId={ticket.project_id}
+            tags={ticket.tags ?? []}
+          />
 
           <div className="ml-auto flex items-center gap-1.5">
             <span
