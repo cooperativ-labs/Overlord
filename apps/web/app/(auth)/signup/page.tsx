@@ -4,9 +4,15 @@ import { getInvitationByTokenAction } from '@/lib/actions/invitations';
 export default async function SignupPage({
   searchParams
 }: {
-  searchParams: Promise<{ error?: string; message?: string; next?: string; invite?: string }>;
+  searchParams: Promise<{
+    error?: string;
+    message?: string;
+    next?: string;
+    invite?: string;
+    name?: string;
+  }>;
 }) {
-  const { error, message, next, invite } = await searchParams;
+  const { error, message, next, invite, name } = await searchParams;
 
   let inviteEmail: string | undefined;
   let inviteToken: string | undefined;
@@ -28,6 +34,7 @@ export default async function SignupPage({
         mode="signup"
         inviteToken={inviteToken}
         inviteEmail={inviteEmail}
+        defaultName={name}
       />
     </div>
   );

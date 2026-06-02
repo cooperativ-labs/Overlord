@@ -3,16 +3,19 @@ import type { Metadata } from 'next';
 import { DocsMarkdownContent } from '../../_components/docs-markdown-content';
 import { DocsMarkdownPage } from '../../_components/docs-markdown-page';
 import { ExecutionTargetsArchitectureDiagram } from '../../_components/execution-targets-architecture-diagram';
-import { ExecutionTargetsPlaceholderDiagram } from '../../_components/execution-targets-placeholder-diagram';
+import { ExecutionTargetsRegistrationDiagram } from '../../_components/execution-targets-placeholder-diagram';
 
 export const metadata: Metadata = {
   title: 'Execution Targets & Resources'
 };
 
 const INTRO = `
-Overlord needs to know **where** agent work runs: your laptop, a remote Linux box over SSH, a devbox, or any future hosted runner. That machine (or environment) is an **execution target**. The **checkout path** for a project on that target is a **project resource directory**.
+Overlord needs to know **where** agent work runs: your laptop, a remote workstation, a devbox,
+or any future hosted runner. That machine or environment is an **execution target**. The
+**checkout path** for a project on that target is a **project resource directory**.
 
-Together they replace the older pattern of storing SSH host, remote path, and local path on \`project_user\`. Paths and connection topology now live in dedicated tables so the device you SSH into can maintain its own resources while the backend resolves a consistent working directory for \`ovld launch\` and \`ovld runner\`.
+Targets and paths live in dedicated tables so the runner can resolve a consistent working
+directory for \`ovld launch\` and \`ovld runner\`.
 
 ---
 
@@ -20,7 +23,7 @@ Together they replace the older pattern of storing SSH host, remote path, and lo
 
 | Concept | What it is | Example |
 | --- | --- | --- |
-| **Execution target** | Canonical row for a machine or SSH endpoint agents execute on | Your Mac (\`device_fingerprint\` from \`~/.ovld/device.json\`), or \`ssh:build.example.com:22\` before first registration |
+| **Execution target** | Canonical row for a machine or environment agents execute on | Your Mac (\`device_fingerprint\` from \`~/.ovld/device.json\`), or \`remote-build-box\` before first registration |
 | **Organization label** | Human-friendly name unique within an org | \`builder-mac\`, \`linux-ci\` |
 | **Project resource directory** | A checkout path on a target for a given project | \`/home/dev/overlord\` marked \`is_primary\` for project X on target Y |
 | **Primary resource** | The default directory when no explicit resource is chosen | One primary per **(project, execution target)** — shared by all users on that project/target pair |
@@ -30,24 +33,24 @@ An execution target is **not** owned by a single user or organization. Instead:
 - \`execution_targets\` holds canonical identity (fingerprint or placeholder key, host, port, transport).
 - \`organization_execution_targets\` adds org-scoped labels.
 - \`user_execution_targets\` records which users may use the target.
-- \`execution_target_ssh_credentials\` stores per-user SSH metadata (username, auth method, private key **path** — never private key material).
 - \`project_execution_targets\` links targets to projects.
 - \`project_resource_directories\` is the **path authority**: every resource points at exactly one \`execution_target_id\`.
 
 ---
 
-## Local vs SSH targets
+## Local vs remote targets
 
 **Local targets** register when \`ovld\` runs on the machine. \`ovld protocol get-device\` (or the runner on startup) upserts \`execution_targets\` with a real \`device_fingerprint\`, \`transport=local\`, and the hostname from the OS.
 
-**SSH targets** can be configured before the remote host has ever run Overlord:
+**Remote targets** can be configured before the machine that will run the work has ever registered:
 
-1. The web app saves host, port, username, and key path.
-2. Overlord creates a **placeholder** target with \`placeholder_key=ssh:{host}:{port}\`.
-3. Resource and association rows are wired immediately so you can queue work against the remote path.
-4. When \`ovld\` eventually runs on the remote machine and calls \`get-device\`, the placeholder reconciles to the real fingerprint without changing \`execution_target_id\`.
+1. The web app or protocol creates the target and its project resource directories.
+2. When \`ovld\` runs on the target machine, \`get-device\` registers the real fingerprint.
+3. Overlord reconciles the pending row to that fingerprint without changing \`execution_target_id\`.
 
-The same physical server can appear in multiple organizations with different labels. Host and port are connection coordinates, not global identity — two VMs on one host are two targets if agents execute inside each VM.
+The same physical server can appear in multiple organizations with different labels. Identity is
+the fingerprint, not the label — two VMs on one host are two targets if agents execute inside each
+VM.
 
 ---
 
@@ -62,7 +65,7 @@ When you click **Run** or auto-advance enqueues an objective, \`execution_reques
 
 \`claim-execution\` resolves the working directory from the target resource, or falls back to the primary \`project_resource_directories\` row for \`(project_id, execution_target_id)\`. If no primary exists, the request is skipped and a backstop event is recorded rather than launching in an unknown directory.
 
-See [Agent Execution & Runner](/docs/workflow/agent-execution) for the full queue lifecycle, leasing, and launch sequence.
+See [Agent Execution & Runner](/docs/workflow/agent-execution) for the full queue lifecycle, leasing, and launch sequence. See [Terminal & IDE](/docs/workflow/terminal-and-ide) for the per-target terminal profile and launch settings.
 
 ---
 
@@ -80,7 +83,7 @@ const AFTER_ARCHITECTURE = `
 
 - At most one \`is_primary=true\` row per \`(project_id, execution_target_id)\` — enforced by a partial unique index.
 - Primary is **project topology**, not per-user: two teammates working on the same project on the same target share the same primary checkout path.
-- SSH credentials remain **per user** (stored in \`execution_target_ssh_credentials\`); only the directory path is shared at the project/target level.
+- Registration metadata is **per target**; only the directory path is shared at the project/target level.
 - The first directory added for a (project, target) auto-promotes to primary. If you remove the primary, the next oldest directory for that pair is promoted automatically.
 
 When you add a resource from the desktop app or protocol, setting \`is_primary\` clears any other primary on that same project and target.
@@ -98,13 +101,13 @@ When you add a resource from the desktop app or protocol, setting \`is_primary\`
 
 In both cases, all org members may **read** the primary (so they can see the project's working directory). The write authority is enforced in both application code (\`assertCanManagePrimary\`) and RLS (\`can_manage_project_resource_directory()\` SQL helper).
 
-Self-registered targets (local \`ovld runner\` startup) default to personal (owner = the registering user). SSH targets added from the web app can be marked organization-owned at creation time. Ownership can be transferred later by an org admin or the current owner.
+Self-registered targets (local \`ovld runner\` startup) default to personal (owner = the registering user). Targets added from the web app can be marked organization-owned at creation time. Ownership can be transferred later by an org admin or the current owner.
 
 ---
 
-## Placeholder reconciliation
+## Registration flow
 
-Use placeholders when you know the SSH endpoint and remote checkout path before the remote machine has registered with Overlord.
+Use pending targets when you know the machine and checkout path before the remote machine has registered with Overlord.
 `;
 
 const AFTER_PLACEHOLDER = `
@@ -142,7 +145,7 @@ For ticket routing (agent vs human work), \`--for-human\` on \`ovld protocol cre
 
 \`\`\`
 Project
-  └── execution target (laptop | SSH server | …)
+  └── execution target (laptop | remote workstation | …)
         └── resource directories (/path/a, /path/b, …)
               └── one primary → default cwd for launch/runner
 \`\`\`
@@ -171,7 +174,7 @@ export default function ExecutionTargetsPage() {
       <DocsMarkdownContent className="prose-headings:scroll-mt-24">
         {AFTER_ARCHITECTURE}
       </DocsMarkdownContent>
-      <ExecutionTargetsPlaceholderDiagram />
+      <ExecutionTargetsRegistrationDiagram />
       <DocsMarkdownContent className="prose-headings:scroll-mt-24">
         {AFTER_PLACEHOLDER}
       </DocsMarkdownContent>

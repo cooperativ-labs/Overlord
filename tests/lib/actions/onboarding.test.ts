@@ -32,6 +32,10 @@ describe('createFirstProjectWithDirectory', () => {
       id: 'project-1',
       organizationId: 42
     });
+    mockAddProjectResourceDirectoryAction.mockResolvedValue({
+      executionTargetId: 'execution-target-1',
+      projectName: 'Agent orchestration'
+    });
 
     await createFirstProjectWithDirectory({
       organizationId: 42,

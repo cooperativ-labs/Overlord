@@ -141,7 +141,7 @@ Agents can find docs here: https://www.ovld.ai/docs/for-agents
 - `record-change-rationales` - persist structured change rationales without a normal progress update
 - `ask` - post a blocking question and move the ticket to review
 - `permission-request` - notify Overlord that the agent is requesting tool permission
-- `hook-event` - record lifecycle hook events such as `UserPromptSubmit` / Cursor `beforeSubmitPrompt` without a session key
+- `hook-event` - record lifecycle hook events such as `UserPromptSubmit` / Cursor `beforeSubmitPrompt` without a session key; optionally persist a native resume/session id onto the active Overlord session
 - `read-context` - read shared persistent context for this ticket
 - `write-context` - write shared persistent context for future sessions
 - `deliver` - send artifacts/rationales and move the ticket to review

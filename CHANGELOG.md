@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2606021051.0] - 2026-06-02:10:51
+
+### Added
+- Add **`ovld onboard`** for terminal-first setup: device-flow sign-in, organization and project creation, primary resource directory on this machine, first onboarding ticket, and **`.overlord/project.json`** in the current repo.
+- Add **`POST /api/auth/cli-onboarding`** so the CLI can provision org, project, device, and starter ticket after authentication.
+- Persist **native agent session ids** (`external_session_id`) on **`agent_sessions`** via protocol **`connect`**, **`attach`**, and **`hook-event`**, MCP **`record_hook_event`**, and matching CLI/MCP flags (**`--external-session-id`**, including **`null`** to clear).
+- Auto-detect Codex and Claude session/thread ids in the CLI when **`--external-session-id`** is omitted.
+- Send **Cursor `conversation_id`** and **Codex thread/session env vars** from agent hooks as **`externalSessionId`** so Overlord can correlate resumed threads with ticket sessions.
+- Prefill the signup **name** field when onboarding opens the browser with a **`name`** query param.
+- Add a **Terminal & IDE** workflow doc page covering per-target terminal apps, launch modes, and Desktop behavior.
+- Resolve **System Default** terminal launches on Desktop from **`TERMINAL`** / **`TERM`** when the execution target uses the default profile.
+
+### Fixed
+- Persist **`externalSessionId`** on hook events that are skipped as the initial submit or legacy launch prompt, so session correlation still updates before the handler returns.
+
+### Changed
+- Show passkey registration guidance in **Desktop** settings (open the web app to add passkeys) instead of the web-only register flow inside Electron.
+
+### Security
+- None.
+
+### Test
+- Add API, shared protocol, and CLI tests for **`external_session_id`** normalization, connect/hook-event persistence, and **`ovld onboard`** / cli-onboarding flows.
+
+### Documentation
+- Refresh execution-target, agent-execution, CLI reference, quick-start, connector-surfaces, and public onboarding guides for **`ovld onboard`**, external session ids, and terminal launch settings.
+
 ## [0.2606011152.0] - 2026-06-01:11:52
 
 ### Added

@@ -46,7 +46,29 @@ with open(path, 'w', encoding='utf-8') as handle:
     handle.write(str(turn_index))
 
 tid = os.environ.get('TICKET_ID', '')
-print(json.dumps({'hookType': 'UserPromptSubmit', 'ticketId': tid, 'prompt': text, 'turnIndex': turn_index}))
+session_key = os.environ.get('SESSION_KEY') or ''
+if not session_key:
+    encoded = __import__('base64').urlsafe_b64encode(os.getcwd().encode()).decode().rstrip('=')
+    session_file = os.path.join(__import__('tempfile').gettempdir(), f'.overlord-session-{encoded}')
+    try:
+        with open(session_file, encoding='utf-8') as handle:
+            persisted = json.load(handle)
+        if persisted.get('ticketId') == tid:
+            session_key = persisted.get('sessionKey') or ''
+    except Exception:
+        session_key = ''
+
+payload = {
+    'hookType': 'UserPromptSubmit',
+    'ticketId': tid,
+    'prompt': text,
+    'turnIndex': turn_index,
+}
+if cid != 'unknown':
+    payload['externalSessionId'] = cid
+if session_key:
+    payload['sessionKey'] = session_key
+print(json.dumps(payload))
 " 2>/dev/null
   )
   if [ -n "$PAYLOAD" ]; then

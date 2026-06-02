@@ -1296,6 +1296,12 @@ async function protocolHookEvent(args) {
       ? { turnIndex: parseInt(String(flags['turn-index']), 10) }
       : {}),
     ...(flags['follow-up-intent'] ? { followUpIntent: String(flags['follow-up-intent']) } : {}),
+    ...(() => {
+      if (flags['external-session-id'] === undefined) return {};
+      const raw = String(flags['external-session-id']).trim();
+      if (raw === '') return {};
+      return { externalSessionId: raw.toLowerCase() === 'null' ? null : raw };
+    })(),
     ...(sessionKey ? { sessionKey } : {})
   };
 
@@ -2200,11 +2206,13 @@ async function protocolConnect(args) {
   const { platformUrl, bearerToken, localSecret, organizationId } =
     await resolveProtocolAuthForFlags(flags, ticketId);
   const timeoutMs = resolveTimeout(flags);
+  const externalSessionId = resolveExternalSessionId(flags);
 
   const body = {
     ticketId,
     agentIdentifier: resolveProtocolAgentIdentifier(flags),
     connectionMethod: String(flags.method ?? 'cli'),
+    ...(externalSessionId !== undefined ? { externalSessionId } : {}),
     metadata: await resolveProtocolMetadata(flags, { cwd: process.cwd() })
   };
 
@@ -2813,9 +2821,12 @@ connect:
     --agent <identifier>
     --model <identifier>
     --method <connectionMethod>
+    --external-session-id <id|null>  Store the native agent thread/session id, or clear it with null
     --metadata-json <json>     Extra session metadata object
   Returns:
     Session JSON and SESSION_KEY on stderr when available
+  Notes:
+    If --external-session-id is omitted, the CLI may auto-detect Codex or Claude session ids
 
 load-context:
   Purpose:
@@ -2938,6 +2949,7 @@ hook-event:
     --prompt <text>
     --turn-index <n>
     --follow-up-intent <mode> discussion | execution | pending_delivery
+    --external-session-id <id|null>  Native agent resume/session id to persist on the attached session
 
 read-context:
   Purpose:

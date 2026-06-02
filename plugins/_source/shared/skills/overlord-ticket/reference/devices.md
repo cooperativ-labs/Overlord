@@ -1,6 +1,6 @@
 # Execution Targets And Checkout Paths
 
-Execution targets are canonical rows keyed by a real `device_fingerprint` when known, or by an SSH placeholder until the remote target registers. Organization labels, user access, SSH credential references, and project membership live in separate association rows. Persist a fingerprint per workstation, upsert via `ovld protocol get-device`, then maintain checkout paths via `list-project-resources`, `add-project-resource`, `update-project-resource`, and `update-device` (`ovld protocol help` lists flags).
+Execution targets are canonical rows keyed by a real `device_fingerprint` when known, or by a placeholder until the target registers. Organization labels, user access, project membership, and project checkout paths live in separate association rows. Persist a fingerprint per machine, upsert via `ovld protocol get-device`, then maintain checkout paths via `list-project-resources`, `add-project-resource`, `update-project-resource`, and `update-device` (`ovld protocol help` lists flags).
 
 ```bash
 ovld protocol get-device --device-fingerprint "$OVERLORD_DEVICE_FINGERPRINT"

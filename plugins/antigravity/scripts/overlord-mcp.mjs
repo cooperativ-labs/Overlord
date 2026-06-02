@@ -439,7 +439,7 @@ const tools = [
   {
     name: 'record_hook_event',
     description:
-      'Record a hook lifecycle event for a ticket without requiring a session key. Stop is reserved for future lifecycle hooks.',
+      "Record a hook lifecycle event for a ticket. Use hookType='Stop' with a session_key to check whether delivery is needed after a turn ends.",
     inputSchema: {
       type: 'object',
       properties: {
@@ -453,6 +453,16 @@ const tools = [
         follow_up_intent: {
           type: 'string',
           enum: ['discussion', 'execution', 'pending_delivery']
+        },
+        external_session_id: {
+          type: ['string', 'null'],
+          description:
+            'Optional native agent resume/session id to persist on the attached Overlord session.'
+        },
+        session_key: {
+          type: 'string',
+          description:
+            'Optional session key for Stop hooks. When provided, the response includes deliveryStatus indicating whether delivery is needed.'
         }
       },
       required: ['hook_type', 'ticket_id']
@@ -462,7 +472,9 @@ const tools = [
       'ticket-id': args.ticket_id,
       prompt: args.prompt,
       'turn-index': args.turn_index,
-      'follow-up-intent': args.follow_up_intent
+      'follow-up-intent': args.follow_up_intent,
+      'external-session-id': args.external_session_id,
+      'session-key': args.session_key
     }),
     subcommand: 'hook-event'
   },

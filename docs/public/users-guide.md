@@ -228,6 +228,8 @@ Agents can use `connect` when they only need a lightweight session key:
 ovld protocol connect --ticket-id <ticket_id>
 ```
 
+`connect` also accepts `--external-session-id <id|null>` so the active session can expose a native resume id before delivery.
+
 Agents can inspect a ticket without creating a working session:
 
 ```bash
@@ -267,6 +269,8 @@ Supported activity event types are:
 - `decision` for explicit non-file decisions
 
 On connectors that support lifecycle hooks (Claude Code and Codex `UserPromptSubmit`, Cursor IDE `beforeSubmitPrompt` via `~/.cursor/hooks.json` after `ovld setup cursor` / desktop bundle install), follow-up user messages after the initial ticket are captured automatically and appear as `user_follow_up` events in the activity feed. If hooks are unavailable or misconfigured, the agent should publish the message verbatim before continuing:
+
+Those same hooks now also forward the connector's native resume/session id when available, so Overlord can populate Copy Resume Command on the active objective before delivery instead of waiting for the final session summary.
 
 ```bash
 ovld protocol update \

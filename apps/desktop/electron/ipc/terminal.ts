@@ -178,6 +178,25 @@ function buildHotkeyAppleScript(hotkey: string): string | null {
   return `keystroke "${keyLiteral}" using {${applescriptModifiers.join(', ')}}`;
 }
 
+function mapEnvValueToTerminalApp(value: string): string {
+  const normalized = value.toLowerCase();
+  if (normalized.includes('iterm')) return 'iterm';
+  if (normalized.includes('warp')) return 'warp';
+  if (normalized.includes('ghostty')) return 'ghostty';
+  if (normalized.includes('alacritty')) return 'alacritty';
+  if (normalized.includes('kitty')) return 'kitty';
+  if (normalized.includes('hyper')) return 'hyper';
+  return 'terminal';
+}
+
+function resolveDefaultTerminalApp(): string {
+  const terminalEnv = process.env.TERMINAL?.trim();
+  if (terminalEnv) return mapEnvValueToTerminalApp(terminalEnv);
+  const termEnv = process.env.TERM?.trim();
+  if (termEnv) return mapEnvValueToTerminalApp(termEnv);
+  return 'terminal';
+}
+
 function resolveTmuxHostApplication(hostApp: string, customHostApp: string): string {
   if (hostApp === 'custom') return customHostApp.trim() || 'Terminal';
 
@@ -297,7 +316,7 @@ async function launchScriptInExternalTerminal(scriptPath: string): Promise<void>
   const launchCmd = `bash ${shellQuote(scriptPath)}`;
   const profile = getLocalTerminalSettingsProfile();
   const {
-    termApp,
+    termApp: rawTermApp,
     launchMode,
     customHotkeyValue,
     customApp,
@@ -305,6 +324,7 @@ async function launchScriptInExternalTerminal(scriptPath: string): Promise<void>
     customTmuxHostApp,
     tmuxCommand
   } = profile;
+  const termApp = rawTermApp === 'default' ? resolveDefaultTerminalApp() : rawTermApp;
   const openInTab = launchMode === 'tab';
   const isCustomLaunchMode = launchMode === 'custom';
   const hotkeyScript = buildHotkeyAppleScript(customHotkeyValue);

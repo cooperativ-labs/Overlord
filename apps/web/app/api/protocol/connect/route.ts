@@ -12,7 +12,13 @@ export async function POST(request: Request) {
 
   try {
     const supabase = createServiceRoleClient();
-    const { ticketId: rawTicketId, agentIdentifier, connectionMethod, metadata } = parsed.data;
+    const {
+      ticketId: rawTicketId,
+      agentIdentifier,
+      connectionMethod,
+      externalSessionId,
+      metadata
+    } = parsed.data;
     const { organizationId, userId } = parsed.tokenContext;
     const ticketId = await resolveTicketId(rawTicketId, organizationId);
     if (!ticketId) return NextResponse.json({ error: 'Ticket not found.' }, { status: 404 });
@@ -21,6 +27,7 @@ export async function POST(request: Request) {
       ticketId,
       agentIdentifier,
       connectionMethod,
+      externalSessionId,
       metadata: metadata as Record<string, never>,
       organizationId,
       userId

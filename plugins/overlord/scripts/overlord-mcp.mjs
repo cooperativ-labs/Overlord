@@ -139,6 +139,7 @@ const tools = [
         },
         agent: { type: 'string' },
         method: { type: 'string' },
+        external_session_id: { type: ['string', 'null'] },
         metadata: {
           type: 'object',
           description:
@@ -151,6 +152,7 @@ const tools = [
       'ticket-id': args.ticket_id,
       agent: args.agent,
       method: args.method,
+      'external-session-id': args.external_session_id,
       ...(args.metadata && typeof args.metadata === 'object' && !Array.isArray(args.metadata)
         ? { 'metadata-json': args.metadata }
         : {})
@@ -179,7 +181,7 @@ const tools = [
   {
     name: 'revert',
     description:
-      'Restore the local working tree to an objective checkpoint (maps to ovld protocol revert).',
+      'Restore the local working tree to the recorded objective state (maps to ovld protocol revert).',
     inputSchema: {
       type: 'object',
       properties: {
@@ -454,6 +456,11 @@ const tools = [
           type: 'string',
           enum: ['discussion', 'execution', 'pending_delivery']
         },
+        external_session_id: {
+          type: ['string', 'null'],
+          description:
+            'Optional native agent resume/session id to persist on the attached Overlord session.'
+        },
         session_key: {
           type: 'string',
           description:
@@ -468,6 +475,7 @@ const tools = [
       prompt: args.prompt,
       'turn-index': args.turn_index,
       'follow-up-intent': args.follow_up_intent,
+      'external-session-id': args.external_session_id,
       'session-key': args.session_key
     }),
     subcommand: 'hook-event'

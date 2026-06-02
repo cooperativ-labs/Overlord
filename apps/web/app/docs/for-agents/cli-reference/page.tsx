@@ -108,7 +108,7 @@ Lightweight session when you only need a session key, not the full ticket payloa
 ovld protocol connect --ticket-id <ticket_id>
 \`\`\`
 
-Optional flags match \`attach\`. Prints \`SESSION_KEY\` on stderr when available.
+Optional flags match \`attach\`, including \`--external-session-id <id|null>\` for native resume ids. Prints \`SESSION_KEY\` on stderr when available.
 
 ## load-context
 
@@ -120,9 +120,8 @@ ovld protocol load-context --ticket-id <ticket_id>
 
 ## revert
 
-Restore the local git working tree to an objective checkpoint. The CLI fetches
-the checkpoint row from Overlord, saves a safety ref under
-\`refs/overlord/safety/\`, then restores the tree.
+Restore the local git working tree to the recorded objective state. The CLI
+fetches the saved row from Overlord, then restores the tree.
 
 \`\`\`bash
 ovld protocol revert --objective-id <objective-uuid>
@@ -331,10 +330,11 @@ to capture follow-up user messages automatically.
 
 \`\`\`bash
 ovld protocol hook-event --hook-type UserPromptSubmit --ticket-id <ticket_id> \\
-  --prompt "Verbatim follow-up message" --turn-index 1
+  --prompt "Verbatim follow-up message" --turn-index 1 \\
+  --session-key <session_key> --external-session-id <native-session-id>
 \`\`\`
 
-Optional: \`--prompt <text>\`, \`--turn-index <n>\`.
+Optional: \`--prompt <text>\`, \`--turn-index <n>\`, \`--session-key <key>\`, \`--external-session-id <id|null>\`.
 
 ---
 
@@ -383,11 +383,8 @@ Optional:
 --skip-file-change-check           # bypass local git vs changeRationales validation
 \`\`\`
 
-Local git checkpoints are created on \`attach\` (one per executing objective at
-\`refs/overlord/checkpoints/<objectiveId>\`), not on \`deliver\`. Pass
-\`--skip-checkpoint\` to \`attach\` to opt out of that behavior. \`deliver\` itself
-does not create a checkpoint; restore an objective checkpoint with
-\`ovld protocol revert --objective-id <id>\`.
+In a git workspace, \`deliver\` validates that changed files are represented by
+\`changeRationales\` unless the check is skipped.
 
 In a git workspace, \`deliver\` validates that changed files are represented by
 \`changeRationales\` unless the check is skipped.

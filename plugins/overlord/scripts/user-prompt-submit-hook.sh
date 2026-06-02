@@ -28,7 +28,40 @@ if [ -z "$OVERLORD_BASE_URL" ] || [ -z "$OVERLORD_TOKEN" ] || [ -z "${TICKET_ID:
 fi
 
 if [ -n "$OVERLORD_BASE_URL" ] && [ -n "$OVERLORD_TOKEN" ] && [ -n "$TICKET_ID" ]; then
-  PAYLOAD=$(printf '%s' "$BODY" | python3 -c "import json,sys; body=json.load(sys.stdin); print(json.dumps({'hookType': 'UserPromptSubmit', 'ticketId': __import__('os').environ['TICKET_ID'], 'prompt': body.get('prompt', ''), 'turnIndex': body.get('turn_number', 0)}))" 2>/dev/null || echo '')
+  PAYLOAD=$(printf '%s' "$BODY" | python3 -c "
+import base64
+import json
+import os
+import sys
+import tempfile
+from pathlib import Path
+
+body = json.load(sys.stdin)
+external_session_id = os.environ.get('CODEX_THREAD_ID') or os.environ.get('CODEX_SESSION_ID') or None
+session_key = os.environ.get('SESSION_KEY') or ''
+
+if not session_key:
+    encoded = base64.urlsafe_b64encode(os.getcwd().encode()).decode().rstrip('=')
+    session_file = Path(tempfile.gettempdir()) / f'.overlord-session-{encoded}'
+    try:
+        persisted = json.loads(session_file.read_text(encoding='utf-8'))
+        if persisted.get('ticketId') == os.environ.get('TICKET_ID'):
+            session_key = persisted.get('sessionKey') or ''
+    except Exception:
+        session_key = ''
+
+payload = {
+    'hookType': 'UserPromptSubmit',
+    'ticketId': os.environ['TICKET_ID'],
+    'prompt': body.get('prompt', ''),
+    'turnIndex': body.get('turn_number', 0),
+}
+if external_session_id:
+    payload['externalSessionId'] = external_session_id
+if session_key:
+    payload['sessionKey'] = session_key
+print(json.dumps(payload))
+" 2>/dev/null || echo '')
   if [ -z "$PAYLOAD" ]; then
     log_hook "failed to build hook-event payload from submit body"
     exit 0

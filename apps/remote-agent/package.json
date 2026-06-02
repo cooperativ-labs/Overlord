@@ -2,7 +2,7 @@
   "name": "@overlord/remote-agent",
   "version": "0.1.0",
   "private": true,
-  "description": "Overlord remote helper daemon — runs on the SSH target and exposes filesystem + git operations over HTTP to the Electron and mobile clients via an SSH port-forward.",
+  "description": "Overlord remote helper daemon — runs on the target machine and exposes filesystem + git operations over HTTP to the Electron and mobile clients.",
   "type": "module",
   "main": "dist/server.js",
   "bin": {

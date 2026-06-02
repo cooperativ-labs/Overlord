@@ -94,4 +94,13 @@ describe('hookEventSchema normalization', () => {
     const result = hookEventSchema.parse({ hookType: 'Stop', ticketId: '1:1' });
     expect(result.prompt).toBeUndefined();
   });
+
+  it('accepts externalSessionId on hook events', () => {
+    const result = hookEventSchema.parse({
+      ...base,
+      turnIndex: 2,
+      externalSessionId: 'claude-session-123'
+    });
+    expect(result.externalSessionId).toBe('claude-session-123');
+  });
 });

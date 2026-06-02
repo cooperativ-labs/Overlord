@@ -36,7 +36,7 @@ const STEPS: SequenceStep[] = [
     n: 6,
     from: 'Backend',
     to: 'ovld runner',
-    action: 'Return launch params (agent, model, working directory, SSH, …)'
+    action: 'Return launch params (agent, model, working directory, …)'
   },
   {
     n: 7,

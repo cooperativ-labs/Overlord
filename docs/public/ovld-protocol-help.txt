@@ -249,6 +249,7 @@ hook-event:
     --prompt <text>
     --turn-index <n>
     --follow-up-intent <mode> discussion | execution | pending_delivery
+    --external-session-id <id|null>  Native agent resume/session id to persist on the attached session
 
 read-context:
   Purpose:
@@ -628,4 +629,3 @@ EOF
   ovld protocol add-project-resource --project-id <project-uuid> --directory /path/to/repo --device-fingerprint $OVERLORD_DEVICE_FINGERPRINT --label "main checkout" --is-primary
   ovld protocol update-project-resource --resource-id <resource-uuid> --device-fingerprint $OVERLORD_DEVICE_FINGERPRINT --label "docs branch"
   ovld protocol update-project-resource --resource-id <resource-uuid> --device-fingerprint $OVERLORD_DEVICE_FINGERPRINT --is-primary true
-

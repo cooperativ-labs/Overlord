@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import { parseProtocolBody } from '@/app/api/protocol/_lib';
 import { checkDeliveryStatus } from '@/lib/overlord/follow-up-delivery';
 import { isLikelyOverlordAgentLaunchPrompt } from '@/lib/overlord/is-overlord-agent-launch-prompt';
+import { normalizeExternalSessionId } from '@/lib/overlord/protocol-connect';
 import { resolveSession, resolveTicketId } from '@/lib/overlord/protocol-db';
 import { hookEventSchema } from '@/lib/overlord/validation';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
@@ -12,12 +13,46 @@ function okResponse() {
   return NextResponse.json({ ok: true });
 }
 
+async function persistHookExternalSessionId(input: {
+  supabase: ReturnType<typeof createServiceRoleClient>;
+  ticketId: string;
+  organizationId: number;
+  sessionKey?: string;
+  externalSessionId?: string | null;
+}) {
+  const { externalSessionId, organizationId, sessionKey, supabase, ticketId } = input;
+  if (!sessionKey || externalSessionId === undefined) return;
+
+  const sessionResult = await resolveSession(sessionKey, ticketId, organizationId);
+  if (!sessionResult.session) {
+    console.warn('[protocol:hook-event] could not resolve session for external session id update', {
+      ticketId,
+      sessionKeyPrefix: sessionKey.slice(0, 8)
+    });
+    return;
+  }
+
+  const { error } = await supabase
+    .from('agent_sessions')
+    .update({ external_session_id: normalizeExternalSessionId(externalSessionId) })
+    .eq('id', sessionResult.session.id);
+
+  if (error) {
+    console.warn('[protocol:hook-event] failed to persist external session id', {
+      ticketId,
+      sessionId: sessionResult.session.id,
+      error: error.message
+    });
+  }
+}
+
 export async function POST(request: Request) {
   const parsed = await parseProtocolBody(request, hookEventSchema);
   if (!parsed.ok) return parsed.errorResponse;
 
   try {
     const {
+      externalSessionId,
       followUpIntent,
       hookType,
       prompt,
@@ -27,6 +62,12 @@ export async function POST(request: Request) {
     } = parsed.data;
     const { organizationId, userId } = parsed.tokenContext;
     const promptLength = prompt?.trim().length ?? 0;
+    const shouldSkipInitialSubmit = hookType === 'UserPromptSubmit' && turnIndex === 0;
+    const shouldSkipLegacyLaunchPrompt =
+      hookType === 'UserPromptSubmit' &&
+      turnIndex === 1 &&
+      prompt &&
+      isLikelyOverlordAgentLaunchPrompt(prompt);
 
     console.warn('[protocol:hook-event] received hook event', {
       hookType,
@@ -37,29 +78,22 @@ export async function POST(request: Request) {
       promptLength
     });
 
-    if (hookType === 'UserPromptSubmit' && turnIndex === 0) {
+    if (shouldSkipInitialSubmit) {
       console.warn('[protocol:hook-event] skipping initial submit event', {
         rawTicketId,
         turnIndex
       });
-      return okResponse();
     }
 
     // Both the Claude Code and legacy Cursor hooks send the initial injected ticket/objective
     // prompt as turnIndex 0 (filtered above) but older Cursor builds sent it at turnIndex 1.
     // This catches that legacy case to prevent mis-recording the launch prompt as user_follow_up.
-    if (
-      hookType === 'UserPromptSubmit' &&
-      turnIndex === 1 &&
-      prompt &&
-      isLikelyOverlordAgentLaunchPrompt(prompt)
-    ) {
+    if (shouldSkipLegacyLaunchPrompt) {
       console.warn('[protocol:hook-event] skipping legacy launch prompt submit', {
         rawTicketId,
         turnIndex,
         promptLength
       });
-      return okResponse();
     }
 
     const ticketId = await resolveTicketId(rawTicketId, organizationId);
@@ -72,6 +106,17 @@ export async function POST(request: Request) {
     }
 
     const supabase = createServiceRoleClient();
+    await persistHookExternalSessionId({
+      supabase,
+      ticketId,
+      organizationId,
+      sessionKey,
+      externalSessionId
+    });
+
+    if (shouldSkipInitialSubmit || shouldSkipLegacyLaunchPrompt) {
+      return okResponse();
+    }
 
     if (hookType === 'UserPromptSubmit') {
       const summary = prompt?.trim();

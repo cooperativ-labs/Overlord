@@ -26,6 +26,7 @@ type AuthFormProps = {
   next?: string;
   inviteToken?: string;
   inviteEmail?: string;
+  defaultName?: string;
 };
 
 function withNext(path: string, next?: string): string {
@@ -42,7 +43,8 @@ export function AuthForm({
   message,
   next,
   inviteToken,
-  inviteEmail
+  inviteEmail,
+  defaultName
 }: AuthFormProps) {
   const router = useRouter();
   const [signInButtonState, setSignInButtonState] = React.useState<ButtonLoadingState>('default');
@@ -257,7 +259,14 @@ export function AuthForm({
             </div>
             <Field>
               <FieldLabel htmlFor="signup-name">Name</FieldLabel>
-              <Input id="signup-name" name="name" type="text" placeholder="Ada Lovelace" required />
+              <Input
+                id="signup-name"
+                name="name"
+                type="text"
+                placeholder="Ada Lovelace"
+                required
+                defaultValue={defaultName ?? ''}
+              />
             </Field>
             <Field>
               <FieldLabel htmlFor="signup-email">Email</FieldLabel>

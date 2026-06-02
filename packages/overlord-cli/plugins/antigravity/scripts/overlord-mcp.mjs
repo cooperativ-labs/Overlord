@@ -454,6 +454,11 @@ const tools = [
           type: 'string',
           enum: ['discussion', 'execution', 'pending_delivery']
         },
+        external_session_id: {
+          type: ['string', 'null'],
+          description:
+            'Optional native agent resume/session id to persist on the attached Overlord session.'
+        },
         session_key: {
           type: 'string',
           description:
@@ -468,6 +473,7 @@ const tools = [
       prompt: args.prompt,
       'turn-index': args.turn_index,
       'follow-up-intent': args.follow_up_intent,
+      'external-session-id': args.external_session_id,
       'session-key': args.session_key
     }),
     subcommand: 'hook-event'

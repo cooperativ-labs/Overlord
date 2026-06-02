@@ -34,6 +34,34 @@ During onboarding you will create:
 - an initial project, usually mapped to one repository or product area
 - optionally, a local working directory when you are using the desktop app
 
+#### Agent-assisted CLI onboarding
+
+If a user has the CLI installed and wants an agent to fully onboard them, use this single command from the repository they want Overlord to manage:
+
+```bash
+ovld onboard
+```
+
+The command:
+
+- asks for the user's name, organization name, and project name
+- opens browser signup/login so the user can choose email/password or a social login
+- creates the first organization when the account does not have one
+- creates a project for the current repository
+- registers the current directory as the project's local resource
+- creates the same starter review ticket used by web onboarding
+- prompts the user to open the Desktop download page, or opens the project in the web app if they decline
+
+For a brand-new machine, install the CLI first:
+
+```bash
+npm install -g @overlord-ai/cli
+cd /path/to/repo
+ovld onboard
+```
+
+Agents should prefer `ovld onboard` for first-time terminal setup because it gives them one clear entry point instead of separately directing the user through signup, auth, project creation, directory registration, and first-ticket creation.
+
 ### 2. Install the Desktop App
 
 Install and sign in to Overlord Desktop when you want agents to work in repositories on your machine.
@@ -72,7 +100,7 @@ Requirements:
 Install the standalone CLI:
 
 ```bash
-npm install -g overlord-cli
+npm install -g @overlord-ai/cli
 ```
 
 Check it on that machine:

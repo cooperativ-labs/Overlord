@@ -17,6 +17,18 @@ export default function QuickStartPage() {
 
 Sign up at [ovld.ai/signup](https://www.ovld.ai/signup) and finish onboarding in the web app. Your account hosts your projects, tickets, and delivery history.
 
+### Agent-assisted CLI onboarding
+
+You can also ask an agent to onboard you from the terminal. Install the CLI, move into the repository you want Overlord to manage, and run:
+
+\`\`\`bash
+npm install -g @overlord-ai/cli
+cd /path/to/your/repo
+ovld onboard
+\`\`\`
+
+\`ovld onboard\` asks for your name, organization name, and project name, opens browser signup/login, creates your first organization and project, links the current directory, and creates the same starter review ticket as the web onboarding flow. At the end it strongly recommends opening the Desktop download page; choose no to open the project in the web app instead.
+
 ## 2. Download the desktop app
 
 The desktop app is what launches agents locally, follows your repositories, and streams updates back into Overlord.
@@ -30,7 +42,7 @@ On first launch, the app walks you through linking a workspace folder and choosi
 
 Agents like Claude Code and Codex talk to Overlord through a small plugin. Installing a plugin once lets Overlord launch, attach, and deliver tickets through that agent.
 
-Follow the [Agent plugins guide](/docs/agent-plugins) to install the plugins from Overlord settings, then register them in Claude Code and the Codex desktop app.
+Follow the [Agent plugins guide](/docs/surfaces/agent-plugins) to install the plugins from Overlord settings, then register them in Claude Code and the Codex desktop app.
 
 ## 4. Create your first ticket
 
@@ -50,9 +62,9 @@ ovld claude "add a health check endpoint" --model opus
 
 See the [CLI guide](/docs/surfaces/cli#launch-an-agent-in-one-line) for the full flag reference.
 
-### Next steps
+## Related pages
 
-- [Agent plugins](/docs/agent-plugins)
+- [Agent plugins](/docs/surfaces/agent-plugins)
 - [Product surfaces](/docs/surfaces)
 - [Workflow overview](/docs/workflow)
 - [Protocol reference](/docs/protocol)

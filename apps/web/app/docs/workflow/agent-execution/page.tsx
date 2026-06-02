@@ -26,9 +26,9 @@ Three layers are involved. Only the bottom layer touches the host shell.
 | --- | --- | --- | --- |
 | Coordination | Overlord backend (Next.js / Supabase) | **No** | Decides *which* objective should run next, promotes draft → \`submitted\`, inserts a row in \`execution_requests\`, emits \`execution_requested\` for the UI. |
 | Dispatch | \`ovld runner\` on a capable machine | **Indirectly** | Polls (or listens via Realtime), claims a compatible queued row, then **spawns** \`ovld launch\` as a child process. |
-| Launch | \`ovld launch <agent>\` | **Yes** | Starts the assigned agent (Claude Code, Cursor, Codex, etc.) in a new terminal session or remote tmux/SSH context using local PATH, credentials, and working directory. |
+| Launch | \`ovld launch <agent>\` | **Yes** | Starts the assigned agent (Claude Code, Cursor, Codex, etc.) in a new terminal session using local PATH, credentials, and working directory. |
 
-The backend never SSHs into your machine and never spawns a local process. If no runner is running, the request stays \`queued\` until something on a capable host runs \`ovld runner start\` or \`ovld runner once\`, or a human copies the fallback \`ovld launch\` command from the UI.
+The backend never opens a shell on your machine and never spawns a local process. If no runner is running, the request stays \`queued\` until something on a capable host runs \`ovld runner start\` or \`ovld runner once\`, or a human copies the fallback \`ovld launch\` command from the UI.
 
 ---
 
@@ -88,12 +88,12 @@ Before a runner can launch an agent in the right checkout, Overlord needs an **e
 
 For each candidate row the runner resolves the working directory in priority order:
 
-1. **Explicit \`workingDirectory\` in \`launch_params\`** — used as-is (SSH command flows).
+1. **Explicit \`workingDirectory\` in \`launch_params\`** — used as-is.
 2. **\`target_resource_id\` set** — looks up the path from \`project_resource_directories\` and verifies it lives on the claiming target.
 3. **Fallback: \`(project, target)\` primary** — selects the \`is_primary = true\` row for \`(project_id, execution_target_id)\`. Primary is **target-scoped** — no user filter is applied; all users on a project share the same primary checkout per target.
 4. **No primary found** — a \`ticket_event\` backstop is recorded and the request is skipped (fail-closed). Overlord also validates at request time that a primary exists before inserting a queue row.
 
-See [Execution Targets & Resources](/docs/workflow/execution-targets) for the data model, SSH placeholder flow, primary semantics, target ownership, and protocol commands (\`get-device\`, \`list-project-resources\`, \`add-project-resource\`).
+See [Execution Targets & Resources](/docs/workflow/execution-targets) for the data model, registration flow, primary semantics, target ownership, and protocol commands (\`get-device\`, \`list-project-resources\`, \`add-project-resource\`).
 
 ---
 

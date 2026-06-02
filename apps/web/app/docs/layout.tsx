@@ -95,6 +95,10 @@ const data = {
           url: '/docs/workflow/agent-execution'
         },
         {
+          title: 'Terminal & IDE',
+          url: '/docs/workflow/terminal-and-ide'
+        },
+        {
           title: 'Execution Targets & Resources',
           url: '/docs/workflow/execution-targets'
         },

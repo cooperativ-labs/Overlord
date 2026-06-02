@@ -14,51 +14,43 @@ function Step({ n, children }: { n: number; children: ReactNode }) {
   );
 }
 
-/** Placeholder SSH target reconciliation before remote ovld registers. */
-export function ExecutionTargetsPlaceholderDiagram() {
+/** How a remote target is registered before the runner starts claiming work. */
+export function ExecutionTargetsRegistrationDiagram() {
   return (
     <figure className="not-prose my-6 w-full">
       <figcaption className="mb-3 text-sm text-muted-foreground">
-        Configure SSH in the web app before the remote machine has run{' '}
-        <code className="rounded bg-muted px-1 py-0.5 text-xs">ovld</code>; registration upgrades
-        the same row instead of creating a duplicate.
+        Create the target in the web app or via protocol first, then register it from the machine
+        that will run agents. Registration upgrades the same row instead of creating a duplicate.
       </figcaption>
-      <ol className="space-y-4" aria-label="Placeholder reconciliation steps">
+      <ol className="space-y-4" aria-label="Remote target registration steps">
         <Step n={1}>
           <p>
-            User saves SSH host, port, username, and key path for a project. Overlord upserts an{' '}
-            <strong>execution_targets</strong> row with{' '}
-            <code className="rounded bg-muted px-1 py-0.5 text-xs">is_placeholder=true</code> and{' '}
-            <code className="rounded bg-muted px-1 py-0.5 text-xs">
-              placeholder_key=ssh:{'{host}'}:{'{port}'}
-            </code>
-            .
+            User creates an <strong>execution_targets</strong> row for the machine or environment
+            that will run the agent, along with a project checkout path.
           </p>
         </Step>
         <Step n={2}>
           <p>
             Association rows (<code className="text-xs">organization_execution_targets</code>,{' '}
-            <code className="text-xs">user_execution_targets</code>,{' '}
-            <code className="text-xs">execution_target_ssh_credentials</code>,{' '}
-            <code className="text-xs">project_execution_targets</code>) and a{' '}
-            <code className="text-xs">project_resource_directories</code> row for the remote
-            checkout path are created in the same transaction.
+            <code className="text-xs">user_execution_targets</code>, and{' '}
+            <code className="text-xs">project_execution_targets</code>) plus a{' '}
+            <code className="text-xs">project_resource_directories</code> row are created in the
+            same transaction.
           </p>
         </Step>
         <Step n={3}>
           <p>
-            Agent work is queued against that target and resource. The runner on another machine may
-            claim only if its fingerprint does not match; SSH launch uses the stored credential
-            metadata locally.
+            Agent work is queued against that target and resource. The runner on that machine can
+            claim the request once its fingerprint matches the registered target.
           </p>
         </Step>
         <Step n={4}>
           <p>
-            When <code className="text-xs">ovld protocol get-device</code> runs on the remote host
-            with a real <code className="text-xs">device_fingerprint</code>, the server reconciles
-            the placeholder by host/port, sets <code className="text-xs">is_placeholder=false</code>
-            , and keeps the same <code className="text-xs">execution_target_id</code> — resources
-            and project links stay attached.
+            When <code className="text-xs">ovld protocol get-device</code> runs on the target
+            machine with a real <code className="text-xs">device_fingerprint</code>, the server
+            reconciles the pending row, marks it registered, and keeps the same{' '}
+            <code className="text-xs">execution_target_id</code> so resources and project links stay
+            attached.
           </p>
         </Step>
       </ol>

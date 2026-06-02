@@ -48,18 +48,6 @@ export async function approveDevice(userCode: string): Promise<void> {
     redirect('/auth/device?error=already_approved');
   }
 
-  const { data: orgData } = await service
-    .from('members')
-    .select('organization_id')
-    .eq('user_id', user.id)
-    .order('organization_id', { ascending: true })
-    .limit(1)
-    .single();
-
-  if (!orgData) {
-    redirect('/auth/device?error=no_organization');
-  }
-
   const { deviceClientId } = getOAuthRuntimeConfig();
   if (!deviceClientId) {
     redirect('/auth/device?error=oauth_not_configured');

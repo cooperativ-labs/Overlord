@@ -42,8 +42,8 @@ export function ExecutionTargetsArchitectureDiagram() {
   return (
     <figure className="not-prose my-6 w-full">
       <figcaption className="mb-3 text-sm text-muted-foreground">
-        Canonical execution targets are shared; organization labels, user access, SSH credentials,
-        project membership, and checkout paths hang off separate tables.
+        Canonical execution targets are shared; organization labels, user access, project
+        membership, and checkout paths hang off separate tables.
       </figcaption>
       <div
         className="flex flex-col gap-3"
@@ -54,7 +54,7 @@ export function ExecutionTargetsArchitectureDiagram() {
           <DiagramBox>
             <strong>execution_targets</strong>
             <p className="mt-1 text-xs text-muted-foreground">
-              fingerprint or SSH placeholder · host · port · transport
+              fingerprint or placeholder · host · transport
             </p>
           </DiagramBox>
         </Swimlane>
@@ -71,13 +71,7 @@ export function ExecutionTargetsArchitectureDiagram() {
             </DiagramBox>
             <DiagramBox>
               <strong>user_execution_targets</strong>
-              <p className="mt-1 text-xs text-muted-foreground">access + default SSH username</p>
-            </DiagramBox>
-            <DiagramBox>
-              <strong>execution_target_ssh_credentials</strong>
-              <p className="mt-1 text-xs text-muted-foreground">
-                per-user key path / auth method (metadata only)
-              </p>
+              <p className="mt-1 text-xs text-muted-foreground">access + default label</p>
             </DiagramBox>
           </Swimlane>
 

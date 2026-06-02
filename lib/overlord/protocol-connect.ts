@@ -9,10 +9,20 @@ import type { Database, Json } from '@/types/database.types';
 type ConnectClient = SupabaseClient<Database>;
 type ConnectionMethod = (typeof connectionMethods)[number];
 
+/**
+ * Normalizes a native agent session id for storage: trims whitespace and
+ * collapses empty/whitespace-only/undefined values to null so every write
+ * surface (connect, hook-event) stores it consistently.
+ */
+export function normalizeExternalSessionId(value?: string | null): string | null {
+  return typeof value === 'string' ? value.trim() || null : null;
+}
+
 export type ConnectParams = {
   ticketId: string;
   agentIdentifier: string;
   connectionMethod: ConnectionMethod;
+  externalSessionId?: string | null;
   metadata: Json;
   organizationId: number;
   userId?: string | null;
@@ -26,7 +36,15 @@ export type ConnectParams = {
  * sending events to a ticket without ingesting its context.
  */
 export async function runConnectProtocol(supabase: ConnectClient, params: ConnectParams) {
-  const { ticketId, agentIdentifier, connectionMethod, metadata, organizationId, userId } = params;
+  const {
+    ticketId,
+    agentIdentifier,
+    connectionMethod,
+    externalSessionId,
+    metadata,
+    organizationId,
+    userId
+  } = params;
   const sessionKey = randomUUID();
 
   const { data: ticket, error: ticketError } = await supabase
@@ -70,6 +88,7 @@ export async function runConnectProtocol(supabase: ConnectClient, params: Connec
     .insert({
       agent_identifier: agentIdentifier,
       connection_method: connectionMethod,
+      external_session_id: normalizeExternalSessionId(externalSessionId),
       metadata,
       session_key: sessionKey,
       objective_id: objectiveExecution.executedObjectiveId

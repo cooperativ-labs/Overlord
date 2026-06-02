@@ -172,6 +172,7 @@ export const hookEventSchema = z.object({
   prompt: agentTextOptional(20_000).optional(),
   turnIndex: z.number().int().min(0).optional(),
   followUpIntent: followUpIntentSchema.optional(),
+  externalSessionId: z.string().trim().max(2_048).nullable().optional(),
   sessionKey: z.string().uuid().optional()
 });
 
@@ -252,6 +253,7 @@ export const connectSchema = z.object({
   ticketId: ticketIdSchema,
   agentIdentifier: z.string().trim().min(1).max(120),
   connectionMethod: connectionMethodSchema.default('rest'),
+  externalSessionId: z.string().trim().max(2_048).nullable().optional(),
   metadata: z.record(z.string(), z.unknown()).optional().default({})
 });
 

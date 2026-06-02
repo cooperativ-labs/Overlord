@@ -1,13 +1,13 @@
 # Overlord Remote Agent
 
-Tiny Node HTTP daemon that runs on an SSH target host. The Overlord desktop and
-mobile clients reach it through an SSH port-forward and use it for filesystem +
-git operations against the project working directory on that host.
+Tiny Node HTTP daemon that runs on a target machine. The Overlord desktop and
+mobile clients use it for filesystem + git operations against the project
+working directory on that machine.
 
 ## Install (invoked by the client)
 
-1. Client runs `ssh host 'bash -s -- --with-bundle' < install.sh` with the
-   bundled `server.mjs` appended between `OVERLORD_BUNDLE_BEGIN` /
+1. Client runs the install script on the target machine with the bundled
+   `server.mjs` appended between `OVERLORD_BUNDLE_BEGIN` /
    `OVERLORD_BUNDLE_END` markers on stdin.
 2. The script drops the server into `~/.overlord/remote/` and emits an auth
    token at `~/.overlord/remote/token`.
@@ -16,16 +16,15 @@ git operations against the project working directory on that host.
 
 ## Launch (per session)
 
-The client opens an SSH connection and runs:
+The client starts the daemon process locally on the target machine:
 
 ```
 <NODE_BIN> <SERVER_PATH>
 ```
 
 The server binds `127.0.0.1:0` (random loopback port) and prints
-`OVERLORD_REMOTE_READY <host>:<port>` on stdout. The client reads that line,
-opens an SSH port-forward from a local ephemeral port to that remote port, and
-makes HTTP calls through the forward.
+`OVERLORD_REMOTE_READY <host>:<port>` on stdout. The client reads that line and
+makes HTTP calls through the advertised address.
 
 ## Protocol
 

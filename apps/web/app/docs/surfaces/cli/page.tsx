@@ -81,7 +81,7 @@ ovld ollama-claude "summarize today's diffs" --model qwen2.5-coder
 \`\`\`
 
 - Built-in agents must have an installed connector (\`ovld setup <agent>\`); pass \`--allow-uninstalled\` to override.
-- Overlord flags (\`--model\`, \`--thinking\`, \`--project-id\`, \`--personal\`, \`--for-human\`, \`--priority\`, \`--title\`, \`--working-directory\`, repeatable \`--flag\`, \`--pre-command\`, and the remote/SSH flags) are consumed by the CLI; \`--pre-command\` runs through your shell before the agent binary, and everything after \`--\` is forwarded to the agent binary.
+- Overlord flags (\`--model\`, \`--thinking\`, \`--project-id\`, \`--personal\`, \`--for-human\`, \`--priority\`, \`--title\`, \`--working-directory\`, repeatable \`--flag\`, and \`--pre-command\`) are consumed by the CLI; \`--pre-command\` runs through your shell before the agent binary, and everything after \`--\` is forwarded to the agent binary.
 - If no project resolves from the current directory, register it first with \`ovld add-cwd\` or pass \`--project-id\`.
 
 ## Terminal runner

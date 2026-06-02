@@ -387,6 +387,11 @@ export const TOOLS = [
           description:
             'Intent to store on the captured follow-up event. Hooks should default to discussion.'
         },
+        externalSessionId: {
+          type: ['string', 'null'],
+          description:
+            'Optional native agent resume/session id to persist on the attached Overlord session.'
+        },
         sessionKey: {
           type: 'string',
           description:

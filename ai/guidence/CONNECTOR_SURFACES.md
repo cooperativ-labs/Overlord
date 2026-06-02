@@ -58,7 +58,7 @@ Checklist:
 
 - Skill file is the canonical workflow instructions for bundle mode
 - Hook script calls `$OVERLORD_URL/api/protocol/permission-request` when Claude awaits tool permission
-- `UserPromptSubmit` hook calls `POST /api/protocol/hook-event` to capture follow-up messages without a session key
+- `UserPromptSubmit` hook calls `POST /api/protocol/hook-event` to capture follow-up messages and forward the Claude native `session_id` plus persisted `sessionKey` so `external_session_id` can be populated before delivery
 - Settings merge preserves user's existing hooks and permissions (no clobber)
 - Skill text tells the agent to request permission escalation or network access before retrying if `OVERLORD_URL` is unreachable
 - Skill text tells the agent to run `ovld auth repair` itself on protocol/MCP auth failures before asking the user to log in again or proceed without Overlord updates
@@ -188,7 +188,7 @@ Checklist:
 - Local Codex launches pass `agent=codex` into the context route
 - Local Codex does not request `bundle` instruction mode (`bundleAgent = null` for Codex)
 - Prompt text explicitly includes the Codex ticket workflow instructions and the `## Task` metadata now includes the resolved current `Objective ID` alongside `Ticket ID`
-- Local Codex plugin installs a `UserPromptSubmit` hook that records follow-up activity through `/api/protocol/hook-event`
+- Local Codex plugin installs a `UserPromptSubmit` hook that records follow-up activity through `/api/protocol/hook-event` and forwards `CODEX_THREAD_ID` / `CODEX_SESSION_ID` to populate `external_session_id` when attach-time detection missed it
 - Local Codex plugin installs a `PermissionRequest` hook that notifies Overlord through `/api/protocol/permission-request` (same blocking question event as Claude)
 - Agent delivery narratives stay on the `deliver` event; the follow-on review `status_change` event uses generic transition text so the activity feed does not duplicate the delivery summary
 - Prompt text does not tell Codex to look for `overlord-local` or a local Codex bundle
@@ -299,7 +299,7 @@ Checklist:
 
 - Bundle support via local Cursor plugin — slim workflow prompt can be used in `instructionMode=bundle`
 - No permission hook
-- `beforeSubmitPrompt` hook (Cursor IDE hooks) calls `POST /api/protocol/hook-event` when `TICKET_ID`, `OVERLORD_ACCESS_TOKEN`, and `OVERLORD_URL` / `OVERLORD_CONNECTOR_URL` are present in the agent environment (same contract as Claude/Codex `UserPromptSubmit`)
+- `beforeSubmitPrompt` hook (Cursor IDE hooks) calls `POST /api/protocol/hook-event` when `TICKET_ID`, `OVERLORD_ACCESS_TOKEN`, and `OVERLORD_URL` / `OVERLORD_CONNECTOR_URL` are present in the agent environment (same contract as Claude/Codex `UserPromptSubmit`) and forwards Cursor `conversation_id` plus the persisted Overlord `sessionKey`
 - Model flag: `--model` (no thinking/effort flag for Cursor)
 - Desktop and CLI launches export `TMPDIR`, `TMP`, `TEMP`, and `OVERLORD_TMPDIR` to the resolved project `.overlord/tmp/` directory when a project working directory is known
 
@@ -389,7 +389,7 @@ Checklist:
 
 Checklist:
 
-- `UserPromptSubmit` calls `POST /api/protocol/hook-event` when `OVERLORD_URL`, `OVERLORD_ACCESS_TOKEN`, and `TICKET_ID` are set (same contract as Claude/Codex/Cursor follow-up capture)
+- `UserPromptSubmit` calls `POST /api/protocol/hook-event` when `OVERLORD_URL`, `OVERLORD_ACCESS_TOKEN`, and `TICKET_ID` are set (same contract as Claude/Codex/Cursor follow-up capture) and forwards Antigravity `session_id` plus the persisted Overlord `sessionKey`
 - Hook skips turn index 0 (initial injected ticket prompt) via file-based session state under `~/.ovld/antigravity-user-prompt-hook/`
 - **No permission hook** — Antigravity has no `PermissionRequest` equivalent wired to Overlord
 - Skill text tells the agent to request permission escalation or network access before retrying if `OVERLORD_URL` is unreachable
@@ -636,6 +636,7 @@ Notes:
 - **Parameter naming:** Supabase Edge MCP (`/Users/jake/Development/Cooperativ/Overlord/supabase/functions/mcp/tools.ts`) uses **camelCase** tool arguments that match `POST /api/protocol/*` JSON bodies (`ticketId`, `sessionKey`, `changeRationales`, …). The local Codex MCP shim (`/Users/jake/Development/Cooperativ/Overlord/plugins/overlord/scripts/overlord-mcp.mjs`) uses **snake_case** keys that map to `ovld protocol` kebab-case flags (`ticket_id` → `--ticket-id`). Prefer camelCase when calling the hosted MCP endpoint and snake_case when calling the shim.
 - `discover-project` accepts `projectId` / `--project-id` / `project_id` as an explicit shortcut, or `workingDirectory` / `--working-directory` / `working_directory` for path matching. Device identity fields (`deviceFingerprint`, `deviceHostname`, `devicePlatform`) are accepted across API, CLI, hosted MCP, and local shims so directory matching can prefer resource directories for the current device.
 - `agentIdentifier` and `connectionMethod` are required by the API but defaulted client-side: CLI defaults to `<agent>`/`cli`, MCP defaults to `mcp`.
+- `externalSessionId` is accepted on `attach`, `connect`, `update`, `heartbeat`, and `hook-event`, allowing active sessions to expose a native resume id before delivery.
 - Organization scope for ticket-scoped protocol calls is resolved in this order: organization id embedded in human-readable `ticket_id` (for example `1:899`), then explicit `--organization-id` / `x-organization-id`, then stored OAuth organization.
 - `deliver` accepts optional `artifacts` (defaults to `[]`), `changeRationales`, `snapshot`, and `checkpoint` metadata — same as `deliverSchema` in `/Users/jake/Development/Cooperativ/Overlord/lib/overlord/validation.ts`. The CLI can send the full delivery object via `--payload-json <json>` or `--payload-file <path|->`; when either full-payload flag is used, do not also pass `--summary`, `--artifacts-*`, or `--change-rationales-*`. Local git checkpoints are created on `attach` (per executing objective), not `deliver`; `--skip-checkpoint` is an `attach` flag.
 - Objective arrays are accepted on `create`, `prompt`, and `record-work` as ordered `objectives` arrays of `{ objective, title?, autoAdvance?, assignedAgent? }`. CLI flags are `--objectives-json` / `--objectives-file`; hosted MCP uses camelCase fields and the local shim uses snake_case inputs mapped to those CLI flags.
@@ -649,7 +650,7 @@ Notes:
 - `heartbeat` is intentionally session-scoped, not event-scoped. It updates `agent_sessions.heartbeat_at` and stores transient `phase` / `percent` / `note` telemetry on the session row without creating a `ticket_events` history entry.
 - After a prior `deliver`, execution updates, git snapshots, rationale rows, deliverable payloads, or explicit `pending_delivery` intent mark the current objective `pending_delivery`. The transition itself does not count as work, so redelivery is required only when follow-up execution produced something meaningful after the previous delivery.
 - `update` event types include `discussion_summary` and `decision` in addition to `update`, `user_follow_up`, and `alert`, so important non-file follow-up outcomes can be recorded without treating them as execution.
-- `hook-event` is invoked by installed lifecycle hooks (`UserPromptSubmit` and `Stop`). `UserPromptSubmit` follow-up captures default to `followUpIntent=discussion`. `Stop` fires when the agent's turn ends; when called with an optional `sessionKey`, the response includes `deliveryStatus` indicating whether the session has pending work that should be delivered. The check is non-blocking and does not force delivery after every message.
+- `hook-event` is invoked by installed lifecycle hooks (`UserPromptSubmit` and `Stop`). `UserPromptSubmit` follow-up captures default to `followUpIntent=discussion` and may also carry `externalSessionId` plus `sessionKey` so the current `agent_sessions.external_session_id` is updated as soon as the runtime exposes a native resume id. `Stop` fires when the agent's turn ends; when called with an optional `sessionKey`, the response includes `deliveryStatus` indicating whether the session has pending work that should be delivered. The check is non-blocking and does not force delivery after every message.
 - `prompt` (formerly `spawn`) creates and executes a ticket immediately. The CLI accepts `spawn` as a backward-compatible alias.
 - MCP objective attachment tools follow `<verb>_<noun>` naming. CLI subcommands keep the `attachment-*` shape for terminal ergonomics. (`artifacts` is reserved for the structured records agents submit via `deliver`, not user-uploaded files.)
 - `GET /context/[ticketId]` and `GET /projects` are intentionally UI-only (Overlord desktop/web). They are marked `// UI-private — not exposed via CLI/MCP by design` in code so future drift audits don't re-flag them.

@@ -74,7 +74,7 @@ Ordinary deliver artifacts should use `next_steps`, `test_results`, `migration`,
 ovld protocol revert --objective-id <objective-id>
 ```
 
-`revert` restores the local working tree to the recorded objective checkpoint and saves a safety ref under `refs/overlord/safety/` first.
+`revert` restores the local working tree to the recorded objective state.
 
 ## Record Change Rationales
 
