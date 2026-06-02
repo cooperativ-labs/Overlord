@@ -34,5 +34,11 @@
     "filename": "auto-advance-flow.md",
     "title": "Objective Auto-Advance Flow",
     "description": "Auto-advance and manual Run share one launch path: the backend decides **what** should run, writes a durable `execution_requests` row, and a capable machine runs **`ovld runner`** to claim that row..."
+  },
+  {
+    "slug": "execution-targets-resources-runner",
+    "filename": "execution-targets-resources-runner.md",
+    "title": "Execution Targets, Resources, and the Overlord Runner",
+    "description": "This document covers everything an agent or user needs to know about execution targets, resource directories, target ownership, and the `ovld runner` — the three interlocking concepts that control where and how Overlord launches agent work."
   }
 ]

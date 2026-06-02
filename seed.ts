@@ -102,6 +102,7 @@ async function main() {
       role: 'authenticated',
       aud: 'authenticated',
       is_super_admin: false,
+      banned_until: null,
       raw_app_meta_data: { provider: 'email', providers: ['email'] },
       raw_user_meta_data: {
         name: 'Jake',
@@ -117,6 +118,7 @@ async function main() {
       role: 'authenticated',
       aud: 'authenticated',
       is_super_admin: false,
+      banned_until: null,
       raw_app_meta_data: { provider: 'email', providers: ['email'] },
       raw_user_meta_data: {
         name: 'Alice',

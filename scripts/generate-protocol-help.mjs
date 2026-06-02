@@ -22,7 +22,9 @@ const MANIFEST_ORDER = [
   'new-user-onboarding.md',
   'users-guide.md',
   'overlord-examples.md',
-  'feed-page-functionality.md'
+  'feed-page-functionality.md',
+  'auto-advance-flow.md',
+  'execution-targets-resources-runner.md'
 ];
 
 function parseMarkdownDoc({ content, filename }) {

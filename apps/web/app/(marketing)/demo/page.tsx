@@ -1,5 +1,9 @@
 import type { Metadata } from 'next';
 
+import { AgentModelsPrefetch } from '@/components/features/AgentModelSelector';
+import { getAgentModelsAction } from '@/lib/actions/agent-models';
+import { resolveMarketingAgentModels } from '@/lib/marketing/offered-agent-models';
+
 import { DemoContent } from './DemoContent';
 
 export const metadata: Metadata = {
@@ -11,6 +15,13 @@ export const metadata: Metadata = {
   }
 };
 
-export default function DemoPage() {
-  return <DemoContent />;
+export default async function DemoPage() {
+  const offeredModels = resolveMarketingAgentModels(await getAgentModelsAction());
+
+  return (
+    <>
+      <AgentModelsPrefetch models={offeredModels} configs={{}} launchPreference={null} />
+      <DemoContent />
+    </>
+  );
 }

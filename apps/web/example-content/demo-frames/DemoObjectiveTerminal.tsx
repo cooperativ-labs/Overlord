@@ -27,7 +27,11 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import type { AgentModelSelection } from '@/lib/helpers/agent-model-preference';
-import type { AgentSelectorValue, LaunchAgentType } from '@/lib/helpers/agent-types';
+import {
+  type AgentSelectorValue,
+  isLaunchAgentTypeValue,
+  type LaunchAgentType
+} from '@/lib/helpers/agent-types';
 import {
   MARKETING_OFFERED_AGENT_MODELS,
   resolveMarketingAgentModels
@@ -143,10 +147,25 @@ function DemoObjectiveCard({ onRun, running }: { onRun: () => void; running: boo
 function DemoObjectiveAgentControls({ onRun, running }: { onRun: () => void; running: boolean }) {
   const { models: fetchedModels } = useAgentModels();
   const catalogModels = resolveMarketingAgentModels(fetchedModels);
-  const [assignedSelection, setAssignedSelection] = useState(INITIAL_SELECTION);
+  const [chooserSelection, setChooserSelection] = useState(INITIAL_SELECTION);
   const [selectedAgent, setSelectedAgent] = useState<AgentSelectorValue>(INITIAL_SELECTION.agent);
   const [chooserOpen, setChooserOpen] = useState(false);
   const [autoAdvance, setAutoAdvance] = useState(true);
+
+  const handleAgentSelect = useCallback((agent: LaunchAgentType) => {
+    setSelectedAgent(agent);
+    setChooserSelection(current => ({
+      ...current,
+      agent,
+      model: null,
+      thinking: null,
+      customAgentId: null
+    }));
+  }, []);
+
+  const splitButtonSelection: AgentModelSelection = isLaunchAgentTypeValue(selectedAgent)
+    ? { ...chooserSelection, agent: selectedAgent }
+    : chooserSelection;
 
   return (
     <div className="flex min-w-0 items-center justify-between gap-2 overflow-hidden px-2 py-1.5">
@@ -183,7 +202,7 @@ function DemoObjectiveAgentControls({ onRun, running }: { onRun: () => void; run
         <Popover open={chooserOpen} onOpenChange={setChooserOpen}>
           <PopoverTrigger asChild>
             <AgentModelChooserTrigger
-              selection={assignedSelection}
+              selection={chooserSelection}
               active={chooserOpen}
               onToggle={() => {}}
             />
@@ -196,15 +215,16 @@ function DemoObjectiveAgentControls({ onRun, running }: { onRun: () => void; run
             <AgentModelSelector
               demo
               catalogModels={catalogModels}
-              value={assignedSelection}
-              onChange={setAssignedSelection}
+              value={chooserSelection}
+              onChange={setChooserSelection}
+              onAgentSelect={handleAgentSelect}
             />
           </PopoverContent>
         </Popover>
         <MockAgentSplitButton
           selectedAgent={selectedAgent}
           onSelectAgent={setSelectedAgent}
-          assignedSelection={assignedSelection}
+          assignedSelection={splitButtonSelection}
           running={running}
           onRun={onRun}
         />

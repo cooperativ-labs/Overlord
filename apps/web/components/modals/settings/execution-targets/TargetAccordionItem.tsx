@@ -1,12 +1,15 @@
 'use client';
 
+import { ArrowRight, ArrowRightLeft, Check, Copy, X } from 'lucide-react';
 import { type KeyboardEvent, useCallback, useEffect, useState } from 'react';
+import { toast } from 'sonner';
 
 import { useElectron } from '@/components/features/terminal/useElectron';
 import { AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { LoadingButton } from '@/components/ui/loading-button';
 import {
   Select,
   SelectContent,
@@ -15,9 +18,19 @@ import {
   SelectValue
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import type { UserExecutionTargetDetailed } from '@/lib/actions/resource-directories';
-
 import {
+  claimExecutionTargetAction,
+  type ExecutionTargetOwnership,
+  setExecutionTargetOwnershipAction,
+  type UserExecutionTargetDetailed
+} from '@/lib/actions/resource-directories';
+import { useCopyToClipboard } from '@/lib/hooks/use-copy-to-clipboard';
+import { type AgentLaunchConfig } from '@/lib/schemas/target-agent-config';
+
+import { AgentNameWithLogo } from './AgentNameWithLogo';
+import {
+  AGENT_LABELS,
+  AGENTS,
   authMethodLabel,
   DEFAULT_TERMINAL_PROFILE,
   DEFAULT_TMUX_COMMAND,
@@ -33,14 +46,69 @@ import {
 export function TargetAccordionItem({
   target,
   api,
-  isElectron
+  isElectron,
+  ownership,
+  onOwnershipChanged,
+  onGetAgentConfig,
+  onSavePreCommand,
+  onPreCommandInput,
+  onAddFlag,
+  onRemoveFlag,
+  onBuildLocalAgentCommand,
+  onNavigate
 }: {
   target: UserExecutionTargetDetailed;
   api: ReturnType<typeof useElectron>['api'];
   isElectron: boolean;
+  ownership?: ExecutionTargetOwnership;
+  onOwnershipChanged?: () => void;
+  onGetAgentConfig: (args: { targetId: string; agent: string }) => AgentLaunchConfig;
+  onSavePreCommand: (args: { targetId: string; agent: string; value: string }) => Promise<void>;
+  onPreCommandInput: (args: { targetId: string; agent: string; value: string }) => void;
+  onAddFlag: (args: {
+    targetId: string;
+    selectedLocalAgent: string;
+    flagInput: string;
+  }) => Promise<void>;
+  onRemoveFlag: (args: { targetId: string; agent: string; index: number }) => Promise<void>;
+  onBuildLocalAgentCommand: (args: { targetId: string; agent: string }) => string;
+  onNavigate?: (section: string) => void;
 }) {
   const [profile, setProfile] = useState<TerminalProfileState>(DEFAULT_TERMINAL_PROFILE);
   const [profileLoaded, setProfileLoaded] = useState(false);
+  const [pendingOrgId, setPendingOrgId] = useState<number | null>(null);
+  const [selectedLocalAgent, setSelectedLocalAgent] = useState<string>('claude');
+  const [flagInput, setFlagInput] = useState('');
+
+  async function handleClaim(organizationId: number) {
+    setPendingOrgId(organizationId);
+    try {
+      await claimExecutionTargetAction({ targetId: target.id, organizationId });
+      toast.success('Target claimed as personal.');
+      onOwnershipChanged?.();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to claim target.');
+    } finally {
+      setPendingOrgId(null);
+    }
+  }
+
+  async function handleMakeOrgOwned(organizationId: number) {
+    setPendingOrgId(organizationId);
+    try {
+      await setExecutionTargetOwnershipAction({
+        targetId: target.id,
+        organizationId,
+        ownerUserId: null
+      });
+      toast.success('Target donated to the organization.');
+      onOwnershipChanged?.();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to update target ownership.');
+    } finally {
+      setPendingOrgId(null);
+    }
+  }
 
   useEffect(() => {
     if (!api) {
@@ -133,6 +201,16 @@ export function TargetAccordionItem({
     : 'Local';
 
   const inputsDisabled = !isElectron || !profileLoaded;
+  const localAgentConfig = onGetAgentConfig({ targetId: target.id, agent: selectedLocalAgent });
+
+  async function handleAddFlagToTarget() {
+    await onAddFlag({
+      targetId: target.id,
+      selectedLocalAgent,
+      flagInput
+    });
+    setFlagInput('');
+  }
 
   return (
     <AccordionItem value={target.id} className="px-4">
@@ -156,6 +234,77 @@ export function TargetAccordionItem({
         </div>
       </AccordionTrigger>
       <AccordionContent className="grid gap-4">
+        {ownership && ownership.organizations.length > 0 ? (
+          <div className="grid gap-3 rounded-md border p-4">
+            <div className="grid gap-1">
+              <h4 className="text-sm font-medium">Ownership</h4>
+              <p className="text-xs text-muted-foreground">
+                A personal target is managed only by its owner. An organization-owned target can be
+                managed by any project editor. Claiming requires admin permissions in the
+                organization.
+              </p>
+            </div>
+            <div className="grid gap-2">
+              {ownership.organizations.map(org => {
+                const isPending = pendingOrgId === org.organizationId;
+                const statusLabel = org.isOwnedByMe
+                  ? 'Owned by you'
+                  : org.isOrgOwned
+                    ? 'Organization-owned'
+                    : 'Owned by another member';
+                return (
+                  <div
+                    key={org.organizationId}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-muted/30 px-3 py-2"
+                  >
+                    <div className="flex min-w-0 flex-col">
+                      <span className="truncate text-sm font-medium">{org.organizationName}</span>
+                      <span className="text-xs text-muted-foreground">{statusLabel}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge
+                        variant={org.isOrgOwned ? 'outline' : 'secondary'}
+                        className="text-[10px] uppercase"
+                      >
+                        {org.isOrgOwned ? 'Org' : 'Personal'}
+                      </Badge>
+                      {org.canClaim ? (
+                        <LoadingButton
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          buttonState={isPending ? 'loading' : 'default'}
+                          text={
+                            <span className="flex items-center gap-1.5">
+                              <ArrowRightLeft className="h-3.5 w-3.5" />
+                              Claim
+                            </span>
+                          }
+                          onClick={() => void handleClaim(org.organizationId)}
+                        />
+                      ) : org.canMakeOrgOwned ? (
+                        <LoadingButton
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          buttonState={isPending ? 'loading' : 'default'}
+                          text={
+                            <span className="flex items-center gap-1.5">
+                              <ArrowRightLeft className="h-3.5 w-3.5" />
+                              Make org-owned
+                            </span>
+                          }
+                          onClick={() => void handleMakeOrgOwned(org.organizationId)}
+                        />
+                      ) : null}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
+
         <div className="grid gap-4 rounded-md border p-4">
           <div className="grid gap-1">
             <h4 className="text-sm font-medium">Terminal settings</h4>
@@ -305,6 +454,166 @@ export function TargetAccordionItem({
             </div>
           </div>
         </div>
+
+        {isElectron ? (
+          <div className="grid gap-4 rounded-md border p-4">
+            <div className="grid gap-1">
+              <h4 className="text-sm font-medium">Local agent configuration</h4>
+              <p className="text-xs text-muted-foreground">
+                Customize how Overlord launches each local agent for this execution target.
+              </p>
+            </div>
+            <div className="grid gap-4">
+              <Select value={selectedLocalAgent} onValueChange={setSelectedLocalAgent}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select agent" />
+                </SelectTrigger>
+                <SelectContent>
+                  {AGENTS.map(agent => (
+                    <SelectItem key={agent} value={agent}>
+                      <AgentNameWithLogo agent={agent} label={AGENT_LABELS[agent] ?? agent} />
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <label className="text-xs font-medium text-foreground">Pre-command</label>
+                  <input
+                    type="text"
+                    placeholder="e.g., ollama or agent-pod"
+                    value={localAgentConfig.preCommand ?? ''}
+                    onChange={e =>
+                      onPreCommandInput({
+                        targetId: target.id,
+                        agent: selectedLocalAgent,
+                        value: e.target.value
+                      })
+                    }
+                    onBlur={e =>
+                      void onSavePreCommand({
+                        targetId: target.id,
+                        agent: selectedLocalAgent,
+                        value: e.target.value
+                      })
+                    }
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        void onSavePreCommand({
+                          targetId: target.id,
+                          agent: selectedLocalAgent,
+                          value: e.currentTarget.value
+                        });
+                      }
+                    }}
+                    className="w-full rounded border bg-background px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    Runs in your shell before the agent binary, wrapping it - e.g.{' '}
+                    <code className="rounded bg-muted px-1">ollama</code> launches{' '}
+                    <code className="rounded bg-muted px-1">ollama {selectedLocalAgent} ...</code>
+                  </p>
+                  {localAgentConfig.preCommand ? (
+                    <div className="rounded-md border border-yellow-500/40 bg-yellow-50/50 p-2.5 dark:bg-yellow-900/10">
+                      <p className="text-[11px] text-yellow-800 dark:text-yellow-300">
+                        If this command runs inside a container, make sure{' '}
+                        <code className="rounded bg-yellow-100 px-1 dark:bg-yellow-900/30">
+                          overlord-cli
+                        </code>{' '}
+                        is installed{' '}
+                        <code className="rounded bg-yellow-100 px-1 dark:bg-yellow-900/30">
+                          npm install -g overlord-cli
+                        </code>{' '}
+                        there so agents can communicate with Overlord. We recommend generating a
+                        token and using the{' '}
+                        <code className="rounded bg-yellow-100 px-1 dark:bg-yellow-900/30">
+                          ovld auth login --token {`<oat...>`}
+                        </code>{' '}
+                        command to persist it in your environment.
+                      </p>
+                      <LoadingButton
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="mt-2 w-fit"
+                        buttonState="default"
+                        text={
+                          <span className="flex items-center gap-1.5">
+                            Manage agent tokens
+                            <ArrowRight className="h-3.5 w-3.5" />
+                          </span>
+                        }
+                        onClick={() => onNavigate?.('Agent Tokens')}
+                      />
+                    </div>
+                  ) : null}
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-medium text-foreground">Command flags</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="e.g., --enable-auto-mode"
+                      value={flagInput}
+                      onChange={e => setFlagInput(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          void handleAddFlagToTarget();
+                        }
+                      }}
+                      className="flex-1 rounded border bg-background px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void handleAddFlagToTarget()}
+                      className="rounded border bg-muted px-3 py-2 text-xs font-medium hover:bg-muted/80"
+                    >
+                      Add
+                    </button>
+                  </div>
+                </div>
+                {localAgentConfig.flags.length > 0 ? (
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap gap-2">
+                      {localAgentConfig.flags.map((flag, index) => (
+                        <div
+                          key={index}
+                          className="flex items-center gap-2 rounded-md bg-muted px-2.5 py-1"
+                        >
+                          <code className="text-xs font-medium">{flag}</code>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void onRemoveFlag({
+                                targetId: target.id,
+                                agent: selectedLocalAgent,
+                                index
+                              })
+                            }
+                            className="rounded p-0.5 hover:bg-muted-foreground/20"
+                            title="Remove flag"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+                <div className="space-y-2 rounded-md border bg-muted/30 p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs font-medium text-foreground">Example command</p>
+                  </div>
+                  <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs">
+                    {onBuildLocalAgentCommand({ targetId: target.id, agent: selectedLocalAgent })}
+                  </pre>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         <div className="grid gap-3 rounded-md border p-4">
           <div className="grid gap-1">

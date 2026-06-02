@@ -28,6 +28,13 @@ export function ElectronLoginScreen() {
   const restoreBlockedRef = React.useRef(false);
   const nextPath = sanitizeNextPath(searchParams.get('next'));
 
+  const showMissingDesktopBridgeError = React.useCallback(() => {
+    setErrorMessage(
+      'Desktop auth bridge is unavailable. Restart the desktop app or rerun `yarn electron:dev`.'
+    );
+    setSignInButtonState('error');
+  }, []);
+
   // Stable ref so the effect doesn't re-run when router identity changes.
   const routerRef = React.useRef(router);
   routerRef.current = router;
@@ -35,8 +42,15 @@ export function ElectronLoginScreen() {
   nextPathRef.current = nextPath;
 
   useEffect(() => {
+    console.log('[ElectronLogin] mount effect', {
+      hasElectronAPI: !!window.electronAPI,
+      hasAuth: !!window.electronAPI?.auth
+    });
     const electronAuth = window.electronAPI?.auth;
-    if (!electronAuth) return;
+    if (!electronAuth) {
+      showMissingDesktopBridgeError();
+      return;
+    }
 
     let cancelled = false;
 
@@ -78,7 +92,7 @@ export function ElectronLoginScreen() {
       cancelled = true;
       clearTimeout(timeout);
     };
-  }, []);
+  }, [showMissingDesktopBridgeError]);
 
   async function handleLogout() {
     restoreBlockedRef.current = true;
@@ -88,8 +102,17 @@ export function ElectronLoginScreen() {
   }
 
   async function handleSignIn() {
+    console.log('[ElectronLogin] handleSignIn called', {
+      hasElectronAPI: !!window.electronAPI,
+      hasAuth: !!window.electronAPI?.auth,
+      buttonState: signInButtonState
+    });
     const electronAuth = window.electronAPI?.auth;
-    if (!electronAuth) return;
+    if (!electronAuth) {
+      console.warn('[ElectronLogin] electronAPI.auth is missing');
+      showMissingDesktopBridgeError();
+      return;
+    }
 
     restoreBlockedRef.current = false;
     setIsRestoringSession(false);

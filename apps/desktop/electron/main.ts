@@ -94,13 +94,17 @@ function getRendererCsp(targetUrl: string): string {
       ].join(' ')
     : ["'self'", 'https:', 'wss:'].join(' ');
 
+  const scriptSources = isDev
+    ? ["'self'", "'unsafe-inline'", "'unsafe-eval'"].join(' ')
+    : ["'self'", "'unsafe-inline'"].join(' ');
+
   return [
     "default-src 'self'",
     "base-uri 'self'",
     "form-action 'self'",
     "frame-ancestors 'none'",
     "object-src 'none'",
-    "script-src 'self' 'unsafe-inline'",
+    `script-src ${scriptSources}`,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob: https:",
     "font-src 'self' data:",

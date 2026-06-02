@@ -186,6 +186,131 @@ export async function getUserExecutionTargetsWithDetailsAction(): Promise<
   return targets;
 }
 
+/** Per-organization ownership status of an execution target for the current user. */
+export type ExecutionTargetOrgOwnership = {
+  organizationId: number;
+  organizationName: string;
+  /** `null` => organization-owned; otherwise the owning user's id. */
+  ownerUserId: string | null;
+  isOrgOwned: boolean;
+  isOwnedByMe: boolean;
+  /** Whether the current user is an ADMIN of this organization. */
+  isAdmin: boolean;
+  /** Whether the current user may claim this target as personal in this org. */
+  canClaim: boolean;
+  /** Whether the current user may donate this (personal) target to the org. */
+  canMakeOrgOwned: boolean;
+};
+
+export type ExecutionTargetOwnership = {
+  targetId: string;
+  label: string;
+  hostname: string | null;
+  /** Org associations limited to organizations the current user belongs to. */
+  organizations: ExecutionTargetOrgOwnership[];
+};
+
+/**
+ * Returns the current user's execution targets with per-organization ownership
+ * status, used by the settings page to claim/donate targets. Org associations
+ * are limited to organizations the user is a member of; claiming requires ADMIN.
+ */
+export async function getExecutionTargetOwnershipsAction(): Promise<ExecutionTargetOwnership[]> {
+  const supabase = await createClientForRequest();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data, error } = await (supabase as any)
+    .from('user_execution_targets')
+    .select(
+      'execution_target_id, execution_targets(host, organization_execution_targets(label, organization_id, owner_user_id))'
+    )
+    .eq('user_id', user.id)
+    .order('last_connected_at', { ascending: false, nullsFirst: false });
+
+  if (error) {
+    console.error('getExecutionTargetOwnershipsAction', error);
+    return [];
+  }
+
+  const rows = (data ?? []) as any[];
+
+  const extractOrgTargets = (row: any): any[] => {
+    const target = Array.isArray(row.execution_targets)
+      ? row.execution_targets[0]
+      : row.execution_targets;
+    const orgRel = target?.organization_execution_targets;
+    return Array.isArray(orgRel) ? orgRel : orgRel ? [orgRel] : [];
+  };
+
+  // Resolve the user's roles and org names in bulk across every referenced org.
+  const orgIds = new Set<number>();
+  for (const row of rows) {
+    for (const o of extractOrgTargets(row)) {
+      if (typeof o?.organization_id === 'number') orgIds.add(o.organization_id);
+    }
+  }
+
+  const memberOrgIds = new Set<number>();
+  const adminOrgIds = new Set<number>();
+  const orgNames = new Map<number, string>();
+  if (orgIds.size > 0) {
+    const ids = [...orgIds];
+    const [{ data: memberRows }, { data: orgRows }] = await Promise.all([
+      (supabase as any)
+        .from('members')
+        .select('organization_id, role')
+        .eq('user_id', user.id)
+        .in('organization_id', ids),
+      (supabase as any).from('organizations').select('id, name').in('id', ids)
+    ]);
+    for (const m of (memberRows ?? []) as any[]) {
+      memberOrgIds.add(m.organization_id);
+      if (m.role === 'ADMIN') adminOrgIds.add(m.organization_id);
+    }
+    for (const o of (orgRows ?? []) as any[]) orgNames.set(o.id, o.name);
+  }
+
+  return rows.map(row => {
+    const target = Array.isArray(row.execution_targets)
+      ? row.execution_targets[0]
+      : row.execution_targets;
+    const orgTargets = extractOrgTargets(row);
+    const organizations: ExecutionTargetOrgOwnership[] = orgTargets
+      .filter(
+        (o: any) => typeof o?.organization_id === 'number' && memberOrgIds.has(o.organization_id)
+      )
+      .map((o: any) => {
+        const ownerUserId = (o.owner_user_id ?? null) as string | null;
+        const isOrgOwned = ownerUserId === null;
+        const isOwnedByMe = ownerUserId === user.id;
+        const isAdmin = adminOrgIds.has(o.organization_id);
+        return {
+          organizationId: o.organization_id as number,
+          organizationName: orgNames.get(o.organization_id) ?? `Organization ${o.organization_id}`,
+          ownerUserId,
+          isOrgOwned,
+          isOwnedByMe,
+          isAdmin,
+          // Claiming makes the target personal to this user; gated to admins
+          // (the current owner already owns it, so claiming is a no-op for them).
+          canClaim: !isOwnedByMe && isAdmin,
+          // Donating to the org is allowed for the current owner or an admin, and
+          // only when the target is currently personal.
+          canMakeOrgOwned: !isOrgOwned && (isAdmin || isOwnedByMe)
+        };
+      });
+    return {
+      targetId: row.execution_target_id as string,
+      label: (orgTargets[0]?.label ?? target?.host ?? 'Unknown target') as string,
+      hostname: (target?.host ?? null) as string | null,
+      organizations
+    };
+  });
+}
+
 /** Returns execution targets the current user has access to, for project resource assignment in the browser. */
 export async function getUserExecutionTargetsAction(): Promise<UserExecutionTarget[]> {
   const supabase = await createClientForRequest();
@@ -375,6 +500,12 @@ export async function addProjectResourceDirectoryAction(input: {
 
   if (error) {
     console.error('addProjectResourceDirectoryAction', error);
+    // Unique violation on (project_id, execution_target_id, directory_path): the
+    // folder is already linked to this project on this device. Surface a clear,
+    // human-readable message instead of leaking the raw Postgres constraint text.
+    if (error.code === '23505') {
+      throw new Error('This folder is already linked to this project on this device.');
+    }
     throw new Error(error.message ?? 'Failed to add resource directory.');
   }
 

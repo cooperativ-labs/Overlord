@@ -11,7 +11,7 @@ import {
   Plus
 } from 'lucide-react';
 import Image from 'next/image';
-import { useLayoutEffect, useState } from 'react';
+import { useCallback, useLayoutEffect, useState } from 'react';
 
 import { AgentModelChooserTrigger } from '@/components/features/AgentModelChooserTrigger';
 import {
@@ -25,7 +25,11 @@ import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import type { AgentModelSelection } from '@/lib/helpers/agent-model-preference';
-import type { AgentSelectorValue, LaunchAgentType } from '@/lib/helpers/agent-types';
+import {
+  type AgentSelectorValue,
+  isLaunchAgentTypeValue,
+  type LaunchAgentType
+} from '@/lib/helpers/agent-types';
 import {
   MARKETING_OFFERED_AGENT_MODELS,
   resolveMarketingAgentModels
@@ -102,10 +106,25 @@ function DemoObjectiveAgentControls({
   const { models: fetchedModels } = useAgentModels();
   const catalogModels = resolveMarketingAgentModels(fetchedModels);
   const initialSelection = demoSelectionFromObjective(objective);
-  const [assignedSelection, setAssignedSelection] = useState(initialSelection);
+  const [chooserSelection, setChooserSelection] = useState(initialSelection);
   const [selectedAgent, setSelectedAgent] = useState<AgentSelectorValue>(initialSelection.agent);
   const [chooserOpen, setChooserOpen] = useState(false);
   const [autoAdvance, setAutoAdvance] = useState(objective.autoAdvance ?? true);
+
+  const handleAgentSelect = useCallback((agent: LaunchAgentType) => {
+    setSelectedAgent(agent);
+    setChooserSelection(current => ({
+      ...current,
+      agent,
+      model: null,
+      thinking: null,
+      customAgentId: null
+    }));
+  }, []);
+
+  const splitButtonSelection: AgentModelSelection = isLaunchAgentTypeValue(selectedAgent)
+    ? { ...chooserSelection, agent: selectedAgent }
+    : chooserSelection;
 
   return (
     <div className="flex min-w-0 items-center justify-between gap-2 overflow-hidden px-2 py-1.5">
@@ -142,7 +161,7 @@ function DemoObjectiveAgentControls({
         <Popover open={chooserOpen} onOpenChange={setChooserOpen}>
           <PopoverTrigger asChild>
             <AgentModelChooserTrigger
-              selection={assignedSelection}
+              selection={chooserSelection}
               active={chooserOpen}
               onToggle={() => {}}
             />
@@ -155,8 +174,9 @@ function DemoObjectiveAgentControls({
             <AgentModelSelector
               demo
               catalogModels={catalogModels}
-              value={assignedSelection}
-              onChange={setAssignedSelection}
+              value={chooserSelection}
+              onChange={setChooserSelection}
+              onAgentSelect={handleAgentSelect}
             />
           </PopoverContent>
         </Popover>
@@ -172,7 +192,7 @@ function DemoObjectiveAgentControls({
             ticketId={DEMO_TICKET_ID}
             selectedAgent={selectedAgent}
             onSelectAgent={setSelectedAgent}
-            assignedSelection={assignedSelection}
+            assignedSelection={splitButtonSelection}
             hasProjectWorkingDirectory
             workingDirectory="/demo"
             onDemoRun={onRun}

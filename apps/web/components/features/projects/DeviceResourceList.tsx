@@ -1,14 +1,7 @@
 'use client';
 
-import {
-  ArrowRightLeft,
-  Check,
-  ChevronDown,
-  ChevronRight,
-  FolderOpen,
-  Laptop,
-  Monitor
-} from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
+import { Check, ChevronDown, ChevronRight, FolderOpen, Laptop, Monitor } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 
@@ -33,14 +26,13 @@ import {
 } from '@/lib/actions/devices';
 import {
   addProjectResourceDirectoryAction,
-  claimExecutionTargetAction,
   getUserExecutionTargetsAction,
   removeProjectResourceDirectoryAction,
-  setExecutionTargetOwnershipAction,
   setResourceDirectoryPrimaryAction,
   updateResourceDirectoryLabelAction,
   type UserExecutionTarget
 } from '@/lib/actions/resource-directories';
+import { ticketQueryKeys } from '@/lib/client-data/tickets/query-keys';
 import { defaultDirectoryLabel } from '@/lib/resource-directories/labels';
 import { cn } from '@/lib/utils';
 
@@ -55,6 +47,7 @@ type Props = {
 
 export function DeviceResourceList({ open, projectId }: Props) {
   const { api, isElectron } = useElectron();
+  const queryClient = useQueryClient();
   const [devices, setDevices] = useState<UserDevice[]>([]);
   const [projectDevices, setProjectDevices] = useState<ProjectDevice[]>([]);
   const [loadingDevices, setLoadingDevices] = useState(true);
@@ -70,9 +63,6 @@ export function DeviceResourceList({ open, projectId }: Props) {
   const [editingResourceLabel, setEditingResourceLabel] = useState('');
   const [savingResourceId, setSavingResourceId] = useState<string | null>(null);
   const [, startTransition] = useTransition();
-
-  // Ownership transfer state
-  const [transferringTargetId, setTransferringTargetId] = useState<string | null>(null);
 
   // Add new resource directory state
   const [newPath, setNewPath] = useState('');
@@ -222,6 +212,7 @@ export function DeviceResourceList({ open, projectId }: Props) {
       try {
         await setResourceDirectoryPrimaryAction({ directoryId: resourceId, projectId });
         await refreshAll({ showLoading: false });
+        void queryClient.invalidateQueries({ queryKey: ticketQueryKeys.projects() });
       } catch (error) {
         toast.error(error instanceof Error ? error.message : 'Failed to set primary directory.');
       }
@@ -245,40 +236,11 @@ export function DeviceResourceList({ open, projectId }: Props) {
           }
         }
         await refreshAll({ showLoading: false });
+        void queryClient.invalidateQueries({ queryKey: ticketQueryKeys.projects() });
       } catch (error) {
         toast.error(error instanceof Error ? error.message : 'Failed to remove directory.');
       }
     });
-  }
-
-  async function handleClaimTarget(deviceId: string, organizationId: number) {
-    setTransferringTargetId(deviceId);
-    try {
-      await claimExecutionTargetAction({ targetId: deviceId, organizationId });
-      await refreshAll({ showLoading: false });
-      toast.success('Target claimed as personal.');
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to claim target.');
-    } finally {
-      setTransferringTargetId(null);
-    }
-  }
-
-  async function handleDonateTarget(deviceId: string, organizationId: number) {
-    setTransferringTargetId(deviceId);
-    try {
-      await setExecutionTargetOwnershipAction({
-        targetId: deviceId,
-        organizationId,
-        ownerUserId: null
-      });
-      await refreshAll({ showLoading: false });
-      toast.success('Target donated to organization.');
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to donate target.');
-    } finally {
-      setTransferringTargetId(null);
-    }
   }
 
   async function handleRevealInFinder(directoryPath: string) {
@@ -385,6 +347,7 @@ export function DeviceResourceList({ open, projectId }: Props) {
       setNewLabel('');
       labelManuallyEditedRef.current = false;
       await refreshAll({ showLoading: false });
+      void queryClient.invalidateQueries({ queryKey: ticketQueryKeys.projects() });
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to add directory.');
     } finally {
@@ -493,34 +456,12 @@ export function DeviceResourceList({ open, projectId }: Props) {
                         className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground"
                         title={
                           isOrgOwned
-                            ? 'Organization-owned: any project editor can manage directories'
-                            : 'Personal target: only the owner can manage directories'
+                            ? 'Organization-owned: any project editor can manage directories. Change ownership in Settings → Execution targets.'
+                            : 'Personal target: only the owner can manage directories. Change ownership in Settings → Execution targets.'
                         }
                       >
                         {isOrgOwned ? 'Org-owned' : 'Personal'}
                       </span>
-                      {canManage && projectDevice.organizationId ? (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="h-5 gap-1 px-1.5 text-[10px] text-muted-foreground hover:text-foreground"
-                          disabled={transferringTargetId === device.id}
-                          title={
-                            isOrgOwned
-                              ? 'Claim this target as personal to your account'
-                              : 'Donate this target to the organization'
-                          }
-                          onClick={() =>
-                            isOrgOwned
-                              ? void handleClaimTarget(device.id, projectDevice.organizationId!)
-                              : void handleDonateTarget(device.id, projectDevice.organizationId!)
-                          }
-                        >
-                          <ArrowRightLeft className="h-3 w-3" />
-                          {isOrgOwned ? 'Claim' : 'Make org-owned'}
-                        </Button>
-                      ) : null}
                     </div>
                   ) : null}
 

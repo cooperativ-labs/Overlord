@@ -63,7 +63,7 @@ export function DeviceResourceRow({
             }}
           />
         ) : (
-          <div className="min-w-0">
+          <div className="min-w-0 max-w-[500px]">
             {resource.label ? <span className="font-medium">{resource.label}</span> : null}
             <TruncatedPath
               path={resource.directoryPath}
