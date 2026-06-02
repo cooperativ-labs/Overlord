@@ -1559,6 +1559,7 @@ export type Database = {
           color: string;
           created_at: string;
           everhour_project_id: string | null;
+          everhour_project_name: string | null;
           id: string;
           name: string;
           operations_profile: Json | null;
@@ -1572,6 +1573,7 @@ export type Database = {
           color?: string;
           created_at?: string;
           everhour_project_id?: string | null;
+          everhour_project_name?: string | null;
           id?: string;
           name: string;
           operations_profile?: Json | null;
@@ -1585,6 +1587,7 @@ export type Database = {
           color?: string;
           created_at?: string;
           everhour_project_id?: string | null;
+          everhour_project_name?: string | null;
           id?: string;
           name?: string;
           operations_profile?: Json | null;

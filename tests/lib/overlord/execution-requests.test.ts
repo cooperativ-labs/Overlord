@@ -1,6 +1,7 @@
 import {
   createExecutionRequest,
   failActiveExecutionRequestsForObjective,
+  failStaleExecutionRequest,
   isObjectiveLaunchableForExecution
 } from '@/lib/overlord/execution-requests';
 import { NO_ASSIGNED_AGENT_ERROR } from '@/lib/overlord/resolve-execution-agent';
@@ -237,6 +238,96 @@ describe('failActiveExecutionRequestsForObjective', () => {
       })
     );
     expect(chain.in).toHaveBeenCalledWith('status', ['queued', 'claimed', 'launching']);
+  });
+});
+
+describe('failStaleExecutionRequest', () => {
+  const REQUEST_ID = 'eeeeeeee-0000-4000-8000-000000000099';
+
+  function buildChain(returned: Record<string, unknown> | null) {
+    const calls = { lt: 0 };
+    const chain = {
+      update: jest.fn(() => chain),
+      eq: jest.fn(() => chain),
+      lt: jest.fn(() => {
+        calls.lt += 1;
+        return chain;
+      }),
+      select: jest.fn(() => chain),
+      maybeSingle: jest.fn(async () => ({ data: returned, error: null }))
+    };
+    return { chain, calls };
+  }
+
+  const nowMs = Date.parse('2026-06-02T00:05:00.000Z');
+
+  it('fails a stale row guarded on status + expired lease and returns it', async () => {
+    const { chain, calls } = buildChain({ id: REQUEST_ID, status: 'failed' });
+    let captured: unknown;
+    chain.update.mockImplementation((patch: unknown) => {
+      captured = patch;
+      return chain;
+    });
+    const supabase = buildSupabase({ execution_requests: () => chain });
+
+    const result = await failStaleExecutionRequest({
+      supabase: supabase as never,
+      request: {
+        id: REQUEST_ID,
+        organization_id: ORG_ID,
+        status: 'launching',
+        lease_expires_at: '2026-06-02T00:00:00.000Z'
+      } as never,
+      nowMs
+    });
+
+    expect(result).toEqual({ id: REQUEST_ID, status: 'failed' });
+    expect(captured).toEqual(
+      expect.objectContaining({
+        status: 'failed',
+        lease_expires_at: null,
+        claimed_by_execution_target_id: null
+      })
+    );
+    // Guarded on status and on an expired lease so concurrent polls cannot both win.
+    expect(chain.eq).toHaveBeenCalledWith('status', 'launching');
+    expect(calls.lt).toBe(1);
+  });
+
+  it('returns null when it loses the compare-and-swap race', async () => {
+    const { chain } = buildChain(null);
+    const supabase = buildSupabase({ execution_requests: () => chain });
+
+    const result = await failStaleExecutionRequest({
+      supabase: supabase as never,
+      request: {
+        id: REQUEST_ID,
+        organization_id: ORG_ID,
+        status: 'claimed',
+        lease_expires_at: '2026-06-02T00:00:00.000Z'
+      } as never,
+      nowMs
+    });
+
+    expect(result).toBeNull();
+  });
+
+  it('omits the lease guard when the stale row has no lease recorded', async () => {
+    const { chain, calls } = buildChain({ id: REQUEST_ID, status: 'failed' });
+    const supabase = buildSupabase({ execution_requests: () => chain });
+
+    await failStaleExecutionRequest({
+      supabase: supabase as never,
+      request: {
+        id: REQUEST_ID,
+        organization_id: ORG_ID,
+        status: 'claimed',
+        lease_expires_at: null
+      } as never,
+      nowMs
+    });
+
+    expect(calls.lt).toBe(0);
   });
 });
 

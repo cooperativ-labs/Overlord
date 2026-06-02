@@ -64,6 +64,17 @@ export const EXECUTION_LAUNCHABLE_OBJECTIVE_STATES = ['draft', 'submitted', 'lau
 const STALE_EXECUTION_REQUEST_REASON =
   'Objective is no longer launchable; active execution request cancelled.';
 
+/**
+ * Recorded on `execution_requests.last_error` (and surfaced in the user
+ * notification) when a `claimed`/`launching` request's claim lease expires
+ * before the agent ever attaches. Such a launch never started successfully, so
+ * instead of silently re-claiming it every poll (which caused the
+ * every-5-minutes retry loop) we mark it failed, clear it from the queue, and
+ * notify the user to retry manually.
+ */
+export const STALE_LAUNCH_FAILURE_REASON =
+  'The agent launch did not start before its lease expired and was cleared from the runner queue. Retry to relaunch it.';
+
 export function isObjectiveLaunchableForExecution(state: string): boolean {
   return (EXECUTION_LAUNCHABLE_OBJECTIVE_STATES as readonly string[]).includes(state);
 }
@@ -103,6 +114,55 @@ export async function failActiveExecutionRequestsForObjective({
   const { data, error } = await query.select('id');
   if (error) throw new Error(error.message);
   return { failedCount: data?.length ?? 0 };
+}
+
+/**
+ * Compare-and-swap a single stalled `claimed`/`launching` execution request to
+ * `failed`. A stale row is one whose claim lease has expired (or, anomalously,
+ * is missing) without the agent ever attaching — attach clears the lease, so an
+ * expired lease means the launch never completed.
+ *
+ * The update is guarded on the observed status + expired lease so that two
+ * concurrent runner polls cannot both transition (and both notify for) the same
+ * request. Returns the failed row when THIS caller won the transition, or null
+ * when the row already moved on (claimed elsewhere, launched, or failed by
+ * another poll) — letting the caller fire the user notification exactly once.
+ */
+export async function failStaleExecutionRequest({
+  supabase,
+  request,
+  nowMs,
+  reason = STALE_LAUNCH_FAILURE_REASON
+}: {
+  supabase: ExecutionClient;
+  request: ExecutionRequestRow;
+  nowMs: number;
+  reason?: string;
+}): Promise<ExecutionRequestRow | null> {
+  const nowIso = new Date(nowMs).toISOString();
+  let update = supabase
+    .from('execution_requests')
+    .update({
+      status: 'failed',
+      failed_at: nowIso,
+      claimed_by_execution_target_id: null,
+      claimed_at: null,
+      lease_expires_at: null,
+      last_error: reason
+    })
+    .eq('id', request.id)
+    .eq('organization_id', request.organization_id)
+    .eq('status', request.status);
+
+  // Only fail a row whose lease has actually expired. A null lease on a
+  // claimed/launching row is anomalous; treat it as stalled too (no lease guard).
+  if (request.lease_expires_at) {
+    update = update.lt('lease_expires_at', nowIso);
+  }
+
+  const { data, error } = await update.select('*').maybeSingle();
+  if (error) throw new Error(error.message);
+  return (data as ExecutionRequestRow | null) ?? null;
 }
 
 export async function loadObjectiveStatesById(

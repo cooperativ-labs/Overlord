@@ -53,6 +53,7 @@ type ProjectLayoutClientProps = {
   projectSshAuthMethod: ProjectSshAuthMethod | string | null;
   projectSshPrivateKeyPath: string | null;
   projectEverhourProjectId: string | null;
+  projectEverhourProjectName: string | null;
   statuses: Array<{
     name: string;
     position: number;
@@ -80,6 +81,7 @@ export function ProjectLayoutClient({
   projectSshAuthMethod,
   projectSshPrivateKeyPath,
   projectEverhourProjectId,
+  projectEverhourProjectName,
   statuses,
   hasEverhourApiKey,
   sshFeatureEnabled,
@@ -151,6 +153,7 @@ export function ProjectLayoutClient({
       initialSshAuthMethod={projectSshAuthMethod as ProjectSshAuthMethod | null}
       initialSshPrivateKeyPath={projectSshPrivateKeyPath}
       initialEverhourProjectId={projectEverhourProjectId}
+      initialEverhourProjectName={projectEverhourProjectName}
       initialStatuses={initialStatuses}
       hasEverhourApiKey={hasEverhourApiKey}
       sshFeatureEnabled={sshFeatureEnabled}

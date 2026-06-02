@@ -17,6 +17,7 @@ import {
 import { useEffect, useState } from 'react';
 
 import { MarkdownContent } from '@/components/features/MarkdownContent';
+import { RetryExecutionButton } from '@/components/features/RetryExecutionButton';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -60,6 +61,18 @@ const EVENT_LABELS: Partial<Record<Database['public']['Enums']['ticket_event_typ
 
 function getDisplayLabel(event: TicketEvent): string {
   return EVENT_LABELS[event.event_type] ?? event.event_type;
+}
+
+/**
+ * A stalled-launch alert (the runner cleared a launch that never started) is
+ * retryable: it carries `entry_type: 'execution_stalled'` + `retryable: true`
+ * so we can offer a manual Retry action, since the runner no longer relaunches
+ * it automatically.
+ */
+function isRetryableStalledLaunch(event: TicketEvent): boolean {
+  if (event.event_type !== 'alert') return false;
+  const payload = getEventPayload(event);
+  return payload.entry_type === 'execution_stalled' && payload.retryable === true;
 }
 
 export function LiveActivityFeed({
@@ -178,6 +191,9 @@ export function LiveActivityFeed({
               ) : (
                 <p className="text-sm italic text-muted-foreground">No summary.</p>
               )}
+              {isRetryableStalledLaunch(event) ? (
+                <RetryExecutionButton objectiveId={event.objective_id} ticketId={event.ticket_id} />
+              ) : null}
             </div>
           </article>
         );

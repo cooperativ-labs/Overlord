@@ -40,7 +40,7 @@ The backend never SSHs into your machine and never spawns a local process. If no
 4. **Runner claims** — \`ovld runner\` calls \`POST /api/protocol/claim-execution\` with the device fingerprint from \`~/.ovld/device.json\`. The row moves to \`claimed\` with a lease. The claim payload includes the working directory resolved from [project resource directories](/docs/workflow/execution-targets) on that target.
 5. **Runner launches** — the runner builds \`ovld launch …\` arguments from the claim payload and spawns that process (\`stdio: inherit\` so output appears in the runner’s terminal).
 6. **Runner reports spawn** — on child \`spawn\`, it calls \`complete-execution-launch\`; the row becomes \`launching\` (the launch process started, but no agent has attached yet).
-7. **Next agent attaches** — the new agent process calls \`ovld protocol attach\`, loads ticket context, executes the launchable objective, and **only then** is the matching request marked \`launched\` (with \`launched_session_id\`). Attach is the source of truth for a successful launch; a \`launching\` row whose agent never attaches is released for relaunch.
+7. **Next agent attaches** — the new agent process calls \`ovld protocol attach\`, loads ticket context, executes the launchable objective, and **only then** is the matching request marked \`launched\` (with \`launched_session_id\`). Attach is the source of truth for a successful launch; a \`claimed\`/\`launching\` row whose agent never attaches before its lease expires is treated as a **stalled launch** — it is marked \`failed\`, cleared from the queue, and the user is notified to relaunch manually (it is **not** auto-relaunched).
 
 Auto-advance and manual Run differ only at step 2 (scheduler vs. Run button / protocol). Steps 3–7 are identical.
 
@@ -67,16 +67,16 @@ const REST = `
 All execution triggers (whether automated or manual) write to the unified \`execution_requests\` table. Each row acts as a durable lease:
 
 - **Idempotency**: A partial unique index on \`execution_requests(objective_id) WHERE status IN ('queued','claimed','launching')\` guarantees at most one **active** request per objective — this is what suppresses duplicate runs. The \`manual_run:<objective_id>:<client_request_id>\` idempotency key stays non-deterministic on purpose so a terminal-state (\`failed\`/\`launched\`) row never blocks a legitimate relaunch; auto-advances use \`auto_advance:<objective_id>\`.
-- **Leasing**: When a runner claims a request, the row transitions to \`claimed\` with a \`lease_expires_at\` timestamp. If the runner crashes or fails to launch the process within the lease window, the backend releases the request so it can be claimed again.
+- **Leasing**: When a runner claims a request, the row transitions to \`claimed\` with a \`lease_expires_at\` timestamp. If the agent never attaches before the lease expires (the runner crashed, the launch errored, the terminal was closed, …), the backend does **not** silently re-claim it — that produced an annoying relaunch loop every lease window. Instead it marks the request \`failed\`, clears it from the queue, and emits an alert notification so the user can relaunch manually (with a Retry action).
 
 ### Request Status States
 | Status | Meaning |
 | --- | --- |
 | \`queued\` | Waiting for a runner that matches the target device, resource, or kind. |
 | \`claimed\` | Leased by a device fingerprint; runner is preparing to launch. |
-| \`launching\` | Runner spawned the launch process, but no agent has attached yet. A stale \`launching\` row is released for relaunch. |
+| \`launching\` | Runner spawned the launch process, but no agent has attached yet. A stale \`launching\`/\`claimed\` row (lease expired with no attach) is marked \`failed\` and the user is notified — it is not auto-relaunched. |
 | \`launched\` | An agent attached and created its session; \`launched_session_id\` is recorded. Set by attach, not by the runner. |
-| \`failed\` | Spawning error recorded in the \`last_error\` column. |
+| \`failed\` | Spawning error, or a stalled launch whose lease expired before any agent attached. Reason recorded in the \`last_error\` column. |
 
 ---
 

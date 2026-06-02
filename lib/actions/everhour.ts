@@ -39,6 +39,7 @@ export type EverhourTimeRecord = {
 export type EverhourSyncedProject = {
   color: string;
   everhour_project_id: string | null;
+  everhour_project_name: string | null;
   id: string;
   name: string;
 };
@@ -63,6 +64,7 @@ type EverhourRemoteProject = {
 
 type ProjectEverhourState = {
   everhour_project_id: string | null;
+  everhour_project_name: string | null;
   id: string;
   name: string;
   organization_id: number;
@@ -484,7 +486,7 @@ async function getProjectEverhourState(
 ): Promise<ProjectEverhourState> {
   const { data, error } = await supabase
     .from('projects')
-    .select('id,organization_id,name,everhour_project_id')
+    .select('id,organization_id,name,everhour_project_id,everhour_project_name')
     .eq('id', projectId)
     .single();
 
@@ -652,7 +654,7 @@ export async function syncEverhourProjectsForOrganization(organizationId: number
 
   const { data: existingProjects, error: existingProjectsError } = await supabase
     .from('projects')
-    .select('id,name,color,everhour_project_id')
+    .select('id,name,color,everhour_project_id,everhour_project_name')
     .eq('organization_id', organizationId)
     .order('name', { ascending: true });
 
@@ -673,7 +675,12 @@ export async function syncEverhourProjectsForOrganization(organizationId: number
   let linked = 0;
 
   for (const localProject of localProjects) {
-    const localProjectName = normalizeProjectName(localProject.name);
+    const rawEverhourName =
+      typeof localProject.everhour_project_name === 'string' &&
+      localProject.everhour_project_name.trim().length > 0
+        ? localProject.everhour_project_name.trim()
+        : localProject.name;
+    const localProjectName = normalizeProjectName(rawEverhourName);
     const currentEverhourId = extractEverhourProjectId(localProject.everhour_project_id);
 
     if (currentEverhourId && remoteById.has(currentEverhourId)) {
@@ -712,7 +719,7 @@ export async function syncEverhourProjectsForOrganization(organizationId: number
 
   const { data: projectsAfterSync, error: projectsAfterSyncError } = await supabase
     .from('projects')
-    .select('id,name,color,everhour_project_id')
+    .select('id,name,color,everhour_project_id,everhour_project_name')
     .eq('organization_id', organizationId)
     .order('name', { ascending: true });
 
@@ -791,7 +798,11 @@ export async function ensureEverhourGeneralTaskForProject(
   }
 
   const apiKey = await requireEverhourApiKey(supabase, userId);
-  const taskName = buildGeneralEverhourTaskName(project.name);
+  const displayName =
+    typeof project.everhour_project_name === 'string' && project.everhour_project_name.trim()
+      ? project.everhour_project_name.trim()
+      : project.name;
+  const taskName = buildGeneralEverhourTaskName(displayName);
   const existingTaskId = await findEverhourTaskIdByName(apiKey, everhourProjectId, taskName);
   if (existingTaskId) {
     return { taskId: existingTaskId };

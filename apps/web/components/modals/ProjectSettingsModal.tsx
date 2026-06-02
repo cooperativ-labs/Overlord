@@ -56,6 +56,7 @@ type ProjectSettingsModalProps = {
   initialSshAuthMethod: ProjectSshAuthMethod | null;
   initialSshPrivateKeyPath: string | null;
   initialEverhourProjectId: string | null;
+  initialEverhourProjectName: string | null;
   initialStatuses: Array<{
     name: string;
     position: number;
@@ -84,6 +85,7 @@ export function ProjectSettingsModal({
   initialSshAuthMethod,
   initialSshPrivateKeyPath,
   initialEverhourProjectId,
+  initialEverhourProjectName,
   initialStatuses,
   hasEverhourApiKey,
   sshFeatureEnabled,
@@ -149,7 +151,9 @@ export function ProjectSettingsModal({
         <IntegrationsPage
           projectId={projectId}
           organizationId={organizationId}
+          projectName={initialName}
           initialEverhourProjectId={initialEverhourProjectId}
+          initialEverhourProjectName={initialEverhourProjectName}
           hasEverhourApiKey={hasEverhourApiKey}
           slackEnabled={slackEnabled}
           open={open}

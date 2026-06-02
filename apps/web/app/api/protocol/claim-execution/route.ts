@@ -3,9 +3,12 @@ import { NextResponse } from 'next/server';
 import { internalErrorResponse, parseProtocolBody } from '@/app/api/protocol/_lib';
 import {
   failActiveExecutionRequestsForObjective,
+  failStaleExecutionRequest,
   isObjectiveLaunchableForExecution,
-  loadObjectiveStatesById
+  loadObjectiveStatesById,
+  STALE_LAUNCH_FAILURE_REASON
 } from '@/lib/overlord/execution-requests';
+import { emitWorkflowNotification } from '@/lib/overlord/notifications/orchestrator';
 import { resolveTargetAgentLaunch } from '@/lib/overlord/target-agent-flags';
 import { upsertDeviceFromProtocol } from '@/lib/overlord/upsert-device';
 import { claimExecutionSchema } from '@/lib/overlord/validation';
@@ -88,14 +91,80 @@ async function resolveWorkingDirectory(
   return targetResource?.directory_path ?? null;
 }
 
-function claimableByStatus(row: ExecutionRequestRow, nowMs: number): boolean {
-  if (row.status === 'queued') return true;
-  // Phase 4: a stale `launching` row (runner spawned but the agent never
-  // attached) is reclaimable for relaunch once its lease expires, same as a
-  // stale `claimed` row.
+/**
+ * Phase 5: a `claimed`/`launching` row whose claim lease is still valid means a
+ * runner is mid-launch — leave it alone. We no longer auto-reclaim a row whose
+ * lease has expired (that re-launched stalled/failed jobs every ~5 minutes
+ * forever); that case is handled separately by failing it and notifying the
+ * user. Only `queued` rows are claimable here.
+ */
+function isLaunchInFlight(row: ExecutionRequestRow, nowMs: number): boolean {
   if (row.status !== 'claimed' && row.status !== 'launching') return false;
-  if (!row.lease_expires_at) return true;
-  return Date.parse(row.lease_expires_at) < nowMs;
+  if (!row.lease_expires_at) return false;
+  return Date.parse(row.lease_expires_at) >= nowMs;
+}
+
+/**
+ * A stalled launch was just cleared from the queue. Tell the user so they can
+ * relaunch manually: insert an `alert` ticket_event (drives the in-app feed +
+ * realtime desktop notification, and carries `retryable` metadata so surfaces
+ * can render a Retry action) and emit the mobile push. Fire-and-forget.
+ */
+async function notifyStalledLaunch(
+  supabase: ReturnType<typeof createServiceRoleClient>,
+  request: ExecutionRequestRow,
+  userId: string
+): Promise<void> {
+  try {
+    const { data: ticket } = await supabase
+      .from('tickets')
+      .select('ticket_id,title')
+      .eq('id', request.ticket_id)
+      .maybeSingle();
+
+    const summary =
+      'The agent never started for this objective, so it was cleared from the runner queue. Retry to relaunch it.';
+
+    const { data: inserted } = await supabase
+      .from('ticket_events')
+      .insert({
+        event_type: 'alert',
+        phase: 'execute',
+        summary,
+        ticket_id: request.ticket_id,
+        objective_id: request.objective_id,
+        created_by: userId,
+        payload: {
+          entry_type: 'execution_stalled',
+          retryable: true,
+          execution_request_id: request.id,
+          objective_id: request.objective_id,
+          last_error: STALE_LAUNCH_FAILURE_REASON
+        }
+      })
+      .select('id')
+      .maybeSingle();
+
+    await emitWorkflowNotification({
+      supabase,
+      event: {
+        id: inserted?.id ?? null,
+        event_type: 'alert',
+        summary,
+        payload: { entry_type: 'execution_stalled', retryable: true }
+      },
+      organizationId: request.organization_id,
+      ticketId: request.ticket_id,
+      ticketReference: ticket?.ticket_id ?? request.ticket_id,
+      ticketTitle: ticket?.title ?? null,
+      objectiveId: request.objective_id
+    });
+  } catch (err) {
+    console.error('[claim-execution] failed to notify stalled launch', {
+      executionRequestId: request.id,
+      error: err instanceof Error ? err.message : err
+    });
+  }
 }
 
 export async function POST(request: Request) {
@@ -183,7 +252,29 @@ export async function POST(request: Request) {
         continue;
       }
 
-      if (!claimableByStatus(candidate, now.getTime())) continue;
+      // A claim that is still mid-launch (valid lease) is left for the runner
+      // that owns it. A `claimed`/`launching` row whose lease has expired is a
+      // stalled launch: instead of re-claiming it (the old every-5-minutes
+      // loop), fail it, clear it from the queue, and notify the user to retry.
+      if (candidate.status === 'claimed' || candidate.status === 'launching') {
+        if (isLaunchInFlight(candidate, now.getTime())) continue;
+        const failed = await failStaleExecutionRequest({
+          supabase,
+          request: candidate,
+          nowMs: now.getTime()
+        }).catch(err => {
+          console.error('[claim-execution] failed to clear stalled execution request', {
+            executionRequestId: candidate.id,
+            objectiveId: candidate.objective_id,
+            error: err instanceof Error ? err.message : err
+          });
+          return null;
+        });
+        if (failed) await notifyStalledLaunch(supabase, failed, userId);
+        continue;
+      }
+
+      // Only `queued` rows reach the claim path below.
       if (
         candidate.target_execution_target_id &&
         candidate.target_execution_target_id !== executionTargetId
@@ -268,7 +359,8 @@ export async function POST(request: Request) {
         continue;
       }
 
-      let claimUpdate = supabase
+      // CAS on `queued` so a concurrent poll cannot double-claim the same row.
+      const claimUpdate = supabase
         .from('execution_requests')
         .update({
           status: 'claimed',
@@ -279,12 +371,8 @@ export async function POST(request: Request) {
           attempt_count: candidate.attempt_count + 1
         })
         .eq('id', candidate.id)
+        .eq('status', 'queued')
         .select('*');
-
-      claimUpdate =
-        candidate.status === 'claimed' || candidate.status === 'launching'
-          ? claimUpdate.eq('status', candidate.status).lt('lease_expires_at', now.toISOString())
-          : claimUpdate.eq('status', 'queued');
 
       const { data: claimed, error: claimError } = await claimUpdate.maybeSingle();
 

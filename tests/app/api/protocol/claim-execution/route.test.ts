@@ -6,6 +6,16 @@ jest.mock('@/app/api/protocol/_lib', () => ({
 }));
 jest.mock('@/supabase/utils/service-role');
 jest.mock('@/lib/overlord/upsert-device');
+jest.mock('@/lib/overlord/notifications/orchestrator', () => ({
+  emitWorkflowNotification: jest.fn(async () => ({ sent: true }))
+}));
+// Keep the real module (the route relies on isObjectiveLaunchableForExecution,
+// failActiveExecutionRequestsForObjective, etc.) but stub the stale-launch CAS
+// so the every-5-minutes fix can be asserted without a live DB round-trip.
+jest.mock('@/lib/overlord/execution-requests', () => {
+  const actual = jest.requireActual('@/lib/overlord/execution-requests');
+  return { __esModule: true, ...actual, failStaleExecutionRequest: jest.fn() };
+});
 
 const USER_ID = '11111111-1111-4111-8111-111111111111';
 const ORG_ID = 1;
@@ -50,7 +60,15 @@ function buildClaimSupabase({
   memberOrgIds = [ORG_ID] as number[],
   targetOrgIds = [ORG_ID] as number[]
 } = {}) {
-  const ticketEventsInsert = jest.fn(async () => ({ error: null }));
+  // Supports both bare `await insert({...})` (missing-primary / target-config
+  // paths) and the chained `insert({...}).select('id').maybeSingle()` used by
+  // the stalled-launch notification.
+  const ticketEventsInsert = jest.fn(() => ({
+    error: null,
+    select: jest.fn(() => ({
+      maybeSingle: jest.fn(async () => ({ data: { id: 'evt-1' }, error: null }))
+    }))
+  }));
   const staleFailUpdate = {
     update: jest.fn(() => staleFailUpdate),
     eq: jest.fn(() => staleFailUpdate),
@@ -116,6 +134,11 @@ function buildClaimSupabase({
           eq: jest.fn(() => chain),
           single: jest.fn(async () => ({
             data: { id: 'ticket-uuid', ticket_id: '1:100', project_id: PROJECT_ID },
+            error: null
+          })),
+          // notifyStalledLaunch reads the ticket reference/title via maybeSingle.
+          maybeSingle: jest.fn(async () => ({
+            data: { ticket_id: '1:100', title: 'Test ticket' },
             error: null
           }))
         };
@@ -198,6 +221,11 @@ describe('POST /api/protocol/claim-execution', () => {
     mockParseBody();
     const { upsertDeviceFromProtocol } = jest.requireMock('@/lib/overlord/upsert-device');
     upsertDeviceFromProtocol.mockResolvedValue(EXECUTION_TARGET_ID);
+    // Default: the stale-launch CAS "wins" and returns the failed row.
+    const { failStaleExecutionRequest } = jest.requireMock('@/lib/overlord/execution-requests');
+    failStaleExecutionRequest.mockResolvedValue(
+      baseCandidate({ status: 'failed', lease_expires_at: null })
+    );
   });
 
   it('returns null request when no candidates are claimable', async () => {
@@ -350,66 +378,83 @@ describe('POST /api/protocol/claim-execution', () => {
     expect(supabase.claimUpdate.update).not.toHaveBeenCalled();
   });
 
-  it('reclaims an expired claimed request and increments attempt_count', async () => {
+  it('fails and notifies an expired claimed request instead of re-claiming it', async () => {
     const expiredLease = new Date(Date.now() - 60_000).toISOString();
-    const claimed = baseCandidate({
+    const candidate = baseCandidate({
       status: 'claimed',
+      attempt_count: 1,
+      lease_expires_at: expiredLease,
+      launch_params: { workingDirectory: '/repo' }
+    });
+    const supabase = buildClaimSupabase({ candidates: [candidate] });
+    const { createServiceRoleClient } = jest.requireMock('@/supabase/utils/service-role');
+    createServiceRoleClient.mockReturnValue(supabase);
+    const { failStaleExecutionRequest } = jest.requireMock('@/lib/overlord/execution-requests');
+    const { emitWorkflowNotification } = jest.requireMock(
+      '@/lib/overlord/notifications/orchestrator'
+    );
+
+    const response = await POST(new Request('http://localhost', { method: 'POST' }));
+    expect(response.status).toBe(200);
+    // No relaunch happened: the stalled row is failed + cleared from the queue.
+    await expect(response.json()).resolves.toEqual({ request: null });
+    expect(failStaleExecutionRequest).toHaveBeenCalledWith(
+      expect.objectContaining({ request: expect.objectContaining({ id: REQUEST_ID }) })
+    );
+    expect(supabase.claimUpdate.update).not.toHaveBeenCalled();
+    // The user is notified (in-app alert event + push) so they can retry.
+    expect(supabase.ticketEventsInsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event_type: 'alert',
+        payload: expect.objectContaining({ entry_type: 'execution_stalled', retryable: true })
+      })
+    );
+    expect(emitWorkflowNotification).toHaveBeenCalled();
+  });
+
+  it('fails and notifies a stale launching request after the lease expires', async () => {
+    const expiredLease = new Date(Date.now() - 60_000).toISOString();
+    const candidate = baseCandidate({
+      status: 'launching',
       attempt_count: 2,
       lease_expires_at: expiredLease,
       launch_params: { workingDirectory: '/repo' }
     });
-    const supabase = buildClaimSupabase({
-      candidates: [
-        baseCandidate({
-          status: 'claimed',
-          attempt_count: 1,
-          lease_expires_at: expiredLease,
-          launch_params: { workingDirectory: '/repo' }
-        })
-      ],
-      claimResult: claimed
-    });
+    const supabase = buildClaimSupabase({ candidates: [candidate] });
     const { createServiceRoleClient } = jest.requireMock('@/supabase/utils/service-role');
     createServiceRoleClient.mockReturnValue(supabase);
+    const { failStaleExecutionRequest } = jest.requireMock('@/lib/overlord/execution-requests');
 
     const response = await POST(new Request('http://localhost', { method: 'POST' }));
     expect(response.status).toBe(200);
-    expect(supabase.claimUpdate.lt).toHaveBeenCalled();
-    expect(supabase.claimUpdate.update).toHaveBeenCalledWith(
-      expect.objectContaining({ attempt_count: 2 })
+    await expect(response.json()).resolves.toEqual({ request: null });
+    expect(failStaleExecutionRequest).toHaveBeenCalledWith(
+      expect.objectContaining({ request: expect.objectContaining({ status: 'launching' }) })
     );
+    expect(supabase.claimUpdate.update).not.toHaveBeenCalled();
   });
 
-  it('reclaims a stale launching request after the lease expires', async () => {
+  it('does not notify twice when another poll already failed the stale request', async () => {
     const expiredLease = new Date(Date.now() - 60_000).toISOString();
-    const claimed = baseCandidate({
+    const candidate = baseCandidate({
       status: 'claimed',
-      attempt_count: 3,
       lease_expires_at: expiredLease,
       launch_params: { workingDirectory: '/repo' }
     });
-    const supabase = buildClaimSupabase({
-      candidates: [
-        baseCandidate({
-          status: 'launching',
-          attempt_count: 2,
-          lease_expires_at: expiredLease,
-          launch_params: { workingDirectory: '/repo' }
-        })
-      ],
-      claimResult: claimed
-    });
+    const supabase = buildClaimSupabase({ candidates: [candidate] });
     const { createServiceRoleClient } = jest.requireMock('@/supabase/utils/service-role');
     createServiceRoleClient.mockReturnValue(supabase);
+    const { failStaleExecutionRequest } = jest.requireMock('@/lib/overlord/execution-requests');
+    // Lost the compare-and-swap race: the row already moved on.
+    failStaleExecutionRequest.mockResolvedValueOnce(null);
+    const { emitWorkflowNotification } = jest.requireMock(
+      '@/lib/overlord/notifications/orchestrator'
+    );
 
     const response = await POST(new Request('http://localhost', { method: 'POST' }));
-    expect(response.status).toBe(200);
-    // The stale launching row is guarded by status+expired-lease, then re-claimed.
-    expect(supabase.claimUpdate.eq).toHaveBeenCalledWith('status', 'launching');
-    expect(supabase.claimUpdate.lt).toHaveBeenCalled();
-    expect(supabase.claimUpdate.update).toHaveBeenCalledWith(
-      expect.objectContaining({ attempt_count: 3 })
-    );
+    await expect(response.json()).resolves.toEqual({ request: null });
+    expect(emitWorkflowNotification).not.toHaveBeenCalled();
+    expect(supabase.ticketEventsInsert).not.toHaveBeenCalled();
   });
 
   it('does not reclaim a launching request before lease expiry', async () => {

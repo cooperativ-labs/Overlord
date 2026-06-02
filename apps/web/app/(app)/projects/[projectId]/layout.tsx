@@ -31,7 +31,7 @@ export default async function ProjectLayout({ children, params }: LayoutProps) {
   // Fetch project first to get organization_id for subsequent queries
   const { data: project, error: projectError } = await supabase
     .from('projects')
-    .select(`${PROJECT_BASE_SELECT},everhour_project_id`)
+    .select(`${PROJECT_BASE_SELECT},everhour_project_id,everhour_project_name`)
     .eq('id', projectId)
     .single();
 
@@ -90,6 +90,7 @@ export default async function ProjectLayout({ children, params }: LayoutProps) {
         projectSshAuthMethod={sshSettings.sshAuthMethod}
         projectSshPrivateKeyPath={sshSettings.sshPrivateKeyPath}
         projectEverhourProjectId={project.everhour_project_id}
+        projectEverhourProjectName={project.everhour_project_name ?? null}
         statuses={statuses ?? []}
         hasEverhourApiKey={hasEverhourApiKey}
         sshFeatureEnabled={sshEnabled}

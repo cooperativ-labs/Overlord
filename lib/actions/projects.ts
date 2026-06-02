@@ -320,6 +320,26 @@ export async function disconnectProjectFromEverhourAction(input: {
   revalidateProjectPaths(input.projectId);
 }
 
+export async function updateProjectEverhourProjectNameAction(input: {
+  projectId: string;
+  everhourProjectName: string | null;
+}): Promise<void> {
+  const supabase = await createClientForRequest();
+  const trimmed = trimOrNull(input.everhourProjectName);
+  const { data, error } = await supabase
+    .from('projects')
+    .update({ everhour_project_name: trimmed })
+    .eq('id', input.projectId)
+    .select('organization_id')
+    .single();
+
+  if (error || !data) {
+    throw new Error(error?.message ?? 'Failed to update Everhour project name.');
+  }
+
+  revalidateProjectPaths(input.projectId);
+}
+
 const defaultProjectStatuses = [
   { name: 'draft', status_type: 'draft', position: 0 },
   { name: 'execute', status_type: 'execute', position: 1 },
