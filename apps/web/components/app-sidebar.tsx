@@ -515,6 +515,14 @@ export function AppSidebar({
           setProjectNeedingDirectory(null);
           setPendingPath(null);
         }}
+        onSkipped={() => {
+          if (pendingPath) {
+            router.push(pendingPath);
+          }
+          router.refresh();
+          setProjectNeedingDirectory(null);
+          setPendingPath(null);
+        }}
       />
       <SidebarRail />
     </Sidebar>

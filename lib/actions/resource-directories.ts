@@ -13,6 +13,7 @@ import {
   clearTargetPrimary,
   shouldAutoPrimary
 } from '@/lib/resource-directories/primary-resource';
+import { WORKING_DIRECTORY_NONE } from '@/lib/helpers/project-working-directory';
 import { createClientForRequest } from '@/supabase/utils/server';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 import type { Database } from '@/types/database.types';
@@ -768,4 +769,73 @@ export async function updateExecutionTargetLabelAction(input: {
     console.error('updateExecutionTargetLabelAction', error);
     throw new Error(error.message ?? 'Failed to update execution target label.');
   }
+}
+
+/**
+ * Records that the user has explicitly opted out of setting a working directory
+ * for this project on this device. Stores the sentinel value `__none__` as the
+ * primary resource directory so the prompt won't show again.
+ */
+export async function skipProjectWorkingDirectoryAction(input: {
+  projectId: string;
+  deviceFingerprint: string;
+  deviceHostname?: string | null;
+  devicePlatform?: string | null;
+}): Promise<void> {
+  const supabase = await createClientForRequest();
+  const serviceSupabase = createServiceRoleClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+  if (!user) {
+    throw new Error('You must be signed in to update a resource directory.');
+  }
+
+  const { data: project, error: projectError } = await supabase
+    .from('projects')
+    .select('organization_id')
+    .eq('id', input.projectId)
+    .maybeSingle();
+  if (projectError || !project) {
+    throw new Error('Project not found.');
+  }
+
+  const executionTargetId = await upsertExecutionTargetFromProtocol(serviceSupabase, {
+    organizationId: project.organization_id,
+    userId: user.id,
+    deviceFingerprint: input.deviceFingerprint,
+    hostname: input.deviceHostname ?? null,
+    platform: input.devicePlatform ?? null
+  });
+  if (!executionTargetId) {
+    throw new Error('Failed to register execution target.');
+  }
+
+  await ensureProjectExecutionTarget(serviceSupabase, {
+    projectId: input.projectId,
+    organizationId: project.organization_id,
+    userId: user.id,
+    executionTargetId
+  });
+
+  await clearTargetPrimary(serviceSupabase, input.projectId, executionTargetId);
+
+  const { error } = await serviceSupabase.from('project_resource_directories').upsert(
+    {
+      user_id: user.id,
+      project_id: input.projectId,
+      execution_target_id: executionTargetId,
+      directory_path: WORKING_DIRECTORY_NONE,
+      label: null,
+      is_primary: true
+    },
+    { onConflict: 'project_id,execution_target_id,directory_path', ignoreDuplicates: false }
+  );
+
+  if (error) {
+    console.error('skipProjectWorkingDirectoryAction', error);
+    throw new Error(error.message ?? 'Failed to save directory preference.');
+  }
+
+  revalidateProjectPaths(input.projectId);
 }

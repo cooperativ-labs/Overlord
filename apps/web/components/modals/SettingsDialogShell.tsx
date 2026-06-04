@@ -89,7 +89,7 @@ export function SettingsDialogShell({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="h-dvh max-h-dvh w-full max-w-full overflow-hidden p-0 md:h-auto md:max-h-[680px] md:max-w-[900px] lg:max-w-[1000px]">
+      <DialogContent className="h-dvh max-h-dvh w-full max-w-full overflow-hidden p-0 md:h-auto md:max-h-[90%] md:max-w-[900px] lg:max-w-[1000px]">
         <DialogTitle className="sr-only">{title}</DialogTitle>
         <DialogDescription className="sr-only">{description}</DialogDescription>
         <SidebarProvider className="items-start">

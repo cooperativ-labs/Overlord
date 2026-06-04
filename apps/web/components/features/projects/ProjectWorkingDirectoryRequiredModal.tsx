@@ -13,7 +13,10 @@ import {
 } from '@/components/ui/dialog';
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import { LoadingButton } from '@/components/ui/loading-button';
-import { addProjectResourceDirectoryAction } from '@/lib/actions/resource-directories';
+import {
+  addProjectResourceDirectoryAction,
+  skipProjectWorkingDirectoryAction
+} from '@/lib/actions/resource-directories';
 
 type ProjectWorkingDirectoryRequiredModalProps = {
   open: boolean;
@@ -23,13 +26,15 @@ type ProjectWorkingDirectoryRequiredModalProps = {
     name: string;
   } | null;
   onLinked?: (directory: string) => void;
+  onSkipped?: () => void;
 };
 
 export function ProjectWorkingDirectoryRequiredModal({
   open,
   onOpenChange,
   project,
-  onLinked
+  onLinked,
+  onSkipped
 }: ProjectWorkingDirectoryRequiredModalProps) {
   const { api, isElectron } = useElectron();
   const [selectFolderState, setSelectFolderState] = useState<ButtonLoadingState>('default');
@@ -115,8 +120,26 @@ export function ProjectWorkingDirectoryRequiredModal({
     setSkipState('loading');
     setError(null);
 
+    if (isElectron && api?.app.getDeviceIdentity) {
+      try {
+        const identity = await api.app.getDeviceIdentity();
+        await skipProjectWorkingDirectoryAction({
+          projectId: project.id,
+          deviceFingerprint: identity.deviceFingerprint,
+          deviceHostname: identity.hostname,
+          devicePlatform: identity.platform
+        });
+      } catch (skipError) {
+        console.error('Failed to persist directory skip preference', {
+          projectId: project.id,
+          skipError
+        });
+      }
+    }
+
     setSkipState('success');
     onOpenChange(false);
+    onSkipped?.();
   }
 
   return (
