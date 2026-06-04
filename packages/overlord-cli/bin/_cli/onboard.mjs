@@ -105,12 +105,25 @@ async function promptForYes(question, defaultYes = true) {
   }
 }
 
-function buildSignupUrl(platformUrl, verificationUri, name) {
+function buildSignupUrl(platformUrl, verificationUri, name, invite) {
   const verificationUrl = new URL(verificationUri);
   const signupUrl = new URL('/signup', platformUrl);
   signupUrl.searchParams.set('next', `${verificationUrl.pathname}${verificationUrl.search}`);
   if (name) signupUrl.searchParams.set('name', name);
+  // Pre-fill the invited email and accept the invite after signup (web fallback parity).
+  if (invite) signupUrl.searchParams.set('invite', invite);
   return signupUrl.toString();
+}
+
+/**
+ * Accept either a bare invitation token or a full `…/invite/<token>` URL pasted
+ * from the invite email, returning the bare token (or '' when not provided).
+ */
+function normalizeInviteToken(raw) {
+  const value = typeof raw === 'string' ? raw.trim() : '';
+  if (!value) return '';
+  const match = value.match(/\/invite\/([^/?#]+)/);
+  return match ? decodeURIComponent(match[1]) : value;
 }
 
 async function completeCliOnboarding(platformUrl, localSecret, credentials, payload) {
@@ -141,7 +154,7 @@ export async function runOnboardCommand(args) {
   const flags = parseFlags(args);
 
   if (flags.help === true || flags.h === true || args[0] === 'help') {
-    console.log(`Usage: ovld onboard [--name <name>] [--organization-name <name>] [--project-name <name>] [--directory <path>] [--yes] [--no-desktop]
+    console.log(`Usage: ovld onboard [--name <name>] [--organization-name <name>] [--project-name <name>] [--directory <path>] [--invite <token|url>] [--yes] [--no-desktop]
 
 Creates an Overlord account setup from the terminal:
   1. collects your name, organization, project, and repository directory
@@ -149,21 +162,32 @@ Creates an Overlord account setup from the terminal:
   3. creates the organization/project, links this directory, and creates the first onboarding ticket
   4. opens the Desktop download page, or the web project when --no-desktop is used
 
+With --invite <token>, joins the inviting organization (from an invite email)
+with the invited role instead of creating a new organization; the organization
+prompt is skipped. Accepts a bare token or a full /invite/<token> URL.
+
 Run this from the repository you want Overlord agents to work in.`);
     return;
   }
+
+  const inviteToken = normalizeInviteToken(flags.invite ?? flags['invite-code']);
 
   const directoryPath = path.resolve(trimFlag(flags, 'directory') || process.cwd());
   const directoryName = path.basename(directoryPath) || 'My project';
   const inferredName = os.userInfo().username || 'User';
   const name = trimFlag(flags, 'name') || (await promptForValue('Your name', inferredName));
-  const organizationName =
-    trimFlag(flags, 'organization-name') || (await promptForValue('Organization name', name));
+  // On the invite path the org comes from the invitation, so skip the org prompt.
+  const organizationName = inviteToken
+    ? trimFlag(flags, 'organization-name')
+    : trimFlag(flags, 'organization-name') || (await promptForValue('Organization name', name));
   const projectName =
     trimFlag(flags, 'project-name') || (await promptForValue('Project name', directoryName));
 
-  if (!name || !organizationName || !projectName) {
-    throw new Error('Name, organization name, and project name are required.');
+  if (!name || !projectName) {
+    throw new Error('Name and project name are required.');
+  }
+  if (!inviteToken && !organizationName) {
+    throw new Error('Organization name is required (or pass --invite <token> to join an org).');
   }
 
   const storedCredentials = loadCredentials();
@@ -176,7 +200,7 @@ Run this from the repository you want Overlord agents to work in.`);
 
   const credentials = await authLoginViaDeviceFlow(platformUrl, localSecret, {
     browserOpener: verificationUri => {
-      const signupUrl = buildSignupUrl(platformUrl, verificationUri, name);
+      const signupUrl = buildSignupUrl(platformUrl, verificationUri, name, inviteToken);
       console.log(`  Signup URL: ${signupUrl}`);
       openBrowser(signupUrl);
     }
@@ -186,12 +210,13 @@ Run this from the repository you want Overlord agents to work in.`);
   const deviceFingerprint = readOrCreateDeviceFingerprint(flags);
   const result = await completeCliOnboarding(resolvedPlatformUrl, localSecret, credentials, {
     name,
-    organizationName,
+    ...(organizationName ? { organizationName } : {}),
     projectName,
     directoryPath,
     deviceFingerprint,
     deviceHostname: os.hostname(),
-    devicePlatform: process.platform
+    devicePlatform: process.platform,
+    ...(inviteToken ? { inviteToken } : {})
   });
 
   saveCredentials({
@@ -216,9 +241,14 @@ Run this from the repository you want Overlord agents to work in.`);
 
   console.log('\nOverlord setup complete.');
   console.log(`  Organization: ${result.organization.organizationName}`);
+  if (result.organization.role) {
+    console.log(`  Role: ${result.organization.role}`);
+  }
   console.log(`  Project: ${result.project.name}`);
   console.log(`  Directory: ${directoryPath}`);
-  console.log(`  Onboarding ticket: ${result.ticket.reference ?? result.ticket.id}`);
+  if (result.ticket) {
+    console.log(`  Onboarding ticket: ${result.ticket.reference ?? result.ticket.id}`);
+  }
 
   const skipDesktop = flags['no-desktop'] === true || flags.desktop === 'false';
   const autoYes = flags.yes === true || flags.y === true;

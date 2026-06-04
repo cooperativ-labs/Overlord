@@ -440,6 +440,48 @@ export const listProjectResourcesSchema = z.object({
   deviceFingerprint: z.string().trim().max(128).optional()
 });
 
+/**
+ * create-project: create a project and, when a directory is supplied, register
+ * it as a primary resource in the same call (one-step provisioning).
+ */
+export const createProjectSchema = z
+  .object({
+    name: z.string().trim().min(1).max(160),
+    color: z.string().trim().max(32).optional(),
+    directoryPath: z.string().trim().min(1).max(1024).optional(),
+    label: z.string().trim().max(160).optional(),
+    isPrimary: z.boolean().optional(),
+    deviceFingerprint: z.string().trim().max(128).optional(),
+    deviceHostname: z.string().trim().max(256).optional(),
+    devicePlatform: z.string().trim().max(64).optional(),
+    devicePort: z.coerce.number().int().min(1).max(65535).optional()
+  })
+  .refine(data => !data.directoryPath || Boolean(data.deviceFingerprint), {
+    message: 'deviceFingerprint is required when directoryPath is provided.',
+    path: ['deviceFingerprint']
+  });
+
+/**
+ * cli-onboarding: `ovld onboard` payload. When an `inviteToken` is present the
+ * account joins the inviting org (so `organizationName` is not required); without
+ * a token an organization name must be supplied to create/reuse an org.
+ */
+export const cliOnboardingSchema = z
+  .object({
+    name: z.string().trim().min(1).max(120),
+    organizationName: z.string().trim().min(1).max(120).optional(),
+    projectName: z.string().trim().min(1).max(160),
+    directoryPath: z.string().trim().min(1).max(1024),
+    deviceFingerprint: z.string().trim().min(1).max(128),
+    deviceHostname: z.string().trim().max(256).optional(),
+    devicePlatform: z.string().trim().max(64).optional(),
+    inviteToken: z.string().trim().min(1).max(256).optional()
+  })
+  .refine(data => Boolean(data.inviteToken) || Boolean(data.organizationName), {
+    message: 'organizationName is required unless an invite token is provided.',
+    path: ['organizationName']
+  });
+
 /** add-project-resource: register a new directory for a project */
 export const addProjectResourceSchema = z.object({
   projectId: z.string().uuid(),

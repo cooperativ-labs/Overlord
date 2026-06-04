@@ -1110,6 +1110,63 @@ export const TOOLS = [
   // ---------------------------------------------------------------------------
 
   {
+    name: 'create_project',
+    annotations: {
+      title: 'Create Project',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false
+    },
+    description:
+      "Create a new project in the caller's organization. Optionally register a local directory as the project's primary resource in the same call (one-step setup) by passing directoryPath plus a deviceFingerprint — the directory must exist on that device.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: {
+          type: 'string',
+          description: 'Project name.'
+        },
+        color: {
+          type: 'string',
+          description: 'Optional hex color like #d4d4d8 (defaults to a soft rose).'
+        },
+        directoryPath: {
+          type: 'string',
+          description:
+            "Optional absolute path on the calling device to register as the project's primary resource in one step."
+        },
+        deviceFingerprint: {
+          type: 'string',
+          description:
+            'Stable fingerprint of the device that owns directoryPath (required with it).'
+        },
+        label: {
+          type: 'string',
+          description: 'Optional label for the registered directory.'
+        },
+        isPrimary: {
+          type: 'boolean',
+          description: 'Override primary status for the directory (defaults to primary).'
+        },
+        deviceHostname: {
+          type: 'string',
+          description: 'Hostname (used to auto-generate a device label on first registration).'
+        },
+        devicePlatform: {
+          type: 'string',
+          description: "Platform: 'darwin', 'linux', or 'windows'."
+        },
+        devicePort: {
+          type: 'integer',
+          description: 'SSH port for placeholder reconciliation when targets share a host.'
+        }
+      },
+      required: ['name']
+    }
+  },
+
+  {
     name: 'list_project_resources',
     annotations: {
       title: 'List Project Resources',

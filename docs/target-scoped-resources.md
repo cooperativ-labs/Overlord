@@ -166,6 +166,8 @@ The edge MCP handlers share a Deno module `_resource-authority.ts` that mirrors 
 - `lib/resource-directories/primary-resource.ts` — canonical helper module
 - `lib/actions/resource-directories.ts` — server action write path
 - `apps/web/app/api/protocol/add-project-resource/route.ts` — REST write path
+- `apps/web/app/api/protocol/create-project/route.ts` — create a project, optionally registering a primary resource directory in one step
+- `lib/overlord/project-provisioning.ts` — shared project + primary-resource provisioning helpers
 - `apps/web/app/api/protocol/claim-execution/route.ts` — org-agnostic claim
 - `lib/overlord/execution-requests.ts` — G4 request-time check
 - `supabase/functions/mcp/handlers/_resource-authority.ts` — edge MCP authority mirror

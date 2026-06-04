@@ -264,6 +264,7 @@ You need ADMIN or MANAGER role in the organization, or the target must be person
 
 | Goal | Command |
 |------|---------|
+| Create a project (and link the current directory in one step) | `ovld create-project --name "<name>"` |
 | Register current directory as a project resource | `ovld add-cwd` |
 | Start the runner daemon | `ovld runner start` |
 | Run once and exit | `ovld runner once` |

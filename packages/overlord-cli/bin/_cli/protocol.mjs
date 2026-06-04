@@ -1983,6 +1983,135 @@ async function protocolUpdateProjectResource(args) {
 }
 
 // ---------------------------------------------------------------------------
+// create-project (create a project, optionally registering a primary directory)
+// ---------------------------------------------------------------------------
+
+async function protocolCreateProject(args) {
+  const flags = parseFlags(args);
+
+  if (flags.help === true || flags.h === true) {
+    console.log(`Usage: ovld create-project --name "<name>" [options]
+
+Create a project. By default the current working directory is registered as the
+project's primary resource in the same call (one-step setup).
+
+Options:
+  --name <text>              Project name (required)
+  --color <#rrggbb>          Project color (defaults to a soft rose)
+  --directory <path>         Directory to register as the primary resource
+                             (defaults to the current working directory)
+  --no-directory             Create a bare project without registering a directory
+  --device-fingerprint <fp>  Device for the directory (or OVERLORD_DEVICE_FINGERPRINT;
+                             auto-generated when omitted)
+  --label <text>             Label for the registered directory
+  --is-primary <true|false>  Override primary status (directory defaults to primary)
+  --organization-id <id>     Create in a specific organization (defaults to membership)
+
+This command is also available as \`ovld protocol create-project\`.`);
+    return;
+  }
+
+  const { platformUrl, bearerToken, localSecret, organizationId } =
+    await resolveProtocolAuthForFlags(flags);
+  const timeoutMs = resolveTimeout(flags);
+
+  const name = typeof flags.name === 'string' ? flags.name.trim() : '';
+  if (!name) {
+    console.error('Error: --name is required');
+    process.exit(1);
+  }
+
+  // A directory makes project creation a one-step process: the project is
+  // created and the directory is registered as its primary resource together.
+  // Pass --no-directory (or --directory=false) to create a bare project.
+  const directoryRequested = !(flags.directory === false || flags.directory === 'false');
+  let directoryPath = '';
+  if (directoryRequested) {
+    directoryPath = path.resolve(
+      typeof flags.directory === 'string' && flags.directory.trim()
+        ? flags.directory.trim()
+        : process.cwd()
+    );
+    if (!fs.existsSync(directoryPath)) {
+      console.error(`Error: Directory does not exist: ${directoryPath}`);
+      process.exit(1);
+    }
+  }
+
+  let deviceFingerprint = '';
+  if (directoryPath) {
+    deviceFingerprint = String(
+      flags['device-fingerprint'] ?? process.env.OVERLORD_DEVICE_FINGERPRINT ?? ''
+    ).trim();
+    if (!deviceFingerprint) {
+      const { readOrCreateDeviceFingerprint } = await import('./runner.mjs');
+      deviceFingerprint = readOrCreateDeviceFingerprint(flags);
+    }
+  }
+
+  const isPrimary =
+    flags['is-primary'] !== undefined
+      ? flags['is-primary'] === true || flags['is-primary'] === 'true'
+      : flags.primary !== undefined
+        ? !(flags.primary === false || flags.primary === 'false')
+        : undefined;
+
+  const body = {
+    name,
+    ...(typeof flags.color === 'string' && flags.color.trim() ? { color: flags.color.trim() } : {}),
+    ...(directoryPath
+      ? {
+          directoryPath,
+          deviceFingerprint,
+          ...(isPrimary !== undefined ? { isPrimary } : {}),
+          ...(typeof flags.label === 'string' ? { label: flags.label } : {}),
+          ...(flags['device-hostname']
+            ? { deviceHostname: String(flags['device-hostname']) }
+            : { deviceHostname: os.hostname() }),
+          ...(flags['device-platform']
+            ? { devicePlatform: String(flags['device-platform']) }
+            : { devicePlatform: process.platform }),
+          ...(flags['device-port'] != null ? { devicePort: Number(flags['device-port']) } : {})
+        }
+      : {})
+  };
+
+  const data = await apiPost(
+    platformUrl,
+    bearerToken,
+    localSecret,
+    organizationId,
+    '/api/protocol/create-project',
+    body,
+    timeoutMs
+  );
+  console.log(JSON.stringify(data, null, 2));
+
+  if (data.project?.id) {
+    process.stderr.write(`\nPROJECT_ID=${data.project.id}\n`);
+  }
+  if (data.resource?.id) {
+    process.stderr.write(`RESOURCE_ID=${data.resource.id}\n`);
+  }
+
+  // Write .overlord/project.json so future cwd-based resolution finds the project.
+  if (directoryPath && data.project?.id && data.project?.name) {
+    try {
+      const { upsertLocalOverlordConfig } = await import('./local-config.mjs');
+      const result = await upsertLocalOverlordConfig({
+        directoryPath,
+        project: { id: data.project.id, name: data.project.name }
+      });
+      process.stderr.write(`OVERLORD_CONFIG=${result.filePath} (${result.action})\n`);
+    } catch (configError) {
+      process.stderr.write(
+        `\nWarning: could not write .overlord/project.json: ${configError instanceof Error ? configError.message : configError}\n`
+      );
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // execution requests (durable runner queue)
 // ---------------------------------------------------------------------------
 
@@ -2750,6 +2879,7 @@ Subcommands:
   attachment-upload-file      Prepare, upload, and finalize a local file in one command
   get-device                  Identify / register the current device and return its label
   update-device               Rename this device's label (must be lowercase kebab-case)
+  create-project              Create a project, optionally linking the current directory in one step
   list-project-resources      List resource directories registered for a project
   add-project-resource        Register a local directory as a project resource on this device
   update-project-resource     Update a resource directory's path, label, or primary status
@@ -3180,6 +3310,20 @@ update-device:
     --device-fingerprint <fp>  (or OVERLORD_DEVICE_FINGERPRINT env var)
     --label <label>            Lowercase kebab-case, unique within org
 
+create-project:
+  Required:
+    --name <text>              Project name
+  Optional:
+    --color <#rrggbb>          Project color (defaults to a soft rose)
+    --directory <path>         Register this directory as the project's primary resource
+                               in one step (defaults to the current working directory;
+                               pass --no-directory to create a bare project)
+    --device-fingerprint <fp>  Device for the directory (or OVERLORD_DEVICE_FINGERPRINT;
+                               auto-generated when omitted)
+    --label <text>             Label for the registered directory
+    --is-primary <true|false>  Override primary status (directory defaults to primary)
+    --organization-id <id>     Create in a specific organization (defaults to your membership)
+
 list-project-resources:
   Required:
     --project-id <uuid>
@@ -3322,6 +3466,8 @@ Examples:
 EOF
   ovld protocol get-device --device-fingerprint $OVERLORD_DEVICE_FINGERPRINT
   ovld protocol update-device --device-fingerprint $OVERLORD_DEVICE_FINGERPRINT --label work-macbook
+  ovld protocol create-project --name "Acme Web" --directory /path/to/repo
+  ovld protocol create-project --name "Acme Web" --no-directory
   ovld protocol list-project-resources --project-id <project-uuid>
   ovld protocol list-project-resources --project-id <project-uuid> --device-fingerprint $OVERLORD_DEVICE_FINGERPRINT
   ovld protocol add-project-resource --project-id <project-uuid> --device-fingerprint $OVERLORD_DEVICE_FINGERPRINT
@@ -3474,6 +3620,10 @@ EOF
   }
   if (subcommand === 'update-device') {
     await protocolUpdateDevice(args);
+    return;
+  }
+  if (subcommand === 'create-project') {
+    await protocolCreateProject(args);
     return;
   }
   if (subcommand === 'list-project-resources') {

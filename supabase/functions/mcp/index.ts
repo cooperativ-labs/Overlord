@@ -21,6 +21,7 @@ import { handleAttachmentFinalizeUpload } from './handlers/attachment-finalize-u
 import { handleAttachmentGetDownloadUrl } from './handlers/attachment-get-download-url.ts';
 import { handleAttachmentList } from './handlers/attachment-list.ts';
 import { handleAttachmentPrepareUpload } from './handlers/attachment-prepare-upload.ts';
+import { handleCreateProject } from './handlers/create-project.ts';
 import { handleCreateTicket } from './handlers/create-ticket.ts';
 import { handleCreateTicketDraft } from './handlers/create-ticket-draft.ts';
 import { handleDeliver } from './handlers/deliver.ts';
@@ -325,6 +326,8 @@ Deno.serve(async (req: Request) => {
         result = await handleRecordWork(supabase, toolArgs, requestContext);
       } else if (toolName === 'create_ticket') {
         result = await handleCreateTicket(supabase, toolArgs, requestContext);
+      } else if (toolName === 'create_project') {
+        result = await handleCreateProject(supabase, toolArgs, requestContext);
       } else if (toolName === 'discover_project') {
         result = await handleDiscoverProject(supabase, toolArgs, requestContext);
       } else if (toolName === 'search_tickets') {

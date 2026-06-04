@@ -33,6 +33,7 @@ Usage:
   ${primaryCommand} attach [ticketId] [agent]  Search tickets and launch an agent (interactive)
   ${primaryCommand} create "<objective>"       Create a ticket with numbered project selection; supports --agent/--model/--delegate
   ${primaryCommand} prompt "<objective>"       Create a ticket, then launch an agent on it
+  ${primaryCommand} create-project --name "<name>"  Create a project, optionally linking a directory in one step
   ${primaryCommand} add-cwd                   Register the current directory as a project resource (interactive)
   ${primaryCommand} onboard                   Create an account, project, cwd link, and onboarding ticket
   ${primaryCommand} auth <subcommand>          Login, logout, repair, or check auth status
@@ -109,6 +110,12 @@ export async function runCli({ primaryCommand }) {
   if (command === 'prompt') {
     const { runPromptCommand } = await import('./new-ticket.mjs');
     await runPromptCommand(rest);
+    return;
+  }
+
+  if (command === 'create-project') {
+    // Friendly top-level alias for `ovld protocol create-project`.
+    await runProtocolCommand('create-project', rest);
     return;
   }
 

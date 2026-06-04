@@ -5,6 +5,7 @@ import { Resend } from 'resend';
 
 import { getPlatformUrl } from '@/lib/env';
 import { ORGANIZATION_ROLE_ORDER, type OrganizationRole } from '@/lib/organization-roles';
+import { acceptInvitationForUser } from '@/lib/overlord/invitations';
 import { createClientForRequest } from '@/supabase/utils/server';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
@@ -58,20 +59,31 @@ const ROLE_DESCRIPTIONS: Record<OrganizationRole, string> = {
   ADMIN: 'Full access including org settings and member management.'
 };
 
-async function sendInvitationEmail(opts: {
+type InvitationEmailOptions = {
   to: string;
   inviterName: string;
   orgName: string;
   role: OrganizationRole;
   token: string;
-}) {
-  const resend = getResendClient();
+};
+
+export async function buildInvitationEmailContent(opts: InvitationEmailOptions): Promise<{
+  subject: string;
+  text: string;
+  html: string;
+}> {
   const acceptUrl = `${getPlatformUrl()}/invite/${opts.token}`;
   const roleDesc = ROLE_DESCRIPTIONS[opts.role];
+  const escapedInviterName = escapeHtml(opts.inviterName);
+  const escapedOrgName = escapeHtml(opts.orgName);
+  const escapedRole = escapeHtml(opts.role);
+  const escapedRoleDesc = escapeHtml(roleDesc);
+  const escapedAcceptUrl = escapeHtml(acceptUrl);
+  const escapedToken = escapeHtml(opts.token);
+  const installCommand = 'npm install -g overlord-cli';
+  const onboardCommand = `ovld onboard --invite ${opts.token}`;
 
-  await resend.emails.send({
-    from: getFromEmail(),
-    to: opts.to,
+  return Promise.resolve({
     subject: `You've been invited to join ${opts.orgName} on Overlord`,
     text: [
       `${opts.inviterName} has invited you to join ${opts.orgName} on Overlord as ${opts.role}.`,
@@ -79,25 +91,433 @@ async function sendInvitationEmail(opts: {
       '',
       `Accept your invitation: ${acceptUrl}`,
       '',
+      'For AI agents: onboard yourself from the terminal.',
+      `  1. Install the CLI:  ${installCommand}`,
+      `  2. Onboard with this invite:  ${onboardCommand}`,
+      '',
+      `Invitation code: ${opts.token}`,
+      '',
       'This invitation expires in 7 days.'
     ].join('\n'),
     html: `
-      <div style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:32px 24px;">
-        <h1 style="font-size:20px;margin-bottom:8px;">You're invited to join ${escapeHtml(opts.orgName)}</h1>
-        <p style="color:#555;margin-bottom:24px;">
-          <strong>${escapeHtml(opts.inviterName)}</strong> has invited you to join
-          <strong>${escapeHtml(opts.orgName)}</strong> on Overlord as
-          <strong>${escapeHtml(opts.role)}</strong>.
-        </p>
-        <p style="color:#555;margin-bottom:32px;">${escapeHtml(roleDesc)}</p>
-        <a href="${acceptUrl}" style="display:inline-block;background:#000;color:#fff;text-decoration:none;padding:12px 24px;border-radius:6px;font-weight:600;">
-          Accept invitation
-        </a>
-        <p style="color:#999;font-size:12px;margin-top:32px;">
-          This invitation expires in 7 days. If you didn't expect this, you can safely ignore this email.
-        </p>
-      </div>
+      <!doctype html>
+      <html lang="en" style="margin: 0; padding: 0">
+        <head>
+          <meta charset="UTF-8" />
+          <meta name="viewport" content="width=device-width,initial-scale=1" />
+          <meta name="x-apple-disable-message-reformatting" />
+          <meta name="color-scheme" content="light only" />
+          <meta name="supported-color-schemes" content="light only" />
+          <title>You've been invited to Overlord.</title>
+          <!--[if mso]>
+            <style>
+              * {
+                font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif !important;
+              }
+            </style>
+          <![endif]-->
+          <style>
+            @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+            body,
+            table,
+            td,
+            a {
+              -webkit-text-size-adjust: 100%;
+              -ms-text-size-adjust: 100%;
+            }
+            table,
+            td {
+              mso-table-lspace: 0pt;
+              mso-table-rspace: 0pt;
+            }
+            img {
+              -ms-interpolation-mode: bicubic;
+              border: 0;
+              outline: none;
+              text-decoration: none;
+            }
+            body {
+              margin: 0 !important;
+              padding: 0 !important;
+              width: 100% !important;
+            }
+            a {
+              color: #1c1917;
+            }
+            a.cta:hover {
+              background: #000 !important;
+            }
+            a.text-link:hover {
+              text-decoration: underline !important;
+            }
+            @media only screen and (max-width: 620px) {
+              .container {
+                width: 100% !important;
+                padding-left: 20px !important;
+                padding-right: 20px !important;
+              }
+              .card {
+                padding: 28px 24px !important;
+                border-radius: 18px !important;
+              }
+              .headline {
+                font-size: 26px !important;
+                line-height: 1.15 !important;
+              }
+              .footer {
+                padding: 24px 24px 32px !important;
+              }
+              .stack-block {
+                padding: 14px 16px !important;
+              }
+            }
+          </style>
+        </head>
+        <body
+          style="
+            margin: 0;
+            padding: 0;
+            background: #f6f4ef;
+            font-family: 'Space Grotesk', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            color: #1c1917;
+          "
+        >
+          <div
+            style="
+              display: none;
+              max-height: 0;
+              overflow: hidden;
+              mso-hide: all;
+              font-size: 1px;
+              line-height: 1px;
+              color: #f6f4ef;
+            "
+          >
+            ${escapedInviterName} invited you to join ${escapedOrgName} on Overlord.
+          </div>
+
+          <table
+            role="presentation"
+            cellpadding="0"
+            cellspacing="0"
+            border="0"
+            width="100%"
+            style="background: #f6f4ef"
+          >
+            <tr>
+              <td align="center" style="padding: 32px 16px 8px">
+                <table
+                  role="presentation"
+                  cellpadding="0"
+                  cellspacing="0"
+                  border="0"
+                  width="600"
+                  class="container"
+                  style="max-width: 600px; width: 100%"
+                >
+                  <tr>
+                    <td align="left" style="padding: 0 4px 24px">
+                      <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                        <tr>
+                          <td style="vertical-align: middle; padding-right: 12px">
+                            <img
+                              src="https://zitmmhvbilhjjdwgxlfm.supabase.co/storage/v1/object/public/org-images/Overlord/256.png"
+                              width="36"
+                              height="36"
+                              alt="Overlord"
+                              style="display: block; width: 36px; height: 36px; border-radius: 8px"
+                            />
+                          </td>
+                          <td
+                            style="
+                              vertical-align: middle;
+                              font-family:
+                                'Space Grotesk', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+                              font-weight: 600;
+                              font-size: 18px;
+                              letter-spacing: -0.02em;
+                              color: #1c1917;
+                            "
+                          >
+                            Overlord
+                          </td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+                </table>
+
+                <table
+                  role="presentation"
+                  cellpadding="0"
+                  cellspacing="0"
+                  border="0"
+                  width="600"
+                  class="container"
+                  style="max-width: 600px; width: 100%"
+                >
+                  <tr>
+                    <td
+                      class="card"
+                      style="
+                        background: #ffffff;
+                        border: 1px solid #e7e5e0;
+                        border-radius: 20px;
+                        padding: 40px 40px 36px;
+                      "
+                    >
+                      <div
+                        style="
+                          font-family: 'IBM Plex Mono', 'SF Mono', Menlo, Consolas, monospace;
+                          font-size: 11px;
+                          font-weight: 500;
+                          letter-spacing: 0.22em;
+                          text-transform: uppercase;
+                          color: #a8a29e;
+                          margin: 0 0 18px;
+                        "
+                      >
+                        WORKSPACE INVITE
+                      </div>
+                      <h1
+                        class="headline"
+                        style="
+                          margin: 0 0 16px;
+                          font-family: 'Space Grotesk', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+                          font-weight: 600;
+                          font-size: 30px;
+                          line-height: 1.1;
+                          letter-spacing: -0.04em;
+                          color: #1c1917;
+                        "
+                      >
+                        Join ${escapedOrgName} on Overlord.
+                      </h1>
+                      <div
+                        style="
+                          font-family: 'Space Grotesk', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+                          font-size: 16px;
+                          line-height: 1.6;
+                          color: #57534e;
+                        "
+                      >
+                        <p style="margin: 0 0 14px">
+                          <strong style="color: #1c1917">${escapedInviterName}</strong> invited you
+                          to join <strong style="color: #1c1917">${escapedOrgName}</strong> on
+                          Overlord as
+                          <span
+                            style="
+                              font-family: 'IBM Plex Mono', 'SF Mono', Menlo, Consolas, monospace;
+                              font-size: 0.92em;
+                              background: #f4f3ee;
+                              border: 1px solid #e7e5e0;
+                              border-radius: 4px;
+                              padding: 1px 6px;
+                              color: #1c1917;
+                              white-space: nowrap;
+                            "
+                            >${escapedRole}</span
+                          >.
+                        </p>
+                        <p style="margin: 0 0 14px">${escapedRoleDesc}</p>
+                        <div
+                          class="stack-block"
+                          style="
+                            margin: 20px 0 0;
+                            padding: 16px 18px;
+                            background: #fafaf7;
+                            border: 1px solid #e7e5e0;
+                            border-radius: 14px;
+                            color: #57534e;
+                          "
+                        >
+                          Accept the invite to join the workspace. This invitation expires in 7 days.
+                        </div>
+                      </div>
+
+                      <table
+                        role="presentation"
+                        cellpadding="0"
+                        cellspacing="0"
+                        border="0"
+                        style="margin: 28px 0 8px"
+                      >
+                        <tr>
+                          <td style="background: #1c1917; border-radius: 9999px">
+                            <a
+                              class="cta"
+                              href="${escapedAcceptUrl}"
+                              style="
+                                display: inline-block;
+                                padding: 14px 28px;
+                                font-family:
+                                  'Space Grotesk', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+                                font-weight: 600;
+                                font-size: 15px;
+                                letter-spacing: -0.01em;
+                                color: #fafaf7;
+                                text-decoration: none;
+                                border-radius: 9999px;
+                              "
+                            >
+                              Accept Invite&nbsp;&rarr;
+                            </a>
+                          </td>
+                        </tr>
+                      </table>
+
+                      <div
+                        class="stack-block"
+                        style="
+                          margin: 28px 0 0;
+                          padding: 18px 20px;
+                          background: #fafaf7;
+                          border: 1px solid #e7e5e0;
+                          border-radius: 14px;
+                        "
+                      >
+                        <div
+                          style="
+                            font-family: 'IBM Plex Mono', 'SF Mono', Menlo, Consolas, monospace;
+                            font-size: 11px;
+                            font-weight: 500;
+                            letter-spacing: 0.22em;
+                            text-transform: uppercase;
+                            color: #a8a29e;
+                            margin: 0 0 10px;
+                          "
+                        >
+                          For AI Agents
+                        </div>
+                        <p
+                          style="
+                            margin: 0 0 12px;
+                            font-family: 'Space Grotesk', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+                            font-size: 14px;
+                            line-height: 1.6;
+                            color: #57534e;
+                          "
+                        >
+                          Onboard yourself from the terminal — install the Overlord CLI and run
+                          onboarding with this invite.
+                        </p>
+                        <div
+                          style="
+                            font-family: 'IBM Plex Mono', 'SF Mono', Menlo, Consolas, monospace;
+                            font-size: 13px;
+                            line-height: 1.7;
+                            background: #1c1917;
+                            color: #fafaf7;
+                            border-radius: 10px;
+                            padding: 12px 14px;
+                            white-space: nowrap;
+                            overflow-x: auto;
+                          "
+                        >
+                          ${escapeHtml(installCommand)}<br />
+                          ${escapeHtml(onboardCommand)}
+                        </div>
+                        <p
+                          style="
+                            margin: 12px 0 0;
+                            font-family: 'Space Grotesk', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+                            font-size: 12px;
+                            color: #a8a29e;
+                          "
+                        >
+                          Invitation code:
+                          <span
+                            style="
+                              font-family: 'IBM Plex Mono', 'SF Mono', Menlo, Consolas, monospace;
+                              color: #57534e;
+                              word-break: break-all;
+                            "
+                            >${escapedToken}</span
+                          >
+                        </p>
+                      </div>
+
+                      <div
+                        style="
+                          margin-top: 24px;
+                          padding-top: 24px;
+                          border-top: 1px solid #e7e5e0;
+                          font-family: 'Space Grotesk', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+                          font-size: 13px;
+                          line-height: 1.5;
+                          color: #a8a29e;
+                        "
+                      >
+                        Button doesn't work? Paste this URL into your browser:<br />
+                        <a
+                          class="text-link"
+                          href="${escapedAcceptUrl}"
+                          style="color: #57534e; word-break: break-all; text-decoration: underline"
+                          >${escapedAcceptUrl}</a
+                        >
+                      </div>
+                    </td>
+                  </tr>
+                </table>
+
+                <table
+                  role="presentation"
+                  cellpadding="0"
+                  cellspacing="0"
+                  border="0"
+                  width="600"
+                  class="container"
+                  style="max-width: 600px; width: 100%"
+                >
+                  <tr>
+                    <td
+                      class="footer"
+                      align="left"
+                      style="
+                        padding: 28px 4px 40px;
+                        font-family: 'Space Grotesk', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+                        font-size: 12px;
+                        line-height: 1.6;
+                        color: #a8a29e;
+                      "
+                    >
+                      <div style="margin-bottom: 8px">
+                        <a
+                          class="text-link"
+                          href="${escapeHtml(getPlatformUrl())}"
+                          style="color: #57534e; text-decoration: none; font-weight: 500"
+                          >ovld.ai</a
+                        >
+                        &nbsp;·&nbsp; Agent work, organized.
+                      </div>
+
+                      <div style="margin-top: 8px; color: #a8a29e">
+                        You're receiving this because someone used this email address to invite you
+                        to ${escapedOrgName} on Overlord. If that wasn't expected, you can safely
+                        ignore this message.
+                      </div>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </table>
+        </body>
+      </html>
     `
+  });
+}
+
+async function sendInvitationEmail(opts: InvitationEmailOptions) {
+  const resend = getResendClient();
+  const content = await buildInvitationEmailContent(opts);
+
+  await resend.emails.send({
+    from: getFromEmail(),
+    to: opts.to,
+    subject: content.subject,
+    text: content.text,
+    html: content.html
   });
 }
 
@@ -379,69 +799,18 @@ export async function acceptInvitationAction(
 
   if (!user) return { error: 'You must be signed in to accept an invitation.' };
 
+  // Web accepts require the signed-in email to match the invited email. The CLI
+  // onboarding path uses the same helper with a soft match (see ticket 1:1358).
+  const result = await acceptInvitationForUser({
+    token,
+    userId: user.id,
+    userEmail: user.email,
+    enforceEmailMatch: true
+  });
+
+  if (!result.ok) return { error: result.error };
+
   const serviceSupabase = createServiceRoleClient();
-
-  const { data: invitation } = await serviceSupabase
-    .from('organization_invitations')
-    .select('id, organization_id, email, role, status, expires_at')
-    .eq('token', token)
-    .maybeSingle();
-
-  if (!invitation) return { error: 'Invitation not found.' };
-
-  if (invitation.status !== 'pending') {
-    const messages: Record<string, string> = {
-      accepted: 'This invitation has already been accepted.',
-      cancelled: 'This invitation has been cancelled.',
-      declined: 'This invitation was declined.',
-      expired: 'This invitation has expired. Please request a new one.'
-    };
-    return { error: messages[invitation.status] ?? 'This invitation is no longer valid.' };
-  }
-
-  if (new Date(invitation.expires_at) < new Date()) {
-    await serviceSupabase
-      .from('organization_invitations')
-      .update({ status: 'expired', updated_at: new Date().toISOString() })
-      .eq('id', invitation.id);
-    return { error: 'This invitation has expired. Please request a new one.' };
-  }
-
-  if (user.email?.toLowerCase() !== invitation.email.toLowerCase()) {
-    return {
-      error: `This invitation was sent to ${invitation.email}. Sign in with that email to accept it.`
-    };
-  }
-
-  // Upsert membership (idempotent)
-  const { data: existing } = await serviceSupabase
-    .from('members')
-    .select('user_id')
-    .eq('organization_id', invitation.organization_id)
-    .eq('user_id', user.id)
-    .maybeSingle();
-
-  if (!existing) {
-    const { error: memberError } = await serviceSupabase.from('members').insert({
-      organization_id: invitation.organization_id,
-      user_id: user.id,
-      role: invitation.role
-    });
-
-    if (memberError) {
-      Sentry.captureException(memberError);
-      return { error: 'Failed to add you to the organization. Please try again.' };
-    }
-  }
-
-  await serviceSupabase
-    .from('organization_invitations')
-    .update({
-      status: 'accepted',
-      accepted_by: user.id,
-      updated_at: new Date().toISOString()
-    })
-    .eq('id', invitation.id);
 
   // Determine if this is a new user (only the invited org so far)
   const { count } = await serviceSupabase
@@ -462,12 +831,12 @@ export async function acceptInvitationAction(
     await serviceSupabase
       .from('profiles')
       .update({
-        onboarding: { ...current, invited_organization_id: invitation.organization_id }
+        onboarding: { ...current, invited_organization_id: result.organizationId }
       })
       .eq('id', user.id);
   }
 
-  return { organizationId: invitation.organization_id, isNewUser };
+  return { organizationId: result.organizationId, isNewUser };
 }
 
 export async function declineInvitationAction(token: string): Promise<{ error?: string }> {

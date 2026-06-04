@@ -54,6 +54,7 @@ Subcommands:
   attachment-upload-file      Prepare, upload, and finalize a local file in one command
   get-device                  Identify / register the current device and return its label
   update-device               Rename this device's label (must be lowercase kebab-case)
+  create-project              Create a project, optionally linking the current directory in one step
   list-project-resources      List resource directories registered for a project
   add-project-resource        Register a local directory as a project resource on this device
   update-project-resource     Update a resource directory's path, label, or primary status
@@ -124,9 +125,12 @@ connect:
     --agent <identifier>
     --model <identifier>
     --method <connectionMethod>
+    --external-session-id <id|null>  Store the native agent thread/session id, or clear it with null
     --metadata-json <json>     Extra session metadata object
   Returns:
     Session JSON and SESSION_KEY on stderr when available
+  Notes:
+    If --external-session-id is omitted, the CLI may auto-detect Codex or Claude session ids
 
 load-context:
   Purpose:
@@ -481,6 +485,20 @@ update-device:
     --device-fingerprint <fp>  (or OVERLORD_DEVICE_FINGERPRINT env var)
     --label <label>            Lowercase kebab-case, unique within org
 
+create-project:
+  Required:
+    --name <text>              Project name
+  Optional:
+    --color <#rrggbb>          Project color (defaults to a soft rose)
+    --directory <path>         Register this directory as the project's primary resource
+                               in one step (defaults to the current working directory;
+                               pass --no-directory to create a bare project)
+    --device-fingerprint <fp>  Device for the directory (or OVERLORD_DEVICE_FINGERPRINT;
+                               auto-generated when omitted)
+    --label <text>             Label for the registered directory
+    --is-primary <true|false>  Override primary status (directory defaults to primary)
+    --organization-id <id>     Create in a specific organization (defaults to your membership)
+
 list-project-resources:
   Required:
     --project-id <uuid>
@@ -623,9 +641,12 @@ Examples:
 EOF
   ovld protocol get-device --device-fingerprint $OVERLORD_DEVICE_FINGERPRINT
   ovld protocol update-device --device-fingerprint $OVERLORD_DEVICE_FINGERPRINT --label work-macbook
+  ovld protocol create-project --name "Acme Web" --directory /path/to/repo
+  ovld protocol create-project --name "Acme Web" --no-directory
   ovld protocol list-project-resources --project-id <project-uuid>
   ovld protocol list-project-resources --project-id <project-uuid> --device-fingerprint $OVERLORD_DEVICE_FINGERPRINT
   ovld protocol add-project-resource --project-id <project-uuid> --device-fingerprint $OVERLORD_DEVICE_FINGERPRINT
   ovld protocol add-project-resource --project-id <project-uuid> --directory /path/to/repo --device-fingerprint $OVERLORD_DEVICE_FINGERPRINT --label "main checkout" --is-primary
   ovld protocol update-project-resource --resource-id <resource-uuid> --device-fingerprint $OVERLORD_DEVICE_FINGERPRINT --label "docs branch"
   ovld protocol update-project-resource --resource-id <resource-uuid> --device-fingerprint $OVERLORD_DEVICE_FINGERPRINT --is-primary true
+

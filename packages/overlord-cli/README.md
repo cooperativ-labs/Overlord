@@ -107,6 +107,7 @@ Top-level commands (see `ovld help`):
 - `<agent> "<prompt>"` - create a ticket from the prompt (project inferred from the current directory) and launch the agent on it in one step, e.g. `ovld claude "fix the flaky login test" --model opus`. Built-in agents need an installed connector (`ovld setup <agent>`, override with `--allow-uninstalled`); your custom agents launch by id. Flags after a standalone `--` pass through to the agent binary.
 - `attach` - search tickets and launch an agent interactively (`ovld attach [ticketId] [agent]`)
 - `create` - create a ticket with numbered project selection; supports `--agent`, `--model`, `--delegate` (same delegate flags as `ovld protocol create`)
+- `create-project` - create a project, registering the current directory (or `--directory`) as its primary resource in one step; `--no-directory` makes a bare project (alias for `ovld protocol create-project`)
 - `prompt` - create a ticket, then launch an agent on it
 - `auth` - `login`, `status`, `repair` (shared Desktop/CLI credentials), or `logout`
 - `tickets` - `create` or `list` (optional `--status`)
@@ -150,6 +151,7 @@ Agents can find docs here: https://www.ovld.ai/docs/for-agents
 - `attachment-download-url` - get a signed download URL for an existing objective attachment
 - `attachment-upload-file` - prepare, upload, and finalize a local objective attachment in one command
 - `get-device` / `update-device` - register the caller machine (per organization + user + fingerprint) and rename its label
+- `create-project` - create a project and, when a `--directory` + `--device-fingerprint` are given, register it as the project's primary resource in one step
 - `list-project-resources` / `add-project-resource` / `update-project-resource` - manage filesystem directories tied to a project device
 - `request-execution` / `claim-execution` / `list-execution-requests` / `clear-execution-requests` / `complete-execution-launch` / `fail-execution-launch` - durable runner queue operations used by auto-advance and manual Run
 - `list-organizations` - list every organization the authenticated user (or agent token) belongs to; the runner uses this to poll all of your organizations, not just the one stored at login

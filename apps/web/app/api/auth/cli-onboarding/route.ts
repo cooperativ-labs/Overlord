@@ -1,44 +1,28 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
-import os from 'node:os';
-import { z } from 'zod';
 
 import { internalErrorResponse } from '@/app/api/protocol/_lib';
 import { getSupabasePublishableKey, getSupabaseUrl } from '@/lib/env';
-import { normalizeHexColor } from '@/lib/helpers/color';
 import { deriveTitleFromObjective, getTicketIdentifier } from '@/lib/helpers/tickets';
 import { insertOrderedObjectives } from '@/lib/objectives';
-import { ensureProjectExecutionTarget } from '@/lib/overlord/execution-targets';
-import { upsertDeviceFromProtocol } from '@/lib/overlord/upsert-device';
+import { acceptInvitationForUser } from '@/lib/overlord/invitations';
 import {
-  assertCanManagePrimary,
-  clearTargetPrimary,
-  shouldAutoPrimary
-} from '@/lib/resource-directories/primary-resource';
+  createProjectRecord,
+  registerProjectResourceDirectory
+} from '@/lib/overlord/project-provisioning';
+import { cliOnboardingSchema } from '@/lib/overlord/validation';
 import { resolvePreferredStatusNameByType } from '@/lib/ticket-statuses';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 import type { Database } from '@/types/database.types';
 
-const DEFAULT_PROJECT_COLOR = '#fecdd3';
 const ONBOARDING_TICKET_OBJECTIVE =
   'conduct a code review of this repository, save it as a Markdown file, then create objectives on this ticket for the top three most critical fixes';
 
-const defaultProjectStatuses = [
-  { name: 'draft', status_type: 'draft', position: 0 },
-  { name: 'execute', status_type: 'execute', position: 1 },
-  { name: 'review', status_type: 'review', position: 2 },
-  { name: 'complete', status_type: 'complete', position: 3 }
-] as const;
-
-const cliOnboardingSchema = z.object({
-  name: z.string().trim().min(1).max(120),
-  organizationName: z.string().trim().min(1).max(120),
-  projectName: z.string().trim().min(1).max(160),
-  directoryPath: z.string().trim().min(1).max(1024),
-  deviceFingerprint: z.string().trim().min(1).max(128),
-  deviceHostname: z.string().trim().max(256).optional(),
-  devicePlatform: z.string().trim().max(64).optional()
-});
+/**
+ * Raised when an invite token cannot be consumed (expired, already used, etc.).
+ * Surfaced to the CLI as a 400 with an agent-readable message.
+ */
+class InviteResolutionError extends Error {}
 
 function extractBearerToken(request: Request): string | null {
   const authHeader = request.headers.get('authorization');
@@ -59,29 +43,6 @@ function createUserScopedSupabase(accessToken: string) {
       }
     }
   });
-}
-
-async function ensureDefaultStatusesForOrganization(input: {
-  organizationId: number;
-  supabase: ReturnType<typeof createServiceRoleClient>;
-}) {
-  const { error } = await input.supabase.from('ticket_statuses').upsert(
-    defaultProjectStatuses.map(status => ({
-      organization_id: input.organizationId,
-      name: status.name,
-      status_type: status.status_type,
-      position: status.position,
-      is_default: true
-    })),
-    {
-      onConflict: 'organization_id,name',
-      ignoreDuplicates: true
-    }
-  );
-
-  if (error) {
-    throw new Error(error.message ?? 'Failed to initialize default project statuses.');
-  }
 }
 
 async function resolveOrCreateOrganization(input: {
@@ -124,121 +85,33 @@ async function resolveOrCreateOrganization(input: {
   };
 }
 
-async function createProject(input: { organizationId: number; projectName: string }) {
-  const supabase = createServiceRoleClient();
-  await ensureDefaultStatusesForOrganization({ organizationId: input.organizationId, supabase });
-
-  // `ovld onboard` is interactive and may be re-run in the same repo. Reuse an existing
-  // same-named project in this org rather than creating a duplicate.
-  const { data: existing } = await supabase
-    .from('projects')
-    .select('id,name,organization_id')
-    .eq('organization_id', input.organizationId)
-    .eq('name', input.projectName)
-    .limit(1)
-    .maybeSingle();
-
-  if (existing) return existing;
-
-  const { data, error } = await supabase
-    .from('projects')
-    .insert({
-      organization_id: input.organizationId,
-      name: input.projectName,
-      color: normalizeHexColor(DEFAULT_PROJECT_COLOR)
-    })
-    .select('id,name,organization_id')
-    .single();
-
-  if (error || !data) {
-    throw new Error(error?.message ?? 'Failed to create project.');
-  }
-
-  return data;
-}
-
-async function registerProjectResource(input: {
-  organizationId: number;
-  projectId: string;
+/**
+ * Invite path: consume the invitation token and join the inviting org with the
+ * invited role instead of creating a new org. Email match is soft — possession
+ * of the single-use, expiring token plus an authenticated account is sufficient
+ * authority to join (see ticket 1:1358).
+ */
+async function resolveOrganizationFromInvite(input: {
+  inviteToken: string;
   userId: string;
-  directoryPath: string;
-  deviceFingerprint: string;
-  deviceHostname?: string;
-  devicePlatform?: string;
+  userEmail: string | null | undefined;
 }) {
-  const supabase = createServiceRoleClient();
-  const executionTargetId = await upsertDeviceFromProtocol(supabase, {
-    organizationId: input.organizationId,
+  const result = await acceptInvitationForUser({
+    token: input.inviteToken,
     userId: input.userId,
-    deviceFingerprint: input.deviceFingerprint,
-    hostname: input.deviceHostname ?? os.hostname(),
-    port: null,
-    platform: input.devicePlatform ?? null
+    userEmail: input.userEmail,
+    enforceEmailMatch: false
   });
 
-  if (!executionTargetId) {
-    throw new Error('Failed to register execution target.');
-  }
-
-  await ensureProjectExecutionTarget(supabase, {
-    projectId: input.projectId,
-    organizationId: input.organizationId,
-    userId: input.userId,
-    executionTargetId
-  });
-
-  await assertCanManagePrimary(supabase, {
-    userId: input.userId,
-    projectId: input.projectId,
-    executionTargetId
-  });
-
-  const shouldSetPrimary = await shouldAutoPrimary(supabase, {
-    projectId: input.projectId,
-    executionTargetId
-  });
-
-  if (shouldSetPrimary) {
-    await clearTargetPrimary(supabase, input.projectId, executionTargetId);
-  }
-
-  const { data, error } = await (supabase as any)
-    .from('project_resource_directories')
-    .insert({
-      user_id: input.userId,
-      project_id: input.projectId,
-      execution_target_id: executionTargetId,
-      directory_path: input.directoryPath,
-      label: null,
-      is_primary: shouldSetPrimary
-    })
-    .select('id, is_primary, execution_target_id')
-    .single();
-
-  if (error) {
-    if (error.code === '23505') {
-      const { data: existing } = await (supabase as any)
-        .from('project_resource_directories')
-        .select('id, is_primary, execution_target_id')
-        .eq('project_id', input.projectId)
-        .eq('execution_target_id', executionTargetId)
-        .eq('directory_path', input.directoryPath)
-        .maybeSingle();
-      return {
-        id: existing?.id ?? null,
-        isPrimary: Boolean(existing?.is_primary),
-        executionTargetId,
-        alreadyRegistered: true
-      };
-    }
-    throw new Error(error.message ?? 'Failed to register project directory.');
+  if (!result.ok) {
+    throw new InviteResolutionError(result.error);
   }
 
   return {
-    id: data.id as string,
-    isPrimary: Boolean(data.is_primary),
-    executionTargetId: data.execution_target_id as string,
-    alreadyRegistered: false
+    created: false,
+    organizationId: result.organizationId,
+    organizationName: result.organizationName ?? '',
+    role: result.role
   };
 }
 
@@ -393,16 +266,27 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid or expired token.' }, { status: 401 });
     }
 
-    const organization = await resolveOrCreateOrganization({
-      accessToken,
-      organizationName: parsed.data.organizationName,
-      userId: user.id
-    });
-    const project = await createProject({
+    const inviteToken = parsed.data.inviteToken;
+    const organization = inviteToken
+      ? await resolveOrganizationFromInvite({
+          inviteToken,
+          userId: user.id,
+          userEmail: user.email
+        })
+      : await resolveOrCreateOrganization({
+          accessToken,
+          // organizationName is required by the schema whenever inviteToken is absent.
+          organizationName: parsed.data.organizationName as string,
+          userId: user.id
+        });
+    const project = await createProjectRecord({
+      supabase: service,
       organizationId: organization.organizationId,
-      projectName: parsed.data.projectName
+      name: parsed.data.projectName,
+      reuseExistingByName: true
     });
-    const resource = await registerProjectResource({
+    const resource = await registerProjectResourceDirectory({
+      supabase: service,
       organizationId: organization.organizationId,
       projectId: project.id,
       userId: user.id,
@@ -411,11 +295,15 @@ export async function POST(request: Request) {
       deviceHostname: parsed.data.deviceHostname,
       devicePlatform: parsed.data.devicePlatform
     });
-    const ticket = await createOnboardingTicket({
-      organizationId: organization.organizationId,
-      projectId: project.id,
-      userId: user.id
-    });
+    // Skip the auto onboarding ticket on the invite path — the inviting org
+    // already has work, and the agent receives real tickets from it (1:1358).
+    const ticket = inviteToken
+      ? null
+      : await createOnboardingTicket({
+          organizationId: organization.organizationId,
+          projectId: project.id,
+          userId: user.id
+        });
 
     await updateProfile({
       userId: user.id,
@@ -435,6 +323,9 @@ export async function POST(request: Request) {
       ticket
     });
   } catch (error) {
+    if (error instanceof InviteResolutionError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
     return internalErrorResponse(error);
   }
 }

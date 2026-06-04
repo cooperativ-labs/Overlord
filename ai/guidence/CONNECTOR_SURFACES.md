@@ -46,12 +46,13 @@ Capability resolver:
 - Templates (skill + hook content):
   [templates.ts](/Users/jake/Development/Cooperativ/Overlord/electron/services/agent-bundle/templates.ts) — `CLAUDE_SKILL_CONTENT`, `PERMISSION_HOOK_SCRIPT`
 - CLI install:
-  [setup.mjs](/Users/jake/Development/Cooperativ/Overlord/packages/overlord-cli/bin/_cli/setup.mjs) — `ovld setup claude`
+  [setup.mjs](/Users/jake/Development/Cooperativ/Overlord/packages/overlord-cli/bin/_cli/setup.mjs) — `ovld setup claude`. Performs a real headless install (not just Desktop): builds the local marketplace wrapper under `~/.ovld/claude-marketplace`, then drives Claude's own plugin system via `claude plugin marketplace add` + `claude plugin install overlord@overlord-local` (idempotent; falls back to `marketplace update`/`plugin update` on re-run). Warns but does not fail when the `claude` binary is absent. This is what makes the plugin (and the `overlord:overlord-ticket` skill) load in headless/agent-pod sessions where Overlord Desktop never ran.
 
 Managed files:
 
 - `~/.claude/skills/overlord-local/SKILL.md` — durable workflow skill
 - `~/.claude/overlord-permission-hook.sh` — legacy permission notification hook (mode 0755) removed during migration cleanup
+- `~/.ovld/claude-marketplace/` — CLI-built local marketplace wrapper (`.claude-plugin/marketplace.json` + `plugins/overlord/<bundle>`) registered through the `claude` CLI by `ovld setup claude`
 - Claude local marketplace plugin copy under `~/.claude/plugins/cache/overlord-local/overlord/<version>/` — includes `hooks/hooks.json`, `scripts/permission-hook.sh`, and `scripts/user-prompt-submit-hook.sh`
 - Runtime diagnostics: `~/.ovld/logs/user-prompt-submit-hook.log` — append-only hook trace for Claude/Codex follow-up submission attempts
 - `~/.claude/settings.json` — existing user settings preserved; durable hooks now come from the installed plugin manifest rather than a temp settings merge
@@ -138,6 +139,8 @@ Checklist:
 
 - Desktop-managed plugin installer:
   [overlord-plugin.ts](/Users/jake/Development/Cooperativ/Overlord/electron/services/overlord-plugin.ts)
+- CLI install:
+  [setup.mjs](/Users/jake/Development/Cooperativ/Overlord/packages/overlord-cli/bin/_cli/setup.mjs) — `ovld setup codex`. Copies the bundle to `~/.codex/plugins/overlord`, writes the `~/.agents/plugins/marketplace.json` registry entry, then runs `codex plugin add overlord@overlord-local` to actually install/enable it (copying the marketplace only makes it "available"). Idempotent; warns but does not fail when the `codex` binary is absent.
 - Settings UI for local Codex install / repair / uninstall:
   [CliPage.tsx](/Users/jake/Development/Cooperativ/Overlord/components/modals/settings/CliPage.tsx)
 - IPC exposure:
@@ -157,6 +160,7 @@ Checklist:
 
 - Plugin install writes `~/.agents/plugins/marketplace.json`
 - Plugin install writes `~/.codex/plugins/overlord`
+- `ovld setup codex` runs `codex plugin add overlord@overlord-local` so the plugin is installed/enabled (not merely available) in headless/CLI environments without the Desktop app
 - Plugin install rewrites `.codex-plugin/hooks.json` so `PermissionRequest` and `UserPromptSubmit` commands point at absolute installed script paths under `~/.codex/plugins/overlord/scripts/`, avoiding reliance on a Codex-provided plugin-root environment variable
 - Plugin bundle includes `skills/`, `.codex-plugin/hooks.json`, `scripts/permission-hook.sh`, `scripts/user-prompt-submit-hook.sh`, and install-surface assets in `assets/`
 - Plugin install manages `~/.codex/rules/default.rules`
@@ -604,6 +608,7 @@ when one surface changes, check the others against this table.
 | ----------------------------- | ------------------------------------------------- | -------------------------------- | ---------------------------------------------- |
 | auth-status                   | —                                                 | `ovld protocol auth-status`      | — (CLI/human-only)                             |
 | discover-project              | `POST /api/protocol/discover-project`             | `discover-project`               | `discover_project`                             |
+| create-project                | `POST /api/protocol/create-project`               | `create-project`                 | `create_project`                               |
 | attach                        | `POST /api/protocol/attach`                       | `attach`                         | `attach`                                       |
 | connect                       | `POST /api/protocol/connect`                      | `connect`                        | `connect` (local `overlord-mcp.mjs` shim only) |
 | load-context                  | `POST /api/protocol/load-context`                 | `load-context`                   | `load_ticket_context` (local shim only)        |
@@ -641,6 +646,7 @@ Notes:
 
 - **Parameter naming:** Supabase Edge MCP (`/Users/jake/Development/Cooperativ/Overlord/supabase/functions/mcp/tools.ts`) uses **camelCase** tool arguments that match `POST /api/protocol/*` JSON bodies (`ticketId`, `sessionKey`, `changeRationales`, …). The local Codex MCP shim (`/Users/jake/Development/Cooperativ/Overlord/plugins/overlord/scripts/overlord-mcp.mjs`) uses **snake_case** keys that map to `ovld protocol` kebab-case flags (`ticket_id` → `--ticket-id`). Prefer camelCase when calling the hosted MCP endpoint and snake_case when calling the shim.
 - `discover-project` accepts `projectId` / `--project-id` / `project_id` as an explicit shortcut, or `workingDirectory` / `--working-directory` / `working_directory` for path matching. Device identity fields (`deviceFingerprint`, `deviceHostname`, `devicePlatform`) are accepted across API, CLI, hosted MCP, and local shims so directory matching can prefer resource directories for the current device.
+- `create-project` creates a project (`name`, optional `color`) and, when a `directoryPath` + `deviceFingerprint` are supplied, registers that directory as a (default-primary) resource in the same call so project creation is one step with or without a directory. The CLI defaults `--directory` to the current working directory (`--no-directory` / `--directory=false` creates a bare project) and writes `.overlord/project.json` after a directory is registered; the local shim mirrors this via `no_directory` / `directory_path`; the hosted MCP `create_project` requires `directoryPath`+`deviceFingerprint` to be passed explicitly since it cannot see the caller's filesystem. Organization scope follows the standard sessionless resolution (`--organization-id` / `x-organization-id` override, else the caller's membership). `ovld create-project` is a top-level alias for `ovld protocol create-project`. The shared provisioning helpers live in `/Users/jake/Development/Cooperativ/Overlord/lib/overlord/project-provisioning.ts` (also used by `POST /api/auth/cli-onboarding`); the hosted MCP reimplements them in `/Users/jake/Development/Cooperativ/Overlord/supabase/functions/mcp/handlers/create-project.ts`.
 - `agentIdentifier` and `connectionMethod` are required by the API but defaulted client-side: CLI defaults to `<agent>`/`cli`, MCP defaults to `mcp`.
 - `externalSessionId` is accepted on `attach`, `connect`, `update`, `heartbeat`, and `hook-event`, allowing active sessions to expose a native resume id before delivery.
 - Organization scope is never stored as a default. Ticket-scoped protocol calls resolve from the organization id embedded in human-readable `ticket_id` (for example `1:899`) before auth. Sessionless object-scoped calls resolve from stable object ids such as `projectId`, `resourceId`, `objectiveId`, or `requestId`; browse/search flows fan out across memberships. Explicit `--organization-id` / `x-organization-id` remains a single-org override and must name an organization the identity belongs to.

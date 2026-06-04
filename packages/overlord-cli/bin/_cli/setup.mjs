@@ -1125,6 +1125,95 @@ function removeCursorBeforeSubmitHook(paths) {
 }
 
 
+// ---------------------------------------------------------------------------
+// Headless marketplace plugin install (Claude + Codex, via the agent CLI)
+// ---------------------------------------------------------------------------
+
+const OVERLORD_PLUGIN_NAME = 'overlord';
+const OVERLORD_MARKETPLACE_NAME = 'overlord-local';
+const OVERLORD_PLUGIN_KEY = `${OVERLORD_PLUGIN_NAME}@${OVERLORD_MARKETPLACE_NAME}`;
+const CLAUDE_MARKETPLACE_ROOT = path.join(os.homedir(), '.ovld', 'claude-marketplace');
+
+/**
+ * Run an agent CLI plugin command without throwing.
+ * `missing` is true when the agent binary is not on PATH (ENOENT).
+ *
+ * @returns {{ ok: boolean, missing: boolean, stdout: string, stderr: string }}
+ */
+function runAgentPluginCli(binary, args) {
+  try {
+    const stdout = execFileSync(binary, args, {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe']
+    });
+    return { ok: true, missing: false, stdout: stdout ?? '', stderr: '' };
+  } catch (err) {
+    return {
+      ok: false,
+      missing: err?.code === 'ENOENT',
+      stdout: err?.stdout?.toString?.() ?? '',
+      stderr: err?.stderr?.toString?.() ?? ''
+    };
+  }
+}
+
+/**
+ * Build the local marketplace wrapper under ~/.ovld/claude-marketplace and
+ * register + install the Overlord plugin through the `claude` CLI so the plugin
+ * (and its `overlord:overlord-ticket` skill) loads in every Claude session —
+ * including headless/pod environments where Overlord Desktop never ran. Mirrors
+ * the desktop installer's registerClaudeLocalMarketplace, but drives Claude's
+ * own plugin system instead of hand-writing its JSON.
+ *
+ * @returns {{ ok: boolean, missing: boolean }}
+ */
+function installClaudeMarketplacePlugin(sourceDir, version) {
+  const pluginDir = path.join(CLAUDE_MARKETPLACE_ROOT, 'plugins', OVERLORD_PLUGIN_NAME);
+  fs.mkdirSync(path.dirname(pluginDir), { recursive: true });
+  fs.rmSync(pluginDir, { recursive: true, force: true });
+  fs.cpSync(sourceDir, pluginDir, { recursive: true });
+
+  const marketplaceManifest = {
+    name: OVERLORD_MARKETPLACE_NAME,
+    owner: { name: 'Cooperativ', email: 'support@ovld.ai' },
+    metadata: {
+      description: 'Overlord plugin registered locally by the Overlord CLI.',
+      version
+    },
+    plugins: [
+      {
+        name: OVERLORD_PLUGIN_NAME,
+        source: `./plugins/${OVERLORD_PLUGIN_NAME}`,
+        description:
+          'Overlord ticket protocol workflow for Claude Code (attach/update/ask/deliver, slash commands, permission hook).',
+        version
+      }
+    ]
+  };
+  const manifestPath = path.join(CLAUDE_MARKETPLACE_ROOT, '.claude-plugin', 'marketplace.json');
+  fs.mkdirSync(path.dirname(manifestPath), { recursive: true });
+  fs.writeFileSync(manifestPath, JSON.stringify(marketplaceManifest, null, 2) + '\n');
+
+  // Register the marketplace (idempotent: refresh if it was already added).
+  const added = runAgentPluginCli('claude', [
+    'plugin',
+    'marketplace',
+    'add',
+    CLAUDE_MARKETPLACE_ROOT
+  ]);
+  if (added.missing) return { ok: false, missing: true };
+  if (!added.ok) {
+    runAgentPluginCli('claude', ['plugin', 'marketplace', 'update', OVERLORD_MARKETPLACE_NAME]);
+  }
+
+  // Install the plugin (idempotent: update if it was already installed).
+  let installed = runAgentPluginCli('claude', ['plugin', 'install', OVERLORD_PLUGIN_KEY]);
+  if (!installed.ok && !installed.missing) {
+    installed = runAgentPluginCli('claude', ['plugin', 'update', OVERLORD_PLUGIN_KEY]);
+  }
+  return { ok: installed.ok, missing: installed.missing };
+}
+
 function installClaude() {
   const sourceDir = claudeSourcePluginDir();
   const sourceManifest = path.join(sourceDir, '.claude-plugin', 'plugin.json');
@@ -1138,9 +1227,18 @@ function installClaude() {
   } else {
     console.log('  ✓ No v3.25 Claude connector files needed migration.');
   }
-  console.log(
-    '  ✓ `ovld launch claude` now uses the installed Claude local marketplace plugin by default.'
-  );
+
+  const result = installClaudeMarketplacePlugin(sourceDir, sourceVersion);
+  if (result.ok) {
+    console.log(`  ✓ Registered + installed the Claude plugin (${OVERLORD_PLUGIN_KEY}) via the claude CLI.`);
+  } else if (result.missing) {
+    console.log('  ⚠ `claude` CLI not found on PATH — wrote the local marketplace but could not install the plugin.');
+    console.log(
+      `      Run \`claude plugin marketplace add ${CLAUDE_MARKETPLACE_ROOT} && claude plugin install ${OVERLORD_PLUGIN_KEY}\` once Claude Code is installed.`
+    );
+  } else {
+    console.log('  ⚠ Could not install the Claude plugin via the claude CLI. The local marketplace was written; rerun `ovld setup claude` to retry.');
+  }
 
   const manifest = readManifest();
   manifest.claude = {
@@ -1233,6 +1331,21 @@ function installCodex() {
   console.log(`  ✓ Updated marketplace: ${CODEX_TARGET_MARKETPLACE}`);
 
   removeLegacyCodexBundle();
+
+  // Copying the plugin + writing the marketplace only makes the plugin
+  // "available". `codex plugin add` is what actually installs/enables it, so the
+  // skill loads in headless/pod sessions where Overlord Desktop never ran.
+  const codexAdd = runAgentPluginCli('codex', ['plugin', 'add', OVERLORD_PLUGIN_KEY]);
+  if (codexAdd.ok) {
+    console.log(`  ✓ Installed plugin via codex CLI: ${OVERLORD_PLUGIN_KEY}`);
+  } else if (codexAdd.missing) {
+    console.log('  ⚠ `codex` CLI not found on PATH — wrote the marketplace but could not install the plugin.');
+    console.log(`      Run \`codex plugin add ${OVERLORD_PLUGIN_KEY}\` once Codex is installed.`);
+  } else if (/already/i.test(`${codexAdd.stdout}${codexAdd.stderr}`)) {
+    console.log(`  ✓ Codex plugin already installed: ${OVERLORD_PLUGIN_KEY}`);
+  } else {
+    console.log('  ⚠ Could not install the Codex plugin via the codex CLI. The marketplace was written; rerun `ovld setup codex` to retry.');
+  }
 
   const installedFiles = [
     ...listFilesRecursive(CODEX_TARGET_PLUGIN_DIR),

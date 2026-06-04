@@ -857,6 +857,61 @@ const tools = [
     subcommand: 'update-device'
   },
   {
+    name: 'create_project',
+    description:
+      'Create a new project. By default the current working directory is registered as the project\'s primary resource in one step; pass no_directory:true for a bare project, or directory_path to link a specific directory.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Project name.' },
+        color: { type: 'string', description: 'Optional hex color like #d4d4d8.' },
+        directory_path: {
+          type: 'string',
+          description: 'Absolute path to register as primary; omit to use cwd.'
+        },
+        no_directory: {
+          type: 'boolean',
+          description: 'Create a bare project without registering any directory.'
+        },
+        device_fingerprint: { type: 'string' },
+        label: { type: 'string' },
+        is_primary: { type: 'boolean' },
+        device_hostname: { type: 'string' },
+        device_platform: { type: 'string' },
+        organization_id: { type: 'string' }
+      },
+      required: ['name']
+    },
+    toCliFlags: args => ({
+      name: args.name,
+      ...(typeof args.color === 'string' && args.color.trim().length > 0
+        ? { color: args.color.trim() }
+        : {}),
+      ...(args.no_directory === true || args.no_directory === 'true'
+        ? { directory: 'false' }
+        : typeof args.directory_path === 'string' && args.directory_path.trim().length > 0
+          ? { directory: args.directory_path }
+          : {}),
+      ...(typeof args.device_fingerprint === 'string' && args.device_fingerprint.trim().length > 0
+        ? { 'device-fingerprint': args.device_fingerprint.trim() }
+        : {}),
+      ...(typeof args.label === 'string' ? { label: args.label } : {}),
+      ...(args.is_primary !== undefined
+        ? { 'is-primary': args.is_primary === true || args.is_primary === 'true' }
+        : {}),
+      ...(typeof args.device_hostname === 'string' && args.device_hostname.trim().length > 0
+        ? { 'device-hostname': args.device_hostname }
+        : {}),
+      ...(typeof args.device_platform === 'string' && args.device_platform.trim().length > 0
+        ? { 'device-platform': args.device_platform }
+        : {}),
+      ...(typeof args.organization_id === 'string' && args.organization_id.trim().length > 0
+        ? { 'organization-id': args.organization_id.trim() }
+        : {})
+    }),
+    subcommand: 'create-project'
+  },
+  {
     name: 'list_project_resources',
     description:
       'List directories registered as resources for a project. Optionally filter by device_fingerprint to the device registered for this org session.',

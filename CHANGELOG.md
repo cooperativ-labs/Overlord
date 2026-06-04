@@ -2,6 +2,34 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2606041635.0] - 2026-06-04:16:35
+
+### Added
+- Add **`ovld onboard --invite`** (alias **`--invite-code`**) so agents invited to an organization can onboard from the terminal into the **inviting workspace** with the **invited role** instead of creating a new organization; accepts a bare token or a full **`/invite/<token>`** URL.
+- Add **“For AI agents”** instructions and a copyable **`ovld onboard --invite`** command to **organization invitation emails**.
+- Add **`create-project`** across protocol surfaces: **`POST /api/protocol/create-project`**, **`ovld protocol create-project`**, top-level **`ovld create-project`**, hosted MCP **`create_project`**, and local MCP shim support — create a project and optionally register the current directory as its primary resource in one step.
+- Make **`ovld setup claude`** and **`ovld setup codex`** perform real headless plugin installs via the native **`claude`** / **`codex`** CLIs (marketplace register + plugin add), so connectors work in agent pods and other environments without Overlord Desktop.
+
+### Fixed
+- Fix **`invited_organization_id`** on web invite acceptance using the resolved organization id from the shared accept helper.
+
+### Changed
+- Make **`POST /api/auth/cli-onboarding`** invitation-aware: when **`inviteToken`** is present, consume the invite and join that organization; skip the auto onboarding ticket on the invite path.
+- Accept organization invites on CLI onboarding by **token possession** (web accept still requires the signed-in email to match the invitation).
+- Redesign organization invitation email HTML layout.
+
+### Security
+- None.
+
+### Refactor
+- Extract shared **`acceptInvitationForUser`**, **`createProjectRecord`**, and **`registerProjectResourceDirectory`** helpers used by web actions, CLI onboarding, and **`create-project`**.
+
+### Test
+- Add tests for invitation accept, CLI onboarding validation, and **`create-project`** validation.
+
+### Documentation
+- Update connector surfaces, protocol help, target-scoped resources, CLI README, and agent plugin skills for invite onboarding, **`create-project`**, and headless **`ovld setup`** behavior.
+
 ## [0.2606021930.0] - 2026-06-02:19:30
 
 ### Added
