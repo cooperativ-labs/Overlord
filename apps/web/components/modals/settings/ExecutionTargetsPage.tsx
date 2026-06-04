@@ -121,6 +121,12 @@ export function ExecutionTargetsPage({
     }
   }
 
+  function handleLabelChanged(targetId: string, newLabel: string) {
+    setTargets(current =>
+      current.map(t => (t.id === targetId ? { ...t, label: newLabel } : t))
+    );
+  }
+
   async function handleAddFlag({
     targetId,
     selectedLocalAgent,
@@ -260,6 +266,7 @@ export function ExecutionTargetsPage({
               isElectron={isElectron}
               ownership={ownerships[target.id]}
               onOwnershipChanged={loadOwnerships}
+              onLabelChanged={handleLabelChanged}
               onGetAgentConfig={currentAgentConfig}
               onSavePreCommand={handleSavePreCommand}
               onPreCommandInput={handlePreCommandInput}

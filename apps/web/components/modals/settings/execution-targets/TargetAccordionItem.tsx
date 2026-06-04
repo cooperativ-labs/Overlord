@@ -22,6 +22,7 @@ import {
   claimExecutionTargetAction,
   type ExecutionTargetOwnership,
   setExecutionTargetOwnershipAction,
+  updateExecutionTargetLabelAction,
   type UserExecutionTargetDetailed
 } from '@/lib/actions/resource-directories';
 import { useCopyToClipboard } from '@/lib/hooks/use-copy-to-clipboard';
@@ -55,6 +56,7 @@ export function TargetAccordionItem({
   onAddFlag,
   onRemoveFlag,
   onBuildLocalAgentCommand,
+  onLabelChanged,
   onNavigate
 }: {
   target: UserExecutionTargetDetailed;
@@ -72,6 +74,7 @@ export function TargetAccordionItem({
   }) => Promise<void>;
   onRemoveFlag: (args: { targetId: string; agent: string; index: number }) => Promise<void>;
   onBuildLocalAgentCommand: (args: { targetId: string; agent: string }) => string;
+  onLabelChanged?: (targetId: string, newLabel: string) => void;
   onNavigate?: (section: string) => void;
 }) {
   const [profile, setProfile] = useState<TerminalProfileState>(DEFAULT_TERMINAL_PROFILE);
@@ -79,6 +82,46 @@ export function TargetAccordionItem({
   const [pendingOrgId, setPendingOrgId] = useState<number | null>(null);
   const [selectedLocalAgent, setSelectedLocalAgent] = useState<string>('claude');
   const [flagInput, setFlagInput] = useState('');
+
+  const [labelInput, setLabelInput] = useState(target.label);
+  const [labelEditing, setLabelEditing] = useState(false);
+  const [labelError, setLabelError] = useState<string | null>(null);
+  const [labelSaving, setLabelSaving] = useState(false);
+
+  const LABEL_REGEX = /^[a-z0-9][a-z0-9-]*$/;
+
+  function validateLabel(value: string): string | null {
+    if (!value.trim()) return 'Label cannot be empty.';
+    if (!LABEL_REGEX.test(value))
+      return 'Only lowercase letters, digits, and hyphens allowed. Must start with a letter or digit.';
+    return null;
+  }
+
+  async function handleSaveLabel() {
+    const error = validateLabel(labelInput);
+    if (error) {
+      setLabelError(error);
+      return;
+    }
+    setLabelSaving(true);
+    try {
+      await updateExecutionTargetLabelAction({ targetId: target.id, label: labelInput });
+      toast.success('Label updated.');
+      setLabelEditing(false);
+      setLabelError(null);
+      onLabelChanged?.(target.id, labelInput);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update label.');
+    } finally {
+      setLabelSaving(false);
+    }
+  }
+
+  function handleCancelLabelEdit() {
+    setLabelInput(target.label);
+    setLabelEditing(false);
+    setLabelError(null);
+  }
 
   async function handleClaim(organizationId: number) {
     setPendingOrgId(organizationId);
@@ -234,6 +277,78 @@ export function TargetAccordionItem({
         </div>
       </AccordionTrigger>
       <AccordionContent className="grid gap-4">
+        <div className="grid gap-3 rounded-md border p-4">
+          <div className="grid gap-1">
+            <h4 className="text-sm font-medium">Label</h4>
+            <p className="text-xs text-muted-foreground">
+              A short identifier for this target. Lowercase letters, digits, and hyphens only.
+            </p>
+          </div>
+          {labelEditing ? (
+            <div className="grid gap-2">
+              <Input
+                id={`target-${target.id}-label`}
+                value={labelInput}
+                onChange={e => {
+                  setLabelInput(e.target.value);
+                  setLabelError(validateLabel(e.target.value));
+                }}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') void handleSaveLabel();
+                  if (e.key === 'Escape') handleCancelLabelEdit();
+                }}
+                autoFocus
+                disabled={labelSaving}
+              />
+              {labelError && <p className="text-xs text-destructive">{labelError}</p>}
+              <div className="flex gap-2">
+                <LoadingButton
+                  type="button"
+                  size="sm"
+                  buttonState={labelSaving ? 'loading' : 'default'}
+                  text={
+                    <span className="flex items-center gap-1.5">
+                      <Check className="h-3.5 w-3.5" />
+                      Save
+                    </span>
+                  }
+                  onClick={() => void handleSaveLabel()}
+                />
+                <LoadingButton
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  buttonState="default"
+                  text={
+                    <span className="flex items-center gap-1.5">
+                      <X className="h-3.5 w-3.5" />
+                      Cancel
+                    </span>
+                  }
+                  onClick={handleCancelLabelEdit}
+                  disabled={labelSaving}
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-3">
+              <span className="font-mono text-sm">{target.label}</span>
+              <LoadingButton
+                type="button"
+                variant="outline"
+                size="sm"
+                buttonState="default"
+                text="Edit"
+                onClick={() => {
+                  setLabelInput(target.label);
+                  setLabelError(null);
+                  setLabelEditing(true);
+                }}
+              />
+            </div>
+          )}
+        </div>
+
         {ownership && ownership.organizations.length > 0 ? (
           <div className="grid gap-3 rounded-md border p-4">
             <div className="grid gap-1">

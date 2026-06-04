@@ -734,3 +734,38 @@ export async function updateResourceDirectoryLabelAction(input: {
 
   revalidateProjectPaths(input.projectId);
 }
+
+export async function updateExecutionTargetLabelAction(input: {
+  targetId: string;
+  label: string;
+}): Promise<void> {
+  const supabase = await createClientForRequest();
+  const serviceSupabase = createServiceRoleClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+  if (!user) {
+    throw new Error('You must be signed in to update an execution target label.');
+  }
+
+  const { data: userTarget } = await serviceSupabase
+    .from('user_execution_targets')
+    .select('execution_target_id')
+    .eq('execution_target_id', input.targetId)
+    .eq('user_id', user.id)
+    .maybeSingle();
+
+  if (!userTarget) {
+    throw new Error('Execution target not found or you do not have access to it.');
+  }
+
+  const { error } = await serviceSupabase
+    .from('organization_execution_targets')
+    .update({ label: input.label })
+    .eq('execution_target_id', input.targetId);
+
+  if (error) {
+    console.error('updateExecutionTargetLabelAction', error);
+    throw new Error(error.message ?? 'Failed to update execution target label.');
+  }
+}
