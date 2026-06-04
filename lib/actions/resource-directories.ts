@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 
+import { WORKING_DIRECTORY_NONE } from '@/lib/helpers/project-working-directory';
 import {
   ensureProjectExecutionTarget,
   findExecutionTargetByFingerprint,
@@ -13,7 +14,6 @@ import {
   clearTargetPrimary,
   shouldAutoPrimary
 } from '@/lib/resource-directories/primary-resource';
-import { WORKING_DIRECTORY_NONE } from '@/lib/helpers/project-working-directory';
 import { createClientForRequest } from '@/supabase/utils/server';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 import type { Database } from '@/types/database.types';

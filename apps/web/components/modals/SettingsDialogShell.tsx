@@ -89,7 +89,7 @@ export function SettingsDialogShell({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="h-dvh max-h-dvh w-full max-w-full overflow-hidden p-0 md:h-auto md:max-h-[90%] md:max-w-[900px] lg:max-w-[1000px]">
+      <DialogContent className="h-dvh max-h-dvh w-full max-w-full overflow-hidden p-0 md:h-auto md:max-h-[80%] md:max-w-[900px] lg:max-w-[1000px]">
         <DialogTitle className="sr-only">{title}</DialogTitle>
         <DialogDescription className="sr-only">{description}</DialogDescription>
         <SidebarProvider className="items-start">
@@ -117,7 +117,7 @@ export function SettingsDialogShell({
               ))}
             </SidebarContent>
           </Sidebar>
-          <main className="flex h-dvh flex-1 flex-col overflow-hidden md:max-h-[680px]">
+          <main className="flex h-dvh flex-1 flex-col overflow-hidden md:max-h-[80%]">
             <header className="flex shrink-0 items-center gap-2 border-b px-4 py-3">
               {/* Mobile: page selector dropdown */}
               <div className="flex w-full items-center md:hidden">

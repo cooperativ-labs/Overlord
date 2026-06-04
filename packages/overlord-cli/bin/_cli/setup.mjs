@@ -1138,7 +1138,9 @@ function installClaude() {
   } else {
     console.log('  ✓ No v3.25 Claude connector files needed migration.');
   }
-  console.log('  ✓ `ovld launch claude` now loads this plugin with `claude --plugin-dir`.');
+  console.log(
+    '  ✓ `ovld launch claude` now uses the installed Claude local marketplace plugin by default.'
+  );
 
   const manifest = readManifest();
   manifest.claude = {

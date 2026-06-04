@@ -17,6 +17,21 @@ import { runAttachCommand } from './attach.mjs';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PACKAGE_CLAUDE_PLUGIN_DIR = path.resolve(__dirname, '..', '..', 'plugins', 'claude');
 const REPO_CLAUDE_PLUGIN_DIR = path.resolve(__dirname, '..', '..', '..', '..', 'plugins', 'claude');
+const CLAUDE_PLUGIN_CACHE_DIR = path.join(
+  os.homedir(),
+  '.claude',
+  'plugins',
+  'cache',
+  'overlord-local',
+  'overlord'
+);
+const CLAUDE_INSTALLED_PLUGINS_FILE = path.join(
+  os.homedir(),
+  '.claude',
+  'plugins',
+  'installed_plugins.json'
+);
+const CLAUDE_INSTALLED_PLUGIN_KEY = 'overlord@overlord-local';
 
 function resolveLaunchScratchDir(workingDirectory, { explicit = false } = {}) {
   const trimmed = typeof workingDirectory === 'string' ? workingDirectory.trim() : '';
@@ -47,6 +62,55 @@ function claudeSourcePluginDir() {
   return null;
 }
 
+function readJsonFile(filePath) {
+  try {
+    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+function claudeInstalledPluginDir() {
+  const installed = readJsonFile(CLAUDE_INSTALLED_PLUGINS_FILE);
+  const pluginEntries = installed?.plugins?.[CLAUDE_INSTALLED_PLUGIN_KEY];
+
+  if (Array.isArray(pluginEntries)) {
+    for (const entry of pluginEntries) {
+      const installPath = typeof entry?.installPath === 'string' ? entry.installPath.trim() : '';
+      if (installPath && fs.existsSync(path.join(installPath, '.claude-plugin', 'plugin.json'))) {
+        return installPath;
+      }
+    }
+  }
+
+  if (!fs.existsSync(CLAUDE_PLUGIN_CACHE_DIR)) return null;
+
+  const versionDirs = fs
+    .readdirSync(CLAUDE_PLUGIN_CACHE_DIR, { withFileTypes: true })
+    .filter(entry => entry.isDirectory())
+    .map(entry => path.join(CLAUDE_PLUGIN_CACHE_DIR, entry.name))
+    .filter(candidate => fs.existsSync(path.join(candidate, '.claude-plugin', 'plugin.json')))
+    .sort()
+    .reverse();
+
+  return versionDirs[0] ?? null;
+}
+
+function envTruthy(value) {
+  return /^(1|true|yes|on)$/i.test(String(value ?? '').trim());
+}
+
+function claudeLaunchPluginDir() {
+  const explicitPluginDir = process.env.OVERLORD_CLAUDE_PLUGIN_DIR?.trim();
+  if (explicitPluginDir) return explicitPluginDir;
+
+  if (envTruthy(process.env.OVERLORD_USE_CLAUDE_SOURCE_PLUGIN)) {
+    return claudeSourcePluginDir();
+  }
+
+  return null;
+}
+
 function antigravityBundleInstalled() {
   return fs.existsSync(
     path.join(os.homedir(), '.gemini', 'antigravity-cli', 'plugins', 'plugin.json')
@@ -55,7 +119,7 @@ function antigravityBundleInstalled() {
 
 function getInstructionMode(agent) {
   if (agent === 'claude') {
-    return claudeSourcePluginDir() ? 'bundle' : 'legacy';
+    return claudeInstalledPluginDir() || claudeLaunchPluginDir() ? 'bundle' : 'legacy';
   }
 
   if (agent === 'codex') {
@@ -474,7 +538,7 @@ async function runAgent(agent, mode = 'run', options = {}) {
 
   try {
     if (agent === 'claude') {
-      const pluginDir = claudeSourcePluginDir();
+      const pluginDir = claudeLaunchPluginDir();
       if (mode === 'resume') {
         const claudeSessionId = process.env.CLAUDE_SESSION_ID?.trim();
         const args = claudeSessionId

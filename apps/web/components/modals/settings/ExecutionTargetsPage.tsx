@@ -122,9 +122,7 @@ export function ExecutionTargetsPage({
   }
 
   function handleLabelChanged(targetId: string, newLabel: string) {
-    setTargets(current =>
-      current.map(t => (t.id === targetId ? { ...t, label: newLabel } : t))
-    );
+    setTargets(current => current.map(t => (t.id === targetId ? { ...t, label: newLabel } : t)));
   }
 
   async function handleAddFlag({

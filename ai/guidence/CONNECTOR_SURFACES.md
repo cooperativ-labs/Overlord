@@ -105,6 +105,8 @@ Checklist:
 - Bundle not installed → temp settings file with per-session hook is passed via `--settings`
 - `instructionMode=bundle` is passed to context route when bundle is installed
 - Model flag: `--model`; thinking/effort flag: `--effort`
+- `ovld launch claude` uses the installed Claude local marketplace plugin under `~/.claude/plugins/...` for bundle mode and does not pass `--plugin-dir` in normal launches
+- Repo/source plugin loading via `claude --plugin-dir` is reserved for explicit local-dev fallback (`OVERLORD_USE_CLAUDE_SOURCE_PLUGIN=1` or `OVERLORD_CLAUDE_PLUGIN_DIR=/abs/path`)
 - Desktop local launches intentionally do **not** shell out to `ovld launch`; they prefetch context, write temp hook/settings files, and avoid shell-quoting edge cases before spawning Claude directly
 - Desktop local launches export `TMPDIR`, `TMP`, `TEMP`, and `OVERLORD_TMPDIR` to the resolved project `.overlord/tmp/` directory when a project working directory is known
 - Desktop SSH launches use the same direct main-process command builder, omit local-only temp Claude settings/plugin paths on the remote host, and wrap the final remote agent command over system SSH
