@@ -11,6 +11,7 @@ import {
   toErrorDiagnostics
 } from '@/lib/diagnostics/server-action';
 import { normalizeHexColor } from '@/lib/helpers/color';
+import { projectNameConflictError } from '@/lib/helpers/project-name';
 import { buildProjectPath } from '@/lib/helpers/ticket-path';
 import { deriveTitleFromObjective } from '@/lib/helpers/tickets';
 import { upsertDraftObjective } from '@/lib/objectives';
@@ -354,7 +355,7 @@ export async function createProjectAction(input: {
     .single();
 
   if (error || !data) {
-    throw new Error(error?.message ?? 'Failed to create project.');
+    throw projectNameConflictError(error, 'Failed to create project.');
   }
 
   revalidateTicketBoards();

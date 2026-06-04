@@ -1,6 +1,7 @@
 import os from 'node:os';
 
 import { normalizeHexColor } from '@/lib/helpers/color';
+import { projectNameConflictError } from '@/lib/helpers/project-name';
 import { ensureProjectExecutionTarget } from '@/lib/overlord/execution-targets';
 import { upsertDeviceFromProtocol } from '@/lib/overlord/upsert-device';
 import {
@@ -86,7 +87,7 @@ export async function createProjectRecord(input: {
       .from('projects')
       .select('id,name,organization_id')
       .eq('organization_id', input.organizationId)
-      .eq('name', trimmedName)
+      .ilike('name', trimmedName)
       .limit(1)
       .maybeSingle();
 
@@ -104,7 +105,7 @@ export async function createProjectRecord(input: {
     .single();
 
   if (error || !data) {
-    throw new Error(error?.message ?? 'Failed to create project.');
+    throw projectNameConflictError(error, 'Failed to create project.');
   }
 
   return data as ProvisionedProject;

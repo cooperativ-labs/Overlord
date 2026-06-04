@@ -66,6 +66,9 @@ export async function handleCreateProject(supabase: SupabaseClient, args: any, c
     .single();
 
   if (projectError || !project) {
+    if (projectError?.code === '23505') {
+      return toolErr('A project with this name already exists in this organization.');
+    }
     return toolErr(`Failed to create project: ${projectError?.message ?? 'unknown error'}`);
   }
 

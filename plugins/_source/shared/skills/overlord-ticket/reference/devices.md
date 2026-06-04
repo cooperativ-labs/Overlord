@@ -1,6 +1,6 @@
 # Execution Targets And Checkout Paths
 
-Execution targets are canonical rows keyed by a real `device_fingerprint` when known, or by a placeholder until the target registers. Organization labels, user access, project membership, and project checkout paths live in separate association rows. Persist a fingerprint per machine, upsert via `ovld protocol get-device`, then maintain checkout paths via `list-project-resources`, `add-project-resource`, `update-project-resource`, and `update-device` (`ovld protocol help` lists flags).
+Execution targets are canonical rows keyed by a real `device_fingerprint` when known, or by a placeholder until the target registers. Organization labels, user access, project membership, and project checkout paths live in separate association rows. Persist a fingerprint per machine, upsert via `ovld protocol get-device`, then maintain checkout paths via `list-project-resources`, `add-project-resource`, `update-project-resource`, and `update-device` (`ovld protocol help` lists flags). To create a brand-new project (optionally registering a directory as its primary resource in one step) use `ovld protocol create-project --name "..."`.
 
 ```bash
 ovld protocol get-device --device-fingerprint "$OVERLORD_DEVICE_FINGERPRINT"

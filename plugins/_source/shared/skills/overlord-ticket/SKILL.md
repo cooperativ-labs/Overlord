@@ -115,4 +115,4 @@ For the `record-change-rationales` command and full payload shape with optional 
 - [reference/context.md](reference/context.md) — Shared state, attachments, and large artifact policy
 - [reference/shell-escaping.md](reference/shell-escaping.md) — Heredoc stdin piping for special characters in summaries and payloads
 
-<!-- version: 0.5.11 -->
+<!-- version: 0.5.12 -->

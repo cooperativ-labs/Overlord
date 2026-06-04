@@ -140,6 +140,29 @@ ovld protocol discover-project --working-directory /path/to/repo
 
 Use `--project-id` when the project id is already known. Use `--working-directory` to override cwd path matching. If the runtime has an `OVERLORD_DEVICE_FINGERPRINT`, pass `--device-fingerprint "$OVERLORD_DEVICE_FINGERPRINT"` so resource-directory matching prefers the current device.
 
+## Creating Projects
+
+Users and agents can create a project directly from the CLI. By default the current
+working directory is registered as the new project's primary resource in the same
+call (one-step setup); pass `--no-directory` to create a bare project.
+
+```bash
+# Create a project and link the current directory in one step
+ovld protocol create-project --name "Acme Web"
+
+# Link a specific directory
+ovld protocol create-project --name "Acme Web" --directory /path/to/repo
+
+# Create a bare project with no directory
+ovld protocol create-project --name "Acme Web" --no-directory
+```
+
+`ovld create-project` is a friendly top-level alias for `ovld protocol create-project`.
+When a directory is registered the command also writes `.overlord/project.json` so
+future cwd-based resolution finds the project. Pass `--organization-id <id>` to create
+in a specific organization (defaults to your membership); `--color <#rrggbb>` sets the
+project color.
+
 ### Resolving the project ID when you don't have one
 
 When you need a project ID for a protocol command and the ticket prompt did not supply one, resolve it in this order.
