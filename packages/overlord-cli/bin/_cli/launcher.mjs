@@ -56,6 +56,29 @@ function withLaunchTempEnv(baseEnv, scratchDir) {
   };
 }
 
+function contextFileTag(ticketId) {
+  const safeTicket = String(ticketId ?? 'ticket').replace(/[^a-zA-Z0-9._-]+/g, '-');
+  return `overlord-${safeTicket}-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
+}
+
+function writeLaunchContextFile(scratchDir, ticketId, context) {
+  const contextFile = path.join(scratchDir, `${contextFileTag(ticketId)}-context.md`);
+  fs.mkdirSync(path.dirname(contextFile), { recursive: true });
+  fs.writeFileSync(contextFile, context, 'utf-8');
+  setTimeout(() => {
+    try {
+      fs.unlinkSync(contextFile);
+    } catch {
+      // Best-effort cleanup only.
+    }
+  }, 30 * 60_000).unref();
+  return contextFile;
+}
+
+function buildContextFilePrompt(contextFile, startPrompt) {
+  return `${startPrompt}\n\nRead the Overlord launch context from ${contextFile} before taking action. Follow the ticket workflow and objective described in that file.`;
+}
+
 function claudeSourcePluginDir() {
   if (fs.existsSync(PACKAGE_CLAUDE_PLUGIN_DIR)) return PACKAGE_CLAUDE_PLUGIN_DIR;
   if (fs.existsSync(REPO_CLAUDE_PLUGIN_DIR)) return REPO_CLAUDE_PLUGIN_DIR;
@@ -461,8 +484,9 @@ async function runAgent(agent, mode = 'run', options = {}) {
     process.chdir(options.workingDirectory);
   }
 
+  const useMountedProjectScratch = Boolean(options.workingDirectory || options.preCommand?.trim());
   const scratchDir = resolveLaunchScratchDir(options.workingDirectory, {
-    explicit: Boolean(options.workingDirectory)
+    explicit: useMountedProjectScratch
   });
 
   const launchOrganizationId = resolveLaunchOrganizationId(
@@ -535,24 +559,38 @@ async function runAgent(agent, mode = 'run', options = {}) {
       : {})
   }, scratchDir);
   const extraArgs = buildExtraArgs(agent, options);
+  const useContextFilePrompt = Boolean(options.preCommand?.trim());
+  const launchContextFile = useContextFilePrompt
+    ? writeLaunchContextFile(scratchDir, ticketId, context)
+    : null;
 
   try {
     if (agent === 'claude') {
       const pluginDir = claudeLaunchPluginDir();
       if (mode === 'resume') {
         const claudeSessionId = process.env.CLAUDE_SESSION_ID?.trim();
+        const resumePrompt = launchContextFile
+          ? buildContextFilePrompt(launchContextFile, 'Resume working on this Overlord ticket.')
+          : context;
         const args = claudeSessionId
-          ? ['--resume', claudeSessionId, context]
-          : ['--continue', context];
+          ? ['--resume', claudeSessionId, resumePrompt]
+          : ['--continue', resumePrompt];
+        if (launchContextFile) args.unshift('--append-system-prompt-file', launchContextFile);
         args.unshift(...extraArgs);
         if (pluginDir) args.unshift('--plugin-dir', pluginDir);
         execAgentBinary('claude', args, { stdio: 'inherit', env: childEnv }, options.preCommand);
       } else {
+        const startPrompt = launchContextFile
+          ? buildContextFilePrompt(
+              launchContextFile,
+              'Begin working on this ticket.'
+            )
+          : 'Begin working on this ticket. Start by calling the attach endpoint, then proceed with the objective described in your system prompt.';
         const args = [
-          '--append-system-prompt',
-          context,
+          launchContextFile ? '--append-system-prompt-file' : '--append-system-prompt',
+          launchContextFile ?? context,
           ...extraArgs,
-          'Begin working on this ticket. Start by calling the attach endpoint, then proceed with the objective described in your system prompt.'
+          startPrompt
         ];
         if (pluginDir) args.unshift('--plugin-dir', pluginDir);
         execAgentBinary('claude', args, { stdio: 'inherit', env: childEnv }, options.preCommand);
@@ -560,15 +598,23 @@ async function runAgent(agent, mode = 'run', options = {}) {
     } else if (agent === 'codex') {
       if (mode === 'resume') {
         const codexSessionId = process.env.CODEX_SESSION_ID?.trim();
+        const resumePrompt = launchContextFile
+          ? buildContextFilePrompt(launchContextFile, 'Resume working on this Overlord ticket.')
+          : context;
         const args = codexSessionId
-          ? ['resume', codexSessionId, context]
-          : ['resume', '--last', context];
+          ? ['resume', codexSessionId, resumePrompt]
+          : ['resume', '--last', resumePrompt];
         args.splice(1, 0, ...extraArgs);
         execAgentBinary('codex', args, { stdio: 'inherit', env: childEnv }, options.preCommand);
       } else {
         execAgentBinary(
           'codex',
-          [...extraArgs, context],
+          [
+            ...extraArgs,
+            launchContextFile
+              ? buildContextFilePrompt(launchContextFile, 'Begin working on this Overlord ticket.')
+              : context
+          ],
           { stdio: 'inherit', env: childEnv },
           options.preCommand
         );
@@ -576,22 +622,36 @@ async function runAgent(agent, mode = 'run', options = {}) {
     } else if (agent === 'cursor') {
       execAgentBinary(
         'agent',
-        [...extraArgs, context],
+        [
+          ...extraArgs,
+          launchContextFile
+            ? buildContextFilePrompt(launchContextFile, 'Begin working on this Overlord ticket.')
+            : context
+        ],
         { stdio: 'inherit', env: childEnv },
         options.preCommand
       );
     } else if (agent === 'opencode') {
       if (mode === 'resume') {
         const openCodeSessionId = process.env.OPENCODE_SESSION_ID?.trim();
+        const resumePrompt = launchContextFile
+          ? buildContextFilePrompt(launchContextFile, 'Resume working on this Overlord ticket.')
+          : context;
         const args = openCodeSessionId
-          ? ['--continue', '--session', openCodeSessionId, '--prompt', context]
-          : ['--continue', '--prompt', context];
+          ? ['--continue', '--session', openCodeSessionId, '--prompt', resumePrompt]
+          : ['--continue', '--prompt', resumePrompt];
         args.unshift(...extraArgs);
         execAgentBinary('opencode', args, { stdio: 'inherit', env: childEnv }, options.preCommand);
       } else {
         execAgentBinary(
           'opencode',
-          [...extraArgs, '--prompt', context],
+          [
+            ...extraArgs,
+            '--prompt',
+            launchContextFile
+              ? buildContextFilePrompt(launchContextFile, 'Begin working on this Overlord ticket.')
+              : context
+          ],
           { stdio: 'inherit', env: childEnv },
           options.preCommand
         );
@@ -599,24 +659,34 @@ async function runAgent(agent, mode = 'run', options = {}) {
     } else if (agent === 'pi') {
       if (mode === 'resume') {
         const piSessionId = process.env.PI_SESSION_ID?.trim();
+        const resumePrompt = launchContextFile
+          ? buildContextFilePrompt(launchContextFile, 'Resume working on this Overlord ticket.')
+          : context;
         const args = piSessionId
-          ? ['--session', piSessionId, context]
-          : ['--continue', context];
+          ? ['--session', piSessionId, resumePrompt]
+          : ['--continue', resumePrompt];
         args.unshift(...extraArgs);
         execAgentBinary('pi', args, { stdio: 'inherit', env: childEnv }, options.preCommand);
       } else {
         execAgentBinary(
           'pi',
-          [...extraArgs, context],
+          [
+            ...extraArgs,
+            launchContextFile
+              ? buildContextFilePrompt(launchContextFile, 'Begin working on this Overlord ticket.')
+              : context
+          ],
           { stdio: 'inherit', env: childEnv },
           options.preCommand
         );
       }
     } else if (agent === 'antigravity') {
       const tag = `overlord-${ticketId.slice(-8)}-${Date.now()}`;
-      const contextFile = path.join(scratchDir, `${tag}-ctx.md`);
-      fs.writeFileSync(contextFile, context, 'utf-8');
-      setTimeout(() => { try { fs.unlinkSync(contextFile); } catch { /* already gone */ } }, 30 * 60_000).unref();
+      const contextFile = launchContextFile ?? path.join(scratchDir, `${tag}-ctx.md`);
+      if (!launchContextFile) {
+        fs.writeFileSync(contextFile, context, 'utf-8');
+        setTimeout(() => { try { fs.unlinkSync(contextFile); } catch { /* already gone */ } }, 30 * 60_000).unref();
+      }
 
       const agySessionId =
         process.env.AGY_SESSION_ID?.trim() ?? process.env.GEMINI_SESSION_ID?.trim();

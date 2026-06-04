@@ -30,6 +30,8 @@ Registered project resource directories use `.overlord/project.json` as the dura
 
 Local desktop launches write context files and fallback hook/settings files into `.overlord/tmp/` when a project working directory is resolved, and export `TMPDIR`, `TMP`, `TEMP`, and `OVERLORD_TMPDIR` to that same directory for the spawned agent process. Remote launches create `$REMOTE_WORKING_DIRECTORY/.overlord/tmp/` for the context file when a remote working directory is known, export the same temp env vars there, and fall back to remote system temp only when no project resource path is available.
 
+CLI launches with `--pre-command <wrapper>` force the scratch root to the visible project `.overlord/tmp/` directory and pass wrapper-safe file references instead of the full fetched context as a large shell/Docker argument. Claude uses `--append-system-prompt-file`; Codex, Cursor, OpenCode, and Pi receive a short prompt that points them at the context file. Antigravity already uses a context-file prompt path.
+
 Capability resolver:
 [agent-capabilities.ts](/Users/jake/Development/Cooperativ/Overlord/lib/overlord/agent-capabilities.ts)
 
@@ -107,6 +109,7 @@ Checklist:
 - Model flag: `--model`; thinking/effort flag: `--effort`
 - `ovld launch claude` uses the installed Claude local marketplace plugin under `~/.claude/plugins/...` for bundle mode and does not pass `--plugin-dir` in normal launches
 - Repo/source plugin loading via `claude --plugin-dir` is reserved for explicit local-dev fallback (`OVERLORD_USE_CLAUDE_SOURCE_PLUGIN=1` or `OVERLORD_CLAUDE_PLUGIN_DIR=/abs/path`)
+- `ovld launch claude --pre-command <wrapper>` writes the fetched context to `.overlord/tmp/` and uses `--append-system-prompt-file <context-file>` so wrappers such as `agent-pod` do not receive the full context as a large shell/Docker argument
 - Desktop local launches intentionally do **not** shell out to `ovld launch`; they prefetch context, write temp hook/settings files, and avoid shell-quoting edge cases before spawning Claude directly
 - Desktop local launches export `TMPDIR`, `TMP`, `TEMP`, and `OVERLORD_TMPDIR` to the resolved project `.overlord/tmp/` directory when a project working directory is known
 - Desktop SSH launches use the same direct main-process command builder, omit local-only temp Claude settings/plugin paths on the remote host, and wrap the final remote agent command over system SSH
@@ -198,6 +201,7 @@ Checklist:
 - Prompt text tells Codex to try `ovld auth repair` before `ovld auth login` when shared credentials look stale; `--organization-id <id>` is optional and scopes a command/login validation without creating a stored default
 - Thinking/effort flag uses `-c model_reasoning_effort=<value>` (TOML inline format)
 - `--pre-command` runs through the user's interactive login shell (`$SHELL -ilc`) on POSIX before the Codex binary, so shell wrappers such as `agent-pod`, aliases, functions, and shell-initialized PATH entries resolve the same way they do in an interactive terminal. The shell must be interactive (`-i`), not just login (`-l`): zsh/bash only source `~/.zshrc` / `~/.bashrc` for interactive shells, which is where wrappers like agent-pod install their alias by default
+- `ovld launch codex --pre-command <wrapper>` writes the fetched context to `.overlord/tmp/` and passes a short prompt pointing Codex at that file so wrappers such as `agent-pod` do not receive the full context as a large shell/Docker argument
 - Desktop local launches intentionally stay on the direct Electron path instead of delegating to `ovld launch`; `ovld launch` is the copy/paste surface and remote shell entrypoint
 - Desktop SSH launches use the same Codex expect/context-file behavior with the context file created on the remote host before Codex starts
 - `ovld launch` exports `TMPDIR`, `TMP`, `TEMP`, and `OVERLORD_TMPDIR` to the resolved project `.overlord/tmp/` directory when `--working-directory` is provided or the current directory is a registered project

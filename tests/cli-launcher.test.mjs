@@ -82,3 +82,32 @@ test('ovld launch claude resolves an agent-pod pre-command alias via interactive
   // alias receives them as arguments rather than zsh treating them as $0/$1/....
   assert.match(last?.argv?.[1] ?? '', /^agent-pod 'claude'/);
 });
+
+test('ovld launch claude uses a context file when routed through agent-pod', async () => {
+  const calls = await runLaunchWithPreCommand([
+    'claude',
+    '--ticket-id',
+    '1:1254',
+    '--pre-command',
+    'agent-pod'
+  ]);
+
+  const command = calls.at(-1)?.argv?.[1] ?? '';
+  assert.match(command, /'--append-system-prompt-file' '.*\/\.overlord\/tmp\/overlord-/);
+  assert.doesNotMatch(command, /'--append-system-prompt' 'launch context'/);
+});
+
+test('ovld launch codex uses a context file prompt when routed through agent-pod', async () => {
+  const calls = await runLaunchWithPreCommand([
+    'codex',
+    '--ticket-id',
+    '1:1254',
+    '--pre-command',
+    'agent-pod'
+  ]);
+
+  const command = calls.at(-1)?.argv?.[1] ?? '';
+  assert.match(command, /^agent-pod 'codex'/);
+  assert.match(command, /Read the Overlord launch context from .*\/\.overlord\/tmp\/overlord-/);
+  assert.doesNotMatch(command, /'launch context'/);
+});
