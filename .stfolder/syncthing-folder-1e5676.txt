@@ -1,0 +1,5 @@
+# This directory is a Syncthing folder marker.
+# Do not delete.
+
+folderID: Overlord
+created: 2026-06-03T10:52:09+02:00
