@@ -350,7 +350,7 @@ create:
     --session-key <key>
     --ticket-id <ticket_id>
     --working-directory <path>  Resolve project by your configured local working directory (default: cwd)
-    --project-id <id-or-name>   Explicit project (UUID or name) for standalone draft creation
+    --project-id <id-or-name>   Explicit project (UUID or name); overrides follow-up inheritance or standalone cwd resolution
     --personal                  Create a private standalone draft without a project
     --title <text>
     --priority <level>        low | medium | high | urgent
@@ -365,7 +365,7 @@ create:
     New draft ticket JSON (follow-up draft when session flags are provided)
   Notes:
     Standalone create auto-discovers the project from the current working directory unless --personal is set.
-    Follow-up create requires both --session-key and --ticket-id.
+    Follow-up create requires both --session-key and --ticket-id and inherits the current ticket project unless --project-id is passed.
     Use create for future work. If the work is already complete and only needs to be recorded,
     use `record-work` instead.
 
@@ -651,4 +651,3 @@ EOF
   ovld protocol add-project-resource --project-id <project-uuid> --directory /path/to/repo --device-fingerprint $OVERLORD_DEVICE_FINGERPRINT --label "main checkout" --is-primary
   ovld protocol update-project-resource --resource-id <resource-uuid> --device-fingerprint $OVERLORD_DEVICE_FINGERPRINT --label "docs branch"
   ovld protocol update-project-resource --resource-id <resource-uuid> --device-fingerprint $OVERLORD_DEVICE_FINGERPRINT --is-primary true
-

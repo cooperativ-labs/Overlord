@@ -2,6 +2,35 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2606050938.0] - 2026-06-05:09:38
+
+### Added
+- Add **`--project-id`** override on follow-up **`create`** / **`create-ticket`** so agents can place follow-up drafts in a different project (inherits the current ticket project when omitted).
+- Add **delete execution target** controls on Settings → **Execution targets** (admin-only, with confirmation).
+
+### Fixed
+- Preserve a **saved remote execution target** on Desktop when reopening a project instead of always defaulting to the current device.
+- Clarify the execution-target deletion error when the target still has linked project resources.
+
+### Changed
+- Move execution-target **rename** and **delete** out of the project **Devices & resources** panel into **Settings → Execution targets**; the project panel now directs admins there.
+
+### Security
+- None.
+
+### Removed
+- Remove inline device rename/delete controls from the project **Devices & resources** list.
+
+### Refactor
+- Extract **`resolveSelectedDeviceId`** and **`removeOrganizationFromOwnership`** helpers.
+
+### Test
+- Add tests for follow-up **`create`** **`projectId`** posting, **`resolveSelectedDeviceId`**, and **`createFollowUpTicketSchema`** project-name validation.
+
+### Documentation
+- Update protocol help, CLI README, connector surfaces, and agent plugin **`cli.md`** references for follow-up **`--project-id`** override.
+- Add **`docs/rbac-roles.md`** RBAC roles reference.
+
 ## [0.2606050806.0] - 2026-06-05:08:06
 
 ### Added

@@ -114,6 +114,7 @@ When creating tickets from within a repository:
 - Prefer `create` by default for draft ticket creation.
 - Use `prompt` only when the user explicitly asks to start execution immediately.
 - Both commands can resolve the project from the current working directory; use `--working-directory` to override or `--project-id` to be explicit.
+- Follow-up `create` calls under an active session inherit the current ticket's project by default, but `--project-id` can override that when the follow-up belongs in a different project.
 - Create multiple tickets when each prompt represents a different feature or goal.
 - Add objectives to the same ticket when each prompt is a sequential step toward the same feature or goal; use `ovld protocol add-objectives --ticket-id <ticket_id> --objectives-json '[{"objective":"..."}]'`.
 - `create`, `prompt`, and `record-work` require `--objectives-json` or `--objectives-file` with an ordered array of `{ "objective": "...", "title": "...", "autoAdvance": true }` objects. A single objective is just an array with one item.

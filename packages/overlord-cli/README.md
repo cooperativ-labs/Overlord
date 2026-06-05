@@ -134,7 +134,7 @@ Agents can find docs here: https://www.ovld.ai/docs/for-agents
 - `revert` - restore the local working tree to an objective checkpoint after fetching its checkpoint row
 - `search-tickets` - find tickets by keyword, status, project, creator, or update date
 - `add-objectives` - append ordered objectives to an existing ticket (`--objectives-json` / `--objectives-file`)
-- `create` - create a draft ticket without attaching (standalone or follow-up)
+- `create` - create a draft ticket without attaching (standalone or follow-up; `--project-id` can override the inherited project during follow-up creation)
 - `prompt` - create a ticket and attach to it immediately (`spawn` is a backward-compatible alias)
 - `record-work` - record already-completed chat work as a ticket in review with a completed objective and trigger feed-post generation
 - `update` - post progress, discussion/decision events, optional change rationales, and explicit `--begin-follow-up-work` transitions

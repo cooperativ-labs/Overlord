@@ -199,7 +199,7 @@ export async function deleteOrganizationExecutionTargetAction(input: {
 
   if ((resourceCount ?? 0) > 0) {
     throw new Error(
-      'This target still has linked resource directories. Remove all resource directories from this target before deleting it.'
+      'This target is still used by one or more project resources. Remove its resource directories from every project before deleting it.'
     );
   }
 

@@ -6,6 +6,7 @@ import { toolErr, toolOk } from '../rpc.ts';
 import { resolveSession } from '../session.ts';
 
 import { insertOrderedObjectives, normalizeObjectivesInput } from './_objectives.ts';
+import { resolveProjectIdOrName } from './_project-resolution.ts';
 import { resolvePreferredStatusNameByType } from './_status-resolution.ts';
 import { resolveTicketCreatorUserId } from './_ticket-creator.ts';
 
@@ -34,7 +35,8 @@ export async function handleCreateTicket(supabase: SupabaseClient, args: any, ct
     availableTools = '',
     forHuman = false,
     priority = 'medium',
-    delegate = null
+    delegate = null,
+    projectId = null
   } = args;
   let objectives;
   try {
@@ -67,6 +69,15 @@ export async function handleCreateTicket(supabase: SupabaseClient, args: any, ct
 
   if (sourceErr || !sourceTicket) return toolErr('Source ticket not found.');
 
+  let resolvedProjectId = sourceTicket.project_id;
+  if (typeof projectId === 'string' && projectId.trim()) {
+    const matchedProject = await resolveProjectIdOrName(supabase, organizationId, projectId);
+    if (!matchedProject) {
+      return toolErr(`Project not found: ${projectId}`);
+    }
+    resolvedProjectId = matchedProject.id;
+  }
+
   const nextTitle = title.trim() || objectives[0].objective.slice(0, 120);
   const createdBy = await resolveTicketCreatorUserId(supabase, ctx);
   const draftStatusName = await resolvePreferredStatusNameByType(
@@ -85,7 +96,7 @@ export async function handleCreateTicket(supabase: SupabaseClient, args: any, ct
       for_human: forHuman,
       organization_id: sourceTicket.organization_id,
       priority,
-      project_id: sourceTicket.project_id,
+      project_id: resolvedProjectId,
       status: draftStatusName,
       title: nextTitle
     })

@@ -1,3 +1,4 @@
+import type { ExecutionTargetOwnership } from '@/lib/actions/resource-directories';
 import { LAUNCH_AGENT_VALUES, type LaunchAgentType } from '@/lib/helpers/agent-types';
 
 export type TerminalProfileState = {
@@ -78,6 +79,17 @@ export const COPY_AGENT_LABELS: Record<string, string> = {
   'copy-cloud': 'For Cloud',
   'copy-terminal': 'For Terminal'
 };
+
+export function removeOrganizationFromOwnership(
+  ownership: ExecutionTargetOwnership,
+  organizationId: number
+): ExecutionTargetOwnership | null {
+  const organizations = ownership.organizations.filter(
+    organization => organization.organizationId !== organizationId
+  );
+
+  return organizations.length > 0 ? { ...ownership, organizations } : null;
+}
 
 export function settingKey(targetId: string, field: keyof TerminalProfileState): string {
   return `executionTarget.${targetId}.${field}`;

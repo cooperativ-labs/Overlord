@@ -933,7 +933,7 @@ export const TOOLS = [
       openWorldHint: false
     },
     description:
-      'Create a follow-up ticket in the same project. Use when blocked by a human-only action. Pass objectives as an array (a single objective is just an array with one item); they will be stored in the objectives table and associated with the ticket.',
+      'Create a follow-up ticket linked to the current ticket. By default it inherits the current project, but projectId can override that. Pass objectives as an array (a single objective is just an array with one item); they will be stored in the objectives table and associated with the ticket.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -949,6 +949,11 @@ export const TOOLS = [
         availableTools: { type: 'string' },
         forHuman: { type: 'boolean', default: false },
         priority: { type: 'string', enum: ['low', 'medium', 'high', 'urgent'], default: 'medium' },
+        projectId: {
+          type: 'string',
+          description:
+            'Optional project UUID or name override for the new follow-up ticket. Defaults to the current ticket project.'
+        },
         delegate: {
           type: 'string',
           description:

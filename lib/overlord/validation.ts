@@ -248,6 +248,7 @@ export const createFollowUpTicketSchema = z.object({
   acceptanceCriteria: agentTextOptional(20_000).optional().default(''),
   forHuman: forHumanSchema,
   priority: z.enum(['low', 'medium', 'high', 'urgent']).default('medium'),
+  projectId: projectIdOrNameSchema.optional(),
   delegate: z.string().trim().max(120).optional()
 });
 

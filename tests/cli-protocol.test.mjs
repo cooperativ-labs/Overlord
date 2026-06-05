@@ -356,6 +356,69 @@ test('heartbeat posts lightweight session telemetry without a summary', async ()
   assert.match(logs.join('\n'), /"heartbeatAt": "2026-05-31T00:00:00.000Z"/);
 });
 
+test('create posts projectId for follow-up draft creation when explicitly overridden', async () => {
+  const previousFetch = global.fetch;
+  const previousOverlordUrl = process.env.OVERLORD_URL;
+  const previousAgentToken = process.env.OVERLORD_ACCESS_TOKEN;
+  const previousOrganizationId = process.env.OVERLORD_ORGANIZATION_ID;
+  const previousLog = console.log;
+  const calls = [];
+  const logs = [];
+
+  try {
+    process.env.OVERLORD_URL = 'https://www.ovld.ai';
+    process.env.OVERLORD_ACCESS_TOKEN = 'test-agent-token';
+    process.env.OVERLORD_ORGANIZATION_ID = '42';
+
+    global.fetch = async (url, init = {}) => {
+      calls.push({
+        url: String(url),
+        method: init.method,
+        headers: init.headers,
+        body: init.body
+      });
+      return new Response(JSON.stringify({ ok: true, ticket: { id: 'ticket-1' } }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    };
+    console.log = value => {
+      logs.push(String(value));
+    };
+
+    await runProtocolCommand('create', [
+      '--session-key',
+      '11111111-2222-4333-8444-555555555555',
+      '--ticket-id',
+      '1:1333',
+      '--project-id',
+      'Shared Platform',
+      '--objectives-json',
+      '[{"objective":"Capture cross-project follow-up"}]'
+    ]);
+  } finally {
+    global.fetch = previousFetch;
+    console.log = previousLog;
+    if (previousOverlordUrl === undefined) delete process.env.OVERLORD_URL;
+    else process.env.OVERLORD_URL = previousOverlordUrl;
+    if (previousAgentToken === undefined) delete process.env.OVERLORD_ACCESS_TOKEN;
+    else process.env.OVERLORD_ACCESS_TOKEN = previousAgentToken;
+    if (previousOrganizationId === undefined) delete process.env.OVERLORD_ORGANIZATION_ID;
+    else process.env.OVERLORD_ORGANIZATION_ID = previousOrganizationId;
+  }
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, 'https://www.ovld.ai/api/protocol/create-ticket');
+  assert.deepEqual(JSON.parse(calls[0].body), {
+    sessionKey: '11111111-2222-4333-8444-555555555555',
+    ticketId: '1:1333',
+    objectives: [{ objective: 'Capture cross-project follow-up' }],
+    projectId: 'Shared Platform',
+    delegate: 'claude-code'
+  });
+  assert.match(logs.join('\n'), /"ok": true/);
+});
+
 test('connect posts externalSessionId when explicitly provided', async () => {
   const previousFetch = global.fetch;
   const previousOverlordUrl = process.env.OVERLORD_URL;

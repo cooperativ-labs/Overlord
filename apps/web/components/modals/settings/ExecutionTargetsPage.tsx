@@ -23,6 +23,7 @@ import {
   type TargetAgentConfigs
 } from '@/lib/schemas/target-agent-config';
 
+import { removeOrganizationFromOwnership } from './execution-targets/execution-targets-helpers';
 import { TargetAccordionItem } from './execution-targets/TargetAccordionItem';
 
 export function ExecutionTargetsPage({
@@ -123,6 +124,24 @@ export function ExecutionTargetsPage({
 
   function handleLabelChanged(targetId: string, newLabel: string) {
     setTargets(current => current.map(t => (t.id === targetId ? { ...t, label: newLabel } : t)));
+  }
+
+  function handleTargetDeleted(targetId: string, organizationId: number) {
+    const existing = ownerships[targetId];
+    if (!existing) return;
+
+    const nextOwnership = removeOrganizationFromOwnership(existing, organizationId);
+    if (!nextOwnership) {
+      setOwnerships(current => {
+        const next = { ...current };
+        delete next[targetId];
+        return next;
+      });
+      setTargets(current => current.filter(target => target.id !== targetId));
+      return;
+    }
+
+    setOwnerships(current => ({ ...current, [targetId]: nextOwnership }));
   }
 
   async function handleAddFlag({
@@ -272,6 +291,7 @@ export function ExecutionTargetsPage({
               onRemoveFlag={handleRemoveFlag}
               onBuildLocalAgentCommand={buildLocalAgentCommand}
               onNavigate={onNavigate}
+              onDeleted={handleTargetDeleted}
             />
           ))}
         </Accordion>

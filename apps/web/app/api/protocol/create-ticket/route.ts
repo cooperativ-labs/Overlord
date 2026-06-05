@@ -6,6 +6,7 @@ import { insertOrderedObjectives } from '@/lib/objectives';
 import { resolveSession, resolveTicketId } from '@/lib/overlord/protocol-db';
 import { resolveProtocolTicketCreatorUserId } from '@/lib/overlord/protocol-ticket-creator';
 import { resolveTicketDelegate } from '@/lib/overlord/protocol-ticket-delegate';
+import { resolveProjectIdOrName } from '@/lib/overlord/resolve-project';
 import { createFollowUpTicketSchema } from '@/lib/overlord/validation';
 import { resolvePreferredStatusNameByType } from '@/lib/ticket-statuses';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
@@ -22,6 +23,7 @@ export async function POST(request: Request) {
       forHuman,
       objectives,
       priority,
+      projectId,
       sessionKey,
       ticketId: rawTicketId,
       title
@@ -58,6 +60,15 @@ export async function POST(request: Request) {
       );
     }
 
+    let resolvedProjectId = sourceTicket.project_id;
+    if (projectId) {
+      const matchedProject = await resolveProjectIdOrName(supabase, organizationId, projectId);
+      if (!matchedProject) {
+        return NextResponse.json({ error: `Project not found: ${projectId}` }, { status: 404 });
+      }
+      resolvedProjectId = matchedProject.id;
+    }
+
     const nextTitle = title.trim() || deriveTitleFromObjective(objectives[0].objective);
     const draftStatusName = await resolvePreferredStatusNameByType(
       supabase,
@@ -75,7 +86,7 @@ export async function POST(request: Request) {
         for_human: forHuman,
         organization_id: sourceTicket.organization_id,
         priority,
-        project_id: sourceTicket.project_id,
+        project_id: resolvedProjectId,
         status: draftStatusName,
         title: nextTitle
       })

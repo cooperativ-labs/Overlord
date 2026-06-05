@@ -271,7 +271,8 @@ const tools = [
   },
   {
     name: 'create_ticket',
-    description: 'Create a draft ticket without attaching (ovld protocol create).',
+    description:
+      'Create a draft ticket without attaching (ovld protocol create). When session_key/ticket_id are provided, this creates a follow-up draft and project_id can override the current ticket project.',
     inputSchema: {
       type: 'object',
       properties: {

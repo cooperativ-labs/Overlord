@@ -1,9 +1,10 @@
 import {
-  discoverProjectSchema,
-  searchTicketsSchema,
-  spawnSchema,
+  createFollowUpTicketSchema,
   createStandaloneTicketSchema,
-  recordWorkSchema
+  discoverProjectSchema,
+  recordWorkSchema,
+  searchTicketsSchema,
+  spawnSchema
 } from '@/lib/overlord/validation';
 
 describe('projectId accepts project names alongside UUIDs', () => {
@@ -49,6 +50,16 @@ describe('projectId accepts project names alongside UUIDs', () => {
       projectId: 'Mobile App'
     });
     expect(result.projectId).toBe('Mobile App');
+  });
+
+  it('createFollowUpTicketSchema accepts a project name for projectId', () => {
+    const result = createFollowUpTicketSchema.parse({
+      sessionKey: '11111111-2222-4333-8444-555555555555',
+      ticketId: '1:899',
+      objectives: [{ objective: 'Move this follow-up into another project' }],
+      projectId: 'Shared Platform'
+    });
+    expect(result.projectId).toBe('Shared Platform');
   });
 
   it('recordWorkSchema accepts a project name for projectId', () => {

@@ -21,6 +21,28 @@ type ProjectExecutionWorkspaceSelectorProps = {
   projectId: string;
 };
 
+export function resolveSelectedDeviceId({
+  devices,
+  storedDeviceId,
+  matchedDeviceId,
+  isElectron
+}: {
+  devices: Pick<ProjectDevice, 'id'>[];
+  storedDeviceId: string | null;
+  matchedDeviceId: string | null;
+  isElectron: boolean;
+}): string | null {
+  if (storedDeviceId && devices.some(device => device.id === storedDeviceId)) {
+    return storedDeviceId;
+  }
+
+  if (isElectron && matchedDeviceId && devices.some(device => device.id === matchedDeviceId)) {
+    return matchedDeviceId;
+  }
+
+  return devices[0]?.id ?? null;
+}
+
 export function ProjectExecutionWorkspaceSelector({
   projectId
 }: ProjectExecutionWorkspaceSelectorProps) {
@@ -66,7 +88,7 @@ export function ProjectExecutionWorkspaceSelector({
     };
   }, [projectId, api]);
 
-  // Auto-select: on desktop default to current device, on web restore from localStorage
+  // Restore an explicit project preference before applying platform defaults.
   useEffect(() => {
     if (loading || !projectSettings) return;
     if (devices.length === 0) return;
@@ -76,21 +98,12 @@ export function ProjectExecutionWorkspaceSelector({
         ? window.localStorage.getItem(`${SELECTED_DEVICE_KEY}:${projectId}`)
         : null;
 
-    let targetId: string | null = null;
-
-    if (isElectron && matchedDeviceId) {
-      const matched = devices.find(d => d.id === matchedDeviceId);
-      if (matched) targetId = matched.id;
-    }
-
-    if (!targetId && storedId) {
-      const stored = devices.find(d => d.id === storedId);
-      if (stored) targetId = stored.id;
-    }
-
-    if (!targetId) {
-      targetId = devices[0].id;
-    }
+    const targetId = resolveSelectedDeviceId({
+      devices,
+      storedDeviceId: storedId,
+      matchedDeviceId,
+      isElectron
+    });
 
     const targetDevice = devices.find(d => d.id === targetId);
     const targetPrimaryDirectory =

@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowRight, ArrowRightLeft, Check, X } from 'lucide-react';
+import { ArrowRight, ArrowRightLeft, Check, Trash2, X } from 'lucide-react';
 import { type KeyboardEvent, useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -23,6 +23,7 @@ import {
   SelectValue
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { deleteOrganizationExecutionTargetAction } from '@/lib/actions/devices';
 import {
   claimExecutionTargetAction,
   type ExecutionTargetOwnership,
@@ -61,6 +62,7 @@ export function TargetAccordionItem({
   onRemoveFlag,
   onBuildLocalAgentCommand,
   onLabelChanged,
+  onDeleted,
   onNavigate
 }: {
   target: UserExecutionTargetDetailed;
@@ -79,6 +81,7 @@ export function TargetAccordionItem({
   onRemoveFlag: (args: { targetId: string; agent: string; index: number }) => Promise<void>;
   onBuildLocalAgentCommand: (args: { targetId: string; agent: string }) => string;
   onLabelChanged?: (targetId: string, newLabel: string) => void;
+  onDeleted?: (targetId: string, organizationId: number) => void;
   onNavigate?: (section: string) => void;
 }) {
   const [profile, setProfile] = useState<TerminalProfileState>(DEFAULT_TERMINAL_PROFILE);
@@ -91,6 +94,8 @@ export function TargetAccordionItem({
   const [labelEditing, setLabelEditing] = useState(false);
   const [labelError, setLabelError] = useState<string | null>(null);
   const [labelSaving, setLabelSaving] = useState(false);
+  const [pendingDeleteOrgId, setPendingDeleteOrgId] = useState<number | null>(null);
+  const [confirmDeleteOrgId, setConfirmDeleteOrgId] = useState<number | null>(null);
 
   const LABEL_REGEX = /^[a-z0-9][a-z0-9-]*$/;
 
@@ -154,6 +159,23 @@ export function TargetAccordionItem({
       toast.error(error instanceof Error ? error.message : 'Failed to update target ownership.');
     } finally {
       setPendingOrgId(null);
+    }
+  }
+
+  async function handleDeleteTarget(organizationId: number) {
+    setPendingDeleteOrgId(organizationId);
+    try {
+      await deleteOrganizationExecutionTargetAction({
+        organizationId,
+        executionTargetId: target.id
+      });
+      toast.success('Target removed from the organization.');
+      setConfirmDeleteOrgId(null);
+      onDeleted?.(target.id, organizationId);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to remove execution target.');
+    } finally {
+      setPendingDeleteOrgId(null);
     }
   }
 
@@ -428,6 +450,51 @@ export function TargetAccordionItem({
                                 }
                                 onClick={() => void handleMakeOrgOwned(org.organizationId)}
                               />
+                            ) : null}
+                            {org.isAdmin ? (
+                              confirmDeleteOrgId === org.organizationId ? (
+                                <div className="flex items-center gap-1">
+                                  <span className="text-[10px] whitespace-nowrap text-muted-foreground">
+                                    Delete?
+                                  </span>
+                                  <LoadingButton
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    buttonState={
+                                      pendingDeleteOrgId === org.organizationId
+                                        ? 'loading'
+                                        : 'default'
+                                    }
+                                    text={<Check className="h-3.5 w-3.5" />}
+                                    onClick={() => void handleDeleteTarget(org.organizationId)}
+                                  />
+                                  <LoadingButton
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    buttonState="default"
+                                    text={<X className="h-3.5 w-3.5" />}
+                                    onClick={() => setConfirmDeleteOrgId(null)}
+                                    disabled={pendingDeleteOrgId === org.organizationId}
+                                  />
+                                </div>
+                              ) : (
+                                <LoadingButton
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  buttonState="default"
+                                  text={
+                                    <span className="flex items-center gap-1.5">
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                      Delete
+                                    </span>
+                                  }
+                                  onClick={() => setConfirmDeleteOrgId(org.organizationId)}
+                                  disabled={pendingDeleteOrgId !== null}
+                                />
+                              )
                             ) : null}
                           </div>
                         </div>

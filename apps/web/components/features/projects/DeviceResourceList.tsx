@@ -16,12 +16,10 @@ import {
 import { Input } from '@/components/ui/input';
 import { LoadingButton } from '@/components/ui/loading-button';
 import {
-  deleteOrganizationExecutionTargetAction,
   getProjectDevicesAction,
   getUserDevicesAction,
   type ProjectDevice,
   type ProjectDeviceResource,
-  updateDeviceLabelAction,
   type UserDevice
 } from '@/lib/actions/devices';
 import {
@@ -37,7 +35,6 @@ import { defaultDirectoryLabel } from '@/lib/resource-directories/labels';
 import { cn } from '@/lib/utils';
 
 import { partitionDevicesByProject } from './device-resources/device-resource-helpers';
-import { DeviceLabelControls } from './device-resources/DeviceLabelControls';
 import { DeviceResourceRow } from './device-resources/DeviceResourceRow';
 
 type Props = {
@@ -51,11 +48,6 @@ export function DeviceResourceList({ open, projectId }: Props) {
   const [devices, setDevices] = useState<UserDevice[]>([]);
   const [projectDevices, setProjectDevices] = useState<ProjectDevice[]>([]);
   const [loadingDevices, setLoadingDevices] = useState(true);
-  const [editingDeviceId, setEditingDeviceId] = useState<string | null>(null);
-  const [editingDeviceLabel, setEditingDeviceLabel] = useState('');
-  const [savingDeviceId, setSavingDeviceId] = useState<string | null>(null);
-  const [deletingDeviceId, setDeletingDeviceId] = useState<string | null>(null);
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [expandedDeviceIds, setExpandedDeviceIds] = useState<Set<string>>(new Set());
 
   // Resource editing state
@@ -118,55 +110,6 @@ export function DeviceResourceList({ open, projectId }: Props) {
       }
       return next;
     });
-  }
-
-  function handleStartEditDevice(device: UserDevice) {
-    setEditingDeviceId(device.id);
-    setEditingDeviceLabel(device.label);
-  }
-
-  function handleCancelEditDevice() {
-    setEditingDeviceId(null);
-    setEditingDeviceLabel('');
-  }
-
-  async function handleSaveDeviceLabel(deviceId: string) {
-    const next = editingDeviceLabel.trim();
-    if (!next) return;
-    setSavingDeviceId(deviceId);
-    try {
-      await updateDeviceLabelAction({ deviceId, label: next });
-      setDevices(prev =>
-        prev.map(device => (device.id === deviceId ? { ...device, label: next } : device))
-      );
-      setProjectDevices(prev =>
-        prev.map(device => (device.id === deviceId ? { ...device, label: next } : device))
-      );
-      setEditingDeviceId(null);
-      setEditingDeviceLabel('');
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to update device label.');
-    } finally {
-      setSavingDeviceId(null);
-    }
-  }
-
-  async function handleDeleteDevice(device: UserDevice) {
-    if (!device.organizationId) return;
-    setDeletingDeviceId(device.id);
-    setConfirmDeleteId(null);
-    try {
-      await deleteOrganizationExecutionTargetAction({
-        organizationId: device.organizationId,
-        executionTargetId: device.id
-      });
-      setDevices(prev => prev.filter(d => d.id !== device.id));
-      toast.success(`"${device.label}" removed from organization.`);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to remove execution target.');
-    } finally {
-      setDeletingDeviceId(null);
-    }
   }
 
   // Resource actions
@@ -372,7 +315,8 @@ export function DeviceResourceList({ open, projectId }: Props) {
         <h3 className="text-sm font-medium">Devices &amp; resources</h3>
         <p className="text-xs text-muted-foreground">
           Devices associated with this project and their resource directories. Each device can have
-          multiple working directories; the primary one is used for execution.
+          multiple working directories; the primary one is used for execution. Rename or delete
+          targets from Settings → Execution targets.
         </p>
       </div>
 
@@ -386,11 +330,6 @@ export function DeviceResourceList({ open, projectId }: Props) {
       ) : (
         <div className="grid gap-2">
           {devicesInProject.map(({ device, projectDevice }) => {
-            const isEditing = editingDeviceId === device.id;
-            const isSaving = savingDeviceId === device.id;
-            const isDeleting = deletingDeviceId === device.id;
-            const isConfirming = confirmDeleteId === device.id;
-            const isBusy = isSaving || isDeleting;
             const resources = projectDevice?.resources ?? [];
             const primaryResource = resources.find(r => r.isPrimary);
             const isExpanded = expandedDeviceIds.has(device.id);
@@ -412,42 +351,22 @@ export function DeviceResourceList({ open, projectId }: Props) {
                   </button>
                   <Laptop className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                   <div className="flex-1 min-w-0">
-                    {isEditing ? (
-                      <Input
-                        value={editingDeviceLabel}
-                        onChange={event => setEditingDeviceLabel(event.target.value)}
-                        className="h-7 text-xs"
-                        placeholder="e.g. my-raspberry-pi"
-                        disabled={isSaving}
-                        autoFocus
-                        onKeyDown={event => {
-                          if (event.key === 'Enter') {
-                            event.preventDefault();
-                            void handleSaveDeviceLabel(device.id);
-                          }
-                          if (event.key === 'Escape') {
-                            handleCancelEditDevice();
-                          }
-                        }}
-                      />
-                    ) : (
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <span className="font-medium">{device.label}</span>
-                        {device.hostname && device.hostname !== device.label ? (
-                          <span className="text-muted-foreground">· {device.hostname}</span>
-                        ) : null}
-                        {device.platform ? (
-                          <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase text-muted-foreground">
-                            {device.platform}
-                          </span>
-                        ) : null}
-                        {primaryResource ? (
-                          <span className="text-muted-foreground">
-                            · {primaryResource.label ?? primaryResource.directoryPath}
-                          </span>
-                        ) : null}
-                      </div>
-                    )}
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="font-medium">{device.label}</span>
+                      {device.hostname && device.hostname !== device.label ? (
+                        <span className="text-muted-foreground">· {device.hostname}</span>
+                      ) : null}
+                      {device.platform ? (
+                        <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase text-muted-foreground">
+                          {device.platform}
+                        </span>
+                      ) : null}
+                      {primaryResource ? (
+                        <span className="text-muted-foreground">
+                          · {primaryResource.label ?? primaryResource.directoryPath}
+                        </span>
+                      ) : null}
+                    </div>
                   </div>
 
                   {projectDevice ? (
@@ -468,22 +387,6 @@ export function DeviceResourceList({ open, projectId }: Props) {
                   <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
                     {resources.length} resource{resources.length !== 1 ? 's' : ''}
                   </span>
-
-                  <DeviceLabelControls
-                    isEditing={isEditing}
-                    isSaving={isSaving}
-                    isDeleting={isDeleting}
-                    isConfirming={isConfirming}
-                    isBusy={isBusy}
-                    canSaveLabel={Boolean(editingDeviceLabel.trim())}
-                    showDelete={Boolean(device.isAdmin && device.organizationId)}
-                    onSave={() => void handleSaveDeviceLabel(device.id)}
-                    onCancel={handleCancelEditDevice}
-                    onStartEdit={() => handleStartEditDevice(device)}
-                    onRequestDelete={() => setConfirmDeleteId(device.id)}
-                    onCancelDelete={() => setConfirmDeleteId(null)}
-                    onConfirmDelete={() => void handleDeleteDevice(device)}
-                  />
                 </div>
 
                 {isExpanded && resources.length > 0 ? (
@@ -527,12 +430,6 @@ export function DeviceResourceList({ open, projectId }: Props) {
               </p>
               <div className="grid gap-1.5">
                 {devicesNotInProject.map(({ device }) => {
-                  const isEditing = editingDeviceId === device.id;
-                  const isSaving = savingDeviceId === device.id;
-                  const isDeleting = deletingDeviceId === device.id;
-                  const isConfirming = confirmDeleteId === device.id;
-                  const isBusy = isSaving || isDeleting;
-
                   return (
                     <div
                       key={device.id}
@@ -540,56 +437,18 @@ export function DeviceResourceList({ open, projectId }: Props) {
                     >
                       <Laptop className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                       <div className="flex-1 min-w-0">
-                        {isEditing ? (
-                          <Input
-                            value={editingDeviceLabel}
-                            onChange={event => setEditingDeviceLabel(event.target.value)}
-                            className="h-7 text-xs"
-                            placeholder="e.g. my-raspberry-pi"
-                            disabled={isSaving}
-                            autoFocus
-                            onKeyDown={event => {
-                              if (event.key === 'Enter') {
-                                event.preventDefault();
-                                void handleSaveDeviceLabel(device.id);
-                              }
-                              if (event.key === 'Escape') {
-                                handleCancelEditDevice();
-                              }
-                            }}
-                          />
-                        ) : (
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            <span className="font-medium text-muted-foreground">
-                              {device.label}
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="font-medium text-muted-foreground">{device.label}</span>
+                          {device.hostname && device.hostname !== device.label ? (
+                            <span className="text-muted-foreground">· {device.hostname}</span>
+                          ) : null}
+                          {device.platform ? (
+                            <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase text-muted-foreground">
+                              {device.platform}
                             </span>
-                            {device.hostname && device.hostname !== device.label ? (
-                              <span className="text-muted-foreground">· {device.hostname}</span>
-                            ) : null}
-                            {device.platform ? (
-                              <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase text-muted-foreground">
-                                {device.platform}
-                              </span>
-                            ) : null}
-                          </div>
-                        )}
+                          ) : null}
+                        </div>
                       </div>
-
-                      <DeviceLabelControls
-                        isEditing={isEditing}
-                        isSaving={isSaving}
-                        isDeleting={isDeleting}
-                        isConfirming={isConfirming}
-                        isBusy={isBusy}
-                        canSaveLabel={Boolean(editingDeviceLabel.trim())}
-                        showDelete={Boolean(device.isAdmin && device.organizationId)}
-                        onSave={() => void handleSaveDeviceLabel(device.id)}
-                        onCancel={handleCancelEditDevice}
-                        onStartEdit={() => handleStartEditDevice(device)}
-                        onRequestDelete={() => setConfirmDeleteId(device.id)}
-                        onCancelDelete={() => setConfirmDeleteId(null)}
-                        onConfirmDelete={() => void handleDeleteDevice(device)}
-                      />
                     </div>
                   );
                 })}
