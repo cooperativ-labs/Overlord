@@ -1,8 +1,8 @@
 import { buildInvitationEmailContent } from '@/lib/actions/invitations';
 
 describe('buildInvitationEmailContent', () => {
-  it('renders branded invite email content with escaped org details', () => {
-    const content = buildInvitationEmailContent({
+  it('renders branded invite email content with escaped org details', async () => {
+    const content = await buildInvitationEmailContent({
       to: 'new.user@example.com',
       inviterName: 'Jane & Co <Admin>',
       orgName: 'R&D "Skunkworks" > Alpha',
@@ -28,8 +28,8 @@ describe('buildInvitationEmailContent', () => {
     expect(content.html).toContain('/invite/invite-token-123');
   });
 
-  it('includes a CLI self-onboarding block with the install + onboard commands and code', () => {
-    const content = buildInvitationEmailContent({
+  it('includes a CLI self-onboarding block with the install + onboard commands and code', async () => {
+    const content = await buildInvitationEmailContent({
       to: 'agent@example.com',
       inviterName: 'Jane',
       orgName: 'Acme',
@@ -48,8 +48,8 @@ describe('buildInvitationEmailContent', () => {
     expect(content.html).toContain('ovld onboard --invite invite-token-123');
   });
 
-  it('escapes the invitation token in the HTML block', () => {
-    const content = buildInvitationEmailContent({
+  it('escapes the invitation token in the HTML block', async () => {
+    const content = await buildInvitationEmailContent({
       to: 'agent@example.com',
       inviterName: 'Jane',
       orgName: 'Acme',

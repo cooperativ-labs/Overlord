@@ -22,6 +22,7 @@ import {
   useObjectiveAttachmentState
 } from '@/components/features/ObjectiveAttachmentUpload';
 import { ObjectiveMenuButton } from '@/components/features/ObjectiveMenuButton';
+import { useDefaultProject } from '@/components/features/projects/DefaultProjectContext';
 import { AgentSplitButtonLive, useTicketLive } from '@/components/features/TicketLiveProvider';
 import { Button } from '@/components/ui/button';
 import { FileDropZone } from '@/components/ui/file-drop-zone';
@@ -91,6 +92,11 @@ export function DraftObjective({
   const [cliQuickstartOpen, setCliQuickstartOpen] = useState(false);
   const [promoting, startPromoteTransition] = useTransition();
   const { session, events } = useTicketLive();
+  const { projects } = useDefaultProject();
+  const projectMentionOptions = useMemo(
+    () => projects.map(p => ({ id: p.id, name: p.name })),
+    [projects]
+  );
   const activeAgentType = getAgentTypeByIdentifier(session?.agent_identifier ?? null);
   const showAgentControls = assignedAgent !== undefined;
   const isFuture = objectiveState === 'future';
@@ -228,6 +234,7 @@ export function DraftObjective({
             displayClassName="text-base leading-relaxed"
             field="objective"
             fileMentionPaths={fileMentionPaths}
+            projectMentionOptions={projectMentionOptions}
             initialValue={initialValue}
             inputClassName={cn(
               'text-base leading-relaxed',

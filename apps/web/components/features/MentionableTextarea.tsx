@@ -14,6 +14,11 @@ import { cn } from '@/lib/utils';
 
 const MAX_MENTION_RESULTS = 20;
 
+export type ProjectMentionOption = {
+  id: string;
+  name: string;
+};
+
 type MentionableTextareaProps = Omit<
   React.ComponentProps<'textarea'>,
   'value' | 'onChange' | 'children'
@@ -21,12 +26,14 @@ type MentionableTextareaProps = Omit<
   value: string;
   onValueChange: (nextValue: string) => void;
   mentionPaths?: string[];
+  projectMentionOptions?: ProjectMentionOption[];
   containerClassName?: string;
   menuClassName?: string;
   mentionMenuMode?: 'portal' | 'inline';
   onChange?: React.ChangeEventHandler<HTMLTextAreaElement>;
   onMentionMenuOpenChange?: (open: boolean) => void;
   onMentionSelect?: (filePath: string) => void;
+  onProjectMentionSelect?: (project: ProjectMentionOption) => void;
   /** Continue `1. ` / `- ` lists on newline; use `shift-enter` when plain Enter is reserved (e.g. submit). */
   autoListContinuation?: AutoListContinuationMode | false;
   /** When set, caps auto-grown height so the textarea scrolls internally instead of expanding past this pixel height. */
@@ -39,6 +46,7 @@ export const MentionableTextarea = React.forwardRef<HTMLTextAreaElement, Mention
       value,
       onValueChange,
       mentionPaths = [],
+      projectMentionOptions = [],
       className,
       containerClassName,
       menuClassName,
@@ -50,6 +58,7 @@ export const MentionableTextarea = React.forwardRef<HTMLTextAreaElement, Mention
       onChange,
       onMentionMenuOpenChange,
       onMentionSelect,
+      onProjectMentionSelect,
       autoListContinuation = false,
       maxHeightPx,
       ...props
@@ -58,10 +67,19 @@ export const MentionableTextarea = React.forwardRef<HTMLTextAreaElement, Mention
   ) {
     const containerRef = React.useRef<HTMLDivElement>(null);
     const mentionListRef = React.useRef<HTMLDivElement>(null);
+    const projectMentionListRef = React.useRef<HTMLDivElement>(null);
     const textareaRef = React.useRef<HTMLTextAreaElement>(null);
+
+    // File (@) mention state
     const [mentionStart, setMentionStart] = React.useState<number | null>(null);
     const [mentionQuery, setMentionQuery] = React.useState('');
     const [mentionIndex, setMentionIndex] = React.useState(0);
+
+    // Project (#) mention state
+    const [projectMentionStart, setProjectMentionStart] = React.useState<number | null>(null);
+    const [projectMentionQuery, setProjectMentionQuery] = React.useState('');
+    const [projectMentionIndex, setProjectMentionIndex] = React.useState(0);
+
     const [mentionMenuPlacement, setMentionMenuPlacement] = React.useState<'top' | 'bottom'>(
       'bottom'
     );
@@ -79,6 +97,15 @@ export const MentionableTextarea = React.forwardRef<HTMLTextAreaElement, Mention
       [mentionPaths, mentionQuery]
     );
     const mentionMenuOpen = mentionStart !== null && mentionResults.length > 0;
+
+    const projectMentionResults = React.useMemo(
+      () =>
+        projectMentionOptions
+          .filter(p => p.name.toLowerCase().includes(projectMentionQuery.toLowerCase()))
+          .slice(0, MAX_MENTION_RESULTS),
+      [projectMentionOptions, projectMentionQuery]
+    );
+    const projectMentionMenuOpen = projectMentionStart !== null && projectMentionResults.length > 0;
 
     const setRefs = React.useCallback(
       (node: HTMLTextAreaElement | null) => {
@@ -99,27 +126,52 @@ export const MentionableTextarea = React.forwardRef<HTMLTextAreaElement, Mention
       setMentionIndex(0);
     }, []);
 
+    const clearProjectMentionState = React.useCallback(() => {
+      setProjectMentionStart(null);
+      setProjectMentionQuery('');
+      setProjectMentionIndex(0);
+    }, []);
+
     const updateMentionState = React.useCallback(
       (nextValue: string, cursorPosition: number) => {
         if (mentionPaths.length === 0) {
           clearMentionState();
-          return;
+        } else {
+          const beforeCursor = nextValue.slice(0, cursorPosition);
+          const tokenMatch = beforeCursor.match(/(^|[\s(])@([^\s@]*)$/);
+          if (!tokenMatch) {
+            clearMentionState();
+          } else {
+            const query = tokenMatch[2] ?? '';
+            const atSymbolPosition = cursorPosition - query.length - 1;
+            setMentionStart(atSymbolPosition);
+            setMentionQuery(query);
+            setMentionIndex(0);
+          }
         }
 
-        const beforeCursor = nextValue.slice(0, cursorPosition);
-        const tokenMatch = beforeCursor.match(/(^|[\s(])@([^\s@]*)$/);
-        if (!tokenMatch) {
-          clearMentionState();
-          return;
+        if (projectMentionOptions.length === 0) {
+          clearProjectMentionState();
+        } else {
+          const beforeCursor = nextValue.slice(0, cursorPosition);
+          const tokenMatch = beforeCursor.match(/(^|[\s(])#([^\s#[]*)$/);
+          if (!tokenMatch) {
+            clearProjectMentionState();
+          } else {
+            const query = tokenMatch[2] ?? '';
+            const hashPosition = cursorPosition - query.length - 1;
+            setProjectMentionStart(hashPosition);
+            setProjectMentionQuery(query);
+            setProjectMentionIndex(0);
+          }
         }
-
-        const query = tokenMatch[2] ?? '';
-        const atSymbolPosition = cursorPosition - query.length - 1;
-        setMentionStart(atSymbolPosition);
-        setMentionQuery(query);
-        setMentionIndex(0);
       },
-      [mentionPaths.length, clearMentionState]
+      [
+        mentionPaths.length,
+        clearMentionState,
+        projectMentionOptions.length,
+        clearProjectMentionState
+      ]
     );
 
     const updateMentionMenuPosition = React.useCallback(() => {
@@ -176,8 +228,40 @@ export const MentionableTextarea = React.forwardRef<HTMLTextAreaElement, Mention
       [mentionStart, value, onValueChange, onMentionSelect, clearMentionState]
     );
 
+    const insertProjectMentionAtCursor = React.useCallback(
+      (project: ProjectMentionOption) => {
+        const textArea = textareaRef.current as
+          | (TextareaHandle & {
+              selectionStart: number | null;
+            })
+          | null;
+        if (!textArea || projectMentionStart === null || !project.name) return;
+
+        const cursor = textArea.selectionStart ?? value.length;
+        let mentionText = `#[${project.name}]`;
+        const suffix = value.slice(cursor);
+        if (suffix.length === 0 || (!suffix.startsWith(' ') && !suffix.startsWith('\n'))) {
+          mentionText += ' ';
+        }
+
+        const nextValue = `${value.slice(0, projectMentionStart)}${mentionText}${suffix}`;
+        const nextCursor = projectMentionStart + mentionText.length;
+
+        onValueChange(nextValue);
+        onProjectMentionSelect?.(project);
+        clearProjectMentionState();
+
+        requestAnimationFrame(() => {
+          textArea.focus();
+          textArea.setSelectionRange(nextCursor, nextCursor);
+        });
+      },
+      [projectMentionStart, value, onValueChange, onProjectMentionSelect, clearProjectMentionState]
+    );
+
     React.useEffect(() => {
-      if (!mentionMenuOpen || mentionMenuMode !== 'portal') return;
+      const anyMenuOpen = mentionMenuOpen || projectMentionMenuOpen;
+      if (!anyMenuOpen || mentionMenuMode !== 'portal') return;
       updateMentionMenuPosition();
       window.addEventListener('resize', updateMentionMenuPosition);
       window.addEventListener('scroll', updateMentionMenuPosition, true);
@@ -185,11 +269,11 @@ export const MentionableTextarea = React.forwardRef<HTMLTextAreaElement, Mention
         window.removeEventListener('resize', updateMentionMenuPosition);
         window.removeEventListener('scroll', updateMentionMenuPosition, true);
       };
-    }, [mentionMenuOpen, mentionMenuMode, updateMentionMenuPosition]);
+    }, [mentionMenuOpen, projectMentionMenuOpen, mentionMenuMode, updateMentionMenuPosition]);
 
     React.useEffect(() => {
-      onMentionMenuOpenChange?.(mentionMenuOpen);
-    }, [mentionMenuOpen, onMentionMenuOpenChange]);
+      onMentionMenuOpenChange?.(mentionMenuOpen || projectMentionMenuOpen);
+    }, [mentionMenuOpen, projectMentionMenuOpen, onMentionMenuOpenChange]);
 
     React.useEffect(() => {
       if (!mentionMenuOpen) return;
@@ -200,9 +284,24 @@ export const MentionableTextarea = React.forwardRef<HTMLTextAreaElement, Mention
     }, [mentionMenuOpen, mentionIndex]);
 
     React.useEffect(() => {
+      if (!projectMentionMenuOpen) return;
+      const listEl = projectMentionListRef.current;
+      if (!listEl) return;
+      const active = listEl.querySelector<HTMLElement>(
+        `[data-project-mention-index="${projectMentionIndex}"]`
+      );
+      active?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    }, [projectMentionMenuOpen, projectMentionIndex]);
+
+    React.useEffect(() => {
       if (mentionPaths.length > 0) return;
       clearMentionState();
     }, [mentionPaths.length, clearMentionState]);
+
+    React.useEffect(() => {
+      if (projectMentionOptions.length > 0) return;
+      clearProjectMentionState();
+    }, [projectMentionOptions.length, clearProjectMentionState]);
 
     React.useEffect(() => {
       const textarea = textareaRef.current;
@@ -218,6 +317,17 @@ export const MentionableTextarea = React.forwardRef<HTMLTextAreaElement, Mention
       textarea.scrollTop = Math.min(prevTextareaScrollTop, maxScrollTop);
     }, [value, maxHeightPx]);
 
+    const menuStyle =
+      mentionMenuMode === 'portal'
+        ? {
+            top: mentionMenuPlacement === 'top' ? undefined : menuPosition.top,
+            bottom:
+              mentionMenuPlacement === 'top' ? window.innerHeight - menuPosition.top : undefined,
+            left: menuPosition.left,
+            maxHeight: mentionMenuMaxHeight
+          }
+        : undefined;
+
     const mentionMenu = mentionMenuOpen ? (
       <div
         ref={mentionListRef}
@@ -227,19 +337,7 @@ export const MentionableTextarea = React.forwardRef<HTMLTextAreaElement, Mention
             : 'mt-2 max-h-56 overflow-x-auto overflow-y-auto rounded-xl border bg-background/95 p-1 shadow-sm backdrop-blur-md',
           menuClassName
         )}
-        style={
-          mentionMenuMode === 'portal'
-            ? {
-                top: mentionMenuPlacement === 'top' ? undefined : menuPosition.top,
-                bottom:
-                  mentionMenuPlacement === 'top'
-                    ? window.innerHeight - menuPosition.top
-                    : undefined,
-                left: menuPosition.left,
-                maxHeight: mentionMenuMaxHeight
-              }
-            : undefined
-        }
+        style={menuStyle}
       >
         {mentionResults.map((filePath, index) => (
           <button
@@ -271,6 +369,39 @@ export const MentionableTextarea = React.forwardRef<HTMLTextAreaElement, Mention
       </div>
     ) : null;
 
+    const projectMentionMenu = projectMentionMenuOpen ? (
+      <div
+        ref={projectMentionListRef}
+        className={cn(
+          mentionMenuMode === 'portal'
+            ? 'fixed z-50 w-max max-w-[min(48rem,calc(100vw-1rem))] overflow-x-auto overflow-y-auto rounded-md border bg-popover p-1 shadow-md'
+            : 'mt-2 max-h-56 overflow-x-auto overflow-y-auto rounded-xl border bg-background/95 p-1 shadow-sm backdrop-blur-md',
+          menuClassName
+        )}
+        style={menuStyle}
+      >
+        {projectMentionResults.map((project, index) => (
+          <button
+            key={project.id}
+            data-project-mention-index={index}
+            className={cn(
+              'block w-full whitespace-nowrap rounded px-2 py-1.5 text-left text-sm transition-colors',
+              index === projectMentionIndex
+                ? 'bg-muted-foreground/30 text-foreground shadow-sm'
+                : 'text-foreground hover:bg-muted-foreground/30'
+            )}
+            type="button"
+            onMouseDown={event => {
+              event.preventDefault();
+              insertProjectMentionAtCursor(project);
+            }}
+          >
+            <span className="font-medium">#{project.name}</span>
+          </button>
+        ))}
+      </div>
+    ) : null;
+
     return (
       <div ref={containerRef} className={cn('relative w-full', containerClassName)}>
         <textarea
@@ -296,6 +427,7 @@ export const MentionableTextarea = React.forwardRef<HTMLTextAreaElement, Mention
           }}
           onBlur={event => {
             clearMentionState();
+            clearProjectMentionState();
             onBlur?.(event);
           }}
           onKeyDown={event => {
@@ -320,6 +452,34 @@ export const MentionableTextarea = React.forwardRef<HTMLTextAreaElement, Mention
               if (event.key === 'Escape') {
                 event.preventDefault();
                 clearMentionState();
+                return;
+              }
+            }
+
+            if (projectMentionMenuOpen) {
+              if (event.key === 'ArrowDown') {
+                event.preventDefault();
+                setProjectMentionIndex(current => (current + 1) % projectMentionResults.length);
+                return;
+              }
+              if (event.key === 'ArrowUp') {
+                event.preventDefault();
+                setProjectMentionIndex(
+                  current =>
+                    (current - 1 + projectMentionResults.length) % projectMentionResults.length
+                );
+                return;
+              }
+              if (event.key === 'Enter' || event.key === 'Tab') {
+                event.preventDefault();
+                const selected =
+                  projectMentionResults[projectMentionIndex] ?? projectMentionResults[0];
+                if (selected) insertProjectMentionAtCursor(selected);
+                return;
+              }
+              if (event.key === 'Escape') {
+                event.preventDefault();
+                clearProjectMentionState();
                 return;
               }
             }
@@ -361,6 +521,9 @@ export const MentionableTextarea = React.forwardRef<HTMLTextAreaElement, Mention
         {mentionMenuMode === 'portal' && mentionMenu
           ? createPortal(mentionMenu, document.body)
           : mentionMenu}
+        {mentionMenuMode === 'portal' && projectMentionMenu
+          ? createPortal(projectMentionMenu, document.body)
+          : projectMentionMenu}
       </div>
     );
   }

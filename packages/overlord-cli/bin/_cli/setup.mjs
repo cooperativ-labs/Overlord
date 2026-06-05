@@ -1945,7 +1945,10 @@ function installCodexPermissions() {
 // ---------------------------------------------------------------------------
 
 export async function runSetupCommand(args) {
-  const agent = args[0];
+  const yesFlag = args.includes('--yes') || args.includes('-y') ||
+    /^(1|true|yes|on)$/i.test(String(process.env.AGENT_POD_OVERLORD ?? '').trim());
+  const filteredArgs = args.filter(a => a !== '--yes' && a !== '-y');
+  const agent = filteredArgs[0];
 
   if (agent === '--help' || agent === '-h' || agent === 'help') {
     console.log(`Usage:
@@ -1956,7 +1959,10 @@ export async function runSetupCommand(args) {
   ovld setup antigravity  Install Overlord Antigravity plugin (agy) and protocol policy rules
   ovld setup opencode  Install Overlord connector for OpenCode
   ovld setup all       Prepare all supported agents
-  ovld doctor          Validate installed connectors and check for CLI updates`);
+  ovld doctor          Validate installed connectors and check for CLI updates
+
+Options:
+  --yes, -y            Auto-approve all prompts (for non-interactive / pod environments)`);
     return;
   }
 
@@ -2025,7 +2031,7 @@ export async function runSetupCommand(args) {
       console.log('Agent plugins/connectors prepared successfully!\n');
 
       printAgentPermissionsDescription();
-      const shouldInstallPermissions = await askYesNo(
+      const shouldInstallPermissions = yesFlag || await askYesNo(
         'Would you like to configure agent permissions for Overlord protocol access?',
         true
       );
@@ -2072,7 +2078,7 @@ export async function runSetupCommand(args) {
     if (agentsThatNeedPermissions.length > 0) {
       console.log();
       printAgentPermissionsDescription();
-      const shouldInstallPermissions = await askYesNo(
+      const shouldInstallPermissions = yesFlag || await askYesNo(
         'Would you like to configure agent permissions for Overlord protocol access?',
         true
       );
@@ -2107,7 +2113,7 @@ export async function runSetupCommand(args) {
     if (['claude', 'codex', 'opencode'].includes(agent)) {
       console.log();
       printAgentPermissionsDescription();
-      const shouldInstallPermissions = await askYesNo(
+      const shouldInstallPermissions = yesFlag || await askYesNo(
         'Would you like to configure agent permissions for Overlord protocol access?',
         true
       );

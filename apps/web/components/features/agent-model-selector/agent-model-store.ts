@@ -73,6 +73,32 @@ export function getCachedAgentConfigs(): Record<string, AgentConfig> {
   return cachedConfigs ?? {};
 }
 
+/**
+ * Patch the module-level configs cache for a single agent's launch config
+ * (pre-command / flags). Called after the launch footer persists an edit so
+ * cache-backed selector surfaces — and a remounted footer re-seeding from the
+ * cache — reflect the new value without a refetch.
+ */
+export function updateCachedAgentLaunchConfig(
+  agentType: string,
+  patch: { preCommand?: string | null; flags?: string[] }
+): void {
+  const current = cachedConfigs ?? {};
+  const next: AgentConfig = { ...(current[agentType] ?? { flags: [] }) };
+  if (patch.flags !== undefined) {
+    next.flags = patch.flags;
+  }
+  if ('preCommand' in patch) {
+    const trimmed = patch.preCommand?.trim();
+    if (trimmed) {
+      next.preCommand = trimmed;
+    } else {
+      delete next.preCommand;
+    }
+  }
+  cachedConfigs = { ...current, [agentType]: next };
+}
+
 /** Returns the agent model list, using module-level cache to avoid duplicate fetches. */
 export function useAgentModels(): { models: AgentModel[]; loading: boolean } {
   const [models, setModels] = useState<AgentModel[]>(() => cachedResolvedModels ?? []);

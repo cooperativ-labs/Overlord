@@ -106,6 +106,10 @@ export default function BlankTicketCard({
     fileMentionPaths,
     workingDirectory: selectedProjectWorkingDirectory
   });
+  const projectMentionOptions = useMemo(
+    () => projects.map(p => ({ id: p.id, name: p.name })),
+    [projects]
+  );
 
   const { data: tagDefinitions } = useProjectTagDefinitions(selectedProjectId);
   const activeTagDefinitions = useMemo(
@@ -286,6 +290,7 @@ export default function BlankTicketCard({
           value={value}
           onValueChange={setValue}
           mentionPaths={effectiveMentionPaths}
+          projectMentionOptions={projectMentionOptions}
           onKeyDown={e => {
             void handleKeyDown(e);
           }}

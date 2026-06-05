@@ -27,6 +27,7 @@ import {
   supportsBuiltInThinkingSelection,
   useAgentModels
 } from './agent-model-selector/agent-model-store';
+import { AgentLaunchFooter } from './agent-model-selector/AgentLaunchFooter';
 import {
   CursorAutoTooltipLabel,
   DefaultTooltipLabel
@@ -82,6 +83,11 @@ export function AgentModelSelector({
   const selectedCustomAgent = value.customAgentId
     ? (customAgents.find(agent => agent.id === value.customAgentId) ?? null)
     : null;
+
+  // Launch pre-command / flags are stored per agent_type (custom agents key off
+  // their id). The footer keys off this so its fields re-seed when the agent changes.
+  const launchConfigKey = selectedCustomAgent ? selectedCustomAgent.id : value.agent;
+  const launchConfig = configs[launchConfigKey];
 
   const modelsByAgent = useMemo(() => {
     const grouped: Record<string, AgentModel[]> = {};
@@ -209,182 +215,194 @@ export function AgentModelSelector({
   );
 
   return (
-    <div className={cn('flex gap-3', inline ? 'flex-col' : 'flex-row')}>
-      {/* Agent column */}
-      <div className={cn('flex flex-col gap-0.5', inline ? 'w-full' : 'min-w-[110px]')}>
-        <p className="mb-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-          Agent
-        </p>
-        {visibleBuiltInAgents.map(agent => {
-          const isSelected = !selectedCustomAgent && value.agent === agent.value;
-          return (
-            <button
-              key={agent.value}
-              type="button"
-              onClick={() => handleAgentChange(agent.value)}
-              className={cn(
-                'flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors',
-                isSelected ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'
-              )}
-            >
-              <span className="flex h-4 w-4 items-center justify-center">
-                <AgentIcon agentType={agent} size={12} />
-              </span>
-              <span className="truncate">{agent.label}</span>
-              {isSelected && <Check className="ml-auto h-3 w-3 shrink-0" />}
-            </button>
-          );
-        })}
-        {customAgents.map(customAgent => {
-          const isSelected = value.customAgentId === customAgent.id;
-          return (
-            <button
-              key={customAgent.id}
-              type="button"
-              onClick={() => handleCustomAgentSelect(customAgent)}
-              className={cn(
-                'flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors',
-                isSelected ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'
-              )}
-            >
-              <span className="flex h-4 w-4 items-center justify-center">
-                <Bot className="h-3 w-3" aria-hidden />
-              </span>
-              <span className="truncate">{customAgent.name}</span>
-              {isSelected && <Check className="ml-auto h-3 w-3 shrink-0" />}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Model column */}
-      <div className={cn('flex flex-col gap-0.5', inline ? 'w-full' : 'min-w-[160px]')}>
-        <p className="mb-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-          {selectedCustomAgent ? (customModelPlaceholder?.label ?? 'Model') : 'Model'}
-        </p>
-        {selectedCustomAgent ? (
-          customModelPlaceholder && customModelPlaceholder.options.length > 0 ? (
-            <div className="max-h-[220px] overflow-y-auto">
-              {customModelPlaceholder.options.map(option => {
-                const isSelected = value.model === option.value;
-                return (
-                  <button
-                    key={option.value}
-                    type="button"
-                    onClick={() => handleModelChange(option.value)}
-                    className={cn(
-                      'flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors',
-                      isSelected ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'
-                    )}
-                  >
-                    <span className="truncate">{option.label}</span>
-                    {isSelected && <Check className="ml-auto h-3 w-3 shrink-0" />}
-                  </button>
-                );
-              })}
-            </div>
-          ) : (
-            <p className="px-2 py-1.5 text-xs leading-relaxed text-muted-foreground">
-              This agent has no model options.
-            </p>
-          )
-        ) : antigravityManagesModels ? (
-          <p className="px-2 py-1.5 text-xs leading-relaxed text-muted-foreground">
-            Antigravity chooses models in its own UI.
-          </p>
-        ) : (
-          <>
-            <button
-              type="button"
-              onClick={() => handleModelChange(null)}
-              className={cn(
-                'flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors',
-                value.model === null ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'
-              )}
-            >
-              <DefaultTooltipLabel />
-              {value.model === null && <Check className="ml-auto h-3 w-3 shrink-0" />}
-            </button>
-            {value.agent === 'cursor' ? (
-              <button
-                type="button"
-                onClick={() => handleModelChange('auto')}
-                className={cn(
-                  'flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors',
-                  value.model === 'auto' ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'
-                )}
-              >
-                <CursorAutoTooltipLabel />
-                {value.model === 'auto' && <Check className="ml-auto h-3 w-3 shrink-0" />}
-              </button>
-            ) : null}
-            {currentModels.length > 0 ? (
-              <div className="max-h-[220px] overflow-y-auto">
-                {currentModels.map(m => {
-                  const isSelected = value.model === m.model_id;
-                  return (
-                    <button
-                      key={m.model_id}
-                      type="button"
-                      onClick={() => handleModelChange(m.model_id)}
-                      className={cn(
-                        'flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors',
-                        isSelected ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'
-                      )}
-                    >
-                      <span className="truncate">{m.display_name}</span>
-                      {isSelected && <Check className="ml-auto h-3 w-3 shrink-0" />}
-                    </button>
-                  );
-                })}
-              </div>
-            ) : loading ? (
-              <p className="px-2 py-1.5 text-xs text-muted-foreground">Loading...</p>
-            ) : (
-              <p className="px-2 py-1.5 text-xs text-muted-foreground">No models available</p>
-            )}
-          </>
-        )}
-      </div>
-
-      {/* Thinking column — only shown when a model with thinking options is selected */}
-      {thinkingEnabled && thinkingOptions.length > 0 && (
-        <div className={cn('flex flex-col gap-0.5', inline ? 'w-full' : 'min-w-[90px]')}>
+    <div className="flex flex-col gap-3">
+      <div className={cn('flex gap-3', inline ? 'flex-col' : 'flex-row')}>
+        {/* Agent column */}
+        <div className={cn('flex flex-col gap-0.5', inline ? 'w-full' : 'min-w-[110px]')}>
           <p className="mb-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-            {selectedCustomAgent
-              ? (customThinkingPlaceholder?.label ?? 'Thinking')
-              : getAgentThinkingLabel(value.agent)}
+            Agent
           </p>
-          <button
-            type="button"
-            onClick={() => handleThinkingChange(null)}
-            className={cn(
-              'flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors',
-              value.thinking === null ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'
-            )}
-          >
-            <span className="truncate text-muted-foreground">Default</span>
-            {value.thinking === null && <Check className="ml-auto h-3 w-3 shrink-0" />}
-          </button>
-          {thinkingOptions.map(option => {
-            const isSelected = value.thinking === option;
+          {visibleBuiltInAgents.map(agent => {
+            const isSelected = !selectedCustomAgent && value.agent === agent.value;
             return (
               <button
-                key={option}
+                key={agent.value}
                 type="button"
-                onClick={() => handleThinkingChange(option)}
+                onClick={() => handleAgentChange(agent.value)}
                 className={cn(
-                  'flex items-center gap-1.5 rounded-md px-2 py-1 text-xs capitalize transition-colors',
+                  'flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors',
                   isSelected ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'
                 )}
               >
-                <span className="truncate">{option}</span>
+                <span className="flex h-4 w-4 items-center justify-center">
+                  <AgentIcon agentType={agent} size={12} />
+                </span>
+                <span className="truncate">{agent.label}</span>
+                {isSelected && <Check className="ml-auto h-3 w-3 shrink-0" />}
+              </button>
+            );
+          })}
+          {customAgents.map(customAgent => {
+            const isSelected = value.customAgentId === customAgent.id;
+            return (
+              <button
+                key={customAgent.id}
+                type="button"
+                onClick={() => handleCustomAgentSelect(customAgent)}
+                className={cn(
+                  'flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors',
+                  isSelected ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'
+                )}
+              >
+                <span className="flex h-4 w-4 items-center justify-center">
+                  <Bot className="h-3 w-3" aria-hidden />
+                </span>
+                <span className="truncate">{customAgent.name}</span>
                 {isSelected && <Check className="ml-auto h-3 w-3 shrink-0" />}
               </button>
             );
           })}
         </div>
-      )}
+
+        {/* Model column */}
+        <div className={cn('flex flex-col gap-0.5', inline ? 'w-full' : 'min-w-[160px]')}>
+          <p className="mb-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+            {selectedCustomAgent ? (customModelPlaceholder?.label ?? 'Model') : 'Model'}
+          </p>
+          {selectedCustomAgent ? (
+            customModelPlaceholder && customModelPlaceholder.options.length > 0 ? (
+              <div className="max-h-[220px] overflow-y-auto">
+                {customModelPlaceholder.options.map(option => {
+                  const isSelected = value.model === option.value;
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => handleModelChange(option.value)}
+                      className={cn(
+                        'flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors',
+                        isSelected ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'
+                      )}
+                    >
+                      <span className="truncate">{option.label}</span>
+                      {isSelected && <Check className="ml-auto h-3 w-3 shrink-0" />}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="px-2 py-1.5 text-xs leading-relaxed text-muted-foreground">
+                This agent has no model options.
+              </p>
+            )
+          ) : antigravityManagesModels ? (
+            <p className="px-2 py-1.5 text-xs leading-relaxed text-muted-foreground">
+              Antigravity chooses models in its own UI.
+            </p>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => handleModelChange(null)}
+                className={cn(
+                  'flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors',
+                  value.model === null ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'
+                )}
+              >
+                <DefaultTooltipLabel />
+                {value.model === null && <Check className="ml-auto h-3 w-3 shrink-0" />}
+              </button>
+              {value.agent === 'cursor' ? (
+                <button
+                  type="button"
+                  onClick={() => handleModelChange('auto')}
+                  className={cn(
+                    'flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors',
+                    value.model === 'auto'
+                      ? 'bg-accent text-accent-foreground'
+                      : 'hover:bg-accent/50'
+                  )}
+                >
+                  <CursorAutoTooltipLabel />
+                  {value.model === 'auto' && <Check className="ml-auto h-3 w-3 shrink-0" />}
+                </button>
+              ) : null}
+              {currentModels.length > 0 ? (
+                <div className="max-h-[220px] overflow-y-auto">
+                  {currentModels.map(m => {
+                    const isSelected = value.model === m.model_id;
+                    return (
+                      <button
+                        key={m.model_id}
+                        type="button"
+                        onClick={() => handleModelChange(m.model_id)}
+                        className={cn(
+                          'flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors',
+                          isSelected ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'
+                        )}
+                      >
+                        <span className="truncate">{m.display_name}</span>
+                        {isSelected && <Check className="ml-auto h-3 w-3 shrink-0" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : loading ? (
+                <p className="px-2 py-1.5 text-xs text-muted-foreground">Loading...</p>
+              ) : (
+                <p className="px-2 py-1.5 text-xs text-muted-foreground">No models available</p>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* Thinking column — only shown when a model with thinking options is selected */}
+        {thinkingEnabled && thinkingOptions.length > 0 && (
+          <div className={cn('flex flex-col gap-0.5', inline ? 'w-full' : 'min-w-[90px]')}>
+            <p className="mb-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              {selectedCustomAgent
+                ? (customThinkingPlaceholder?.label ?? 'Thinking')
+                : getAgentThinkingLabel(value.agent)}
+            </p>
+            <button
+              type="button"
+              onClick={() => handleThinkingChange(null)}
+              className={cn(
+                'flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors',
+                value.thinking === null ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'
+              )}
+            >
+              <span className="truncate text-muted-foreground">Default</span>
+              {value.thinking === null && <Check className="ml-auto h-3 w-3 shrink-0" />}
+            </button>
+            {thinkingOptions.map(option => {
+              const isSelected = value.thinking === option;
+              return (
+                <button
+                  key={option}
+                  type="button"
+                  onClick={() => handleThinkingChange(option)}
+                  className={cn(
+                    'flex items-center gap-1.5 rounded-md px-2 py-1 text-xs capitalize transition-colors',
+                    isSelected ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'
+                  )}
+                >
+                  <span className="truncate">{option}</span>
+                  {isSelected && <Check className="ml-auto h-3 w-3 shrink-0" />}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      <AgentLaunchFooter
+        key={launchConfigKey}
+        agentKey={launchConfigKey}
+        preCommand={launchConfig?.preCommand ?? ''}
+        flags={launchConfig?.flags ?? []}
+        demo={demo}
+      />
     </div>
   );
 }

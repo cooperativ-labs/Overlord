@@ -2,6 +2,38 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2606050717.0] - 2026-06-05:07:17
+
+### Added
+- Add **project `#` mentions** in objective fields (Quick Task Bar, new-ticket and quick-run modals, blank ticket card, draft objectives) — type `#` to insert `#[Project Name]` with autocomplete across your projects.
+- Add an **agent launch footer** on the model selector to edit **pre-command** and **flags** inline per agent (built-in or custom), with immediate persistence to your agent config.
+- Add **Skip** on the project working-directory required modal (Desktop) to defer linking a folder and continue navigating; the skip preference is persisted per device.
+- Add **execution target label** editing in Settings with lowercase letter, digit, and hyphen validation.
+- Add **`ovld setup --yes` / `-y`** (and honor **`AGENT_POD_OVERLORD`**) to auto-approve permission prompts in non-interactive and agent-pod environments.
+- Write **context files** for CLI launches that use a **`--pre-command`** wrapper so agents read launch context from a temp markdown file instead of oversized shell arguments.
+- Enforce **unique project names per organization** (case- and trim-insensitive) via a database unique index.
+
+### Fixed
+- Return a clear **“A project with this name already exists in this organization”** error when project creation or rename hits a name conflict instead of a generic database failure.
+- Keep the execution targets list in Settings in sync after a label is saved.
+
+### Changed
+- Enlarge the **Settings** dialog on desktop (taller max height) for execution targets and related pages.
+- Resolve the Claude plugin path from the installed plugin cache when launching agents.
+
+### Security
+- None.
+
+### Refactor
+- Extract shared **`projectNameConflictError`** helper for consistent project name conflict handling across web actions, CLI onboarding, and **`create-project`**.
+
+### Test
+- Add tests for project name conflict detection and context-file usage in CLI agent launches.
+- Update invitation email tests for async **`buildInvitationEmailContent`**.
+
+### Documentation
+- Extend **`create-project`** CLI, MCP, and agent plugin reference docs with directory-linking and bare-project options.
+
 ## [0.2606041635.0] - 2026-06-04:16:35
 
 ### Added

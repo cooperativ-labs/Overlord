@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 import { AgentModelChooserButton } from '@/components/features/AgentModelChooserButton';
@@ -102,6 +102,10 @@ export function QuickRunModal({
     fileMentionPaths,
     workingDirectory: workspace.effectiveWorkingDirectory
   });
+  const projectMentionOptions = useMemo(
+    () => projects.map(p => ({ id: p.id, name: p.name })),
+    [projects]
+  );
 
   const autoResize = useCallback(() => {
     const el = textareaRef.current as EditableTextareaHandle | null;
@@ -353,6 +357,7 @@ export function QuickRunModal({
               value={objective}
               onValueChange={setObjective}
               mentionPaths={effectiveMentionPaths}
+              projectMentionOptions={projectMentionOptions}
               onChange={() => autoResize()}
               onMentionSelect={() => {
                 requestAnimationFrame(() => autoResize());

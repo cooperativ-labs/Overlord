@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 import { AgentModelChooserButton } from '@/components/features/AgentModelChooserButton';
@@ -82,6 +82,10 @@ export function NewTicketModal({
     fileMentionPaths,
     workingDirectory: selectedProjectForFileTree?.local_working_directory
   });
+  const projectMentionOptions = useMemo(
+    () => projects.map(p => ({ id: p.id, name: p.name })),
+    [projects]
+  );
 
   // Auto-resize textarea
   const autoResize = useCallback(() => {
@@ -295,6 +299,7 @@ export function NewTicketModal({
               value={objective}
               onValueChange={setObjective}
               mentionPaths={effectiveMentionPaths}
+              projectMentionOptions={projectMentionOptions}
               onChange={handleChange}
               onMentionSelect={() => {
                 requestAnimationFrame(() => autoResize());

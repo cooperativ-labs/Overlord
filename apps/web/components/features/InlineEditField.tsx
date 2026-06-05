@@ -12,7 +12,10 @@ import {
 } from 'react';
 
 import { MarkdownContent } from '@/components/features/MarkdownContent';
-import { MentionableTextarea } from '@/components/features/MentionableTextarea';
+import {
+  MentionableTextarea,
+  type ProjectMentionOption
+} from '@/components/features/MentionableTextarea';
 import { useWorkspaceFileTree } from '@/components/features/projects/useWorkspaceFileTree';
 import { updateObjectiveBodyAction } from '@/lib/actions/tickets';
 import { useUpdateTicketFieldsMutation } from '@/lib/client-data/tickets/mutations';
@@ -46,6 +49,8 @@ type Props = {
   renderMarkdown?: boolean;
   /** Optional list of project file paths used for @mention suggestions in multiline mode */
   fileMentionPaths?: string[];
+  /** Optional list of projects for #mention suggestions in multiline mode */
+  projectMentionOptions?: ProjectMentionOption[];
   /** Optional absolute directory used for local Electron file mention suggestions */
   workingDirectory?: string | null;
   variant?: 'default' | 'textarea';
@@ -78,6 +83,7 @@ export const InlineEditField = forwardRef<InlineEditFieldHandle, Props>(function
     inputClassName,
     renderMarkdown = false,
     fileMentionPaths = EMPTY_MENTION_PATHS,
+    projectMentionOptions,
     workingDirectory,
     variant = 'default',
     seamless = false,
@@ -252,6 +258,7 @@ export const InlineEditField = forwardRef<InlineEditFieldHandle, Props>(function
               value={value}
               onValueChange={setValue}
               mentionPaths={effectiveMentionPaths}
+              projectMentionOptions={projectMentionOptions}
               onBlur={save}
               onKeyDown={handleKeyDown}
             />

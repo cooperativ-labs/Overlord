@@ -1,7 +1,7 @@
 'use client';
 
 import { ArrowUp, Bot, Loader2, Plus, User } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 import { AgentModelChooserTrigger } from '@/components/features/AgentModelChooserTrigger';
@@ -90,6 +90,10 @@ export function QuickTaskBar({ defaultProjectId, projects, sshEnabled }: QuickTa
     workingDirectory: workspace.effectiveWorkingDirectory,
     enabled: mentionPathsEnabled
   });
+  const projectMentionOptions = useMemo(
+    () => projects.map(p => ({ id: p.id, name: p.name })),
+    [projects]
+  );
 
   useEffect(() => {
     if (mentionPathsEnabled) return;
@@ -443,6 +447,7 @@ export function QuickTaskBar({ defaultProjectId, projects, sshEnabled }: QuickTa
             requestAnimationFrame(() => autoResize());
           }}
           mentionPaths={mentionPaths}
+          projectMentionOptions={projectMentionOptions}
           mentionMenuMode="inline"
           onMentionMenuOpenChange={handleMentionMenuOpenChange}
           onKeyDown={handleKeyDown}
