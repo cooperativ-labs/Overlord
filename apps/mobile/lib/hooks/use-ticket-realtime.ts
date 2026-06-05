@@ -9,10 +9,13 @@ import { getSupabase } from '@/lib/supabase';
  */
 export function useTicketRealtime(
   ticketId: string,
+  objectiveIds: string[],
   onUpdate: (options?: { suppressTransientNetworkAlert?: boolean }) => void
 ) {
   const onUpdateRef = useRef(onUpdate);
   onUpdateRef.current = onUpdate;
+  const objectiveIdsRef = useRef(objectiveIds);
+  objectiveIdsRef.current = objectiveIds;
 
   useEffect(() => {
     const supabase = getSupabase();
@@ -38,6 +41,22 @@ export function useTicketRealtime(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'objectives', filter: `ticket_id=eq.${ticketId}` },
         () => onUpdateRef.current({ suppressTransientNetworkAlert: true })
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'agent_sessions' },
+        payload => {
+          const changedObjectiveId =
+            (payload.new as { objective_id?: string | null } | null)?.objective_id ??
+            (payload.old as { objective_id?: string | null } | null)?.objective_id ??
+            null;
+
+          if (!changedObjectiveId || !objectiveIdsRef.current.includes(changedObjectiveId)) {
+            return;
+          }
+
+          onUpdateRef.current({ suppressTransientNetworkAlert: true });
+        }
       )
       .subscribe(status => {
         if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {

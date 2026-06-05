@@ -165,6 +165,15 @@ export interface Objective {
   created_at: string;
 }
 
+export type AgentSessionState = 'attached' | 'idle' | 'blocked' | 'completed' | 'disconnected';
+
+export interface TicketAgentSessionSummary {
+  objective_id: string;
+  session_state: AgentSessionState;
+  agent_identifier: string;
+  attached_at: string | null;
+}
+
 /** A ticket currently being executed by an agent. */
 export interface ExecutingFeedTicket {
   id: string;
@@ -188,37 +197,45 @@ export interface TicketEvent {
   created_by: string | null;
 }
 
-/** Supported remote connection transports. */
-export type ServerTransport = 'ssh' | 'tailscale_ssh';
-
-/** SSH server connection status. */
-export type ServerStatus = 'pending' | 'connected' | 'error';
-
-/** Device-local credential metadata for a server profile. */
-export interface DeviceServerCredential {
-  serverId: string;
-  keyTag: string;
-  publicKey: string;
-  publicKeyFingerprint: string;
-  isHardwareBacked: boolean;
-  createdAt: string;
+/** Per-agent local launch configuration stored on an execution target. */
+export interface AgentLaunchConfig {
+  /** Command flags appended when launching this agent on the target. */
+  flags: string[];
+  /** Tokens prepended before the agent binary (e.g. a container exec wrapper). */
+  preCommand: string | null;
 }
 
-/** SSH server connection record. */
-export interface Server {
+/**
+ * Partial update for an agent's per-target launch config. An omitted field is
+ * left unchanged; `preCommand: null` (or blank) clears a stored pre-command.
+ */
+export interface AgentLaunchConfigUpdate {
+  flags?: string[];
+  preCommand?: string | null;
+}
+
+/**
+ * An execution target the ovld runner can claim work on. Replaces the legacy
+ * per-device SSH "server" model — the app no longer connects to machines
+ * directly; it queues work that a runner attached to the target picks up.
+ */
+export interface ExecutionTarget {
+  /** execution_targets.id */
   id: string;
-  user_id: string;
-  organization_id: number;
+  /** organization_execution_targets.label — the user-facing slug. */
   label: string;
+  organizationId: number;
   host: string;
   port: number;
-  username: string;
-  transport: ServerTransport;
-  host_key_fingerprint: string | null;
-  last_connected_at: string | null;
-  last_verified_at: string | null;
-  last_error: string | null;
-  status: ServerStatus;
-  created_at: string;
-  updated_at: string;
+  /** 'local' | 'ssh' | 'tailscale_ssh' */
+  transport: string;
+  platform: string | null;
+  name: string | null;
+  isPlaceholder: boolean;
+  lastSeenAt: string | null;
+  /** user_execution_targets.access_status — null when the user has no row. */
+  accessStatus: string | null;
+  defaultUsername: string | null;
+  /** Per-agent default pre-commands and flags, keyed by agent_type. */
+  agentFlags: Record<string, AgentLaunchConfig>;
 }

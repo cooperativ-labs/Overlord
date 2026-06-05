@@ -1,0 +1,8 @@
+slug: mobile-app
+name: mobile-app
+description: Keep mobile features aligned with the web app. Use when changing
+  shared product behavior, data loading, or UI in apps/mobile that has a web
+  counterpart in apps/web.
+tags: []
+compat: []
+sha256: 724a857f63e70462fbfd71f557a35562dc68fb304a0362a4eb47a87a5e7b4ac1

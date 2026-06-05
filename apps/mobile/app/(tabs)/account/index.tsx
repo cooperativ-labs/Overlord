@@ -53,28 +53,6 @@ export default function AccountScreen() {
       </View>
 
       <View style={styles.menuSection}>
-        <Pressable style={styles.menuItem} onPress={() => router.push('/(tabs)/account/servers')}>
-          <Ionicons name="server-outline" size={20} color={colors.foreground} />
-          <View style={styles.menuItemContent}>
-            <Text style={styles.menuText}>Servers</Text>
-            <Text style={styles.menuDescription}>Manage connected machines</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={18} color={colors.mutedForeground} />
-        </Pressable>
-        <Pressable
-          style={[styles.menuItem, styles.menuItemLast]}
-          onPress={() => router.push('/(tabs)/account/security')}
-        >
-          <Ionicons name="shield-outline" size={20} color={colors.foreground} />
-          <View style={styles.menuCopy}>
-            <Text style={styles.menuText}>Security</Text>
-            <Text style={styles.menuDescription}>Server terminal preferences</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={18} color={colors.mutedForeground} />
-        </Pressable>
-      </View>
-
-      <View style={styles.menuSection}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Appearance</Text>
           <Text style={styles.sectionDescription}>Current mode: {resolvedTheme}</Text>

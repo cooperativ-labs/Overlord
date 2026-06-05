@@ -73,7 +73,12 @@ export function FileChangesArtifact({ content, workspaceRoot, editorScheme }: Pr
                     isMd ? markdownFileIconClassName : 'text-muted-foreground'
                   )}
                 />
-                <span className={cn('font-medium', isMd ? markdownFileLabelClassName : 'text-foreground')}>
+                <span
+                  className={cn(
+                    'font-medium',
+                    isMd ? markdownFileLabelClassName : 'text-foreground'
+                  )}
+                >
                   {filename}
                 </span>
                 {dir && <span className="text-muted-foreground">{dir}</span>}

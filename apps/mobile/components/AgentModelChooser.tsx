@@ -10,15 +10,21 @@ import {
 } from 'react-native';
 
 import { AgentBrandIcon } from '@/components/AgentBrandIcon';
+import { AgentLaunchFooter } from '@/components/AgentLaunchFooter';
 import {
-  AGENT_OPTIONS,
+  type AgentUserConfig,
   DEFAULT_AGENT_MODEL_SELECTION,
+  getAgentThinkingLabel,
+  getVisibleBuiltInAgents,
+  getVisibleModelsForAgent,
   normalizeAgentModels,
   normalizeLaunchPreference,
   normalizeUserAgentConfigs,
-  resolveAgentModelSelection
+  resolveAgentModelSelection,
+  supportsBuiltInThinkingSelection
 } from '@/lib/agent-models';
 import { type ThemeColors, useThemeColors, useThemedStyles } from '@/lib/colors';
+import { useExecutionTargets } from '@/lib/execution-targets-context';
 import { Ionicons } from '@/lib/icons';
 import { getSupabase } from '@/lib/supabase';
 import type { AgentModelRecord, AgentModelSelection, LaunchAgentType } from '@/lib/types';
@@ -52,7 +58,9 @@ export function AgentModelChooser({
 }: AgentModelChooserProps) {
   const colors = useThemeColors();
   const styles = useThemedStyles(createStyles);
+  const { selectedTarget, updateTargetAgentConfig } = useExecutionTargets();
   const [models, setModels] = useState<AgentModelRecord[]>([]);
+  const [userConfigs, setUserConfigs] = useState<Record<string, AgentUserConfig>>({});
   const [resolvedSelection, setResolvedSelection] = useState<AgentModelSelection>(
     DEFAULT_AGENT_MODEL_SELECTION
   );
@@ -85,6 +93,7 @@ export function AgentModelChooser({
           data: { user }
         } = await supabase.auth.getUser();
 
+        let normalizedConfigs: Record<string, AgentUserConfig> = {};
         let nextSelection = DEFAULT_AGENT_MODEL_SELECTION;
 
         if (user) {
@@ -105,14 +114,16 @@ export function AgentModelChooser({
             throw new Error(preferenceRes.error.message);
           }
 
+          normalizedConfigs = normalizeUserAgentConfigs(configRes.data ?? []);
           nextSelection = resolveAgentModelSelection(
-            normalizeUserAgentConfigs(configRes.data ?? []),
+            normalizedConfigs,
             normalizeLaunchPreference(preferenceRes.data)
           );
         }
 
         if (!cancelled) {
           setModels(normalizedModels);
+          setUserConfigs(normalizedConfigs);
           setResolvedSelection(nextSelection);
         }
       } catch (error) {
@@ -150,23 +161,54 @@ export function AgentModelChooser({
     );
   }, [models]);
 
+  const visibleBuiltInAgents = useMemo(
+    () =>
+      getVisibleBuiltInAgents({
+        configs: userConfigs,
+        selectedAgent: effectiveSelection.agent
+      }),
+    [effectiveSelection.agent, userConfigs]
+  );
+
   const antigravityManagesModels = effectiveSelection.agent === 'antigravity';
   const currentModels = antigravityManagesModels
     ? []
-    : (modelsByAgent[effectiveSelection.agent] ?? []);
+    : getVisibleModelsForAgent({
+        models: modelsByAgent[effectiveSelection.agent] ?? [],
+        agent: effectiveSelection.agent,
+        configs: userConfigs
+      });
   const selectedModel = currentModels.find(model => model.model_id === effectiveSelection.model);
-  const showThinking = effectiveSelection.agent !== 'codex' && !antigravityManagesModels;
-  const thinkingOptions = showThinking ? (selectedModel?.thinking_options ?? []) : [];
-  const selectedAgentOption = AGENT_OPTIONS.find(
+  const thinkingEnabled = supportsBuiltInThinkingSelection(
+    effectiveSelection.agent,
+    antigravityManagesModels
+  );
+  const thinkingOptions =
+    thinkingEnabled && effectiveSelection.model === 'auto'
+      ? []
+      : thinkingEnabled
+        ? (selectedModel?.thinking_options ?? [])
+        : [];
+  const selectedAgentOption = visibleBuiltInAgents.find(
     option => option.value === effectiveSelection.agent
   );
   const isSelectorVisible = alwaysExpanded || (expanded ?? showSelector);
   const selectedModelLabel = antigravityManagesModels
     ? 'Antigravity default'
-    : (selectedModel?.display_name ?? 'Default model');
+    : effectiveSelection.model === 'auto'
+      ? 'Auto'
+      : (selectedModel?.display_name ?? 'Default model');
   const selectedThinkingLabel = effectiveSelection.thinking
     ? ` · ${effectiveSelection.thinking}`
     : '';
+
+  // Launch defaults (pre-command + flags) are sourced from the app-wide selected
+  // execution target's per-agent config — the same data the Servers tab shows
+  // and the ovld runner reads — so the agent config settings apply consistently
+  // across the app rather than from a separate global config.
+  const currentTargetAgentConfig = selectedTarget?.agentFlags[effectiveSelection.agent] ?? null;
+  const currentAgentFlags = currentTargetAgentConfig?.flags ?? [];
+  const currentAgentPreCommand = currentTargetAgentConfig?.preCommand ?? '';
 
   function setSelectorVisible(nextVisible: boolean) {
     if (!alwaysExpanded && expanded === undefined) {
@@ -223,7 +265,7 @@ export function AgentModelChooser({
         <View style={styles.selectorPanel}>
           <Text style={styles.groupLabel}>Agent</Text>
           <View style={styles.chipWrap}>
-            {AGENT_OPTIONS.map(option => {
+            {visibleBuiltInAgents.map(option => {
               const selected = effectiveSelection.agent === option.value;
               return (
                 <Pressable
@@ -268,6 +310,20 @@ export function AgentModelChooser({
                   })
                 }
               />
+              {effectiveSelection.agent === 'cursor' ? (
+                <ModelChoice
+                  disabled={disabled}
+                  isSelected={effectiveSelection.model === 'auto'}
+                  label="Auto"
+                  onPress={() =>
+                    onChange({
+                      agent: effectiveSelection.agent,
+                      model: 'auto',
+                      thinking: null
+                    })
+                  }
+                />
+              ) : null}
               {currentModels.map(model => (
                 <ModelChoice
                   key={model.id}
@@ -289,9 +345,11 @@ export function AgentModelChooser({
             </View>
           )}
 
-          {thinkingOptions.length > 0 ? (
+          {thinkingEnabled && thinkingOptions.length > 0 ? (
             <>
-              <Text style={styles.groupLabel}>Thinking</Text>
+              <Text style={styles.groupLabel}>
+                {getAgentThinkingLabel(effectiveSelection.agent)}
+              </Text>
               <View style={styles.chipWrap}>
                 <Pressable
                   disabled={disabled}
@@ -349,6 +407,25 @@ export function AgentModelChooser({
               </View>
             </>
           ) : null}
+
+          <AgentLaunchFooter
+            key={`${selectedTarget?.id ?? 'none'}:${effectiveSelection.agent}`}
+            agentKey={effectiveSelection.agent}
+            preCommand={currentAgentPreCommand}
+            flags={currentAgentFlags}
+            targetLabel={selectedTarget?.label ?? null}
+            onChange={
+              selectedTarget
+                ? update =>
+                    void updateTargetAgentConfig(
+                      selectedTarget.id,
+                      effectiveSelection.agent,
+                      update
+                    )
+                : undefined
+            }
+            disabled={disabled || !selectedTarget}
+          />
         </View>
       ) : null}
     </View>

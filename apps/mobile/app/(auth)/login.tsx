@@ -1,4 +1,5 @@
 import { useRouter } from 'expo-router';
+import { Fingerprint } from 'lucide-react-native';
 import { useState } from 'react';
 import {
   ActivityIndicator,
@@ -18,11 +19,12 @@ import { Path, Svg } from 'react-native-svg';
 import appIcon from '@/assets/icon.png';
 import { useAuth } from '@/lib/auth-context';
 import { type ThemeColors, useThemeColors, useThemedStyles } from '@/lib/colors';
+import { PasskeyCancelledError } from '@/lib/passkey';
 import { supabaseRuntimeInfo } from '@/lib/supabase';
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { signIn, signInWithGithub, signInWithBitbucket } = useAuth();
+  const { signIn, signInWithGithub, signInWithBitbucket, signInWithPasskey } = useAuth();
   const colors = useThemeColors();
   const styles = useThemedStyles(createStyles);
   const [email, setEmail] = useState('');
@@ -30,6 +32,7 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [githubLoading, setGithubLoading] = useState(false);
   const [bitbucketLoading, setBitbucketLoading] = useState(false);
+  const [passkeyLoading, setPasskeyLoading] = useState(false);
 
   const handleSignIn = async () => {
     if (!email || !password) {
@@ -40,7 +43,7 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       await signIn(email, password);
-      router.replace('/(tabs)/feed');
+      router.replace('/(tabs)/create');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'An error occurred';
       const debugContext = __DEV__
@@ -49,6 +52,26 @@ export default function LoginScreen() {
       Alert.alert('Sign In Failed', `${message}${debugContext}`);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handlePasskeySignIn = async () => {
+    setPasskeyLoading(true);
+    try {
+      await signInWithPasskey();
+      router.replace('/(tabs)/create');
+    } catch (error) {
+      // A user-cancelled sheet is not an error worth interrupting them over.
+      if (error instanceof PasskeyCancelledError) {
+        return;
+      }
+      const message = error instanceof Error ? error.message : 'An error occurred';
+      const debugContext = __DEV__
+        ? `\n\nSupabase host: ${supabaseRuntimeInfo.host}\nKey: ${supabaseRuntimeInfo.publishableKeyPrefix}...`
+        : '';
+      Alert.alert('Passkey Sign In Failed', `${message}${debugContext}`);
+    } finally {
+      setPasskeyLoading(false);
     }
   };
 
@@ -134,6 +157,23 @@ export default function LoginScreen() {
             <Text style={[styles.dividerText, { color: colors.mutedForeground }]}>or</Text>
             <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
           </View>
+
+          <Pressable
+            style={[styles.githubButton, passkeyLoading && styles.buttonDisabled]}
+            onPress={handlePasskeySignIn}
+            disabled={passkeyLoading}
+          >
+            {passkeyLoading ? (
+              <ActivityIndicator color={colors.foreground} />
+            ) : (
+              <>
+                <Fingerprint size={20} color={colors.foreground} />
+                <Text style={[styles.githubButtonText, { color: colors.foreground }]}>
+                  Sign in with passkey
+                </Text>
+              </>
+            )}
+          </Pressable>
 
           <Pressable
             style={[styles.githubButton, githubLoading && styles.buttonDisabled]}

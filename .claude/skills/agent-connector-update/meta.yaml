@@ -4,8 +4,8 @@ description: Use when changing the Overlord CLI or how Overlord integrates with
   any agent connector (Claude Code, Codex, Cursor, Gemini CLI, OpenCode) —
   adding/removing protocol operations, changing flags or help text, modifying
   bundle/plugin install behavior, updating slash commands, or altering
-  permission/hook wiring. Enforces source-template-first edits, generated
-  plugin parity, and alignment across all protocol surfaces.
+  permission/hook wiring. Enforces source-template-first edits, generated plugin
+  parity, and alignment across all protocol surfaces.
 tags: []
 compat: []
 sha256: 81ba00eae56473859b2ca467cbb38efb64ecf004040976b17b9af86b752c1e1a

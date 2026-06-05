@@ -1,7 +1,0 @@
-module Clibssh2 [system] {
-  header "libssh2.h"
-  header "libssh2_publickey.h"
-  header "libssh2_sftp.h"
-  link "ssh2"
-  export *
-}

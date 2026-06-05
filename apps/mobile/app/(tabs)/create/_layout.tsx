@@ -4,7 +4,7 @@ import { ActivityIndicator, View } from 'react-native';
 import { useAuth } from '@/lib/auth-context';
 import { useThemeColors } from '@/lib/colors';
 
-export default function AccountLayout() {
+export default function CreateLayout() {
   const { session, loading } = useAuth();
   const colors = useThemeColors();
 
@@ -34,7 +34,7 @@ export default function AccountLayout() {
         headerTintColor: colors.foreground
       }}
     >
-      <Stack.Screen name="index" options={{ title: 'Account' }} />
+      <Stack.Screen name="index" options={{ title: 'Create' }} />
     </Stack>
   );
 }

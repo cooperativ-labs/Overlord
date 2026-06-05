@@ -7,13 +7,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { QuickCreateTicketModal } from '@/components/QuickCreateTicketModal';
 import { SidebarDrawer } from '@/components/SidebarDrawer';
-import { useGlassAvailable, useThemeColors, useThemedStyles } from '@/lib/colors';
-import { Ionicons } from '@/lib/icons';
-import { useSelectedProject } from '@/lib/selected-project-context';
-import { getSupabase } from '@/lib/supabase';
-import { isTransientNetworkError } from '@/lib/transient-network-error';
-import { normalizeTicketExecutionTarget, type TicketListItemRow } from '@/lib/types';
-
 import {
   ALL_PROJECTS_LABEL,
   buildStatusFilterOptions,
@@ -28,10 +21,16 @@ import {
   type TicketTagSummary,
   type TicketWithProject,
   type ViewMode
-} from './components/shared';
-import { TicketsResults } from './components/TicketsResults';
-import { TicketsScreenFilters } from './components/TicketsScreenFilters';
-import { createTicketsScreenStyles } from './components/TicketsScreenStyles';
+} from '@/components/tickets/shared';
+import { TicketsResults } from '@/components/tickets/TicketsResults';
+import { TicketsScreenFilters } from '@/components/tickets/TicketsScreenFilters';
+import { createTicketsScreenStyles } from '@/components/tickets/TicketsScreenStyles';
+import { useGlassAvailable, useThemeColors, useThemedStyles } from '@/lib/colors';
+import { Ionicons } from '@/lib/icons';
+import { useSelectedProject } from '@/lib/selected-project-context';
+import { getSupabase } from '@/lib/supabase';
+import { isTransientNetworkError } from '@/lib/transient-network-error';
+import { normalizeTicketExecutionTarget, type TicketListItemRow } from '@/lib/types';
 
 const TICKETS_FILTER_PREFERENCES_KEY = 'mobile-ticket-screen-filters';
 

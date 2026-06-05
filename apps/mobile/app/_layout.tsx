@@ -1,6 +1,5 @@
 import * as Sentry from '@sentry/react-native';
-import { Stack } from 'expo-router';
-import * as SplashScreen from 'expo-splash-screen';
+import { SplashScreen, Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
@@ -9,9 +8,9 @@ import { initialWindowMetrics, SafeAreaProvider } from 'react-native-safe-area-c
 
 import { AuthProvider } from '@/lib/auth-context';
 import { type ThemeColors, ThemeProvider, useThemedStyles, useThemePreference } from '@/lib/colors';
+import { ExecutionTargetsProvider } from '@/lib/execution-targets-context';
 import { NotificationsProvider } from '@/lib/notifications';
 import { SelectedProjectProvider } from '@/lib/selected-project-context';
-import { ServerConnectionsProvider } from '@/lib/server-connections-context';
 import { isSupabaseConfigured, supabaseConfigError } from '@/lib/supabase';
 
 Sentry.init({
@@ -75,15 +74,12 @@ function RootLayoutContent() {
   return (
     <AuthProvider>
       <NotificationsProvider>
-        <ServerConnectionsProvider>
+        <ExecutionTargetsProvider>
           <SelectedProjectProvider>
-            <Stack screenOptions={{ headerShown: false }}>
-              <Stack.Screen name="(tabs)" />
-              <Stack.Screen name="(auth)" />
-            </Stack>
+            <Stack screenOptions={{ headerShown: false }} />
             <StatusBar style={resolvedTheme === 'light' ? 'dark' : 'light'} />
           </SelectedProjectProvider>
-        </ServerConnectionsProvider>
+        </ExecutionTargetsProvider>
       </NotificationsProvider>
     </AuthProvider>
   );

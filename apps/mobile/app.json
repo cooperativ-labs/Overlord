@@ -7,17 +7,16 @@
     "icon": "./assets/icon.png",
     "scheme": "overlord",
     "userInterfaceStyle": "automatic",
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#09090b"
-    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.cooperativ.overlord",
       "infoPlist": {
         "NSFaceIDUsageDescription": "Use Face ID to authenticate"
-      }
+      },
+      "associatedDomains": [
+        "webcredentials:ovld.ai",
+        "webcredentials:www.ovld.ai"
+      ]
     },
     "android": {
       "adaptiveIcon": {
@@ -29,6 +28,15 @@
     "plugins": [
       "expo-dev-client",
       "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 100,
+          "resizeMode": "contain",
+          "backgroundColor": "#09090b"
+        }
+      ],
       [
         "expo-image-picker",
         {
@@ -52,10 +60,11 @@
           "project": "overlord-mobile",
           "organization": "cooperativ-labs"
         }
-      ]
+      ],
+      "@sentry/react-native"
     ],
     "experiments": {
-      "typedRoutes": false
+      "typedRoutes": true
     }
   }
 }

@@ -1,4 +1,4 @@
-import { useRouter } from 'expo-router';
+import { type Href, useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -37,15 +37,15 @@ export function SidebarDrawer({ visible, onClose }: SidebarDrawerProps) {
     }
   }, [visible]);
 
-  function navigate(path: string) {
+  function navigate(path: Href) {
     onClose();
-    router.push(path as never);
+    router.push(path);
   }
 
   function switchProject(projectId: string | null) {
     selectProject(projectId);
     onClose();
-    router.replace('/(tabs)/tickets' as never);
+    router.replace('/(tabs)/tickets');
   }
 
   return (

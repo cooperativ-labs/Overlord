@@ -71,7 +71,13 @@ export function getSupabase() {
         // Leaving this true runs refresh ticks in the background and can break iOS SecureStore.
         autoRefreshToken: false,
         persistSession: true,
-        detectSessionInUrl: false
+        detectSessionInUrl: false,
+        // Enables the `supabase.auth.passkey.*` two-step WebAuthn API used by lib/passkey.ts.
+        // The high-level `signInWithPasskey` relies on browser `navigator.credentials`, which
+        // does not exist in React Native, so we drive the ceremony with a native authenticator.
+        experimental: {
+          passkey: true
+        }
       }
     });
   }

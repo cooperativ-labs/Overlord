@@ -2,6 +2,7 @@ import type { Session, User } from '@supabase/supabase-js';
 import { createContext, useContext, useEffect, useState } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 
+import { signInWithPasskey as runPasskeySignIn } from './passkey';
 import { getSupabase, isSupabaseConfigured, supabaseConfigError } from './supabase';
 
 interface AuthContextType {
@@ -11,6 +12,7 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<void>;
   signInWithGithub: () => Promise<void>;
   signInWithBitbucket: () => Promise<void>;
+  signInWithPasskey: () => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -100,6 +102,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (error) throw error;
   };
 
+  const signInWithPasskey = async () => {
+    // The native ceremony persists the session and emits SIGNED_IN, so the onAuthStateChange
+    // listener above updates state; we just surface errors to the caller.
+    await runPasskeySignIn();
+  };
+
   const signOut = async () => {
     if (!isSupabaseConfigured()) {
       throw new Error(supabaseConfigError ?? 'Supabase is not configured.');
@@ -119,6 +127,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signIn,
         signInWithGithub,
         signInWithBitbucket,
+        signInWithPasskey,
         signOut
       }}
     >
