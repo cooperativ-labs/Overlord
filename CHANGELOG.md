@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2606050806.0] - 2026-06-05:08:06
+
+### Added
+- None.
+
+### Fixed
+- None.
+
+### Changed
+- Accept **project name** or **UUID** for **`--project-id`** on CLI protocol commands (`discover-project`, `search-tickets`, `prompt`, `create`, `record-work`) and on the matching protocol API routes; names are unique per organization and matched case-insensitively.
+- Align **`ovld new-ticket --project-id`** with the same ID-or-name resolution when selecting a project.
+
+### Security
+- None.
+
+### Refactor
+- Add shared **`resolveProjectIdOrName`** helper for protocol project resolution on web and CLI.
+
+### Test
+- Add tests for **`resolveProject`** name and UUID matching in **`new-ticket`**.
+
+### Documentation
+- Update CLI reference, protocol help, and agent plugin **`cli.md`** references for **`--project-id <id-or-name>`**.
+
 ## [0.2606050717.0] - 2026-06-05:07:17
 
 ### Added

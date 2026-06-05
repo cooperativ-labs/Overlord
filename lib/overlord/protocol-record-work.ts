@@ -6,7 +6,10 @@ import { insertOrderedObjectives, type OrderedObjectiveInput } from '@/lib/objec
 import { insertFileChanges } from '@/lib/overlord/file-changes';
 import { resolveProtocolTicketCreatorUserId } from '@/lib/overlord/protocol-ticket-creator';
 import { resolveTicketDelegate } from '@/lib/overlord/protocol-ticket-delegate';
-import { resolveProjectByWorkingDirectory } from '@/lib/overlord/resolve-project';
+import {
+  resolveProjectByWorkingDirectory,
+  resolveProjectIdOrName
+} from '@/lib/overlord/resolve-project';
 import { connectionMethods } from '@/lib/overlord/types';
 import { resolvePreferredStatusNameByType } from '@/lib/ticket-statuses';
 import type { Database, Json } from '@/types/database.types';
@@ -91,9 +94,17 @@ export async function runRecordWorkProtocol(supabase: RecordClient, params: Reco
     deviceId
   } = params;
 
-  // Project resolution: explicit projectId wins; else try workingDirectory; else require `personal`.
-  let resolvedProjectId: string | undefined = projectId;
+  // Project resolution: explicit projectId/name wins; else try workingDirectory; else require `personal`.
+  let resolvedProjectId: string | undefined;
   let resolutionAttempted = false;
+
+  if (!personal && projectId) {
+    const matched = await resolveProjectIdOrName(supabase, organizationId, projectId);
+    resolvedProjectId = matched?.id;
+    if (!resolvedProjectId) {
+      return { error: `Project not found: ${projectId}`, status: 404 } as const;
+    }
+  }
 
   if (!personal && !resolvedProjectId && workingDirectory) {
     resolutionAttempted = true;

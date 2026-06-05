@@ -64,14 +64,16 @@ Resolve the Overlord project that corresponds to a working directory. Uses your 
 
 \`\`\`bash
 ovld protocol discover-project
-ovld protocol discover-project --project-id <project-uuid>
+ovld protocol discover-project --project-id <id-or-name>
+ovld protocol discover-project --project-id "My Project"
 ovld protocol discover-project --working-directory /path/to/repo
 ovld protocol discover-project --working-directory /path/to/repo \\
   --device-fingerprint "$OVERLORD_DEVICE_FINGERPRINT"
 \`\`\`
 
 Prints \`PROJECT_ID=<id>\` on stderr. Returns 404 with a hint when no match is found.
-Use \`--project-id\` when the project id is already known; it skips directory matching.
+Use \`--project-id\` when the project ID or name is already known; it skips directory matching.
+\`--project-id\` accepts a UUID or a project name (names are unique per organization, matched case-insensitively).
 Use \`--device-fingerprint\` when matching registered resource directories for a specific device.
 
 ---
@@ -135,7 +137,7 @@ Omit \`--query\` for list mode (most recently updated first).
 
 \`\`\`bash
 ovld protocol search-tickets --query "auth refactor" --status next-up,execute --limit 10
-ovld protocol search-tickets --status next-up --project-id <uuid>
+ovld protocol search-tickets --status next-up --project-id <id-or-name>
 \`\`\`
 
 Optional:
@@ -145,7 +147,7 @@ Optional:
 --status <csv>             Comma-separated statuses, e.g. "draft,next-up,execute"
 --include-completed <bool> Include completed tickets (default: false)
 --limit <n>                Max results 1..50 (default: 8)
---project-id <uuid>
+--project-id <id-or-name>  UUID or project name
 --created-by <uuid>
 --updated-after <iso>      Updated_at >= ISO timestamp
 --updated-before <iso>     Updated_at <= ISO timestamp
@@ -174,7 +176,7 @@ Optional:
 
 \`\`\`text
 --working-directory <path>   Override cwd for project resolution
---project-id <id>            Explicit project for standalone drafts
+--project-id <id-or-name>    Explicit project (UUID or name) for standalone drafts
 --personal                   Private standalone draft, no project
 --title <text>
 --priority <low|medium|high|urgent>
@@ -226,7 +228,7 @@ Optional:
 \`\`\`text
 --title <text>                Auto-derived from objective if omitted
 --priority <low|medium|high|urgent>
---project-id <id>             Skip cwd resolution and use this project explicitly
+--project-id <id-or-name>     Skip cwd resolution and use this project explicitly (UUID or name)
 --working-directory <path>    Override cwd for project resolution
 --personal                    Private ticket with no project
 --artifacts-json <json>

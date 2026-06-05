@@ -10,7 +10,10 @@ import {
 } from '@/lib/objectives';
 import { resolveProtocolTicketCreatorUserId } from '@/lib/overlord/protocol-ticket-creator';
 import { resolveTicketDelegate } from '@/lib/overlord/protocol-ticket-delegate';
-import { resolveProjectByWorkingDirectory } from '@/lib/overlord/resolve-project';
+import {
+  resolveProjectByWorkingDirectory,
+  resolveProjectIdOrName
+} from '@/lib/overlord/resolve-project';
 import { connectionMethods } from '@/lib/overlord/types';
 import { resolvePreferredStatusNameByType } from '@/lib/ticket-statuses';
 import type { Database, Json } from '@/types/database.types';
@@ -70,8 +73,16 @@ export async function runSpawnProtocol(supabase: SpawnClient, params: SpawnParam
     deviceId
   } = params;
 
-  // Resolve project — use provided projectId, then try workingDirectory, then fall back to first in org
-  let resolvedProjectId: string | undefined = projectId;
+  // Resolve project — use provided projectId/name, then try workingDirectory, then fall back to first in org
+  let resolvedProjectId: string | undefined;
+
+  if (!personal && projectId) {
+    const matched = await resolveProjectIdOrName(supabase, organizationId, projectId);
+    resolvedProjectId = matched?.id;
+    if (!resolvedProjectId) {
+      return { error: `Project not found: ${projectId}`, status: 404 } as const;
+    }
+  }
 
   if (!personal && !resolvedProjectId && workingDirectory) {
     const matched = await resolveProjectByWorkingDirectory(

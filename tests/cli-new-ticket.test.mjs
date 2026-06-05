@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
   parseNumberedSelection,
+  resolveProject,
   resolvePromptAgentIdentifier,
   resolveTicketCreationModelIdentifier,
   resolveTicketCreationDelegate,
@@ -89,4 +90,40 @@ test('resolveTicketCreationDelegate prefers explicit delegate, then model, then 
       process.env.AGENT_IDENTIFIER = original;
     }
   }
+});
+
+const SAMPLE_PROJECTS = [
+  { id: 'aaaa-1111', name: 'Overlord' },
+  { id: 'bbbb-2222', name: 'Mobile App' },
+  { id: 'cccc-3333', name: 'Backend API' }
+];
+
+test('resolveProject matches by UUID', () => {
+  const result = resolveProject(SAMPLE_PROJECTS, 'bbbb-2222');
+  assert.equal(result.id, 'bbbb-2222');
+  assert.equal(result.name, 'Mobile App');
+});
+
+test('resolveProject matches by exact project name', () => {
+  const result = resolveProject(SAMPLE_PROJECTS, 'Overlord');
+  assert.equal(result.id, 'aaaa-1111');
+});
+
+test('resolveProject matches by name case-insensitively', () => {
+  const result = resolveProject(SAMPLE_PROJECTS, 'mobile app');
+  assert.equal(result.id, 'bbbb-2222');
+
+  const result2 = resolveProject(SAMPLE_PROJECTS, 'BACKEND API');
+  assert.equal(result2.id, 'cccc-3333');
+});
+
+test('resolveProject returns null for empty input', () => {
+  assert.equal(resolveProject(SAMPLE_PROJECTS, ''), null);
+  assert.equal(resolveProject(SAMPLE_PROJECTS, null), null);
+  assert.equal(resolveProject(SAMPLE_PROJECTS, undefined), null);
+});
+
+test('resolveProject throws for unknown name or id', () => {
+  assert.throws(() => resolveProject(SAMPLE_PROJECTS, 'Nonexistent'), /Unknown project/);
+  assert.throws(() => resolveProject(SAMPLE_PROJECTS, 'zzzz-9999'), /Unknown project/);
 });

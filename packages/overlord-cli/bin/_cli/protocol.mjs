@@ -2836,10 +2836,12 @@ Project discovery:
   You can also discover the project explicitly:
 
     ovld protocol discover-project
-    ovld protocol discover-project --project-id <project-uuid>
+    ovld protocol discover-project --project-id <id-or-name>
+    ovld protocol discover-project --project-id "My Project"
     ovld protocol discover-project --working-directory /path/to/repo
 
   Use --project-id to override automatic resolution on discover, prompt, or ticket creation.
+  Accepts a UUID or a project name (names are unique per organization).
   Use --personal to create a private ticket without assigning any project.
 
 Subcommands:
@@ -2912,7 +2914,7 @@ discover-project:
     Resolve the Overlord project that corresponds to the current (or given) working directory.
     Uses the caller's configured "Local working directory" for matching.
   Optional:
-    --project-id <uuid>       Resolve this project directly; skips working-directory matching
+    --project-id <id-or-name> Resolve this project directly; skips working-directory matching
     --working-directory <path>  Directory to match (default: current working directory)
     --device-fingerprint <fp>   Prefer resource directories for this registered device
     --device-hostname <name>    Register/update device metadata when fingerprint is provided
@@ -2982,7 +2984,7 @@ search-tickets:
     --status <csv>             Comma-separated statuses, e.g. "draft,next-up,execute"
     --include-completed <bool> Include completed tickets (default: false)
     --limit <n>                Max results 1..50 (default: 8)
-    --project-id <uuid>        Restrict to a single project
+    --project-id <id-or-name>  Restrict to a single project
     --created-by <uuid>        Restrict to tickets created by this user
     --updated-after <iso>      Updated_at >= ISO timestamp
     --updated-before <iso>     Updated_at <= ISO timestamp
@@ -3134,7 +3136,7 @@ prompt:
   Optional:
     --title <text>
     --priority <level>        low | medium | high | urgent
-    --project-id <id>         Explicit project; skips working-directory resolution
+    --project-id <id-or-name> Explicit project (UUID or name); skips working-directory resolution
     --personal                Create the ticket without assigning a project
     --working-directory <path> Override cwd for project resolution (default: cwd)
     --acceptance-criteria <text>
@@ -3173,7 +3175,7 @@ create:
     --session-key <key>
     --ticket-id <ticket_id>
     --working-directory <path>  Resolve project by your configured local working directory (default: cwd)
-    --project-id <id>           Explicit project for standalone draft creation
+    --project-id <id-or-name>   Explicit project (UUID or name) for standalone draft creation
     --personal                  Create a private standalone draft without a project
     --title <text>
     --priority <level>        low | medium | high | urgent
@@ -3219,7 +3221,7 @@ record-work:
   Optional:
     --title <text>            Auto-derived from objective if omitted
     --priority <level>        low | medium | high | urgent
-    --project-id <id>         Skip cwd resolution and use this project explicitly
+    --project-id <id-or-name> Skip cwd resolution and use this project explicitly (UUID or name)
     --working-directory <path> Override cwd for project resolution
     --personal                Create a private ticket when no project should be associated
     --artifacts-json <json>
@@ -3421,8 +3423,10 @@ Examples:
   ovld protocol auth-status
   ovld protocol discover-project
   ovld protocol discover-project --project-id <project-uuid>
+  ovld protocol discover-project --project-id "My Project"              # resolve by name
   ovld protocol discover-project --working-directory /path/to/repo
   ovld protocol prompt --agent codex --objective "Implement feature X"   # auto-resolves project from cwd
+  ovld protocol prompt --project-id "My Project" --objective "Fix bug"   # resolve project by name
   ovld protocol attach --ticket-id 1:899
   ovld protocol attach --ticket-id 1:899 --external-session-id null
   ovld protocol connect --ticket-id 1:899

@@ -5,7 +5,10 @@ import { deriveTitleFromObjective, getTicketIdentifier } from '@/lib/helpers/tic
 import { insertOrderedObjectives } from '@/lib/objectives';
 import { resolveAgentToken } from '@/lib/overlord/protocol-auth';
 import { resolveProtocolTicketCreatorUserId } from '@/lib/overlord/protocol-ticket-creator';
-import { resolveProjectByWorkingDirectory } from '@/lib/overlord/resolve-project';
+import {
+  resolveProjectByWorkingDirectory,
+  resolveProjectIdOrName
+} from '@/lib/overlord/resolve-project';
 import { createStandaloneTicketSchema } from '@/lib/overlord/validation';
 import { resolvePreferredStatusNameByType } from '@/lib/ticket-statuses';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
@@ -54,18 +57,13 @@ export async function POST(request: Request) {
     // then fall back to first project in org.
     // Ticket organization_id follows the selected project so the CLI can treat
     // the project choice as the source of truth.
-    let resolvedProjectId: string | null = projectId ?? null;
+    let resolvedProjectId: string | null = null;
     let resolvedOrganizationId: number | null = personal ? organizationId : null;
 
-    if (resolvedProjectId) {
-      const { data: project } = await supabase
-        .from('projects')
-        .select('id,organization_id')
-        .eq('id', resolvedProjectId)
-        .single();
-
-      resolvedProjectId = project?.id ?? null;
-      resolvedOrganizationId = project?.organization_id ?? null;
+    if (projectId) {
+      const matched = await resolveProjectIdOrName(supabase, organizationId, projectId);
+      resolvedProjectId = matched?.id ?? null;
+      resolvedOrganizationId = matched?.organization_id ?? null;
     }
 
     if (!personal && !resolvedProjectId && workingDirectory) {

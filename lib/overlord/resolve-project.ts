@@ -110,3 +110,37 @@ export async function resolveProjectByWorkingDirectory(
 
   return null;
 }
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Resolve a `projectId` value that may be either a UUID or a project name.
+ * Returns the project row on success, or `null` if not found.
+ */
+export async function resolveProjectIdOrName(
+  supabase: SupabaseClient<Database>,
+  organizationId: number,
+  projectIdOrName: string
+): Promise<ProjectRow | null> {
+  const trimmed = projectIdOrName.trim();
+  if (!trimmed) return null;
+
+  if (UUID_RE.test(trimmed)) {
+    const { data } = await supabase
+      .from('projects')
+      .select('id, name, organization_id')
+      .eq('id', trimmed)
+      .eq('organization_id', organizationId)
+      .maybeSingle();
+    return data ?? null;
+  }
+
+  const { data } = await supabase
+    .from('projects')
+    .select('id, name, organization_id')
+    .eq('organization_id', organizationId)
+    .ilike('name', trimmed)
+    .limit(1)
+    .maybeSingle();
+  return data ?? null;
+}

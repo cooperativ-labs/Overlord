@@ -53,7 +53,8 @@ export const TOOLS = [
         },
         projectId: {
           type: 'string',
-          description: 'Optional project UUID. Defaults to the first project in your organization.'
+          description:
+            'Optional project UUID or name. Defaults to the first project in your organization. Names are unique per organization and matched case-insensitively.'
         }
       },
       required: ['conversationContext']
@@ -767,7 +768,8 @@ export const TOOLS = [
         priority: { type: 'string', enum: ['low', 'medium', 'high', 'urgent'], default: 'medium' },
         projectId: {
           type: 'string',
-          description: 'Explicit project UUID. Skips workingDirectory resolution.'
+          description:
+            'Explicit project UUID or name. Skips workingDirectory resolution. Names are unique per organization and matched case-insensitively.'
         },
         workingDirectory: {
           type: 'string',
@@ -882,7 +884,8 @@ export const TOOLS = [
         priority: { type: 'string', enum: ['low', 'medium', 'high', 'urgent'] },
         projectId: {
           type: 'string',
-          description: 'Optional destination project UUID. Defaults to the first available project.'
+          description:
+            'Optional destination project UUID or name. Defaults to the first available project. Names are unique per organization and matched case-insensitively.'
         }
       },
       required: ['description']
@@ -971,7 +974,7 @@ export const TOOLS = [
         projectId: {
           type: 'string',
           description:
-            'UUID of the project to resolve. Takes precedence over workingDirectory. Use this when connecting via MCP and the project ID is known.'
+            'UUID or name of the project to resolve. Takes precedence over workingDirectory. Names are unique per organization and matched case-insensitively.'
         },
         workingDirectory: {
           type: 'string',
@@ -1023,7 +1026,10 @@ export const TOOLS = [
           description: 'Include completed tickets. Default false.'
         },
         limit: { type: 'number', description: 'Max results (1–50, default 8).' },
-        projectId: { type: 'string', description: 'Optional project UUID filter.' },
+        projectId: {
+          type: 'string',
+          description: 'Optional project UUID or name filter. Names are matched case-insensitively.'
+        },
         createdBy: { type: 'string', description: 'Optional creator user UUID.' },
         updatedAfter: {
           type: 'string',

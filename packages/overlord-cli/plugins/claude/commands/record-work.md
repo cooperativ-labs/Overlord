@@ -24,6 +24,6 @@ After the command succeeds, report the new `TICKET_ID`.
 Rules:
 - Do NOT use this for in-progress work. Use `/prompt` for that.
 - The CLI validates that every changed git-tracked file is represented in `changeRationales` unless `--skip-file-change-check` is passed.
-- If project resolution fails, re-run with `--project-id <id>` or `--personal`.
+- If project resolution fails, re-run with `--project-id <id-or-name>` or `--personal`.
 
 

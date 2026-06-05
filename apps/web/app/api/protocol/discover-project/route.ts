@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server';
 
 import { internalErrorResponse, parseProtocolBody } from '@/app/api/protocol/_lib';
-import { resolveProjectByWorkingDirectory } from '@/lib/overlord/resolve-project';
+import {
+  resolveProjectByWorkingDirectory,
+  resolveProjectIdOrName
+} from '@/lib/overlord/resolve-project';
 import { upsertDeviceFromProtocol } from '@/lib/overlord/upsert-device';
 import { discoverProjectSchema } from '@/lib/overlord/validation';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
@@ -17,12 +20,7 @@ export async function POST(request: Request) {
       parsed.data;
 
     if (projectId) {
-      const { data: project } = await supabase
-        .from('projects')
-        .select('id, name, organization_id')
-        .eq('id', projectId)
-        .eq('organization_id', organizationId)
-        .maybeSingle();
+      const project = await resolveProjectIdOrName(supabase, organizationId, projectId);
 
       if (!project) {
         return NextResponse.json(

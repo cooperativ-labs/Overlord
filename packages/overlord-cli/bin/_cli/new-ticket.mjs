@@ -48,10 +48,10 @@ function parseFlags(args) {
 
 function buildUsage(commandName) {
   if (commandName === 'prompt') {
-    return 'Usage: ovld prompt --objectives-json \'[{"objective":"..."}]\' [--objectives-file <path>] [--title "..."] [--acceptance-criteria "..."] [--available-tools "..."] [--for-human] [--priority low|medium|high|urgent] [--project-id <id>] [--agent <agent>] [--model <identifier>] [--delegate <agent>]';
+    return 'Usage: ovld prompt --objectives-json \'[{"objective":"..."}]\' [--objectives-file <path>] [--title "..."] [--acceptance-criteria "..."] [--available-tools "..."] [--for-human] [--priority low|medium|high|urgent] [--project-id <id-or-name>] [--agent <agent>] [--model <identifier>] [--delegate <agent>]';
   }
 
-  return 'Usage: ovld create --objectives-json \'[{"objective":"..."}]\' [--objectives-file <path>] [--title "..."] [--acceptance-criteria "..."] [--available-tools "..."] [--for-human] [--priority low|medium|high|urgent] [--project-id <id>] [--agent <agent>] [--model <identifier>] [--delegate <agent>]';
+  return 'Usage: ovld create --objectives-json \'[{"objective":"..."}]\' [--objectives-file <path>] [--title "..."] [--acceptance-criteria "..."] [--available-tools "..."] [--for-human] [--priority low|medium|high|urgent] [--project-id <id-or-name>] [--agent <agent>] [--model <identifier>] [--delegate <agent>]';
 }
 
 function resolveForHumanFlag(flags) {
@@ -305,15 +305,17 @@ async function createTicket(platformUrl, bearerToken, localSecret, organizationI
   return data.ticket;
 }
 
-function resolveProject(projects, projectId) {
-  if (!projectId) return null;
+export function resolveProject(projects, projectIdOrName) {
+  if (!projectIdOrName) return null;
 
-  const project = projects.find(candidate => candidate.id === projectId);
-  if (!project) {
-    throw new Error(`Unknown project ID: ${projectId}`);
-  }
+  const byId = projects.find(candidate => candidate.id === projectIdOrName);
+  if (byId) return byId;
 
-  return project;
+  const lowerName = projectIdOrName.toLowerCase();
+  const byName = projects.find(candidate => candidate.name?.toLowerCase() === lowerName);
+  if (byName) return byName;
+
+  throw new Error(`Unknown project: ${projectIdOrName}`);
 }
 
 function resolveAgent(agent) {
@@ -424,7 +426,8 @@ Creates a ticket after interactive numbered project selection.
 
 Examples:
   ovld create --objectives-json '[{"objective":"Implement login page"}]'
-  ovld create --objectives-json '[{"objective":"Fix sync bug"}]' --project-id <project-id>
+  ovld create --objectives-json '[{"objective":"Fix sync bug"}]' --project-id <id-or-name>
+  ovld create --objectives-json '[{"objective":"Fix sync bug"}]' --project-id "My Project"
 `);
     return;
   }

@@ -64,7 +64,8 @@ const tools = [
       properties: {
         project_id: {
           type: 'string',
-          description: 'Project UUID to resolve directly. Skips working-directory matching.'
+          description:
+            'Project UUID or name to resolve directly. Skips working-directory matching. Names are unique per organization and matched case-insensitively.'
         },
         working_directory: {
           type: 'string',
@@ -1115,6 +1116,11 @@ const searchTicketsTool = {
       limit: {
         type: 'number',
         description: 'Maximum number of results to return (1–50, default 8).'
+      },
+      project_id: {
+        type: 'string',
+        description:
+          'Optional project UUID or name to restrict results. Names are matched case-insensitively.'
       }
     }
   },
@@ -1122,7 +1128,8 @@ const searchTicketsTool = {
     query: args.query,
     statuses: Array.isArray(args.statuses) ? args.statuses.join(',') : args.statuses,
     'include-completed': args.include_completed,
-    limit: args.limit
+    limit: args.limit,
+    'project-id': args.project_id
   }),
   subcommand: 'search-tickets'
 };

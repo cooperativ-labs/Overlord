@@ -16,6 +16,9 @@ const ticketStatusSchema = z.enum(ticketStatuses);
 const connectionMethodSchema = z.enum(connectionMethods);
 const forHumanSchema = z.boolean().optional().default(false);
 
+/** Accepts a UUID or a project name (resolved server-side). */
+const projectIdOrNameSchema = z.string().trim().min(1).max(160);
+
 /** Required agent-authored text field with normalization applied after trim. */
 const agentText = (max: number) => z.string().trim().min(1).max(max).transform(normalizeAgentText);
 
@@ -54,7 +57,7 @@ export const searchTicketsSchema = z.object({
   includeCompleted: z.boolean().optional().default(false),
   limit: z.number().int().min(1).max(50).optional().default(8),
   statuses: z.array(z.string().trim().max(60)).optional(),
-  projectId: z.string().uuid().optional(),
+  projectId: projectIdOrNameSchema.optional(),
   createdBy: z.string().uuid().optional(),
   updatedAfter: z.string().datetime({ offset: true }).optional(),
   updatedBefore: z.string().datetime({ offset: true }).optional()
@@ -343,7 +346,7 @@ const devicePlatformSchema = z.string().trim().max(64).optional();
 /** discover-project: resolve a project from working directory */
 export const discoverProjectSchema = z
   .object({
-    projectId: z.string().uuid().optional(),
+    projectId: projectIdOrNameSchema.optional(),
     workingDirectory: z.string().trim().min(1).max(1024).optional(),
     deviceFingerprint: deviceFingerprintSchema,
     deviceHostname: deviceHostnameSchema,
