@@ -79,6 +79,53 @@ Everything attached to the ticket that survives across objectives: `write-contex
 
 A structured record per modified file describing **what** changed, **why**, and the **impact**. Agents emit these during `deliver`, producing an audit trail that lives alongside the diff and survives long after the session ends.
 
+### Feed Post 📰
+
+An AI-synthesized, **ticket-level rollup** of everything that happened while agents worked a ticket. Feed posts are never written by hand — after an agent delivers (or a ticket moves into a review/complete status), the `generate-feed-post` Supabase Edge Function gathers the ticket's source facts and asks an LLM (Google Gemini) to distill them into a scannable summary with per-objective sections, tradeoff callouts, and required human follow-up actions.
+
+There is **one canonical post per ticket**: subsequent deliveries regenerate and merge into the same row rather than spawning duplicates. The post is a high-signal *review surface* — the ticket itself remains the source of truth. The `/feed` page renders these posts as a timeline so a human can see what changed across projects, what tradeoffs matter, and what they still need to do (run a migration, set an API key, deploy a function) without opening every ticket.
+
+```mermaid
+graph LR
+    subgraph Sources["🎫 Ticket source facts"]
+        direction TB
+        TM["Ticket: title, objective,<br/>acceptance criteria, constraints"]
+        OBJ["Objectives<br/>(executing / complete)"]
+        EV["Ticket events<br/>(updates, deliveries)"]
+        CR["Change rationales<br/>(file, why, impact)"]
+        SP["Spawned tickets"]
+        PROF["Repo operations profile<br/>+ project feed instructions"]
+    end
+
+    subgraph Gen["⚙️ generate-feed-post (Edge Function)"]
+        direction TB
+        CAND["Derive candidate<br/>human actions"]
+        LLM["🤖 Gemini generator<br/>(structured JSON)"]
+        FB["Deterministic fallback<br/>(if LLM unavailable)"]
+    end
+
+    subgraph Post["📰 Feed Post"]
+        direction TB
+        P1["Title + summary"]
+        P2["Impact level + tags"]
+        P3["Per-objective sections<br/>(takeaway, body, tradeoffs)"]
+        P4["Human actions required"]
+        P5["Files touched +<br/>tickets created"]
+    end
+
+    TM --> LLM
+    OBJ --> LLM
+    EV --> LLM
+    CR --> LLM
+    SP --> LLM
+    PROF --> CAND
+    CR --> CAND
+    CAND --> LLM
+    LLM -.fallback.-> FB
+    LLM --> Post
+    FB --> Post
+```
+
 ### Project Resource 🔌
 
 A typed resource attached to a project — an SSH target, a working directory, a database, etc. Resources let a ticket say "run me against *this* environment" without hard-coding paths in the prompt.
@@ -189,14 +236,15 @@ For the full CLI reference, run `ovld protocol help`.
 | ---------------------------------------- | ------------------------------------------------------------------------------ |
 | Agents & project conventions             | [CLAUDE.md](CLAUDE.md)                                                          |
 | Checkpoints & change tracking            | [docs/checkpoints-change-tracking.md](docs/checkpoints-change-tracking.md)      |
+| Feed posts & the activity feed           | [docs/public/feed-page-functionality.md](docs/public/feed-page-functionality.md) |
 | MCP auth & integration                   | [docs/MCP_AUTH_AND_INTEGRATION.md](docs/MCP_AUTH_AND_INTEGRATION.md)            |
 | SSH key generation and management        | [docs/SSH_KEY_GENERATION_AND_MANAGEMENT.md](docs/SSH_KEY_GENERATION_AND_MANAGEMENT.md) |
 | Changelog                                | [CHANGELOG.md](CHANGELOG.md)                                                    |
 
 ## License
 
-Overlord is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE).
+Overlord is licensed under the [PolyForm Strict License 1.0.0](LICENSE).
 
-You may use, modify, and share the software for **any noncommercial purpose** — including personal use, research, education, and hobby projects. **Commercial use is not permitted** under this license. The software is provided **"as is", without warranty of any kind, and with no liability** to the extent allowed by law.
+You may use the software for **noncommercial purposes only** — including personal use, research, education, and hobby projects — but you may not distribute copies or make changes or new works based on it. The software is provided **"as is", without warranty of any kind, and with no liability** to the extent allowed by law.
 
 For commercial licensing inquiries, contact [Cooperativ Labs, Inc.](https://cooperativ.io).
