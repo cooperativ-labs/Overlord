@@ -1,6 +1,7 @@
 'use client';
 
 import { ChevronDown } from 'lucide-react';
+import { type ComponentPropsWithoutRef, forwardRef } from 'react';
 
 import { AgentIcon } from '@/components/features/AgentIcon';
 import { useAgentModels } from '@/components/features/AgentModelSelector';
@@ -21,31 +22,36 @@ function getSelectionLabel(models: AgentModel[], modelId: string | null): string
  * Same chrome as {@link AgentModelChooserButton} but no popover — the parent renders
  * {@link AgentModelSelector} inline and toggles visibility via `active` / `onToggle`.
  */
-export function AgentModelChooserTrigger({
-  selection,
-  active,
-  onToggle,
-  disabled = false,
-  className
-}: {
+type AgentModelChooserTriggerProps = Omit<ComponentPropsWithoutRef<typeof Button>, 'children'> & {
   selection: AgentModelSelection;
   active: boolean;
   onToggle: () => void;
-  disabled?: boolean;
-  className?: string;
-}) {
+};
+
+export const AgentModelChooserTrigger = forwardRef<
+  HTMLButtonElement,
+  AgentModelChooserTriggerProps
+>(function AgentModelChooserTrigger(
+  { selection, active, onToggle, disabled = false, className, onClick, ...buttonProps },
+  ref
+) {
   const { models } = useAgentModels();
   const agent = getAgentTypeByValue(selection.agent);
   const label = getSelectionLabel(models, selection.model);
 
   return (
     <Button
+      {...buttonProps}
+      ref={ref}
       type="button"
       className={cn('h-8 max-w-[230px] gap-2 px-3 text-xs', className)}
       size="sm"
       variant="outline"
       disabled={disabled}
-      onClick={onToggle}
+      onClick={event => {
+        onClick?.(event);
+        if (!event.defaultPrevented) onToggle();
+      }}
       aria-expanded={active}
       aria-haspopup="true"
       aria-label="Choose agent and model"
@@ -61,4 +67,4 @@ export function AgentModelChooserTrigger({
       />
     </Button>
   );
-}
+});

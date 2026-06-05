@@ -2,7 +2,14 @@ import { FileCode2 } from 'lucide-react';
 
 import { ExternalLink } from '@/components/features/ExternalLink';
 import { MarkdownIcon } from '@/components/ui/markdown-icon';
-import { buildDiffHref, isMarkdownFile, parseFileChanges } from '@/lib/helpers/file-changes';
+import {
+  buildDiffHref,
+  isMarkdownFile,
+  markdownFileIconClassName,
+  markdownFileLabelClassName,
+  parseFileChanges
+} from '@/lib/helpers/file-changes';
+import { cn } from '@/lib/utils';
 
 type Props = {
   content: string;
@@ -42,18 +49,33 @@ export function FileChangesArtifact({ content, workspaceRoot, editorScheme }: Pr
           <li className="text-xs" key={path}>
             {href ? (
               <ExternalLink
-                className="inline-flex flex-wrap items-center gap-1.5 rounded hover:underline underline-offset-4 text-primary"
+                className={cn(
+                  'inline-flex flex-wrap items-center gap-1.5 rounded hover:underline underline-offset-4',
+                  isMd ? markdownFileLabelClassName : 'text-primary'
+                )}
                 href={href}
                 title={`Open diff for ${path} in editor`}
               >
-                <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                <Icon
+                  className={cn(
+                    'h-3.5 w-3.5 shrink-0',
+                    isMd ? markdownFileIconClassName : 'text-muted-foreground'
+                  )}
+                />
                 <span className="font-medium">{filename}</span>
                 {dir && <span className="text-muted-foreground">{dir}</span>}
               </ExternalLink>
             ) : (
               <span className="inline-flex flex-wrap items-center gap-1.5">
-                <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                <span className="font-medium text-foreground">{filename}</span>
+                <Icon
+                  className={cn(
+                    'h-3.5 w-3.5 shrink-0',
+                    isMd ? markdownFileIconClassName : 'text-muted-foreground'
+                  )}
+                />
+                <span className={cn('font-medium', isMd ? markdownFileLabelClassName : 'text-foreground')}>
+                  {filename}
+                </span>
                 {dir && <span className="text-muted-foreground">{dir}</span>}
               </span>
             )}

@@ -7,7 +7,12 @@ import { useState } from 'react';
 import { ExternalLink } from '@/components/features/ExternalLink';
 import { Button } from '@/components/ui/button';
 import { MarkdownIcon } from '@/components/ui/markdown-icon';
-import { buildDiffHref, isMarkdownFile } from '@/lib/helpers/file-changes';
+import {
+  buildDiffHref,
+  isMarkdownFile,
+  markdownFileIconClassName,
+  markdownFileLabelClassName
+} from '@/lib/helpers/file-changes';
 import { cn } from '@/lib/utils';
 import type { Database } from '@/types/database.types';
 
@@ -35,6 +40,7 @@ export function LiveFileChangeCard({
     : null;
 
   const dateStr = new Date(fileChange.created_at).toLocaleString();
+  const isMd = isMarkdownFile(fileChange.file_name || fileChange.file_path);
 
   return (
     <article className="rounded-lg border bg-muted/20">
@@ -52,12 +58,19 @@ export function LiveFileChangeCard({
         ) : (
           <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
         )}
-        {isMarkdownFile(fileChange.file_name || fileChange.file_path) ? (
-          <MarkdownIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
+        {isMd ? (
+          <MarkdownIcon className={cn('h-4 w-4 shrink-0', markdownFileIconClassName)} />
         ) : (
           <FileCode2 className="h-4 w-4 shrink-0 text-muted-foreground" />
         )}
-        <span className="min-w-0 flex-1 truncate text-sm font-medium">{fileChange.file_name}</span>
+        <span
+          className={cn(
+            'min-w-0 flex-1 truncate text-sm font-medium',
+            isMd && markdownFileLabelClassName
+          )}
+        >
+          {fileChange.file_name}
+        </span>
         <span className="shrink-0 text-[11px] text-muted-foreground">{dateStr}</span>
       </button>
 

@@ -122,3 +122,7 @@ export function isMarkdownFile(path: string | undefined | null): boolean {
   const cleanPath = path.trim().toLowerCase();
   return cleanPath.endsWith('.md') || cleanPath.endsWith('.markdown');
 }
+
+export const markdownFileIconClassName = 'text-blue-500';
+
+export const markdownFileLabelClassName = 'text-blue-600 dark:text-blue-400';
