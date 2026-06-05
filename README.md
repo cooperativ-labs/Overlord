@@ -1,6 +1,7 @@
 # Overlord
 
 **A platform for managing AI agent workflows across tickets, projects, and devices.**
+Watch demo videos and sign up for the beta at [ovld.ai](https://www.ovld.ai).
 
 ## Overview
 
