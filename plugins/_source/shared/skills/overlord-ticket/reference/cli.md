@@ -134,11 +134,12 @@ To inspect project resolution explicitly:
 
 ```bash
 ovld protocol discover-project
-ovld protocol discover-project --project-id <project_uuid>
+ovld protocol discover-project --project-id <id-or-name>
+ovld protocol discover-project --project-id "My Project"
 ovld protocol discover-project --working-directory /path/to/repo
 ```
 
-Use `--project-id` when the project id is already known. Use `--working-directory` to override cwd path matching. If the runtime has an `OVERLORD_DEVICE_FINGERPRINT`, pass `--device-fingerprint "$OVERLORD_DEVICE_FINGERPRINT"` so resource-directory matching prefers the current device.
+Use `--project-id` when the project ID or name is already known (names are unique per organization, matched case-insensitively). Use `--working-directory` to override cwd path matching. If the runtime has an `OVERLORD_DEVICE_FINGERPRINT`, pass `--device-fingerprint "$OVERLORD_DEVICE_FINGERPRINT"` so resource-directory matching prefers the current device.
 
 ## Creating Projects
 

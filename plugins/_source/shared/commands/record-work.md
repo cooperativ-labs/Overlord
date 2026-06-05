@@ -26,7 +26,7 @@ After the command succeeds, report the new `TICKET_ID`.
 Rules:
 - Do NOT use this for in-progress work. Use `/prompt` for that.
 - The CLI validates that every changed git-tracked file is represented in `changeRationales` unless `--skip-file-change-check` is passed.
-- If project resolution fails, re-run with `--project-id <id>` or `--personal`.
+- If project resolution fails, re-run with `--project-id <id-or-name>` or `--personal`.
 {{/if}}{{#if isCursor}}If text was provided after `/record-work`, treat it as additional context for the summary.
 
 Run `ovld protocol record-work --payload-file -` and stream the JSON payload `{ "objective": "...", "summary": "...", "artifacts": [...], "changeRationales": [...] }` on stdin via a single-quoted heredoc.
