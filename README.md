@@ -1,6 +1,7 @@
 # Overlord
 
 **A platform for managing AI agent workflows across tickets, projects, and devices.**
+
 Watch demo videos and sign up for the beta at [ovld.ai](https://www.ovld.ai).
 
 ## Overview
@@ -191,3 +192,11 @@ For the full CLI reference, run `ovld protocol help`.
 | MCP auth & integration                   | [docs/MCP_AUTH_AND_INTEGRATION.md](docs/MCP_AUTH_AND_INTEGRATION.md)            |
 | SSH key generation and management        | [docs/SSH_KEY_GENERATION_AND_MANAGEMENT.md](docs/SSH_KEY_GENERATION_AND_MANAGEMENT.md) |
 | Changelog                                | [CHANGELOG.md](CHANGELOG.md)                                                    |
+
+## License
+
+Overlord is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE).
+
+You may use, modify, and share the software for **any noncommercial purpose** — including personal use, research, education, and hobby projects. **Commercial use is not permitted** under this license. The software is provided **"as is", without warranty of any kind, and with no liability** to the extent allowed by law.
+
+For commercial licensing inquiries, contact [Cooperativ Labs, Inc.](https://cooperativ.io).

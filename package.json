@@ -4,6 +4,7 @@
   "author": "Overlord",
   "version": "0.2606050717.0",
   "private": true,
+  "license": "PolyForm-Noncommercial-1.0.0",
   "main": "apps/desktop/dist-electron/main.js",
   "workspaces": [
     "apps/*",
