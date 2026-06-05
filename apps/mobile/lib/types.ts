@@ -123,6 +123,7 @@ export interface TicketDetail {
   created_at: string;
   updated_at: string;
   project_id: string | null;
+  everhour_task_id: string | null;
 }
 
 export type TicketDetailRow = Omit<TicketDetail, 'execution_target'> & {

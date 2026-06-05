@@ -153,6 +153,43 @@ export const createStyles = (colors: ThemeColors) =>
     },
     headerSheetRowLabel: { flex: 1, color: colors.foreground, fontSize: 15 },
     headerSheetRowTrailing: { color: colors.mutedForeground, fontSize: 13 },
+    timerRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      paddingHorizontal: 10,
+      paddingVertical: 12,
+      borderRadius: 12,
+      backgroundColor: colors.isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)'
+    },
+    timerCopy: { flex: 1, minWidth: 0 },
+    timerLabel: { color: colors.foreground, fontSize: 15, fontWeight: '600' },
+    timerMeta: { color: colors.mutedForeground, fontSize: 12, marginTop: 2 },
+    timerError: { color: colors.destructive, fontSize: 12, marginTop: 4 },
+    timerButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
+      minWidth: 84,
+      height: 36,
+      paddingHorizontal: 12,
+      borderRadius: 999
+    },
+    timerButtonStart: { backgroundColor: colors.primary },
+    timerButtonStop: {
+      backgroundColor: colors.isDark ? 'rgba(239,68,68,0.16)' : 'rgba(239,68,68,0.12)',
+      borderWidth: 1,
+      borderColor: colors.destructive
+    },
+    timerButtonDisabled: { opacity: 0.6 },
+    timerButtonText: {
+      color: colors.primaryForeground,
+      fontSize: 13,
+      fontWeight: '600',
+      fontVariant: ['tabular-nums']
+    },
+    timerButtonTextStop: { color: colors.destructive },
     titleBlock: { paddingHorizontal: 16, marginBottom: 12, gap: 6 },
     sequence: {
       color: colors.mutedForeground,

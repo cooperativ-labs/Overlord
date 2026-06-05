@@ -22,6 +22,7 @@ import { Ionicons } from '@/lib/icons';
 import type { AgentModelSelection } from '@/lib/types';
 
 import { createStyles } from './ticket-detail-styles';
+import { TicketTimerBar } from './TicketTimerBar';
 
 const AnimatedGlassView = Animated.createAnimatedComponent(GlassView);
 const HEADER_SHEET_EXPAND_DURATION_MS = 200;
@@ -109,6 +110,8 @@ export function TicketHeaderSheet({
   onClose,
   title,
   subtitle,
+  ticketUuid,
+  everhourTaskId,
   copyingPromptContext,
   onOpenOverflow,
   onCopyCliCommand,
@@ -120,6 +123,8 @@ export function TicketHeaderSheet({
   onClose: () => void;
   title: string;
   subtitle: string;
+  ticketUuid: string;
+  everhourTaskId: string | null;
   copyingPromptContext: 'cli' | 'web' | null;
   onOpenOverflow: () => void;
   onCopyCliCommand: () => void;
@@ -227,6 +232,7 @@ export function TicketHeaderSheet({
                   label="Copy ticket ID"
                   onPress={onCopyTicketId}
                 />
+                <TicketTimerBar ticketId={ticketUuid} initialTaskId={everhourTaskId} />
                 <HeaderSheetRow
                   icon="ellipsis-horizontal-circle-outline"
                   label="More actions"
@@ -293,6 +299,7 @@ export function TicketHeaderSheet({
                   label="Copy ticket ID"
                   onPress={onCopyTicketId}
                 />
+                <TicketTimerBar ticketId={ticketUuid} initialTaskId={everhourTaskId} />
                 <HeaderSheetRow
                   icon="ellipsis-horizontal-circle-outline"
                   label="More actions"

@@ -126,7 +126,7 @@ export default function TicketDetailScreen() {
         supabase
           .from('tickets')
           .select(
-            'id, organization_id, title, status, priority, for_human, due_datetime, ticket_sequence, context, constraints, acceptance_criteria, created_at, updated_at, project_id, ticket_id'
+            'id, organization_id, title, status, priority, for_human, due_datetime, ticket_sequence, context, constraints, acceptance_criteria, created_at, updated_at, project_id, ticket_id, everhour_task_id'
           )
           .eq('id', ticketId)
           .single(),
@@ -1079,6 +1079,8 @@ export default function TicketDetailScreen() {
         onClose={() => setHeaderSheetOpen(false)}
         title={ticket.title || 'Ticket'}
         subtitle={ticketHeaderSubtitle}
+        ticketUuid={ticket.id}
+        everhourTaskId={ticket.everhour_task_id ?? null}
         copyingPromptContext={copyingPromptContext}
         onOpenOverflow={() => {
           setHeaderSheetOpen(false);
