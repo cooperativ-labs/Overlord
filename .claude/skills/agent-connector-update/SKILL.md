@@ -1,6 +1,6 @@
 ---
 name: agent-connector-update
-description: Use when changing how Overlord integrates with any agent connector (Claude Code, Codex, Cursor, Gemini CLI, OpenCode) — adding/removing protocol operations, changing launch commands, modifying bundle/plugin install behavior, updating slash commands, or altering permission/hook wiring. Enforces parity across all agents, the four protocol surfaces (API/CLI/MCP/plugin docs), and keeps the connector surfaces and drift-review documentation in sync.
+description: Use when changing the Overlord CLI or how Overlord integrates with any agent connector (Claude Code, Codex, Cursor, Gemini CLI, OpenCode) — adding/removing protocol operations, changing flags or help text, modifying bundle/plugin install behavior, updating slash commands, or altering permission/hook wiring. Enforces source-template-first edits, generated plugin parity, and alignment across all protocol surfaces.
 allowed-tools: Read, Edit, Write, Bash, Grep, Glob
 user-invocable: true
 ---
@@ -10,6 +10,33 @@ user-invocable: true
 <agent-connector-update>
 
 Connector code lives in many parallel places. A change to one agent or one surface that doesn't propagate to the others is the most common source of bugs in this repo. Use this skill any time you touch connector wiring so that every agent and every surface stays aligned.
+
+## Mandatory ordering: templates before CLI
+
+When a task changes a CLI command, flag, example, help description, or MCP mapping that appears in an agent plugin, update the canonical plugin templates **before editing the CLI implementation or help text**. This ordering prevents a later render from restoring stale template content over newer generated output.
+
+The canonical plugin sources are:
+
+- `plugins/_source/shared/` for content shared by multiple agents, including commands and skill references
+- `plugins/_source/agents/{claude,cursor,overlord}/` for agent-specific files and overrides
+
+These directories are generated outputs and must not be edited directly:
+
+- `plugins/{claude,cursor,overlord}/`
+- `packages/overlord-cli/plugins/{claude,cursor,overlord}/`
+
+Antigravity is currently the exception: `plugins/antigravity/` and `packages/overlord-cli/plugins/antigravity/` remain directly maintained until they are migrated into the renderer.
+
+For every affected CLI or connector change:
+
+1. Search `plugins/_source/` for the command, flag, parameter, example, or description being changed.
+2. Edit every affected shared or agent-specific source template first.
+3. Run `yarn plugins:render` immediately. Treat the rendered diff as part of the same change, not as an independent edit.
+4. Only then update the CLI/API/MCP implementation and non-generated documentation surfaces.
+5. Run `yarn plugins:render` again after all edits, then `yarn plugins:check`.
+6. Review `git diff -- plugins/_source plugins packages/overlord-cli/plugins` and confirm every rendered change is explained by a source-template change. A generated-only change is a defect; move it to the source and render again.
+
+Never repair a generated plugin file by hand. If a generated file is wrong, locate the owning file under `plugins/_source/`, fix that source, and rerun the renderer.
 
 ## Source of truth
 
@@ -27,6 +54,7 @@ Apply this skill if the change touches any of:
 - A protocol operation (new/removed/renamed verb, parameter change, response shape change)
 - An agent launch command, model flag, or thinking/effort flag
 - An agent bundle/plugin installer or its managed files (skills, hooks, slash commands, settings/permission rules)
+- Any CLI command, flag, help text, or MCP mapping documented or invoked by an agent plugin
 - Slash command content for any agent
 - Onboarding copy that names a connector or `ovld setup` command
 - The capability resolver or context route's per-agent branching
@@ -48,8 +76,8 @@ For each affected agent, verify and update as needed:
 
 1. **Bundle / plugin installer** — `electron/services/agent-bundle/installer.ts`, `electron/services/overlord-plugin.ts`, and templates in `electron/services/agent-bundle/templates.ts` (`CLAUDE_SKILL_CONTENT`, `OPENCODE_AGENTS_SECTION`, etc.)
 2. **Slash commands** — `electron/services/agent-bundle/slash-commands.ts`. Note format differences: Claude/Cursor/OpenCode are Markdown with `$ARGUMENTS`; Gemini is TOML with `{{args}}`; OpenCode requires `agent: build` frontmatter.
-3. **Plugin skills** — the `overlord-ticket` SKILL.md in `plugins/claude/skills/`, `plugins/cursor/skills/`, and `plugins/overlord/skills/` (the Codex plugin). Keep workflow instructions consistent.
-4. **Local Codex MCP shim** — `plugins/overlord/scripts/overlord-mcp.mjs` (this is how Codex reaches the protocol locally).
+3. **Plugin skills** — edit the source templates under `plugins/_source/` and render the `overlord-ticket` SKILL.md into `plugins/claude/skills/`, `plugins/cursor/skills/`, and `plugins/overlord/skills/` (the Codex plugin). Keep workflow instructions consistent.
+4. **Local Codex MCP shim** — edit `plugins/_source/agents/overlord/scripts/overlord-mcp.mjs`, then render `plugins/overlord/scripts/overlord-mcp.mjs` (this is how Codex reaches the protocol locally).
 5. **Launch service** — `electron/services/agent-launcher.ts`. Verify model flag, thinking/effort flag, and prompt-passing convention for each agent (see the per-agent command patterns in `CONNECTOR_SURFACES.md`).
 6. **Capability resolver** — `lib/overlord/agent-capabilities.ts`. If bundle eligibility, instruction mode, or a new capability flag changes, update this.
 7. **Context route + prompt builder** — `app/api/protocol/context/[ticketId]/route.ts` and `lib/overlord/ticket-prompt.ts`. The `agent=` param branches are the per-agent prompt customization point.
@@ -65,8 +93,8 @@ Any new or changed protocol operation must be exposed (or deliberately not expos
 |---|---|---|
 | API route | `app/api/protocol/<op>/route.ts` (or `apps/web/app/api/protocol/...`) | REST, kebab-case path, body keys `snake_case` |
 | CLI subcommand | `packages/overlord-cli/bin/_cli/protocol.mjs` | `ovld protocol <op>`, `--kebab-case` flags |
-| MCP tool | `supabase/functions/mcp/tools.ts` and `plugins/overlord/scripts/overlord-mcp.mjs` | `snake_case` tool name and parameters; CLI artifact tools keep `<verb>_<noun>` shape |
-| Plugin skill docs | `plugins/{claude,cursor,overlord}/skills/overlord-ticket/SKILL.md` | Documents which CLI/MCP commands the agent should use |
+| MCP tool | `supabase/functions/mcp/tools.ts` and source template `plugins/_source/agents/overlord/scripts/overlord-mcp.mjs` | `snake_case` tool name and parameters; CLI artifact tools keep `<verb>_<noun>` shape |
+| Plugin skill docs | Source templates under `plugins/_source/`, rendered to `plugins/{claude,cursor,overlord}/skills/overlord-ticket/SKILL.md` | Documents which CLI/MCP commands the agent should use |
 
 For any new operation:
 
@@ -115,15 +143,20 @@ If a code change adds a new managed file, a new `ovld setup` target, a new proto
 
 1. Read `CONNECTOR_SURFACES.md` end-to-end so the parity expectations are loaded.
 2. Identify which agents and which of the four surfaces are touched by your change. Write the list down before editing.
-3. Make the code changes, walking the Axis-1 and Axis-2 checklists for the touched agents/surfaces.
-4. increment the version number of the updated plugins, bundles, commands, connectors, etc. (the bottom of each should always have a version number in the following format: `<!-- version: 1.0.0 -->`)
-4. Update `CONNECTOR_SURFACES.md` and `.claude/skills/drift-review/SKILL.md` to reflect the new reality.
-5. As a final pass, invoke the `drift-review` skill (or mentally walk its Phase 3 checks) to confirm no surface was missed.
-6. In your deliver summary, list which agents and surfaces were touched, and call out any deliberate asymmetries (e.g., "Gemini intentionally not updated because it has no permission hook").
+3. Search and update `plugins/_source/` first, then run `yarn plugins:render` before changing the CLI or other protocol surfaces.
+4. Make the remaining code changes, walking the Axis-1 and Axis-2 checklists for the touched agents/surfaces.
+5. Increment the version number of updated plugins, bundles, commands, connectors, etc. (the bottom of each should always have a version number in the following format: `<!-- version: 1.0.0 -->`). Make version edits in source templates, not rendered outputs.
+6. Update `CONNECTOR_SURFACES.md` and `.claude/skills/drift-review/SKILL.md` to reflect the new reality.
+7. Run `yarn plugins:render`, `yarn plugins:check`, and review the source-to-generated diff. Do not deliver with generated-only plugin changes.
+8. As a final pass, invoke the `drift-review` skill (or mentally walk its Phase 3 checks) to confirm no surface was missed.
+9. In your deliver summary, list which agents and surfaces were touched, and call out any deliberate asymmetries (e.g., "Gemini intentionally not updated because it has no permission hook").
 
 ## Common pitfalls
 
 - Adding an MCP tool but forgetting the corresponding CLI subcommand (or vice versa).
+- Editing `plugins/` or `packages/overlord-cli/plugins/` directly; the next `yarn plugins:render` will overwrite those changes from stale source templates.
+- Updating CLI help or behavior before searching `plugins/_source/` for copies of the old flag, example, or description.
+- Running the renderer without inspecting whether it reverted a generated change; any unexpected reversion means the source template is still stale.
 - Adding a new flag to the API but not threading it through `protocol.mjs` `parseFlags()` or the MCP `inputSchema`.
 - Adding a new bundle-managed file but not updating the manifest entry in `~/.ovld/bundle-manifest.json` (or its plugin equivalent).
 - Updating slash command content for Claude/Cursor/OpenCode but forgetting Gemini's TOML format with `{{args}}`.
@@ -133,4 +166,4 @@ If a code change adds a new managed file, a new `ovld setup` target, a new proto
 
 </agent-connector-update>
 
-<!-- version: 1.0.0 -->
+<!-- version: 1.1.0 -->
