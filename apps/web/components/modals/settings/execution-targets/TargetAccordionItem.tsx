@@ -1,10 +1,9 @@
 'use client';
 
-import { ArrowRight, ArrowRightLeft, Check, Trash2, X } from 'lucide-react';
-import { type KeyboardEvent, useCallback, useEffect, useState } from 'react';
+import { ArrowRight, ArrowRightLeft, Check, Copy, Trash2, X } from 'lucide-react';
+import { type KeyboardEvent, type MouseEvent, useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
-import { useElectron } from '@/components/features/terminal/useElectron';
 import {
   Accordion,
   AccordionContent,
@@ -31,7 +30,10 @@ import {
   updateExecutionTargetLabelAction,
   type UserExecutionTargetDetailed
 } from '@/lib/actions/resource-directories';
+import { type RunnerTerminalProfile } from '@/lib/helpers/runner-terminal-settings';
+import { useCopyToClipboard } from '@/lib/hooks/use-copy-to-clipboard';
 import { type AgentLaunchConfig } from '@/lib/schemas/target-agent-config';
+import { cn } from '@/lib/utils';
 
 import { AgentNameWithLogo } from './AgentNameWithLogo';
 import {
@@ -44,16 +46,16 @@ import {
   externalTerminalLaunchModeOptions,
   isTmuxLikeProfile,
   PROFILE_FIELDS,
-  settingKey,
   type TerminalProfileState,
   tmuxHostTerminalOptions
 } from './execution-targets-helpers';
 
 export function TargetAccordionItem({
   target,
-  api,
   isElectron,
   ownership,
+  terminalProfile,
+  onTerminalProfileChange,
   onOwnershipChanged,
   onGetAgentConfig,
   onSavePreCommand,
@@ -66,9 +68,10 @@ export function TargetAccordionItem({
   onNavigate
 }: {
   target: UserExecutionTargetDetailed;
-  api: ReturnType<typeof useElectron>['api'];
   isElectron: boolean;
   ownership?: ExecutionTargetOwnership;
+  terminalProfile: RunnerTerminalProfile;
+  onTerminalProfileChange: (profile: RunnerTerminalProfile) => Promise<void> | void;
   onOwnershipChanged?: () => void;
   onGetAgentConfig: (args: { targetId: string; agent: string }) => AgentLaunchConfig;
   onSavePreCommand: (args: { targetId: string; agent: string; value: string }) => Promise<void>;
@@ -85,7 +88,6 @@ export function TargetAccordionItem({
   onNavigate?: (section: string) => void;
 }) {
   const [profile, setProfile] = useState<TerminalProfileState>(DEFAULT_TERMINAL_PROFILE);
-  const [profileLoaded, setProfileLoaded] = useState(false);
   const [pendingOrgId, setPendingOrgId] = useState<number | null>(null);
   const [selectedLocalAgent, setSelectedLocalAgent] = useState<string>('claude');
   const [flagInput, setFlagInput] = useState('');
@@ -96,6 +98,7 @@ export function TargetAccordionItem({
   const [labelSaving, setLabelSaving] = useState(false);
   const [pendingDeleteOrgId, setPendingDeleteOrgId] = useState<number | null>(null);
   const [confirmDeleteOrgId, setConfirmDeleteOrgId] = useState<number | null>(null);
+  const { copied, copy } = useCopyToClipboard();
 
   const LABEL_REGEX = /^[a-z0-9][a-z0-9-]*$/;
 
@@ -180,36 +183,23 @@ export function TargetAccordionItem({
   }
 
   useEffect(() => {
-    if (!api) {
-      setProfileLoaded(true);
-      return;
-    }
-    let cancelled = false;
-    Promise.all(
-      PROFILE_FIELDS.map(field => api.settings.get<string>(settingKey(target.id, field)))
-    ).then(values => {
-      if (cancelled) return;
-      const next: TerminalProfileState = { ...DEFAULT_TERMINAL_PROFILE };
-      PROFILE_FIELDS.forEach((field, index) => {
-        const value = values[index];
-        if (typeof value === 'string' && value.length > 0) {
-          (next as Record<string, string>)[field] = value;
-        }
-      });
-      setProfile(next);
-      setProfileLoaded(true);
+    const next: TerminalProfileState = { ...DEFAULT_TERMINAL_PROFILE };
+    PROFILE_FIELDS.forEach(field => {
+      const value = terminalProfile[field];
+      if (typeof value === 'string' && value.length > 0) {
+        (next as Record<string, string>)[field] = value;
+      }
     });
-    return () => {
-      cancelled = true;
-    };
-  }, [api, target.id]);
+    setProfile(next);
+  }, [terminalProfile]);
 
   const updateProfile = useCallback(
     async (field: keyof TerminalProfileState, value: string) => {
-      setProfile(current => ({ ...current, [field]: value }));
-      await api?.settings.set(settingKey(target.id, field), value);
+      const next = { ...profile, [field]: value };
+      setProfile(next);
+      await onTerminalProfileChange(next);
     },
-    [api, target.id]
+    [onTerminalProfileChange, profile]
   );
 
   const handleHotkeyKeyDown = useCallback(
@@ -269,11 +259,23 @@ export function TargetAccordionItem({
       : 'SSH'
     : 'Local';
 
-  const inputsDisabled = !isElectron || !profileLoaded;
+  const inputsDisabled = false;
   const localAgentConfig = onGetAgentConfig({ targetId: target.id, agent: selectedLocalAgent });
   const selectedLocalAgentLabel = AGENT_LABELS[selectedLocalAgent] ?? selectedLocalAgent;
   const localAgentPreCommand = localAgentConfig.preCommand?.trim();
   const localAgentFlags = localAgentConfig.flags;
+  const executionTargetSuffix = target.id.slice(-4);
+
+  async function handleCopyExecutionTargetId(event: MouseEvent<HTMLButtonElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    const didCopy = await copy(target.id);
+    if (didCopy) {
+      toast.success('Execution target ID copied.');
+      return;
+    }
+    toast.error('Could not copy execution target ID.');
+  }
 
   async function handleAddFlagToTarget() {
     await onAddFlag({
@@ -287,12 +289,24 @@ export function TargetAccordionItem({
   return (
     <AccordionItem value={target.id} className="px-4">
       <AccordionTrigger>
-        <div className="flex flex-1 flex-col gap-1 pr-2">
+        <div className="flex flex-1 flex-col gap-1 pr-2 hover:no-underline">
           <div className="flex items-center gap-2">
             <span className="font-medium">{target.label}</span>
-            <Badge variant="secondary" className="text-[10px] uppercase">
-              {transportLabel}
-            </Badge>
+            <button
+              type="button"
+              onClick={handleCopyExecutionTargetId}
+              className={cn(
+                'inline-flex items-center gap-1 rounded-full',
+                copied && 'text-green-700 dark:text-green-300'
+              )}
+              aria-label={`Copy execution target ID ${target.id}`}
+              title={copied ? 'Copied execution target ID' : 'Copy execution target ID'}
+            >
+              <Badge variant="secondary" className="font-mono text-[10px]">
+                {executionTargetSuffix}
+              </Badge>
+              {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+            </button>
             {target.isPlaceholder && (
               <Badge variant="outline" className="text-[10px] uppercase">
                 Pending
@@ -302,6 +316,7 @@ export function TargetAccordionItem({
           <span className="text-xs text-muted-foreground">
             {target.hostname || 'No hostname'}
             {target.platform ? ` · ${target.platform}` : ''}
+            {transportLabel ? ` · ${transportLabel}` : ''}
           </span>
         </div>
       </AccordionTrigger>

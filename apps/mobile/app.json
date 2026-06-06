@@ -14,7 +14,6 @@
         "NSFaceIDUsageDescription": "Use Face ID to authenticate"
       },
       "associatedDomains": [
-        "webcredentials:ovld.ai",
         "webcredentials:www.ovld.ai"
       ]
     },

@@ -13,6 +13,39 @@ export type OAuthTokenResponse = {
   expires_in?: number;
 };
 
+/**
+ * Raised when an OAuth token refresh fails. `terminal` distinguishes an
+ * unrecoverable failure (the refresh token itself is expired, revoked, or
+ * otherwise rejected — `invalid_grant`) from a transient one (network blip,
+ * 5xx) that may succeed on a later attempt. Callers use this to decide whether
+ * to clear the persisted session and force the user back to sign-in, versus
+ * simply retrying later.
+ */
+export class OAuthRefreshError extends Error {
+  constructor(
+    message: string,
+    public readonly terminal: boolean,
+    public readonly status?: number
+  ) {
+    super(message);
+    this.name = 'OAuthRefreshError';
+  }
+}
+
+/**
+ * A refresh is unrecoverable when the authorization server actively rejects the
+ * refresh token. Supabase/GoTrue returns 400 (with an `invalid_grant` body) or
+ * 401 for a dead/revoked refresh token; 403 means the grant was revoked. Any
+ * other status (network errors, 5xx, 429) is treated as transient.
+ */
+function isTerminalRefreshFailure(status: number, body: string): boolean {
+  if (status === 401 || status === 403) return true;
+  if (status === 400) {
+    return /invalid_grant|invalid_request|invalid_token|bad_refresh/i.test(body);
+  }
+  return false;
+}
+
 export function computeAccessTokenExpiresAt(data: {
   access_token?: string;
   expires_in?: unknown;
@@ -67,7 +100,11 @@ export async function refreshOAuthTokens(
 
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`OAuth token refresh failed (${res.status}): ${text.slice(0, 180)}`);
+    throw new OAuthRefreshError(
+      `OAuth token refresh failed (${res.status}): ${text.slice(0, 180)}`,
+      isTerminalRefreshFailure(res.status, text),
+      res.status
+    );
   }
 
   const data = (await res.json()) as OAuthTokenResponse;

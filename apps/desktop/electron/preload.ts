@@ -228,7 +228,16 @@ const electronAPI = {
         ok: boolean;
         session?: { access_token: string };
         error?: string;
-      }>
+      }>,
+    // Fires when the desktop session becomes unrecoverable (dead refresh token).
+    // The renderer drops cached data and routes the user back to sign-in.
+    onSessionExpired: (callback: () => void) => {
+      const handler = () => callback();
+      ipcRenderer.on('auth:session-expired', handler);
+      return () => {
+        ipcRenderer.removeListener('auth:session-expired', handler);
+      };
+    }
   },
   isElectron: true as const
 };

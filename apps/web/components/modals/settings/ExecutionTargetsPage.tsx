@@ -9,12 +9,20 @@ import {
   updateExecutionTargetAgentConfigAction
 } from '@/lib/actions/execution-target-agent-config';
 import {
+  getExecutionTargetTerminalProfilesAction,
+  updateExecutionTargetTerminalProfileAction
+} from '@/lib/actions/execution-target-terminal-profile';
+import {
   type ExecutionTargetOwnership,
   getExecutionTargetOwnershipsAction,
   getUserExecutionTargetsWithDetailsAction,
   type UserExecutionTargetDetailed
 } from '@/lib/actions/resource-directories';
 import { type LaunchAgentType } from '@/lib/helpers/agent-types';
+import {
+  DEFAULT_RUNNER_TERMINAL_PROFILE,
+  type RunnerTerminalProfile
+} from '@/lib/helpers/runner-terminal-settings';
 import { buildDirectAgentCommand } from '@/lib/overlord/launch-commands';
 import {
   type AgentLaunchConfig,
@@ -33,12 +41,15 @@ export function ExecutionTargetsPage({
   open: boolean;
   onNavigate?: (section: string) => void;
 }) {
-  const { api, isElectron } = useElectron();
+  const { isElectron } = useElectron();
   const [targets, setTargets] = useState<UserExecutionTargetDetailed[]>([]);
   const [ownerships, setOwnerships] = useState<Record<string, ExecutionTargetOwnership>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const [terminalProfiles, setTerminalProfiles] = useState<Record<string, RunnerTerminalProfile>>(
+    {}
+  );
   const [targetAgentConfigs, setTargetAgentConfigs] = useState<Record<string, TargetAgentConfigs>>(
     {}
   );
@@ -78,7 +89,19 @@ export function ExecutionTargetsPage({
   }, [open, loadOwnerships]);
 
   useEffect(() => {
-    if (!open || !isElectron) return;
+    if (!open) return;
+    void (async () => {
+      try {
+        const profiles = await getExecutionTargetTerminalProfilesAction();
+        setTerminalProfiles(profiles);
+      } catch (err) {
+        console.error('Failed to load execution target terminal profiles:', err);
+      }
+    })();
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
     void (async () => {
       try {
         const configs = await getExecutionTargetAgentConfigsAction();
@@ -87,7 +110,21 @@ export function ExecutionTargetsPage({
         console.error('Failed to load execution target agent configs:', err);
       }
     })();
-  }, [isElectron, open]);
+  }, [open]);
+
+  function currentTerminalProfile(targetId: string): RunnerTerminalProfile {
+    return terminalProfiles[targetId] ?? DEFAULT_RUNNER_TERMINAL_PROFILE;
+  }
+
+  async function persistTerminalProfile(targetId: string, profile: RunnerTerminalProfile) {
+    setTerminalProfiles(current => ({ ...current, [targetId]: profile }));
+    try {
+      const saved = await updateExecutionTargetTerminalProfileAction(targetId, profile);
+      setTerminalProfiles(current => ({ ...current, [targetId]: saved }));
+    } catch (err) {
+      console.error('Failed to save execution target terminal profile:', err);
+    }
+  }
 
   function currentAgentConfig({
     targetId,
@@ -238,29 +275,11 @@ export function ExecutionTargetsPage({
 
   return (
     <div className="grid gap-6">
-      {!isElectron && (
-        <div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-400">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 20 20"
-            fill="currentColor"
-            className="size-4 shrink-0"
-          >
-            <path
-              fillRule="evenodd"
-              d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z"
-              clipRule="evenodd"
-            />
-          </svg>
-          Per-target terminal launch settings only apply when running the Overlord desktop app.
-        </div>
-      )}
-
       <div className="grid gap-1">
         <h3 className="text-sm font-medium">Execution targets</h3>
         <p className="text-xs text-muted-foreground">
-          Configure how Overlord opens each execution target. Settings are saved per target and per
-          machine.
+          Configure how Overlord opens each execution target. Settings are saved per target and used
+          when launches are pinned to that machine.
         </p>
       </div>
 
@@ -279,10 +298,11 @@ export function ExecutionTargetsPage({
             <TargetAccordionItem
               key={target.id}
               target={target}
-              api={api}
               isElectron={isElectron}
               ownership={ownerships[target.id]}
               onOwnershipChanged={loadOwnerships}
+              terminalProfile={currentTerminalProfile(target.id)}
+              onTerminalProfileChange={profile => void persistTerminalProfile(target.id, profile)}
               onLabelChanged={handleLabelChanged}
               onGetAgentConfig={currentAgentConfig}
               onSavePreCommand={handleSavePreCommand}

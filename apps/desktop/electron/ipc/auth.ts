@@ -7,6 +7,7 @@ import { clearElectronCredentials } from '../services/electron-credentials';
 import {
   computeAccessTokenExpiresAt,
   fetchAuthConfig,
+  OAuthRefreshError,
   refreshOAuthTokens
 } from '../services/oauth-tokens';
 import { createRefreshController } from '../services/refresh-controller';
@@ -327,7 +328,31 @@ type RegisterAuthIpcOptions = {
   getPlatformUrl: () => string;
   sessionStore: Awaited<ReturnType<typeof createElectronSessionStore>>;
   refreshController?: ReturnType<typeof createRefreshController>;
+  /**
+   * Notifies every renderer that the desktop session is no longer recoverable
+   * (the refresh token is dead). The renderer uses this to drop cached data and
+   * route the user to the sign-in screen instead of silently failing writes.
+   */
+  onSessionExpired?: () => void;
 };
+
+/**
+ * A refresh failure is terminal when re-attempting it cannot succeed without a
+ * new sign-in: the authorization server rejected the refresh token, or there is
+ * no refresh token / session left to refresh. Transient failures (network, 5xx)
+ * are intentionally excluded so we don't sign users out over a flaky connection.
+ */
+function isTerminalAuthFailure(err: unknown): boolean {
+  if (err instanceof OAuthRefreshError) {
+    return err.terminal;
+  }
+  const message = err instanceof Error ? err.message : String(err);
+  return (
+    message.includes('No refresh token available') ||
+    message.includes('No Electron session is available') ||
+    message.includes('No platform URL available')
+  );
+}
 
 export function registerAuthIpc({
   getPlatformUrl,
@@ -342,8 +367,30 @@ export function registerAuthIpc({
         accessTokenExpiresAt: computeAccessTokenExpiresAt(session)
       };
     }
-  })
+  }),
+  onSessionExpired
 }: RegisterAuthIpcOptions): void {
+  // Guards against re-clearing / re-broadcasting on every queued request once a
+  // session is already known to be dead. Reset whenever a fresh session lands.
+  let sessionExpiredHandled = false;
+
+  const handleTerminalAuthFailure = () => {
+    if (sessionExpiredHandled) return;
+    sessionExpiredHandled = true;
+
+    clearElectronCredentials();
+    sessionStore.clear();
+    Sentry.addBreadcrumb({
+      category: 'electron_auth',
+      level: 'warning',
+      message: 'electron_auth.session_expired'
+    });
+    try {
+      onSessionExpired?.();
+    } catch (err) {
+      console.warn('[auth] session-expired notification failed', err);
+    }
+  };
   const buildAccessTokenResponse = (accessToken: string) => ({
     ok: true,
     accessToken,
@@ -389,6 +436,9 @@ export function registerAuthIpc({
         latency_ms: Date.now() - startedAt
       });
 
+      // A successful refresh means a later death should be announced again.
+      sessionExpiredHandled = false;
+
       return {
         ok: true,
         session: {
@@ -398,18 +448,27 @@ export function registerAuthIpc({
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Refresh failed';
       const statusMatch = message.match(/\((\d{3})\)/);
+      const terminal = isTerminalAuthFailure(err);
       addRefreshBreadcrumb(
         'electron_auth.refresh_failed',
         {
           code: message.split(':')[0] || 'refresh_failed',
+          terminal,
           ...(statusMatch ? { status: Number(statusMatch[1]) } : {})
         },
         'error'
       );
 
+      // Only a terminal failure (dead refresh token) ends the session. Transient
+      // failures keep the session so a later attempt can recover it.
+      if (terminal) {
+        handleTerminalAuthFailure();
+      }
+
       return {
         ok: false,
-        error: message
+        error: message,
+        terminal
       };
     }
   };
@@ -441,6 +500,7 @@ export function registerAuthIpc({
   ipcMain.handle('auth:login', async () => {
     const platformUrl = getPlatformUrl();
     const session = await performLogin(platformUrl, sessionStore.setSession);
+    sessionExpiredHandled = false;
     return { ok: true, session };
   });
 

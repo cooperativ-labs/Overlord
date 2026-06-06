@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2606060757.0] - 2026-06-06:07:57
+
+### Added
+- Persist **per–execution-target terminal profiles** (multiplexer, hotkey, launch mode, etc.) to your account so settings follow you across devices and the web app.
+- Add **copy execution target ID** control on Settings → **Execution targets**.
+- Add desktop **session expired** handling — when the refresh token is revoked, the app clears cached data and routes you to sign-in instead of silently failing writes.
+
+### Fixed
+- Fix desktop sessions that could appear signed in while writes silently failed after a revoked refresh token.
+- Apply the correct **terminal profile for the selected execution target** when launching ticket objectives instead of always using the global runner profile.
+
+### Changed
+- Make execution target terminal settings editable on **web** as well as Desktop (previously Desktop-only via local storage).
+- Move the transport label (Local/SSH) to the execution target subtitle in Settings.
+
+### Security
+- Distinguish terminal OAuth refresh failures (revoked or expired token) from transient errors so Desktop only clears credentials when re-authentication is required.
+
+### Test
+- Add tests for OAuth token refresh terminal vs transient failure detection.
+
 ## [0.2606050938.0] - 2026-06-05:09:38
 
 ### Added

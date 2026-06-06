@@ -2277,6 +2277,7 @@ export type Database = {
           default_username: string | null;
           execution_target_id: string;
           last_connected_at: string | null;
+          terminal_profile: Json;
           updated_at: string;
           user_id: string;
         };
@@ -2287,6 +2288,7 @@ export type Database = {
           default_username?: string | null;
           execution_target_id: string;
           last_connected_at?: string | null;
+          terminal_profile?: Json;
           updated_at?: string;
           user_id: string;
         };
@@ -2297,6 +2299,7 @@ export type Database = {
           default_username?: string | null;
           execution_target_id?: string;
           last_connected_at?: string | null;
+          terminal_profile?: Json;
           updated_at?: string;
           user_id?: string;
         };

@@ -12,6 +12,7 @@ import { createTicketSchema } from '@/lib/overlord/validation';
 import { createClientForRequest } from '@/supabase/utils/server';
 import type { Database } from '@/types/database.types';
 
+import { getExecutionTargetTerminalProfileAction } from '../execution-target-terminal-profile';
 import { getRunnerTerminalProfileAction } from '../profile-settings';
 
 import {
@@ -107,6 +108,10 @@ export async function requestTicketObjectiveExecutionAction(input: {
       targetExecutionTargetId = priorRequest?.target_execution_target_id ?? null;
     }
 
+    const runnerTerminalProfile = targetExecutionTargetId
+      ? await getExecutionTargetTerminalProfileAction(targetExecutionTargetId)
+      : await getRunnerTerminalProfileAction();
+
     const result = await createExecutionRequest(supabase, {
       ticketId: input.ticketId,
       objectiveId: input.objectiveId ?? null,
@@ -125,7 +130,7 @@ export async function requestTicketObjectiveExecutionAction(input: {
       remoteWorkingDirectory: input.remoteWorkingDirectory ?? null,
       serverMultiplexer: input.serverMultiplexer ?? null,
       tmuxCommand: input.tmuxCommand ?? null,
-      runnerTerminalProfile: await getRunnerTerminalProfileAction(),
+      runnerTerminalProfile,
       targetKind: input.sshCommand?.trim() ? 'ssh' : 'any',
       targetExecutionTargetId
     });

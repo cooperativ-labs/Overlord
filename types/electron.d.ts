@@ -526,6 +526,7 @@ interface ElectronAPI {
       session?: { access_token: string };
       error?: string;
     }>;
+    onSessionExpired: (callback: () => void) => () => void;
   };
   isElectron: true;
 }

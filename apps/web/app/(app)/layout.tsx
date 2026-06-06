@@ -11,6 +11,8 @@ import {
   ElectronAuthBoundary,
   ElectronAuthGate
 } from '@/components/features/electron-auth/ElectronAuthGate';
+import { ElectronSessionEndedScreen } from '@/components/features/electron-auth/ElectronSessionEndedScreen';
+import { ElectronSessionWatcher } from '@/components/features/electron-auth/ElectronSessionWatcher';
 import { MainWindowNavigationBridge } from '@/components/features/electron-nav/MainWindowNavigationBridge';
 import { ElectronOfflineGate } from '@/components/features/electron-offline/ElectronOfflineGate';
 import { OfflineTicketProcessor } from '@/components/features/electron-offline/OfflineTicketProcessor';
@@ -105,8 +107,9 @@ export default async function RootLayout({
   let tutorialAutoStep = 1;
   let onboardingState = null;
 
+  const isElectronRequest = await isElectronRequestFromHeaders();
+
   if (user) {
-    const isElectronRequest = await isElectronRequestFromHeaders();
     if (isElectronRequest) {
       // Web users without org/project → redirect to full-page onboarding
       if (organizations.length === 0 || projects.length === 0) {
@@ -157,6 +160,7 @@ export default async function RootLayout({
       <ElectronOfflineGate>
         <ElectronAuthBoundary>
           <AppQueryClientProvider>
+            <ElectronSessionWatcher />
             <TerminalProvider>
               <DefaultProjectProvider
                 projects={projects}
@@ -209,6 +213,11 @@ export default async function RootLayout({
                               </SidebarInset>
                             </div>
                           </div>
+                        ) : isElectronRequest ? (
+                          // Desktop request the server could not authenticate.
+                          // Never render a half-app (board without sidebar/nav);
+                          // prompt a clean re-sign-in instead.
+                          <ElectronSessionEndedScreen />
                         ) : (
                           <div className="flex w-full flex-col ">
                             <main className="w-full h-full ">{children}</main>

@@ -400,7 +400,12 @@ app.whenReady().then(async () => {
   registerAuthIpc({
     getPlatformUrl: () => platformUrl,
     sessionStore,
-    refreshController
+    refreshController,
+    onSessionExpired: () => {
+      for (const window of BrowserWindow.getAllWindows()) {
+        window.webContents.send('auth:session-expired');
+      }
+    }
   });
 
   createWindow(windowUrl);
