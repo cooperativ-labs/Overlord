@@ -18,7 +18,7 @@ import { getProjectDevicesAction, type ProjectDevice } from '@/lib/actions/devic
 import { cn } from '@/lib/utils';
 
 type ProjectExecutionWorkspaceSelectorProps = {
-  projectId: string;
+  projectId?: string;
 };
 
 export function resolveSelectedDeviceId({
@@ -55,6 +55,12 @@ export function ProjectExecutionWorkspaceSelector({
   const selectedDeviceId = projectSettings?.selectedDeviceId ?? null;
 
   useEffect(() => {
+    if (!projectId) {
+      setDevices([]);
+      setMatchedDeviceId(null);
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
     async function loadDevices() {
       setLoading(true);
@@ -71,7 +77,7 @@ export function ProjectExecutionWorkspaceSelector({
           }
         }
         const payload = await getProjectDevicesAction({
-          projectId,
+          projectId: projectId!,
           deviceFingerprint
         });
         if (!cancelled) {
@@ -90,7 +96,7 @@ export function ProjectExecutionWorkspaceSelector({
 
   // Restore an explicit project preference before applying platform defaults.
   useEffect(() => {
-    if (loading || !projectSettings) return;
+    if (loading || !projectSettings || !projectId) return;
     if (devices.length === 0) return;
 
     const storedId =
@@ -123,11 +129,9 @@ export function ProjectExecutionWorkspaceSelector({
     projectSettings.setSelectedDevice(device.id, primaryResource?.directoryPath ?? null);
   }
 
-  if (!projectSettings) return null;
-  const ps = projectSettings;
-
   const selectedDevice = devices.find(d => d.id === selectedDeviceId);
   const selectedLabel = selectedDevice?.label ?? null;
+  const hasProject = !!projectId;
 
   return (
     <DropdownMenu>
@@ -139,17 +143,19 @@ export function ProjectExecutionWorkspaceSelector({
             devices.length > 0 ? 'border-border' : 'border-dashed border-muted-foreground/60'
           )}
           aria-label="Execution device"
-          title="Switch execution device for this project"
+          title={hasProject ? 'Switch execution device for this project' : 'Execution device'}
         >
           {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Laptop className="h-3 w-3" />}
           <span className="max-w-[12rem] truncate sm:max-w-[16rem]">
             {loading
               ? 'Devices'
-              : selectedLabel
-                ? selectedLabel
-                : devices.length === 0
-                  ? 'No devices'
-                  : `${devices.length} device${devices.length === 1 ? '' : 's'}`}
+              : !hasProject
+                ? 'No project selected'
+                : selectedLabel
+                  ? selectedLabel
+                  : devices.length === 0
+                    ? 'No devices'
+                    : `${devices.length} device${devices.length === 1 ? '' : 's'}`}
           </span>
           <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground/80" />
         </button>
@@ -161,10 +167,16 @@ export function ProjectExecutionWorkspaceSelector({
         <div className="border-b px-3 py-2">
           <p className="text-xs font-medium text-foreground">Execution device</p>
           <p className="text-[11px] text-muted-foreground">
-            Select which device to use as the execution target for this project.
+            {hasProject
+              ? 'Select which device to use as the execution target for this project.'
+              : 'Select a project to see available execution devices.'}
           </p>
         </div>
-        {loading ? (
+        {!hasProject ? (
+          <div className="px-3 py-4 text-xs italic text-muted-foreground">
+            No project selected. Choose a project to view and select execution devices.
+          </div>
+        ) : loading ? (
           <div className="px-3 py-4 text-xs text-muted-foreground">Loading...</div>
         ) : devices.length === 0 ? (
           <div className="px-3 py-4 text-xs italic text-muted-foreground">
@@ -251,14 +263,18 @@ export function ProjectExecutionWorkspaceSelector({
           </ul>
         )}
 
-        <DropdownMenuSeparator className="my-0" />
-        <button
-          type="button"
-          className="w-full cursor-pointer px-3 py-2 text-left text-xs hover:bg-muted/60 transition-colors"
-          onClick={() => ps.openProjectSettings('Resources')}
-        >
-          Manage devices &amp; resources...
-        </button>
+        {projectSettings ? (
+          <>
+            <DropdownMenuSeparator className="my-0" />
+            <button
+              type="button"
+              className="w-full cursor-pointer px-3 py-2 text-left text-xs hover:bg-muted/60 transition-colors"
+              onClick={() => projectSettings.openProjectSettings('Resources')}
+            >
+              Manage devices &amp; resources...
+            </button>
+          </>
+        ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
   );

@@ -1,6 +1,7 @@
 'use client';
 
 import { DefaultProjectChooser } from '@/components/features/projects/DefaultProjectChooser';
+import { ProjectExecutionWorkspaceSelector } from '@/components/features/projects/ProjectExecutionWorkspaceSelector';
 
 type UserTicketsSettingsPanelProps = {
   selectedOrgId?: number;
@@ -20,6 +21,7 @@ export function UserTicketsSettingsPanel({ selectedOrgId }: UserTicketsSettingsP
           <p className="text-muted-foreground text-sm">{description}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <ProjectExecutionWorkspaceSelector />
           <DefaultProjectChooser />
         </div>
       </div>
