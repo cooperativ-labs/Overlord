@@ -21,7 +21,7 @@ export function UserTicketsSettingsPanel({ selectedOrgId }: UserTicketsSettingsP
           <p className="text-muted-foreground text-sm">{description}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <ProjectExecutionWorkspaceSelector />
+          {/* <ProjectExecutionWorkspaceSelector /> */}
           <DefaultProjectChooser />
         </div>
       </div>
