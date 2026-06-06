@@ -1,4 +1,10 @@
+import { Metadata } from 'next';
 import Image from 'next/image';
+
+export const metadata: Metadata = {
+  title: 'Overlord | Authentication',
+  description: 'Authenticate to access your Overlord account'
+};
 
 export default function AuthLayout({
   children

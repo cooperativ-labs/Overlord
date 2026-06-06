@@ -25,6 +25,7 @@ import {
   SelectValue
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { updateExecutionTargetTerminalProfileAction } from '@/lib/actions/execution-target-terminal-profile';
 
 type Props = {
   executionTargetId: string;
@@ -63,10 +64,14 @@ export function TerminalSettingsStep({ executionTargetId, onContinue }: Props) {
 
   const updateProfile = useCallback(
     async (field: keyof TerminalProfileState, value: string) => {
-      setProfile(current => ({ ...current, [field]: value }));
+      const next = { ...profile, [field]: value };
+      setProfile(next);
       await api?.settings.set(settingKey(executionTargetId, field), value);
+      updateExecutionTargetTerminalProfileAction(executionTargetId, next).catch(err => {
+        console.error('[TerminalSettingsStep] Failed to save terminal profile to DB:', err);
+      });
     },
-    [api, executionTargetId]
+    [api, executionTargetId, profile]
   );
 
   const handleHotkeyKeyDown = useCallback(

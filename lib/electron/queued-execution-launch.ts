@@ -17,6 +17,7 @@ type ClaimedLaunchParams = {
   remoteWorkingDirectory: string | null;
   serverMultiplexer: string | null;
   tmuxCommand: string | null;
+  runnerTerminalProfile: Record<string, string> | null;
 };
 
 type ClaimResponse = {
@@ -107,7 +108,8 @@ export async function claimAndLaunchQueuedExecutions({
         preCommand: launch.preCommand ?? undefined,
         customCommand: launch.customCommand ?? undefined,
         model: launch.model ?? undefined,
-        thinking: launch.thinking ?? undefined
+        thinking: launch.thinking ?? undefined,
+        runnerTerminalProfile: launch.runnerTerminalProfile ?? undefined
       });
 
       await protocolFetch(

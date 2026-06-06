@@ -629,6 +629,7 @@ when one surface changes, check the others against this table.
 | request-execution             | `POST /api/protocol/request-execution`             | `request-execution`              | `request_execution` (local shim)               |
 | claim-execution               | `POST /api/protocol/claim-execution`               | `claim-execution`                | `claim_execution` (local shim)                 |
 | list-execution-requests       | `POST /api/protocol/list-execution-requests`       | `list-execution-requests`        | `list_execution_requests` (local shim)         |
+| list-execution-targets        | `POST /api/protocol/list-execution-targets`        | `list-execution-targets`         | `list_execution_targets` (local shim)          |
 | clear-execution-requests      | `POST /api/protocol/clear-execution-requests`      | `clear-execution-requests`       | `clear_execution_requests` (local shim)        |
 | complete-execution-launch     | `POST /api/protocol/complete-execution-launch`     | `complete-execution-launch`      | `complete_execution_launch` (local shim)       |
 | fail-execution-launch         | `POST /api/protocol/fail-execution-launch`         | `fail-execution-launch`          | `fail_execution_launch` (local shim)           |

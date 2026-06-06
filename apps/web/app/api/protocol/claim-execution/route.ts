@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { internalErrorResponse, parseProtocolBody } from '@/app/api/protocol/_lib';
+import { normalizeRunnerTerminalProfile } from '@/lib/helpers/runner-terminal-settings';
 import {
   failActiveExecutionRequestsForObjective,
   failStaleExecutionRequest,
@@ -391,6 +392,17 @@ export async function POST(request: Request) {
         .eq('id', claimed.ticket_id)
         .single();
 
+      const { data: userTarget } = await supabase
+        .from('user_execution_targets')
+        .select('terminal_profile')
+        .eq('user_id', userId)
+        .eq('execution_target_id', executionTargetId)
+        .maybeSingle();
+
+      const runnerTerminalProfile = normalizeRunnerTerminalProfile(
+        userTarget?.terminal_profile ?? null
+      );
+
       return NextResponse.json({
         request: claimed,
         launch: {
@@ -413,7 +425,7 @@ export async function POST(request: Request) {
           remoteWorkingDirectory: textFromParams(claimed.launch_params, 'remoteWorkingDirectory'),
           serverMultiplexer: textFromParams(claimed.launch_params, 'serverMultiplexer'),
           tmuxCommand: textFromParams(claimed.launch_params, 'tmuxCommand'),
-          runnerTerminalProfile: jsonFromParams(claimed.launch_params, 'runnerTerminalProfile')
+          runnerTerminalProfile
         }
       });
     }

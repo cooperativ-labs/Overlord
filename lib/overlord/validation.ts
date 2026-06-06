@@ -563,6 +563,8 @@ export const listExecutionRequestsSchema = z.object({
   projectId: z.string().uuid().optional()
 });
 
+export const listExecutionTargetsSchema = z.object({});
+
 export const clearExecutionRequestsSchema = z
   .object({
     objectiveId: z.string().uuid().optional(),

@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2606060856.0] - 2026-06-06:08:56
+
+### Added
+- Add **`list-execution-targets`** protocol command and **`runner targets`** CLI subcommand to list runner devices (execution targets) the authenticated user can access.
+- Expose **`list_execution_targets`** MCP tool so agents can discover available runner devices and their labels.
+- Include **execution target label** on queued execution requests returned by **`list-execution-requests`**.
+
+### Fixed
+- Apply the persisted **per-target terminal profile** when Desktop claims and launches queued executions instead of always using local store settings.
+- Persist terminal profile changes made during **onboarding** to the user account, not only local Desktop storage.
+
+### Changed
+- Set document title and description on authentication pages.
+
+### Security
+- Allow Vercel Live preview tooling (`vercel.live`, Pusher) in the web app CSP on preview deployments.
+
+### Performance
+- Lazy-load ticket board views (Kanban, calendar, list) on the client to reduce initial JavaScript payload.
+
+### Documentation
+- Document **`list-execution-targets`** in the connector surfaces reference.
+
 ## [0.2606060757.0] - 2026-06-06:07:57
 
 ### Added

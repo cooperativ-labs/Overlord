@@ -1,6 +1,7 @@
 'use client';
 
 import { useQueryClient } from '@tanstack/react-query';
+import dynamic from 'next/dynamic';
 import { useEffect, useMemo, useState } from 'react';
 
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -12,10 +13,11 @@ import { ticketQueryKeys } from '@/lib/client-data/tickets/query-keys';
 import type { TicketListFilters } from '@/lib/helpers/ticket-list-filters';
 import type { Ticket } from '@/types/tickets';
 
-import CalendarView from './CalendarView';
-import KanbanBoard from './KanbanBoard';
-import TicketListView from './TicketListView';
 import { TicketViewContext } from './TicketViewContext';
+
+const CalendarView = dynamic(() => import('./CalendarView'), { ssr: false });
+const KanbanBoard = dynamic(() => import('./KanbanBoard'), { ssr: false });
+const TicketListView = dynamic(() => import('./TicketListView'), { ssr: false });
 
 type TicketsBoardClientProps = {
   initialView: string;

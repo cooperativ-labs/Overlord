@@ -2242,6 +2242,24 @@ async function protocolListExecutionRequests(args) {
   console.log(JSON.stringify(data, null, 2));
 }
 
+async function protocolListExecutionTargets(args) {
+  const flags = parseFlags(args);
+  const { platformUrl, bearerToken, localSecret, organizationId } =
+    await resolveProtocolAuthForFlags(flags);
+  const timeoutMs = resolveTimeout(flags);
+
+  const data = await apiPost(
+    platformUrl,
+    bearerToken,
+    localSecret,
+    organizationId,
+    '/api/protocol/list-execution-targets',
+    {},
+    timeoutMs
+  );
+  console.log(JSON.stringify(data, null, 2));
+}
+
 async function protocolClearExecutionRequests(args) {
   const flags = parseFlags(args);
   const { platformUrl, bearerToken, localSecret, organizationId } =
@@ -2867,6 +2885,7 @@ Subcommands:
   claim-execution           Claim one queued execution request for this device
   list-organizations        List organizations the authenticated user belongs to
   list-execution-requests   List active execution requests in the runner queue
+  list-execution-targets    List execution targets (runner devices) the user has access to
   clear-execution-requests  Clear active execution requests by objective or wholesale
   complete-execution-launch Mark a claimed execution request launched
   fail-execution-launch     Mark a claimed execution request failed
@@ -3398,6 +3417,13 @@ list-execution-requests:
     --device-fingerprint <fp>  Filter queue visibility to one execution target
     --project-id <uuid>        Restrict to one project
 
+list-execution-targets:
+  Purpose:
+    List all execution targets (runner devices) accessible to the authenticated user
+    in the current organization, including their label and id.
+  Returns:
+    JSON with { targets: [ { id, label, host, platform, transport, is_placeholder, last_seen_at } ] }
+
 clear-execution-requests:
   Purpose:
     Clear active execution requests from the runner queue by marking them failed.
@@ -3456,6 +3482,7 @@ Examples:
   ovld protocol claim-execution --device-fingerprint $OVERLORD_DEVICE_FINGERPRINT
   ovld protocol list-organizations
   ovld protocol list-execution-requests --device-fingerprint $OVERLORD_DEVICE_FINGERPRINT
+  ovld protocol list-execution-targets
   ovld protocol clear-execution-requests --objective-id <objective-uuid>
   ovld protocol clear-execution-requests --clear-all
   ovld protocol deliver --session-key <key> --ticket-id <ticket_id> --summary "Done"
@@ -3585,6 +3612,10 @@ EOF
   }
   if (subcommand === 'list-execution-requests') {
     await protocolListExecutionRequests(args);
+    return;
+  }
+  if (subcommand === 'list-execution-targets') {
+    await protocolListExecutionTargets(args);
     return;
   }
   if (subcommand === 'clear-execution-requests') {

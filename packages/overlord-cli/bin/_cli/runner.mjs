@@ -22,6 +22,7 @@ function printRunnerHelp(primaryCommand = 'ovld') {
   ${primaryCommand} runner once [options]
   ${primaryCommand} runner start [options]
   ${primaryCommand} runner status [options]
+  ${primaryCommand} runner targets [options]
   ${primaryCommand} runner clear <objective_id> [options]
   ${primaryCommand} runner clear-all [options]
 
@@ -143,6 +144,12 @@ function clearExecutionRequests(flags, deviceFingerprint, organizationId, option
     args.push('--objective-id', options.objectiveId);
   }
   return protocolJson('clear-execution-requests', args, {
+    OVERLORD_DEVICE_FINGERPRINT: deviceFingerprint
+  });
+}
+
+function listExecutionTargets(deviceFingerprint) {
+  return protocolJson('list-execution-targets', [], {
     OVERLORD_DEVICE_FINGERPRINT: deviceFingerprint
   });
 }
@@ -582,6 +589,12 @@ export async function runRunnerCommand(subcommand, args, primaryCommand = 'ovld'
 
   const flags = parseFlags(args);
   const deviceFingerprint = readOrCreateDeviceFingerprint(flags);
+
+  if (subcommand === 'targets') {
+    const data = listExecutionTargets(deviceFingerprint);
+    console.log(JSON.stringify({ ok: true, targets: data.targets ?? [] }, null, 2));
+    return;
+  }
 
   if (subcommand === 'status') {
     const organizationScope = createOrganizationScope(flags, deviceFingerprint);

@@ -78,18 +78,35 @@ export async function POST(request: Request) {
 
     const ticketIds = [...new Set(filtered.map(request => request.ticket_id))];
     const objectiveIds = [...new Set(filtered.map(request => request.objective_id))];
+    const targetIds = [
+      ...new Set(
+        filtered
+          .map(request => request.target_execution_target_id)
+          .filter((id): id is string => id !== null)
+      )
+    ];
 
-    const [{ data: tickets }, { data: objectives }] = await Promise.all([
+    const [{ data: tickets }, { data: objectives }, { data: orgTargets }] = await Promise.all([
       ticketIds.length === 0
         ? Promise.resolve({ data: [] })
         : supabase.from('tickets').select('id,ticket_id,title').in('id', ticketIds),
       objectiveIds.length === 0
         ? Promise.resolve({ data: [] })
-        : supabase.from('objectives').select('id,objective,title').in('id', objectiveIds)
+        : supabase.from('objectives').select('id,objective,title').in('id', objectiveIds),
+      targetIds.length === 0
+        ? Promise.resolve({ data: [] })
+        : supabase
+            .from('organization_execution_targets')
+            .select('execution_target_id,label')
+            .eq('organization_id', organizationId)
+            .in('execution_target_id', targetIds)
     ]);
 
     const ticketsById = new Map((tickets ?? []).map(ticket => [ticket.id, ticket]));
     const objectivesById = new Map((objectives ?? []).map(objective => [objective.id, objective]));
+    const labelByTargetId = new Map(
+      (orgTargets ?? []).map(ot => [ot.execution_target_id, ot.label])
+    );
 
     return NextResponse.json({
       requests: filtered.map(request => ({
@@ -99,7 +116,10 @@ export async function POST(request: Request) {
         objective_title:
           objectivesById.get(request.objective_id)?.title ??
           objectivesById.get(request.objective_id)?.objective ??
-          null
+          null,
+        execution_target_label: request.target_execution_target_id
+          ? (labelByTargetId.get(request.target_execution_target_id) ?? null)
+          : null
       }))
     });
   } catch (error) {

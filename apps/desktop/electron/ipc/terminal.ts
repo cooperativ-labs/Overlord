@@ -34,7 +34,8 @@ const LaunchAgentPayloadSchema = z.object({
   thinking: z.string().max(64).optional(),
   projectId: z.string().uuid().nullable().optional(),
   feedPostId: z.string().uuid().optional(),
-  initialQuestion: z.string().max(8000).optional()
+  initialQuestion: z.string().max(8000).optional(),
+  runnerTerminalProfile: z.record(z.string(), z.string()).optional()
 });
 
 type ServerMultiplexerConfig = {
@@ -96,6 +97,20 @@ function getLocalTerminalSettingsProfile(): TerminalSettingsProfile {
       'externalTerminalTmuxCommand',
       'tmux new-session bash {script}'
     ) as string
+  };
+}
+
+function profileFromRunnerTerminalProfile(
+  profile: Record<string, string>
+): TerminalSettingsProfile {
+  return {
+    termApp: profile['terminalApp'] || 'default',
+    launchMode: profile['terminalLaunchMode'] || 'tab',
+    customHotkeyValue: profile['terminalCustomHotkey'] || '',
+    customApp: profile['customTerminalApp'] || '',
+    tmuxHostApp: profile['terminalTmuxHostApp'] || 'terminal',
+    customTmuxHostApp: profile['customTerminalTmuxHostApp'] || '',
+    tmuxCommand: profile['terminalTmuxCommand'] || 'tmux new-session bash {script}'
   };
 }
 
@@ -310,11 +325,14 @@ function writeLaunchScript(command: string, cwd?: string, env?: Record<string, s
   return scriptPath;
 }
 
-async function launchScriptInExternalTerminal(scriptPath: string): Promise<void> {
+async function launchScriptInExternalTerminal(
+  scriptPath: string,
+  profile?: TerminalSettingsProfile
+): Promise<void> {
   // Keep the command short for apps we drive via synthetic keystrokes.
   // Long leading shell conditionals can lose characters during app-switch/hotkey flows.
   const launchCmd = `bash ${shellQuote(scriptPath)}`;
-  const profile = getLocalTerminalSettingsProfile();
+  const resolvedProfile = profile ?? getLocalTerminalSettingsProfile();
   const {
     termApp: rawTermApp,
     launchMode,
@@ -323,7 +341,7 @@ async function launchScriptInExternalTerminal(scriptPath: string): Promise<void>
     tmuxHostApp,
     customTmuxHostApp,
     tmuxCommand
-  } = profile;
+  } = resolvedProfile;
   const termApp = rawTermApp === 'default' ? resolveDefaultTerminalApp() : rawTermApp;
   const openInTab = launchMode === 'tab';
   const isCustomLaunchMode = launchMode === 'custom';
@@ -575,8 +593,12 @@ export function registerTerminalIpc(): void {
       initialQuestion: payload.initialQuestion
     });
 
+    const terminalProfile = payload.runnerTerminalProfile
+      ? profileFromRunnerTerminalProfile(payload.runnerTerminalProfile)
+      : getLocalTerminalSettingsProfile();
+
     const scriptPath = writeLaunchScript(command, cwd, env);
-    return launchScriptInExternalTerminal(scriptPath);
+    return launchScriptInExternalTerminal(scriptPath, terminalProfile);
   });
 
   ipcMain.handle('terminal:choose-directory', async event => {

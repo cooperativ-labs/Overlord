@@ -1091,6 +1091,16 @@ const tools = [
     subcommand: 'list-execution-requests'
   },
   {
+    name: 'list_execution_targets',
+    description: 'List execution targets (runner devices) the authenticated user has access to, including their label and id.',
+    inputSchema: {
+      type: 'object',
+      properties: {}
+    },
+    toCliFlags: () => ({}),
+    subcommand: 'list-execution-targets'
+  },
+  {
     name: 'clear_execution_requests',
     description: 'Clear active execution requests from the local runner queue.',
     inputSchema: {

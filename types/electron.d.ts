@@ -108,6 +108,8 @@ export type LaunchTerminalAgentParams = {
   projectId?: string | null;
   feedPostId?: string;
   initialQuestion?: string;
+  /** Terminal profile from user_execution_targets, overrides local store settings when present. */
+  runnerTerminalProfile?: Record<string, string>;
 };
 
 interface ElectronAPI {

@@ -11,6 +11,7 @@ const supabaseHostname = new URL(supabaseUrl).hostname;
 const supabaseRealtimeOrigin = supabaseOrigin.replace(/^http/, 'ws');
 
 const isDev = process.env.NODE_ENV === 'development';
+const isPreview = process.env.VERCEL_ENV === 'preview';
 
 const buildAppContentSecurityPolicy = () => {
   const scriptSrc = ["'self'", "'unsafe-inline'"];
@@ -47,6 +48,11 @@ const buildAppContentSecurityPolicy = () => {
       'ws://127.0.0.1:*'
     );
     imgSrc.push('http://localhost:*', 'http://127.0.0.1:*');
+  }
+
+  if (isDev || isPreview) {
+    scriptSrc.push('https://vercel.live');
+    connectSrc.push('https://vercel.live', 'wss://ws-us3.pusher.com');
   }
 
   const directives = [
