@@ -18,22 +18,22 @@ export const metadata: Metadata = {
 
 const features = [
   {
-    title: 'Open with the first objective',
+    title: 'Write an objective',
     description:
       'Start a ticket with an idea, a question, or a scoped ask. The objective is the prompt the agent will execute.'
   },
   {
-    title: 'Run in the right repo',
+    title: 'Launch the agent with context',
     description:
-      'Pick an agent and click Run. Overlord opens your terminal in the project directory and launches the objective with the right guidance.'
+      'Pick an agent and click Run. Overlord opens your terminal and launches the objective with context from previous objectives on that ticket.'
   },
   {
     title: 'Structured delivery back to the ticket',
     description:
-      'Agents report progress, file-change rationales, artifacts, and delivery summaries so reviewers can follow what happened.'
+      'Agents report progress, file-change rationales, artifacts, and delivery summaries, which serve as context for future objectives.'
   },
   {
-    title: 'Queue the next objective',
+    title: 'Queue future objectives',
     description:
       'Add future objectives to the same ticket and run them sequentially, with each step inheriting context from the last.'
   }
@@ -54,8 +54,8 @@ export default function TheAgenticTicketPage() {
             The Agentic Ticket
           </h1>
           <p className="mt-6 text-lg leading-8 text-stone-600 dark:text-slate-300">
-            Each Overlord project is a kanban board where tickets are shared context around a goal — like a
-            feature — and objectives inside each ticket are the prompts agents actually run.
+            Each Overlord project is a kanban board where tickets are shared context around a goal —
+            like a feature — and objectives inside each ticket are the prompts agents actually run.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             {features.map((feature, index) => (
@@ -79,7 +79,7 @@ export default function TheAgenticTicketPage() {
           </div>
         </div>
         <div className="p-5">
-          <div className='shadow-lg rounded-2xl'>
+          <div className="shadow-lg rounded-2xl">
             <DemoAgenticTicket />
           </div>
         </div>
@@ -123,4 +123,3 @@ export default function TheAgenticTicketPage() {
     </div>
   );
 }
-
