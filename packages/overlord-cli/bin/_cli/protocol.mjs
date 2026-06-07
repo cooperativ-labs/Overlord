@@ -2489,6 +2489,7 @@ async function protocolPrompt(args) {
     ...(flags['available-tools'] ? { availableTools: String(flags['available-tools']) } : {}),
     ...(forHuman !== undefined ? { forHuman } : {}),
     delegate: resolveProtocolTicketDelegate(flags, modelIdentifier, agentIdentifier),
+    ...(flags['assigned-to'] ? { assignedTo: String(flags['assigned-to']) } : {}),
     ...(flags['parent-session-key']
       ? { parentSessionKey: String(flags['parent-session-key']) }
       : {}),
@@ -2577,7 +2578,8 @@ async function protocolCreateTicket(args) {
         : {}),
       ...(flags['available-tools'] ? { availableTools: String(flags['available-tools']) } : {}),
       ...(forHuman !== undefined ? { forHuman } : {}),
-      delegate: resolveProtocolTicketDelegate(flags, modelIdentifier, agentIdentifier)
+      delegate: resolveProtocolTicketDelegate(flags, modelIdentifier, agentIdentifier),
+      ...(flags['assigned-to'] ? { assignedTo: String(flags['assigned-to']) } : {})
     };
 
     const data = await apiPost(
@@ -2617,7 +2619,8 @@ async function protocolCreateTicket(args) {
       : {}),
     ...(flags['available-tools'] ? { availableTools: String(flags['available-tools']) } : {}),
     ...(forHuman !== undefined ? { forHuman } : {}),
-    delegate: resolveProtocolTicketDelegate(flags, modelIdentifier, agentIdentifier)
+    delegate: resolveProtocolTicketDelegate(flags, modelIdentifier, agentIdentifier),
+    ...(flags['assigned-to'] ? { assignedTo: String(flags['assigned-to']) } : {})
   };
 
   const data = await apiPost(
@@ -2712,7 +2715,8 @@ async function protocolRecordWork(args) {
       ? { acceptanceCriteria: String(flags['acceptance-criteria']) }
       : {}),
     ...(flags['available-tools'] ? { availableTools: String(flags['available-tools']) } : {}),
-    delegate: resolveProtocolTicketDelegate(flags, modelIdentifier, agentIdentifier)
+    delegate: resolveProtocolTicketDelegate(flags, modelIdentifier, agentIdentifier),
+    ...(flags['assigned-to'] ? { assignedTo: String(flags['assigned-to']) } : {})
   };
 
   const { platformUrl, bearerToken, localSecret, organizationId } =
@@ -3164,6 +3168,7 @@ prompt:
     --for-human               Mark the new ticket as requiring a human
     --execution-target <t>    Deprecated alias: agent | human
     --delegate <model>        Model or delegate identifier that created the ticket
+    --assigned-to <member>    Assign the ticket to a member: username, email, user-id, or orgid:username (defaults to creator)
     --parent-session-key <key>
     --parent-ticket-id <ticket_id>
     --agent <identifier>
@@ -3204,6 +3209,7 @@ create:
     --for-human               Mark the new ticket as requiring a human
     --execution-target <t>    Deprecated alias: agent | human
     --delegate <model>        Model or delegate identifier that created the ticket
+    --assigned-to <member>    Assign the ticket to a member: username, email, user-id, or orgid:username (defaults to creator)
     --agent <identifier>
     --model <identifier>
   Returns:
@@ -3252,6 +3258,7 @@ record-work:
     --acceptance-criteria <text>
     --available-tools <text>
     --delegate <model>
+    --assigned-to <member>    Assign the ticket to a member: username, email, user-id, or orgid:username (defaults to creator)
     --agent <identifier>
     --model <identifier>
   Notes:

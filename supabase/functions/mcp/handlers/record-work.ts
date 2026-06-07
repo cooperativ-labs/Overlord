@@ -7,6 +7,7 @@ import { type TokenContext } from '../auth.ts';
 import { scheduleGenerateFeedPost } from '../helpers/invoke-generate-feed-post.ts';
 import { toolErr, toolOk } from '../rpc.ts';
 
+import { resolveAssignedMember } from './_assigned-member.ts';
 import { insertChangeRationales } from './_change-rationales.ts';
 import { upsertDeviceFromProtocol } from './_device-upsert.ts';
 import { insertOrderedObjectives, normalizeObjectivesInput } from './_objectives.ts';
@@ -113,6 +114,7 @@ export async function handleRecordWork(supabase: SupabaseClient, args: any, ctx:
     personal = false,
     workingDirectory,
     delegate = null,
+    assignedTo = null,
     agentIdentifier = 'unknown',
     metadata = {},
     deviceFingerprint = null,
@@ -166,6 +168,9 @@ export async function handleRecordWork(supabase: SupabaseClient, args: any, ctx:
     );
   }
 
+  const assigneeResult = await resolveAssignedMember(supabase, organizationId, assignedTo);
+  if (!assigneeResult.ok) return toolErr(assigneeResult.error);
+
   const nextTitle =
     (typeof title === 'string' ? title : '').trim() || objectives[0].objective.slice(0, 120);
   const createdBy = await resolveTicketCreatorUserId(supabase, ctx);
@@ -194,6 +199,7 @@ export async function handleRecordWork(supabase: SupabaseClient, args: any, ctx:
     .from('tickets')
     .insert({
       acceptance_criteria: acceptanceCriteria || null,
+      assigned_member: assigneeResult.memberId ?? undefined,
       available_tools: availableTools,
       board_position: topBoardPosition,
       created_by: createdBy,

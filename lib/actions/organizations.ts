@@ -48,7 +48,7 @@ export async function uploadOrganizationLogoAction(
   if (file.size > MAX_ORG_IMAGE_BYTES) throw new Error('Image must be 5 MB or smaller.');
 
   const supabase = await createClientForRequest();
-  const userId = await requireUserId();
+  await requireUserId();
 
   const { data: existingOrg } = await supabase
     .from('organizations')
@@ -340,11 +340,14 @@ export async function updateOrganizationFeedRetentionDaysAction(
 }
 
 export type OrganizationMember = {
+  memberId: string;
   userId: string;
   role: OrganizationRole;
   joinedAt: string;
   email: string | null;
   displayName: string | null;
+  username: string | null;
+  imageUrl: string | null;
   isCurrentUser: boolean;
 };
 
@@ -354,40 +357,31 @@ export async function getOrganizationMembersAction(
   const supabase = await createClientForRequest();
   const currentUserId = await requireUserId();
 
-  const { data: memberRows, error } = await supabase
-    .from('members')
-    .select('user_id, role, created_at')
-    .eq('organization_id', organizationId)
-    .order('created_at', { ascending: true });
+  // get_org_member_directory is a SECURITY DEFINER RPC that returns only the
+  // safe display columns for co-members, so we get real names/avatars/usernames
+  // without exposing the sensitive profiles columns to every co-member.
+  const { data: directoryRows, error } = await supabase.rpc('get_org_member_directory', {
+    org_id: organizationId
+  });
 
   if (error) {
     throw new Error(error.message ?? 'Failed to load members.');
   }
 
-  const members = memberRows ?? [];
-  const userIds = members.map(m => m.user_id);
-  const profilesById = new Map<string, { email: string | null; name: string | null }>();
-  if (userIds.length > 0) {
-    const { data: profileRows } = await supabase
-      .from('profiles')
-      .select('id, email, name')
-      .in('id', userIds);
-    for (const row of profileRows ?? []) {
-      profilesById.set(row.id, { email: row.email ?? null, name: row.name ?? null });
-    }
-  }
+  type DirectoryRow =
+    Database['public']['Functions']['get_org_member_directory']['Returns'][number];
 
-  return members.map(row => {
-    const profile = profilesById.get(row.user_id);
-    return {
-      userId: row.user_id,
-      role: row.role as OrganizationRole,
-      joinedAt: row.created_at,
-      email: profile?.email ?? null,
-      displayName: profile?.name ?? null,
-      isCurrentUser: row.user_id === currentUserId
-    };
-  });
+  return ((directoryRows ?? []) as DirectoryRow[]).map(row => ({
+    memberId: row.member_id,
+    userId: row.user_id,
+    role: row.role as OrganizationRole,
+    joinedAt: row.joined_at,
+    email: row.email ?? null,
+    displayName: row.name ?? null,
+    username: row.username ?? null,
+    imageUrl: row.image_url ?? null,
+    isCurrentUser: row.user_id === currentUserId
+  }));
 }
 
 export async function updateMemberRoleAction(

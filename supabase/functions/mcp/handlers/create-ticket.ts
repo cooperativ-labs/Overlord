@@ -5,6 +5,7 @@ import { type TokenContext } from '../auth.ts';
 import { toolErr, toolOk } from '../rpc.ts';
 import { resolveSession } from '../session.ts';
 
+import { resolveAssignedMember } from './_assigned-member.ts';
 import { insertOrderedObjectives, normalizeObjectivesInput } from './_objectives.ts';
 import { resolveProjectIdOrName } from './_project-resolution.ts';
 import { resolvePreferredStatusNameByType } from './_status-resolution.ts';
@@ -36,7 +37,8 @@ export async function handleCreateTicket(supabase: SupabaseClient, args: any, ct
     forHuman = false,
     priority = 'medium',
     delegate = null,
-    projectId = null
+    projectId = null,
+    assignedTo = null
   } = args;
   let objectives;
   try {
@@ -78,6 +80,13 @@ export async function handleCreateTicket(supabase: SupabaseClient, args: any, ct
     resolvedProjectId = matchedProject.id;
   }
 
+  const assigneeResult = await resolveAssignedMember(
+    supabase,
+    sourceTicket.organization_id,
+    assignedTo
+  );
+  if (!assigneeResult.ok) return toolErr(assigneeResult.error);
+
   const nextTitle = title.trim() || objectives[0].objective.slice(0, 120);
   const createdBy = await resolveTicketCreatorUserId(supabase, ctx);
   const draftStatusName = await resolvePreferredStatusNameByType(
@@ -90,6 +99,7 @@ export async function handleCreateTicket(supabase: SupabaseClient, args: any, ct
     .from('tickets')
     .insert({
       acceptance_criteria: acceptanceCriteria || null,
+      assigned_member: assigneeResult.memberId ?? undefined,
       available_tools: availableTools,
       created_by: createdBy,
       delegate: ticketDelegate,

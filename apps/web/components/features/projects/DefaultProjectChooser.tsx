@@ -3,16 +3,9 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { useDefaultProject } from '@/components/features/projects/DefaultProjectContext';
-import { ProjectColorDot } from '@/components/features/projects/ProjectColorDot';
+import { ProjectSelector } from '@/components/features/projects/ProjectSelector';
 import { ProjectWorkingDirectoryRequiredModal } from '@/components/features/projects/ProjectWorkingDirectoryRequiredModal';
 import { useElectron } from '@/components/features/terminal/useElectron';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '@/components/ui/select';
 import { isWorkingDirectoryNone } from '@/lib/helpers/project-working-directory';
 import { cn } from '@/lib/utils';
 
@@ -71,31 +64,13 @@ export function DefaultProjectChooser({ className }: { className?: string }) {
 
   return (
     <>
-      <Select
+      <ProjectSelector
+        projects={projects}
         value={defaultProjectId ?? projects[0].id}
         onValueChange={handleSelectDefaultProject}
         disabled={isPending}
-      >
-        <SelectTrigger
-          aria-label="Select default project"
-          className={cn('h-8 min-w-56 max-w-[26rem]', className)}
-        >
-          <div className="flex w-full items-center gap-2">
-            <SelectValue placeholder="Select default project" />{' '}
-            <span className="text-muted-foreground text-sm">Default project</span>
-          </div>
-        </SelectTrigger>
-        <SelectContent align="start">
-          {projects.map(project => (
-            <SelectItem key={project.id} value={project.id}>
-              <div className="flex items-center gap-2">
-                <ProjectColorDot color={project.color} className="h-3 w-3 border" withBorder />
-                <span>{project.name}</span>
-              </div>
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+        triggerClassName={cn('min-w-56 max-w-[26rem]', className)}
+      />
       <ProjectWorkingDirectoryRequiredModal
         open={projectNeedingDirectory !== null}
         project={projectNeedingDirectory}

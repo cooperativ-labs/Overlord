@@ -236,7 +236,8 @@ export const createStandaloneTicketSchema = z.object({
   projectId: z.string().optional(),
   personal: z.boolean().optional().default(false),
   workingDirectory: z.string().trim().max(1024).optional(),
-  delegate: z.string().trim().max(120).optional()
+  delegate: z.string().trim().max(120).optional(),
+  assignedTo: z.string().trim().max(320).optional()
 });
 
 export const createFollowUpTicketSchema = z.object({
@@ -249,7 +250,8 @@ export const createFollowUpTicketSchema = z.object({
   forHuman: forHumanSchema,
   priority: z.enum(['low', 'medium', 'high', 'urgent']).default('medium'),
   projectId: projectIdOrNameSchema.optional(),
-  delegate: z.string().trim().max(120).optional()
+  delegate: z.string().trim().max(120).optional(),
+  assignedTo: z.string().trim().max(320).optional()
 });
 
 /** connect: lightweight session creation, no ticket context returned */
@@ -304,6 +306,7 @@ export const recordWorkSchema = z.object({
   personal: z.boolean().optional().default(false),
   workingDirectory: z.string().trim().max(1024).optional(),
   delegate: z.string().trim().max(120).optional(),
+  assignedTo: z.string().trim().max(320).optional(),
   agentIdentifier: z.string().trim().min(1).max(120),
   connectionMethod: connectionMethodSchema.default('rest'),
   metadata: z.record(z.string(), z.unknown()).optional().default({}),
@@ -324,6 +327,7 @@ export const spawnSchema = z.object({
   personal: z.boolean().optional().default(false),
   workingDirectory: z.string().trim().max(1024).optional(),
   delegate: z.string().trim().max(120).optional(),
+  assignedTo: z.string().trim().max(320).optional(),
   parentSessionKey: z.string().uuid().optional(),
   parentTicketId: z.string().optional(),
   agentIdentifier: z.string().trim().min(1).max(120),

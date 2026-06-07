@@ -44,6 +44,13 @@ describe('execution_requests idempotency', () => {
       target_organization_id: orgId
     });
 
+    const { error: memberError } = await supabase.from('members').insert({
+      organization_id: orgId,
+      user_id: USER_ID,
+      role: 'ADMIN'
+    });
+    if (memberError) throw memberError;
+
     const { data: ticket, error: ticketError } = await supabase
       .from('tickets')
       .insert({
@@ -79,6 +86,9 @@ describe('execution_requests idempotency', () => {
       await supabase.from('ticket_events').delete().eq('ticket_id', ticketId);
       await supabase.from('objectives').delete().eq('ticket_id', ticketId);
       await supabase.from('tickets').delete().eq('id', ticketId);
+    }
+    if (orgId) {
+      await supabase.from('members').delete().eq('organization_id', orgId).eq('user_id', USER_ID);
     }
     if (orgId) {
       await supabase.from('organizations').delete().eq('id', orgId);

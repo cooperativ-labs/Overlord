@@ -105,6 +105,13 @@ export function TicketHeaderRight({ onPress }: { onPress: () => void }) {
   );
 }
 
+export type TicketAssigneeOption = {
+  memberId: string;
+  userId: string;
+  name: string;
+  username: string | null;
+};
+
 export function TicketHeaderSheet({
   visible,
   onClose,
@@ -113,6 +120,10 @@ export function TicketHeaderSheet({
   ticketUuid,
   everhourTaskId,
   copyingPromptContext,
+  members,
+  assignedMember,
+  savingAssignee,
+  onChangeAssignee,
   onOpenOverflow,
   onCopyCliCommand,
   onCopyPrompt,
@@ -126,6 +137,10 @@ export function TicketHeaderSheet({
   ticketUuid: string;
   everhourTaskId: string | null;
   copyingPromptContext: 'cli' | 'web' | null;
+  members: TicketAssigneeOption[];
+  assignedMember: string | null;
+  savingAssignee: boolean;
+  onChangeAssignee: (userId: string | null) => void;
   onOpenOverflow: () => void;
   onCopyCliCommand: () => void;
   onCopyPrompt: (context: 'cli' | 'web') => void;
@@ -227,6 +242,12 @@ export function TicketHeaderSheet({
                   <HeaderSheetChip icon="refresh-outline" label="Reload" onPress={onReload} />
                 </View>
 
+                <HeaderSheetAssigneeSection
+                  members={members}
+                  assignedMember={assignedMember}
+                  saving={savingAssignee}
+                  onChange={onChangeAssignee}
+                />
                 <HeaderSheetRow
                   icon="copy-outline"
                   label="Copy ticket ID"
@@ -294,6 +315,12 @@ export function TicketHeaderSheet({
                   <HeaderSheetChip icon="refresh-outline" label="Reload" onPress={onReload} />
                 </View>
 
+                <HeaderSheetAssigneeSection
+                  members={members}
+                  assignedMember={assignedMember}
+                  saving={savingAssignee}
+                  onChange={onChangeAssignee}
+                />
                 <HeaderSheetRow
                   icon="copy-outline"
                   label="Copy ticket ID"
@@ -348,6 +375,77 @@ function HeaderSheetChip({
       <Text style={styles.headerSheetChipLabel} numberOfLines={1}>
         {label}
       </Text>
+    </Pressable>
+  );
+}
+
+function HeaderSheetAssigneeSection({
+  members,
+  assignedMember,
+  saving,
+  onChange
+}: {
+  members: TicketAssigneeOption[];
+  assignedMember: string | null;
+  saving: boolean;
+  onChange: (userId: string | null) => void;
+}) {
+  const colors = useThemeColors();
+  const styles = useThemedStyles(createStyles);
+  return (
+    <View>
+      <View style={styles.headerSheetRow}>
+        <Ionicons name="person-outline" size={18} color={colors.foreground} />
+        <Text style={styles.headerSheetRowLabel}>Assignee</Text>
+        {saving ? <ActivityIndicator size="small" color={colors.mutedForeground} /> : null}
+      </View>
+      <HeaderSheetAssigneeOption
+        label="Unassigned"
+        selected={!assignedMember}
+        disabled={saving}
+        onPress={() => onChange(null)}
+      />
+      {members.map(member => (
+        <HeaderSheetAssigneeOption
+          key={member.memberId}
+          label={member.username ? `${member.name} (@${member.username})` : member.name}
+          selected={assignedMember === member.memberId}
+          disabled={saving}
+          onPress={() => onChange(member.memberId)}
+        />
+      ))}
+    </View>
+  );
+}
+
+function HeaderSheetAssigneeOption({
+  label,
+  selected,
+  disabled,
+  onPress
+}: {
+  label: string;
+  selected: boolean;
+  disabled?: boolean;
+  onPress: () => void;
+}) {
+  const colors = useThemeColors();
+  const styles = useThemedStyles(createStyles);
+  return (
+    <Pressable
+      style={({ pressed }) => [
+        styles.headerSheetRow,
+        { paddingLeft: 34 },
+        pressed && styles.pressed
+      ]}
+      onPress={onPress}
+      disabled={disabled}
+      accessibilityRole="button"
+    >
+      <Text style={styles.headerSheetRowLabel} numberOfLines={1}>
+        {label}
+      </Text>
+      {selected ? <Ionicons name="checkmark" size={18} color={colors.foreground} /> : null}
     </Pressable>
   );
 }

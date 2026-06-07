@@ -6,6 +6,12 @@ import { useLayoutEffect } from 'react';
 import { seedAgentModelsCache } from '@/components/features/AgentModelSelector';
 import { LiveActivityFeed } from '@/components/features/TicketPanelLive/LiveActivityFeed';
 import { LiveFileChanges } from '@/components/features/TicketPanelLive/LiveFileChanges';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger
+} from '@/components/ui/accordion';
 import { Badge } from '@/components/ui/badge';
 import { MARKETING_OFFERED_AGENT_MODELS } from '@/lib/marketing/offered-agent-models';
 import { cn } from '@/lib/utils';
@@ -17,7 +23,6 @@ import {
   DEMO_TICKET_LIFECYCLE_FILE_CHANGES,
   DEMO_TICKET_LIFECYCLE_INFO
 } from './mock-ticket-lifecycle-data';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 
 export function DemoAgenticTicket() {
   useLayoutEffect(() => {
@@ -31,7 +36,6 @@ export function DemoAgenticTicket() {
           <h2 className="flex-1 text-lg font-semibold leading-tight">
             {DEMO_TICKET_DETAILS.title}
           </h2>
-
         </div>
         <p className="mt-1 font-mono text-[11px] text-muted-foreground">
           {DEMO_TICKET_DETAILS.project_name} · {DEMO_TICKET_DETAILS.ticket_identifier}
@@ -70,8 +74,7 @@ export function DemoAgenticTicket() {
         className={cn(
           'relative overflow-hidden border-t bg-card px-5 py-5 text-foreground sm:px-6 sm:py-6',
 
-          'before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-12 before:bg-linear-to-b before:from-black/6 before:to-transparent',
-
+          'before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-12 before:bg-linear-to-b before:from-black/6 before:to-transparent'
         )}
       >
         <section className="mb-6">

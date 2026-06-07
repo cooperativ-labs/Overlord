@@ -33,7 +33,12 @@ import { normalizeTicketExecutionTarget } from '@/lib/types';
 import { type ObjectiveAttachmentItem, type Project } from './ticket-detail-shared';
 import { createStyles } from './ticket-detail-styles';
 import { TicketDetailContent } from './TicketDetailContent';
-import { TicketHeaderRight, TicketHeaderSheet, TicketHeaderTitle } from './TicketDetailHeader';
+import {
+  type TicketAssigneeOption,
+  TicketHeaderRight,
+  TicketHeaderSheet,
+  TicketHeaderTitle
+} from './TicketDetailHeader';
 import { TicketDetailModals } from './TicketDetailModals';
 
 export default function TicketDetailScreen() {
@@ -67,6 +72,8 @@ export default function TicketDetailScreen() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [savingProject, setSavingProject] = useState(false);
+  const [members, setMembers] = useState<TicketAssigneeOption[]>([]);
+  const [savingAssignee, setSavingAssignee] = useState(false);
   const [showProjectPicker, setShowProjectPicker] = useState(false);
   const [showStatusPicker, setShowStatusPicker] = useState(false);
   const [statusDefinitions, setStatusDefinitions] = useState<TicketStatusDefinition[]>([]);
@@ -126,7 +133,7 @@ export default function TicketDetailScreen() {
         supabase
           .from('tickets')
           .select(
-            'id, organization_id, title, status, priority, for_human, due_datetime, ticket_sequence, context, constraints, acceptance_criteria, created_at, updated_at, project_id, ticket_id, everhour_task_id'
+            'id, organization_id, title, status, priority, for_human, due_datetime, ticket_sequence, context, constraints, acceptance_criteria, created_at, updated_at, project_id, ticket_id, everhour_task_id, assigned_member'
           )
           .eq('id', ticketId)
           .single(),
@@ -168,6 +175,34 @@ export default function TicketDetailScreen() {
         const normalizedTicket = normalizeTicketExecutionTarget(ticketRes.data as TicketDetailRow);
         setTicket(normalizedTicket);
         setSelectedProjectId(normalizedTicket.project_id ?? null);
+
+        // Load the org member directory for the assignee picker (SECURITY DEFINER
+        // RPC returns only safe display columns to verified co-members).
+        const directoryRes = await supabase.rpc('get_org_member_directory', {
+          org_id: normalizedTicket.organization_id
+        });
+        if (loadSequenceRef.current !== loadSequence) {
+          return;
+        }
+        if (directoryRes.data) {
+          const directoryRows = directoryRes.data as {
+            member_id: string;
+            user_id: string;
+            name: string | null;
+            username: string | null;
+            email: string | null;
+          }[];
+          setMembers(
+            directoryRows.map(row => ({
+              memberId: row.member_id,
+              userId: row.user_id,
+              name: row.name?.trim() || row.username || row.email || 'Member',
+              username: row.username ?? null
+            }))
+          );
+        } else if (reset) {
+          setMembers([]);
+        }
       } else if (ticketRes.error) {
         setTicket(null);
         setSelectedProjectId(null);
@@ -646,6 +681,43 @@ export default function TicketDetailScreen() {
     }
   }
 
+  async function handleAssigneeChange(nextAssignedMember: string | null) {
+    if (!ticket || savingAssignee) return;
+    if ((ticket.assigned_member ?? null) === nextAssignedMember) return;
+
+    const previousAssignedMember = ticket.assigned_member ?? null;
+    setTicket(current => (current ? { ...current, assigned_member: nextAssignedMember } : current));
+    setSavingAssignee(true);
+
+    try {
+      const supabase = getSupabase();
+      const { error } = await supabase
+        .from('tickets')
+        .update({ assigned_member: nextAssignedMember })
+        .eq('id', ticket.id);
+
+      if (error) throw new Error(error.message);
+
+      await supabase.from('ticket_events').insert({
+        event_type: 'system',
+        summary: nextAssignedMember
+          ? 'Assignee updated from mobile.'
+          : 'Ticket unassigned from mobile.',
+        ticket_id: ticket.id
+      });
+    } catch (error) {
+      setTicket(current =>
+        current ? { ...current, assigned_member: previousAssignedMember } : current
+      );
+      Alert.alert(
+        'Unable to update assignee',
+        error instanceof Error ? error.message : 'An unexpected error occurred.'
+      );
+    } finally {
+      setSavingAssignee(false);
+    }
+  }
+
   async function handleStatusChange(nextStatus: string) {
     if (!ticket) return;
 
@@ -1082,6 +1154,12 @@ export default function TicketDetailScreen() {
         ticketUuid={ticket.id}
         everhourTaskId={ticket.everhour_task_id ?? null}
         copyingPromptContext={copyingPromptContext}
+        members={members}
+        assignedMember={ticket.assigned_member ?? null}
+        savingAssignee={savingAssignee}
+        onChangeAssignee={value => {
+          void handleAssigneeChange(value);
+        }}
         onOpenOverflow={() => {
           setHeaderSheetOpen(false);
           setOverflowOpen(true);

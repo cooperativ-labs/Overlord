@@ -70,6 +70,7 @@ type ProjectSettingsProviderProps = {
   initialSshPrivateKeyPath?: string | null;
   initialEverhourProjectId: string | null;
   initialEverhourProjectName: string | null;
+  isArchived?: boolean;
   initialStatuses: Array<{
     name: string;
     position: number;
@@ -97,6 +98,7 @@ export function ProjectSettingsProvider({
   initialSshPrivateKeyPath,
   initialEverhourProjectId,
   initialEverhourProjectName,
+  isArchived = false,
   initialStatuses,
   hasEverhourApiKey,
   sshFeatureEnabled,
@@ -236,6 +238,7 @@ export function ProjectSettingsProvider({
         initialSshPrivateKeyPath={initialSshPrivateKeyPath ?? null}
         initialEverhourProjectId={initialEverhourProjectId}
         initialEverhourProjectName={initialEverhourProjectName}
+        isArchived={isArchived}
         initialStatuses={initialStatuses}
         hasEverhourApiKey={hasEverhourApiKey}
         sshFeatureEnabled={sshFeatureEnabled}

@@ -8,10 +8,12 @@ import {
   type SidebarProject
 } from '@/lib/actions/project-types';
 import {
+  archiveProjectAction,
   createProject,
   deleteProjectAction,
   disconnectProjectFromEverhourAction,
   moveProjectToOrganizationAction,
+  unarchiveProjectAction,
   updateProjectColorAction,
   updateProjectNameAction,
   updateProjectSshConfigAction
@@ -100,6 +102,8 @@ const updateProjectSshConfigWithRetry = withElectronActionRetry(updateProjectSsh
 const disconnectProjectFromEverhourWithRetry = withElectronActionRetry(
   disconnectProjectFromEverhourAction
 );
+const archiveProjectWithRetry = withElectronActionRetry(archiveProjectAction);
+const unarchiveProjectWithRetry = withElectronActionRetry(unarchiveProjectAction);
 const deleteProjectWithRetry = withElectronActionRetry(deleteProjectAction);
 
 function deriveSshCommand(input: {
@@ -223,6 +227,31 @@ export function useUpdateProjectSshConfigMutation() {
 export function useDisconnectProjectEverhourMutation() {
   return useMutation({
     mutationFn: disconnectProjectFromEverhourWithRetry
+  });
+}
+
+export function useArchiveProjectMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: archiveProjectWithRetry,
+    onMutate: input => {
+      const snapshot = snapshotProjectState(queryClient);
+      removeProjectFromCache(queryClient, input.projectId);
+      return snapshot;
+    },
+    onError: (_error, _input, snapshot) => {
+      if (snapshot) restoreProjectState(queryClient, snapshot);
+    }
+  });
+}
+
+export function useUnarchiveProjectMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: unarchiveProjectWithRetry,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ticketQueryKeys.projects() });
+    }
   });
 }
 

@@ -6,6 +6,7 @@ import { insertOrderedObjectives, type OrderedObjectiveInput } from '@/lib/objec
 import { insertFileChanges } from '@/lib/overlord/file-changes';
 import { resolveProtocolTicketCreatorUserId } from '@/lib/overlord/protocol-ticket-creator';
 import { resolveTicketDelegate } from '@/lib/overlord/protocol-ticket-delegate';
+import { resolveAssignedMember } from '@/lib/overlord/resolve-assigned-member';
 import {
   resolveProjectByWorkingDirectory,
   resolveProjectIdOrName
@@ -51,6 +52,7 @@ export type RecordWorkParams = {
   artifacts: ArtifactInput[];
   changeRationales: ChangeRationaleInput[];
   delegate?: string;
+  assignedTo?: string;
   agentIdentifier: string;
   modelIdentifier?: string | null;
   connectionMethod: ConnectionMethod;
@@ -85,6 +87,7 @@ export async function runRecordWorkProtocol(supabase: RecordClient, params: Reco
     artifacts,
     changeRationales,
     delegate,
+    assignedTo,
     agentIdentifier,
     modelIdentifier,
     connectionMethod,
@@ -127,6 +130,11 @@ export async function runRecordWorkProtocol(supabase: RecordClient, params: Reco
     } as const;
   }
 
+  const assigneeResult = await resolveAssignedMember(supabase, organizationId, assignedTo);
+  if (!assigneeResult.ok) {
+    return { error: assigneeResult.error, status: 400 } as const;
+  }
+
   const nextTitle = title.trim() || deriveTitleFromObjective(objectives[0].objective);
   const ticketDelegate = resolveTicketDelegate(delegate, modelIdentifier ?? null, agentIdentifier);
   const createdBy = await resolveProtocolTicketCreatorUserId(supabase, { userId });
@@ -150,6 +158,7 @@ export async function runRecordWorkProtocol(supabase: RecordClient, params: Reco
     .from('tickets')
     .insert({
       acceptance_criteria: acceptanceCriteria || null,
+      assigned_member: assigneeResult.memberId ?? undefined,
       available_tools: availableTools,
       board_position: topBoardPosition,
       created_by: createdBy,

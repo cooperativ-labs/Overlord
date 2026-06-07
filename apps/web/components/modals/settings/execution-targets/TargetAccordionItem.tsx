@@ -10,7 +10,26 @@ import {
   AccordionItem,
   AccordionTrigger
 } from '@/components/ui/accordion';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle
+} from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { LoadingButton } from '@/components/ui/loading-button';
@@ -94,10 +113,9 @@ export function TargetAccordionItem({
 
   const [labelInput, setLabelInput] = useState(target.label);
   const [labelEditing, setLabelEditing] = useState(false);
-  const [labelError, setLabelError] = useState<string | null>(null);
-  const [labelSaving, setLabelSaving] = useState(false);
   const [pendingDeleteOrgId, setPendingDeleteOrgId] = useState<number | null>(null);
   const [confirmDeleteOrgId, setConfirmDeleteOrgId] = useState<number | null>(null);
+  const [deleteDialogOrgId, setDeleteDialogOrgId] = useState<number | null>(null);
   const { copied, copy } = useCopyToClipboard();
 
   const LABEL_REGEX = /^[a-z0-9][a-z0-9-]*$/;
@@ -109,30 +127,36 @@ export function TargetAccordionItem({
     return null;
   }
 
-  async function handleSaveLabel() {
-    const error = validateLabel(labelInput);
+  async function handleLabelBlur() {
+    setLabelEditing(false);
+    const trimmed = labelInput.trim();
+    const error = validateLabel(trimmed);
     if (error) {
-      setLabelError(error);
+      setLabelInput(target.label);
+      toast.error(error);
       return;
     }
-    setLabelSaving(true);
+    if (trimmed === target.label) {
+      setLabelInput(target.label);
+      return;
+    }
+
+    const previousLabel = target.label;
+    onLabelChanged?.(target.id, trimmed);
+    setLabelInput(trimmed);
+
     try {
-      await updateExecutionTargetLabelAction({ targetId: target.id, label: labelInput });
-      toast.success('Label updated.');
-      setLabelEditing(false);
-      setLabelError(null);
-      onLabelChanged?.(target.id, labelInput);
+      await updateExecutionTargetLabelAction({ targetId: target.id, label: trimmed });
     } catch (err) {
+      onLabelChanged?.(target.id, previousLabel);
+      setLabelInput(previousLabel);
       toast.error(err instanceof Error ? err.message : 'Failed to update label.');
-    } finally {
-      setLabelSaving(false);
     }
   }
 
   function handleCancelLabelEdit() {
     setLabelInput(target.label);
     setLabelEditing(false);
-    setLabelError(null);
   }
 
   async function handleClaim(organizationId: number) {
@@ -174,6 +198,7 @@ export function TargetAccordionItem({
       });
       toast.success('Target removed from the organization.');
       setConfirmDeleteOrgId(null);
+      setDeleteDialogOrgId(null);
       onDeleted?.(target.id, organizationId);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to remove execution target.');
@@ -181,6 +206,12 @@ export function TargetAccordionItem({
       setPendingDeleteOrgId(null);
     }
   }
+
+  useEffect(() => {
+    if (!labelEditing) {
+      setLabelInput(target.label);
+    }
+  }, [target.label, labelEditing]);
 
   useEffect(() => {
     const next: TerminalProfileState = { ...DEFAULT_TERMINAL_PROFILE };
@@ -250,7 +281,10 @@ export function TargetAccordionItem({
   const usesCustomLaunchMode = profile.terminalLaunchMode === 'custom';
   const selectedTerminalLabel =
     externalTerminalAppOptions.find(opt => opt.value === profile.terminalApp)?.label ??
-    'your terminal';
+    'System Default';
+  const launchModeLabel = externalTerminalLaunchModeOptions.find(
+    opt => opt.value === profile.terminalLaunchMode
+  )?.label;
 
   const isSsh = target.transport === 'ssh' || target.transport === 'tailscale_ssh';
   const transportLabel = isSsh
@@ -265,6 +299,13 @@ export function TargetAccordionItem({
   const localAgentPreCommand = localAgentConfig.preCommand?.trim();
   const localAgentFlags = localAgentConfig.flags;
   const executionTargetSuffix = target.id.slice(-4);
+  const deletableOrgs = ownership?.organizations.filter(org => org.isAdmin) ?? [];
+  const deleteDialogOrg = deletableOrgs.find(org => org.organizationId === deleteDialogOrgId);
+
+  // Derive terminal label from the prop directly for the outer trigger
+  const triggerTerminalLabel =
+    externalTerminalAppOptions.find(opt => opt.value === terminalProfile.terminalApp)?.label ??
+    'System Default';
 
   async function handleCopyExecutionTargetId(event: MouseEvent<HTMLButtonElement>) {
     event.preventDefault();
@@ -287,121 +328,187 @@ export function TargetAccordionItem({
   }
 
   return (
-    <AccordionItem value={target.id} className="px-4">
-      <AccordionTrigger>
-        <div className="flex flex-1 flex-col gap-1 pr-2 hover:no-underline">
-          <div className="flex items-center gap-2">
-            <span className="font-medium">{target.label}</span>
-            <button
-              type="button"
-              onClick={handleCopyExecutionTargetId}
-              className={cn(
-                'inline-flex items-center gap-1 rounded-full',
-                copied && 'text-green-700 dark:text-green-300'
+    <AccordionItem value={target.id} className="px-4 bg-neutral-100 rounded-lg">
+      <AccordionTrigger className="py-4 hover:no-underline">
+        <div className="flex flex-1 items-start gap-2 pr-2">
+          <div className="flex min-w-0 flex-1 flex-col gap-2">
+            {/* Row 1: Name + ID badge + status badges */}
+            <div className="flex items-center gap-2">
+              {labelEditing ? (
+                <Input
+                  id={`target-${target.id}-label`}
+                  value={labelInput}
+                  onChange={e => setLabelInput(e.target.value)}
+                  onClick={e => e.stopPropagation()}
+                  onKeyDown={e => {
+                    e.stopPropagation();
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      e.currentTarget.blur();
+                    }
+                    if (e.key === 'Escape') {
+                      e.preventDefault();
+                      handleCancelLabelEdit();
+                    }
+                  }}
+                  onBlur={() => void handleLabelBlur()}
+                  autoFocus
+                  className="h-7 w-auto min-w-32 max-w-[16rem] font-medium"
+                />
+              ) : (
+                <button
+                  type="button"
+                  className="font-medium text-left hover:underline"
+                  title="Click to edit label"
+                  onClick={e => {
+                    e.stopPropagation();
+                    setLabelInput(target.label);
+                    setLabelEditing(true);
+                  }}
+                >
+                  {target.label}
+                </button>
               )}
-              aria-label={`Copy execution target ID ${target.id}`}
-              title={copied ? 'Copied execution target ID' : 'Copy execution target ID'}
-            >
-              <Badge variant="secondary" className="font-mono text-[10px]">
-                {executionTargetSuffix}
-              </Badge>
-              {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-            </button>
-            {target.isPlaceholder && (
-              <Badge variant="outline" className="text-[10px] uppercase">
-                Pending
-              </Badge>
+              <button
+                type="button"
+                onClick={handleCopyExecutionTargetId}
+                className={cn(
+                  'inline-flex items-center gap-1 rounded-full',
+                  copied && 'text-green-700 dark:text-green-300'
+                )}
+                aria-label={`Copy execution target ID ${target.id}`}
+                title={copied ? 'Copied execution target ID' : 'Copy execution target ID'}
+              >
+                <Badge variant="secondary" className="font-mono text-[10px]">
+                  {executionTargetSuffix}
+                </Badge>
+                {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+              </button>
+              {target.isPlaceholder && (
+                <Badge variant="outline" className="text-[10px] uppercase">
+                  Pending
+                </Badge>
+              )}
+            </div>
+            {/* Row 2: Machine info */}
+            {(target.hostname || target.platform) && (
+              <span className="text-xs text-muted-foreground">
+                {target.hostname || 'No hostname'}
+                {target.platform ? ` · ${target.platform}` : ''}
+              </span>
             )}
+            {/* Row 3: Config summary */}
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Badge variant={isSsh ? 'default' : 'secondary'} className="text-[10px]">
+                {transportLabel}
+              </Badge>
+              <Badge variant="outline" className="text-[10px]">
+                {triggerTerminalLabel}
+              </Badge>
+              {isSsh && target.sshCredentials.length > 0 && (
+                <Badge variant="outline" className="text-[10px]">
+                  {target.sshCredentials.length} credential
+                  {target.sshCredentials.length !== 1 ? 's' : ''}
+                </Badge>
+              )}
+              {isSsh && target.sshCredentials.length === 0 && (
+                <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                  No credentials
+                </Badge>
+              )}
+            </div>
           </div>
-          <span className="text-xs text-muted-foreground">
-            {target.hostname || 'No hostname'}
-            {target.platform ? ` · ${target.platform}` : ''}
-            {transportLabel ? ` · ${transportLabel}` : ''}
-          </span>
+          {deletableOrgs.length > 0 ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
+                  aria-label="Delete execution target from organization"
+                  title="Delete from organization"
+                  onClick={e => e.stopPropagation()}
+                  onPointerDown={e => e.stopPropagation()}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" onClick={e => e.stopPropagation()}>
+                <DropdownMenuLabel>Remove from organization</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {deletableOrgs.map(org => (
+                  <DropdownMenuItem
+                    key={org.organizationId}
+                    className="text-destructive focus:text-destructive"
+                    disabled={pendingDeleteOrgId !== null}
+                    onSelect={() => setDeleteDialogOrgId(org.organizationId)}
+                  >
+                    {org.organizationName}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null}
         </div>
       </AccordionTrigger>
-      <AccordionContent className="grid gap-4">
-        <div className="grid gap-3 rounded-md border p-4">
-          <div className="grid gap-1">
-            <h4 className="text-sm font-medium">Label</h4>
-            <p className="text-xs text-muted-foreground">
-              A short identifier for this target. Lowercase letters, digits, and hyphens only.
-            </p>
-          </div>
-          {labelEditing ? (
-            <div className="grid gap-2">
-              <Input
-                id={`target-${target.id}-label`}
-                value={labelInput}
-                onChange={e => {
-                  setLabelInput(e.target.value);
-                  setLabelError(validateLabel(e.target.value));
-                }}
-                onKeyDown={e => {
-                  if (e.key === 'Enter') void handleSaveLabel();
-                  if (e.key === 'Escape') handleCancelLabelEdit();
-                }}
-                autoFocus
-                disabled={labelSaving}
-              />
-              {labelError && <p className="text-xs text-destructive">{labelError}</p>}
-              <div className="flex gap-2">
-                <LoadingButton
-                  type="button"
-                  size="sm"
-                  buttonState={labelSaving ? 'loading' : 'default'}
-                  text={
-                    <span className="flex items-center gap-1.5">
-                      <Check className="h-3.5 w-3.5" />
-                      Save
-                    </span>
-                  }
-                  onClick={() => void handleSaveLabel()}
-                />
-                <LoadingButton
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  buttonState="default"
-                  text={
-                    <span className="flex items-center gap-1.5">
-                      <X className="h-3.5 w-3.5" />
-                      Cancel
-                    </span>
-                  }
-                  onClick={handleCancelLabelEdit}
-                  disabled={labelSaving}
-                />
-              </div>
-            </div>
-          ) : (
-            <div className="flex items-center gap-3">
-              <span className="font-mono text-sm">{target.label}</span>
-              <LoadingButton
-                type="button"
-                variant="outline"
-                size="sm"
-                buttonState="default"
-                text="Edit"
-                onClick={() => {
-                  setLabelInput(target.label);
-                  setLabelError(null);
-                  setLabelEditing(true);
-                }}
-              />
-            </div>
-          )}
-        </div>
 
+      <AlertDialog
+        open={deleteDialogOrgId !== null}
+        onOpenChange={open => {
+          if (!open) setDeleteDialogOrgId(null);
+        }}
+      >
+        <AlertDialogContent onClick={e => e.stopPropagation()}>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove execution target?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes <strong>{target.label}</strong> from{' '}
+              <strong>{deleteDialogOrg?.organizationName}</strong>. The target will no longer be
+              available in that organization.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={pendingDeleteOrgId !== null}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={pendingDeleteOrgId !== null || deleteDialogOrgId === null}
+              onClick={e => {
+                e.preventDefault();
+                if (deleteDialogOrgId !== null) {
+                  void handleDeleteTarget(deleteDialogOrgId);
+                }
+              }}
+            >
+              {pendingDeleteOrgId !== null ? 'Removing…' : 'Remove target'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AccordionContent className="grid gap-4 pb-4">
         <Accordion type="multiple" className="grid gap-3">
+          {/* Ownership */}
           {ownership && ownership.organizations.length > 0 ? (
-            <AccordionItem value={`${target.id}-ownership`} className="rounded-md border px-4">
+            <AccordionItem
+              value={`${target.id}-ownership`}
+              className="rounded-md border px-4 bg-background"
+            >
               <AccordionTrigger className="hover:no-underline">
-                <div className="grid gap-1">
+                <div className="flex flex-1 flex-col gap-1.5 pr-2">
                   <h4 className="text-sm font-medium">Ownership</h4>
-                  <p className="text-xs font-normal text-muted-foreground">
-                    Manage who can administer this execution target.
-                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {ownership.organizations.map(org => (
+                      <Badge
+                        key={org.organizationId}
+                        variant={org.isOrgOwned ? 'outline' : 'secondary'}
+                        className="text-[10px]"
+                      >
+                        {org.organizationName} ·{' '}
+                        {org.isOwnedByMe ? 'Personal' : org.isOrgOwned ? 'Org-owned' : 'Shared'}
+                      </Badge>
+                    ))}
+                  </div>
                 </div>
               </AccordionTrigger>
               <AccordionContent>
@@ -469,7 +576,7 @@ export function TargetAccordionItem({
                             {org.isAdmin ? (
                               confirmDeleteOrgId === org.organizationId ? (
                                 <div className="flex items-center gap-1">
-                                  <span className="text-[10px] whitespace-nowrap text-muted-foreground">
+                                  <span className="whitespace-nowrap text-[10px] text-muted-foreground">
                                     Delete?
                                   </span>
                                   <LoadingButton
@@ -521,22 +628,35 @@ export function TargetAccordionItem({
             </AccordionItem>
           ) : null}
 
-          <AccordionItem value={`${target.id}-terminal`} className="rounded-md border px-4">
+          {/* Terminal settings */}
+          <AccordionItem
+            value={`${target.id}-terminal`}
+            className="rounded-md border last:border-b px-4 bg-background"
+          >
             <AccordionTrigger className="hover:no-underline">
-              <div className="grid gap-1">
-                <h4 className="text-sm font-medium">Terminal settings</h4>
-                <p className="text-xs font-normal text-muted-foreground">
-                  Overlord opens {selectedTerminalLabel} when launching an agent on this target.
-                </p>
+              <div className="flex flex-1 flex-col gap-1.5 pr-2">
+                <h4 className="text-sm font-medium">Terminal</h4>
+                <div className="flex flex-wrap gap-1.5">
+                  <Badge variant="secondary" className="text-[10px]">
+                    {selectedTerminalLabel}
+                  </Badge>
+                  {supportsLaunchModeSelection && launchModeLabel && (
+                    <Badge variant="outline" className="text-[10px]">
+                      {launchModeLabel}
+                    </Badge>
+                  )}
+                  {profile.terminalCustomHotkey && (
+                    <Badge variant="outline" className="font-mono text-[10px]">
+                      {profile.terminalCustomHotkey}
+                    </Badge>
+                  )}
+                </div>
               </div>
             </AccordionTrigger>
             <AccordionContent>
               <div className="grid gap-4">
-                <p className="text-xs text-muted-foreground">
-                  Overlord opens this terminal application when launching an agent on this target.
-                </p>
                 <div className="grid gap-2">
-                  <Label htmlFor={`target-${target.id}-app`}>External terminal application</Label>
+                  <Label htmlFor={`target-${target.id}-app`}>Terminal application</Label>
                   <Select
                     value={profile.terminalApp}
                     onValueChange={value => void updateProfile('terminalApp', value)}
@@ -686,47 +806,47 @@ export function TargetAccordionItem({
             </AccordionContent>
           </AccordionItem>
 
+          {/* Local agent configuration (Electron only) */}
           {isElectron ? (
-            <AccordionItem value={`${target.id}-local-agent`} className="rounded-md border px-4">
+            <AccordionItem
+              value={`${target.id}-local-agent`}
+              className="rounded-md border last:border-b px-4 bg-background"
+            >
               <AccordionTrigger className="hover:no-underline">
-                <div className="grid min-w-0 gap-2 pr-2">
-                  <div className="grid gap-1">
-                    <h4 className="text-sm font-medium">Local agent configuration</h4>
-                    <p className="text-xs font-normal text-muted-foreground">
-                      {selectedLocalAgentLabel} launch overrides for this target.
-                    </p>
-                  </div>
+                <div className="flex flex-1 flex-col gap-1.5 pr-2">
+                  <h4 className="text-sm font-medium">Agent overrides</h4>
                   <div className="flex min-w-0 flex-wrap gap-1.5">
-                    <Badge
-                      variant="secondary"
-                      className="max-w-full truncate font-mono text-[10px]"
-                    >
-                      pre-command: {localAgentPreCommand || 'none'}
-                    </Badge>
-                    {localAgentFlags.length > 0 ? (
-                      localAgentFlags.map((flag, index) => (
-                        <Badge
-                          key={`${flag}-${index}`}
-                          variant="outline"
-                          className="max-w-full truncate font-mono text-[10px]"
-                        >
-                          {flag}
-                        </Badge>
-                      ))
-                    ) : (
-                      <Badge variant="outline" className="font-mono text-[10px]">
-                        flags: none
+                    {localAgentPreCommand ? (
+                      <Badge
+                        variant="secondary"
+                        className="max-w-full truncate font-mono text-[10px]"
+                      >
+                        pre: {localAgentPreCommand}
                       </Badge>
-                    )}
+                    ) : null}
+                    {localAgentFlags.length > 0
+                      ? localAgentFlags.map((flag, index) => (
+                          <Badge
+                            key={`${flag}-${index}`}
+                            variant="outline"
+                            className="max-w-full truncate font-mono text-[10px]"
+                          >
+                            {flag}
+                          </Badge>
+                        ))
+                      : null}
+                    {!localAgentPreCommand && localAgentFlags.length === 0 ? (
+                      <span className="text-xs text-muted-foreground">
+                        No overrides for {selectedLocalAgentLabel}
+                      </span>
+                    ) : null}
                   </div>
                 </div>
               </AccordionTrigger>
               <AccordionContent>
                 <div className="grid gap-4">
-                  <p className="text-xs text-muted-foreground">
-                    Customize how Overlord launches each local agent for this execution target.
-                  </p>
-                  <div className="grid gap-4">
+                  <div className="grid gap-2">
+                    <Label>Agent</Label>
                     <Select value={selectedLocalAgent} onValueChange={setSelectedLocalAgent}>
                       <SelectTrigger>
                         <SelectValue placeholder="Select agent" />
@@ -739,173 +859,172 @@ export function TargetAccordionItem({
                         ))}
                       </SelectContent>
                     </Select>
-                    <div className="space-y-3">
-                      <div className="space-y-2">
-                        <label className="text-xs font-medium text-foreground">Pre-command</label>
-                        <input
-                          type="text"
-                          placeholder="e.g., ollama or agent-pod"
-                          value={localAgentConfig.preCommand ?? ''}
-                          onChange={e =>
-                            onPreCommandInput({
-                              targetId: target.id,
-                              agent: selectedLocalAgent,
-                              value: e.target.value
-                            })
-                          }
-                          onBlur={e =>
-                            void onSavePreCommand({
-                              targetId: target.id,
-                              agent: selectedLocalAgent,
-                              value: e.target.value
-                            })
-                          }
-                          onKeyDown={e => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault();
-                              void onSavePreCommand({
-                                targetId: target.id,
-                                agent: selectedLocalAgent,
-                                value: e.currentTarget.value
-                              });
-                            }
-                          }}
-                          className="w-full rounded border bg-background px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
-                        />
-                        <p className="text-[11px] text-muted-foreground">
-                          Runs in your shell before the agent binary, wrapping it - e.g.{' '}
-                          <code className="rounded bg-muted px-1">ollama</code> launches{' '}
-                          <code className="rounded bg-muted px-1">
-                            ollama {selectedLocalAgent} ...
-                          </code>
-                        </p>
-                        {localAgentConfig.preCommand ? (
-                          <div className="rounded-md border border-yellow-500/40 bg-yellow-50/50 p-2.5 dark:bg-yellow-900/10">
-                            <p className="text-[11px] text-yellow-800 dark:text-yellow-300">
-                              If this command runs inside a container, make sure{' '}
-                              <code className="rounded bg-yellow-100 px-1 dark:bg-yellow-900/30">
-                                overlord-cli
-                              </code>{' '}
-                              is installed{' '}
-                              <code className="rounded bg-yellow-100 px-1 dark:bg-yellow-900/30">
-                                npm install -g overlord-cli
-                              </code>{' '}
-                              there so agents can communicate with Overlord. We recommend generating
-                              a token and using the{' '}
-                              <code className="rounded bg-yellow-100 px-1 dark:bg-yellow-900/30">
-                                ovld auth login --token {`<oat...>`}
-                              </code>{' '}
-                              command to persist it in your environment.
-                            </p>
-                            <LoadingButton
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              className="mt-2 w-fit"
-                              buttonState="default"
-                              text={
-                                <span className="flex items-center gap-1.5">
-                                  Manage agent tokens
-                                  <ArrowRight className="h-3.5 w-3.5" />
-                                </span>
-                              }
-                              onClick={() => onNavigate?.('Agent Tokens')}
-                            />
-                          </div>
-                        ) : null}
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-xs font-medium text-foreground">Command flags</label>
-                        <div className="flex gap-2">
-                          <input
-                            type="text"
-                            placeholder="e.g., --enable-auto-mode"
-                            value={flagInput}
-                            onChange={e => setFlagInput(e.target.value)}
-                            onKeyDown={e => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault();
-                                void handleAddFlagToTarget();
-                              }
-                            }}
-                            className="flex-1 rounded border bg-background px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => void handleAddFlagToTarget()}
-                            className="rounded border bg-muted px-3 py-2 text-xs font-medium hover:bg-muted/80"
-                          >
-                            Add
-                          </button>
-                        </div>
-                      </div>
-                      {localAgentConfig.flags.length > 0 ? (
-                        <div className="space-y-2">
-                          <div className="flex flex-wrap gap-2">
-                            {localAgentConfig.flags.map((flag, index) => (
-                              <div
-                                key={index}
-                                className="flex items-center gap-2 rounded-md bg-muted px-2.5 py-1"
-                              >
-                                <code className="text-xs font-medium">{flag}</code>
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    void onRemoveFlag({
-                                      targetId: target.id,
-                                      agent: selectedLocalAgent,
-                                      index
-                                    })
-                                  }
-                                  className="rounded p-0.5 hover:bg-muted-foreground/20"
-                                  title="Remove flag"
-                                >
-                                  <X className="h-3 w-3" />
-                                </button>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ) : null}
-                      <div className="space-y-2 rounded-md border bg-muted/30 p-3">
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="text-xs font-medium text-foreground">Example command</p>
-                        </div>
-                        <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs">
-                          {onBuildLocalAgentCommand({
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor={`target-${target.id}-pre-command`}>Pre-command</Label>
+                    <Input
+                      id={`target-${target.id}-pre-command`}
+                      placeholder="e.g., ollama or agent-pod"
+                      value={localAgentConfig.preCommand ?? ''}
+                      onChange={e =>
+                        onPreCommandInput({
+                          targetId: target.id,
+                          agent: selectedLocalAgent,
+                          value: e.target.value
+                        })
+                      }
+                      onBlur={e =>
+                        void onSavePreCommand({
+                          targetId: target.id,
+                          agent: selectedLocalAgent,
+                          value: e.target.value
+                        })
+                      }
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          void onSavePreCommand({
                             targetId: target.id,
-                            agent: selectedLocalAgent
-                          })}
-                        </pre>
+                            agent: selectedLocalAgent,
+                            value: e.currentTarget.value
+                          });
+                        }
+                      }}
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      Runs in your shell before the agent binary, wrapping it — e.g.{' '}
+                      <code className="rounded bg-muted px-1">ollama</code> launches{' '}
+                      <code className="rounded bg-muted px-1">ollama {selectedLocalAgent} ...</code>
+                    </p>
+                    {localAgentConfig.preCommand ? (
+                      <div className="rounded-md border border-yellow-500/40 bg-yellow-50/50 p-2.5 dark:bg-yellow-900/10">
+                        <p className="text-[11px] text-yellow-800 dark:text-yellow-300">
+                          If this command runs inside a container, make sure{' '}
+                          <code className="rounded bg-yellow-100 px-1 dark:bg-yellow-900/30">
+                            overlord-cli
+                          </code>{' '}
+                          is installed{' '}
+                          <code className="rounded bg-yellow-100 px-1 dark:bg-yellow-900/30">
+                            npm install -g overlord-cli
+                          </code>{' '}
+                          there so agents can communicate with Overlord. We recommend generating a
+                          token and using the{' '}
+                          <code className="rounded bg-yellow-100 px-1 dark:bg-yellow-900/30">
+                            ovld auth login --token {`<oat...>`}
+                          </code>{' '}
+                          command to persist it in your environment.
+                        </p>
+                        <LoadingButton
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="mt-2 w-fit"
+                          buttonState="default"
+                          text={
+                            <span className="flex items-center gap-1.5">
+                              Manage agent tokens
+                              <ArrowRight className="h-3.5 w-3.5" />
+                            </span>
+                          }
+                          onClick={() => onNavigate?.('Agent Tokens')}
+                        />
                       </div>
+                    ) : null}
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>Command flags</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder="e.g., --enable-auto-mode"
+                        value={flagInput}
+                        onChange={e => setFlagInput(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            void handleAddFlagToTarget();
+                          }
+                        }}
+                      />
+                      <LoadingButton
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        buttonState="default"
+                        text="Add"
+                        onClick={() => void handleAddFlagToTarget()}
+                      />
                     </div>
+                    {localAgentConfig.flags.length > 0 ? (
+                      <div className="flex flex-wrap gap-2">
+                        {localAgentConfig.flags.map((flag, index) => (
+                          <div
+                            key={index}
+                            className="flex items-center gap-2 rounded-md bg-muted px-2.5 py-1"
+                          >
+                            <code className="text-xs font-medium">{flag}</code>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                void onRemoveFlag({
+                                  targetId: target.id,
+                                  agent: selectedLocalAgent,
+                                  index
+                                })
+                              }
+                              className="rounded p-0.5 hover:bg-muted-foreground/20"
+                              title="Remove flag"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                  <div className="grid gap-2 rounded-md border bg-muted/30 p-3">
+                    <p className="text-xs font-medium text-foreground">Example command</p>
+                    <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs">
+                      {onBuildLocalAgentCommand({
+                        targetId: target.id,
+                        agent: selectedLocalAgent
+                      })}
+                    </pre>
                   </div>
                 </div>
               </AccordionContent>
             </AccordionItem>
           ) : null}
 
-          <AccordionItem value={`${target.id}-ssh`} className="rounded-md border px-4">
+          {/* SSH settings */}
+          {/* <AccordionItem value={`${target.id}-ssh`} className="rounded-md border px-4 bg-background">
             <AccordionTrigger className="hover:no-underline">
-              <div className="grid gap-1">
-                <h4 className="text-sm font-medium">SSH settings</h4>
-                <p className="text-xs font-normal text-muted-foreground">
-                  {isSsh
-                    ? `${target.sshCredentials.length} saved credential${
-                        target.sshCredentials.length === 1 ? '' : 's'
-                      } for ${target.hostname || 'this target'}.`
-                    : 'No SSH credentials are stored for local targets.'}
-                </p>
+              <div className="flex flex-1 flex-col gap-1.5 pr-2">
+                <h4 className="text-sm font-medium">SSH</h4>
+                {isSsh ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    <Badge variant="secondary" className="font-mono text-[10px]">
+                      {target.hostname || 'no host'}:{target.port ?? 22}
+                    </Badge>
+                    <Badge variant="outline" className="text-[10px]">
+                      {target.sshCredentials.length} credential
+                      {target.sshCredentials.length !== 1 ? 's' : ''}
+                    </Badge>
+                    {target.transport === 'tailscale_ssh' && (
+                      <Badge variant="outline" className="text-[10px]">
+                        Tailscale
+                      </Badge>
+                    )}
+                  </div>
+                ) : (
+                  <span className="text-xs text-muted-foreground">
+                    Local target — no SSH credentials
+                  </span>
+                )}
               </div>
             </AccordionTrigger>
             <AccordionContent>
               <div className="grid gap-3">
-                <p className="text-xs text-muted-foreground">
-                  {isSsh
-                    ? 'Stored credentials Overlord can use to connect to this target.'
-                    : 'This is a local execution target, so no SSH credentials are stored.'}
-                </p>
-                {isSsh && (
+                {isSsh ? (
                   <div className="grid gap-2 text-sm">
                     <div className="grid grid-cols-[120px_1fr] gap-2">
                       <span className="text-muted-foreground">Host</span>
@@ -937,13 +1056,13 @@ export function TargetAccordionItem({
                             {cred.privateKeyPath && (
                               <div className="grid grid-cols-[120px_1fr] gap-2">
                                 <span className="text-muted-foreground">Private key</span>
-                                <span className="font-mono break-all">{cred.privateKeyPath}</span>
+                                <span className="break-all font-mono">{cred.privateKeyPath}</span>
                               </div>
                             )}
                             {cred.hostKeyFingerprint && (
                               <div className="grid grid-cols-[120px_1fr] gap-2">
                                 <span className="text-muted-foreground">Host fingerprint</span>
-                                <span className="font-mono break-all">
+                                <span className="break-all font-mono">
                                   {cred.hostKeyFingerprint}
                                 </span>
                               </div>
@@ -953,10 +1072,14 @@ export function TargetAccordionItem({
                       </div>
                     )}
                   </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    This is a local execution target, so no SSH credentials are stored.
+                  </p>
                 )}
               </div>
             </AccordionContent>
-          </AccordionItem>
+          </AccordionItem> */}
         </Accordion>
       </AccordionContent>
     </AccordionItem>

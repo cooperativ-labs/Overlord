@@ -9,7 +9,7 @@ This command is deprecated. Use `/overlord:prompt` instead.
 Create a new Overlord ticket from the user's request.
 
 Use `$ARGUMENTS` as the input.
-If it already contains flags such as `--title`, `--priority`, `--project-id`, or `--for-human`, pass those flags through after `ovld protocol prompt --agent {{agent.protocolAgent}}`.
+If it already contains flags such as `--title`, `--priority`, `--project-id`, `--assigned-to`, or `--for-human`, pass those flags through after `ovld protocol prompt --agent {{agent.protocolAgent}}`.
 Otherwise, treat `$ARGUMENTS` as the objective text and run:
 `ovld protocol prompt --agent {{agent.protocolAgent}} --objective "<objective>"`
 

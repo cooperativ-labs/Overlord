@@ -38,7 +38,10 @@ import { getUnreadChangelogEntriesAction } from '@/lib/actions/changelog';
 import { getOnboardingState } from '@/lib/actions/onboarding';
 import { getUserOrganizations } from '@/lib/actions/organizations';
 import { fetchProfileSettings } from '@/lib/actions/profile-settings';
-import { getProjectsForCurrentUser } from '@/lib/actions/projects';
+import {
+  getArchivedProjectsForCurrentUser,
+  getProjectsForCurrentUser
+} from '@/lib/actions/projects';
 import { getUserLaunchPreferenceAction } from '@/lib/actions/user-launch-preference';
 import { isAppFeatureEnabled } from '@/lib/app-features';
 import { isAdminEmail } from '@/lib/auth/admin';
@@ -76,6 +79,7 @@ export default async function RootLayout({
 
   const [
     projects,
+    archivedProjects,
     organizations,
     profileSettings,
     agentModels,
@@ -85,6 +89,7 @@ export default async function RootLayout({
     slackEnabled
   ] = await Promise.all([
     getProjectsForCurrentUser(),
+    getArchivedProjectsForCurrentUser(),
     user ? getUserOrganizations() : Promise.resolve([]),
     user ? fetchProfileSettings(supabase, user.id) : Promise.resolve(null),
     getAgentModelsAction(),
@@ -197,6 +202,7 @@ export default async function RootLayout({
                                 }}
                                 isAdmin={isAdminEmail(user.email)}
                                 projects={projects}
+                                archivedProjects={archivedProjects}
                                 organizations={organizations}
                                 selectedOrgId={selectedOrgId}
                                 slackEnabled={slackEnabled}

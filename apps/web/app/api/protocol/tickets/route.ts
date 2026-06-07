@@ -5,6 +5,7 @@ import { deriveTitleFromObjective, getTicketIdentifier } from '@/lib/helpers/tic
 import { insertOrderedObjectives } from '@/lib/objectives';
 import { resolveAgentToken } from '@/lib/overlord/protocol-auth';
 import { resolveProtocolTicketCreatorUserId } from '@/lib/overlord/protocol-ticket-creator';
+import { resolveAssignedMember } from '@/lib/overlord/resolve-assigned-member';
 import {
   resolveProjectByWorkingDirectory,
   resolveProjectIdOrName
@@ -37,6 +38,7 @@ export async function POST(request: Request) {
   try {
     const {
       acceptanceCriteria,
+      assignedTo,
       availableTools,
       delegate,
       forHuman,
@@ -105,6 +107,15 @@ export async function POST(request: Request) {
       );
     }
 
+    const assigneeResult = await resolveAssignedMember(
+      supabase,
+      resolvedOrganizationId,
+      assignedTo
+    );
+    if (!assigneeResult.ok) {
+      return NextResponse.json({ error: assigneeResult.error }, { status: 400 });
+    }
+
     const nextTitle = title.trim() || deriveTitleFromObjective(objectives[0].objective);
     const draftStatusName = await resolvePreferredStatusNameByType(
       supabase,
@@ -116,6 +127,7 @@ export async function POST(request: Request) {
       .from('tickets')
       .insert({
         acceptance_criteria: acceptanceCriteria || null,
+        assigned_member: assigneeResult.memberId ?? undefined,
         available_tools: availableTools,
         created_by: createdBy,
         delegate: delegate || null,

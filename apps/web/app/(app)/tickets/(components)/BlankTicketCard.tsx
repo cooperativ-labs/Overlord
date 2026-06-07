@@ -1,10 +1,11 @@
 'use client';
 
-import { Check, Tag } from 'lucide-react';
+import { Tag } from 'lucide-react';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 
 import { MentionableTextarea } from '@/components/features/MentionableTextarea';
 import { useDefaultProject } from '@/components/features/projects/DefaultProjectContext';
+import { ProjectSelector } from '@/components/features/projects/ProjectSelector';
 import { useWorkspaceFileTree } from '@/components/features/projects/useWorkspaceFileTree';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -12,7 +13,6 @@ import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 import { useProjectTagDefinitions } from '@/lib/client-data/tags/hooks';
@@ -21,7 +21,6 @@ import { cn } from '@/lib/utils';
 
 import { IsHumanToggle } from './IsHumanToggle';
 import type { BlankTicketCreateOptions } from './ticket-view-helpers';
-import { ProjectColorDot } from './TicketCardPrimitives';
 
 type BlankTicketCardProps = {
   inputId: string;
@@ -312,46 +311,20 @@ export default function BlankTicketCard({
           )}
           <div className="flex items-center gap-1">
             {showProjectPicker ? (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6 shrink-0"
-                    aria-label={
-                      selectedProject
-                        ? `Project: ${selectedProject.name}`
-                        : 'Choose project for new ticket'
-                    }
-                    disabled={isCreating}
-                  >
-                    <ProjectColorDot
-                      color={selectedProject?.color ?? defaultProject?.color}
-                      name={selectedProject?.name ?? defaultProject?.name}
-                      size="sm"
-                    />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className={cn('w-52', projectMenuScopeClass)}>
-                  {projects.map(project => (
-                    <DropdownMenuItem
-                      key={project.id}
-                      className="gap-2"
-                      onSelect={event => {
-                        event.preventDefault();
-                        setSelectedProjectId(project.id);
-                      }}
-                    >
-                      <ProjectColorDot color={project.color} name={project.name} size="sm" />
-                      <span className="flex-1 truncate">{project.name}</span>
-                      {selectedProjectId === project.id ? (
-                        <Check className="h-3.5 w-3.5 shrink-0 text-primary" />
-                      ) : null}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <ProjectSelector
+                variant="icon-only"
+                projects={projects}
+                value={selectedProjectId ?? ''}
+                onValueChange={setSelectedProjectId}
+                disabled={isCreating}
+                align="end"
+                menuScopeClassName={projectMenuScopeClass}
+                ariaLabel={
+                  selectedProject
+                    ? `Project: ${selectedProject.name}`
+                    : 'Choose project for new ticket'
+                }
+              />
             ) : null}
             {showTagPicker ? (
               <DropdownMenu>

@@ -35,6 +35,7 @@ export {
   markTicketUnreadAction,
   reorderTicketsAction,
   requestTicketObjectiveExecutionAction,
+  setTicketAssignedMemberAction,
   setTicketProjectAction,
   submitTicketObjectiveAction,
   updateTicketAction,

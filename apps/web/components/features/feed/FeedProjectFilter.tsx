@@ -1,13 +1,6 @@
 'use client';
 
-import { ProjectColorDot } from '@/components/features/projects/ProjectColorDot';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '@/components/ui/select';
+import { ProjectSelector } from '@/components/features/projects/ProjectSelector';
 
 type Project = {
   id: string;
@@ -23,23 +16,12 @@ type FeedProjectFilterProps = {
 
 export function FeedProjectFilter({ projects, value, onChange }: FeedProjectFilterProps) {
   return (
-    <Select value={value} onValueChange={onChange}>
-      <SelectTrigger className="w-[150px] backdrop-blur-sm">
-        <SelectValue placeholder="All Projects" />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value="all">
-          <span className="flex items-center gap-2">All Projects</span>
-        </SelectItem>
-        {projects.map(project => (
-          <SelectItem key={project.id} value={project.id}>
-            <span className="flex items-center gap-2">
-              <ProjectColorDot color={project.color} />
-              {project.name}
-            </span>
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    <ProjectSelector
+      projects={projects}
+      value={value}
+      onValueChange={onChange}
+      nullOption={{ value: 'all', label: 'All Projects' }}
+      triggerClassName="w-[150px] backdrop-blur-sm"
+    />
   );
 }

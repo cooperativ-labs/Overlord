@@ -244,6 +244,11 @@ const tools = [
         available_tools: { type: 'string' },
         for_human: { type: 'boolean' },
         delegate: { type: 'string' },
+        assigned_to: {
+          type: 'string',
+          description:
+            'Assign the ticket to a member: username, email, user-id, or orgid:username (defaults to creator).'
+        },
         parent_session_key: { type: 'string' },
         parent_ticket_id: { type: 'string' },
         agent: { type: 'string' },
@@ -262,6 +267,7 @@ const tools = [
       'available-tools': args.available_tools,
       'for-human': args.for_human === true ? true : undefined,
       delegate: args.delegate,
+      'assigned-to': args.assigned_to,
       'parent-session-key': args.parent_session_key,
       'parent-ticket-id': args.parent_ticket_id,
       agent: args.agent,
@@ -286,6 +292,11 @@ const tools = [
         available_tools: { type: 'string' },
         for_human: { type: 'boolean' },
         delegate: { type: 'string' },
+        assigned_to: {
+          type: 'string',
+          description:
+            'Assign the ticket to a member: username, email, user-id, or orgid:username (defaults to creator).'
+        },
         session_key: { type: 'string' },
         ticket_id: { type: 'string' },
         agent: { type: 'string' }
@@ -303,6 +314,7 @@ const tools = [
       'available-tools': args.available_tools,
       'for-human': args.for_human === true ? true : undefined,
       delegate: args.delegate,
+      'assigned-to': args.assigned_to,
       'session-key': args.session_key,
       'ticket-id': args.ticket_id,
       agent: args.agent
@@ -628,6 +640,11 @@ const tools = [
         acceptance_criteria: { type: 'string' },
         available_tools: { type: 'string' },
         delegate: { type: 'string' },
+        assigned_to: {
+          type: 'string',
+          description:
+            'Assign the ticket to a member: username, email, user-id, or orgid:username (defaults to creator).'
+        },
         agent: { type: 'string' },
         skip_file_change_check: { type: 'boolean' }
       },
@@ -643,6 +660,7 @@ const tools = [
       'acceptance-criteria': args.acceptance_criteria,
       'available-tools': args.available_tools,
       delegate: args.delegate,
+      'assigned-to': args.assigned_to,
       agent: args.agent,
       'skip-file-change-check': args.skip_file_change_check
     }),

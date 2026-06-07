@@ -942,6 +942,7 @@ export type Database = {
       members: {
         Row: {
           created_at: string;
+          id: string;
           organization_id: number;
           role: Database['public']['Enums']['organization_role'];
           updated_at: string;
@@ -949,6 +950,7 @@ export type Database = {
         };
         Insert: {
           created_at?: string;
+          id?: string;
           organization_id: number;
           role?: Database['public']['Enums']['organization_role'];
           updated_at?: string;
@@ -956,6 +958,7 @@ export type Database = {
         };
         Update: {
           created_at?: string;
+          id?: string;
           organization_id?: number;
           role?: Database['public']['Enums']['organization_role'];
           updated_at?: string;
@@ -1237,6 +1240,7 @@ export type Database = {
           onboarding: Json;
           preferences: Json;
           updated_at: string;
+          username: string | null;
         };
         Insert: {
           ai_title_generation?: boolean;
@@ -1252,6 +1256,7 @@ export type Database = {
           onboarding?: Json;
           preferences?: Json;
           updated_at?: string;
+          username?: string | null;
         };
         Update: {
           ai_title_generation?: boolean;
@@ -1267,6 +1272,7 @@ export type Database = {
           onboarding?: Json;
           preferences?: Json;
           updated_at?: string;
+          username?: string | null;
         };
         Relationships: [
           {
@@ -1556,6 +1562,7 @@ export type Database = {
       };
       projects: {
         Row: {
+          archived_at: string | null;
           color: string;
           created_at: string;
           everhour_project_id: string | null;
@@ -1570,6 +1577,7 @@ export type Database = {
           updated_at: string;
         };
         Insert: {
+          archived_at?: string | null;
           color?: string;
           created_at?: string;
           everhour_project_id?: string | null;
@@ -1584,6 +1592,7 @@ export type Database = {
           updated_at?: string;
         };
         Update: {
+          archived_at?: string | null;
           color?: string;
           created_at?: string;
           everhour_project_id?: string | null;
@@ -2083,6 +2092,7 @@ export type Database = {
       tickets: {
         Row: {
           acceptance_criteria: string | null;
+          assigned_member: string | null;
           available_tools: string;
           board_position: number;
           constraints: string;
@@ -2114,6 +2124,7 @@ export type Database = {
         };
         Insert: {
           acceptance_criteria?: string | null;
+          assigned_member?: string | null;
           available_tools?: string;
           board_position?: number;
           constraints?: string;
@@ -2145,6 +2156,7 @@ export type Database = {
         };
         Update: {
           acceptance_criteria?: string | null;
+          assigned_member?: string | null;
           available_tools?: string;
           board_position?: number;
           constraints?: string;
@@ -2175,6 +2187,13 @@ export type Database = {
           updated_at?: string;
         };
         Relationships: [
+          {
+            foreignKeyName: 'tickets_assigned_member_fkey';
+            columns: ['organization_id', 'assigned_member'];
+            isOneToOne: false;
+            referencedRelation: 'members';
+            referencedColumns: ['organization_id', 'user_id'];
+          },
           {
             foreignKeyName: 'tickets_organization_id_fkey';
             columns: ['organization_id'];
@@ -2412,6 +2431,20 @@ export type Database = {
       generate_ticket_identifier: {
         Args: { p_organization_id: number };
         Returns: string;
+      };
+      generate_unique_username: { Args: { seed: string }; Returns: string };
+      get_org_member_directory: {
+        Args: { org_id: number };
+        Returns: {
+          email: string;
+          image_url: string;
+          joined_at: string;
+          member_id: string;
+          name: string;
+          role: Database['public']['Enums']['organization_role'];
+          user_id: string;
+          username: string;
+        }[];
       };
       get_project_file_changes: {
         Args: {

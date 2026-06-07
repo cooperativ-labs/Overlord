@@ -118,6 +118,7 @@ When creating tickets from within a repository:
 - Create multiple tickets when each prompt represents a different feature or goal.
 - Add objectives to the same ticket when each prompt is a sequential step toward the same feature or goal; use `ovld protocol add-objectives --ticket-id <ticket_id> --objectives-json '[{"objective":"..."}]'`.
 - `create`, `prompt`, and `record-work` require `--objectives-json` or `--objectives-file` with an ordered array of `{ "objective": "...", "title": "...", "autoAdvance": true }` objects. A single objective is just an array with one item.
+- `create`, `prompt`, `create-ticket`, and `record-work` accept `--assigned-to <member>` to set the ticket's human owner. Accepts a username, an email, a user-id UUID, or the `orgid:username` member ID. When omitted, the assignee defaults to the ticket creator.
 
 ```bash
 ovld protocol create --agent cursor --objectives-json '[{"objective":"Capture follow-up work from this repository"}]'

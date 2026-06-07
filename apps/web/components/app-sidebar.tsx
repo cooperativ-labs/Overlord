@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  Archive,
   ChevronDown,
   ExternalLink,
   GraduationCap,
@@ -52,7 +53,11 @@ import {
 } from '@/components/ui/sidebar';
 import type { UserOrganization } from '@/lib/actions/organizations';
 import type { SidebarProject } from '@/lib/actions/project-types';
-import { useUpdateProjectColorMutation } from '@/lib/client-data/projects/mutations';
+import type { ArchivedProject } from '@/lib/actions/projects';
+import {
+  useArchiveProjectMutation,
+  useUpdateProjectColorMutation
+} from '@/lib/client-data/projects/mutations';
 import { useProjects } from '@/lib/client-data/tickets/hooks';
 import { isWorkingDirectoryNone } from '@/lib/helpers/project-working-directory';
 
@@ -66,6 +71,7 @@ type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
   isAdmin: boolean;
   user: AppSidebarUser;
   projects: SidebarProject[];
+  archivedProjects: ArchivedProject[];
   organizations: UserOrganization[];
   selectedOrgId: number | null;
   slackEnabled?: boolean;
@@ -78,6 +84,8 @@ type ProjectColorMenuProps = {
 
 function ProjectColorMenu({ projectId, color }: ProjectColorMenuProps) {
   const updateProjectColorMutation = useUpdateProjectColorMutation();
+  const archiveProjectMutation = useArchiveProjectMutation();
+  const router = useRouter();
   const [open, setOpen] = React.useState(false);
 
   async function handleChangeColor(nextColor: string) {
@@ -90,6 +98,16 @@ function ProjectColorMenu({ projectId, color }: ProjectColorMenuProps) {
       setOpen(false);
     } catch {
       // Mutation rollback restores the previous color; keep the menu open for another attempt.
+    }
+  }
+
+  async function handleArchive() {
+    setOpen(false);
+    try {
+      await archiveProjectMutation.mutateAsync({ projectId });
+      router.push('/u');
+    } catch {
+      // Error handled by mutation
     }
   }
 
@@ -112,6 +130,14 @@ function ProjectColorMenu({ projectId, color }: ProjectColorMenuProps) {
               <Settings size={16} />
               <span>Project settings</span>
             </Link>
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            className="text-xs p-1"
+            disabled={archiveProjectMutation.isPending}
+            onClick={handleArchive}
+          >
+            <Archive size={16} />
+            <span>Archive project</span>
           </DropdownMenuItem>
         </div>
       </DropdownMenuContent>
@@ -243,10 +269,73 @@ function OrgGroupedProjects({
   );
 }
 
+type ArchivedProjectsListProps = {
+  archivedProjects: ArchivedProject[];
+  selectedOrgId: number | null;
+  pathname: string;
+};
+
+function ArchivedProjectsList({
+  archivedProjects,
+  selectedOrgId,
+  pathname
+}: ArchivedProjectsListProps) {
+  const [showArchived, setShowArchived] = React.useState(false);
+
+  const filtered = React.useMemo(
+    () =>
+      selectedOrgId !== null
+        ? archivedProjects.filter(p => p.organizationId === selectedOrgId)
+        : archivedProjects,
+    [selectedOrgId, archivedProjects]
+  );
+
+  if (filtered.length === 0) return null;
+
+  function isArchivedProjectActive(projectId: string) {
+    const segments = pathname.split('/').filter(Boolean);
+    if (segments.length < 2) return false;
+    return segments[0] === 'projects' && segments[1] === projectId;
+  }
+
+  return (
+    <Collapsible open={showArchived} onOpenChange={setShowArchived}>
+      <CollapsibleTrigger className="group/archived-trigger flex w-full items-center gap-1 px-2 py-1 text-xs text-sidebar-foreground/40 hover:text-sidebar-foreground/60 transition-colors">
+        <ChevronDown className="h-3 w-3 transition-transform group-data-[state=closed]/archived-trigger:-rotate-90" />
+        <Archive className="h-3 w-3" />
+        <span className="group-data-[collapsible=icon]:hidden">Archived ({filtered.length})</span>
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <SidebarMenu>
+          {filtered.map(project => (
+            <SidebarMenuItem key={project.id}>
+              <SidebarMenuButton
+                asChild
+                isActive={isArchivedProjectActive(project.id)}
+                tooltip={`${project.name} (archived)`}
+                className="opacity-60"
+              >
+                <Link href={`/projects/${project.id}`}>
+                  <span
+                    className="h-2 w-2 shrink-0 rounded-sm group-data-[collapsible=icon]:h-4 group-data-[collapsible=icon]:w-4 group-data-[collapsible=icon]:rounded-full"
+                    style={{ backgroundColor: project.color }}
+                  />
+                  <span className="group-data-[collapsible=icon]:hidden">{project.name}</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          ))}
+        </SidebarMenu>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
 export function AppSidebar({
   isAdmin,
   user,
   projects,
+  archivedProjects,
   organizations,
   selectedOrgId,
   slackEnabled = false,
@@ -461,6 +550,11 @@ export function AppSidebar({
                 onNavigationClick={handleProjectNavigationClick}
               />
             )}
+            <ArchivedProjectsList
+              archivedProjects={archivedProjects}
+              selectedOrgId={selectedOrgId}
+              pathname={pathname}
+            />
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>

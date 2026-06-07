@@ -200,6 +200,7 @@ export async function getProjectsForCurrentUser(): Promise<SidebarProject[]> {
   const { data, error } = await supabase
     .from('projects')
     .select(PROJECT_BASE_SELECT)
+    .is('archived_at', null)
     .order('name', { ascending: true });
 
   if (error || !data) {
@@ -227,9 +228,40 @@ export async function getProjectsForCurrentUser(): Promise<SidebarProject[]> {
         typeof project.everhour_project_id === 'string' ? project.everhour_project_id : null,
       operationsProfileFingerprint: project.operations_profile_fingerprint ?? null,
       operationsProfileGeneratedAt: project.operations_profile_generated_at ?? null,
+      archivedAt: project.archived_at ?? null,
       localWorkingDirectory: localSettings?.local_working_directory ?? null
     };
   });
+}
+
+export type ArchivedProject = {
+  id: string;
+  name: string;
+  color: string;
+  organizationId: number;
+  archivedAt: string;
+};
+
+export async function getArchivedProjectsForCurrentUser(): Promise<ArchivedProject[]> {
+  const supabase = await createClientForRequest();
+
+  const { data, error } = await supabase
+    .from('projects')
+    .select('id,name,color,organization_id,archived_at')
+    .not('archived_at', 'is', null)
+    .order('name', { ascending: true });
+
+  if (error || !data) {
+    return [];
+  }
+
+  return data.map(project => ({
+    id: project.id,
+    name: project.name,
+    color: project.color,
+    organizationId: project.organization_id,
+    archivedAt: project.archived_at!
+  }));
 }
 
 export type ModalProjectOption = {
@@ -389,6 +421,62 @@ async function ensureDefaultStatusesForOrganization(input: {
   if (error) {
     throw new Error(error.message ?? 'Failed to initialize default project statuses.');
   }
+}
+
+export async function archiveProjectAction(input: { projectId: string }): Promise<void> {
+  const supabase = await createClientForRequest();
+  const serviceSupabase = createServiceRoleClient();
+
+  const { data, error } = await supabase
+    .from('projects')
+    .update({ archived_at: new Date().toISOString() })
+    .eq('id', input.projectId)
+    .is('archived_at', null)
+    .select('id')
+    .single();
+
+  if (error || !data) {
+    throw new Error(error?.message ?? 'Failed to archive project.');
+  }
+
+  await (serviceSupabase as any)
+    .from('project_resource_directories')
+    .delete()
+    .eq('project_id', input.projectId);
+
+  await (serviceSupabase as any)
+    .from('project_execution_targets')
+    .delete()
+    .eq('project_id', input.projectId);
+
+  await (serviceSupabase as any)
+    .from('profiles')
+    .update({ default_project_id: null })
+    .eq('default_project_id', input.projectId);
+
+  revalidatePath('/projects');
+  revalidatePath('/u');
+  revalidateProjectPaths(input.projectId);
+}
+
+export async function unarchiveProjectAction(input: { projectId: string }): Promise<void> {
+  const supabase = await createClientForRequest();
+
+  const { data, error } = await supabase
+    .from('projects')
+    .update({ archived_at: null })
+    .eq('id', input.projectId)
+    .not('archived_at', 'is', null)
+    .select('id')
+    .single();
+
+  if (error || !data) {
+    throw new Error(error?.message ?? 'Failed to unarchive project.');
+  }
+
+  revalidatePath('/projects');
+  revalidatePath('/u');
+  revalidateProjectPaths(input.projectId);
 }
 
 export async function deleteProjectAction(input: { projectId: string }): Promise<void> {

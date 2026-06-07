@@ -2,6 +2,36 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2606070914.0] - 2026-06-07:09:14
+
+### Added
+- Assign tickets to a specific organization member from the ticket header on **web** and in the ticket detail sheet on **mobile**; unassign explicitly when no owner is needed.
+- Add editable **usernames** on your profile (auto-generated from your email on signup) so teammates can identify and assign work to you by handle.
+- Introduce human-readable **member IDs** (`orgid:username`) for organization members, mirroring ticket IDs.
+- Add **`--assigned-to`** on protocol **`create`**, **`prompt`**, **`create-ticket`**, and **`record-work`** (and matching MCP tools) to set the ticket assignee at creation — accepts a member ID, username, email, or user UUID; defaults to the creator when omitted.
+- **Archive and unarchive projects** from project settings or the sidebar project menu; archived projects appear in a collapsible **Archived** section in the sidebar.
+- Add a shared **`ProjectSelector`** component used across ticket headers, feed filters, and project pickers for consistent project switching.
+
+### Fixed
+- Show co-member **names, avatars, and usernames** in organization member lists via a scoped directory RPC instead of returning empty profile data under row-level security.
+
+### Changed
+- Save execution target **labels on blur** with optimistic updates instead of a separate save control.
+- Redesign **Settings → Execution targets** accordion rows (rounded cards, inline label editing, clearer terminal summary on the trigger, confirmation dialogs for org removal).
+
+### Security
+- Expose co-member profile fields through **`get_org_member_directory`**, a column-scoped RPC that returns only display-safe fields without widening base-table RLS on sensitive profile data.
+
+### Refactor
+- Consolidate project picker UI into **`ProjectSelector`** (`compact`, `default`, and `icon-only` variants).
+
+### Test
+- Update execution-request route mocks for organization execution-target label lookups.
+- Insert organization **members** in execution-request idempotency tests to satisfy the ticket assignee foreign key.
+
+### Documentation
+- Document **`--assigned-to`** in protocol help, agent plugin command templates, and **`cli.md`** connector references.
+
 ## [0.2606060856.0] - 2026-06-06:08:56
 
 ### Added

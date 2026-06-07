@@ -124,6 +124,7 @@ export interface TicketDetail {
   updated_at: string;
   project_id: string | null;
   everhour_task_id: string | null;
+  assigned_member: string | null;
 }
 
 export type TicketDetailRow = Omit<TicketDetail, 'execution_target'> & {

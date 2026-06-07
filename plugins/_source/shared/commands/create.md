@@ -9,7 +9,7 @@ disable-model-invocation: true
 {{/if}}
 
 {{#if isClaude}}Use `$ARGUMENTS` as the input.
-If it already contains flags such as `--title`, `--priority`, `--project-id`, or `--for-human`, pass those flags through after `ovld protocol create --agent {{agent.protocolAgent}}`.
+If it already contains flags such as `--title`, `--priority`, `--project-id`, `--assigned-to`, or `--for-human`, pass those flags through after `ovld protocol create --agent {{agent.protocolAgent}}`.
 Otherwise, treat `$ARGUMENTS` as the objective text and run:
 {{/if}}{{#if isCursor}}Use the text after `/create` as the objective unless raw flags are present.
 

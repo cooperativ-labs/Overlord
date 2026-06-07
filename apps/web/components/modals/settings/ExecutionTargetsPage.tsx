@@ -289,8 +289,19 @@ export function ExecutionTargetsPage({
         <p className="text-sm text-destructive">{error}</p>
       ) : targets.length === 0 ? (
         <div className="rounded-md border bg-muted/30 px-4 py-6 text-sm text-muted-foreground">
-          You don&apos;t have any execution targets yet. Targets are created automatically when you
-          launch an agent locally or add a remote SSH target to a project.
+          <p className="mb-3">You don&apos;t have any execution targets yet.</p>
+          <p className="mb-3">
+            To set up an execution target, install the Overlord CLI and run{' '}
+            <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">ovld setup</code> in
+            your project directory. This registers your machine as an execution target and
+            configures the agent connector.
+          </p>
+          <p>
+            Install the CLI globally with npm:{' '}
+            <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">
+              npm install -g overlord-cli
+            </code>
+          </p>
         </div>
       ) : (
         <Accordion type="multiple" className="rounded-md border" defaultValue={[targets[0]?.id]}>

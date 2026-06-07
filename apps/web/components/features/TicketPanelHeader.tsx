@@ -1,9 +1,9 @@
 import { ArrowRightToLine, EllipsisVertical } from 'lucide-react';
 import Link from 'next/link';
 
-import { IsHumanToggle } from '@/app/(app)/tickets/(components)/IsHumanToggle';
 import { CopyTicketIdentifierButton } from '@/components/features/CopyTicketIdentifierButton';
 import { DeleteTicketButton } from '@/components/features/DeleteTicketButton';
+import { TicketMemberSelect } from '@/components/features/TicketMemberSelect';
 import { TicketProjectSelect } from '@/components/features/TicketProjectSelect';
 import { TicketStatusSelect } from '@/components/features/TicketStatusSelect';
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,7 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
+import type { OrganizationMember } from '@/lib/actions/organizations';
 
 type ProjectOption = {
   id: string;
@@ -26,10 +27,11 @@ type TicketPanelHeaderProps = {
   organizationId: number;
   projectId: string | null;
   projects: ProjectOption[];
+  members: OrganizationMember[];
+  assignedMember: string | null;
   currentStatus: string;
   statusOptions: string[];
   closePath: string;
-  forHuman: boolean;
 };
 
 export function TicketPanelHeader({
@@ -38,10 +40,11 @@ export function TicketPanelHeader({
   organizationId,
   projectId,
   projects,
+  members,
+  assignedMember,
   currentStatus,
   statusOptions,
-  closePath,
-  forHuman
+  closePath
 }: TicketPanelHeaderProps) {
   return (
     <div className="relative flex items-center justify-between gap-2 overflow-hidden border-b px-4 py-2.5">
@@ -77,6 +80,12 @@ export function TicketPanelHeader({
       </div>
       <div className="flex items-center justify-end gap-3">
         <div className="flex items-center gap-1.5">
+          <TicketMemberSelect
+            ticketId={ticketId}
+            members={members}
+            currentAssignedMember={assignedMember}
+          />
+
           <TicketProjectSelect
             ticketId={ticketId}
             organizationId={organizationId}

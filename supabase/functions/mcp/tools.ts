@@ -784,6 +784,11 @@ export const TOOLS = [
         acceptanceCriteria: { type: 'string' },
         availableTools: { type: 'string' },
         delegate: { type: 'string' },
+        assignedTo: {
+          type: 'string',
+          description:
+            'Assign the ticket to a human member: a username, email, user-id UUID, or orgid:username member ID. When omitted, the assignee defaults to the ticket creator.'
+        },
         agentIdentifier: {
           type: 'string',
           description: 'The agent identifier doing the recording.'
@@ -958,6 +963,11 @@ export const TOOLS = [
           type: 'string',
           description:
             'Optional override for tickets.delegate. When omitted, Overlord should fill it with the active model identifier and only fall back to the agent identifier if the model is unavailable. The authenticated bearer token determines created_by automatically.'
+        },
+        assignedTo: {
+          type: 'string',
+          description:
+            'Assign the ticket to a human member: a username, email, user-id UUID, or orgid:username member ID. When omitted, the assignee defaults to the ticket creator.'
         }
       },
       required: ['sessionKey', 'ticketId', 'objectives']

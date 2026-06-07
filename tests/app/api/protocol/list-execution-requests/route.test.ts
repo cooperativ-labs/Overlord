@@ -71,11 +71,20 @@ describe('POST /api/protocol/list-execution-requests', () => {
         error: null
       }))
     };
+    const organizationExecutionTargetsQuery = {
+      select: jest.fn(() => organizationExecutionTargetsQuery),
+      eq: jest.fn(() => organizationExecutionTargetsQuery),
+      in: jest.fn(async () => ({
+        data: [],
+        error: null
+      }))
+    };
     const supabase = {
       from: jest.fn((table: string) => {
         if (table === 'execution_requests') return requestsQuery;
         if (table === 'tickets') return ticketsQuery;
         if (table === 'objectives') return objectivesQuery;
+        if (table === 'organization_execution_targets') return organizationExecutionTargetsQuery;
         throw new Error(`unexpected ${table}`);
       })
     };
@@ -154,11 +163,20 @@ describe('POST /api/protocol/list-execution-requests', () => {
         error: null
       }))
     };
+    const organizationExecutionTargetsQuery = {
+      select: jest.fn(() => organizationExecutionTargetsQuery),
+      eq: jest.fn(() => organizationExecutionTargetsQuery),
+      in: jest.fn(async () => ({
+        data: [{ execution_target_id: EXECUTION_TARGET_ID, label: 'My laptop' }],
+        error: null
+      }))
+    };
     const supabase = {
       from: jest.fn((table: string) => {
         if (table === 'execution_requests') return requestsQuery;
         if (table === 'tickets') return ticketsQuery;
         if (table === 'objectives') return objectivesQuery;
+        if (table === 'organization_execution_targets') return organizationExecutionTargetsQuery;
         throw new Error(`unexpected ${table}`);
       })
     };

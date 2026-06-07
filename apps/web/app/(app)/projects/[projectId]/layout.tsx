@@ -91,6 +91,7 @@ export default async function ProjectLayout({ children, params }: LayoutProps) {
         projectSshPrivateKeyPath={sshSettings.sshPrivateKeyPath}
         projectEverhourProjectId={project.everhour_project_id}
         projectEverhourProjectName={project.everhour_project_name ?? null}
+        isArchived={project.archived_at !== null}
         statuses={statuses ?? []}
         hasEverhourApiKey={hasEverhourApiKey}
         sshFeatureEnabled={sshEnabled}

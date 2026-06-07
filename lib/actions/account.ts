@@ -4,6 +4,7 @@ import * as Sentry from '@sentry/nextjs';
 import type { User } from '@supabase/supabase-js';
 import { revalidatePath } from 'next/cache';
 
+import { validateUsername } from '@/lib/account/username';
 import { getPlatformUrl } from '@/lib/env';
 import { createClientForRequest } from '@/supabase/utils/server';
 
@@ -20,6 +21,7 @@ export type ProfileData = {
   name: string;
   email: string;
   imageUrl: string;
+  username: string | null;
   hasPassword: boolean;
   identities: OAuthIdentity[];
 };
@@ -119,10 +121,17 @@ export async function getProfileDataAction(): Promise<ProfileData> {
 
   const hasPassword = (user.identities ?? []).some(i => i.provider === 'email');
 
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('username')
+    .eq('id', user.id)
+    .maybeSingle();
+
   return {
     name: user.user_metadata?.full_name ?? user.user_metadata?.name ?? '',
     email: user.email ?? '',
     imageUrl: getUserImageUrl(user),
+    username: profile?.username ?? null,
     hasPassword,
     identities
   };
@@ -162,6 +171,39 @@ export async function updateProfileNameAction(name: string): Promise<void> {
 
   revalidatePath('/u');
   revalidatePath('/', 'layout');
+}
+
+export async function updateUsernameAction(username: string): Promise<{ error?: string }> {
+  const validation = validateUsername(username);
+  if (validation.error || !validation.username) {
+    return { error: validation.error ?? 'Invalid username.' };
+  }
+
+  const supabase = await createClientForRequest();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: 'Unauthorized' };
+  }
+
+  const { error } = await supabase
+    .from('profiles')
+    .update({ username: validation.username })
+    .eq('id', user.id);
+
+  if (error) {
+    // unique_violation — the case-insensitive unique index rejected the handle.
+    if (error.code === '23505') {
+      return { error: 'That username is already taken.' };
+    }
+    return { error: error.message ?? 'Failed to update username.' };
+  }
+
+  revalidatePath('/u');
+  revalidatePath('/', 'layout');
+  return {};
 }
 
 export async function updatePasswordAction(

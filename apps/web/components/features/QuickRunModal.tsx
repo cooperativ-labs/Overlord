@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { AgentModelChooserButton } from '@/components/features/AgentModelChooserButton';
 import { useAgentModelPreference } from '@/components/features/AgentModelSelector';
 import { MentionableTextarea } from '@/components/features/MentionableTextarea';
+import { ProjectSelector } from '@/components/features/projects/ProjectSelector';
 import { useWorkspaceFileTree } from '@/components/features/projects/useWorkspaceFileTree';
 import { useWorkspacePreference } from '@/components/features/projects/useWorkspacePreference';
 import { useTerminal } from '@/components/features/terminal/TerminalProvider';
@@ -22,7 +23,6 @@ import {
 import { Label } from '@/components/ui/label';
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import { LoadingButton } from '@/components/ui/loading-button';
-import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { generateTicketTitleAction } from '@/lib/actions/generate-title';
 import { requestTicketObjectiveExecutionAction } from '@/lib/actions/tickets';
 import {
@@ -279,9 +279,6 @@ export function QuickRunModal({
   }
 
   const selectedProject = projects.find(p => p.id === selectedProjectId);
-  const projectIndicatorStyle = selectedProject
-    ? { backgroundColor: selectedProject.color, borderColor: selectedProject.color }
-    : undefined;
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -295,43 +292,17 @@ export function QuickRunModal({
 
         <div className="flex flex-1 flex-col gap-4 overflow-y-auto sm:flex-1 sm:min-h-0">
           <div className="flex gap-3">
-            {/* Project selector */}
             <div className="flex flex-col gap-2">
               <Label htmlFor="quick-run-project" className="text-sm font-medium">
                 Project
               </Label>
-              <Select
+              <ProjectSelector
+                projects={projects}
                 value={selectedProjectId}
                 onValueChange={setSelectedProjectId}
                 disabled={isSubmitting}
-              >
-                <SelectTrigger
-                  id="quick-run-project"
-                  className="h-8 w-full border-border bg-background px-3 text-left shadow-sm hover:bg-accent hover:text-accent-foreground"
-                >
-                  <span className="flex min-w-0 items-center gap-2 pr-2">
-                    {selectedProject ? (
-                      <span
-                        className="h-3 w-3 shrink-0 rounded-[6px] border"
-                        style={projectIndicatorStyle}
-                      />
-                    ) : (
-                      <span className="h-3 w-3 shrink-0 rounded-[6px] border border-muted-foreground/50 bg-muted" />
-                    )}
-                    <span className="truncate text-sm font-medium">
-                      {selectedProject?.name ?? 'Inbox'}
-                    </span>
-                  </span>
-                </SelectTrigger>
-                <SelectContent align="start">
-                  <SelectItem value={PERSONAL_PROJECT_VALUE}>No project / Inbox</SelectItem>
-                  {projects.map(project => (
-                    <SelectItem key={project.id} value={project.id}>
-                      {project.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                nullOption={{ value: PERSONAL_PROJECT_VALUE, label: 'No project / Inbox' }}
+              />
             </div>
 
             <div className="flex flex-col gap-2">

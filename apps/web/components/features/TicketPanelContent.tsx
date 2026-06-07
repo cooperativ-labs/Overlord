@@ -14,6 +14,7 @@ import { TicketTitleField } from '@/components/features/TicketTitleField';
 import { ErrorBoundary } from '@/components/ui/error-boundary';
 import { getAllAgentConfigsByUserIdAction } from '@/lib/actions/agent-config';
 import { listObjectiveAttachmentsAction } from '@/lib/actions/attachments';
+import { getOrganizationMembersAction } from '@/lib/actions/organizations';
 import { fetchProfileSettings } from '@/lib/actions/profile-settings';
 import {
   resolveProjectUserSshSettings,
@@ -269,6 +270,7 @@ export async function TicketPanelContent({
   };
   const ticketIdentifier = getTicketIdentifier(ticket);
   const statusOptions = statuses?.map(s => s.name) ?? fallbackStatuses;
+  const members = await getOrganizationMembersAction(organizationId).catch(() => []);
 
   const activeProjectId = ticket.project_id;
   const activeProject = activeProjectId
@@ -361,10 +363,11 @@ export async function TicketPanelContent({
             color: p.color,
             everhour_project_id: p.everhour_project_id
           }))}
+          members={members}
+          assignedMember={ticket.assigned_member ?? null}
           currentStatus={ticket.status ?? ''}
           statusOptions={[...statusOptions]}
           closePath={closePath}
-          forHuman={ticket.for_human ?? false}
         />
 
         <TimerWithTimeEntries

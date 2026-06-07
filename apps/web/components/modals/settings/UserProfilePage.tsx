@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { PasswordForm } from '@/components/features/account/password-form';
 import { ProfileImageForm } from '@/components/features/account/profile-image-form';
 import { ProfileNameForm } from '@/components/features/account/profile-name-form';
+import { ProfileUsernameForm } from '@/components/features/account/profile-username-form';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { getProfileDataAction, type ProfileData } from '@/lib/actions/account';
@@ -76,6 +77,8 @@ export function UserProfilePage({ open }: UserProfilePageProps) {
           />
           <Separator />
           <ProfileNameForm initialName={profile.name} />
+          <Separator />
+          <ProfileUsernameForm initialUsername={profile.username} />
         </div>
       </div>
 

@@ -3,9 +3,9 @@
 import { CheckCircle2, Plus, Trash2 } from 'lucide-react';
 import { useCallback, useState } from 'react';
 
+import { ProjectSelector } from '@/components/features/projects/ProjectSelector';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import type { CachedProject } from '@/lib/offline/offline-projects-cache';
 import { getCachedProjects } from '@/lib/offline/offline-projects-cache';
@@ -24,8 +24,6 @@ export function OfflineTicketForm() {
   const [selectedProjectId, setSelectedProjectId] = useState<string>(PERSONAL_PROJECT_VALUE);
   const [queue, setQueue] = useState<QueuedTicket[]>(() => getQueuedTickets());
   const [justQueued, setJustQueued] = useState(false);
-
-  const selectedProject = projects.find(p => p.id === selectedProjectId);
 
   const handleQueue = useCallback(() => {
     if (!objective.trim()) return;
@@ -86,35 +84,13 @@ export function OfflineTicketForm() {
           <Label htmlFor="offline-project" className="text-sm font-medium">
             Project
           </Label>
-          <Select value={selectedProjectId} onValueChange={setSelectedProjectId}>
-            <SelectTrigger
-              id="offline-project"
-              className="h-auto w-full rounded-full border-border bg-background px-3 py-1.5 text-left shadow-sm"
-            >
-              <span className="flex items-center gap-2 pr-2">
-                {selectedProject ? (
-                  <span
-                    className="h-3 w-3 rounded-[6px] border"
-                    style={{
-                      backgroundColor: selectedProject.color,
-                      borderColor: selectedProject.color
-                    }}
-                  />
-                ) : (
-                  <span className="h-3 w-3 rounded-[6px] border border-muted-foreground/50 bg-muted" />
-                )}
-                <span className="text-sm font-medium">{selectedProject?.name ?? 'Inbox'}</span>
-              </span>
-            </SelectTrigger>
-            <SelectContent align="start">
-              <SelectItem value={PERSONAL_PROJECT_VALUE}>No project / Inbox</SelectItem>
-              {projects.map(project => (
-                <SelectItem key={project.id} value={project.id}>
-                  {project.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <ProjectSelector
+            projects={projects}
+            value={selectedProjectId}
+            onValueChange={setSelectedProjectId}
+            nullOption={{ value: PERSONAL_PROJECT_VALUE, label: 'No project / Inbox' }}
+            triggerClassName="!rounded-full h-auto py-1.5"
+          />
         </div>
 
         <Button

@@ -8,6 +8,7 @@ import {
   ProjectColorSetter,
   toHexColor
 } from '@/components/features/projects/ProjectColorSetter';
+import { ProjectSelector } from '@/components/features/projects/ProjectSelector';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -21,13 +22,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import { LoadingButton } from '@/components/ui/loading-button';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectSeparator,
-  SelectTrigger
-} from '@/components/ui/select';
 import { setTicketProjectAction } from '@/lib/actions/tickets';
 import { useCreateProjectMutation } from '@/lib/client-data/projects/mutations';
 import { moveTicketProjectInBoards } from '@/lib/client-data/tickets/cache';
@@ -190,60 +184,27 @@ export function TicketProjectSelect({
     }
   }
 
-  const projectIndicatorStyle = selectedProject
-    ? { backgroundColor: selectedProject.color, borderColor: selectedProject.color }
-    : undefined;
-
   return (
     <>
-      <Select
+      <ProjectSelector
+        projects={availableProjects}
         value={selectedProjectId}
-        onValueChange={(value: string | undefined) =>
-          handleProjectChange(value ?? PERSONAL_PROJECT_VALUE)
-        }
+        onValueChange={value => handleProjectChange(value ?? PERSONAL_PROJECT_VALUE)}
         disabled={isSavingProject}
-      >
-        <SelectTrigger
-          id="ticket-project-select"
-          aria-label="Select project"
-          className="h-6 w-auto rounded-md border bg-transparent px-3 text-xs font-base hover:bg-muted"
-        >
-          <span className="flex items-center gap-1.5">
-            {selectedProject ? (
-              <span
-                className="h-2.5 w-2.5 rounded-[4px] border shrink-0"
-                style={projectIndicatorStyle}
-              />
-            ) : (
-              <span className="h-2.5 w-2.5 rounded-[4px] border border-muted-foreground/50 bg-muted shrink-0" />
-            )}
-            <span>{selectedProject?.name ?? 'Inbox'}</span>
-          </span>
-        </SelectTrigger>
-        <SelectContent align="start">
-          <SelectItem value={PERSONAL_PROJECT_VALUE}>Inbox</SelectItem>
-          <SelectSeparator />
-          {availableProjects.map(project => (
-            <SelectItem key={project.id} value={project.id}>
-              {project.name}
-            </SelectItem>
-          ))}
-          <SelectSeparator />
-          <div className="p-1 pt-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="w-full"
-              onClick={() => {
-                handleCreateDialogOpenChange(true);
-              }}
-            >
-              Create new project
-            </Button>
-          </div>
-        </SelectContent>
-      </Select>
+        variant="compact"
+        nullOption={{ value: PERSONAL_PROJECT_VALUE, label: 'Inbox' }}
+        footer={
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="w-full"
+            onClick={() => handleCreateDialogOpenChange(true)}
+          >
+            Create new project
+          </Button>
+        }
+      />
       {updateError ? <p className="text-xs text-destructive">{updateError}</p> : null}
       <Dialog open={showCreateForm} onOpenChange={handleCreateDialogOpenChange}>
         <DialogContent className="sm:max-w-md">

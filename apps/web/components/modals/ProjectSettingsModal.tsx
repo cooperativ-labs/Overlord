@@ -57,6 +57,7 @@ type ProjectSettingsModalProps = {
   initialSshPrivateKeyPath: string | null;
   initialEverhourProjectId: string | null;
   initialEverhourProjectName: string | null;
+  isArchived?: boolean;
   initialStatuses: Array<{
     name: string;
     position: number;
@@ -86,6 +87,7 @@ export function ProjectSettingsModal({
   initialSshPrivateKeyPath,
   initialEverhourProjectId,
   initialEverhourProjectName,
+  isArchived = false,
   initialStatuses,
   hasEverhourApiKey,
   sshFeatureEnabled,
@@ -164,6 +166,7 @@ export function ProjectSettingsModal({
         <DangerZonePage
           projectId={projectId}
           projectName={initialName}
+          isArchived={isArchived}
           onOpenChange={onOpenChange}
         />
       )}

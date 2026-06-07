@@ -10,6 +10,7 @@ import {
 } from '@/lib/objectives';
 import { resolveProtocolTicketCreatorUserId } from '@/lib/overlord/protocol-ticket-creator';
 import { resolveTicketDelegate } from '@/lib/overlord/protocol-ticket-delegate';
+import { resolveAssignedMember } from '@/lib/overlord/resolve-assigned-member';
 import {
   resolveProjectByWorkingDirectory,
   resolveProjectIdOrName
@@ -32,6 +33,7 @@ export type SpawnParams = {
   personal?: boolean;
   workingDirectory?: string;
   delegate?: string;
+  assignedTo?: string;
   parentSessionKey?: string;
   parentTicketId?: string;
   agentIdentifier: string;
@@ -62,6 +64,7 @@ export async function runSpawnProtocol(supabase: SpawnClient, params: SpawnParam
     personal = false,
     workingDirectory,
     delegate,
+    assignedTo,
     parentSessionKey,
     parentTicketId,
     agentIdentifier,
@@ -110,6 +113,11 @@ export async function runSpawnProtocol(supabase: SpawnClient, params: SpawnParam
     return { error: 'No project found for this organization.', status: 400 } as const;
   }
 
+  const assigneeResult = await resolveAssignedMember(supabase, organizationId, assignedTo);
+  if (!assigneeResult.ok) {
+    return { error: assigneeResult.error, status: 400 } as const;
+  }
+
   const nextTitle = title.trim() || deriveTitleFromObjective(objectives[0].objective);
   const ticketDelegate = resolveTicketDelegate(delegate, modelIdentifier ?? null, agentIdentifier);
   const createdBy = await resolveProtocolTicketCreatorUserId(supabase, {
@@ -126,6 +134,7 @@ export async function runSpawnProtocol(supabase: SpawnClient, params: SpawnParam
     .from('tickets')
     .insert({
       acceptance_criteria: acceptanceCriteria || null,
+      assigned_member: assigneeResult.memberId ?? undefined,
       available_tools: availableTools,
       created_by: createdBy,
       delegate: ticketDelegate,

@@ -393,6 +393,61 @@ export async function setTicketProjectAction(
   ]);
 }
 
+export async function setTicketAssignedMemberAction(
+  ticketId: string,
+  assignedMemberId: string | null
+): Promise<void> {
+  const supabase = await createClientForRequest();
+  const nextAssignee =
+    typeof assignedMemberId === 'string' ? assignedMemberId.trim() || null : null;
+
+  const existingTicket = await assertTicketAccess(supabase, ticketId);
+
+  // Defense in depth: the FK already guarantees a real member identifier,
+  // but verify explicitly so we can surface a friendly error instead of a raw
+  // constraint violation.
+  if (nextAssignee) {
+    const { data: member, error: memberError } = await supabase
+      .from('members')
+      .select('id')
+      .eq('id', nextAssignee)
+      .eq('organization_id', existingTicket.organization_id)
+      .maybeSingle();
+
+    if (memberError) {
+      throw new Error(memberError.message);
+    }
+    if (!member) {
+      throw new Error('Cannot assign ticket: that user is not a member of this organization.');
+    }
+  }
+
+  const { data, error } = await supabase
+    .from('tickets')
+    .update({ assigned_member: nextAssignee })
+    .eq('id', ticketId)
+    .select('organization_id,project_id')
+    .single();
+
+  if (error || !data) {
+    throw new Error(error?.message ?? 'Failed to update ticket assignee.');
+  }
+
+  await supabase.from('ticket_events').insert({
+    event_type: 'system',
+    summary: nextAssignee ? 'Assignee updated.' : 'Ticket unassigned.',
+    ticket_id: ticketId
+  });
+
+  revalidateTicketBoards();
+  revalidatePath(
+    buildProjectPath({ organizationId: data.organization_id, projectId: data.project_id })
+  );
+  revalidateTicketDetails([
+    { organizationId: data.organization_id, projectId: data.project_id, ticketId }
+  ]);
+}
+
 export async function reorderTicketsAction(
   orderedIds: string[],
   statusChange?: { ticketId: string; newStatus: string }

@@ -8,6 +8,7 @@ export type SidebarProject = {
   everhourProjectId?: string | null;
   operationsProfileFingerprint?: string | null;
   operationsProfileGeneratedAt?: string | null;
+  archivedAt?: string | null;
   localWorkingDirectory: string | null;
   sshCommand: string | null;
   remoteWorkingDirectory: string | null;
