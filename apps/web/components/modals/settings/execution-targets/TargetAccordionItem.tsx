@@ -328,7 +328,10 @@ export function TargetAccordionItem({
   }
 
   return (
-    <AccordionItem value={target.id} className="px-4 bg-neutral-100 rounded-lg">
+    <AccordionItem
+      value={target.id}
+      className="rounded-lg border border-border bg-card px-4 shadow-sm"
+    >
       <AccordionTrigger className="py-4 hover:no-underline">
         <div className="flex flex-1 items-start gap-2 pr-2">
           <div className="flex min-w-0 flex-1 flex-col gap-2">
@@ -492,7 +495,7 @@ export function TargetAccordionItem({
           {ownership && ownership.organizations.length > 0 ? (
             <AccordionItem
               value={`${target.id}-ownership`}
-              className="rounded-md border px-4 bg-background"
+              className="rounded-md border border-border bg-background px-4"
             >
               <AccordionTrigger className="hover:no-underline">
                 <div className="flex flex-1 flex-col gap-1.5 pr-2">
@@ -631,7 +634,7 @@ export function TargetAccordionItem({
           {/* Terminal settings */}
           <AccordionItem
             value={`${target.id}-terminal`}
-            className="rounded-md border last:border-b px-4 bg-background"
+            className="rounded-md border border-border bg-background px-4 last:border-b"
           >
             <AccordionTrigger className="hover:no-underline">
               <div className="flex flex-1 flex-col gap-1.5 pr-2">
@@ -810,7 +813,7 @@ export function TargetAccordionItem({
           {isElectron ? (
             <AccordionItem
               value={`${target.id}-local-agent`}
-              className="rounded-md border last:border-b px-4 bg-background"
+              className="rounded-md border border-border bg-background px-4 last:border-b"
             >
               <AccordionTrigger className="hover:no-underline">
                 <div className="flex flex-1 flex-col gap-1.5 pr-2">

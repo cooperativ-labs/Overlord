@@ -190,7 +190,7 @@ export function DraftObjective({
         </div>
       }
       className={cn(
-        'w-full overflow-hidden border rounded-xl transition-all focus-within:ring-1 focus-within:ring-ring/50 min-w-[350px]',
+        'w-full overflow-hidden border rounded-xl transition-all focus-within:ring-1 focus-within:ring-ring/50 min-w-[300px]',
         isFuture
           ? 'border-border-500/35 bg-muted/20 opacity-70 focus-within:opacity-100 focus-within:ring-ring/55'
           : 'border-muted-foreground/20',

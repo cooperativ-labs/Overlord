@@ -78,7 +78,7 @@ export default function TheAgenticTicketPage() {
             ))}
           </div>
         </div>
-        <div className="p-5">
+        <div className="md:p-5">
           <div className="shadow-lg rounded-2xl">
             <DemoAgenticTicket />
           </div>
