@@ -3,6 +3,7 @@ export const SESSION_ENDED_MESSAGE = 'You have been signed out. Please sign in a
 const PUBLIC_EXACT_PATHS = new Set([
   '/',
   '/anatomy',
+  '/the-agentic-ticket',
   '/changelog',
   '/compare',
   '/early-access',

@@ -11,6 +11,11 @@ describe('isPublicRoute', () => {
     expect(isPublicRoute('/anatomy-extra')).toBe(false);
   });
 
+  it('treats the agentic ticket page as public', () => {
+    expect(isPublicRoute('/the-agentic-ticket')).toBe(true);
+    expect(isPublicRoute('/the-agentic-ticket-extra')).toBe(false);
+  });
+
   it('does not treat unrelated paths as public', () => {
     expect(isPublicRoute('/changelogging')).toBe(false);
   });
