@@ -3,6 +3,7 @@
 import { ArrowDown, ArrowUp } from 'lucide-react';
 import { useTransition } from 'react';
 
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   ContextMenuContent,
   ContextMenuItem,
@@ -11,6 +12,7 @@ import {
 import { updateTicketPriorityAction } from '@/lib/actions/tickets';
 import { cn } from '@/lib/utils';
 import type { Database } from '@/types/database.types';
+import type { TicketAssignee } from '@/types/tickets';
 
 /* ------------------------------------------------------------------ */
 /*  StatusDot                                                          */
@@ -99,6 +101,40 @@ export function ProjectColorDot({
       className={cn('block shrink-0 rounded-[2px] border border-muted-foreground/50', sizeClass)}
       title={name ?? 'Inbox ticket'}
     />
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  TicketAssigneeAvatar                                               */
+/* ------------------------------------------------------------------ */
+
+function assigneeLabel(assignee: TicketAssignee): string {
+  return assignee.name?.trim() || assignee.username || 'Assignee';
+}
+
+function assigneeInitials(assignee: TicketAssignee): string {
+  return assigneeLabel(assignee).slice(0, 2).toUpperCase();
+}
+
+export function TicketAssigneeAvatar({
+  assignee,
+  className
+}: {
+  assignee: TicketAssignee | null | undefined;
+  className?: string;
+}) {
+  if (!assignee) return null;
+
+  const label = assigneeLabel(assignee);
+
+  return (
+    <Avatar
+      className={cn('h-4 w-4 shrink-0 ring-1 ring-border', className)}
+      title={`Assigned to ${label}`}
+    >
+      {assignee.imageUrl ? <AvatarImage src={assignee.imageUrl} alt={label} /> : null}
+      <AvatarFallback className="text-[8px]">{assigneeInitials(assignee)}</AvatarFallback>
+    </Avatar>
   );
 }
 

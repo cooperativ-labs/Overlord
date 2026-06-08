@@ -15,11 +15,12 @@ import { parseObjectiveAssignedAgent } from '@/lib/helpers/ticket-assigned-agent
 import { isDraftObjectiveWithText } from '@/lib/helpers/tickets';
 import { createClientForRequest } from '@/supabase/utils/server';
 import type { Database } from '@/types/database.types';
+import type { TicketAssignee } from '@/types/tickets';
 
 import type { ServerSupabase } from './internals';
 
 const TICKET_BOARD_SELECT =
-  'id,ticket_id,ticket_sequence,title,due_datetime,for_human,status,priority,is_read,updated_at,board_position,organization_id,project_id,everhour_task_id,schedule_id,delegate,organization:organizations(name),project:projects(name,color,everhour_project_id)';
+  'id,ticket_id,ticket_sequence,title,due_datetime,for_human,status,priority,is_read,updated_at,board_position,organization_id,project_id,everhour_task_id,schedule_id,delegate,assigned_member,organization:organizations(name),project:projects(name,color,everhour_project_id)';
 const COMPLETE_TICKETS_PAGE_SIZE = 20;
 const ALL_TICKETS_PAGE_SIZE = 1000;
 
@@ -40,6 +41,7 @@ type RawBoardTicket = {
   everhour_task_id: string | null;
   schedule_id: number | null;
   delegate: string | null;
+  assigned_member: string | null;
   organization: { name: string } | Array<{ name: string }> | null;
   project:
     | { name: string; color: string; everhour_project_id: string | null }
@@ -47,12 +49,58 @@ type RawBoardTicket = {
     | null;
 };
 
+/**
+ * Resolve the assignee display info (name/username/avatar) for a set of tickets.
+ *
+ * tickets.assigned_member stores a members.id ([orgid]:[username]); the avatar
+ * and name live on profiles, which co-members cannot read directly. We go
+ * through get_org_member_directory — a SECURITY DEFINER RPC that returns only
+ * the safe display columns — once per distinct organization, and build a
+ * memberId -> assignee map the card renderers can consume.
+ */
+async function buildTicketAssigneeMap(
+  supabase: ServerSupabase,
+  tickets: Pick<RawBoardTicket, 'assigned_member' | 'organization_id'>[]
+): Promise<Map<string, TicketAssignee>> {
+  const assigneeMap = new Map<string, TicketAssignee>();
+  const organizationIds = new Set<number>();
+  for (const ticket of tickets) {
+    if (ticket.assigned_member) {
+      organizationIds.add(ticket.organization_id);
+    }
+  }
+  if (organizationIds.size === 0) {
+    return assigneeMap;
+  }
+
+  type DirectoryRow =
+    Database['public']['Functions']['get_org_member_directory']['Returns'][number];
+
+  const directories = await Promise.all(
+    [...organizationIds].map(orgId => supabase.rpc('get_org_member_directory', { org_id: orgId }))
+  );
+
+  for (const { data } of directories) {
+    for (const row of (data ?? []) as DirectoryRow[]) {
+      assigneeMap.set(row.member_id, {
+        memberId: row.member_id,
+        name: row.name ?? null,
+        username: row.username ?? null,
+        imageUrl: row.image_url ?? null
+      });
+    }
+  }
+
+  return assigneeMap;
+}
+
 function mapBoardTicket(
   raw: RawBoardTicket,
   latestObjectiveAgent: string | null = null,
   latestObjectiveAssignedAgent: Database['public']['Tables']['objectives']['Row']['assigned_agent'] = null,
   hasExecutingObjective = false,
-  hasDraftObjectiveWithText = false
+  hasDraftObjectiveWithText = false,
+  assignee: TicketAssignee | null = null
 ) {
   const p = Array.isArray(raw.project) ? raw.project[0] : raw.project;
   const org = Array.isArray(raw.organization) ? raw.organization[0] : raw.organization;
@@ -76,6 +124,8 @@ function mapBoardTicket(
     everhour_task_id: raw.everhour_task_id,
     schedule_id: raw.schedule_id,
     delegate: raw.delegate,
+    assigned_member: raw.assigned_member,
+    assignee,
     organization_name: org?.name ?? null,
     project_name: p?.name ?? (raw.project_id ? null : 'Inbox'),
     project_color: p?.color ?? null,
@@ -359,6 +409,8 @@ export async function getTicketBoardBootstrapAction(
     }
   }
 
+  const assigneeByMemberId = await buildTicketAssigneeMap(supabase, rawTickets);
+
   return {
     scope,
     statuses,
@@ -368,7 +420,8 @@ export async function getTicketBoardBootstrapAction(
         latestObjectiveAgentByTicket.get(ticket.id) ?? null,
         latestObjectiveAssignedAgentByTicket.get(ticket.id) ?? null,
         executingObjectiveByTicket.has(ticket.id),
-        hasDraftObjectiveWithTextByTicket.has(ticket.id)
+        hasDraftObjectiveWithTextByTicket.has(ticket.id),
+        ticket.assigned_member ? (assigneeByMemberId.get(ticket.assigned_member) ?? null) : null
       )
     ),
     columnPageInfo
@@ -475,6 +528,8 @@ export async function loadMoreTicketsAction({
     }
   }
 
+  const assigneeByMemberId = await buildTicketAssigneeMap(supabase, tickets);
+
   return {
     tickets: tickets.map(ticket => {
       const mapped = mapBoardTicket(
@@ -482,7 +537,8 @@ export async function loadMoreTicketsAction({
         latestObjectiveAgentByTicket.get(ticket.id) ?? null,
         latestObjectiveAssignedAgentByTicket.get(ticket.id) ?? null,
         executingObjectiveByTicket.has(ticket.id),
-        hasDraftObjectiveWithTextByTicket.has(ticket.id)
+        hasDraftObjectiveWithTextByTicket.has(ticket.id),
+        ticket.assigned_member ? (assigneeByMemberId.get(ticket.assigned_member) ?? null) : null
       );
       const waitingAt = waitingLatestByTicket.get(ticket.id);
       return waitingAt ? { ...mapped, waiting_for_response_at: waitingAt } : mapped;

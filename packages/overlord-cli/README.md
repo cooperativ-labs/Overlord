@@ -38,13 +38,34 @@ overlord help
 ### Auth
 
 ```bash
+# No account yet? Create one entirely from the terminal with just an email.
+ovld auth signup --email agent@example.com --name "Build Agent" # emails an 8-digit code, then mints a durable oat_ agent token by default
+ovld onboard --email agent@example.com --project-name Repo       # same signup, plus org/project/cwd setup
+
 # Repair shared credentials first when a session already exists
 ovld auth repair # mirror and chmod shared Desktop/CLI credentials when possible
 
 # Login to Overlord if repair does not restore access
 ovld auth login #opens a browser when possible and also prints a verification URL/code so login can be completed from another machine over SSH.
+ovld auth login --email agent@example.com # log back in after logout with an emailed code (no browser)
 ovld auth status # show current login status (use --verbose for redacted diagnostics)
 ovld auth logout # remove stored credentials
+```
+
+#### Terminal-native account creation
+
+`ovld auth signup` creates an Overlord account without a browser: it emails an
+8-digit confirmation code, you enter it in the terminal, and the CLI stores valid
+credentials. Pass `--password` to set a password-manager-generated password;
+without one, signup is passwordless and you log back in later with
+`ovld auth login --email`. By default a durable `oat_…` agent token is minted and
+saved for headless use — pass `--no-agent-token` to skip it. For agents that read
+email out of band, the split flow is available:
+
+```bash
+ovld auth signup request --email agent@example.com --name "Build Agent" --json
+ovld auth signup verify  --email agent@example.com --code 12345678 --json
+ovld onboard --use-current-auth --project-name Repo --directory "$PWD" --yes
 ```
 
 Desktop-installed wrappers default `OVERLORD_URL` to `https://www.ovld.ai` unless you override it explicitly.

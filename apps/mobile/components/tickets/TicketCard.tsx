@@ -1,6 +1,6 @@
 import { format, parseISO } from 'date-fns';
 import { useEffect } from 'react';
-import { Pressable, Text, useWindowDimensions, View } from 'react-native';
+import { Image, Pressable, Text, useWindowDimensions, View } from 'react-native';
 import Animated, {
   cancelAnimation,
   Easing,
@@ -210,6 +210,37 @@ export function TicketCard({
             }}
           />
         )}
+
+        {/* Assignee avatar */}
+        {ticket.assignee ? (
+          <View
+            style={{
+              width: 18,
+              height: 18,
+              borderRadius: 9,
+              overflow: 'hidden',
+              flexShrink: 0,
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderWidth: 1,
+              borderColor: colors.border,
+              backgroundColor: colors.muted
+            }}
+          >
+            {ticket.assignee.imageUrl ? (
+              <Image
+                source={{ uri: ticket.assignee.imageUrl }}
+                style={{ width: '100%', height: '100%' }}
+              />
+            ) : (
+              <Text style={{ fontSize: 8, fontWeight: '600', color: colors.mutedForeground }}>
+                {(ticket.assignee.name ?? ticket.assignee.username ?? 'A')
+                  .slice(0, 2)
+                  .toUpperCase()}
+              </Text>
+            )}
+          </View>
+        ) : null}
 
         <View style={styles.ticketListExecWrap}>
           <Ionicons

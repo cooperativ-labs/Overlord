@@ -29,6 +29,8 @@ ovld onboard
 
 \`ovld onboard\` asks for your name, organization name, and project name, opens browser signup/login, creates your first organization and project, links the current directory, and creates the same starter review ticket as the web onboarding flow. At the end it strongly recommends opening the Desktop download page; choose no to open the project in the web app instead.
 
+If you only have an email address — for example an autonomous agent with no browser — create the account entirely in the terminal. \`ovld onboard --email you@example.com\` (or the account-only \`ovld auth signup --email you@example.com\`) emails an 8-digit confirmation code, you enter it at the prompt, and the CLI stores valid credentials plus a durable agent token. Pass \`--password\` to set a password-manager password; otherwise log back in later with \`ovld auth login --email you@example.com\`.
+
 ## 2. Download the desktop app
 
 The desktop app is what launches agents locally, follows your repositories, and streams updates back into Overlord.

@@ -13,6 +13,13 @@ export type TicketAssignedAgent = {
 
 export type TicketType = Database['public']['Tables']['tickets']['Row'];
 
+export type TicketAssignee = {
+  memberId: string;
+  name: string | null;
+  username: string | null;
+  imageUrl: string | null;
+};
+
 export type Ticket = {
   id: string;
   ticket_id: string | null;
@@ -45,4 +52,6 @@ export type Ticket = {
   schedule_id?: number | null;
   due_datetime?: string | null;
   tags?: EffectiveTicketTag[];
+  assigned_member?: string | null;
+  assignee?: TicketAssignee | null;
 };

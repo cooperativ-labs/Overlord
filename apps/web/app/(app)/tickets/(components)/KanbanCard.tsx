@@ -22,6 +22,7 @@ import { ObjectivesExecutedBadge } from './ObjectivesExecutedBadge';
 import {
   AttentionIndicators,
   ProjectColorDot,
+  TicketAssigneeAvatar,
   TicketPriorityContextMenu
 } from './TicketCardPrimitives';
 
@@ -148,6 +149,7 @@ function KanbanCardBody({
               )}
             </div>
             <div className="flex shrink-0 items-center gap-1.5">
+              <TicketAssigneeAvatar assignee={ticket.assignee} />
               <ExecutionTargetBadge forHuman={ticket.for_human} className="text-xs" />
               {ticket.schedule_id ? <ScheduleBadge /> : null}
               <ObjectivesExecutedBadge

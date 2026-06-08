@@ -17,6 +17,7 @@ import { ObjectivesExecutedBadge } from './ObjectivesExecutedBadge';
 import {
   AttentionIndicators,
   ProjectColorDot,
+  TicketAssigneeAvatar,
   TicketPriorityContextMenu
 } from './TicketCardPrimitives';
 
@@ -244,6 +245,9 @@ export default function TicketListCard({
                 title="Agent running"
               />
             )}
+
+            {/* Assignee avatar */}
+            <TicketAssigneeAvatar assignee={ticket.assignee} />
 
             {/* Execution target icon */}
             <span title={executionTitle} className="flex shrink-0 items-center opacity-70">

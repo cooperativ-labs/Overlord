@@ -2,6 +2,37 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2606081356.0] - 2026-06-08:13:56
+
+### Added
+- Add **`ovld auth signup`** (and **`request`** / **`verify`** subcommands) to create an Overlord account from the terminal with an emailed 8-digit confirmation code — no browser required.
+- Add **`ovld auth login --email`** for passwordless re-login via emailed code when no browser is available.
+- Extend **`ovld onboard`** with **`--email`** for terminal-first account creation plus org/project/directory setup, and **`--use-current-auth`** to provision a workspace after a prior **`auth signup`**.
+- Mint a durable **`oat_…`** agent token by default after CLI signup or email login (**`--no-agent-token`** to skip); expose **`POST /api/auth/agent-token`** for explicit minting after authentication.
+- Add public **`/api/auth/cli-signup/*`** and **`/api/auth/cli-login/*`** routes so the CLI can sign up and log in via Supabase email OTP without holding service-role credentials.
+- Show **assignee avatars** on ticket cards across Kanban, list, and calendar views on **web**, and on the tickets list on **mobile**.
+- Add **Archived projects** page under organization settings to browse and unarchive projects; sidebar shows a link into that page when archives exist.
+
+### Fixed
+- None.
+
+### Changed
+- Replace the sidebar collapsible archived-project list with a compact link that opens organization settings on the Archived projects page.
+
+### Security
+- Rate-limit CLI signup and email-login request/verify endpoints per IP and normalized email via the **`cli_auth_attempts`** table.
+
+### Refactor
+- Consolidate agent-token generation and persistence into shared **`lib/overlord/agent-tokens.ts`** used by Settings, the new agent-token route, and CLI flows.
+- Centralize CLI auth helpers (anon/user-scoped Supabase clients, duplicate-signup detection, email normalization) in **`lib/overlord/cli-auth.ts`**.
+
+### Test
+- Add API route tests for **`cli-signup`**, **`cli-login`**, and **`agent-token`** endpoints.
+- Add CLI signup integration tests and validation/rate-limit unit tests for CLI auth.
+
+### Documentation
+- Document terminal-native signup, email login, and agent-token defaults in the CLI README, docs CLI surface, and Quick Start.
+
 ## [0.2606081020.0] - 2026-06-08:10:20
 
 ### Added

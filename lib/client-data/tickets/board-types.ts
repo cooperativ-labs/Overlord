@@ -19,6 +19,13 @@ export type TicketAssignedAgent = {
   customAgentId?: string | null;
 };
 
+export type TicketAssignee = {
+  memberId: string;
+  name: string | null;
+  username: string | null;
+  imageUrl: string | null;
+};
+
 export type BoardScope =
   | { kind: 'user'; organizationId?: number }
   | { kind: 'project'; projectId: string; organizationId?: number };
@@ -57,6 +64,8 @@ export type BoardTicket = {
   schedule_id?: number | null;
   due_datetime?: string | null;
   tags?: EffectiveTicketTag[];
+  assigned_member?: string | null;
+  assignee?: TicketAssignee | null;
 };
 
 export type BoardStatus = {

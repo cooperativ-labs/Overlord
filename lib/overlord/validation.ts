@@ -490,6 +490,63 @@ export const cliOnboardingSchema = z
     path: ['organizationName']
   });
 
+// ---------------------------------------------------------------------------
+// CLI-native account creation & email-code login
+// ---------------------------------------------------------------------------
+
+/** Trimmed, lowercased, format-validated email shared by the CLI auth schemas. */
+const cliEmailSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .pipe(z.email({ error: 'A valid email address is required.' }).max(254));
+
+/**
+ * Email confirmation / login code. Supabase issues 6–8 digit numeric OTPs
+ * depending on the flow; accept that range so signup and email-login both work.
+ */
+const cliOtpSchema = z
+  .string()
+  .trim()
+  .regex(/^\d{6,8}$/, 'Confirmation code must be 6–8 digits.');
+
+/**
+ * Optional password supplied from a password manager. Supabase rejects passwords
+ * longer than 72 bytes (bcrypt), so cap there; require a reasonable minimum.
+ */
+const cliPasswordSchema = z.string().min(8, 'Password must be at least 8 characters.').max(72);
+
+/** POST /api/auth/cli-signup/request */
+export const cliSignupRequestSchema = z.object({
+  email: cliEmailSchema,
+  name: z.string().trim().min(1).max(120),
+  password: cliPasswordSchema.optional(),
+  inviteToken: z.string().trim().min(1).max(256).optional()
+});
+
+/** POST /api/auth/cli-signup/verify */
+export const cliSignupVerifySchema = z.object({
+  email: cliEmailSchema,
+  token: cliOtpSchema,
+  password: cliPasswordSchema.optional()
+});
+
+/** POST /api/auth/cli-login/request */
+export const cliLoginRequestSchema = z.object({
+  email: cliEmailSchema
+});
+
+/** POST /api/auth/cli-login/verify */
+export const cliLoginVerifySchema = z.object({
+  email: cliEmailSchema,
+  token: cliOtpSchema
+});
+
+/** POST /api/auth/agent-token */
+export const agentTokenCreateSchema = z.object({
+  label: z.string().trim().min(1).max(80)
+});
+
 /** add-project-resource: register a new directory for a project */
 export const addProjectResourceSchema = z.object({
   projectId: z.string().uuid(),

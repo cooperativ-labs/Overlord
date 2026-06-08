@@ -1,37 +1,14 @@
 'use server';
 
+import { type AgentTokenInfo, createAgentTokenForUser } from '@/lib/overlord/agent-tokens';
 import { createClientForRequest } from '@/supabase/utils/server';
 
-function generateSecureToken(): string {
-  const bytes = new Uint8Array(32);
-  crypto.getRandomValues(bytes);
-  return 'oat_' + Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
-}
-
-async function hashToken(token: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(token);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
-export type UserAgentTokenInfo = {
-  id: string;
-  label: string;
-  tokenPrefix: string;
-  createdAt: string;
-  lastUsedAt: string | null;
-};
+export type UserAgentTokenInfo = AgentTokenInfo;
 
 /** Create a new labeled AGENT_TOKEN for the current user. Returns the full token once. */
 export async function createUserAgentTokenAction(
   label: string
 ): Promise<{ token: string; info: UserAgentTokenInfo }> {
-  const trimmed = label.trim();
-  if (!trimmed) throw new Error('Label is required');
-  if (trimmed.length > 80) throw new Error('Label must be 80 characters or fewer');
-
   const supabase = await createClientForRequest();
   const {
     data: { user },
@@ -39,33 +16,7 @@ export async function createUserAgentTokenAction(
   } = await supabase.auth.getUser();
   if (userError || !user) throw new Error('Not authenticated');
 
-  const token = generateSecureToken();
-  const tokenHash = await hashToken(token);
-  const tokenPrefix = token.slice(0, 12);
-
-  const { data, error } = await supabase
-    .from('user_agent_tokens')
-    .insert({
-      user_id: user.id,
-      label: trimmed,
-      token_hash: tokenHash,
-      token_prefix: tokenPrefix
-    })
-    .select('id, label, token_prefix, created_at, last_used_at')
-    .single();
-
-  if (error || !data) throw new Error(error?.message ?? 'Failed to generate token');
-
-  return {
-    token,
-    info: {
-      id: data.id,
-      label: data.label,
-      tokenPrefix: data.token_prefix,
-      createdAt: data.created_at,
-      lastUsedAt: data.last_used_at
-    }
-  };
+  return createAgentTokenForUser(supabase, user.id, label);
 }
 
 /** Revoke a single AGENT_TOKEN owned by the current user. */

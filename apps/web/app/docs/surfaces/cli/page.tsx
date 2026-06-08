@@ -26,12 +26,22 @@ npx @overlord-ai/cli --help
 ## Authentication
 
 \`\`\`bash
-# Log in to your Overlord account
+# Create an account from the terminal (no browser) — emails a confirmation code
+ovld auth signup --email you@example.com --name "Your Name"
+
+# Log in to your Overlord account (browser, or an emailed code with --email)
 ovld auth login
+ovld auth login --email you@example.com
 
 # Log out
 ovld auth logout
 \`\`\`
+
+\`ovld auth signup\` creates the account only and, by default, mints a durable
+\`oat_…\` agent token for headless use (\`--no-agent-token\` to skip). Add
+\`--password\` to set a password-manager password; otherwise sign back in later
+with \`ovld auth login --email\`. To also create an organization, project, and
+link the current directory, use \`ovld onboard --email you@example.com\`.
 
 ## Setup & maintenance
 

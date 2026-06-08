@@ -7,6 +7,8 @@ import { getDisplayTitle } from '@/lib/helpers/tickets';
 import { cn } from '@/lib/utils';
 import type { Ticket } from '@/types/tickets';
 
+import { TicketAssigneeAvatar } from '../TicketCardPrimitives';
+
 import { getCalendarTicketColors } from './calendar-ticket-colors';
 
 export function DraggableCalendarTicket({
@@ -79,6 +81,7 @@ export function DraggableCalendarTicket({
         </button>
       ) : null}
       <span className="truncate">{getDisplayTitle(ticket)}</span>
+      <TicketAssigneeAvatar assignee={ticket.assignee} className="ml-auto h-3.5 w-3.5" />
     </div>
   );
 }

@@ -1,10 +1,8 @@
 'use server';
 
-import type { AuthError } from '@supabase/auth-js';
-
 import { getPlatformUrl } from '@/lib/env';
+import { findAuthUserByEmail, isDuplicateSignupError } from '@/lib/overlord/cli-auth';
 import { createClientForRequest } from '@/supabase/utils/server';
-import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
 function sanitizeNextPath(value: FormDataEntryValue | null, fallback: string): string {
   if (typeof value !== 'string') return fallback;
@@ -33,41 +31,6 @@ function buildConfirmEmailRedirect(email: string, nextPath: string, message?: st
   }
 
   return `/confirm-email?${params.toString()}`;
-}
-
-function isDuplicateSignupError(error: AuthError | null): boolean {
-  if (!error) return false;
-
-  return error.code === 'email_exists' || error.code === 'user_already_exists';
-}
-
-async function findAuthUserByEmail(email: string) {
-  const service = createServiceRoleClient();
-  let page = 1;
-
-  while (page <= 20) {
-    const { data, error } = await service.auth.admin.listUsers({ page, perPage: 200 });
-
-    if (error) {
-      throw new Error(error.message ?? 'Failed to inspect existing auth users.');
-    }
-
-    const user = data.users.find(
-      candidate => candidate.email?.toLowerCase() === email.toLowerCase()
-    );
-
-    if (user) {
-      return user;
-    }
-
-    if (!data.nextPage) {
-      return null;
-    }
-
-    page = data.nextPage;
-  }
-
-  return null;
 }
 
 export async function signIn(formData: FormData): Promise<AuthResult> {

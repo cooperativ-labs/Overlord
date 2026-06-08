@@ -3203,6 +3203,30 @@ Use this for ticket lifecycle work from an agent runtime: create a standalone
 draft with \`ovld protocol create\`, create-and-attach with \`ovld protocol prompt\`,
 or attach to an existing ticket with \`ovld protocol attach --ticket-id <ticket_id>\`.
 
+Account creation & onboarding:
+  No Overlord account or credentials yet? If you have an email address you can
+  create an account and set up a workspace entirely from the terminal — no
+  browser needed. Run these (outside \`ovld protocol\`) before attaching:
+
+    ovld auth signup --email <email> --name <name>
+                                   Create an account from the terminal: an 8-digit
+                                   code is emailed and entered here. Mints and
+                                   stores a durable oat_ agent token by default.
+    ovld onboard --email <email>   Same terminal-first signup, then also create an
+                                   organization + project and link this directory.
+    ovld onboard                   Browser-based account + workspace setup.
+    ovld onboard --invite <token>  Join an organization you were invited to
+                                   instead of creating a new one.
+    ovld auth login --email <email>
+                                   Log back in after logout with an emailed code.
+    ovld auth login                Authorize an existing account (browser flow,
+                                   or --token <oat_…> to persist a durable,
+                                   never-expiring agent token for headless use).
+    ovld auth status               Show current login status and organizations.
+
+  To check credentials machine-readably from a script, use
+  \`ovld protocol auth-status\` (returns ok=true|false).
+
 Project discovery:
   When prompting or creating tickets, the CLI automatically resolves the correct
   project by matching your current working directory against your configured

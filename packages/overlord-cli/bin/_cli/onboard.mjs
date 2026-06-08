@@ -11,6 +11,7 @@ import {
   buildAuthHeaders,
   loadCredentials,
   loadRuntime,
+  resolveStoredSupabaseAccessToken,
   saveCredentials
 } from './credentials.mjs';
 import { upsertLocalOverlordConfig } from './local-config.mjs';
@@ -150,17 +151,86 @@ function buildWebProjectUrl(platformUrl, result) {
   return `${platformUrl}/projects/${projectId}`;
 }
 
+/**
+ * Resolve the credentials onboarding will use, based on the chosen auth mode:
+ *  - `--use-current-auth`: reuse the already signed-in Supabase session.
+ *  - `--email`: create the account entirely in the terminal (email + code).
+ *  - default: browser device-authorization flow.
+ *
+ * Returns the Supabase access token to call `cli-onboarding` with, the resolved
+ * platform URL and local secret, and (only for the browser flow) the freshly
+ * issued session that still needs persisting.
+ */
+async function resolveOnboardingAuth({ flags, name, inviteToken }) {
+  const useCurrentAuth = flags['use-current-auth'] === true || flags['use-current-auth'] === 'true';
+  const email = trimFlag(flags, 'email');
+
+  if (useCurrentAuth) {
+    const { accessToken, platformUrl, localSecret } = await resolveStoredSupabaseAccessToken();
+    return { accessToken, platformUrl, localSecret, sessionToPersist: null };
+  }
+
+  if (email) {
+    const { runCliSignupFlow } = await import('./signup.mjs');
+    const { session, platformUrl, localSecret } = await runCliSignupFlow({
+      email,
+      name,
+      password: trimFlag(flags, 'password') || undefined,
+      invite: inviteToken || undefined,
+      'no-agent-token': flags['no-agent-token'] === true
+    });
+    return {
+      accessToken: session.access_token,
+      platformUrl: session.platform_url ?? platformUrl,
+      localSecret,
+      sessionToPersist: null
+    };
+  }
+
+  const storedCredentials = loadCredentials();
+  const platformUrl = resolveLoginPlatformUrl(null, storedCredentials?.platform_url ?? null);
+  const runtime = loadRuntime(platformUrl);
+  const localSecret = runtime?.local_secret ?? process.env.OVERLORD_LOCAL_SECRET ?? '';
+
+  console.log('\nStarting Overlord onboarding in your browser.');
+  console.log('Create an account or sign in, then approve the CLI authorization request.\n');
+
+  const credentials = await authLoginViaDeviceFlow(platformUrl, localSecret, {
+    browserOpener: verificationUri => {
+      const signupUrl = buildSignupUrl(platformUrl, verificationUri, name, inviteToken);
+      console.log(`  Signup URL: ${signupUrl}`);
+      openBrowser(signupUrl);
+    }
+  });
+
+  return {
+    accessToken: credentials.access_token,
+    platformUrl: credentials.platform_url ?? platformUrl,
+    localSecret,
+    sessionToPersist: credentials
+  };
+}
+
 export async function runOnboardCommand(args) {
   const flags = parseFlags(args);
 
   if (flags.help === true || flags.h === true || args[0] === 'help') {
-    console.log(`Usage: ovld onboard [--name <name>] [--organization-name <name>] [--project-name <name>] [--directory <path>] [--invite <token|url>] [--yes] [--no-desktop]
+    console.log(`Usage: ovld onboard [--name <name>] [--organization-name <name>] [--project-name <name>] [--directory <path>] [--invite <token|url>] [--email <email>] [--password <password>] [--use-current-auth] [--yes] [--no-desktop]
 
 Creates an Overlord account setup from the terminal:
   1. collects your name, organization, project, and repository directory
-  2. opens browser signup/login and authorizes the CLI
+  2. authorizes the CLI (browser by default; terminal-only with --email)
   3. creates the organization/project, links this directory, and creates the first onboarding ticket
   4. opens the Desktop download page, or the web project when --no-desktop is used
+
+Authorization modes:
+  (default)            Browser signup/login + device authorization.
+  --email <email>      Create the account entirely in the terminal: an 8-digit
+                       confirmation code is emailed and entered here. Add
+                       --password <password> to set a password-manager password;
+                       otherwise future login uses \`ovld auth login --email\`.
+  --use-current-auth   Skip auth and provision using the already signed-in session
+                       (e.g. right after \`ovld auth signup\`).
 
 With --invite <token>, joins the inviting organization (from an invite email)
 with the invited role instead of creating a new organization; the organization
@@ -190,42 +260,43 @@ Run this from the repository you want Overlord agents to work in.`);
     throw new Error('Organization name is required (or pass --invite <token> to join an org).');
   }
 
-  const storedCredentials = loadCredentials();
-  const platformUrl = resolveLoginPlatformUrl(null, storedCredentials?.platform_url ?? null);
-  const runtime = loadRuntime(platformUrl);
-  const localSecret = runtime?.local_secret ?? process.env.OVERLORD_LOCAL_SECRET ?? '';
+  const {
+    accessToken,
+    platformUrl: resolvedPlatformUrl,
+    localSecret,
+    sessionToPersist
+  } = await resolveOnboardingAuth({ flags, name, inviteToken });
 
-  console.log('\nStarting Overlord onboarding in your browser.');
-  console.log('Create an account or sign in, then approve the CLI authorization request.\n');
-
-  const credentials = await authLoginViaDeviceFlow(platformUrl, localSecret, {
-    browserOpener: verificationUri => {
-      const signupUrl = buildSignupUrl(platformUrl, verificationUri, name, inviteToken);
-      console.log(`  Signup URL: ${signupUrl}`);
-      openBrowser(signupUrl);
-    }
-  });
-
-  const resolvedPlatformUrl = credentials.platform_url ?? platformUrl;
   const deviceFingerprint = readOrCreateDeviceFingerprint(flags);
-  const result = await completeCliOnboarding(resolvedPlatformUrl, localSecret, credentials, {
-    name,
-    ...(organizationName ? { organizationName } : {}),
-    projectName,
-    directoryPath,
-    deviceFingerprint,
-    deviceHostname: os.hostname(),
-    devicePlatform: process.platform,
-    ...(inviteToken ? { inviteToken } : {})
-  });
+  const result = await completeCliOnboarding(
+    resolvedPlatformUrl,
+    localSecret,
+    { access_token: accessToken },
+    {
+      name,
+      ...(organizationName ? { organizationName } : {}),
+      projectName,
+      directoryPath,
+      deviceFingerprint,
+      deviceHostname: os.hostname(),
+      devicePlatform: process.platform,
+      ...(inviteToken ? { inviteToken } : {})
+    }
+  );
 
-  saveCredentials({
-    access_token: credentials.access_token,
-    access_token_expires_at: credentials.access_token_expires_at ?? undefined,
-    refresh_token: credentials.refresh_token,
-    organization_id: result.organization.organizationId,
-    platform_url: resolvedPlatformUrl
-  });
+  // The browser device-auth flow returns a session that hasn't been stored yet;
+  // persist it (with the resolved org). The --email and --use-current-auth paths
+  // already saved credentials (including any minted agent token), so we leave the
+  // stored credential — and its durable agent token — untouched.
+  if (sessionToPersist) {
+    saveCredentials({
+      access_token: sessionToPersist.access_token,
+      access_token_expires_at: sessionToPersist.access_token_expires_at ?? undefined,
+      refresh_token: sessionToPersist.refresh_token,
+      organization_id: result.organization.organizationId,
+      platform_url: resolvedPlatformUrl
+    });
+  }
 
   try {
     const localConfig = await upsertLocalOverlordConfig({

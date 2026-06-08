@@ -30,7 +30,11 @@ import { Ionicons } from '@/lib/icons';
 import { useSelectedProject } from '@/lib/selected-project-context';
 import { getSupabase } from '@/lib/supabase';
 import { isTransientNetworkError } from '@/lib/transient-network-error';
-import { normalizeTicketExecutionTarget, type TicketListItemRow } from '@/lib/types';
+import {
+  normalizeTicketExecutionTarget,
+  type TicketAssignee,
+  type TicketListItemRow
+} from '@/lib/types';
 
 const TICKETS_FILTER_PREFERENCES_KEY = 'mobile-ticket-screen-filters';
 
@@ -155,7 +159,7 @@ export default function TicketsScreen() {
         let q = supabase
           .from('tickets')
           .select(
-            'id, organization_id, title, status, priority, for_human, ticket_sequence, due_datetime, created_at, updated_at, project_id, board_position'
+            'id, organization_id, title, status, priority, for_human, ticket_sequence, due_datetime, created_at, updated_at, project_id, board_position, assigned_member'
           )
           .order('updated_at', { ascending: false })
           .limit(100);
@@ -195,6 +199,41 @@ export default function TicketsScreen() {
             }
           }
           const ticketIds = (data ?? []).map(ticket => ticket.id);
+
+          // Resolve assignee display info (name/avatar) for tickets that have an
+          // assigned_member. tickets.assigned_member stores a members.id; the
+          // avatar lives on profiles, which co-members read through the
+          // get_org_member_directory SECURITY DEFINER RPC (once per org).
+          const assigneeByMemberId = new Map<string, TicketAssignee>();
+          const assigneeOrgIds = new Set<number>();
+          for (const ticket of (data ?? []) as TicketListItemRow[]) {
+            if (ticket.assigned_member) {
+              assigneeOrgIds.add(ticket.organization_id);
+            }
+          }
+          if (assigneeOrgIds.size > 0) {
+            const directories = await Promise.all(
+              [...assigneeOrgIds].map(orgId =>
+                supabase.rpc('get_org_member_directory', { org_id: orgId })
+              )
+            );
+            for (const { data: directoryRows } of directories) {
+              for (const row of (directoryRows ?? []) as {
+                member_id: string;
+                name: string | null;
+                username: string | null;
+                image_url: string | null;
+              }[]) {
+                assigneeByMemberId.set(row.member_id, {
+                  memberId: row.member_id,
+                  name: row.name ?? null,
+                  username: row.username ?? null,
+                  imageUrl: row.image_url ?? null
+                });
+              }
+            }
+          }
+
           const tagMap = new Map<string, Map<string, TicketTagSummary>>();
           if (ticketIds.length > 0) {
             const { data: tagRows, error: tagError } = await supabase
@@ -236,6 +275,9 @@ export default function TicketsScreen() {
               ...normalizeTicketExecutionTarget(t),
               assigned_agent: assignedByTicket.get(t.id) ?? null,
               has_executing_objective: executingTicketIds.has(t.id),
+              assignee: t.assigned_member
+                ? (assigneeByMemberId.get(t.assigned_member) ?? null)
+                : null,
               tags: [...(tagMap.get(t.id)?.values() ?? [])].sort((a, b) =>
                 a.label.localeCompare(b.label)
               )

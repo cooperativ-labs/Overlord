@@ -304,11 +304,7 @@ export function ExecutionTargetsPage({
           </p>
         </div>
       ) : (
-        <Accordion
-          type="multiple"
-          className="rounded-md border border-border bg-muted/20 p-2"
-          defaultValue={[targets[0]?.id]}
-        >
+        <Accordion type="multiple" className="gap-3" defaultValue={[targets[0]?.id]}>
           {targets.map(target => (
             <TargetAccordionItem
               key={target.id}

@@ -264,6 +264,31 @@ export async function getArchivedProjectsForCurrentUser(): Promise<ArchivedProje
   }));
 }
 
+export async function getArchivedProjectsForOrganizationAction(
+  organizationId: number
+): Promise<ArchivedProject[]> {
+  const supabase = await createClientForRequest();
+
+  const { data, error } = await supabase
+    .from('projects')
+    .select('id,name,color,organization_id,archived_at')
+    .eq('organization_id', organizationId)
+    .not('archived_at', 'is', null)
+    .order('name', { ascending: true });
+
+  if (error || !data) {
+    return [];
+  }
+
+  return data.map(project => ({
+    id: project.id,
+    name: project.name,
+    color: project.color,
+    organizationId: project.organization_id,
+    archivedAt: project.archived_at!
+  }));
+}
+
 export type ModalProjectOption = {
   id: string;
   name: string;

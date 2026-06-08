@@ -30,6 +30,14 @@ export interface AssignedAgent {
   thinking?: string | null;
 }
 
+/** Display info for the human a ticket is assigned to (avatar/name). */
+export interface TicketAssignee {
+  memberId: string;
+  name: string | null;
+  username: string | null;
+  imageUrl: string | null;
+}
+
 export interface AgentModelSelection {
   agent: LaunchAgentType;
   model: string | null;
@@ -97,11 +105,13 @@ export interface TicketListItem {
   due_datetime: string | null;
   updated_at: string;
   has_executing_objective?: boolean;
+  assigned_member: string | null;
+  assignee?: TicketAssignee | null;
 }
 
 export type TicketListItemRow = Omit<
   TicketListItem,
-  'execution_target' | 'assigned_agent' | 'has_executing_objective'
+  'execution_target' | 'assigned_agent' | 'has_executing_objective' | 'assignee'
 > & {
   for_human: boolean;
 };

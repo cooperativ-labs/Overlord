@@ -1,6 +1,6 @@
 'use client';
 
-import { Newspaper, Settings, Trash2, Users } from 'lucide-react';
+import { Archive, Newspaper, Settings, Trash2, Users } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import {
@@ -8,6 +8,7 @@ import {
   type OrganizationDetails
 } from '@/lib/actions/organizations';
 
+import { ArchivedProjectsPage } from './organization-settings/ArchivedProjectsPage';
 import { DangerZonePage } from './organization-settings/DangerZonePage';
 import { FeedPage } from './organization-settings/FeedPage';
 import { GeneralPage } from './organization-settings/GeneralPage';
@@ -18,6 +19,7 @@ const navItems: SettingsNavItem[] = [
   { name: 'General', icon: Settings },
   { name: 'Members', icon: Users },
   { name: 'Feed', icon: Newspaper },
+  { name: 'Archived projects', icon: Archive },
   { name: 'Danger zone', icon: Trash2 }
 ];
 
@@ -102,6 +104,9 @@ export function OrganizationSettingsModal({
               organizationId={details.id}
               initialRetentionDays={details.feedRetentionDays}
             />
+          )}
+          {activeNav === 'Archived projects' && (
+            <ArchivedProjectsPage open={open} organizationId={details.id} />
           )}
           {activeNav === 'Danger zone' && (
             <DangerZonePage

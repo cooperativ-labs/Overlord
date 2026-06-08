@@ -785,6 +785,57 @@ export async function searchTicketsAcrossOrganizations(auth, body, options = {})
   return { tickets, count: tickets.length };
 }
 
+/**
+ * Resolve a fresh Supabase access token (JWT) from stored credentials, refreshing
+ * via the stored refresh token when the cached access token is stale.
+ *
+ * Unlike {@link resolveAuth}, this never returns an `oat_…` agent token: it is for
+ * callers that must present a real Supabase user JWT (e.g. `/api/auth/cli-onboarding`
+ * and `/api/auth/agent-token`, which validate the session with `auth.getUser`).
+ *
+ * @returns {Promise<{ accessToken: string, platformUrl: string, localSecret: string }>}
+ */
+export async function resolveStoredSupabaseAccessToken() {
+  const selected = selectStoredCredentials();
+  const creds = selected?.credentials ?? migrateLegacyCredentials();
+  const platformUrl =
+    normalizePlatformUrl(process.env.OVERLORD_URL) ??
+    normalizeStoredPlatformUrl(creds?.platform_url) ??
+    getDefaultOverlordUrl();
+  const runtime = isLocalhostUrl(platformUrl) ? loadRuntime(platformUrl) : null;
+  const localSecret =
+    runtime?.local_secret && runtime.platform_url === platformUrl ? runtime.local_secret : '';
+
+  if (!creds) {
+    throw new Error('No stored Overlord credentials. Run `ovld auth signup` or `ovld auth login` first.');
+  }
+
+  if (creds.access_token && isAccessTokenFresh(creds)) {
+    return { accessToken: creds.access_token, platformUrl, localSecret };
+  }
+
+  if (creds.refresh_token) {
+    const refreshed = await refreshOAuthAccessToken(platformUrl, creds.refresh_token, localSecret);
+    if (!refreshed.access_token) {
+      throw new Error('Failed to refresh the stored Supabase session. Run `ovld auth login --email` again.');
+    }
+    saveCredentialsToSource(
+      {
+        ...creds,
+        access_token: refreshed.access_token,
+        access_token_expires_at: refreshed.access_token_expires_at,
+        refresh_token: refreshed.refresh_token || creds.refresh_token
+      },
+      selected?.source
+    );
+    return { accessToken: refreshed.access_token, platformUrl, localSecret };
+  }
+
+  throw new Error(
+    'Stored credentials have no Supabase session. Run `ovld auth login --email` to obtain one.'
+  );
+}
+
 export async function getAuthStatus() {
   const creds = loadCredentials();
   let resolved;

@@ -726,7 +726,14 @@ export async function runAuthCommand(subcommand, args = []) {
     console.log(`ovld auth <subcommand>
 
 Subcommands:
+  signup   Create a new Overlord account from the terminal (email + confirmation code)
+             --email <email>          Email to create the account with.
+             --name <name>            Display name.
+             --password <password>    Optional password-manager password.
+             --no-agent-token         Skip minting a durable oat_ token.
+           Run \`ovld auth signup help\` for request/verify split flow.
   login    Authorize the CLI via browser (works locally or over SSH)
+             --email <email>          Log in with an emailed code instead of a browser.
              --token <oat_…>          Persist an agent token from Settings → Agents & MCP.
                                       Skips the browser flow; token never expires.
              --organization-id <id>   Optional. Validated against your membership but
@@ -740,7 +747,29 @@ Subcommands:
     return;
   }
 
+  if (subcommand === 'signup') {
+    const { runAuthSignupCommand } = await import('./signup.mjs');
+    await runAuthSignupCommand(args);
+    return;
+  }
+
   if (subcommand === 'login') {
+    const [maybeSub, ...rest] = args;
+    if (maybeSub === 'request') {
+      const { runEmailLoginRequest } = await import('./signup.mjs');
+      await runEmailLoginRequest(rest);
+      return;
+    }
+    if (maybeSub === 'verify') {
+      const { runEmailLoginVerify } = await import('./signup.mjs');
+      await runEmailLoginVerify(rest);
+      return;
+    }
+    if (args.some(arg => arg === '--email' || arg.startsWith('--email='))) {
+      const { runEmailLogin } = await import('./signup.mjs');
+      await runEmailLogin(args);
+      return;
+    }
     await authLogin(args);
     return;
   }

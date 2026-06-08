@@ -313,6 +313,30 @@ export type Database = {
         };
         Relationships: [];
       };
+      cli_auth_attempts: {
+        Row: {
+          created_at: string;
+          email: string | null;
+          id: string;
+          kind: string;
+          requester_ip: string | null;
+        };
+        Insert: {
+          created_at?: string;
+          email?: string | null;
+          id?: string;
+          kind: string;
+          requester_ip?: string | null;
+        };
+        Update: {
+          created_at?: string;
+          email?: string | null;
+          id?: string;
+          kind?: string;
+          requester_ip?: string | null;
+        };
+        Relationships: [];
+      };
       connections: {
         Row: {
           config: Json;

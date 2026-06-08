@@ -25,6 +25,10 @@ import { ProjectWorkingDirectoryRequiredModal } from '@/components/features/proj
 import { useAgentBundleNotifications } from '@/components/features/system-notifications';
 import { useElectron } from '@/components/features/terminal/useElectron';
 import { FeedbackModal } from '@/components/modals/FeedbackModal';
+import {
+  OrganizationSettingsModal,
+  type OrganizationSettingsNavSection
+} from '@/components/modals/OrganizationSettingsModal';
 import { SettingsModal, type SettingsNavSection } from '@/components/modals/SettingsModal';
 import { NavUser } from '@/components/nav-user';
 import { TeamSwitcher } from '@/components/team-switcher';
@@ -269,19 +273,17 @@ function OrgGroupedProjects({
   );
 }
 
-type ArchivedProjectsListProps = {
+type ArchivedProjectsLinkProps = {
   archivedProjects: ArchivedProject[];
   selectedOrgId: number | null;
-  pathname: string;
+  onOpenArchived: () => void;
 };
 
-function ArchivedProjectsList({
+function ArchivedProjectsLink({
   archivedProjects,
   selectedOrgId,
-  pathname
-}: ArchivedProjectsListProps) {
-  const [showArchived, setShowArchived] = React.useState(false);
-
+  onOpenArchived
+}: ArchivedProjectsLinkProps) {
   const filtered = React.useMemo(
     () =>
       selectedOrgId !== null
@@ -292,42 +294,15 @@ function ArchivedProjectsList({
 
   if (filtered.length === 0) return null;
 
-  function isArchivedProjectActive(projectId: string) {
-    const segments = pathname.split('/').filter(Boolean);
-    if (segments.length < 2) return false;
-    return segments[0] === 'projects' && segments[1] === projectId;
-  }
-
   return (
-    <Collapsible open={showArchived} onOpenChange={setShowArchived}>
-      <CollapsibleTrigger className="group/archived-trigger flex w-full items-center gap-1 px-2 py-1 text-xs text-sidebar-foreground/40 hover:text-sidebar-foreground/60 transition-colors">
-        <ChevronDown className="h-3 w-3 transition-transform group-data-[state=closed]/archived-trigger:-rotate-90" />
-        <Archive className="h-3 w-3" />
-        <span className="group-data-[collapsible=icon]:hidden">Archived ({filtered.length})</span>
-      </CollapsibleTrigger>
-      <CollapsibleContent>
-        <SidebarMenu>
-          {filtered.map(project => (
-            <SidebarMenuItem key={project.id}>
-              <SidebarMenuButton
-                asChild
-                isActive={isArchivedProjectActive(project.id)}
-                tooltip={`${project.name} (archived)`}
-                className="opacity-60"
-              >
-                <Link href={`/projects/${project.id}`}>
-                  <span
-                    className="h-2 w-2 shrink-0 rounded-sm group-data-[collapsible=icon]:h-4 group-data-[collapsible=icon]:w-4 group-data-[collapsible=icon]:rounded-full"
-                    style={{ backgroundColor: project.color }}
-                  />
-                  <span className="group-data-[collapsible=icon]:hidden">{project.name}</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          ))}
-        </SidebarMenu>
-      </CollapsibleContent>
-    </Collapsible>
+    <button
+      type="button"
+      onClick={onOpenArchived}
+      className="flex w-full items-center gap-1 px-2 py-1 text-xs text-sidebar-foreground/40 hover:text-sidebar-foreground/60 transition-colors group-data-[collapsible=icon]:justify-center"
+    >
+      <Archive className="h-3 w-3 shrink-0" />
+      <span className="group-data-[collapsible=icon]:hidden">{filtered.length} archived</span>
+    </button>
   );
 }
 
@@ -354,6 +329,10 @@ export function AppSidebar({
   const [settingsOpen, setSettingsOpen] = React.useState(false);
   const [settingsInitialNav, setSettingsInitialNav] = React.useState<
     SettingsNavSection | undefined
+  >(undefined);
+  const [orgSettingsOrgId, setOrgSettingsOrgId] = React.useState<number | null>(null);
+  const [orgSettingsInitialNav, setOrgSettingsInitialNav] = React.useState<
+    OrganizationSettingsNavSection | undefined
   >(undefined);
   const [projectNeedingDirectory, setProjectNeedingDirectory] =
     React.useState<SidebarProject | null>(null);
@@ -550,10 +529,16 @@ export function AppSidebar({
                 onNavigationClick={handleProjectNavigationClick}
               />
             )}
-            <ArchivedProjectsList
+            <ArchivedProjectsLink
               archivedProjects={archivedProjects}
               selectedOrgId={selectedOrgId}
-              pathname={pathname}
+              onOpenArchived={() => {
+                const orgId = selectedOrgId ?? defaultOrganizationId;
+                if (orgId !== null) {
+                  setOrgSettingsOrgId(orgId);
+                  setOrgSettingsInitialNav('Archived projects');
+                }
+              }}
             />
           </SidebarGroupContent>
         </SidebarGroup>
@@ -582,6 +567,17 @@ export function AppSidebar({
         <NavUser user={user} onOpenSettings={openSettings} />
       </SidebarFooter>
       <FeedbackModal open={feedbackOpen} onOpenChange={setFeedbackOpen} />
+      <OrganizationSettingsModal
+        open={orgSettingsOrgId !== null}
+        onOpenChange={open => {
+          if (!open) {
+            setOrgSettingsOrgId(null);
+            setOrgSettingsInitialNav(undefined);
+          }
+        }}
+        organizationId={orgSettingsOrgId}
+        initialNav={orgSettingsInitialNav}
+      />
       <SettingsModal
         open={settingsOpen}
         onOpenChange={nextOpen => {
