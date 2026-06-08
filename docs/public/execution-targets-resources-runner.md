@@ -18,7 +18,7 @@ These three concepts form a pipeline: a user queues work in the Overlord UI or v
 
 ## Execution Targets
 
-An **execution target** represents a machine (physical or virtual) that can run agent processes on behalf of a user. Every target has a stable identity derived from a device fingerprint — a unique string generated when `ovld` first runs on that machine.
+An **execution target** represents a machine (physical or virtual) that can run agent processes on behalf of a user. Every target has a stable identity derived from a device fingerprint — a unique string generated when `ovld` first runs on that machine and persisted in the shared canonical file `~/.ovld/device.json`.
 
 ### Target types
 
@@ -30,6 +30,7 @@ An **execution target** represents a machine (physical or virtual) that can run 
 ### Target lifecycle
 
 1. **Auto-registration** — when `ovld runner` polls for work, it registers the local device fingerprint with Overlord automatically. The target record is created or updated on the first `claim-execution` call. No manual registration step is required for local targets.
+   Desktop and CLI share the same canonical fingerprint file (`~/.ovld/device.json`); Desktop migrates the legacy `~/Library/Application Support/overlord/overlord-device.json` value into that file on first access.
 2. **SSH targets** — SSH targets can be pre-registered as *placeholder* records (identified by `ssh:<host>:<port>`) before the runner has ever connected from that host. When the runner connects for the first time, the placeholder is promoted to a full target by binding its device fingerprint.
 3. **Labels** — each target gets a human-readable label per organization (e.g., `macbook-pro`, `prod-server-1`). Labels are generated from the hostname and platform and can be renamed via `ovld protocol update-device`.
 

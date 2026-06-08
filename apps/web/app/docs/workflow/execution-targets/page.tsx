@@ -23,7 +23,7 @@ directory for \`ovld launch\` and \`ovld runner\`.
 
 | Concept | What it is | Example |
 | --- | --- | --- |
-| **Execution target** | Canonical row for a machine or environment agents execute on | Your Mac (\`device_fingerprint\` from \`~/.ovld/device.json\`), or \`remote-build-box\` before first registration |
+| **Execution target** | Canonical row for a machine or environment agents execute on | Your Mac (\`device_fingerprint\` from the shared \`~/.ovld/device.json\` file used by both CLI and Desktop), or \`remote-build-box\` before first registration |
 | **Organization label** | Human-friendly name unique within an org | \`builder-mac\`, \`linux-ci\` |
 | **Project resource directory** | A checkout path on a target for a given project | \`/home/dev/overlord\` marked \`is_primary\` for project X on target Y |
 | **Primary resource** | The default directory when no explicit resource is chosen | One primary per **(project, execution target)** — shared by all users on that project/target pair |
@@ -61,7 +61,7 @@ When you click **Run** or auto-advance enqueues an objective, \`execution_reques
 - \`target_execution_target_id\` — which machine should run the agent
 - \`target_resource_id\` — optional explicit resource; otherwise the primary directory for that project/target pair
 
-\`ovld runner\` claims rows whose target matches its fingerprint (from \`~/.ovld/device.json\`). It is **org-agnostic**: a single runner process serves queued work across every organization the user belongs to that also shares the claiming target. \`claim-execution\` computes the intersection of (user's member orgs) and (orgs that include the target) to scope the queue, so a developer's laptop can pick up requests from all their organizations without separate runner instances.
+\`ovld runner\` claims rows whose target matches its fingerprint (from the shared \`~/.ovld/device.json\`). Desktop reads that same file and migrates its legacy app-support fingerprint into it on first access. The runner is **org-agnostic**: a single runner process serves queued work across every organization the user belongs to that also shares the claiming target. \`claim-execution\` computes the intersection of (user's member orgs) and (orgs that include the target) to scope the queue, so a developer's laptop can pick up requests from all their organizations without separate runner instances.
 
 \`claim-execution\` resolves the working directory from the target resource, or falls back to the primary \`project_resource_directories\` row for \`(project_id, execution_target_id)\`. If no primary exists, the request is skipped and a backstop event is recorded rather than launching in an unknown directory.
 

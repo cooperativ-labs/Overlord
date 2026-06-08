@@ -37,7 +37,7 @@ The backend never opens a shell on your machine and never spawns a local process
 1. **Objective exists on the ticket** — usually as \`draft\` (next step) or already \`launching\` (a queued launch request; the legacy \`submitted\` state is treated identically).
 2. **Trigger enqueues work** — auto-advance after \`deliver\`, or a human **Run** / \`ovld protocol request-execution\`. Both call the same \`execution_requests\` queue. Creating a request moves the objective \`draft -> launching\`; a repeat Run for an objective that already has an active request **re-queues that request** instead of creating a duplicate.
 3. **Row is \`queued\`** — stores resolved agent, model, thinking, flags, target execution target/resource, and launch mode. The UI can show “waiting for runner.”
-4. **Runner claims** — \`ovld runner\` calls \`POST /api/protocol/claim-execution\` with the device fingerprint from \`~/.ovld/device.json\`. The row moves to \`claimed\` with a lease. The claim payload includes the working directory resolved from [project resource directories](/docs/workflow/execution-targets) on that target.
+4. **Runner claims** — \`ovld runner\` calls \`POST /api/protocol/claim-execution\` with the shared device fingerprint from \`~/.ovld/device.json\`. Desktop and CLI now use the same canonical file; Desktop migrates the legacy \`~/Library/Application Support/overlord/overlord-device.json\` value on first read. The row moves to \`claimed\` with a lease. The claim payload includes the working directory resolved from [project resource directories](/docs/workflow/execution-targets) on that target.
 5. **Runner launches** — the runner builds \`ovld launch …\` arguments from the claim payload and spawns that process (\`stdio: inherit\` so output appears in the runner’s terminal).
 6. **Runner reports spawn** — on child \`spawn\`, it calls \`complete-execution-launch\`; the row becomes \`launching\` (the launch process started, but no agent has attached yet).
 7. **Next agent attaches** — the new agent process calls \`ovld protocol attach\`, loads ticket context, executes the launchable objective, and **only then** is the matching request marked \`launched\` (with \`launched_session_id\`). Attach is the source of truth for a successful launch; a \`claimed\`/\`launching\` row whose agent never attaches before its lease expires is treated as a **stalled launch** — it is marked \`failed\`, cleared from the queue, and the user is notified to relaunch manually (it is **not** auto-relaunched).
@@ -100,7 +100,7 @@ See [Execution Targets & Resources](/docs/workflow/execution-targets) for the da
 ## The Terminal Runner (\`ovld runner\`)
 
 The Terminal Runner is a lightweight, long-running CLI process that manages local execution. It handles:
-1. **Device Identity**: Generates a unique UUID fingerprint stored in \`~/.ovld/device.json\` to identify the machine (linked to a canonical execution target).
+1. **Device Identity**: Generates a unique UUID fingerprint stored in the shared canonical file \`~/.ovld/device.json\` to identify the machine (linked to a canonical execution target). Desktop migrates its legacy app-support fingerprint into that file automatically.
 2. **Project Directories**: Resolves working directories from registered project resources on the current execution target fingerprint.
 3. **Queue Polling**: Regularly polls the backend (or subscribes via Supabase Realtime) for compatible queued requests.
 4. **Agent Spawning**: Spawns agent sessions locally by shelling into \`ovld launch\`.

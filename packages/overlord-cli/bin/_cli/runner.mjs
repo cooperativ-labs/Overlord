@@ -1,13 +1,11 @@
 #!/usr/bin/env node
 
 import { execFileSync, spawn } from 'node:child_process';
-import crypto from 'node:crypto';
-import fs from 'node:fs';
 import os from 'node:os';
-import path from 'node:path';
+
+import { readOrCreateCanonicalDeviceFingerprintSync } from '../../../../lib/overlord/device-identity.mjs';
 
 const OVLD_ENTRY = process.argv[1];
-const DEVICE_FILE = path.join(os.homedir(), '.ovld', 'device.json');
 const DEFAULT_TMUX_COMMAND = 'tmux new-session bash {script}';
 
 /** @internal Test-only overrides for protocol/launch subprocess calls. */
@@ -65,22 +63,7 @@ export function readOrCreateDeviceFingerprint(flags) {
     typeof flags['device-fingerprint'] === 'string'
       ? flags['device-fingerprint'].trim()
       : process.env.OVERLORD_DEVICE_FINGERPRINT?.trim();
-  if (explicit) return explicit;
-
-  try {
-    const raw = fs.readFileSync(DEVICE_FILE, 'utf8');
-    const parsed = JSON.parse(raw);
-    if (typeof parsed.deviceFingerprint === 'string' && parsed.deviceFingerprint.trim()) {
-      return parsed.deviceFingerprint.trim();
-    }
-  } catch {
-    // Create below.
-  }
-
-  const deviceFingerprint = crypto.randomUUID();
-  fs.mkdirSync(path.dirname(DEVICE_FILE), { recursive: true });
-  fs.writeFileSync(DEVICE_FILE, `${JSON.stringify({ deviceFingerprint }, null, 2)}\n`, 'utf8');
-  return deviceFingerprint;
+  return readOrCreateCanonicalDeviceFingerprintSync({ explicitFingerprint: explicit });
 }
 
 function runOvld(args, env = {}) {

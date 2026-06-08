@@ -1,10 +1,9 @@
 import * as Sentry from '@sentry/electron/main';
 import { app, BrowserWindow, ipcMain, Notification, shell } from 'electron';
-import { randomUUID } from 'node:crypto';
-import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
+import { readOrCreateCanonicalDeviceFingerprint } from '../../../../lib/overlord/device-identity.mjs';
 import {
   type AgentBundleAgent,
   getAgentBundleStatus,
@@ -94,26 +93,9 @@ export function registerAppIpc({
   });
 
   ipcMain.handle('app:get-device-identity', async () => {
-    const deviceFilePath = path.join(app.getPath('userData'), 'overlord-device.json');
-    let deviceFingerprint: string;
-    try {
-      const raw = await fs.readFile(deviceFilePath, 'utf8');
-      const parsed = JSON.parse(raw) as { deviceFingerprint?: unknown };
-      const fp =
-        typeof parsed.deviceFingerprint === 'string' ? parsed.deviceFingerprint.trim() : '';
-      if (!fp) {
-        throw new Error('missing deviceFingerprint');
-      }
-      deviceFingerprint = fp;
-    } catch {
-      deviceFingerprint = randomUUID();
-      await fs.mkdir(path.dirname(deviceFilePath), { recursive: true });
-      await fs.writeFile(
-        deviceFilePath,
-        `${JSON.stringify({ deviceFingerprint }, null, 2)}\n`,
-        'utf8'
-      );
-    }
+    const deviceFingerprint = await readOrCreateCanonicalDeviceFingerprint({
+      legacyDesktopUserDataPath: app.getPath('userData')
+    });
     return {
       deviceFingerprint,
       hostname: os.hostname(),

@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2606081442.0] - 2026-06-08:14:42
+
+### Added
+- None.
+
+### Fixed
+- None.
+
+### Changed
+- Unify **CLI** and **Desktop** device fingerprints in the shared canonical file **`~/.ovld/device.json`** so both surfaces register and claim against the same execution target on a machine.
+- **Desktop** migrates the legacy app-support fingerprint from **`~/Library/Application Support/overlord/overlord-device.json`** into **`~/.ovld/device.json`** on first access instead of generating a separate identity.
+
+### Security
+- None.
+
+### Refactor
+- Consolidate device fingerprint read/create/migrate logic into shared **`lib/overlord/device-identity.mjs`** used by **`ovld runner`** and the Desktop **`app:get-device-identity`** IPC handler.
+
+### Documentation
+- Document the shared canonical device file and Desktop legacy migration in agent execution, execution targets, and runner guides.
+
 ## [0.2606081356.0] - 2026-06-08:13:56
 
 ### Added
