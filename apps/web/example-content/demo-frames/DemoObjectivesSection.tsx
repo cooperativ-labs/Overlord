@@ -17,6 +17,10 @@ import { AgentModelChooserTrigger } from '@/components/features/AgentModelChoose
 import { AgentModelSelector, useAgentModels } from '@/components/features/AgentModelSelector';
 import { AgentSplitButton } from '@/components/features/AgentSplitButton';
 import { MarkdownContent } from '@/components/features/MarkdownContent';
+import {
+  ToolbarOverflowCompactProvider,
+  useToolbarOverflowCompactState
+} from '@/components/features/ToolbarOverflowCompact';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -31,10 +35,6 @@ import { resolveMarketingAgentModels } from '@/lib/marketing/offered-agent-model
 import { cn } from '@/lib/utils';
 
 import { DEMO_OBJECTIVES, type DemoObjective } from './mock-ticket-details';
-import {
-  ToolbarOverflowCompactProvider,
-  useToolbarOverflowCompactState
-} from '@/components/features/ToolbarOverflowCompact';
 import { useSeedMarketingAgentModels } from './useSeedMarketingAgentModels';
 
 const DEMO_TICKET_ID = 'demo-ticket';
@@ -174,7 +174,7 @@ function DemoObjectiveAgentControls({
               <AgentModelChooserTrigger
                 selection={chooserSelection}
                 active={chooserOpen}
-                onToggle={() => { }}
+                onToggle={() => {}}
               />
             </PopoverTrigger>
             <PopoverContent

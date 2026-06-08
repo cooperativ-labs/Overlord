@@ -204,7 +204,7 @@ function DemoObjectiveAgentControls({ onRun, running }: { onRun: () => void; run
             <AgentModelChooserTrigger
               selection={chooserSelection}
               active={chooserOpen}
-              onToggle={() => { }}
+              onToggle={() => {}}
             />
           </PopoverTrigger>
           <PopoverContent

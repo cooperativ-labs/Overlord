@@ -234,7 +234,10 @@ async function uploadToSignedUrl(uploadUrl, bytes, contentType, timeoutMs = DEFA
 // ---------------------------------------------------------------------------
 
 function getSessionFilePath() {
-  return path.join(os.tmpdir(), `.overlord-session-${Buffer.from(process.cwd()).toString('base64url')}`);
+  return path.join(
+    os.tmpdir(),
+    `.overlord-session-${Buffer.from(process.cwd()).toString('base64url')}`
+  );
 }
 
 function persistSession(sessionKey, ticketId) {
@@ -244,7 +247,9 @@ function persistSession(sessionKey, ticketId) {
       JSON.stringify({ sessionKey, ticketId, ts: Date.now() }),
       'utf8'
     );
-  } catch { /* best-effort */ }
+  } catch {
+    /* best-effort */
+  }
 }
 
 function readPersistedSession() {
@@ -252,7 +257,9 @@ function readPersistedSession() {
     const raw = fs.readFileSync(getSessionFilePath(), 'utf8');
     const data = JSON.parse(raw);
     if (data.sessionKey && data.ticketId) return data;
-  } catch { /* missing or corrupt — ignore */ }
+  } catch {
+    /* missing or corrupt — ignore */
+  }
   return null;
 }
 
@@ -272,6 +279,161 @@ function resolveSessionFlags(flags) {
   }
 
   return { sessionKey, ticketId };
+}
+
+// ---------------------------------------------------------------------------
+// Pending ticket drafts — local durability before DB confirmation
+//
+// New tickets/objectives are written to the server over the network. On a
+// flaky connection a `create`/`prompt`/`add-objectives`/`record-work` call can
+// fail after the user has already composed real text, and that text is lost.
+// To prevent that, we persist the request body to a durable local file BEFORE
+// the network call and only delete it once the server confirms the write
+// succeeded. Anything left behind can be inspected, retried, or cleared with
+// `ovld protocol pending-tickets`.
+// ---------------------------------------------------------------------------
+
+function getPendingTicketsDir() {
+  const override = process.env.OVERLORD_PENDING_TICKETS_DIR?.trim();
+  if (override) return override;
+  return path.join(os.homedir(), '.overlord', 'pending-tickets');
+}
+
+function getPendingTicketFilePath(id) {
+  return path.join(getPendingTicketsDir(), `${id}.json`);
+}
+
+function generatePendingTicketId() {
+  // Timestamp prefix keeps drafts naturally sortable; random suffix avoids
+  // collisions when several drafts are created within the same millisecond.
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+/** Pull human-readable objective text out of a request body for display. */
+function describePendingObjectives(body) {
+  const objectives = Array.isArray(body?.objectives)
+    ? body.objectives
+    : typeof body?.objective === 'string'
+      ? [body.objective]
+      : [];
+  return objectives
+    .map(objective => (typeof objective === 'string' ? objective : objective?.objective))
+    .filter(value => typeof value === 'string' && value.trim().length > 0);
+}
+
+function truncateForDisplay(value, max = 200) {
+  const text = String(value ?? '');
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+}
+
+/**
+ * Persist the request body for a new ticket/objective before sending it.
+ * Best-effort: if the local filesystem is not writable we return null and let
+ * the network call proceed unguarded rather than blocking the user's write.
+ * @returns {{ id: string, filePath: string } | null}
+ */
+function savePendingTicket({ kind, endpoint, body }) {
+  let dir;
+  try {
+    dir = getPendingTicketsDir();
+    fs.mkdirSync(dir, { recursive: true });
+  } catch {
+    return null;
+  }
+
+  const id = generatePendingTicketId();
+  const filePath = getPendingTicketFilePath(id);
+  const record = {
+    id,
+    kind,
+    endpoint,
+    createdAt: new Date().toISOString(),
+    cwd: process.cwd(),
+    title: typeof body?.title === 'string' ? body.title : null,
+    ticketId: body?.ticketId ?? null,
+    projectId: body?.projectId ?? null,
+    objectives: describePendingObjectives(body),
+    body
+  };
+
+  try {
+    fs.writeFileSync(filePath, JSON.stringify(record, null, 2), 'utf8');
+    return { id, filePath };
+  } catch {
+    return null;
+  }
+}
+
+/** Remove a pending draft once the server has confirmed the write. */
+function resolvePendingTicket(id) {
+  if (!id) return;
+  try {
+    fs.unlinkSync(getPendingTicketFilePath(id));
+  } catch {
+    /* already gone — best effort */
+  }
+}
+
+/** Read every saved draft, skipping any that are missing or corrupt. */
+function listPendingTickets() {
+  let entries;
+  try {
+    entries = fs.readdirSync(getPendingTicketsDir());
+  } catch {
+    return [];
+  }
+
+  const records = [];
+  for (const name of entries) {
+    if (!name.endsWith('.json')) continue;
+    try {
+      const raw = fs.readFileSync(path.join(getPendingTicketsDir(), name), 'utf8');
+      records.push(JSON.parse(raw));
+    } catch {
+      /* skip corrupt draft */
+    }
+  }
+  records.sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
+  return records;
+}
+
+/**
+ * Post a new-ticket/objective request with local durability: save the body
+ * first, delete it only on a confirmed (2xx) response, and on any failure keep
+ * it and point the user at the recovery command. Mirrors apiPost's contract.
+ */
+async function apiPostCreatingTicket(auth, endpoint, body, kind) {
+  const { platformUrl, bearerToken, localSecret, organizationId, timeoutMs } = auth;
+  const pending = savePendingTicket({ kind, endpoint, body });
+  if (pending) {
+    process.stderr.write(
+      `[protocol] saved local draft ${pending.id} before ${endpoint} (kept until the server confirms)\n`
+    );
+  }
+
+  let data;
+  try {
+    data = await apiPost(
+      platformUrl,
+      bearerToken,
+      localSecret,
+      organizationId,
+      endpoint,
+      body,
+      timeoutMs
+    );
+  } catch (error) {
+    if (pending && error instanceof Error) {
+      error.message +=
+        `\n\nYour ticket text was NOT lost — it was saved locally at:\n  ${pending.filePath}\n` +
+        `List it with:  ovld protocol pending-tickets\n` +
+        `Retry it with: ovld protocol pending-tickets --retry ${pending.id}`;
+    }
+    throw error;
+  }
+
+  if (pending) resolvePendingTicket(pending.id);
+  return data;
 }
 
 /** Resolve request timeout from --timeout flag or OVERLORD_TIMEOUT env var. */
@@ -420,7 +582,10 @@ async function readJsonFileOrStdin(filePath, label) {
   }
 }
 
-async function resolveObjectivesInput(flags, { payload = null, requireSingleObjective = true } = {}) {
+async function resolveObjectivesInput(
+  flags,
+  { payload = null, requireSingleObjective = true } = {}
+) {
   if (flags['objectives-json'] && flags['objectives-file']) {
     throw new Error('Use either --objectives-json or --objectives-file, not both');
   }
@@ -436,7 +601,10 @@ async function resolveObjectivesInput(flags, { payload = null, requireSingleObje
   }
 
   if (flags['objectives-file']) {
-    const objectives = await readJsonFileOrStdin(String(flags['objectives-file']), '--objectives-file');
+    const objectives = await readJsonFileOrStdin(
+      String(flags['objectives-file']),
+      '--objectives-file'
+    );
     if (!Array.isArray(objectives) || objectives.length === 0) {
       throw new Error('--objectives-file must contain a non-empty JSON array');
     }
@@ -934,13 +1102,122 @@ function detectClaudeSessionId() {
   }
 }
 
+const CODEX_SESSION_UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+
 /**
- * Codex exposes the active resumable thread id directly in the runtime
- * environment, so prefer that over filesystem heuristics.
+ * Read the first line of a (potentially large) rollout file without slurping
+ * the whole thing into memory. Codex writes the session meta as the first
+ * JSONL record.
  */
-function detectCodexSessionId() {
-  const sessionId = process.env.CODEX_THREAD_ID?.trim() || process.env.CODEX_SESSION_ID?.trim();
-  return sessionId || null;
+function readFirstLine(filePath, maxBytes = 16384) {
+  let fd;
+  try {
+    fd = fs.openSync(filePath, 'r');
+    const buffer = Buffer.alloc(maxBytes);
+    const bytesRead = fs.readSync(fd, buffer, 0, maxBytes, 0);
+    const text = buffer.toString('utf8', 0, bytesRead);
+    const newlineIdx = text.indexOf('\n');
+    return newlineIdx === -1 ? text : text.slice(0, newlineIdx);
+  } catch {
+    return null;
+  } finally {
+    if (fd !== undefined) {
+      try {
+        fs.closeSync(fd);
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+}
+
+/**
+ * Extract the session id and recorded cwd from a Codex rollout meta line.
+ * Newer Codex builds wrap the meta in a `{ type, payload }` envelope; older
+ * builds emit the meta object directly. Returns null when no usable id exists.
+ */
+export function extractCodexRolloutMeta(line) {
+  if (!line) return null;
+  let parsed;
+  try {
+    parsed = JSON.parse(line);
+  } catch {
+    return null;
+  }
+  if (!parsed || typeof parsed !== 'object') return null;
+  const meta = parsed.payload && typeof parsed.payload === 'object' ? parsed.payload : parsed;
+  const idMatch = typeof meta.id === 'string' ? meta.id.match(CODEX_SESSION_UUID_RE) : null;
+  const cwd = typeof meta.cwd === 'string' ? meta.cwd : null;
+  return idMatch ? { id: idMatch[0], cwd } : null;
+}
+
+/**
+ * Detect the active Codex session id from disk when the runtime env vars are
+ * absent. Codex persists rollout files under
+ * ~/.codex/sessions/YYYY/MM/DD/rollout-<timestamp>-<uuid>.jsonl. We pick the
+ * most recently modified rollout whose recorded cwd matches the current
+ * working directory, falling back to the most recent rollout overall.
+ */
+export function detectCodexSessionIdFromDisk() {
+  try {
+    const sessionsDir = path.join(os.homedir(), '.codex', 'sessions');
+    if (!fs.existsSync(sessionsDir)) return null;
+
+    const cwd = process.cwd();
+    const candidates = [];
+    const walk = (dir, depth) => {
+      if (depth > 5 || candidates.length > 1000) return;
+      let entries;
+      try {
+        entries = fs.readdirSync(dir, { withFileTypes: true });
+      } catch {
+        return;
+      }
+      for (const entry of entries) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          walk(full, depth + 1);
+        } else if (
+          entry.isFile() &&
+          entry.name.startsWith('rollout-') &&
+          entry.name.endsWith('.jsonl')
+        ) {
+          try {
+            candidates.push({ full, name: entry.name, mtime: fs.statSync(full).mtimeMs });
+          } catch {
+            /* ignore unreadable file */
+          }
+        }
+      }
+    };
+    walk(sessionsDir, 0);
+
+    if (candidates.length === 0) return null;
+    candidates.sort((a, b) => b.mtime - a.mtime);
+
+    let fallbackId = null;
+    for (const candidate of candidates.slice(0, 25)) {
+      const meta = extractCodexRolloutMeta(readFirstLine(candidate.full));
+      const id = meta?.id ?? candidate.name.match(CODEX_SESSION_UUID_RE)?.[0] ?? null;
+      if (!id) continue;
+      if (fallbackId === null) fallbackId = id;
+      if (meta?.cwd && meta.cwd === cwd) return id;
+    }
+    return fallbackId;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Codex exposes the active resumable thread id in the runtime environment, but
+ * does not set those vars reliably across launch paths. Prefer the env var when
+ * present, otherwise fall back to reading the active rollout file from disk.
+ */
+export function detectCodexSessionId() {
+  const fromEnv = process.env.CODEX_THREAD_ID?.trim() || process.env.CODEX_SESSION_ID?.trim();
+  if (fromEnv) return fromEnv;
+  return detectCodexSessionIdFromDisk();
 }
 
 /**
@@ -1758,7 +2035,9 @@ async function protocolGetDevice(args) {
     await resolveProtocolAuthForFlags(flags);
   const timeoutMs = resolveTimeout(flags);
 
-  const deviceFingerprint = String(flags['device-fingerprint'] ?? process.env.OVERLORD_DEVICE_FINGERPRINT ?? '');
+  const deviceFingerprint = String(
+    flags['device-fingerprint'] ?? process.env.OVERLORD_DEVICE_FINGERPRINT ?? ''
+  );
   if (!deviceFingerprint) {
     console.error('Error: --device-fingerprint is required (or set OVERLORD_DEVICE_FINGERPRINT)');
     process.exit(1);
@@ -1800,7 +2079,9 @@ async function protocolUpdateDevice(args) {
     await resolveProtocolAuthForFlags(flags);
   const timeoutMs = resolveTimeout(flags);
 
-  const deviceFingerprint = String(flags['device-fingerprint'] ?? process.env.OVERLORD_DEVICE_FINGERPRINT ?? '');
+  const deviceFingerprint = String(
+    flags['device-fingerprint'] ?? process.env.OVERLORD_DEVICE_FINGERPRINT ?? ''
+  );
   if (!deviceFingerprint) {
     console.error('Error: --device-fingerprint is required (or set OVERLORD_DEVICE_FINGERPRINT)');
     process.exit(1);
@@ -1839,9 +2120,10 @@ async function protocolListProjectResources(args) {
     process.exit(1);
   }
 
-  const deviceFingerprint = typeof flags['device-fingerprint'] === 'string'
-    ? flags['device-fingerprint'].trim()
-    : (process.env.OVERLORD_DEVICE_FINGERPRINT?.trim() ?? '');
+  const deviceFingerprint =
+    typeof flags['device-fingerprint'] === 'string'
+      ? flags['device-fingerprint'].trim()
+      : (process.env.OVERLORD_DEVICE_FINGERPRINT?.trim() ?? '');
 
   const body = {
     projectId,
@@ -1871,9 +2153,8 @@ async function protocolAddProjectResource(args) {
   const timeoutMs = resolveTimeout(flags);
 
   const projectId = typeof flags['project-id'] === 'string' ? flags['project-id'].trim() : '';
-  const directoryPath = typeof flags['directory'] === 'string'
-    ? flags['directory'].trim()
-    : process.cwd();
+  const directoryPath =
+    typeof flags['directory'] === 'string' ? flags['directory'].trim() : process.cwd();
   const deviceFingerprint = String(
     flags['device-fingerprint'] ?? process.env.OVERLORD_DEVICE_FINGERPRINT ?? ''
   );
@@ -2496,14 +2777,11 @@ async function protocolPrompt(args) {
     ...(parentTicketId ? { parentTicketId } : {})
   };
 
-  const data = await apiPost(
-    platformUrl,
-    bearerToken,
-    localSecret,
-    organizationId,
+  const data = await apiPostCreatingTicket(
+    { platformUrl, bearerToken, localSecret, organizationId, timeoutMs },
     '/api/protocol/prompt',
     body,
-    timeoutMs
+    'prompt'
   );
 
   const sessionKey = data.session?.sessionKey;
@@ -2582,14 +2860,11 @@ async function protocolCreateTicket(args) {
       ...(flags['assigned-to'] ? { assignedTo: String(flags['assigned-to']) } : {})
     };
 
-    const data = await apiPost(
-      platformUrl,
-      bearerToken,
-      localSecret,
-      organizationId,
+    const data = await apiPostCreatingTicket(
+      { platformUrl, bearerToken, localSecret, organizationId, timeoutMs },
       '/api/protocol/create-ticket',
       body,
-      timeoutMs
+      'create'
     );
     console.log(JSON.stringify(data, null, 2));
     return;
@@ -2623,14 +2898,11 @@ async function protocolCreateTicket(args) {
     ...(flags['assigned-to'] ? { assignedTo: String(flags['assigned-to']) } : {})
   };
 
-  const data = await apiPost(
-    platformUrl,
-    bearerToken,
-    localSecret,
-    organizationId,
+  const data = await apiPostCreatingTicket(
+    { platformUrl, bearerToken, localSecret, organizationId, timeoutMs },
     '/api/protocol/tickets',
     standaloneBody,
-    timeoutMs
+    'create'
   );
   console.log(JSON.stringify(data, null, 2));
 }
@@ -2723,14 +2995,11 @@ async function protocolRecordWork(args) {
     await resolveProtocolAuthForFlags(flags);
   const timeoutMs = resolveTimeout(flags);
 
-  const data = await apiPost(
-    platformUrl,
-    bearerToken,
-    localSecret,
-    organizationId,
+  const data = await apiPostCreatingTicket(
+    { platformUrl, bearerToken, localSecret, organizationId, timeoutMs },
     '/api/protocol/record-work',
     body,
-    timeoutMs
+    'record-work'
   );
   console.log(JSON.stringify(data, null, 2));
 
@@ -2755,19 +3024,101 @@ async function protocolAddObjectives(args) {
     await resolveProtocolAuthForFlags(flags, ticketId);
   const timeoutMs = resolveTimeout(flags);
 
-  const data = await apiPost(
-    platformUrl,
-    bearerToken,
-    localSecret,
-    organizationId,
+  const data = await apiPostCreatingTicket(
+    { platformUrl, bearerToken, localSecret, organizationId, timeoutMs },
     '/api/protocol/add-objectives',
     {
       ticketId,
       objectives: objectiveInput.objectives
     },
-    timeoutMs
+    'add-objectives'
   );
   console.log(JSON.stringify(data, null, 2));
+}
+
+// ---------------------------------------------------------------------------
+// pending-tickets (inspect / retry / clear locally-saved unconfirmed drafts)
+// ---------------------------------------------------------------------------
+
+async function protocolPendingTickets(args) {
+  const flags = parseFlags(args);
+
+  if (flags['clear-all']) {
+    const records = listPendingTickets();
+    for (const record of records) resolvePendingTicket(record.id);
+    console.log(JSON.stringify({ cleared: records.length }, null, 2));
+    return;
+  }
+
+  if (flags.clear) {
+    const id = String(flags.clear);
+    resolvePendingTicket(id);
+    console.log(JSON.stringify({ cleared: id }, null, 2));
+    return;
+  }
+
+  if (flags.retry) {
+    const id = String(flags.retry);
+    const record = listPendingTickets().find(entry => entry.id === id);
+    if (!record) {
+      throw new Error(
+        `No pending ticket draft with id "${id}". Run \`ovld protocol pending-tickets\` to list drafts.`
+      );
+    }
+    if (!record.endpoint || !record.body) {
+      throw new Error(
+        `Pending draft "${id}" is missing the original request and cannot be retried.`
+      );
+    }
+
+    const ticketIdHint = record.ticketId ?? record.body?.ticketId ?? '';
+    const { platformUrl, bearerToken, localSecret, organizationId } =
+      await resolveProtocolAuthForFlags(flags, ticketIdHint);
+    const timeoutMs = resolveTimeout(flags);
+
+    const data = await apiPost(
+      platformUrl,
+      bearerToken,
+      localSecret,
+      organizationId,
+      record.endpoint,
+      record.body,
+      timeoutMs
+    );
+    resolvePendingTicket(id);
+    console.log(JSON.stringify(data, null, 2));
+    return;
+  }
+
+  const records = listPendingTickets();
+
+  if (flags.json) {
+    console.log(JSON.stringify(records, null, 2));
+    return;
+  }
+
+  if (records.length === 0) {
+    console.log('No pending ticket drafts. Everything you created was confirmed by the server.');
+    return;
+  }
+
+  const lines = [`${records.length} pending ticket draft(s) not yet confirmed by the server:`, ''];
+  for (const record of records) {
+    const objectiveText = record.objectives?.length
+      ? record.objectives.join(' | ')
+      : (record.title ?? '(no objective text captured)');
+    lines.push(`• ${record.id}  [${record.kind}]  ${record.createdAt}`);
+    if (record.title) lines.push(`    title:  ${record.title}`);
+    lines.push(`    text:   ${truncateForDisplay(objectiveText)}`);
+    if (record.ticketId) lines.push(`    ticket: ${record.ticketId}`);
+    lines.push(`    file:   ${getPendingTicketFilePath(record.id)}`);
+    lines.push('');
+  }
+  lines.push('These drafts were saved before the server confirmed them.');
+  lines.push('  Retry a draft:  ovld protocol pending-tickets --retry <id>');
+  lines.push('  Clear a draft:  ovld protocol pending-tickets --clear <id>');
+  lines.push('  Clear all:      ovld protocol pending-tickets --clear-all');
+  console.log(lines.join('\n'));
 }
 
 // ---------------------------------------------------------------------------
@@ -2877,6 +3228,7 @@ Subcommands:
   search-tickets            Find tickets by keyword, status, project, creator, or update date
   discuss-objective          Mark a draft objective as submitted (ready for review/execution)
   add-objectives             Append ordered objectives to an existing ticket
+  pending-tickets            List, retry, or clear locally-saved drafts the server never confirmed
   create                    Create a draft ticket without attaching (follow-up or standalone)
   prompt                    Create a ticket and attach to it immediately
   record-work               Record completed-from-chat work as a ticket in review + feed post (no attach)
@@ -3232,6 +3584,22 @@ add-objectives:
     goal. Create multiple tickets instead when prompts describe different
     features or goals.
 
+pending-tickets:
+  Purpose:
+    Inspect, retry, or clear ticket/objective drafts that were saved locally
+    before a create/prompt/add-objectives/record-work call but never confirmed
+    by the server (e.g. the network dropped). Drafts are written before the
+    request and deleted automatically once the server confirms the write, so a
+    flaky connection never loses your text.
+  Usage:
+    --json              Print the raw saved drafts as JSON instead of a summary
+    --retry <id>        Re-send a saved draft to the server; clears it on success
+    --clear <id>        Delete a single saved draft after confirming it landed
+    --clear-all         Delete every saved draft
+  Notes:
+    Drafts live under ~/.overlord/pending-tickets/. With no flags the command
+    lists outstanding drafts with their captured objective text.
+
 record-work:
   Purpose:
     Record work the agent already completed in a chat as a ticket in \`review\` status
@@ -3474,6 +3842,9 @@ Examples:
   ovld protocol create --agent codex --objectives-json '[{"objective":"Step one"},{"objective":"Step two"}]'
   ovld protocol create --agent codex --session-key <key> --ticket-id <ticket_id> --objective "Capture follow-up work"
   ovld protocol prompt --agent codex --objective "Implement user auth" --priority high
+  ovld protocol pending-tickets
+  ovld protocol pending-tickets --retry <draft-id>
+  ovld protocol pending-tickets --clear-all
   ovld protocol update --session-key <key> --ticket-id <ticket_id> --summary "Did X" --phase execute
   ovld protocol update --session-key <key> --ticket-id <ticket_id> --summary-file ./update.txt --event-type user_follow_up
   ovld protocol record-change-rationales --session-key <key> --ticket-id <ticket_id> --change-rationales-json '[{"label":"...","file_path":"...","summary":"...","why":"...","impact":"...","hunks":[{"header":"@@ ... @@"}]}]'
@@ -3551,6 +3922,10 @@ EOF
   }
   if (subcommand === 'add-objectives') {
     await protocolAddObjectives(args);
+    return;
+  }
+  if (subcommand === 'pending-tickets') {
+    await protocolPendingTickets(args);
     return;
   }
   if (subcommand === 'create' || subcommand === 'create-ticket') {

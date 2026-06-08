@@ -1,6 +1,7 @@
 import {
   mergeAgentLaunchConfig,
   normalizeAgentLaunchConfig,
+  parseObjectiveLaunchConfig,
   parseTargetAgentConfigs
 } from '@/lib/schemas/target-agent-config';
 
@@ -39,6 +40,29 @@ describe('normalizeAgentLaunchConfig', () => {
       flags: [],
       preCommand: 'ollama'
     });
+  });
+});
+
+describe('parseObjectiveLaunchConfig', () => {
+  it('returns null when there is no override', () => {
+    expect(parseObjectiveLaunchConfig(null)).toBeNull();
+    expect(parseObjectiveLaunchConfig(undefined)).toBeNull();
+  });
+
+  it('parses a populated override', () => {
+    expect(parseObjectiveLaunchConfig({ flags: ['--foo'], preCommand: 'ollama' })).toEqual({
+      flags: ['--foo'],
+      preCommand: 'ollama'
+    });
+  });
+
+  it('preserves a present-but-empty override (explicit "none")', () => {
+    expect(parseObjectiveLaunchConfig({ flags: [] })).toEqual({ flags: [] });
+  });
+
+  it('returns null for malformed input rather than throwing', () => {
+    expect(parseObjectiveLaunchConfig({ flags: 'nope' })).toBeNull();
+    expect(parseObjectiveLaunchConfig('nope')).toBeNull();
   });
 });
 

@@ -10,6 +10,7 @@ import type { AgentModel } from '@/lib/actions/agent-models';
 import type { AgentModelSelection } from '@/lib/helpers/agent-model-preference';
 import { getAgentTypeByValue } from '@/lib/helpers/agent-types';
 import { cn } from '@/lib/utils';
+
 import { useToolbarOverflowCompact } from './ToolbarOverflowCompact';
 
 function getSelectionLabel(models: AgentModel[], modelId: string | null): string {

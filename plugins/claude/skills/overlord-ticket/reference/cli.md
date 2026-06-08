@@ -132,6 +132,17 @@ ovld protocol prompt --agent claude-code --objectives-json '[{"objective":"Imple
 ovld protocol add-objectives --ticket-id 1:899 --objectives-json '[{"objective":"Implement the API"},{"objective":"Add CLI docs"}]'
 ```
 
+### Local Durability For New Tickets
+
+`create`, `prompt`, `add-objectives`, and `record-work` save the objective/ticket text to a local draft (`~/.overlord/pending-tickets/`) **before** sending it, and delete that draft only once the server confirms the write. If the network drops mid-call, your text is never lost — the failure message points at the saved file. Manage outstanding drafts with `pending-tickets`:
+
+```bash
+ovld protocol pending-tickets               # list drafts the server never confirmed
+ovld protocol pending-tickets --retry <id>  # re-send a saved draft; clears it on success
+ovld protocol pending-tickets --clear <id>  # delete one draft after confirming it landed
+ovld protocol pending-tickets --clear-all   # delete every draft
+```
+
 To inspect project resolution explicitly:
 
 ```bash

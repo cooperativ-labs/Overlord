@@ -10,7 +10,10 @@ import {
   STALE_LAUNCH_FAILURE_REASON
 } from '@/lib/overlord/execution-requests';
 import { emitWorkflowNotification } from '@/lib/overlord/notifications/orchestrator';
-import { resolveTargetAgentLaunch } from '@/lib/overlord/target-agent-flags';
+import {
+  resolveObjectiveLaunchOverride,
+  resolveTargetAgentLaunch
+} from '@/lib/overlord/target-agent-flags';
 import { upsertDeviceFromProtocol } from '@/lib/overlord/upsert-device';
 import { claimExecutionSchema } from '@/lib/overlord/validation';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
@@ -403,6 +406,17 @@ export async function POST(request: Request) {
         userTarget?.terminal_profile ?? null
       );
 
+      // A per-objective override (set from the mobile AgentLaunchFooter) is the
+      // user's explicit choice for this objective and wins over the target's
+      // CliPage config. When present — even with empty values, meaning "no
+      // pre-command / flags for this objective" — the target config is not
+      // consulted. `null` means no override, so we keep the existing precedence
+      // (target config, then request-captured launch_params).
+      const objectiveOverride = await resolveObjectiveLaunchOverride(
+        supabase,
+        claimed.objective_id
+      );
+
       return NextResponse.json({
         request: claimed,
         launch: {
@@ -411,12 +425,14 @@ export async function POST(request: Request) {
           model: claimed.model_identifier,
           thinking: claimed.thinking_level,
           launchMode: claimed.launch_mode,
-          flags:
-            targetLaunch.kind === 'configured'
+          flags: objectiveOverride
+            ? objectiveOverride.flags
+            : targetLaunch.kind === 'configured'
               ? targetLaunch.flags
               : stringArrayFromParams(claimed.launch_params, 'flags'),
-          preCommand:
-            targetLaunch.kind === 'configured'
+          preCommand: objectiveOverride
+            ? objectiveOverride.preCommand
+            : targetLaunch.kind === 'configured'
               ? targetLaunch.preCommand
               : textFromParams(claimed.launch_params, 'preCommand'),
           customCommand: textFromParams(claimed.launch_params, 'customCommand'),

@@ -160,6 +160,13 @@ export interface Objective {
   agent_identifier: string | null;
   model_identifier: string | null;
   assigned_agent: AssignedAgent | null;
+  /**
+   * Per-objective override of the execution target's agent launch config
+   * (pre-command + flags), set from the AgentLaunchFooter. `null` means no
+   * override (inherit the target config); a present value — even with empty
+   * fields — overrides it for this objective.
+   */
+  launch_config: AgentLaunchConfig | null;
   position: number;
   auto_advance: boolean;
   approval_reason: string | null;

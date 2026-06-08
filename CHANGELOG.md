@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2606081020.0] - 2026-06-08:10:20
+
+### Added
+- Add **`pending-tickets`** protocol command to list, retry, or clear locally saved ticket/objective drafts when **`create`**, **`prompt`**, **`add-objectives`**, or **`record-work`** fails before the server confirms the write.
+- Persist draft ticket text under **`~/.overlord/pending-tickets/`** before those protocol calls and remove it only after a successful server response so flaky connections do not lose composed objectives.
+- Override **pre-command and launch flags per draft objective** on **mobile** via the agent launch footer; overrides are stored on the objective and applied when the runner claims the execution instead of the execution target's shared config.
+
+### Fixed
+- Detect the active **Codex session id** from the most recent rollout file under **`~/.codex/sessions/`** when **`CODEX_THREAD_ID`** / **`CODEX_SESSION_ID`** are unset, in both the CLI and the Codex **`UserPromptSubmit`** hook, so follow-up activity links to the correct external session.
+
+### Changed
+- None.
+
+### Security
+- None.
+
+### Test
+- Add claim-execution route coverage for per-objective **`launch_config`** precedence over execution-target config.
+- Add CLI protocol tests for pending-ticket durability, retry/clear flows, and Codex rollout session detection.
+
+### Documentation
+- Document **`pending-tickets`** and local draft recovery in agent plugin **`cli.md`** references and the connector surfaces guide.
+
 ## [0.2606070914.0] - 2026-06-07:09:14
 
 ### Added

@@ -20,6 +20,12 @@ type AgentLaunchFooterProps = {
   onChange?: (update: AgentLaunchConfigUpdate) => void;
   /** Label of the target these defaults apply to, shown as a caption. */
   targetLabel?: string | null;
+  /**
+   * When true, the fields edit a per-objective override of the target config
+   * rather than the target config itself. Changes the caption to explain that
+   * empty fields mean "no pre-command / flags for this objective".
+   */
+  override?: boolean;
   disabled?: boolean;
 };
 
@@ -37,6 +43,7 @@ export function AgentLaunchFooter({
   flags: initialFlags,
   onChange,
   targetLabel,
+  override = false,
   disabled = false
 }: AgentLaunchFooterProps) {
   const colors = useThemeColors();
@@ -74,9 +81,13 @@ export function AgentLaunchFooter({
   return (
     <View style={styles.container}>
       <Text style={styles.caption}>
-        {targetLabel
-          ? `Launch defaults for ${targetLabel}`
-          : 'Select an execution target to set launch defaults.'}
+        {override
+          ? `Overrides the launch defaults${
+              targetLabel ? ` from ${targetLabel}` : ''
+            } for this objective. Leave empty to run with no pre-command or flags.`
+          : targetLabel
+            ? `Launch defaults for ${targetLabel}`
+            : 'Select an execution target to set launch defaults.'}
       </Text>
 
       <Text style={styles.groupLabel}>Pre-command</Text>

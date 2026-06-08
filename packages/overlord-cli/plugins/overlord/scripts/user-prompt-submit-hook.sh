@@ -32,12 +32,73 @@ if [ -n "$OVERLORD_BASE_URL" ] && [ -n "$OVERLORD_TOKEN" ] && [ -n "$TICKET_ID" 
 import base64
 import json
 import os
+import re
 import sys
 import tempfile
 from pathlib import Path
 
+UUID_RE = re.compile(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', re.I)
+
+
+def detect_codex_session_id_from_disk():
+    # Codex does not reliably export CODEX_THREAD_ID/CODEX_SESSION_ID, so fall
+    # back to the active rollout file under ~/.codex/sessions. Prefer the most
+    # recent rollout whose recorded cwd matches ours.
+    try:
+        sessions_dir = Path.home() / '.codex' / 'sessions'
+        if not sessions_dir.is_dir():
+            return None
+        cwd = os.getcwd()
+        candidates = []
+        for entry in sessions_dir.rglob('rollout-*.jsonl'):
+            try:
+                candidates.append((entry.stat().st_mtime, entry))
+            except OSError:
+                continue
+            if len(candidates) > 1000:
+                break
+        if not candidates:
+            return None
+        candidates.sort(key=lambda item: item[0], reverse=True)
+        fallback_id = None
+        for _, entry in candidates[:25]:
+            meta_id = None
+            meta_cwd = None
+            try:
+                with entry.open('r', encoding='utf-8', errors='replace') as handle:
+                    first_line = handle.readline()
+                obj = json.loads(first_line)
+                meta = obj.get('payload') if isinstance(obj.get('payload'), dict) else obj
+                if isinstance(meta, dict):
+                    raw_id = meta.get('id')
+                    if isinstance(raw_id, str):
+                        match = UUID_RE.search(raw_id)
+                        meta_id = match.group(0) if match else None
+                    if isinstance(meta.get('cwd'), str):
+                        meta_cwd = meta.get('cwd')
+            except Exception:
+                meta_id = None
+            if not meta_id:
+                match = UUID_RE.search(entry.name)
+                meta_id = match.group(0) if match else None
+            if not meta_id:
+                continue
+            if fallback_id is None:
+                fallback_id = meta_id
+            if meta_cwd and meta_cwd == cwd:
+                return meta_id
+        return fallback_id
+    except Exception:
+        return None
+
+
 body = json.load(sys.stdin)
-external_session_id = os.environ.get('CODEX_THREAD_ID') or os.environ.get('CODEX_SESSION_ID') or None
+external_session_id = (
+    os.environ.get('CODEX_THREAD_ID')
+    or os.environ.get('CODEX_SESSION_ID')
+    or detect_codex_session_id_from_disk()
+    or None
+)
 session_key = os.environ.get('SESSION_KEY') or ''
 
 if not session_key:

@@ -950,7 +950,7 @@ export type Database = {
         };
         Insert: {
           created_at?: string;
-          id?: string;
+          id: string;
           organization_id: number;
           role?: Database['public']['Enums']['organization_role'];
           updated_at?: string;
@@ -1046,6 +1046,7 @@ export type Database = {
           created_at: string;
           created_by: string | null;
           id: string;
+          launch_config: Json | null;
           model_identifier: string | null;
           objective: string;
           position: number | null;
@@ -1064,6 +1065,7 @@ export type Database = {
           created_at?: string;
           created_by?: string | null;
           id?: string;
+          launch_config?: Json | null;
           model_identifier?: string | null;
           objective?: string;
           position?: number | null;
@@ -1082,6 +1084,7 @@ export type Database = {
           created_at?: string;
           created_by?: string | null;
           id?: string;
+          launch_config?: Json | null;
           model_identifier?: string | null;
           objective?: string;
           position?: number | null;
@@ -2189,10 +2192,10 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: 'tickets_assigned_member_fkey';
-            columns: ['organization_id', 'assigned_member'];
+            columns: ['assigned_member'];
             isOneToOne: false;
             referencedRelation: 'members';
-            referencedColumns: ['organization_id', 'user_id'];
+            referencedColumns: ['id'];
           },
           {
             foreignKeyName: 'tickets_organization_id_fkey';
@@ -2538,6 +2541,10 @@ export type Database = {
         Returns: boolean;
       };
       is_ticket_org_member: { Args: { p_ticket_id: string }; Returns: boolean };
+      member_identifier: {
+        Args: { org_id: number; username: string };
+        Returns: string;
+      };
       resolve_ticket_event_objective_id: {
         Args: { p_ticket_id: string };
         Returns: string;

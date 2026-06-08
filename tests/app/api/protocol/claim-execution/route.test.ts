@@ -57,6 +57,7 @@ function buildClaimSupabase({
   targetAgentFlags = undefined as Record<string, unknown> | null | undefined,
   targetAgentFlagsError = null as { message: string } | null,
   objectiveStates = { [OBJECTIVE_ID]: 'draft' } as Record<string, string>,
+  objectiveLaunchConfig = null as Record<string, unknown> | null,
   memberOrgIds = [ORG_ID] as number[],
   targetOrgIds = [ORG_ID] as number[]
 } = {}) {
@@ -96,6 +97,13 @@ function buildClaimSupabase({
     select: jest.fn(() => objectivesQuery),
     in: jest.fn(async (_column: string, ids: string[]) => ({
       data: ids.map(id => ({ id, state: objectiveStates[id] ?? 'draft' })),
+      error: null
+    })),
+    // resolveObjectiveLaunchOverride reads the per-objective override via
+    // select('launch_config').eq('id', ...).maybeSingle().
+    eq: jest.fn(() => objectivesQuery),
+    maybeSingle: jest.fn(async () => ({
+      data: { launch_config: objectiveLaunchConfig },
       error: null
     }))
   };
@@ -314,6 +322,48 @@ describe('POST /api/protocol/claim-execution', () => {
     const body = await response.json();
     expect(body.launch.flags).toEqual(['--from-target']);
     expect(body.launch.preCommand).toBe('target-pre');
+  });
+
+  it('prefers the per-objective launch_config override over the target config', async () => {
+    const launchParams = {
+      workingDirectory: '/repo',
+      flags: ['--from-request'],
+      preCommand: 'global-pre'
+    };
+    const supabase = buildClaimSupabase({
+      candidates: [baseCandidate({ launch_params: launchParams })],
+      claimResult: baseCandidate({ status: 'claimed', launch_params: launchParams }),
+      targetAgentFlags: { claude: { flags: ['--from-target'], preCommand: 'target-pre' } },
+      objectiveLaunchConfig: { flags: ['--from-objective'], preCommand: 'objective-pre' }
+    });
+    const { createServiceRoleClient } = jest.requireMock('@/supabase/utils/service-role');
+    createServiceRoleClient.mockReturnValue(supabase);
+
+    const response = await POST(new Request('http://localhost', { method: 'POST' }));
+    const body = await response.json();
+    expect(body.launch.flags).toEqual(['--from-objective']);
+    expect(body.launch.preCommand).toBe('objective-pre');
+  });
+
+  it('honors an empty per-objective override as "no flags / pre-command" (no target fallback)', async () => {
+    const launchParams = {
+      workingDirectory: '/repo',
+      flags: ['--from-request'],
+      preCommand: 'global-pre'
+    };
+    const supabase = buildClaimSupabase({
+      candidates: [baseCandidate({ launch_params: launchParams })],
+      claimResult: baseCandidate({ status: 'claimed', launch_params: launchParams }),
+      targetAgentFlags: { claude: { flags: ['--from-target'], preCommand: 'target-pre' } },
+      objectiveLaunchConfig: { flags: [] }
+    });
+    const { createServiceRoleClient } = jest.requireMock('@/supabase/utils/service-role');
+    createServiceRoleClient.mockReturnValue(supabase);
+
+    const response = await POST(new Request('http://localhost', { method: 'POST' }));
+    const body = await response.json();
+    expect(body.launch.flags).toEqual([]);
+    expect(body.launch.preCommand).toBeNull();
   });
 
   it('falls back to launch_params flags when the target has no config for the agent', async () => {

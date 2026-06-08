@@ -9,7 +9,10 @@ import {
   runProtocolCommand,
   resolveProtocolAgentIdentifier,
   resolveProtocolModelIdentifier,
-  resolveProtocolTicketDelegate
+  resolveProtocolTicketDelegate,
+  detectCodexSessionId,
+  detectCodexSessionIdFromDisk,
+  extractCodexRolloutMeta
 } from '../packages/overlord-cli/bin/_cli/protocol.mjs';
 
 // The CLI prefers OVERLORD_AGENT_TOKEN over legacy OVERLORD_ACCESS_TOKEN.
@@ -931,4 +934,321 @@ test('complete-execution-launch and fail-execution-launch post expected payloads
     deviceFingerprint: 'fp-env',
     error: 'spawn failed'
   });
+});
+
+// ---------------------------------------------------------------------------
+// Codex external session id detection
+// ---------------------------------------------------------------------------
+
+function writeCodexRollout(home, { uuid, cwd, mtime, name }) {
+  const dir = path.join(home, '.codex', 'sessions', '2026', '06', '08');
+  fs.mkdirSync(dir, { recursive: true });
+  const file = path.join(dir, name ?? `rollout-2026-06-08T08-00-00-${uuid}.jsonl`);
+  const meta = {
+    type: 'session_meta',
+    payload: { id: uuid, cwd, timestamp: '2026-06-08T08:00:00Z' }
+  };
+  fs.writeFileSync(file, `${JSON.stringify(meta)}\n{"type":"event"}\n`);
+  if (mtime !== undefined) fs.utimesSync(file, mtime, mtime);
+  return file;
+}
+
+test('extractCodexRolloutMeta parses both enveloped and flat meta lines', () => {
+  const uuid = 'abcdef12-3456-4789-8abc-def012345678';
+  assert.deepEqual(
+    extractCodexRolloutMeta(
+      JSON.stringify({ type: 'session_meta', payload: { id: uuid, cwd: '/repo' } })
+    ),
+    { id: uuid, cwd: '/repo' }
+  );
+  assert.deepEqual(extractCodexRolloutMeta(JSON.stringify({ id: uuid })), { id: uuid, cwd: null });
+  assert.equal(extractCodexRolloutMeta('not json'), null);
+  assert.equal(extractCodexRolloutMeta(JSON.stringify({ payload: { id: 'nope' } })), null);
+});
+
+test('detectCodexSessionIdFromDisk prefers the rollout whose cwd matches', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'ovld-codex-home-'));
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'ovld-codex-repo-'));
+  const previousHome = process.env.HOME;
+  const previousCwd = process.cwd();
+  const matchId = 'aaaaaaaa-1111-4111-8111-111111111111';
+  const otherId = 'bbbbbbbb-2222-4222-8222-222222222222';
+  try {
+    process.env.HOME = home;
+    // The cwd-matching rollout is older, the non-matching rollout is newer —
+    // cwd match must still win over raw recency.
+    writeCodexRollout(home, {
+      uuid: matchId,
+      cwd: repo,
+      mtime: 1000,
+      name: `rollout-2026-06-08T08-00-00-${matchId}.jsonl`
+    });
+    writeCodexRollout(home, {
+      uuid: otherId,
+      cwd: '/somewhere/else',
+      mtime: 2000,
+      name: `rollout-2026-06-08T09-00-00-${otherId}.jsonl`
+    });
+    process.chdir(repo);
+    assert.equal(detectCodexSessionIdFromDisk(), matchId);
+  } finally {
+    process.chdir(previousCwd);
+    if (previousHome === undefined) delete process.env.HOME;
+    else process.env.HOME = previousHome;
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test('detectCodexSessionIdFromDisk falls back to the most recent rollout when no cwd matches', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'ovld-codex-home-'));
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'ovld-codex-repo-'));
+  const previousHome = process.env.HOME;
+  const previousCwd = process.cwd();
+  const oldId = 'aaaaaaaa-1111-4111-8111-111111111111';
+  const newId = 'bbbbbbbb-2222-4222-8222-222222222222';
+  try {
+    process.env.HOME = home;
+    writeCodexRollout(home, {
+      uuid: oldId,
+      cwd: '/old/path',
+      mtime: 1000,
+      name: `rollout-2026-06-08T08-00-00-${oldId}.jsonl`
+    });
+    writeCodexRollout(home, {
+      uuid: newId,
+      cwd: '/new/path',
+      mtime: 2000,
+      name: `rollout-2026-06-08T09-00-00-${newId}.jsonl`
+    });
+    process.chdir(repo);
+    assert.equal(detectCodexSessionIdFromDisk(), newId);
+  } finally {
+    process.chdir(previousCwd);
+    if (previousHome === undefined) delete process.env.HOME;
+    else process.env.HOME = previousHome;
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test('detectCodexSessionIdFromDisk returns null when no codex sessions exist', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'ovld-codex-home-'));
+  const previousHome = process.env.HOME;
+  try {
+    process.env.HOME = home;
+    assert.equal(detectCodexSessionIdFromDisk(), null);
+  } finally {
+    if (previousHome === undefined) delete process.env.HOME;
+    else process.env.HOME = previousHome;
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('create keeps a local draft when the network fails and clears it on success', async () => {
+  const previousFetch = global.fetch;
+  const previousOverlordUrl = process.env.OVERLORD_URL;
+  const previousAgentToken = process.env.OVERLORD_ACCESS_TOKEN;
+  const previousOrganizationId = process.env.OVERLORD_ORGANIZATION_ID;
+  const previousPendingDir = process.env.OVERLORD_PENDING_TICKETS_DIR;
+  const previousLog = console.log;
+  const pendingDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ovld-pending-'));
+
+  try {
+    process.env.OVERLORD_URL = 'https://www.ovld.ai';
+    process.env.OVERLORD_ACCESS_TOKEN = 'test-agent-token';
+    process.env.OVERLORD_ORGANIZATION_ID = '42';
+    process.env.OVERLORD_PENDING_TICKETS_DIR = pendingDir;
+    console.log = () => {};
+
+    // 1) Network failure must preserve the draft and surface the file path.
+    global.fetch = async () => {
+      throw new Error('socket hang up');
+    };
+
+    await assert.rejects(
+      runProtocolCommand('create', [
+        '--session-key',
+        '11111111-2222-4333-8444-555555555555',
+        '--ticket-id',
+        '1:1333',
+        '--objectives-json',
+        '[{"objective":"Survive flaky internet"}]'
+      ]),
+      error => {
+        assert.match(error.message, /saved locally/);
+        assert.match(error.message, new RegExp(pendingDir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+        return true;
+      }
+    );
+
+    let drafts = fs.readdirSync(pendingDir).filter(name => name.endsWith('.json'));
+    assert.equal(drafts.length, 1);
+    const saved = JSON.parse(fs.readFileSync(path.join(pendingDir, drafts[0]), 'utf8'));
+    assert.equal(saved.endpoint, '/api/protocol/create-ticket');
+    assert.deepEqual(saved.objectives, ['Survive flaky internet']);
+    assert.deepEqual(saved.body.objectives, [{ objective: 'Survive flaky internet' }]);
+
+    // 2) A confirmed write must delete the draft so it does not linger.
+    global.fetch = async () =>
+      new Response(JSON.stringify({ ok: true, ticket: { id: 'ticket-1' } }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+    await runProtocolCommand('create', [
+      '--session-key',
+      '11111111-2222-4333-8444-555555555555',
+      '--ticket-id',
+      '1:1333',
+      '--objectives-json',
+      '[{"objective":"Confirmed write"}]'
+    ]);
+
+    drafts = fs.readdirSync(pendingDir).filter(name => name.endsWith('.json'));
+    // The confirmed call leaves only the earlier failed draft behind.
+    assert.equal(drafts.length, 1);
+    assert.deepEqual(
+      JSON.parse(fs.readFileSync(path.join(pendingDir, drafts[0]), 'utf8')).objectives,
+      ['Survive flaky internet']
+    );
+  } finally {
+    global.fetch = previousFetch;
+    console.log = previousLog;
+    if (previousOverlordUrl === undefined) delete process.env.OVERLORD_URL;
+    else process.env.OVERLORD_URL = previousOverlordUrl;
+    if (previousAgentToken === undefined) delete process.env.OVERLORD_ACCESS_TOKEN;
+    else process.env.OVERLORD_ACCESS_TOKEN = previousAgentToken;
+    if (previousOrganizationId === undefined) delete process.env.OVERLORD_ORGANIZATION_ID;
+    else process.env.OVERLORD_ORGANIZATION_ID = previousOrganizationId;
+    if (previousPendingDir === undefined) delete process.env.OVERLORD_PENDING_TICKETS_DIR;
+    else process.env.OVERLORD_PENDING_TICKETS_DIR = previousPendingDir;
+    fs.rmSync(pendingDir, { recursive: true, force: true });
+  }
+});
+
+test('pending-tickets --retry resends the saved body and clears the draft on success', async () => {
+  const previousFetch = global.fetch;
+  const previousOverlordUrl = process.env.OVERLORD_URL;
+  const previousAgentToken = process.env.OVERLORD_ACCESS_TOKEN;
+  const previousOrganizationId = process.env.OVERLORD_ORGANIZATION_ID;
+  const previousPendingDir = process.env.OVERLORD_PENDING_TICKETS_DIR;
+  const previousLog = console.log;
+  const pendingDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ovld-pending-'));
+  const calls = [];
+
+  try {
+    process.env.OVERLORD_URL = 'https://www.ovld.ai';
+    process.env.OVERLORD_ACCESS_TOKEN = 'test-agent-token';
+    process.env.OVERLORD_ORGANIZATION_ID = '42';
+    process.env.OVERLORD_PENDING_TICKETS_DIR = pendingDir;
+    console.log = () => {};
+
+    const draftId = 'draft-retry-1';
+    fs.writeFileSync(
+      path.join(pendingDir, `${draftId}.json`),
+      JSON.stringify({
+        id: draftId,
+        kind: 'add-objectives',
+        endpoint: '/api/protocol/add-objectives',
+        createdAt: new Date().toISOString(),
+        ticketId: '1:1333',
+        objectives: ['Retry me'],
+        body: { ticketId: '1:1333', objectives: [{ objective: 'Retry me' }] }
+      }),
+      'utf8'
+    );
+
+    global.fetch = async (url, init = {}) => {
+      calls.push({ url: String(url), body: init.body });
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    };
+
+    await runProtocolCommand('pending-tickets', ['--retry', draftId]);
+
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].url, 'https://www.ovld.ai/api/protocol/add-objectives');
+    assert.deepEqual(JSON.parse(calls[0].body), {
+      ticketId: '1:1333',
+      objectives: [{ objective: 'Retry me' }]
+    });
+    assert.equal(fs.existsSync(path.join(pendingDir, `${draftId}.json`)), false);
+  } finally {
+    global.fetch = previousFetch;
+    console.log = previousLog;
+    if (previousOverlordUrl === undefined) delete process.env.OVERLORD_URL;
+    else process.env.OVERLORD_URL = previousOverlordUrl;
+    if (previousAgentToken === undefined) delete process.env.OVERLORD_ACCESS_TOKEN;
+    else process.env.OVERLORD_ACCESS_TOKEN = previousAgentToken;
+    if (previousOrganizationId === undefined) delete process.env.OVERLORD_ORGANIZATION_ID;
+    else process.env.OVERLORD_ORGANIZATION_ID = previousOrganizationId;
+    if (previousPendingDir === undefined) delete process.env.OVERLORD_PENDING_TICKETS_DIR;
+    else process.env.OVERLORD_PENDING_TICKETS_DIR = previousPendingDir;
+    fs.rmSync(pendingDir, { recursive: true, force: true });
+  }
+});
+
+test('pending-tickets --clear-all removes every saved draft', async () => {
+  const previousPendingDir = process.env.OVERLORD_PENDING_TICKETS_DIR;
+  const previousLog = console.log;
+  const pendingDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ovld-pending-'));
+
+  try {
+    process.env.OVERLORD_PENDING_TICKETS_DIR = pendingDir;
+    console.log = () => {};
+
+    for (const id of ['a', 'b']) {
+      fs.writeFileSync(
+        path.join(pendingDir, `${id}.json`),
+        JSON.stringify({ id, kind: 'create', createdAt: new Date().toISOString() }),
+        'utf8'
+      );
+    }
+
+    await runProtocolCommand('pending-tickets', ['--clear-all']);
+    assert.equal(fs.readdirSync(pendingDir).filter(name => name.endsWith('.json')).length, 0);
+  } finally {
+    console.log = previousLog;
+    if (previousPendingDir === undefined) delete process.env.OVERLORD_PENDING_TICKETS_DIR;
+    else process.env.OVERLORD_PENDING_TICKETS_DIR = previousPendingDir;
+    fs.rmSync(pendingDir, { recursive: true, force: true });
+  }
+});
+
+test('detectCodexSessionId prefers env vars, then disk fallback', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'ovld-codex-home-'));
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'ovld-codex-repo-'));
+  const previousHome = process.env.HOME;
+  const previousThread = process.env.CODEX_THREAD_ID;
+  const previousSession = process.env.CODEX_SESSION_ID;
+  const previousCwd = process.cwd();
+  const diskId = 'aaaaaaaa-1111-4111-8111-111111111111';
+  try {
+    process.env.HOME = home;
+    writeCodexRollout(home, { uuid: diskId, cwd: repo, mtime: 1000 });
+    process.chdir(repo);
+
+    process.env.CODEX_THREAD_ID = 'env-thread-id';
+    assert.equal(detectCodexSessionId(), 'env-thread-id');
+
+    delete process.env.CODEX_THREAD_ID;
+    process.env.CODEX_SESSION_ID = 'env-session-id';
+    assert.equal(detectCodexSessionId(), 'env-session-id');
+
+    delete process.env.CODEX_SESSION_ID;
+    assert.equal(detectCodexSessionId(), diskId);
+  } finally {
+    process.chdir(previousCwd);
+    if (previousHome === undefined) delete process.env.HOME;
+    else process.env.HOME = previousHome;
+    if (previousThread === undefined) delete process.env.CODEX_THREAD_ID;
+    else process.env.CODEX_THREAD_ID = previousThread;
+    if (previousSession === undefined) delete process.env.CODEX_SESSION_ID;
+    else process.env.CODEX_SESSION_ID = previousSession;
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(repo, { recursive: true, force: true });
+  }
 });

@@ -27,7 +27,13 @@ import { type ThemeColors, useThemeColors, useThemedStyles } from '@/lib/colors'
 import { useExecutionTargets } from '@/lib/execution-targets-context';
 import { Ionicons } from '@/lib/icons';
 import { getSupabase } from '@/lib/supabase';
-import type { AgentModelRecord, AgentModelSelection, LaunchAgentType } from '@/lib/types';
+import type {
+  AgentLaunchConfig,
+  AgentLaunchConfigUpdate,
+  AgentModelRecord,
+  AgentModelSelection,
+  LaunchAgentType
+} from '@/lib/types';
 
 type AgentModelChooserProps = {
   alwaysExpanded?: boolean;
@@ -41,6 +47,20 @@ type AgentModelChooserProps = {
   style?: StyleProp<ViewStyle>;
   triggerMetaLabel?: string;
   value: AgentModelSelection | null;
+  /**
+   * Per-objective launch config override to seed the AgentLaunchFooter with.
+   * `null` (with an `onLaunchConfigOverrideChange` handler present) means no
+   * override yet, so the footer seeds from the selected target's config as the
+   * inherited default. Only meaningful together with
+   * `onLaunchConfigOverrideChange`.
+   */
+  launchConfigOverride?: AgentLaunchConfig | null;
+  /**
+   * When provided, the AgentLaunchFooter edits a per-objective override (routed
+   * here) instead of the app-wide selected target's config. The footer still
+   * seeds from the target config when there is no override.
+   */
+  onLaunchConfigOverrideChange?: (update: AgentLaunchConfigUpdate) => void;
 };
 
 export function AgentModelChooser({
@@ -54,7 +74,9 @@ export function AgentModelChooser({
   onResolvedSelectionChange,
   style,
   triggerMetaLabel,
-  value
+  value,
+  launchConfigOverride = null,
+  onLaunchConfigOverrideChange
 }: AgentModelChooserProps) {
   const colors = useThemeColors();
   const styles = useThemedStyles(createStyles);
@@ -209,6 +231,19 @@ export function AgentModelChooser({
   const currentTargetAgentConfig = selectedTarget?.agentFlags[effectiveSelection.agent] ?? null;
   const currentAgentFlags = currentTargetAgentConfig?.flags ?? [];
   const currentAgentPreCommand = currentTargetAgentConfig?.preCommand ?? '';
+
+  // Override mode: the footer edits a per-objective override of the target
+  // config instead of the target config itself. When an override exists, seed
+  // from it verbatim (an empty override means "none for this objective" and must
+  // not fall back to the target default); when it does not, seed from the target
+  // config so the user sees what they would inherit before editing.
+  const overrideMode = Boolean(onLaunchConfigOverrideChange);
+  const footerPreCommand =
+    overrideMode && launchConfigOverride
+      ? (launchConfigOverride.preCommand ?? '')
+      : currentAgentPreCommand;
+  const footerFlags =
+    overrideMode && launchConfigOverride ? launchConfigOverride.flags : currentAgentFlags;
 
   function setSelectorVisible(nextVisible: boolean) {
     if (!alwaysExpanded && expanded === undefined) {
@@ -409,22 +444,27 @@ export function AgentModelChooser({
           ) : null}
 
           <AgentLaunchFooter
-            key={`${selectedTarget?.id ?? 'none'}:${effectiveSelection.agent}`}
+            key={`${selectedTarget?.id ?? 'none'}:${effectiveSelection.agent}:${
+              overrideMode ? (launchConfigOverride ? 'override-set' : 'override-unset') : 'target'
+            }`}
             agentKey={effectiveSelection.agent}
-            preCommand={currentAgentPreCommand}
-            flags={currentAgentFlags}
+            preCommand={footerPreCommand}
+            flags={footerFlags}
             targetLabel={selectedTarget?.label ?? null}
+            override={overrideMode}
             onChange={
-              selectedTarget
-                ? update =>
-                    void updateTargetAgentConfig(
-                      selectedTarget.id,
-                      effectiveSelection.agent,
-                      update
-                    )
-                : undefined
+              overrideMode
+                ? onLaunchConfigOverrideChange
+                : selectedTarget
+                  ? update =>
+                      void updateTargetAgentConfig(
+                        selectedTarget.id,
+                        effectiveSelection.agent,
+                        update
+                      )
+                  : undefined
             }
-            disabled={disabled || !selectedTarget}
+            disabled={disabled || (!overrideMode && !selectedTarget)}
           />
         </View>
       ) : null}

@@ -197,7 +197,7 @@ Checklist:
 - Local Codex launches pass `agent=codex` into the context route
 - Local Codex does not request `bundle` instruction mode (`bundleAgent = null` for Codex)
 - Prompt text explicitly includes the Codex ticket workflow instructions and the `## Task` metadata now includes the resolved current `Objective ID` alongside `Ticket ID`
-- Local Codex plugin installs a `UserPromptSubmit` hook that records follow-up activity through `/api/protocol/hook-event` and forwards `CODEX_THREAD_ID` / `CODEX_SESSION_ID` to populate `external_session_id` when attach-time detection missed it
+- Local Codex plugin installs a `UserPromptSubmit` hook that records follow-up activity through `/api/protocol/hook-event` and forwards the Codex session id to populate `external_session_id` when attach-time detection missed it. Because Codex does not reliably export `CODEX_THREAD_ID` / `CODEX_SESSION_ID`, both the hook and the CLI (`detectCodexSessionId` in `packages/overlord-cli/bin/_cli/protocol.mjs`) fall back to reading the active rollout file under `~/.codex/sessions/**/rollout-*.jsonl`, preferring the most recent rollout whose recorded `cwd` matches the working directory
 - Local Codex plugin installs a `PermissionRequest` hook that notifies Overlord through `/api/protocol/permission-request` (same blocking question event as Claude)
 - Agent delivery narratives stay on the `deliver` event; the follow-on review `status_change` event uses generic transition text so the activity feed does not duplicate the delivery summary
 - Prompt text does not tell Codex to look for `overlord-local` or a local Codex bundle

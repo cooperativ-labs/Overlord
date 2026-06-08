@@ -19,7 +19,6 @@ export function DemoPanelHeader() {
         >
           <EllipsisVertical className="h-3.5 w-3.5" />
         </Button>
-
       </div>
       <div className="flex items-center justify-end gap-3">
         <div className="flex items-center gap-1.5">
@@ -34,7 +33,6 @@ export function DemoPanelHeader() {
             </span>
           </span>
           <div className="h-3.5 w-px bg-border" />
-
         </div>
         <Button
           size="icon"

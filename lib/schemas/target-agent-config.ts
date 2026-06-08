@@ -45,6 +45,20 @@ export function parseTargetAgentConfigs(raw: unknown): TargetAgentConfigs {
 }
 
 /**
+ * Coerce an objective's stored `launch_config` override into an
+ * {@link AgentLaunchConfig}, or `null` when there is no override. Unlike the
+ * per-target map this is a single agent's config (the objective has one assigned
+ * agent). A present-but-empty override (`{ flags: [] }`) is preserved and means
+ * the user explicitly wants no flags / pre-command for this objective — callers
+ * must NOT fall back to the target config in that case. Never throws.
+ */
+export function parseObjectiveLaunchConfig(raw: unknown): AgentLaunchConfig | null {
+  if (raw === null || raw === undefined) return null;
+  const parsed = agentLaunchConfigSchema.safeParse(raw);
+  return parsed.success ? parsed.data : null;
+}
+
+/**
  * Normalize a single agent's launch config: trim flags, drop blanks/dupes, and
  * drop an empty pre-command. Returns the cleaned config.
  */

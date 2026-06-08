@@ -12,15 +12,22 @@ import {
   selectionFromAssignedAgent
 } from '@/lib/agent-models';
 import { useThemeColors, useThemedStyles } from '@/lib/colors';
+import { mergeAgentLaunchConfig } from '@/lib/execution-targets';
 import { useExecutionTargets } from '@/lib/execution-targets-context';
 import { useTicketRealtime } from '@/lib/hooks/use-ticket-realtime';
 import { Ionicons } from '@/lib/icons';
 import { buildCliLaunchCommand } from '@/lib/launch-commands';
+import {
+  parseObjectiveLaunchConfig,
+  serializeObjectiveLaunchConfig
+} from '@/lib/objective-launch-config';
 import { resolveLaunchOAuthSession, resolvePlatformUrl } from '@/lib/platform';
 import { queueTicketExecution } from '@/lib/queue-execution';
 import { getSupabase } from '@/lib/supabase';
 import { isTransientNetworkError } from '@/lib/transient-network-error';
 import type {
+  AgentLaunchConfig,
+  AgentLaunchConfigUpdate,
   AgentModelSelection,
   Objective,
   TicketAgentSessionSummary,
@@ -140,7 +147,7 @@ export default function TicketDetailScreen() {
         supabase
           .from('objectives')
           .select(
-            'id, objective, title, state, agent_identifier, model_identifier, assigned_agent, position, auto_advance, approval_reason, auto_advanced_at, created_at'
+            'id, objective, title, state, agent_identifier, model_identifier, assigned_agent, launch_config, position, auto_advance, approval_reason, auto_advanced_at, created_at'
           )
           .eq('ticket_id', ticketId)
           .order('created_at', { ascending: false }),
@@ -370,6 +377,14 @@ export default function TicketDetailScreen() {
       setSelectedDraftObjectiveId(null);
     }
   }, [draftObjectives, selectedDraftObjectiveId]);
+
+  // The per-objective launch config override seeded into the AgentLaunchFooter.
+  // `null` means no override yet, so the footer falls back to the selected
+  // target's config as the inherited default.
+  const assignedLaunchOverride = useMemo<AgentLaunchConfig | null>(
+    () => parseObjectiveLaunchConfig(activeDraftObjective?.launch_config ?? null),
+    [activeDraftObjective?.launch_config]
+  );
 
   const filteredEvents = useMemo(() => {
     if (activityFilter === 'completed') {
@@ -648,6 +663,60 @@ export default function TicketDetailScreen() {
       );
     } finally {
       setSavingAssignedAgent(false);
+    }
+  }
+
+  async function handleLaunchOverrideChange(update: AgentLaunchConfigUpdate) {
+    if (!ticket || !activeDraftObjective) return;
+
+    const objectiveId = activeDraftObjective.id;
+    const agentKey = (effectiveAssignedSelection ?? assignedSelection)?.agent ?? null;
+
+    // Seed a first edit from what the footer currently shows: the existing
+    // override if any, else the selected target's config for this agent (the
+    // inherited CliPage default). Merging the partial update onto that base
+    // captures the field the user did NOT touch so the override matches the UI.
+    const existingOverride = parseObjectiveLaunchConfig(activeDraftObjective.launch_config);
+    const targetDefault: AgentLaunchConfig = (agentKey
+      ? selectedTarget?.agentFlags[agentKey]
+      : null) ?? { flags: [], preCommand: null };
+    const nextOverride = mergeAgentLaunchConfig(existingOverride ?? targetDefault, update);
+
+    // Optimistically reflect the override so the footer (and a later reopen)
+    // shows it without waiting for the round trip.
+    setObjectives(current =>
+      current.map(objective =>
+        objective.id === objectiveId ? { ...objective, launch_config: nextOverride } : objective
+      )
+    );
+
+    try {
+      const supabase = getSupabase();
+      const { error } = await supabase
+        .from('objectives')
+        .update({ launch_config: serializeObjectiveLaunchConfig(nextOverride) })
+        .eq('id', objectiveId);
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      const { error: eventError } = await supabase.from('ticket_events').insert({
+        event_type: 'system',
+        summary: 'Objective launch config override updated from mobile.',
+        ticket_id: ticket.id,
+        objective_id: objectiveId
+      });
+
+      if (eventError) {
+        console.error('Failed to record launch config override update:', eventError.message);
+      }
+    } catch (error) {
+      Alert.alert(
+        'Unable to update launch config',
+        error instanceof Error ? error.message : 'An unexpected error occurred.'
+      );
+      await loadData();
     }
   }
 
@@ -1236,6 +1305,10 @@ export default function TicketDetailScreen() {
         savingAssignedAgent={savingAssignedAgent}
         onAssignedAgentChange={handleAssignedAgentChange}
         onResolvedSelectionChange={setResolvedAssignedSelection}
+        launchConfigOverride={assignedLaunchOverride}
+        onLaunchConfigOverrideChange={update => {
+          void handleLaunchOverrideChange(update);
+        }}
         showAcceptanceCriteria={showAcceptanceCriteria}
         onToggleAcceptanceCriteria={() => setShowAcceptanceCriteria(open => !open)}
         acceptanceCriteriaDraft={acceptanceCriteriaDraft}

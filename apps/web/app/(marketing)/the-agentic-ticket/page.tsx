@@ -111,7 +111,6 @@ export default function TheAgenticTicketPage() {
           >
             <Link href="/overlord-context">Public context</Link>
           </Button>
-
         </div>
       </section>
     </div>

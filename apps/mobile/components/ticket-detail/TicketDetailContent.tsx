@@ -24,6 +24,8 @@ import {
 import { useThemeColors, useThemedStyles } from '@/lib/colors';
 import { Ionicons } from '@/lib/icons';
 import type {
+  AgentLaunchConfig,
+  AgentLaunchConfigUpdate,
   AgentModelSelection,
   Objective,
   TicketAgentSessionSummary,
@@ -88,6 +90,8 @@ export function TicketDetailContent({
   savingAssignedAgent,
   onAssignedAgentChange,
   onResolvedSelectionChange,
+  launchConfigOverride,
+  onLaunchConfigOverrideChange,
   showAcceptanceCriteria,
   onToggleAcceptanceCriteria,
   acceptanceCriteriaDraft,
@@ -154,6 +158,8 @@ export function TicketDetailContent({
   savingAssignedAgent: boolean;
   onAssignedAgentChange: (selection: AgentModelSelection) => void;
   onResolvedSelectionChange: (selection: AgentModelSelection) => void;
+  launchConfigOverride: AgentLaunchConfig | null;
+  onLaunchConfigOverrideChange: (update: AgentLaunchConfigUpdate) => void;
   showAcceptanceCriteria: boolean;
   onToggleAcceptanceCriteria: () => void;
   acceptanceCriteriaDraft: string;
@@ -420,6 +426,8 @@ export function TicketDetailContent({
               savingAssignedAgent={savingAssignedAgent}
               onAssignedAgentChange={onAssignedAgentChange}
               onResolvedSelectionChange={onResolvedSelectionChange}
+              launchConfigOverride={launchConfigOverride}
+              onLaunchConfigOverrideChange={onLaunchConfigOverrideChange}
             />
           </View>
 
@@ -672,7 +680,9 @@ function DraftObjectiveAttachments({
   assignedSelection,
   savingAssignedAgent,
   onAssignedAgentChange,
-  onResolvedSelectionChange
+  onResolvedSelectionChange,
+  launchConfigOverride,
+  onLaunchConfigOverrideChange
 }: {
   attachments: ObjectiveAttachmentItem[];
   uploading: boolean;
@@ -686,6 +696,8 @@ function DraftObjectiveAttachments({
   savingAssignedAgent: boolean;
   onAssignedAgentChange: (selection: AgentModelSelection) => void;
   onResolvedSelectionChange: (selection: AgentModelSelection) => void;
+  launchConfigOverride: AgentLaunchConfig | null;
+  onLaunchConfigOverrideChange: (update: AgentLaunchConfigUpdate) => void;
 }) {
   const colors = useThemeColors();
   const styles = useThemedStyles(createStyles);
@@ -838,6 +850,8 @@ function DraftObjectiveAttachments({
             value={assignedSelection}
             onChange={onAssignedAgentChange}
             onResolvedSelectionChange={onResolvedSelectionChange}
+            launchConfigOverride={launchConfigOverride}
+            onLaunchConfigOverrideChange={onLaunchConfigOverrideChange}
             disabled={savingAssignedAgent}
           />
         </View>
