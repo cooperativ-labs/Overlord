@@ -229,7 +229,7 @@ function ProblemDemoFrame({
   children: ReactNode;
 }) {
   return (
-    <div className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm sm:p-6 dark:border-white/10 dark:bg-[#07101d]/70 dark:shadow-none">
+    <div className="rounded-2xl md:border md:border-stone-200  p-2 md:p-5 shadow-sm md:shadow-none md:dark:border-white/10 md:bg-white md:dark:bg-[#07101d]/70">
       <div className="mb-5 flex items-start justify-between gap-4">
         <div>
           <h2 className="text-lg font-semibold text-stone-900 dark:text-white">{title}</h2>

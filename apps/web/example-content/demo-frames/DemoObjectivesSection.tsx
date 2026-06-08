@@ -11,32 +11,31 @@ import {
   Plus
 } from 'lucide-react';
 import Image from 'next/image';
-import { useCallback, useLayoutEffect, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 
 import { AgentModelChooserTrigger } from '@/components/features/AgentModelChooserTrigger';
-import {
-  AgentModelSelector,
-  seedAgentModelsCache,
-  useAgentModels
-} from '@/components/features/AgentModelSelector';
+import { AgentModelSelector, useAgentModels } from '@/components/features/AgentModelSelector';
 import { AgentSplitButton } from '@/components/features/AgentSplitButton';
 import { MarkdownContent } from '@/components/features/MarkdownContent';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { AgentModelSelection } from '@/lib/helpers/agent-model-preference';
 import {
   type AgentSelectorValue,
   isLaunchAgentTypeValue,
   type LaunchAgentType
 } from '@/lib/helpers/agent-types';
-import {
-  MARKETING_OFFERED_AGENT_MODELS,
-  resolveMarketingAgentModels
-} from '@/lib/marketing/offered-agent-models';
+import { resolveMarketingAgentModels } from '@/lib/marketing/offered-agent-models';
 import { cn } from '@/lib/utils';
 
 import { DEMO_OBJECTIVES, type DemoObjective } from './mock-ticket-details';
+import {
+  ToolbarOverflowCompactProvider,
+  useToolbarOverflowCompactState
+} from '@/components/features/ToolbarOverflowCompact';
+import { useSeedMarketingAgentModels } from './useSeedMarketingAgentModels';
 
 const DEMO_TICKET_ID = 'demo-ticket';
 
@@ -46,9 +45,7 @@ type DemoObjectivesSectionProps = {
 };
 
 export function DemoObjectivesSection({ className, onRun }: DemoObjectivesSectionProps) {
-  useLayoutEffect(() => {
-    seedAgentModelsCache(MARKETING_OFFERED_AGENT_MODELS);
-  }, []);
+  useSeedMarketingAgentModels();
 
   const completed = DEMO_OBJECTIVES.filter(objective => objective.state === 'complete');
   const draft = DEMO_OBJECTIVES.filter(objective => objective.state === 'draft');
@@ -110,6 +107,8 @@ function DemoObjectiveAgentControls({
   const [selectedAgent, setSelectedAgent] = useState<AgentSelectorValue>(initialSelection.agent);
   const [chooserOpen, setChooserOpen] = useState(false);
   const [autoAdvance, setAutoAdvance] = useState(objective.autoAdvance ?? true);
+  const toolbarRowRef = useRef<HTMLDivElement>(null);
+  const toolbarCompact = useToolbarOverflowCompactState(toolbarRowRef);
 
   const handleAgentSelect = useCallback((agent: LaunchAgentType) => {
     setSelectedAgent(agent);
@@ -127,79 +126,92 @@ function DemoObjectiveAgentControls({
     : chooserSelection;
 
   return (
-    <div className="flex min-w-0 items-center justify-between gap-2 overflow-hidden px-2 py-1.5">
-      <div className="flex items-center gap-2">
-        <Button
-          type="button"
-          size="icon"
-          variant="ghost"
-          className="h-7 w-7 shrink-0"
-          aria-label="Upload objective attachment"
-        >
-          <Plus size={18} />
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className={cn(
-            'h-7 gap-1 px-2 text-xs text-muted-foreground',
-            !autoAdvance && 'text-amber-600'
-          )}
-          aria-pressed={autoAdvance}
-          onClick={() => setAutoAdvance(value => !value)}
-        >
-          {autoAdvance ? (
-            <FastForward className="h-3.5 w-3.5" />
-          ) : (
-            <PauseCircle className="h-3.5 w-3.5" />
-          )}
-          Auto
-        </Button>
-      </div>
-      <div className="flex items-center gap-2">
-        <Popover open={chooserOpen} onOpenChange={setChooserOpen}>
-          <PopoverTrigger asChild>
-            <AgentModelChooserTrigger
-              selection={chooserSelection}
-              active={chooserOpen}
-              onToggle={() => {}}
-            />
-          </PopoverTrigger>
-          <PopoverContent
-            align="start"
-            collisionPadding={{ left: 8, right: 8 }}
-            className="w-auto min-w-[320px] p-2"
+    <ToolbarOverflowCompactProvider compact={toolbarCompact}>
+      <div
+        ref={toolbarRowRef}
+        className="flex min-w-0 items-center justify-between gap-2 overflow-hidden px-2 py-1.5"
+      >
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            className="h-7 w-7 shrink-0"
+            aria-label="Upload objective attachment"
           >
-            <AgentModelSelector
-              demo
-              catalogModels={catalogModels}
-              value={chooserSelection}
-              onChange={setChooserSelection}
-              onAgentSelect={handleAgentSelect}
-            />
-          </PopoverContent>
-        </Popover>
-        {isFuture ? (
-          <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5 px-3 text-xs">
-            <ArrowUpCircle className="h-3.5 w-3.5" />
-            Promote
+            <Plus size={18} />
           </Button>
-        ) : (
-          <AgentSplitButton
-            demo
-            size="sm"
-            ticketId={DEMO_TICKET_ID}
-            selectedAgent={selectedAgent}
-            onSelectAgent={setSelectedAgent}
-            assignedSelection={splitButtonSelection}
-            hasProjectWorkingDirectory
-            workingDirectory="/demo"
-            onDemoRun={onRun}
-          />
-        )}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className={cn(
+                  'h-7 gap-1 px-2 text-xs text-green-800',
+                  !autoAdvance && 'text-amber-600'
+                )}
+                aria-pressed={autoAdvance}
+                onClick={() => setAutoAdvance(value => !value)}
+              >
+                {autoAdvance ? (
+                  <FastForward className="h-3.5 w-3.5" />
+                ) : (
+                  <PauseCircle className="h-3.5 w-3.5" />
+                )}
+                Auto
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="max-w-56 text-center">
+              Objectives marked Auto will automatically launch in your terminal when the previous
+              objective completes.
+            </TooltipContent>
+          </Tooltip>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <Popover open={chooserOpen} onOpenChange={setChooserOpen}>
+            <PopoverTrigger asChild>
+              <AgentModelChooserTrigger
+                selection={chooserSelection}
+                active={chooserOpen}
+                onToggle={() => { }}
+              />
+            </PopoverTrigger>
+            <PopoverContent
+              align="start"
+              collisionPadding={{ left: 8, right: 8 }}
+              className="w-auto md:min-w-[320px] p-2"
+            >
+              <AgentModelSelector
+                demo
+                catalogModels={catalogModels}
+                value={chooserSelection}
+                onChange={setChooserSelection}
+                onAgentSelect={handleAgentSelect}
+              />
+            </PopoverContent>
+          </Popover>
+          {isFuture ? (
+            <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5 px-3 text-xs">
+              <ArrowUpCircle className="h-3.5 w-3.5" />
+              Promote
+            </Button>
+          ) : (
+            <AgentSplitButton
+              demo
+              size="sm"
+              ticketId={DEMO_TICKET_ID}
+              selectedAgent={selectedAgent}
+              onSelectAgent={setSelectedAgent}
+              assignedSelection={splitButtonSelection}
+              hasProjectWorkingDirectory
+              workingDirectory="/demo"
+              onDemoRun={onRun}
+            />
+          )}
+        </div>
       </div>
-    </div>
+    </ToolbarOverflowCompactProvider>
   );
 }
 
@@ -298,11 +310,11 @@ function CompletedObjective({ objective }: { objective: DemoObjective }) {
               type="button"
               className="relative flex flex-1 flex-col rounded-md py-2 pl-3 pr-1 text-left hover:bg-background"
             >
-              <div className="flex w-full items-center justify-between gap-2">
+              <div className="flex w-full items-center justify-between gap-2 min-w-0">
                 <div className="flex min-w-0 flex-1 items-center gap-2">
                   <CheckCircle className="h-3.5 w-3.5 shrink-0 text-green-500" />
                   <ObjectiveAgentIcon agent={objective.agent} />
-                  <p className="truncate text-sm font-medium">{objective.title}</p>
+                  <p className="truncate text-sm font-medium min-w-10">{objective.title}</p>
                 </div>
                 <ChevronDown
                   className={cn(

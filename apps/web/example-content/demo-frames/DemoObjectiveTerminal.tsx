@@ -106,7 +106,7 @@ export function DemoObjectiveTerminal() {
 
   return (
     <div className="overflow-hidden rounded-xl border border-white/5 bg-slate-950 text-foreground shadow-inner">
-      <div className="border-b border-white/5 px-4 py-3">
+      <div className="border-b border-white/5 px-2 py-3">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <TerminalSquare className="h-4 w-4 text-sky-400" />
@@ -118,7 +118,7 @@ export function DemoObjectiveTerminal() {
         </div>
       </div>
 
-      <div className="space-y-4 p-4">
+      <div className="space-y-4 p-2 md:p-4">
         <DemoObjectiveCard onRun={handleRun} running={terminalRunning} />
         <MockTerminal
           key={terminalKey}
@@ -204,7 +204,7 @@ function DemoObjectiveAgentControls({ onRun, running }: { onRun: () => void; run
             <AgentModelChooserTrigger
               selection={chooserSelection}
               active={chooserOpen}
-              onToggle={() => {}}
+              onToggle={() => { }}
             />
           </PopoverTrigger>
           <PopoverContent

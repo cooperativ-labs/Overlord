@@ -10,6 +10,7 @@ import type { AgentModel } from '@/lib/actions/agent-models';
 import type { AgentModelSelection } from '@/lib/helpers/agent-model-preference';
 import { getAgentTypeByValue } from '@/lib/helpers/agent-types';
 import { cn } from '@/lib/utils';
+import { useToolbarOverflowCompact } from './ToolbarOverflowCompact';
 
 function getSelectionLabel(models: AgentModel[], modelId: string | null): string {
   if (!modelId) return 'Default model';
@@ -35,16 +36,22 @@ export const AgentModelChooserTrigger = forwardRef<
   { selection, active, onToggle, disabled = false, className, onClick, ...buttonProps },
   ref
 ) {
+  const toolbarCompact = useToolbarOverflowCompact();
   const { models } = useAgentModels();
   const agent = getAgentTypeByValue(selection.agent);
   const label = getSelectionLabel(models, selection.model);
+  const tooltipLabel = `${agent.label} · ${label}`;
 
   return (
     <Button
       {...buttonProps}
       ref={ref}
       type="button"
-      className={cn('h-8 max-w-[230px] gap-2 px-3 text-xs', className)}
+      className={cn(
+        'h-8 gap-2 text-xs',
+        toolbarCompact ? 'shrink-0 px-2' : 'max-w-[230px] px-3',
+        className
+      )}
       size="sm"
       variant="outline"
       disabled={disabled}
@@ -54,10 +61,11 @@ export const AgentModelChooserTrigger = forwardRef<
       }}
       aria-expanded={active}
       aria-haspopup="true"
-      aria-label="Choose agent and model"
+      aria-label={toolbarCompact ? tooltipLabel : 'Choose agent and model'}
+      title={toolbarCompact ? tooltipLabel : undefined}
     >
       <AgentIcon agentType={agent} size={14} alt={`${agent.label} icon`} className="h-3.5 w-3.5" />
-      <span className="truncate">{label}</span>
+      {toolbarCompact ? null : <span className="truncate">{label}</span>}
       <ChevronDown
         className={cn(
           'h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform',

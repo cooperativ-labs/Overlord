@@ -13,7 +13,7 @@ export function DemoTicketActivity() {
   return (
     <div
       className={cn(
-        'relative overflow-hidden rounded-xl bg-background p-5 text-foreground sm:p-6',
+        'relative overflow-hidden rounded-xl bg-background p-2 md:p-5 text-foreground sm:p-6',
         // Top shadow + fade: reads like the lower slice of a ticket panel (content continues above).
         'shadow-[inset_0_2px_4px_rgb(0_0_0/0.06),inset_0_18px_28px_-18px_rgb(0_0_0/0.09)]',
         'dark:shadow-[inset_0_2px_4px_rgb(0_0_0/0.35),inset_0_18px_28px_-18px_rgb(0_0_0/0.38)]',

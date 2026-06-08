@@ -111,13 +111,7 @@ export default function TheAgenticTicketPage() {
           >
             <Link href="/overlord-context">Public context</Link>
           </Button>
-          {/* <Button
-            asChild
-            variant="outline"
-            className="rounded-full border-stone-300 bg-white text-stone-900 shadow-sm hover:bg-stone-50 dark:border-white/15 dark:bg-white/5 dark:text-white dark:shadow-none dark:hover:bg-white/10"
-          >
-            <Link href="/anatomy">App anatomy</Link>
-          </Button> */}
+
         </div>
       </section>
     </div>

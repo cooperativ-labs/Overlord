@@ -43,7 +43,7 @@ export function LiveFileChangeCard({
   const isMd = isMarkdownFile(fileChange.file_name || fileChange.file_path);
 
   return (
-    <article className="rounded-lg border bg-muted/20">
+    <article className="rounded-lg border bg-muted/20 min-w-0">
       <button
         type="button"
         className={cn(
