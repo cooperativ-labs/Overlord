@@ -30,7 +30,9 @@ export type BoardScope =
   | { kind: 'user'; organizationId?: number }
   | { kind: 'project'; projectId: string; organizationId?: number };
 
-export type BoardDataset = 'board' | 'list' | 'calendar';
+// Board and list views share the 'board' dataset (one cache entry, identical
+// data); only the calendar fetches a genuinely different slice.
+export type BoardDataset = 'board' | 'calendar';
 
 export type BoardTicket = {
   id: string;

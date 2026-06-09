@@ -10,7 +10,8 @@ import type {
   BoardBootstrap,
   BoardScope,
   BoardStatus,
-  BoardTicket
+  BoardTicket,
+  ColumnPageInfo
 } from '@/lib/client-data/tickets/board-types';
 import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
 import { deriveTitleFromObjective } from '@/lib/helpers/tickets';
@@ -76,7 +77,9 @@ export function toBoardTicket(ticket: Ticket): BoardTicket {
     updated_at: ticket.updated_at,
     delegate: ticket.delegate,
     schedule_id: ticket.schedule_id,
-    due_datetime: ticket.due_datetime
+    due_datetime: ticket.due_datetime,
+    assigned_member: ticket.assigned_member ?? null,
+    assignee: ticket.assignee ?? null
   };
 }
 
@@ -92,11 +95,13 @@ export function buildBoardBootstrap(input: {
   scope: BoardScope;
   tickets: Ticket[];
   statuses: Array<{ name: string; position: number; status_type?: string }>;
+  columnPageInfo?: Record<string, ColumnPageInfo>;
 }): BoardBootstrap {
   return {
     scope: input.scope,
     tickets: input.tickets.map(toBoardTicket),
-    statuses: input.statuses.map(toBoardStatus)
+    statuses: input.statuses.map(toBoardStatus),
+    columnPageInfo: input.columnPageInfo
   };
 }
 
