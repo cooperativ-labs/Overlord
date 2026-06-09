@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2606091312.0] - 2026-06-09:13:12
+
+### Added
+- Scope per-objective launch config overrides by execution target and agent/harness key so one objective can hold different overrides for each launch context.
+- Detect AgentPod and context-file bootstrap prompts when filtering hook events so short context-file launch text is recognized alongside the inline ticket spec.
+
+### Fixed
+- Fix **`ovld protocol attach`** losing a freshly minted session key when checkpoint recording fails — persist the key before best-effort checkpoint updates.
+- Truncate local git checkpoint **diffstat** before posting protocol updates so very large change sets no longer fail server validation.
+- Stop mis-recording the injected launch prompt as **`user_follow_up`** when an agent session is reused across tickets — skip bootstrap prompts at any turn index, not only turns 0 and 1.
+- Apply per-objective launch overrides only for the claiming execution target and assigned agent instead of any stored override on the objective.
+
+### Changed
+- Rename **`user_execution_targets.agent_flags`** to **`agent_configs`** across web, mobile, API, and CLI surfaces to reflect per-agent/harness launch config ownership.
+- Restructure **`objectives.launch_config`** from a flat override to a nested map keyed by execution target id, then agent/harness key.
+- Require a selected execution target and agent on mobile before saving per-objective launch overrides from the ticket detail footer.
+- Enable the mobile agent model chooser whenever an execution target is selected.
+
+### Security
+- None.
+
+### Refactor
+- Centralize scoped objective launch config parsing in shared helpers used by web, mobile, and protocol claim resolution.
+
+### Test
+- Add protocol and schema tests for scoped objective overrides, launch-prompt filtering at any turn index, and attach session-key persistence when checkpoints fail.
+
 ## [0.2606090710.0] - 2026-06-09:07:10
 
 ### Added

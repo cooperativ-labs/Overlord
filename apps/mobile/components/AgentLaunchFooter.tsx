@@ -33,7 +33,7 @@ type AgentLaunchFooterProps = {
  * Mobile counterpart of the web AgentLaunchFooter. Shows the selected agent's
  * launch pre-command and command flags, both editable. Persistence is delegated
  * via `onChange` so the values are written to the app-wide selected execution
- * target's per-agent config (`user_execution_targets.agent_flags`) — the same
+ * target's per-agent config (`user_execution_targets.agent_configs`) — the same
  * source the Servers tab shows and the ovld runner reads. Mounted with a `key`
  * of the target + agent so the fields re-seed whenever either changes.
  */

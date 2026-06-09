@@ -1,7 +1,8 @@
 import {
+  getObjectiveLaunchConfigOverride,
   mergeAgentLaunchConfig,
   normalizeAgentLaunchConfig,
-  parseObjectiveLaunchConfig,
+  parseObjectiveLaunchConfigOverrides,
   parseTargetAgentConfigs
 } from '@/lib/schemas/target-agent-config';
 
@@ -43,26 +44,48 @@ describe('normalizeAgentLaunchConfig', () => {
   });
 });
 
-describe('parseObjectiveLaunchConfig', () => {
-  it('returns null when there is no override', () => {
-    expect(parseObjectiveLaunchConfig(null)).toBeNull();
-    expect(parseObjectiveLaunchConfig(undefined)).toBeNull();
+describe('parseObjectiveLaunchConfigOverrides', () => {
+  it('returns an empty map when there are no overrides', () => {
+    expect(parseObjectiveLaunchConfigOverrides(null)).toEqual({});
+    expect(parseObjectiveLaunchConfigOverrides(undefined)).toEqual({});
   });
 
-  it('parses a populated override', () => {
-    expect(parseObjectiveLaunchConfig({ flags: ['--foo'], preCommand: 'ollama' })).toEqual({
-      flags: ['--foo'],
-      preCommand: 'ollama'
+  it('parses populated target and agent scoped overrides', () => {
+    expect(
+      parseObjectiveLaunchConfigOverrides({
+        targetA: {
+          claude: { flags: ['--foo'], preCommand: 'ollama' },
+          codex: { flags: [] }
+        }
+      })
+    ).toEqual({
+      targetA: {
+        claude: { flags: ['--foo'], preCommand: 'ollama' },
+        codex: { flags: [] }
+      }
     });
   });
 
   it('preserves a present-but-empty override (explicit "none")', () => {
-    expect(parseObjectiveLaunchConfig({ flags: [] })).toEqual({ flags: [] });
+    expect(
+      getObjectiveLaunchConfigOverride({ targetA: { claude: { flags: [] } } }, 'targetA', 'claude')
+    ).toEqual({ flags: [] });
   });
 
-  it('returns null for malformed input rather than throwing', () => {
-    expect(parseObjectiveLaunchConfig({ flags: 'nope' })).toBeNull();
-    expect(parseObjectiveLaunchConfig('nope')).toBeNull();
+  it('returns null when the exact target and agent do not have an override', () => {
+    const overrides = { targetA: { claude: { flags: ['--foo'] } } };
+    expect(getObjectiveLaunchConfigOverride(overrides, 'targetB', 'claude')).toBeNull();
+    expect(getObjectiveLaunchConfigOverride(overrides, 'targetA', 'codex')).toBeNull();
+  });
+
+  it('drops malformed entries rather than throwing', () => {
+    expect(
+      parseObjectiveLaunchConfigOverrides({
+        targetA: { claude: { flags: 'nope' }, codex: { flags: ['ok'] } },
+        targetB: 123
+      })
+    ).toEqual({ targetA: { codex: { flags: ['ok'] } } });
+    expect(parseObjectiveLaunchConfigOverrides('nope')).toEqual({});
   });
 });
 

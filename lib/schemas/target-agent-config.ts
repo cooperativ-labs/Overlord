@@ -2,9 +2,8 @@ import { z } from 'zod';
 
 /**
  * Local launch configuration for a single agent on a single execution target.
- * Mirrors the launch-relevant subset of {@link agentConfigSchema}, but is stored
- * per execution target (in `user_execution_targets.agent_flags`) rather than once
- * per user, because the flags/pre-command a user wants typically differ by target.
+ * Stored per execution target (in `user_execution_targets.agent_configs`) rather
+ * than once per user, because flags/pre-command typically differ by target.
  */
 export const agentLaunchConfigSchema = z.object({
   /** Extra CLI flags appended to the agent launch command on this target. */
@@ -22,11 +21,22 @@ export type AgentLaunchConfigUpdate = Omit<Partial<AgentLaunchConfig>, 'preComma
 
 /**
  * Map of agent type -> launch config for one execution target. Stored as the
- * `agent_flags` jsonb column on `user_execution_targets`.
+ * `agent_configs` jsonb column on `user_execution_targets`.
  */
 export const targetAgentConfigsSchema = z.record(z.string(), agentLaunchConfigSchema).default({});
 
 export type TargetAgentConfigs = z.infer<typeof targetAgentConfigsSchema>;
+
+/**
+ * Objective overrides are keyed by execution target id, then agent/harness key.
+ * A present config is authoritative even when empty; missing target or agent
+ * entries mean "no override, inherit the selected target's config".
+ */
+export const objectiveLaunchConfigOverridesSchema = z
+  .record(z.string(), z.record(z.string(), agentLaunchConfigSchema))
+  .default({});
+
+export type ObjectiveLaunchConfigOverrides = z.infer<typeof objectiveLaunchConfigOverridesSchema>;
 
 /**
  * Safely coerce an arbitrary JSON value (from the DB) into a TargetAgentConfigs,
@@ -45,17 +55,51 @@ export function parseTargetAgentConfigs(raw: unknown): TargetAgentConfigs {
 }
 
 /**
- * Coerce an objective's stored `launch_config` override into an
- * {@link AgentLaunchConfig}, or `null` when there is no override. Unlike the
- * per-target map this is a single agent's config (the objective has one assigned
- * agent). A present-but-empty override (`{ flags: [] }`) is preserved and means
- * the user explicitly wants no flags / pre-command for this objective — callers
- * must NOT fall back to the target config in that case. Never throws.
+ * Coerce an objective's stored `launch_config` override map. Never throws.
  */
-export function parseObjectiveLaunchConfig(raw: unknown): AgentLaunchConfig | null {
-  if (raw === null || raw === undefined) return null;
-  const parsed = agentLaunchConfigSchema.safeParse(raw);
-  return parsed.success ? parsed.data : null;
+export function parseObjectiveLaunchConfigOverrides(raw: unknown): ObjectiveLaunchConfigOverrides {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+
+  const result: ObjectiveLaunchConfigOverrides = {};
+  for (const [targetId, targetValue] of Object.entries(raw as Record<string, unknown>)) {
+    if (
+      !targetId ||
+      !targetValue ||
+      typeof targetValue !== 'object' ||
+      Array.isArray(targetValue)
+    ) {
+      continue;
+    }
+
+    const targetOverrides: TargetAgentConfigs = {};
+    for (const [agentKey, configValue] of Object.entries(targetValue as Record<string, unknown>)) {
+      const parsed = agentLaunchConfigSchema.safeParse(configValue);
+      if (parsed.success) {
+        targetOverrides[agentKey] = parsed.data;
+      }
+    }
+
+    if (Object.keys(targetOverrides).length > 0) {
+      result[targetId] = targetOverrides;
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Resolve a single target+agent objective override. Returns `null` when no
+ * override exists for this exact launch context.
+ */
+export function getObjectiveLaunchConfigOverride(
+  raw: unknown,
+  executionTargetId: string | null | undefined,
+  agentKey: string | null | undefined
+): AgentLaunchConfig | null {
+  const targetId = executionTargetId?.trim();
+  const key = agentKey?.trim();
+  if (!targetId || !key) return null;
+  return parseObjectiveLaunchConfigOverrides(raw)[targetId]?.[key] ?? null;
 }
 
 /**

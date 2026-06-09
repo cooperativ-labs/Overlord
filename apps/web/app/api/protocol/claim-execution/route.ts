@@ -45,12 +45,6 @@ function stringArrayFromParams(params: Json, key: string): string[] {
   return value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
 }
 
-function jsonFromParams(params: Json, key: string): Json | null {
-  if (!isRecord(params)) return null;
-  const value = params[key];
-  return typeof value === 'undefined' ? null : value;
-}
-
 async function resolveWorkingDirectory(
   supabase: ReturnType<typeof createServiceRoleClient>,
   request: ExecutionRequestRow,
@@ -406,15 +400,14 @@ export async function POST(request: Request) {
         userTarget?.terminal_profile ?? null
       );
 
-      // A per-objective override (set from the mobile AgentLaunchFooter) is the
-      // user's explicit choice for this objective and wins over the target's
-      // CliPage config. When present — even with empty values, meaning "no
-      // pre-command / flags for this objective" — the target config is not
-      // consulted. `null` means no override, so we keep the existing precedence
-      // (target config, then request-captured launch_params).
+      // A per-objective override is scoped to the claiming target and assigned
+      // agent. When present — even with empty values, meaning "no pre-command /
+      // flags for this objective" — the target config is not consulted.
       const objectiveOverride = await resolveObjectiveLaunchOverride(
         supabase,
-        claimed.objective_id
+        claimed.objective_id,
+        executionTargetId,
+        claimed.agent_identifier
       );
 
       return NextResponse.json({

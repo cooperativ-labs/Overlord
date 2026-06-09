@@ -703,6 +703,19 @@ function resolveGitRepoRoot(workspacePath) {
   }
 }
 
+// The server caps snapshot.diffStat at 20,000 chars (snapshotContextSchema in
+// lib/overlord/validation.ts). A `git diff --stat` over a large change set can
+// blow past that and make the update POST fail validation. diffstat is purely
+// informational provenance, so truncate it to a safe size before sending.
+const MAX_DIFFSTAT_CHARS = 16_000;
+
+function clampDiffStat(diffStat) {
+  if (typeof diffStat !== 'string' || diffStat.length <= MAX_DIFFSTAT_CHARS) {
+    return diffStat || null;
+  }
+  return `${diffStat.slice(0, MAX_DIFFSTAT_CHARS)}\n… (diffstat truncated; ${diffStat.length} chars total)`;
+}
+
 /**
  * Snapshot the working tree to a hidden ref refs/overlord/checkpoints/<objectiveId>.
  * Captures tracked + untracked + staged + unstaged in one commit-tree object.
@@ -727,9 +740,11 @@ function createLocalCheckpoint({ flags, kind = 'objective', objectiveId, snapsho
       const gitCommitId = runLocalCommand('git', ['-C', repoRoot, 'rev-parse', 'HEAD'], {
         cwd: repoRoot
       }).trim();
-      const diffStat = runLocalCommand('git', ['-C', repoRoot, 'diff', '--stat', 'HEAD'], {
-        cwd: repoRoot
-      }).trim();
+      const diffStat = clampDiffStat(
+        runLocalCommand('git', ['-C', repoRoot, 'diff', '--stat', 'HEAD'], {
+          cwd: repoRoot
+        }).trim()
+      );
       return {
         checkpoint: { diffStat: diffStat || null, kind },
         snapshot: {
@@ -761,9 +776,11 @@ function createLocalCheckpoint({ flags, kind = 'objective', objectiveId, snapsho
   if (existingSha) {
     let diffStat = '';
     try {
-      diffStat = runLocalCommand('git', ['-C', repoRoot, 'diff', '--stat', `${existingSha}^!`], {
-        cwd: repoRoot
-      }).trim();
+      diffStat = clampDiffStat(
+        runLocalCommand('git', ['-C', repoRoot, 'diff', '--stat', `${existingSha}^!`], {
+          cwd: repoRoot
+        }).trim()
+      );
     } catch {
       /* ignore */
     }
@@ -812,9 +829,11 @@ function createLocalCheckpoint({ flags, kind = 'objective', objectiveId, snapsho
     });
     let diffStat = '';
     try {
-      diffStat = runLocalCommand('git', ['-C', repoRoot, 'diff', '--stat', `${commit}^!`], {
-        cwd: repoRoot
-      }).trim();
+      diffStat = clampDiffStat(
+        runLocalCommand('git', ['-C', repoRoot, 'diff', '--stat', `${commit}^!`], {
+          cwd: repoRoot
+        }).trim()
+      );
     } catch {
       /* ignore */
     }
@@ -947,22 +966,31 @@ async function createAndRecordPendingCheckpoints({
       continue;
     }
 
-    await apiPost(
-      platformUrl,
-      bearerToken,
-      localSecret,
-      organizationId,
-      '/api/protocol/update',
-      {
-        sessionKey,
-        ticketId,
-        summary: `Created local git checkpoint for objective ${objectiveId}.`,
-        phase: 'execute',
-        snapshot: checkpointResult.snapshot
-      },
-      timeoutMs
-    );
-    recorded.push(objectiveId);
+    try {
+      await apiPost(
+        platformUrl,
+        bearerToken,
+        localSecret,
+        organizationId,
+        '/api/protocol/update',
+        {
+          sessionKey,
+          ticketId,
+          summary: `Created local git checkpoint for objective ${objectiveId}.`,
+          phase: 'execute',
+          snapshot: checkpointResult.snapshot
+        },
+        timeoutMs
+      );
+      recorded.push(objectiveId);
+    } catch (error) {
+      // A failed checkpoint update must not block the remaining objectives or
+      // the attach itself. The session key is already persisted by the caller.
+      const message = error instanceof Error ? error.message : String(error);
+      process.stderr.write(
+        `[protocol] Failed to record checkpoint for objective ${objectiveId}: ${message}\n`
+      );
+    }
   }
   return recorded;
 }
@@ -1275,25 +1303,45 @@ async function protocolAttach(args) {
     timeoutMs
   );
 
-  const recordedCheckpointObjectiveIds = await createAndRecordPendingCheckpoints({
-    attachData: data,
-    bearerToken,
-    flags,
-    localSecret,
-    organizationId,
-    platformUrl,
-    ticketId,
-    timeoutMs
-  });
+  // Persist the new session key BEFORE any best-effort follow-up work. The
+  // checkpoint step below posts a separate /update call whose payload can be
+  // rejected by the server (e.g. a large diffstat exceeding the size cap). If
+  // that throws, we must not lose the freshly minted session key — otherwise a
+  // stale key from a previous ticket lingers in the persisted session file and
+  // every later `ovld protocol` call in this directory resolves the wrong
+  // session. Persisting first guarantees the new key survives a checkpoint
+  // failure. See ticket 1:1430.
+  const sessionKey = data.session?.sessionKey;
+  if (sessionKey) {
+    persistSession(sessionKey, ticketId);
+  }
+
+  // Best-effort: record local git checkpoints for any pending objectives. This
+  // must never abort the attach or prevent the session key from being persisted
+  // and emitted, so swallow any failure (size limits, network, no git repo).
+  let recordedCheckpointObjectiveIds = [];
+  try {
+    recordedCheckpointObjectiveIds = await createAndRecordPendingCheckpoints({
+      attachData: data,
+      bearerToken,
+      flags,
+      localSecret,
+      organizationId,
+      platformUrl,
+      ticketId,
+      timeoutMs
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    process.stderr.write(`[protocol] Checkpoint recording skipped (attach still succeeded): ${message}\n`);
+  }
   if (recordedCheckpointObjectiveIds.length > 0) {
     data.recordedCheckpointObjectiveIds = recordedCheckpointObjectiveIds;
   }
 
-  const sessionKey = data.session?.sessionKey;
   console.log(JSON.stringify(data, null, 2));
 
   if (sessionKey) {
-    persistSession(sessionKey, ticketId);
     // Emit a machine-readable line for easy shell capture:
     // SESSION_KEY=$(ovld protocol attach --ticket-id ... | grep ^SESSION_KEY= | cut -d= -f2)
     process.stderr.write(`\nSESSION_KEY=${sessionKey}\n`);

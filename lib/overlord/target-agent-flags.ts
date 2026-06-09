@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 import {
   type AgentLaunchConfig,
-  parseObjectiveLaunchConfig,
+  getObjectiveLaunchConfigOverride,
   parseTargetAgentConfigs
 } from '@/lib/schemas/target-agent-config';
 import type { Database } from '@/types/database.types';
@@ -42,7 +42,7 @@ export async function resolveTargetAgentLaunch(
 
   const { data, error } = await supabase
     .from('user_execution_targets')
-    .select('agent_flags')
+    .select('agent_configs')
     .eq('user_id', userId)
     .eq('execution_target_id', executionTargetId)
     .maybeSingle();
@@ -52,7 +52,7 @@ export async function resolveTargetAgentLaunch(
   if (error) return { kind: 'error', error: error.message };
   if (!data) return { kind: 'not_configured' };
 
-  const configs = parseTargetAgentConfigs(data.agent_flags);
+  const configs = parseTargetAgentConfigs(data.agent_configs);
   const config: AgentLaunchConfig | undefined = configs[agentType];
   if (!config) return { kind: 'not_configured' };
 
@@ -66,18 +66,21 @@ export async function resolveTargetAgentLaunch(
 /**
  * Resolve an objective's per-objective launch config override. The mobile
  * AgentLaunchFooter writes this so a single objective can override the execution
- * target's CliPage config. When present (even with empty values) it is the
- * source of truth and the target config must NOT be consulted; `null` means no
- * override and the caller should fall back to the target config.
+ * target's config for one execution target + agent. When present (even with
+ * empty values) it is the source of truth and the target config must NOT be
+ * consulted; `null` means no override and the caller should fall back to the
+ * target config.
  *
  * A lookup failure returns `null` rather than throwing: the override is optional
  * and degrading to the target config is preferable to failing the launch.
  */
 export async function resolveObjectiveLaunchOverride(
   supabase: SupabaseClient<Database>,
-  objectiveId: string | null | undefined
+  objectiveId: string | null | undefined,
+  executionTargetId: string | null | undefined,
+  agentIdentifier: string | null | undefined
 ): Promise<{ flags: string[]; preCommand: string | null } | null> {
-  if (!objectiveId) return null;
+  if (!objectiveId || !executionTargetId || !agentIdentifier?.trim()) return null;
 
   const { data, error } = await supabase
     .from('objectives')
@@ -87,7 +90,11 @@ export async function resolveObjectiveLaunchOverride(
 
   if (error || !data) return null;
 
-  const config = parseObjectiveLaunchConfig(data.launch_config);
+  const config = getObjectiveLaunchConfigOverride(
+    data.launch_config,
+    executionTargetId,
+    agentIdentifier
+  );
   if (!config) return null;
 
   return {

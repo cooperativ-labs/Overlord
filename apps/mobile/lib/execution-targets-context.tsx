@@ -34,7 +34,7 @@ interface ExecutionTargetsContextValue {
   getTargetById: (targetId: string) => ExecutionTarget | null;
   /**
    * Update the per-agent launch config (pre-command + flags) on a target,
-   * persisting to `user_execution_targets.agent_flags` and updating local state
+   * persisting to `user_execution_targets.agent_configs` and updating local state
    * so every surface (chooser, Servers tab) reflects the change immediately.
    */
   updateTargetAgentConfig: (

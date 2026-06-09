@@ -25,7 +25,7 @@ export async function getExecutionTargetAgentConfigsAction(): Promise<
 
   const { data, error } = await supabase
     .from('user_execution_targets')
-    .select('execution_target_id, agent_flags')
+    .select('execution_target_id, agent_configs')
     .eq('user_id', user.id);
 
   if (error) {
@@ -35,7 +35,7 @@ export async function getExecutionTargetAgentConfigsAction(): Promise<
 
   const result: Record<string, TargetAgentConfigs> = {};
   for (const row of data ?? []) {
-    result[row.execution_target_id] = parseTargetAgentConfigs(row.agent_flags);
+    result[row.execution_target_id] = parseTargetAgentConfigs(row.agent_configs);
   }
   return result;
 }
@@ -61,7 +61,7 @@ export async function updateExecutionTargetAgentConfigAction(
 
   const { data: existing, error: readError } = await supabase
     .from('user_execution_targets')
-    .select('agent_flags')
+    .select('agent_configs')
     .eq('user_id', user.id)
     .eq('execution_target_id', executionTargetId)
     .maybeSingle();
@@ -69,7 +69,7 @@ export async function updateExecutionTargetAgentConfigAction(
   if (readError) throw readError;
   if (!existing) throw new Error('Execution target not found.');
 
-  const configs = parseTargetAgentConfigs(existing.agent_flags);
+  const configs = parseTargetAgentConfigs(existing.agent_configs);
   const current = configs[trimmedAgent] ?? agentLaunchConfigSchema.parse({});
   const merged = mergeAgentLaunchConfig(current, config);
 
@@ -80,7 +80,7 @@ export async function updateExecutionTargetAgentConfigAction(
 
   const { error: updateError } = await supabase
     .from('user_execution_targets')
-    .update({ agent_flags: configs })
+    .update({ agent_configs: configs })
     .eq('user_id', user.id)
     .eq('execution_target_id', executionTargetId);
 

@@ -464,7 +464,7 @@ export function AgentModelChooser({
                       )
                   : undefined
             }
-            disabled={disabled || (!overrideMode && !selectedTarget)}
+            disabled={disabled || !selectedTarget}
           />
         </View>
       ) : null}

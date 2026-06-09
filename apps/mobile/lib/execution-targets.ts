@@ -21,7 +21,7 @@ type OrgTargetRow = {
 
 type UserTargetRow = {
   execution_target_id: string;
-  agent_flags: unknown;
+  agent_configs: unknown;
   access_status: string | null;
   default_username: string | null;
 };
@@ -33,7 +33,7 @@ function firstRow(
   return Array.isArray(value) ? (value[0] ?? null) : value;
 }
 
-/** Parse the `user_execution_targets.agent_flags` jsonb into a typed map. */
+/** Parse the `user_execution_targets.agent_configs` jsonb into a typed map. */
 export function parseAgentFlags(value: unknown): Record<string, AgentLaunchConfig> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return {};
@@ -72,7 +72,7 @@ export async function loadExecutionTargets(userId: string): Promise<ExecutionTar
       .order('label', { ascending: true }),
     supabase
       .from('user_execution_targets')
-      .select('execution_target_id, agent_flags, access_status, default_username')
+      .select('execution_target_id, agent_configs, access_status, default_username')
       .eq('user_id', userId)
   ]);
 
@@ -110,7 +110,7 @@ export async function loadExecutionTargets(userId: string): Promise<ExecutionTar
       lastSeenAt: target.last_seen_at,
       accessStatus: userRow?.access_status ?? null,
       defaultUsername: userRow?.default_username ?? null,
-      agentFlags: parseAgentFlags(userRow?.agent_flags)
+      agentFlags: parseAgentFlags(userRow?.agent_configs)
     });
   }
 
@@ -144,7 +144,7 @@ export function mergeAgentLaunchConfig(
 }
 
 /**
- * Serialize a per-target agent config map back into the `agent_flags` jsonb
+ * Serialize a per-target agent config map back into the `agent_configs` jsonb
  * shape, omitting `preCommand` when empty so it matches what the web writes and
  * the runner reads (a missing pre-command, not an explicit null).
  */
@@ -163,7 +163,7 @@ function serializeAgentFlags(
 /**
  * Upsert the launch config for a single agent on a single execution target,
  * preserving the other agents' configs. Reads the latest stored row, merges, and
- * writes it back to `user_execution_targets.agent_flags`. Returns the full,
+ * writes it back to `user_execution_targets.agent_configs`. Returns the full,
  * updated per-agent config map for the target.
  */
 export async function persistTargetAgentConfig(
@@ -178,7 +178,7 @@ export async function persistTargetAgentConfig(
 
   const { data: existing, error: readError } = await supabase
     .from('user_execution_targets')
-    .select('agent_flags')
+    .select('agent_configs')
     .eq('user_id', userId)
     .eq('execution_target_id', executionTargetId)
     .maybeSingle();
@@ -186,13 +186,13 @@ export async function persistTargetAgentConfig(
   if (readError) throw new Error(readError.message);
   if (!existing) throw new Error('Execution target not found for this user.');
 
-  const configs = parseAgentFlags(existing.agent_flags);
+  const configs = parseAgentFlags(existing.agent_configs);
   const current = configs[trimmedAgent] ?? { flags: [], preCommand: null };
   configs[trimmedAgent] = mergeAgentLaunchConfig(current, update);
 
   const { error: updateError } = await supabase
     .from('user_execution_targets')
-    .update({ agent_flags: serializeAgentFlags(configs) })
+    .update({ agent_configs: serializeAgentFlags(configs) })
     .eq('user_id', userId)
     .eq('execution_target_id', executionTargetId);
 

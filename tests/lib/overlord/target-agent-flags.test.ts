@@ -1,6 +1,6 @@
 import { resolveTargetAgentLaunch } from '@/lib/overlord/target-agent-flags';
 
-type Row = { agent_flags: unknown } | null;
+type Row = { agent_configs: unknown } | null;
 
 /** Minimal chainable Supabase stub for the single-row select used by the resolver. */
 function fakeClient(row: Row, error: { message: string } | null = null) {
@@ -15,7 +15,7 @@ function fakeClient(row: Row, error: { message: string } | null = null) {
 describe('resolveTargetAgentLaunch', () => {
   it('returns a configured result for the requested agent', async () => {
     const client = fakeClient({
-      agent_flags: { claude: { flags: ['--x'], preCommand: 'ollama' } }
+      agent_configs: { claude: { flags: ['--x'], preCommand: 'ollama' } }
     });
     expect(await resolveTargetAgentLaunch(client, 'u1', 't1', 'claude')).toEqual({
       kind: 'configured',
@@ -25,7 +25,7 @@ describe('resolveTargetAgentLaunch', () => {
   });
 
   it('returns not_configured when the target has no entry for the agent', async () => {
-    const client = fakeClient({ agent_flags: { codex: { flags: ['--y'] } } });
+    const client = fakeClient({ agent_configs: { codex: { flags: ['--y'] } } });
     expect(await resolveTargetAgentLaunch(client, 'u1', 't1', 'claude')).toEqual({
       kind: 'not_configured'
     });
@@ -35,9 +35,9 @@ describe('resolveTargetAgentLaunch', () => {
     expect(await resolveTargetAgentLaunch(fakeClient(null), 'u1', 't1', 'claude')).toEqual({
       kind: 'not_configured'
     });
-    expect(await resolveTargetAgentLaunch(fakeClient({ agent_flags: {} }), 'u1', 't1', '')).toEqual(
-      { kind: 'not_configured' }
-    );
+    expect(
+      await resolveTargetAgentLaunch(fakeClient({ agent_configs: {} }), 'u1', 't1', '')
+    ).toEqual({ kind: 'not_configured' });
   });
 
   it('returns an error result when the lookup itself fails', async () => {
@@ -49,7 +49,7 @@ describe('resolveTargetAgentLaunch', () => {
   });
 
   it('normalizes a blank pre-command to null', async () => {
-    const client = fakeClient({ agent_flags: { claude: { flags: [], preCommand: '   ' } } });
+    const client = fakeClient({ agent_configs: { claude: { flags: [], preCommand: '   ' } } });
     expect(await resolveTargetAgentLaunch(client, 'u1', 't1', 'claude')).toEqual({
       kind: 'configured',
       flags: [],
@@ -58,7 +58,7 @@ describe('resolveTargetAgentLaunch', () => {
   });
 
   it('treats an explicit empty config as configured so fallback launch params stay disabled', async () => {
-    const client = fakeClient({ agent_flags: { claude: { flags: [] } } });
+    const client = fakeClient({ agent_configs: { claude: { flags: [] } } });
     expect(await resolveTargetAgentLaunch(client, 'u1', 't1', 'claude')).toEqual({
       kind: 'configured',
       flags: [],

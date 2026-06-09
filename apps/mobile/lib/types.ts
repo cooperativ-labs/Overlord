@@ -171,12 +171,10 @@ export interface Objective {
   model_identifier: string | null;
   assigned_agent: AssignedAgent | null;
   /**
-   * Per-objective override of the execution target's agent launch config
-   * (pre-command + flags), set from the AgentLaunchFooter. `null` means no
-   * override (inherit the target config); a present value — even with empty
-   * fields — overrides it for this objective.
+   * Per-objective overrides of execution-target agent launch configs, keyed by
+   * execution target id then agent/harness key. `null` means no overrides.
    */
-  launch_config: AgentLaunchConfig | null;
+  launch_config: ObjectiveLaunchConfigMap | null;
   position: number;
   auto_advance: boolean;
   approval_reason: string | null;
@@ -223,6 +221,8 @@ export interface AgentLaunchConfig {
   /** Tokens prepended before the agent binary (e.g. a container exec wrapper). */
   preCommand: string | null;
 }
+
+export type ObjectiveLaunchConfigMap = Record<string, Record<string, AgentLaunchConfig>>;
 
 /**
  * Partial update for an agent's per-target launch config. An omitted field is

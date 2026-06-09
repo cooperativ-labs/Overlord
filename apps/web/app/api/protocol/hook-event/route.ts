@@ -63,11 +63,13 @@ export async function POST(request: Request) {
     const { organizationId, userId } = parsed.tokenContext;
     const promptLength = prompt?.trim().length ?? 0;
     const shouldSkipInitialSubmit = hookType === 'UserPromptSubmit' && turnIndex === 0;
-    const shouldSkipLegacyLaunchPrompt =
-      hookType === 'UserPromptSubmit' &&
-      turnIndex === 1 &&
-      prompt &&
-      isLikelyOverlordAgentLaunchPrompt(prompt);
+    // A prompt matching the Overlord bootstrap markers is the injected ticket
+    // spec, never a human follow-up — so skip it regardless of turnIndex. The
+    // turn counter is fragile when an agent session id is reused across tickets
+    // (common with AgentPod), which would otherwise mis-record the launch prompt
+    // as a user_follow_up at turnIndex > 0. See ticket 1:1430.
+    const shouldSkipLaunchPrompt =
+      hookType === 'UserPromptSubmit' && !!prompt && isLikelyOverlordAgentLaunchPrompt(prompt);
 
     console.warn('[protocol:hook-event] received hook event', {
       hookType,
@@ -85,11 +87,11 @@ export async function POST(request: Request) {
       });
     }
 
-    // Both the Claude Code and legacy Cursor hooks send the initial injected ticket/objective
-    // prompt as turnIndex 0 (filtered above) but older Cursor builds sent it at turnIndex 1.
-    // This catches that legacy case to prevent mis-recording the launch prompt as user_follow_up.
-    if (shouldSkipLegacyLaunchPrompt) {
-      console.warn('[protocol:hook-event] skipping legacy launch prompt submit', {
+    // Catches the injected launch prompt at any turnIndex (including the legacy
+    // Cursor turnIndex 1 and the AgentPod context-file prompt) so it is never
+    // mis-recorded as user_follow_up.
+    if (shouldSkipLaunchPrompt) {
+      console.warn('[protocol:hook-event] skipping launch prompt submit', {
         rawTicketId,
         turnIndex,
         promptLength
@@ -114,7 +116,7 @@ export async function POST(request: Request) {
       externalSessionId
     });
 
-    if (shouldSkipInitialSubmit || shouldSkipLegacyLaunchPrompt) {
+    if (shouldSkipInitialSubmit || shouldSkipLaunchPrompt) {
       return okResponse();
     }
 

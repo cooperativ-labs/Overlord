@@ -630,6 +630,117 @@ test('revert fetches checkpoint row and restores the local git working tree', as
   }
 });
 
+test('attach persists the new session key even when the checkpoint update fails (ticket 1:1430)', async () => {
+  const previousFetch = global.fetch;
+  const previousOverlordUrl = process.env.OVERLORD_URL;
+  const previousAgentToken = process.env.OVERLORD_ACCESS_TOKEN;
+  const previousOrganizationId = process.env.OVERLORD_ORGANIZATION_ID;
+  const previousTicketId = process.env.TICKET_ID;
+  const previousSessionKey = process.env.SESSION_KEY;
+  const previousWorkspacePath = process.env.OVERLORD_WORKSPACE_PATH;
+  const previousTmpdir = process.env.TMPDIR;
+  const previousLog = console.log;
+  const previousStderrWrite = process.stderr.write;
+
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'ovld-attach-test-'));
+  // Isolate the persisted session file so the test never clobbers a real one.
+  const sessionTmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ovld-attach-session-'));
+  const objectiveId = '99999999-8888-4777-8666-555555555555';
+  const newSessionKey = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
+  const calls = [];
+  const logs = [];
+  const stderr = [];
+  let persisted = null;
+
+  try {
+    git(repo, ['init']);
+    git(repo, ['config', 'user.email', 'test@example.com']);
+    git(repo, ['config', 'user.name', 'Test User']);
+    fs.writeFileSync(path.join(repo, 'file.txt'), 'base\n');
+    git(repo, ['add', 'file.txt']);
+    git(repo, ['commit', '-m', 'base']);
+    // A working-tree change so the checkpoint produces a non-empty diffstat.
+    fs.writeFileSync(path.join(repo, 'file.txt'), 'changed\n');
+
+    process.env.OVERLORD_URL = 'https://www.ovld.ai';
+    process.env.OVERLORD_ACCESS_TOKEN = 'test-agent-token';
+    process.env.OVERLORD_ORGANIZATION_ID = '42';
+    process.env.OVERLORD_WORKSPACE_PATH = repo;
+    process.env.TMPDIR = sessionTmp;
+    delete process.env.SESSION_KEY;
+    delete process.env.TICKET_ID;
+
+    global.fetch = async (url, init = {}) => {
+      const target = String(url);
+      calls.push({ url: target, method: init.method, body: init.body });
+      if (target.includes('/api/protocol/attach')) {
+        return new Response(
+          JSON.stringify({
+            session: { id: 'sess-1', sessionKey: newSessionKey, state: 'attached' },
+            pendingCheckpointObjectiveIds: [objectiveId]
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+      // The follow-up checkpoint update is rejected (e.g. diffstat too large).
+      return new Response(JSON.stringify({ error: 'payload too large' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    };
+    console.log = value => {
+      logs.push(String(value));
+    };
+    process.stderr.write = value => {
+      stderr.push(String(value));
+      return true;
+    };
+
+    // Must NOT throw even though the checkpoint update returns 400.
+    await runProtocolCommand('attach', ['--ticket-id', '1:1430']);
+
+    // Read the persisted session file BEFORE the finally block removes the dir.
+    const sessionFile = path.join(
+      sessionTmp,
+      `.overlord-session-${Buffer.from(process.cwd()).toString('base64url')}`
+    );
+    persisted = JSON.parse(fs.readFileSync(sessionFile, 'utf8'));
+  } finally {
+    global.fetch = previousFetch;
+    console.log = previousLog;
+    process.stderr.write = previousStderrWrite;
+    if (previousOverlordUrl === undefined) delete process.env.OVERLORD_URL;
+    else process.env.OVERLORD_URL = previousOverlordUrl;
+    if (previousAgentToken === undefined) delete process.env.OVERLORD_ACCESS_TOKEN;
+    else process.env.OVERLORD_ACCESS_TOKEN = previousAgentToken;
+    if (previousOrganizationId === undefined) delete process.env.OVERLORD_ORGANIZATION_ID;
+    else process.env.OVERLORD_ORGANIZATION_ID = previousOrganizationId;
+    if (previousWorkspacePath === undefined) delete process.env.OVERLORD_WORKSPACE_PATH;
+    else process.env.OVERLORD_WORKSPACE_PATH = previousWorkspacePath;
+    if (previousTmpdir === undefined) delete process.env.TMPDIR;
+    else process.env.TMPDIR = previousTmpdir;
+    if (previousSessionKey === undefined) delete process.env.SESSION_KEY;
+    else process.env.SESSION_KEY = previousSessionKey;
+    if (previousTicketId === undefined) delete process.env.TICKET_ID;
+    else process.env.TICKET_ID = previousTicketId;
+    fs.rmSync(repo, { recursive: true, force: true });
+    fs.rmSync(sessionTmp, { recursive: true, force: true });
+  }
+
+  // The attach POST succeeded and the checkpoint update was attempted then rejected.
+  assert.ok(calls.some(call => call.url.includes('/api/protocol/attach')));
+  assert.ok(calls.some(call => call.url.includes('/api/protocol/update')));
+
+  // The new session key was persisted to the session file despite the failed checkpoint.
+  assert.ok(persisted, 'expected a persisted session file');
+  assert.equal(persisted.sessionKey, newSessionKey);
+  assert.equal(persisted.ticketId, '1:1430');
+
+  // The attach JSON and SESSION_KEY line were still emitted.
+  assert.match(logs.join('\n'), new RegExp(newSessionKey));
+  assert.match(stderr.join(''), new RegExp(`SESSION_KEY=${newSessionKey}`));
+});
+
 test('request-execution posts local launch payload with repeated flags', async () => {
   const previousFetch = global.fetch;
   const previousOverlordUrl = process.env.OVERLORD_URL;

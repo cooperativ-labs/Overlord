@@ -85,6 +85,35 @@ describe('POST /api/protocol/hook-event', () => {
     );
   });
 
+  it('skips the launch prompt at any turnIndex without recording a follow-up', async () => {
+    const { parseProtocolBody } = jest.requireMock('@/app/api/protocol/_lib');
+    parseProtocolBody.mockResolvedValue({
+      ok: true,
+      data: {
+        hookType: 'UserPromptSubmit',
+        ticketId: '1:1333',
+        // AgentPod context-file launch prompt arriving at a reused session's turnIndex > 1.
+        prompt:
+          'Begin working on this ticket.\n\nRead the Overlord launch context from ' +
+          '/tmp/overlord-1-1333-context.md before taking action. Follow the ticket workflow ' +
+          'and objective described in that file.',
+        turnIndex: 4,
+        sessionKey: SESSION_KEY,
+        externalSessionId: 'claude-session-123'
+      },
+      tokenContext: { organizationId: ORG_ID, userId: USER_ID }
+    });
+
+    const supabase = buildSupabase();
+    const { createServiceRoleClient } = jest.requireMock('@/supabase/utils/service-role');
+    createServiceRoleClient.mockReturnValue(supabase);
+
+    const response = await POST(new Request('http://localhost', { method: 'POST' }));
+
+    expect(response.status).toBe(200);
+    expect(supabase.ticketEventInsert.insert).not.toHaveBeenCalled();
+  });
+
   it('persists externalSessionId even when the initial launch prompt event is skipped', async () => {
     const { parseProtocolBody } = jest.requireMock('@/app/api/protocol/_lib');
     parseProtocolBody.mockResolvedValue({

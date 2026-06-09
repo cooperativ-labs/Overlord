@@ -34,6 +34,10 @@ function normalizeExternalSessionId(value: unknown): string | null {
 /** Same contract as `lib/overlord/is-overlord-agent-launch-prompt.ts` (kept in sync for Deno). */
 function isLikelyOverlordAgentLaunchPrompt(prompt: string): boolean {
   const p = prompt.trim();
+  // Context-file bootstrap markers (AgentPod / context-file launch) — checked
+  // before the length guard because that prompt is short.
+  if (p.includes('Read the Overlord launch context from')) return true;
+  if (p.includes('Follow the ticket workflow and objective described in that file')) return true;
   if (p.length < 80) return false;
   if (p.includes('# Overlord Agent Instructions')) return true;
   if (p.includes('You are an AI coding agent working on ticket') && p.includes('## Task')) {
@@ -57,9 +61,12 @@ export async function handleRecordHookEvent(
     turnIndex
   } = args;
   const shouldSkipInitialSubmit = hookType === 'UserPromptSubmit' && turnIndex === 0;
-  const shouldSkipLegacyLaunchPrompt =
+  // A prompt matching the Overlord bootstrap markers is the injected ticket spec,
+  // never a human follow-up — skip it regardless of turnIndex. The turn counter is
+  // fragile when an agent session id is reused across tickets (common with AgentPod).
+  // See ticket 1:1430.
+  const shouldSkipLaunchPrompt =
     hookType === 'UserPromptSubmit' &&
-    turnIndex === 1 &&
     typeof prompt === 'string' &&
     isLikelyOverlordAgentLaunchPrompt(prompt);
 
@@ -80,10 +87,10 @@ export async function handleRecordHookEvent(
     }
   }
 
-  // Both the Claude Code and legacy Cursor hooks send the initial injected ticket/objective
-  // prompt as turnIndex 0 but older Cursor builds sent it at turnIndex 1. This catches both
-  // cases to prevent mis-recording the launch prompt as user_follow_up.
-  if (shouldSkipInitialSubmit || shouldSkipLegacyLaunchPrompt) {
+  // Catches the injected launch prompt at any turnIndex (initial turn 0, the legacy
+  // Cursor turn 1, and the AgentPod context-file prompt) so it is never mis-recorded
+  // as user_follow_up.
+  if (shouldSkipInitialSubmit || shouldSkipLaunchPrompt) {
     return toolOk({ ok: true });
   }
 

@@ -18,8 +18,9 @@ import { useTicketRealtime } from '@/lib/hooks/use-ticket-realtime';
 import { Ionicons } from '@/lib/icons';
 import { buildCliLaunchCommand } from '@/lib/launch-commands';
 import {
-  parseObjectiveLaunchConfig,
-  serializeObjectiveLaunchConfig
+  getObjectiveLaunchConfigOverride,
+  serializeObjectiveLaunchConfig,
+  upsertObjectiveLaunchConfigOverride
 } from '@/lib/objective-launch-config';
 import { resolveLaunchOAuthSession, resolvePlatformUrl } from '@/lib/platform';
 import { queueTicketExecution } from '@/lib/queue-execution';
@@ -74,6 +75,8 @@ export default function TicketDetailScreen() {
   // panel is mounted. Fall back to the objective's already-assigned agent so the
   // queue button is enabled without forcing the user to open the chooser.
   const effectiveAssignedSelection = resolvedAssignedSelection ?? assignedSelection;
+  const effectiveAssignedAgentKey =
+    effectiveAssignedSelection?.agent ?? assignedSelection?.agent ?? null;
   const [expandedObjectiveIds, setExpandedObjectiveIds] = useState<string[]>([]);
   const [queueing, setQueueing] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -378,12 +381,17 @@ export default function TicketDetailScreen() {
     }
   }, [draftObjectives, selectedDraftObjectiveId]);
 
-  // The per-objective launch config override seeded into the AgentLaunchFooter.
-  // `null` means no override yet, so the footer falls back to the selected
-  // target's config as the inherited default.
+  // The per-objective launch config override for the current target + agent.
+  // `null` means no override yet, so the footer inherits the selected target's
+  // config as the default.
   const assignedLaunchOverride = useMemo<AgentLaunchConfig | null>(
-    () => parseObjectiveLaunchConfig(activeDraftObjective?.launch_config ?? null),
-    [activeDraftObjective?.launch_config]
+    () =>
+      getObjectiveLaunchConfigOverride({
+        value: activeDraftObjective?.launch_config ?? null,
+        executionTargetId: selectedTarget?.id ?? null,
+        agentKey: effectiveAssignedAgentKey
+      }),
+    [activeDraftObjective?.launch_config, effectiveAssignedAgentKey, selectedTarget?.id]
   );
 
   const filteredEvents = useMemo(() => {
@@ -667,26 +675,53 @@ export default function TicketDetailScreen() {
   }
 
   async function handleLaunchOverrideChange(update: AgentLaunchConfigUpdate) {
-    if (!ticket || !activeDraftObjective) return;
+    if (!ticket) return;
 
-    const objectiveId = activeDraftObjective.id;
-    const agentKey = (effectiveAssignedSelection ?? assignedSelection)?.agent ?? null;
+    const executionTargetId = selectedTarget?.id ?? null;
+    const agentKey = effectiveAssignedAgentKey;
+    if (!executionTargetId) {
+      Alert.alert(
+        'Execution target required',
+        'Select an execution target before overriding launch config.'
+      );
+      return;
+    }
+    if (!agentKey) {
+      Alert.alert('Agent required', 'Select an agent before overriding launch config.');
+      return;
+    }
+
+    const objectiveId = await ensureDraftObjectiveId();
+    if (!objectiveId) return;
 
     // Seed a first edit from what the footer currently shows: the existing
     // override if any, else the selected target's config for this agent (the
     // inherited CliPage default). Merging the partial update onto that base
     // captures the field the user did NOT touch so the override matches the UI.
-    const existingOverride = parseObjectiveLaunchConfig(activeDraftObjective.launch_config);
-    const targetDefault: AgentLaunchConfig = (agentKey
-      ? selectedTarget?.agentFlags[agentKey]
-      : null) ?? { flags: [], preCommand: null };
+    const existingLaunchConfig =
+      activeDraftObjective?.id === objectiveId ? activeDraftObjective.launch_config : null;
+    const existingOverride = getObjectiveLaunchConfigOverride({
+      value: existingLaunchConfig,
+      executionTargetId,
+      agentKey
+    });
+    const targetDefault: AgentLaunchConfig = selectedTarget?.agentFlags[agentKey] ?? {
+      flags: [],
+      preCommand: null
+    };
     const nextOverride = mergeAgentLaunchConfig(existingOverride ?? targetDefault, update);
+    const nextLaunchConfig = upsertObjectiveLaunchConfigOverride({
+      value: existingLaunchConfig,
+      executionTargetId,
+      agentKey,
+      config: nextOverride
+    });
 
     // Optimistically reflect the override so the footer (and a later reopen)
     // shows it without waiting for the round trip.
     setObjectives(current =>
       current.map(objective =>
-        objective.id === objectiveId ? { ...objective, launch_config: nextOverride } : objective
+        objective.id === objectiveId ? { ...objective, launch_config: nextLaunchConfig } : objective
       )
     );
 
@@ -694,7 +729,7 @@ export default function TicketDetailScreen() {
       const supabase = getSupabase();
       const { error } = await supabase
         .from('objectives')
-        .update({ launch_config: serializeObjectiveLaunchConfig(nextOverride) })
+        .update({ launch_config: serializeObjectiveLaunchConfig(nextLaunchConfig) })
         .eq('id', objectiveId);
 
       if (error) {
@@ -845,7 +880,7 @@ export default function TicketDetailScreen() {
     if (activeDraftObjective?.id) return activeDraftObjective.id;
     const trimmed = objectiveDraft.trim();
     if (!trimmed) {
-      Alert.alert('Objective required', 'Enter an objective before attaching files.');
+      Alert.alert('Objective required', 'Enter an objective before saving changes.');
       return null;
     }
     const supabase = getSupabase();

@@ -29,4 +29,23 @@ You are an AI coding agent working on ticket **1:2** via Overlord.
 `.trim();
     expect(isLikelyOverlordAgentLaunchPrompt(text)).toBe(true);
   });
+
+  it('detects the context-file launch prompt used by AgentPod', () => {
+    const text =
+      'Begin working on this ticket.\n\nRead the Overlord launch context from ' +
+      '/Users/jake/Development/Cooperativ/Overlord/.overlord/tmp/overlord-1-1430-context.md ' +
+      'before taking action. Follow the ticket workflow and objective described in that file.';
+    expect(isLikelyOverlordAgentLaunchPrompt(text)).toBe(true);
+  });
+
+  it('detects the context-file markers even when the prompt is short', () => {
+    expect(
+      isLikelyOverlordAgentLaunchPrompt('Read the Overlord launch context from /tmp/x-context.md')
+    ).toBe(true);
+    expect(
+      isLikelyOverlordAgentLaunchPrompt(
+        'Follow the ticket workflow and objective described in that file.'
+      )
+    ).toBe(true);
+  });
 });
