@@ -1,5 +1,27 @@
+# Synctrain user-defined ignore file
 // Syncthing ignore patterns (gitignore syntax)
-// Keep node_modules local — run yarn install on each machine instead.
-
+// Standard
 node_modules/
 **/node_modules/
+.next/
+release/
+**/release/
+**/ios/Pods/
+// iOS / Xcode (apps/mobile/ios) — keep build artifacts local
+.DS_Store
+**/ios/build/
+*.pbxuser
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+xcuserdata
+*.xccheckout
+*.moved-aside
+DerivedData
+*.hmap
+*.ipa
+*.xcuserstate
+**/ios/project.xcworkspace
+.xcode.env.local
+*.jsbundle
+// Next.js build cache

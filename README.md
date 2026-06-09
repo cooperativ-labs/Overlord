@@ -21,11 +21,9 @@ The result is a Kanban-style workflow where humans plan and agents execute, with
 | Plans, tickets, and code drift apart                         | One ticket holds many ordered objectives sharing the same context and artifacts |
 
 
-### Architecture
+## Core Concepts
 
 **Key relationship:** one **objective** maps to one **agent session**. A **ticket** is home to one or more objectives plus their shared context. Tickets live inside a **project**, and a project is mapped to a **git repository** (and optionally a working device).
-
-## Core Concepts
 
 
 ```mermaid

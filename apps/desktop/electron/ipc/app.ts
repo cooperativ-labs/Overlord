@@ -3,7 +3,7 @@ import { app, BrowserWindow, ipcMain, Notification, shell } from 'electron';
 import os from 'node:os';
 import path from 'node:path';
 
-import { readOrCreateCanonicalDeviceFingerprint } from '../../../../lib/overlord/device-identity.mjs';
+import { readOrCreateCanonicalDeviceFingerprint } from '../../../../packages/overlord-cli/bin/_cli/device-identity.mjs';
 import {
   type AgentBundleAgent,
   getAgentBundleStatus,

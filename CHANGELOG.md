@@ -2,6 +2,34 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2606090710.0] - 2026-06-09:07:10
+
+### Added
+- None.
+
+### Fixed
+- None.
+
+### Changed
+- None.
+
+### Security
+- None.
+
+### Removed
+- Remove root-level **`bin/ovld.mjs`** and **`bin/_agent-launcher-cli.mjs`** dev shims; invoke the CLI via workspace **`package.json`** bin aliases pointing at **`packages/overlord-cli/bin/ovld.mjs`**.
+- Remove stale agent-launch pipeline code reviews and completed feature plans from the repository.
+
+### Refactor
+- Colocate device fingerprint read/create/migrate logic in **`packages/overlord-cli/bin/_cli/device-identity.mjs`** (replacing **`lib/overlord/device-identity.mjs`**) so **`ovld runner`** and Desktop **`app:get-device-identity`** import the same module from the CLI package.
+
+### Chore
+- Expand Syncthing **`.stignore`** with iOS/Xcode build artifacts, **`.next/`**, and **`release/`** directories so local build outputs stay off synced machines.
+- Regenerate iOS Xcode project references after CocoaPods sync.
+
+### Documentation
+- Merge the README **Architecture** section under **Core Concepts** for a simpler top-level outline.
+
 ## [0.2606081442.0] - 2026-06-08:14:42
 
 ### Added

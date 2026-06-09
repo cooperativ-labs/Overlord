@@ -3,7 +3,7 @@
 import { execFileSync, spawn } from 'node:child_process';
 import os from 'node:os';
 
-import { readOrCreateCanonicalDeviceFingerprintSync } from '../../../../lib/overlord/device-identity.mjs';
+import { readOrCreateCanonicalDeviceFingerprintSync } from './device-identity.mjs';
 
 const OVLD_ENTRY = process.argv[1];
 const DEFAULT_TMUX_COMMAND = 'tmux new-session bash {script}';
