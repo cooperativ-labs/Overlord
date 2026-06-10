@@ -7,279 +7,17 @@ import type {
   BoardScope,
   BoardStatus
 } from '@/lib/client-data/tickets/board-types';
-import {
-  getScheduledTicketVisibilityWindow,
-  mergeRowsById
-} from '@/lib/helpers/scheduled-ticket-visibility';
-import { parseObjectiveAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
-import { isDraftObjectiveWithText } from '@/lib/helpers/tickets';
+import { getScheduledTicketVisibilityWindow } from '@/lib/helpers/scheduled-ticket-visibility';
 import { createClientForRequest } from '@/supabase/utils/server';
-import type { Database } from '@/types/database.types';
-import type { TicketAssignee } from '@/types/tickets';
 
-import type { ServerSupabase } from './internals';
-
-const TICKET_BOARD_SELECT =
-  'id,ticket_id,ticket_sequence,title,due_datetime,for_human,status,priority,is_read,updated_at,board_position,organization_id,project_id,everhour_task_id,schedule_id,delegate,assigned_member,organization:organizations(name),project:projects(name,color,everhour_project_id)';
-const COMPLETE_TICKETS_PAGE_SIZE = 20;
-const ALL_TICKETS_PAGE_SIZE = 1000;
-
-type RawBoardTicket = {
-  id: string;
-  ticket_id: string | null;
-  ticket_sequence: number;
-  title: string | null;
-  due_datetime: string | null;
-  for_human: boolean;
-  status: string;
-  priority: string;
-  is_read: boolean;
-  updated_at: string;
-  board_position: number;
-  organization_id: number;
-  project_id: string | null;
-  everhour_task_id: string | null;
-  schedule_id: number | null;
-  delegate: string | null;
-  assigned_member: string | null;
-  organization: { name: string } | Array<{ name: string }> | null;
-  project:
-    | { name: string; color: string; everhour_project_id: string | null }
-    | Array<{ name: string; color: string; everhour_project_id: string | null }>
-    | null;
-};
-
-/**
- * Resolve the assignee display info (name/username/avatar) for a set of tickets.
- *
- * tickets.assigned_member stores a members.id ([orgid]:[username]); the avatar
- * and name live on profiles, which co-members cannot read directly. We go
- * through get_org_member_directory — a SECURITY DEFINER RPC that returns only
- * the safe display columns — once per distinct organization, and build a
- * memberId -> assignee map the card renderers can consume.
- */
-async function buildTicketAssigneeMap(
-  supabase: ServerSupabase,
-  tickets: Pick<RawBoardTicket, 'assigned_member' | 'organization_id'>[]
-): Promise<Map<string, TicketAssignee>> {
-  const assigneeMap = new Map<string, TicketAssignee>();
-  const organizationIds = new Set<number>();
-  for (const ticket of tickets) {
-    if (ticket.assigned_member) {
-      organizationIds.add(ticket.organization_id);
-    }
-  }
-  if (organizationIds.size === 0) {
-    return assigneeMap;
-  }
-
-  type DirectoryRow =
-    Database['public']['Functions']['get_org_member_directory']['Returns'][number];
-
-  const directories = await Promise.all(
-    [...organizationIds].map(orgId => supabase.rpc('get_org_member_directory', { org_id: orgId }))
-  );
-
-  for (const { data } of directories) {
-    for (const row of (data ?? []) as DirectoryRow[]) {
-      assigneeMap.set(row.member_id, {
-        memberId: row.member_id,
-        name: row.name ?? null,
-        username: row.username ?? null,
-        imageUrl: row.image_url ?? null
-      });
-    }
-  }
-
-  return assigneeMap;
-}
-
-function mapBoardTicket(
-  raw: RawBoardTicket,
-  latestObjectiveAgent: string | null = null,
-  latestObjectiveAssignedAgent: Database['public']['Tables']['objectives']['Row']['assigned_agent'] = null,
-  hasExecutingObjective = false,
-  hasDraftObjectiveWithText = false,
-  assignee: TicketAssignee | null = null
-) {
-  const p = Array.isArray(raw.project) ? raw.project[0] : raw.project;
-  const org = Array.isArray(raw.organization) ? raw.organization[0] : raw.organization;
-  return {
-    id: raw.id,
-    ticket_id: raw.ticket_id,
-    ticket_sequence: raw.ticket_sequence,
-    title: raw.title,
-    objective: null,
-    due_datetime: raw.due_datetime,
-    for_human: raw.for_human,
-    status: raw.status,
-    priority: raw.priority,
-    assigned_agent: parseObjectiveAssignedAgent(latestObjectiveAssignedAgent),
-    latest_objective_agent: latestObjectiveAgent,
-    is_read: raw.is_read,
-    updated_at: raw.updated_at,
-    board_position: raw.board_position,
-    organization_id: raw.organization_id,
-    project_id: raw.project_id,
-    everhour_task_id: raw.everhour_task_id,
-    schedule_id: raw.schedule_id,
-    delegate: raw.delegate,
-    assigned_member: raw.assigned_member,
-    assignee,
-    organization_name: org?.name ?? null,
-    project_name: p?.name ?? (raw.project_id ? null : 'Inbox'),
-    project_color: p?.color ?? null,
-    project_everhour_project_id: p?.everhour_project_id ?? null,
-    agent_session_state: null,
-    running_agent: null,
-    has_executing_objective: hasExecutingObjective,
-    waiting_for_response_at: null as string | null,
-    has_unopened_waiting_response: false,
-    objectives_executed_count: 0,
-    has_draft_objective_with_text: hasDraftObjectiveWithText
-  };
-}
-
-async function loadBoardTicketsForStatus(
-  supabase: ServerSupabase,
-  {
-    status,
-    statusType,
-    organizationId,
-    projectId,
-    window
-  }: {
-    status: string;
-    statusType?: string;
-    organizationId?: number;
-    projectId?: string;
-    window: { startIso: string; endIso: string } | null;
-  }
-): Promise<{
-  tickets: RawBoardTicket[];
-  pageInfo: { cutoff: string | null; hasMore: boolean };
-}> {
-  if (statusType !== 'complete') {
-    const rows = await loadAllBoardTicketsForStatus(supabase, {
-      status,
-      organizationId,
-      projectId
-    });
-    return {
-      tickets: rows,
-      pageInfo: {
-        cutoff: null,
-        hasMore: false
-      }
-    };
-  }
-
-  let recentQuery = supabase
-    .from('tickets')
-    .select(TICKET_BOARD_SELECT)
-    .eq('status', status)
-    .order('board_position', { ascending: true })
-    .limit(COMPLETE_TICKETS_PAGE_SIZE);
-
-  if (organizationId !== undefined) {
-    recentQuery = recentQuery.eq('organization_id', organizationId);
-  }
-  if (projectId !== undefined) {
-    recentQuery = recentQuery.eq('project_id', projectId);
-  }
-
-  const { data: recentTickets, error: recentError } = await recentQuery;
-  if (recentError) {
-    throw new Error(recentError.message);
-  }
-
-  if (!window) {
-    const rows = (recentTickets ?? []) as RawBoardTicket[];
-    return {
-      tickets: rows,
-      pageInfo: {
-        cutoff: rows.at(-1)?.updated_at ?? null,
-        hasMore: rows.length === COMPLETE_TICKETS_PAGE_SIZE
-      }
-    };
-  }
-
-  let scheduledQuery = supabase
-    .from('tickets')
-    .select(TICKET_BOARD_SELECT)
-    .eq('status', status)
-    .not('schedule_id', 'is', null)
-    .gte('due_datetime', window.startIso)
-    .lte('due_datetime', window.endIso)
-    .order('due_datetime', { ascending: true })
-    .limit(100);
-
-  if (organizationId !== undefined) {
-    scheduledQuery = scheduledQuery.eq('organization_id', organizationId);
-  }
-  if (projectId !== undefined) {
-    scheduledQuery = scheduledQuery.eq('project_id', projectId);
-  }
-
-  const { data: scheduledTickets, error: scheduledError } = await scheduledQuery;
-  if (scheduledError) {
-    throw new Error(scheduledError.message);
-  }
-
-  const recentRows = (recentTickets ?? []) as RawBoardTicket[];
-  const scheduledRows = (scheduledTickets ?? []) as RawBoardTicket[];
-  return {
-    tickets: mergeRowsById(recentRows, scheduledRows),
-    pageInfo: {
-      cutoff: recentRows.at(-1)?.updated_at ?? null,
-      hasMore: recentRows.length === COMPLETE_TICKETS_PAGE_SIZE
-    }
-  };
-}
-
-async function loadAllBoardTicketsForStatus(
-  supabase: ServerSupabase,
-  {
-    status,
-    organizationId,
-    projectId
-  }: {
-    status: string;
-    organizationId?: number;
-    projectId?: string;
-  }
-): Promise<RawBoardTicket[]> {
-  const rows: RawBoardTicket[] = [];
-  let offset = 0;
-
-  while (true) {
-    let query = supabase
-      .from('tickets')
-      .select(TICKET_BOARD_SELECT)
-      .eq('status', status)
-      .order('board_position', { ascending: true })
-      .range(offset, offset + ALL_TICKETS_PAGE_SIZE - 1);
-
-    if (organizationId !== undefined) {
-      query = query.eq('organization_id', organizationId);
-    }
-    if (projectId !== undefined) {
-      query = query.eq('project_id', projectId);
-    }
-
-    const { data, error } = await query;
-    if (error) {
-      throw new Error(error.message);
-    }
-
-    const batch = (data ?? []) as RawBoardTicket[];
-    rows.push(...batch);
-    if (batch.length < ALL_TICKETS_PAGE_SIZE) {
-      return rows;
-    }
-    offset += ALL_TICKETS_PAGE_SIZE;
-  }
-}
+import {
+  type BoardSnapshotTicket,
+  COMPLETE_TICKETS_PAGE_SIZE,
+  enrichBoardTickets,
+  loadTicketBoardSnapshot,
+  type RawBoardTicket,
+  TICKET_BOARD_SELECT
+} from './board-snapshot';
 
 export async function getTicketStatusesAction(organizationId?: number): Promise<BoardStatus[]> {
   const supabase = await createClientForRequest();
@@ -309,7 +47,6 @@ export async function getTicketBoardBootstrapAction(
   const supabase = await createClientForRequest();
   const organizationId = scope.organizationId;
   const projectId = scope.kind === 'project' ? scope.projectId : undefined;
-  const statuses = await getTicketStatusesAction(organizationId);
   const {
     data: { user }
   } = await supabase.auth.getUser();
@@ -319,112 +56,30 @@ export async function getTicketBoardBootstrapAction(
   const scheduledWindow =
     dataset === 'calendar' ? null : getScheduledTicketVisibilityWindow(scheduledVisibilityDays);
 
-  let rawTickets: RawBoardTicket[];
-  let columnPageInfo: Record<string, { cutoff: string | null; hasMore: boolean }> | undefined;
+  const snapshot = await loadTicketBoardSnapshot(supabase, {
+    organizationId,
+    projectId,
+    dataset: dataset === 'calendar' ? 'calendar' : 'board',
+    scheduledWindow,
+    userId: user?.id ?? null
+  });
 
-  if (dataset === 'calendar') {
-    let query = supabase
-      .from('tickets')
-      .select(TICKET_BOARD_SELECT)
-      .not('due_datetime', 'is', null)
-      .order('due_datetime', { ascending: true })
-      .limit(500);
-
-    if (organizationId !== undefined) {
-      query = query.eq('organization_id', organizationId);
-    }
-    if (projectId !== undefined) {
-      query = query.eq('project_id', projectId);
-    }
-
-    const { data, error } = await query;
-    if (error) {
-      throw new Error(error.message);
-    }
-
-    rawTickets = (data ?? []) as RawBoardTicket[];
-  } else {
-    const ticketResults = await Promise.all(
-      statuses.map(status =>
-        loadBoardTicketsForStatus(supabase, {
-          status: status.name,
-          statusType: status.status_type,
-          organizationId,
-          projectId,
-          window: scheduledWindow
-        })
-      )
-    );
-
-    rawTickets = ticketResults.flatMap(result => result.tickets);
-    columnPageInfo = Object.fromEntries(
-      statuses.map((status, index) => [
-        status.name,
-        ticketResults[index]?.pageInfo ?? { cutoff: null, hasMore: false }
-      ])
-    );
+  // Background refetches replace the cached board state wholesale, so partial
+  // data must fail loudly instead of silently dropping columns.
+  if (snapshot.statusesError) {
+    throw new Error('Failed to load ticket statuses');
   }
-  const ticketIds = rawTickets.map(ticket => ticket.id);
-  const latestObjectiveAgentByTicket = new Map<string, string | null>();
-  const latestObjectiveAssignedAgentByTicket = new Map<
-    string,
-    Database['public']['Tables']['objectives']['Row']['assigned_agent']
-  >();
-  const executingObjectiveByTicket = new Set<string>();
-  const hasDraftObjectiveWithTextByTicket = new Set<string>();
-
-  if (ticketIds.length > 0) {
-    const { data: objectives, error: objectivesError } = await supabase
-      .from('objectives')
-      .select('ticket_id,agent_identifier,assigned_agent,state,objective')
-      .in('ticket_id', ticketIds)
-      .order('created_at', { ascending: false });
-
-    if (objectivesError) throw new Error(objectivesError.message);
-
-    for (const objective of (objectives ?? []) as Array<{
-      ticket_id: string;
-      agent_identifier: string | null;
-      assigned_agent: Database['public']['Tables']['objectives']['Row']['assigned_agent'];
-      state: string | null;
-      objective: string | null;
-    }>) {
-      if (!latestObjectiveAgentByTicket.has(objective.ticket_id)) {
-        latestObjectiveAgentByTicket.set(objective.ticket_id, objective.agent_identifier ?? null);
-      }
-      // Use the most recently created objective that has a non-null assigned_agent, so that
-      // a newly created empty draft without an assigned_agent doesn't shadow the actual selection.
-      if (
-        !latestObjectiveAssignedAgentByTicket.has(objective.ticket_id) &&
-        objective.assigned_agent !== null
-      ) {
-        latestObjectiveAssignedAgentByTicket.set(objective.ticket_id, objective.assigned_agent);
-      }
-      if (objective.state === 'executing') {
-        executingObjectiveByTicket.add(objective.ticket_id);
-      }
-      if (isDraftObjectiveWithText(objective)) {
-        hasDraftObjectiveWithTextByTicket.add(objective.ticket_id);
-      }
-    }
+  if (snapshot.ticketsError) {
+    throw snapshot.ticketsError instanceof Error
+      ? snapshot.ticketsError
+      : new Error('Failed to load tickets');
   }
-
-  const assigneeByMemberId = await buildTicketAssigneeMap(supabase, rawTickets);
 
   return {
     scope,
-    statuses,
-    tickets: rawTickets.map(ticket =>
-      mapBoardTicket(
-        ticket,
-        latestObjectiveAgentByTicket.get(ticket.id) ?? null,
-        latestObjectiveAssignedAgentByTicket.get(ticket.id) ?? null,
-        executingObjectiveByTicket.has(ticket.id),
-        hasDraftObjectiveWithTextByTicket.has(ticket.id),
-        ticket.assigned_member ? (assigneeByMemberId.get(ticket.assigned_member) ?? null) : null
-      )
-    ),
-    columnPageInfo
+    statuses: snapshot.statuses,
+    tickets: snapshot.tickets,
+    columnPageInfo: snapshot.columnPageInfo
   };
 }
 
@@ -438,7 +93,7 @@ export async function loadMoreTicketsAction({
   organizationId?: number;
   projectId?: string;
   beforeDate: string;
-}): Promise<{ tickets: ReturnType<typeof mapBoardTicket>[] }> {
+}): Promise<{ tickets: BoardSnapshotTicket[] }> {
   const supabase = await createClientForRequest();
 
   let query = supabase
@@ -447,7 +102,7 @@ export async function loadMoreTicketsAction({
     .eq('status', status)
     .lt('updated_at', beforeDate)
     .order('updated_at', { ascending: false })
-    .limit(20);
+    .limit(COMPLETE_TICKETS_PAGE_SIZE);
 
   if (organizationId !== undefined) {
     query = query.eq('organization_id', organizationId);
@@ -456,92 +111,12 @@ export async function loadMoreTicketsAction({
     query = query.eq('project_id', projectId);
   }
 
-  const { data, error } = await query;
+  const [{ data, error }, userResult] = await Promise.all([query, supabase.auth.getUser()]);
   if (error) throw new Error(error.message);
 
-  const tickets = (data ?? []) as RawBoardTicket[];
-  const ticketIds = tickets.map(ticket => ticket.id);
-  const latestObjectiveAgentByTicket = new Map<string, string | null>();
-  const latestObjectiveAssignedAgentByTicket = new Map<
-    string,
-    Database['public']['Tables']['objectives']['Row']['assigned_agent']
-  >();
-  const executingObjectiveByTicket = new Set<string>();
-  const hasDraftObjectiveWithTextByTicket = new Set<string>();
-  const waitingLatestByTicket = new Map<string, string>();
+  const tickets = await enrichBoardTickets(supabase, (data ?? []) as RawBoardTicket[], {
+    userId: userResult.data.user?.id ?? null
+  });
 
-  if (ticketIds.length > 0) {
-    const [
-      { data: objectives, error: objectivesError },
-      { data: waitingQuestions, error: waitingQuestionsError }
-    ] = await Promise.all([
-      supabase
-        .from('objectives')
-        .select('ticket_id,agent_identifier,assigned_agent,state,objective')
-        .in('ticket_id', ticketIds)
-        .order('created_at', { ascending: false }),
-      supabase
-        .from('ticket_events')
-        .select('ticket_id,created_at')
-        .in('ticket_id', ticketIds)
-        .eq('event_type', 'question')
-        .eq('is_blocking', true)
-        .order('created_at', { ascending: false })
-    ]);
-
-    if (objectivesError) throw new Error(objectivesError.message);
-    if (waitingQuestionsError) throw new Error(waitingQuestionsError.message);
-
-    for (const objective of (objectives ?? []) as Array<{
-      ticket_id: string;
-      agent_identifier: string | null;
-      assigned_agent: Database['public']['Tables']['objectives']['Row']['assigned_agent'];
-      state: string | null;
-      objective: string | null;
-    }>) {
-      if (!latestObjectiveAgentByTicket.has(objective.ticket_id)) {
-        latestObjectiveAgentByTicket.set(objective.ticket_id, objective.agent_identifier ?? null);
-      }
-      // Use the most recently created objective that has a non-null assigned_agent, so that
-      // a newly created empty draft without an assigned_agent doesn't shadow the actual selection.
-      if (
-        !latestObjectiveAssignedAgentByTicket.has(objective.ticket_id) &&
-        objective.assigned_agent !== null
-      ) {
-        latestObjectiveAssignedAgentByTicket.set(objective.ticket_id, objective.assigned_agent);
-      }
-      if (objective.state === 'executing') {
-        executingObjectiveByTicket.add(objective.ticket_id);
-      }
-      if (isDraftObjectiveWithText(objective)) {
-        hasDraftObjectiveWithTextByTicket.add(objective.ticket_id);
-      }
-    }
-
-    for (const question of (waitingQuestions ?? []) as Array<{
-      ticket_id: string;
-      created_at: string;
-    }>) {
-      if (!waitingLatestByTicket.has(question.ticket_id)) {
-        waitingLatestByTicket.set(question.ticket_id, question.created_at);
-      }
-    }
-  }
-
-  const assigneeByMemberId = await buildTicketAssigneeMap(supabase, tickets);
-
-  return {
-    tickets: tickets.map(ticket => {
-      const mapped = mapBoardTicket(
-        ticket,
-        latestObjectiveAgentByTicket.get(ticket.id) ?? null,
-        latestObjectiveAssignedAgentByTicket.get(ticket.id) ?? null,
-        executingObjectiveByTicket.has(ticket.id),
-        hasDraftObjectiveWithTextByTicket.has(ticket.id),
-        ticket.assigned_member ? (assigneeByMemberId.get(ticket.assigned_member) ?? null) : null
-      );
-      const waitingAt = waitingLatestByTicket.get(ticket.id);
-      return waitingAt ? { ...mapped, waiting_for_response_at: waitingAt } : mapped;
-    })
-  };
+  return { tickets };
 }

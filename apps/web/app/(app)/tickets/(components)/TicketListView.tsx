@@ -12,10 +12,9 @@ import { useDefaultProject } from '@/components/features/projects/DefaultProject
 import { Card, CardContent } from '@/components/ui/card';
 import { upsertGlobalListViewPreferencesAction } from '@/lib/actions/global-list-view-preferences';
 import { upsertProjectUserPreferencesAction } from '@/lib/actions/project-user-preferences';
-import { loadMoreTicketsAction } from '@/lib/actions/tickets';
 import { useTicketTagsBatch } from '@/lib/client-data/tags/hooks';
 import { selectAllTickets } from '@/lib/client-data/tickets/board-selectors';
-import { mergeTicketsIntoBoards } from '@/lib/client-data/tickets/cache';
+import type { ColumnPageInfo } from '@/lib/client-data/tickets/board-types';
 import { useTicketBoard } from '@/lib/client-data/tickets/hooks';
 import {
   useCreateTicketMutation,
@@ -65,11 +64,11 @@ import type {
   TicketListProjectOption,
   TicketListStatusStyle
 } from './TicketListView.types';
+import { useLoadMoreTickets } from './useLoadMoreTickets';
 import { useTicketBoardRealtime } from './useTicketBoardRealtime';
 
 const PRIORITY_ORDER = ['critical', 'high', 'medium', 'low'];
 const PERSONAL_PROJECT_FILTER_ID = '__personal__';
-const TICKETS_PAGE_SIZE = 20;
 /** Sentinel for "drop after last status" - not a real status name. */
 const STATUS_REORDER_DROP_END = '__overlord_status_reorder_end__';
 
@@ -119,6 +118,7 @@ function getStatusStyle(statusType: string | undefined, statusName: string): Tic
 export default function TicketListView({
   tickets: initialTickets,
   statuses,
+  columnPageInfo,
   showOrganizationName = false,
   ticketUrlBase,
   initialView,
@@ -132,6 +132,7 @@ export default function TicketListView({
 }: {
   tickets: Ticket[];
   statuses: Array<{ name: string; position: number; status_type?: string }>;
+  columnPageInfo?: Record<string, ColumnPageInfo>;
   showOrganizationName?: boolean;
   ticketUrlBase?: string;
   initialView: string;
@@ -155,7 +156,9 @@ export default function TicketListView({
     () => buildBoardBootstrap({ scope: boardScope, tickets: initialTickets, statuses }),
     [boardScope, initialTickets, statuses]
   );
-  const boardQuery = useTicketBoard(boardScope, boardBootstrap, { dataset: 'list' });
+  // Same 'board' dataset as KanbanBoard: one cache entry serves both views so
+  // switching between them never shows divergent data.
+  const boardQuery = useTicketBoard(boardScope, boardBootstrap, { dataset: 'board' });
   const tickets = useMemo(
     () => (boardQuery.data ? selectAllTickets(boardQuery.data).map(toViewTicket) : initialTickets),
     [boardQuery.data, initialTickets]
@@ -204,10 +207,6 @@ export default function TicketListView({
   const [customStatusOrder, setCustomStatusOrder] = useState<string[] | null>(() =>
     initialStatusOrder && initialStatusOrder.length > 0 ? [...initialStatusOrder] : null
   );
-  type StatusLoadMoreState = { cutoff: string; hasMore: boolean; isLoading: boolean };
-  const [statusLoadMoreStates, setStatusLoadMoreStates] = useState<
-    Map<string, StatusLoadMoreState>
-  >(() => new Map());
 
   const [draggedTicketId, setDraggedTicketId] = useState<string | null>(null);
   const [dropTargetStatus, setDropTargetStatus] = useState<string | null>(null);
@@ -456,61 +455,14 @@ export default function TicketListView({
     return groups;
   }, [orderedStatuses, filteredSortedTickets]);
 
-  const initialHasMoreByStatus = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const ticket of initialTickets) {
-      counts.set(ticket.status, (counts.get(ticket.status) ?? 0) + 1);
-    }
-    return counts;
-  }, [initialTickets]);
-
-  async function handleLoadMore(statusName: string) {
-    const state = statusLoadMoreStates.get(statusName);
-    if (state?.isLoading || state?.hasMore === false) return;
-
-    const statusTickets = groupedTickets.get(statusName) ?? [];
-    const oldestUpdatedAt =
-      statusTickets
-        .map(ticket => ticket.updated_at)
-        .filter(Boolean)
-        .sort()[0] ?? new Date().toISOString();
-    const cutoff = state?.cutoff ?? oldestUpdatedAt;
-
-    setStatusLoadMoreStates(prev => {
-      const next = new Map(prev);
-      next.set(statusName, { cutoff, hasMore: true, isLoading: true });
-      return next;
-    });
-
-    try {
-      const { tickets: loaded } = await loadMoreTicketsAction({
-        status: statusName,
-        organizationId,
-        projectId,
-        beforeDate: cutoff
-      });
-      const newCutoff =
-        loaded.length > 0 ? (loaded[loaded.length - 1].updated_at ?? cutoff) : cutoff;
-
-      mergeTicketsIntoBoards(queryClient, (loaded as Ticket[]).map(toBoardTicket), 'server-poll');
-      mergeWaitingFromLoadedTickets(loaded as Ticket[]);
-      setStatusLoadMoreStates(prev => {
-        const next = new Map(prev);
-        next.set(statusName, {
-          cutoff: newCutoff,
-          hasMore: loaded.length === TICKETS_PAGE_SIZE,
-          isLoading: false
-        });
-        return next;
-      });
-    } catch {
-      setStatusLoadMoreStates(prev => {
-        const next = new Map(prev);
-        next.set(statusName, { cutoff, hasMore: true, isLoading: false });
-        return next;
-      });
-    }
-  }
+  const { loadMoreForColumn, columnHasMore, isColumnLoadingMore } = useLoadMoreTickets({
+    organizationId,
+    projectId,
+    queryClient,
+    mergeWaitingFromLoadedTickets,
+    columnPageInfo,
+    initialTickets
+  });
 
   const completeStatusName = useMemo(
     () =>
@@ -826,11 +778,12 @@ export default function TicketListView({
     });
   }
 
-  async function handleCreateTicket(
+  async function createTicketInStatus(
     status: string,
     objective: string,
-    position: 'top' | 'bottom' = 'top',
-    options?: BlankTicketCreateOptions
+    position: 'top' | 'bottom',
+    options: BlankTicketCreateOptions | undefined,
+    openAfterCreate: boolean
   ) {
     const trimmed = objective.trim();
     if (!trimmed) return;
@@ -863,6 +816,19 @@ export default function TicketListView({
       placement: position
     });
     void finalizeBlankTicketOptions({ ticketId: result.id, options }).catch(() => {});
+
+    if (openAfterCreate) {
+      router.push(buildTicketPath({ projectId: result.projectId, ticketId: result.id }));
+    }
+  }
+
+  async function handleCreateTicket(
+    status: string,
+    objective: string,
+    position: 'top' | 'bottom' = 'top',
+    options?: BlankTicketCreateOptions
+  ) {
+    await createTicketInStatus(status, objective, position, options, false);
   }
 
   async function handleCreateAndOpenTicket(
@@ -871,43 +837,7 @@ export default function TicketListView({
     position: 'top' | 'bottom' = 'top',
     options?: BlankTicketCreateOptions
   ) {
-    const trimmed = objective.trim();
-    if (!trimmed) return;
-
-    const effectiveProjectId = options?.projectId ?? projectId ?? null;
-    const selectedProject =
-      effectiveProjectId !== null
-        ? (sidebarProjects.find(p => p.id === effectiveProjectId) ?? null)
-        : null;
-    const clientTicketId = crypto.randomUUID();
-    const optimisticTicket = buildOptimisticTicket({
-      id: clientTicketId,
-      objective: trimmed,
-      status,
-      position,
-      tickets,
-      organizationId: selectedProject?.organizationId ?? organizationId,
-      projectId: effectiveProjectId,
-      selectedProject,
-      defaultProject,
-      forHuman: options?.forHuman
-    });
-
-    const result = await createTicketMutation.mutateAsync({
-      optimisticTicket: toBoardTicket(optimisticTicket),
-      status,
-      objective: trimmed,
-      organizationId: selectedProject?.organizationId ?? organizationId,
-      projectId: optimisticTicket.project_id ?? undefined,
-      placement: position
-    });
-    void finalizeBlankTicketOptions({ ticketId: result.id, options }).catch(() => {});
-
-    const path = buildTicketPath({
-      projectId: result.projectId,
-      ticketId: result.id
-    });
-    router.push(path);
+    await createTicketInStatus(status, objective, position, options, true);
   }
 
   return (
@@ -970,12 +900,8 @@ export default function TicketListView({
               const isDropTarget = !draggedStatusName && dropTargetStatus === status.name;
               const isReorderTarget =
                 draggedStatusName && dropTargetStatusForReorder === status.name;
-              const loadMoreState = statusLoadMoreStates.get(status.name);
-              const hasMore =
-                status.status_type === 'complete' &&
-                (loadMoreState?.hasMore ??
-                  (initialHasMoreByStatus.get(status.name) ?? 0) >= TICKETS_PAGE_SIZE);
-              const isLoadingMore = loadMoreState?.isLoading ?? false;
+              const hasMore = status.status_type === 'complete' && columnHasMore(status.name);
+              const isLoadingMore = isColumnLoadingMore(status.name);
 
               return (
                 <TicketListStatusGroup
@@ -1012,7 +938,7 @@ export default function TicketListView({
                   onCreateAndOpenTicket={handleCreateAndOpenTicket}
                   hasMore={hasMore}
                   isLoadingMore={isLoadingMore}
-                  onLoadMore={() => void handleLoadMore(status.name)}
+                  onLoadMore={() => void loadMoreForColumn(status.name, rawGroupTickets)}
                 />
               );
             })}
