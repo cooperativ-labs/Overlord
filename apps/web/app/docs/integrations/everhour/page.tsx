@@ -41,7 +41,19 @@ Apply the migration that adds:
 2. In the **Project** section, click **Sync Projects to Everhour**.
 3. Select a synced project (shown with \`(Everhour)\` in the dropdown).
 
-## 5. Verify it works
+## 5. Share one Everhour project across multiple Overlord projects
+
+Several Overlord projects can map to the same Everhour project so their time
+rolls up together.
+
+1. Open a project's **Settings → Integrations**.
+2. Under **Share an existing Everhour project**, pick an Everhour project that is
+   already linked to another Overlord project in the same organization.
+3. Click **Link**. This project adopts the selected Everhour project ID (and its
+   display name), so timers and time entries from both projects land in the same
+   Everhour project.
+
+## 6. Verify it works
 
 1. Open any ticket.
 2. In **Time Tracking**, click **Start Timer**.

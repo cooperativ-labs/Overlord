@@ -1,13 +1,25 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { ProjectSlackSettings } from '@/components/features/slack/ProjectSlackSettings';
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import { LoadingButton } from '@/components/ui/loading-button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { syncEverhourProjectsForOrganization } from '@/lib/actions/everhour';
-import { updateProjectEverhourProjectNameAction } from '@/lib/actions/projects';
+import {
+  type EverhourLinkedProjectOption,
+  getEverhourLinkedProjectsForOrganizationAction,
+  linkProjectToExistingEverhourProjectAction,
+  updateProjectEverhourProjectNameAction
+} from '@/lib/actions/projects';
 import { useDisconnectProjectEverhourMutation } from '@/lib/client-data/projects/mutations';
 import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
 
@@ -16,6 +28,9 @@ const syncEverhourProjectsForOrganizationWithRetry = withElectronActionRetry(
 );
 const updateProjectEverhourProjectNameWithRetry = withElectronActionRetry(
   updateProjectEverhourProjectNameAction
+);
+const linkProjectToExistingEverhourProjectWithRetry = withElectronActionRetry(
+  linkProjectToExistingEverhourProjectAction
 );
 
 type IntegrationsPageProps = {
@@ -46,6 +61,9 @@ export function IntegrationsPage({
   const [disconnectButtonState, setDisconnectButtonState] = useState<ButtonLoadingState>('default');
   const [saveNameButtonState, setSaveNameButtonState] = useState<ButtonLoadingState>('default');
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  const [linkedOptions, setLinkedOptions] = useState<EverhourLinkedProjectOption[]>([]);
+  const [selectedLinkEverhourId, setSelectedLinkEverhourId] = useState('');
+  const [linkButtonState, setLinkButtonState] = useState<ButtonLoadingState>('default');
 
   useEffect(() => {
     setSavedEverhourProjectId(initialEverhourProjectId);
@@ -54,6 +72,20 @@ export function IntegrationsPage({
   useEffect(() => {
     setEverhourProjectName(initialEverhourProjectName ?? '');
   }, [initialEverhourProjectName]);
+
+  const loadLinkedOptions = useCallback(async () => {
+    try {
+      const options = await getEverhourLinkedProjectsForOrganizationAction(organizationId);
+      setLinkedOptions(options);
+    } catch {
+      setLinkedOptions([]);
+    }
+  }, [organizationId]);
+
+  useEffect(() => {
+    if (!open || !hasEverhourApiKey) return;
+    void loadLinkedOptions();
+  }, [open, hasEverhourApiKey, loadLinkedOptions]);
 
   async function handleSaveEverhourProjectName() {
     setSaveNameButtonState('loading');
@@ -86,9 +118,41 @@ export function IntegrationsPage({
           ? ` Could not auto-create: ${result.failedProjects.join(', ')}. Create these in Everhour, then sync again.`
           : '';
       setSyncMessage(`${baseMessage}${failedMessage}`);
+      void loadLinkedOptions();
     } catch (error) {
       setSyncButtonState('error');
       setSyncMessage(error instanceof Error ? error.message : 'Failed to sync Everhour projects.');
+    }
+  }
+
+  async function handleLinkExistingEverhourProject() {
+    const option = linkedOptions.find(item => item.everhourProjectId === selectedLinkEverhourId);
+    if (!option) {
+      setLinkButtonState('error');
+      setSyncMessage('Select an Everhour project to link.');
+      return;
+    }
+
+    setLinkButtonState('loading');
+    setSyncMessage(null);
+    try {
+      await linkProjectToExistingEverhourProjectWithRetry({
+        projectId,
+        everhourProjectId: option.everhourProjectId
+      });
+      setSavedEverhourProjectId(option.everhourProjectId);
+      setEverhourProjectName(option.everhourProjectName);
+      setSelectedLinkEverhourId('');
+      setLinkButtonState('success');
+      setSyncMessage(
+        `Linked this project to the Everhour project "${option.everhourProjectName}".`
+      );
+      void loadLinkedOptions();
+    } catch (error) {
+      setLinkButtonState('error');
+      setSyncMessage(
+        error instanceof Error ? error.message : 'Failed to link to the Everhour project.'
+      );
     }
   }
 
@@ -102,6 +166,7 @@ export function IntegrationsPage({
       setSavedEverhourProjectId(null);
       setDisconnectButtonState('success');
       setSyncMessage('Disconnected this project from Everhour.');
+      void loadLinkedOptions();
     } catch (error) {
       setDisconnectButtonState('error');
       setSyncMessage(
@@ -109,6 +174,10 @@ export function IntegrationsPage({
       );
     }
   }
+
+  const availableLinkOptions = linkedOptions.filter(
+    option => option.everhourProjectId !== savedEverhourProjectId
+  );
 
   return (
     <div className="space-y-6">
@@ -154,6 +223,53 @@ export function IntegrationsPage({
                 />
               </div>
             </div>
+            {availableLinkOptions.length > 0 ? (
+              <div className="grid gap-1">
+                <label className="text-xs text-muted-foreground" htmlFor="everhour-shared-project">
+                  Share an existing Everhour project
+                </label>
+                <p className="text-xs text-muted-foreground">
+                  Link this project to an Everhour project already used by another Overlord project
+                  so they share the same Everhour project and time totals.
+                </p>
+                <div className="flex gap-2">
+                  <Select
+                    value={selectedLinkEverhourId}
+                    onValueChange={value => {
+                      setSelectedLinkEverhourId(value);
+                      setLinkButtonState('default');
+                    }}
+                  >
+                    <SelectTrigger id="everhour-shared-project" className="h-8 text-xs">
+                      <SelectValue placeholder="Select an Everhour project" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableLinkOptions.map(option => (
+                        <SelectItem key={option.everhourProjectId} value={option.everhourProjectId}>
+                          {option.everhourProjectName}
+                          {option.linkedProjectNames.length > 0
+                            ? ` (${option.linkedProjectNames.join(', ')})`
+                            : ''}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <LoadingButton
+                    buttonState={linkButtonState}
+                    setButtonState={setLinkButtonState}
+                    text="Link"
+                    loadingText="Linking…"
+                    successText="Linked"
+                    errorText="Retry"
+                    reset
+                    size="sm"
+                    variant="outline"
+                    disabled={!selectedLinkEverhourId || linkButtonState === 'loading'}
+                    onClick={handleLinkExistingEverhourProject}
+                  />
+                </div>
+              </div>
+            ) : null}
             <div className="flex flex-wrap items-center gap-2">
               <LoadingButton
                 buttonState={syncButtonState}

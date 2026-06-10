@@ -398,6 +398,120 @@ export async function updateProjectEverhourProjectNameAction(input: {
   revalidateProjectPaths(input.projectId);
 }
 
+export type EverhourLinkedProjectOption = {
+  everhourProjectId: string;
+  everhourProjectName: string;
+  linkedProjectNames: string[];
+};
+
+/**
+ * Returns the distinct Everhour projects already linked to projects within an
+ * organization, so a project can be mapped to one that another project already
+ * uses (letting several Overlord projects share a single Everhour project ID).
+ */
+export async function getEverhourLinkedProjectsForOrganizationAction(
+  organizationId: number
+): Promise<EverhourLinkedProjectOption[]> {
+  const supabase = await createClientForRequest();
+  const { data, error } = await supabase
+    .from('projects')
+    .select('name,everhour_project_id,everhour_project_name')
+    .eq('organization_id', organizationId)
+    .not('everhour_project_id', 'is', null)
+    .is('archived_at', null)
+    .order('name', { ascending: true });
+
+  if (error || !data) {
+    return [];
+  }
+
+  const grouped = new Map<string, EverhourLinkedProjectOption>();
+  for (const project of data) {
+    const everhourProjectId = trimString(project.everhour_project_id);
+    if (!everhourProjectId) continue;
+
+    const everhourProjectName = trimString(project.everhour_project_name) ?? project.name;
+    const existing = grouped.get(everhourProjectId);
+    if (existing) {
+      existing.linkedProjectNames.push(project.name);
+    } else {
+      grouped.set(everhourProjectId, {
+        everhourProjectId,
+        everhourProjectName,
+        linkedProjectNames: [project.name]
+      });
+    }
+  }
+
+  return [...grouped.values()].sort((left, right) =>
+    left.everhourProjectName.localeCompare(right.everhourProjectName)
+  );
+}
+
+/**
+ * Links a project to an Everhour project that is already mapped to another
+ * project in the same organization, adopting that project's Everhour display
+ * name so both stay in sync. This is the path for sharing one Everhour project
+ * across multiple Overlord projects.
+ */
+export async function linkProjectToExistingEverhourProjectAction(input: {
+  projectId: string;
+  everhourProjectId: string;
+}): Promise<void> {
+  const everhourProjectId = trimString(input.everhourProjectId);
+  if (!everhourProjectId) {
+    throw new Error('Select an Everhour project to link.');
+  }
+
+  const supabase = await createClientForRequest();
+
+  const { data: targetProject, error: targetError } = await supabase
+    .from('projects')
+    .select('id,organization_id')
+    .eq('id', input.projectId)
+    .single();
+
+  if (targetError || !targetProject) {
+    throw new Error(targetError?.message ?? 'Project not found.');
+  }
+
+  // Only allow linking to an Everhour project that another project in the same
+  // organization already uses, and adopt its display name.
+  const { data: source, error: sourceError } = await supabase
+    .from('projects')
+    .select('name,everhour_project_name')
+    .eq('organization_id', targetProject.organization_id)
+    .eq('everhour_project_id', everhourProjectId)
+    .not('id', 'eq', input.projectId)
+    .limit(1)
+    .maybeSingle();
+
+  if (sourceError) {
+    throw new Error(sourceError.message);
+  }
+  if (!source) {
+    throw new Error('That Everhour project is not linked to any project in this organization.');
+  }
+
+  const everhourProjectName = trimString(source.everhour_project_name) ?? source.name;
+
+  const { error: updateError } = await supabase
+    .from('projects')
+    .update({
+      everhour_project_id: everhourProjectId,
+      everhour_project_name: everhourProjectName
+    })
+    .eq('id', input.projectId)
+    .select('organization_id')
+    .single();
+
+  if (updateError) {
+    throw new Error(updateError.message);
+  }
+
+  revalidateProjectPaths(input.projectId);
+}
+
 const defaultProjectStatuses = [
   { name: 'draft', status_type: 'draft', position: 0 },
   { name: 'execute', status_type: 'execute', position: 1 },
