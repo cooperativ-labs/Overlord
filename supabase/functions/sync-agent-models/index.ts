@@ -34,7 +34,7 @@ type AgentModelRow = {
   updated_at: string;
 };
 
-const CLAUDE_LATEST_MAJOR_PATTERN = /(opus|sonnet|haiku)-4([-.]|$)/;
+const CLAUDE_LATEST_MAJOR_PATTERN = /(fable|opus|sonnet|haiku)-[45]([-.]|$)/;
 const OPENAI_LATEST_MAJOR_PREFIXES = ['gpt-5', 'codex-5'];
 
 function buildCapabilities(compatibleAgents: string[]): Record<string, unknown> {
@@ -111,7 +111,7 @@ async function fetchClaudeModels(): Promise<AgentModelRow[]> {
       if (!isClaudeCodeCompatibleModel(id)) continue;
 
       const thinkingOptions = extractClaudeThinkingOptions(id);
-      const isRecommended = id.includes('opus') || id.includes('sonnet');
+      const isRecommended = id.includes('fable') || id.includes('opus') || id.includes('sonnet');
 
       models.push({
         agent_type: 'claude',
@@ -134,14 +134,17 @@ async function fetchClaudeModels(): Promise<AgentModelRow[]> {
 
 function extractClaudeThinkingOptions(modelId: string): string[] {
   // Claude 4.x models support extended thinking with budget levels.
-  if (modelId.includes('mythos') || modelId.includes('opus') || modelId.includes('sonnet')) {
+  if (modelId.includes('fable') || modelId.includes('opus') || modelId.includes('sonnet')) {
     return ['low', 'medium', 'high', 'xhigh', 'max', 'ultracode'];
   }
   return [];
 }
 
 function getClaudeSortOrder(modelId: string): number {
-  if (modelId.includes('mythos-4')) return 10;
+  if (modelId.includes('fable-5')) return 10;
+  if (modelId.includes('opus-5')) return 20;
+  if (modelId.includes('sonnet-5')) return 30;
+  if (modelId.includes('haiku-5')) return 40;
   if (modelId.includes('opus-4')) return 20;
   if (modelId.includes('sonnet-4')) return 20;
   if (modelId.includes('haiku-4')) return 30;
@@ -293,6 +296,7 @@ async function fetchCursorModels(): Promise<AgentModelRow[]> {
 
 function getCursorSortOrder(modelId: string): number {
   if (modelId.includes('composer')) return 10;
+  if (modelId.includes('fable')) return 20;
   if (modelId.includes('opus')) return 20;
   if (modelId.includes('sonnet')) return 30;
   if (modelId.includes('gpt-5')) return 40;
