@@ -10,6 +10,10 @@ import {
   persistObjectivePositions,
   promoteNextFutureDraft
 } from '@/lib/objectives';
+import {
+  completeActiveAgentSessionsForObjective,
+  disconnectActiveAgentSessionsForObjective
+} from '@/lib/overlord/agent-session-lifecycle';
 import { failActiveExecutionRequestsForObjective } from '@/lib/overlord/execution-requests';
 import { createClientForRequest } from '@/supabase/utils/server';
 
@@ -42,6 +46,8 @@ export async function markObjectiveExecutedAction(
   if (executeError) {
     throw new Error(executeError.message);
   }
+
+  await completeActiveAgentSessionsForObjective({ supabase, objectiveId });
 
   const shouldPromoteNextFuture =
     objective.state === 'draft' ||
@@ -165,6 +171,8 @@ export async function markObjectiveDraftAction(
     throw new Error(unexecuteError.message);
   }
 
+  await disconnectActiveAgentSessionsForObjective({ supabase, objectiveId });
+
   const { data: ticket, error: ticketError } = await supabase
     .from('tickets')
     .select('organization_id,project_id')
@@ -173,6 +181,21 @@ export async function markObjectiveDraftAction(
 
   if (ticketError || !ticket) {
     throw new Error(ticketError?.message ?? 'Ticket not found.');
+  }
+
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+
+  if (user) {
+    await failActiveExecutionRequestsForObjective({
+      supabase,
+      organizationId: ticket.organization_id,
+      objectiveId,
+      requestedBy: user.id
+    }).catch(err =>
+      console.error('[markObjectiveDraft] failed to cancel active execution request:', err)
+    );
   }
 
   await supabase.from('ticket_events').insert({

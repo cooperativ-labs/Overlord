@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { generateTitleWithGemini } from '@/lib/ai/generate-ticket-title';
 import { parseTicketAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
 import { deriveTitleFromObjective } from '@/lib/helpers/tickets';
+import { canReattachExecutingObjective } from '@/lib/overlord/agent-session-lifecycle';
 import { requireExecutionAgentFromAssignment } from '@/lib/overlord/resolve-execution-agent';
 import type { Database, Json } from '@/types/database.types';
 
@@ -559,7 +560,11 @@ export async function markSubmittedObjectiveExecuting(
 
     if (executingObjective) {
       const normalizedExisting = normalizeObjectiveText(executingObjective.objective);
-      if (normalizedExisting) {
+      const canReattach = await canReattachExecutingObjective({
+        supabase,
+        objectiveId: executingObjective.id
+      });
+      if (normalizedExisting && canReattach) {
         return {
           didExecute: false,
           executedObjective: normalizedExisting,

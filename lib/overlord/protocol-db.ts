@@ -1,4 +1,9 @@
+import {
+  isProtocolUsableSessionState,
+  STALE_SESSION_REATTACH_MESSAGE
+} from '@/lib/overlord/agent-session-lifecycle';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
+import type { Database } from '@/types/database.types';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const TICKET_ID_REGEX = /^\d+:\d+$/;
@@ -63,10 +68,15 @@ type EventInsert = {
  * Joins through objectives to verify the session belongs to the supplied ticket.
  * When organizationId is provided, also verifies org membership.
  */
+type ResolveSessionOptions = {
+  allowCompletedReactivation?: boolean;
+};
+
 export async function resolveSession(
   sessionKey: string,
   ticketId: string,
-  organizationId?: number
+  organizationId?: number,
+  options?: ResolveSessionOptions
 ) {
   const supabase = createServiceRoleClient();
 
@@ -94,6 +104,18 @@ export async function resolveSession(
   const { objective: _objective, ...sessionRow } = session as typeof session & {
     objective: unknown;
   };
+
+  const sessionState = sessionRow.session_state as Database['public']['Enums']['session_state'];
+  if (
+    !isProtocolUsableSessionState(sessionState, {
+      allowCompletedReactivation: options?.allowCompletedReactivation
+    })
+  ) {
+    return {
+      error: STALE_SESSION_REATTACH_MESSAGE,
+      session: null
+    };
+  }
 
   await supabase
     .from('agent_sessions')

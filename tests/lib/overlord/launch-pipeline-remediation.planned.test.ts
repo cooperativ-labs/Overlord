@@ -175,6 +175,13 @@ describe.skip('[1:1288 Phase 1] unified attach objective selection', () => {
         error: null
       }))
     };
+    const sessionQuery = {
+      select: jest.fn(() => sessionQuery),
+      eq: jest.fn(() => sessionQuery),
+      order: jest.fn(() => sessionQuery),
+      limit: jest.fn(() => sessionQuery),
+      maybeSingle: jest.fn(async () => ({ data: { session_state: 'attached' }, error: null }))
+    };
     const supabase = {
       from: jest
         .fn()
@@ -182,6 +189,7 @@ describe.skip('[1:1288 Phase 1] unified attach objective selection', () => {
         .mockReturnValueOnce(submittedQuery)
         .mockReturnValueOnce(draftQuery)
         .mockReturnValueOnce(executingQuery)
+        .mockReturnValueOnce(sessionQuery)
     };
 
     const result = await markSubmittedObjectiveExecuting(

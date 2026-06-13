@@ -124,6 +124,78 @@ describe('markSubmittedObjectiveExecuting', () => {
     );
   });
 
+  it('does not reuse an executing objective when its latest session already completed', async () => {
+    const launchingQuery = {
+      select: jest.fn(() => launchingQuery),
+      eq: jest.fn(() => launchingQuery),
+      order: jest.fn(() => launchingQuery),
+      limit: jest.fn(() => launchingQuery),
+      maybeSingle: jest.fn(async () => ({ data: null, error: null }))
+    };
+    const submittedQuery = {
+      select: jest.fn(() => submittedQuery),
+      eq: jest.fn(() => submittedQuery),
+      order: jest.fn(() => submittedQuery),
+      limit: jest.fn(() => submittedQuery),
+      maybeSingle: jest.fn(async () => ({ data: null, error: null }))
+    };
+    const draftQuery = {
+      select: jest.fn(() => draftQuery),
+      eq: jest.fn(() => draftQuery),
+      order: jest.fn(() => draftQuery),
+      limit: jest.fn(() => draftQuery),
+      maybeSingle: jest.fn(async () => ({ data: null, error: null }))
+    };
+    const executingQuery = {
+      select: jest.fn(() => executingQuery),
+      eq: jest.fn(() => executingQuery),
+      in: jest.fn(() => executingQuery),
+      order: jest.fn(() => executingQuery),
+      limit: jest.fn(() => executingQuery),
+      maybeSingle: jest.fn(async () => ({
+        data: {
+          id: OBJECTIVE_ID,
+          objective: 'Ship it',
+          state: 'executing',
+          assigned_agent: { agent: 'codex', model: 'gpt-5.4', thinking: null }
+        },
+        error: null
+      }))
+    };
+    const sessionQuery = {
+      select: jest.fn(() => sessionQuery),
+      eq: jest.fn(() => sessionQuery),
+      order: jest.fn(() => sessionQuery),
+      limit: jest.fn(() => sessionQuery),
+      maybeSingle: jest.fn(async () => ({
+        data: { session_state: 'completed' },
+        error: null
+      }))
+    };
+
+    const supabase = {
+      from: jest
+        .fn()
+        .mockReturnValueOnce(launchingQuery)
+        .mockReturnValueOnce(submittedQuery)
+        .mockReturnValueOnce(draftQuery)
+        .mockReturnValueOnce(executingQuery)
+        .mockReturnValueOnce(sessionQuery)
+    };
+
+    await expect(
+      markSubmittedObjectiveExecuting(
+        supabase as never,
+        TICKET_ID,
+        { agentIdentifier: 'codex' },
+        'user-1'
+      )
+    ).resolves.toEqual({
+      didExecute: false,
+      executedObjective: null
+    });
+  });
+
   it('rejects execution when the launchable objective has no assigned agent', async () => {
     const submittedQuery = {
       select: jest.fn(() => submittedQuery),

@@ -128,7 +128,8 @@ export async function handleUpdate(supabase: SupabaseClient, args: any, ctx: Tok
     sessionKey,
     rawTicketId,
     ctx.organizationId,
-    ctx.mcpSessionId
+    ctx.mcpSessionId,
+    { allowCompletedReactivation: beginFollowUpWork === true }
   );
   if (!resolved.session) return toolErr(resolved.error ?? 'Session not found.');
   const ticketId = resolved.resolvedTicketId!;

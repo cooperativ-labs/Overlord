@@ -53,7 +53,9 @@ export async function POST(request: Request) {
       .maybeSingle();
     const ticketReference = getTicketIdentifier(ticket ?? ticketId);
     const typedSupabase = supabase as SupabaseClient<Database>;
-    const resolved = await resolveSession(sessionKey, ticketId, organizationId);
+    const resolved = await resolveSession(sessionKey, ticketId, organizationId, {
+      allowCompletedReactivation: beginFollowUpWork === true
+    });
     if (!resolved.session) {
       return NextResponse.json({ error: resolved.error }, { status: 404 });
     }

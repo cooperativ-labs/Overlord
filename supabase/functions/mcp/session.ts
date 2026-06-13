@@ -6,6 +6,38 @@ const TICKET_ID_REGEX = /^\d+:\d+$/;
 /** Sessions without a heartbeat for this duration are considered stale. */
 const SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
 
+const STALE_SESSION_REATTACH_MESSAGE =
+  'Session is no longer attached. Call attach again to start a new session.';
+
+function isProtocolUsableSessionState(
+  sessionState: string,
+  options?: { allowCompletedReactivation?: boolean }
+): boolean {
+  if (sessionState === 'attached') return true;
+  if (options?.allowCompletedReactivation && sessionState === 'completed') return true;
+  return false;
+}
+
+async function canReattachExecutingObjective(
+  supabase: SupabaseClient,
+  objectiveId: string
+): Promise<boolean> {
+  const { data: latestSession, error } = await supabase
+    .from('agent_sessions')
+    .select('session_state')
+    .eq('objective_id', objectiveId)
+    .order('attached_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  if (!latestSession) return true;
+  return latestSession.session_state !== 'completed';
+}
+
 /**
  * Resolves a ticket identifier to a full UUID, scoped to the organization.
  * - Full UUIDs are returned as-is (no DB query).
@@ -38,12 +70,17 @@ async function resolveTicketId(
 // Session helper
 // ---------------------------------------------------------------------------
 
+type ResolveSessionOptions = {
+  allowCompletedReactivation?: boolean;
+};
+
 export async function resolveSession(
   supabase: SupabaseClient,
   sessionKey: string,
   ticketId: string,
   organizationId: number,
-  externalSessionId?: string | null
+  externalSessionId?: string | null,
+  options?: ResolveSessionOptions
 ) {
   const resolvedId = await resolveTicketId(supabase, ticketId, organizationId);
   if (!resolvedId) {
@@ -71,6 +108,18 @@ export async function resolveSession(
 
   if (sessionErr || !session) {
     return { error: 'Session not found for ticket.', session: null, resolvedTicketId: null };
+  }
+
+  if (
+    !isProtocolUsableSessionState(session.session_state, {
+      allowCompletedReactivation: options?.allowCompletedReactivation
+    })
+  ) {
+    return {
+      error: STALE_SESSION_REATTACH_MESSAGE,
+      session: null,
+      resolvedTicketId: null
+    };
   }
 
   // Check for session timeout — mark stale sessions as disconnected
@@ -102,3 +151,5 @@ export async function resolveSession(
 
   return { error: null, session, resolvedTicketId: resolvedId };
 }
+
+export { canReattachExecutingObjective };

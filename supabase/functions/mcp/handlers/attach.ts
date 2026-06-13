@@ -4,6 +4,8 @@ import { type SupabaseClient } from '@supabase/supabase-js';
 import { type TokenContext } from '../auth.ts';
 import { toolErr, toolOk } from '../rpc.ts';
 
+import { canReattachExecutingObjective } from '../session.ts';
+
 import { buildPromptContext } from './_prompt-context.ts';
 import {
   resolvePreferredStatusNameByType,
@@ -197,8 +199,11 @@ export async function handleAttach(supabase: SupabaseClient, args: any, ctx: Tok
       .maybeSingle();
 
     if (executingObjective && executingObjective.objective.trim().length > 0) {
-      executedObjective = executingObjective.objective;
-      executedObjectiveId = executingObjective.id;
+      const canReattach = await canReattachExecutingObjective(supabase, executingObjective.id);
+      if (canReattach) {
+        executedObjective = executingObjective.objective;
+        executedObjectiveId = executingObjective.id;
+      }
     }
   }
 
