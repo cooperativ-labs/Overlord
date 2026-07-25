@@ -88,6 +88,8 @@ import {
 } from './desktop-oauth-handoff.ts';
 import { ENV_PROFILE } from './env-profile.ts';
 import { apiErrorFromDatabaseError } from './errors.ts';
+import { registerLiveActivityPushToken, revokeLiveActivityPushToken } from './live-activities.ts';
+import { liveActivityDispatcher } from './live-activity-dispatcher.ts';
 import {
   handleOAuthApprove,
   handleOAuthRegister,
@@ -453,6 +455,7 @@ function handle(
           realtime.pollNow();
           webhookDispatcher.pollNow();
           deliveryComposeWorker.pollNow();
+          liveActivityDispatcher.pollNow();
         }
         if (!res.headersSent) res.json(result ?? { ok: true });
       } catch (err) {
@@ -505,6 +508,7 @@ if (mcpEnabled) {
       realtime.pollNow();
       webhookDispatcher.pollNow();
       deliveryComposeWorker.pollNow();
+      liveActivityDispatcher.pollNow();
     })().catch(next);
   });
 }
@@ -1207,6 +1211,30 @@ app.patch(
   })
 );
 
+// ---- Mobile Live Activities ---------------------------------------------
+// ActivityKit tokens are opaque, account-private credentials. These routes
+// intentionally have no corresponding read endpoint.
+app.put(
+  '/api/mobile/live-activities/:activityId/push-token',
+  handle(
+    async req => {
+      await registerLiveActivityPushToken(req.params.activityId, req.body);
+      return { ok: true as const };
+    },
+    { mutates: true }
+  )
+);
+app.delete(
+  '/api/mobile/live-activities/:activityId/push-token',
+  handle(
+    async (req, res) => {
+      await revokeLiveActivityPushToken(req.params.activityId);
+      res.status(204).end();
+    },
+    { mutates: true }
+  )
+);
+
 app.get(
   '/api/projects/:id/tags',
   handle(req => listProjectTags(req.params.id))
@@ -1787,6 +1815,7 @@ async function start(): Promise<void> {
   realtime.start();
   webhookDispatcher.start();
   deliveryComposeWorker.start();
+  liveActivityDispatcher.start();
 
   const server = app.listen(bindPort, bindHost, () => {
     const databaseLabel =

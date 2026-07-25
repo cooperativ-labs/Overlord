@@ -8,6 +8,7 @@ import { buildDeliveryReport, markDeliveryPresentationPending } from './delivery
 import { ServiceError } from './errors.js';
 import { createExecutionRequest, linkExecutionRequestToSession } from './execution-requests.js';
 import { ensureActingDeviceTarget } from './execution-targets.js';
+import { enqueueLiveActivityRefreshForMission } from './live-activity-jobs.js';
 import {
   type ArtifactSummary,
   type AttachmentSummary,
@@ -618,6 +619,12 @@ export async function attachSession({
         'state',
         ...(currentObjectiveAssignment?.assigned_agent ? [] : ['assigned_agent'])
       ]
+    });
+    await enqueueLiveActivityRefreshForMission({
+      db: txCtx.db,
+      workspaceId: ctx.workspace.id,
+      missionId: context.mission.id,
+      now
     });
 
     await ensureNextDraftObjective({
@@ -1867,6 +1874,12 @@ export async function deliverSession({
         deliveryId
       }
     });
+    await enqueueLiveActivityRefreshForMission({
+      db: txCtx.db,
+      workspaceId: ctx.workspace.id,
+      missionId: mission.id,
+      now
+    });
 
     await txCtx.db.run(
       `UPDATE agent_sessions
@@ -2329,6 +2342,12 @@ export async function recordWork({
       entity: { missionId: created.mission.id, objectiveId, deliveryId }
     });
     await enqueueDeliveryComposeJob({ ctx: txCtx, deliveryId, now });
+    await enqueueLiveActivityRefreshForMission({
+      db: txCtx.db,
+      workspaceId: ctx.workspace.id,
+      missionId: created.mission.id,
+      now
+    });
   });
   return { mission: created.mission, deliveryId };
 }

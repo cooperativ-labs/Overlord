@@ -16,6 +16,7 @@ import path from 'node:path';
 
 import { readDeliveryReport } from '../packages/core/service/delivery-report.ts';
 import { ensureActingDeviceTarget } from '../packages/core/service/execution-targets.ts';
+import { enqueueLiveActivityRefreshForMission } from '../packages/core/service/live-activity-jobs.ts';
 import { resolveBackendResourceProvider } from '../packages/core/service/local-target/index.ts';
 import type { TargetMetadata } from '../packages/core/service/local-target/types.ts';
 import {
@@ -5906,6 +5907,19 @@ async function updateObjectiveTx(
       },
       tx
     );
+
+    if (
+      body.state !== undefined &&
+      body.state !== existing.state &&
+      (body.state === 'executing' || body.state === 'complete' || existing.state === 'executing')
+    ) {
+      await enqueueLiveActivityRefreshForMission({
+        db: tx,
+        workspaceId,
+        missionId: existing.mission_id,
+        now
+      });
+    }
 
     if (
       body.state === 'executing' &&

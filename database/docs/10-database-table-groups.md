@@ -18,64 +18,55 @@ Every Overlord installation needs these. They cover the fundamental workflow: cr
 
 ### Identity and Workspace
 
-
 | Table             | Purpose                                                                    |
 | ----------------- | -------------------------------------------------------------------------- |
 | `workspaces`      | The local instance (one workspace for CLI-first installs).                 |
 | `users`           | Global human and service-user identities.                                  |
 | `workspace_users` | Workspace membership; domain records reference this, not `users` directly. |
 
-
 ### Projects and Execution
 
-
-| Table                              | Purpose                                                  |
-| ---------------------------------- | -------------------------------------------------------- |
-| `projects`                         | Top-level containers mapped to git repositories.         |
-| `project_statuses`                 | Configurable mission workflow states per project.         |
-| `devices`                          | Local and remote runner-capable machine identities.      |
-| `execution_targets`                | Where objectives can run (local device, SSH host, etc.). |
-| `workspace_user_execution_targets` | Per-workspace-user access to an execution target. |
+| Table                               | Purpose                                                                                     |
+| ----------------------------------- | ------------------------------------------------------------------------------------------- |
+| `projects`                          | Top-level containers mapped to git repositories.                                            |
+| `project_statuses`                  | Configurable mission workflow states per project.                                           |
+| `devices`                           | Local and remote runner-capable machine identities.                                         |
+| `execution_targets`                 | Where objectives can run (local device, SSH host, etc.).                                    |
+| `workspace_user_execution_targets`  | Per-workspace-user access to an execution target.                                           |
 | `user_execution_target_preferences` | Reusable per-profile terminal and agent launch preferences for a stable target fingerprint. |
-| `project_resources`                | Links a project to a directory on an execution target.   |
-| `project_user_preferences`         | Per-user project UI/config defaults.                     |
-
+| `project_resources`                 | Links a project to a directory on an execution target.                                      |
+| `project_user_preferences`          | Per-user project UI/config defaults.                                                        |
 
 ### Missions, Objectives, and Sessions
 
-
-| Table              | Purpose                                                |
-| ------------------ | ------------------------------------------------------ |
+| Table               | Purpose                                                |
+| ------------------- | ------------------------------------------------------ |
 | `mission_sequences` | Allocates the numeric part of human IDs like `1:1204`. |
 | `missions`          | The durable work unit and review boundary.             |
-| `objectives`       | One ordered agent pass inside a mission.                |
-| `agent_sessions`   | Live attachment between an agent and one objective.    |
-
+| `objectives`        | One ordered agent pass inside a mission.               |
+| `agent_sessions`    | Live attachment between an agent and one objective.    |
 
 ### Activity, Context, and Review
 
-
 | Table                    | Purpose                                                           |
 | ------------------------ | ----------------------------------------------------------------- |
-| `mission_events`          | Append-only timeline of all mission activity.                      |
-| `shared_context_entries` | Persistent mission memory that survives across objectives.         |
+| `mission_events`         | Append-only timeline of all mission activity.                     |
+| `shared_context_entries` | Persistent mission memory that survives across objectives.        |
 | `objective_attachments`  | File metadata for uploads/imports scoped to an objective.         |
 | `deliveries`             | Final or follow-up delivery review boundaries.                    |
 | `artifacts`              | Structured review artifacts attached to deliveries.               |
 | `changed_files`          | Update-time file metadata recorded during a session.              |
 | `change_rationales`      | Structured per-file records of what changed, why, and the impact. |
 
-
 ### Queue, Idempotency, and Change Feed
 
-
-| Table                | Purpose                                                                  |
-| -------------------- | ------------------------------------------------------------------------ |
-| `execution_requests` | Durable queue for manual runs and auto-advance.                          |
-| `idempotency_keys`   | Guards REST, protocol, hook, and worker calls against duplicate effects. |
-| `entity_changes`     | Canonical change feed for realtime, REST polling, and sync.              |
-| `schema_migrations`  | Tracks which migrations have been applied per adapter and component.     |
-
+| Table                       | Purpose                                                                  |
+| --------------------------- | ------------------------------------------------------------------------ |
+| `execution_requests`        | Durable queue for manual runs and auto-advance.                          |
+| `idempotency_keys`          | Guards REST, protocol, hook, and worker calls against duplicate effects. |
+| `entity_changes`            | Canonical change feed for realtime, REST polling, and sync.              |
+| `live_activity_push_tokens` | Private per-profile ActivityKit/APNs registrations.                      |
+| `schema_migrations`         | Tracks which migrations have been applied per adapter and component.     |
 
 ---
 
@@ -357,15 +348,13 @@ All groups. Order of adoption:
 
 When an agent guides a new user through `ovld init` configuration, it should ask questions in roughly the order of the decision guide above. Each question maps to one or more groups:
 
-
-| Question                                                                          | Group(s) |
-| --------------------------------------------------------------------------------- | -------- |
-| Will you share this instance with others or use the REST API from external tools? | 1, 2     |
-| Do you need a web UI or desktop app with live updates?                            | 3, 6, 7  |
-| Do you need full-text mission search?                                              | 8        |
-| Do you want custom labels on missions?                                             | 5        |
+| Question                                                                                       | Group(s) |
+| ---------------------------------------------------------------------------------------------- | -------- |
+| Will you share this instance with others or use the REST API from external tools?              | 1, 2     |
+| Do you need a web UI or desktop app with live updates?                                         | 3, 6, 7  |
+| Do you need full-text mission search?                                                          | 8        |
+| Do you want custom labels on missions?                                                         | 5        |
 | Do you want custom harness extensions, connector health monitoring, or permission approval UI? | 3, 4     |
-
 
 The agent should confirm the final group selection before running migrations, and should note that any group can be added later with additive-only migrations. The agent should never suggest removing core tables.
 

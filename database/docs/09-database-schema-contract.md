@@ -1903,6 +1903,34 @@ Indexes:
 
 Implemented as of contract version `1`. `topic = 'webhook.deliver.v1'` is the first consumer: one row per `(event × matching webhook_subscription)`, `payload_json = { subscriptionId, eventType, envelope }`.
 
+### `live_activity_push_tokens`
+
+Private ActivityKit registration for one account-level Live Activity. This is an
+operational table, not a user-facing notification history: neither activity IDs nor
+APNs tokens appear in REST reads, change feeds, audit payloads, or logs.
+
+| Column              | Type         | Required | Notes                                                                |
+| ------------------- | ------------ | -------- | -------------------------------------------------------------------- |
+| `id`                | Id           | yes      |                                                                      |
+| `profile_id`        | Id           | yes      | FK to `profiles`; the authenticated account that owns this activity. |
+| `activity_id`       | text         | yes      | Opaque ActivityKit activity identifier. Unique with `profile_id`.    |
+| `push_token`        | text         | yes      | Opaque APNs ActivityKit token; private at rest.                      |
+| `last_content_hash` | text         | no       | SHA-256 of the last visible snapshot sent to this activity.          |
+| `last_sent_at`      | TimestampUTC | no       | Supports five-minute coalescing of unchanged visible progress.       |
+| `created_at`        | TimestampUTC | yes      |                                                                      |
+| `updated_at`        | TimestampUTC | yes      |                                                                      |
+
+Indexes:
+
+- Unique `(profile_id, activity_id)`.
+- `(profile_id)` for lifecycle fan-out.
+
+Delivery is driven by durable `worker_jobs.type = 'overlord.live_activity.dispatch.v1'`.
+Jobs carry only the target profile ID and are idempotently coalesced; the dispatcher
+recomputes presentation state at delivery time. APNs credential material is process
+configuration, not database data. Invalid-token APNs responses delete the matching
+registration.
+
 ### `webhook_subscriptions`
 
 Workspace-scoped webhook subscription: which events an external endpoint receives, with what payload mode, signed with a per-subscription secret. Management is REST-only (`/api/webhooks*`); the enqueue helper reads active subscriptions when a matching event fires (see `Realtime Strategy` and `packages/core/service/webhook-events.ts`).

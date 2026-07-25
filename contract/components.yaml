@@ -4,7 +4,7 @@
 # IMPORTANT: Update this file and CONTRACT.md together when adding components or surfaces.
 # Increment contractVersion when any stable interface changes.
 
-contractVersion: '27'
+contractVersion: '28'
 
 components:
   protocol:
@@ -39,7 +39,8 @@ components:
       - 'organizations table (grouping layer above workspaces) and the required workspaces.organization_id FK; workspaces remain the sole RBAC layer; slugs are unique per organization, not instance-wide'
       - 'controlled vocabularies (closed and open sets)'
       - 'versioned deliveryReport payload storage in deliveries.payload_json; summary remains immutable agent-authored source text'
-      - 'worker_jobs durable background queue including core type overlord.delivery.compose.v1'
+      - 'worker_jobs durable background queue including core types overlord.delivery.compose.v1 and overlord.live_activity.dispatch.v1'
+      - 'private live_activity_push_tokens registrations keyed by profile and ActivityKit activity id; APNs tokens are never projected through REST, realtime, or audit payloads'
       - 'project_resources as project-scoped logical identities and project_resource_sources as the sole target/source materialization descriptors (local checkout paths, Git, bundles, or opaque virtual handles); existing resource rows are intentionally discarded by the contract-v4 migration rather than carried through a legacy compatibility shape'
       - 'virtual execution target core tables (execution_target_registrations, project_environment_definitions, project_resource_sources, execution_request_snapshots, execution_request_grants, execution_request_observations, mission_target_resources) and additive execution_requests snapshot/failure/gateway columns; immutable snapshot (payload_json + SHA-256 payload_digest) created in the same transaction as the queued request and never updated; grant records store hashes/opaque IDs, never bearer values'
       - 'soft-delete and revision semantics'
@@ -148,6 +149,7 @@ components:
       - 'storage routes for the organization-images bucket key (/api/storage/organization-images/…) with a PUBLIC organization_image:read grant'
       - 'hosted MCP OAuth endpoints: POST /oauth/register, POST /oauth/token, POST /oauth/revoke, GET /oauth/authorize, POST /oauth/authorize/request, POST /oauth/authorize/approve'
       - 'versioned virtual-target gateway route family (/api/virtual-targets/v1/*): PUT …/registration, POST …/claim, POST …/requests/:id/progress, POST …/requests/:id/launched, POST …/requests/:id/failed, POST …/grants/:id/exchange, GET …/missions/:id/resources, POST …/missions/:id/actions; owns DTO shapes, target-authenticated auth/RBAC, per-request idempotency, and bounded/redacted output; the immutable VirtualExecutionQueueItemV1 payload + digest are built by the service layer at queue time and returned only to the authenticated claiming gateway; local /api/runner/* routes are unchanged'
+      - 'authenticated mobile Live Activity registration routes: PUT and DELETE /api/mobile/live-activities/:activityId/push-token; registrations are private to the caller and APNs delivery is handled by the in-process live-activity dispatcher'
     dependsOn:
       - database
       - auth
@@ -230,6 +232,18 @@ components:
       - shellToRest
       - shellToCli
 
+  mobile:
+    label: 'Mobile REST Consumer'
+    stableIdentifier: mobile
+    referenceSpec: '../OverlordMobile/conformance-manifest.yaml'
+    owns:
+      - 'native ActivityKit lifecycle and per-activity push-token registration stream'
+      - 'authenticated registration, rotation, and revocation calls to the Mobile → REST surface'
+    dependsOn:
+      - rest
+    interactionSurfaces:
+      - mobileToRest
+
   mcp:
     label: 'MCP Server'
     stableIdentifier: mcp
@@ -252,6 +266,18 @@ components:
 
 # Interaction surfaces — the only sanctioned paths between components
 interactionSurfaces:
+  mobileToRest:
+    description: 'Native mobile app registers private ActivityKit push tokens over REST; the server owns snapshot recomputation and APNs delivery'
+    from: mobile
+    to: rest
+    transport: https-json
+    authMechanism: bearer-token
+    routeFamily: '/api/mobile/live-activities/:activityId/push-token'
+    rules:
+      - 'PUT accepts only an opaque ActivityKit pushToken and upserts the authenticated profile registration; DELETE revokes only that caller registration and both operations are retry-safe'
+      - 'Registrations and tokens are never returned by a read endpoint, included in realtime, or written to application logs'
+      - 'The mobile app never sends mission data or an APNs payload; the backend recomputes the bounded account snapshot from authorized data'
+
   agentToProtocol:
     description: 'Agents invoke ovld protocol subcommands via subprocess CLI'
     from: agent
