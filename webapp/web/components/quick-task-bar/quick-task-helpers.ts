@@ -41,10 +41,12 @@ export function getQuickTaskApi(): QuickTaskWindowApi | null {
 
 export function resolveProjectId(
   projects: ProjectOption[],
-  defaultProjectId: string | null
+  ...candidateProjectIds: Array<string | null | undefined>
 ): string {
-  if (defaultProjectId && projects.some(project => project.id === defaultProjectId)) {
-    return defaultProjectId;
+  for (const projectId of candidateProjectIds) {
+    if (projectId && projects.some(project => project.id === projectId)) {
+      return projectId;
+    }
   }
   return projects[0]?.id ?? '';
 }

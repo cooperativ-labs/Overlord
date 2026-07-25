@@ -81,8 +81,10 @@ export function QuickTaskBar({ defaultProjectId = null }: QuickTaskBarProps) {
     [projectsQ.data, workspaces]
   );
 
-  const resolvedDefaultProjectId = resolveProjectId(projects, defaultProjectId);
-
+  // The quick-task window is hidden between uses rather than recreated. Keep
+  // an explicit record of user-driven project changes so reopening it honors a
+  // picker or # selection ahead of all other defaults.
+  const lastManualProjectIdRef = useRef<string | null>(null);
   const [objective, setObjective] = useState('');
   const [selectedProjectId, setSelectedProjectId] = useState(() =>
     resolveProjectId(projects, defaultProjectId)
@@ -163,13 +165,16 @@ export function QuickTaskBar({ defaultProjectId = null }: QuickTaskBarProps) {
   });
 
   useEffect(() => {
-    setSelectedProjectId(current => {
-      if (current && projects.some(project => project.id === current)) {
-        return current;
-      }
-      return resolvedDefaultProjectId;
-    });
-  }, [projects, resolvedDefaultProjectId]);
+    setSelectedProjectId(current =>
+      resolveProjectId(projects, lastManualProjectIdRef.current, current, defaultProjectId)
+    );
+  }, [defaultProjectId, projects]);
+
+  const selectProject = useCallback((projectId: string) => {
+    lastManualProjectIdRef.current = projectId;
+    setSelectedProjectId(projectId);
+    setSelectedResourceKey(null);
+  }, []);
 
   // Drop a bound resource key once it no longer maps to a resource on the
   // selected project (e.g. after switching projects), falling back to inherit
@@ -234,7 +239,9 @@ export function QuickTaskBar({ defaultProjectId = null }: QuickTaskBarProps) {
     if (!quickTaskApi) return;
     const off = quickTaskApi.onShown(() => {
       requestAnimationFrame(() => {
-        setSelectedProjectId(resolvedDefaultProjectId);
+        setSelectedProjectId(current =>
+          resolveProjectId(projects, lastManualProjectIdRef.current, current, defaultProjectId)
+        );
         setObjectiveSelection(defaultSelection);
         setSelectedResourceKey(null);
         setActiveMenu(null);
@@ -246,7 +253,7 @@ export function QuickTaskBar({ defaultProjectId = null }: QuickTaskBarProps) {
     return () => {
       off?.();
     };
-  }, [autoResize, defaultSelection, resolveTextarea, resolvedDefaultProjectId]);
+  }, [autoResize, defaultProjectId, defaultSelection, projects, resolveTextarea]);
 
   const handleClose = useCallback(() => {
     const quickTaskApi = getQuickTaskApi();
@@ -432,8 +439,7 @@ export function QuickTaskBar({ defaultProjectId = null }: QuickTaskBarProps) {
             projectMentionOptions={projects}
             projectMentionSelectionBehavior="select"
             onProjectMentionSelect={project => {
-              setSelectedProjectId(project.id);
-              setSelectedResourceKey(null);
+              selectProject(project.id);
             }}
             onMentionSelect={() => {
               requestAnimationFrame(() => autoResize());
@@ -633,8 +639,7 @@ export function QuickTaskBar({ defaultProjectId = null }: QuickTaskBarProps) {
           projects={projects}
           selectedProjectId={selectedProjectId}
           onSelect={projectId => {
-            setSelectedProjectId(projectId);
-            setSelectedResourceKey(null);
+            selectProject(projectId);
             setActiveMenu(null);
           }}
         />

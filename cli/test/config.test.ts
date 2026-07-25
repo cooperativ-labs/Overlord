@@ -384,6 +384,17 @@ test('bundled PI catalog keeps provider-qualified models and no forced default',
   );
 });
 
+test('bundled Claude catalog offers Opus 5 with the Opus 4.8 reasoning options', () => {
+  const claude = BUNDLED_AGENT_CATALOG.claude;
+  const opus48 = claude.models.find(model => model.id === 'claude-opus-4-8');
+  const opus5 = claude.models.find(model => model.id === 'claude-opus-5');
+
+  assert.ok(opus48);
+  assert.ok(opus5);
+  assert.equal(opus5.displayName, 'Opus 5');
+  assert.deepEqual(opus5.reasoningOptions, opus48.reasoningOptions);
+});
+
 test('parseAgentCatalogFromToml ignores invalid agents', () => {
   assert.deepEqual(
     parseAgentCatalogFromToml({

@@ -271,7 +271,7 @@ function DeliveryPresentation({
       <Accordion className="border-t border-(--color-ink-dim)/15 pt-1">
         <AccordionItem value="summary" className="border-none">
           <AccordionTrigger className="py-2 text-xs font-medium text-(--color-ink-dim) hover:no-underline">
-            Delivery summary
+            Full delivery text
           </AccordionTrigger>
           <AccordionContent>
             <p className="whitespace-pre-wrap text-sm text-(--color-ink-dim)">{summaryText}</p>

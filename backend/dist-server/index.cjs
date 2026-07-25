@@ -69042,6 +69042,11 @@ var init_agent_catalog_defaults = __esm({
             reasoningOptions: ["low", "medium", "high", "xhigh", "max", "ultracode"]
           },
           {
+            id: "claude-opus-5",
+            displayName: "Opus 5",
+            reasoningOptions: ["low", "medium", "high", "xhigh", "max", "ultracode"]
+          },
+          {
             id: "claude-sonnet-5",
             displayName: "Sonnet 5",
             reasoningOptions: ["low", "medium", "high", "xhigh", "max", "ultracode"]
@@ -72192,265 +72197,6 @@ var init_dist6 = __esm({
   }
 });
 
-// ../packages/core/service/local-target-mutations.ts
-function parseMetadataObject(raw) {
-  try {
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
-  } catch {
-    return {};
-  }
-}
-function buildLocalTargetMutationMetadata({
-  kind,
-  capability,
-  input
-}) {
-  return {
-    [LOCAL_TARGET_MUTATION_METADATA_KEY]: {
-      kind,
-      capability,
-      input
-    }
-  };
-}
-function parseLocalTargetMutation(metadataJson) {
-  const metadata = typeof metadataJson === "string" ? parseMetadataObject(metadataJson) : metadataJson;
-  const raw = metadata[LOCAL_TARGET_MUTATION_METADATA_KEY];
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
-  const payload = raw;
-  const kind = payload.kind;
-  const capability = payload.capability;
-  if (kind !== "branch_action" && kind !== "worktree_purge") return null;
-  if (capability !== "performBranchAction" && capability !== "purgeMergedWorktrees" && capability !== "removeWorktree") {
-    return null;
-  }
-  const input = payload.input && typeof payload.input === "object" && !Array.isArray(payload.input) ? payload.input : {};
-  const result = payload.result;
-  const parsedResult = result && typeof result === "object" && !Array.isArray(result) ? result : void 0;
-  return {
-    kind,
-    capability,
-    input,
-    ...parsedResult ? { result: parsedResult } : {}
-  };
-}
-async function resolveMutationObjectiveId({
-  ctx,
-  missionId
-}) {
-  const row = await ctx.db.get(
-    `SELECT id FROM objectives
-        WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL
-        ORDER BY position ASC
-        LIMIT 1`,
-    [missionId, ctx.workspace.id]
-  );
-  if (!row) {
-    throw new ServiceError(
-      "Mission has no objectives to anchor a local-target mutation request.",
-      "no_objective_for_mutation",
-      409
-    );
-  }
-  return row.id;
-}
-async function createLocalTargetMutationRequest({
-  ctx,
-  projectId,
-  missionId,
-  executionTargetId,
-  kind,
-  capability,
-  input,
-  eventSummary
-}) {
-  const mission = await resolveMissionId(ctx, missionId);
-  const resolvedProjectId = await resolveProjectId(ctx, projectId);
-  const objectiveId = await resolveMutationObjectiveId({ ctx, missionId: mission.id });
-  const now2 = nowIso();
-  const id = newId();
-  const metadata = buildLocalTargetMutationMetadata({ kind, capability, input });
-  await ctx.db.transaction(async (tx) => {
-    const txCtx = { ...ctx, db: tx };
-    await txCtx.db.run(
-      `INSERT INTO execution_requests
-           (id, workspace_id, project_id, mission_id, objective_id, execution_target_id,
-            requested_agent, requested_model, requested_reasoning_effort, launch_mode,
-            launch_flags_json, target_kind, requested_source, idempotency_key, status,
-            requested_by_workspace_user_id, resolved_resource_id, resolved_working_directory,
-            metadata_json, created_at, updated_at, revision)
-         VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, NULL, 'run', '{}', 'local', ?, NULL, 'queued', ?, NULL, NULL, ?, ?, ?, 1)`,
-      [
-        id,
-        ctx.workspace.id,
-        resolvedProjectId,
-        mission.id,
-        objectiveId,
-        executionTargetId,
-        LOCAL_TARGET_MUTATION_REQUESTED_SOURCE,
-        ctx.actorWorkspaceUserId,
-        JSON.stringify(metadata),
-        now2,
-        now2
-      ]
-    );
-    await recordChange({
-      ctx: txCtx,
-      entityType: "execution_request",
-      entityId: id,
-      operation: "insert",
-      entityRevision: 1,
-      projectId: resolvedProjectId,
-      missionId: mission.id,
-      objectiveId,
-      changedFields: ["status", "requested_source", "metadata_json"]
-    });
-    await txCtx.db.run(
-      `INSERT INTO mission_events
-           (id, workspace_id, project_id, mission_id, objective_id, type, phase, summary,
-            payload_json, source, actor_workspace_user_id, created_at)
-         VALUES (?, ?, ?, ?, ?, 'execution_requested', 'execute', ?, ?, 'webapp', ?, ?)`,
-      [
-        newId(),
-        ctx.workspace.id,
-        resolvedProjectId,
-        mission.id,
-        objectiveId,
-        eventSummary ?? `Queued ${kind.replace("_", " ")} on remote execution target.`,
-        JSON.stringify({ executionRequestId: id, kind, capability }),
-        ctx.actorWorkspaceUserId,
-        now2
-      ]
-    );
-  });
-  return { id };
-}
-async function completeLocalTargetMutationRequest({
-  ctx,
-  requestId,
-  result
-}) {
-  const row = await ctx.db.get(
-    `SELECT id, workspace_id, project_id, mission_id, objective_id, status, revision, metadata_json,
-            requested_source
-       FROM execution_requests
-      WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-    [requestId, ctx.workspace.id]
-  );
-  if (!row) {
-    throw new ServiceError("Execution request not found", "execution_request_not_found", 404);
-  }
-  if (row.requested_source !== LOCAL_TARGET_MUTATION_REQUESTED_SOURCE) {
-    throw new ServiceError(
-      "Execution request is not a local-target mutation.",
-      "not_local_target_mutation",
-      409
-    );
-  }
-  if (row.status !== "launching" && row.status !== "claimed") {
-    throw new ServiceError(
-      `Cannot complete local-target mutation from status ${row.status}.`,
-      "invalid_execution_request_transition",
-      409
-    );
-  }
-  const mutation = parseLocalTargetMutation(row.metadata_json);
-  if (!mutation) {
-    throw new ServiceError(
-      "Execution request is missing local-target mutation metadata.",
-      "invalid_local_target_mutation",
-      409
-    );
-  }
-  const storedResult = result.ok ? { ok: true, value: result.value } : {
-    ok: false,
-    code: result.code,
-    message: result.message,
-    ...result.details !== void 0 ? { details: result.details } : {}
-  };
-  const metadata = parseMetadataObject(row.metadata_json);
-  metadata[LOCAL_TARGET_MUTATION_METADATA_KEY] = {
-    ...mutation,
-    result: storedResult
-  };
-  const now2 = nowIso();
-  const revision = row.revision + 1;
-  const nextStatus = result.ok ? "launched" : "failed";
-  const lastError = result.ok ? null : result.message;
-  await ctx.db.transaction(async (tx) => {
-    const txCtx = { ...ctx, db: tx };
-    const updated = await txCtx.db.run(
-      `UPDATE execution_requests
-          SET status = ?,
-              metadata_json = ?,
-              last_error = ?,
-              launch_completed_at = ?,
-              updated_at = ?,
-              revision = ?
-        WHERE id = ? AND status = ? AND revision = ?`,
-      [
-        nextStatus,
-        JSON.stringify(metadata),
-        lastError,
-        now2,
-        now2,
-        revision,
-        row.id,
-        row.status,
-        row.revision
-      ]
-    );
-    if (updated.changes === 0) {
-      throw new ServiceError(
-        "Execution request changed while completing local-target mutation.",
-        "execution_request_conflict",
-        409
-      );
-    }
-    await recordChange({
-      ctx: txCtx,
-      entityType: "execution_request",
-      entityId: row.id,
-      operation: "update",
-      entityRevision: revision,
-      projectId: row.project_id,
-      missionId: row.mission_id,
-      objectiveId: row.objective_id,
-      changedFields: ["status", "metadata_json", "last_error", "launch_completed_at"]
-    });
-    await txCtx.db.run(
-      `INSERT INTO mission_events
-           (id, workspace_id, project_id, mission_id, objective_id, type, phase, summary,
-            payload_json, source, actor_workspace_user_id, created_at)
-         VALUES (?, ?, ?, ?, ?, 'update', 'execute', ?, ?, 'runner', NULL, ?)`,
-      [
-        newId(),
-        ctx.workspace.id,
-        row.project_id,
-        row.mission_id,
-        row.objective_id,
-        result.ok ? `Completed ${mutation.kind.replace("_", " ")} on execution target.` : `Local-target mutation failed: ${result.message}`,
-        JSON.stringify({ executionRequestId: row.id, result: storedResult }),
-        now2
-      ]
-    );
-  });
-  return parseLocalTargetMutation(JSON.stringify(metadata));
-}
-var LOCAL_TARGET_MUTATION_METADATA_KEY, LOCAL_TARGET_MUTATION_REQUESTED_SOURCE;
-var init_local_target_mutations = __esm({
-  "../packages/core/service/local-target-mutations.ts"() {
-    "use strict";
-    init_change_feed();
-    init_context();
-    init_errors4();
-    init_util3();
-    LOCAL_TARGET_MUTATION_METADATA_KEY = "overlord.localTargetMutation";
-    LOCAL_TARGET_MUTATION_REQUESTED_SOURCE = "local_target_mutation";
-  }
-});
-
 // ../packages/core/service/project-execution-target.ts
 function requireActor2(ctx) {
   if (!ctx.actorWorkspaceUserId) {
@@ -72979,6 +72725,28 @@ async function renameWorkspaceExecutionTarget({
   }
   return updated;
 }
+async function registerActingExecutionTarget({
+  ctx,
+  label
+}) {
+  const target = await ensureActingDeviceTarget({ ctx });
+  let finalLabel = target.deviceLabel;
+  const desired = typeof label === "string" ? label.trim() : "";
+  if (desired && desired !== finalLabel) {
+    const renamed = await renameWorkspaceExecutionTarget({
+      ctx,
+      executionTargetId: target.executionTargetId,
+      label: desired
+    });
+    finalLabel = renamed.label;
+  }
+  return {
+    executionTargetId: target.executionTargetId,
+    deviceId: target.deviceId,
+    label: finalLabel,
+    targetFingerprint: target.targetFingerprint
+  };
+}
 var PROJECT_EXECUTION_TARGET_PREFERENCE_KEY, TARGET_REACHABLE_STALE_MS, ACTIVE_QUEUE_STATUSES;
 var init_project_execution_target = __esm({
   "../packages/core/service/project-execution-target.ts"() {
@@ -72993,6 +72761,265 @@ var init_project_execution_target = __esm({
     PROJECT_EXECUTION_TARGET_PREFERENCE_KEY = "selectedExecutionTargetId";
     TARGET_REACHABLE_STALE_MS = 5 * 60 * 1e3;
     ACTIVE_QUEUE_STATUSES = ["queued", "claimed", "launching"];
+  }
+});
+
+// ../packages/core/service/local-target-mutations.ts
+function parseMetadataObject(raw) {
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+function buildLocalTargetMutationMetadata({
+  kind,
+  capability,
+  input
+}) {
+  return {
+    [LOCAL_TARGET_MUTATION_METADATA_KEY]: {
+      kind,
+      capability,
+      input
+    }
+  };
+}
+function parseLocalTargetMutation(metadataJson) {
+  const metadata = typeof metadataJson === "string" ? parseMetadataObject(metadataJson) : metadataJson;
+  const raw = metadata[LOCAL_TARGET_MUTATION_METADATA_KEY];
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const payload = raw;
+  const kind = payload.kind;
+  const capability = payload.capability;
+  if (kind !== "branch_action" && kind !== "worktree_purge") return null;
+  if (capability !== "performBranchAction" && capability !== "purgeMergedWorktrees" && capability !== "removeWorktree") {
+    return null;
+  }
+  const input = payload.input && typeof payload.input === "object" && !Array.isArray(payload.input) ? payload.input : {};
+  const result = payload.result;
+  const parsedResult = result && typeof result === "object" && !Array.isArray(result) ? result : void 0;
+  return {
+    kind,
+    capability,
+    input,
+    ...parsedResult ? { result: parsedResult } : {}
+  };
+}
+async function resolveMutationObjectiveId({
+  ctx,
+  missionId
+}) {
+  const row = await ctx.db.get(
+    `SELECT id FROM objectives
+        WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL
+        ORDER BY position ASC
+        LIMIT 1`,
+    [missionId, ctx.workspace.id]
+  );
+  if (!row) {
+    throw new ServiceError(
+      "Mission has no objectives to anchor a local-target mutation request.",
+      "no_objective_for_mutation",
+      409
+    );
+  }
+  return row.id;
+}
+async function createLocalTargetMutationRequest({
+  ctx,
+  projectId,
+  missionId,
+  executionTargetId,
+  kind,
+  capability,
+  input,
+  eventSummary
+}) {
+  const mission = await resolveMissionId(ctx, missionId);
+  const resolvedProjectId = await resolveProjectId(ctx, projectId);
+  const objectiveId = await resolveMutationObjectiveId({ ctx, missionId: mission.id });
+  const now2 = nowIso();
+  const id = newId();
+  const metadata = buildLocalTargetMutationMetadata({ kind, capability, input });
+  await ctx.db.transaction(async (tx) => {
+    const txCtx = { ...ctx, db: tx };
+    await txCtx.db.run(
+      `INSERT INTO execution_requests
+           (id, workspace_id, project_id, mission_id, objective_id, execution_target_id,
+            requested_agent, requested_model, requested_reasoning_effort, launch_mode,
+            launch_flags_json, target_kind, requested_source, idempotency_key, status,
+            requested_by_workspace_user_id, resolved_resource_id, resolved_working_directory,
+            metadata_json, created_at, updated_at, revision)
+         VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, NULL, 'run', '{}', 'local', ?, NULL, 'queued', ?, NULL, NULL, ?, ?, ?, 1)`,
+      [
+        id,
+        ctx.workspace.id,
+        resolvedProjectId,
+        mission.id,
+        objectiveId,
+        executionTargetId,
+        LOCAL_TARGET_MUTATION_REQUESTED_SOURCE,
+        ctx.actorWorkspaceUserId,
+        JSON.stringify(metadata),
+        now2,
+        now2
+      ]
+    );
+    await recordChange({
+      ctx: txCtx,
+      entityType: "execution_request",
+      entityId: id,
+      operation: "insert",
+      entityRevision: 1,
+      projectId: resolvedProjectId,
+      missionId: mission.id,
+      objectiveId,
+      changedFields: ["status", "requested_source", "metadata_json"]
+    });
+    await txCtx.db.run(
+      `INSERT INTO mission_events
+           (id, workspace_id, project_id, mission_id, objective_id, type, phase, summary,
+            payload_json, source, actor_workspace_user_id, created_at)
+         VALUES (?, ?, ?, ?, ?, 'execution_requested', 'execute', ?, ?, 'webapp', ?, ?)`,
+      [
+        newId(),
+        ctx.workspace.id,
+        resolvedProjectId,
+        mission.id,
+        objectiveId,
+        eventSummary ?? `Queued ${kind.replace("_", " ")} on remote execution target.`,
+        JSON.stringify({ executionRequestId: id, kind, capability }),
+        ctx.actorWorkspaceUserId,
+        now2
+      ]
+    );
+  });
+  return { id };
+}
+async function completeLocalTargetMutationRequest({
+  ctx,
+  requestId,
+  result
+}) {
+  const row = await ctx.db.get(
+    `SELECT id, workspace_id, project_id, mission_id, objective_id, status, revision, metadata_json,
+            requested_source
+       FROM execution_requests
+      WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+    [requestId, ctx.workspace.id]
+  );
+  if (!row) {
+    throw new ServiceError("Execution request not found", "execution_request_not_found", 404);
+  }
+  if (row.requested_source !== LOCAL_TARGET_MUTATION_REQUESTED_SOURCE) {
+    throw new ServiceError(
+      "Execution request is not a local-target mutation.",
+      "not_local_target_mutation",
+      409
+    );
+  }
+  if (row.status !== "launching" && row.status !== "claimed") {
+    throw new ServiceError(
+      `Cannot complete local-target mutation from status ${row.status}.`,
+      "invalid_execution_request_transition",
+      409
+    );
+  }
+  const mutation = parseLocalTargetMutation(row.metadata_json);
+  if (!mutation) {
+    throw new ServiceError(
+      "Execution request is missing local-target mutation metadata.",
+      "invalid_local_target_mutation",
+      409
+    );
+  }
+  const storedResult = result.ok ? { ok: true, value: result.value } : {
+    ok: false,
+    code: result.code,
+    message: result.message,
+    ...result.details !== void 0 ? { details: result.details } : {}
+  };
+  const metadata = parseMetadataObject(row.metadata_json);
+  metadata[LOCAL_TARGET_MUTATION_METADATA_KEY] = {
+    ...mutation,
+    result: storedResult
+  };
+  const now2 = nowIso();
+  const revision = row.revision + 1;
+  const nextStatus = result.ok ? "launched" : "failed";
+  const lastError = result.ok ? null : result.message;
+  await ctx.db.transaction(async (tx) => {
+    const txCtx = { ...ctx, db: tx };
+    const updated = await txCtx.db.run(
+      `UPDATE execution_requests
+          SET status = ?,
+              metadata_json = ?,
+              last_error = ?,
+              launch_completed_at = ?,
+              updated_at = ?,
+              revision = ?
+        WHERE id = ? AND status = ? AND revision = ?`,
+      [
+        nextStatus,
+        JSON.stringify(metadata),
+        lastError,
+        now2,
+        now2,
+        revision,
+        row.id,
+        row.status,
+        row.revision
+      ]
+    );
+    if (updated.changes === 0) {
+      throw new ServiceError(
+        "Execution request changed while completing local-target mutation.",
+        "execution_request_conflict",
+        409
+      );
+    }
+    await recordChange({
+      ctx: txCtx,
+      entityType: "execution_request",
+      entityId: row.id,
+      operation: "update",
+      entityRevision: revision,
+      projectId: row.project_id,
+      missionId: row.mission_id,
+      objectiveId: row.objective_id,
+      changedFields: ["status", "metadata_json", "last_error", "launch_completed_at"]
+    });
+    await txCtx.db.run(
+      `INSERT INTO mission_events
+           (id, workspace_id, project_id, mission_id, objective_id, type, phase, summary,
+            payload_json, source, actor_workspace_user_id, created_at)
+         VALUES (?, ?, ?, ?, ?, 'update', 'execute', ?, ?, 'runner', NULL, ?)`,
+      [
+        newId(),
+        ctx.workspace.id,
+        row.project_id,
+        row.mission_id,
+        row.objective_id,
+        result.ok ? `Completed ${mutation.kind.replace("_", " ")} on execution target.` : `Local-target mutation failed: ${result.message}`,
+        JSON.stringify({ executionRequestId: row.id, result: storedResult }),
+        now2
+      ]
+    );
+  });
+  return parseLocalTargetMutation(JSON.stringify(metadata));
+}
+var LOCAL_TARGET_MUTATION_METADATA_KEY, LOCAL_TARGET_MUTATION_REQUESTED_SOURCE;
+var init_local_target_mutations = __esm({
+  "../packages/core/service/local-target-mutations.ts"() {
+    "use strict";
+    init_change_feed();
+    init_context();
+    init_errors4();
+    init_util3();
+    LOCAL_TARGET_MUTATION_METADATA_KEY = "overlord.localTargetMutation";
+    LOCAL_TARGET_MUTATION_REQUESTED_SOURCE = "local_target_mutation";
   }
 });
 
@@ -132055,6 +132082,7 @@ async function moveMissionToExecute({
 }
 
 // protocol.ts
+init_project_execution_target();
 init_projects();
 
 // ../packages/core/service/protocol.ts
@@ -138925,6 +138953,48 @@ async function deleteProjectResource(projectId, resourceId) {
         entityRevision: revision,
         projectId,
         workspaceId: existing.workspace_id
+      },
+      tx
+    );
+  });
+}
+async function deleteProjectResourceSource(projectId, resourceId, sourceId) {
+  await requireDatabaseClient().transaction(async (tx) => {
+    const resource = await getProjectResourceRow(
+      tx,
+      projectId,
+      resourceId,
+      PERMISSIONS.PROJECT_UPDATE
+    );
+    const source = await tx.get(
+      `SELECT id FROM project_resource_sources
+        WHERE id = ? AND project_id = ? AND resource_id = ? AND deleted_at IS NULL`,
+      [sourceId, projectId, resourceId]
+    );
+    if (!source) throw new ApiError(404, "Project resource source not found");
+    const now2 = nowIso2();
+    const revision = resource.revision + 1;
+    await tx.run(
+      `UPDATE project_resource_sources
+          SET deleted_at = ?, updated_at = ?, revision = revision + 1
+        WHERE id = ?`,
+      [now2, now2, sourceId]
+    );
+    await tx.run(
+      `UPDATE project_resources
+          SET updated_at = ?, revision = ?
+        WHERE id = ?`,
+      [now2, revision, resourceId]
+    );
+    await recordChange2(
+      {
+        entityType: "project_resource",
+        entityId: resourceId,
+        operation: "update",
+        entityRevision: revision,
+        projectId,
+        changedFields: ["sources"],
+        workspaceId: resource.workspace_id
       },
       tx
     );
@@ -149046,8 +149116,7 @@ function objectiveInputs(body) {
     }
   ];
 }
-async function createProjectFromProtocol(body) {
-  const name = requireFlag(body, "--name");
+async function resolveParentlessWorkspace(body, selectionMessage) {
   const memberships = await callerWorkspaceMemberships();
   if (memberships.length === 0) {
     throw new ApiError(403, "No active workspace membership; create or join a workspace first.");
@@ -149055,24 +149124,36 @@ async function createProjectFromProtocol(body) {
   const memberWorkspaceIds = new Set(memberships.map((m3) => m3.workspaceId));
   const workspaces = (await listWorkspaces()).filter((w) => memberWorkspaceIds.has(w.id)).map((w) => ({ id: w.id, name: w.name, slug: w.slug }));
   const requested = strFlag(body, "--workspace-id")?.trim();
-  let target;
   if (requested) {
     const needle = requested.toLowerCase();
-    target = workspaces.find(
+    const target = workspaces.find(
       (w) => w.id === requested || w.slug.toLowerCase() === needle || w.name.toLowerCase() === needle
     );
     if (!target) {
       throw new ApiError(404, `Workspace not found or not a member: ${requested}`);
     }
-  } else if (workspaces.length === 1) {
-    target = workspaces[0];
-  } else {
-    return {
-      status: "workspace_selection_required",
-      message: "You belong to more than one workspace. Ask the user which workspace to create the project in, then retry with workspaceId set to the chosen id, slug, or name.",
-      workspaces
-    };
+    return { kind: "workspace", workspace: target };
   }
+  if (workspaces.length === 1) {
+    return { kind: "workspace", workspace: workspaces[0] };
+  }
+  return {
+    kind: "selection",
+    result: {
+      status: "workspace_selection_required",
+      message: selectionMessage,
+      workspaces
+    }
+  };
+}
+async function createProjectFromProtocol(body) {
+  const name = requireFlag(body, "--name");
+  const resolved = await resolveParentlessWorkspace(
+    body,
+    "You belong to more than one workspace. Ask the user which workspace to create the project in, then retry with workspaceId set to the chosen id, slug, or name."
+  );
+  if (resolved.kind === "selection") return resolved.result;
+  const target = resolved.workspace;
   const workspaceUserId = await requireWorkspacePermission({
     workspaceId: target.id,
     permission: PERMISSIONS.PROJECT_CREATE,
@@ -149093,6 +149174,32 @@ async function createProjectFromProtocol(body) {
     slug: strFlag(body, "--slug") ?? null
   });
   return { status: "created", project, workspace: target };
+}
+async function registerTargetFromProtocol(body) {
+  const resolved = await resolveParentlessWorkspace(
+    body,
+    "You belong to more than one workspace. Ask the user which workspace to register the execution target in, then retry with workspaceId set to the chosen id, slug, or name."
+  );
+  if (resolved.kind === "selection") return resolved.result;
+  const target = resolved.workspace;
+  const workspaceUserId = await requireWorkspacePermission({
+    workspaceId: target.id,
+    permission: PERMISSIONS.EXECUTION_REQUEST_CLAIM,
+    notFoundMessage: "Workspace not found or no active membership"
+  });
+  const ctx = {
+    ...await buildWebappServiceContextForWorkspace(
+      target.id,
+      serviceDatabaseClient(),
+      workspaceUserId
+    ),
+    source: "protocol"
+  };
+  const registered = await registerActingExecutionTarget({
+    ctx,
+    label: strFlag(body, "--name") ?? null
+  });
+  return { status: "registered", executionTarget: registered, workspace: target };
 }
 var handlers = {
   // Session lifecycle ------------------------------------------------------
@@ -149327,6 +149434,11 @@ var handlers = {
   // (see `createProjectFromProtocol`) so it can return a `workspace_selection_required`
   // result when the caller has multiple memberships instead of defaulting.
   "create-project": (_ctx, body) => createProjectFromProtocol(body),
+  // Parentless execution-target registration. Resolves/validates the target
+  // workspace itself (see `registerTargetFromProtocol`) so it can return a
+  // `workspace_selection_required` result when the caller has multiple
+  // memberships instead of defaulting.
+  "register-target": (_ctx, body) => registerTargetFromProtocol(body),
   // Predates the real `organizations` table/hierarchy (coo:135) — despite the
   // name, this returns only the caller's current *workspace* context (never
   // an organization row), kept as-is to avoid a breaking protocol rename.
@@ -149360,6 +149472,7 @@ var SUBCOMMAND_PERMISSIONS = {
   // Enforced per-target inside the handler (requireWorkspacePermission) so the
   // multi-workspace selection flow runs before any default-workspace gate.
   "create-project": null,
+  "register-target": null,
   "list-organizations": PERMISSIONS.PROJECT_READ
 };
 async function runProtocolSubcommand(subcommand, body) {
@@ -156140,6 +156253,16 @@ app.delete(
   handle2(
     (req) => {
       deleteProjectResource(req.params.id, req.params.resourceId);
+      return { ok: true };
+    },
+    { mutates: true }
+  )
+);
+app.delete(
+  "/api/projects/:id/resources/:resourceId/sources/:sourceId",
+  handle2(
+    async (req) => {
+      await deleteProjectResourceSource(req.params.id, req.params.resourceId, req.params.sourceId);
       return { ok: true };
     },
     { mutates: true }

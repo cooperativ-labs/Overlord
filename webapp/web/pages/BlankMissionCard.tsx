@@ -1,4 +1,4 @@
-import { Check, ChevronDown, FolderOpen, Tag } from 'lucide-react';
+import { Check, FolderOpen, Tag } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { RepositoryMentionTextarea } from '@/components/RepositoryMentionTextarea.tsx';
@@ -338,8 +338,8 @@ export function BlankMissionCard({
                     <Button
                       type="button"
                       variant="ghost"
-                      size="sm"
-                      className="h-6 gap-1 px-1.5 text-xs"
+                      size="icon"
+                      className="h-6 w-6 shrink-0"
                       aria-label={
                         selectedProject
                           ? `Project: ${selectedProject.name}`
@@ -351,13 +351,12 @@ export function BlankMissionCard({
                   }
                 >
                   <span
-                    className="h-2.5 w-2.5 shrink-0 rounded-[3px] border"
+                    className="h-3.5 w-3.5 shrink-0 rounded-[3px] border"
                     style={{
                       backgroundColor: selectedProject?.color ?? undefined,
                       borderColor: selectedProject?.color ?? undefined
                     }}
                   />
-                  <ChevronDown className="h-3 w-3 opacity-60" />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent
                   align="end"
