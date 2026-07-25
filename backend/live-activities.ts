@@ -46,7 +46,7 @@ function presentationTitle(value: string): string {
   return bounded(
     value
       .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-      .replace(/[\*_`]/g, '')
+      .replace(/[*_`]/g, '')
       .replace(/^[#>\-+*]\s+/gm, '')
       .replace(/\s+/g, ' ')
       .trim(),
