@@ -51,6 +51,7 @@ import {
 } from './execution/runner.ts';
 import { createEverhourExtensionRouter } from './ext/everhour/routes.ts';
 import { createGitHubExtensionRouter } from './ext/github/routes.ts';
+import { completeGitHubUserAuthorization } from './ext/github/user-oauth.ts';
 import { isAllowedBrowserOrigin } from './http/browser-origins.ts';
 import { buildMeta } from './http/meta.ts';
 import { resolveAuthBaseUrl } from './http/public-backend-url.ts';
@@ -144,6 +145,7 @@ import {
   getProfile,
   getProject,
   getProjectRepository,
+  initializeProject,
   listArtifacts,
   listMissionBranches,
   listMissionDeliveries,
@@ -414,6 +416,32 @@ app.post('/api/auth/browser/exchange', express.json(), (req, res) => {
     return;
   }
   res.json({ token });
+});
+
+// GitHub OAuth Apps accept one registered callback plus subpaths. The login
+// callback remains `/api/auth/callback/github`; this exact repository-consent
+// callback must run before Better Auth's `/api/auth/*` wildcard.
+app.get('/api/auth/callback/github/repository', async (req, res, next) => {
+  try {
+    const result = await completeGitHubUserAuthorization({
+      code: typeof req.query.code === 'string' ? req.query.code : '',
+      state: typeof req.query.state === 'string' ? req.query.state : ''
+    });
+    if (result.returnUrl) {
+      const destination = new URL(result.returnUrl);
+      destination.searchParams.set('githubConnection', 'connected');
+      res.redirect(302, destination.toString());
+      return;
+    }
+    res
+      .status(200)
+      .type('html')
+      .send(
+        '<!doctype html><meta name="viewport" content="width=device-width"><title>GitHub connected</title><p>GitHub is connected. You can return to Overlord.</p>'
+      );
+  } catch (error) {
+    next(error);
+  }
 });
 
 app.all('/api/auth/*', authNodeHandler);
@@ -1156,6 +1184,10 @@ app.post(
   '/api/projects',
   handle(req => createProject(req.body), { mutates: true })
 );
+app.post(
+  '/api/projects/initialize',
+  handle(req => initializeProject(req.body), { mutates: true })
+);
 app.patch(
   '/api/projects/reorder',
   handle(req => reorderProjects(req.body), { mutates: true })
@@ -1382,7 +1414,11 @@ app.get(
 // `/api` route. Authentication resolves the profile; extension resource routes
 // derive their workspace from the named project or mission before authorization.
 app.use('/ext/everhour', requireAuthenticatedSession, createEverhourExtensionRouter(handle));
-app.use('/ext/github', requireAuthenticatedSession, createGitHubExtensionRouter(handle));
+app.use(
+  '/ext/github',
+  requireAuthenticatedSession,
+  createGitHubExtensionRouter(handle, { allowedBrowserOrigins: getAllowedBrowserOrigins() })
+);
 app.patch(
   '/api/projects/:id/board/reorder',
   handle(req => reorderBoardColumn(req.params.id, req.body), {

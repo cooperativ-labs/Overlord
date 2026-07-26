@@ -4,6 +4,7 @@ import type { DatabaseClient } from '@overlord/database';
 import { isCoLocatedBackend } from './local-target/index.js';
 import { recordChange } from './change-feed.js';
 import type { ServiceContext } from './context.js';
+import { softDeleteDeviceIfOrphaned, softDeleteOrphanDevices } from './devices.js';
 import { ServiceError } from './errors.js';
 import {
   ensureActingDeviceTarget,
@@ -151,6 +152,8 @@ export async function listWorkspaceExecutionTargets({
 }: {
   ctx: ServiceContext;
 }): Promise<WorkspaceExecutionTarget[]> {
+  await softDeleteOrphanDevices({ ctx });
+
   const callerExecutionTargetId = await findActingDeviceExecutionTargetId({ ctx });
   const rows = (await ctx.db.all(
     `SELECT et.id, et.type, et.label, et.status,
@@ -683,10 +686,10 @@ export async function deleteWorkspaceExecutionTarget({
   }
 
   const target = (await ctx.db.get(
-    `SELECT id FROM execution_targets
+    `SELECT id, device_id FROM execution_targets
         WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
     [id, ctx.workspace.id]
-  )) as { id: string } | undefined;
+  )) as { id: string; device_id: string | null } | undefined;
   if (!target) {
     throw new ServiceError('Execution target not found', 'not_found', 404);
   }
@@ -763,6 +766,9 @@ export async function deleteWorkspaceExecutionTarget({
     entityRevision: null,
     changedFields: ['deleted_at']
   });
+
+  // A device without a live execution target is not a selectable host — tombstone it.
+  await softDeleteDeviceIfOrphaned({ ctx, deviceId: target.device_id });
 }
 
 /** Rename an execution target that belongs to the acting workspace. */

@@ -1219,6 +1219,45 @@ export interface CreateProjectBody {
   } | null;
 }
 
+/**
+ * Atomic project + first-mission creation with optional retryable private
+ * GitHub provisioning. The key is generated once by the client and reused for
+ * retries so a network failure cannot create a second project.
+ */
+export interface InitializeProjectBody {
+  workspaceId: string;
+  idempotencyKey: string;
+  name: string;
+  description: string;
+  createGitHubRepository?: boolean;
+  githubOwnerLogin?: string;
+}
+
+export type GitHubRepositoryProvisioningStatus =
+  | 'not_requested'
+  | 'pending'
+  | 'failed'
+  | 'succeeded';
+
+export interface InitializeProjectResultDto {
+  project: ProjectDto;
+  mission: MissionDetailDto;
+  repositoryProvisioning: {
+    status: GitHubRepositoryProvisioningStatus;
+    retryable: boolean;
+    ownerLogin: string | null;
+    repository: {
+      id: string;
+      fullName: string;
+      defaultBranch: string;
+      private: true;
+      cloneUrl: string;
+    } | null;
+    resource: ProjectResourceDto | null;
+    error: string | null;
+  };
+}
+
 /** A per-project tag definition. Authored in project settings, assigned to missions. */
 export interface ProjectTagDto {
   id: string;

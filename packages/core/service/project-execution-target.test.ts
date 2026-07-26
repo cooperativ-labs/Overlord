@@ -588,10 +588,15 @@ describe('execution target lifecycle', () => {
 
     await deleteWorkspaceExecutionTarget({ ctx, executionTargetId: staleTargetId });
 
-    const row = (await db.get(`SELECT deleted_at FROM execution_targets WHERE id = ?`, [
+    const row = (await db.get(`SELECT deleted_at, device_id FROM execution_targets WHERE id = ?`, [
       staleTargetId
-    ])) as { deleted_at: string | null };
+    ])) as { deleted_at: string | null; device_id: string | null };
     assert.ok(row.deleted_at);
+
+    const deviceRow = (await db.get(`SELECT deleted_at FROM devices WHERE id = ?`, [
+      row.device_id
+    ])) as { deleted_at: string | null };
+    assert.ok(deviceRow.deleted_at, 'linked device should be soft-deleted when orphaned');
 
     const sourceRow = (await db.get(
       `SELECT deleted_at FROM project_resource_sources
@@ -602,6 +607,66 @@ describe('execution target lifecycle', () => {
 
     const selection = await getProjectExecutionTargetSelection({ ctx, projectId: project.id });
     assert.equal(selection.selectedExecutionTargetId, null);
+  });
+
+  it('listWorkspaceExecutionTargets soft-deletes orphan devices', async () => {
+    const { ctx, db } = await setup();
+    const now = nowIso();
+    const orphanDeviceId = newId();
+    await db.run(
+      `INSERT INTO devices
+         (id, workspace_id, fingerprint, label, platform, status, last_seen_at,
+          metadata_json, created_at, updated_at, revision)
+       VALUES (?, ?, 'fp-orphan-list', 'orphan-device', 'linux', 'active', ?, '{}', ?, ?, 1)`,
+      [orphanDeviceId, ctx.workspace.id, now, now, now]
+    );
+
+    await listWorkspaceExecutionTargets({ ctx });
+
+    const deviceRow = (await db.get(`SELECT deleted_at FROM devices WHERE id = ?`, [
+      orphanDeviceId
+    ])) as { deleted_at: string | null };
+    assert.ok(deviceRow.deleted_at);
+  });
+
+  it('re-registering a soft-deleted device fingerprint revives the device and target', async () => {
+    const { ctx, db } = await setup();
+    const fingerprint = 'fp-revive-me';
+    const first = await ensureClientDeviceTarget({
+      ctx,
+      deviceFingerprint: fingerprint,
+      deviceLabel: 'revive-host',
+      devicePlatform: 'linux'
+    });
+
+    await deleteWorkspaceExecutionTarget({ ctx, executionTargetId: first.executionTargetId });
+
+    const tombstonedDevice = (await db.get(`SELECT deleted_at FROM devices WHERE id = ?`, [
+      first.deviceId
+    ])) as { deleted_at: string | null };
+    assert.ok(tombstonedDevice.deleted_at);
+
+    const second = await ensureClientDeviceTarget({
+      ctx,
+      deviceFingerprint: fingerprint,
+      deviceLabel: 'revive-host-again',
+      devicePlatform: 'linux'
+    });
+
+    assert.equal(second.deviceId, first.deviceId);
+    assert.equal(second.executionTargetId, first.executionTargetId);
+
+    const liveDevice = (await db.get(`SELECT deleted_at, label FROM devices WHERE id = ?`, [
+      first.deviceId
+    ])) as { deleted_at: string | null; label: string };
+    assert.equal(liveDevice.deleted_at, null);
+    assert.equal(liveDevice.label, 'revive-host-again');
+
+    const liveTarget = (await db.get(
+      `SELECT deleted_at FROM execution_targets WHERE id = ?`,
+      [first.executionTargetId]
+    )) as { deleted_at: string | null };
+    assert.equal(liveTarget.deleted_at, null);
   });
 
   it('renames a workspace execution target', async () => {

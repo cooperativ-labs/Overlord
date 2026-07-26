@@ -10,6 +10,7 @@ import {
   USER_TOKEN_PREFIX
 } from '@overlord/auth';
 import { generateDateFromSchedule, type ScheduleLike } from '@overlord/automations';
+import type { CreatedGitHubRepositoryDto } from '@overlord/contract/ext/github';
 import { bindBool, type DatabaseClient } from '@overlord/database';
 import os from 'node:os';
 import path from 'node:path';
@@ -53,6 +54,8 @@ import type {
   DeliveryReportPayloadV1,
   FileChangeDto,
   GenerateCommitMessageResultDto,
+  InitializeProjectBody,
+  InitializeProjectResultDto,
   MissionBranchDto,
   MissionBranchListDto,
   MissionDetailDto,
@@ -114,6 +117,7 @@ import {
   resolveMutationAnchorMissionId,
   resolveRemoteMutationTarget
 } from './execution/local-target-mutation-queue.ts';
+import { createPrivateGitHubRepository } from './ext/github/user-oauth.ts';
 import { missionWorktreePath, previewMissionBranch } from './branch-planning.ts';
 import {
   buildWebappServiceContext,
@@ -2945,6 +2949,287 @@ export async function createProject(body: CreateProjectBody): Promise<ProjectDto
   });
 }
 
+type ProjectInitializationRow = {
+  id: string;
+  project_id: string;
+  mission_id: string;
+  github_owner_login: string | null;
+  provisioning_status: 'not_requested' | 'pending' | 'failed' | 'succeeded';
+  github_repo_id: string | null;
+  full_name: string | null;
+  default_branch: string | null;
+  clone_url: string | null;
+  failure_message: string | null;
+  revision: number;
+};
+
+function initializationProvisioning(
+  row: ProjectInitializationRow,
+  resource: ProjectResourceDto | null
+): InitializeProjectResultDto['repositoryProvisioning'] {
+  const succeeded = row.provisioning_status === 'succeeded';
+  return {
+    status: row.provisioning_status,
+    retryable: row.provisioning_status === 'pending' || row.provisioning_status === 'failed',
+    ownerLogin: row.github_owner_login,
+    repository:
+      succeeded && row.github_repo_id && row.full_name && row.default_branch && row.clone_url
+        ? {
+            id: row.github_repo_id,
+            fullName: row.full_name,
+            defaultBranch: row.default_branch,
+            private: true,
+            cloneUrl: row.clone_url
+          }
+        : null,
+    resource,
+    error: row.failure_message
+  };
+}
+
+async function readProjectInitialization(
+  db: DatabaseClient,
+  profileId: string,
+  idempotencyKey: string
+): Promise<ProjectInitializationRow | null> {
+  return (
+    (await db.get<ProjectInitializationRow>(
+      `SELECT id, project_id, mission_id, github_owner_login, provisioning_status,
+              github_repo_id, full_name, default_branch, clone_url, failure_message, revision
+         FROM ext_github_project_initializations
+        WHERE profile_id = ? AND idempotency_key = ? AND deleted_at IS NULL`,
+      [profileId, idempotencyKey]
+    )) ?? null
+  );
+}
+
+/**
+ * The mobile composite creation boundary. Internal idea capture is committed in
+ * one transaction; the external GitHub side effect is deliberately retried
+ * afterwards using the same caller idempotency key.
+ */
+export async function initializeProject(
+  body: InitializeProjectBody
+): Promise<InitializeProjectResultDto> {
+  const db = requireDatabaseClient();
+  const workspaceId = body.workspaceId?.trim();
+  const idempotencyKey = body.idempotencyKey?.trim();
+  const name = body.name?.trim();
+  const description = body.description?.trim();
+  const wantsRepository = body.createGitHubRepository === true;
+  const ownerLogin = body.githubOwnerLogin?.trim() || null;
+  if (!workspaceId || !idempotencyKey || idempotencyKey.length > 200 || !name || !description) {
+    throw new ApiError(400, 'workspaceId, idempotencyKey, name, and description are required.');
+  }
+  if (wantsRepository !== Boolean(ownerLogin)) {
+    throw new ApiError(400, 'githubOwnerLogin is required only when creating a GitHub repository.');
+  }
+  const profileId = await resolveActiveProfileId(db);
+  if (!profileId) throw new ApiError(401, 'Authentication required.');
+
+  let initialization = await db.transaction(async tx => {
+    const existing = await readProjectInitialization(tx, profileId, idempotencyKey);
+    if (existing) return existing;
+    const workspaceUserId = await requireWorkspacePermission({
+      workspaceId,
+      permission: PERMISSIONS.PROJECT_CREATE,
+      db: tx,
+      notFoundMessage: 'Workspace not found or no active membership'
+    });
+    const now = nowIso();
+    const projectId = newId();
+    const maxPosition = (await tx.get(
+      `SELECT COALESCE(MAX(position), 0) AS max_position FROM projects
+        WHERE workspace_id = ? AND deleted_at IS NULL`,
+      [workspaceId]
+    )) as { max_position: number };
+    await tx.run(
+      `INSERT INTO projects (id, workspace_id, slug, name, description, status, settings_json,
+          created_by_workspace_user_id, created_at, updated_at, revision, position)
+       VALUES (?, ?, ?, ?, ?, 'active', '{}', ?, ?, ?, 1, ?)`,
+      [
+        projectId,
+        workspaceId,
+        slugify(name),
+        name,
+        description,
+        workspaceUserId,
+        now,
+        now,
+        maxPosition.max_position + 1
+      ]
+    );
+    await recordChange(
+      {
+        entityType: 'project',
+        entityId: projectId,
+        operation: 'insert',
+        entityRevision: 1,
+        projectId,
+        workspaceId,
+        actorWorkspaceUserId: workspaceUserId
+      },
+      tx
+    );
+    const mission = await createMissionTx(
+      { projectId, title: name, firstObjective: description },
+      tx,
+      true
+    );
+    const id = newId();
+    const status = wantsRepository ? 'pending' : 'not_requested';
+    await tx.run(
+      `INSERT INTO ext_github_project_initializations
+        (id, profile_id, workspace_id, project_id, mission_id, idempotency_key, github_owner_login,
+         provisioning_status, created_at, updated_at, revision)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+      [
+        id,
+        profileId,
+        workspaceId,
+        projectId,
+        mission.missionId,
+        idempotencyKey,
+        ownerLogin,
+        status,
+        now,
+        now
+      ]
+    );
+    return {
+      id,
+      project_id: projectId,
+      mission_id: mission.missionId,
+      github_owner_login: ownerLogin,
+      provisioning_status: status,
+      github_repo_id: null,
+      full_name: null,
+      default_branch: null,
+      clone_url: null,
+      failure_message: null,
+      revision: 1
+    } satisfies ProjectInitializationRow;
+  });
+
+  if (
+    initialization.provisioning_status !== 'not_requested' &&
+    initialization.provisioning_status !== 'succeeded'
+  ) {
+    try {
+      const repo = await createPrivateGitHubRepository({
+        ownerLogin: ownerLogin!,
+        name: slugify(name)
+      });
+      initialization = await persistInitializedRepository({ db, initialization, repo });
+    } catch (error) {
+      const message =
+        error instanceof ApiError ? error.message : 'GitHub repository provisioning failed.';
+      const now = nowIso();
+      await db.run(
+        `UPDATE ext_github_project_initializations
+            SET provisioning_status = 'failed', failure_message = ?, updated_at = ?, revision = revision + 1
+          WHERE id = ? AND provisioning_status <> 'succeeded' AND deleted_at IS NULL`,
+        [message.slice(0, 500), now, initialization.id]
+      );
+      initialization = (await readProjectInitialization(db, profileId, idempotencyKey))!;
+    }
+  }
+
+  const project = await getProject(initialization.project_id);
+  const mission = await getMissionDetail(initialization.mission_id);
+  const resources = await listProjectResources(initialization.project_id);
+  const resource = initialization.clone_url
+    ? (resources.find(item =>
+        item.sources.some(source => source.descriptor.url === initialization.clone_url)
+      ) ?? null)
+    : null;
+  return {
+    project,
+    mission,
+    repositoryProvisioning: initializationProvisioning(initialization, resource)
+  };
+}
+
+async function persistInitializedRepository({
+  db,
+  initialization,
+  repo
+}: {
+  db: DatabaseClient;
+  initialization: ProjectInitializationRow;
+  repo: CreatedGitHubRepositoryDto;
+}): Promise<ProjectInitializationRow> {
+  return db.transaction(async tx => {
+    const current = (await tx.get<ProjectInitializationRow>(
+      `SELECT id, project_id, mission_id, github_owner_login, provisioning_status,
+              github_repo_id, full_name, default_branch, clone_url, failure_message, revision
+         FROM ext_github_project_initializations WHERE id = ? AND deleted_at IS NULL`,
+      [initialization.id]
+    ))!;
+    if (current.provisioning_status === 'succeeded') return current;
+    const project = await getProject(current.project_id, tx, PERMISSIONS.PROJECT_READ);
+    const now = nowIso();
+    const existingLink = await tx.get<{ id: string }>(
+      `SELECT id FROM ext_github_project_links WHERE project_id = ? AND deleted_at IS NULL`,
+      [project.id]
+    );
+    if (!existingLink) {
+      const linkId = newId();
+      await tx.run(
+        `INSERT INTO ext_github_project_links
+          (id, workspace_id, project_id, github_repo_id, full_name, default_branch, metadata_json, created_at, updated_at, revision)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+        [
+          linkId,
+          project.workspaceId,
+          project.id,
+          repo.id,
+          repo.fullName,
+          repo.defaultBranch,
+          JSON.stringify({ private: true, source: 'user_oauth' }),
+          now,
+          now
+        ]
+      );
+      await recordChange(
+        {
+          entityType: 'github:project_link',
+          entityId: linkId,
+          operation: 'insert',
+          entityRevision: 1,
+          projectId: project.id,
+          changedFields: ['repo'],
+          workspaceId: project.workspaceId
+        },
+        tx
+      );
+    }
+    await insertProjectResource(
+      tx,
+      project,
+      {
+        sourceUrl: repo.cloneUrl,
+        label: repo.fullName,
+        isPrimary: false,
+        accessMode: 'read'
+      },
+      'GitHub clone URL is required'
+    );
+    await tx.run(
+      `UPDATE ext_github_project_initializations SET provisioning_status = 'succeeded', github_repo_id = ?,
+          full_name = ?, default_branch = ?, clone_url = ?, failure_message = NULL, updated_at = ?, revision = revision + 1
+        WHERE id = ?`,
+      [repo.id, repo.fullName, repo.defaultBranch, repo.cloneUrl, now, current.id]
+    );
+    return (await tx.get<ProjectInitializationRow>(
+      `SELECT id, project_id, mission_id, github_owner_login, provisioning_status,
+              github_repo_id, full_name, default_branch, clone_url, failure_message, revision
+         FROM ext_github_project_initializations WHERE id = ?`,
+      [current.id]
+    ))!;
+  });
+}
+
 export async function updateProject(id: string, body: UpdateProjectBody): Promise<ProjectDto> {
   return requireDatabaseClient().transaction(async tx => {
     const { workspaceId, workspaceUserId } = await requireProjectPermission({
@@ -3894,8 +4179,12 @@ type CreateMissionResult = {
   shouldGenerateMissionTitle: boolean;
 };
 
-async function createMissionTx(body: CreateMissionBody): Promise<CreateMissionResult> {
-  return requireDatabaseClient().transaction(async tx => {
+async function createMissionTx(
+  body: CreateMissionBody,
+  client: DatabaseClient = requireDatabaseClient(),
+  alreadyInTransaction = false
+): Promise<CreateMissionResult> {
+  const execute = async (tx: DatabaseClient): Promise<CreateMissionResult> => {
     const objectiveInputs =
       body.objectives && body.objectives.length > 0
         ? body.objectives
@@ -4015,7 +4304,8 @@ async function createMissionTx(body: CreateMissionBody): Promise<CreateMissionRe
     });
 
     return { missionId: id, objectiveIds, instruction, shouldGenerateMissionTitle: !explicitTitle };
-  });
+  };
+  return alreadyInTransaction ? execute(client) : client.transaction(execute);
 }
 
 /**

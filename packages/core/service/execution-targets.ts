@@ -4,7 +4,7 @@ import { isCoLocatedBackend } from './local-target/index.js';
 import { recordChange } from './change-feed.js';
 import type { ServiceContext } from './context.js';
 import type { ClientDeviceIdentity } from './device-identity.js';
-import { callerDeviceFingerprint } from './devices.js';
+import { callerDeviceFingerprint, softDeleteOrphanDevices } from './devices.js';
 import { ServiceError } from './errors.js';
 import {
   DEFAULT_TERMINAL_PROFILE,
@@ -225,6 +225,10 @@ async function ensureDeviceTargetForFingerprint({
   label: string;
   platformName: string | null;
 }): Promise<LocalExecutionTarget> {
+  // Disposable container churn can leave devices without live targets; clean them
+  // before provisioning so orphan rows do not accumulate in the workspace.
+  await softDeleteOrphanDevices({ ctx });
+
   const now = nowIso();
 
   let device = (await ctx.db.get(
@@ -239,22 +243,85 @@ async function ensureDeviceTargetForFingerprint({
       [now, now, device.id]
     );
   } else {
-    const id = newId();
-    await ctx.db.run(
-      `INSERT INTO devices
-           (id, workspace_id, fingerprint, label, platform, status, last_seen_at,
-            metadata_json, created_at, updated_at, revision)
-         VALUES (?, ?, ?, ?, ?, 'active', ?, '{}', ?, ?, 1)`,
-      [id, ctx.workspace.id, fingerprint, label, platformName, now, now, now]
-    );
-    await recordChange({
-      ctx,
-      entityType: 'device',
-      entityId: id,
-      operation: 'insert',
-      entityRevision: 1
-    });
-    device = { id, label, fingerprint };
+    // Unique (workspace_id, fingerprint) covers tombstones — revive rather than insert.
+    const tombstoned = (await ctx.db.get(
+      `SELECT id, label, fingerprint FROM devices
+          WHERE workspace_id = ? AND fingerprint = ? AND deleted_at IS NOT NULL
+          ORDER BY deleted_at DESC
+          LIMIT 1`,
+      [ctx.workspace.id, fingerprint]
+    )) as { id: string; label: string; fingerprint: string } | undefined;
+
+    if (tombstoned) {
+      const revivedLabel = label.trim() || tombstoned.label;
+      await ctx.db.run(
+        `UPDATE devices
+            SET deleted_at = NULL, status = 'active', label = ?, platform = COALESCE(?, platform),
+                last_seen_at = ?, updated_at = ?, revision = revision + 1
+          WHERE id = ?`,
+        [revivedLabel, platformName, now, now, tombstoned.id]
+      );
+      await recordChange({
+        ctx,
+        entityType: 'device',
+        entityId: tombstoned.id,
+        operation: 'update',
+        entityRevision: null,
+        changedFields: ['deleted_at', 'status', 'label', 'last_seen_at']
+      });
+      device = { id: tombstoned.id, label: revivedLabel, fingerprint };
+    } else {
+      const id = newId();
+      await ctx.db.run(
+        `INSERT INTO devices
+             (id, workspace_id, fingerprint, label, platform, status, last_seen_at,
+              metadata_json, created_at, updated_at, revision)
+           VALUES (?, ?, ?, ?, ?, 'active', ?, '{}', ?, ?, 1)`,
+        [id, ctx.workspace.id, fingerprint, label, platformName, now, now, now]
+      );
+      await recordChange({
+        ctx,
+        entityType: 'device',
+        entityId: id,
+        operation: 'insert',
+        entityRevision: 1
+      });
+      device = { id, label, fingerprint };
+    }
+  }
+
+  // Soft-deleted local targets for this device should be revived with the device so
+  // the one-local-target-per-device invariant holds without colliding on history rows.
+  const tombstonedTarget = (await ctx.db.get(
+    `SELECT id FROM execution_targets
+        WHERE workspace_id = ? AND device_id = ? AND type = 'local' AND deleted_at IS NOT NULL
+        ORDER BY deleted_at DESC
+        LIMIT 1`,
+    [ctx.workspace.id, device.id]
+  )) as { id: string } | undefined;
+  if (tombstonedTarget) {
+    const liveSibling = (await ctx.db.get(
+      `SELECT id FROM execution_targets
+          WHERE workspace_id = ? AND device_id = ? AND type = 'local' AND deleted_at IS NULL`,
+      [ctx.workspace.id, device.id]
+    )) as { id: string } | undefined;
+    if (!liveSibling) {
+      await ctx.db.run(
+        `UPDATE execution_targets
+            SET deleted_at = NULL, status = 'active', label = ?, updated_at = ?,
+                revision = revision + 1
+          WHERE id = ?`,
+        [device.label || hostname(), now, tombstonedTarget.id]
+      );
+      await recordChange({
+        ctx,
+        entityType: 'execution_target',
+        entityId: tombstonedTarget.id,
+        operation: 'update',
+        entityRevision: null,
+        changedFields: ['deleted_at', 'status', 'label']
+      });
+    }
   }
 
   let target = (await ctx.db.get(

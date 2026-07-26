@@ -19,7 +19,8 @@ For behavioral specs and acceptance criteria, see the other docs in this folder.
 | `OVERLORD_USER_TOKEN`, `OVLD_USER_TOKEN`, `USER_TOKEN` | Backend auth (checked in that order) |
 | `OVERLORD_BACKEND_URL`, `OVERLORD_BACKEND_URL_DEV` | Backend URL resolution |
 | `OVERLORD_EXECUTION_REQUEST_ID` | `protocol attach` (links to runner request) |
-| `OVERLORD_DEVICE_LABEL` | Optional override for this machine's execution-target display name (defaults to hostname; does not change the device fingerprint) |
+| `OVERLORD_DEVICE_FINGERPRINT` | Optional stable execution-target identity. When set (e.g. by AgentPod for a host environment), every process/container reuses that target instead of deriving a new fingerprint from the ephemeral hostname |
+| `OVERLORD_DEVICE_LABEL` | Optional override for this machine's execution-target display name (defaults to hostname). Does not change the fingerprint unless `OVERLORD_DEVICE_FINGERPRINT` is also set |
 | `SESSION_KEY` | Protocol commands that require `--session-key` (also cached per working directory + mission) |
 | `OVLD_HOME` | Relocate `~/.ovld` credentials and config |
 | `OVERLORD_WEB_HOST`, `OVERLORD_WEB_PORT`, `OVERLORD_SQLITE_PATH` | `ovld serve` defaults |

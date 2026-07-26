@@ -1,8 +1,8 @@
-contractVersion: "5"
+contractVersion: '33'
 componentType: extension
 componentKey: github
-label: "GitHub Database Extension"
-description: "GitHub App installation, repository-link, and pull-request persistence."
+label: 'GitHub Database Extension'
+description: 'GitHub App persistence plus encrypted user-scoped OAuth connections, hashed callback state, and retryable project initialization records.'
 extension:
   tablePrefix: ext_github_
   migrationComponent: ext:github

@@ -14,14 +14,48 @@ import {
   linkProjectGitHub,
   listGitHubRepos
 } from './service.ts';
+import {
+  beginGitHubUserAuthorization,
+  disconnectGitHubUser,
+  getGitHubUserConnection,
+  listGitHubRepositoryOwners
+} from './user-oauth.ts';
 
 type RouteHandler = (
   fn: (req: Request, res: Response) => unknown,
   options?: { mutates?: boolean; requires?: Permission }
 ) => (req: Request, res: Response, next: NextFunction) => void;
 
-export function createGitHubExtensionRouter(handle: RouteHandler): Router {
+export function createGitHubExtensionRouter(
+  handle: RouteHandler,
+  options: { allowedBrowserOrigins?: readonly string[] } = {}
+): Router {
   const router = Router();
+  router.get(
+    '/user-connection',
+    handle(() => getGitHubUserConnection())
+  );
+  router.post(
+    '/user-connection/authorize',
+    handle(
+      req =>
+        beginGitHubUserAuthorization(
+          {
+            returnTo: typeof req.body?.returnTo === 'string' ? req.body.returnTo : undefined
+          },
+          options.allowedBrowserOrigins ?? []
+        ),
+      { mutates: true }
+    )
+  );
+  router.delete(
+    '/user-connection',
+    handle(() => disconnectGitHubUser(), { mutates: true })
+  );
+  router.get(
+    '/repository-owners',
+    handle(() => listGitHubRepositoryOwners())
+  );
   router.get(
     '/integration',
     handle(() => getGitHubIntegration(), { requires: PERMISSIONS.WORKSPACE_READ })

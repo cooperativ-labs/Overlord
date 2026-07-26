@@ -55,6 +55,8 @@ Options:
 MVP behavior:
 
 - Register/read a stable local device fingerprint from `~/.ovld/device.json`.
+- Honor `OVERLORD_DEVICE_FINGERPRINT` when set so disposable containers in one
+  host environment (AgentPod) share a single execution target.
 - Poll the configured backend.
 - Claim the oldest compatible request.
 - Resolve working directory.

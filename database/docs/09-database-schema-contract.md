@@ -468,7 +468,13 @@ Indexes:
 
 ### `devices`
 
-Represents a local or remote runner-capable device identity.
+Represents a local or remote runner-capable device identity. A live `devices` row
+must be associated with at least one non-deleted `execution_targets` row; the
+service soft-deletes orphan devices (no live target) when an execution target is
+deleted and opportunistically on workspace target projection / local-target
+provisioning. Re-registering the same fingerprint revives a soft-deleted device
+rather than inserting a second row (the unique index covers all rows, including
+tombstones).
 
 | Column          | Type         | Required | Notes                                                  |
 | --------------- | ------------ | -------- | ------------------------------------------------------ |
@@ -2289,11 +2295,15 @@ Indexes:
 ## GitHub Database Extension
 
 GitHub repository integration is extension-owned. The `github` extension stores
-only the GitHub App installation identifier and non-secret display metadata;
-installation access tokens are minted from `GITHUB_APP_PRIVATE_KEY` on demand
-and must never enter these tables, DTOs, logs, or change-feed fields. Its
-migrations use `schema_migrations.component = 'ext:github'` and all tables use
-the `ext_github_` prefix.
+the GitHub App installation identifier and non-secret display metadata, plus a
+separate profile-scoped repository-creation OAuth connection. GitHub App
+installation access tokens are minted from `GITHUB_APP_PRIVATE_KEY` on demand.
+User OAuth access and optional refresh credentials are encrypted with
+AES-256-GCM under the server-held `GITHUB_USER_TOKEN_ENCRYPTION_KEY`; plaintext
+credentials must never enter these tables, DTOs, logs, browser/mobile storage,
+realtime, entity changes, or error text. Its migrations use
+`schema_migrations.component = 'ext:github'` and all tables use the
+`ext_github_` prefix.
 
 ### `ext_github_installations`
 
@@ -2340,6 +2350,60 @@ Idempotency record for a mission pull request created through the GitHub App.
 | `created_at`, `updated_at`, `deleted_at`, `revision` | standard | yes/no   | Standard lifecycle fields.                |
 
 Index: unique active `(workspace_id, mission_id)`.
+
+### `ext_github_user_connections`
+
+One active repository-creation OAuth connection per profile. This account-wide
+connection shares Better Auth GitHub sign-in's OAuth App client registration,
+but its grant, token, encrypted persistence, and revocation lifecycle are
+independent of the login session and `ext_github_installations`.
+
+| Column                                                                    | Type     | Required | Notes                                                                            |
+| ------------------------------------------------------------------------- | -------- | -------- | -------------------------------------------------------------------------------- |
+| `id`, `profile_id`                                                        | Id       | yes      | Extension row and owning profile FK.                                             |
+| `github_user_id`, `github_login`                                          | text     | yes      | Stable GitHub identity and non-secret login.                                     |
+| `avatar_url`                                                              | text     | no       | Non-secret HTTPS display URL.                                                    |
+| `scopes_json`                                                             | JSON     | yes      | Granted OAuth scopes; never a credential.                                        |
+| `access_token_ciphertext`                                                 | text     | yes      | Versioned AES-256-GCM envelope; never projected.                                 |
+| `refresh_token_ciphertext`                                                | text     | no       | Versioned AES-256-GCM envelope when GitHub issues an expiring-token refresh key. |
+| `access_token_expires_at`, `refresh_token_expires_at`                     | datetime | no       | Provider expiry metadata.                                                        |
+| `created_at`, `updated_at`, `last_validated_at`, `deleted_at`, `revision` | standard | yes/no   | Standard lifecycle, validation, and optimistic-concurrency fields.               |
+
+Indexes: unique active `(profile_id)` and unique active `(github_user_id)`.
+
+### `ext_github_user_oauth_states`
+
+Durable OAuth initiation state so a callback may land on any service instance.
+The raw state is returned only in the provider authorization URL; persistence
+contains only its SHA-256 hash.
+
+| Column                                               | Type     | Required | Notes                                                      |
+| ---------------------------------------------------- | -------- | -------- | ---------------------------------------------------------- |
+| `id`, `profile_id`                                   | Id       | yes      | State row and initiating profile FK.                       |
+| `state_hash`                                         | text     | yes      | SHA-256 hash of the opaque 256-bit state.                  |
+| `return_url`                                         | text     | no       | Prevalidated first-party web origin or Overlord deep link. |
+| `expires_at`, `consumed_at`                          | datetime | yes/no   | Ten-minute expiry and single-use consumption marker.       |
+| `created_at`, `updated_at`, `deleted_at`, `revision` | standard | yes/no   | Standard lifecycle and optimistic-concurrency fields.      |
+
+Index: unique active `(state_hash)`.
+
+### `ext_github_project_initializations`
+
+Idempotency and retry record for composite project initialization. It owns only
+non-secret request, ownership, state, and repository metadata; OAuth credentials
+remain exclusively in `ext_github_user_connections`.
+
+| Column | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `id`, `profile_id`, `workspace_id`, `project_id`, `mission_id` | Id | yes | Extension record, caller, tenant, and internally created records. |
+| `idempotency_key` | text | yes | Caller key, unique active per profile. |
+| `github_owner_login` | text | no | Selected owner when repository provisioning is requested. |
+| `provisioning_status` | text | yes | Extension-local `not_requested`, `pending`, `failed`, or `succeeded`. |
+| `github_repo_id`, `full_name`, `default_branch`, `clone_url` | text | no | Non-secret GitHub repository metadata after success. |
+| `failure_message` | text | no | Bounded retryable provider failure text; never credentials. |
+| `created_at`, `updated_at`, `deleted_at`, `revision` | standard | yes/no | Standard lifecycle and optimistic-concurrency fields. |
+
+Indexes: unique active `(profile_id, idempotency_key)` and `(workspace_id, project_id)`.
 
 ## Extension Points
 

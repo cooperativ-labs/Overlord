@@ -110,7 +110,11 @@ function ArtifactCard({ artifact, missionId }: { artifact: ArtifactDto; missionI
             <form className="grid gap-3" onSubmit={save}>
               <label className="grid gap-1 text-xs font-medium text-(--color-ink-dim)">
                 Label
-                <TextInput value={label} onChange={event => setLabel(event.target.value)} required />
+                <TextInput
+                  value={label}
+                  onChange={event => setLabel(event.target.value)}
+                  required
+                />
               </label>
               <label className="grid gap-1 text-xs font-medium text-(--color-ink-dim)">
                 Markdown

@@ -25,6 +25,15 @@ An execution target is **not** owned by a single user or organization. The same
 physical machine can appear in multiple organizations with different labels;
 identity is the fingerprint, so two VMs on one host are two targets.
 
+### Environments vs disposable containers
+
+By default the CLI fingerprints from the process hostname, so a new container
+hostname becomes a new target. That is correct for lasting machines and VMs.
+Disposable agent containers that share one host environment should instead set
+a stable `OVERLORD_DEVICE_FINGERPRINT` (and optionally `OVERLORD_DEVICE_LABEL`)
+for that environment — AgentPod already does this — so each container is a
+session inside the same target rather than a selectable new target.
+
 ## Local vs remote targets
 
 **Local targets** register automatically when the CLI or desktop app runs on the

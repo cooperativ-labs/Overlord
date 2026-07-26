@@ -142,7 +142,8 @@ input (`-`) for larger payloads.
 | `OVERLORD_USER_TOKEN`, `OVLD_USER_TOKEN`, `USER_TOKEN` | Authentication token, checked in that order. |
 | `OVERLORD_BACKEND_URL`, `OVERLORD_BACKEND_URL_DEV` | Backend URL fallback. |
 | `OVERLORD_EXECUTION_REQUEST_ID` | Link an agent protocol attach to a runner request. |
-| `OVERLORD_DEVICE_LABEL` | Override the human-facing device name for this machine's execution target. Optional; falls back to the hostname. Does not affect the device fingerprint. |
+| `OVERLORD_DEVICE_FINGERPRINT` | Pin this process to a stable execution-target identity. Use when disposable containers (e.g. AgentPod) share one host environment and must not each register a new target from their ephemeral hostname. |
+| `OVERLORD_DEVICE_LABEL` | Override the human-facing device name for this machine's execution target. Optional; falls back to the hostname. Does not affect the fingerprint unless `OVERLORD_DEVICE_FINGERPRINT` is also set. |
 | `SESSION_KEY` | Session-key fallback for protocol commands. |
 | `OVLD_HOME` | Relocate the CLI's credentials and configuration. |
 | `OVERLORD_WEB_HOST`, `OVERLORD_WEB_PORT`, `OVERLORD_SQLITE_PATH` | Defaults for `ovld serve`. |
