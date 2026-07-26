@@ -1,0 +1,105 @@
+import assert from 'node:assert/strict';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import test from 'node:test';
+
+const tempDir = mkdtempSync(path.join(tmpdir(), 'overlord-artifacts-'));
+const { bootstrapIntegrationTestDb } = await import('./test-helpers.ts');
+await bootstrapIntegrationTestDb({ sqlitePath: path.join(tempDir, 'webapp.sqlite') });
+
+const { db, nowIso } = await import('./db.ts');
+const { createMission, createProject, updateArtifact } = await import('./repository.ts');
+const { ApiError } = await import('./errors.ts');
+
+async function createArtifactFixture(contentText: string | null = '# Initial artifact') {
+  const project = await createProject({ name: `Artifacts ${Date.now()}` });
+  const mission = await createMission({ projectId: project.id, firstObjective: 'Review artifact' });
+  const artifactId = `artifact-${crypto.randomUUID()}`;
+  const now = nowIso();
+  db.prepare(
+    `INSERT INTO artifacts (
+       id, workspace_id, project_id, mission_id, objective_id, type, label,
+       content_text, content_json, external_url, created_at, updated_at, revision
+     ) VALUES (?, ?, ?, ?, ?, 'note', 'Initial label', ?, '{"source":"agent"}', NULL, ?, ?, 1)`
+  ).run(
+    artifactId,
+    mission.workspaceId,
+    project.id,
+    mission.id,
+    mission.objectives[0].id,
+    contentText,
+    now,
+    now
+  );
+  return { artifactId, mission };
+}
+
+test('updates editable artifact fields while retaining provenance and structured content', async () => {
+  const { artifactId, mission } = await createArtifactFixture();
+
+  const updated = await updateArtifact(mission.id, artifactId, {
+    expectedRevision: 1,
+    label: 'Release notes',
+    contentText: '## Checks\n\n- **passed**',
+    externalUrl: 'https://example.test/results'
+  });
+
+  assert.equal(updated.label, 'Release notes');
+  assert.equal(updated.contentText, '## Checks\n\n- **passed**');
+  assert.equal(updated.externalUrl, 'https://example.test/results');
+  assert.deepEqual(updated.contentJson, { source: 'agent' });
+  assert.equal(updated.revision, 2);
+
+  const change = db
+    .prepare(
+      `SELECT entity_type, entity_id, entity_revision, changed_fields_json
+         FROM entity_changes WHERE entity_id = ? ORDER BY seq DESC LIMIT 1`
+    )
+    .get(artifactId) as {
+    entity_type: string;
+    entity_id: string;
+    entity_revision: number;
+    changed_fields_json: string;
+  };
+  assert.equal(change.entity_type, 'artifact');
+  assert.equal(change.entity_id, artifactId);
+  assert.equal(change.entity_revision, 2);
+  assert.deepEqual(JSON.parse(change.changed_fields_json), [
+    'label',
+    'content_text',
+    'external_url'
+  ]);
+});
+
+test('rejects an edit that would leave an artifact without any content', async () => {
+  const { artifactId, mission } = await createArtifactFixture();
+  db.prepare(`UPDATE artifacts SET content_json = NULL WHERE id = ?`).run(artifactId);
+
+  await assert.rejects(
+    updateArtifact(mission.id, artifactId, { expectedRevision: 1, contentText: null }),
+    (error: unknown) => error instanceof ApiError && error.status === 400
+  );
+});
+
+test('rejects an artifact edit based on a stale revision', async () => {
+  const { artifactId, mission } = await createArtifactFixture();
+  await updateArtifact(mission.id, artifactId, { expectedRevision: 1, label: 'Current label' });
+
+  await assert.rejects(
+    updateArtifact(mission.id, artifactId, { expectedRevision: 1, label: 'Stale label' }),
+    (error: unknown) => error instanceof ApiError && error.status === 409
+  );
+});
+
+test('rejects an artifact edit with an unsafe external URL', async () => {
+  const { artifactId, mission } = await createArtifactFixture();
+
+  await assert.rejects(
+    updateArtifact(mission.id, artifactId, {
+      expectedRevision: 1,
+      externalUrl: 'javascript:alert(1)'
+    }),
+    (error: unknown) => error instanceof ApiError && error.status === 400
+  );
+});

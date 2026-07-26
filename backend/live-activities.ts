@@ -38,11 +38,16 @@ type SnapshotRow = {
   status_type: string;
 };
 
-function bounded(value: string, max: number): string {
+/**
+ * Shared with the standard push dispatcher (coo:444): these two functions are the
+ * only path by which user-authored text reaches any APNs payload, so both push
+ * surfaces bound and strip through exactly one implementation.
+ */
+export function bounded(value: string, max: number): string {
   return value.length <= max ? value : `${value.slice(0, max - 1)}…`;
 }
 
-function presentationTitle(value: string): string {
+export function presentationTitle(value: string): string {
   return bounded(
     value
       .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')

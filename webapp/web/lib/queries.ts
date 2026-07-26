@@ -47,6 +47,7 @@ import type {
   StatusType,
   UpdateAgentCatalogBody,
   UpdateAgentLaunchConfigBody,
+  UpdateArtifactBody,
   UpdateLaunchPreferenceBody,
   UpdateMissionBody,
   UpdateObjectiveBody,
@@ -476,6 +477,20 @@ export const useMissionDeliveries = (id: string, enabled: boolean) =>
 
 export const useMissionArtifacts = (id: string) =>
   useQuery({ queryKey: keys.missionArtifacts(id), queryFn: () => api.listMissionArtifacts(id) });
+
+export function useUpdateMissionArtifact(missionId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ artifactId, body }: { artifactId: string; body: UpdateArtifactBody }) =>
+      api.updateMissionArtifact(missionId, artifactId, body),
+    onSuccess: artifact => {
+      qc.setQueryData<import('../../shared/contract.ts').ArtifactDto[]>(
+        keys.missionArtifacts(missionId),
+        current => current?.map(item => (item.id === artifact.id ? artifact : item))
+      );
+    }
+  });
+}
 
 // Change rationale writes currently arrive through broad fallback invalidation
 // unless a future feed row carries a more specific file-change entity type.

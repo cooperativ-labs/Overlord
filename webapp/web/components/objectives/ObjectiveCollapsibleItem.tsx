@@ -5,6 +5,7 @@ import {
   ChevronDown,
   Copy,
   FastForward,
+  FolderOpen,
   GitBranch,
   Loader2,
   Paperclip
@@ -15,10 +16,12 @@ import type { ObjectiveDto } from '../../../shared/contract.ts';
 import { getAgentIcon } from '../../lib/helpers/agent-icons.ts';
 import { buildAgentResumeCommand } from '../../lib/helpers/agent-resume-command.ts';
 import { useCopyToClipboard } from '../../lib/hooks/use-copy-to-clipboard.ts';
+import { missionDraftResourceBadgeKey, projectResourceLabel } from '../../lib/project-resources.ts';
 import {
   useAgentCatalog,
   useObjectiveAttachments,
   useProject,
+  useProjectResources,
   useUpdateObjective
 } from '../../lib/queries.ts';
 import { cn } from '../../lib/utils.ts';
@@ -35,8 +38,10 @@ import { ObjectiveMenuButton } from './ObjectiveMenuButton.tsx';
  * stages (executing, pending delivery, or complete). The header summarises the
  * objective with a state icon, title, and a kebab actions menu
  * ({@link ObjectiveMenuButton}); expanding it reveals the full instruction
- * text. In-flight objectives (executing / pending delivery) carry a shimmer
- * sweep so live work is visible at a glance.
+ * text. Multi-resource projects show the bound resource label on the same
+ * secondary row as the auto-advance indicator. In-flight objectives
+ * (executing / pending delivery) carry a shimmer sweep so live work is
+ * visible at a glance.
  */
 export function ObjectiveCollapsibleItem({
   objective,
@@ -51,8 +56,15 @@ export function ObjectiveCollapsibleItem({
   // Display labels come from the objective's own workspace's catalog (coo:324).
   const projectQuery = useProject(objective.projectId);
   const catalogQuery = useAgentCatalog(projectQuery.data?.workspaceId);
+  const resourcesQuery = useProjectResources(objective.projectId);
   const { data: attachments = [] } = useObjectiveAttachments(objective.id);
   const hasAttachments = attachments.length > 0;
+  const resources = resourcesQuery.data ?? [];
+  const resourceKey = missionDraftResourceBadgeKey({
+    resources,
+    draftObjectiveResourceKey: objective.resourceKey
+  });
+  const resourceLabel = resourceKey ? projectResourceLabel({ resources, resourceKey }) : null;
 
   const isExecuting = objective.state === 'executing';
   const isPendingDelivery = objective.state === 'pending_delivery';
@@ -155,10 +167,28 @@ export function ObjectiveCollapsibleItem({
                 )}
               />
             </div>
-            {objective.autoAdvance ? (
-              <div className="mt-0.5 flex items-center gap-1 pl-[18px] text-[11px] text-muted-foreground">
-                <FastForward className="h-3 w-3" />
-                <span>Auto-advance</span>
+            {resourceLabel || objective.autoAdvance ? (
+              <div className="mt-0.5 flex min-w-0 items-center gap-1.5 pl-[18px] text-[11px] text-muted-foreground">
+                {resourceLabel ? (
+                  <span
+                    className="inline-flex min-w-0 items-center gap-1"
+                    title={`Resource: ${resourceLabel}`}
+                  >
+                    <FolderOpen className="h-3 w-3 shrink-0" />
+                    <span className="truncate">{resourceLabel}</span>
+                  </span>
+                ) : null}
+                {resourceLabel && objective.autoAdvance ? (
+                  <span aria-hidden="true" className="text-muted-foreground/60">
+                    ·
+                  </span>
+                ) : null}
+                {objective.autoAdvance ? (
+                  <span className="inline-flex shrink-0 items-center gap-1">
+                    <FastForward className="h-3 w-3" />
+                    <span>Auto-advance</span>
+                  </span>
+                ) : null}
               </div>
             ) : null}
           </CollapsibleTrigger>

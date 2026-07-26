@@ -6,13 +6,16 @@ import {
   Link,
   type LucideIcon,
   MessageSquare,
+  PenLine,
   TestTube2
 } from 'lucide-react';
+import { type FormEvent, useState } from 'react';
 
 import type { ArtifactDto, ArtifactType } from '../../shared/contract.ts';
-import { useMissionArtifacts } from '../lib/queries.ts';
+import { useMissionArtifacts, useUpdateMissionArtifact } from '../lib/queries.ts';
 
-import { Badge, Spinner } from './ui.tsx';
+import { Markdown } from './Markdown.tsx';
+import { Badge, Button, Spinner, TextArea, TextInput } from './ui.tsx';
 
 const ARTIFACT_META: Record<ArtifactType, { icon: LucideIcon; label: string }> = {
   test_results: { icon: TestTube2, label: 'Test Results' },
@@ -32,8 +35,39 @@ function formatDate(iso: string): string {
   return Number.isNaN(date.getTime()) ? iso : date.toLocaleString();
 }
 
-function ArtifactEntry({ artifact }: { artifact: ArtifactDto }) {
+function ArtifactEntry({ artifact, missionId }: { artifact: ArtifactDto; missionId: string }) {
   const { icon: Icon, label: typeLabel } = artifactMeta(artifact.type);
+  const updateArtifact = useUpdateMissionArtifact(missionId);
+  const [isEditing, setIsEditing] = useState(false);
+  const [label, setLabel] = useState(artifact.label);
+  const [contentText, setContentText] = useState(artifact.contentText ?? '');
+  const [externalUrl, setExternalUrl] = useState(artifact.externalUrl ?? '');
+
+  function beginEditing() {
+    setLabel(artifact.label);
+    setContentText(artifact.contentText ?? '');
+    setExternalUrl(artifact.externalUrl ?? '');
+    setIsEditing(true);
+  }
+
+  function cancelEditing() {
+    setIsEditing(false);
+    updateArtifact.reset();
+  }
+
+  async function save(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await updateArtifact.mutateAsync({
+      artifactId: artifact.id,
+      body: {
+        expectedRevision: artifact.revision,
+        label,
+        contentText: contentText || null,
+        externalUrl: externalUrl || null
+      }
+    });
+    setIsEditing(false);
+  }
 
   return (
     <article className="flex gap-3 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-1)] p-3">
@@ -51,22 +85,77 @@ function ArtifactEntry({ artifact }: { artifact: ArtifactDto }) {
           <span className="text-[11px] text-[var(--color-ink-dim)]">
             {formatDate(artifact.createdAt)}
           </span>
+          {!isEditing && (
+            <Button
+              type="button"
+              variant="ghost"
+              className="ml-auto h-6 px-1.5 text-xs"
+              onClick={beginEditing}
+            >
+              <PenLine className="mr-1 h-3 w-3" />
+              Edit
+            </Button>
+          )}
         </div>
-        {artifact.contentText && (
-          <p className="whitespace-pre-wrap break-words text-sm text-[var(--color-ink-dim)]">
-            {artifact.contentText}
-          </p>
-        )}
-        {artifact.externalUrl && (
-          <a
-            href={artifact.externalUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="flex items-center gap-1 text-xs text-sky-600 underline-offset-2 hover:underline dark:text-sky-400"
-          >
-            <ExternalLink className="h-3 w-3" />
-            {artifact.externalUrl}
-          </a>
+        {isEditing ? (
+          <form className="grid gap-3" onSubmit={save}>
+            <label className="grid gap-1 text-xs font-medium text-[var(--color-ink-dim)]">
+              Label
+              <TextInput value={label} onChange={event => setLabel(event.target.value)} required />
+            </label>
+            <label className="grid gap-1 text-xs font-medium text-[var(--color-ink-dim)]">
+              Markdown
+              <TextArea
+                value={contentText}
+                onChange={event => setContentText(event.target.value)}
+                rows={8}
+                className="font-mono text-xs"
+                placeholder="Write artifact details in Markdown"
+              />
+            </label>
+            <label className="grid gap-1 text-xs font-medium text-[var(--color-ink-dim)]">
+              External URL
+              <TextInput
+                type="url"
+                value={externalUrl}
+                onChange={event => setExternalUrl(event.target.value)}
+                placeholder="https://…"
+              />
+            </label>
+            {updateArtifact.isError && (
+              <p className="text-xs text-red-400">
+                {(updateArtifact.error as Error).message || 'Could not save artifact.'}
+              </p>
+            )}
+            <div className="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={cancelEditing}
+                disabled={updateArtifact.isPending}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" variant="primary" disabled={updateArtifact.isPending}>
+                {updateArtifact.isPending ? 'Saving…' : 'Save'}
+              </Button>
+            </div>
+          </form>
+        ) : (
+          <>
+            {artifact.contentText && <Markdown text={artifact.contentText} />}
+            {artifact.externalUrl && (
+              <a
+                href={artifact.externalUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-1 text-xs text-sky-600 underline-offset-2 hover:underline dark:text-sky-400"
+              >
+                <ExternalLink className="h-3 w-3" />
+                {artifact.externalUrl}
+              </a>
+            )}
+          </>
         )}
       </div>
     </article>
@@ -100,7 +189,7 @@ export function MissionArtifactsSection({ missionId }: { missionId: string }) {
   return (
     <div className="grid gap-2">
       {artifacts.map(artifact => (
-        <ArtifactEntry key={artifact.id} artifact={artifact} />
+        <ArtifactEntry key={artifact.id} artifact={artifact} missionId={missionId} />
       ))}
     </div>
   );

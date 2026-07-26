@@ -1,10 +1,9 @@
 import type { DatabaseClient } from '@overlord/database';
-import { createSign } from 'node:crypto';
-import http2 from 'node:http2';
 
 import { LIVE_ACTIVITY_DISPATCH_JOB_TYPE } from '../packages/core/service/live-activity-jobs.ts';
 import { newId, nowIso } from '../packages/core/service/util.ts';
 
+import { type ApnsConfig, apnsConfig, type ApnsResult, sendApnsRequest } from './apns-client.ts';
 import { requireDatabaseClient } from './db.ts';
 import {
   buildLiveActivityContentState,
@@ -34,48 +33,6 @@ type TokenRow = {
   last_sent_at: string | null;
 };
 
-type ApnsResult = { status: number; body: string };
-
-function liveActivityConfig(): {
-  teamId: string;
-  keyId: string;
-  privateKey: string;
-  bundleId: string;
-  host: string;
-} | null {
-  const teamId = process.env.OVERLORD_APNS_TEAM_ID?.trim();
-  const keyId = process.env.OVERLORD_APNS_KEY_ID?.trim();
-  const privateKey = process.env.OVERLORD_APNS_PRIVATE_KEY?.replace(/\\n/g, '\n').trim();
-  const bundleId = process.env.OVERLORD_IOS_BUNDLE_ID?.trim();
-  if (!teamId || !keyId || !privateKey || !bundleId) return null;
-  return {
-    teamId,
-    keyId,
-    privateKey,
-    bundleId,
-    host:
-      process.env.OVERLORD_APNS_ENV === 'sandbox'
-        ? 'https://api.sandbox.push.apple.com'
-        : 'https://api.push.apple.com'
-  };
-}
-
-function b64url(value: string | Buffer): string {
-  return Buffer.from(value).toString('base64url');
-}
-
-function apnsJwt(config: NonNullable<ReturnType<typeof liveActivityConfig>>): string {
-  const now = Math.floor(Date.now() / 1000);
-  const signingInput = `${b64url(JSON.stringify({ alg: 'ES256', kid: config.keyId }))}.${b64url(
-    JSON.stringify({ iss: config.teamId, iat: now })
-  )}`;
-  const signer = createSign('SHA256');
-  signer.update(signingInput);
-  signer.end();
-  const signature = signer.sign({ key: config.privateKey, dsaEncoding: 'ieee-p1363' });
-  return `${signingInput}.${b64url(signature)}`;
-}
-
 function apnsPayload(state: LiveActivityContentState | null): {
   event: 'update' | 'end';
   body: string;
@@ -101,6 +58,7 @@ function apnsPayload(state: LiveActivityContentState | null): {
   return { event, body: JSON.stringify({ aps }) };
 }
 
+/** ActivityKit delivery: the liveactivity topic suffix and push type are mandatory. */
 async function sendApns({
   token,
   body,
@@ -108,44 +66,17 @@ async function sendApns({
 }: {
   token: string;
   body: string;
-  config: NonNullable<ReturnType<typeof liveActivityConfig>>;
+  config: ApnsConfig;
 }): Promise<ApnsResult> {
-  return new Promise((resolve, reject) => {
-    const client = http2.connect(config.host);
-    let settled = false;
-    const finish = (result: ApnsResult) => {
-      if (settled) return;
-      settled = true;
-      client.close();
-      resolve(result);
-    };
-    client.once('error', error => {
-      if (settled) return;
-      settled = true;
-      client.close();
-      reject(error);
-    });
-    const request = client.request({
-      ':method': 'POST',
-      ':path': `/3/device/${token}`,
-      authorization: `bearer ${apnsJwt(config)}`,
+  return sendApnsRequest({
+    token,
+    body,
+    config,
+    headers: {
       'apns-topic': `${config.bundleId}.push-type.liveactivity`,
       'apns-push-type': 'liveactivity',
-      'apns-priority': '5',
-      'content-type': 'application/json'
-    });
-    let status = 0;
-    let response = '';
-    request.on('response', headers => {
-      status = Number(headers[':status'] ?? 0);
-    });
-    request.setEncoding('utf8');
-    request.on('data', chunk => {
-      response += chunk;
-    });
-    request.once('end', () => finish({ status, body: response.slice(0, 512) }));
-    request.once('error', reject);
-    request.end(body);
+      'apns-priority': '5'
+    }
   });
 }
 
@@ -201,7 +132,7 @@ class LiveActivityDispatcher {
       const state = await buildLiveActivityContentState(db, profileId);
       const hash = liveActivityContentHash(state);
       const payload = apnsPayload(state);
-      const config = liveActivityConfig();
+      const config = apnsConfig();
       for (const token of tokens) {
         const sentAt = token.last_sent_at ? Date.parse(token.last_sent_at) : NaN;
         if (

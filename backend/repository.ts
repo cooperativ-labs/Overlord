@@ -32,6 +32,7 @@ import {
   missionSearchWorkspaceParams
 } from '../packages/core/service/mission-search-sql.ts';
 import { resolveProjectExecutionTargetForLaunch } from '../packages/core/service/project-execution-target.ts';
+import { enqueuePushNotificationForMission } from '../packages/core/service/push-notification-jobs.ts';
 import {
   loadTargetResourceObservations,
   mergeResourceStatusWithObservation,
@@ -80,6 +81,7 @@ import type {
   ScheduleInput,
   StatusType,
   TokenScope,
+  UpdateArtifactBody,
   UpdateMissionBody,
   UpdateObjectiveBody,
   UpdateProfileBody,
@@ -3709,20 +3711,11 @@ interface ArtifactRow {
   external_url: string | null;
   created_at: string;
   updated_at: string;
+  revision: number;
 }
 
-export async function listArtifacts(missionRef: string, limit = 200): Promise<ArtifactDto[]> {
-  const mission = await getMissionRow(missionRef, undefined, PERMISSIONS.ARTIFACT_READ);
-  const rows = (await requireDatabaseClient().all(
-    `SELECT id, workspace_id, project_id, mission_id, objective_id, session_id, delivery_id,
-              type, label, content_text, content_json, external_url, created_at, updated_at
-         FROM artifacts
-        WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL
-        ORDER BY created_at DESC, id DESC
-        LIMIT ?`,
-    [mission.id, mission.workspace_id, limit]
-  )) as ArtifactRow[];
-  return rows.map(row => ({
+function toArtifactDto(row: ArtifactRow): ArtifactDto {
+  return {
     id: row.id,
     workspaceId: row.workspace_id,
     projectId: row.project_id,
@@ -3736,8 +3729,133 @@ export async function listArtifacts(missionRef: string, limit = 200): Promise<Ar
     contentJson: row.content_json ? (JSON.parse(row.content_json) as unknown) : null,
     externalUrl: row.external_url,
     createdAt: row.created_at,
-    updatedAt: row.updated_at
-  }));
+    updatedAt: row.updated_at,
+    revision: row.revision
+  };
+}
+
+export async function listArtifacts(missionRef: string, limit = 200): Promise<ArtifactDto[]> {
+  const mission = await getMissionRow(missionRef, undefined, PERMISSIONS.ARTIFACT_READ);
+  const rows = (await requireDatabaseClient().all(
+    `SELECT id, workspace_id, project_id, mission_id, objective_id, session_id, delivery_id,
+              type, label, content_text, content_json, external_url, created_at, updated_at, revision
+         FROM artifacts
+        WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL
+        ORDER BY created_at DESC, id DESC
+        LIMIT ?`,
+    [mission.id, mission.workspace_id, limit]
+  )) as ArtifactRow[];
+  return rows.map(toArtifactDto);
+}
+
+/** Update the human-facing presentation fields of an existing mission artifact. */
+export async function updateArtifact(
+  missionRef: string,
+  artifactId: string,
+  body: UpdateArtifactBody
+): Promise<ArtifactDto> {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    throw new ApiError(400, 'Artifact update body must be an object');
+  }
+
+  return requireDatabaseClient().transaction(async tx => {
+    const mission = await getMissionRow(missionRef, tx, PERMISSIONS.MISSION_UPDATE);
+    const artifact = (await tx.get(
+      `SELECT id, workspace_id, project_id, mission_id, objective_id, session_id, delivery_id,
+              type, label, content_text, content_json, external_url, created_at, updated_at, revision
+         FROM artifacts
+        WHERE id = ? AND mission_id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+      [artifactId, mission.id, mission.workspace_id]
+    )) as ArtifactRow | undefined;
+    if (!artifact) throw new ApiError(404, 'Artifact not found');
+    if (!Number.isInteger(body.expectedRevision) || body.expectedRevision < 1) {
+      throw new ApiError(400, 'Artifact expectedRevision must be a positive integer');
+    }
+    if (body.expectedRevision !== artifact.revision) {
+      throw new ApiError(409, 'Artifact was updated by someone else; refresh and try again');
+    }
+
+    const fields: string[] = [];
+    const params: unknown[] = [];
+    const changedFields: string[] = [];
+    let contentText = artifact.content_text;
+    let externalUrl = artifact.external_url;
+
+    if (body.label !== undefined) {
+      if (typeof body.label !== 'string' || !body.label.trim()) {
+        throw new ApiError(400, 'Artifact label cannot be empty');
+      }
+      fields.push('label = ?');
+      params.push(body.label.trim());
+      changedFields.push('label');
+    }
+    if (body.contentText !== undefined) {
+      if (body.contentText !== null && typeof body.contentText !== 'string') {
+        throw new ApiError(400, 'Artifact contentText must be a string or null');
+      }
+      contentText = body.contentText?.trim() ? body.contentText : null;
+      fields.push('content_text = ?');
+      params.push(contentText);
+      changedFields.push('content_text');
+    }
+    if (body.externalUrl !== undefined) {
+      if (body.externalUrl !== null && typeof body.externalUrl !== 'string') {
+        throw new ApiError(400, 'Artifact externalUrl must be a string or null');
+      }
+      externalUrl = body.externalUrl?.trim() || null;
+      if (externalUrl) {
+        try {
+          const url = new URL(externalUrl);
+          if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+            throw new Error('Unsupported protocol');
+          }
+        } catch {
+          throw new ApiError(400, 'Artifact externalUrl must be an http(s) URL');
+        }
+      }
+      fields.push('external_url = ?');
+      params.push(externalUrl);
+      changedFields.push('external_url');
+    }
+    if (fields.length === 0) {
+      throw new ApiError(400, 'Provide at least one editable artifact field');
+    }
+    if (!contentText && !artifact.content_json && !externalUrl) {
+      throw new ApiError(400, 'An artifact must retain text, structured content, or a URL');
+    }
+
+    const updatedAt = nowIso();
+    const revision = artifact.revision + 1;
+    await tx.run(
+      `UPDATE artifacts
+          SET ${fields.join(', ')}, updated_at = ?, revision = ?
+        WHERE id = ? AND workspace_id = ? AND revision = ?`,
+      [...params, updatedAt, revision, artifact.id, mission.workspace_id, artifact.revision]
+    );
+    const updated = (await tx.get(
+      `SELECT id, workspace_id, project_id, mission_id, objective_id, session_id, delivery_id,
+              type, label, content_text, content_json, external_url, created_at, updated_at, revision
+         FROM artifacts
+        WHERE id = ? AND workspace_id = ?`,
+      [artifact.id, mission.workspace_id]
+    )) as ArtifactRow;
+
+    await recordChange(
+      {
+        entityType: 'artifact',
+        entityId: artifact.id,
+        operation: 'update',
+        entityRevision: revision,
+        workspaceId: mission.workspace_id,
+        projectId: mission.project_id,
+        missionId: mission.id,
+        objectiveId: artifact.objective_id,
+        changedFields
+      },
+      tx
+    );
+    return toArtifactDto(updated);
+  });
 }
 
 async function nextMissionSequence(db: DatabaseClient, workspaceId: string): Promise<number> {
@@ -4204,6 +4322,18 @@ async function patchMissionFieldsTx(id: string, body: UpdateMissionBody): Promis
 
     if (scheduleTriggerStatusType) {
       await createScheduledDuplicateIfNeeded(tx, existing, scheduleTriggerStatusType);
+    }
+
+    // Closing the mission is the end of the story the assignee has been tracking,
+    // so it earns its own category rather than another awaiting-review ping.
+    if (scheduleTriggerStatusType === 'complete' && existing.status_type !== 'complete') {
+      await enqueuePushNotificationForMission({
+        db: tx,
+        workspaceId: existing.workspace_id,
+        missionId: id,
+        category: 'mission_complete',
+        now
+      });
     }
   });
 }

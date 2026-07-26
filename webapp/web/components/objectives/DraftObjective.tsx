@@ -46,13 +46,13 @@ export function DraftObjective({ objective, siblings, executionRequests }: Draft
     handleInputChange,
     handleRemove,
     dragState
-  } = useObjectiveAttachmentState(objective.id, { dropDisabled: isFuture });
+  } = useObjectiveAttachmentState(objective.id);
   const isLaunching = objective.state === 'launching';
 
   return (
     <FileDropZone
       onDrop={handleFiles}
-      disabled={isUploading || isFuture}
+      disabled={isUploading}
       dragState={dragState}
       className={cn(
         'w-full overflow-hidden rounded-xl border transition-all focus-within:shadow-md focus-within:ring-1 focus-within:ring-ring/50 md:min-w-[350px]',
@@ -116,40 +116,27 @@ export function DraftObjective({ objective, siblings, executionRequests }: Draft
       {/* Attachments + toolbar. The whole card is the drop target (FileDropZone);
           the footer + button opens the file browser. */}
       <div className="border-t border-border/40">
-        {!isFuture ? (
-          <>
-            <ObjectiveAttachmentList
-              attachments={attachments}
-              removingId={removingId}
-              onRemove={handleRemove}
-              toolbar
-            />
-            {attachmentError ? (
-              <p className="px-3 pb-1 text-xs text-destructive">{attachmentError}</p>
-            ) : null}
-            <ObjectiveAttachmentUploadTrigger
-              attachmentsCount={attachments.length}
-              inputRef={inputRef}
-              onInputChange={handleInputChange}
-              disabled={isUploading}
-            >
-              <DraftObjectiveToolbar
-                objective={objective}
-                siblings={siblings}
-                executionRequests={executionRequests}
-              />
-            </ObjectiveAttachmentUploadTrigger>
-          </>
-        ) : (
-          <div className="@container/objective-toolbar flex min-w-0 flex-wrap items-center justify-end gap-2 px-3 py-2">
-            <div className="grow" />
-            <DraftObjectiveToolbar
-              objective={objective}
-              siblings={siblings}
-              executionRequests={executionRequests}
-            />
-          </div>
-        )}
+        <ObjectiveAttachmentList
+          attachments={attachments}
+          removingId={removingId}
+          onRemove={handleRemove}
+          toolbar
+        />
+        {attachmentError ? (
+          <p className="px-3 pb-1 text-xs text-destructive">{attachmentError}</p>
+        ) : null}
+        <ObjectiveAttachmentUploadTrigger
+          attachmentsCount={attachments.length}
+          inputRef={inputRef}
+          onInputChange={handleInputChange}
+          disabled={isUploading}
+        >
+          <DraftObjectiveToolbar
+            objective={objective}
+            siblings={siblings}
+            executionRequests={executionRequests}
+          />
+        </ObjectiveAttachmentUploadTrigger>
       </div>
     </FileDropZone>
   );

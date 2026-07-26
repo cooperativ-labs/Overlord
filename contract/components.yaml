@@ -4,7 +4,7 @@
 # IMPORTANT: Update this file and CONTRACT.md together when adding components or surfaces.
 # Increment contractVersion when any stable interface changes.
 
-contractVersion: '28'
+contractVersion: '30'
 
 components:
   protocol:
@@ -39,8 +39,9 @@ components:
       - 'organizations table (grouping layer above workspaces) and the required workspaces.organization_id FK; workspaces remain the sole RBAC layer; slugs are unique per organization, not instance-wide'
       - 'controlled vocabularies (closed and open sets)'
       - 'versioned deliveryReport payload storage in deliveries.payload_json; summary remains immutable agent-authored source text'
-      - 'worker_jobs durable background queue including core types overlord.delivery.compose.v1 and overlord.live_activity.dispatch.v1'
+      - 'worker_jobs durable background queue including core types overlord.delivery.compose.v1, overlord.live_activity.dispatch.v1, and overlord.push_notification.dispatch.v1'
       - 'private live_activity_push_tokens registrations keyed by profile and ActivityKit activity id; APNs tokens are never projected through REST, realtime, or audit payloads'
+      - 'private device_push_tokens registrations (globally unique device_token bound to one profile, with platform, environment, and bundle_id) and notification_preferences rows unique per (profile_id, category); standard APNs device tokens are stored separately from ActivityKit tokens and are never projected through REST, realtime, or audit payloads'
       - 'project_resources as project-scoped logical identities and project_resource_sources as the sole target/source materialization descriptors (local checkout paths, Git, bundles, or opaque virtual handles); existing resource rows are intentionally discarded by the contract-v4 migration rather than carried through a legacy compatibility shape'
       - 'virtual execution target core tables (execution_target_registrations, project_environment_definitions, project_resource_sources, execution_request_snapshots, execution_request_grants, execution_request_observations, mission_target_resources) and additive execution_requests snapshot/failure/gateway columns; immutable snapshot (payload_json + SHA-256 payload_digest) created in the same transaction as the queued request and never updated; grant records store hashes/opaque IDs, never bearer values'
       - 'soft-delete and revision semantics'
@@ -150,6 +151,8 @@ components:
       - 'hosted MCP OAuth endpoints: POST /oauth/register, POST /oauth/token, POST /oauth/revoke, GET /oauth/authorize, POST /oauth/authorize/request, POST /oauth/authorize/approve'
       - 'versioned virtual-target gateway route family (/api/virtual-targets/v1/*): PUT …/registration, POST …/claim, POST …/requests/:id/progress, POST …/requests/:id/launched, POST …/requests/:id/failed, POST …/grants/:id/exchange, GET …/missions/:id/resources, POST …/missions/:id/actions; owns DTO shapes, target-authenticated auth/RBAC, per-request idempotency, and bounded/redacted output; the immutable VirtualExecutionQueueItemV1 payload + digest are built by the service layer at queue time and returned only to the authenticated claiming gateway; local /api/runner/* routes are unchanged'
       - 'authenticated mobile Live Activity registration routes: PUT and DELETE /api/mobile/live-activities/:activityId/push-token; registrations are private to the caller and APNs delivery is handled by the in-process live-activity dispatcher'
+      - 'authenticated standard push routes: PUT /api/mobile/push/device-token and POST /api/mobile/push/device-token/revoke (opaque device token carried in the body, never the URL, with no read surface), plus GET/PUT /api/profile/notification-preferences returning { enabled, categories: { category, mode }[] }; alert/background APNs delivery is handled by the in-process push-notification dispatcher and never reuses ActivityKit tokens or topics'
+      - 'editable mission artifacts: PATCH /api/missions/:id/artifacts/:artifactId accepts expectedRevision plus a non-empty subset of { label, contentText, externalUrl }, requires mission:update on the named mission, preserves delivery/session/objective provenance plus contentJson, rejects stale edits with 409 and non-HTTP(S) external URLs, and emits an artifact entity-change in the same transaction'
     dependsOn:
       - database
       - auth
@@ -238,11 +241,14 @@ components:
     referenceSpec: '../OverlordMobile/conformance-manifest.yaml'
     owns:
       - 'native ActivityKit lifecycle and per-activity push-token registration stream'
+      - 'standard user-notification permission prompt and APNs device-token registration, rotation, sync, and revocation on sign-out; device tokens are kept strictly separate from ActivityKit tokens'
+      - 'user-visible notification preference UI backed by the profile notification-preferences routes, and handling of notification taps into mission deep links'
       - 'authenticated registration, rotation, and revocation calls to the Mobile → REST surface'
     dependsOn:
       - rest
     interactionSurfaces:
       - mobileToRest
+      - mobilePushToRest
 
   mcp:
     label: 'MCP Server'
@@ -277,6 +283,22 @@ interactionSurfaces:
       - 'PUT accepts only an opaque ActivityKit pushToken and upserts the authenticated profile registration; DELETE revokes only that caller registration and both operations are retry-safe'
       - 'Registrations and tokens are never returned by a read endpoint, included in realtime, or written to application logs'
       - 'The mobile app never sends mission data or an APNs payload; the backend recomputes the bounded account snapshot from authorized data'
+
+  mobilePushToRest:
+    description: 'Native mobile app registers standard APNs device tokens and notification preferences over REST; the server owns alert composition and APNs delivery'
+    from: mobile
+    to: rest
+    transport: https-json
+    authMechanism: bearer-token
+    routeFamily: '/api/mobile/push/device-token, /api/profile/notification-preferences'
+    rules:
+      - 'PUT /api/mobile/push/device-token upserts { deviceToken, environment, bundleId, appVersion? } for the authenticated profile and rotates an existing token in place; POST …/revoke removes only that caller registration; both are retry-safe and return 204'
+      - 'A device token is globally unique and bound to exactly one profile; registering a token held by another profile reassigns it, and clients must revoke before clearing credentials on sign-out'
+      - 'Standard device tokens are never ActivityKit tokens: separate tables, routes, APNs topics (<bundleId> vs <bundleId>.push-type.liveactivity), and apns-push-type values'
+      - 'Device tokens are carried in the request body, never the URL, and are never returned by a read endpoint, included in realtime, or written to application logs'
+      - 'Notification preferences are the caller profile own state: categories are exactly mission_awaiting_review, agent_question, mission_complete, mission_failed with mode alert|silent|off, plus a master enabled switch that never affects Live Activity delivery; unknown categories or modes are rejected 400'
+      - 'The mobile app never sends mission data or an APNs payload; the backend recomputes the bounded alert snapshot from authorized data at delivery time'
+      - 'APNs payloads carry only bounded project name, sanitized mission title and display id, badge count, mission id, category, and deep link — never tokens, instructions, prompts, summaries, question text, file paths, or event payloads'
 
   agentToProtocol:
     description: 'Agents invoke ovld protocol subcommands via subprocess CLI'

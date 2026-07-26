@@ -623,6 +623,15 @@ export interface ArtifactDto {
   externalUrl: string | null;
   createdAt: string;
   updatedAt: string;
+  revision: number;
+}
+
+/** Editable human-facing artifact fields. Delivery provenance and structured content remain immutable. */
+export interface UpdateArtifactBody {
+  expectedRevision: number;
+  label?: string;
+  contentText?: string | null;
+  externalUrl?: string | null;
 }
 
 export interface MissionDetailDto extends MissionDto {

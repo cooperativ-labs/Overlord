@@ -219,10 +219,10 @@ To inspect project resolution explicitly:
 ovld protocol discover-project
 ovld protocol discover-project --project-id <id-or-name>
 ovld protocol discover-project --project-id "My Project"
-ovld protocol discover-project --working-directory /path/to/repo
+ovld protocol discover-project --directory /path/to/repo
 ```
 
-Use `--project-id` when the project ID or name is already known (names are unique per organization, matched case-insensitively). Use `--working-directory` to override cwd path matching. If the runtime has an `OVERLORD_DEVICE_FINGERPRINT`, pass `--device-fingerprint "$OVERLORD_DEVICE_FINGERPRINT"` so resource-directory matching prefers the current device. Set `OVERLORD_DEVICE_LABEL` to override this machine's execution-target display name (defaults to the hostname); it changes only the label, not the fingerprint.
+Use `--project-id` when the project ID or name is already known (names are unique per organization, matched case-insensitively). Use `--directory` to override cwd path matching; resource-directory matching automatically prefers the device the CLI is running on (its identity is sent as request headers). Set `OVERLORD_DEVICE_LABEL` to override this machine's execution-target display name (defaults to the hostname); it changes only the label, not the fingerprint.
 
 ## Creating Projects
 

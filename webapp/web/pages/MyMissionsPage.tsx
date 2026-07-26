@@ -25,6 +25,7 @@ import {
 import { firstObjectiveCreatePayload } from '../lib/project-resources.ts';
 import {
   keys,
+  useAllProjects,
   useCreateMission,
   useMeta,
   useProjects,
@@ -36,6 +37,7 @@ import {
 import type { BlankMissionCreateOptions } from './BlankMissionCard.tsx';
 import {
   type BoardView,
+  buildMissionProjectFilterOptions,
   type ColumnMap,
   getMissionTags,
   resolveColumnMissions
@@ -82,6 +84,10 @@ export function MyMissionsPage() {
   const meta = useMeta();
   const myMissionsQ = useWorkspaceMyMissions();
   const projectsQ = useProjects();
+  // My Missions spans every workspace of the active organization, so the project
+  // filter is gated on the cross-workspace list, which already excludes archived
+  // projects (lifecycle defaults to 'active').
+  const activeProjectsQ = useAllProjects();
   const createMission = useCreateMission();
   const setMissionStatus = useSetMissionStatus();
   const reorder = useReorderMyMissions();
@@ -166,21 +172,17 @@ export function MyMissionsPage() {
     return map;
   }, [missions]);
 
+  const activeProjectIds = useMemo(
+    () => new Set((activeProjectsQ.data ?? []).map(project => project.id)),
+    [activeProjectsQ.data]
+  );
+
   // Only projects the caller actually has missions in are worth filtering by.
   // Derived from the unfiltered set so the option list is stable as filters change.
-  const projectFilterOptions = useMemo(() => {
-    const byId = new Map<string, { id: string; name: string; color: string | null }>();
-    for (const mission of missions) {
-      if (!byId.has(mission.projectId)) {
-        byId.set(mission.projectId, {
-          id: mission.projectId,
-          name: mission.projectName,
-          color: mission.projectColor
-        });
-      }
-    }
-    return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name));
-  }, [missions]);
+  const projectFilterOptions = useMemo(
+    () => buildMissionProjectFilterOptions(missions, activeProjectIds),
+    [missions, activeProjectIds]
+  );
 
   const statusFilterOptions = useMemo(
     () => merged.columns.map(column => ({ id: column.key, name: column.name, type: column.type })),
@@ -222,6 +224,7 @@ export function MyMissionsPage() {
     if (
       projectFilterOrganizationId !== activeOrganizationId ||
       !myMissionsQ.data ||
+      activeProjectsQ.isLoading ||
       selectedProjectIds.length === 0
     ) {
       return;
@@ -235,6 +238,7 @@ export function MyMissionsPage() {
   }, [
     activeOrganizationId,
     myMissionsQ.data,
+    activeProjectsQ.isLoading,
     selectedProjectIds,
     projectFilterOptions,
     projectFilterOrganizationId
@@ -499,7 +503,13 @@ export function MyMissionsPage() {
   );
 
   const statusesLoading = statusQueries.some(query => query.isLoading);
-  if (meta.isLoading || myMissionsQ.isLoading || projectsQ.isLoading || statusesLoading) {
+  if (
+    meta.isLoading ||
+    myMissionsQ.isLoading ||
+    projectsQ.isLoading ||
+    activeProjectsQ.isLoading ||
+    statusesLoading
+  ) {
     return (
       <div className="p-8">
         <Spinner />

@@ -1931,6 +1931,59 @@ recomputes presentation state at delivery time. APNs credential material is proc
 configuration, not database data. Invalid-token APNs responses delete the matching
 registration.
 
+### `device_push_tokens`
+
+Private standard APNs device-token registration for one app install. Distinct from
+`live_activity_push_tokens`: an ActivityKit token dies with its activity and is sent
+on the `…push-type.liveactivity` topic, while a device token lives with the install
+and is sent on the plain bundle-id topic as an `alert` or `background` push. The two
+are never interchangeable. Neither device tokens nor this table appear in REST reads,
+change feeds, audit payloads, or logs.
+
+| Column               | Type         | Required | Notes                                                                              |
+| -------------------- | ------------ | -------- | ---------------------------------------------------------------------------------- |
+| `id`                 | Id           | yes      |                                                                                    |
+| `profile_id`         | Id           | yes      | FK to `profiles`; the single account this token currently belongs to.              |
+| `device_token`       | text         | yes      | Opaque APNs device token; globally unique so re-registration reassigns the device. |
+| `platform`           | text         | yes      | Closed set: `ios`.                                                                 |
+| `environment`        | text         | yes      | Closed set: `sandbox`, `production`. Selects the APNs host per registration.       |
+| `bundle_id`          | text         | yes      | App target that owns the token; prevents cross-target delivery.                    |
+| `app_version`        | text         | no       | Diagnostics only.                                                                  |
+| `last_registered_at` | TimestampUTC | yes      | Refreshed on every re-registration.                                                |
+| `last_sent_at`       | TimestampUTC | no       |                                                                                    |
+| `created_at`         | TimestampUTC | yes      |                                                                                    |
+| `updated_at`         | TimestampUTC | yes      |                                                                                    |
+
+Indexes:
+
+- Unique `(device_token)`.
+- `(profile_id)` for lifecycle fan-out.
+
+### `notification_preferences`
+
+Per-account standard push preferences. One row per `(profile_id, category)`; a missing
+row means the default (`alert`). The reserved `all` category is the master switch and
+suppresses standard push only — Live Activity delivery is unaffected.
+
+| Column       | Type         | Required | Notes                                                                                                 |
+| ------------ | ------------ | -------- | ----------------------------------------------------------------------------------------------------- |
+| `id`         | Id           | yes      |                                                                                                       |
+| `profile_id` | Id           | yes      | FK to `profiles`.                                                                                     |
+| `category`   | text         | yes      | Closed set: `all`, `mission_awaiting_review`, `agent_question`, `mission_complete`, `mission_failed`. |
+| `mode`       | text         | yes      | Closed set: `alert`, `silent`, `off`. The `all` category uses only `alert`/`off`.                     |
+| `created_at` | TimestampUTC | yes      |                                                                                                       |
+| `updated_at` | TimestampUTC | yes      |                                                                                                       |
+
+Indexes:
+
+- Unique `(profile_id, category)`.
+
+Delivery is driven by durable `worker_jobs.type = 'overlord.push_notification.dispatch.v1'`.
+Jobs carry only ids (profile, mission, objective, category) and a dedupe key; the
+dispatcher recomputes the bounded alert presentation at delivery time and never stores
+or transmits objective instructions, prompts, summaries, or event payloads. Invalid-token
+APNs responses (`410 Unregistered`, `400 BadDeviceToken`) delete the matching registration.
+
 ### `webhook_subscriptions`
 
 Workspace-scoped webhook subscription: which events an external endpoint receives, with what payload mode, signed with a per-subscription secret. Management is REST-only (`/api/webhooks*`); the enqueue helper reads active subscriptions when a matching event fires (see `Realtime Strategy` and `packages/core/service/webhook-events.ts`).
@@ -2339,6 +2392,7 @@ The REST API should be the primary remote access path. It should expose domain r
 Recommended boundary:
 
 - `/projects`, `/projects/:id/resources`, `/projects/:id/repository`, `/missions`, `/missions/:id/objectives`, `/missions/:id/events`, `/missions/:id/context`, `/missions/:id/deliveries`, `/workspaces/:id/objectives.csv`. Project resource create/update bodies accept additive `resourceKey`; objective DTOs and create/update bodies expose additive `resourceKey`.
+- `PATCH /api/missions/:id/artifacts/:artifactId` edits an existing artifact's human-facing `label`, `contentText`, and/or `externalUrl` with `mission:update` permission on its mission. The caller supplies `expectedRevision`; stale writes return `409`, and external URLs must use HTTP(S). Its delivery/session/objective provenance and structured `contentJson` are immutable through this surface; the resulting artifact must retain at least one text, JSON, or URL content field. The transaction increments the artifact revision and appends an `artifact` entity change.
 - `/workspace/my-missions` (read: missions assigned to the active actor across the active workspace, with personal `my_mission_positions` ordering) and `/workspace/my-missions/order` (persist a personal column reorder; a cross-column drag is a real mission status change validated by the `(workspace_id, status_id)` composite FK).
 - `/protocol/*` endpoints mirroring `ovld protocol`.
 - `/execution-requests` for runner queue operations.

@@ -76,6 +76,29 @@ export function getStatusFilterLabel(
 
 export type MissionProjectFilterOption = { id: string; name: string; color: string | null };
 
+/**
+ * Project filter options derived from the missions on screen, restricted to
+ * projects present in `activeProjectIds`. Mission rows carry project name/color
+ * but no lifecycle, so archived projects would otherwise leak into the filter
+ * (coo:234, coo:445); callers pass the ids from the active-only project list.
+ */
+export function buildMissionProjectFilterOptions(
+  missions: { projectId: string; projectName: string; projectColor: string | null }[],
+  activeProjectIds: ReadonlySet<string>
+): MissionProjectFilterOption[] {
+  const byId = new Map<string, MissionProjectFilterOption>();
+  for (const mission of missions) {
+    if (!activeProjectIds.has(mission.projectId)) continue;
+    if (byId.has(mission.projectId)) continue;
+    byId.set(mission.projectId, {
+      id: mission.projectId,
+      name: mission.projectName,
+      color: mission.projectColor
+    });
+  }
+  return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
 export function getProjectFilterLabel(
   selectedProjectIds: string[],
   projectOptions: MissionProjectFilterOption[]

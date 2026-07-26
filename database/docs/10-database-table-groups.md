@@ -66,6 +66,8 @@ Every Overlord installation needs these. They cover the fundamental workflow: cr
 | `idempotency_keys`          | Guards REST, protocol, hook, and worker calls against duplicate effects. |
 | `entity_changes`            | Canonical change feed for realtime, REST polling, and sync.              |
 | `live_activity_push_tokens` | Private per-profile ActivityKit/APNs registrations.                      |
+| `device_push_tokens`        | Private standard APNs device-token registrations, one per app install.  |
+| `notification_preferences`  | Per-profile standard push categories and modes.                         |
 | `schema_migrations`         | Tracks which migrations have been applied per adapter and component.     |
 
 ---

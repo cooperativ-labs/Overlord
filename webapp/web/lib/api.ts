@@ -85,6 +85,7 @@ import type {
   StoredImageDto,
   UpdateAgentCatalogBody,
   UpdateAgentLaunchConfigBody,
+  UpdateArtifactBody,
   UpdateLaunchPreferenceBody,
   UpdateMissionBody,
   UpdateObjectiveBody,
@@ -508,6 +509,8 @@ export const api = {
     request<DeliveryDto[]>('GET', `/api/missions/${id}/deliveries`),
   listMissionArtifacts: (id: string) =>
     request<ArtifactDto[]>('GET', `/api/missions/${id}/artifacts`),
+  updateMissionArtifact: (missionId: string, artifactId: string, body: UpdateArtifactBody) =>
+    request<ArtifactDto>('PATCH', `/api/missions/${missionId}/artifacts/${artifactId}`, body),
   listMissionFileChanges: (id: string) =>
     request<FileChangeDto[]>('GET', `/api/missions/${id}/file-changes`),
 

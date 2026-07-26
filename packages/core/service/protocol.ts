@@ -39,6 +39,7 @@ import {
   findPrimaryProjectResource,
   findProjectResourceByKey
 } from './projects.js';
+import { enqueuePushNotificationForMission } from './push-notification-jobs.js';
 import { generateSessionKey, hashSessionKey, newId, nowIso } from './util.js';
 import { enqueueWebhookEvent } from './webhook-events.js';
 import { enqueueDeliveryComposeJob } from './worker-jobs.js';
@@ -1386,6 +1387,17 @@ export async function askQuestion({
       projectId: mission.projectId,
       entity: { missionId: mission.id, objectiveId: session.objective_id, sessionId: session.id }
     });
+    // A blocked agent cannot make progress until a person answers, which is
+    // exactly the case a standard push exists for. The question text itself stays
+    // in the mission event — the payload only says which mission needs input.
+    await enqueuePushNotificationForMission({
+      db: txCtx.db,
+      workspaceId: ctx.workspace.id,
+      missionId: mission.id,
+      category: 'agent_question',
+      objectiveId: session.objective_id,
+      now
+    });
 
     await moveMissionToReview({ ctx: txCtx, missionId: mission.id });
   });
@@ -1945,6 +1957,10 @@ export async function deliverSession({
       }
     | undefined;
 
+  // A delivery that immediately auto-advances leaves work in flight, which the
+  // Live Activity already shows; only a delivery that actually parks the mission
+  // in review owes the assignee an interrupting notification.
+  let autoAdvanceQueued = false;
   if (nextObjective) {
     const eventId = newId();
     const eventNow = nowIso();
@@ -2026,6 +2042,7 @@ export async function deliverSession({
           metadata: { launchConfigSource: resolvedLaunch.source },
           idempotencyKey: `auto_advance:${nextObjective.id}`
         });
+        autoAdvanceQueued = true;
       } catch (error) {
         await ctx.db.run(
           `INSERT INTO mission_events
@@ -2067,6 +2084,16 @@ export async function deliverSession({
         ]
       );
     }
+  }
+
+  if (!autoAdvanceQueued) {
+    await enqueuePushNotificationForMission({
+      db: ctx.db,
+      workspaceId: ctx.workspace.id,
+      missionId: mission.id,
+      category: 'mission_awaiting_review',
+      objectiveId: session.objective_id
+    });
   }
 
   return { deliveryId, eventId };

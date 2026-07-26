@@ -7,6 +7,7 @@ import { ServiceError } from './errors.js';
 import { type ClientDeviceIdentity, resolveClaimingDeviceTarget } from './execution-targets.js';
 import { LOCAL_TARGET_MUTATION_REQUESTED_SOURCE } from './local-target-mutations.ts';
 import { resolveObjectiveWorkingDirectory } from './projects.js';
+import { enqueuePushNotificationForMission } from './push-notification-jobs.js';
 import { newId, nowIso } from './util.js';
 
 export const ACTIVE_EXECUTION_REQUEST_STATUSES = ['queued', 'claimed', 'launching'] as const;
@@ -781,6 +782,16 @@ export async function markExecutionFailed({
       row,
       summary: `Agent run failed: ${error}`,
       payload: { error }
+    });
+    // A failed launch strands the mission with nobody working it, so the assignee
+    // is told. The error text stays in the mission event and never in the payload.
+    await enqueuePushNotificationForMission({
+      db: txCtx.db,
+      workspaceId: ctx.workspace.id,
+      missionId: row.mission_id,
+      category: 'mission_failed',
+      objectiveId: row.objective_id,
+      now
     });
     return await getExecutionRequest({ ctx: txCtx, id: requestId });
   });

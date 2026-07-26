@@ -88,6 +88,9 @@ function renderInline(text: string, keyPrefix: string): ReactNode[] {
           </code>
         );
       case 'link':
+        if (!isSafeLinkHref(token.href)) {
+          return <Fragment key={key}>{token.value}</Fragment>;
+        }
         return (
           <a
             key={key}
@@ -103,6 +106,17 @@ function renderInline(text: string, keyPrefix: string): ReactNode[] {
         return <Fragment key={key}>{token.value}</Fragment>;
     }
   });
+}
+
+function isSafeLinkHref(href: string): boolean {
+  if (href.startsWith('/') && !href.startsWith('//')) return true;
+  if (href.startsWith('./') || href.startsWith('../') || href.startsWith('#')) return true;
+  try {
+    const url = new URL(href);
+    return url.protocol === 'http:' || url.protocol === 'https:' || url.protocol === 'mailto:';
+  } catch {
+    return false;
+  }
 }
 
 type Block =

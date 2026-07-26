@@ -108,6 +108,13 @@ import {
   updateOrganization
 } from './organizations.ts';
 import { runProtocolSubcommand } from './protocol.ts';
+import { pushNotificationDispatcher } from './push-notification-dispatcher.ts';
+import {
+  getNotificationPreferences,
+  registerDevicePushToken,
+  revokeDevicePushToken,
+  updateNotificationPreferences
+} from './push-notifications.ts';
 import { requirePermission } from './rbac.ts';
 import { readChangesAfter, realtime } from './realtime.ts';
 import {
@@ -167,6 +174,7 @@ import {
   revokeUserToken,
   searchMissions,
   setDefaultProjectPreference,
+  updateArtifact,
   updateMission,
   updateObjective,
   updateProfile,
@@ -456,6 +464,7 @@ function handle(
           webhookDispatcher.pollNow();
           deliveryComposeWorker.pollNow();
           liveActivityDispatcher.pollNow();
+          pushNotificationDispatcher.pollNow();
         }
         if (!res.headersSent) res.json(result ?? { ok: true });
       } catch (err) {
@@ -509,6 +518,7 @@ if (mcpEnabled) {
       webhookDispatcher.pollNow();
       deliveryComposeWorker.pollNow();
       liveActivityDispatcher.pollNow();
+      pushNotificationDispatcher.pollNow();
     })().catch(next);
   });
 }
@@ -1235,6 +1245,42 @@ app.delete(
   )
 );
 
+// ---- Mobile standard push notifications ---------------------------------
+// Standard APNs *device* tokens, deliberately distinct from the ActivityKit
+// tokens above: different table, topic, and push type (see CONTRACT.md). The
+// opaque token travels in the body rather than the URL so it stays out of access
+// logs and proxy caches, and there is no read surface for it at all.
+app.put(
+  '/api/mobile/push/device-token',
+  handle(
+    async (req, res) => {
+      await registerDevicePushToken(req.body);
+      res.status(204).end();
+    },
+    { mutates: true }
+  )
+);
+app.post(
+  '/api/mobile/push/device-token/revoke',
+  handle(
+    async (req, res) => {
+      await revokeDevicePushToken(req.body);
+      res.status(204).end();
+    },
+    { mutates: true }
+  )
+);
+
+// ---- Notification preferences (any of the profile's own clients) ---------
+app.get(
+  '/api/profile/notification-preferences',
+  handle(() => getNotificationPreferences())
+);
+app.put(
+  '/api/profile/notification-preferences',
+  handle(req => updateNotificationPreferences(req.body), { mutates: true })
+);
+
 app.get(
   '/api/projects/:id/tags',
   handle(req => listProjectTags(req.params.id))
@@ -1421,6 +1467,13 @@ app.get(
 app.get(
   '/api/missions/:id/artifacts',
   handle(req => listArtifacts(req.params.id))
+);
+app.patch(
+  '/api/missions/:id/artifacts/:artifactId',
+  handle(req => updateArtifact(req.params.id, req.params.artifactId, req.body), {
+    mutates: true,
+    requires: PERMISSIONS.MISSION_UPDATE
+  })
 );
 app.get(
   '/api/missions/:id/file-changes',
@@ -1816,6 +1869,7 @@ async function start(): Promise<void> {
   webhookDispatcher.start();
   deliveryComposeWorker.start();
   liveActivityDispatcher.start();
+  pushNotificationDispatcher.start();
 
   const server = app.listen(bindPort, bindHost, () => {
     const databaseLabel =
