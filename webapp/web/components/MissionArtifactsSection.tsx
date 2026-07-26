@@ -1,5 +1,7 @@
 import {
   CheckCircle2,
+  ChevronDown,
+  ChevronRight,
   ExternalLink,
   FileCode2,
   FileText,
@@ -15,7 +17,6 @@ import type { ArtifactDto, ArtifactType } from '../../shared/contract.ts';
 import { useMissionArtifacts, useUpdateMissionArtifact } from '../lib/queries.ts';
 
 import { Markdown } from './Markdown.tsx';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from './ui/accordion.tsx';
 import { Badge, Button, Spinner, TextArea, TextInput } from './ui.tsx';
 
 const ARTIFACT_META: Record<ArtifactType, { icon: LucideIcon; label: string }> = {
@@ -36,9 +37,10 @@ function formatDate(iso: string): string {
   return Number.isNaN(date.getTime()) ? iso : date.toLocaleString();
 }
 
-function ArtifactAccordionItem({ artifact, missionId }: { artifact: ArtifactDto; missionId: string }) {
+function ArtifactCard({ artifact, missionId }: { artifact: ArtifactDto; missionId: string }) {
   const { icon: Icon, label: typeLabel } = artifactMeta(artifact.type);
   const updateArtifact = useUpdateMissionArtifact(missionId);
+  const [expanded, setExpanded] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [label, setLabel] = useState(artifact.label);
   const [contentText, setContentText] = useState(artifact.contentText ?? '');
@@ -49,6 +51,7 @@ function ArtifactAccordionItem({ artifact, missionId }: { artifact: ArtifactDto;
     setContentText(artifact.contentText ?? '');
     setExternalUrl(artifact.externalUrl ?? '');
     setIsEditing(true);
+    setExpanded(true);
   }
 
   function cancelEditing() {
@@ -71,27 +74,38 @@ function ArtifactAccordionItem({ artifact, missionId }: { artifact: ArtifactDto;
   }
 
   return (
-    <AccordionItem value={artifact.id}>
-      <AccordionTrigger className="gap-3 py-3 hover:no-underline">
-        <span className="flex min-w-0 flex-1 items-center gap-2.5">
-          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-(--color-border) bg-(--color-surface-1)">
-            {Icon ? (
-              <Icon className="h-3.5 w-3.5 text-(--color-ink-dim)" />
-            ) : (
-              <div className="h-2 w-2 rounded-full bg-(--color-ink-dim)/40" />
-            )}
-          </span>
-          <span className="grid min-w-0 flex-1 gap-0.5 text-left">
-            <span className="truncate text-sm font-medium text-(--color-ink)">{artifact.label}</span>
-            <span className="flex flex-wrap items-center gap-2 text-[11px] text-(--color-ink-dim)">
-              <Badge className="px-1.5 py-0 text-[10px] uppercase tracking-wide">{typeLabel}</Badge>
-              <span>{formatDate(artifact.createdAt)}</span>
-            </span>
+    <article className="min-w-0 rounded-lg border border-(--color-border) bg-(--color-surface-1)">
+      <button
+        type="button"
+        className={`flex w-full items-center gap-2.5 p-3 text-left transition-colors hover:bg-(--color-surface-2) ${
+          expanded ? 'bg-(--color-surface-2)' : ''
+        }`}
+        onClick={() => setExpanded(!expanded)}
+        aria-expanded={expanded}
+      >
+        {expanded ? (
+          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-(--color-ink-dim)" />
+        ) : (
+          <ChevronRight className="h-3.5 w-3.5 shrink-0 text-(--color-ink-dim)" />
+        )}
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-(--color-border) bg-(--color-surface-1)">
+          {Icon ? (
+            <Icon className="h-3.5 w-3.5 text-(--color-ink-dim)" />
+          ) : (
+            <div className="h-2 w-2 rounded-full bg-(--color-ink-dim)/40" />
+          )}
+        </span>
+        <span className="grid min-w-0 flex-1 gap-0.5">
+          <span className="truncate text-sm font-medium text-(--color-ink)">{artifact.label}</span>
+          <span className="flex flex-wrap items-center gap-2 text-[11px] text-(--color-ink-dim)">
+            <Badge className="px-1.5 py-0 text-[10px] uppercase tracking-wide">{typeLabel}</Badge>
+            <span>{formatDate(artifact.createdAt)}</span>
           </span>
         </span>
-      </AccordionTrigger>
-      <AccordionContent className="pt-1">
-        <div className="rounded-md border border-(--color-border) bg-(--color-surface-1) p-3">
+      </button>
+
+      {expanded && (
+        <div className="border-t border-(--color-border) px-3 pb-3 pt-2">
           {isEditing ? (
             <form className="grid gap-3" onSubmit={save}>
               <label className="grid gap-1 text-xs font-medium text-(--color-ink-dim)">
@@ -168,8 +182,8 @@ function ArtifactAccordionItem({ artifact, missionId }: { artifact: ArtifactDto;
             </div>
           )}
         </div>
-      </AccordionContent>
-    </AccordionItem>
+      )}
+    </article>
   );
 }
 
@@ -198,10 +212,10 @@ export function MissionArtifactsSection({ missionId }: { missionId: string }) {
   }
 
   return (
-    <Accordion multiple className="overflow-hidden rounded-lg border border-(--color-border) bg-(--color-surface-1) px-4">
+    <div className="grid gap-3">
       {artifacts.map(artifact => (
-        <ArtifactAccordionItem key={artifact.id} artifact={artifact} missionId={missionId} />
+        <ArtifactCard key={artifact.id} artifact={artifact} missionId={missionId} />
       ))}
-    </Accordion>
+    </div>
   );
 }
