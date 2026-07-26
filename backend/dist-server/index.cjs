@@ -101524,7 +101524,7 @@ var require_dist_cjs12 = __commonJS({
     var { buildQueryString: buildQueryString2, HttpResponse: HttpResponse2 } = (init_protocols(), __toCommonJS(protocols_exports));
     var node_https = require("node:https");
     var { Readable: Readable7 } = require("node:stream");
-    var http2 = require("node:http2");
+    var http22 = require("node:http2");
     var { streamCollector: streamCollector7 } = (init_serde(), __toCommonJS(serde_exports));
     exports2.streamCollector = streamCollector7;
     function buildAbortError(abortSignal) {
@@ -102153,10 +102153,10 @@ or increase socketAcquisitionWarningTimeout=(millis) in the NodeHttpHandler conf
         return request.destination.toString();
       }
       connect(url2) {
-        return this.connectOptions === void 0 ? http2.connect(url2) : http2.connect(url2, this.connectOptions);
+        return this.connectOptions === void 0 ? http22.connect(url2) : http22.connect(url2, this.connectOptions);
       }
     };
-    var { constants } = http2;
+    var { constants } = http22;
     var NodeHttp2Handler = class _NodeHttp2Handler {
       config;
       configProvider;
@@ -105366,7 +105366,7 @@ var require_dist_cjs16 = __commonJS({
     var { setCredentialFeature: setCredentialFeature2 } = (init_client4(), __toCommonJS(client_exports2));
     var { CredentialsProviderError: CredentialsProviderError2, readFile: readFile4, parseKnownFiles: parseKnownFiles2, getProfileName: getProfileName2 } = (init_config3(), __toCommonJS(config_exports));
     var { HttpRequest: HttpRequest2 } = (init_protocols(), __toCommonJS(protocols_exports));
-    var { createHash: createHash15, createPrivateKey, createPublicKey, sign: sign3 } = require("node:crypto");
+    var { createHash: createHash16, createPrivateKey, createPublicKey, sign: sign3 } = require("node:crypto");
     var { promises } = require("node:fs");
     var { homedir: homedir2 } = require("node:os");
     var { dirname, join: join6 } = require("node:path");
@@ -105527,7 +105527,7 @@ var require_dist_cjs16 = __commonJS({
       getTokenFilePath() {
         const directory = process.env.AWS_LOGIN_CACHE_DIRECTORY ?? join6(homedir2(), ".aws", "login", "cache");
         const loginSessionBytes = Buffer.from(this.loginSession, "utf8");
-        const loginSessionSha256 = createHash15("sha256").update(loginSessionBytes).digest("hex");
+        const loginSessionSha256 = createHash16("sha256").update(loginSessionBytes).digest("hex");
         return join6(directory, `${loginSessionSha256}.json`);
       }
       derToRawSignature(derSignature) {
@@ -132101,6 +132101,105 @@ init_errors4();
 init_execution_targets();
 init_local_target_mutations();
 init_projects();
+
+// ../packages/core/service/push-notification-jobs.ts
+init_util3();
+var PUSH_NOTIFICATION_DISPATCH_JOB_TYPE = "overlord.push_notification.dispatch.v1";
+var PUSH_NOTIFICATION_CATEGORIES = [
+  "mission_awaiting_review",
+  "agent_question",
+  "mission_complete",
+  "mission_failed"
+];
+var PUSH_NOTIFICATION_MASTER_CATEGORY = "all";
+var PUSH_NOTIFICATION_MODES = ["alert", "silent", "off"];
+function isPushNotificationCategory(value) {
+  return typeof value === "string" && PUSH_NOTIFICATION_CATEGORIES.includes(value);
+}
+function isPushNotificationMode(value) {
+  return typeof value === "string" && PUSH_NOTIFICATION_MODES.includes(value);
+}
+function dedupePredicate(dialect) {
+  return dialect === "postgres" ? "payload_json->>'dedupeKey' = ?" : "json_extract(payload_json, '$.dedupeKey') = ?";
+}
+function pushNotificationDedupeKey({
+  profileId,
+  category,
+  missionId,
+  objectiveId
+}) {
+  return `${profileId}:${category}:${missionId}:${objectiveId ?? "-"}`;
+}
+async function enqueuePushNotificationJob({
+  db,
+  workspaceId,
+  profileId,
+  category,
+  missionId,
+  objectiveId = null,
+  now: now2 = nowIso()
+}) {
+  const dedupeKey = pushNotificationDedupeKey({ profileId, category, missionId, objectiveId });
+  const existing = await db.get(
+    `SELECT id FROM worker_jobs
+       WHERE workspace_id = ? AND type = ? AND status IN ('queued', 'running')
+         AND deleted_at IS NULL AND ${dedupePredicate(db.dialect)}
+       LIMIT 1`,
+    [workspaceId, PUSH_NOTIFICATION_DISPATCH_JOB_TYPE, dedupeKey]
+  );
+  if (existing) return false;
+  const payload = {
+    profileId,
+    missionId,
+    objectiveId,
+    category,
+    dedupeKey
+  };
+  await db.run(
+    `INSERT INTO worker_jobs
+       (id, workspace_id, type, status, priority, run_after, attempt_count, max_attempts,
+        payload_json, created_at, updated_at, revision)
+       VALUES (?, ?, ?, 'queued', 40, ?, 0, 5, ?, ?, ?, 1)`,
+    [
+      newId(),
+      workspaceId,
+      PUSH_NOTIFICATION_DISPATCH_JOB_TYPE,
+      now2,
+      JSON.stringify(payload),
+      now2,
+      now2
+    ]
+  );
+  return true;
+}
+async function enqueuePushNotificationForMission({
+  db,
+  workspaceId,
+  missionId,
+  category,
+  objectiveId = null,
+  now: now2 = nowIso()
+}) {
+  const owner = await db.get(
+    `SELECT wu.profile_id
+       FROM missions m
+       JOIN workspace_users wu ON wu.id = m.assigned_workspace_user_id
+      WHERE m.id = ? AND m.workspace_id = ? AND m.deleted_at IS NULL
+        AND wu.deleted_at IS NULL AND wu.status = 'active'`,
+    [missionId, workspaceId]
+  );
+  return owner ? enqueuePushNotificationJob({
+    db,
+    workspaceId,
+    profileId: owner.profile_id,
+    category,
+    missionId,
+    objectiveId,
+    now: now2
+  }) : false;
+}
+
+// ../packages/core/service/execution-requests.ts
 init_util3();
 var ACTIVE_EXECUTION_REQUEST_STATUSES = ["queued", "claimed", "launching"];
 var LAUNCHABLE_OBJECTIVE_STATES2 = ["draft", "submitted", "launching"];
@@ -132658,6 +132757,14 @@ async function markExecutionFailed({
       summary: `Agent run failed: ${error53}`,
       payload: { error: error53 }
     });
+    await enqueuePushNotificationForMission({
+      db: txCtx.db,
+      workspaceId: ctx.workspace.id,
+      missionId: row.mission_id,
+      category: "mission_failed",
+      objectiveId: row.objective_id,
+      now: now2
+    });
     return await getExecutionRequest({ ctx: txCtx, id: requestId });
   });
 }
@@ -132861,6 +132968,60 @@ async function linkExecutionRequestToSession({
 
 // ../packages/core/service/protocol.ts
 init_execution_targets();
+
+// ../packages/core/service/live-activity-jobs.ts
+init_util3();
+var LIVE_ACTIVITY_DISPATCH_JOB_TYPE = "overlord.live_activity.dispatch.v1";
+function profilePredicate(dialect) {
+  return dialect === "postgres" ? "payload_json->>'profileId' = ?" : "json_extract(payload_json, '$.profileId') = ?";
+}
+async function enqueueLiveActivityDispatchJob({
+  db,
+  workspaceId,
+  profileId,
+  now: now2 = nowIso()
+}) {
+  const existing = await db.get(
+    `SELECT id FROM worker_jobs
+       WHERE workspace_id = ? AND type = ? AND status IN ('queued', 'running')
+         AND deleted_at IS NULL AND ${profilePredicate(db.dialect)}
+       LIMIT 1`,
+    [workspaceId, LIVE_ACTIVITY_DISPATCH_JOB_TYPE, profileId]
+  );
+  if (existing) return false;
+  await db.run(
+    `INSERT INTO worker_jobs
+       (id, workspace_id, type, status, priority, run_after, attempt_count, max_attempts,
+        payload_json, created_at, updated_at, revision)
+       VALUES (?, ?, ?, 'queued', 40, ?, 0, 5, ?, ?, ?, 1)`,
+    [
+      newId(),
+      workspaceId,
+      LIVE_ACTIVITY_DISPATCH_JOB_TYPE,
+      now2,
+      JSON.stringify({ profileId }),
+      now2,
+      now2
+    ]
+  );
+  return true;
+}
+async function enqueueLiveActivityRefreshForMission({
+  db,
+  workspaceId,
+  missionId,
+  now: now2 = nowIso()
+}) {
+  const owner = await db.get(
+    `SELECT wu.profile_id
+       FROM missions m
+       JOIN workspace_users wu ON wu.id = m.assigned_workspace_user_id
+      WHERE m.id = ? AND m.workspace_id = ? AND m.deleted_at IS NULL
+        AND wu.deleted_at IS NULL AND wu.status = 'active'`,
+    [missionId, workspaceId]
+  );
+  return owner ? enqueueLiveActivityDispatchJob({ db, workspaceId, profileId: owner.profile_id, now: now2 }) : false;
+}
 
 // ../packages/core/service/profiles.ts
 function parseProfileMetadata(metadataJson) {
@@ -133713,6 +133874,12 @@ async function attachSession({
         ...currentObjectiveAssignment?.assigned_agent ? [] : ["assigned_agent"]
       ]
     });
+    await enqueueLiveActivityRefreshForMission({
+      db: txCtx.db,
+      workspaceId: ctx.workspace.id,
+      missionId: context.mission.id,
+      now: now2
+    });
     await ensureNextDraftObjective({
       ctx: txCtx,
       missionId: context.mission.id,
@@ -134329,6 +134496,14 @@ async function askQuestion({
       projectId: mission.projectId,
       entity: { missionId: mission.id, objectiveId: session.objective_id, sessionId: session.id }
     });
+    await enqueuePushNotificationForMission({
+      db: txCtx.db,
+      workspaceId: ctx.workspace.id,
+      missionId: mission.id,
+      category: "agent_question",
+      objectiveId: session.objective_id,
+      now: now2
+    });
     await moveMissionToReview({ ctx: txCtx, missionId: mission.id });
   });
   return { eventId };
@@ -134670,6 +134845,12 @@ async function deliverSession({
         deliveryId
       }
     });
+    await enqueueLiveActivityRefreshForMission({
+      db: txCtx.db,
+      workspaceId: ctx.workspace.id,
+      missionId: mission.id,
+      now: now2
+    });
     await txCtx.db.run(
       `UPDATE agent_sessions
          SET delivery_state = 'delivered', phase = 'review', ended_at = ?, updated_at = ?, revision = revision + 1
@@ -134710,6 +134891,7 @@ async function deliverSession({
        ORDER BY position ASC LIMIT 1`,
     [mission.id, session.objective_id]
   );
+  let autoAdvanceQueued = false;
   if (nextObjective) {
     const eventId2 = newId();
     const eventNow = nowIso();
@@ -134775,6 +134957,7 @@ async function deliverSession({
           metadata: { launchConfigSource: resolvedLaunch.source },
           idempotencyKey: `auto_advance:${nextObjective.id}`
         });
+        autoAdvanceQueued = true;
       } catch (error53) {
         await ctx.db.run(
           `INSERT INTO mission_events
@@ -134814,6 +134997,15 @@ async function deliverSession({
         ]
       );
     }
+  }
+  if (!autoAdvanceQueued) {
+    await enqueuePushNotificationForMission({
+      db: ctx.db,
+      workspaceId: ctx.workspace.id,
+      missionId: mission.id,
+      category: "mission_awaiting_review",
+      objectiveId: session.objective_id
+    });
   }
   return { deliveryId, eventId };
 }
@@ -135029,6 +135221,12 @@ async function recordWork({
       entity: { missionId: created.mission.id, objectiveId, deliveryId }
     });
     await enqueueDeliveryComposeJob({ ctx: txCtx, deliveryId, now: now2 });
+    await enqueueLiveActivityRefreshForMission({
+      db: txCtx.db,
+      workspaceId: ctx.workspace.id,
+      missionId: created.mission.id,
+      now: now2
+    });
   });
   return { mission: created.mission, deliveryId };
 }
@@ -136499,8 +136697,8 @@ function slugifyBranchTitle(title, fallback2) {
   const slug = stripCombiningMarks(title).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
   const truncated = slug.length > TITLE_SLUG_MAX ? slug.slice(0, TITLE_SLUG_MAX) : slug;
   const boundary = truncated.length === TITLE_SLUG_MAX ? truncated.lastIndexOf("-") : -1;
-  const bounded = boundary > 0 && boundary >= Math.floor(TITLE_SLUG_MAX * 0.6) ? truncated.slice(0, boundary) : truncated;
-  return bounded.replace(/^-+|-+$/g, "") || fallback2;
+  const bounded2 = boundary > 0 && boundary >= Math.floor(TITLE_SLUG_MAX * 0.6) ? truncated.slice(0, boundary) : truncated;
+  return bounded2.replace(/^-+|-+$/g, "") || fallback2;
 }
 function sanitizeBranchName(branch, fallback2) {
   let sanitized = stripCombiningMarks(branch).toLowerCase().replace(/\\/g, "/").replace(/\/+/g, "/").replace(/\.\.+/g, ".").replace(/(^|\/)[.-]+/g, "$1").replace(/[~^:?*[\]\s]+/g, "-").replace(/\/+/g, "/").replace(/(?:\.lock|[./-]+)$/g, "");
@@ -139725,18 +139923,8 @@ async function listMissionFileChanges(missionRef, limit = 200) {
     createdAt: row.created_at
   }));
 }
-async function listArtifacts2(missionRef, limit = 200) {
-  const mission = await getMissionRow(missionRef, void 0, PERMISSIONS.ARTIFACT_READ);
-  const rows = await requireDatabaseClient().all(
-    `SELECT id, workspace_id, project_id, mission_id, objective_id, session_id, delivery_id,
-              type, label, content_text, content_json, external_url, created_at, updated_at
-         FROM artifacts
-        WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL
-        ORDER BY created_at DESC, id DESC
-        LIMIT ?`,
-    [mission.id, mission.workspace_id, limit]
-  );
-  return rows.map((row) => ({
+function toArtifactDto(row) {
+  return {
     id: row.id,
     workspaceId: row.workspace_id,
     projectId: row.project_id,
@@ -139750,8 +139938,121 @@ async function listArtifacts2(missionRef, limit = 200) {
     contentJson: row.content_json ? JSON.parse(row.content_json) : null,
     externalUrl: row.external_url,
     createdAt: row.created_at,
-    updatedAt: row.updated_at
-  }));
+    updatedAt: row.updated_at,
+    revision: row.revision
+  };
+}
+async function listArtifacts2(missionRef, limit = 200) {
+  const mission = await getMissionRow(missionRef, void 0, PERMISSIONS.ARTIFACT_READ);
+  const rows = await requireDatabaseClient().all(
+    `SELECT id, workspace_id, project_id, mission_id, objective_id, session_id, delivery_id,
+              type, label, content_text, content_json, external_url, created_at, updated_at, revision
+         FROM artifacts
+        WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL
+        ORDER BY created_at DESC, id DESC
+        LIMIT ?`,
+    [mission.id, mission.workspace_id, limit]
+  );
+  return rows.map(toArtifactDto);
+}
+async function updateArtifact(missionRef, artifactId, body) {
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    throw new ApiError(400, "Artifact update body must be an object");
+  }
+  return requireDatabaseClient().transaction(async (tx) => {
+    const mission = await getMissionRow(missionRef, tx, PERMISSIONS.MISSION_UPDATE);
+    const artifact = await tx.get(
+      `SELECT id, workspace_id, project_id, mission_id, objective_id, session_id, delivery_id,
+              type, label, content_text, content_json, external_url, created_at, updated_at, revision
+         FROM artifacts
+        WHERE id = ? AND mission_id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+      [artifactId, mission.id, mission.workspace_id]
+    );
+    if (!artifact) throw new ApiError(404, "Artifact not found");
+    if (!Number.isInteger(body.expectedRevision) || body.expectedRevision < 1) {
+      throw new ApiError(400, "Artifact expectedRevision must be a positive integer");
+    }
+    if (body.expectedRevision !== artifact.revision) {
+      throw new ApiError(409, "Artifact was updated by someone else; refresh and try again");
+    }
+    const fields = [];
+    const params = [];
+    const changedFields = [];
+    let contentText = artifact.content_text;
+    let externalUrl = artifact.external_url;
+    if (body.label !== void 0) {
+      if (typeof body.label !== "string" || !body.label.trim()) {
+        throw new ApiError(400, "Artifact label cannot be empty");
+      }
+      fields.push("label = ?");
+      params.push(body.label.trim());
+      changedFields.push("label");
+    }
+    if (body.contentText !== void 0) {
+      if (body.contentText !== null && typeof body.contentText !== "string") {
+        throw new ApiError(400, "Artifact contentText must be a string or null");
+      }
+      contentText = body.contentText?.trim() ? body.contentText : null;
+      fields.push("content_text = ?");
+      params.push(contentText);
+      changedFields.push("content_text");
+    }
+    if (body.externalUrl !== void 0) {
+      if (body.externalUrl !== null && typeof body.externalUrl !== "string") {
+        throw new ApiError(400, "Artifact externalUrl must be a string or null");
+      }
+      externalUrl = body.externalUrl?.trim() || null;
+      if (externalUrl) {
+        try {
+          const url2 = new URL(externalUrl);
+          if (url2.protocol !== "http:" && url2.protocol !== "https:") {
+            throw new Error("Unsupported protocol");
+          }
+        } catch {
+          throw new ApiError(400, "Artifact externalUrl must be an http(s) URL");
+        }
+      }
+      fields.push("external_url = ?");
+      params.push(externalUrl);
+      changedFields.push("external_url");
+    }
+    if (fields.length === 0) {
+      throw new ApiError(400, "Provide at least one editable artifact field");
+    }
+    if (!contentText && !artifact.content_json && !externalUrl) {
+      throw new ApiError(400, "An artifact must retain text, structured content, or a URL");
+    }
+    const updatedAt = nowIso2();
+    const revision = artifact.revision + 1;
+    await tx.run(
+      `UPDATE artifacts
+          SET ${fields.join(", ")}, updated_at = ?, revision = ?
+        WHERE id = ? AND workspace_id = ? AND revision = ?`,
+      [...params, updatedAt, revision, artifact.id, mission.workspace_id, artifact.revision]
+    );
+    const updated = await tx.get(
+      `SELECT id, workspace_id, project_id, mission_id, objective_id, session_id, delivery_id,
+              type, label, content_text, content_json, external_url, created_at, updated_at, revision
+         FROM artifacts
+        WHERE id = ? AND workspace_id = ?`,
+      [artifact.id, mission.workspace_id]
+    );
+    await recordChange2(
+      {
+        entityType: "artifact",
+        entityId: artifact.id,
+        operation: "update",
+        entityRevision: revision,
+        workspaceId: mission.workspace_id,
+        projectId: mission.project_id,
+        missionId: mission.id,
+        objectiveId: artifact.objective_id,
+        changedFields
+      },
+      tx
+    );
+    return toArtifactDto(updated);
+  });
 }
 async function nextMissionSequence2(db, workspaceId) {
   const row = await db.get(
@@ -140114,6 +140415,15 @@ async function patchMissionFieldsTx(id, body) {
     );
     if (scheduleTriggerStatusType) {
       await createScheduledDuplicateIfNeeded(tx, existing, scheduleTriggerStatusType);
+    }
+    if (scheduleTriggerStatusType === "complete" && existing.status_type !== "complete") {
+      await enqueuePushNotificationForMission({
+        db: tx,
+        workspaceId: existing.workspace_id,
+        missionId: id,
+        category: "mission_complete",
+        now: now2
+      });
     }
   });
 }
@@ -141412,6 +141722,14 @@ async function updateObjectiveTx(id, body) {
       },
       tx
     );
+    if (body.state !== void 0 && body.state !== existing.state && (body.state === "executing" || body.state === "complete" || existing.state === "executing")) {
+      await enqueueLiveActivityRefreshForMission({
+        db: tx,
+        workspaceId,
+        missionId: existing.mission_id,
+        now: now2
+      });
+    }
     if (body.state === "executing" && body.state !== existing.state && (existing.state === "draft" || existing.state === "future" || existing.state === "submitted" || existing.state === "launching")) {
       await ensureDraftSlotAfterObjectiveLeavesQueue(tx, {
         workspaceId,
@@ -153734,8 +154052,406 @@ function beginDesktopGitHubOAuth(auth2, authBaseUrl2) {
 init_env_profile();
 init_errors5();
 
-// oauth.ts
+// live-activities.ts
 var import_node_crypto17 = require("node:crypto");
+init_util3();
+init_db();
+init_errors5();
+var MAX_RUNNING = 2;
+var COMPLETION_HOLD_MS = 30 * 60 * 1e3;
+var TITLE_MAX_LENGTH = 80;
+function bounded(value, max) {
+  return value.length <= max ? value : `${value.slice(0, max - 1)}\u2026`;
+}
+function presentationTitle(value) {
+  return bounded(
+    value.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1").replace(/[*_`]/g, "").replace(/^[#>\-+*]\s+/gm, "").replace(/\s+/g, " ").trim(),
+    TITLE_MAX_LENGTH
+  );
+}
+function projectColor(settingsJson) {
+  try {
+    const value = JSON.parse(settingsJson);
+    const configured = value["overlord.color"] ?? value.color;
+    const color = typeof configured === "string" ? configured.trim() : "";
+    return color ? color.startsWith("#") ? color : `#${color}` : "#2563eb";
+  } catch {
+    return "#2563eb";
+  }
+}
+function asBool(value) {
+  return value === true || value === 1;
+}
+function toSnapshot(row) {
+  return {
+    id: row.id,
+    title: presentationTitle(row.title),
+    displayId: row.display_id,
+    projectName: bounded(row.project_name.trim() || "Project", 40),
+    projectColorHex: projectColor(row.project_settings_json)
+  };
+}
+async function registerLiveActivityPushToken(activityId, body) {
+  const normalizedActivityId = activityId.trim();
+  const pushToken = typeof body.pushToken === "string" ? body.pushToken.trim() : "";
+  if (!normalizedActivityId || !pushToken) {
+    throw new ApiError(400, "activityId and pushToken are required");
+  }
+  if (normalizedActivityId.length > 255 || pushToken.length > 4096) {
+    throw new ApiError(400, "Live Activity registration is too large");
+  }
+  const db = requireDatabaseClient();
+  const profileId = await resolveActiveProfileId(db);
+  if (!profileId) throw new ApiError(401, "Authentication required");
+  const workspace = await db.get(
+    `SELECT w.id FROM workspace_users wu JOIN workspaces w ON w.id = wu.workspace_id
+      WHERE wu.profile_id = ? AND wu.status = 'active' AND wu.deleted_at IS NULL
+        AND w.deleted_at IS NULL ORDER BY wu.created_at ASC LIMIT 1`,
+    [profileId]
+  );
+  if (!workspace) throw new ApiError(403, "No active workspace membership");
+  const now2 = nowIso();
+  await db.transaction(async (tx) => {
+    const existing = await tx.get(
+      `SELECT id FROM live_activity_push_tokens WHERE profile_id = ? AND activity_id = ?`,
+      [profileId, normalizedActivityId]
+    );
+    if (existing) {
+      await tx.run(
+        `UPDATE live_activity_push_tokens
+            SET push_token = ?, last_content_hash = NULL, last_sent_at = NULL, updated_at = ?
+          WHERE id = ?`,
+        [pushToken, now2, existing.id]
+      );
+    } else {
+      await tx.run(
+        `INSERT INTO live_activity_push_tokens
+           (id, profile_id, activity_id, push_token, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [newId(), profileId, normalizedActivityId, pushToken, now2, now2]
+      );
+    }
+    await enqueueLiveActivityDispatchJob({
+      db: tx,
+      workspaceId: workspace.id,
+      profileId,
+      now: now2
+    });
+  });
+}
+async function revokeLiveActivityPushToken(activityId) {
+  const normalizedActivityId = activityId.trim();
+  if (!normalizedActivityId) throw new ApiError(400, "activityId is required");
+  const db = requireDatabaseClient();
+  const profileId = await resolveActiveProfileId(db);
+  if (!profileId) throw new ApiError(401, "Authentication required");
+  await db.run(`DELETE FROM live_activity_push_tokens WHERE profile_id = ? AND activity_id = ?`, [
+    profileId,
+    normalizedActivityId
+  ]);
+}
+async function buildLiveActivityContentState(db, profileId, now2 = /* @__PURE__ */ new Date()) {
+  const rows = await db.all(
+    `SELECT m.id, m.title, m.display_id, p.name AS project_name, p.settings_json AS project_settings_json,
+            m.updated_at, m.status_type,
+            EXISTS(SELECT 1 FROM objectives o WHERE o.mission_id = m.id AND o.deleted_at IS NULL AND o.state = 'executing') AS has_executing_objective,
+            EXISTS(SELECT 1 FROM objectives o WHERE o.mission_id = m.id AND o.deleted_at IS NULL AND o.state = 'complete') AS has_completed_objective
+       FROM missions m
+       JOIN projects p ON p.id = m.project_id AND p.deleted_at IS NULL
+       JOIN workspace_users wu ON wu.id = m.assigned_workspace_user_id
+       JOIN workspaces w ON w.id = m.workspace_id AND w.deleted_at IS NULL
+      WHERE m.deleted_at IS NULL AND wu.profile_id = ? AND wu.status = 'active' AND wu.deleted_at IS NULL
+      ORDER BY m.updated_at DESC, m.id ASC`,
+    [profileId]
+  );
+  const running = rows.filter((row) => asBool(row.has_executing_objective)).slice(0, MAX_RUNNING);
+  const completion = rows.find((row) => {
+    if (asBool(row.has_executing_objective)) return false;
+    if (!asBool(row.has_completed_objective) && row.status_type !== "complete") return false;
+    const updated = Date.parse(row.updated_at);
+    return Number.isFinite(updated) && now2.getTime() - updated <= COMPLETION_HOLD_MS;
+  });
+  if (running.length === 0 && !completion) return null;
+  return {
+    running: running.map(toSnapshot),
+    recentCompletion: completion ? toSnapshot(completion) : null,
+    updatedAt: now2.toISOString()
+  };
+}
+function liveActivityContentHash(state2) {
+  return (0, import_node_crypto17.createHash)("sha256").update(
+    JSON.stringify(
+      state2 && {
+        running: state2.running,
+        recentCompletion: state2.recentCompletion
+      }
+    )
+  ).digest("hex");
+}
+
+// live-activity-dispatcher.ts
+init_util3();
+
+// apns-client.ts
+var import_node_crypto18 = require("node:crypto");
+var import_node_http2 = __toESM(require("node:http2"), 1);
+var SANDBOX_HOST = "https://api.sandbox.push.apple.com";
+var PRODUCTION_HOST = "https://api.push.apple.com";
+function apnsHostFor(environment) {
+  return environment === "sandbox" ? SANDBOX_HOST : PRODUCTION_HOST;
+}
+function apnsConfig() {
+  const teamId = process.env.OVERLORD_APNS_TEAM_ID?.trim();
+  const keyId = process.env.OVERLORD_APNS_KEY_ID?.trim();
+  const privateKey = process.env.OVERLORD_APNS_PRIVATE_KEY?.replace(/\\n/g, "\n").trim();
+  const bundleId = process.env.OVERLORD_IOS_BUNDLE_ID?.trim();
+  if (!teamId || !keyId || !privateKey || !bundleId) return null;
+  return {
+    teamId,
+    keyId,
+    privateKey,
+    bundleId,
+    host: apnsHostFor(process.env.OVERLORD_APNS_ENV === "sandbox" ? "sandbox" : "production")
+  };
+}
+function b64url(value) {
+  return Buffer.from(value).toString("base64url");
+}
+function apnsJwt(config4) {
+  const now2 = Math.floor(Date.now() / 1e3);
+  const signingInput = `${b64url(JSON.stringify({ alg: "ES256", kid: config4.keyId }))}.${b64url(
+    JSON.stringify({ iss: config4.teamId, iat: now2 })
+  )}`;
+  const signer = (0, import_node_crypto18.createSign)("SHA256");
+  signer.update(signingInput);
+  signer.end();
+  const signature = signer.sign({ key: config4.privateKey, dsaEncoding: "ieee-p1363" });
+  return `${signingInput}.${b64url(signature)}`;
+}
+function isRetiredTokenResponse(result) {
+  if (result.status === 410) return true;
+  return result.status === 400 && /BadDeviceToken|DeviceTokenNotForTopic/.test(result.body);
+}
+async function sendApnsRequest({
+  token,
+  body,
+  config: config4,
+  headers,
+  host
+}) {
+  return new Promise((resolve, reject) => {
+    const client = import_node_http2.default.connect(host ?? config4.host);
+    let settled = false;
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      client.close();
+      resolve(result);
+    };
+    client.once("error", (error53) => {
+      if (settled) return;
+      settled = true;
+      client.close();
+      reject(error53);
+    });
+    const request = client.request({
+      ":method": "POST",
+      ":path": `/3/device/${token}`,
+      authorization: `bearer ${apnsJwt(config4)}`,
+      "content-type": "application/json",
+      ...headers
+    });
+    let status = 0;
+    let response = "";
+    request.on("response", (responseHeaders) => {
+      status = Number(responseHeaders[":status"] ?? 0);
+    });
+    request.setEncoding("utf8");
+    request.on("data", (chunk) => {
+      response += chunk;
+    });
+    request.once("end", () => finish({ status, body: response.slice(0, 512) }));
+    request.once("error", reject);
+    request.end(body);
+  });
+}
+
+// live-activity-dispatcher.ts
+init_db();
+var POLL_INTERVAL_MS2 = 1500;
+var LOCK_TTL_MS2 = 6e4;
+var UNCHANGED_MIN_INTERVAL_MS = 5 * 60 * 1e3;
+var COMPLETION_DISMISSAL_MS = 10 * 60 * 1e3;
+var RETRY_BACKOFF_MS2 = [15e3, 6e4, 3e5, 9e5, 36e5];
+function apnsPayload(state2) {
+  const now2 = Date.now();
+  const completionHold = state2 && state2.running.length === 0 && state2.recentCompletion !== null;
+  const event = state2?.running.length ? "update" : "end";
+  const finalState = state2 ?? {
+    running: [],
+    recentCompletion: null,
+    updatedAt: new Date(now2).toISOString()
+  };
+  const aps = {
+    timestamp: Math.floor(now2 / 1e3),
+    event,
+    "content-state": finalState
+  };
+  if (event === "update") aps["stale-date"] = Math.floor((now2 + 30 * 60 * 1e3) / 1e3);
+  if (event === "end")
+    aps["dismissal-date"] = Math.floor(
+      (now2 + (completionHold ? COMPLETION_DISMISSAL_MS : 0)) / 1e3
+    );
+  return { event, body: JSON.stringify({ aps }) };
+}
+async function sendApns({
+  token,
+  body,
+  config: config4
+}) {
+  return sendApnsRequest({
+    token,
+    body,
+    config: config4,
+    headers: {
+      "apns-topic": `${config4.bundleId}.push-type.liveactivity`,
+      "apns-push-type": "liveactivity",
+      "apns-priority": "5"
+    }
+  });
+}
+var LiveActivityDispatcher = class {
+  timer = null;
+  polling = false;
+  workerId = `live-activity:${process.pid}:${newId().slice(0, 8)}`;
+  start() {
+    if (this.timer) return;
+    this.timer = setInterval(() => void this.poll(), POLL_INTERVAL_MS2);
+  }
+  pollNow() {
+    void this.poll();
+  }
+  async poll() {
+    if (this.polling) return;
+    this.polling = true;
+    try {
+      const db = requireDatabaseClient();
+      const job = await claimNextJob(db, this.workerId);
+      if (job) await this.processJob(db, job);
+    } catch (error53) {
+      console.error("[live-activity-dispatcher] poll failed", error53);
+    } finally {
+      this.polling = false;
+    }
+  }
+  async processJob(db, job) {
+    let profileId;
+    try {
+      const payload = JSON.parse(job.payload_json);
+      if (typeof payload.profileId !== "string" || !payload.profileId) throw new Error("profileId");
+      profileId = payload.profileId;
+    } catch {
+      await finishJob(db, job.id, "failed", "Malformed profile payload");
+      return;
+    }
+    try {
+      const tokens = await db.all(
+        `SELECT id, activity_id, push_token, last_content_hash, last_sent_at
+           FROM live_activity_push_tokens WHERE profile_id = ?`,
+        [profileId]
+      );
+      if (tokens.length === 0) {
+        await finishJob(db, job.id, "succeeded", null);
+        return;
+      }
+      const state2 = await buildLiveActivityContentState(db, profileId);
+      const hash2 = liveActivityContentHash(state2);
+      const payload = apnsPayload(state2);
+      const config4 = apnsConfig();
+      for (const token of tokens) {
+        const sentAt = token.last_sent_at ? Date.parse(token.last_sent_at) : NaN;
+        if (payload.event === "update" && token.last_content_hash === hash2 && Number.isFinite(sentAt) && Date.now() - sentAt < UNCHANGED_MIN_INTERVAL_MS) {
+          continue;
+        }
+        if (!config4) continue;
+        const response = await sendApns({ token: token.push_token, body: payload.body, config: config4 });
+        if (response.status === 400 || response.status === 410) {
+          await db.run(`DELETE FROM live_activity_push_tokens WHERE id = ?`, [token.id]);
+          continue;
+        }
+        if (response.status < 200 || response.status >= 300) {
+          throw new Error(`APNs ${response.status}: ${response.body || "unknown response"}`);
+        }
+        if (payload.event === "end") {
+          await db.run(`DELETE FROM live_activity_push_tokens WHERE id = ?`, [token.id]);
+        } else {
+          const now2 = nowIso();
+          await db.run(
+            `UPDATE live_activity_push_tokens SET last_content_hash = ?, last_sent_at = ?, updated_at = ? WHERE id = ?`,
+            [hash2, now2, now2, token.id]
+          );
+        }
+      }
+      await finishJob(db, job.id, "succeeded", null);
+    } catch (error53) {
+      const message2 = error53 instanceof Error ? error53.message : String(error53);
+      if (job.attempt_count >= job.max_attempts) {
+        await finishJob(db, job.id, "failed", message2);
+      } else {
+        const delay = RETRY_BACKOFF_MS2[Math.min(job.attempt_count - 1, RETRY_BACKOFF_MS2.length - 1)];
+        await db.run(
+          `UPDATE worker_jobs SET status = 'queued', run_after = ?, last_error = ?, locked_by = NULL,
+             locked_until = NULL, updated_at = ?, revision = revision + 1 WHERE id = ?`,
+          [new Date(Date.now() + delay).toISOString(), message2, nowIso(), job.id]
+        );
+      }
+    }
+  }
+};
+async function claimNextJob(db, workerId) {
+  return db.transaction(async (tx) => {
+    const now2 = nowIso();
+    await tx.run(
+      `UPDATE worker_jobs SET status = 'queued', locked_by = NULL, locked_until = NULL, updated_at = ?, revision = revision + 1
+       WHERE type = ? AND status = 'running' AND deleted_at IS NULL AND locked_until < ?`,
+      [now2, LIVE_ACTIVITY_DISPATCH_JOB_TYPE, now2]
+    );
+    const lock = tx.dialect === "postgres" ? "FOR UPDATE SKIP LOCKED" : "";
+    const candidate = await tx.get(
+      `SELECT id, payload_json, attempt_count, max_attempts, revision FROM worker_jobs
+        WHERE type = ? AND status = 'queued' AND deleted_at IS NULL AND run_after <= ?
+        ORDER BY priority ASC, run_after ASC LIMIT 1 ${lock}`,
+      [LIVE_ACTIVITY_DISPATCH_JOB_TYPE, now2]
+    );
+    if (!candidate) return null;
+    const updated = await tx.run(
+      `UPDATE worker_jobs SET status = 'running', attempt_count = attempt_count + 1, locked_by = ?, locked_until = ?, updated_at = ?, revision = revision + 1
+        WHERE id = ? AND status = 'queued' AND revision = ?`,
+      [
+        workerId,
+        new Date(Date.parse(now2) + LOCK_TTL_MS2).toISOString(),
+        now2,
+        candidate.id,
+        candidate.revision
+      ]
+    );
+    return updated.changes === 0 ? null : {
+      ...candidate,
+      attempt_count: candidate.attempt_count + 1,
+      revision: candidate.revision + 1
+    };
+  });
+}
+async function finishJob(db, id, status, lastError) {
+  await db.run(
+    `UPDATE worker_jobs SET status = ?, last_error = ?, locked_by = NULL, locked_until = NULL, updated_at = ?, revision = revision + 1 WHERE id = ?`,
+    [status, lastError, nowIso(), id]
+  );
+}
+var liveActivityDispatcher = new LiveActivityDispatcher();
+
+// oauth.ts
+var import_node_crypto19 = require("node:crypto");
 init_db();
 init_errors5();
 var CLIENT_ID_PREFIX = "ovlc_";
@@ -153771,12 +154487,12 @@ function oauthSigningSecret() {
   return process.env.OVERLORD_OAUTH_SIGNING_SECRET?.trim() || process.env.BETTER_AUTH_SECRET?.trim() || "overlord-local-oauth-development-secret";
 }
 function signPayload(payload) {
-  return (0, import_node_crypto17.createHmac)("sha256", oauthSigningSecret()).update(payload).digest("base64url");
+  return (0, import_node_crypto19.createHmac)("sha256", oauthSigningSecret()).update(payload).digest("base64url");
 }
 function fixedTimeEqual(a5, b5) {
   const left = Buffer.from(a5);
   const right = Buffer.from(b5);
-  return left.length === right.length && (0, import_node_crypto17.timingSafeEqual)(left, right);
+  return left.length === right.length && (0, import_node_crypto19.timingSafeEqual)(left, right);
 }
 function jsonError(res, status, error53, description) {
   res.status(status).json({ error: error53, error_description: description });
@@ -154013,7 +154729,7 @@ async function handleOAuthApprove(req, res) {
     scope: "mission_lifecycle",
     expiresAt: new Date(Date.now() + USER_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1e3).toISOString()
   });
-  const code = `${AUTH_CODE_PREFIX}${(0, import_node_crypto17.randomBytes)(32).toString("base64url")}`;
+  const code = `${AUTH_CODE_PREFIX}${(0, import_node_crypto19.randomBytes)(32).toString("base64url")}`;
   authorizationCodes.set(code, {
     clientId: parsed.clientId,
     redirectUri: parsed.redirectUri,
@@ -154057,7 +154773,7 @@ async function handleOAuthToken(req, res) {
     jsonError(res, 400, "invalid_target", "OAuth resource does not match the authorization code.");
     return;
   }
-  const challenge = (0, import_node_crypto17.createHash)("sha256").update(codeVerifier).digest("base64url");
+  const challenge = (0, import_node_crypto19.createHash)("sha256").update(codeVerifier).digest("base64url");
   if (!codeVerifier || challenge !== entry.codeChallenge) {
     await revokeOrphanedAccessToken(entry.accessToken);
     jsonError(res, 400, "invalid_grant", "PKCE verification failed.");
@@ -154076,8 +154792,397 @@ async function handleOAuthRevoke(req, res) {
   res.status(200).json({ ok: true });
 }
 
+// push-notification-dispatcher.ts
+init_util3();
+init_db();
+
+// push-notifications.ts
+init_util3();
+init_db();
+init_errors5();
+var DEVICE_TOKEN_MAX_LENGTH = 512;
+var BUNDLE_ID_MAX_LENGTH = 255;
+var APP_VERSION_MAX_LENGTH = 64;
+var PROJECT_NAME_MAX_LENGTH = 40;
+var DEFAULT_MODE = "alert";
+var CATEGORY_VERBS = {
+  mission_awaiting_review: "is ready for review",
+  agent_question: "needs your input",
+  mission_complete: "finished",
+  mission_failed: "failed"
+};
+function requiredString2(value, field, max) {
+  const normalized = typeof value === "string" ? value.trim() : "";
+  if (!normalized) throw new ApiError(400, `${field} is required`);
+  if (normalized.length > max) throw new ApiError(400, `${field} is too long`);
+  return normalized;
+}
+async function registerDevicePushToken(body) {
+  const deviceToken = requiredString2(body.deviceToken, "deviceToken", DEVICE_TOKEN_MAX_LENGTH);
+  const bundleId = requiredString2(body.bundleId, "bundleId", BUNDLE_ID_MAX_LENGTH);
+  const environmentRaw = typeof body.environment === "string" ? body.environment.trim() : "";
+  if (environmentRaw !== "sandbox" && environmentRaw !== "production") {
+    throw new ApiError(400, "environment must be sandbox or production");
+  }
+  const environment = environmentRaw;
+  const appVersionRaw = typeof body.appVersion === "string" ? body.appVersion.trim() : "";
+  if (appVersionRaw.length > APP_VERSION_MAX_LENGTH) {
+    throw new ApiError(400, "appVersion is too long");
+  }
+  const appVersion = appVersionRaw || null;
+  const db = requireDatabaseClient();
+  const profileId = await resolveActiveProfileId(db);
+  if (!profileId) throw new ApiError(401, "Authentication required");
+  const now2 = nowIso();
+  await db.transaction(async (tx) => {
+    const existing = await tx.get(
+      `SELECT id FROM device_push_tokens WHERE device_token = ?`,
+      [deviceToken]
+    );
+    if (existing) {
+      await tx.run(
+        `UPDATE device_push_tokens
+            SET profile_id = ?, platform = 'ios', environment = ?, bundle_id = ?, app_version = ?,
+                last_registered_at = ?, updated_at = ?
+          WHERE id = ?`,
+        [profileId, environment, bundleId, appVersion, now2, now2, existing.id]
+      );
+      return;
+    }
+    await tx.run(
+      `INSERT INTO device_push_tokens
+         (id, profile_id, device_token, platform, environment, bundle_id, app_version,
+          last_registered_at, last_sent_at, created_at, updated_at)
+       VALUES (?, ?, ?, 'ios', ?, ?, ?, ?, NULL, ?, ?)`,
+      [newId(), profileId, deviceToken, environment, bundleId, appVersion, now2, now2, now2]
+    );
+  });
+}
+async function revokeDevicePushToken(body) {
+  const deviceToken = requiredString2(body.deviceToken, "deviceToken", DEVICE_TOKEN_MAX_LENGTH);
+  const db = requireDatabaseClient();
+  const profileId = await resolveActiveProfileId(db);
+  if (!profileId) throw new ApiError(401, "Authentication required");
+  await db.run(`DELETE FROM device_push_tokens WHERE profile_id = ? AND device_token = ?`, [
+    profileId,
+    deviceToken
+  ]);
+}
+async function readPreferenceRows(db, profileId) {
+  return db.all(
+    `SELECT category, mode FROM notification_preferences WHERE profile_id = ?`,
+    [profileId]
+  );
+}
+function toPreferences(rows) {
+  const stored = new Map(rows.map((row) => [row.category, row.mode]));
+  return {
+    enabled: stored.get(PUSH_NOTIFICATION_MASTER_CATEGORY) !== "off",
+    categories: PUSH_NOTIFICATION_CATEGORIES.map((category) => {
+      const mode = stored.get(category);
+      return { category, mode: isPushNotificationMode(mode) ? mode : DEFAULT_MODE };
+    })
+  };
+}
+async function getNotificationPreferences() {
+  const db = requireDatabaseClient();
+  const profileId = await resolveActiveProfileId(db);
+  if (!profileId) throw new ApiError(401, "Authentication required");
+  return toPreferences(await readPreferenceRows(db, profileId));
+}
+async function updateNotificationPreferences(body) {
+  const updates = [];
+  if (body.enabled !== void 0) {
+    if (typeof body.enabled !== "boolean") throw new ApiError(400, "enabled must be a boolean");
+    updates.push({
+      category: PUSH_NOTIFICATION_MASTER_CATEGORY,
+      mode: body.enabled ? "alert" : "off"
+    });
+  }
+  if (body.categories !== void 0) {
+    if (!Array.isArray(body.categories)) throw new ApiError(400, "categories must be an array");
+    for (const entry of body.categories) {
+      const record2 = entry ?? {};
+      if (!isPushNotificationCategory(record2.category)) {
+        throw new ApiError(400, "Unknown notification category");
+      }
+      if (!isPushNotificationMode(record2.mode)) {
+        throw new ApiError(400, "Unknown notification mode");
+      }
+      updates.push({ category: record2.category, mode: record2.mode });
+    }
+  }
+  const db = requireDatabaseClient();
+  const profileId = await resolveActiveProfileId(db);
+  if (!profileId) throw new ApiError(401, "Authentication required");
+  if (updates.length === 0) return toPreferences(await readPreferenceRows(db, profileId));
+  const now2 = nowIso();
+  await db.transaction(async (tx) => {
+    for (const update of updates) {
+      const existing = await tx.get(
+        `SELECT id FROM notification_preferences WHERE profile_id = ? AND category = ?`,
+        [profileId, update.category]
+      );
+      if (existing) {
+        await tx.run(`UPDATE notification_preferences SET mode = ?, updated_at = ? WHERE id = ?`, [
+          update.mode,
+          now2,
+          existing.id
+        ]);
+      } else {
+        await tx.run(
+          `INSERT INTO notification_preferences (id, profile_id, category, mode, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          [newId(), profileId, update.category, update.mode, now2, now2]
+        );
+      }
+    }
+  });
+  return toPreferences(await readPreferenceRows(db, profileId));
+}
+async function resolveNotificationMode(db, profileId, category) {
+  const preferences = toPreferences(await readPreferenceRows(db, profileId));
+  if (!preferences.enabled) return "off";
+  return preferences.categories.find((entry) => entry.category === category)?.mode ?? DEFAULT_MODE;
+}
+async function buildPushNotificationPresentation({
+  db,
+  profileId,
+  missionId,
+  category
+}) {
+  const mission = await db.get(
+    `SELECT m.id, m.title, m.display_id, p.name AS project_name
+       FROM missions m
+       JOIN projects p ON p.id = m.project_id AND p.deleted_at IS NULL
+       JOIN workspace_users wu ON wu.id = m.assigned_workspace_user_id
+      WHERE m.id = ? AND m.deleted_at IS NULL AND wu.profile_id = ?
+        AND wu.status = 'active' AND wu.deleted_at IS NULL`,
+    [missionId, profileId]
+  );
+  if (!mission) return null;
+  const badgeRow = await db.get(
+    `SELECT COUNT(*) AS count
+       FROM missions m
+       JOIN workspace_users wu ON wu.id = m.assigned_workspace_user_id
+      WHERE m.deleted_at IS NULL AND m.status_type = 'review'
+        AND wu.profile_id = ? AND wu.status = 'active' AND wu.deleted_at IS NULL`,
+    [profileId]
+  );
+  const title = presentationTitle(mission.title) || "Untitled mission";
+  return {
+    title: bounded(mission.project_name.trim() || "Project", PROJECT_NAME_MAX_LENGTH),
+    body: `${mission.display_id}: ${title} ${CATEGORY_VERBS[category]}`,
+    badge: Number(badgeRow?.count ?? 0),
+    missionId: mission.id,
+    category,
+    deepLink: `overlord://missions/${mission.id}`
+  };
+}
+
+// push-notification-dispatcher.ts
+var POLL_INTERVAL_MS3 = 1500;
+var LOCK_TTL_MS3 = 6e4;
+var RETRY_BACKOFF_MS3 = [15e3, 6e4, 3e5, 9e5, 36e5];
+var ALERT_EXPIRATION_MS = 60 * 60 * 1e3;
+function parseJob(payloadJson) {
+  try {
+    const payload = JSON.parse(payloadJson);
+    if (typeof payload.profileId !== "string" || !payload.profileId) return null;
+    if (typeof payload.missionId !== "string" || !payload.missionId) return null;
+    if (!isPushNotificationCategory(payload.category)) return null;
+    return {
+      profileId: payload.profileId,
+      missionId: payload.missionId,
+      category: payload.category
+    };
+  } catch {
+    return null;
+  }
+}
+function apnsBody(presentation, mode) {
+  const aps = mode === "alert" ? {
+    alert: { title: presentation.title, body: presentation.body },
+    sound: "default",
+    badge: presentation.badge,
+    "thread-id": presentation.missionId
+  } : {
+    "content-available": 1,
+    badge: presentation.badge,
+    "thread-id": presentation.missionId
+  };
+  return {
+    body: JSON.stringify({
+      aps,
+      data: {
+        missionId: presentation.missionId,
+        category: presentation.category,
+        deepLink: presentation.deepLink
+      }
+    })
+  };
+}
+async function sendStandardPush({
+  token,
+  body,
+  config: config4,
+  mode,
+  collapseId
+}) {
+  const headers = {
+    // The plain bundle-id topic — never the `.push-type.liveactivity` suffix.
+    "apns-topic": token.bundle_id,
+    "apns-push-type": mode === "alert" ? "alert" : "background",
+    "apns-priority": mode === "alert" ? "10" : "5",
+    "apns-collapse-id": collapseId
+  };
+  if (mode === "alert") {
+    headers["apns-expiration"] = String(Math.floor((Date.now() + ALERT_EXPIRATION_MS) / 1e3));
+  }
+  return sendApnsRequest({
+    token: token.device_token,
+    body,
+    config: config4,
+    headers,
+    // Per-registration environment wins over OVERLORD_APNS_ENV so a debug or
+    // TestFlight install is never sent through the production APNs host.
+    host: apnsHostFor(token.environment === "sandbox" ? "sandbox" : "production")
+  });
+}
+var PushNotificationDispatcher = class {
+  timer = null;
+  polling = false;
+  workerId = `push-notification:${process.pid}:${newId().slice(0, 8)}`;
+  start() {
+    if (this.timer) return;
+    this.timer = setInterval(() => void this.poll(), POLL_INTERVAL_MS3);
+  }
+  pollNow() {
+    void this.poll();
+  }
+  async poll() {
+    if (this.polling) return;
+    this.polling = true;
+    try {
+      const db = requireDatabaseClient();
+      const job = await claimNextJob2(db, this.workerId);
+      if (job) await this.processJob(db, job);
+    } catch (error53) {
+      console.error("[push-notification-dispatcher] poll failed", error53);
+    } finally {
+      this.polling = false;
+    }
+  }
+  async processJob(db, job) {
+    const target = parseJob(job.payload_json);
+    if (!target) {
+      await finishJob2(db, job.id, "failed", "Malformed push notification payload");
+      return;
+    }
+    try {
+      const mode = await resolveNotificationMode(db, target.profileId, target.category);
+      if (mode === "off") {
+        await finishJob2(db, job.id, "succeeded", null);
+        return;
+      }
+      const tokens = await db.all(
+        `SELECT id, device_token, environment, bundle_id
+           FROM device_push_tokens WHERE profile_id = ?`,
+        [target.profileId]
+      );
+      if (tokens.length === 0) {
+        await finishJob2(db, job.id, "succeeded", null);
+        return;
+      }
+      const presentation = await buildPushNotificationPresentation({
+        db,
+        profileId: target.profileId,
+        missionId: target.missionId,
+        category: target.category
+      });
+      if (!presentation) {
+        await finishJob2(db, job.id, "succeeded", null);
+        return;
+      }
+      const { body } = apnsBody(presentation, mode);
+      const collapseId = `${target.category}:${target.missionId}`.slice(0, 64);
+      const config4 = apnsConfig();
+      for (const token of tokens) {
+        if (!config4) continue;
+        const response = await sendStandardPush({ token, body, config: config4, mode, collapseId });
+        if (isRetiredTokenResponse(response)) {
+          await db.run(`DELETE FROM device_push_tokens WHERE id = ?`, [token.id]);
+          continue;
+        }
+        if (response.status < 200 || response.status >= 300) {
+          throw new Error(`APNs ${response.status}: ${response.body || "unknown response"}`);
+        }
+        const now2 = nowIso();
+        await db.run(
+          `UPDATE device_push_tokens SET last_sent_at = ?, updated_at = ? WHERE id = ?`,
+          [now2, now2, token.id]
+        );
+      }
+      await finishJob2(db, job.id, "succeeded", null);
+    } catch (error53) {
+      const message2 = error53 instanceof Error ? error53.message : String(error53);
+      if (job.attempt_count >= job.max_attempts) {
+        await finishJob2(db, job.id, "failed", message2);
+      } else {
+        const delay = RETRY_BACKOFF_MS3[Math.min(job.attempt_count - 1, RETRY_BACKOFF_MS3.length - 1)];
+        await db.run(
+          `UPDATE worker_jobs SET status = 'queued', run_after = ?, last_error = ?, locked_by = NULL,
+             locked_until = NULL, updated_at = ?, revision = revision + 1 WHERE id = ?`,
+          [new Date(Date.now() + delay).toISOString(), message2, nowIso(), job.id]
+        );
+      }
+    }
+  }
+};
+async function claimNextJob2(db, workerId) {
+  return db.transaction(async (tx) => {
+    const now2 = nowIso();
+    await tx.run(
+      `UPDATE worker_jobs SET status = 'queued', locked_by = NULL, locked_until = NULL, updated_at = ?, revision = revision + 1
+       WHERE type = ? AND status = 'running' AND deleted_at IS NULL AND locked_until < ?`,
+      [now2, PUSH_NOTIFICATION_DISPATCH_JOB_TYPE, now2]
+    );
+    const lock = tx.dialect === "postgres" ? "FOR UPDATE SKIP LOCKED" : "";
+    const candidate = await tx.get(
+      `SELECT id, payload_json, attempt_count, max_attempts, revision FROM worker_jobs
+        WHERE type = ? AND status = 'queued' AND deleted_at IS NULL AND run_after <= ?
+        ORDER BY priority ASC, run_after ASC LIMIT 1 ${lock}`,
+      [PUSH_NOTIFICATION_DISPATCH_JOB_TYPE, now2]
+    );
+    if (!candidate) return null;
+    const updated = await tx.run(
+      `UPDATE worker_jobs SET status = 'running', attempt_count = attempt_count + 1, locked_by = ?, locked_until = ?, updated_at = ?, revision = revision + 1
+        WHERE id = ? AND status = 'queued' AND revision = ?`,
+      [
+        workerId,
+        new Date(Date.parse(now2) + LOCK_TTL_MS3).toISOString(),
+        now2,
+        candidate.id,
+        candidate.revision
+      ]
+    );
+    return updated.changes === 0 ? null : {
+      ...candidate,
+      attempt_count: candidate.attempt_count + 1,
+      revision: candidate.revision + 1
+    };
+  });
+}
+async function finishJob2(db, id, status, lastError) {
+  await db.run(
+    `UPDATE worker_jobs SET status = ?, last_error = ?, locked_by = NULL, locked_until = NULL, updated_at = ?, revision = revision + 1 WHERE id = ?`,
+    [status, lastError, nowIso(), id]
+  );
+}
+var pushNotificationDispatcher = new PushNotificationDispatcher();
+
 // storage.ts
-var import_node_crypto18 = require("node:crypto");
+var import_node_crypto20 = require("node:crypto");
 var import_node_fs17 = require("node:fs");
 var import_node_path29 = __toESM(require("node:path"), 1);
 var import_node_url7 = require("node:url");
@@ -154161,7 +155266,7 @@ async function writeImageObject(bucket, input, storageKeyFor) {
     storageKey,
     sizeBytes: input.bytes.length,
     contentType,
-    checksum: (0, import_node_crypto18.createHash)("sha256").update(input.bytes).digest("hex"),
+    checksum: (0, import_node_crypto20.createHash)("sha256").update(input.bytes).digest("hex"),
     publicUrl: publicUrlFor(bucket.bucket_key, storageKey)
   };
 }
@@ -154392,7 +155497,7 @@ async function uploadObjectiveAttachment(input) {
     contentType: contentType ?? "application/octet-stream"
   });
   const filename = input.filename.trim() || `attachment${import_node_path29.default.extname(storageKey)}`;
-  const checksum3 = (0, import_node_crypto18.createHash)("sha256").update(input.bytes).digest("hex");
+  const checksum3 = (0, import_node_crypto20.createHash)("sha256").update(input.bytes).digest("hex");
   return requireDatabaseClient().transaction(async (tx) => {
     await tx.run(
       `INSERT INTO attachments (
@@ -154647,14 +155752,14 @@ init_webhook_events();
 init_db();
 
 // webhook-security.ts
-var import_node_crypto19 = require("node:crypto");
+var import_node_crypto21 = require("node:crypto");
 var import_promises5 = __toESM(require("node:dns/promises"), 1);
 var import_node_net = require("node:net");
 init_db();
 init_errors5();
 function signWebhookPayload(secret, rawBody) {
   const timestamp = Math.floor(Date.now() / 1e3);
-  const signature = (0, import_node_crypto19.createHmac)("sha256", secret).update(`${timestamp}.${rawBody}`).digest("hex");
+  const signature = (0, import_node_crypto21.createHmac)("sha256", secret).update(`${timestamp}.${rawBody}`).digest("hex");
   return { header: `t=${timestamp},v1=${signature}`, timestamp };
 }
 function internalHostPatterns() {
@@ -154739,18 +155844,18 @@ function redactSecretLikeTokens(text) {
 }
 
 // webhook-dispatcher.ts
-var POLL_INTERVAL_MS2 = 1e3;
+var POLL_INTERVAL_MS4 = 1e3;
 var CLAIM_BATCH_SIZE2 = 10;
 var REQUEST_TIMEOUT_MS = 1e4;
 var RESPONSE_SNIPPET_LIMIT = 1e3;
-var RETRY_BACKOFF_MS2 = [3e4, 12e4, 6e5, 36e5, 216e5, 864e5];
+var RETRY_BACKOFF_MS4 = [3e4, 12e4, 6e5, 36e5, 216e5, 864e5];
 var AUTO_DISABLE_FAILURE_THRESHOLD = 20;
 var WebhookDispatcher = class {
   pollTimer = null;
   polling = false;
   start() {
     if (this.pollTimer) return;
-    this.pollTimer = setInterval(() => void this.poll(), POLL_INTERVAL_MS2);
+    this.pollTimer = setInterval(() => void this.poll(), POLL_INTERVAL_MS4);
   }
   /** Nudge an immediate poll — mirrors `realtime.pollNow()`, called from the same `handle()` mutation hook. */
   pollNow() {
@@ -154871,10 +155976,10 @@ var WebhookDispatcher = class {
       await recordSubscriptionSuccess(client, subscription.id);
       return;
     }
-    if (attemptNumber >= RETRY_BACKOFF_MS2.length) {
+    if (attemptNumber >= RETRY_BACKOFF_MS4.length) {
       await markOutboxTerminal(client, row.id, "failed", errorMessage);
     } else {
-      const delayMs = RETRY_BACKOFF_MS2[Math.min(attemptNumber - 1, RETRY_BACKOFF_MS2.length - 1)];
+      const delayMs = RETRY_BACKOFF_MS4[Math.min(attemptNumber - 1, RETRY_BACKOFF_MS4.length - 1)];
       await rescheduleOutbox(client, row.id, attemptNumber, delayMs, errorMessage);
     }
     await recordSubscriptionFailure(client, subscription.id, subscription.consecutive_failures);
@@ -154981,7 +156086,7 @@ var webhookDispatcher = new WebhookDispatcher();
 
 // webhooks.ts
 init_dist();
-var import_node_crypto20 = require("node:crypto");
+var import_node_crypto22 = require("node:crypto");
 init_webhook_events();
 init_db();
 init_errors5();
@@ -155017,7 +156122,7 @@ function toSubscriptionDto(row) {
   };
 }
 function generateWebhookSecret() {
-  return { secret: `${WEBHOOK_SECRET_SCHEME}_${(0, import_node_crypto20.randomBytes)(24).toString("hex")}` };
+  return { secret: `${WEBHOOK_SECRET_SCHEME}_${(0, import_node_crypto22.randomBytes)(24).toString("hex")}` };
 }
 function normalizeEventTypes(input) {
   if (!Array.isArray(input) || input.length === 0) {
@@ -155575,6 +156680,8 @@ function handle2(fn, options = {}) {
           realtime.pollNow();
           webhookDispatcher.pollNow();
           deliveryComposeWorker.pollNow();
+          liveActivityDispatcher.pollNow();
+          pushNotificationDispatcher.pollNow();
         }
         if (!res.headersSent) res.json(result ?? { ok: true });
       } catch (err) {
@@ -155622,6 +156729,8 @@ if (mcpEnabled) {
       realtime.pollNow();
       webhookDispatcher.pollNow();
       deliveryComposeWorker.pollNow();
+      liveActivityDispatcher.pollNow();
+      pushNotificationDispatcher.pollNow();
     })().catch(next);
   });
 }
@@ -156206,6 +157315,54 @@ app.patch(
     requires: PERMISSIONS.MISSION_UPDATE
   })
 );
+app.put(
+  "/api/mobile/live-activities/:activityId/push-token",
+  handle2(
+    async (req) => {
+      await registerLiveActivityPushToken(req.params.activityId, req.body);
+      return { ok: true };
+    },
+    { mutates: true }
+  )
+);
+app.delete(
+  "/api/mobile/live-activities/:activityId/push-token",
+  handle2(
+    async (req, res) => {
+      await revokeLiveActivityPushToken(req.params.activityId);
+      res.status(204).end();
+    },
+    { mutates: true }
+  )
+);
+app.put(
+  "/api/mobile/push/device-token",
+  handle2(
+    async (req, res) => {
+      await registerDevicePushToken(req.body);
+      res.status(204).end();
+    },
+    { mutates: true }
+  )
+);
+app.post(
+  "/api/mobile/push/device-token/revoke",
+  handle2(
+    async (req, res) => {
+      await revokeDevicePushToken(req.body);
+      res.status(204).end();
+    },
+    { mutates: true }
+  )
+);
+app.get(
+  "/api/profile/notification-preferences",
+  handle2(() => getNotificationPreferences())
+);
+app.put(
+  "/api/profile/notification-preferences",
+  handle2((req) => updateNotificationPreferences(req.body), { mutates: true })
+);
 app.get(
   "/api/projects/:id/tags",
   handle2((req) => listProjectTags(req.params.id))
@@ -156370,6 +157527,13 @@ app.get(
 app.get(
   "/api/missions/:id/artifacts",
   handle2((req) => listArtifacts2(req.params.id))
+);
+app.patch(
+  "/api/missions/:id/artifacts/:artifactId",
+  handle2((req) => updateArtifact(req.params.id, req.params.artifactId, req.body), {
+    mutates: true,
+    requires: PERMISSIONS.MISSION_UPDATE
+  })
 );
 app.get(
   "/api/missions/:id/file-changes",
@@ -156683,6 +157847,8 @@ async function start() {
   realtime.start();
   webhookDispatcher.start();
   deliveryComposeWorker.start();
+  liveActivityDispatcher.start();
+  pushNotificationDispatcher.start();
   const server = app.listen(bindPort, bindHost, () => {
     const databaseLabel = DATABASE_DIALECT === "postgres" ? "postgres (DATABASE_URL)" : DATABASE_PATH;
     console.log(`[webapp] Overlord web server listening on ${bindHost}:${bindPort}`);

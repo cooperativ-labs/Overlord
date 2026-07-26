@@ -78,6 +78,57 @@ function actorInitials(label: string): string {
 }
 
 /**
+ * Collapsed summary preview: plain text clamped to four lines with an optional
+ * "Show more" hint when the content overflows. The summary itself is always
+ * clickable to expand into richer detail.
+ */
+function ClampedSummaryPreview({
+  text,
+  tone,
+  onExpand
+}: {
+  text: string;
+  tone: string;
+  onExpand: () => void;
+}) {
+  const measureRef = useRef<HTMLParagraphElement>(null);
+  const [isClamped, setIsClamped] = useState(false);
+
+  useLayoutEffect(() => {
+    const el = measureRef.current;
+    if (!el) return;
+    // Compare full content height against the collapsed (clamped) height to
+    // decide whether the summary is long enough to warrant an expand hint.
+    setIsClamped(el.scrollHeight > el.clientHeight + 1);
+  }, [text]);
+
+  return (
+    <div className="grid gap-0.5">
+      <p
+        ref={measureRef}
+        onClick={onExpand}
+        role="button"
+        tabIndex={0}
+        onKeyDown={e => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onExpand();
+          }
+        }}
+        className={`line-clamp-4 cursor-pointer whitespace-pre-wrap wrap-anywhere text-sm ${tone}`}
+      >
+        {text}
+      </p>
+      {isClamped ? (
+        <span className="justify-self-start text-[11px] font-medium text-sky-600 dark:text-sky-400">
+          Show more
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+/**
  * Renders an event summary. By default the text is shown clamped and *plain*
  * (no markdown formatting) so the feed stays clean and visually consistent
  * regardless of how each summary was authored. Clicking the summary lifts it
@@ -86,18 +137,8 @@ function actorInitials(label: string): string {
  * Clicking anywhere outside the card returns it to the default plain state.
  */
 function ExpandableSummary({ text, tone }: { text: string; tone: string }) {
-  const measureRef = useRef<HTMLParagraphElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const [expanded, setExpanded] = useState(false);
-  const [isClamped, setIsClamped] = useState(false);
-
-  useLayoutEffect(() => {
-    const el = measureRef.current;
-    if (!el || expanded) return;
-    // Compare full content height against the collapsed (clamped) height to
-    // decide whether the summary is long enough to warrant an expand hint.
-    setIsClamped(el.scrollHeight > el.clientHeight + 1);
-  }, [text, expanded]);
 
   // Collapse back to the default state when the user clicks/taps outside the
   // expanded detail card, or presses Escape.
@@ -140,33 +181,7 @@ function ExpandableSummary({ text, tone }: { text: string; tone: string }) {
     );
   }
 
-  // `isClamped` is retained purely to drive the subtle "Show more" affordance
-  // below; the whole summary is clickable regardless so any event can be
-  // lifted into its formatted detail card.
-  return (
-    <div className="grid gap-0.5">
-      <p
-        ref={measureRef}
-        onClick={() => setExpanded(true)}
-        role="button"
-        tabIndex={0}
-        onKeyDown={e => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            setExpanded(true);
-          }
-        }}
-        className={`line-clamp-4 cursor-pointer whitespace-pre-wrap wrap-anywhere text-sm ${tone}`}
-      >
-        {text}
-      </p>
-      {isClamped && (
-        <span className="justify-self-start text-[11px] font-medium text-sky-600 dark:text-sky-400">
-          Show more
-        </span>
-      )}
-    </div>
-  );
+  return <ClampedSummaryPreview text={text} tone={tone} onExpand={() => setExpanded(true)} />;
 }
 
 function DeliveryDetails({
@@ -283,9 +298,10 @@ function DeliveryPresentation({
 }
 
 /**
- * Delivery events show a plain summary line by default. Clicking it swaps in the
- * AI-generated deliver card in place of that text; the summary moves into an
- * accordion at the bottom of the card. Click outside or press Escape to collapse.
+ * Delivery events show a clamped plain summary by default, matching other feed
+ * entries. Clicking it swaps in the structured delivery card; the raw summary
+ * moves into an accordion at the bottom of the card. Click outside or press
+ * Escape to collapse.
  */
 function DeliveryExpandable({
   missionId,
@@ -321,13 +337,11 @@ function DeliveryExpandable({
 
   if (!open) {
     return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="cursor-pointer text-left text-sm text-(--color-ink-dim) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
-      >
-        {summary}
-      </button>
+      <ClampedSummaryPreview
+        text={summary}
+        tone="text-(--color-ink-dim)"
+        onExpand={() => setOpen(true)}
+      />
     );
   }
 

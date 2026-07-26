@@ -15,6 +15,7 @@ import type { ArtifactDto, ArtifactType } from '../../shared/contract.ts';
 import { useMissionArtifacts, useUpdateMissionArtifact } from '../lib/queries.ts';
 
 import { Markdown } from './Markdown.tsx';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from './ui/accordion.tsx';
 import { Badge, Button, Spinner, TextArea, TextInput } from './ui.tsx';
 
 const ARTIFACT_META: Record<ArtifactType, { icon: LucideIcon; label: string }> = {
@@ -35,7 +36,7 @@ function formatDate(iso: string): string {
   return Number.isNaN(date.getTime()) ? iso : date.toLocaleString();
 }
 
-function ArtifactEntry({ artifact, missionId }: { artifact: ArtifactDto; missionId: string }) {
+function ArtifactAccordionItem({ artifact, missionId }: { artifact: ArtifactDto; missionId: string }) {
   const { icon: Icon, label: typeLabel } = artifactMeta(artifact.type);
   const updateArtifact = useUpdateMissionArtifact(missionId);
   const [isEditing, setIsEditing] = useState(false);
@@ -70,95 +71,105 @@ function ArtifactEntry({ artifact, missionId }: { artifact: ArtifactDto; mission
   }
 
   return (
-    <article className="flex gap-3 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-1)] p-3">
-      <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center">
-        {Icon ? (
-          <Icon className="h-3.5 w-3.5 text-[var(--color-ink-dim)]" />
-        ) : (
-          <div className="h-2 w-2 rounded-full bg-[var(--color-ink-dim)]/40" />
-        )}
-      </div>
-      <div className="grid min-w-0 flex-1 gap-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-medium text-[var(--color-ink)]">{artifact.label}</span>
-          <Badge className="px-2 py-0 text-[10px] uppercase tracking-wide">{typeLabel}</Badge>
-          <span className="text-[11px] text-[var(--color-ink-dim)]">
-            {formatDate(artifact.createdAt)}
+    <AccordionItem value={artifact.id}>
+      <AccordionTrigger className="gap-3 py-3 hover:no-underline">
+        <span className="flex min-w-0 flex-1 items-center gap-2.5">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-(--color-border) bg-(--color-surface-1)">
+            {Icon ? (
+              <Icon className="h-3.5 w-3.5 text-(--color-ink-dim)" />
+            ) : (
+              <div className="h-2 w-2 rounded-full bg-(--color-ink-dim)/40" />
+            )}
           </span>
-          {!isEditing && (
-            <Button
-              type="button"
-              variant="ghost"
-              className="ml-auto h-6 px-1.5 text-xs"
-              onClick={beginEditing}
-            >
-              <PenLine className="mr-1 h-3 w-3" />
-              Edit
-            </Button>
+          <span className="grid min-w-0 flex-1 gap-0.5 text-left">
+            <span className="truncate text-sm font-medium text-(--color-ink)">{artifact.label}</span>
+            <span className="flex flex-wrap items-center gap-2 text-[11px] text-(--color-ink-dim)">
+              <Badge className="px-1.5 py-0 text-[10px] uppercase tracking-wide">{typeLabel}</Badge>
+              <span>{formatDate(artifact.createdAt)}</span>
+            </span>
+          </span>
+        </span>
+      </AccordionTrigger>
+      <AccordionContent className="pt-1">
+        <div className="rounded-md border border-(--color-border) bg-(--color-surface-1) p-3">
+          {isEditing ? (
+            <form className="grid gap-3" onSubmit={save}>
+              <label className="grid gap-1 text-xs font-medium text-(--color-ink-dim)">
+                Label
+                <TextInput value={label} onChange={event => setLabel(event.target.value)} required />
+              </label>
+              <label className="grid gap-1 text-xs font-medium text-(--color-ink-dim)">
+                Markdown
+                <TextArea
+                  value={contentText}
+                  onChange={event => setContentText(event.target.value)}
+                  rows={8}
+                  className="font-mono text-xs"
+                  placeholder="Write artifact details in Markdown"
+                />
+              </label>
+              <label className="grid gap-1 text-xs font-medium text-(--color-ink-dim)">
+                External URL
+                <TextInput
+                  type="url"
+                  value={externalUrl}
+                  onChange={event => setExternalUrl(event.target.value)}
+                  placeholder="https://…"
+                />
+              </label>
+              {updateArtifact.isError && (
+                <p className="text-xs text-red-400">
+                  {(updateArtifact.error as Error).message || 'Could not save artifact.'}
+                </p>
+              )}
+              <div className="flex justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={cancelEditing}
+                  disabled={updateArtifact.isPending}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" variant="primary" disabled={updateArtifact.isPending}>
+                  {updateArtifact.isPending ? 'Saving…' : 'Save'}
+                </Button>
+              </div>
+            </form>
+          ) : (
+            <div className="grid gap-3">
+              <div className="flex justify-end">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="h-7 px-2 text-xs"
+                  onClick={beginEditing}
+                >
+                  <PenLine className="mr-1 h-3 w-3" />
+                  Edit
+                </Button>
+              </div>
+              {artifact.contentText ? (
+                <Markdown text={artifact.contentText} />
+              ) : (
+                <p className="text-sm italic text-(--color-ink-dim)">No content yet.</p>
+              )}
+              {artifact.externalUrl && (
+                <a
+                  href={artifact.externalUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-1 text-xs text-sky-600 underline-offset-2 hover:underline dark:text-sky-400"
+                >
+                  <ExternalLink className="h-3 w-3" />
+                  {artifact.externalUrl}
+                </a>
+              )}
+            </div>
           )}
         </div>
-        {isEditing ? (
-          <form className="grid gap-3" onSubmit={save}>
-            <label className="grid gap-1 text-xs font-medium text-[var(--color-ink-dim)]">
-              Label
-              <TextInput value={label} onChange={event => setLabel(event.target.value)} required />
-            </label>
-            <label className="grid gap-1 text-xs font-medium text-[var(--color-ink-dim)]">
-              Markdown
-              <TextArea
-                value={contentText}
-                onChange={event => setContentText(event.target.value)}
-                rows={8}
-                className="font-mono text-xs"
-                placeholder="Write artifact details in Markdown"
-              />
-            </label>
-            <label className="grid gap-1 text-xs font-medium text-[var(--color-ink-dim)]">
-              External URL
-              <TextInput
-                type="url"
-                value={externalUrl}
-                onChange={event => setExternalUrl(event.target.value)}
-                placeholder="https://…"
-              />
-            </label>
-            {updateArtifact.isError && (
-              <p className="text-xs text-red-400">
-                {(updateArtifact.error as Error).message || 'Could not save artifact.'}
-              </p>
-            )}
-            <div className="flex justify-end gap-2">
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={cancelEditing}
-                disabled={updateArtifact.isPending}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" variant="primary" disabled={updateArtifact.isPending}>
-                {updateArtifact.isPending ? 'Saving…' : 'Save'}
-              </Button>
-            </div>
-          </form>
-        ) : (
-          <>
-            {artifact.contentText && <Markdown text={artifact.contentText} />}
-            {artifact.externalUrl && (
-              <a
-                href={artifact.externalUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="flex items-center gap-1 text-xs text-sky-600 underline-offset-2 hover:underline dark:text-sky-400"
-              >
-                <ExternalLink className="h-3 w-3" />
-                {artifact.externalUrl}
-              </a>
-            )}
-          </>
-        )}
-      </div>
-    </article>
+      </AccordionContent>
+    </AccordionItem>
   );
 }
 
@@ -183,14 +194,14 @@ export function MissionArtifactsSection({ missionId }: { missionId: string }) {
 
   const artifacts = artifactsQ.data ?? [];
   if (artifacts.length === 0) {
-    return <p className="text-sm italic text-[var(--color-ink-dim)]">No artifacts yet.</p>;
+    return <p className="text-sm italic text-(--color-ink-dim)">No artifacts yet.</p>;
   }
 
   return (
-    <div className="grid gap-2">
+    <Accordion multiple className="overflow-hidden rounded-lg border border-(--color-border) bg-(--color-surface-1) px-4">
       {artifacts.map(artifact => (
-        <ArtifactEntry key={artifact.id} artifact={artifact} missionId={missionId} />
+        <ArtifactAccordionItem key={artifact.id} artifact={artifact} missionId={missionId} />
       ))}
-    </div>
+    </Accordion>
   );
 }
