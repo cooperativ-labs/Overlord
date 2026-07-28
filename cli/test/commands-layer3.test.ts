@@ -14,6 +14,7 @@ import {
   writeBaseline
 } from '../src/vcs.ts';
 import { writeActiveSession } from '../src/vcs-sessions.ts';
+import { writeActiveMissionPointer } from '../src/active-mission.ts';
 
 const MISSION_ID = 'coo:127';
 const OTHER_MISSION_ID = 'coo:128';
@@ -211,4 +212,51 @@ test('ovld protocol changes prints classified paths without calling the backend'
       reason: `Changed by concurrent mission ${OTHER_MISSION_ID}; excluded from this delivery report.`
     }
   ]);
+});
+
+test('ovld protocol mission-link prints the local active mission without calling the backend', async () => {
+  const repo = makeRepo();
+  writeActiveMissionPointer({
+    workingDirectory: repo,
+    missionId: 'bc3ae6cd-77ca-4b4d-95b3-728198379963',
+    displayId: 'coo:502',
+    title: 'Investigate Terminal-Overlord Mission Linking'
+  });
+  const runtime = {
+    backend: {
+      baseUrl: 'http://example.test',
+      health: async () => ({ ok: true }),
+      get: async () => {
+        throw new Error('unexpected GET — mission-link must be local-only');
+      },
+      post: async () => {
+        throw new Error('unexpected POST — mission-link must be local-only');
+      },
+      patch: async () => {
+        throw new Error('unexpected PATCH');
+      },
+      delete: async () => {
+        throw new Error('unexpected DELETE');
+      }
+    },
+    close: () => {}
+  } satisfies CliRuntime;
+
+  let written = '';
+  const originalWrite = process.stdout.write.bind(process.stdout);
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    written += String(chunk);
+    return true;
+  }) as typeof process.stdout.write;
+  const originalCwd = process.cwd();
+  process.chdir(repo);
+  try {
+    await runProtocolCommand({ runtime, subcommand: 'mission-link', args: [] });
+  } finally {
+    process.chdir(originalCwd);
+    process.stdout.write = originalWrite;
+  }
+
+  assert.match(written, /coo:502.*overlord:\/\/missions\/coo:502/);
+  assert.match(written, /Investigate Terminal-Overlord Mission Linking/);
 });

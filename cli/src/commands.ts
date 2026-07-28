@@ -16,6 +16,11 @@ import os from 'node:os';
 import path from 'node:path';
 
 import {
+  clearActiveMissionPointer,
+  readActiveMissionPointer,
+  writeActiveMissionPointer
+} from './active-mission.js';
+import {
   flagBoolean,
   flagValue,
   parseArgs,
@@ -32,6 +37,7 @@ import {
 } from './discover-project-local.js';
 import { CliError } from './errors.js';
 import { launchAgent } from './launch.js';
+import { missionLinkLine } from './mission-link.js';
 import { resolveNativeSessionId } from './native-session.js';
 import { runOrgSetupCommand } from './org-setup.js';
 import { printJson, printKeyValue } from './output.js';
@@ -800,6 +806,27 @@ export async function runProtocolCommand({
     return;
   }
 
+  // Local-only terminal footer. This intentionally never crosses the CLI →
+  // REST boundary: Stop hooks need a deterministic, backend-free way to print
+  // the mission link below an agent's delivery/summary.
+  if (subcommand === 'mission-link') {
+    const pointer = readActiveMissionPointer(workingDirectory);
+    const requestedMissionId = flagValue(parsed.flags, '--mission-id');
+    const environmentMissionId = process.env.MISSION_ID ?? process.env.OVERLORD_MISSION_ID;
+    const displayId = requestedMissionId?.trim() || pointer?.displayId || environmentMissionId?.trim();
+    if (!displayId) return;
+    const title =
+      pointer &&
+      (!requestedMissionId ||
+        requestedMissionId === pointer.missionId ||
+        requestedMissionId === pointer.displayId)
+        ? pointer.title
+        : undefined;
+    const line = missionLinkLine({ displayId, title });
+    if (line) process.stdout.write(`${line}\n`);
+    return;
+  }
+
   // Local-only preflight: classify every currently dirty path (mine/claimed/
   // unclaimed) exactly the way deliver will, plus draft rationales from local
   // edit notes. No backend call — this replaces hand-triaging `git status`
@@ -946,11 +973,47 @@ export async function runProtocolCommand({
       }
     }
   }
+
+  // Attach / connect / resume: surface a deterministic mission deep-link on
+  // stderr (never stdout — agents parse the JSON) and drop a cwd→mission
+  // pointer so later hooks can read the link without a backend round trip.
+  if (
+    subcommand === 'attach' ||
+    subcommand === 'connect' ||
+    subcommand === 'resume-follow-up'
+  ) {
+    const missionRecord = asRecord(resultRecord.mission);
+    // Prefer the response display id, then the caller-supplied --mission-id
+    // (often already a display id like coo:502), and only then the UUID.
+    const displayId =
+      (typeof missionRecord.displayId === 'string' && missionRecord.displayId.trim()) ||
+      (typeof missionId === 'string' && missionId.trim()) ||
+      (typeof resultRecord.missionId === 'string' && resultRecord.missionId.trim()) ||
+      '';
+    const title =
+      typeof missionRecord.title === 'string' ? missionRecord.title : undefined;
+    const pointerMissionId =
+      (typeof missionRecord.id === 'string' && missionRecord.id.trim()) ||
+      (typeof resultRecord.missionId === 'string' && resultRecord.missionId.trim()) ||
+      displayId;
+    if (displayId) {
+      const banner = missionLinkLine({ displayId, title });
+      if (banner) process.stderr.write(`${banner}\n`);
+      writeActiveMissionPointer({
+        workingDirectory,
+        missionId: pointerMissionId,
+        displayId,
+        title
+      });
+    }
+  }
+
   // The session ends at deliver: drop the cached key so it can't bind to a later
   // session for the same working dir + mission.
   if (subcommand === 'deliver' && missionId) {
     clearCachedSessionKey({ missionId, workingDirectory });
     removeActiveSession({ workingDirectory, missionId });
+    clearActiveMissionPointer(workingDirectory);
 
     // Self-diagnosis: a connector that installs an edit hook (Claude Code or
     // Cursor) should always have a touched-files

@@ -4,7 +4,7 @@
 # IMPORTANT: Update this file and CONTRACT.md together when adding components or surfaces.
 # Increment contractVersion when any stable interface changes.
 
-contractVersion: '34'
+contractVersion: '35'
 
 components:
   protocol:
@@ -71,6 +71,7 @@ components:
       - 'backend URL settings: backend_url and backend_mode (local/cloud)'
       - 'per-user terminal profiles on user_execution_target_preferences for opening launched agents in a terminal window'
       - 'protocol session-key cache: persists the attach session key by (working directory, mission) and auto-injects --session-key when the flag is absent; cleared at deliver'
+      - 'local mission-link formatter: ovld protocol mission-link reads the cwd active-mission pointer or launch environment and prints the credential-free Desktop mission deep link without a backend request'
       - 'human-readable CLI output format conventions'
     dependsOn:
       - auth
@@ -86,6 +87,7 @@ components:
       - 'connector core workflow instructions'
       - 'per-agent plugin/adapter files and managed file manifests'
       - 'hook scripts and their event contracts'
+      - 'deterministic terminal footers for adapters that declare the existing Stop hook capability'
       - 'ovld agent-setup <agent>/all and ovld doctor behavior'
       - 'connector capability declarations and approved capability flag set'
     dependsOn:
@@ -225,8 +227,9 @@ components:
       - 'profile-scoped CSP (loopback in Local mode; remote REST + wss origins added in Remote mode), single-instance lock, shell-local navigation guard, external-navigation handling'
       - 'process supervision of the bundled web/REST server (Node utilityProcess) in Local mode only; Remote mode does not fork the embedded server'
       - 'backend profiles ({ id, label, mode: local|remote, backendUrl } + active id) in userData/settings.json, per-profile Electron session partitions (persist:backend-<id>), per-backend bearer-token storage via safeStorage, and the reload-and-login switcher / first-run chooser (additive; Local is the default unchanged behavior)'
-      - 'the minimal window.overlord preload bridge surface (feature-detected by the SPA, never required by it), incl. getActiveBackend/listBackends/addBackend/removeBackend/switchBackend/writeProjectMetadata/invokeLocalTarget and runnerService.{getStatus,install,start,stop,restart,uninstall} which drive the CLI-owned ovld runner service operations as a subprocess without supervising the runner itself'
+      - 'the minimal window.overlord preload bridge surface (feature-detected by the SPA, never required by it), incl. getActiveBackend/listBackends/addBackend/removeBackend/switchBackend/writeProjectMetadata/invokeLocalTarget, onNavigate(route), and runnerService.{getStatus,install,start,stop,restart,uninstall} which drive the CLI-owned ovld runner service operations as a subprocess without supervising the runner itself'
       - 'remote OAuth callback: handles overlord://auth/callback only in Electron main, exchanges its opaque short-lived ticket with the active backend, and writes the resulting Better Auth session token through per-profile safeStorage; no token crosses the preload bridge'
+      - 'mission deep links: accepts only overlord://missions/<missionId> where missionId matches [A-Za-z0-9:_-]{1,64}, then focuses the shell and emits the fixed internal /user/missions/<missionId> route through onNavigate; links carry no credential, ticket, or payload'
       - 'desktop packaging metadata and the build/sign/notarize pipeline (electron-builder, entitlements, app-data layout)'
     dependsOn:
       - rest
@@ -480,6 +483,7 @@ interactionSurfaces:
       - 'Navigation stays scoped to the shell origin in both modes; the remote REST + wss origins are added to CSP connect-src per the active profile'
       - 'Desktop-only affordances are exposed only via the feature-detected window.overlord preload bridge'
       - 'Remote social OAuth uses an opaque, single-use, short-lived handoff ticket between the backend callback and Electron main; the custom URL and renderer never receive a session, bearer, GitHub access token, or client secret'
+      - 'Mission deep links are limited to overlord://missions/<missionId> with an id matching [A-Za-z0-9:_-]{1,64}; the main process emits only the fixed internal /user/missions/<missionId> route through window.overlord.onNavigate'
 
   shellToCli:
     description: 'The desktop shell supervises the bundled CLI/server as subprocesses (ovld serve / runner / launch), analogous to the Agent -> Protocol subprocess pattern'

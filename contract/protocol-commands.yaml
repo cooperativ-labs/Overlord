@@ -9,7 +9,8 @@
 #
 # Local-only `ovld protocol <subcommand>` commands that never cross the CLI -> backend
 # HTTP surface (no POST /api/protocol/<subcommand>, no backend handler, no permission
-# entry) are intentionally not listed here: `record-touched` and `changes`. See
+# entry) are intentionally not listed here: `record-touched`, `changes`, and
+# `mission-link`. See
 # CONTRACT.md's contract-version-2 changelog entry for the precedent.
 
 contractVersion: '2'

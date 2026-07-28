@@ -1980,7 +1980,7 @@ var require_utils2 = __commonJS({
     var nodeCrypto = require("crypto");
     module2.exports = {
       postgresMd5PasswordHash,
-      randomBytes: randomBytes9,
+      randomBytes: randomBytes10,
       deriveKey: deriveKey3,
       sha256: sha2562,
       hashByName,
@@ -1990,7 +1990,7 @@ var require_utils2 = __commonJS({
     var webCrypto = nodeCrypto.webcrypto || globalThis.crypto;
     var subtleCrypto = webCrypto.subtle;
     var textEncoder2 = new TextEncoder();
-    function randomBytes9(length) {
+    function randomBytes10(length) {
       return webCrypto.getRandomValues(Buffer.alloc(length));
     }
     async function md5(string4) {
@@ -70759,6 +70759,79 @@ function deviceFingerprint() {
 function callerDeviceFingerprint() {
   return deviceFingerprint();
 }
+async function softDeleteOrphanDevices({
+  ctx
+}) {
+  const orphans = await ctx.db.all(
+    `SELECT d.id
+       FROM devices d
+      WHERE d.workspace_id = ?
+        AND d.deleted_at IS NULL
+        AND NOT EXISTS (
+          SELECT 1
+            FROM execution_targets et
+           WHERE et.device_id = d.id
+             AND et.workspace_id = d.workspace_id
+             AND et.deleted_at IS NULL
+        )`,
+    [ctx.workspace.id]
+  );
+  if (orphans.length === 0) return 0;
+  const now2 = nowIso();
+  for (const orphan of orphans) {
+    await ctx.db.run(
+      `UPDATE devices
+          SET deleted_at = ?, updated_at = ?, revision = revision + 1
+        WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+      [now2, now2, orphan.id, ctx.workspace.id]
+    );
+    await recordChange({
+      ctx,
+      entityType: "device",
+      entityId: orphan.id,
+      operation: "delete",
+      entityRevision: null,
+      changedFields: ["deleted_at"]
+    });
+  }
+  return orphans.length;
+}
+async function softDeleteDeviceIfOrphaned({
+  ctx,
+  deviceId
+}) {
+  const id = deviceId?.trim();
+  if (!id) return false;
+  const liveTarget = await ctx.db.get(
+    `SELECT id FROM execution_targets
+        WHERE workspace_id = ? AND device_id = ? AND deleted_at IS NULL
+        LIMIT 1`,
+    [ctx.workspace.id, id]
+  );
+  if (liveTarget) return false;
+  const device = await ctx.db.get(
+    `SELECT id FROM devices
+        WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+    [id, ctx.workspace.id]
+  );
+  if (!device) return false;
+  const now2 = nowIso();
+  await ctx.db.run(
+    `UPDATE devices
+        SET deleted_at = ?, updated_at = ?, revision = revision + 1
+      WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+    [now2, now2, id, ctx.workspace.id]
+  );
+  await recordChange({
+    ctx,
+    entityType: "device",
+    entityId: id,
+    operation: "delete",
+    entityRevision: null,
+    changedFields: ["deleted_at"]
+  });
+  return true;
+}
 var import_node_crypto6, import_node_os4;
 var init_devices = __esm({
   "../packages/core/service/devices.ts"() {
@@ -70934,6 +71007,7 @@ async function ensureDeviceTargetForFingerprint({
   label,
   platformName
 }) {
+  await softDeleteOrphanDevices({ ctx });
   const now2 = nowIso();
   let device = await ctx.db.get(
     `SELECT id, label, fingerprint FROM devices
@@ -70946,22 +71020,80 @@ async function ensureDeviceTargetForFingerprint({
       [now2, now2, device.id]
     );
   } else {
-    const id = newId();
-    await ctx.db.run(
-      `INSERT INTO devices
-           (id, workspace_id, fingerprint, label, platform, status, last_seen_at,
-            metadata_json, created_at, updated_at, revision)
-         VALUES (?, ?, ?, ?, ?, 'active', ?, '{}', ?, ?, 1)`,
-      [id, ctx.workspace.id, fingerprint, label, platformName, now2, now2, now2]
+    const tombstoned = await ctx.db.get(
+      `SELECT id, label, fingerprint FROM devices
+          WHERE workspace_id = ? AND fingerprint = ? AND deleted_at IS NOT NULL
+          ORDER BY deleted_at DESC
+          LIMIT 1`,
+      [ctx.workspace.id, fingerprint]
     );
-    await recordChange({
-      ctx,
-      entityType: "device",
-      entityId: id,
-      operation: "insert",
-      entityRevision: 1
-    });
-    device = { id, label, fingerprint };
+    if (tombstoned) {
+      const revivedLabel = label.trim() || tombstoned.label;
+      await ctx.db.run(
+        `UPDATE devices
+            SET deleted_at = NULL, status = 'active', label = ?, platform = COALESCE(?, platform),
+                last_seen_at = ?, updated_at = ?, revision = revision + 1
+          WHERE id = ?`,
+        [revivedLabel, platformName, now2, now2, tombstoned.id]
+      );
+      await recordChange({
+        ctx,
+        entityType: "device",
+        entityId: tombstoned.id,
+        operation: "update",
+        entityRevision: null,
+        changedFields: ["deleted_at", "status", "label", "last_seen_at"]
+      });
+      device = { id: tombstoned.id, label: revivedLabel, fingerprint };
+    } else {
+      const id = newId();
+      await ctx.db.run(
+        `INSERT INTO devices
+             (id, workspace_id, fingerprint, label, platform, status, last_seen_at,
+              metadata_json, created_at, updated_at, revision)
+           VALUES (?, ?, ?, ?, ?, 'active', ?, '{}', ?, ?, 1)`,
+        [id, ctx.workspace.id, fingerprint, label, platformName, now2, now2, now2]
+      );
+      await recordChange({
+        ctx,
+        entityType: "device",
+        entityId: id,
+        operation: "insert",
+        entityRevision: 1
+      });
+      device = { id, label, fingerprint };
+    }
+  }
+  const tombstonedTarget = await ctx.db.get(
+    `SELECT id FROM execution_targets
+        WHERE workspace_id = ? AND device_id = ? AND type = 'local' AND deleted_at IS NOT NULL
+        ORDER BY deleted_at DESC
+        LIMIT 1`,
+    [ctx.workspace.id, device.id]
+  );
+  if (tombstonedTarget) {
+    const liveSibling = await ctx.db.get(
+      `SELECT id FROM execution_targets
+          WHERE workspace_id = ? AND device_id = ? AND type = 'local' AND deleted_at IS NULL`,
+      [ctx.workspace.id, device.id]
+    );
+    if (!liveSibling) {
+      await ctx.db.run(
+        `UPDATE execution_targets
+            SET deleted_at = NULL, status = 'active', label = ?, updated_at = ?,
+                revision = revision + 1
+          WHERE id = ?`,
+        [device.label || (0, import_node_os5.hostname)(), now2, tombstonedTarget.id]
+      );
+      await recordChange({
+        ctx,
+        entityType: "execution_target",
+        entityId: tombstonedTarget.id,
+        operation: "update",
+        entityRevision: null,
+        changedFields: ["deleted_at", "status", "label"]
+      });
+    }
   }
   let target = await ctx.db.get(
     `SELECT id FROM execution_targets
@@ -72254,6 +72386,7 @@ function isTargetReachable({
 async function listWorkspaceExecutionTargets({
   ctx
 }) {
+  await softDeleteOrphanDevices({ ctx });
   const callerExecutionTargetId = await findActingDeviceExecutionTargetId({ ctx });
   const rows = await ctx.db.all(
     `SELECT et.id, et.type, et.label, et.status,
@@ -72609,7 +72742,7 @@ async function deleteWorkspaceExecutionTarget({
     throw new ServiceError("executionTargetId is required", "validation_error", 400);
   }
   const target = await ctx.db.get(
-    `SELECT id FROM execution_targets
+    `SELECT id, device_id FROM execution_targets
         WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
     [id, ctx.workspace.id]
   );
@@ -72681,6 +72814,7 @@ async function deleteWorkspaceExecutionTarget({
     entityRevision: null,
     changedFields: ["deleted_at"]
   });
+  await softDeleteDeviceIfOrphaned({ ctx, deviceId: target.device_id });
 }
 async function renameWorkspaceExecutionTarget({
   ctx,
@@ -72754,6 +72888,7 @@ var init_project_execution_target = __esm({
     init_dist6();
     init_local_target();
     init_change_feed();
+    init_devices();
     init_errors4();
     init_execution_targets();
     init_projects();
@@ -73141,8 +73276,8 @@ function getActorWorkspaceUserId() {
   return requestContext().actorWorkspaceUserId;
 }
 async function resolveActiveProfileId(client = requireDatabaseClient()) {
-  const activeProfileId = getActiveProfileId();
-  if (activeProfileId) return activeProfileId;
+  const activeProfileId2 = getActiveProfileId();
+  if (activeProfileId2) return activeProfileId2;
   const actorWorkspaceUserId = getActorWorkspaceUserId();
   if (actorWorkspaceUserId) {
     const row = await client.get(
@@ -77335,14 +77470,14 @@ var init_getProfileName = __esm({
 });
 
 // ../node_modules/@smithy/core/dist-es/submodules/config/shared-ini-file-loader/getSSOTokenFilepath.js
-var import_node_crypto9, import_node_path17, getSSOTokenFilepath;
+var import_node_crypto10, import_node_path17, getSSOTokenFilepath;
 var init_getSSOTokenFilepath = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/config/shared-ini-file-loader/getSSOTokenFilepath.js"() {
-    import_node_crypto9 = require("node:crypto");
+    import_node_crypto10 = require("node:crypto");
     import_node_path17 = require("node:path");
     init_getHomeDir();
     getSSOTokenFilepath = (id) => {
-      const hasher = (0, import_node_crypto9.createHash)("sha1");
+      const hasher = (0, import_node_crypto10.createHash)("sha1");
       const cacheName = hasher.update(id).digest("hex");
       return (0, import_node_path17.join)(getHomeDir(), ".aws", "sso", "cache", `${cacheName}.json`);
     };
@@ -79513,10 +79648,10 @@ function castSourceData(toCast, encoding) {
   }
   return fromArrayBuffer(toCast);
 }
-var import_node_crypto10, Hash;
+var import_node_crypto11, Hash;
 var init_hash_node = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/serde/hash-node/hash-node.js"() {
-    import_node_crypto10 = require("node:crypto");
+    import_node_crypto11 = require("node:crypto");
     init_buffer_from();
     init_toUint8Array();
     Hash = class {
@@ -79535,7 +79670,7 @@ var init_hash_node = __esm({
         return Promise.resolve(this.hash.digest());
       }
       reset() {
-        this.hash = this.secret ? (0, import_node_crypto10.createHmac)(this.algorithmIdentifier, castSourceData(this.secret)) : (0, import_node_crypto10.createHash)(this.algorithmIdentifier);
+        this.hash = this.secret ? (0, import_node_crypto11.createHmac)(this.algorithmIdentifier, castSourceData(this.secret)) : (0, import_node_crypto11.createHash)(this.algorithmIdentifier);
       }
     };
   }
@@ -80429,10 +80564,10 @@ __export(serde_exports, {
   toUtf8: () => toUtf8,
   v4: () => v4
 });
-var import_node_crypto11, Uint8ArrayBlobAdapter, _getRandomValues, v4, generateIdempotencyToken;
+var import_node_crypto12, Uint8ArrayBlobAdapter, _getRandomValues, v4, generateIdempotencyToken;
 var init_serde = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/serde/index.js"() {
-    import_node_crypto11 = require("node:crypto");
+    import_node_crypto12 = require("node:crypto");
     init_fromBase64();
     init_toBase64();
     init_Uint8ArrayBlobAdapter();
@@ -80469,7 +80604,7 @@ var init_serde = __esm({
     init_stream_collector();
     Uint8ArrayBlobAdapter = class extends bindUint8ArrayBlobAdapter(toUtf8, fromUtf8, toBase64, fromBase64) {
     };
-    _getRandomValues = import_node_crypto11.getRandomValues;
+    _getRandomValues = import_node_crypto12.getRandomValues;
     v4 = bindV4(_getRandomValues);
     generateIdempotencyToken = v4;
   }
@@ -105366,7 +105501,7 @@ var require_dist_cjs16 = __commonJS({
     var { setCredentialFeature: setCredentialFeature2 } = (init_client4(), __toCommonJS(client_exports2));
     var { CredentialsProviderError: CredentialsProviderError2, readFile: readFile4, parseKnownFiles: parseKnownFiles2, getProfileName: getProfileName2 } = (init_config3(), __toCommonJS(config_exports));
     var { HttpRequest: HttpRequest2 } = (init_protocols(), __toCommonJS(protocols_exports));
-    var { createHash: createHash16, createPrivateKey, createPublicKey, sign: sign3 } = require("node:crypto");
+    var { createHash: createHash17, createPrivateKey, createPublicKey, sign: sign3 } = require("node:crypto");
     var { promises } = require("node:fs");
     var { homedir: homedir2 } = require("node:os");
     var { dirname, join: join6 } = require("node:path");
@@ -105527,7 +105662,7 @@ var require_dist_cjs16 = __commonJS({
       getTokenFilePath() {
         const directory = process.env.AWS_LOGIN_CACHE_DIRECTORY ?? join6(homedir2(), ".aws", "login", "cache");
         const loginSessionBytes = Buffer.from(this.loginSession, "utf8");
-        const loginSessionSha256 = createHash16("sha256").update(loginSessionBytes).digest("hex");
+        const loginSessionSha256 = createHash17("sha256").update(loginSessionBytes).digest("hex");
         return join6(directory, `${loginSessionSha256}.json`);
       }
       derToRawSignature(derSignature) {
@@ -107556,7 +107691,7 @@ var init_Md5Js = __esm({
 function buildNativeClass() {
   return class Md5Node {
     digestLength = 16;
-    hash = (0, import_node_crypto12.createHash)("md5");
+    hash = (0, import_node_crypto13.createHash)("md5");
     update(data) {
       this.hash.update(toUint8Array(data));
     }
@@ -107565,19 +107700,19 @@ function buildNativeClass() {
       return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
     }
     reset() {
-      this.hash = (0, import_node_crypto12.createHash)("md5");
+      this.hash = (0, import_node_crypto13.createHash)("md5");
     }
   };
 }
-var import_node_crypto12, hasNativeCrypto, Md5Node;
+var import_node_crypto13, hasNativeCrypto, Md5Node;
 var init_Md5Node = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/checksum/md5/Md5Node.js"() {
-    import_node_crypto12 = require("node:crypto");
+    import_node_crypto13 = require("node:crypto");
     init_serde();
     init_Md5Js();
     hasNativeCrypto = (() => {
       try {
-        (0, import_node_crypto12.createHash)("md5");
+        (0, import_node_crypto13.createHash)("md5");
         return true;
       } catch {
         return false;
@@ -107921,7 +108056,7 @@ function buildNativeClass3() {
       this.finished = false;
     }
     createHash() {
-      return this.secret ? (0, import_node_crypto13.createHmac)("sha256", toBuffer(this.secret)) : (0, import_node_crypto13.createHash)("sha256");
+      return this.secret ? (0, import_node_crypto14.createHmac)("sha256", toBuffer(this.secret)) : (0, import_node_crypto14.createHash)("sha256");
     }
   };
 }
@@ -107934,14 +108069,14 @@ function toBuffer(data) {
   }
   return Buffer.from(data);
 }
-var import_node_crypto13, hasNativeCrypto2, Sha256Node;
+var import_node_crypto14, hasNativeCrypto2, Sha256Node;
 var init_Sha256Node = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/checksum/sha256/Sha256Node.js"() {
-    import_node_crypto13 = require("node:crypto");
+    import_node_crypto14 = require("node:crypto");
     init_Sha256Js();
     hasNativeCrypto2 = (() => {
       try {
-        (0, import_node_crypto13.createHash)("sha256");
+        (0, import_node_crypto14.createHash)("sha256");
         return true;
       } catch {
         return false;
@@ -136687,6 +136822,601 @@ async function getObjectivePrompt(objectiveId) {
 // repository.ts
 init_local_target_mutation_queue();
 
+// ext/github/user-oauth.ts
+var import_node_crypto9 = require("node:crypto");
+init_db();
+init_errors5();
+
+// http/public-backend-url.ts
+var PUBLIC_BACKEND_URL_ENV_KEYS = [
+  "BETTER_AUTH_URL",
+  "BACKEND_URL",
+  "OVERLORD_BACKEND_URL"
+];
+function normalizeOriginUrl(value) {
+  const trimmed = value.trim().replace(/\/+$/, "");
+  const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? trimmed : `http://${trimmed}`;
+  return new URL(withScheme).origin;
+}
+function readConfiguredPublicBackendUrls() {
+  const origins = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const key of PUBLIC_BACKEND_URL_ENV_KEYS) {
+    const raw = process.env[key]?.trim();
+    if (!raw) continue;
+    const origin = normalizeOriginUrl(raw);
+    if (seen.has(origin)) continue;
+    seen.add(origin);
+    origins.push(origin);
+  }
+  return origins;
+}
+function resolveLoopbackAuthBaseUrl() {
+  const authBaseHost = process.env.OVERLORD_WEB_HOST && process.env.OVERLORD_WEB_HOST !== "0.0.0.0" ? process.env.OVERLORD_WEB_HOST : "127.0.0.1";
+  const authBasePort = process.env.OVERLORD_WEB_PORT ?? "4310";
+  return `http://${authBaseHost}:${authBasePort}`;
+}
+function resolveAuthBaseUrl() {
+  const configured = readConfiguredPublicBackendUrls();
+  if (configured.length > 0) return configured[0];
+  return resolveLoopbackAuthBaseUrl();
+}
+
+// ext/github/user-oauth.ts
+var GITHUB_API = "https://api.github.com";
+var GITHUB_AUTHORIZE_URL = "https://github.com/login/oauth/authorize";
+var GITHUB_ACCESS_TOKEN_URL = "https://github.com/login/oauth/access_token";
+var USER_OAUTH_SCOPES = ["repo", "read:org"];
+var USER_OAUTH_CALLBACK_PATH = "/api/auth/callback/github/repository";
+var OAUTH_STATE_TTL_MS = 10 * 60 * 1e3;
+var TOKEN_EXPIRY_SKEW_MS = 60 * 1e3;
+function encryptionKeyFromEnv() {
+  const encoded = process.env.GITHUB_USER_TOKEN_ENCRYPTION_KEY?.trim();
+  if (!encoded) return null;
+  const key = Buffer.from(encoded, "base64url");
+  if (key.length !== 32) return null;
+  return key;
+}
+function githubUserOAuthConfigured() {
+  return userOAuthConfig() !== null;
+}
+function userOAuthConfig() {
+  const oauth = githubOAuthConfigFromEnv();
+  const encryptionKey = encryptionKeyFromEnv();
+  if (!oauth || !encryptionKey) return null;
+  return { ...oauth, encryptionKey };
+}
+function requireUserOAuthConfig() {
+  const config4 = userOAuthConfig();
+  if (!config4) {
+    throw new ApiError(
+      503,
+      "GitHub repository authorization is not configured on this Overlord server."
+    );
+  }
+  return config4;
+}
+function tokenAad(profileId, kind) {
+  return Buffer.from(`overlord:github-user-oauth:v1:${profileId}:${kind}`, "utf8");
+}
+function encryptToken(token, profileId, kind, key) {
+  const nonce = (0, import_node_crypto9.randomBytes)(12);
+  const cipher = (0, import_node_crypto9.createCipheriv)("aes-256-gcm", key, nonce);
+  cipher.setAAD(tokenAad(profileId, kind));
+  const ciphertext = Buffer.concat([cipher.update(token, "utf8"), cipher.final()]);
+  const tag2 = cipher.getAuthTag();
+  return `v1.${nonce.toString("base64url")}.${tag2.toString("base64url")}.${ciphertext.toString("base64url")}`;
+}
+function decryptToken(envelope, profileId, kind, key) {
+  const [version4, nonceText, tagText, ciphertextText, ...extra] = envelope.split(".");
+  if (version4 !== "v1" || !nonceText || !tagText || !ciphertextText || extra.length > 0) {
+    throw new ApiError(503, "The stored GitHub connection cannot be decrypted.");
+  }
+  try {
+    const decipher = (0, import_node_crypto9.createDecipheriv)("aes-256-gcm", key, Buffer.from(nonceText, "base64url"));
+    decipher.setAAD(tokenAad(profileId, kind));
+    decipher.setAuthTag(Buffer.from(tagText, "base64url"));
+    return Buffer.concat([
+      decipher.update(Buffer.from(ciphertextText, "base64url")),
+      decipher.final()
+    ]).toString("utf8");
+  } catch {
+    throw new ApiError(503, "The stored GitHub connection cannot be decrypted.");
+  }
+}
+function parseScopes(value) {
+  let parsed = value;
+  if (typeof value === "string") {
+    try {
+      parsed = JSON.parse(value);
+    } catch {
+      return [];
+    }
+  }
+  return Array.isArray(parsed) ? parsed.filter((scope) => typeof scope === "string") : [];
+}
+function scopesFromTokenResponse(value) {
+  if (typeof value !== "string") return [];
+  return value.split(/[,\s]+/).map((scope) => scope.trim()).filter(Boolean);
+}
+function expiryFromSeconds(value) {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? new Date(Date.now() + value * 1e3).toISOString() : null;
+}
+async function activeProfileId(client = requireDatabaseClient()) {
+  const profileId = await resolveActiveProfileId(client);
+  if (!profileId) throw new ApiError(401, "Authentication required.");
+  return profileId;
+}
+async function readConnection(client, profileId) {
+  return await client.get(
+    `SELECT id, profile_id, github_user_id, github_login, avatar_url, scopes_json,
+              access_token_ciphertext, refresh_token_ciphertext,
+              access_token_expires_at, refresh_token_expires_at, revision
+         FROM ext_github_user_connections
+        WHERE profile_id = ? AND deleted_at IS NULL`,
+    [profileId]
+  ) ?? null;
+}
+function connectionDto(row) {
+  return {
+    configured: githubUserOAuthConfigured(),
+    connected: row !== null,
+    account: row ? {
+      id: row.github_user_id,
+      login: row.github_login,
+      avatarUrl: row.avatar_url
+    } : null,
+    scopes: row ? parseScopes(row.scopes_json) : []
+  };
+}
+async function getGitHubUserConnection() {
+  const client = requireDatabaseClient();
+  const profileId = await activeProfileId(client);
+  return connectionDto(await readConnection(client, profileId));
+}
+function stateHash(state2) {
+  return (0, import_node_crypto9.createHash)("sha256").update(state2).digest("hex");
+}
+function validatedReturnUrl(value, allowedBrowserOrigins2) {
+  if (value === void 0 || value === null || value === "") return null;
+  if (typeof value !== "string") throw new ApiError(400, "GitHub return URL is invalid.");
+  let url2;
+  try {
+    url2 = new URL(value);
+  } catch {
+    throw new ApiError(400, "GitHub return URL is invalid.");
+  }
+  if (url2.protocol === "overlord:" && url2.hostname === "github" && url2.pathname === "/callback" && !url2.username && !url2.password) {
+    return url2.toString();
+  }
+  if ((url2.protocol === "https:" || url2.protocol === "http:") && allowedBrowserOrigins2.includes(url2.origin)) {
+    return url2.toString();
+  }
+  throw new ApiError(400, "GitHub return URL is not an allowed Overlord destination.");
+}
+async function beginGitHubUserAuthorization(body, allowedBrowserOrigins2) {
+  const config4 = requireUserOAuthConfig();
+  const client = requireDatabaseClient();
+  const profileId = await activeProfileId(client);
+  const state2 = (0, import_node_crypto9.randomBytes)(32).toString("base64url");
+  const now2 = nowIso2();
+  const expiresAt = new Date(Date.now() + OAUTH_STATE_TTL_MS).toISOString();
+  const returnUrl = validatedReturnUrl(body.returnTo, allowedBrowserOrigins2);
+  await client.transaction(async (tx) => {
+    await tx.run(
+      `UPDATE ext_github_user_oauth_states
+          SET deleted_at = ?, updated_at = ?, revision = revision + 1
+        WHERE profile_id = ? AND deleted_at IS NULL
+          AND (consumed_at IS NOT NULL OR expires_at <= ?)`,
+      [now2, now2, profileId, now2]
+    );
+    await tx.run(
+      `INSERT INTO ext_github_user_oauth_states
+        (id, profile_id, state_hash, return_url, expires_at, created_at, updated_at, revision)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 1)`,
+      [newId2(), profileId, stateHash(state2), returnUrl, expiresAt, now2, now2]
+    );
+  });
+  const authorizationUrl = new URL(GITHUB_AUTHORIZE_URL);
+  authorizationUrl.searchParams.set("client_id", config4.clientId);
+  authorizationUrl.searchParams.set(
+    "redirect_uri",
+    new URL(USER_OAUTH_CALLBACK_PATH, resolveAuthBaseUrl()).toString()
+  );
+  authorizationUrl.searchParams.set("scope", USER_OAUTH_SCOPES.join(" "));
+  authorizationUrl.searchParams.set("state", state2);
+  authorizationUrl.searchParams.set("allow_signup", "false");
+  return { authorizationUrl: authorizationUrl.toString() };
+}
+async function consumeOAuthState(state2) {
+  if (!/^[A-Za-z0-9_-]{40,80}$/.test(state2)) {
+    throw new ApiError(400, "GitHub authorization state is invalid.");
+  }
+  const client = requireDatabaseClient();
+  return client.transaction(async (tx) => {
+    const now2 = nowIso2();
+    const row = await tx.get(
+      `SELECT id, profile_id, return_url, expires_at, consumed_at, revision
+         FROM ext_github_user_oauth_states
+        WHERE state_hash = ? AND deleted_at IS NULL`,
+      [stateHash(state2)]
+    );
+    if (!row || row.consumed_at || row.expires_at <= now2) {
+      throw new ApiError(400, "GitHub authorization state has expired or was already used.");
+    }
+    const updated = await tx.run(
+      `UPDATE ext_github_user_oauth_states
+          SET consumed_at = ?, updated_at = ?, revision = ?
+        WHERE id = ? AND revision = ? AND consumed_at IS NULL AND deleted_at IS NULL`,
+      [now2, now2, row.revision + 1, row.id, row.revision]
+    );
+    if (updated.changes !== 1) {
+      throw new ApiError(400, "GitHub authorization state has expired or was already used.");
+    }
+    return row;
+  });
+}
+async function exchangeOAuthToken(input) {
+  const config4 = requireUserOAuthConfig();
+  const body = input.refreshToken === void 0 ? {
+    client_id: config4.clientId,
+    client_secret: config4.clientSecret,
+    code: input.code,
+    redirect_uri: new URL(USER_OAUTH_CALLBACK_PATH, resolveAuthBaseUrl()).toString()
+  } : {
+    client_id: config4.clientId,
+    client_secret: config4.clientSecret,
+    grant_type: "refresh_token",
+    refresh_token: input.refreshToken
+  };
+  let response;
+  try {
+    response = await fetch(GITHUB_ACCESS_TOKEN_URL, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(body)
+    });
+  } catch {
+    throw new ApiError(502, "Could not reach GitHub to complete authorization.");
+  }
+  let result;
+  try {
+    result = await response.json();
+  } catch {
+    throw new ApiError(502, "GitHub returned an invalid authorization response.");
+  }
+  if (!response.ok || typeof result.access_token !== "string" || !result.access_token) {
+    throw new ApiError(502, "GitHub did not complete repository authorization.");
+  }
+  const scopes = scopesFromTokenResponse(result.scope);
+  if (!USER_OAUTH_SCOPES.every((required2) => scopes.includes(required2))) {
+    throw new ApiError(
+      403,
+      "GitHub authorization did not grant private-repository and organization access."
+    );
+  }
+  return {
+    accessToken: result.access_token,
+    refreshToken: typeof result.refresh_token === "string" ? result.refresh_token : null,
+    scopes,
+    accessTokenExpiresAt: expiryFromSeconds(result.expires_in),
+    refreshTokenExpiresAt: expiryFromSeconds(result.refresh_token_expires_in)
+  };
+}
+async function githubUserFetchUrl(url2, token, init2 = {}) {
+  const target = new URL(url2, GITHUB_API);
+  if (target.origin !== GITHUB_API)
+    throw new ApiError(502, "GitHub returned an invalid page link.");
+  let response;
+  try {
+    response = await fetch(target, {
+      method: init2.method ?? "GET",
+      headers: {
+        Accept: "application/vnd.github+json",
+        Authorization: `Bearer ${token}`,
+        "X-GitHub-Api-Version": "2022-11-28",
+        ...init2.body === void 0 ? {} : { "Content-Type": "application/json" }
+      },
+      body: init2.body === void 0 ? void 0 : JSON.stringify(init2.body)
+    });
+  } catch {
+    throw new ApiError(502, "Could not reach GitHub.");
+  }
+  if (!response.ok) {
+    const status = response.status === 401 ? 401 : response.status === 403 ? 403 : 502;
+    throw new ApiError(
+      status,
+      `GitHub rejected the connected account request (${response.status}).`
+    );
+  }
+  const nextMatch = response.headers.get("link")?.split(",").map((part) => part.trim()).find((part) => part.endsWith('rel="next"'))?.match(/^<([^>]+)>/);
+  return {
+    data: await response.json(),
+    nextUrl: nextMatch?.[1] ?? null
+  };
+}
+async function githubUserFetch(path24, token, init2 = {}) {
+  return (await githubUserFetchUrl(path24, token, init2)).data;
+}
+async function githubUserFetchAll(path24, token) {
+  const rows = [];
+  let nextUrl = path24;
+  const visited = /* @__PURE__ */ new Set();
+  while (nextUrl) {
+    const canonical = new URL(nextUrl, GITHUB_API).toString();
+    if (visited.has(canonical)) throw new ApiError(502, "GitHub returned a repeated page link.");
+    visited.add(canonical);
+    const page = await githubUserFetchUrl(
+      nextUrl,
+      token
+    );
+    rows.push(...page.data);
+    nextUrl = page.nextUrl;
+  }
+  return rows;
+}
+async function upsertConnection(input) {
+  const config4 = requireUserOAuthConfig();
+  const client = requireDatabaseClient();
+  const now2 = nowIso2();
+  const githubUserId = String(input.user.id);
+  const githubLogin = input.user.login.trim();
+  if (!githubUserId || !githubLogin) {
+    throw new ApiError(502, "GitHub returned incomplete account metadata.");
+  }
+  const accessCiphertext = encryptToken(
+    input.token.accessToken,
+    input.profileId,
+    "access",
+    config4.encryptionKey
+  );
+  const refreshCiphertext = input.token.refreshToken ? encryptToken(input.token.refreshToken, input.profileId, "refresh", config4.encryptionKey) : null;
+  await client.transaction(async (tx) => {
+    const claimed = await tx.get(
+      `SELECT profile_id
+         FROM ext_github_user_connections
+        WHERE github_user_id = ? AND profile_id <> ? AND deleted_at IS NULL`,
+      [githubUserId, input.profileId]
+    );
+    if (claimed) {
+      throw new ApiError(409, "This GitHub account is already connected to another user.");
+    }
+    const existing = await readConnection(tx, input.profileId);
+    if (existing) {
+      const updated = await tx.run(
+        `UPDATE ext_github_user_connections
+            SET github_user_id = ?, github_login = ?, avatar_url = ?, scopes_json = ?,
+                access_token_ciphertext = ?, refresh_token_ciphertext = ?,
+                access_token_expires_at = ?, refresh_token_expires_at = ?,
+                last_validated_at = ?, updated_at = ?, revision = ?
+          WHERE id = ? AND revision = ? AND deleted_at IS NULL`,
+        [
+          githubUserId,
+          githubLogin,
+          input.user.avatar_url ?? null,
+          JSON.stringify(input.token.scopes),
+          accessCiphertext,
+          refreshCiphertext,
+          input.token.accessTokenExpiresAt,
+          input.token.refreshTokenExpiresAt,
+          now2,
+          now2,
+          existing.revision + 1,
+          existing.id,
+          existing.revision
+        ]
+      );
+      if (updated.changes !== 1) throw new ApiError(409, "GitHub connection changed; try again.");
+      return;
+    }
+    await tx.run(
+      `INSERT INTO ext_github_user_connections
+        (id, profile_id, github_user_id, github_login, avatar_url, scopes_json,
+         access_token_ciphertext, refresh_token_ciphertext, access_token_expires_at,
+         refresh_token_expires_at, last_validated_at, created_at, updated_at, revision)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+      [
+        newId2(),
+        input.profileId,
+        githubUserId,
+        githubLogin,
+        input.user.avatar_url ?? null,
+        JSON.stringify(input.token.scopes),
+        accessCiphertext,
+        refreshCiphertext,
+        input.token.accessTokenExpiresAt,
+        input.token.refreshTokenExpiresAt,
+        now2,
+        now2,
+        now2
+      ]
+    );
+  });
+}
+async function completeGitHubUserAuthorization(input) {
+  const oauthState = await consumeOAuthState(input.state);
+  if (!input.code.trim()) throw new ApiError(400, "GitHub authorization code is missing.");
+  const token = await exchangeOAuthToken({ code: input.code });
+  const user = await githubUserFetch("/user", token.accessToken);
+  await upsertConnection({ profileId: oauthState.profile_id, user, token });
+  const row = await readConnection(requireDatabaseClient(), oauthState.profile_id);
+  return { connection: connectionDto(row), returnUrl: oauthState.return_url };
+}
+async function refreshAccessToken2(row, config4) {
+  if (!row.refresh_token_ciphertext) {
+    throw new ApiError(401, "Reconnect GitHub to refresh repository access.");
+  }
+  const refreshToken2 = decryptToken(
+    row.refresh_token_ciphertext,
+    row.profile_id,
+    "refresh",
+    config4.encryptionKey
+  );
+  const token = await exchangeOAuthToken({ refreshToken: refreshToken2 });
+  const now2 = nowIso2();
+  const accessCiphertext = encryptToken(
+    token.accessToken,
+    row.profile_id,
+    "access",
+    config4.encryptionKey
+  );
+  const refreshCiphertext = token.refreshToken ? encryptToken(token.refreshToken, row.profile_id, "refresh", config4.encryptionKey) : row.refresh_token_ciphertext;
+  const updated = await requireDatabaseClient().run(
+    `UPDATE ext_github_user_connections
+        SET scopes_json = ?, access_token_ciphertext = ?, refresh_token_ciphertext = ?,
+            access_token_expires_at = ?, refresh_token_expires_at = ?,
+            updated_at = ?, revision = ?
+      WHERE id = ? AND revision = ? AND deleted_at IS NULL`,
+    [
+      JSON.stringify(token.scopes),
+      accessCiphertext,
+      refreshCiphertext,
+      token.accessTokenExpiresAt,
+      token.refreshTokenExpiresAt ?? row.refresh_token_expires_at,
+      now2,
+      row.revision + 1,
+      row.id,
+      row.revision
+    ]
+  );
+  if (updated.changes !== 1) throw new ApiError(409, "GitHub connection changed; try again.");
+  return token.accessToken;
+}
+async function connectionAccessToken(row) {
+  const config4 = requireUserOAuthConfig();
+  if (row.access_token_expires_at && new Date(row.access_token_expires_at).getTime() <= Date.now() + TOKEN_EXPIRY_SKEW_MS) {
+    return refreshAccessToken2(row, config4);
+  }
+  return decryptToken(row.access_token_ciphertext, row.profile_id, "access", config4.encryptionKey);
+}
+async function listGitHubRepositoryOwners() {
+  const client = requireDatabaseClient();
+  const profileId = await activeProfileId(client);
+  const connection = await readConnection(client, profileId);
+  if (!connection) throw new ApiError(409, "Connect GitHub before choosing a repository owner.");
+  const token = await connectionAccessToken(connection);
+  const user = await githubUserFetch("/user", token);
+  if (String(user.id) !== connection.github_user_id) {
+    throw new ApiError(401, "The connected GitHub identity changed; reconnect GitHub.");
+  }
+  const memberships = await githubUserFetchAll(
+    "/user/memberships/orgs?state=active&per_page=100",
+    token
+  );
+  const organizations = await Promise.all(
+    memberships.filter((membership) => membership.state === "active" && membership.organization?.login).map(async (membership) => {
+      const login = membership.organization.login.trim();
+      const policy = await githubUserFetch(`/orgs/${encodeURIComponent(login)}`, token);
+      const canCreate = membership.role === "admin" || Boolean(
+        policy.members_can_create_private_repositories ?? policy.members_can_create_repositories
+      );
+      return canCreate ? {
+        login,
+        type: "organization",
+        avatarUrl: membership.organization?.avatar_url ?? null,
+        canCreateRepositories: true
+      } : null;
+    })
+  );
+  const now2 = nowIso2();
+  await client.run(
+    `UPDATE ext_github_user_connections
+        SET github_login = ?, avatar_url = ?, last_validated_at = ?, updated_at = ?,
+            revision = revision + 1
+      WHERE id = ? AND deleted_at IS NULL`,
+    [user.login, user.avatar_url ?? null, now2, now2, connection.id]
+  );
+  return [
+    {
+      login: user.login,
+      type: "personal",
+      avatarUrl: user.avatar_url ?? null,
+      canCreateRepositories: true
+    },
+    ...organizations.filter((owner) => owner !== null).sort((left, right) => left.login.localeCompare(right.login))
+  ];
+}
+async function createPrivateGitHubRepository({
+  ownerLogin,
+  name
+}) {
+  const normalizedOwner = ownerLogin.trim();
+  const normalizedName = name.trim();
+  if (!/^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,99})$/.test(normalizedName)) {
+    throw new ApiError(400, "GitHub repository name is invalid.");
+  }
+  const owners = await listGitHubRepositoryOwners();
+  const owner = owners.find(
+    (candidate) => candidate.login.toLowerCase() === normalizedOwner.toLowerCase()
+  );
+  if (!owner)
+    throw new ApiError(403, "The selected GitHub owner cannot create private repositories.");
+  const client = requireDatabaseClient();
+  const profileId = await activeProfileId(client);
+  const connection = await readConnection(client, profileId);
+  if (!connection) throw new ApiError(409, "Connect GitHub before creating a repository.");
+  const token = await connectionAccessToken(connection);
+  const endpoint = owner.type === "personal" ? "/user/repos" : `/orgs/${encodeURIComponent(owner.login)}/repos`;
+  const response = await githubUserFetch(endpoint, token, {
+    method: "POST",
+    body: { name: normalizedName, private: true, auto_init: false }
+  });
+  if (!response.id || !response.full_name || !response.clone_url || !response.private || response.owner?.login?.toLowerCase() !== owner.login.toLowerCase()) {
+    throw new ApiError(502, "GitHub returned an invalid private repository response.");
+  }
+  return {
+    id: String(response.id),
+    fullName: response.full_name,
+    defaultBranch: response.default_branch ?? "main",
+    private: true,
+    cloneUrl: response.clone_url
+  };
+}
+async function revokeUpstreamToken(token, config4) {
+  try {
+    await fetch(`${GITHUB_API}/applications/${encodeURIComponent(config4.clientId)}/token`, {
+      method: "DELETE",
+      headers: {
+        Accept: "application/vnd.github+json",
+        Authorization: `Basic ${Buffer.from(`${config4.clientId}:${config4.clientSecret}`).toString("base64")}`,
+        "Content-Type": "application/json",
+        "X-GitHub-Api-Version": "2022-11-28"
+      },
+      body: JSON.stringify({ access_token: token })
+    });
+  } catch {
+  }
+}
+async function disconnectGitHubUser() {
+  const client = requireDatabaseClient();
+  const profileId = await activeProfileId(client);
+  let connection = await readConnection(client, profileId);
+  if (!connection) return connectionDto(null);
+  const config4 = userOAuthConfig();
+  if (config4) {
+    try {
+      const token = await connectionAccessToken(connection);
+      await revokeUpstreamToken(token, config4);
+      connection = await readConnection(client, profileId) ?? connection;
+    } catch {
+    }
+  }
+  const now2 = nowIso2();
+  const updated = await client.run(
+    `UPDATE ext_github_user_connections
+        SET access_token_ciphertext = 'revoked:v1', refresh_token_ciphertext = NULL,
+            access_token_expires_at = NULL, refresh_token_expires_at = NULL,
+            deleted_at = ?, updated_at = ?, revision = ?
+      WHERE id = ? AND revision = ? AND deleted_at IS NULL`,
+    [now2, now2, connection.revision + 1, connection.id, connection.revision]
+  );
+  if (updated.changes !== 1) throw new ApiError(409, "GitHub connection changed; try again.");
+  return connectionDto(null);
+}
+
 // branch-planning.ts
 var import_node_path15 = __toESM(require("node:path"), 1);
 var TITLE_SLUG_MAX = 48;
@@ -139371,6 +140101,237 @@ async function createProject2(body) {
     return getProject2(id, tx);
   });
 }
+function initializationProvisioning(row, resource) {
+  const succeeded = row.provisioning_status === "succeeded";
+  return {
+    status: row.provisioning_status,
+    retryable: row.provisioning_status === "pending" || row.provisioning_status === "failed",
+    ownerLogin: row.github_owner_login,
+    repository: succeeded && row.github_repo_id && row.full_name && row.default_branch && row.clone_url ? {
+      id: row.github_repo_id,
+      fullName: row.full_name,
+      defaultBranch: row.default_branch,
+      private: true,
+      cloneUrl: row.clone_url
+    } : null,
+    resource,
+    error: row.failure_message
+  };
+}
+async function readProjectInitialization(db, profileId, idempotencyKey) {
+  return await db.get(
+    `SELECT id, project_id, mission_id, github_owner_login, provisioning_status,
+              github_repo_id, full_name, default_branch, clone_url, failure_message, revision
+         FROM ext_github_project_initializations
+        WHERE profile_id = ? AND idempotency_key = ? AND deleted_at IS NULL`,
+    [profileId, idempotencyKey]
+  ) ?? null;
+}
+async function initializeProject(body) {
+  const db = requireDatabaseClient();
+  const workspaceId = body.workspaceId?.trim();
+  const idempotencyKey = body.idempotencyKey?.trim();
+  const name = body.name?.trim();
+  const description = body.description?.trim();
+  const wantsRepository = body.createGitHubRepository === true;
+  const ownerLogin = body.githubOwnerLogin?.trim() || null;
+  if (!workspaceId || !idempotencyKey || idempotencyKey.length > 200 || !name || !description) {
+    throw new ApiError(400, "workspaceId, idempotencyKey, name, and description are required.");
+  }
+  if (wantsRepository !== Boolean(ownerLogin)) {
+    throw new ApiError(400, "githubOwnerLogin is required only when creating a GitHub repository.");
+  }
+  const profileId = await resolveActiveProfileId(db);
+  if (!profileId) throw new ApiError(401, "Authentication required.");
+  let initialization = await db.transaction(async (tx) => {
+    const existing = await readProjectInitialization(tx, profileId, idempotencyKey);
+    if (existing) return existing;
+    const workspaceUserId = await requireWorkspacePermission({
+      workspaceId,
+      permission: PERMISSIONS.PROJECT_CREATE,
+      db: tx,
+      notFoundMessage: "Workspace not found or no active membership"
+    });
+    const now2 = nowIso2();
+    const projectId = newId2();
+    const maxPosition = await tx.get(
+      `SELECT COALESCE(MAX(position), 0) AS max_position FROM projects
+        WHERE workspace_id = ? AND deleted_at IS NULL`,
+      [workspaceId]
+    );
+    await tx.run(
+      `INSERT INTO projects (id, workspace_id, slug, name, description, status, settings_json,
+          created_by_workspace_user_id, created_at, updated_at, revision, position)
+       VALUES (?, ?, ?, ?, ?, 'active', '{}', ?, ?, ?, 1, ?)`,
+      [
+        projectId,
+        workspaceId,
+        slugify4(name),
+        name,
+        description,
+        workspaceUserId,
+        now2,
+        now2,
+        maxPosition.max_position + 1
+      ]
+    );
+    await recordChange2(
+      {
+        entityType: "project",
+        entityId: projectId,
+        operation: "insert",
+        entityRevision: 1,
+        projectId,
+        workspaceId,
+        actorWorkspaceUserId: workspaceUserId
+      },
+      tx
+    );
+    const mission2 = await createMissionTx(
+      { projectId, title: name, firstObjective: description },
+      tx,
+      true
+    );
+    const id = newId2();
+    const status = wantsRepository ? "pending" : "not_requested";
+    await tx.run(
+      `INSERT INTO ext_github_project_initializations
+        (id, profile_id, workspace_id, project_id, mission_id, idempotency_key, github_owner_login,
+         provisioning_status, created_at, updated_at, revision)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+      [
+        id,
+        profileId,
+        workspaceId,
+        projectId,
+        mission2.missionId,
+        idempotencyKey,
+        ownerLogin,
+        status,
+        now2,
+        now2
+      ]
+    );
+    return {
+      id,
+      project_id: projectId,
+      mission_id: mission2.missionId,
+      github_owner_login: ownerLogin,
+      provisioning_status: status,
+      github_repo_id: null,
+      full_name: null,
+      default_branch: null,
+      clone_url: null,
+      failure_message: null,
+      revision: 1
+    };
+  });
+  if (initialization.provisioning_status !== "not_requested" && initialization.provisioning_status !== "succeeded") {
+    try {
+      const repo = await createPrivateGitHubRepository({
+        ownerLogin,
+        name: slugify4(name)
+      });
+      initialization = await persistInitializedRepository({ db, initialization, repo });
+    } catch (error53) {
+      const message2 = error53 instanceof ApiError ? error53.message : "GitHub repository provisioning failed.";
+      const now2 = nowIso2();
+      await db.run(
+        `UPDATE ext_github_project_initializations
+            SET provisioning_status = 'failed', failure_message = ?, updated_at = ?, revision = revision + 1
+          WHERE id = ? AND provisioning_status <> 'succeeded' AND deleted_at IS NULL`,
+        [message2.slice(0, 500), now2, initialization.id]
+      );
+      initialization = await readProjectInitialization(db, profileId, idempotencyKey);
+    }
+  }
+  const project = await getProject2(initialization.project_id);
+  const mission = await getMissionDetail(initialization.mission_id);
+  const resources = await listProjectResources2(initialization.project_id);
+  const resource = initialization.clone_url ? resources.find(
+    (item) => item.sources.some((source) => source.descriptor.url === initialization.clone_url)
+  ) ?? null : null;
+  return {
+    project,
+    mission,
+    repositoryProvisioning: initializationProvisioning(initialization, resource)
+  };
+}
+async function persistInitializedRepository({
+  db,
+  initialization,
+  repo
+}) {
+  return db.transaction(async (tx) => {
+    const current = await tx.get(
+      `SELECT id, project_id, mission_id, github_owner_login, provisioning_status,
+              github_repo_id, full_name, default_branch, clone_url, failure_message, revision
+         FROM ext_github_project_initializations WHERE id = ? AND deleted_at IS NULL`,
+      [initialization.id]
+    );
+    if (current.provisioning_status === "succeeded") return current;
+    const project = await getProject2(current.project_id, tx, PERMISSIONS.PROJECT_READ);
+    const now2 = nowIso2();
+    const existingLink = await tx.get(
+      `SELECT id FROM ext_github_project_links WHERE project_id = ? AND deleted_at IS NULL`,
+      [project.id]
+    );
+    if (!existingLink) {
+      const linkId = newId2();
+      await tx.run(
+        `INSERT INTO ext_github_project_links
+          (id, workspace_id, project_id, github_repo_id, full_name, default_branch, metadata_json, created_at, updated_at, revision)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+        [
+          linkId,
+          project.workspaceId,
+          project.id,
+          repo.id,
+          repo.fullName,
+          repo.defaultBranch,
+          JSON.stringify({ private: true, source: "user_oauth" }),
+          now2,
+          now2
+        ]
+      );
+      await recordChange2(
+        {
+          entityType: "github:project_link",
+          entityId: linkId,
+          operation: "insert",
+          entityRevision: 1,
+          projectId: project.id,
+          changedFields: ["repo"],
+          workspaceId: project.workspaceId
+        },
+        tx
+      );
+    }
+    await insertProjectResource(
+      tx,
+      project,
+      {
+        sourceUrl: repo.cloneUrl,
+        label: repo.fullName,
+        isPrimary: false,
+        accessMode: "read"
+      },
+      "GitHub clone URL is required"
+    );
+    await tx.run(
+      `UPDATE ext_github_project_initializations SET provisioning_status = 'succeeded', github_repo_id = ?,
+          full_name = ?, default_branch = ?, clone_url = ?, failure_message = NULL, updated_at = ?, revision = revision + 1
+        WHERE id = ?`,
+      [repo.id, repo.fullName, repo.defaultBranch, repo.cloneUrl, now2, current.id]
+    );
+    return await tx.get(
+      `SELECT id, project_id, mission_id, github_owner_login, provisioning_status,
+              github_repo_id, full_name, default_branch, clone_url, failure_message, revision
+         FROM ext_github_project_initializations WHERE id = ?`,
+      [current.id]
+    );
+  });
+}
 async function updateProject(id, body) {
   return requireDatabaseClient().transaction(async (tx) => {
     const { workspaceId, workspaceUserId } = await requireProjectPermission({
@@ -140078,8 +141039,8 @@ async function nextMissionSequence2(db, workspaceId) {
   ]);
   return seq;
 }
-async function createMissionTx(body) {
-  return requireDatabaseClient().transaction(async (tx) => {
+async function createMissionTx(body, client = requireDatabaseClient(), alreadyInTransaction = false) {
+  const execute2 = async (tx) => {
     const objectiveInputs2 = body.objectives && body.objectives.length > 0 ? body.objectives : body.firstObjective ? [{ objective: body.firstObjective }] : [];
     const instruction = (objectiveInputs2[0]?.objective ?? body.title ?? "").trim();
     if (!instruction) {
@@ -140177,7 +141138,8 @@ async function createMissionTx(body) {
       now: now2
     });
     return { missionId: id, objectiveIds, instruction, shouldGenerateMissionTitle: !explicitTitle };
-  });
+  };
+  return alreadyInTransaction ? execute2(client) : client.transaction(execute2);
 }
 async function syncMissionTags(db, {
   workspaceId,
@@ -142378,7 +143340,7 @@ async function revokeUserTokenSecret(rawToken) {
 
 // workspaces.ts
 init_dist();
-var import_node_crypto14 = require("node:crypto");
+var import_node_crypto15 = require("node:crypto");
 
 // sql-studio/sql-studio.ts
 var import_node_child_process4 = require("node:child_process");
@@ -148791,9 +149753,9 @@ var INVITATION_HASH_ALGORITHM = "sha256";
 var INVITATION_TTL_DAYS = 14;
 var WORKSPACE_ROLE_KEYS = /* @__PURE__ */ new Set(["ADMIN", "MANAGER", "MEMBER"]);
 function generateInvitationSecret() {
-  const prefix = `${INVITATION_TOKEN_SCHEME}_${(0, import_node_crypto14.randomBytes)(4).toString("hex")}`;
-  const secret = `${prefix}${(0, import_node_crypto14.randomBytes)(24).toString("hex")}`;
-  const hash2 = (0, import_node_crypto14.createHash)(INVITATION_HASH_ALGORITHM).update(secret).digest("hex");
+  const prefix = `${INVITATION_TOKEN_SCHEME}_${(0, import_node_crypto15.randomBytes)(4).toString("hex")}`;
+  const secret = `${prefix}${(0, import_node_crypto15.randomBytes)(24).toString("hex")}`;
+  const hash2 = (0, import_node_crypto15.createHash)(INVITATION_HASH_ALGORITHM).update(secret).digest("hex");
   return { secret, prefix, hash: hash2 };
 }
 var INVITATION_COLUMNS = "id, workspace_id, email, role_key, token_prefix, status, invited_by_workspace_user_id, expires_at, created_at, revision";
@@ -148957,7 +149919,7 @@ async function acceptWorkspaceInvitation(body) {
   if (!rawToken) throw new ApiError(400, "Invitation token is required");
   const profileId = getActiveProfileId();
   if (!profileId) throw new ApiError(401, "Authentication required");
-  const tokenHash = (0, import_node_crypto14.createHash)(INVITATION_HASH_ALGORITHM).update(rawToken).digest("hex");
+  const tokenHash = (0, import_node_crypto15.createHash)(INVITATION_HASH_ALGORITHM).update(rawToken).digest("hex");
   const client = requireDatabaseClient();
   const outcome = await client.transaction(async (tx) => {
     const invitation = await tx.get(
@@ -152235,10 +153197,10 @@ function createEverhourExtensionRouter(handle3) {
 var import_express2 = __toESM(require_express2(), 1);
 
 // ext/github/service.ts
-var import_node_crypto15 = require("node:crypto");
+var import_node_crypto16 = require("node:crypto");
 init_db();
 init_errors5();
-var GITHUB_API = "https://api.github.com";
+var GITHUB_API2 = "https://api.github.com";
 var STATE_TTL_MS = 10 * 60 * 1e3;
 function githubAppConfig() {
   const appId = process.env.GITHUB_APP_ID?.trim();
@@ -152266,7 +153228,7 @@ function appJwt(config4) {
     JSON.stringify({ iat: now2 - 60, exp: now2 + 9 * 60, iss: config4.appId })
   );
   const signingInput = `${encodedHeader}.${encodedPayload}`;
-  const signer = (0, import_node_crypto15.createSign)("RSA-SHA256");
+  const signer = (0, import_node_crypto16.createSign)("RSA-SHA256");
   signer.update(signingInput);
   signer.end();
   return `${signingInput}.${signer.sign(config4.privateKey, "base64url")}`;
@@ -152274,7 +153236,7 @@ function appJwt(config4) {
 async function githubFetch(path24, token, init2 = {}) {
   let response;
   try {
-    response = await fetch(`${GITHUB_API}${path24}`, {
+    response = await fetch(`${GITHUB_API2}${path24}`, {
       method: init2.method ?? "GET",
       headers: {
         Accept: "application/vnd.github+json",
@@ -152305,16 +153267,16 @@ async function githubFetch(path24, token, init2 = {}) {
 }
 function signedInstallState(workspaceId, privateKey) {
   const payload = base64url3(JSON.stringify({ workspaceId, expiresAt: Date.now() + STATE_TTL_MS }));
-  const mac3 = (0, import_node_crypto15.createHmac)("sha256", privateKey).update(payload).digest("base64url");
+  const mac3 = (0, import_node_crypto16.createHmac)("sha256", privateKey).update(payload).digest("base64url");
   return `${payload}.${mac3}`;
 }
 function verifyInstallState(value, workspaceId, privateKey) {
   const [payload, suppliedMac, ...extra] = value?.split(".") ?? [];
   if (!payload || !suppliedMac || extra.length)
     throw new ApiError(400, "Invalid GitHub installation state.");
-  const expectedMac = (0, import_node_crypto15.createHmac)("sha256", privateKey).update(payload).digest("base64url");
+  const expectedMac = (0, import_node_crypto16.createHmac)("sha256", privateKey).update(payload).digest("base64url");
   const sameLength = suppliedMac.length === expectedMac.length;
-  if (!sameLength || !(0, import_node_crypto15.timingSafeEqual)(Buffer.from(suppliedMac), Buffer.from(expectedMac))) {
+  if (!sameLength || !(0, import_node_crypto16.timingSafeEqual)(Buffer.from(suppliedMac), Buffer.from(expectedMac))) {
     throw new ApiError(400, "Invalid GitHub installation state.");
   }
   let decoded;
@@ -152684,8 +153646,32 @@ async function createMissionGitHubPullRequest(missionId, body) {
 }
 
 // ext/github/routes.ts
-function createGitHubExtensionRouter(handle3) {
+function createGitHubExtensionRouter(handle3, options = {}) {
   const router2 = (0, import_express2.Router)();
+  router2.get(
+    "/user-connection",
+    handle3(() => getGitHubUserConnection())
+  );
+  router2.post(
+    "/user-connection/authorize",
+    handle3(
+      (req) => beginGitHubUserAuthorization(
+        {
+          returnTo: typeof req.body?.returnTo === "string" ? req.body.returnTo : void 0
+        },
+        options.allowedBrowserOrigins ?? []
+      ),
+      { mutates: true }
+    )
+  );
+  router2.delete(
+    "/user-connection",
+    handle3(() => disconnectGitHubUser(), { mutates: true })
+  );
+  router2.get(
+    "/repository-owners",
+    handle3(() => listGitHubRepositoryOwners())
+  );
   router2.get(
     "/integration",
     handle3(() => getGitHubIntegration(), { requires: PERMISSIONS.WORKSPACE_READ })
@@ -152755,41 +153741,6 @@ function createGitHubExtensionRouter(handle3) {
     )
   );
   return router2;
-}
-
-// http/public-backend-url.ts
-var PUBLIC_BACKEND_URL_ENV_KEYS = [
-  "BETTER_AUTH_URL",
-  "BACKEND_URL",
-  "OVERLORD_BACKEND_URL"
-];
-function normalizeOriginUrl(value) {
-  const trimmed = value.trim().replace(/\/+$/, "");
-  const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? trimmed : `http://${trimmed}`;
-  return new URL(withScheme).origin;
-}
-function readConfiguredPublicBackendUrls() {
-  const origins = [];
-  const seen = /* @__PURE__ */ new Set();
-  for (const key of PUBLIC_BACKEND_URL_ENV_KEYS) {
-    const raw = process.env[key]?.trim();
-    if (!raw) continue;
-    const origin = normalizeOriginUrl(raw);
-    if (seen.has(origin)) continue;
-    seen.add(origin);
-    origins.push(origin);
-  }
-  return origins;
-}
-function resolveLoopbackAuthBaseUrl() {
-  const authBaseHost = process.env.OVERLORD_WEB_HOST && process.env.OVERLORD_WEB_HOST !== "0.0.0.0" ? process.env.OVERLORD_WEB_HOST : "127.0.0.1";
-  const authBasePort = process.env.OVERLORD_WEB_PORT ?? "4310";
-  return `http://${authBaseHost}:${authBasePort}`;
-}
-function resolveAuthBaseUrl() {
-  const configured = readConfiguredPublicBackendUrls();
-  if (configured.length > 0) return configured[0];
-  return resolveLoopbackAuthBaseUrl();
 }
 
 // http/browser-origins.ts
@@ -153993,7 +154944,7 @@ async function rescheduleJob(client, id, attemptCount, delayMs, lastError) {
 var deliveryComposeWorker = new DeliveryComposeWorker();
 
 // desktop-oauth-handoff.ts
-var import_node_crypto16 = require("node:crypto");
+var import_node_crypto17 = require("node:crypto");
 var HANDOFF_TTL_MS = 6e4;
 var TICKET_PATTERN = /^[A-Za-z0-9_-]{32,128}$/;
 var handoffs = /* @__PURE__ */ new Map();
@@ -154004,7 +154955,7 @@ function discardExpiredHandoffs(now2 = Date.now()) {
 }
 function createOAuthHandoff(sessionToken, audience) {
   discardExpiredHandoffs();
-  const ticket = (0, import_node_crypto16.randomBytes)(32).toString("base64url");
+  const ticket = (0, import_node_crypto17.randomBytes)(32).toString("base64url");
   handoffs.set(ticket, { audience, sessionToken, expiresAt: Date.now() + HANDOFF_TTL_MS });
   return ticket;
 }
@@ -154053,7 +155004,7 @@ init_env_profile();
 init_errors5();
 
 // live-activities.ts
-var import_node_crypto17 = require("node:crypto");
+var import_node_crypto18 = require("node:crypto");
 init_util3();
 init_db();
 init_errors5();
@@ -154179,7 +155130,7 @@ async function buildLiveActivityContentState(db, profileId, now2 = /* @__PURE__ 
   };
 }
 function liveActivityContentHash(state2) {
-  return (0, import_node_crypto17.createHash)("sha256").update(
+  return (0, import_node_crypto18.createHash)("sha256").update(
     JSON.stringify(
       state2 && {
         running: state2.running,
@@ -154193,7 +155144,7 @@ function liveActivityContentHash(state2) {
 init_util3();
 
 // apns-client.ts
-var import_node_crypto18 = require("node:crypto");
+var import_node_crypto19 = require("node:crypto");
 var import_node_http2 = __toESM(require("node:http2"), 1);
 var SANDBOX_HOST = "https://api.sandbox.push.apple.com";
 var PRODUCTION_HOST = "https://api.push.apple.com";
@@ -154222,7 +155173,7 @@ function apnsJwt(config4) {
   const signingInput = `${b64url(JSON.stringify({ alg: "ES256", kid: config4.keyId }))}.${b64url(
     JSON.stringify({ iss: config4.teamId, iat: now2 })
   )}`;
-  const signer = (0, import_node_crypto18.createSign)("SHA256");
+  const signer = (0, import_node_crypto19.createSign)("SHA256");
   signer.update(signingInput);
   signer.end();
   const signature = signer.sign({ key: config4.privateKey, dsaEncoding: "ieee-p1363" });
@@ -154451,7 +155402,7 @@ async function finishJob(db, id, status, lastError) {
 var liveActivityDispatcher = new LiveActivityDispatcher();
 
 // oauth.ts
-var import_node_crypto19 = require("node:crypto");
+var import_node_crypto20 = require("node:crypto");
 init_db();
 init_errors5();
 var CLIENT_ID_PREFIX = "ovlc_";
@@ -154487,12 +155438,12 @@ function oauthSigningSecret() {
   return process.env.OVERLORD_OAUTH_SIGNING_SECRET?.trim() || process.env.BETTER_AUTH_SECRET?.trim() || "overlord-local-oauth-development-secret";
 }
 function signPayload(payload) {
-  return (0, import_node_crypto19.createHmac)("sha256", oauthSigningSecret()).update(payload).digest("base64url");
+  return (0, import_node_crypto20.createHmac)("sha256", oauthSigningSecret()).update(payload).digest("base64url");
 }
 function fixedTimeEqual(a5, b5) {
   const left = Buffer.from(a5);
   const right = Buffer.from(b5);
-  return left.length === right.length && (0, import_node_crypto19.timingSafeEqual)(left, right);
+  return left.length === right.length && (0, import_node_crypto20.timingSafeEqual)(left, right);
 }
 function jsonError(res, status, error53, description) {
   res.status(status).json({ error: error53, error_description: description });
@@ -154729,7 +155680,7 @@ async function handleOAuthApprove(req, res) {
     scope: "mission_lifecycle",
     expiresAt: new Date(Date.now() + USER_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1e3).toISOString()
   });
-  const code = `${AUTH_CODE_PREFIX}${(0, import_node_crypto19.randomBytes)(32).toString("base64url")}`;
+  const code = `${AUTH_CODE_PREFIX}${(0, import_node_crypto20.randomBytes)(32).toString("base64url")}`;
   authorizationCodes.set(code, {
     clientId: parsed.clientId,
     redirectUri: parsed.redirectUri,
@@ -154773,7 +155724,7 @@ async function handleOAuthToken(req, res) {
     jsonError(res, 400, "invalid_target", "OAuth resource does not match the authorization code.");
     return;
   }
-  const challenge = (0, import_node_crypto19.createHash)("sha256").update(codeVerifier).digest("base64url");
+  const challenge = (0, import_node_crypto20.createHash)("sha256").update(codeVerifier).digest("base64url");
   if (!codeVerifier || challenge !== entry.codeChallenge) {
     await revokeOrphanedAccessToken(entry.accessToken);
     jsonError(res, 400, "invalid_grant", "PKCE verification failed.");
@@ -155182,7 +156133,7 @@ async function finishJob2(db, id, status, lastError) {
 var pushNotificationDispatcher = new PushNotificationDispatcher();
 
 // storage.ts
-var import_node_crypto20 = require("node:crypto");
+var import_node_crypto21 = require("node:crypto");
 var import_node_fs17 = require("node:fs");
 var import_node_path29 = __toESM(require("node:path"), 1);
 var import_node_url7 = require("node:url");
@@ -155266,7 +156217,7 @@ async function writeImageObject(bucket, input, storageKeyFor) {
     storageKey,
     sizeBytes: input.bytes.length,
     contentType,
-    checksum: (0, import_node_crypto20.createHash)("sha256").update(input.bytes).digest("hex"),
+    checksum: (0, import_node_crypto21.createHash)("sha256").update(input.bytes).digest("hex"),
     publicUrl: publicUrlFor(bucket.bucket_key, storageKey)
   };
 }
@@ -155497,7 +156448,7 @@ async function uploadObjectiveAttachment(input) {
     contentType: contentType ?? "application/octet-stream"
   });
   const filename = input.filename.trim() || `attachment${import_node_path29.default.extname(storageKey)}`;
-  const checksum3 = (0, import_node_crypto20.createHash)("sha256").update(input.bytes).digest("hex");
+  const checksum3 = (0, import_node_crypto21.createHash)("sha256").update(input.bytes).digest("hex");
   return requireDatabaseClient().transaction(async (tx) => {
     await tx.run(
       `INSERT INTO attachments (
@@ -155752,14 +156703,14 @@ init_webhook_events();
 init_db();
 
 // webhook-security.ts
-var import_node_crypto21 = require("node:crypto");
+var import_node_crypto22 = require("node:crypto");
 var import_promises5 = __toESM(require("node:dns/promises"), 1);
 var import_node_net = require("node:net");
 init_db();
 init_errors5();
 function signWebhookPayload(secret, rawBody) {
   const timestamp = Math.floor(Date.now() / 1e3);
-  const signature = (0, import_node_crypto21.createHmac)("sha256", secret).update(`${timestamp}.${rawBody}`).digest("hex");
+  const signature = (0, import_node_crypto22.createHmac)("sha256", secret).update(`${timestamp}.${rawBody}`).digest("hex");
   return { header: `t=${timestamp},v1=${signature}`, timestamp };
 }
 function internalHostPatterns() {
@@ -156086,7 +157037,7 @@ var webhookDispatcher = new WebhookDispatcher();
 
 // webhooks.ts
 init_dist();
-var import_node_crypto22 = require("node:crypto");
+var import_node_crypto23 = require("node:crypto");
 init_webhook_events();
 init_db();
 init_errors5();
@@ -156122,7 +157073,7 @@ function toSubscriptionDto(row) {
   };
 }
 function generateWebhookSecret() {
-  return { secret: `${WEBHOOK_SECRET_SCHEME}_${(0, import_node_crypto22.randomBytes)(24).toString("hex")}` };
+  return { secret: `${WEBHOOK_SECRET_SCHEME}_${(0, import_node_crypto23.randomBytes)(24).toString("hex")}` };
 }
 function normalizeEventTypes(input) {
   if (!Array.isArray(input) || input.length === 0) {
@@ -156650,6 +157601,25 @@ app.post("/api/auth/browser/exchange", import_express3.default.json(), (req, res
     return;
   }
   res.json({ token });
+});
+app.get("/api/auth/callback/github/repository", async (req, res, next) => {
+  try {
+    const result = await completeGitHubUserAuthorization({
+      code: typeof req.query.code === "string" ? req.query.code : "",
+      state: typeof req.query.state === "string" ? req.query.state : ""
+    });
+    if (result.returnUrl) {
+      const destination = new URL(result.returnUrl);
+      destination.searchParams.set("githubConnection", "connected");
+      res.redirect(302, destination.toString());
+      return;
+    }
+    res.status(200).type("html").send(
+      '<!doctype html><meta name="viewport" content="width=device-width"><title>GitHub connected</title><p>GitHub is connected. You can return to Overlord.</p>'
+    );
+  } catch (error53) {
+    next(error53);
+  }
 });
 app.all("/api/auth/*", authNodeHandler);
 var jsonBody = import_express3.default.json();
@@ -157253,6 +158223,10 @@ app.post(
   "/api/projects",
   handle2((req) => createProject2(req.body), { mutates: true })
 );
+app.post(
+  "/api/projects/initialize",
+  handle2((req) => initializeProject(req.body), { mutates: true })
+);
 app.patch(
   "/api/projects/reorder",
   handle2((req) => reorderProjects(req.body), { mutates: true })
@@ -157454,7 +158428,11 @@ app.get(
   handle2((req) => listMissions2(req.params.id))
 );
 app.use("/ext/everhour", requireAuthenticatedSession, createEverhourExtensionRouter(handle2));
-app.use("/ext/github", requireAuthenticatedSession, createGitHubExtensionRouter(handle2));
+app.use(
+  "/ext/github",
+  requireAuthenticatedSession,
+  createGitHubExtensionRouter(handle2, { allowedBrowserOrigins: getAllowedBrowserOrigins() })
+);
 app.patch(
   "/api/projects/:id/board/reorder",
   handle2((req) => reorderBoardColumn(req.params.id, req.body), {

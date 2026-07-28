@@ -1,4 +1,4 @@
-contractVersion: "0"
+contractVersion: "35"
 componentType: connector
 componentKey: cursor
 label: "Cursor Connector"

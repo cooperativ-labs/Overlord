@@ -1,9 +1,16 @@
+import { missionBannerShellCommands } from './mission-link.js';
 import { projectTmpDir } from './project-tmp.js';
 import {
   appleScriptKeystrokeClause,
   parseTerminalLaunchChord,
   type TerminalLaunchPlacement
 } from './terminal-launch-chord.js';
+
+/** Optional mission identity printed as a launch-time banner + OSC title. */
+export type MissionLinkBanner = {
+  displayId: string;
+  title?: string;
+};
 
 /** Resolved process invocation describing exactly how the agent is spawned. */
 export type LaunchExecution = {
@@ -111,24 +118,36 @@ function withPreLaunchCommands(agentCommand: string, preLaunchCommands?: string[
  * The command run *inside* a freshly opened terminal window. A new window does
  * not inherit our process cwd/env, so we cd into the project and re-export the
  * TMPDIR family before invoking the agent. Any project pre-launch commands run
- * after the exports and before the agent.
+ * after the exports and before the agent. When a mission link is supplied, a
+ * one-line banner + OSC title is printed after the exports so every launched
+ * terminal shows its Overlord mission without relying on the agent.
  */
 function terminalInnerCommand({
   workingDirectory,
   agentCommand,
   extraEnv = {},
-  preLaunchCommands
+  preLaunchCommands,
+  missionLink
 }: {
   workingDirectory: string;
   agentCommand: string;
   extraEnv?: Record<string, string>;
   preLaunchCommands?: string[] | null;
+  missionLink?: MissionLinkBanner | null;
 }): string {
   const exports = Object.entries({ ...tmpEnvFor(workingDirectory), ...extraEnv })
     .map(([key, value]) => `export ${key}=${shellQuote(value)}`)
     .join('; ');
+  const banner =
+    missionLink?.displayId?.trim()
+      ? missionBannerShellCommands({
+          displayId: missionLink.displayId,
+          title: missionLink.title
+        })
+      : '';
   const invocation = withPreLaunchCommands(agentCommand, preLaunchCommands);
-  return `cd ${shellQuote(workingDirectory)} && ${exports}; ${invocation}`;
+  const afterExports = [banner, invocation].filter(Boolean).join('; ');
+  return `cd ${shellQuote(workingDirectory)} && ${exports}; ${afterExports}`;
 }
 
 export function terminalLaunchScriptContent({
@@ -137,7 +156,8 @@ export function terminalLaunchScriptContent({
   workingDirectory,
   preCommand,
   extraEnv = {},
-  preLaunchCommands
+  preLaunchCommands,
+  missionLink
 }: {
   command: string;
   args: string[];
@@ -145,9 +165,10 @@ export function terminalLaunchScriptContent({
   preCommand?: string | null;
   extraEnv?: Record<string, string>;
   preLaunchCommands?: string[] | null;
+  missionLink?: MissionLinkBanner | null;
 }): string {
   const agentCommand = agentShellCommand({ command, args, preCommand });
-  return `#!/usr/bin/env bash\n${terminalInnerCommand({ workingDirectory, agentCommand, extraEnv, preLaunchCommands })}\n`;
+  return `#!/usr/bin/env bash\n${terminalInnerCommand({ workingDirectory, agentCommand, extraEnv, preLaunchCommands, missionLink })}\n`;
 }
 
 function terminalScriptCommand(scriptPath: string): string {
@@ -376,7 +397,8 @@ export function resolveLaunchExecution({
   terminalScriptPath,
   terminalLaunchBackground = false,
   extraEnv = {},
-  preLaunchCommands
+  preLaunchCommands,
+  missionLink
 }: {
   command: string;
   args: string[];
@@ -384,6 +406,7 @@ export function resolveLaunchExecution({
   preCommand?: string | null;
   extraEnv?: Record<string, string>;
   preLaunchCommands?: string[] | null;
+  missionLink?: MissionLinkBanner | null;
 } & TerminalLaunchSettings): LaunchExecution {
   const agentCommand = agentShellCommand({ command, args, preCommand });
   const genericAgentCommand = agentShellCommand({
@@ -413,7 +436,8 @@ export function resolveLaunchExecution({
     workingDirectory,
     agentCommand,
     extraEnv,
-    preLaunchCommands
+    preLaunchCommands,
+    missionLink
   });
   const terminalInner = terminalScriptPath?.trim()
     ? terminalScriptCommand(terminalScriptPath.trim())

@@ -12,9 +12,16 @@ log_hook() {
   printf '%s [cursor-stop] %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$1" >>"$LOG_FILE" 2>/dev/null || true
 }
 
-if [ -z "${MISSION_ID:-}" ] || ! command -v ovld >/dev/null 2>&1; then
-  log_hook "missing required mission or ovld, skipping"
+if ! command -v ovld >/dev/null 2>&1; then
+  log_hook "missing ovld, skipping"
   printf '{}'
+  exit 0
+fi
+
+if [ -z "${MISSION_ID:-}" ]; then
+  log_hook "no launch mission id; printing any cwd mission-link pointer"
+  printf '{}'
+  ovld protocol mission-link >&2 2>/dev/null || true
   exit 0
 fi
 
@@ -68,6 +75,11 @@ else
   log_hook "hook-event failed exit=$OVLD_EXIT"
   printf '{}'
 fi
+
+# Preserve Cursor's machine-readable stdout response; the human-facing footer
+# belongs on stderr after Cursor has consumed that JSON. mission-link does not
+# call the backend or alter the hook response above.
+ovld protocol mission-link >&2 2>/dev/null || true
 
 rm -f "$RESPONSE_FILE"
 exit 0

@@ -59,6 +59,18 @@ export type DesktopBackendProfile = {
   backendUrl: string;
 };
 
+const navigationListeners = new Set<(route: string) => void>();
+const pendingNavigationRoutes: string[] = [];
+
+ipcRenderer.on('overlord:navigate', (_event: Electron.IpcRendererEvent, route: unknown) => {
+  if (typeof route !== 'string') return;
+  if (navigationListeners.size === 0) {
+    pendingNavigationRoutes.push(route);
+    return;
+  }
+  for (const listener of navigationListeners) listener(route);
+});
+
 /**
  * The `window.overlord` bridge. Kept deliberately tiny: a few shell-only
  * affordances the unmodified SPA can *feature-detect* (`if (window.overlord)`),
@@ -147,6 +159,12 @@ const api = {
         ipcRenderer.removeListener('overlord:quick-task-shown', listener);
       };
     }
+  },
+  /** Subscribe to validated shell-local navigation requested by a deep link. */
+  onNavigate: (callback: (route: string) => void): (() => void) => {
+    navigationListeners.add(callback);
+    for (const route of pendingNavigationRoutes.splice(0)) callback(route);
+    return () => navigationListeners.delete(callback);
   },
   updates: {
     getStatus: (): Promise<DesktopUpdateStatus> =>

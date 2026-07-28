@@ -123,8 +123,16 @@ A minimal, audited surface the SPA **feature-detects** (`if (window.overlord)`):
 | `quickTask.close()`                                                                | hide the quick-task capture window                                                                                                                           |
 | `quickTask.setHeight(height)` / `quickTask.setBounds({ height, barOffsetTop })`    | resize the frameless quick-task window                                                                                                                       |
 | `quickTask.onShown(callback)`                                                      | run when the quick-task window is shown (e.g. reset focus)                                                                                                   |
+| `onNavigate(callback)`                                                             | receive a validated shell-local route from an `overlord://missions/<missionId>` deep link                                                                    |
 
 No tokens, Node access, or product logic cross this boundary.
+
+### Mission deep links
+
+The shell owns `overlord://missions/<missionId>` mission links. It accepts only ids
+matching `[A-Za-z0-9:_-]{1,64}`, focuses or creates the main window, and forwards the
+fixed internal `/user/missions/<missionId>` route through `onNavigate`. The custom URL
+and the preload notification carry no credentials, OAuth ticket, or other payload.
 
 ### Backend profiles and CLI auth
 

@@ -113,6 +113,7 @@ declare global {
       setBounds?: (args: { height: number; barOffsetTop: number }) => Promise<void>;
       onShown: (callback: () => void) => () => void;
     };
+    onNavigate?: (callback: (route: string) => void) => () => void;
     updates: {
       getStatus: () => Promise<DesktopUpdateStatus>;
       check: () => Promise<DesktopUpdateStatus>;

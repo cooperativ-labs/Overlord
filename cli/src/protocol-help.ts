@@ -1,4 +1,4 @@
-/** Protocol subcommands implemented by the local backend (`backend/protocol.ts`). */
+/** Backend and local-only protocol subcommands exposed by the CLI. */
 export const SUPPORTED_PROTOCOL_SUBCOMMANDS = [
   'add-objectives',
   'ask',
@@ -16,6 +16,7 @@ export const SUPPORTED_PROTOCOL_SUBCOMMANDS = [
   'hook-event',
   'list-organizations',
   'load-context',
+  'mission-link',
   'prompt',
   'read-context',
   'record-work',
@@ -88,6 +89,7 @@ Subcommands:
   deliver                Finish work, send artifacts, and move the mission to review
   resume-follow-up       Reopen a completed objective for post-delivery follow-up work
   hook-event             Record a connector lifecycle hook (e.g. UserPromptSubmit)
+  mission-link           Local-only: print this cwd's Desktop mission deep link
   record-touched         Local-only: append an edit hook's touched files to the session log
   changes                Local-only: preflight — print classified mine/claimed/unclaimed
                          paths and drafted rationales before delivering; run this instead

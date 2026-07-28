@@ -25,7 +25,7 @@ import {
 } from './cli-auth-sync.js';
 import { CliUpdater } from './cli-updater.js';
 import { registerIpc } from './ipc.js';
-import { parseDesktopOAuthHandoffUrl } from './oauth-handoff.js';
+import { parseDesktopOAuthHandoffUrl, parseMissionDeepLink } from './oauth-handoff.js';
 import {
   hideQuickTaskWindow,
   initQuickTaskWindow,
@@ -53,6 +53,7 @@ let backendController: BackendRuntimeController | null = null;
 let updater: DesktopUpdater | null = null;
 let cliUpdater: CliUpdater | null = null;
 const pendingOAuthCallbackUrls: string[] = [];
+const pendingMissionIds: string[] = [];
 
 process.env.OVERLORD_DESKTOP_VERSION = app.getVersion();
 registerOAuthProtocol();
@@ -61,13 +62,13 @@ if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   app.on('second-instance', (_event, commandLine) => {
-    queueOAuthCallback(commandLine.find(argument => argument.startsWith('overlord://')));
+    queueDeepLink(commandLine.find(argument => argument.startsWith('overlord://')));
     showOrCreateMainWindow();
   });
 
   app.on('open-url', (event, url) => {
     event.preventDefault();
-    queueOAuthCallback(url);
+    queueDeepLink(url);
   });
 
   app
@@ -145,6 +146,7 @@ async function boot(): Promise<void> {
 
   await openMainWindow({ reloadExisting: false });
   await consumePendingOAuthCallbacks();
+  await consumePendingMissionDeepLinks();
   initQuickTaskWindow({
     appOrigin: shellOrigin,
     preloadPath: PRELOAD,
@@ -164,13 +166,21 @@ function registerOAuthProtocol(): void {
   } else {
     app.setAsDefaultProtocolClient('overlord');
   }
-  queueOAuthCallback(process.argv.find(argument => argument.startsWith('overlord://')));
+  queueDeepLink(process.argv.find(argument => argument.startsWith('overlord://')));
 }
 
-function queueOAuthCallback(url: string | undefined): void {
-  if (!url || !parseDesktopOAuthHandoffUrl(url)) return;
-  pendingOAuthCallbackUrls.push(url);
-  void consumePendingOAuthCallbacks();
+function queueDeepLink(url: string | undefined): void {
+  if (!url) return;
+  if (parseDesktopOAuthHandoffUrl(url)) {
+    pendingOAuthCallbackUrls.push(url);
+    void consumePendingOAuthCallbacks();
+    return;
+  }
+  const missionId = parseMissionDeepLink(url);
+  if (!missionId) return;
+  pendingMissionIds.push(missionId);
+  if (backendController) showOrCreateMainWindow();
+  void consumePendingMissionDeepLinks();
 }
 
 async function consumePendingOAuthCallbacks(): Promise<void> {
@@ -208,6 +218,17 @@ async function consumePendingOAuthCallbacks(): Promise<void> {
     } catch (error) {
       dialog.showErrorBox('GitHub sign-in failed', describe(error));
     }
+  }
+}
+
+async function consumePendingMissionDeepLinks(): Promise<void> {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  const active = resolveActiveBackend({ shellOrigin });
+  if (!mainWindow.webContents.getURL().startsWith(active.shellOrigin)) return;
+
+  while (pendingMissionIds.length > 0) {
+    const missionId = pendingMissionIds.shift();
+    if (missionId) mainWindow.webContents.send('overlord:navigate', `/user/missions/${missionId}`);
   }
 }
 
@@ -259,6 +280,7 @@ async function openMainWindow({
   if (!mainWindow) return null;
 
   await mainWindow.loadURL(`${active.shellOrigin}/`);
+  await consumePendingMissionDeepLinks();
   setQuickTaskBackend({
     appOrigin: active.shellOrigin,
     partition: sessionPartitionForProfile(active.id)
