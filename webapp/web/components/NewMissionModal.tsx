@@ -307,7 +307,7 @@ export function NewMissionModal({
       }}
     >
       <DialogContent
-        className="gap-0 p-0 sm:max-w-xl shadow-none ring-0 bg-transparent"
+        className="gap-0 p-0 sm:max-w-3xl shadow-none ring-0 bg-transparent"
         showCloseButton
       >
         <DialogTitle className="sr-only">New mission</DialogTitle>
@@ -337,8 +337,8 @@ export function NewMissionModal({
           />
 
           {/* Footer toolbar */}
-          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/40 px-3 py-2">
-            <div className="flex flex-wrap items-center gap-1.5">
+          <div className="flex flex-nowrap items-center justify-between gap-2 border-t border-border/40 px-3 py-2">
+            <div className="flex min-w-0 flex-nowrap items-center gap-1.5">
               {/* Project selector */}
               <DropdownMenu>
                 <DropdownMenuTrigger
@@ -465,7 +465,7 @@ export function NewMissionModal({
               />
             </div>
 
-            <div className="flex items-center gap-1.5">
+            <div className="flex shrink-0 items-center gap-1.5">
               <AgentModelChooserButton
                 catalog={catalog}
                 selection={selection}

@@ -131,8 +131,10 @@ export function getWeeksForMonth(monthDate: Date): Date[][] {
   return weeks;
 }
 
-export function groupMissionsByDay(missions: MissionDto[]): Map<DayKey, MissionDto[]> {
-  const map = new Map<DayKey, MissionDto[]>();
+export function groupMissionsByDay<TMission extends MissionDto>(
+  missions: TMission[]
+): Map<DayKey, TMission[]> {
+  const map = new Map<DayKey, TMission[]>();
 
   for (const mission of missions) {
     if (!mission.dueDatetime) continue;

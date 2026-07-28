@@ -21,7 +21,7 @@ export function MissionsViewToggle({
 }: {
   value: BoardView;
   onChange: (value: BoardView) => void;
-  /** Subset of views to show; My Missions omits calendar until multi-project support ships. */
+  /** Subset of views to show; defaults to board, list, and calendar. */
   views?: BoardView[];
 }) {
   const options = VIEW_OPTIONS.filter(option => views.includes(option.value));

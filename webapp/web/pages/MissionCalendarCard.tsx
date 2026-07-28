@@ -15,6 +15,7 @@ export function MissionCalendarCard({
   projectColor,
   selected,
   onComplete,
+  onOpen,
   draggable = true,
   isDragging = false,
   isDragOverlay = false
@@ -24,6 +25,8 @@ export function MissionCalendarCard({
   projectColor: string | null;
   selected?: boolean;
   onComplete?: (missionId: string) => void;
+  /** Override the default navigate-to-project-mission click (e.g. My Missions). */
+  onOpen?: () => void;
   draggable?: boolean;
   isDragging?: boolean;
   isDragOverlay?: boolean;
@@ -36,12 +39,14 @@ export function MissionCalendarCard({
     disabled: isDragOverlay || !draggable
   });
 
-  const openMission = () => {
-    navigate({
-      to: '/projects/$projectId/missions/$missionId',
-      params: { projectId, missionId: mission.id }
+  const openMission =
+    onOpen ??
+    (() => {
+      navigate({
+        to: '/projects/$projectId/missions/$missionId',
+        params: { projectId, missionId: mission.id }
+      });
     });
-  };
 
   return (
     <div

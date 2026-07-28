@@ -3,6 +3,8 @@ import { useQueries } from '@tanstack/react-query';
 import { useMatch, useNavigate } from '@tanstack/react-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import { NewMissionModal } from '@/components/NewMissionModal.tsx';
+
 import type {
   MyMissionDto,
   WorkspaceMemberDto,
@@ -43,6 +45,7 @@ import {
   resolveColumnMissions
 } from './board-shared.ts';
 import type { BoardColumnStatus } from './BoardColumn.tsx';
+import { MissionCalendarView } from './MissionCalendarView.tsx';
 import { MissionListView } from './MissionListView.tsx';
 import { MissionProjectFilterDropdown } from './MissionProjectFilterDropdown.tsx';
 import { MissionStatusFilterDropdown } from './MissionStatusFilterDropdown.tsx';
@@ -59,19 +62,19 @@ import { type MyMissionsDropTarget, useMyMissionsDnd } from './useMyMissionsDnd.
 
 const UNCATEGORIZED_ID = '__my_missions_uncategorized__';
 const VIEW_STORAGE_KEY = 'overlord:my-missions-view';
+const MY_MISSIONS_VIEWS: BoardView[] = ['board', 'list', 'calendar'];
 
 function readStoredView(): BoardView {
   if (typeof window === 'undefined') return 'board';
   try {
     const value = window.localStorage.getItem(VIEW_STORAGE_KEY);
-    return value === 'list' ? 'list' : 'board';
+    return MY_MISSIONS_VIEWS.includes(value as BoardView) ? (value as BoardView) : 'board';
   } catch {
     return 'board';
   }
 }
 
 function storeView(view: BoardView) {
-  if (view === 'calendar') return;
   try {
     window.localStorage.setItem(VIEW_STORAGE_KEY, view);
   } catch {
@@ -128,6 +131,8 @@ export function MyMissionsPage() {
   const [dropError, setDropError] = useState<{ statusName: string; workspaceName: string } | null>(
     null
   );
+  const [modalOpen, setModalOpen] = useState(false);
+  const [defaultDueDate, setDefaultDueDate] = useState<Date | null>(null);
 
   const missions = useMemo(() => myMissionsQ.data?.missions ?? [], [myMissionsQ.data]);
   const projects = useMemo(() => projectsQ.data ?? [], [projectsQ.data]);
@@ -414,6 +419,16 @@ export function MyMissionsPage() {
     storeView(next);
   };
 
+  const handleCalendarDayClick = useCallback((day: Date) => {
+    setDefaultDueDate(day);
+    setModalOpen(true);
+  }, []);
+
+  const handleCloseNewMissionModal = useCallback(() => {
+    setModalOpen(false);
+    setDefaultDueDate(null);
+  }, []);
+
   const openMission = useCallback(
     (missionId: string) => {
       void navigate({ to: '/user/missions/$missionId', params: { missionId } });
@@ -575,11 +590,7 @@ export function MyMissionsPage() {
         </div>
         <div className="flex flex-wrap items-center gap-2 border-(--color-border) px-5 mt-5">
           <div className="flex flex-wrap items-center gap-2">
-            <MissionsViewToggle
-              value={view}
-              onChange={handleViewChange}
-              views={['board', 'list']}
-            />
+            <MissionsViewToggle value={view} onChange={handleViewChange} />
             <MissionProjectFilterDropdown
               projects={projectFilterOptions}
               selectedProjectIds={selectedProjectIds}
@@ -659,6 +670,16 @@ export function MyMissionsPage() {
               </DragOverlay>
             ) : null}
           </DndContext>
+        ) : view === 'calendar' ? (
+          <MissionCalendarView
+            missions={filteredMissions}
+            projectId={defaultCreateProjectId}
+            projectColor={null}
+            selectedMissionId={selectedMissionId}
+            onCompleteMission={handleCompleteMission}
+            onDayClick={handleCalendarDayClick}
+            getMissionCardContext={getMissionCardContext}
+          />
         ) : (
           <MissionListView
             statuses={listStatuses}
@@ -678,6 +699,13 @@ export function MyMissionsPage() {
           />
         )}
       </div>
+
+      <NewMissionModal
+        open={modalOpen}
+        onClose={handleCloseNewMissionModal}
+        defaultProjectId={defaultCreateProjectId || null}
+        defaultDueDate={defaultDueDate}
+      />
 
       <Dialog
         open={dropError !== null}

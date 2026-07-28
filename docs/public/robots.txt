@@ -1,0 +1,7 @@
+# Overlord documentation site (docs.ovld.ai).
+# The marketing site at https://www.ovld.ai publishes its own robots.txt and sitemap.
+User-agent: *
+Allow: /
+Disallow: /pagefind/
+
+Sitemap: https://docs.ovld.ai/sitemap-index.xml

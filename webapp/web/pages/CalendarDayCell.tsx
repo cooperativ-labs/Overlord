@@ -6,9 +6,10 @@ import { cn } from '@/lib/utils';
 
 import type { MissionDto } from '../../shared/contract.ts';
 
+import type { MissionCardContext } from './BoardColumn.tsx';
 import { MissionCalendarCard } from './MissionCalendarCard.tsx';
 
-export function CalendarDayCell({
+export function CalendarDayCell<TMission extends MissionDto>({
   day,
   dayMissions,
   inMonth,
@@ -20,10 +21,11 @@ export function CalendarDayCell({
   onCompleteMission,
   activeMissionId,
   draggable,
-  onDayClick
+  onDayClick,
+  getMissionCardContext
 }: {
   day: Date;
-  dayMissions: MissionDto[];
+  dayMissions: TMission[];
   inMonth: boolean;
   isToday: boolean;
   todayRef: RefObject<HTMLDivElement | null>;
@@ -34,6 +36,7 @@ export function CalendarDayCell({
   activeMissionId: string | null;
   draggable: boolean;
   onDayClick?: (day: Date) => void;
+  getMissionCardContext?: (mission: TMission) => MissionCardContext;
 }) {
   const dayKey = dayKeyFromDate(day);
   const { isOver, setNodeRef } = useDroppable({ id: calendarDayDroppableId(dayKey) });
@@ -86,18 +89,26 @@ export function CalendarDayCell({
       </div>
       {inMonth ? (
         <div className="flex flex-col gap-1" onClick={event => event.stopPropagation()}>
-          {dayMissions.map(mission => (
-            <MissionCalendarCard
-              key={mission.id}
-              mission={mission}
-              projectId={projectId}
-              projectColor={projectColor}
-              selected={mission.id === selectedMissionId}
-              onComplete={onCompleteMission}
-              draggable={draggable}
-              isDragging={activeMissionId === mission.id}
-            />
-          ))}
+          {dayMissions.map(mission => {
+            const cardContext = getMissionCardContext?.(mission) ?? {
+              projectId,
+              projectName: '',
+              projectColor
+            };
+            return (
+              <MissionCalendarCard
+                key={mission.id}
+                mission={mission}
+                projectId={cardContext.projectId}
+                projectColor={cardContext.projectColor}
+                selected={mission.id === selectedMissionId}
+                onComplete={onCompleteMission}
+                onOpen={cardContext.onOpen}
+                draggable={draggable}
+                isDragging={activeMissionId === mission.id}
+              />
+            );
+          })}
         </div>
       ) : null}
     </div>

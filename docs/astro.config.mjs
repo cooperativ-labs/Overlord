@@ -2,6 +2,9 @@ import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 
 export default defineConfig({
+  // Required for sitemap generation. Starlight auto-registers @astrojs/sitemap,
+  // but it only emits sitemap-index.xml / sitemap-0.xml when `site` is set.
+  site: 'https://docs.ovld.ai',
   integrations: [
     starlight({
       title: 'The Docs',

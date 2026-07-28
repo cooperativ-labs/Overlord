@@ -28,9 +28,9 @@ import { invalidateNonEverhourQueries } from '../lib/query-invalidation.ts';
 
 import type { BoardDndResult } from './board-shared.ts';
 
-export type CalendarDndResult = {
+export type CalendarDndResult<TMission extends MissionDto = MissionDto> = {
   activeMissionId: string | null;
-  displayMissionsByDay: Map<DayKey, MissionDto[]>;
+  displayMissionsByDay: Map<DayKey, TMission[]>;
   dndContextProps: BoardDndResult['dndContextProps'];
 };
 
@@ -51,15 +51,15 @@ function sortMissionsInDay(left: MissionDto, right: MissionDto): number {
   return right.sequenceNumber - left.sequenceNumber;
 }
 
-function buildGroupedMissions({
+function buildGroupedMissions<TMission extends MissionDto>({
   missions,
   dayKeyByMissionId
 }: {
-  missions: MissionDto[];
+  missions: TMission[];
   dayKeyByMissionId: Map<string, DayKey>;
-}): Map<DayKey, MissionDto[]> {
+}): Map<DayKey, TMission[]> {
   const missionById = new Map(missions.map(mission => [mission.id, mission]));
-  const result = new Map<DayKey, MissionDto[]>();
+  const result = new Map<DayKey, TMission[]>();
 
   for (const [missionId, dayKey] of dayKeyByMissionId) {
     const mission = missionById.get(missionId);
@@ -85,13 +85,13 @@ function dayKeyMapsEqual(left: Map<string, DayKey>, right: Map<string, DayKey>):
   return true;
 }
 
-export function useCalendarDueDateDnd({
+export function useCalendarDueDateDnd<TMission extends MissionDto>({
   missions,
   draggable = true
 }: {
-  missions: MissionDto[];
+  missions: TMission[];
   draggable?: boolean;
-}): CalendarDndResult {
+}): CalendarDndResult<TMission> {
   const queryClient = useQueryClient();
   const settledMissionsByDay = useMemo(() => groupMissionsByDay(missions), [missions]);
   const settledDayKeyByMissionId = useMemo(
