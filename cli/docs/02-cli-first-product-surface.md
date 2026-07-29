@@ -140,7 +140,8 @@ Requirements:
 
 - Written into linked project directories.
 - Stores local project identifier, resource label, whether the directory is primary, and enough metadata for project discovery.
-- Should be tracked unless the user chooses otherwise.
+- Must remain tracked: linking never ignores `project.json` or the whole `.overlord/` directory.
+- Is exclusively managed by Overlord. Linking writes a marked no-edit rule to the checkout's `AGENTS.md` and `CLAUDE.md`, and installs a local pre-commit guard that rejects staged changes to it.
 
 ### `~/.ovld/` (global CLI config) and local backend data
 
@@ -158,6 +159,7 @@ Requirements:
 - Pruning must be best-effort and age-based so recent follow-up context remains available across short mission-review windows.
 - Must be gitignored by generated `.gitignore` suggestions.
 - Do not gitignore the whole `.overlord/` directory by default because `project.json` is durable metadata.
+- `ovld create-project` and `ovld add-cwd` add precisely `.overlord/tmp/` and `.overlord/logs/` to a connected checkout's `.gitignore` when those patterns are absent.
 
 ## MVP CLI Acceptance Criteria
 
