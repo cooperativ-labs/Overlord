@@ -34,13 +34,27 @@ where a surface differs by edition this document calls it out explicitly.
 
 ## Contract Version
 
-Current version: `37`
+Current version: `38`
 
 This `Current version` line is the **sole authoritative** statement of the contract
 version in this document. Automated checks and agents MUST read it (and
 `contract/components.yaml`) — never a header duplicate. The contract version is
 incremented when any stable interface changes. All conformance manifests must
 declare the contract version they were validated against.
+
+### Version 38
+
+Project-link metadata protection (coo:520): the existing checkout-local
+`writeProjectMetadata` capability used by `ovld create-project`/`ovld add-cwd`
+and the Desktop bridge continues to write only a read-write resource's
+`.overlord/project.json` link metadata. On each link it also idempotently
+maintains the checkout-root `AGENTS.md` and `CLAUDE.md` with a marked rule that
+agents must not edit that metadata, adds only `.overlord/tmp/` and
+`.overlord/logs/` to the checkout's `.gitignore` (never `project.json` or all
+of `.overlord/`), and installs a cooperative Git `pre-commit` guard that rejects
+staged `.overlord/project.json` changes. Existing instruction files, ignore
+rules, and hooks remain preserved; the guard is local checkout policy and does
+not alter Git transport or any REST/protocol interface.
 
 | Version | Changes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

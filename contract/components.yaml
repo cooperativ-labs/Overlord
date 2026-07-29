@@ -4,7 +4,7 @@
 # IMPORTANT: Update this file and CONTRACT.md together when adding components or surfaces.
 # Increment contractVersion when any stable interface changes.
 
-contractVersion: '37'
+contractVersion: '38'
 
 components:
   protocol:
@@ -67,7 +67,7 @@ components:
       - 'ovld config set: select a local loopback backend URL or hosted/cloud backend URL'
       - 'ovld auth login: first-run backend onboarding before authentication'
       - 'project linking and discovery from working directory, with a packaged-mode fallback to the OS app-data overlord.toml'
-      - 'configuration file locations: overlord.toml, .overlord/project.json (legacy resourceId plus additive resourceIdsByExecutionTarget map keyed by execution_targets.id, plus additive resourceKey for logical checkout identity)'
+      - 'configuration file locations: overlord.toml, .overlord/project.json (legacy resourceId plus additive resourceIdsByExecutionTarget map keyed by execution_targets.id, plus additive resourceKey for logical checkout identity); linking a read_write checkout idempotently maintains its agent no-edit instruction block, ignores only .overlord/tmp/ and .overlord/logs/, and installs a local pre-commit guard for .overlord/project.json'
       - 'project resource registration commands: ovld add-cwd --key <resourceKey> upserts a target-scoped local_checkout source on the project-scoped identity; ovld add-url --url <git-url> upserts its project-global git source'
       - 'backend URL settings: backend_url and backend_mode (local/cloud)'
       - 'per-user terminal profiles on user_execution_target_preferences for opening launched agents in a terminal window'

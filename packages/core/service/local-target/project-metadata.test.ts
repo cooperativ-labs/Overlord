@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, it } from 'node:test';
@@ -7,6 +8,57 @@ import { describe, it } from 'node:test';
 import { readProjectJsonLink, writeProjectJson } from './project-metadata.ts';
 
 describe('project metadata', () => {
+  it('protects generated metadata with instructions, narrow ignores, and a pre-commit guard', () => {
+    const directory = mkdtempSync(path.join(tmpdir(), 'ovld-project-json-protected-'));
+    execFileSync('git', ['init', '--quiet', directory]);
+    writeFileSync(path.join(directory, 'AGENTS.md'), '# Existing agent instructions\n');
+    writeFileSync(path.join(directory, 'CLAUDE.md'), '# Existing Claude instructions\n');
+
+    writeProjectJson({
+      directoryPath: directory,
+      projectId: 'project-1',
+      resourceId: 'resource-1',
+      isPrimary: true
+    });
+
+    const projectJsonPath = path.join(directory, '.overlord', 'project.json');
+    const projectJson = JSON.parse(readFileSync(projectJsonPath, 'utf8')) as { _warning: string };
+    assert.match(projectJson._warning, /strictly protected/i);
+
+    for (const filename of ['AGENTS.md', 'CLAUDE.md']) {
+      const content = readFileSync(path.join(directory, filename), 'utf8');
+      assert.match(content, /Existing .* instructions/);
+      assert.match(content, /OVERLORD PROJECT METADATA PROTECTION: START/);
+      assert.match(content, /must not edit/i);
+    }
+
+    const gitignore = readFileSync(path.join(directory, '.gitignore'), 'utf8');
+    assert.match(gitignore, /^\.overlord\/tmp\/$/m);
+    assert.match(gitignore, /^\.overlord\/logs\/$/m);
+    assert.doesNotMatch(gitignore, /project\.json/);
+    assert.doesNotMatch(gitignore, /^\.overlord\/$/m);
+
+    const hookPath = path.join(directory, '.git', 'hooks', 'pre-commit');
+    assert.equal(existsSync(hookPath), true);
+    execFileSync('git', ['-C', directory, 'add', '.overlord/project.json']);
+    const hook = spawnSync(hookPath, [], { cwd: directory, encoding: 'utf8' });
+    assert.equal(hook.status, 1);
+    assert.match(hook.stderr, /Overlord blocked this commit/);
+
+    writeProjectJson({
+      directoryPath: directory,
+      projectId: 'project-1',
+      resourceId: 'resource-1',
+      isPrimary: true
+    });
+    assert.equal(
+      (readFileSync(path.join(directory, 'AGENTS.md'), 'utf8').match(
+        /OVERLORD PROJECT METADATA PROTECTION: START/g
+      ) ?? []).length,
+      1
+    );
+  });
+
   it('reads legacy single-resource metadata', () => {
     const directory = mkdtempSync(path.join(tmpdir(), 'ovld-project-json-legacy-'));
     const overlordDir = path.join(directory, '.overlord');
