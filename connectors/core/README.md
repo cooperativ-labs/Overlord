@@ -46,7 +46,24 @@ When building a Connector Plugin, adapter skill templates include `<!-- @connect
 `connectors/core/overlord-mission/` into that marker and copies core reference files
 into the installable plugin package. Do not fork the core protocol rules into each adapter.
 
+The same rendering path carries the local MCP shim. `scripts/overlord-mcp.mjs` is the
+single source for the stdio MCP bridge that Codex, Cursor, and Antigravity install;
+`ovld agent-setup <agent>` substitutes `__OVERLORD_ADAPTER_KEY__` with the adapter key
+(`DEFAULT_AGENT` and `serverInfo.name`) and writes the result into the adapter's install
+path. There are no adapter-local copies to keep in step. Two constraints hold when
+editing it:
+
+- It must stay a standalone runnable `.mjs`. The rendered file is copied into the
+  user's home and started directly by the harness, so it may not import anything
+  repo-local or require a build step.
+- The tool list must stay in parity with the hosted MCP catalog; `backend/mcp.test.ts`
+  asserts this against `mcp/tool-catalog.ts`.
+
+`connectors/VERSION` drives the reported `serverInfo.version`; patch it with
+`yarn connectors:version:sync`, never by hand.
+
 ### Files
 
 - `overlord-mission/SKILL.md` — shared mission lifecycle workflow.
 - `overlord-mission/reference/` — shared protocol, context, device, MCP/API, and shell-escaping references.
+- `scripts/overlord-mcp.mjs` — shared local MCP shim, rendered per adapter.

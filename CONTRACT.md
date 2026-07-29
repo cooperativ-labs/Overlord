@@ -1,6 +1,7 @@
 # Overlord Component Interaction Contract
 
-Contract Version: `37`
+The current contract version is stated once under [Contract Version](#contract-version).
+Do not restate the numeric version elsewhere in this document.
 
 ## Purpose
 
@@ -35,7 +36,11 @@ where a surface differs by edition this document calls it out explicitly.
 
 Current version: `37`
 
-The contract version is incremented when any stable interface changes. All conformance manifests must declare the contract version they were validated against.
+This `Current version` line is the **sole authoritative** statement of the contract
+version in this document. Automated checks and agents MUST read it (and
+`contract/components.yaml`) — never a header duplicate. The contract version is
+incremented when any stable interface changes. All conformance manifests must
+declare the contract version they were validated against.
 
 | Version | Changes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -700,7 +705,9 @@ The `contract/` directory contains machine-readable counterparts:
 
 1. Read and understand the current contract (this document + relevant `contract/*.yaml` files)
 2. Draft the required contract changes
-3. **Increment the contract version** in this document header and in `contract/components.yaml`
+3. **Increment the contract version** in the sole authoritative `Current version` line under
+   [Contract Version](#contract-version) above, and in `contract/components.yaml`. Do not add
+   or update any other numeric version statement in this document.
 4. Add a changelog entry to this document
 5. Implement the changes in code and other docs
 6. Verify any affected component's conformance manifest passes `ovld contract check`

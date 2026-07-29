@@ -12,6 +12,14 @@ export const CONNECTOR_CORE_SKILL_RELATIVE_PATH = 'skills/overlord-mission/SKILL
 export const CONNECTOR_CORE_REFERENCE_PREFIX = 'skills/overlord-mission/reference/';
 
 /**
+ * The local MCP shim is a single core script rendered per adapter. The only
+ * adapter-specific values are the default agent identifier and the reported
+ * `serverInfo.name`, both spelled with this placeholder in the core file.
+ */
+export const CONNECTOR_CORE_MCP_SHIM_RELATIVE_PATH = 'scripts/overlord-mcp.mjs';
+export const CONNECTOR_ADAPTER_KEY_PLACEHOLDER = '__OVERLORD_ADAPTER_KEY__';
+
+/**
  * Locate `connectors/core/overlord-mission`. The CLI package ships a copy under
  * `dist/connectors`, but source checkouts and development overrides are also
  * supported.
@@ -41,6 +49,19 @@ export function connectorCoreRoot(): string {
   }
 
   return resolveRepoPath('connectors/core/overlord-mission');
+}
+
+/**
+ * `connectors/core/scripts` — sibling of the core skill directory returned by
+ * {@link connectorCoreRoot}, resolved through it so both follow the same
+ * packaged/source/override lookup.
+ */
+export function connectorCoreScriptsRoot(coreRoot = connectorCoreRoot()): string {
+  return path.join(path.dirname(coreRoot), 'scripts');
+}
+
+export function isConnectorCoreMcpShimPath(relativePath: string): boolean {
+  return relativePath === CONNECTOR_CORE_MCP_SHIM_RELATIVE_PATH;
 }
 
 export function isConnectorCoreSkillPath(relativePath: string): boolean {
@@ -114,6 +135,50 @@ export function readConnectorCoreReference({
   return readFileSync(referencePath);
 }
 
+/**
+ * Render the shared local MCP shim for one adapter. The result must stay a
+ * standalone runnable `.mjs`: it is copied into the user's home and started
+ * directly by the harness, so it may not import anything repo-local.
+ */
+export function renderConnectorMcpShim({
+  adapterKey,
+  coreRoot = connectorCoreRoot()
+}: {
+  adapterKey: string;
+  coreRoot?: string;
+}): string {
+  const shimPath = path.join(connectorCoreScriptsRoot(coreRoot), 'overlord-mcp.mjs');
+  if (!existsSync(shimPath)) {
+    throw new CliError({
+      message: `Connector core MCP shim missing at ${shimPath}.`
+    });
+  }
+  const source = readFileSync(shimPath, 'utf8');
+  if (!source.includes(CONNECTOR_ADAPTER_KEY_PLACEHOLDER)) {
+    throw new CliError({
+      message:
+        `Connector core MCP shim at ${shimPath} is missing ` +
+        `${CONNECTOR_ADAPTER_KEY_PLACEHOLDER}. The adapter key must stay a substitution point.`
+    });
+  }
+  return source.replaceAll(CONNECTOR_ADAPTER_KEY_PLACEHOLDER, adapterKey);
+}
+
+/**
+ * Adapter key for substitution. `setupConnector` passes it explicitly; the
+ * fallback keeps the older `sourceDir`-only callers working, since every
+ * adapter source directory is named for its key.
+ */
+function resolveAdapterKey({
+  sourceDir,
+  adapterKey
+}: {
+  sourceDir: string;
+  adapterKey?: string;
+}): string {
+  return adapterKey ?? path.basename(sourceDir);
+}
+
 export function managedFileSourceExists({
   sourceDir,
   relativePath,
@@ -126,20 +191,33 @@ export function managedFileSourceExists({
   if (isConnectorCoreReferencePath(relativePath)) {
     return existsSync(path.join(coreRoot, 'reference', path.basename(relativePath)));
   }
+  if (isConnectorCoreMcpShimPath(relativePath)) {
+    return existsSync(path.join(connectorCoreScriptsRoot(coreRoot), 'overlord-mcp.mjs'));
+  }
   return existsSync(path.join(sourceDir, relativePath));
 }
 
 export function resolveManagedFileContents({
   sourceDir,
   relativePath,
+  adapterKey,
   coreRoot = connectorCoreRoot()
 }: {
   sourceDir: string;
   relativePath: string;
+  adapterKey?: string;
   coreRoot?: string;
 }): Buffer {
   if (isConnectorCoreReferencePath(relativePath)) {
     return readConnectorCoreReference({ relativePath, coreRoot });
+  }
+
+  if (isConnectorCoreMcpShimPath(relativePath)) {
+    const rendered = renderConnectorMcpShim({
+      adapterKey: resolveAdapterKey({ sourceDir, adapterKey }),
+      coreRoot
+    });
+    return Buffer.from(rendered, 'utf8');
   }
 
   if (isConnectorCoreSkillPath(relativePath)) {

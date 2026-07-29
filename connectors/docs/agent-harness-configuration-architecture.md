@@ -50,7 +50,7 @@ fingerprint.
 
 | Concern | Owner | Overlord storage | Notes |
 | --- | --- | --- | --- |
-| Built-in agent connector capabilities | Overlord | Connector registry or static config | Examples: `codex`, `claude`, `cursor`. |
+| Built-in agent connector capabilities | Overlord | Connector registry or static config | Examples: `codex`, `claude`, `cursor`. Which mechanisms each adapter ships, and which omissions are deliberate, are recorded in the [adapter capability matrix](../README.md#adapter-capability-matrix). |
 | Agents and models available by default | Workspace | `workspaces.settings_json`, future `workspace_agent_catalog` | Model config is workspace-level, not project-level. |
 | Personal custom harness extensions | User | `user_harness_extensions` | User-owned source of truth for draft/private custom connectors. |
 | Workspace custom harness extensions | Workspace admin/member with permission | `workspace_harness_extensions` | Workspace-installed catalog entries, optionally copied from a personal extension version. |

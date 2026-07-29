@@ -70,9 +70,16 @@ This connector is intentionally reviewable against the four connector layers in 
 
 - `skills/overlord-mission/SKILL.md` — Codex adapter template with a `<!-- @connector-core -->` marker; setup interpolates shared core content at install time.
 - `.codex-plugin/hooks.json` + `scripts/*.sh` — `UserPromptSubmit` follow-up capture and `PermissionRequest` notifications through `ovld protocol`.
-- `.mcp.json` + `scripts/overlord-mcp.mjs` — MCP bridge to common `ovld protocol` operations.
+- `.mcp.json` + `scripts/overlord-mcp.mjs` — MCP bridge to common `ovld protocol` operations. The shim is **generated**: it is rendered from `connectors/core/scripts/overlord-mcp.mjs` at setup time with the adapter key substituted, and there is no copy in this directory to edit.
 - `assets/` — branded plugin assets for Codex install surfaces.
 - `conformance-manifest.yaml` — connector conformance declaration for the Overlord contract.
 - `prompt-wrapper.md` — Codex launch guidance.
 
 The shared Connector Core source lives at `connectors/core/overlord-mission`. `ovld agent-setup codex` interpolates that core into the adapter skill template and installs core reference files so the runtime package is self-contained.
+
+### Omissions
+
+- **No `commands/` directory.** Codex reaches protocol operations through the MCP bridge and the mission skill. This is unported rather than declined — no Codex constraint is recorded against slash commands — so treat it as open work with its own mission, not as a settled decision.
+- **No `PostToolUse` or `Stop` hooks.** Only `UserPromptSubmit` and `PermissionRequest` are registered; the equivalent Codex events are not yet mapped.
+
+See the [adapter capability matrix](../../README.md#adapter-capability-matrix) for how this compares across adapters.

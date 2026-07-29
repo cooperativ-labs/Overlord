@@ -73,11 +73,19 @@ This connector is intentionally reviewable against the four connector layers in 
 - `skills/overlord-mission/SKILL.md` — Antigravity adapter template with a `<!-- @connector-core -->` marker; setup interpolates shared core content at install time.
 - `skills/attach.md`, `skills/connect.md`, `skills/load.md`, `skills/create.md`, `skills/prompt.md`, `skills/discuss-objective.md`, `skills/add-objectives.md`, `skills/record-work.md`, `skills/spawn.md` — one skill per protocol operation; Antigravity auto-registers each as a `/<name>` slash command.
 - `hooks.json` + `scripts/pre-invocation-hook.sh` + `scripts/pre-tool-use-hook.sh` — follow-up and permission activity capture through `ovld protocol` (see mapping notes below).
-- `mcp_config.json` + `scripts/overlord-mcp.mjs` — MCP bridge to common `ovld protocol` operations.
+- `mcp_config.json` + `scripts/overlord-mcp.mjs` — MCP bridge to common `ovld protocol` operations. The shim is **generated**: it is rendered from `connectors/core/scripts/overlord-mcp.mjs` at setup time with the adapter key substituted, and there is no copy in this directory to edit.
 - `conformance-manifest.yaml` — connector conformance declaration for the Overlord contract.
 - `prompt-wrapper.md` — Antigravity launch guidance.
 
 The shared Connector Core source lives at `connectors/core/overlord-mission`. `ovld agent-setup antigravity` interpolates that core into the adapter skill template and installs core reference files so the runtime package is self-contained.
+
+### Omissions
+
+- **No model or effort flag at launch.** Antigravity selects the model internally, so Overlord passes neither. Deliberate.
+- **No `commands/` directory.** Antigravity auto-registers each `skills/*.md` as a `/<name>` slash command, so a separate commands surface would be redundant. Deliberate.
+- **No `PostToolUse` or `Stop` hooks.** Only follow-up and permission capture are mapped; whether Antigravity exposes the equivalent events is not yet established. Treat as open work.
+
+See the [adapter capability matrix](../../README.md#adapter-capability-matrix) for how this compares across adapters.
 
 ### Notes on the Antigravity hook mapping
 

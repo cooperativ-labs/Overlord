@@ -24,8 +24,8 @@ Do **not** skip this step when only one adapter changes. All agent connectors sh
 - `connectors/adapters/claude/.claude-plugin/plugin.json`
 - `connectors/adapters/codex/.codex-plugin/plugin.json`
 - `connectors/adapters/cursor/.cursor-plugin/plugin.json`
-- `connectors/adapters/codex/scripts/overlord-mcp.mjs` (`serverInfo.version`)
-- `connectors/adapters/cursor/scripts/overlord-mcp.mjs` (`serverInfo.version`)
+- `connectors/adapters/antigravity/plugin.json`
+- `connectors/core/scripts/overlord-mcp.mjs` (`serverInfo.version`) — the single source for the Codex, Cursor, and Antigravity local MCP shims, which are rendered per adapter at setup time
 
 Never hand-edit those version fields in multiple files. Update `connectors/VERSION` through the script, then sync.
 

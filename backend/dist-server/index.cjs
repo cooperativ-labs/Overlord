@@ -70759,9 +70759,7 @@ function deviceFingerprint() {
 function callerDeviceFingerprint() {
   return deviceFingerprint();
 }
-async function softDeleteOrphanDevices({
-  ctx
-}) {
+async function softDeleteOrphanDevices({ ctx }) {
   const orphans = await ctx.db.all(
     `SELECT d.id
        FROM devices d
@@ -150682,6 +150680,31 @@ var handlers = {
       value
     });
   },
+  // In-place artifact edit (same service as REST PATCH). No session key — a
+  // later objective or follow-up can revise an artifact created earlier.
+  "update-artifact": (_ctx, body) => {
+    const expectedRevision = intFlag(body, "--expected-revision");
+    if (expectedRevision === void 0) {
+      throw new ApiError(400, "Missing required flag: --expected-revision");
+    }
+    const update = { expectedRevision };
+    if (hasFlag(body, "--label")) {
+      update.label = strFlag(body, "--label") ?? "";
+    }
+    if (hasFlag(body, "--content-text") || hasFlag(body, "--content-text-file")) {
+      const content = resolveInput(body, "--content-text", "--content-text-file");
+      update.contentText = content !== void 0 && content.trim() ? content : null;
+    }
+    if (hasFlag(body, "--external-url")) {
+      const url2 = strFlag(body, "--external-url");
+      update.externalUrl = url2 !== void 0 && url2.trim() ? url2 : null;
+    }
+    return updateArtifact(
+      requireFlag(body, "--mission-id"),
+      requireFlag(body, "--artifact-id"),
+      update
+    );
+  },
   "attachment-list": async (ctx, body) => {
     const missionId = requireFlag(body, "--mission-id");
     const attachments = await listAttachments({ ctx, missionId });
@@ -150745,6 +150768,7 @@ var SUBCOMMAND_PERMISSIONS = {
   "record-work": PERMISSIONS.MISSION_CREATE,
   "read-context": PERMISSIONS.MISSION_READ,
   "write-context": PERMISSIONS.MISSION_UPDATE,
+  "update-artifact": PERMISSIONS.MISSION_UPDATE,
   "attachment-list": PERMISSIONS.ARTIFACT_READ,
   "attachment-download-url": PERMISSIONS.ARTIFACT_READ,
   "auth-status": null,
@@ -150949,6 +150973,21 @@ var hostedMcpToolDefinitions = [
         missionId: stringProperty("Mission UUID or workspace display id."),
         sessionKey: stringProperty("Session key returned by overlord_attach_session."),
         summary: stringProperty("Delivery summary."),
+        artifacts: {
+          type: "array",
+          description: "Optional mission artifacts to persist with this delivery. Each artifact has type, label, optional content, and optional HTTP(S) url.",
+          items: objectSchema(
+            {
+              type: stringProperty(
+                "Artifact type, such as note, next_steps, test_results, decision, migration, or url."
+              ),
+              label: stringProperty("Human-facing artifact label."),
+              content: stringProperty("Optional text or Markdown content."),
+              url: stringProperty("Optional HTTP(S) URL.")
+            },
+            ["type", "label"]
+          )
+        },
         noFileChanges: {
           type: "boolean",
           description: "Set true when the MCP run changed no files."
@@ -150993,6 +151032,31 @@ var hostedMcpToolDefinitions = [
     ),
     annotations: writeAction,
     _meta: widget("ui://overlord/file-changes.html")
+  },
+  {
+    name: "overlord_update_artifact",
+    title: "Update mission artifact",
+    description: "Use this when an existing mission artifact must be revised in place (for example a plan written in an earlier objective) rather than delivering a duplicate. Requires the current artifact revision for optimistic concurrency. Provide at least one of label, contentText, or externalUrl.",
+    inputSchema: objectSchema(
+      {
+        missionId: stringProperty("Mission UUID or workspace display id such as coo:150."),
+        artifactId: stringProperty("Artifact id from mission context or load-context artifacts."),
+        expectedRevision: {
+          type: "number",
+          description: "Current artifact.revision. Stale values return a conflict error."
+        },
+        label: stringProperty("Optional new human-facing label."),
+        contentText: stringProperty(
+          "Optional new Markdown/text content. Pass an empty string to clear text content."
+        ),
+        externalUrl: stringProperty(
+          "Optional HTTP(S) URL. Pass an empty string to clear the external URL."
+        )
+      },
+      ["missionId", "artifactId", "expectedRevision"]
+    ),
+    outputSchema: protocolOutputSchema("The updated artifact DTO including the new revision."),
+    annotations: writeAction
   },
   {
     name: "overlord_record_work",
@@ -151235,6 +151299,7 @@ var toolHandlers = {
       "--session-key": requiredString(args, "sessionKey"),
       "--summary": requiredString(args, "summary"),
       ...args.noFileChanges === true ? { "--no-file-changes": true } : {},
+      ...Array.isArray(args.artifacts) ? { "--artifacts-file": true } : {},
       ...Array.isArray(args.changeRationales) ? { "--change-rationales-file": true } : {},
       ...Array.isArray(args.humanActions) || Array.isArray(args.tradeoffsMade) || Array.isArray(args.knownRisks) || Array.isArray(args.deferredWork) || Array.isArray(args.assumptions) ? {
         "--payload-json": JSON.stringify({
@@ -151251,8 +151316,33 @@ var toolHandlers = {
         })
       } : {}
     },
-    fileInputs: Array.isArray(args.changeRationales) ? { "--change-rationales-file": JSON.stringify(args.changeRationales) } : void 0
+    fileInputs: Array.isArray(args.artifacts) || Array.isArray(args.changeRationales) ? {
+      ...Array.isArray(args.artifacts) ? { "--artifacts-file": JSON.stringify(args.artifacts) } : {},
+      ...Array.isArray(args.changeRationales) ? { "--change-rationales-file": JSON.stringify(args.changeRationales) } : {}
+    } : void 0
   }),
+  overlord_update_artifact: (args) => {
+    if (typeof args.expectedRevision !== "number" || !Number.isInteger(args.expectedRevision)) {
+      throw new Error("expectedRevision must be an integer");
+    }
+    const hasLabel = typeof args.label === "string";
+    const hasContentText = typeof args.contentText === "string";
+    const hasExternalUrl = typeof args.externalUrl === "string";
+    if (!hasLabel && !hasContentText && !hasExternalUrl) {
+      throw new Error("Provide at least one of label, contentText, or externalUrl");
+    }
+    return runProtocolSubcommand("update-artifact", {
+      flags: {
+        "--mission-id": requiredString(args, "missionId"),
+        "--artifact-id": requiredString(args, "artifactId"),
+        "--expected-revision": String(Math.trunc(args.expectedRevision)),
+        ...hasLabel ? { "--label": args.label } : {},
+        ...hasContentText ? { "--content-text-file": true } : {},
+        ...hasExternalUrl ? { "--external-url": args.externalUrl } : {}
+      },
+      fileInputs: hasContentText ? { "--content-text-file": args.contentText } : void 0
+    });
+  },
   overlord_record_work: (args) => {
     const payload = {
       objective: requiredString(args, "objective"),

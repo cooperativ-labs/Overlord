@@ -66,19 +66,21 @@ For every asymmetry, decide and state: intentional (harness lacks the capability
 (never ported). Accidental asymmetries are findings; intentional ones belong in the adapter's
 README, and their absence there is a documentation finding.
 
-### MCP shim duplication
-Each local shim (`connectors/adapters/*/scripts/overlord-mcp.mjs`) maps snake_case tool arguments
-onto `ovld protocol` kebab-case flags. These shims are near-copies:
+### MCP shim rendering
+The local shim maps snake_case tool arguments onto `ovld protocol` kebab-case flags. Since
+2026-07-29 there is exactly one source — `connectors/core/scripts/overlord-mcp.mjs` — rendered per
+adapter at setup time by `cli/src/connector-core-render.ts`, with the adapter key substituted for
+`__OVERLORD_ADAPTER_KEY__`. Check that the duplication has not returned:
 
 ```bash
-wc -l connectors/adapters/*/scripts/overlord-mcp.mjs
-md5sum connectors/adapters/*/scripts/overlord-mcp.mjs
+ls connectors/adapters/*/scripts/overlord-mcp.mjs 2>/dev/null   # expect: no matches
+wc -l connectors/core/scripts/overlord-mcp.mjs
 ```
 
-Identical or near-identical shims argue for a shared generated module; genuinely divergent ones
-argue for documenting why. Either way the finding must respect the constraint that shims ship as
-standalone runnable files into user homes — a proposal requiring a bundler at install time is
-usually the wrong trade, so state that constraint in the finding.
+A reappearing adapter-local copy is a finding. So is adapter-specific logic added to the core file
+beyond the agent-key substitution — that belongs in the adapter. Any proposal here must respect the
+constraint that shims ship as standalone runnable files into user homes; requiring a bundler at
+install time is usually the wrong trade, so state that constraint in the finding.
 
 ### Hosted tool catalog vs. service layer
 `mcp/tool-catalog.ts` declares hosted tool definitions; `mcp/server.ts` dispatches them into the

@@ -46,6 +46,25 @@ Required content:
 - Do not continue implementation after delivery unless follow-up execution is explicitly requested.
 - Run local repair/diagnostic commands before asking the user to fix connector setup.
 
+## Canonical Local MCP Shim
+
+Source location:
+
+- `connectors/core/scripts/overlord-mcp.mjs`
+
+Codex, Cursor, and Antigravity each install a local stdio MCP bridge that delegates to `ovld protocol`. All three are rendered from this one core script at `ovld agent-setup` time: the adapter key is substituted for `__OVERLORD_ADAPTER_KEY__` in `DEFAULT_AGENT` and `serverInfo.name`. Adapter directories contain no committed copy — edit the core file.
+
+Requirements:
+
+- The rendered shim must remain a standalone runnable `.mjs`; harnesses start it directly from the install path, so no bundler or repo-local import may appear at runtime.
+- Adapter-specific behavior beyond the agent identifier belongs in the adapter, not in a fork of the shim.
+- The shim tool list must stay in parity with the hosted MCP catalog (`mcp/tool-catalog.ts`).
+- `serverInfo.version` follows `connectors/VERSION` through `scripts/sync-connector-versions.mjs`.
+
+## Adapter Capability Differences
+
+Adapters intentionally differ in which mechanisms they ship. The per-adapter matrix, the omissions that are decisions, and the gaps that are merely unported are recorded in the [connectors module README](../README.md#adapter-capability-matrix). Update that table when an adapter gains or drops a mechanism.
+
 ## Codex Connector
 
 Requirements:

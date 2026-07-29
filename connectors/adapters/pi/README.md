@@ -40,3 +40,11 @@ When PI supplies a native session ID, Overlord's review UI can reopen it with:
 ```bash
 pi --session <session-id>
 ```
+
+## Deliberate omissions
+
+- **No local MCP shim and no MCP config.** PI integrates through the single `extensions/overlord.ts` extension, which calls `ovld protocol` directly.
+- **No permission hook.** PI exposes no native permission-request event, so there is nothing to observe.
+- **No `commands/` directory or rules file.** Protocol operations are reached through the mission skill and the extension.
+
+See the [adapter capability matrix](../../README.md#adapter-capability-matrix) for how this compares across adapters.

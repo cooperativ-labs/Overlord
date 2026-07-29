@@ -86,11 +86,9 @@ async function localToolContracts(scriptPath: string): Promise<ToolContract[]> {
 
 test('local MCP bridge tools stay in sync with hosted MCP registry', async () => {
   const expected = hostedToolContracts();
-  const scripts = [
-    'connectors/adapters/codex/scripts/overlord-mcp.mjs',
-    'connectors/adapters/cursor/scripts/overlord-mcp.mjs',
-    'connectors/adapters/antigravity/scripts/overlord-mcp.mjs'
-  ];
+  // The Codex, Cursor, and Antigravity shims are rendered from this one core
+  // script; per-adapter rendering is covered by cli connector-core-render tests.
+  const scripts = ['connectors/core/scripts/overlord-mcp.mjs'];
 
   for (const relativePath of scripts) {
     assert.deepEqual(await localToolContracts(path.join(repoRoot, relativePath)), expected);

@@ -23,11 +23,13 @@ export function missionDeepLink(displayId: string): string {
 
 /** Strip control chars so titles cannot inject terminal escape sequences. */
 export function sanitizeTerminalText(value: string): string {
-  return value
-    // eslint-disable-next-line no-control-regex
-    .replace(/[\u0000-\u001f\u007f]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+  return (
+    value
+      // eslint-disable-next-line no-control-regex
+      .replace(/[\u0000-\u001f\u007f]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+  );
 }
 
 /** Window/tab title: `coo:502 — Title` or just the display id. */

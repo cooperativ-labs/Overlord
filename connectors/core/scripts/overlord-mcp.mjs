@@ -6,7 +6,7 @@ import { promisify } from 'node:util';
 const execFileAsync = promisify(execFile);
 const OVLD_BIN = process.env.OVLD_BIN?.trim() || 'ovld';
 const PROTOCOL_VERSION = '2025-06-18';
-const DEFAULT_AGENT = 'cursor';
+const DEFAULT_AGENT = '__OVERLORD_ADAPTER_KEY__';
 let buffer = Buffer.alloc(0);
 
 function send(message) {
@@ -477,7 +477,7 @@ process.stdin.on('data', async chunk => {
         result: {
           protocolVersion: PROTOCOL_VERSION,
           capabilities: { tools: { listChanged: false } },
-          serverInfo: { name: 'overlord-cursor', version: '0.3.9' }
+          serverInfo: { name: 'overlord-__OVERLORD_ADAPTER_KEY__', version: '0.3.10' }
         }
       });
       continue;

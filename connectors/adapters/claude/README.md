@@ -91,3 +91,10 @@ This connector is intentionally reviewable against the four connector layers in 
 - `prompt-wrapper.md` — Claude launch context-file guidance.
 
 The shared Connector Core source lives at `connectors/core/overlord-mission`. `ovld agent-setup claude` interpolates that core into the adapter skill template and installs core reference files so the runtime package is self-contained.
+
+### Deliberate omissions
+
+- **No local MCP shim.** The Claude plugin reaches Overlord's hosted MCP server, so the local stdio bridge that Codex, Cursor, and Antigravity install would only duplicate it.
+- **No native resume flag.** Sessions are re-entered through the plugin's own surfaces rather than a `--session` launch flag.
+
+See the [adapter capability matrix](../../README.md#adapter-capability-matrix) for how this compares across adapters.

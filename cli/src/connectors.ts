@@ -716,7 +716,7 @@ export function setupConnector({
 
     let contents: Buffer;
     try {
-      contents = resolveManagedFileContents({ sourceDir, relativePath });
+      contents = resolveManagedFileContents({ sourceDir, relativePath, adapterKey: agentKey });
     } catch (error) {
       const message = error instanceof CliError ? error.message : String(error);
       warnings.push(message);

@@ -4,7 +4,8 @@
 
 - Area: `agent-surfaces`
 - Roots reviewed: `mcp/`, `connectors/core/`, `connectors/adapters/{claude,codex,cursor,antigravity,pi}/`, `connectors/VERSION`, `scripts/sync-connector-versions.mjs`, `cli/src/connector-core-render.ts`
-- Contract version at review: `35` (see F3 — `CONTRACT.md` states both `34` and `35`)
+- Contract version at review: `35` (F3 resolved — sole authoritative version is now
+  `Current version` under `## Contract Version`; header duplicate removed)
 - AI model: claude-opus-5
 - Commit: `5603a7bd`
 - Rotation slot: 5. Chosen out of order as the first run of this routine — the smallest area, so
@@ -43,10 +44,19 @@ declaring a version at all.
 
 ## Findings
 
-### F1. Generate the local MCP shims from one source instead of maintaining three copies
+### F1. Generate the local MCP shims from one source instead of maintaining three copies — RESOLVED
 
 - **Value / Effort**: High / M
 - **Dimension**: Duplication with divergence
+- **Status**: Resolved 2026-07-29 (coo:519). `connectors/core/scripts/overlord-mcp.mjs` is now the
+  single source; the three adapter copies are deleted and rendered at `ovld agent-setup` time by
+  `cli/src/connector-core-render.ts`, substituting the adapter key for
+  `__OVERLORD_ADAPTER_KEY__` in `DEFAULT_AGENT` and `serverInfo.name`. Byte-identity against the
+  three previously committed files was verified before deletion, and
+  `cli/test/connector-core-render.test.ts` now asserts each rendered shim equals the core source
+  with only that substitution, installs through `setupConnector`, and passes `node --check`.
+  `scripts/sync-connector-versions.mjs` patches the core file only; `backend/mcp.test.ts` asserts
+  hosted-catalog parity against it. Net: −1,569 duplicated lines, +523 shared.
 - **Evidence**:
   - `connectors/adapters/codex/scripts/overlord-mcp.mjs` (479 lines)
   - `connectors/adapters/cursor/scripts/overlord-mcp.mjs` (479 lines)
@@ -122,10 +132,14 @@ declaring a version at all.
 - **Risk**: Low. A too-strict check (failing on any lag) would block routine work — the check
   should report drift and fail only on impossible values.
 
-### F3. Reconcile the two contract version numbers in `CONTRACT.md`
+### F3. Reconcile the two contract version numbers in `CONTRACT.md` — RESOLVED
 
 - **Value / Effort**: Medium / S
 - **Dimension**: Types and contracts
+- **Status**: Resolved 2026-07-29 (coo:519). The header `Contract Version:` line was removed so
+  the sole authoritative statement is `Current version` under `## Contract Version` (currently
+  `37`; no version bump for this editorial fix). Maintenance rules now require bumps only there
+  and in `contract/components.yaml`, and forbid restating the number elsewhere in `CONTRACT.md`.
 - **Evidence**: `CONTRACT.md:3` — ``Contract Version: `34` ``; `CONTRACT.md:36` — ``Current
   version: `35` ``
 - **Problem**: The document declaring the version every component must cite states two different
@@ -142,10 +156,21 @@ declaring a version at all.
   this fix.
 - **Risk**: None to code. Coordinate with anything already parsing line 3 of `CONTRACT.md`.
 
-### F4. Document the deliberate adapter asymmetries instead of leaving them to inference
+### F4. Document the deliberate adapter asymmetries instead of leaving them to inference — RESOLVED
 
 - **Value / Effort**: Medium / S
 - **Dimension**: Abstraction fit
+- **Status**: Resolved 2026-07-29 (coo:519), alongside F1 step 5. `connectors/README.md` now
+  carries an adapter capability matrix derived from the five `conformance-manifest.yaml` files,
+  splitting omissions into *intentional* (claude's hosted MCP instead of a shim; pi's
+  extension-only integration and absent permission event; antigravity's internal model selection;
+  cursor's deferred effort flag) and *unconfirmed* (codex having no `commands/`; codex and
+  antigravity registering no `PostToolUse`/`Stop` hooks). Each adapter README gained an omissions
+  section pointing at the matrix, and
+  `connectors/docs/agent-harness-configuration-architecture.md` references it. The unconfirmed
+  gaps are labeled as unported and left for their own missions, per this finding's instruction not
+  to fold feature work in. Note: the matrix below overstated antigravity as having no commands —
+  it registers `skills/*.md` as slash commands; the shipped table is corrected.
 - **Evidence**: adapter capability matrix as committed —
 
   | Adapter | commands | hooks | MCP shim | MCP config | extensions | rules |
@@ -175,11 +200,16 @@ declaring a version at all.
 
 ## Recommended sequence
 
-1. **F3** (minutes, and F2's check depends on a single authoritative version).
-2. **F2** steps 1–2 — cheap, and makes the area's conformance claims meaningful.
-3. **F1** — the substantive refactor. Land steps 1–2 (core file plus byte-identity test) as one
-   reviewable change, then steps 3–5 as a second.
-4. **F4** — do alongside F1 step 5, since both touch connector docs.
+1. ~~**F3**~~ (resolved 2026-07-29 / coo:519 — sole authoritative `Current version` under
+   `## Contract Version`; F2's check should read that line).
+2. ~~**F2**~~ (resolved 2026-07-29 / coo:519 — manifests declare v37 and
+   `scripts/check-conformance-versions.mjs` runs in `yarn check`).
+3. ~~**F1**~~ (resolved 2026-07-29 / coo:519 — one core shim rendered per adapter).
+4. ~~**F4**~~ (resolved 2026-07-29 / coo:519 — capability matrix in `connectors/README.md`).
+
+All findings from this review are closed. Follow-on work deliberately left open, each needing its
+own mission: port `commands/` to the codex adapter if the harness supports it, and establish
+whether codex and antigravity expose `PostToolUse`/`Stop` equivalents.
 
 ## Explicitly not recommended
 

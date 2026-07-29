@@ -25,18 +25,13 @@ const PLUGIN_JSON_TARGETS = [
   'connectors/adapters/antigravity/plugin.json'
 ];
 
+// The Codex, Cursor, and Antigravity shims are all rendered from this one core
+// file (see cli/src/connector-core-render.ts), so there is a single version to
+// patch. `__OVERLORD_ADAPTER_KEY__` is the adapter-key substitution point.
 const MCP_SERVER_INFO_TARGETS = [
   {
-    path: 'connectors/adapters/codex/scripts/overlord-mcp.mjs',
-    serverName: 'overlord-codex'
-  },
-  {
-    path: 'connectors/adapters/cursor/scripts/overlord-mcp.mjs',
-    serverName: 'overlord-cursor'
-  },
-  {
-    path: 'connectors/adapters/antigravity/scripts/overlord-mcp.mjs',
-    serverName: 'overlord-antigravity'
+    path: 'connectors/core/scripts/overlord-mcp.mjs',
+    serverName: 'overlord-__OVERLORD_ADAPTER_KEY__'
   }
 ];
 

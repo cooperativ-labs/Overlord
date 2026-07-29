@@ -80,10 +80,17 @@ This connector is intentionally reviewable against the four connector layers in 
 - `hooks/overlord-post-tool-use.sh` — records `postToolUse` file edits and shell-mediated changes for exact per-session delivery attribution.
 - `hooks/overlord-stop.sh` — checks pending delivery through `ovld protocol hook-event`; when needed, it asks Cursor to continue once so the agent can finish delivery.
 - `rules/overlord-local.mdc` — always-on workflow rules for Cursor sessions.
-- `mcp.json` + `scripts/overlord-mcp.mjs` — MCP bridge to common `ovld protocol` operations.
+- `mcp.json` + `scripts/overlord-mcp.mjs` — MCP bridge to common `ovld protocol` operations. The shim is **generated**: it is rendered from `connectors/core/scripts/overlord-mcp.mjs` at setup time with the adapter key substituted, and there is no copy in this directory to edit.
 - `conformance-manifest.yaml` — connector conformance declaration for the Overlord contract.
 - `prompt-wrapper.md` — Cursor launch guidance.
 
 The shared Connector Core source lives at `connectors/core/overlord-mission`. `ovld agent-setup cursor` interpolates that core into the adapter skill template and installs core reference files so the runtime package is self-contained.
+
+### Deliberate omissions
+
+- **No effort/thinking flag.** Launch passes a model flag only; the Cursor requirements record no thinking/effort flag as needed initially. Deferred, not declined.
+- **No native resume flag.** Cursor sessions are re-entered through the harness rather than an Overlord-passed session flag.
+
+See the [adapter capability matrix](../../README.md#adapter-capability-matrix) for how this compares across adapters.
 
 Cursor's generic `preToolUse` hook is intentionally not used for permission capture. Cursor currently documents that `ask` is not enforced for `preToolUse`; the narrower shell and MCP hooks expose the native permission-decision schema without changing the user's policy. Cursor also documents hook execution as fail-open by default, so Overlord telemetry failures do not strand the agent.
