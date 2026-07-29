@@ -1069,9 +1069,14 @@ export interface TerminalProfileDto {
 }
 
 export interface LaunchSettingsDto {
-  /** The local execution target launches queue against (provisioned on demand). */
-  executionTargetId: string;
-  deviceLabel: string;
+  /**
+   * The local execution target launches queue against, or `null` when the calling
+   * machine has no declared execution target. Reading launch settings never
+   * declares one — use `ovld add-et` or link a checkout from that machine.
+   */
+  executionTargetId: string | null;
+  /** Display label of that machine, or `null` when no target is declared. */
+  deviceLabel: string | null;
   /** Per-user launch configs keyed by agent key. */
   agentConfigs: Record<string, AgentLaunchConfigDto>;
   /** Per-user terminal profile for this machine's execution target. */
@@ -1126,6 +1131,20 @@ export interface WorkspaceExecutionTargetDto {
   activeMemberAccessCount: number;
   /** Whether the caller can select this target for project launch settings. */
   hasCurrentUserAccess: boolean;
+  unavailableReason: string | null;
+  runnerRegistrations: ExecutionTargetRunnerRegistrationDto[];
+}
+
+export interface ExecutionTargetRunnerRegistrationDto {
+  id: string;
+  runnerInstanceId: string;
+  relation: 'native' | 'adopted';
+  label: string | null;
+  runnerVersion: string | null;
+  supportedAgents: string[];
+  health: string;
+  lastHeartbeatAt: string | null;
+  lastErrorCode: string | null;
 }
 
 export type ExecutionRequestStatus =
@@ -1576,6 +1595,8 @@ export interface LaunchObjectiveBody {
   agent: string;
   model?: string | null;
   reasoningEffort?: string | null;
+  /** Explicit eligible target for this queued request; omit to use project selection. */
+  executionTargetId?: string | null;
   /**
    * Explicit per-objective override stored in `objectives.launch_config_json`
    * keyed by execution target + agent. Omit to inherit per the resolution order.

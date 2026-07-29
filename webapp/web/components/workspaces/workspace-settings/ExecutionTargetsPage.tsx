@@ -19,9 +19,12 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { type ButtonLoadingState, LoadingButton } from '@/components/ui/loading-button';
+import { getDesktopChrome } from '@/lib/desktop-chrome';
 import {
   useDeleteWorkspaceExecutionTarget,
+  useRegisterWorkspaceExecutionTarget,
   useRenameWorkspaceExecutionTarget,
+  useUpdateWorkspaceExecutionTargetStatus,
   useWorkspaceExecutionTargets,
   useWorkspaceMembers
 } from '@/lib/queries';
@@ -41,6 +44,7 @@ function ExecutionTargetNameEditor({
   target: WorkspaceExecutionTargetDto;
 }) {
   const rename = useRenameWorkspaceExecutionTarget(workspaceId);
+  const updateStatus = useUpdateWorkspaceExecutionTargetStatus(workspaceId);
   const [label, setLabel] = useState(target.label);
   const [error, setError] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<ButtonLoadingState>('default');
@@ -95,6 +99,103 @@ function ExecutionTargetNameEditor({
         />
       </div>
       {error ? <p className="text-xs text-destructive">{error}</p> : null}
+      <div className="flex items-center gap-2 pt-1">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={updateStatus.isPending}
+          onClick={() => {
+            setError(null);
+            updateStatus.mutate(
+              {
+                executionTargetId: target.id,
+                status: target.status === 'active' ? 'disabled' : 'active'
+              },
+              {
+                onError: err =>
+                  setError(err instanceof Error ? err.message : 'Failed to update target status.')
+              }
+            );
+          }}
+        >
+          {target.status === 'active' ? 'Disable target' : 'Enable target'}
+        </Button>
+        <span className="text-xs text-muted-foreground">
+          Disabled targets cannot receive new work.
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Actionable no-target state (contract v39). Execution targets are declared, never
+ * inferred, so an empty list is a setup step rather than a wait: the desktop shell
+ * can declare the machine it runs on in one click, and an ordinary browser — which
+ * has no machine identity at all — is given the commands to run on the machine that
+ * should run agents.
+ */
+function RegisterThisMachine({ workspaceId }: { workspaceId: string }) {
+  const register = useRegisterWorkspaceExecutionTarget(workspaceId);
+  const [error, setError] = useState<string | null>(null);
+  const [registerState, setRegisterState] = useState<ButtonLoadingState>('default');
+  const { isDesktop } = getDesktopChrome();
+
+  async function handleRegister() {
+    setRegisterState('loading');
+    setError(null);
+    try {
+      await register.mutateAsync({});
+      setRegisterState('success');
+    } catch (err) {
+      setRegisterState('error');
+      setError(err instanceof Error ? err.message : 'Failed to register this machine.');
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-muted-foreground">
+        No execution targets yet. Overlord only launches agents on machines you have declared, so
+        nothing appears here until someone declares one.
+      </p>
+      <div className="space-y-2 rounded-lg border p-4">
+        <p className="text-sm font-medium">On the machine where agents should run</p>
+        <p className="text-sm text-muted-foreground">
+          Link a project directory there, which declares that machine and tells Overlord where the
+          code lives:
+        </p>
+        <code className="block break-all rounded bg-muted px-2 py-1 font-mono text-xs">
+          ovld add-cwd --project-id &lt;project&gt;
+        </code>
+        <p className="text-sm text-muted-foreground">
+          Or declare it up front, before any checkout exists:
+        </p>
+        <code className="block break-all rounded bg-muted px-2 py-1 font-mono text-xs">
+          ovld add-et --name &quot;&lt;name&gt;&quot;
+        </code>
+      </div>
+      {isDesktop ? (
+        <div className="space-y-2 rounded-lg border p-4">
+          <p className="text-sm font-medium">Or use this machine</p>
+          <p className="text-sm text-muted-foreground">
+            The desktop app runs on a real machine, so it can declare this one directly.
+          </p>
+          <LoadingButton
+            buttonState={registerState}
+            setButtonState={setRegisterState}
+            text="Register this machine"
+            loadingText="Registering…"
+            successText="Registered"
+            errorText="Retry"
+            reset
+            variant="outline"
+            onClick={handleRegister}
+          />
+          {error ? <p className="text-sm text-destructive">{error}</p> : null}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -190,12 +291,9 @@ export function ExecutionTargetsPage({ workspaceId }: { workspaceId: string }) {
 
   if (!targets.data?.length) {
     return (
-      <div className="space-y-2">
+      <div className="space-y-3">
         <h2 className="text-base font-medium">Execution targets</h2>
-        <p className="text-sm text-muted-foreground">
-          No execution targets have connected to this workspace yet. A target appears when a
-          workspace member configures a local runner or a virtual gateway registers here.
-        </p>
+        <RegisterThisMachine workspaceId={workspaceId} />
       </div>
     );
   }
@@ -318,6 +416,31 @@ export function ExecutionTargetsPage({ workspaceId }: { workspaceId: string }) {
                       <dt className="text-xs text-muted-foreground">Target ID</dt>
                       <dd className="break-all font-mono text-xs">{target.id}</dd>
                     </div>
+                    <div className="space-y-1 sm:col-span-2">
+                      <dt className="text-xs text-muted-foreground">Availability</dt>
+                      <dd>{target.unavailableReason ?? 'Available for eligible launches.'}</dd>
+                    </div>
+                    {target.runnerRegistrations.length ? (
+                      <div className="space-y-2 sm:col-span-2">
+                        <dt className="text-xs text-muted-foreground">Runner instances</dt>
+                        {target.runnerRegistrations.map(runner => (
+                          <dd key={runner.id} className="rounded border p-2 text-xs">
+                            <span className="font-medium">
+                              {runner.label ?? runner.runnerInstanceId}
+                            </span>
+                            {' · '}
+                            {runner.relation}
+                            {runner.runnerVersion ? ` · ${runner.runnerVersion}` : ''}
+                            {' · '}
+                            {runner.health}
+                            {runner.supportedAgents.length
+                              ? ` · ${runner.supportedAgents.join(', ')}`
+                              : ''}
+                            {runner.lastErrorCode ? ` · ${runner.lastErrorCode}` : ''}
+                          </dd>
+                        ))}
+                      </div>
+                    ) : null}
                   </dl>
                 </AccordionContent>
               </AccordionItem>

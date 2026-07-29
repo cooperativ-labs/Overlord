@@ -9665,9 +9665,9 @@ var init_schemas = __esm({
       $ZodStringFormat.init(inst, def);
       inst._zod.check = (payload) => {
         try {
-          const trimmed = payload.value.trim();
+          const trimmed2 = payload.value.trim();
           if (!def.normalize && def.protocol?.source === httpProtocol.source) {
-            if (!/^https?:\/\//i.test(trimmed)) {
+            if (!/^https?:\/\//i.test(trimmed2)) {
               payload.issues.push({
                 code: "invalid_format",
                 format: "url",
@@ -9679,7 +9679,7 @@ var init_schemas = __esm({
               return;
             }
           }
-          const url2 = new URL(trimmed);
+          const url2 = new URL(trimmed2);
           if (def.hostname) {
             def.hostname.lastIndex = 0;
             if (!def.hostname.test(url2.hostname)) {
@@ -9711,7 +9711,7 @@ var init_schemas = __esm({
           if (def.normalize) {
             payload.value = url2.href;
           } else {
-            payload.value = trimmed;
+            payload.value = trimmed2;
           }
           return;
         } catch (_) {
@@ -69908,8 +69908,8 @@ function integrateBranch(input) {
 }
 function commitBranch(input) {
   const { branchName, worktreePath } = input;
-  const trimmed = (input.message ?? "").trim();
-  if (!trimmed) {
+  const trimmed2 = (input.message ?? "").trim();
+  if (!trimmed2) {
     return {
       ok: false,
       code: "BRANCH_COMMIT_MESSAGE_REQUIRED",
@@ -69948,7 +69948,7 @@ function commitBranch(input) {
       detail: staged.stderr || staged.stdout
     };
   }
-  const commit = runGitResult(worktreePath, ["commit", "-m", trimmed]);
+  const commit = runGitResult(worktreePath, ["commit", "-m", trimmed2]);
   if (!commit.ok) {
     return {
       ok: false,
@@ -70884,6 +70884,9 @@ var init_terminal_profile_types = __esm({
 function isBrowserDevicePlatform(platform4) {
   return platform4?.trim() === BROWSER_DEVICE_PLATFORM;
 }
+function isBrowserClientDevice(client) {
+  return isBrowserDevicePlatform(client?.devicePlatform ?? null);
+}
 function requireActor(ctx) {
   if (!ctx.actorWorkspaceUserId) {
     throw new ServiceError(
@@ -70994,10 +70997,77 @@ async function findActingDeviceExecutionTargetId({
   const client = resolveClientDevice(ctx);
   if (!client) return null;
   if (isBackendHostFingerprint(client.deviceFingerprint)) return null;
+  if (isBrowserClientDevice(client)) return null;
   return findDeviceExecutionTargetIdForFingerprint({
     ctx,
     fingerprint: client.deviceFingerprint
   });
+}
+async function findDeviceTargetForFingerprint({
+  ctx,
+  fingerprint
+}) {
+  const row = await ctx.db.get(
+    `SELECT d.id AS device_id, d.label AS device_label, d.fingerprint AS fingerprint,
+            et.id AS execution_target_id
+       FROM devices d
+       JOIN execution_targets et
+         ON et.device_id = d.id
+        AND et.workspace_id = d.workspace_id
+        AND et.type = 'local'
+        AND et.deleted_at IS NULL
+      WHERE d.workspace_id = ?
+        AND d.fingerprint = ?
+        AND d.deleted_at IS NULL`,
+    [ctx.workspace.id, fingerprint]
+  );
+  if (!row) return null;
+  let userTargetId = null;
+  let preferenceId = null;
+  let terminalProfile = { ...DEFAULT_TERMINAL_PROFILE };
+  if (ctx.actorWorkspaceUserId) {
+    const userTarget = await ctx.db.get(
+      `SELECT id FROM workspace_user_execution_targets
+          WHERE workspace_id = ? AND workspace_user_id = ? AND execution_target_id = ?
+            AND deleted_at IS NULL`,
+      [ctx.workspace.id, ctx.actorWorkspaceUserId, row.execution_target_id]
+    );
+    userTargetId = userTarget?.id ?? null;
+    const profileId = await actorProfileId(ctx);
+    if (profileId) {
+      const preference = await ctx.db.get(
+        `SELECT id, terminal_profile_json FROM user_execution_target_preferences
+            WHERE profile_id = ? AND target_type = 'local' AND target_fingerprint = ?
+              AND deleted_at IS NULL`,
+        [profileId, row.fingerprint]
+      );
+      if (preference) {
+        preferenceId = preference.id;
+        terminalProfile = parseTerminalProfileJson(preference.terminal_profile_json);
+      }
+    }
+  }
+  return {
+    deviceId: row.device_id,
+    deviceLabel: row.device_label,
+    executionTargetId: row.execution_target_id,
+    targetFingerprint: row.fingerprint,
+    userTargetId,
+    preferenceId,
+    terminalProfile
+  };
+}
+async function findActingDeviceTarget({
+  ctx
+}) {
+  if (isCoLocatedBackend(ctx.db)) {
+    return findDeviceTargetForFingerprint({ ctx, fingerprint: callerDeviceFingerprint() });
+  }
+  const client = resolveClientDevice(ctx);
+  if (!client) return null;
+  if (isBackendHostFingerprint(client.deviceFingerprint)) return null;
+  if (isBrowserClientDevice(client)) return null;
+  return findDeviceTargetForFingerprint({ ctx, fingerprint: client.deviceFingerprint });
 }
 async function ensureDeviceTargetForFingerprint({
   ctx,
@@ -71199,6 +71269,28 @@ async function ensureClientDeviceTarget({
     platformName: devicePlatform?.trim() || (0, import_node_os5.platform)()
   });
 }
+function noExecutionTargetRegistered(what) {
+  return new ServiceError(
+    `${what} No execution target is registered for this machine. ${DECLARE_TARGET_REMEDY}`,
+    NO_EXECUTION_TARGET_REGISTERED,
+    409
+  );
+}
+function hasMachineLocalIdentity(ctx) {
+  if (isCoLocatedBackend(ctx.db)) return true;
+  const client = resolveClientDevice(ctx);
+  if (!client) return false;
+  if (isBackendHostFingerprint(client.deviceFingerprint)) return false;
+  return !isBrowserClientDevice(client);
+}
+async function requireActingDeviceTarget({
+  ctx,
+  what
+}) {
+  const target = await findActingDeviceTarget({ ctx });
+  if (!target) throw noExecutionTargetRegistered(what);
+  return target;
+}
 async function resolveClaimingDeviceTarget({
   ctx,
   clientDevice
@@ -71207,11 +71299,18 @@ async function resolveClaimingDeviceTarget({
     ...ctx,
     clientDevice: clientDevice ?? ctx.clientDevice ?? null
   };
-  return ensureActingDeviceTarget({ ctx: mergedCtx });
+  return requireActingDeviceTarget({
+    ctx: mergedCtx,
+    what: "This runner cannot claim work."
+  });
 }
-async function ensureActingDeviceTarget({
-  ctx
+async function declareActingDeviceTarget({
+  ctx,
+  declaration
 }) {
+  if (!hasMachineLocalIdentity(ctx)) {
+    throw noExecutionTargetRegistered(DECLARATION_REFUSALS[declaration]);
+  }
   if (isCoLocatedBackend(ctx.db)) {
     return ensureDeviceTargetForFingerprint({
       ctx,
@@ -71246,7 +71345,10 @@ async function updateTerminalProfile({
   ctx,
   profile
 }) {
-  const target = await ensureActingDeviceTarget({ ctx });
+  const target = await requireActingDeviceTarget({
+    ctx,
+    what: "Terminal settings are stored per execution target."
+  });
   requireActor(ctx);
   if (!target.preferenceId) {
     throw new ServiceError(
@@ -71272,7 +71374,7 @@ async function updateTerminalProfile({
   });
   return { ...target, terminalProfile: profile };
 }
-var import_node_os5, BROWSER_DEVICE_PLATFORM;
+var import_node_os5, BROWSER_DEVICE_PLATFORM, NO_EXECUTION_TARGET_REGISTERED, DECLARE_TARGET_REMEDY, DECLARATION_REFUSALS;
 var init_execution_targets = __esm({
   "../packages/core/service/execution-targets.ts"() {
     "use strict";
@@ -71284,6 +71386,12 @@ var init_execution_targets = __esm({
     init_terminal_profile_types();
     init_util3();
     BROWSER_DEVICE_PLATFORM = "browser";
+    NO_EXECUTION_TARGET_REGISTERED = "no_execution_target_registered";
+    DECLARE_TARGET_REMEDY = 'Run `ovld add-et --name "<name>"` on that machine, or link a project directory from it with `ovld add-cwd`.';
+    DECLARATION_REFUSALS = {
+      register_target: "This machine cannot be registered as an execution target.",
+      local_checkout_link: "Overlord cannot tell which machine holds this directory, so it will not link it."
+    };
   }
 });
 
@@ -71313,7 +71421,7 @@ async function preferredExecutionTargetIdForDiscovery({
   ctx
 }) {
   try {
-    return (await ensureActingDeviceTarget({ ctx })).executionTargetId;
+    return await findActingDeviceExecutionTargetId({ ctx });
   } catch {
     return null;
   }
@@ -72160,22 +72268,22 @@ var init_webhook_events = __esm({
 
 // ../packages/contract/dist/agent-launch-flags.js
 function parseAgentLaunchFlagText(text) {
-  const trimmed = text.trim();
-  if (!trimmed)
+  const trimmed2 = text.trim();
+  if (!trimmed2)
     return null;
-  const eqIndex = trimmed.indexOf("=");
-  if (eqIndex > 0 && trimmed.startsWith("--")) {
-    const name = trimmed.slice(0, eqIndex).trim();
-    const value = trimmed.slice(eqIndex + 1).trim();
+  const eqIndex = trimmed2.indexOf("=");
+  if (eqIndex > 0 && trimmed2.startsWith("--")) {
+    const name = trimmed2.slice(0, eqIndex).trim();
+    const value = trimmed2.slice(eqIndex + 1).trim();
     return name ? { name, value: value.length > 0 ? value : null } : null;
   }
-  const spaceIndex = trimmed.indexOf(" ");
-  if (spaceIndex > 0 && trimmed.startsWith("--")) {
-    const name = trimmed.slice(0, spaceIndex).trim();
-    const value = trimmed.slice(spaceIndex + 1).trim();
+  const spaceIndex = trimmed2.indexOf(" ");
+  if (spaceIndex > 0 && trimmed2.startsWith("--")) {
+    const name = trimmed2.slice(0, spaceIndex).trim();
+    const value = trimmed2.slice(spaceIndex + 1).trim();
     return name ? { name, value: value.length > 0 ? value : null } : null;
   }
-  return { name: trimmed };
+  return { name: trimmed2 };
 }
 function normalizeAgentLaunchFlags(input) {
   if (!Array.isArray(input))
@@ -72327,6 +72435,301 @@ var init_dist6 = __esm({
   }
 });
 
+// ../packages/core/service/execution-target-runners.ts
+function isRunnerRelation(value) {
+  return value === "native" || value === "adopted";
+}
+function trimmed(value) {
+  const text = value?.trim();
+  return text && text.length > 0 ? text : null;
+}
+function notRegistered(message2) {
+  return new ServiceError(message2, NO_EXECUTION_TARGET_REGISTERED, 409);
+}
+async function resolveExplicitTarget({
+  ctx,
+  executionTargetId
+}) {
+  const row = await ctx.db.get(
+    `SELECT et.id, et.device_id, et.type, et.status, et.label, d.fingerprint
+       FROM execution_targets et
+       LEFT JOIN devices d
+         ON d.id = et.device_id
+        AND d.workspace_id = et.workspace_id
+        AND d.deleted_at IS NULL
+      WHERE et.id = ? AND et.workspace_id = ? AND et.deleted_at IS NULL`,
+    [executionTargetId, ctx.workspace.id]
+  );
+  if (!row) {
+    throw notRegistered(
+      `Execution target ${executionTargetId} does not exist in this workspace. A runner never creates one \u2014 register the machine with \`ovld add-et\` and pass its id.`
+    );
+  }
+  if (row.type !== "local") {
+    throw notRegistered(
+      `Execution target ${executionTargetId} is a ${row.type} target. Only local targets are served by a device runner.`
+    );
+  }
+  if (row.status !== "active") {
+    throw notRegistered(
+      `Execution target "${row.label}" is ${row.status}. Enable it before a runner can serve it.`
+    );
+  }
+  if (!ctx.actorWorkspaceUserId) {
+    throw notRegistered("This runner has no workspace membership to claim work with.");
+  }
+  const access = await ctx.db.get(
+    `SELECT id FROM workspace_user_execution_targets
+        WHERE workspace_id = ? AND workspace_user_id = ? AND execution_target_id = ?
+          AND access_status = 'active' AND deleted_at IS NULL`,
+    [ctx.workspace.id, ctx.actorWorkspaceUserId, row.id]
+  );
+  if (!access) {
+    throw notRegistered(
+      `You do not have access to execution target "${row.label}", so this runner cannot serve it.`
+    );
+  }
+  return row;
+}
+async function assertTargetEnabled({
+  ctx,
+  executionTargetId
+}) {
+  const row = await ctx.db.get(
+    `SELECT status, label FROM execution_targets
+        WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+    [executionTargetId, ctx.workspace.id]
+  );
+  if (row && row.status !== "active") {
+    throw notRegistered(
+      `Execution target "${row.label}" is ${row.status}. Enable it before a runner can serve it.`
+    );
+  }
+}
+async function resolveRunnerTarget({
+  ctx,
+  input,
+  actingTarget
+}) {
+  const explicitId = trimmed(input.executionTargetId);
+  if (!explicitId) {
+    const target = actingTarget ?? await resolveClaimingDeviceTarget({ ctx });
+    await assertTargetEnabled({ ctx, executionTargetId: target.executionTargetId });
+    return {
+      executionTargetId: target.executionTargetId,
+      deviceId: target.deviceId,
+      relation: input.relation ?? "native"
+    };
+  }
+  const row = await resolveExplicitTarget({ ctx, executionTargetId: explicitId });
+  const acting = actingTarget === void 0 ? await findActingDeviceTarget({ ctx }) : actingTarget;
+  const isOwnMachine = acting !== null && acting?.executionTargetId === row.id;
+  return {
+    executionTargetId: row.id,
+    deviceId: row.device_id,
+    relation: input.relation ?? (isOwnMachine ? "native" : "adopted")
+  };
+}
+async function recordRunnerHeartbeat({
+  ctx,
+  executionTargetId,
+  runnerInstanceId,
+  relation,
+  label,
+  runnerVersion,
+  capabilities,
+  supportedAgents,
+  health = "healthy",
+  lastErrorCode = null
+}) {
+  const now2 = nowIso();
+  const capabilitiesJson = JSON.stringify(capabilities ?? {});
+  const supportedAgentsJson = JSON.stringify(supportedAgents ?? []);
+  const existing = await ctx.db.get(
+    `SELECT id, revision FROM execution_target_runner_registrations
+        WHERE workspace_id = ? AND runner_instance_id = ? AND deleted_at IS NULL`,
+    [ctx.workspace.id, runnerInstanceId]
+  );
+  if (existing) {
+    await ctx.db.run(
+      `UPDATE execution_target_runner_registrations
+          SET execution_target_id = ?, relation = ?, label = ?, runner_version = ?,
+              capabilities_json = ?, supported_agents_json = ?, health = ?,
+              last_heartbeat_at = ?, last_error_code = ?, updated_at = ?,
+              revision = revision + 1
+        WHERE id = ?`,
+      [
+        executionTargetId,
+        relation,
+        trimmed(label),
+        trimmed(runnerVersion),
+        capabilitiesJson,
+        supportedAgentsJson,
+        health,
+        now2,
+        lastErrorCode,
+        now2,
+        existing.id
+      ]
+    );
+    await recordChange({
+      ctx,
+      entityType: "execution_target_runner_registration",
+      entityId: existing.id,
+      operation: "update",
+      entityRevision: existing.revision + 1,
+      changedFields: ["health", "last_heartbeat_at", "relation", "execution_target_id"]
+    });
+    return {
+      id: existing.id,
+      executionTargetId,
+      runnerInstanceId,
+      relation,
+      label: trimmed(label),
+      runnerVersion: trimmed(runnerVersion),
+      supportedAgents: supportedAgents ?? [],
+      health,
+      lastHeartbeatAt: now2,
+      lastErrorCode
+    };
+  }
+  const id = newId();
+  await ctx.db.run(
+    `INSERT INTO execution_target_runner_registrations
+        (id, workspace_id, execution_target_id, runner_instance_id, relation, label,
+         runner_version, capabilities_json, supported_agents_json, health,
+         last_heartbeat_at, last_error_code, created_at, updated_at, revision)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+    [
+      id,
+      ctx.workspace.id,
+      executionTargetId,
+      runnerInstanceId,
+      relation,
+      trimmed(label),
+      trimmed(runnerVersion),
+      capabilitiesJson,
+      supportedAgentsJson,
+      health,
+      now2,
+      lastErrorCode,
+      now2,
+      now2
+    ]
+  );
+  await recordChange({
+    ctx,
+    entityType: "execution_target_runner_registration",
+    entityId: id,
+    operation: "insert",
+    entityRevision: 1
+  });
+  return {
+    id,
+    executionTargetId,
+    runnerInstanceId,
+    relation,
+    label: trimmed(label),
+    runnerVersion: trimmed(runnerVersion),
+    supportedAgents: supportedAgents ?? [],
+    health,
+    lastHeartbeatAt: now2,
+    lastErrorCode
+  };
+}
+async function listRunnerRegistrations({
+  ctx,
+  executionTargetIds
+}) {
+  const result = /* @__PURE__ */ new Map();
+  const ids = [...new Set(executionTargetIds.filter(Boolean))];
+  if (!ids.length) return result;
+  const rows = await ctx.db.all(
+    `SELECT id, execution_target_id, runner_instance_id, relation, label, runner_version,
+            supported_agents_json, health, last_heartbeat_at, last_error_code
+       FROM execution_target_runner_registrations
+      WHERE workspace_id = ? AND deleted_at IS NULL AND execution_target_id IN (${ids.map(() => "?").join(", ")})
+      ORDER BY last_heartbeat_at DESC, created_at ASC`,
+    [ctx.workspace.id, ...ids]
+  );
+  for (const row of rows) {
+    let supportedAgents = [];
+    try {
+      const parsed = JSON.parse(row.supported_agents_json);
+      supportedAgents = Array.isArray(parsed) ? parsed.filter((value) => typeof value === "string") : [];
+    } catch {
+    }
+    const registrations = result.get(row.execution_target_id) ?? [];
+    registrations.push({
+      id: row.id,
+      executionTargetId: row.execution_target_id,
+      runnerInstanceId: row.runner_instance_id,
+      relation: row.relation,
+      label: row.label,
+      runnerVersion: row.runner_version,
+      supportedAgents,
+      health: row.health,
+      lastHeartbeatAt: row.last_heartbeat_at,
+      lastErrorCode: row.last_error_code
+    });
+    result.set(row.execution_target_id, registrations);
+  }
+  return result;
+}
+function emptyLiveness() {
+  return {
+    hasRegistration: false,
+    live: false,
+    lastHeartbeatAt: null,
+    nativeCount: 0,
+    adoptedCount: 0
+  };
+}
+async function readRunnerLiveness({
+  ctx,
+  executionTargetIds,
+  now: now2 = Date.now()
+}) {
+  const liveness = /* @__PURE__ */ new Map();
+  const unique = [...new Set(executionTargetIds.filter((id) => id))];
+  if (unique.length === 0) return liveness;
+  const placeholders = unique.map(() => "?").join(", ");
+  const rows = await ctx.db.all(
+    `SELECT execution_target_id, relation, health, last_heartbeat_at
+       FROM execution_target_runner_registrations
+      WHERE workspace_id = ? AND deleted_at IS NULL
+        AND execution_target_id IN (${placeholders})`,
+    [ctx.workspace.id, ...unique]
+  );
+  for (const row of rows) {
+    const entry = liveness.get(row.execution_target_id) ?? emptyLiveness();
+    entry.hasRegistration = true;
+    if (row.relation === "adopted") entry.adoptedCount += 1;
+    else entry.nativeCount += 1;
+    const heartbeat = row.last_heartbeat_at;
+    if (heartbeat && (!entry.lastHeartbeatAt || heartbeat > entry.lastHeartbeatAt)) {
+      entry.lastHeartbeatAt = heartbeat;
+    }
+    const healthy = LIVE_RUNNER_HEALTH.includes(row.health);
+    const recent = heartbeat !== null && now2 - new Date(heartbeat).getTime() < RUNNER_HEARTBEAT_STALE_MS;
+    if (healthy && recent) entry.live = true;
+    liveness.set(row.execution_target_id, entry);
+  }
+  return liveness;
+}
+var RUNNER_HEARTBEAT_STALE_MS, LIVE_RUNNER_HEALTH;
+var init_execution_target_runners = __esm({
+  "../packages/core/service/execution-target-runners.ts"() {
+    "use strict";
+    init_change_feed();
+    init_errors4();
+    init_execution_targets();
+    init_util3();
+    RUNNER_HEARTBEAT_STALE_MS = 5 * 60 * 1e3;
+    LIVE_RUNNER_HEALTH = ["healthy", "degraded"];
+  }
+});
+
 // ../packages/core/service/project-execution-target.ts
 function requireActor2(ctx) {
   if (!ctx.actorWorkspaceUserId) {
@@ -72370,8 +72773,8 @@ function readPreferenceRow(ctx, projectId) {
 function readStoredExecutionTargetId(preferences) {
   const stored = preferences[PROJECT_EXECUTION_TARGET_PREFERENCE_KEY];
   if (typeof stored !== "string") return null;
-  const trimmed = stored.trim();
-  return trimmed.length > 0 ? trimmed : null;
+  const trimmed2 = stored.trim();
+  return trimmed2.length > 0 ? trimmed2 : null;
 }
 function isTargetReachable({
   lastSeenAt,
@@ -72380,6 +72783,14 @@ function isTargetReachable({
   if (isCallerDevice) return true;
   if (!lastSeenAt) return false;
   return Date.now() - new Date(lastSeenAt).getTime() < TARGET_REACHABLE_STALE_MS;
+}
+function isLocalTargetReachable({
+  liveness,
+  lastSeenAt,
+  isCallerDevice
+}) {
+  if (liveness?.hasRegistration) return liveness.live;
+  return isTargetReachable({ lastSeenAt, isCallerDevice });
 }
 async function listWorkspaceExecutionTargets({
   ctx
@@ -72426,10 +72837,24 @@ async function listWorkspaceExecutionTargets({
       ORDER BY et.label ASC, et.created_at ASC`,
     [ctx.actorWorkspaceUserId, ctx.workspace.id]
   );
+  const runnerLiveness = await readRunnerLiveness({
+    ctx,
+    executionTargetIds: rows.filter((row) => row.type !== "virtual").map((row) => row.id)
+  });
+  const runnerRegistrations = await listRunnerRegistrations({
+    ctx,
+    executionTargetIds: rows.filter((row) => row.type !== "virtual").map((row) => row.id)
+  });
   return rows.map((row) => {
     const isCallerTarget = row.id === callerExecutionTargetId;
-    const lastSeenAt = row.type === "virtual" ? row.virtual_last_heartbeat_at : row.device_last_seen_at;
-    const reachable = row.type === "virtual" ? (row.virtual_health === "healthy" || row.virtual_health === "degraded") && isTargetReachable({ lastSeenAt, isCallerDevice: false }) : isTargetReachable({ lastSeenAt, isCallerDevice: isCallerTarget });
+    const liveness = runnerLiveness.get(row.id);
+    const lastSeenAt = row.type === "virtual" ? row.virtual_last_heartbeat_at : liveness?.lastHeartbeatAt ?? row.device_last_seen_at;
+    const reachable = row.type === "virtual" ? (row.virtual_health === "healthy" || row.virtual_health === "degraded") && isTargetReachable({ lastSeenAt, isCallerDevice: false }) : isLocalTargetReachable({
+      liveness,
+      lastSeenAt: row.device_last_seen_at,
+      isCallerDevice: isCallerTarget
+    });
+    const unavailableReason = row.status !== "active" ? "Disabled by a workspace administrator." : !reachable ? row.type === "local" && !liveness?.hasRegistration ? "Awaiting this target's first runner heartbeat." : "No healthy runner is currently available." : null;
     return {
       id: row.id,
       type: row.type,
@@ -72439,7 +72864,9 @@ async function listWorkspaceExecutionTargets({
       reachable,
       lastSeenAt,
       activeMemberAccessCount: Number(row.active_member_access_count),
-      hasCurrentUserAccess: Boolean(row.has_current_user_access)
+      hasCurrentUserAccess: Boolean(row.has_current_user_access),
+      unavailableReason,
+      runnerRegistrations: runnerRegistrations.get(row.id) ?? []
     };
   });
 }
@@ -72481,6 +72908,10 @@ async function listEligibleProjectExecutionTargets({
         ORDER BY et.label ASC, et.created_at ASC`,
     [ctx.workspace.id, ctx.actorWorkspaceUserId]
   );
+  const runnerLiveness = await readRunnerLiveness({
+    ctx,
+    executionTargetIds: rows.filter((row) => row.type !== "virtual").map((row) => row.execution_target_id)
+  });
   const eligible = [];
   for (const row of rows) {
     if (isBrowserDevicePlatform(row.device_platform)) {
@@ -72502,7 +72933,8 @@ async function listEligibleProjectExecutionTargets({
       type: row.type,
       label: row.target_label,
       deviceLabel: row.device_label,
-      reachable: isTargetReachable({
+      reachable: row.type === "virtual" ? isTargetReachable({ lastSeenAt: row.last_seen_at, isCallerDevice }) : isLocalTargetReachable({
+        liveness: runnerLiveness.get(row.execution_target_id),
         lastSeenAt: row.last_seen_at,
         isCallerDevice
       }),
@@ -72725,9 +73157,21 @@ async function readAgentConfigsForExecutionTarget({
 }
 async function resolveLaunchExecutionTarget({
   ctx,
-  projectId
+  projectId,
+  executionTargetId: explicitExecutionTargetId = null
 }) {
-  const executionTargetId = await resolveProjectExecutionTargetForLaunch({ ctx, projectId });
+  const executionTargetId = explicitExecutionTargetId?.trim() || await resolveProjectExecutionTargetForLaunch({ ctx, projectId });
+  if (explicitExecutionTargetId?.trim()) {
+    const eligible = await listEligibleProjectExecutionTargets({ ctx, projectId });
+    const target = eligible.find((entry) => entry.executionTargetId === executionTargetId);
+    if (!target || !target.reachable || !target.primaryResourceConnected) {
+      throw new ServiceError(
+        "Execution target is not active, reachable, or connected to this project.",
+        "execution_target_not_eligible",
+        400
+      );
+    }
+  }
   const agentConfigs = executionTargetId === null ? {} : await readAgentConfigsForExecutionTarget({ ctx, executionTargetId });
   return { executionTargetId, agentConfigs };
 }
@@ -72857,11 +73301,39 @@ async function renameWorkspaceExecutionTarget({
   }
   return updated;
 }
+async function updateWorkspaceExecutionTargetStatus({
+  ctx,
+  executionTargetId,
+  status
+}) {
+  const id = executionTargetId.trim();
+  if (!id) throw new ServiceError("executionTargetId is required", "validation_error", 400);
+  const target = await ctx.db.get(
+    `SELECT id FROM execution_targets WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+    [id, ctx.workspace.id]
+  );
+  if (!target) throw new ServiceError("Execution target not found", "not_found", 404);
+  await ctx.db.run(
+    `UPDATE execution_targets SET status = ?, updated_at = ?, revision = revision + 1 WHERE id = ?`,
+    [status, nowIso(), id]
+  );
+  await recordChange({
+    ctx,
+    entityType: "execution_target",
+    entityId: id,
+    operation: "update",
+    entityRevision: null,
+    changedFields: ["status"]
+  });
+  const updated = (await listWorkspaceExecutionTargets({ ctx })).find((entry) => entry.id === id);
+  if (!updated) throw new ServiceError("Execution target not found", "not_found", 404);
+  return updated;
+}
 async function registerActingExecutionTarget({
   ctx,
   label
 }) {
-  const target = await ensureActingDeviceTarget({ ctx });
+  const target = await declareActingDeviceTarget({ ctx, declaration: "register_target" });
   let finalLabel = target.deviceLabel;
   const desired = typeof label === "string" ? label.trim() : "";
   if (desired && desired !== finalLabel) {
@@ -72888,6 +73360,7 @@ var init_project_execution_target = __esm({
     init_change_feed();
     init_devices();
     init_errors4();
+    init_execution_target_runners();
     init_execution_targets();
     init_projects();
     init_util3();
@@ -130454,11 +130927,11 @@ function normalizeInstructionText(value) {
   return (value ?? "").trim();
 }
 function deriveTitleFromInstructionText(instructionText) {
-  const trimmed = normalizeInstructionText(instructionText);
-  if (trimmed.length <= 100) {
-    return trimmed;
+  const trimmed2 = normalizeInstructionText(instructionText);
+  if (trimmed2.length <= 100) {
+    return trimmed2;
   }
-  return `${trimmed.slice(0, 100)}\u2026`;
+  return `${trimmed2.slice(0, 100)}\u2026`;
 }
 
 // ../automations/dist/title-summarizer/tools/summarize-text.js
@@ -131842,8 +132315,8 @@ async function searchMissions({
   projectId,
   limit = 25
 }) {
-  const trimmed = query?.trim();
-  const match = trimmed ? buildMissionSearchMatch({ dialect: ctx.db.dialect, query: trimmed }) : null;
+  const trimmed2 = query?.trim();
+  const match = trimmed2 ? buildMissionSearchMatch({ dialect: ctx.db.dialect, query: trimmed2 }) : null;
   if (!match) {
     return await listMissions({
       ctx,
@@ -132231,7 +132704,7 @@ init_dist6();
 init_change_feed();
 init_context();
 init_errors4();
-init_execution_targets();
+init_execution_target_runners();
 init_local_target_mutations();
 init_projects();
 
@@ -132664,10 +133137,27 @@ async function claimNextExecutionRequest({
   ctx,
   projectId,
   claimTtlMs = CLAIM_TTL_MS,
-  clientDevice
+  clientDevice,
+  runner
 }) {
   await expireStaleExecutionRequests({ ctx });
-  const target = await resolveClaimingDeviceTarget({ ctx, clientDevice });
+  const runnerInput = runner ?? {};
+  const claimCtx = {
+    ...ctx,
+    clientDevice: clientDevice ?? ctx.clientDevice ?? null
+  };
+  const target = await resolveRunnerTarget({ ctx: claimCtx, input: runnerInput });
+  const runnerInstanceId = runnerInput.runnerInstanceId?.trim();
+  const registration = runnerInstanceId ? await recordRunnerHeartbeat({
+    ctx: claimCtx,
+    executionTargetId: target.executionTargetId,
+    runnerInstanceId,
+    relation: target.relation,
+    label: runnerInput.label,
+    runnerVersion: runnerInput.runnerVersion,
+    capabilities: runnerInput.capabilities,
+    supportedAgents: runnerInput.supportedAgents
+  }) : null;
   const conditions = [
     "er.workspace_id = ?",
     "er.status = 'queued'",
@@ -132725,6 +133215,7 @@ async function claimNextExecutionRequest({
             SET status = 'claimed',
                 claimed_by_device_id = ?,
                 claimed_by_execution_target_id = ?,
+                claimed_by_runner_registration_id = ?,
                 claimed_at = ?,
                 claim_expires_at = ?,
                 resolved_resource_id = COALESCE(resolved_resource_id, ?),
@@ -132736,6 +133227,7 @@ async function claimNextExecutionRequest({
       [
         target.deviceId,
         target.executionTargetId,
+        registration?.id ?? null,
         now2,
         expires,
         resourceId,
@@ -132755,6 +133247,7 @@ async function claimNextExecutionRequest({
         "status",
         "claimed_by_device_id",
         "claimed_by_execution_target_id",
+        ...registration ? ["claimed_by_runner_registration_id"] : [],
         "claimed_at",
         "claim_expires_at",
         "resolved_working_directory",
@@ -133297,8 +133790,8 @@ async function recordTargetResourceObservations({
   if (!Array.isArray(rawObservations) || rawObservations.length === 0) {
     throw new ServiceError("At least one observation is required", "validation_error", 400);
   }
-  const actingTarget = await ensureActingDeviceTarget({ ctx });
-  if (actingTarget.executionTargetId !== targetId) {
+  const actingTargetId = await findActingDeviceExecutionTargetId({ ctx });
+  if (actingTargetId !== targetId) {
     throw new ServiceError(
       "Observations must be reported for the acting execution target",
       "execution_target_mismatch",
@@ -133771,7 +134264,7 @@ async function resolveProtocolExecutionTargetId({
     }
   }
   try {
-    return (await ensureActingDeviceTarget({ ctx })).executionTargetId;
+    return await findActingDeviceExecutionTargetId({ ctx });
   } catch {
     return null;
   }
@@ -133795,7 +134288,7 @@ async function resolveSessionResourceId({
   let executionTargetId = requestRow?.claimed_by_execution_target_id ?? requestRow?.execution_target_id ?? null;
   if (!executionTargetId) {
     try {
-      executionTargetId = (await ensureActingDeviceTarget({ ctx })).executionTargetId;
+      executionTargetId = await findActingDeviceExecutionTargetId({ ctx });
     } catch {
       executionTargetId = null;
     }
@@ -134584,8 +135077,8 @@ async function askQuestion({
   sessionKey,
   question
 }) {
-  const trimmed = question.trim();
-  if (!trimmed) {
+  const trimmed2 = question.trim();
+  if (!trimmed2) {
     throw new ServiceError("Question is required", "validation_error");
   }
   const mission = await resolveMissionId(ctx, missionId);
@@ -134609,7 +135102,7 @@ async function askQuestion({
         mission.id,
         session.objective_id,
         session.id,
-        trimmed,
+        trimmed2,
         ctx.source,
         ctx.actorWorkspaceUserId,
         now2
@@ -135529,6 +136022,7 @@ init_dist();
 var import_node_os8 = __toESM(require("node:os"), 1);
 var import_node_path25 = __toESM(require("node:path"), 1);
 init_delivery_report();
+init_errors4();
 init_execution_targets();
 init_local_target();
 
@@ -135639,8 +136133,8 @@ async function recordMissionBranchObservations({
   if (!Array.isArray(rawObservations) || rawObservations.length === 0) {
     throw new ServiceError("At least one branch observation is required", "validation_error", 400);
   }
-  const actingTarget = await ensureActingDeviceTarget({ ctx });
-  if (actingTarget.executionTargetId !== targetId) {
+  const actingTargetId = await findActingDeviceExecutionTargetId({ ctx });
+  if (actingTargetId !== targetId) {
     throw new ServiceError(
       "Branch observations must be reported for the acting execution target",
       "execution_target_mismatch",
@@ -136042,6 +136536,16 @@ async function generateMissionTitleNow(params) {
 
 // execution/launch.ts
 init_dist6();
+
+// ../packages/core/dist/service/terminal-profile-types.js
+var DEFAULT_TERMINAL_PROFILE2 = {
+  launcher: "Terminal",
+  placement: "window",
+  chord: null,
+  background: false
+};
+
+// execution/launch.ts
 init_agent_catalog();
 init_config();
 init_execution_targets();
@@ -136102,13 +136606,13 @@ async function readWorktreeBranchAutomationEnabled(client = requireDatabaseClien
 async function launchSettingsDto({
   target,
   workspaceId,
-  agentConfigs = target.agentConfigs,
-  terminalProfile = target.terminalProfile,
+  agentConfigs = target?.agentConfigs ?? {},
+  terminalProfile = target?.terminalProfile ?? toTerminalProfileDto(DEFAULT_TERMINAL_PROFILE2),
   client = requireDatabaseClient()
 }) {
   return {
-    executionTargetId: target.executionTargetId,
-    deviceLabel: target.deviceLabel,
+    executionTargetId: target?.executionTargetId ?? null,
+    deviceLabel: target?.deviceLabel ?? null,
     agentConfigs,
     terminalProfile,
     worktreeBranchAutomationEnabled: await readWorktreeBranchAutomationEnabled(client, workspaceId)
@@ -136275,8 +136779,7 @@ async function readAgentConfigs(preferenceId, client = requireDatabaseClient()) 
   );
   return row ? parseAgentConfigs(row.agent_configs_json) : {};
 }
-async function ensureLocalLaunchTarget(client = requireDatabaseClient(), ctx = serviceContext(client)) {
-  const target = await ensureActingDeviceTarget({ ctx });
+async function toLocalLaunchTarget(target, client) {
   return {
     deviceId: target.deviceId,
     deviceLabel: target.deviceLabel,
@@ -136287,10 +136790,23 @@ async function ensureLocalLaunchTarget(client = requireDatabaseClient(), ctx = s
     terminalProfile: toTerminalProfileDto(target.terminalProfile)
   };
 }
+async function requireLocalLaunchTarget(client = requireDatabaseClient(), ctx = serviceContext(client)) {
+  return toLocalLaunchTarget(
+    await requireActingDeviceTarget({
+      ctx,
+      what: "Launch settings are stored per execution target."
+    }),
+    client
+  );
+}
+async function findLocalLaunchTarget(client = requireDatabaseClient(), ctx = serviceContext(client)) {
+  const target = await findActingDeviceTarget({ ctx });
+  return target ? toLocalLaunchTarget(target, client) : null;
+}
 async function getLaunchSettings(workspaceId) {
   const client = requireDatabaseClient();
   const scope = await resolveLaunchSettingsScope(workspaceId, PERMISSIONS.LAUNCH_READ, client);
-  const target = await ensureLocalLaunchTarget(client, scope.ctx);
+  const target = await findLocalLaunchTarget(client, scope.ctx);
   return launchSettingsDto({ target, workspaceId: scope.workspaceId, client });
 }
 async function updateAgentLaunchConfig(agentKey, body, workspaceId) {
@@ -136298,7 +136814,7 @@ async function updateAgentLaunchConfig(agentKey, body, workspaceId) {
     const key = agentKey.trim();
     if (!key) throw new ApiError(400, "Agent key is required");
     const scope = await resolveLaunchSettingsScope(workspaceId, PERMISSIONS.LAUNCH_CONFIGURE, tx);
-    const target = await ensureLocalLaunchTarget(tx, scope.ctx);
+    const target = await requireLocalLaunchTarget(tx, scope.ctx);
     if (!target.preferenceId) {
       throw new ApiError(409, "No active workspace user to store launch configs for");
     }
@@ -136333,7 +136849,7 @@ async function updateTerminalProfile2(body, workspaceId) {
         background: body.background ?? false
       }
     });
-    const target = await ensureLocalLaunchTarget(tx, scope.ctx);
+    const target = await requireLocalLaunchTarget(tx, scope.ctx);
     return launchSettingsDto({
       target: {
         ...target,
@@ -136352,7 +136868,7 @@ async function updateWorktreeBranchAutomation(body, workspaceId) {
     const settings = await readWorkspaceSettings(tx, scope.workspaceId);
     settings[WORKTREE_BRANCH_AUTOMATION_SETTINGS_KEY] = body.enabled === true;
     await writeWorkspaceSettings(settings, tx, scope.workspaceId);
-    const target = await ensureLocalLaunchTarget(tx, scope.ctx);
+    const target = await findLocalLaunchTarget(tx, scope.ctx);
     return launchSettingsDto({ target, workspaceId: scope.workspaceId, client: tx });
   });
 }
@@ -136654,7 +137170,8 @@ async function launchObjective(objectiveId, body) {
     );
     const launchTarget = await resolveLaunchExecutionTarget({
       ctx: serviceCtx,
-      projectId: objective.project_id
+      projectId: objective.project_id,
+      executionTargetId: body.executionTargetId
     });
     const { executionTargetId, agentConfigs } = launchTarget;
     const now2 = nowIso2();
@@ -136832,8 +137349,8 @@ var PUBLIC_BACKEND_URL_ENV_KEYS = [
   "OVERLORD_BACKEND_URL"
 ];
 function normalizeOriginUrl(value) {
-  const trimmed = value.trim().replace(/\/+$/, "");
-  const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? trimmed : `http://${trimmed}`;
+  const trimmed2 = value.trim().replace(/\/+$/, "");
+  const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed2) ? trimmed2 : `http://${trimmed2}`;
   return new URL(withScheme).origin;
 }
 function readConfiguredPublicBackendUrls() {
@@ -137850,10 +138367,10 @@ async function updateOrganization(id, body) {
     const changed = [];
     let name = existing.name;
     if (body.name !== void 0) {
-      const trimmed = body.name.trim();
-      if (!trimmed) throw new ApiError(400, "Organization name cannot be empty");
-      if (trimmed !== existing.name) changed.push("name");
-      name = trimmed;
+      const trimmed2 = body.name.trim();
+      if (!trimmed2) throw new ApiError(400, "Organization name cannot be empty");
+      if (trimmed2 !== existing.name) changed.push("name");
+      name = trimmed2;
     }
     if (body.logoUrl !== void 0) {
       const logoUrl = body.logoUrl?.trim() || null;
@@ -138364,17 +138881,28 @@ async function resolveResourceExecutionTargetId(db, workspaceId, executionTarget
       db,
       notFoundMessage: "Project not found"
     });
-    return (await ensureActingDeviceTarget({
-      ctx: await buildWebappServiceContextForWorkspace(workspaceId, db, workspaceUserId)
-    })).executionTargetId;
+    const ctx = await buildWebappServiceContextForWorkspace(workspaceId, db, workspaceUserId);
+    try {
+      return (await declareActingDeviceTarget({ ctx, declaration: "local_checkout_link" })).executionTargetId;
+    } catch (error53) {
+      if (error53 instanceof ServiceError && error53.code === NO_EXECUTION_TARGET_REGISTERED) {
+        throw new ApiError(
+          error53.status,
+          `${error53.message} To link a directory from a browser, choose an execution target that already exists; otherwise run the link from that machine's CLI or desktop app.`,
+          void 0,
+          error53.code
+        );
+      }
+      throw error53;
+    }
   }
   if (executionTargetId === null) return null;
-  const trimmed = executionTargetId.trim();
-  if (!trimmed) return null;
-  if (!await executionTargetBelongsToWorkspace(db, trimmed, workspaceId)) {
+  const trimmed2 = executionTargetId.trim();
+  if (!trimmed2) return null;
+  if (!await executionTargetBelongsToWorkspace(db, trimmed2, workspaceId)) {
     throw new ApiError(404, "Execution target not found");
   }
-  return trimmed;
+  return trimmed2;
 }
 async function getProjectResourceRow(db, projectId, resourceId, permission = PERMISSIONS.PROJECT_READ) {
   await getProject2(projectId, db, permission);
@@ -139471,8 +139999,8 @@ async function listProjectTags(projectId) {
 }
 function normalizeTagColor(color) {
   if (color === null || color === void 0) return null;
-  const trimmed = color.trim();
-  return trimmed.length > 0 ? trimmed : null;
+  const trimmed2 = color.trim();
+  return trimmed2.length > 0 ? trimmed2 : null;
 }
 async function createProjectTag(projectId, body) {
   return requireDatabaseClient().transaction(async (tx) => {
@@ -140023,8 +140551,8 @@ async function getProjectRepository(projectId, executionTargetId, resourceKey = 
 }
 var hexColorPattern = /^#?[0-9a-fA-F]{6}$/;
 function normalizeHexColor(value) {
-  const trimmed = value.trim();
-  const withHash = trimmed.startsWith("#") ? trimmed : `#${trimmed}`;
+  const trimmed2 = value.trim();
+  const withHash = trimmed2.startsWith("#") ? trimmed2 : `#${trimmed2}`;
   return hexColorPattern.test(withHash) ? withHash.toLowerCase() : null;
 }
 async function createProject2(body) {
@@ -141221,12 +141749,12 @@ async function generateMissionTitle(missionRef) {
 }
 async function resolveAssignedWorkspaceUserId(db, workspaceId, value) {
   if (value === null || value === void 0) return null;
-  const trimmed = value.trim();
-  if (!trimmed) return null;
+  const trimmed2 = value.trim();
+  if (!trimmed2) return null;
   const member2 = await db.get(
     `SELECT id FROM workspace_users
         WHERE id = ? AND workspace_id = ? AND status = 'active' AND deleted_at IS NULL`,
-    [trimmed, workspaceId]
+    [trimmed2, workspaceId]
   );
   if (!member2) throw new ApiError(400, "Assignee is not a member of this workspace");
   return member2.id;
@@ -142832,13 +143360,13 @@ function mergeProfileMetadataJson({
   if (avatarUrl) parsed.avatarUrl = avatarUrl;
   else if (avatarUrl !== void 0) delete parsed.avatarUrl;
   if (agentInstructions !== void 0) {
-    const trimmed = agentInstructions?.trim() ?? "";
-    if (trimmed) parsed.agentInstructions = trimmed;
+    const trimmed2 = agentInstructions?.trim() ?? "";
+    if (trimmed2) parsed.agentInstructions = trimmed2;
     else delete parsed.agentInstructions;
   }
   if (editorScheme !== void 0) {
-    const trimmed = editorScheme?.trim() ?? "";
-    if (trimmed) parsed.editorScheme = trimmed;
+    const trimmed2 = editorScheme?.trim() ?? "";
+    if (trimmed2) parsed.editorScheme = trimmed2;
     else delete parsed.editorScheme;
   }
   return JSON.stringify(parsed);
@@ -151744,6 +152272,29 @@ async function getWorkspaceExecutionTargets(workspaceId, client = requireDatabas
   const ctx = await buildWebappServiceContextForWorkspace(workspaceId, client, workspaceUserId);
   return listWorkspaceExecutionTargets({ ctx });
 }
+async function registerWorkspaceExecutionTarget(workspaceId, body, client = requireDatabaseClient()) {
+  const label = typeof body.label === "string" ? body.label.trim() : "";
+  const workspaceUserId = await requireWorkspacePermission({
+    workspaceId,
+    permission: PERMISSIONS.EXECUTION_REQUEST_CLAIM,
+    db: client,
+    notFoundMessage: "Workspace not found or no active membership"
+  });
+  const ctx = await buildWebappServiceContextForWorkspace(workspaceId, client, workspaceUserId);
+  let registered;
+  try {
+    registered = await registerActingExecutionTarget({ ctx, label: label || null });
+  } catch (error53) {
+    if (error53 instanceof ServiceError) {
+      throw new ApiError(error53.status, error53.message, void 0, error53.code);
+    }
+    throw error53;
+  }
+  const targets = await listWorkspaceExecutionTargets({ ctx });
+  const dto = targets.find((target) => target.id === registered.executionTargetId);
+  if (!dto) throw new ApiError(500, "Execution target was registered but could not be read back");
+  return dto;
+}
 async function removeWorkspaceExecutionTarget(workspaceId, executionTargetId, client = requireDatabaseClient()) {
   const workspaceUserId = await requireWorkspacePermission({
     workspaceId,
@@ -151762,7 +152313,11 @@ async function removeWorkspaceExecutionTarget(workspaceId, executionTargetId, cl
   }
 }
 async function updateWorkspaceExecutionTarget(workspaceId, executionTargetId, body, client = requireDatabaseClient()) {
-  const label = typeof body.label === "string" ? body.label : "";
+  const label = typeof body.label === "string" ? body.label : null;
+  const status = body.status === "active" || body.status === "disabled" ? body.status : null;
+  if (label === null && status === null) {
+    throw new ApiError(400, "Provide a label or status of active or disabled");
+  }
   const workspaceUserId = await requireWorkspacePermission({
     workspaceId,
     permission: PERMISSIONS.WORKSPACE_UPDATE,
@@ -151770,7 +152325,16 @@ async function updateWorkspaceExecutionTarget(workspaceId, executionTargetId, bo
   });
   const ctx = await buildWebappServiceContextForWorkspace(workspaceId, client, workspaceUserId);
   try {
-    return await renameWorkspaceExecutionTarget({ ctx, executionTargetId, label });
+    if (label !== null) {
+      await renameWorkspaceExecutionTarget({ ctx, executionTargetId, label });
+    }
+    if (status !== null) {
+      return await updateWorkspaceExecutionTargetStatus({ ctx, executionTargetId, status });
+    }
+    const targets = await listWorkspaceExecutionTargets({ ctx });
+    const target = targets.find((entry) => entry.id === executionTargetId);
+    if (!target) throw new ServiceError("Execution target not found", "not_found", 404);
+    return target;
   } catch (error53) {
     if (error53 instanceof ServiceError) {
       if (error53.status === 404) throw new ApiError(404, "Execution target not found");
@@ -151805,6 +152369,7 @@ async function updateProjectExecutionTarget(projectId, body, client = requireDat
 // execution/runner.ts
 init_dist6();
 init_errors4();
+init_execution_targets();
 init_local_target_mutations();
 init_project_execution_target();
 init_branch_activity();
@@ -151812,6 +152377,7 @@ init_db();
 init_errors5();
 
 // http/client-device.ts
+init_execution_target_runners();
 var DEVICE_FINGERPRINT_HEADER = "x-overlord-device-fingerprint";
 var DEVICE_LABEL_HEADER = "x-overlord-device-label";
 var DEVICE_PLATFORM_HEADER = "x-overlord-device-platform";
@@ -151834,6 +152400,30 @@ function clientDeviceFromBody(value) {
     deviceLabel: typeof body.deviceLabel === "string" ? body.deviceLabel : null,
     devicePlatform: typeof body.devicePlatform === "string" ? body.devicePlatform : null
   };
+}
+function runnerRegistrationFromBody(value) {
+  if (!value || typeof value !== "object") return null;
+  const body = value;
+  const text = (key) => {
+    const raw = body[key];
+    if (typeof raw !== "string") return null;
+    const trimmed2 = raw.trim();
+    return trimmed2.length > 0 ? trimmed2 : null;
+  };
+  const relation = text("runnerRelation");
+  const capabilities = body.capabilities && typeof body.capabilities === "object" && !Array.isArray(body.capabilities) ? body.capabilities : null;
+  const supportedAgents = Array.isArray(body.supportedAgents) ? body.supportedAgents.filter((agent) => typeof agent === "string") : null;
+  const input = {
+    executionTargetId: text("executionTargetId"),
+    runnerInstanceId: text("runnerInstanceId"),
+    relation: isRunnerRelation(relation) ? relation : null,
+    label: text("runnerLabel"),
+    runnerVersion: text("runnerVersion"),
+    capabilities,
+    supportedAgents
+  };
+  const hasAny = Object.values(input).some((field) => field !== null);
+  return hasAny ? input : null;
 }
 
 // execution/runner-queue-notify.ts
@@ -151978,10 +152568,14 @@ async function runnerStatus(projectId) {
 }
 async function claimRunnerRequest({
   projectId,
-  clientDevice
+  clientDevice,
+  runner
 } = {}) {
   const claimNow = async () => {
-    for (const scope of await resolveRunnerScopes(projectId)) {
+    const scopes = await resolveRunnerScopes(projectId);
+    let undeclaredEverywhere = null;
+    let declaredSomewhere = false;
+    for (const scope of scopes) {
       const ctx = await workspaceServiceContext(
         scope.workspaceId,
         scope.workspaceUserId,
@@ -151992,10 +152586,16 @@ async function claimRunnerRequest({
         request2 = await claimNextExecutionRequest({
           ctx,
           projectId,
-          clientDevice: clientDeviceFromBody(clientDevice)
+          clientDevice: clientDeviceFromBody(clientDevice),
+          runner
         });
+        declaredSomewhere = true;
       } catch (error53) {
         if (error53 instanceof ServiceError && error53.code === "project_not_found") continue;
+        if (error53 instanceof ServiceError && error53.code === NO_EXECUTION_TARGET_REGISTERED) {
+          undeclaredEverywhere = error53;
+          continue;
+        }
         throw error53;
       }
       if (request2) {
@@ -152025,6 +152625,7 @@ async function claimRunnerRequest({
         return dto;
       }
     }
+    if (undeclaredEverywhere && !declaredSomewhere) throw undeclaredEverywhere;
     return null;
   };
   const request = await claimNow();
@@ -153849,8 +154450,8 @@ function resolveAllowedBrowserOrigins({
   const extraOrigins = process.env.OVERLORD_WEB_ORIGINS?.trim();
   if (extraOrigins) {
     for (const origin of extraOrigins.split(",")) {
-      const trimmed = origin.trim();
-      if (trimmed) origins.add(trimmed);
+      const trimmed2 = origin.trim();
+      if (trimmed2) origins.add(trimmed2);
     }
   }
   return [...origins];
@@ -154477,9 +155078,9 @@ function deriveDeterministicActionCandidates({
 }
 function clampText(value, maxLength) {
   if (typeof value !== "string") return null;
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-  return trimmed.length > maxLength ? trimmed.slice(0, maxLength) : trimmed;
+  const trimmed2 = value.trim();
+  if (!trimmed2) return null;
+  return trimmed2.length > maxLength ? trimmed2.slice(0, maxLength) : trimmed2;
 }
 function clampStringList(value, maxItems = DELIVERY_REPORT_LIMITS.maxItems) {
   if (!Array.isArray(value)) return [];
@@ -158010,6 +158611,10 @@ app.get(
   "/api/workspaces/:id/execution-targets",
   handle2((req) => getWorkspaceExecutionTargets(req.params.id))
 );
+app.post(
+  "/api/workspaces/:id/execution-targets",
+  handle2((req) => registerWorkspaceExecutionTarget(req.params.id, req.body), { mutates: true })
+);
 app.patch(
   "/api/workspaces/:id/execution-targets/:targetId",
   handle2((req) => updateWorkspaceExecutionTarget(req.params.id, req.params.targetId, req.body), {
@@ -158785,7 +159390,10 @@ app.post(
         deviceFingerprint: typeof req.body?.deviceFingerprint === "string" ? req.body.deviceFingerprint : null,
         deviceLabel: typeof req.body?.deviceLabel === "string" ? req.body.deviceLabel : null,
         devicePlatform: typeof req.body?.devicePlatform === "string" ? req.body.devicePlatform : null
-      }
+      },
+      // Additive runner-instance identity (contract v40). Absent for older
+      // runners, which claim exactly as before and register no instance.
+      runner: runnerRegistrationFromBody(req.body)
     }),
     { mutates: true }
   )

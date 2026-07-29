@@ -65,4 +65,40 @@ describe('mission branch observations', () => {
 
     await db.close();
   });
+  it('rejects branch observations from a machine with no declared execution target', async () => {
+    // Contract v38: branch-observation attribution resolves an already-declared
+    // target and never creates one for the reporting machine.
+    const db = createSqliteClient(openInMemoryDatabase());
+    await seedServiceOperator({ db });
+    const ctx = await createServiceContext({ db, source: 'cli' });
+
+    await assert.rejects(
+      () =>
+        recordMissionBranchObservations({
+          ctx,
+          executionTargetId: 'some-other-target',
+          observations: [
+            {
+              missionId: 'any-mission',
+              resourceKey: 'primary',
+              status: 'created',
+              dirty: false,
+              worktreePath: '/tmp/whatever',
+              observedAt: new Date().toISOString()
+            }
+          ]
+        }),
+      (error: unknown) =>
+        error instanceof Error &&
+        'code' in error &&
+        (error as { code: string }).code === 'execution_target_mismatch'
+    );
+
+    const row = (await db.get(
+      `SELECT COUNT(*) AS c FROM execution_targets WHERE deleted_at IS NULL`
+    )) as { c: number } | undefined;
+    assert.equal(Number(row?.c ?? 0), 0, 'a rejected observation must not declare a target');
+
+    await db.close();
+  });
 });

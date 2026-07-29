@@ -2,7 +2,7 @@ import { mapObservationToResourceStatus } from './local-target/resource-status.t
 import type { TargetObservationState } from './local-target/types.ts';
 import type { ServiceContext } from './context.js';
 import { ServiceError } from './errors.js';
-import { ensureActingDeviceTarget } from './execution-targets.js';
+import { findActingDeviceExecutionTargetId } from './execution-targets.js';
 import { newId, nowIso } from './util.js';
 
 export type TargetResourceObservationInput = {
@@ -159,8 +159,10 @@ export async function recordTargetResourceObservations({
     throw new ServiceError('At least one observation is required', 'validation_error', 400);
   }
 
-  const actingTarget = await ensureActingDeviceTarget({ ctx });
-  if (actingTarget.executionTargetId !== targetId) {
+  // Read-only (contract v38): reporting observations never declares a target, so a
+  // machine with no declared target fails the same way as a target mismatch.
+  const actingTargetId = await findActingDeviceExecutionTargetId({ ctx });
+  if (actingTargetId !== targetId) {
     throw new ServiceError(
       'Observations must be reported for the acting execution target',
       'execution_target_mismatch',

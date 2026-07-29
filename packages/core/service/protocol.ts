@@ -7,7 +7,7 @@ import { resolveMissionId, resolveProjectId } from './context.js';
 import { buildDeliveryReport, markDeliveryPresentationPending } from './delivery-report.js';
 import { ServiceError } from './errors.js';
 import { createExecutionRequest, linkExecutionRequestToSession } from './execution-requests.js';
-import { ensureActingDeviceTarget } from './execution-targets.js';
+import { findActingDeviceExecutionTargetId } from './execution-targets.js';
 import { enqueueLiveActivityRefreshForMission } from './live-activity-jobs.js';
 import {
   type ArtifactSummary,
@@ -336,8 +336,10 @@ async function resolveProtocolExecutionTargetId({
     }
   }
 
+  // Attribution falls back to the acting machine's already-declared target and
+  // stays null when it has none (contract v38); attach never declares a target.
   try {
-    return (await ensureActingDeviceTarget({ ctx })).executionTargetId;
+    return await findActingDeviceExecutionTargetId({ ctx });
   } catch {
     return null;
   }
@@ -375,7 +377,7 @@ async function resolveSessionResourceId({
     requestRow?.claimed_by_execution_target_id ?? requestRow?.execution_target_id ?? null;
   if (!executionTargetId) {
     try {
-      executionTargetId = (await ensureActingDeviceTarget({ ctx })).executionTargetId;
+      executionTargetId = await findActingDeviceExecutionTargetId({ ctx });
     } catch {
       executionTargetId = null;
     }

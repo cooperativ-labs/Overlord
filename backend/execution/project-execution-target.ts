@@ -6,8 +6,10 @@ import {
   deleteWorkspaceExecutionTarget,
   getProjectExecutionTargetSelection,
   listWorkspaceExecutionTargets,
+  registerActingExecutionTarget,
   renameWorkspaceExecutionTarget,
-  updateProjectExecutionTargetSelection
+  updateProjectExecutionTargetSelection,
+  updateWorkspaceExecutionTargetStatus
 } from '../../packages/core/service/project-execution-target.ts';
 import type {
   ProjectExecutionTargetDto,
@@ -82,6 +84,43 @@ export async function getWorkspaceExecutionTargets(
   return listWorkspaceExecutionTargets({ ctx });
 }
 
+/**
+ * Declare the calling machine as an execution target in `workspaceId` — the
+ * desktop app's one-click equivalent of `ovld add-et` (contract v39).
+ *
+ * Authorization matches the `register-target` protocol surface
+ * (`execution_request:claim`), and the same machine-local eligibility rules apply:
+ * a browser tab, the hosted backend host, or any caller with no machine identity is
+ * refused with `409 no_execution_target_registered` rather than being declared.
+ */
+export async function registerWorkspaceExecutionTarget(
+  workspaceId: string,
+  body: { label?: unknown },
+  client: DatabaseClient = requireDatabaseClient()
+): Promise<WorkspaceExecutionTargetDto> {
+  const label = typeof body.label === 'string' ? body.label.trim() : '';
+  const workspaceUserId = await requireWorkspacePermission({
+    workspaceId,
+    permission: PERMISSIONS.EXECUTION_REQUEST_CLAIM,
+    db: client,
+    notFoundMessage: 'Workspace not found or no active membership'
+  });
+  const ctx = await buildWebappServiceContextForWorkspace(workspaceId, client, workspaceUserId);
+  let registered: Awaited<ReturnType<typeof registerActingExecutionTarget>>;
+  try {
+    registered = await registerActingExecutionTarget({ ctx, label: label || null });
+  } catch (error) {
+    if (error instanceof ServiceError) {
+      throw new ApiError(error.status, error.message, undefined, error.code);
+    }
+    throw error;
+  }
+  const targets = await listWorkspaceExecutionTargets({ ctx });
+  const dto = targets.find(target => target.id === registered.executionTargetId);
+  if (!dto) throw new ApiError(500, 'Execution target was registered but could not be read back');
+  return dto;
+}
+
 export async function removeWorkspaceExecutionTarget(
   workspaceId: string,
   executionTargetId: string,
@@ -107,10 +146,14 @@ export async function removeWorkspaceExecutionTarget(
 export async function updateWorkspaceExecutionTarget(
   workspaceId: string,
   executionTargetId: string,
-  body: { label?: unknown },
+  body: { label?: unknown; status?: unknown },
   client: DatabaseClient = requireDatabaseClient()
 ): Promise<WorkspaceExecutionTargetDto> {
-  const label = typeof body.label === 'string' ? body.label : '';
+  const label = typeof body.label === 'string' ? body.label : null;
+  const status = body.status === 'active' || body.status === 'disabled' ? body.status : null;
+  if (label === null && status === null) {
+    throw new ApiError(400, 'Provide a label or status of active or disabled');
+  }
   const workspaceUserId = await requireWorkspacePermission({
     workspaceId,
     permission: PERMISSIONS.WORKSPACE_UPDATE,
@@ -118,7 +161,16 @@ export async function updateWorkspaceExecutionTarget(
   });
   const ctx = await buildWebappServiceContextForWorkspace(workspaceId, client, workspaceUserId);
   try {
-    return await renameWorkspaceExecutionTarget({ ctx, executionTargetId, label });
+    if (label !== null) {
+      await renameWorkspaceExecutionTarget({ ctx, executionTargetId, label });
+    }
+    if (status !== null) {
+      return await updateWorkspaceExecutionTargetStatus({ ctx, executionTargetId, status });
+    }
+    const targets = await listWorkspaceExecutionTargets({ ctx });
+    const target = targets.find(entry => entry.id === executionTargetId);
+    if (!target) throw new ServiceError('Execution target not found', 'not_found', 404);
+    return target;
   } catch (error) {
     if (error instanceof ServiceError) {
       if (error.status === 404) throw new ApiError(404, 'Execution target not found');

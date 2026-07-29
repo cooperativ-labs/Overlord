@@ -351,9 +351,12 @@ describe('runner claims and drives executions in a secondary (non-active) worksp
     });
     // A primary resource gives the launch a real working directory to resolve;
     // the runner claim re-checks it exists (sqlite dialect), so it must be real.
+    // Omitting `executionTargetId` links the checkout from *this* machine, which
+    // is the declaration that makes it an execution target in the secondary
+    // workspace. Contract v38: the claim resolves that declared target and no
+    // longer provisions one, so a globally-scoped source alone would not claim.
     await createProjectResource(project.id, {
       directoryPath: mkdtempSync(path.join('/tmp', 'ovld-secondary-runner-resource-')),
-      executionTargetId: null,
       isPrimary: true
     });
     const mission = await createMission({

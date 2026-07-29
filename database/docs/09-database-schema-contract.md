@@ -519,6 +519,53 @@ Indexes:
 - `(workspace_id, type, status)`.
 - `(workspace_id, device_id)`.
 
+### `execution_target_runner_registrations`
+
+The live runner processes serving one **local** execution target. Unlike the
+gateway-owned `execution_target_registrations` (exactly one registration per
+`virtual` target), this relation is **one-to-many**: a physical host registers a
+`native` runner, and a container that adopts that host — an AgentPod mounting the
+host checkout — registers an additional `adopted` runner against the _same_
+target row instead of declaring a target of its own.
+
+Rows are written only by an authorized runner claim/heartbeat for a target that
+already exists, is `local`, is `active`, and is accessible to the authenticated
+member. Registering a runner instance never creates, re-enables, or renames its
+target.
+
+| Column                  | Type         | Required | Notes                                                                                             |
+| ----------------------- | ------------ | -------- | ------------------------------------------------------------------------------------------------- |
+| `id`                    | Id           | yes      |                                                                                                   |
+| `workspace_id`          | Id           | yes      | FK to `workspaces`.                                                                               |
+| `execution_target_id`   | Id           | yes      | FK to `execution_targets` (type `local`).                                                         |
+| `runner_instance_id`    | text         | yes      | Stable per runner installation/runtime. Unique among active rows within a workspace.              |
+| `relation`              | text         | yes      | `native` (the target's own machine) or `adopted` (a container sharing that machine's filesystem). |
+| `label`                 | text         | no       | Non-secret operator diagnostic, e.g. the container hostname.                                      |
+| `runner_version`        | text         | no       | Runner/CLI version string.                                                                        |
+| `capabilities_json`     | Json         | yes      | Advertised non-secret capability hints.                                                           |
+| `supported_agents_json` | Json         | yes      | Agent identifiers this runner can launch.                                                         |
+| `health`                | text         | yes      | Open vocabulary: `healthy`, `degraded`, `unreachable`, `unknown`.                                 |
+| `last_heartbeat_at`     | TimestampUTC | no       | Published by the claim poll; reachability requires it inside the heartbeat TTL.                   |
+| `last_error_code`       | text         | no       | Redacted, bounded latest error code.                                                              |
+| `created_at`            | TimestampUTC | yes      |                                                                                                   |
+| `updated_at`            | TimestampUTC | yes      |                                                                                                   |
+| `deleted_at`            | TimestampUTC | no       | Tombstone.                                                                                        |
+| `revision`              | integer      | yes      |                                                                                                   |
+
+Indexes:
+
+- Unique active `(workspace_id, runner_instance_id)`.
+- `(workspace_id, execution_target_id, health, last_heartbeat_at)`.
+
+A `local` execution target is **reachable** when at least one non-deleted
+registration is `healthy` or `degraded` with a heartbeat inside the reachability
+TTL. `devices.last_seen_at` is last observed machine traffic and has no
+scheduling effect; it is consulted for reachability only for a target that has
+never had a runner registration, so a pre-upgrade install stays selectable until
+its upgraded runner publishes its first heartbeat. Claim competition is
+target-level: any healthy runner registered to the selected target may claim its
+work, and a runner instance is never individually addressable.
+
 ### `workspace_user_execution_targets`
 
 Represents a workspace user's access to a workspace execution target. Reusable user launch preferences live in `user_execution_target_preferences`, keyed by profile and stable target fingerprint.
@@ -1327,44 +1374,45 @@ Delivery validation should require final rationales for meaningful `changed_file
 
 Durable queue for manual run and auto-advance.
 
-| Column                           | Type         | Required | Notes                                                                                                                                                                                                 |
-| -------------------------------- | ------------ | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`                             | Id           | yes      |                                                                                                                                                                                                       |
-| `workspace_id`                   | Id           | yes      | FK to `workspaces`.                                                                                                                                                                                   |
-| `project_id`                     | Id           | yes      | FK to `projects`.                                                                                                                                                                                     |
-| `mission_id`                     | Id           | yes      | FK to `missions`.                                                                                                                                                                                     |
-| `objective_id`                   | Id           | yes      | FK to `objectives`.                                                                                                                                                                                   |
-| `execution_target_id`            | Id           | no       | FK to `execution_targets`.                                                                                                                                                                            |
-| `requested_agent`                | text         | no       |                                                                                                                                                                                                       |
-| `requested_model`                | text         | no       |                                                                                                                                                                                                       |
-| `requested_reasoning_effort`     | text         | no       |                                                                                                                                                                                                       |
-| `launch_mode`                    | text         | yes      | `run`, `ask`, or adapter-defined.                                                                                                                                                                     |
-| `launch_flags_json`              | Json         | yes      |                                                                                                                                                                                                       |
-| `target_kind`                    | text         | yes      | `any`, `local`, `ssh`, or adapter-defined.                                                                                                                                                            |
-| `requested_source`               | text         | yes      | `manual_run`, `auto_advance`, `api`, `cli`, etc.                                                                                                                                                      |
-| `idempotency_key`                | text         | no       | Required for auto-advance.                                                                                                                                                                            |
-| `status`                         | text         | yes      | `queued`, `claimed`, `launching`, `launched`, `failed`, `cleared`, `cancelled`, `expired`.                                                                                                            |
-| `requested_by_workspace_user_id` | Id           | no       | FK to `workspace_users`.                                                                                                                                                                              |
-| `claimed_by_device_id`           | Id           | no       | FK to `devices` for local compatibility/diagnostics.                                                                                                                                                  |
-| `claimed_by_execution_target_id` | Id           | no       | FK to `execution_targets`.                                                                                                                                                                            |
-| `claimed_at`                     | TimestampUTC | no       |                                                                                                                                                                                                       |
-| `claim_expires_at`               | TimestampUTC | no       | Stale claims can be retried/failed.                                                                                                                                                                   |
-| `launch_started_at`              | TimestampUTC | no       |                                                                                                                                                                                                       |
-| `launch_completed_at`            | TimestampUTC | no       |                                                                                                                                                                                                       |
-| `launched_session_id`            | Id           | no       | FK to `agent_sessions` when known.                                                                                                                                                                    |
-| `resolved_resource_id`           | Id           | no       | FK to `project_resources`.                                                                                                                                                                            |
-| `resolved_working_directory`     | Path         | no       | No repository contents. Never set for a `virtual` target.                                                                                                                                             |
-| `launch_snapshot_id`             | Id           | no       | FK to `execution_request_snapshots`; set for virtual targets when the immutable `VirtualExecutionQueueItemV1` payload is built in the same transaction the request is queued. Null for local targets. |
-| `failure_code`                   | text         | no       | Typed virtual-target failure code (open vocabulary, e.g. `source_incompatible`); `last_error` remains the human-safe summary.                                                                         |
-| `failure_phase`                  | text         | no       | Phase the typed failure occurred in (e.g. `claim`, `source`, `environment`, `launch`).                                                                                                                |
-| `claimed_by_gateway_instance_id` | text         | no       | Gateway instance holding the current claim, for virtual claims; nullable for local claims.                                                                                                            |
-| `last_error`                     | text         | no       |                                                                                                                                                                                                       |
-| `attempt_count`                  | integer      | yes      | Increment on each claim/launch attempt.                                                                                                                                                               |
-| `metadata_json`                  | Json         | yes      |                                                                                                                                                                                                       |
-| `created_at`                     | TimestampUTC | yes      |                                                                                                                                                                                                       |
-| `updated_at`                     | TimestampUTC | yes      |                                                                                                                                                                                                       |
-| `deleted_at`                     | TimestampUTC | no       | Tombstone.                                                                                                                                                                                            |
-| `revision`                       | integer      | yes      |                                                                                                                                                                                                       |
+| Column                              | Type         | Required | Notes                                                                                                                                                                                                 |
+| ----------------------------------- | ------------ | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                                | Id           | yes      |                                                                                                                                                                                                       |
+| `workspace_id`                      | Id           | yes      | FK to `workspaces`.                                                                                                                                                                                   |
+| `project_id`                        | Id           | yes      | FK to `projects`.                                                                                                                                                                                     |
+| `mission_id`                        | Id           | yes      | FK to `missions`.                                                                                                                                                                                     |
+| `objective_id`                      | Id           | yes      | FK to `objectives`.                                                                                                                                                                                   |
+| `execution_target_id`               | Id           | no       | FK to `execution_targets`.                                                                                                                                                                            |
+| `requested_agent`                   | text         | no       |                                                                                                                                                                                                       |
+| `requested_model`                   | text         | no       |                                                                                                                                                                                                       |
+| `requested_reasoning_effort`        | text         | no       |                                                                                                                                                                                                       |
+| `launch_mode`                       | text         | yes      | `run`, `ask`, or adapter-defined.                                                                                                                                                                     |
+| `launch_flags_json`                 | Json         | yes      |                                                                                                                                                                                                       |
+| `target_kind`                       | text         | yes      | `any`, `local`, `ssh`, or adapter-defined.                                                                                                                                                            |
+| `requested_source`                  | text         | yes      | `manual_run`, `auto_advance`, `api`, `cli`, etc.                                                                                                                                                      |
+| `idempotency_key`                   | text         | no       | Required for auto-advance.                                                                                                                                                                            |
+| `status`                            | text         | yes      | `queued`, `claimed`, `launching`, `launched`, `failed`, `cleared`, `cancelled`, `expired`.                                                                                                            |
+| `requested_by_workspace_user_id`    | Id           | no       | FK to `workspace_users`.                                                                                                                                                                              |
+| `claimed_by_device_id`              | Id           | no       | FK to `devices` for local compatibility/diagnostics.                                                                                                                                                  |
+| `claimed_by_execution_target_id`    | Id           | no       | FK to `execution_targets`.                                                                                                                                                                            |
+| `claimed_at`                        | TimestampUTC | no       |                                                                                                                                                                                                       |
+| `claim_expires_at`                  | TimestampUTC | no       | Stale claims can be retried/failed.                                                                                                                                                                   |
+| `launch_started_at`                 | TimestampUTC | no       |                                                                                                                                                                                                       |
+| `launch_completed_at`               | TimestampUTC | no       |                                                                                                                                                                                                       |
+| `launched_session_id`               | Id           | no       | FK to `agent_sessions` when known.                                                                                                                                                                    |
+| `resolved_resource_id`              | Id           | no       | FK to `project_resources`.                                                                                                                                                                            |
+| `resolved_working_directory`        | Path         | no       | No repository contents. Never set for a `virtual` target.                                                                                                                                             |
+| `launch_snapshot_id`                | Id           | no       | FK to `execution_request_snapshots`; set for virtual targets when the immutable `VirtualExecutionQueueItemV1` payload is built in the same transaction the request is queued. Null for local targets. |
+| `failure_code`                      | text         | no       | Typed virtual-target failure code (open vocabulary, e.g. `source_incompatible`); `last_error` remains the human-safe summary.                                                                         |
+| `failure_phase`                     | text         | no       | Phase the typed failure occurred in (e.g. `claim`, `source`, `environment`, `launch`).                                                                                                                |
+| `claimed_by_gateway_instance_id`    | text         | no       | Gateway instance holding the current claim, for virtual claims; nullable for local claims.                                                                                                            |
+| `claimed_by_runner_registration_id` | Id           | no       | FK to `execution_target_runner_registrations`; the runner instance that won a **local** claim. Null for virtual claims and for claims by a runner that published no instance identity.                |
+| `last_error`                        | text         | no       |                                                                                                                                                                                                       |
+| `attempt_count`                     | integer      | yes      | Increment on each claim/launch attempt.                                                                                                                                                               |
+| `metadata_json`                     | Json         | yes      |                                                                                                                                                                                                       |
+| `created_at`                        | TimestampUTC | yes      |                                                                                                                                                                                                       |
+| `updated_at`                        | TimestampUTC | yes      |                                                                                                                                                                                                       |
+| `deleted_at`                        | TimestampUTC | no       | Tombstone.                                                                                                                                                                                            |
+| `revision`                          | integer      | yes      |                                                                                                                                                                                                       |
 
 Indexes:
 
@@ -1384,7 +1432,7 @@ Claiming must happen in one transaction:
 
 1. Select the oldest compatible active request.
 2. Verify the objective is launchable.
-3. Update status to `claimed`, set `claimed_by_execution_target_id`, optional `claimed_by_device_id`, `claimed_at`, and `claim_expires_at`.
+3. Update status to `claimed`, set `claimed_by_execution_target_id`, optional `claimed_by_device_id`, optional `claimed_by_runner_registration_id`, `claimed_at`, and `claim_expires_at`.
 4. Append `mission_events` and `entity_changes`.
 
 A **virtual** target claim is target-authenticated, not device-authenticated:
@@ -2393,15 +2441,15 @@ Idempotency and retry record for composite project initialization. It owns only
 non-secret request, ownership, state, and repository metadata; OAuth credentials
 remain exclusively in `ext_github_user_connections`.
 
-| Column | Type | Required | Notes |
-| --- | --- | --- | --- |
-| `id`, `profile_id`, `workspace_id`, `project_id`, `mission_id` | Id | yes | Extension record, caller, tenant, and internally created records. |
-| `idempotency_key` | text | yes | Caller key, unique active per profile. |
-| `github_owner_login` | text | no | Selected owner when repository provisioning is requested. |
-| `provisioning_status` | text | yes | Extension-local `not_requested`, `pending`, `failed`, or `succeeded`. |
-| `github_repo_id`, `full_name`, `default_branch`, `clone_url` | text | no | Non-secret GitHub repository metadata after success. |
-| `failure_message` | text | no | Bounded retryable provider failure text; never credentials. |
-| `created_at`, `updated_at`, `deleted_at`, `revision` | standard | yes/no | Standard lifecycle and optimistic-concurrency fields. |
+| Column                                                         | Type     | Required | Notes                                                                 |
+| -------------------------------------------------------------- | -------- | -------- | --------------------------------------------------------------------- |
+| `id`, `profile_id`, `workspace_id`, `project_id`, `mission_id` | Id       | yes      | Extension record, caller, tenant, and internally created records.     |
+| `idempotency_key`                                              | text     | yes      | Caller key, unique active per profile.                                |
+| `github_owner_login`                                           | text     | no       | Selected owner when repository provisioning is requested.             |
+| `provisioning_status`                                          | text     | yes      | Extension-local `not_requested`, `pending`, `failed`, or `succeeded`. |
+| `github_repo_id`, `full_name`, `default_branch`, `clone_url`   | text     | no       | Non-secret GitHub repository metadata after success.                  |
+| `failure_message`                                              | text     | no       | Bounded retryable provider failure text; never credentials.           |
+| `created_at`, `updated_at`, `deleted_at`, `revision`           | standard | yes/no   | Standard lifecycle and optimistic-concurrency fields.                 |
 
 Indexes: unique active `(profile_id, idempotency_key)` and `(workspace_id, project_id)`.
 

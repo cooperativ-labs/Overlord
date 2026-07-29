@@ -22,7 +22,8 @@ import {
   resolveClaimLaunchConfig,
   resolveLaunchExecutionTarget,
   resolveProjectExecutionTargetForLaunch,
-  updateProjectExecutionTargetSelection
+  updateProjectExecutionTargetSelection,
+  updateWorkspaceExecutionTargetStatus
 } from './project-execution-target.js';
 import { addProjectResource, createProject } from './projects.js';
 import { seedServiceOperator } from './test-helpers.js';
@@ -254,6 +255,41 @@ describe('project execution target selection', () => {
     const launch = await resolveLaunchExecutionTarget({ ctx, projectId: project.id });
     assert.equal(launch.executionTargetId, caller.executionTargetId);
     assert.deepEqual(launch.agentConfigs.codex, { preCommand: 'run-it', flags: [] });
+  });
+
+  it('stamps an explicit reachable target and rejects a disabled override', async () => {
+    const { ctx } = await setup();
+    const project = await createProject({ ctx, name: 'Explicit launch target' });
+    await addProjectResource({
+      ctx,
+      projectId: project.id,
+      directoryPath: mkdtempSync(path.join(tmpdir(), 'ovld-explicit-launch-')),
+      isPrimary: true
+    });
+    const target = await ensureCallerDeviceTarget({ ctx });
+
+    const launch = await resolveLaunchExecutionTarget({
+      ctx,
+      projectId: project.id,
+      executionTargetId: target.executionTargetId
+    });
+    assert.equal(launch.executionTargetId, target.executionTargetId);
+
+    await updateWorkspaceExecutionTargetStatus({
+      ctx,
+      executionTargetId: target.executionTargetId,
+      status: 'disabled'
+    });
+    await assert.rejects(
+      () =>
+        resolveLaunchExecutionTarget({
+          ctx,
+          projectId: project.id,
+          executionTargetId: target.executionTargetId
+        }),
+      (error: unknown) =>
+        error instanceof ServiceError && error.code === 'execution_target_not_eligible'
+    );
   });
 
   it('rejects selecting a target that cannot reach a primary resource', async () => {
@@ -684,6 +720,21 @@ describe('execution target lifecycle', () => {
       label: string;
     };
     assert.equal(row.label, 'renamed-runner');
+  });
+
+  it('projects disabled reason and safely omits runner diagnostics when none are registered', async () => {
+    const { ctx } = await setup();
+    const targetId = await seedSecondTarget(ctx, 'disabled-runner');
+    await updateWorkspaceExecutionTargetStatus({
+      ctx,
+      executionTargetId: targetId,
+      status: 'disabled'
+    });
+    const target = (await listWorkspaceExecutionTargets({ ctx })).find(
+      entry => entry.id === targetId
+    );
+    assert.equal(target?.unavailableReason, 'Disabled by a workspace administrator.');
+    assert.deepEqual(target?.runnerRegistrations, []);
   });
 
   it('rejects renaming with a blank label', async () => {

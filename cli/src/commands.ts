@@ -45,6 +45,7 @@ import { pruneStaleProjectTmp } from './project-tmp.js';
 import { printProtocolHelp } from './protocol-help.js';
 import { recordTouchedFromPayload } from './record-touched.js';
 import { reportRunnerResourceObservations } from './resource-observations.js';
+import { runnerRegistrationPayload } from './runner-identity.js';
 import {
   applyPollJitter,
   buildRunnerServiceEnv,
@@ -1519,6 +1520,17 @@ export async function runManagementCommand({
   }
 }
 
+/**
+ * Whether a backend failure is the "this machine was never declared as an
+ * execution target" refusal. The backend client folds the error code into the
+ * rendered message as `(<code>)`, so match that marker rather than re-parsing
+ * the response body.
+ */
+function isNoExecutionTargetRegisteredError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.includes('(no_execution_target_registered)');
+}
+
 async function runRunnerCommand({
   runtime,
   parsed,
@@ -1559,13 +1571,30 @@ async function runRunnerCommand({
   }
 
   const runOnce = async (): Promise<{ launched: boolean; longPoll: boolean }> => {
-    const claim = await runtime.backend.post<unknown>({
-      path: '/api/runner/claim',
-      body: {
-        projectId: flagValue(parsed.flags, '--project-id'),
-        ...clientDeviceIdentity()
+    let claim: unknown;
+    try {
+      claim = await runtime.backend.post<unknown>({
+        path: '/api/runner/claim',
+        body: {
+          projectId: flagValue(parsed.flags, '--project-id'),
+          ...clientDeviceIdentity(),
+          // Contract v40: the claim poll doubles as this runner instance's
+          // heartbeat, so local target liveness reflects a runner that can
+          // actually take work rather than any CLI traffic from the machine.
+          ...runnerRegistrationPayload()
+        }
+      });
+    } catch (error) {
+      // Contract v39: starting a runner never declares an execution target. A
+      // machine nobody declared is unconfigured, not a new target, so say so and
+      // stop instead of polling forever against work it can never claim.
+      if (isNoExecutionTargetRegisteredError(error)) {
+        throw new CliError({
+          message: `${error instanceof Error ? error.message : String(error)}\nThe runner will not register a target for you — declare this machine first, then start it again.`
+        });
       }
-    });
+      throw error;
+    }
     const request = asRecord(claim).request;
     const longPoll = asRecord(claim).longPoll === true;
     if (!request) return { launched: false, longPoll };
@@ -1736,6 +1765,9 @@ async function runRunnerSupervisor({
     try {
       result = await runOnce();
     } catch (error) {
+      // An undeclared machine is a configuration error, not a transient poll
+      // failure: retrying cannot fix it, so surface it and exit non-zero.
+      if (isNoExecutionTargetRegisteredError(error)) throw error;
       lastError = error instanceof Error ? error.message : String(error);
     }
     const state = readRunnerServiceState();

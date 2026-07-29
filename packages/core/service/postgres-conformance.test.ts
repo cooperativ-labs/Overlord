@@ -499,12 +499,42 @@ for (const adapter of adapters) {
             deviceFingerprint: clientFingerprint,
             deviceLabel: 'conformance-client',
             devicePlatform: 'darwin'
-          }
+          },
+          runner: { runnerInstanceId: 'conformance-runner', runnerVersion: '0.0.0-test' }
         });
 
         assert.ok(claimed, 'runner should claim request stamped for its device fingerprint');
         assert.equal(claimed.executionTargetId, graph.executionTargetId);
         assert.equal(claimed.status, 'claimed');
+
+        // Contract v40 runner-instance registration and claim attribution must
+        // behave identically on both adapters (jsonb vs TEXT, timestamptz vs
+        // ISO text, partial unique index).
+        const registration = (await client.get(
+          `SELECT id, execution_target_id, relation, health, last_heartbeat_at
+             FROM execution_target_runner_registrations
+            WHERE workspace_id = ? AND runner_instance_id = ? AND deleted_at IS NULL`,
+          [WORKSPACE_ID, 'conformance-runner']
+        )) as
+          | {
+              id: string;
+              execution_target_id: string;
+              relation: string;
+              health: string;
+              last_heartbeat_at: string | null;
+            }
+          | undefined;
+        assert.ok(registration, 'claim registers this runner instance');
+        assert.equal(registration.execution_target_id, graph.executionTargetId);
+        assert.equal(registration.relation, 'native');
+        assert.equal(registration.health, 'healthy');
+        assert.ok(registration.last_heartbeat_at);
+
+        const attribution = (await client.get(
+          `SELECT claimed_by_runner_registration_id AS reg FROM execution_requests WHERE id = ?`,
+          [claimed.id]
+        )) as { reg: string | null } | undefined;
+        assert.equal(attribution?.reg, registration.id);
       } finally {
         await teardown();
       }

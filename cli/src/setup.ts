@@ -1,3 +1,5 @@
+import { hostname } from 'node:os';
+
 import { flagBoolean, flagValue, parseArgs } from './args.js';
 import {
   type AuthLoginResult,
@@ -58,6 +60,10 @@ function printHumanResult(result: SetupResult): void {
 
 function isHttpUrl(value: string): boolean {
   return /^https?:\/\//i.test(value.trim());
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 }
 
 function shellQuote(value: string): string {
@@ -392,6 +398,69 @@ async function resolveCurrentTerminalProfile({
   }
 }
 
+type ExecutionTargetSetupResult =
+  | { registered: true; executionTargetId: string; label: string }
+  | { registered: false; reason: 'declined' | 'workspace_selection_required' | 'failed' };
+
+/**
+ * Contract v39: an execution target is declared, never inferred. Setup asks
+ * explicitly and then makes the same `register-target` call `ovld add-et` makes —
+ * being authenticated with the CLI installed is deliberately not enough, because
+ * container images ship both.
+ */
+async function configureExecutionTargetForSetup({
+  runtime
+}: {
+  runtime: CliRuntime;
+}): Promise<ExecutionTargetSetupResult> {
+  printLine('');
+  printStepTitle('Step 4: Register this machine as an execution target.');
+  printLine('  Agents can only be launched on machines you have registered.');
+
+  if (!(await promptYesNo('Register this machine', true))) {
+    printLine('  Skipped. Register it later with `ovld add-et --name "<name>"`.');
+    return { registered: false, reason: 'declined' };
+  }
+
+  const name = await promptLine({ message: 'Target name', defaultValue: hostname() });
+
+  let result: Record<string, unknown>;
+  try {
+    result = asRecord(
+      await runtime.backend.post<unknown>({
+        path: '/api/protocol/register-target',
+        body: {
+          args: [],
+          positional: [],
+          flags: name ? { '--name': name } : {},
+          fileInputs: {}
+        }
+      })
+    );
+  } catch (error) {
+    printLine(`  Could not register: ${error instanceof Error ? error.message : String(error)}`);
+    printLine('  Retry later with `ovld add-et --name "<name>"`.');
+    return { registered: false, reason: 'failed' };
+  }
+
+  if (result.status === 'workspace_selection_required') {
+    const workspaces = Array.isArray(result.workspaces) ? result.workspaces : [];
+    printLine('  You belong to more than one workspace, so this needs an explicit choice:');
+    for (const entry of workspaces) {
+      const ws = asRecord(entry);
+      printLine(`    - ${String(ws.name ?? ws.id)} (${String(ws.slug ?? ws.id)})`);
+    }
+    printLine('  Run `ovld add-et --name "<name>" --workspace-id <id>` to finish.');
+    return { registered: false, reason: 'workspace_selection_required' };
+  }
+
+  const target = asRecord(result.executionTarget);
+  const executionTargetId = String(target.executionTargetId ?? '');
+  const label = String(target.label ?? name);
+  printLine(`  Registered execution target ${label} (${executionTargetId}).`);
+  return { registered: true, executionTargetId, label };
+}
+
 async function configureTerminalForSetup({ runtime }: { runtime: CliRuntime }): Promise<{
   executionTargetId: string;
   deviceLabel: string;
@@ -402,7 +471,7 @@ async function configureTerminalForSetup({ runtime }: { runtime: CliRuntime }): 
   const current = await resolveCurrentTerminalProfile({ runtime });
 
   printLine('');
-  printStepTitle('Step 4: Choose the default terminal for launched agents.');
+  printStepTitle('Step 5: Choose the default terminal for launched agents.');
   TERMINAL_OPTIONS.forEach((option, index) => {
     printLine(`  ${index + 1}. ${option.label}`);
   });
@@ -484,7 +553,19 @@ async function runFullSetupCommand({ json }: { json: boolean }): Promise<void> {
   const agents = await configureAgentsForSetup();
   const runtime = openCliRuntime();
   try {
-    const terminal = await configureTerminalForSetup({ runtime });
+    const executionTarget = await configureExecutionTargetForSetup({ runtime });
+    // Terminal settings are stored per execution target (contract v39), so there is
+    // nothing to store them against until this machine has been declared.
+    const terminal = executionTarget.registered
+      ? await configureTerminalForSetup({ runtime })
+      : null;
+    if (!terminal) {
+      printLine('');
+      printLine(
+        'Skipping the terminal step: launch settings are stored per execution target, ' +
+          'so register this machine first with `ovld add-et --name "<name>"`.'
+      );
+    }
 
     if (json) {
       printJson({
@@ -497,6 +578,7 @@ async function runFullSetupCommand({ json }: { json: boolean }): Promise<void> {
           credentialsPath: auth.credentialsPath
         },
         agents: agents.map(result => result.agentKey),
+        executionTarget,
         terminal
       });
     } else {
