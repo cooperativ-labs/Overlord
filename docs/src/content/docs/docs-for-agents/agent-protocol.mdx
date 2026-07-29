@@ -246,6 +246,27 @@ asks for follow-up work.
 - During follow-up execution, post updates and record change rationales just like
   the first pass, then **deliver again**.
 
+## Update an existing artifact
+
+When a later objective or follow-up must revise a plan, notes, or URL artifact
+created earlier, update that artifact in place instead of delivering a
+duplicate:
+
+```bash
+ovld protocol update-artifact \
+  --mission-id coo:312 \
+  --artifact-id <artifact-id> \
+  --expected-revision 2 \
+  --label "Revised plan" \
+  --content-text-file -
+```
+
+Use the `id` and `revision` from `attach` / `load-context` `artifacts` or
+`ovld mission artifacts`. Provide at least one of `--label`,
+`--content-text` / `--content-text-file`, or `--external-url`. No session key is
+required. Stale `--expected-revision` returns a conflict — refresh and retry.
+Hosted MCP exposes the same call as `overlord_update_artifact`.
+
 ## Missions vs objectives
 
 A **mission** is a whole feature or goal. An **objective** is one agent pass —
@@ -276,6 +297,7 @@ ovld protocol add-objectives --mission-id coo:312 \
 | `changes`                        | Local preflight of changed-file attribution.              |
 | `resume-follow-up`               | Reopen a delivered objective for follow-up.               |
 | `read-context` / `write-context` | Read or store persistent shared context.                  |
+| `update-artifact`                | Revise an existing mission artifact in place.             |
 
 For the full CLI surface — management commands, the runner, project linking —
 see the [CLI reference](/cli/). Never invent protocol subcommands; run

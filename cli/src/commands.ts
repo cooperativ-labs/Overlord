@@ -663,6 +663,7 @@ const PROTOCOL_FILE_FLAGS = [
   '--objectives-file',
   '--changed-files-file',
   '--value-file',
+  '--content-text-file',
   '--prompt-file'
 ] as const;
 
@@ -813,7 +814,8 @@ export async function runProtocolCommand({
     const pointer = readActiveMissionPointer(workingDirectory);
     const requestedMissionId = flagValue(parsed.flags, '--mission-id');
     const environmentMissionId = process.env.MISSION_ID ?? process.env.OVERLORD_MISSION_ID;
-    const displayId = requestedMissionId?.trim() || pointer?.displayId || environmentMissionId?.trim();
+    const displayId =
+      requestedMissionId?.trim() || pointer?.displayId || environmentMissionId?.trim();
     if (!displayId) return;
     const title =
       pointer &&
@@ -977,11 +979,7 @@ export async function runProtocolCommand({
   // Attach / connect / resume: surface a deterministic mission deep-link on
   // stderr (never stdout — agents parse the JSON) and drop a cwd→mission
   // pointer so later hooks can read the link without a backend round trip.
-  if (
-    subcommand === 'attach' ||
-    subcommand === 'connect' ||
-    subcommand === 'resume-follow-up'
-  ) {
+  if (subcommand === 'attach' || subcommand === 'connect' || subcommand === 'resume-follow-up') {
     const missionRecord = asRecord(resultRecord.mission);
     // Prefer the response display id, then the caller-supplied --mission-id
     // (often already a display id like coo:502), and only then the UUID.
@@ -990,8 +988,7 @@ export async function runProtocolCommand({
       (typeof missionId === 'string' && missionId.trim()) ||
       (typeof resultRecord.missionId === 'string' && resultRecord.missionId.trim()) ||
       '';
-    const title =
-      typeof missionRecord.title === 'string' ? missionRecord.title : undefined;
+    const title = typeof missionRecord.title === 'string' ? missionRecord.title : undefined;
     const pointerMissionId =
       (typeof missionRecord.id === 'string' && missionRecord.id.trim()) ||
       (typeof resultRecord.missionId === 'string' && resultRecord.missionId.trim()) ||

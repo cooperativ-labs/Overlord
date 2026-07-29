@@ -18,11 +18,7 @@ export function callerDeviceFingerprint(): string {
  * Soft-delete every live device in the workspace that has no live execution target.
  * Returns the number of devices tombstoned.
  */
-export async function softDeleteOrphanDevices({
-  ctx
-}: {
-  ctx: ServiceContext;
-}): Promise<number> {
+export async function softDeleteOrphanDevices({ ctx }: { ctx: ServiceContext }): Promise<number> {
   const orphans = (await ctx.db.all(
     `SELECT d.id
        FROM devices d

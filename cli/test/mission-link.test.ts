@@ -66,7 +66,11 @@ test('missionBannerShellCommands emits plain printf plus OSC title', () => {
     displayId: 'coo:502',
     title: 'Investigate linking'
   });
-  assert.ok(commands.includes(`printf '%s\\n' 'coo:502 · overlord://missions/coo:502 — Investigate linking'`));
+  assert.ok(
+    commands.includes(
+      `printf '%s\\n' 'coo:502 · overlord://missions/coo:502 — Investigate linking'`
+    )
+  );
   assert.ok(commands.includes(`printf '%b' '\\033]0;coo:502 — Investigate linking\\007'`));
 });
 

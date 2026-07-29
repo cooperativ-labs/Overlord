@@ -1,4 +1,5 @@
 import { type Permission, PERMISSIONS } from '@overlord/auth';
+import type { UpdateArtifactBody } from '@overlord/contract';
 
 import type { ServiceContext } from '../packages/core/service/context.ts';
 import { listAttachments } from '../packages/core/service/missions.ts';
@@ -38,7 +39,7 @@ import {
 } from './db.ts';
 import { ApiError } from './errors.ts';
 import { requirePermission, requireWorkspacePermission } from './rbac.ts';
-import { callerWorkspaceMemberships } from './repository.ts';
+import { callerWorkspaceMemberships, updateArtifact } from './repository.ts';
 import { listWorkspaces } from './workspaces.ts';
 
 // ---- Protocol command dispatch -------------------------------------------
@@ -764,6 +765,32 @@ const handlers: Record<string, Handler> = {
     });
   },
 
+  // In-place artifact edit (same service as REST PATCH). No session key — a
+  // later objective or follow-up can revise an artifact created earlier.
+  'update-artifact': (_ctx, body) => {
+    const expectedRevision = intFlag(body, '--expected-revision');
+    if (expectedRevision === undefined) {
+      throw new ApiError(400, 'Missing required flag: --expected-revision');
+    }
+    const update: UpdateArtifactBody = { expectedRevision };
+    if (hasFlag(body, '--label')) {
+      update.label = strFlag(body, '--label') ?? '';
+    }
+    if (hasFlag(body, '--content-text') || hasFlag(body, '--content-text-file')) {
+      const content = resolveInput(body, '--content-text', '--content-text-file');
+      update.contentText = content !== undefined && content.trim() ? content : null;
+    }
+    if (hasFlag(body, '--external-url')) {
+      const url = strFlag(body, '--external-url');
+      update.externalUrl = url !== undefined && url.trim() ? url : null;
+    }
+    return updateArtifact(
+      requireFlag(body, '--mission-id'),
+      requireFlag(body, '--artifact-id'),
+      update
+    );
+  },
+
   'attachment-list': async (ctx, body) => {
     const missionId = requireFlag(body, '--mission-id');
     const attachments = await listAttachments({ ctx, missionId });
@@ -841,6 +868,7 @@ const SUBCOMMAND_PERMISSIONS: Record<string, Permission | null> = {
   'record-work': PERMISSIONS.MISSION_CREATE,
   'read-context': PERMISSIONS.MISSION_READ,
   'write-context': PERMISSIONS.MISSION_UPDATE,
+  'update-artifact': PERMISSIONS.MISSION_UPDATE,
   'attachment-list': PERMISSIONS.ARTIFACT_READ,
   'attachment-download-url': PERMISSIONS.ARTIFACT_READ,
   'auth-status': null,

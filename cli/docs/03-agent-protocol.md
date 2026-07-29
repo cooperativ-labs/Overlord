@@ -59,6 +59,11 @@ Requirements:
 
 - `read-context`: read persistent shared context.
 - `write-context`: write persistent shared context.
+- `update-artifact`: revise an existing mission artifact's label, Markdown
+  content, and/or HTTP(S) URL in place (same rules as REST
+  `PATCH /api/missions/:id/artifacts/:artifactId`). Requires
+  `--expected-revision` for optimistic concurrency; does not require a session
+  key so a later objective or follow-up can update an artifact created earlier.
 - `attachment-list`: list visible objective attachments.
 - `attachment-prepare-upload`: prepare an attachment upload.
 - `attachment-finalize-upload`: finalize an uploaded attachment.

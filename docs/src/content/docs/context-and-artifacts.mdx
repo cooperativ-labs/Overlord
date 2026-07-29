@@ -48,6 +48,29 @@ artifacts are structured entries such as `next_steps`, `test_results`,
 **specific objective**, not the mission in the abstract, so a spec or screenshot
 stays tied to the instruction it supports.
 
+Agents often create a plan or notes artifact in one objective, then revise it in
+a later objective or follow-up. Prefer updating the existing artifact in place
+instead of delivering a duplicate:
+
+```bash
+# Inspect current artifacts (id + revision)
+ovld mission artifacts <mission-id>
+
+# Revise label and/or Markdown content (same rules as the web/mobile editor)
+ovld protocol update-artifact \
+  --mission-id <mission-id> \
+  --artifact-id <artifact-id> \
+  --expected-revision <n> \
+  --label "Revised plan" \
+  --content-text-file -
+```
+
+Hosted MCP exposes the same mutation as `overlord_update_artifact`. No session
+key is required. Supply the current `revision` as `--expected-revision` /
+`expectedRevision` (stale values return a conflict). Editable fields are
+`label`, `contentText`, and `externalUrl`; delivery provenance and structured
+`contentJson` stay immutable.
+
 ## Inspect context from the CLI
 
 ```bash

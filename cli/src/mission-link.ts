@@ -23,7 +23,11 @@ export function missionDeepLink(displayId: string): string {
 
 /** Strip control chars so titles cannot inject terminal escape sequences. */
 export function sanitizeTerminalText(value: string): string {
-  return value.replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim();
+  return value
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\u0000-\u001f\u007f]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 /** Window/tab title: `coo:502 — Title` or just the display id. */
@@ -63,17 +67,14 @@ export function shouldUseTerminalHyperlinks({
  * With hyperlinks: OSC 8 wrapping `coo:502 — Title`.
  * Without: `coo:502 · overlord://missions/coo:502` (plus title when present).
  */
-export function missionLinkLine({
-  displayId,
-  title,
-  hyperlink
-}: MissionLinkOpts): string {
+export function missionLinkLine({ displayId, title, hyperlink }: MissionLinkOpts): string {
   const id = sanitizeTerminalText(displayId);
   if (!id) return '';
   const link = missionDeepLink(id);
   const label = missionTerminalTitle({ displayId: id, title });
   const useHyperlink =
-    hyperlink ?? shouldUseTerminalHyperlinks({ env: process.env, isTty: Boolean(process.stderr.isTTY) });
+    hyperlink ??
+    shouldUseTerminalHyperlinks({ env: process.env, isTty: Boolean(process.stderr.isTTY) });
 
   if (useHyperlink) {
     // OSC 8: ESC ] 8 ; ; <uri> ESC \ <text> ESC ] 8 ; ; ESC \

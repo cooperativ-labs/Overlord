@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
+import { writeActiveMissionPointer } from '../src/active-mission.ts';
 import { runProtocolCommand } from '../src/commands.ts';
 import type { CliRuntime } from '../src/runtime.ts';
 import {
@@ -14,7 +15,6 @@ import {
   writeBaseline
 } from '../src/vcs.ts';
 import { writeActiveSession } from '../src/vcs-sessions.ts';
-import { writeActiveMissionPointer } from '../src/active-mission.ts';
 
 const MISSION_ID = 'coo:127';
 const OTHER_MISSION_ID = 'coo:128';

@@ -23,6 +23,7 @@ export const SUPPORTED_PROTOCOL_SUBCOMMANDS = [
   'resume-follow-up',
   'search-missions',
   'update',
+  'update-artifact',
   'write-context'
 ] as const;
 
@@ -96,6 +97,7 @@ Subcommands:
                          of hand-triaging \`git status\`
   read-context           Read shared persistent context for this mission
   write-context          Write shared persistent context for future sessions
+  update-artifact        Update an existing mission artifact in place
   attachment-list        List all attachments for the mission
   attachment-download-url  Get the download URL for a specific attachment
 
@@ -385,6 +387,23 @@ write-context:
     --mission-id <id>
     --key <name>
     --value <text> or --value-json / --value-file <path|->
+
+update-artifact:
+  Purpose:
+    Update an existing mission artifact's label, Markdown content, and/or URL in
+    place (same rules as PATCH /api/missions/:id/artifacts/:artifactId). Use this
+    when a later objective or follow-up must revise an artifact created earlier,
+    instead of delivering a duplicate. No session key is required.
+  Required:
+    --mission-id <id>
+    --artifact-id <id>
+    --expected-revision <n>     Current artifact.revision (409 if stale)
+  Optional (at least one required):
+    --label <text>
+    --content-text <text> or --content-text-file <path|->
+    --external-url <url>        Empty string clears the URL
+  Returns:
+    Updated ArtifactDto JSON (includes the new revision).
 
 attachment-list:
   Purpose:

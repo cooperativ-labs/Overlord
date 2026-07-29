@@ -662,10 +662,9 @@ describe('execution target lifecycle', () => {
     assert.equal(liveDevice.deleted_at, null);
     assert.equal(liveDevice.label, 'revive-host-again');
 
-    const liveTarget = (await db.get(
-      `SELECT deleted_at FROM execution_targets WHERE id = ?`,
-      [first.executionTargetId]
-    )) as { deleted_at: string | null };
+    const liveTarget = (await db.get(`SELECT deleted_at FROM execution_targets WHERE id = ?`, [
+      first.executionTargetId
+    ])) as { deleted_at: string | null };
     assert.equal(liveTarget.deleted_at, null);
   });
 

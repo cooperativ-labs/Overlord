@@ -73,6 +73,7 @@ credential model behind these tokens and the errors above.
 The tool catalog is mission-first:
 
 - `overlord_resolve_project`
+- `overlord_create_project`
 - `overlord_search_missions`
 - `overlord_create_mission`
 - `overlord_load_mission_context`
@@ -80,6 +81,8 @@ The tool catalog is mission-first:
 - `overlord_attach_session`
 - `overlord_update_session`
 - `overlord_deliver_session`
+- `overlord_update_artifact` — revise an existing mission artifact in place
+- `overlord_record_work`
 
 Widgets are attached to project resolution, mission search, mission-context, and
 delivery results:
@@ -100,6 +103,12 @@ create missions require an explicit `projectId`. Call `overlord_resolve_project`
 first when project identity comes from an exposed repository resource carrying
 `.overlord/project.json`.
 </Aside>
+
+`overlord_update_artifact` forwards to Protocol `update-artifact` and uses the
+same service as REST `PATCH /api/missions/:id/artifacts/:artifactId`. Provide
+`missionId`, `artifactId`, `expectedRevision`, and at least one of `label`,
+`contentText`, or `externalUrl`. Use it when a later objective must revise a
+plan artifact created earlier instead of delivering a duplicate.
 
 ## Boundaries
 

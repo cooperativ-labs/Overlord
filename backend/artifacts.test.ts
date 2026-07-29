@@ -103,3 +103,26 @@ test('rejects an artifact edit with an unsafe external URL', async () => {
     (error: unknown) => error instanceof ApiError && error.status === 400
   );
 });
+
+test('protocol update-artifact revises an existing artifact without a session', async () => {
+  const { artifactId, mission } = await createArtifactFixture();
+  const { runProtocolSubcommand } = await import('./protocol.ts');
+
+  const updated = (await runProtocolSubcommand('update-artifact', {
+    flags: {
+      '--mission-id': mission.id,
+      '--artifact-id': artifactId,
+      '--expected-revision': '1',
+      '--label': 'Revised plan',
+      '--content-text': '## Updated\n\n- step one'
+    }
+  })) as {
+    label: string;
+    contentText: string | null;
+    revision: number;
+  };
+
+  assert.equal(updated.label, 'Revised plan');
+  assert.equal(updated.contentText, '## Updated\n\n- step one');
+  assert.equal(updated.revision, 2);
+});

@@ -208,6 +208,22 @@ export const hostedMcpToolDefinitions: ToolDefinition[] = [
         missionId: stringProperty('Mission UUID or workspace display id.'),
         sessionKey: stringProperty('Session key returned by overlord_attach_session.'),
         summary: stringProperty('Delivery summary.'),
+        artifacts: {
+          type: 'array',
+          description:
+            'Optional mission artifacts to persist with this delivery. Each artifact has type, label, optional content, and optional HTTP(S) url.',
+          items: objectSchema(
+            {
+              type: stringProperty(
+                'Artifact type, such as note, next_steps, test_results, decision, migration, or url.'
+              ),
+              label: stringProperty('Human-facing artifact label.'),
+              content: stringProperty('Optional text or Markdown content.'),
+              url: stringProperty('Optional HTTP(S) URL.')
+            },
+            ['type', 'label']
+          )
+        },
         noFileChanges: {
           type: 'boolean',
           description: 'Set true when the MCP run changed no files.'
@@ -253,6 +269,34 @@ export const hostedMcpToolDefinitions: ToolDefinition[] = [
     ),
     annotations: writeAction,
     _meta: widget('ui://overlord/file-changes.html')
+  },
+  {
+    name: 'overlord_update_artifact',
+    title: 'Update mission artifact',
+    description:
+      'Use this when an existing mission artifact must be revised in place (for example a plan ' +
+      'written in an earlier objective) rather than delivering a duplicate. Requires the current ' +
+      'artifact revision for optimistic concurrency. Provide at least one of label, contentText, or externalUrl.',
+    inputSchema: objectSchema(
+      {
+        missionId: stringProperty('Mission UUID or workspace display id such as coo:150.'),
+        artifactId: stringProperty('Artifact id from mission context or load-context artifacts.'),
+        expectedRevision: {
+          type: 'number',
+          description: 'Current artifact.revision. Stale values return a conflict error.'
+        },
+        label: stringProperty('Optional new human-facing label.'),
+        contentText: stringProperty(
+          'Optional new Markdown/text content. Pass an empty string to clear text content.'
+        ),
+        externalUrl: stringProperty(
+          'Optional HTTP(S) URL. Pass an empty string to clear the external URL.'
+        )
+      },
+      ['missionId', 'artifactId', 'expectedRevision']
+    ),
+    outputSchema: protocolOutputSchema('The updated artifact DTO including the new revision.'),
+    annotations: writeAction
   },
   {
     name: 'overlord_record_work',

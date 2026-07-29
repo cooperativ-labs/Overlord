@@ -138,13 +138,12 @@ function terminalInnerCommand({
   const exports = Object.entries({ ...tmpEnvFor(workingDirectory), ...extraEnv })
     .map(([key, value]) => `export ${key}=${shellQuote(value)}`)
     .join('; ');
-  const banner =
-    missionLink?.displayId?.trim()
-      ? missionBannerShellCommands({
-          displayId: missionLink.displayId,
-          title: missionLink.title
-        })
-      : '';
+  const banner = missionLink?.displayId?.trim()
+    ? missionBannerShellCommands({
+        displayId: missionLink.displayId,
+        title: missionLink.title
+      })
+    : '';
   const invocation = withPreLaunchCommands(agentCommand, preLaunchCommands);
   const afterExports = [banner, invocation].filter(Boolean).join('; ');
   return `cd ${shellQuote(workingDirectory)} && ${exports}; ${afterExports}`;

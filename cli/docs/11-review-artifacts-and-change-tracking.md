@@ -157,6 +157,12 @@ CLI review commands can be added before UI:
 - `ovld mission artifacts <id>`
 - `ovld mission rationales <id>`
 
+Agents update an existing artifact in place with
+`ovld protocol update-artifact` (or MCP `overlord_update_artifact`) rather than
+delivering a duplicate copy. The command requires the current
+`expectedRevision` and accepts any non-empty subset of label / content text /
+external URL — the same mutation as the web/mobile PATCH editor.
+
 ## Security And Data Boundaries
 
 Requirements:

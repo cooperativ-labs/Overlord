@@ -267,6 +267,31 @@ missionDiscovery:
       - creates-completed-objective
       - creates-delivery-record-without-session-attribution
 
+artifacts:
+  updateArtifact:
+    description: >-
+      Update an existing mission artifact's human-facing label, contentText,
+      and/or externalUrl in place (same rules as REST PATCH
+      /api/missions/:id/artifacts/:artifactId). Does not require a session key.
+    requiredFlags:
+      - --mission-id
+      - --artifact-id
+      - --expected-revision
+    optionalFlags:
+      - --label
+      - --content-text
+      - --content-text-file
+      - --external-url
+    rules:
+      - 'At least one of --label, --content-text/--content-text-file, or --external-url must be supplied'
+      - 'Empty --content-text / --external-url clears that field (subject to the retain-at-least-one-content rule)'
+      - 'Stale --expected-revision returns 409; non-HTTP(S) external URLs are rejected'
+      - 'Delivery/session/objective provenance and contentJson remain immutable'
+    sideEffects:
+      - updates-artifact-row
+      - increments-artifact-revision
+      - emits-artifact-entity-change
+
 sharedContext:
   readContext:
     readOnly: true

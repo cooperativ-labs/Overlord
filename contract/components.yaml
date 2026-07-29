@@ -4,7 +4,7 @@
 # IMPORTANT: Update this file and CONTRACT.md together when adding components or surfaces.
 # Increment contractVersion when any stable interface changes.
 
-contractVersion: '35'
+contractVersion: '37'
 
 components:
   protocol:
@@ -22,6 +22,7 @@ components:
       - 'request envelope: per-flag fileInputs map (at most one stdin payload) and change-rationale file_path/filePath alias normalization'
       - 'changed-file and change-rationale recording protocol'
       - 'idempotency key scope naming: protocol.*'
+      - 'in-place mission artifact updates via update-artifact (same editable fields and revision CAS as REST PATCH /api/missions/:id/artifacts/:artifactId; no session key required)'
       - 'agent-facing mission lifecycle commands only; runner queue/device/project-resource management commands live on CLI/Runner/REST surfaces'
     dependsOn:
       - database
@@ -267,6 +268,7 @@ components:
       - 'public ChatGPT mission-first surface: project resolution/selection, mission search/context reads, explicit mission/session writes, and presentation-only widget resources'
       - 'OAuth protected-resource metadata for the hosted MCP resource'
       - 'mapping MCP tool calls to existing service/protocol operations'
+      - 'hosted overlord_update_artifact tool forwarding to Protocol update-artifact'
     dependsOn:
       - auth
       - protocol
@@ -432,6 +434,8 @@ interactionSurfaces:
       - 'MCP handlers must not read or write database tables directly'
       - 'Every tool call must pass through the same RBAC gates as the corresponding REST or protocol operation'
       - 'Mission creation tools require explicit projectId or a prior resolved project identity; missing or ambiguous project context is a tool error'
+      - 'Hosted MCP delivery artifacts use the existing Protocol deliver artifact shape and lifecycle; MCP does not create artifact types or write artifact rows directly'
+      - 'Hosted MCP artifact updates use overlord_update_artifact → Protocol update-artifact → the same updateArtifact service as REST PATCH; MCP does not write artifact rows directly'
       - 'Hosted MCP must not expose local filesystem/worktree inspection, runner queue claiming, execution target mutation, or branch-action tools'
       - 'MCP Apps widget resources use ui://overlord/* URIs, self-contained HTML, and associated tool structuredContent only; no third-party frames, secrets, or unrestricted network access'
 

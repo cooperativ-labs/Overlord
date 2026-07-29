@@ -187,6 +187,7 @@ const toolHandlers: Record<string, ToolHandler> = {
         '--session-key': requiredString(args, 'sessionKey'),
         '--summary': requiredString(args, 'summary'),
         ...(args.noFileChanges === true ? { '--no-file-changes': true } : {}),
+        ...(Array.isArray(args.artifacts) ? { '--artifacts-file': true } : {}),
         ...(Array.isArray(args.changeRationales) ? { '--change-rationales-file': true } : {}),
         ...(Array.isArray(args.humanActions) ||
         Array.isArray(args.tradeoffsMade) ||
@@ -215,10 +216,40 @@ const toolHandlers: Record<string, ToolHandler> = {
             }
           : {})
       },
-      fileInputs: Array.isArray(args.changeRationales)
-        ? { '--change-rationales-file': JSON.stringify(args.changeRationales) }
-        : undefined
+      fileInputs:
+        Array.isArray(args.artifacts) || Array.isArray(args.changeRationales)
+          ? {
+              ...(Array.isArray(args.artifacts)
+                ? { '--artifacts-file': JSON.stringify(args.artifacts) }
+                : {}),
+              ...(Array.isArray(args.changeRationales)
+                ? { '--change-rationales-file': JSON.stringify(args.changeRationales) }
+                : {})
+            }
+          : undefined
     }),
+  overlord_update_artifact: args => {
+    if (typeof args.expectedRevision !== 'number' || !Number.isInteger(args.expectedRevision)) {
+      throw new Error('expectedRevision must be an integer');
+    }
+    const hasLabel = typeof args.label === 'string';
+    const hasContentText = typeof args.contentText === 'string';
+    const hasExternalUrl = typeof args.externalUrl === 'string';
+    if (!hasLabel && !hasContentText && !hasExternalUrl) {
+      throw new Error('Provide at least one of label, contentText, or externalUrl');
+    }
+    return runProtocolSubcommand('update-artifact', {
+      flags: {
+        '--mission-id': requiredString(args, 'missionId'),
+        '--artifact-id': requiredString(args, 'artifactId'),
+        '--expected-revision': String(Math.trunc(args.expectedRevision)),
+        ...(hasLabel ? { '--label': args.label as string } : {}),
+        ...(hasContentText ? { '--content-text-file': true } : {}),
+        ...(hasExternalUrl ? { '--external-url': args.externalUrl as string } : {})
+      },
+      fileInputs: hasContentText ? { '--content-text-file': args.contentText as string } : undefined
+    });
+  },
   overlord_record_work: args => {
     // record-work takes its whole envelope on stdin so objective/summary/title
     // and the file-change arrays travel as one JSON object — the same shape the

@@ -210,6 +210,7 @@ File-backed payloads: any `-*-json` flag has a paired `-*-file <path>` flag (use
 | `hook-event` | Record connector lifecycle hook | `--hook-type UserPromptSubmit`, `--mission-id <id>` | `--prompt <text>` or `--prompt-file <path>`, `--session-key <key>`, `--external-session-id <id>`, `--turn-index <n>` |
 | `read-context` | Read shared persistent mission context | `--mission-id <id>` | `--key <substring>`, `--limit <n>` (default: 50) |
 | `write-context` | Write shared persistent mission context | `--mission-id <id>`, `--key <name>`, `--value <text>` or `--value-json` / `--value-file` | — |
+| `update-artifact` | Update an existing mission artifact in place (same rules as REST PATCH) | `--mission-id <id>`, `--artifact-id <id>`, `--expected-revision <n>` | `--label <text>`, `--content-text <text>` or `--content-text-file <path|->`, `--external-url <url>` (at least one optional field required) |
 | `attachment-list` | List all mission attachments | `--mission-id <id>` | — |
 | `attachment-download-url` | Get download URL for one attachment | `--mission-id <id>`, `--attachment-id <id>` | — |
 | `help` | Print protocol reference (this document's protocol section in long form) | — | — |

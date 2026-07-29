@@ -1,15 +1,11 @@
+import { deviceIdentityFromParts } from '@overlord/core/service/device-identity';
 import assert from 'node:assert/strict';
 import { hostname, platform } from 'node:os';
 import test from 'node:test';
 
-import { deviceIdentityFromParts } from '@overlord/core/service/device-identity';
-
 import { clientDeviceIdentity } from '../src/device-identity.ts';
 
-function withEnv(
-  overrides: Record<string, string | undefined>,
-  run: () => void
-): void {
+function withEnv(overrides: Record<string, string | undefined>, run: () => void): void {
   const previous = new Map<string, string | undefined>();
   for (const [key, value] of Object.entries(overrides)) {
     previous.set(key, process.env[key]);

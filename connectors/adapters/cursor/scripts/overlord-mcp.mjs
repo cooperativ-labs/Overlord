@@ -211,6 +211,10 @@ const tools = [
         missionId: stringProperty('Mission UUID or workspace display id.'),
         sessionKey: stringProperty('Session key returned by overlord_attach_session.'),
         summary: stringProperty('Delivery summary.'),
+        artifacts: {
+          type: 'array',
+          description: 'Optional mission artifacts to persist with this delivery.'
+        },
         noFileChanges: {
           type: 'boolean',
           description: 'Set true when the MCP run changed no files.'
@@ -233,6 +237,26 @@ const tools = [
         assumptions: { type: 'array', description: 'Material implementation assumptions.' }
       },
       ['missionId', 'sessionKey', 'summary']
+    )
+  },
+  {
+    name: 'overlord_update_artifact',
+    title: 'Update mission artifact',
+    description:
+      'Revise an existing mission artifact in place (label, Markdown content, and/or URL) using optimistic concurrency via expectedRevision.',
+    inputSchema: objectSchema(
+      {
+        missionId: stringProperty('Mission UUID or workspace display id.'),
+        artifactId: stringProperty('Artifact id from mission context.'),
+        expectedRevision: {
+          type: 'number',
+          description: 'Current artifact.revision. Stale values return a conflict error.'
+        },
+        label: stringProperty('Optional new human-facing label.'),
+        contentText: stringProperty('Optional new Markdown/text content.'),
+        externalUrl: stringProperty('Optional HTTP(S) URL.')
+      },
+      ['missionId', 'artifactId', 'expectedRevision']
     )
   },
   {
@@ -360,6 +384,7 @@ function callOverlordTool(name, args) {
       'session-key': requiredString(args, 'sessionKey'),
       summary: requiredString(args, 'summary'),
       ...(args.noFileChanges === true ? { 'no-file-changes': true } : {}),
+      ...(Array.isArray(args.artifacts) ? { 'artifacts-json': args.artifacts } : {}),
       ...(Array.isArray(args.changeRationales)
         ? { 'change-rationales-json': args.changeRationales }
         : {}),
@@ -385,6 +410,25 @@ function callOverlordTool(name, args) {
             }
           }
         : {})
+    });
+  }
+  if (name === 'overlord_update_artifact') {
+    if (typeof args.expectedRevision !== 'number' || !Number.isInteger(args.expectedRevision)) {
+      throw new Error('expectedRevision must be an integer');
+    }
+    const hasLabel = typeof args.label === 'string';
+    const hasContentText = typeof args.contentText === 'string';
+    const hasExternalUrl = typeof args.externalUrl === 'string';
+    if (!hasLabel && !hasContentText && !hasExternalUrl) {
+      throw new Error('Provide at least one of label, contentText, or externalUrl');
+    }
+    return runProtocol('update-artifact', {
+      'mission-id': requiredString(args, 'missionId'),
+      'artifact-id': requiredString(args, 'artifactId'),
+      'expected-revision': String(Math.trunc(args.expectedRevision)),
+      ...(hasLabel ? { label: args.label } : {}),
+      ...(hasContentText ? { 'content-text': args.contentText } : {}),
+      ...(hasExternalUrl ? { 'external-url': args.externalUrl } : {})
     });
   }
   if (name === 'overlord_record_work') {
@@ -433,7 +477,7 @@ process.stdin.on('data', async chunk => {
         result: {
           protocolVersion: PROTOCOL_VERSION,
           capabilities: { tools: { listChanged: false } },
-          serverInfo: { name: 'overlord-cursor', version: '0.3.6' }
+          serverInfo: { name: 'overlord-cursor', version: '0.3.9' }
         }
       });
       continue;

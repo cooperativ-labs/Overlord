@@ -407,6 +407,7 @@ Field shape, inline vs stdin piping, and `record-change-rationales` syntax are i
 - The `summary` in deliver is what the PM reads first, so write it as a narrative, not a command list.
 - When a summary or question contains backticks, `$vars`, or other shell-special characters, always use `--summary-file -` (or `--question-file -`) with a single-quoted heredoc (`<<'EOF'`). Never retry by stripping or escaping content — pipe stdin instead. See [reference/shell-escaping.md](reference/shell-escaping.md).
 - Use `write-context` for facts a future agent session should know.
+- Use `update-artifact` (or MCP `overlord_update_artifact`) to revise an existing mission artifact in place instead of delivering a duplicate when a later objective updates a plan or notes.
 - If a protocol or MCP call fails with auth/session errors, run `ovld auth repair` yourself before asking the user to log in again or proceed without Overlord updates.
 - If you must run `ovld auth login`, `--organization-id <id>` is optional — it validates/scopes that login or command but does not create a stored default organization.
 - Do not add or commit changes unless the user explicitly asks you to commit.
