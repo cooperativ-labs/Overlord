@@ -15,11 +15,11 @@ that its project has an available target and a linked directory on it.
 
 ## Core concepts
 
-| Concept | What it is |
-| --- | --- |
-| **Execution target** | A machine or environment agents execute on, identified by a device fingerprint (not a label). |
-| **Project resource directory** | A checkout path for a project on a specific target. |
-| **Primary resource** | The default directory used when a launch does not name an explicit resource. There is one primary per **(project, target)** pair. |
+| Concept                        | What it is                                                                                                                        |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| **Execution target**           | A machine or environment agents execute on, identified by a device fingerprint (not a label).                                     |
+| **Project resource directory** | A checkout path for a project on a specific target.                                                                               |
+| **Primary resource**           | The default directory used when a launch does not name an explicit resource. There is one primary per **(project, target)** pair. |
 
 An execution target is **not** owned by a single user or organization. The same
 physical machine can appear in multiple organizations with different labels;
@@ -27,22 +27,36 @@ identity is the fingerprint, so two VMs on one host are two targets.
 
 ### Environments vs disposable containers
 
-By default the CLI fingerprints from the process hostname, so a new container
-hostname becomes a new target. That is correct for lasting machines and VMs.
-Disposable agent containers that share one host environment should instead set
-a stable `OVERLORD_DEVICE_FINGERPRINT` (and optionally `OVERLORD_DEVICE_LABEL`)
-for that environment — AgentPod already does this — so each container is a
-session inside the same target rather than a selectable new target.
+A container never registers a target of its own. A container that shares its
+host's filesystem — AgentPod mounting the host checkout — **adopts** the host's
+target instead: it runs a runner against the target the host already has, so the
+resources it resolves are literally the host's resources.
+
+Point the container at the host target and give it its own runner identity:
+
+```bash
+OVERLORD_EXECUTION_TARGET_ID=<host target id>
+OVERLORD_RUNNER_INSTANCE_ID=<stable per-container id>
+OVERLORD_RUNNER_RELATION=adopted
+```
+
+The target id is resolved and authorized, never created; if it does not exist or
+you cannot access it, the runner fails with `no_execution_target_registered`
+rather than inventing a target. One target can be served by several runners at
+once — the host's own runner plus every container adopting it — and any healthy
+one may claim its work.
+
+A genuinely independent VM or sandbox is the other case: run `ovld add-et`
+inside it so it becomes its own target.
 
 ## Local vs remote targets
 
-**Local targets** register automatically when the CLI or desktop app runs on the
-machine — the device fingerprint, transport, and hostname are recorded for you.
-The first launch, queue claim, or `ovld add-cwd` provisions the target as a side
-effect.
-
-To register a machine **up front**, before any of that work happens, announce it
-explicitly:
+**Local targets** are registered deliberately, never as a side effect. Logging
+in, installing a runner, or starting one does not make a machine an execution
+target — container images ship the CLI and a token, so capability cannot be the
+trigger. Exactly two acts register one: linking a checkout from the machine that
+holds it (`ovld add-cwd`, `ovld create-project --directory`, the desktop local
+bridge), and announcing the machine explicitly:
 
 ```bash
 ovld add-et --name "CI runner 01"
@@ -58,6 +72,14 @@ workspaces and asks you to choose).
 has registered: the web app creates the target and its resource directories,
 and when Overlord next runs on that machine it reconciles the real fingerprint
 without changing the target's identity.
+
+## When a target is reachable
+
+A local target is online while one of its runners has reported in recently. A
+machine with no runner installed is **not** reachable, however much other CLI
+traffic it produces — that is what keeps queued work from sitting against a
+target that can never claim it. Start a runner there (`ovld runner start`, or
+`ovld runner service install` for a persistent one) to bring the target online.
 
 ## Link a directory to a project
 

@@ -19,7 +19,10 @@
 import { type Permission, PERMISSIONS } from '@overlord/auth';
 import { normalizeAgentLaunchFlags } from '@overlord/contract';
 import type { ServiceContext } from '@overlord/core/service/context';
-import type { TerminalProfile } from '@overlord/core/service/terminal-profile-types';
+import {
+  DEFAULT_TERMINAL_PROFILE,
+  type TerminalProfile
+} from '@overlord/core/service/terminal-profile-types';
 import type { DatabaseClient } from '@overlord/database';
 
 import { resolveInstanceAgentCatalog } from '../../cli/src/agent-catalog.ts';
@@ -31,7 +34,9 @@ import {
   type ExecutionRequestSummary
 } from '../../packages/core/service/execution-requests.ts';
 import {
-  ensureActingDeviceTarget,
+  findActingDeviceTarget,
+  type LocalExecutionTarget,
+  requireActingDeviceTarget,
   updateTerminalProfile as persistTerminalProfile
 } from '../../packages/core/service/execution-targets.ts';
 import {
@@ -198,19 +203,20 @@ export async function readWorktreeBranchAutomationEnabled(
 async function launchSettingsDto({
   target,
   workspaceId,
-  agentConfigs = target.agentConfigs,
-  terminalProfile = target.terminalProfile,
+  agentConfigs = target?.agentConfigs ?? {},
+  terminalProfile = target?.terminalProfile ?? toTerminalProfileDto(DEFAULT_TERMINAL_PROFILE),
   client = requireDatabaseClient()
 }: {
-  target: Awaited<ReturnType<typeof ensureLocalLaunchTarget>>;
+  /** `null` when the acting machine has no declared execution target (contract v38). */
+  target: LocalLaunchTarget | null;
   workspaceId: string;
   agentConfigs?: Record<string, AgentLaunchConfigDto>;
   terminalProfile?: TerminalProfileDto;
   client?: DatabaseClient;
 }): Promise<LaunchSettingsDto> {
   return {
-    executionTargetId: target.executionTargetId,
-    deviceLabel: target.deviceLabel,
+    executionTargetId: target?.executionTargetId ?? null,
+    deviceLabel: target?.deviceLabel ?? null,
     agentConfigs,
     terminalProfile,
     worktreeBranchAutomationEnabled: await readWorktreeBranchAutomationEnabled(client, workspaceId)
@@ -446,10 +452,7 @@ async function readAgentConfigs(
   return row ? parseAgentConfigs(row.agent_configs_json) : {};
 }
 
-async function ensureLocalLaunchTarget(
-  client: DatabaseClient = requireDatabaseClient(),
-  ctx: ServiceContext = serviceContext(client)
-): Promise<{
+type LocalLaunchTarget = {
   deviceId: string;
   deviceLabel: string;
   executionTargetId: string;
@@ -457,8 +460,12 @@ async function ensureLocalLaunchTarget(
   preferenceId: string | null;
   agentConfigs: Record<string, AgentLaunchConfigDto>;
   terminalProfile: TerminalProfileDto;
-}> {
-  const target = await ensureActingDeviceTarget({ ctx });
+};
+
+async function toLocalLaunchTarget(
+  target: LocalExecutionTarget,
+  client: DatabaseClient
+): Promise<LocalLaunchTarget> {
   return {
     deviceId: target.deviceId,
     deviceLabel: target.deviceLabel,
@@ -470,10 +477,41 @@ async function ensureLocalLaunchTarget(
   };
 }
 
+/**
+ * Contract v39: configuring launch settings is not an onboarding act. These writes
+ * store this machine's own preferences against its execution target, so they
+ * resolve an already-declared target and fail with `no_execution_target_registered`
+ * when the machine has none — they no longer declare it.
+ */
+async function requireLocalLaunchTarget(
+  client: DatabaseClient = requireDatabaseClient(),
+  ctx: ServiceContext = serviceContext(client)
+): Promise<LocalLaunchTarget> {
+  return toLocalLaunchTarget(
+    await requireActingDeviceTarget({
+      ctx,
+      what: 'Launch settings are stored per execution target.'
+    }),
+    client
+  );
+}
+
+/**
+ * Read-only counterpart: resolves the acting machine's already-declared target and
+ * returns `null` when it has none. Reading launch settings must never declare one.
+ */
+async function findLocalLaunchTarget(
+  client: DatabaseClient = requireDatabaseClient(),
+  ctx: ServiceContext = serviceContext(client)
+): Promise<LocalLaunchTarget | null> {
+  const target = await findActingDeviceTarget({ ctx });
+  return target ? toLocalLaunchTarget(target, client) : null;
+}
+
 export async function getLaunchSettings(workspaceId?: string): Promise<LaunchSettingsDto> {
   const client = requireDatabaseClient();
   const scope = await resolveLaunchSettingsScope(workspaceId, PERMISSIONS.LAUNCH_READ, client);
-  const target = await ensureLocalLaunchTarget(client, scope.ctx);
+  const target = await findLocalLaunchTarget(client, scope.ctx);
   return launchSettingsDto({ target, workspaceId: scope.workspaceId, client });
 }
 
@@ -487,7 +525,7 @@ export async function updateAgentLaunchConfig(
     const key = agentKey.trim();
     if (!key) throw new ApiError(400, 'Agent key is required');
     const scope = await resolveLaunchSettingsScope(workspaceId, PERMISSIONS.LAUNCH_CONFIGURE, tx);
-    const target = await ensureLocalLaunchTarget(tx, scope.ctx);
+    const target = await requireLocalLaunchTarget(tx, scope.ctx);
     if (!target.preferenceId) {
       throw new ApiError(409, 'No active workspace user to store launch configs for');
     }
@@ -536,7 +574,7 @@ export async function updateTerminalProfile(
         background: body.background ?? false
       }
     });
-    const target = await ensureLocalLaunchTarget(tx, scope.ctx);
+    const target = await requireLocalLaunchTarget(tx, scope.ctx);
     return launchSettingsDto({
       target: {
         ...target,
@@ -559,7 +597,9 @@ export async function updateWorktreeBranchAutomation(
     const settings = await readWorkspaceSettings(tx, scope.workspaceId);
     settings[WORKTREE_BRANCH_AUTOMATION_SETTINGS_KEY] = body.enabled === true;
     await writeWorkspaceSettings(settings, tx, scope.workspaceId);
-    const target = await ensureLocalLaunchTarget(tx, scope.ctx);
+    // Workspace-level setting: the target is only echoed back in the DTO, so this
+    // reads the acting machine's target rather than declaring one.
+    const target = await findLocalLaunchTarget(tx, scope.ctx);
     return launchSettingsDto({ target, workspaceId: scope.workspaceId, client: tx });
   });
 }
@@ -995,7 +1035,8 @@ export async function launchObjective(
     );
     const launchTarget = await resolveLaunchExecutionTarget({
       ctx: serviceCtx,
-      projectId: objective.project_id
+      projectId: objective.project_id,
+      executionTargetId: body.executionTargetId
     });
     const { executionTargetId, agentConfigs } = launchTarget;
     const now = nowIso();

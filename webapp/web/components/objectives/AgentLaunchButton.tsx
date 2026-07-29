@@ -84,6 +84,7 @@ export function AgentLaunchButton({
   const [showActiveConfirm, setShowActiveConfirm] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [executionTargetId, setExecutionTargetId] = useState<string>('');
   const copyResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const primaryConnection = objectiveResourceConnection({
@@ -120,7 +121,8 @@ export function AgentLaunchButton({
         body: {
           agent: selection.agent,
           model: selection.model,
-          reasoningEffort: selection.reasoningEffort
+          reasoningEffort: selection.reasoningEffort,
+          executionTargetId: executionTargetId || undefined
         }
       },
       { onError: err => setError(err instanceof Error ? err.message : 'Failed to queue execution') }
@@ -362,6 +364,29 @@ export function AgentLaunchButton({
               <Copy className="h-3.5 w-3.5" />
               <span>{copied ? 'Copied ✓' : 'Copy prompt'}</span>
             </DropdownMenuItem>
+            <div className="border-t px-2 py-2">
+              <label
+                className="mb-1 block text-[11px] text-muted-foreground"
+                htmlFor={`execution-target-${objective.id}`}
+              >
+                Run on target
+              </label>
+              <select
+                id={`execution-target-${objective.id}`}
+                className="h-8 w-full rounded border bg-background px-1 text-xs"
+                value={executionTargetId}
+                onChange={event => setExecutionTargetId(event.target.value)}
+              >
+                <option value="">Project default</option>
+                {(executionTargetQ.data?.eligibleTargets ?? [])
+                  .filter(target => target.reachable && target.primaryResourceConnected)
+                  .map(target => (
+                    <option key={target.executionTargetId} value={target.executionTargetId}>
+                      {target.label}
+                    </option>
+                  ))}
+              </select>
+            </div>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

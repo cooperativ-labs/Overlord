@@ -7,7 +7,13 @@ import type { ServiceContext } from './context.js';
 import { softDeleteDeviceIfOrphaned, softDeleteOrphanDevices } from './devices.js';
 import { ServiceError } from './errors.js';
 import {
-  ensureActingDeviceTarget,
+  listRunnerRegistrations,
+  readRunnerLiveness,
+  type RunnerRegistration,
+  type TargetRunnerLiveness
+} from './execution-target-runners.js';
+import {
+  declareActingDeviceTarget,
   findActingDeviceExecutionTargetId,
   isBackendHostFingerprint,
   isBrowserDevicePlatform
@@ -58,6 +64,8 @@ export type WorkspaceExecutionTarget = {
   lastSeenAt: string | null;
   activeMemberAccessCount: number;
   hasCurrentUserAccess: boolean;
+  unavailableReason: string | null;
+  runnerRegistrations: RunnerRegistration[];
 };
 
 function requireActor(ctx: ServiceContext): string {
@@ -143,6 +151,30 @@ function isTargetReachable({
 }
 
 /**
+ * Honest reachability for a `local` target (contract v40).
+ *
+ * A target is reachable when one of its runner instances says so. `devices.
+ * last_seen_at` only reported that *some* CLI call came from the machine, so a
+ * machine with no runner installed read as reachable and queued work sat there
+ * forever. It survives here for exactly one case: a target that has never had a
+ * runner registration, so an install stays selectable until its upgraded runner
+ * publishes a first heartbeat. Once any runner registers for a target, device
+ * traffic no longer affects it.
+ */
+function isLocalTargetReachable({
+  liveness,
+  lastSeenAt,
+  isCallerDevice
+}: {
+  liveness: TargetRunnerLiveness | undefined;
+  lastSeenAt: string | null;
+  isCallerDevice: boolean;
+}): boolean {
+  if (liveness?.hasRegistration) return liveness.live;
+  return isTargetReachable({ lastSeenAt, isCallerDevice });
+}
+
+/**
  * Safe workspace-wide target projection for settings. The caller must already
  * be authorized as a member of `ctx.workspace`; this function intentionally
  * exposes neither connection metadata nor any target/access mutation.
@@ -207,15 +239,41 @@ export async function listWorkspaceExecutionTargets({
     has_current_user_access: number | boolean;
   }>;
 
+  // Virtual liveness stays on the gateway registration; only local liveness moves
+  // to runner instances.
+  const runnerLiveness = await readRunnerLiveness({
+    ctx,
+    executionTargetIds: rows.filter(row => row.type !== 'virtual').map(row => row.id)
+  });
+  const runnerRegistrations = await listRunnerRegistrations({
+    ctx,
+    executionTargetIds: rows.filter(row => row.type !== 'virtual').map(row => row.id)
+  });
+
   return rows.map(row => {
     const isCallerTarget = row.id === callerExecutionTargetId;
+    const liveness = runnerLiveness.get(row.id);
     const lastSeenAt =
-      row.type === 'virtual' ? row.virtual_last_heartbeat_at : row.device_last_seen_at;
+      row.type === 'virtual'
+        ? row.virtual_last_heartbeat_at
+        : (liveness?.lastHeartbeatAt ?? row.device_last_seen_at);
     const reachable =
       row.type === 'virtual'
         ? (row.virtual_health === 'healthy' || row.virtual_health === 'degraded') &&
           isTargetReachable({ lastSeenAt, isCallerDevice: false })
-        : isTargetReachable({ lastSeenAt, isCallerDevice: isCallerTarget });
+        : isLocalTargetReachable({
+            liveness,
+            lastSeenAt: row.device_last_seen_at,
+            isCallerDevice: isCallerTarget
+          });
+    const unavailableReason =
+      row.status !== 'active'
+        ? 'Disabled by a workspace administrator.'
+        : !reachable
+          ? row.type === 'local' && !liveness?.hasRegistration
+            ? "Awaiting this target's first runner heartbeat."
+            : 'No healthy runner is currently available.'
+          : null;
     return {
       id: row.id,
       type: row.type,
@@ -225,7 +283,9 @@ export async function listWorkspaceExecutionTargets({
       reachable,
       lastSeenAt,
       activeMemberAccessCount: Number(row.active_member_access_count),
-      hasCurrentUserAccess: Boolean(row.has_current_user_access)
+      hasCurrentUserAccess: Boolean(row.has_current_user_access),
+      unavailableReason,
+      runnerRegistrations: runnerRegistrations.get(row.id) ?? []
     };
   });
 }
@@ -288,6 +348,13 @@ export async function listEligibleProjectExecutionTargets({
     last_seen_at: string | null;
   }>;
 
+  const runnerLiveness = await readRunnerLiveness({
+    ctx,
+    executionTargetIds: rows
+      .filter(row => row.type !== 'virtual')
+      .map(row => row.execution_target_id)
+  });
+
   const eligible: EligibleExecutionTarget[] = [];
   for (const row of rows) {
     if (isBrowserDevicePlatform(row.device_platform)) {
@@ -315,10 +382,14 @@ export async function listEligibleProjectExecutionTargets({
       type: row.type,
       label: row.target_label,
       deviceLabel: row.device_label,
-      reachable: isTargetReachable({
-        lastSeenAt: row.last_seen_at,
-        isCallerDevice
-      }),
+      reachable:
+        row.type === 'virtual'
+          ? isTargetReachable({ lastSeenAt: row.last_seen_at, isCallerDevice })
+          : isLocalTargetReachable({
+              liveness: runnerLiveness.get(row.execution_target_id),
+              lastSeenAt: row.last_seen_at,
+              isCallerDevice
+            }),
       primaryResourceConnected
     });
   }
@@ -654,12 +725,27 @@ export async function readAgentConfigsForExecutionTarget({
  */
 export async function resolveLaunchExecutionTarget({
   ctx,
-  projectId
+  projectId,
+  executionTargetId: explicitExecutionTargetId = null
 }: {
   ctx: ServiceContext;
   projectId: string;
+  executionTargetId?: string | null;
 }): Promise<LaunchExecutionTargetResolution> {
-  const executionTargetId = await resolveProjectExecutionTargetForLaunch({ ctx, projectId });
+  const executionTargetId =
+    explicitExecutionTargetId?.trim() ||
+    (await resolveProjectExecutionTargetForLaunch({ ctx, projectId }));
+  if (explicitExecutionTargetId?.trim()) {
+    const eligible = await listEligibleProjectExecutionTargets({ ctx, projectId });
+    const target = eligible.find(entry => entry.executionTargetId === executionTargetId);
+    if (!target || !target.reachable || !target.primaryResourceConnected) {
+      throw new ServiceError(
+        'Execution target is not active, reachable, or connected to this project.',
+        'execution_target_not_eligible',
+        400
+      );
+    }
+  }
   const agentConfigs =
     executionTargetId === null
       ? {}
@@ -825,6 +911,39 @@ export async function renameWorkspaceExecutionTarget({
   return updated;
 }
 
+export async function updateWorkspaceExecutionTargetStatus({
+  ctx,
+  executionTargetId,
+  status
+}: {
+  ctx: ServiceContext;
+  executionTargetId: string;
+  status: 'active' | 'disabled';
+}): Promise<WorkspaceExecutionTarget> {
+  const id = executionTargetId.trim();
+  if (!id) throw new ServiceError('executionTargetId is required', 'validation_error', 400);
+  const target = (await ctx.db.get(
+    `SELECT id FROM execution_targets WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+    [id, ctx.workspace.id]
+  )) as { id: string } | undefined;
+  if (!target) throw new ServiceError('Execution target not found', 'not_found', 404);
+  await ctx.db.run(
+    `UPDATE execution_targets SET status = ?, updated_at = ?, revision = revision + 1 WHERE id = ?`,
+    [status, nowIso(), id]
+  );
+  await recordChange({
+    ctx,
+    entityType: 'execution_target',
+    entityId: id,
+    operation: 'update',
+    entityRevision: null,
+    changedFields: ['status']
+  });
+  const updated = (await listWorkspaceExecutionTargets({ ctx })).find(entry => entry.id === id);
+  if (!updated) throw new ServiceError('Execution target not found', 'not_found', 404);
+  return updated;
+}
+
 export type RegisteredExecutionTarget = {
   executionTargetId: string;
   deviceId: string;
@@ -834,14 +953,15 @@ export type RegisteredExecutionTarget = {
 
 /**
  * Register (announce) the acting machine as an execution target for `ctx`'s
- * workspace, independent of any launch, claim, or resource-linking activity.
+ * workspace — the explicit "this machine runs agents" declaration behind
+ * `ovld add-et` and the desktop one-click equivalent.
  *
- * Provisioning a device/target already happens implicitly as a side effect of
- * those flows (via {@link ensureActingDeviceTarget}); this exposes the same
- * provisioning as a first-class, idempotent action so a device can make itself
- * known up front. Re-registering the same device returns the existing target.
- * When `label` is supplied it is applied to the target's display name (creating
- * or renaming), so `ovld add-et --name <name>` names the target.
+ * With `register-target` and an eligible machine-local checkout link the only two
+ * declaration paths (contract v39), this is the primary way a machine becomes a
+ * target. It is idempotent: re-registering the same machine returns its existing
+ * target. When `label` is supplied it is applied to the target's display name
+ * (creating or renaming), so `ovld add-et --name <name>` names the target. A
+ * caller with no machine-local identity is refused, never given an inferred one.
  */
 export async function registerActingExecutionTarget({
   ctx,
@@ -850,7 +970,7 @@ export async function registerActingExecutionTarget({
   ctx: ServiceContext;
   label?: string | null;
 }): Promise<RegisteredExecutionTarget> {
-  const target = await ensureActingDeviceTarget({ ctx });
+  const target = await declareActingDeviceTarget({ ctx, declaration: 'register_target' });
   let finalLabel = target.deviceLabel;
 
   const desired = typeof label === 'string' ? label.trim() : '';

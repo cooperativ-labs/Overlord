@@ -107,6 +107,10 @@ function normalizeProfile({
   };
 }
 
+const NO_EXECUTION_TARGET_HINT =
+  'These settings are stored per execution target, and this client has none. Declare the machine ' +
+  'that runs agents first — link a project directory from it, or run `ovld add-et --name "<name>"` there.';
+
 export function IdePage({ open }: IdePageProps) {
   const profile = useProfile();
   const updateProfile = useUpdateProfile();
@@ -179,6 +183,10 @@ export function IdePage({ open }: IdePageProps) {
   const requiresCustomLauncher =
     launcherChoice === CUSTOM_LAUNCHER && draftProfile.launcher === null;
   const agents = [...(catalog.data?.agents ?? [])].sort((a, b) => a.label.localeCompare(b.label));
+  // Contract v39: launch settings are stored per execution target, and configuring
+  // them is not an onboarding act. Without a declared target there is nothing to
+  // store them against, so say that instead of offering controls that 409.
+  const hasExecutionTarget = Boolean(launchSettings.data?.executionTargetId);
 
   async function handleSaveScheme() {
     if (editorScheme === savedScheme) return;
@@ -248,18 +256,27 @@ export function IdePage({ open }: IdePageProps) {
               local
             </span>
           </div>
-          <dl className="mt-4 grid gap-4 text-sm sm:grid-cols-2">
-            <div className="space-y-1">
-              <dt className="text-muted-foreground">Device label</dt>
-              <dd className="font-medium">{launchSettings.data.deviceLabel}</dd>
-            </div>
-            <div className="space-y-1">
-              <dt className="text-muted-foreground">Execution target ID</dt>
-              <dd className="break-all font-mono text-xs">
-                {launchSettings.data.executionTargetId}
-              </dd>
-            </div>
-          </dl>
+          {launchSettings.data.executionTargetId ? (
+            <dl className="mt-4 grid gap-4 text-sm sm:grid-cols-2">
+              <div className="space-y-1">
+                <dt className="text-muted-foreground">Device label</dt>
+                <dd className="font-medium">{launchSettings.data.deviceLabel}</dd>
+              </div>
+              <div className="space-y-1">
+                <dt className="text-muted-foreground">Execution target ID</dt>
+                <dd className="break-all font-mono text-xs">
+                  {launchSettings.data.executionTargetId}
+                </dd>
+              </div>
+            </dl>
+          ) : (
+            <p className="mt-4 text-sm text-muted-foreground">
+              This client has no execution target. Execution targets are declared from the machine
+              that runs agents — link a project directory there, or run{' '}
+              <code className="font-mono text-xs">ovld add-et --name &quot;&lt;name&gt;&quot;</code>{' '}
+              on it.
+            </p>
+          )}
         </div>
       ) : null}
 
@@ -409,12 +426,14 @@ export function IdePage({ open }: IdePageProps) {
             successText="Saved"
             errorText="Save failed"
             onClick={saveTerminalProfile}
-            disabled={!terminalIsDirty && !requiresCustomLauncher}
+            disabled={!hasExecutionTarget || (!terminalIsDirty && !requiresCustomLauncher)}
           />
           <p className="text-xs text-muted-foreground">
-            {draftProfile.launcher === null
-              ? 'No launcher configured: runs stay inline in the current terminal.'
-              : 'Saved changes apply to future launches from the web app and CLI.'}
+            {!hasExecutionTarget
+              ? NO_EXECUTION_TARGET_HINT
+              : draftProfile.launcher === null
+                ? 'No launcher configured: runs stay inline in the current terminal.'
+                : 'Saved changes apply to future launches from the web app and CLI.'}
           </p>
         </div>
         {terminalError ? <p className="text-sm text-destructive">{terminalError}</p> : null}
@@ -449,7 +468,11 @@ export function IdePage({ open }: IdePageProps) {
         ) : null}
         {agentError ? <p className="text-sm text-destructive">{agentError}</p> : null}
 
-        {agents.map((agent, index) => {
+        {!hasExecutionTarget ? (
+          <p className="text-sm text-muted-foreground">{NO_EXECUTION_TARGET_HINT}</p>
+        ) : null}
+
+        {(hasExecutionTarget ? agents : []).map((agent, index) => {
           const config = launchSettings.data?.agentConfigs[agent.key] ?? {
             preCommand: '',
             flags: []

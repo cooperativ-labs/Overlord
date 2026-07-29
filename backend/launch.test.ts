@@ -218,3 +218,52 @@ test('updateAgentCatalog persists model order and display names', async () => {
   };
   assert.equal(settings.agentCatalog?.agents?.cursor?.models?.[0]?.displayName, 'Top Model');
 });
+
+test('launchObjective stamps an explicit execution target and rejects an ineligible one', async () => {
+  // Contract v41: `LaunchObjectiveBody.executionTargetId` is an explicit override.
+  // The launch service validates it in the objective's workspace before stamping
+  // `execution_requests.execution_target_id`; it selects a target only, so any
+  // healthy runner serving that target may still claim the request.
+  const project = await createProject({ name: 'Explicit Launch Target Test' });
+  await createProjectResource(project.id, {
+    // Omitted, not null: an omitted target on a local checkout is the
+    // machine-local declaration (contract v39). An explicit null would write a
+    // project-global source and declare nothing.
+    directoryPath: mkdtempSync(path.join(tmpdir(), 'overlord-launch-override-')),
+    isPrimary: true
+  });
+  const target = db
+    .prepare(
+      `SELECT id FROM execution_targets
+        WHERE type = 'local' AND deleted_at IS NULL
+        ORDER BY created_at DESC LIMIT 1`
+    )
+    .get() as { id: string } | undefined;
+  assert.ok(target, 'linking a checkout declares the acting machine as a target');
+
+  const mission = await createMission({
+    projectId: project.id,
+    firstObjective: 'Run this one on a chosen machine'
+  });
+  const objectiveId = mission.objectives[0]!.id;
+
+  const request = await launchObjective(objectiveId, {
+    agent: 'codex',
+    executionTargetId: target.id
+  });
+  const stamped = db
+    .prepare(`SELECT execution_target_id FROM execution_requests WHERE id = ?`)
+    .get(request.id) as { execution_target_id: string | null };
+  assert.equal(stamped.execution_target_id, target.id);
+
+  // A target that does not exist in this workspace is never eligible.
+  const second = await createObjective({
+    missionId: mission.id,
+    instructionText: 'Second objective'
+  });
+  await updateObjective(objectiveId, { state: 'complete' });
+  await assert.rejects(
+    () => launchObjective(second.id, { agent: 'codex', executionTargetId: crypto.randomUUID() }),
+    /not active, reachable, or connected/
+  );
+});

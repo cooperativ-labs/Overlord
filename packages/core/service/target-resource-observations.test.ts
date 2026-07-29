@@ -125,4 +125,34 @@ describe('target resource observations', () => {
 
     await db.close();
   });
+  it('rejects observations from a machine with no declared execution target', async () => {
+    // Contract v38: reporting observations is a read-side attribution path. It
+    // resolves the acting machine's declared target and never creates one, so an
+    // undeclared machine fails the same authorization check as a target mismatch.
+    const { db, ctx } = await createSeededServiceContext({ source: 'cli' });
+    const before = (await db.get(
+      `SELECT COUNT(*) AS c FROM execution_targets WHERE deleted_at IS NULL`
+    )) as { c: number } | undefined;
+    assert.equal(Number(before?.c ?? 0), 0);
+
+    await assert.rejects(
+      () =>
+        recordTargetResourceObservations({
+          ctx,
+          executionTargetId: 'some-other-target',
+          observations: [{ resourceId: 'anything', state: 'available', observedAt: nowIso() }]
+        }),
+      (error: unknown) =>
+        error instanceof Error &&
+        'code' in error &&
+        (error as { code: string }).code === 'execution_target_mismatch'
+    );
+
+    const after = (await db.get(
+      `SELECT COUNT(*) AS c FROM execution_targets WHERE deleted_at IS NULL`
+    )) as { c: number } | undefined;
+    assert.equal(Number(after?.c ?? 0), 0, 'a rejected observation must not declare a target');
+
+    await db.close();
+  });
 });

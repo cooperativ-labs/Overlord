@@ -3,11 +3,12 @@
  * Please do not edit it manually.
  */
 
-import type { ColumnType } from "kysely";
+import type { ColumnType } from 'kysely';
 
-export type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
-  ? ColumnType<S, I | undefined, U>
-  : ColumnType<T, T | undefined, T>;
+export type Generated<T> =
+  T extends ColumnType<infer S, infer I, infer U>
+    ? ColumnType<S, I | undefined, U>
+    : ColumnType<T, T | undefined, T>;
 
 export interface Account {
   accessToken: string | null;
@@ -219,6 +220,7 @@ export interface ExecutionRequests {
   claimed_by_device_id: string | null;
   claimed_by_execution_target_id: string | null;
   claimed_by_gateway_instance_id: string | null;
+  claimed_by_runner_registration_id: string | null;
   created_at: string;
   deleted_at: string | null;
   execution_target_id: string | null;
@@ -277,6 +279,25 @@ export interface ExecutionTargetRegistrations {
   revision: Generated<number>;
   supported_agents_json: Generated<string>;
   supported_queue_versions_json: Generated<string>;
+  updated_at: string;
+  workspace_id: string;
+}
+
+export interface ExecutionTargetRunnerRegistrations {
+  capabilities_json: Generated<string>;
+  created_at: string;
+  deleted_at: string | null;
+  execution_target_id: string;
+  health: string;
+  id: string | null;
+  label: string | null;
+  last_error_code: string | null;
+  last_heartbeat_at: string | null;
+  relation: string;
+  revision: Generated<number>;
+  runner_instance_id: string;
+  runner_version: string | null;
+  supported_agents_json: Generated<string>;
   updated_at: string;
   workspace_id: string;
 }
@@ -1022,6 +1043,7 @@ export interface DB {
   execution_request_snapshots: ExecutionRequestSnapshots;
   execution_requests: ExecutionRequests;
   execution_target_registrations: ExecutionTargetRegistrations;
+  execution_target_runner_registrations: ExecutionTargetRunnerRegistrations;
   execution_targets: ExecutionTargets;
   ext_everhour_mission_links: ExtEverhourMissionLinks;
   ext_everhour_project_links: ExtEverhourProjectLinks;

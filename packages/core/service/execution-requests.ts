@@ -4,7 +4,12 @@ import { recordChange } from './change-feed.js';
 import type { ServiceContext } from './context.js';
 import { resolveMissionId, resolveProjectId } from './context.js';
 import { ServiceError } from './errors.js';
-import { type ClientDeviceIdentity, resolveClaimingDeviceTarget } from './execution-targets.js';
+import {
+  recordRunnerHeartbeat,
+  resolveRunnerTarget,
+  type RunnerRegistrationInput
+} from './execution-target-runners.js';
+import type { ClientDeviceIdentity } from './execution-targets.js';
 import { LOCAL_TARGET_MUTATION_REQUESTED_SOURCE } from './local-target-mutations.ts';
 import { resolveObjectiveWorkingDirectory } from './projects.js';
 import { enqueuePushNotificationForMission } from './push-notification-jobs.js';
@@ -522,15 +527,40 @@ export async function claimNextExecutionRequest({
   ctx,
   projectId,
   claimTtlMs = CLAIM_TTL_MS,
-  clientDevice
+  clientDevice,
+  runner
 }: {
   ctx: ServiceContext;
   projectId?: string | null;
   claimTtlMs?: number;
   clientDevice?: ClientDeviceIdentity | null;
+  runner?: RunnerRegistrationInput | null;
 }): Promise<ClaimedExecutionRequest | null> {
   await expireStaleExecutionRequests({ ctx });
-  const target = await resolveClaimingDeviceTarget({ ctx, clientDevice });
+  const runnerInput = runner ?? {};
+  const claimCtx: ServiceContext = {
+    ...ctx,
+    clientDevice: clientDevice ?? ctx.clientDevice ?? null
+  };
+  // Resolve which already-declared target this runner serves — its own machine,
+  // or the host target an adopting container was explicitly pointed at. Never
+  // creates a target (contract v40).
+  const target = await resolveRunnerTarget({ ctx: claimCtx, input: runnerInput });
+  // Registering the runner instance is a heartbeat, not a precondition: an older
+  // runner that publishes no instance identity still claims exactly as before.
+  const runnerInstanceId = runnerInput.runnerInstanceId?.trim();
+  const registration = runnerInstanceId
+    ? await recordRunnerHeartbeat({
+        ctx: claimCtx,
+        executionTargetId: target.executionTargetId,
+        runnerInstanceId,
+        relation: target.relation,
+        label: runnerInput.label,
+        runnerVersion: runnerInput.runnerVersion,
+        capabilities: runnerInput.capabilities,
+        supportedAgents: runnerInput.supportedAgents
+      })
+    : null;
   const conditions = [
     'er.workspace_id = ?',
     "er.status = 'queued'",
@@ -602,6 +632,7 @@ export async function claimNextExecutionRequest({
             SET status = 'claimed',
                 claimed_by_device_id = ?,
                 claimed_by_execution_target_id = ?,
+                claimed_by_runner_registration_id = ?,
                 claimed_at = ?,
                 claim_expires_at = ?,
                 resolved_resource_id = COALESCE(resolved_resource_id, ?),
@@ -613,6 +644,7 @@ export async function claimNextExecutionRequest({
       [
         target.deviceId,
         target.executionTargetId,
+        registration?.id ?? null,
         now,
         expires,
         resourceId,
@@ -634,6 +666,7 @@ export async function claimNextExecutionRequest({
         'status',
         'claimed_by_device_id',
         'claimed_by_execution_target_id',
+        ...(registration ? (['claimed_by_runner_registration_id'] as const) : []),
         'claimed_at',
         'claim_expires_at',
         'resolved_working_directory',

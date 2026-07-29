@@ -76,12 +76,12 @@ export async function setupSecondaryWorkspaceFixture(options?: {
   const project = await createProject({ name: `${prefix} Project`, workspaceId: secondary.id });
   assert.equal(project.workspaceId, secondary.id);
 
-  // A primary resource with `executionTargetId: null` provisions B's implicit
-  // acting-device execution target, so launch/target resolution has a real
-  // execution target to land preferences on and to queue against.
+  // Omitting `executionTargetId` links the checkout from *this* machine, which is
+  // the declaration that gives workspace B a real execution target (contract v39).
+  // An explicit `null` would instead write a project-global source and declare
+  // nothing, leaving launch/target resolution with nowhere to land preferences.
   await createProjectResource(project.id, {
     directoryPath: mkdtempSync(path.join('/tmp', 'ovld-secondary-fixture-resource-')),
-    executionTargetId: null,
     isPrimary: true
   });
 

@@ -55,8 +55,17 @@ Options:
 MVP behavior:
 
 - Register/read a stable local device fingerprint from `~/.ovld/device.json`.
-- Honor `OVERLORD_DEVICE_FINGERPRINT` when set so disposable containers in one
-  host environment (AgentPod) share a single execution target.
+- Honor `OVERLORD_DEVICE_FINGERPRINT` when set as a compatibility host hint.
+- Publish a runner-instance registration on every claim (contract 40): a stable
+  `runnerInstanceId` (`OVERLORD_RUNNER_INSTANCE_ID`, else a persisted local id),
+  a `native`/`adopted` relation, and non-secret label/version diagnostics. Local
+  target reachability is derived from these heartbeats, not from device traffic.
+- Honor `OVERLORD_EXECUTION_TARGET_ID` to serve an existing target instead of
+  the acting machine's own. This is how an AgentPod container adopts its host:
+  the host's target id plus its own `OVERLORD_RUNNER_INSTANCE_ID` and
+  `OVERLORD_RUNNER_RELATION=adopted`. The target is resolved and authorized,
+  never created; an unresolvable one fails the claim with
+  `no_execution_target_registered`.
 - Poll the configured backend.
 - Claim the oldest compatible request.
 - Resolve working directory.

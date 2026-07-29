@@ -619,10 +619,21 @@ export const api = {
       'GET',
       `/api/workspaces/${workspaceId}/execution-targets`
     ),
+  /**
+   * Declare the machine this client runs on as an execution target (contract v39).
+   * Only meaningful from the desktop shell or CLI: an ordinary browser sends no
+   * machine identity and is refused with `no_execution_target_registered`.
+   */
+  registerWorkspaceExecutionTarget: (workspaceId: string, body: { label?: string } = {}) =>
+    request<WorkspaceExecutionTargetDto>(
+      'POST',
+      `/api/workspaces/${workspaceId}/execution-targets`,
+      body
+    ),
   updateWorkspaceExecutionTarget: (
     workspaceId: string,
     executionTargetId: string,
-    body: { label: string }
+    body: { label?: string; status?: 'active' | 'disabled' }
   ) =>
     request<WorkspaceExecutionTargetDto>(
       'PATCH',

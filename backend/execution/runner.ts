@@ -16,6 +16,8 @@ import {
   markExecutionLaunching,
   recordResolvedLaunchConfigEvent
 } from '../../packages/core/service/execution-requests.ts';
+import type { RunnerRegistrationInput } from '../../packages/core/service/execution-target-runners.ts';
+import { NO_EXECUTION_TARGET_REGISTERED } from '../../packages/core/service/execution-targets.ts';
 import type { CapabilityResult } from '../../packages/core/service/local-target/types.ts';
 import { completeLocalTargetMutationRequest } from '../../packages/core/service/local-target-mutations.ts';
 import { resolveClaimLaunchConfig } from '../../packages/core/service/project-execution-target.ts';
@@ -217,10 +219,12 @@ export async function runnerStatus(projectId?: string | null): Promise<Record<st
 
 export async function claimRunnerRequest({
   projectId,
-  clientDevice
+  clientDevice,
+  runner
 }: {
   projectId?: string | null;
   clientDevice?: ClientDeviceBody;
+  runner?: RunnerRegistrationInput | null;
 } = {}): Promise<{
   request: Record<string, unknown> | null;
   longPoll: boolean;
@@ -229,7 +233,13 @@ export async function claimRunnerRequest({
     // Claim across every workspace the caller belongs to across organizations.
     // Iterate in membership order and return the first workspace that yields a
     // claimable request; subsequent polls drain the remaining workspaces.
-    for (const scope of await resolveRunnerScopes(projectId)) {
+    const scopes = await resolveRunnerScopes(projectId);
+    // A machine may be a declared execution target in some of the caller's
+    // workspaces and not others. Missing there is "nothing to claim here", not a
+    // failure — the poll only reports it when *no* workspace has declared it.
+    let undeclaredEverywhere: ServiceError | null = null;
+    let declaredSomewhere = false;
+    for (const scope of scopes) {
       const ctx = await workspaceServiceContext(
         scope.workspaceId,
         scope.workspaceUserId,
@@ -240,10 +250,16 @@ export async function claimRunnerRequest({
         request = await claimNextExecutionRequest({
           ctx,
           projectId,
-          clientDevice: clientDeviceFromBody(clientDevice)
+          clientDevice: clientDeviceFromBody(clientDevice),
+          runner
         });
+        declaredSomewhere = true;
       } catch (error) {
         if (error instanceof ServiceError && error.code === 'project_not_found') continue;
+        if (error instanceof ServiceError && error.code === NO_EXECUTION_TARGET_REGISTERED) {
+          undeclaredEverywhere = error;
+          continue;
+        }
         throw error;
       }
       if (request) {
@@ -284,6 +300,7 @@ export async function claimRunnerRequest({
         return dto;
       }
     }
+    if (undeclaredEverywhere && !declaredSomewhere) throw undeclaredEverywhere;
     return null;
   };
 

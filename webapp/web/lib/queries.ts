@@ -271,11 +271,40 @@ export function useDeleteWorkspaceExecutionTarget(workspaceId: string) {
   });
 }
 
+export function useRegisterWorkspaceExecutionTarget(workspaceId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { label?: string } = {}) =>
+      api.registerWorkspaceExecutionTarget(workspaceId, body),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.workspaceExecutionTargets(workspaceId) });
+      invalidateNonEverhourQueries(qc);
+    }
+  });
+}
+
 export function useRenameWorkspaceExecutionTarget(workspaceId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ executionTargetId, label }: { executionTargetId: string; label: string }) =>
       api.updateWorkspaceExecutionTarget(workspaceId, executionTargetId, { label }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.workspaceExecutionTargets(workspaceId) });
+      invalidateNonEverhourQueries(qc);
+    }
+  });
+}
+
+export function useUpdateWorkspaceExecutionTargetStatus(workspaceId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      executionTargetId,
+      status
+    }: {
+      executionTargetId: string;
+      status: 'active' | 'disabled';
+    }) => api.updateWorkspaceExecutionTarget(workspaceId, executionTargetId, { status }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: keys.workspaceExecutionTargets(workspaceId) });
       invalidateNonEverhourQueries(qc);

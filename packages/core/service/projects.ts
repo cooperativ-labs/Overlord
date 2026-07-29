@@ -12,7 +12,10 @@ import { recordChange } from './change-feed.js';
 import type { ServiceContext } from './context.js';
 import { resolveProjectId } from './context.js';
 import { ServiceError } from './errors.js';
-import { ensureActingDeviceTarget } from './execution-targets.js';
+import {
+  declareActingDeviceTarget,
+  findActingDeviceExecutionTargetId
+} from './execution-targets.js';
 import { deriveProjectResourceKey } from './project-resource-key.js';
 import { newId, nowIso, slugify } from './util.js';
 
@@ -98,8 +101,10 @@ async function preferredExecutionTargetIdForDiscovery({
 }: {
   ctx: ServiceContext;
 }): Promise<string | null> {
+  // Discovery is a read: it resolves the machine's already-declared target and
+  // returns null when there is none (contract v38). It never declares one.
   try {
-    return (await ensureActingDeviceTarget({ ctx })).executionTargetId;
+    return await findActingDeviceExecutionTargetId({ ctx });
   } catch {
     return null;
   }
@@ -253,7 +258,12 @@ export async function addProjectResource({
   const resolvedPath = path.resolve(directoryPath);
   const resolvedResourceKey = deriveProjectResourceKey({ resourceKey, label, directoryPath });
   const resolvedAccessMode = resolveResourceAccessMode(isPrimary, accessMode);
-  const executionTargetId = (await ensureActingDeviceTarget({ ctx })).executionTargetId;
+  // Declaration path (contract v39): linking a checkout is the caller saying "this
+  // machine holds this code", and the local source has to be scoped to a target.
+  // A caller with no machine-local identity is refused rather than given one.
+  const executionTargetId = (
+    await declareActingDeviceTarget({ ctx, declaration: 'local_checkout_link' })
+  ).executionTargetId;
   const now = nowIso();
   const id = newId();
 

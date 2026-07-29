@@ -16,7 +16,11 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { readDeliveryReport } from '../packages/core/service/delivery-report.ts';
-import { ensureActingDeviceTarget } from '../packages/core/service/execution-targets.ts';
+import { ServiceError } from '../packages/core/service/errors.ts';
+import {
+  declareActingDeviceTarget,
+  NO_EXECUTION_TARGET_REGISTERED
+} from '../packages/core/service/execution-targets.ts';
 import { enqueueLiveActivityRefreshForMission } from '../packages/core/service/live-activity-jobs.ts';
 import { resolveBackendResourceProvider } from '../packages/core/service/local-target/index.ts';
 import type { TargetMetadata } from '../packages/core/service/local-target/types.ts';
@@ -641,6 +645,16 @@ async function executionTargetBelongsToWorkspace(
   return Boolean(row);
 }
 
+/**
+ * Resolve the execution target a `local_checkout` source belongs to (contract v39).
+ *
+ * An explicit id names an already-declared target and creates nothing — that is how
+ * an ordinary browser edits a source for a target someone else declared. Omitting it
+ * means "the machine I am calling from holds this path", which is the second and only
+ * other declaration act; it requires a real machine-local identity and is refused with
+ * `no_execution_target_registered` otherwise, rather than inferring a target from the
+ * caller. Git/URL sources never reach here: they are project-global by construction.
+ */
 async function resolveResourceExecutionTargetId(
   db: DatabaseClient,
   workspaceId: string,
@@ -653,11 +667,21 @@ async function resolveResourceExecutionTargetId(
       db,
       notFoundMessage: 'Project not found'
     });
-    return (
-      await ensureActingDeviceTarget({
-        ctx: await buildWebappServiceContextForWorkspace(workspaceId, db, workspaceUserId)
-      })
-    ).executionTargetId;
+    const ctx = await buildWebappServiceContextForWorkspace(workspaceId, db, workspaceUserId);
+    try {
+      return (await declareActingDeviceTarget({ ctx, declaration: 'local_checkout_link' }))
+        .executionTargetId;
+    } catch (error) {
+      if (error instanceof ServiceError && error.code === NO_EXECUTION_TARGET_REGISTERED) {
+        throw new ApiError(
+          error.status,
+          `${error.message} To link a directory from a browser, choose an execution target that already exists; otherwise run the link from that machine's CLI or desktop app.`,
+          undefined,
+          error.code
+        );
+      }
+      throw error;
+    }
   }
 
   if (executionTargetId === null) return null;

@@ -122,10 +122,14 @@ export function ProjectCreatorModal({ open, onOpenChange, workspaceId }: Project
         name: trimmedName,
         workspaceId: targetWorkspaceId,
         color: hexColor,
+        // Only the desktop shell offers a directory here, so this is always a
+        // machine-local checkout link. Omitting the target when this machine has
+        // no declared one lets the link itself declare it (contract v38); sending
+        // an explicit `null` would instead create a pathless global source.
         primaryResource: trimmedPrimaryResourcePath
           ? {
               directoryPath: trimmedPrimaryResourcePath,
-              executionTargetId: launchSettingsQ.data?.executionTargetId ?? null
+              executionTargetId: launchSettingsQ.data?.executionTargetId ?? undefined
             }
           : null
       });

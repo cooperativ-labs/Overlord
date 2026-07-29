@@ -37,6 +37,7 @@ import { invokeLocalTargetOnServer } from './execution/local-target-invoke.ts';
 import {
   getProjectExecutionTarget,
   getWorkspaceExecutionTargets,
+  registerWorkspaceExecutionTarget,
   removeWorkspaceExecutionTarget,
   updateProjectExecutionTarget,
   updateWorkspaceExecutionTarget
@@ -53,6 +54,7 @@ import { createEverhourExtensionRouter } from './ext/everhour/routes.ts';
 import { createGitHubExtensionRouter } from './ext/github/routes.ts';
 import { completeGitHubUserAuthorization } from './ext/github/user-oauth.ts';
 import { isAllowedBrowserOrigin } from './http/browser-origins.ts';
+import { runnerRegistrationFromBody } from './http/client-device.ts';
 import { buildMeta } from './http/meta.ts';
 import { resolveAuthBaseUrl } from './http/public-backend-url.ts';
 import { resolveServeSpa } from './http/serve-spa.ts';
@@ -809,6 +811,12 @@ app.get(
 app.get(
   '/api/workspaces/:id/execution-targets',
   handle(req => getWorkspaceExecutionTargets(req.params.id))
+);
+// Contract v39: the desktop app's one-click "make this machine an execution
+// target" — the same explicit declaration as `ovld add-et`, never implicit.
+app.post(
+  '/api/workspaces/:id/execution-targets',
+  handle(req => registerWorkspaceExecutionTarget(req.params.id, req.body), { mutates: true })
 );
 app.patch(
   '/api/workspaces/:id/execution-targets/:targetId',
@@ -1734,7 +1742,10 @@ app.post(
           deviceLabel: typeof req.body?.deviceLabel === 'string' ? req.body.deviceLabel : null,
           devicePlatform:
             typeof req.body?.devicePlatform === 'string' ? req.body.devicePlatform : null
-        }
+        },
+        // Additive runner-instance identity (contract v40). Absent for older
+        // runners, which claim exactly as before and register no instance.
+        runner: runnerRegistrationFromBody(req.body)
       }),
     { mutates: true }
   )

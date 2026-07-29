@@ -173,10 +173,103 @@ export async function findActingDeviceExecutionTargetId({
   const client = resolveClientDevice(ctx);
   if (!client) return null;
   if (isBackendHostFingerprint(client.deviceFingerprint)) return null;
+  // Legacy defence: ordinary browsers no longer send a fingerprint (contract v38),
+  // but a stale client's pseudo-device must never resolve to an execution target.
+  if (isBrowserClientDevice(client)) return null;
   return findDeviceExecutionTargetIdForFingerprint({
     ctx,
     fingerprint: client.deviceFingerprint
   });
+}
+
+async function findDeviceTargetForFingerprint({
+  ctx,
+  fingerprint
+}: {
+  ctx: ServiceContext;
+  fingerprint: string;
+}): Promise<LocalExecutionTarget | null> {
+  const row = (await ctx.db.get(
+    `SELECT d.id AS device_id, d.label AS device_label, d.fingerprint AS fingerprint,
+            et.id AS execution_target_id
+       FROM devices d
+       JOIN execution_targets et
+         ON et.device_id = d.id
+        AND et.workspace_id = d.workspace_id
+        AND et.type = 'local'
+        AND et.deleted_at IS NULL
+      WHERE d.workspace_id = ?
+        AND d.fingerprint = ?
+        AND d.deleted_at IS NULL`,
+    [ctx.workspace.id, fingerprint]
+  )) as
+    | {
+        device_id: string;
+        device_label: string;
+        fingerprint: string;
+        execution_target_id: string;
+      }
+    | undefined;
+  if (!row) return null;
+
+  let userTargetId: string | null = null;
+  let preferenceId: string | null = null;
+  let terminalProfile = { ...DEFAULT_TERMINAL_PROFILE };
+
+  if (ctx.actorWorkspaceUserId) {
+    const userTarget = (await ctx.db.get(
+      `SELECT id FROM workspace_user_execution_targets
+          WHERE workspace_id = ? AND workspace_user_id = ? AND execution_target_id = ?
+            AND deleted_at IS NULL`,
+      [ctx.workspace.id, ctx.actorWorkspaceUserId, row.execution_target_id]
+    )) as { id: string } | undefined;
+    userTargetId = userTarget?.id ?? null;
+
+    const profileId = await actorProfileId(ctx);
+    if (profileId) {
+      const preference = (await ctx.db.get(
+        `SELECT id, terminal_profile_json FROM user_execution_target_preferences
+            WHERE profile_id = ? AND target_type = 'local' AND target_fingerprint = ?
+              AND deleted_at IS NULL`,
+        [profileId, row.fingerprint]
+      )) as { id: string; terminal_profile_json: string } | undefined;
+      if (preference) {
+        preferenceId = preference.id;
+        terminalProfile = parseTerminalProfileJson(preference.terminal_profile_json);
+      }
+    }
+  }
+
+  return {
+    deviceId: row.device_id,
+    deviceLabel: row.device_label,
+    executionTargetId: row.execution_target_id,
+    targetFingerprint: row.fingerprint,
+    userTargetId,
+    preferenceId,
+    terminalProfile
+  };
+}
+
+/**
+ * Read-only resolution of the acting client's already-declared local execution
+ * target, with the device/preference detail callers need for launch settings and
+ * claim attribution. Returns `null` when the machine has never been declared —
+ * it never creates a device, target, access, or preference row (contract v38).
+ */
+export async function findActingDeviceTarget({
+  ctx
+}: {
+  ctx: ServiceContext;
+}): Promise<LocalExecutionTarget | null> {
+  if (isCoLocatedBackend(ctx.db)) {
+    return findDeviceTargetForFingerprint({ ctx, fingerprint: callerDeviceFingerprint() });
+  }
+  const client = resolveClientDevice(ctx);
+  if (!client) return null;
+  if (isBackendHostFingerprint(client.deviceFingerprint)) return null;
+  if (isBrowserClientDevice(client)) return null;
+  return findDeviceTargetForFingerprint({ ctx, fingerprint: client.deviceFingerprint });
 }
 
 /**
@@ -444,9 +537,66 @@ export async function ensureClientDeviceTarget({
 }
 
 /**
+ * Error code raised whenever a caller needs the acting machine's execution target
+ * and that machine was never declared — a runner claim, a launch-preference write,
+ * or a checkout link from a caller with no machine-local identity (contract v39).
+ */
+export const NO_EXECUTION_TARGET_REGISTERED = 'no_execution_target_registered';
+
+/** Actionable remedy appended to every `no_execution_target_registered` message. */
+const DECLARE_TARGET_REMEDY =
+  'Run `ovld add-et --name "<name>"` on that machine, or link a project directory from it with `ovld add-cwd`.';
+
+function noExecutionTargetRegistered(what: string): ServiceError {
+  return new ServiceError(
+    `${what} No execution target is registered for this machine. ${DECLARE_TARGET_REMEDY}`,
+    NO_EXECUTION_TARGET_REGISTERED,
+    409
+  );
+}
+
+/**
+ * Whether this caller carries a real machine-local identity, and may therefore
+ * *declare* the acting machine (contract v39). True for the process host on a
+ * co-located Local backend; on a hosted backend it requires a `x-overlord-device-*`
+ * hint that is neither the backend host nor a browser pseudo-device.
+ *
+ * Possessing credentials is explicitly not enough: container images ship both the
+ * CLI and a user token, and a pod must adopt its host rather than declare itself.
+ */
+export function hasMachineLocalIdentity(ctx: ServiceContext): boolean {
+  if (isCoLocatedBackend(ctx.db)) return true;
+  const client = resolveClientDevice(ctx);
+  if (!client) return false;
+  if (isBackendHostFingerprint(client.deviceFingerprint)) return false;
+  return !isBrowserClientDevice(client);
+}
+
+/**
+ * Resolve the acting machine's already-declared execution target for a write that
+ * needs one, failing with an actionable `no_execution_target_registered` rather
+ * than declaring it. Settings writes and runner activity use this; only the two
+ * declaration paths in {@link declareActingDeviceTarget} may create a target.
+ */
+export async function requireActingDeviceTarget({
+  ctx,
+  what
+}: {
+  ctx: ServiceContext;
+  what: string;
+}): Promise<LocalExecutionTarget> {
+  const target = await findActingDeviceTarget({ ctx });
+  if (!target) throw noExecutionTargetRegistered(what);
+  return target;
+}
+
+/**
  * Resolve the execution target a runner claim should use. On the co-located Local
  * backend the service process host is the runner; on the hosted backend the CLI
  * must supply its machine fingerprint so claims match WS-C stamped targets.
+ *
+ * A claim never declares a target (contract v38): it resolves one that already
+ * exists and fails loudly when the machine has not been registered.
  */
 export async function resolveClaimingDeviceTarget({
   ctx,
@@ -459,19 +609,47 @@ export async function resolveClaimingDeviceTarget({
     ...ctx,
     clientDevice: clientDevice ?? ctx.clientDevice ?? null
   };
-  return ensureActingDeviceTarget({ ctx: mergedCtx });
+  return requireActingDeviceTarget({
+    ctx: mergedCtx,
+    what: 'This runner cannot claim work.'
+  });
 }
 
 /**
- * Provision the execution target for the acting client machine. Co-located Local
- * backends use the process host; hosted backends require `ctx.clientDevice` and
- * refuse to provision the backend host as a target.
+ * The two acts that may create a `local` execution target (contract v39): the
+ * explicit `register-target` declaration (`ovld add-et` and its desktop one-click
+ * equivalent), and an eligible machine-local checkout link. Named rather than
+ * boolean so every declaration site is greppable and reviewable.
  */
-export async function ensureActingDeviceTarget({
-  ctx
+export type ExecutionTargetDeclaration = 'register_target' | 'local_checkout_link';
+
+const DECLARATION_REFUSALS: Record<ExecutionTargetDeclaration, string> = {
+  register_target: 'This machine cannot be registered as an execution target.',
+  local_checkout_link:
+    'Overlord cannot tell which machine holds this directory, so it will not link it.'
+};
+
+/**
+ * Declare the acting client machine as an execution target, creating the device,
+ * target, access, and preference rows when they do not exist.
+ *
+ * This is the **only** provisioning entry point. It may be called from exactly two
+ * places (contract v39): the `register-target` surface, and a machine-local
+ * `local_checkout` project-resource source write. Every other caller — reads,
+ * protocol lifecycle, discovery, observations, launch-preference writes, runner
+ * claims — must use {@link findActingDeviceTarget} or
+ * {@link requireActingDeviceTarget} instead.
+ */
+export async function declareActingDeviceTarget({
+  ctx,
+  declaration
 }: {
   ctx: ServiceContext;
+  declaration: ExecutionTargetDeclaration;
 }): Promise<LocalExecutionTarget> {
+  if (!hasMachineLocalIdentity(ctx)) {
+    throw noExecutionTargetRegistered(DECLARATION_REFUSALS[declaration]);
+  }
   if (isCoLocatedBackend(ctx.db)) {
     return ensureDeviceTargetForFingerprint({
       ctx,
@@ -480,6 +658,9 @@ export async function ensureActingDeviceTarget({
       platformName: platform()
     });
   }
+  // `hasMachineLocalIdentity` already rejected the missing/backend-host/browser
+  // cases; these remain as defence in depth so the provisioning primitive keeps
+  // its own invariant rather than trusting its guard.
   const client = resolveClientDevice(ctx);
   if (!client) {
     throw new ServiceError(
@@ -505,7 +686,7 @@ export async function ensureActingDeviceTarget({
 
 /**
  * Provision the execution target for the process host. Valid only on co-located
- * Local backends; hosted callers must use {@link ensureActingDeviceTarget}.
+ * Local backends; hosted callers must use {@link declareActingDeviceTarget}.
  */
 export async function ensureCallerDeviceTarget({
   ctx
@@ -534,7 +715,12 @@ export async function updateTerminalProfile({
   ctx: ServiceContext;
   profile: TerminalProfile;
 }): Promise<LocalExecutionTarget> {
-  const target = await ensureActingDeviceTarget({ ctx });
+  // Contract v39: storing this machine's terminal profile is a settings write, not
+  // an onboarding act — it resolves an already-declared target and never mints one.
+  const target = await requireActingDeviceTarget({
+    ctx,
+    what: 'Terminal settings are stored per execution target.'
+  });
   requireActor(ctx);
   if (!target.preferenceId) {
     throw new ServiceError(
