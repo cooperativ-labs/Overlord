@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { describe, it } from 'node:test';
 
 import { createExecutionRequest } from './execution-requests.js';
@@ -12,23 +15,32 @@ import {
 } from './projects.js';
 import { createSeededServiceContext } from './test-helpers.js';
 
+// A co-located backend derives resource status by observing the checkout on disk,
+// so a bound resource has to point at a directory that actually exists — a
+// placeholder path resolves as `missing` and fails connection assertions.
+function checkoutDir(prefix: string): string {
+  return mkdtempSync(path.join(tmpdir(), `${prefix}-`));
+}
+
 describe('objective resource binding', () => {
   it('resolves an objective-bound resource key before the project primary', async () => {
     const { db, ctx } = await createSeededServiceContext({ source: 'cli' });
     const project = await createProject({ ctx, name: 'Cross-repo project' });
     const localTarget = await ensureCallerDeviceTarget({ ctx });
+    const primaryDir = checkoutDir('overlord-primary');
+    const mobileDir = checkoutDir('overlord-mobile');
 
     await addProjectResource({
       ctx,
       projectId: project.id,
-      directoryPath: '/tmp/overlord-primary',
+      directoryPath: primaryDir,
       resourceKey: 'overlord',
       isPrimary: true
     });
     await addProjectResource({
       ctx,
       projectId: project.id,
-      directoryPath: '/tmp/overlord-mobile',
+      directoryPath: mobileDir,
       resourceKey: 'mobile',
       isPrimary: false
     });
@@ -46,7 +58,7 @@ describe('objective resource binding', () => {
       executionTargetId: localTarget.executionTargetId
     });
 
-    assert.equal(resolved.workingDirectory, '/tmp/overlord-mobile');
+    assert.equal(resolved.workingDirectory, mobileDir);
     assert.notEqual(resolved.resourceId, null);
 
     const request = await createExecutionRequest({
@@ -57,7 +69,7 @@ describe('objective resource binding', () => {
       requestedSource: 'cli',
       executionTargetId: localTarget.executionTargetId
     });
-    assert.equal(request.resolvedWorkingDirectory, '/tmp/overlord-mobile');
+    assert.equal(request.resolvedWorkingDirectory, mobileDir);
 
     await db.close();
   });
@@ -70,7 +82,7 @@ describe('objective resource binding', () => {
     await addProjectResource({
       ctx,
       projectId: project.id,
-      directoryPath: '/tmp/overlord-primary',
+      directoryPath: checkoutDir('overlord-primary'),
       resourceKey: 'overlord',
       isPrimary: true
     });
@@ -81,7 +93,7 @@ describe('objective resource binding', () => {
     const mobile = await addProjectResource({
       ctx,
       projectId: project.id,
-      directoryPath: '/tmp/overlord-mobile',
+      directoryPath: checkoutDir('overlord-mobile'),
       resourceKey: 'mobile',
       isPrimary: false
     });
@@ -91,9 +103,13 @@ describe('objective resource binding', () => {
        VALUES ('other-target', ?, 'ssh', 'Other Device', 'active', ?, ?)`,
       [ctx.workspace.id, now, now]
     );
-    await db.run(`UPDATE project_resources SET execution_target_id = 'other-target' WHERE id = ?`, [
-      mobile.id
-    ]);
+    // Contract v39 moved per-target linkage off `project_resources` and onto the
+    // resource's `project_resource_sources` row, so re-homing the checkout means
+    // re-pointing the source.
+    await db.run(
+      `UPDATE project_resource_sources SET execution_target_id = 'other-target' WHERE resource_id = ?`,
+      [mobile.id]
+    );
 
     const { mission, objectives } = await createMissionWithObjectives({
       ctx,

@@ -28,7 +28,7 @@ const INSTRUCTION_BLOCK_END = '<!-- OVERLORD PROJECT METADATA PROTECTION: END --
 const PROJECT_METADATA_INSTRUCTION = `${INSTRUCTION_BLOCK_START}
 ## Overlord project metadata — do not edit
 
-`.overlord/project.json` is exclusively managed by Overlord. Do not edit,
+\`.overlord/project.json\` is exclusively managed by Overlord. Do not edit,
 replace, stage, commit, delete, or revert it. If its link metadata needs to
 change, use Overlord's resource-linking command instead.
 ${INSTRUCTION_BLOCK_END}`;
@@ -196,6 +196,11 @@ function parseProjectJson(projectJsonPath: string): ProjectJsonContents | null {
         )
       : {};
 
+  const resourceKey =
+    typeof parsed.resourceKey === 'string' && parsed.resourceKey.trim().length > 0
+      ? parsed.resourceKey.trim()
+      : undefined;
+
   return {
     _warning:
       typeof parsed._warning === 'string'
@@ -204,10 +209,7 @@ function parseProjectJson(projectJsonPath: string): ProjectJsonContents | null {
     version: typeof parsed.version === 'number' ? parsed.version : 1,
     projectId: parsed.projectId,
     resourceId: parsed.resourceId,
-    resourceKey:
-      typeof parsed.resourceKey === 'string' && parsed.resourceKey.trim().length > 0
-        ? parsed.resourceKey.trim()
-        : undefined,
+    ...(resourceKey ? { resourceKey } : {}),
     resourceIdsByExecutionTarget,
     isPrimary: parsed.isPrimary === true,
     linkedAt: typeof parsed.linkedAt === 'string' ? parsed.linkedAt : nowIso()

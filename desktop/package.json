@@ -11,7 +11,7 @@
   "scripts": {
     "build": "node esbuild.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "node --import tsx --test src/local-target-path-allowlist.test.ts src/oauth-handoff.test.ts src/packaging-identity.test.ts",
+    "test": "node --import tsx --test 'src/**/*.test.ts'",
     "dev": "node esbuild.mjs && OVERLORD_DESKTOP_DEV=1 electron .",
     "start": "node esbuild.mjs && electron .",
     "dist": "electron-builder"

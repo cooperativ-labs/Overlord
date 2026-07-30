@@ -125,7 +125,7 @@ test('ovld add-cwd writes local project metadata after resource creation', async
     resourceIdsByExecutionTarget?: Record<string, string>;
     isPrimary: boolean;
   };
-  assert.match(projectJson._warning, /managed by Overlord/i);
+  assert.match(projectJson._warning, /managed exclusively by Overlord/i);
   assert.equal(projectJson.version, 2);
   assert.equal(projectJson.projectId, 'project-1');
   assert.equal(projectJson.resourceId, 'resource-1');

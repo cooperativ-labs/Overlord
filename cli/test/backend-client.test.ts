@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -11,6 +11,7 @@ import {
 } from '../src/auth-credentials.ts';
 import { createBackendClient } from '../src/backend-client.ts';
 import { clientDeviceIdentity } from '../src/device-identity.ts';
+import { resetExplicitRuntimeEnvForTests } from '../src/env.ts';
 import { CliError } from '../src/errors.ts';
 
 const ISOLATED_ENV_KEYS = [
@@ -21,12 +22,28 @@ const ISOLATED_ENV_KEYS = [
   'USER_TOKEN'
 ] as const;
 
+/**
+ * The backend URL these tests resolve against.
+ *
+ * It has to be pinned through the explicit runtime override, not through a
+ * `$OVLD_HOME/overlord.toml`: `findEffectiveConfigPath` walks up from the cwd
+ * first, so a test running inside the repo always resolves the repo's own
+ * (per-instance, uncommitted) `overlord.toml` and never the temp one. Relying on
+ * that file made stored-credential matching depend on whichever backend the
+ * developer happened to be pointed at.
+ */
+const TEST_BACKEND_URL = 'http://127.0.0.1:4310';
+
 function isolateBackendClientEnv(): Record<(typeof ISOLATED_ENV_KEYS)[number], string | undefined> {
   const previous = {} as Record<(typeof ISOLATED_ENV_KEYS)[number], string | undefined>;
   for (const key of ISOLATED_ENV_KEYS) {
     previous[key] = process.env[key];
     delete process.env[key];
   }
+  process.env.OVERLORD_BACKEND_URL = TEST_BACKEND_URL;
+  // `isExplicitRuntimeEnv` is snapshotted at import time, so the override only
+  // outranks config once the baseline is re-established.
+  resetExplicitRuntimeEnvForTests();
   return previous;
 }
 
@@ -37,6 +54,7 @@ function restoreBackendClientEnv(
     if (previous[key] === undefined) delete process.env[key];
     else process.env[key] = previous[key];
   }
+  resetExplicitRuntimeEnvForTests();
 }
 
 test('clearStoredAuthCredentials removes auth.json', () => {
@@ -65,21 +83,13 @@ test('createBackendClient preserves stored credentials and guides re-login on 40
   const previousEnv = isolateBackendClientEnv();
   process.env.OVLD_HOME = home;
 
-  writeFileSync(
-    path.join(home, 'overlord.toml'),
-    `instance_name = "Local Overlord"
-backend_mode = "local"
-backend_url = "http://127.0.0.1:4310"
-web_host = "127.0.0.1"
-web_port = 4310
-default_agent = "claude"
-`
-  );
-
+  // The stored credential only carries an Authorization header when its
+  // backendUrl matches the resolved one, which is what puts the request on the
+  // "saved credentials were rejected" branch under test.
   writeStoredAuthCredentials({
     type: 'session_bearer',
     token: 'stale-session-token',
-    backendUrl: 'http://127.0.0.1:4310'
+    backendUrl: TEST_BACKEND_URL
   });
 
   const originalFetch = globalThis.fetch;
@@ -117,17 +127,6 @@ test('createBackendClient sends local device identity headers', async () => {
   const previousEnv = isolateBackendClientEnv();
   process.env.OVLD_HOME = home;
 
-  writeFileSync(
-    path.join(home, 'overlord.toml'),
-    `instance_name = "Local Overlord"
-backend_mode = "cloud"
-backend_url = "https://cloud.overlord.test"
-web_host = "127.0.0.1"
-web_port = 4310
-default_agent = "claude"
-`
-  );
-
   const originalFetch = globalThis.fetch;
   let capturedHeaders: Headers | null = null;
   globalThis.fetch = (async (_url, init) => {
@@ -159,12 +158,6 @@ test('backend requests do not send workspace-selection headers', async () => {
   const previousHome = process.env.OVLD_HOME;
   const previousEnv = isolateBackendClientEnv();
   process.env.OVLD_HOME = home;
-  writeFileSync(
-    path.join(home, 'overlord.toml'),
-    `backend_mode = "cloud"
-backend_url = "https://cloud.overlord.test"
-`
-  );
 
   const originalFetch = globalThis.fetch;
   let capturedHeaders: Headers | null = null;

@@ -70,6 +70,7 @@ response shapes (→ [webapp module](../webapp/README.md)).
 - [11 — SQLite Vs PostgreSQL For Multi-Agent Use](docs/11-sqlite-vs-postgresql-multi-agent.md): database tradeoffs for local agents, hosted deployments, remote runners, queue claiming, and write concurrency.
 - [12 — Private-Network PostgreSQL Deployment Plan](docs/12-private-network-postgresql-deployment-plan.md): recommended architecture when shared organization state starts on a private-network database with multiple clients and distributed runners.
 - [13 — Database Seeding Framework](docs/13-database-seeding-framework.md): recommendation for how to seed development/test data — a first-party Kysely + faker seed runner over the service layer, and why a third-party seeding framework (Prisma/Drizzle/Snaplet) is the wrong fit.
+- [15 — Test Database Provisioning](docs/15-test-database-provisioning.md): why tests do not get their own hosted Postgres, and how `yarn test:conformance` boots a throwaway one locally and in CI.
 - [Test Plan](docs/testing.md): adapter-parity test plan implementing the schema contract's Adapter Conformance Suite (DDL, concurrency, change feed, uniqueness, queue claiming, soft delete, extension migrations) across SQLite and Postgres. Part of the root [TEST_PLAN.md](../TEST_PLAN.md).
 
 ### Code & Tests (colocated)

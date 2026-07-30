@@ -12,14 +12,24 @@ import {
 } from '../src/branch-preparation.ts';
 import type { CliRuntime } from '../src/runtime.ts';
 
-function runtimeWithProjects(projects: unknown[], calls: string[] = []): CliRuntime {
+function runtimeWithProjects(
+  projects: Array<{ id: string; slug: string }>,
+  calls: string[] = []
+): CliRuntime {
   return {
     backend: {
       baseUrl: 'http://localhost.test',
       health: async () => ({ ok: true }),
       get: async path => {
         calls.push(path);
-        if (path === '/api/projects') return projects as never;
+        // Slug resolution reads a single project by id, so the fake backend
+        // serves the detail route rather than the collection.
+        const match = /^\/api\/projects\/(.+)$/.exec(path);
+        if (match) {
+          const project = projects.find(entry => entry.id === decodeURIComponent(match[1]!));
+          if (!project) throw new Error(`project not found: ${match[1]}`);
+          return project as never;
+        }
         throw new Error(`unexpected GET ${path}`);
       },
       post: async () => null as never,
@@ -41,16 +51,21 @@ test('resolveMissionProjectSlug uses embedded mission project slug when present'
   assert.deepEqual(calls, []);
 });
 
-test('resolveMissionProjectSlug reads existing project slug from project list', async () => {
+test('resolveMissionProjectSlug reads the slug from the project detail endpoint', async () => {
+  const calls: string[] = [];
   const slug = await resolveMissionProjectSlug({
-    runtime: runtimeWithProjects([
-      { id: 'p1', slug: 'alpha' },
-      { id: 'p2', slug: 'overlord' }
-    ]),
+    runtime: runtimeWithProjects(
+      [
+        { id: 'p1', slug: 'alpha' },
+        { id: 'p2', slug: 'overlord' }
+      ],
+      calls
+    ),
     mission: { projectId: 'p2' }
   });
 
   assert.equal(slug, 'overlord');
+  assert.deepEqual(calls, ['/api/projects/p2']);
 });
 
 test('resolveMissionProjectSlug falls back for unresolved legacy payloads', async () => {

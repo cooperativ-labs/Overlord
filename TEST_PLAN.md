@@ -97,9 +97,13 @@ The plan extends this rather than introducing a heavyweight framework:
   dependency required.
 - **SQLite:** `better-sqlite3` (already a dependency) opened as `:memory:` per
   test for isolation, WAL-mode variant for change-feed/realtime tests.
-- **Postgres:** ephemeral instance per CI job. Locally, an opt-in
-  `OVERLORD_TEST_PG_URL`; in CI a service container. Adapter-parity tests skip
-  Postgres with a loud `SKIP` (never a silent pass) when no URL is configured.
+- **Postgres:** an ephemeral instance per run, provisioned by
+  `scripts/test-db.mjs` (temp `initdb` cluster, or a tmpfs `postgres` container)
+  and injected as `TEST_DATABASE_URL` by `yarn test:conformance` /
+  `yarn test:with-pg`. An externally exported `TEST_DATABASE_URL` (Neon branch, CI
+  service container) is used as-is. Adapter-parity tests skip Postgres with a loud
+  `SKIP` (never a silent pass) when no URL is configured. See
+  [15 — Test Database Provisioning](database/docs/15-test-database-provisioning.md).
 - **YAML/JSON-Schema (L0):** validate `contract/*.yaml` and every
   `conformance-manifest.yaml` against `contract/conformance-manifest.schema.yaml`.
 - **No new runtime deps for tests** unless a gap is proven; prefer Node stdlib

@@ -29,7 +29,8 @@ describe('project metadata', () => {
       const content = readFileSync(path.join(directory, filename), 'utf8');
       assert.match(content, /Existing .* instructions/);
       assert.match(content, /OVERLORD PROJECT METADATA PROTECTION: START/);
-      assert.match(content, /must not edit/i);
+      assert.match(content, /exclusively managed by Overlord/i);
+      assert.match(content, /do not edit/i);
     }
 
     const gitignore = readFileSync(path.join(directory, '.gitignore'), 'utf8');
@@ -52,9 +53,11 @@ describe('project metadata', () => {
       isPrimary: true
     });
     assert.equal(
-      (readFileSync(path.join(directory, 'AGENTS.md'), 'utf8').match(
-        /OVERLORD PROJECT METADATA PROTECTION: START/g
-      ) ?? []).length,
+      (
+        readFileSync(path.join(directory, 'AGENTS.md'), 'utf8').match(
+          /OVERLORD PROJECT METADATA PROTECTION: START/g
+        ) ?? []
+      ).length,
       1
     );
   });

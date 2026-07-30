@@ -15,7 +15,7 @@ Postgres) from a single test body via `withAdapter` (see
 ```
 withAdapter(async (db, adapter) => {
   // body runs once with adapter='sqlite' (:memory:),
-  // and once with adapter='postgres' (when OVERLORD_TEST_PG_URL set; else SKIP)
+  // and once with adapter='postgres' (when TEST_DATABASE_URL set; else SKIP)
 });
 ```
 
@@ -24,6 +24,15 @@ withAdapter(async (db, adapter) => {
 - A behavior must pass identically on both adapters. A SQLite-only pass is a
   failing test, not an accepted divergence.
 - Postgres absence yields an explicit `SKIP` line in output, never a silent green.
+
+### Running the Postgres half
+
+`yarn test:conformance` boots a throwaway Postgres (a temp `initdb` cluster, or a
+tmpfs `postgres:17-alpine` container when no local binaries exist), exports
+`TEST_DATABASE_URL` for the run, and deletes it afterwards — no hosted database
+and no cost. `yarn test:with-pg` does the same for the whole root suite, and an
+already-exported `TEST_DATABASE_URL` (a Neon branch, a CI service container) is
+used as-is. See [15 — Test Database Provisioning](15-test-database-provisioning.md).
 
 ## 1. DDL Structural Conformance (Adapter Suite §1)
 

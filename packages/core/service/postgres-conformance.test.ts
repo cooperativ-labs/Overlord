@@ -171,6 +171,48 @@ async function seedGraph(client: DatabaseClient): Promise<{
   return { projectId, missionId, objectiveId, executionTargetId };
 }
 
+/**
+ * Link a primary `local_checkout` resource for `graph.projectId` on
+ * `graph.executionTargetId`.
+ *
+ * Contract v39 split resource identity from per-target linkage: the logical
+ * resource lives in `project_resources` (keyed by `resource_key`) while the
+ * target-scoped checkout path lives in a `project_resource_sources` row. Both
+ * rows are required for the launch-path resolvers to see a linked primary.
+ */
+async function insertPrimaryProjectResource(
+  client: DatabaseClient,
+  graph: Awaited<ReturnType<typeof seedGraph>>,
+  options: { path?: string } = {}
+): Promise<string> {
+  const now = ISO();
+  const resourceId = randomUUID();
+  await client.run(
+    `INSERT INTO project_resources
+       (id, workspace_id, project_id, resource_key, label, is_primary, status,
+        created_at, updated_at)
+     VALUES (?, ?, ?, 'primary', 'Primary', true, 'active', ?, ?)`,
+    [resourceId, WORKSPACE_ID, graph.projectId, now, now]
+  );
+  await client.run(
+    `INSERT INTO project_resource_sources
+       (id, workspace_id, project_id, resource_id, execution_target_id, source_kind,
+        descriptor_json, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, 'local_checkout', ?, ?, ?)`,
+    [
+      randomUUID(),
+      WORKSPACE_ID,
+      graph.projectId,
+      resourceId,
+      graph.executionTargetId,
+      JSON.stringify({ path: options.path ?? '/tmp/conformance-primary' }),
+      now,
+      now
+    ]
+  );
+  return resourceId;
+}
+
 async function insertQueuedRequest(
   client: DatabaseClient,
   graph: Awaited<ReturnType<typeof seedGraph>>,
@@ -471,14 +513,7 @@ for (const adapter of adapters) {
            VALUES (?, ?, ?, ?, 'active', ?, ?)`,
           [randomUUID(), WORKSPACE_ID, workspaceUserId, graph.executionTargetId, now, now]
         );
-        await client.run(
-          `INSERT INTO project_resources
-             (id, workspace_id, project_id, execution_target_id, resource_key, type, label, path,
-              is_primary, status, created_at, updated_at)
-           VALUES (?, ?, ?, ?, 'primary', 'local_directory', 'Primary', '/tmp/conformance-primary', true,
-                   'active', ?, ?)`,
-          [randomUUID(), WORKSPACE_ID, graph.projectId, graph.executionTargetId, now, now]
-        );
+        await insertPrimaryProjectResource(client, graph);
         await client.run(`UPDATE objectives SET state = 'launching' WHERE id = ?`, [
           graph.objectiveId
         ]);
@@ -566,14 +601,7 @@ for (const adapter of adapters) {
            VALUES (?, ?, ?, ?, 'active', ?, ?)`,
           [randomUUID(), WORKSPACE_ID, workspaceUserId, graph.executionTargetId, now, now]
         );
-        await client.run(
-          `INSERT INTO project_resources
-             (id, workspace_id, project_id, execution_target_id, resource_key, type, label, path,
-              is_primary, status, created_at, updated_at)
-           VALUES (?, ?, ?, ?, 'primary', 'local_directory', 'Primary', '/tmp/conformance-primary', true,
-                   'active', ?, ?)`,
-          [randomUUID(), WORKSPACE_ID, graph.projectId, graph.executionTargetId, now, now]
-        );
+        await insertPrimaryProjectResource(client, graph);
 
         const ctx = await createServiceContext({ db: client, source: 'webapp' });
         ctx.actorWorkspaceUserId = workspaceUserId;
@@ -645,14 +673,7 @@ for (const adapter of adapters) {
            VALUES (?, ?, ?, ?, 'active', ?, ?)`,
           [randomUUID(), WORKSPACE_ID, workspaceUserId, graph.executionTargetId, now, now]
         );
-        await client.run(
-          `INSERT INTO project_resources
-             (id, workspace_id, project_id, execution_target_id, resource_key, type, label, path,
-              is_primary, status, created_at, updated_at)
-           VALUES (?, ?, ?, ?, 'primary', 'local_directory', 'Primary', '/tmp/conformance-primary', true,
-                   'active', ?, ?)`,
-          [randomUUID(), WORKSPACE_ID, graph.projectId, graph.executionTargetId, now, now]
-        );
+        await insertPrimaryProjectResource(client, graph);
 
         const ctx = await createServiceContext({ db: client, source: 'webapp' });
         ctx.actorWorkspaceUserId = workspaceUserId;
