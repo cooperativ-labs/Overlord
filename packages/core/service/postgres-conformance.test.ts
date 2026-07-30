@@ -223,7 +223,7 @@ async function insertQueuedRequest(
   await client.run(
     `INSERT INTO execution_requests
        (id, workspace_id, project_id, mission_id, objective_id,
-        launch_mode, target_kind, requested_source, idempotency_key, status,
+        launch_mode, requested_source, idempotency_key, status,
         created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, 'run', 'local', 'webapp', ?, 'queued', ?, ?)`,
     [

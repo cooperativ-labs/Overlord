@@ -32,7 +32,7 @@ import type {
  */
 export interface ExecutionTargetRef {
   executionTargetId: string | null;
-  /** `execution_targets.type`: 'local' | 'cloud_persistent' | 'cloud_sandbox' | 'ssh' | … */
+  /** `execution_targets.type`: 'local' | 'virtual' | adapter-defined transport providers … */
   type: string;
   deviceLabel?: string | null;
   /** Whether the target is currently reachable (from heartbeat/observations). */

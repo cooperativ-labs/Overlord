@@ -800,9 +800,9 @@ describe('execution target lifecycle', () => {
     await db.run(
       `INSERT INTO execution_requests
          (id, workspace_id, project_id, mission_id, objective_id, execution_target_id,
-          launch_mode, launch_flags_json, target_kind, requested_source, status,
+          launch_mode, launch_flags_json, requested_source, status,
           attempt_count, metadata_json, created_at, updated_at, revision)
-       VALUES (?, ?, ?, ?, ?, ?, 'run', '{}', 'local', 'manual_run', 'queued',
+       VALUES (?, ?, ?, ?, ?, ?, 'run', '{}', 'manual_run', 'queued',
                0, '{}', ?, ?, 1)`,
       [
         newId(),

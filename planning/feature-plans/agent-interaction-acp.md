@@ -1,949 +1,984 @@
-# Revamping Agent Interaction (coo:447)
+# Agent Session Exchange: Events, Requests, and Control (coo:447)
 
-Status: research + proposal. No implementation in this objective.
-Research date: 2026-07-26. Contract version at time of writing: `29`.
+**Status:** Architecture revision. No implementation in this objective.
+**Revised:** 2026-07-30.
+**Contract reviewed:** `CONTRACT.md` version 42.
+**Depends on:** the execution-target identity work implemented through contract
+version 41 in
+[`execution-target-identity.md`](./execution-target-identity.md).
 
-## The ask
+This document supersedes the architecture and phasing in the first coo:447
+proposal. Its ACP assessment remains valid: ACP is not the transport for an
+ordinary Overlord terminal session. The revision incorporates the shipped
+execution-target/runner model and a fresh audit of the current connector
+capabilities.
 
-Let a user answer an agent's blocking questions, permission requests, and other
-requests from the Overlord webapp or mobile app instead of walking to the
-terminal, and let them push follow-up instructions into a running session —
-**without replacing the terminal interface**. Agent Client Protocol (ACP) was
-proposed as the vehicle. The activity feed overlaps with this, so either redesign
-it or add a chat-like surface to the mission panel.
+## Executive decision
 
-## Recommendation in one paragraph
+Build a versioned **Agent Session Exchange** in Overlord's backend/service layer.
+It is a durable, session-scoped event and control API:
 
-**Do not adopt ACP as the interaction transport, and do not build a separate chat
-pane.** ACP is disqualified by a structural constraint, not a maturity one: its
-only stable transport requires the *client* to spawn the agent and own its stdio,
-and Overlord launches agents by typing a command into a terminal window it does
-not own. Instead, add one generic **agent-request/response primitive** to the
-protocol — borrowing ACP's `PermissionOption` vocabulary so the data model is
-standards-shaped and interoperable later — and deliver it over three mechanisms
-that all already exist: a **blocking `ask`** (needs no harness support at all), a
-**blocking `PermissionRequest` hook**, and **`asyncRewake` / `Stop` injection**
-for unsolicited follow-up messages. Then evolve the activity feed from its current
-hard-coded boolean branches into a **widget registry**, where a question widget
-owns a reply field and a permission widget owns approve/deny buttons, plus one
-composer pinned under the feed. The terminal stays authoritative throughout:
-every request appears in both places and whoever answers first wins.
+- connector adapters publish normalized session events;
+- agents and blocking hooks open answerable requests;
+- authenticated humans resolve those requests;
+- humans queue instructions for one explicit running session; and
+- connector adapters claim and inject those instructions using the best
+  mechanism their harness supports.
 
----
+Do **not** make the persistent runner the interaction broker. The runner should
+bootstrap a session channel when it launches an agent and may run a lightweight
+per-launch sentinel for liveness and process-exit reporting, but it must not
+capture transcripts, interpret harness events, or receive user instructions.
 
-# Part 1 — What exists today
+The distinction matters after coo:522:
 
-Everything in this section was verified first-hand against the working tree, not
-inferred from docs.
+- an execution target is the user-selected routing identity;
+- several native or adopted runner instances may serve that target;
+- an execution request selects the target, never one runner instance;
+- the runner that wins a claim opens a terminal and then loses ownership of the
+  agent's stdio and terminal pane; and
+- the `agent_sessions` row created by protocol attach is the durable identity of
+  the conversation the user wants to observe or steer.
 
-## 1.1 Overlord never owns the agent's stdio
+Therefore user interaction targets an **agent session channel**, not an
+execution target and not `claimed_by_runner_registration_id`. The winning runner
+registration remains provenance and diagnostics only.
 
-`cli/src/terminal-launcher.ts` builds a shell line and hands it to a terminal
-emulator. For iTerm (`buildItermAppleScript`, `cli/src/terminal-launcher.ts:190`)
-it emits AppleScript that creates a window, tab, or split and calls
-`write text` with the agent invocation. `terminalInnerCommand`
-(`cli/src/terminal-launcher.ts:116`) `cd`s into the project, re-exports the
-`TMPDIR` family and launch env vars, runs the project's pre-launch commands, then
-starts the agent.
-
-Three consequences:
-
-- Overlord holds **no file descriptors** on the agent process. It is a
-  grandchild of a terminal app, not a child of Overlord.
-- The session handle is **not retained**. The AppleScript writes into
-  `current session of newWindow` and discards the reference, so Overlord cannot
-  later address that specific pane.
-- This is macOS + iTerm/Terminal specific, with a generic fallback
-  (`buildGenericPlacementShell`, `cli/src/terminal-launcher.ts:311`).
-
-This single fact drives the entire design. Any mechanism that requires owning the
-agent's stdin is off the table for the launch mode Overlord actually ships.
-
-## 1.2 The activity feed is read-only and its widget dispatch is hard-coded
-
-`webapp/web/components/LiveActivityFeed.tsx` is the whole feed. `EVENT_META`
-(line 37) maps each of the eleven `mission_events.type` values to an icon and a
-label. `ActivityEntry` (line 341) then branches on three inline booleans:
-
-```ts
-const isUserFollowUp = event.type === 'user_follow_up';
-const isBlockingQuestion = event.type === 'ask';
-const isDelivery = event.type === 'delivery' && Boolean(event.deliveryId);
-```
-
-Those three booleans are threaded through ternary-chained Tailwind class strings
-for the icon colour, the label colour, and the article wrapper. Only `delivery`
-has a genuinely distinct body (`DeliveryExpandable` → `DeliveryDetails` →
-`DeliveryPresentation`, lines 174–339). `ask` gets an amber outline and nothing
-else. `permission_request` has an icon (line 44) and no code path that ever
-produces one.
-
-There is **no interactive affordance anywhere in the feed**, and no composer.
-`GET /api/missions/:id/events` (`backend/index.ts:1458-1461`) has no `POST`
-counterpart — the webapp physically cannot write a mission event.
-
-The mission panel (`webapp/web/components/MissionPanel.tsx:342-381`) is a single
-scroll column: objectives card, then a muted section with Tools & Criteria,
-Activity, Artifacts, File Changes. Realtime arrives by SSE on
-`GET /api/stream` (`backend/index.ts:1117`, `backend/realtime.ts:102`), which
-invalidates the React Query cache (`webapp/web/lib/queries.ts:466`).
-
-## 1.3 `ask` is a dead end by design
-
-`askQuestion` (`packages/core/service/protocol.ts:1331`) inserts one
-`mission_events` row with `type='ask'` and `phase='blocked'`, enqueues an
-`agent_question` push notification, and calls `moveMissionToReview`. It returns
-`{ eventId }`.
-
-`contract/protocol-commands.yaml:156` states the rule plainly: *"Agent MUST stop
-after calling ask."* There is no answer column, no answer endpoint, and no
-channel by which an answer could reach the agent.
-
-So the notification half of the loop is already built — coo:444 ships an
-`agent_question` push category that fires from exactly this transaction — and it
-delivers the user to a read-only feed. **The user is already being paged for
-questions they cannot answer.** That is the sharpest framing of the gap.
-
-## 1.4 The permission round-trip is already specified but never built
-
-`database/docs/09-database-schema-contract.md:1767` documents a
-`permission_requests` table in full, including a human-resolution model:
-
-| Column | Notes |
-| --- | --- |
-| `tool_name`, `request_summary`, `payload_json` | secret-redacted |
-| `status` | `requested` \| `approved` \| `denied` \| `expired` \| `not_required` |
-| `resolved_by_workspace_user_id` | FK to `workspace_users` |
-| `resolved_at` | |
-
-`CONTRACT.md:623-624` lists both `permission_requests.status` and the
-`permission_request` / `awaiting_approval` values of `mission_events.type` as
-closed vocabularies. A sibling `hook_events` table is documented at
-`database/docs/09-database-schema-contract.md:1742`.
-
-**Neither table is created by any migration.** `grep` across
-`database/postgres/migrations` and `database/sqlite/migrations` finds
-`permission_request` only inside the `mission_events.type` CHECK constraint
-(`002_initial_core.sql:503` / `:487`). So the design exists on paper, the
-vocabulary is already reserved, and the storage was never built.
-
-## 1.5 Defect cluster: all three non-edit hooks are dead, silently
-
-This was found while researching the mechanism and is worth fixing regardless of
-which design is chosen.
-
-**(a) The `PermissionRequest` hook calls a subcommand that does not exist.**
-`connectors/adapters/claude/scripts/permission-hook.sh` pipes the hook body to
-`ovld protocol permission-request`. Probed directly:
-
-```
-$ ovld protocol permission-request --mission-id coo:447 --payload-file - <<< '…'
-Unknown protocol subcommand: permission-request — Supported subcommands: …
-```
-
-`permission-request` is absent from `SUPPORTED_PROTOCOL_SUBCOMMANDS`
-(`cli/src/protocol-help.ts:2`). No permission activity has ever reached the feed.
-The identical dead call exists in
-`connectors/adapters/codex/scripts/permission-hook.sh`.
-
-**(b) The `Stop` hook's hook type is rejected.**
-`connectors/adapters/claude/scripts/stop-hook.sh` calls
-`ovld protocol hook-event --hook-type Stop`. `recordHookEvent`
-(`packages/core/service/protocol.ts:818`) throws for anything but
-`UserPromptSubmit`. Probed:
-
-```
-$ ovld protocol hook-event --hook-type Stop --mission-id coo:447 --session-key …
-Unsupported hook type: Stop — (validation_error)
-```
-
-**(c) The same hook then reads a field nobody produces.** It parses
-`deliveryStatus.needed` out of the response. `deliveryStatus` appears nowhere in
-`backend/`, `packages/`, or `cli/src/`. Even with the hook type accepted, the
-pending-delivery guidance would be inert.
-
-**(d) Both are gated on a `MISSION_ID` env var that agent-pod sessions never
-set.** This is the exact bug already fixed for `PostToolUse` by the per-cwd
-active-session manifest in `cli/src/vcs-sessions.ts` (see its header comment,
-lines 7–23). `PermissionRequest` and `Stop` were never migrated to it.
-
-Every one of these failures is invisible: the scripts send stderr to `/dev/null`
-and `exit 0`. That is correct for a hook that must never disrupt a user, but it
-means the features have been *silently absent* rather than visibly broken.
-
-**Only `PostToolUse` edit capture actually works.** Meanwhile four connectors
-declare a `permissionHook` capability in their conformance manifests
-(`connectors/adapters/{claude,codex,cursor,antigravity}/conformance-manifest.yaml`),
-and `cursor` declares it with no permission hook script present at all. That is a
-conformance-manifest accuracy problem as well as a functional one.
-
-## 1.6 Reusable machinery that already exists
-
-The proposal below is mostly assembly, not invention:
-
-| Piece | Where | Reuse |
-| --- | --- | --- |
-| Postgres `LISTEN` long-poll primitive | `backend/execution/runner-queue-notify.ts` (25 s hold, dedicated non-pooled client, notification-or-timeout) | The blocking wait for a human answer |
-| Long-poll response contract | `backend/execution/runner.ts:226-304`, additive `longPoll: boolean` | Same pattern for `ask --wait` |
-| Per-cwd active-session manifest | `cli/src/vcs-sessions.ts` | Lets hooks resolve mission + session key with no env var |
-| SSE change feed | `GET /api/stream`, `backend/realtime.ts` | Pushes new requests to the webapp |
-| Push notifications | `agent_question` category, `enqueuePushNotificationForMission` | Already fires on `ask` |
-| Launch env injection | coo:359 `overlord.launchEnvVars` | Can set `BASH_MAX_TIMEOUT_MS`, `CLAUDE_CODE_STOP_HOOK_BLOCK_CAP` per project |
-| Revision CAS | house pattern, zero-row update ⇒ `409` | Race resolution between web and terminal |
+The user interface is deliberately deferred. Once the event, request,
+acknowledgement, and capability contracts are real, mission widgets can render
+them without inventing semantics in the client.
 
 ---
 
-# Part 2 — Agent Client Protocol assessment
+## 1. Questions raised by the objective, with recommended answers
 
-## 2.1 What it actually is
+These are the questions that would materially change the architecture. None
+blocks revising the plan, so each has a recommended default.
 
-| | |
-| --- | --- |
-| Repo | `github.com/agentclientprotocol/agent-client-protocol` (moved out of the `zed-industries` org) |
-| Governance | Jointly governed by **Zed Industries and JetBrains**; two lead maintainers with veto. Explicitly "interim governance," working toward an independent foundation — **no foundation yet** |
-| Protocol version | **`1`, stable.** `2` exists as a **Draft**, announced 2026-07-20 |
-| License | Apache-2.0 |
-| Framing | JSON-RPC 2.0, newline-delimited, UTF-8, fully bidirectional |
-| Official SDKs | Rust, TypeScript, Python, Kotlin, Java |
+### 1.1 Where should the persistent exchange live?
 
-Disambiguation note for anyone reading secondary sources: IBM/BeeAI's *Agent
-Communication Protocol* was also abbreviated ACP and was merged into A2A under
-the Linux Foundation in August 2025. Several 2026 write-ups conflate the two and
-wrongly place Zed's ACP under Linux Foundation stewardship.
+**Answer: in the backend/service layer, keyed to a session channel.**
 
-**The terminology is inverted from intuition and this matters everywhere:**
-the **client** is the editor/IDE/UI (Zed, JetBrains, a hypothetical Overlord
-webapp) and the **agent** is the coding agent process, effectively the server.
+The backend already owns durable mission/session state, authorization,
+idempotency, the entity-change feed, and Local-versus-Cloud portability. A
+runner process is the wrong owner because it is one of potentially several
+processes serving a target and stops being involved after terminal launch.
 
-## 2.2 The disqualifying constraint
+There may be a small local process for liveness, but it is a client of the
+exchange rather than the source of truth.
 
-> *"The client launches the agent as a subprocess. The agent reads JSON-RPC
-> messages from its standard input and sends messages to its standard output."*
+### 1.2 What is the canonical interaction identity?
 
-stdio is the **only stable transport**. There is no attach, no handshake on
-existing file descriptors, no discovery of running agents. The ACP Registry
-reinforces this: every entry ships a `distribution` block (usually an `npx`
-invocation) whose entire purpose is telling the client *what command to spawn*.
+**Answer: `agent_sessions.id` after attach, with a pre-attach channel ID created
+for the launch attempt.**
 
-The three session verbs that sound like they might help do not:
+Harness-native IDs such as Claude's `session_id`, Codex's thread ID, Cursor's
+conversation ID, and Pi's session file are aliases. A mission ID is too broad:
+one mission can have concurrent or historical sessions. A runner instance is
+also too broad: it can launch or serve many sessions.
 
-| Verb | What it actually does |
-| --- | --- |
-| `session/list` | Enumerates sessions the agent persisted. Documented as *"a discovery mechanism only — it does not restore or modify sessions."* |
-| `session/load` | A **newly spawned** process re-hydrates a session id and **replays the whole transcript** as `session/update` notifications |
-| `session/resume` | Same cold re-attach, but MUST NOT replay |
+### 1.3 How are events extracted accurately?
 
-That is cold reattach by id against a fresh process — not live attachment to a
-running one. **If a human has `claude` open in a terminal, ACP cannot see it,
-cannot inject into it, and cannot mirror it.**
+**Answer: only from supported harness hooks/extensions and Overlord's own
+protocol operations.**
 
-Two further cautions, both material to a build decision:
+Do not tail private transcript files, scrape terminal text, intercept
+keystrokes, or infer semantic events from process output. Those approaches are
+agent-specific but live outside the connector adapters, are unstable, and
+cannot provide trustworthy correlation.
 
-- **Remote transport is draft.** A Streamable HTTP + WebSocket RFD moved to
-  Active on 2026-07-02 and is in reference-implementation phase. Message
-  sequencing, `Last-Event-ID` resumability, reconnection semantics, and keepalive
-  are all explicitly deferred to v2. In v1, *"reconnect and retry are up to the
-  implementer"* and in-flight messages are not replayed.
-- **v2 removes v1's main value proposition.** The v2 draft deletes
-  `fs/read_text_file`, `fs/write_text_file`, and the entire `terminal/*` family,
-  on the rationale that adoption was limited and agents built their own
-  sandboxing. Clients wanting specialised tooling are told to expose their own
-  MCP server instead. v2 also removes `session/load` and `session/set_mode`,
-  makes `session/prompt` return immediately, and replaces chunk updates with
-  whole-message upserts.
+The connector maps a native event onto a versioned Overlord envelope. Unknown
+or unavailable native events remain explicitly unsupported.
 
-Separately, ACP *"assumes a single client"*. Microsoft's Agent Host Protocol
-exists specifically to add multi-client coordination, server-sequenced ordering,
-and reconnect-with-replay on top of ACP, and marks ACP's multi-client story as
-"Not addressed." AHP is itself explicitly unstabilised. If the requirement were
-"many observers on one session," that is the gap ACP does not fill.
+### 1.4 Can Overlord promise every failure from every harness?
 
-## 2.3 What ACP gets right, and should be borrowed
+**Answer: no. Promise capability-graded coverage.**
 
-ACP's `session/request_permission` is, as far as I can find, the only
-protocol-level typed approval primitive in this space — MCP, A2A, and AG-UI all
-lack one. It is worth copying verbatim:
+Claude Code currently exposes a typed `StopFailure` event for rate limits,
+overload, authentication, billing, invalid requests, missing models, server
+errors, and max-output-token failures. Codex's documented hook release exposes
+session, prompt, permission, tool, compaction, and stop events, but no equivalent
+provider-failure event. Cursor likewise does not currently provide a documented
+universal provider-failure event.
+
+Overlord can always report channel liveness and process exit for an
+Overlord-launched session. It can report a precise provider failure only where
+the adapter receives a supported native event.
+
+### 1.5 What does “delivered to the agent” mean?
+
+**Answer: use several states and never collapse them.**
+
+For an inbound instruction:
+
+1. `queued` — durably accepted by Overlord;
+2. `leased` — one session adapter claimed it;
+3. `emitted` — the adapter returned/invoked the harness-specific injection;
+4. `acknowledged` — a later native event proves the harness accepted it; or
+5. `failed`, `expired`, or `cancelled`.
+
+Many hooks can prove `emitted` but not `acknowledged`. The API and eventual UI
+must say so. “Sent” must never be presented as “the model saw it.”
+
+### 1.6 How is the race between a remote answer and the terminal handled?
+
+**Answer: use an explicit remote-decision window, then hand off to the terminal.**
+
+The old plan said “first answer wins.” That overclaims what the harness APIs can
+observe. For a native permission prompt, the harness runs the blocking hook
+_before_ drawing its terminal dialog:
+
+1. the adapter creates a request and waits for a bounded remote window;
+2. a remote resolution during that window is translated into a hook decision;
+3. if the window expires, the request atomically becomes
+   `released_to_terminal`;
+4. only then does the hook return no decision and allow the native prompt to
+   appear; and
+5. the web/mobile resolution controls disable immediately.
+
+Some harnesses can later report the terminal result; some cannot. In the latter
+case Overlord records that the request was released, not whether the human
+approved or denied it locally.
+
+For `ovld protocol ask --wait`, there is no simultaneous terminal dialog. The
+CLI subprocess is the waiter, so revision CAS is sufficient.
+
+### 1.7 Who may send instructions and approve tools remotely?
+
+**Answer: separate the permissions and make remote tool approval opt-in.**
+
+- `agent_session:message` permits answers and follow-up instructions.
+- `agent_permission:resolve` permits tool approval/denial.
+
+Remote permission resolution should be disabled by default, enabled by a
+workspace policy ceiling and then per project, and initially support only
+allow-once and deny. Persistent “always allow” changes harness policy and is not
+portable: Claude supports permission updates, while Codex explicitly reserves
+but does not currently support `updatedPermissions`.
+
+### 1.8 Should tool calls be stored?
+
+**Answer: metadata-only and off by default.**
+
+Tool lifecycle events are useful for a live diagnostics view, but raw inputs and
+outputs have the highest secret and volume risk. An opt-in policy may store tool
+name, native call ID, lifecycle state, duration, and a bounded redacted summary.
+It must not store command bodies, file contents, model output, or MCP payloads by
+default.
+
+### 1.9 Which session receives an unsolicited instruction?
+
+**Answer: exactly one explicit session.**
+
+There is no `session_id = null` meaning “whichever agent is live.” If a mission
+has two active sessions, the caller must select one. Convenience behavior may
+auto-select only when exactly one input-capable session exists.
+
+### 1.10 How are objective-launch prompts excluded?
+
+**Answer: explicit launch correlation, not text matching.**
+
+The channel bootstrap records a launch kind and a launch-prompt ID. The adapter
+classifies the injected objective prompt as `objective_launch`; the server does
+not project it as a human `user.prompt` event. Later terminal prompts are
+captured normally. Turn-number heuristics remain only a compatibility fallback.
+
+---
+
+## 2. Why the persistent runner is not the broker
+
+The current runner is persistent only in the queue-claim sense:
+
+1. `ovld runner supervise` long-polls the execution queue.
+2. Any healthy runner serving the selected target may claim.
+3. The winner prepares the worktree and launches a command.
+4. For Terminal/iTerm, `spawnSync` waits for AppleScript to open the terminal,
+   not for the coding agent to exit.
+5. The launched agent later attaches, linking
+   `execution_requests.launched_session_id`.
+
+The runner therefore has neither the agent's stdio nor a durable terminal pane
+handle. Keeping an in-memory `missionId → runner` routing map would be wrong in
+four ways:
+
+- a restarted runner would lose it;
+- an adopted runner could win the next target-level claim;
+- manual `ovld launch` sessions need the same feature without a queue runner;
+  and
+- virtual targets do not use the local runner at all.
+
+`execution_requests.claimed_by_runner_registration_id` is still valuable. The
+session channel copies it as launch provenance so diagnostics can say which
+runner opened the session. It is never used to route an input.
+
+### The runner's legitimate role
+
+The runner/manual-launch path should do only three new things:
+
+1. prepare a session channel before starting the agent;
+2. export its ID and a short-lived, channel-scoped bootstrap credential; and
+3. wrap the terminal invocation with a small sentinel that heartbeats while the
+   agent process is alive and reports a best-effort exit.
+
+The sentinel does not parse output and does not claim inputs. Closing the
+terminal kills it; if its exit report is lost, the backend channel lease
+expires. This gives honest process/channel presence without turning a runner
+registration into a session address.
+
+---
+
+## 3. Recommended architecture
+
+```text
+                         human REST clients
+                   web / desktop / mobile / API
+                              │
+                 resolve request / queue input
+                              │
+                              ▼
+┌──────────────────────────────────────────────────────────────┐
+│                  Agent Session Exchange                      │
+│  channels · normalized events · requests · inbound inputs    │
+│  auth · idempotency · leases · audit · entity-change feed    │
+└─────────────────────────────┬────────────────────────────────┘
+                              │
+             protocol CLI / versioned adapter API
+                              │
+                 ┌────────────┴────────────┐
+                 ▼                         ▼
+       per-launch sentinel          connector adapter
+       heartbeat + process exit     hooks / extension
+                                    normalize + inject
+                                               │
+                                               ▼
+                                     terminal coding agent
+```
+
+The exchange is one core service, not one table per harness and not one API per
+event kind. Harness-specific translation stays under
+`connectors/adapters/<agent>/`.
+
+### 3.1 Session-channel bootstrap
+
+Add an `agent_session_channels` row before the agent starts.
+
+For a queued local launch, the backend creates it when the request transitions
+to `launching` and returns a bootstrap object to the runner. For manual
+`ovld launch`, the CLI calls the same service through a launch-preparation REST
+route. A virtual gateway places the same scoped bootstrap material into the
+realized environment.
+
+The runner exports:
+
+```text
+OVERLORD_SESSION_CHANNEL_ID
+OVERLORD_SESSION_CHANNEL_TOKEN
+OVERLORD_SESSION_LAUNCH_KIND
+OVERLORD_SESSION_LAUNCH_PROMPT_ID
+```
+
+The raw token is:
+
+- short-lived and stored hash-only server-side;
+- scoped to this one channel;
+- allowed to create events/requests, await request resolutions, claim inputs,
+  acknowledge inputs, and heartbeat;
+- unable to read other mission data, resolve a human permission, or perform
+  normal mission mutations.
+
+Protocol `attach` binds the channel to the new `agent_sessions.id` in the same
+transaction that links the execution request. Pre-attach events remain attached
+to the channel and become session events when binding completes.
+
+### 3.2 Channel identity and state
+
+`agent_session_channels` is one active root channel per Overlord agent session.
+Subagent IDs appear on events but are not independently steerable in the first
+version.
+
+Suggested fields:
+
+| Field                                                      | Purpose                                                            |
+| ---------------------------------------------------------- | ------------------------------------------------------------------ |
+| `id`, workspace/project/mission/objective IDs              | Resource-derived authorization and pre-attach correlation          |
+| `session_id`                                               | Nullable until protocol attach, then unique                        |
+| `execution_request_id`                                     | Launch correlation when queue-launched                             |
+| `execution_target_id`                                      | Target provenance, never routing for inputs                        |
+| `runner_registration_id`                                   | Winning runner provenance, never routing                           |
+| `agent_identifier`, `adapter_key`, `adapter_version`       | Translation owner                                                  |
+| `native_session_id`                                        | Harness alias, also copied to `agent_sessions.external_session_id` |
+| `capabilities_json`                                        | Effective runtime capability snapshot                              |
+| `state`                                                    | `preparing`, `online`, `degraded`, `ended`, `lost`                 |
+| `last_heartbeat_at`, `ended_at`, `end_reason`, `exit_code` | Presence and bounded diagnostics                                   |
+| normal timestamps, soft delete, revision                   | Lifecycle and CAS                                                  |
+
+`online` means the sentinel or a connector listener is renewing the channel
+lease. It does not imply the model is actively generating. `lost` means the
+lease expired without a clean end.
+
+### 3.3 Normalized event envelope
+
+Adapters publish `AgentSessionEventV1`:
 
 ```jsonc
-// params
-{ "sessionId": "…", "toolCall": <ToolCallUpdate>, "options": [ <PermissionOption> ] }
-
-// PermissionOption
-{ "optionId": "…", "name": "Human label",
-  "kind": "allow_once" | "allow_always" | "reject_once" | "reject_always" }
-
-// result — internally-tagged union on `outcome`
-{ "outcome": { "outcome": "selected", "optionId": "…" } }
-{ "outcome": { "outcome": "cancelled" } }
+{
+  "schemaVersion": 1,
+  "eventId": "adapter-stable-id",
+  "producerSequence": 42,
+  "occurredAt": "2026-07-30T06:00:00.000Z",
+  "kind": "permission.requested",
+  "severity": "notice",
+  "actionability": "permission",
+  "nativeEvent": "PermissionRequest",
+  "nativeTurnId": "turn_...",
+  "nativeCallId": "call_...",
+  "subagentId": null,
+  "correlationId": "adapter-correlation-id",
+  "origin": "terminal",
+  "summary": "Bash needs approval",
+  "payload": {
+    "toolName": "Bash",
+    "safeDescription": "Run the project test command"
+  }
+}
 ```
 
-The agent supplies the option list; the client only renders it and returns an
-`optionId`. Persisting "always" is the agent's job. This is exactly the shape
-Overlord's request rows and permission widgets should use.
+Rules:
 
-The `SessionUpdate` union (`agent_message_chunk`, `agent_thought_chunk`,
-`user_message_chunk`, `tool_call`, `tool_call_update`, `plan`,
-`available_commands_update`, `current_mode_update`, `config_option_update`,
-`session_info_update`, `usage_update`) is likewise a sane, already-standard
-vocabulary for feed widget types. Overlord's eleven `mission_events.type` values
-are a coarser cut of the same idea.
+- Delivery is at least once. Unique
+  `(channel_id, adapter_key, event_id)` makes replay idempotent.
+- `producerSequence` orders one adapter producer. Arrival order is not treated
+  as a perfect causal order across producers.
+- Gaps are recorded and surfaced in diagnostics; they do not block later
+  events.
+- The adapter redacts first and the server applies a second bounded allowlist.
+- Raw transcript paths may be used locally for correlation but are never sent
+  or persisted.
+- Unknown namespaced kinds are stored and render generically; core kinds are
+  documented in the contract.
+- Payload and summary sizes are bounded before persistence.
+- Full tool input/output, credentials, diffs, and file contents are rejected.
 
-## 2.4 Where ACP genuinely fits later
+Core event kinds:
 
-Three legitimate, **additive** placements — none of which requires ACP for the
-terminal-launched path:
+| Class                   | Kinds                                                                                                         |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Session                 | `session.started`, `session.resumed`, `session.heartbeat`, `session.ended`, `session.lost`                    |
+| User input              | `user.prompt`, `user.input_queued`, `user.input_emitted`, `user.input_acknowledged`                           |
+| Requests                | `agent.question`, `permission.requested`, `permission.released_to_terminal`, `permission.resolution_observed` |
+| Failure/notice          | `provider.failure`, `session.warning`, `agent.needs_input`, `agent.completed`                                 |
+| Optional tool telemetry | `tool.started`, `tool.succeeded`, `tool.failed`                                                               |
 
-1. **Borrow the data model now (Phase 1).** Use `PermissionOption`'s
-   `{optionId, name, kind}` and the four-way kind enum for
-   `agent_requests.options_json`. Free interop later, better UX now (a
-   "Don't ask again" button falls out of `allow_always`).
-2. **An `acp` execution target later (Phase 5, optional).**
-   `execution_targets.type` is an **open** vocabulary
-   (`CONTRACT.md:633`) documenting `local`, `ssh`, `virtual`. An `acp` target
-   would be one where Overlord — the desktop shell, or a virtual-target gateway —
-   *is* the ACP client and spawns the agent, with no terminal at all. That is a
-   genuinely good fit for mobile-only and cloud execution, and it is an
-   **additional** launch mode, not a replacement. Note that under this mode the
-   `virtual` target's Virtual Gateway boundary already covers most of the
-   plumbing.
-3. **Overlord as an ACP agent (out of scope).** Exposing Overlord itself over ACP
-   so Zed/JetBrains/Neovim can drive missions is coherent but unrelated to this
-   objective.
+The event-kind vocabulary should be open and namespaced for connector-specific
+additions. The structural envelope is versioned and closed.
 
-An ACP adapter for Claude Code does exist and is now co-maintained: the package
-chain is `@zed-industries/claude-code-acp` → `@zed-industries/claude-agent-acp` →
-**`@agentclientprotocol/claude-agent-acp`** (current, Apache-2.0), and its
-dependencies are exactly `@anthropic-ai/claude-agent-sdk` plus
-`@agentclientprotocol/sdk`. It therefore drives the **Agent SDK, not the
-interactive TUI** — which is another way of restating the constraint: to speak
-ACP to Claude Code you must be the one who started it. Its fidelity is
-undocumented (the README lists slash commands and MCP as supported and has no
-limitations section), so any claim about what it loses needs empirical testing
-rather than more reading.
+### 3.4 Mission timeline projection
+
+Do not add a new `mission_events.type` for each native event. The current closed
+vocabulary already supports the durable mission narrative:
+
+| Session exchange event                 | Mission event projection |
+| -------------------------------------- | ------------------------ |
+| terminal `user.prompt`                 | `user_follow_up`         |
+| Overlord `user.input_queued`           | `user_follow_up`         |
+| `agent.question`                       | `ask`                    |
+| `permission.requested`                 | `permission_request`     |
+| `provider.failure` or serious warning  | `alert`                  |
+| important channel lifecycle transition | `status_change`          |
+| tool telemetry                         | no projection by default |
+
+The normalized session event is the detailed source; the mission event is the
+bounded notable summary. Both are written in one transaction when a projection
+is required. The input row, rather than a second event, carries its later
+delivery state. Objective launch prompts produce neither a `user.prompt`
+projection nor a duplicate `user_follow_up`.
+
+This avoids widening the mission event enum merely to mirror every harness
+event and keeps existing push/realtime consumers compatible.
 
 ---
 
-# Part 3 — Mechanism inventory
+## 4. Answerable requests
 
-Every candidate channel for getting a human decision into a running agent.
-Claude Code schemas here were **extracted from the installed binary**
-(`/usr/local/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe`) rather
-than taken from documentation, because the docs and the secondary literature
-disagree on several fields.
+Use one `agent_requests` model for blocking questions, permissions, structured
+choices, and retry/continue decisions. It supersedes the
+documented-but-unmigrated `permission_requests` table.
 
-| Mechanism | Works on a terminal-launched session? | Latency | Verdict |
-| --- | --- | --- | --- |
-| **Blocking `ovld protocol ask --wait`** | **Yes, any harness** | Instant | **Adopt — flagship** |
-| **Blocking `PermissionRequest` hook** | **Yes, Claude/Codex/Cursor** | Instant | **Adopt** |
-| **`asyncRewake` hook** | **Yes, Claude** | Seconds | **Adopt — fast path for follow-ups** |
-| **`Stop` hook `decision:"block"`** | **Yes, Claude** | Next turn boundary | **Adopt — portable backstop** |
-| `PostToolUse` `additionalContext` | Yes, Claude | Next tool call | Adopt as an extra drain point |
-| MCP tool that blocks | Yes | Instant | Reject — 4-min ceiling, needs the agent to call it |
-| MCP `elicitation` + `Elicitation` hook | Yes | Instant | Defer — powerful, but needs an MCP server to initiate |
-| `--permission-prompt-tool` | No | — | Reject — print mode only |
-| SDK `canUseTool` | No | — | Reject — in-process, SDK must own the subprocess |
-| `claude -p --input-format stream-json` | No | Instant | Reject *for this mode*; basis of a future `acp`-style target |
-| ACP (stdio) | **No** | — | Reject — client must spawn |
-| Claude Code Remote Control `/rc` | Yes | Instant | Cannot build on — see 3.5 |
-| AppleScript keystroke injection | Partly | Instant | Reject — see 3.6 |
-| tmux `send-keys`, tailing `~/.claude/projects/*.jsonl` | Partly | — | Reject — unsupported, format documented as unstable |
+### 4.1 Request shape
 
-## 3.1 The blocking `ask` — no harness support required
+Suggested fields:
 
-This is the insight that makes the whole feature cheap. When the agent runs
-`ovld protocol ask`, **Overlord owns both ends of that call.** The agent is
-executing a subprocess and waiting for it to exit. So `ask` can simply not exit:
+| Field                                                   | Purpose                                                            |
+| ------------------------------------------------------- | ------------------------------------------------------------------ |
+| workspace/project/mission/objective/session/channel IDs | Scope                                                              |
+| `source_event_id`                                       | Event that created the request                                     |
+| `kind`                                                  | `question`, `permission`, `choice`, `retry`                        |
+| `native_request_id`, `native_call_id`                   | Adapter correlation                                                |
+| `summary`, `details_json`                               | Bounded and redacted                                               |
+| `options_json`, `allows_free_text`                      | Renderable response contract                                       |
+| `status`                                                | `open`, `resolved`, `released_to_terminal`, `expired`, `cancelled` |
+| `resolution_json`, `resolved_by_workspace_user_id`      | Human decision and attribution                                     |
+| `resolved_at`, `expires_at`, `revision`                 | CAS and lifetime                                                   |
+| `application_state`                                     | `pending`, `emitted`, `applied`, `not_applied`, `unknown`          |
+| `application_observed_at`                               | Adapter acknowledgement when available                             |
 
-```
-agent ──▶ ovld protocol ask --wait ──▶ POST /api/protocol/ask {wait:true}
-                                              │ holds the connection (LISTEN)
-   user answers in webapp ──▶ POST /api/agent-requests/:id/resolve
-                                              │ NOTIFY wakes the held request
-agent ◀── stdout: {"status":"answered","answer":{…}} ◀──┘
-```
-
-The answer becomes the Bash tool's result, and the agent reads it as ordinary
-output. **No hook, no harness feature, no protocol negotiation.** It works
-identically for Claude, Codex, Cursor, Antigravity, Pi, and anything added later,
-because the only requirement is "can run a shell command and read its stdout."
-
-Timeout handling: Claude Code's Bash tool defaults to 120 s
-(`BASH_DEFAULT_TIMEOUT_MS`) with the ceiling set by `BASH_MAX_TIMEOUT_MS`, both
-plain env vars — and Overlord already injects per-project launch env vars
-(coo:359 `overlord.launchEnvVars`). Regardless, the server should hold for a
-bounded window (~25 s, matching `RUNNER_CLAIM_LONG_POLL_MS`) and return
-`{"status":"waiting"}`, with the skill instructing the agent to re-poll. Bounded
-holds keep the mechanism portable across harnesses with stricter command
-timeouts, rather than betting on one harness's ceiling.
-
-**Graceful degradation is the important property.** If nobody answers within the
-overall deadline, `ask --wait` returns `{"status":"timeout"}` and the agent falls
-back to exactly today's behaviour: the mission is already parked in review, the
-agent stops, and the question sits in the feed. Nothing regresses.
-
-## 3.2 The blocking permission hook
-
-The `PermissionRequest` hook's output schema, extracted verbatim from the
-installed binary's Zod definition:
-
-```js
-{ hookEventName: "PermissionRequest",
-  decision: union([
-    { behavior: "allow", updatedInput?: Record<string,unknown>,
-                         updatedPermissions?: Array<…> },
-    { behavior: "deny",  message?: string, interrupt?: boolean }
-  ]) }
-```
-
-Note this **corrects the secondary literature**, which commonly reports `rule`
-and `rememberRule` fields. Neither exists in this build; the third field is
-`updatedPermissions`. `updatedPermissions` is the natural carrier for
-`allow_always`.
-
-Hook config entries accept `timeout` (seconds), plus `statusMessage`, `once`,
-`async`, `asyncRewake`, and `asyncTimeout`. So the hook can legitimately block
-while a human decides, showing a custom spinner message.
-
-Returning a decision **pre-empts the terminal prompt** — Claude Code does not
-draw the TUI dialog if the hook resolved it. Conversely, if the hook returns
-nothing (timeout), the normal prompt appears. That gives the exact
-terminal-stays-authoritative behaviour we want, with no special casing.
-
-Fallback shape:
-
-```
-tool call ──▶ PermissionRequest hook
-                ├─ publish agent_request(kind=permission) → feed + push
-                ├─ long-poll up to N seconds
-                │    ├─ resolved in webapp → emit {behavior:"allow"|"deny"}  → no TUI prompt
-                │    └─ timeout / not resolved → exit 0, no decision         → normal TUI prompt
-```
-
-## 3.3 `asyncRewake` — live injection into an interactive session
-
-The most surprising find. A hook entry may set:
-
-```jsonc
-{ "type": "command", "command": "…",
-  "async": true, "asyncRewake": true, "asyncTimeout": …,
-  "rewakeMessage": "…", "rewakeSummary": "…" }
-```
-
-`asyncRewake` is described in the binary as: *"If true, hook runs in background
-and wakes the model on exit code 2 (blocking error). Implies async."* On exit
-code 2, the hook's **stdout is injected into the model's context as a
-system-reminder**, prefixed by `rewakeMessage` (default:
-`Stop hook blocking error from command "<name>":`), with `rewakeSummary` shown as
-the one-line terminal summary.
-
-So a backgrounded hook that long-polls Overlord's inbound message queue and exits
-2 when a message arrives **delivers a user's webapp message into a live,
-interactive terminal session, mid-turn.** No stdio ownership, no ACP.
-
-⚠️ **Caveat to weigh before depending on this.** `asyncRewake`, `async`, and
-`asyncTimeout` are ordinary fields in the hook config schema, but
-`rewakeMessage` and `rewakeSummary` are annotated `@internal` in the binary.
-Without them the mechanism still works, but the injected text carries a
-misleading "Stop hook blocking error" prefix. Treat `asyncRewake` as a **fast
-path that must degrade cleanly**, and keep §3.4 as the portable guarantee.
-
-## 3.4 The `Stop` hook — the portable backstop
-
-Top-level hook output supports `decision: "approve" | "block"` with `reason`.
-On `block`, the turn does not end: the runtime sets `stopHookActive: true`,
-appends the blocking output to the message list, and continues with transition
-reason `stop_hook_blocking`. Consecutive blocks are capped (default 8, raisable
-via `CLAUDE_CODE_STOP_HOOK_BLOCK_CAP`), and the input carries `stop_hook_active`
-so a hook can and must yield to avoid a loop.
-
-This gives a guaranteed, well-defined delivery point: **any queued message is
-delivered at the next turn boundary at the latest.** Slower than `asyncRewake`
-but dependent only on documented fields. `PostToolUse` already runs on every
-`Edit|Write|MultiEdit|NotebookEdit|Bash` and supports
-`hookSpecificOutput.additionalContext`, so it is a third, free drain point that
-tightens latency to "next tool call" without any new hook registration.
-
-## 3.5 Claude Code Remote Control — prior art, not a foundation
-
-Worth naming explicitly because it is the closest shipping implementation of what
-this objective asks for, and because someone will ask.
-
-`/remote-control` (or `/rc`) can be invoked **from inside an already-running
-interactive session** and carries the current conversation history over; the
-remote side can then send input and approve tool calls from a phone. It answers
-the requirement almost exactly.
-
-It cannot be Overlord's mechanism:
-
-- **Not a protocol.** Proprietary and Anthropic-relayed. The session registers
-  with the Anthropic API and polls for work — outbound HTTPS only, no local
-  socket or inbound port for a third party to use.
-- **Transcript is stored on Anthropic servers** while connected.
-- **Requires claude.ai OAuth.** API keys unsupported; blocked on Bedrock, Google
-  Agent Platform, and Microsoft Foundry, and when `ANTHROPIC_BASE_URL` is not
-  `api.anthropic.com`. Off by default on Team/Enterprise; incompatible with Zero
-  Data Retention.
-- **Research preview**, Claude-only, and requires someone able to type `/rc` into
-  the session (or pre-enabled auto-connect).
-
-The honest read: it validates the UX, it is single-vendor and unavailable as a
-building block, and Overlord's multi-agent, self-hostable positioning needs a
-mechanism that works for Codex and Cursor too. It is also a reason **not** to
-over-invest in mirroring the full agent transcript — that race is not winnable
-and, per Part 4, not the goal.
-
-## 3.6 Rejected: AppleScript keystroke injection
-
-iTerm's scripting API does expose `write text` on a session, and Overlord already
-uses it to launch. In principle the desktop shell could type a follow-up into the
-pane. Rejected because: the session reference is not retained at launch (§1.1);
-it is macOS-and-iTerm/Terminal only, with no story for the generic launcher,
-Linux, or Windows; it would fight the user for the input line; and it cannot read
-a result back. It is a demo, not an architecture.
-
----
-
-# Part 4 — Recommended architecture
-
-## 4.1 Design principles
-
-1. **The terminal is always authoritative.** Every request appears in the
-   terminal *and* in Overlord. First answer wins; the loser shows who answered.
-   Nothing about this feature makes the terminal worse or optional.
-2. **Agent-agnostic by default.** The flagship mechanism (§3.1) needs no harness
-   feature. Harness-specific mechanisms are additive capability upgrades declared
-   in the conformance manifest, so a connector without them degrades to today's
-   behaviour rather than breaking.
-3. **One primitive, many kinds.** A blocking question, a tool permission, and a
-   multiple-choice decision are the same shape: a request with options, awaiting
-   a resolution. Do not build three subsystems.
-4. **Requests are first-class rows; the feed renders them.** The feed stays the
-   mission's record. Interactive affordances live *inside* the widget that owns
-   them, driven by request state — not by a parallel chat log.
-5. **Every remote path degrades to the status quo.** Timeout, no runner, offline
-   agent, unsupported harness: the terminal prompt or today's parked-in-review
-   behaviour is always the fallback.
-
-## 4.2 The two new concepts
-
-**`agent_requests` — agent asks, human answers.** A durable, typed,
-resolvable request. Covers blocking questions (`kind='question'`), tool
-permissions (`kind='permission'`), and structured choices (`kind='choice'`).
-Options use ACP's `PermissionOption` shape.
-
-**`agent_messages` — human speaks, agent hears.** An inbound queue of
-unsolicited follow-up instructions, drained by the agent's own hooks at the next
-available boundary and marked delivered atomically.
-
-The asymmetry is deliberate and reflects reality. A request has a known
-recipient that is *actively waiting*, so it can be answered synchronously. A
-follow-up message has no waiter, so it is queued and delivered at the next
-boundary. Presenting these as the same thing in the UI would be a lie about
-latency; presenting them as two clearly-labelled things is honest and still
-feels immediate in practice.
-
-## 4.3 Should `permission_requests` be implemented, or superseded?
-
-Recommendation: **supersede it with `agent_requests` in the same contract
-version bump that adds the new table**, and retire the never-built
-`permission_requests` from the schema contract.
-
-Rationale: `permission_requests` was never created by a migration, so there are
-zero rows to migrate and no deployed consumer. Building it as specified and then
-adding a near-identical `agent_requests` beside it for questions would leave two
-tables modelling one concept. `agent_requests` is `permission_requests` plus a
-`kind` discriminator, an options array, and a free-text resolution.
-
-Alternative considered: implement `permission_requests` verbatim for permissions
-and add `agent_questions` for questions. Rejected — it doubles the REST surface,
-the widget code, and the long-poll plumbing for no benefit, and the two would
-drift.
-
-This is a contract decision that needs sign-off, since it edits a documented
-(if unbuilt) table out of the schema contract and removes a closed vocabulary.
-
-## 4.4 Data model
-
-```sql
--- Supersedes the documented-but-unbuilt `permission_requests`.
-CREATE TABLE agent_requests (
-  id                            TEXT PRIMARY KEY,
-  workspace_id                  TEXT NOT NULL REFERENCES workspaces(id),
-  project_id                    TEXT REFERENCES projects(id),
-  mission_id                    TEXT NOT NULL REFERENCES missions(id),
-  objective_id                  TEXT REFERENCES objectives(id),
-  session_id                    TEXT REFERENCES agent_sessions(id),
-  event_id                      TEXT REFERENCES mission_events(id),
-
-  kind                          TEXT NOT NULL,   -- question | permission | choice
-  tool_name                     TEXT,            -- permission only
-  request_summary               TEXT NOT NULL,   -- secret-redacted, bounded
-  payload_json                  JSON NOT NULL,   -- secret-redacted
-  options_json                  JSON NOT NULL,   -- [] for free-text questions
-  allows_free_text              INTEGER NOT NULL DEFAULT 0,
-
-  status                        TEXT NOT NULL,   -- requested | resolved | expired
-                                                 -- | cancelled | superseded
-  resolved_option_id            TEXT,
-  resolved_text                 TEXT,
-  resolved_via                  TEXT,            -- web | mobile | terminal | timeout | rule
-  resolved_by_workspace_user_id TEXT REFERENCES workspace_users(id),
-  resolved_at                   TIMESTAMP,
-  expires_at                    TIMESTAMP,
-
-  created_at TIMESTAMP NOT NULL, updated_at TIMESTAMP NOT NULL,
-  deleted_at TIMESTAMP, revision INTEGER NOT NULL
-);
--- (mission_id, created_at), (status, created_at), (session_id, status)
-
-CREATE TABLE agent_messages (
-  id                            TEXT PRIMARY KEY,
-  workspace_id                  TEXT NOT NULL REFERENCES workspaces(id),
-  mission_id                    TEXT NOT NULL REFERENCES missions(id),
-  objective_id                  TEXT REFERENCES objectives(id),
-  session_id                    TEXT REFERENCES agent_sessions(id), -- null = whoever is live
-  body                          TEXT NOT NULL,
-  created_by_workspace_user_id  TEXT NOT NULL REFERENCES workspace_users(id),
-  status                        TEXT NOT NULL,   -- queued | delivered | expired | cancelled
-  delivered_at                  TIMESTAMP,
-  delivered_to_session_id       TEXT REFERENCES agent_sessions(id),
-  delivered_via                 TEXT,            -- rewake | stop | post_tool_use | ask_response
-  created_at TIMESTAMP NOT NULL, updated_at TIMESTAMP NOT NULL,
-  deleted_at TIMESTAMP, revision INTEGER NOT NULL
-);
--- (mission_id, status, created_at), (session_id, status)
-```
-
-`options_json` entries use ACP's shape verbatim:
+Options retain the useful ACP idea that the agent/adapter supplies stable option
+IDs and the client returns only one ID:
 
 ```json
-[ { "optionId": "allow", "name": "Allow once",     "kind": "allow_once" },
-  { "optionId": "always","name": "Always allow",   "kind": "allow_always" },
-  { "optionId": "deny",  "name": "Deny",           "kind": "reject_once" } ]
+[
+  { "optionId": "allow_once", "label": "Allow once", "kind": "allow_once" },
+  { "optionId": "deny", "label": "Deny", "kind": "deny_once" }
+]
 ```
 
-Also create the documented-but-missing **`hook_events`** table
-(`database/docs/09-database-schema-contract.md:1742`) as part of Phase 0, since
-repairing the hooks means they will finally have events to record.
+Do not expose option kinds the effective adapter cannot apply. In particular,
+`allow_always` is absent for Codex until its documented
+`updatedPermissions` support becomes real.
 
-## 4.5 Protocol and REST surface
+### 4.2 Blocking `ask`
 
-**New / changed protocol subcommands** (each needs
-`contract/protocol-commands.yaml`):
+`ovld protocol ask --wait` remains the most portable request mechanism:
 
-| Command | Change |
-| --- | --- |
-| `ask` | Add `--wait`, `--timeout-seconds`, `--options-json`. Without `--wait`, behaviour is byte-identical to today |
-| `permission-request` | **New** — currently referenced by two connectors and absent. Accepts `--payload-file -`; `--wait` blocks for a decision |
-| `hook-event` | Accept `Stop`, `PermissionRequest`, `Notification` in addition to `UserPromptSubmit`; response gains `pendingMessages[]` and the long-promised `deliveryStatus` |
-| `messages --drain` | **New** — atomically claim queued `agent_messages` for this session (used by the `asyncRewake` hook) |
+1. create the normal `ask` mission event plus an `agent_requests` row;
+2. enqueue the existing `agent_question` push;
+3. long-poll for a bounded interval;
+4. print the resolution on stdout when answered;
+5. return `waiting` so the agent can re-poll after one server hold; or
+6. return `expired` and fall back to the current parked/review behavior after
+   the overall deadline.
 
-`ask --wait` response contract:
+While the channel is live and waiting, the objective remains executing and the
+mission remains in its execute column. The actionable request is presentation
+state, not a new objective state. Only final timeout or session loss uses the
+existing stop/review behavior.
 
-```jsonc
-{ "requestId": "…", "status": "answered",
-  "answer": { "optionId": "…", "text": "…", "resolvedBy": "jake", "resolvedVia": "web" },
-  "pendingMessages": [ … ] }          // ride-along drain
-{ "requestId": "…", "status": "waiting" }   // bounded hold elapsed; re-poll
-{ "requestId": "…", "status": "timeout" }   // deadline passed; fall back to today
+This works in every harness that can run a shell command and read stdout.
+
+### 4.3 Native permission requests
+
+The adapter translates the normalized resolution back into the harness's exact
+hook output.
+
+For Claude and Codex today:
+
+- allow once and deny are supported;
+- no decision means fall through to the normal terminal prompt;
+- a local timeout is shorter than the harness hook timeout;
+- timeout, backend error, missing channel, or auth error never grants
+  permission; and
+- remote resolution is disabled when the request becomes
+  `released_to_terminal`.
+
+If a later tool/permission event proves the decision took effect, the adapter
+sets `application_state = applied`. Otherwise it remains `emitted` or
+`unknown`; the UI must not infer execution.
+
+The first implementation must not offer persistent permission updates.
+
+---
+
+## 5. Inbound session instructions
+
+`agent_session_inputs` is a durable queue for user-authored instructions sent
+from Overlord to one session.
+
+Suggested fields:
+
+| Field                                           | Purpose                                                                         |
+| ----------------------------------------------- | ------------------------------------------------------------------------------- |
+| workspace/mission/objective/session/channel IDs | Exact target                                                                    |
+| `kind`                                          | `instruction`, `retry`, `continue`                                              |
+| `body`                                          | Bounded user text                                                               |
+| `created_by_workspace_user_id`                  | Audit actor                                                                     |
+| `status`                                        | `queued`, `leased`, `emitted`, `acknowledged`, `failed`, `expired`, `cancelled` |
+| `lease_id`, `lease_expires_at`                  | One adapter consumer at a time                                                  |
+| `emitted_at`, `acknowledged_at`                 | Honest delivery milestones                                                      |
+| `attempt_count`, `last_error_code`              | Bounded diagnostics                                                             |
+| normal timestamps, soft delete, revision        | Lifecycle and CAS                                                               |
+
+Rules:
+
+- the session is required;
+- enqueue is idempotent by a caller-supplied key;
+- lease expiry permits reclaim only before `emitted`;
+- after `emitted`, automatic retry is forbidden because duplicate model
+  instructions are worse than an honest unknown;
+- cancellation is allowed only while `queued`;
+- expired/offline sessions reject new input instead of silently queueing it;
+- inputs that are queued while a briefly degraded channel is still within its
+  grace window show that state explicitly; and
+- an injected message echoed through `UserPromptSubmit` is correlated back to
+  the input row rather than recorded as a second human prompt.
+
+“Try again” and “continue” are convenience intents, not magic backend commands.
+The adapter translates them into a normal user instruction at a supported
+injection boundary.
+
+### 5.1 Injection by harness
+
+| Harness     | Active-turn path                                     | Portable fallback                                                    | Initial capability          |
+| ----------- | ---------------------------------------------------- | -------------------------------------------------------------------- | --------------------------- |
+| Claude Code | `asyncRewake` command hook waiting on session inputs | `Stop` decision block; `PostToolUse` context drain                   | active-turn + turn-boundary |
+| Codex       | none: async hooks are parsed but not supported       | `Stop` continuation; `PostToolUse` feedback/context at tool boundary | turn/tool-boundary          |
+| Pi          | resident extension calls supported message APIs      | before-agent/turn extension events                                   | active-turn where verified  |
+| Cursor      | none currently verified                              | `stop` follow-up message; tool hooks where supported                 | turn-boundary               |
+| Antigravity | none currently verified                              | no injection until a stable native output contract is tested         | observe-only                |
+
+The runtime capability snapshot, not the connector name alone, controls which
+path is offered. If a harness upgrade removes a mechanism, setup/doctor and
+channel registration downgrade the capability rather than letting messages
+disappear.
+
+---
+
+## 6. Capability contract
+
+The existing flat connector capability flags are not expressive enough. Add a
+versioned `agentInteraction` block to connector conformance manifests and
+snapshot its effective runtime form onto the session channel.
+
+Illustrative shape:
+
+```yaml
+agentInteraction:
+  schemaVersion: 1
+  events:
+    sessionLifecycle: guaranteed
+    userPrompt: guaranteed
+    question: protocol_only
+    permissionRequest: guaranteed
+    providerFailure: best_effort
+    toolLifecycle: optional
+  controls:
+    requestReply: synchronous_wait
+    permissionDecision: allow_once_deny
+    inputInjection: turn_boundary
+  permissionOptionKinds:
+    - allow_once
+    - deny_once
 ```
 
-**New REST routes** (all authorized against the mission's owning workspace via
-the existing resource-derived pattern):
+Allowed support levels are:
 
-| Route | Purpose | Permission |
-| --- | --- | --- |
-| `GET /api/missions/:id/agent-requests` | List, `?status=requested` | `mission:read` |
-| `POST /api/agent-requests/:id/resolve` | `{ optionId?, text? }`, revision CAS | new `mission:respond` |
-| `POST /api/agent-requests/:id/cancel` | Withdraw | `mission:respond` |
-| `POST /api/missions/:id/messages` | Queue a follow-up instruction | `mission:respond` |
-| `GET /api/missions/:id/messages` | Show queued/delivered state | `mission:read` |
+- `guaranteed` — a supported, installed native event with conformance tests;
+- `best_effort` — known gaps or native failure modes;
+- `protocol_only` — available only when the agent explicitly uses Overlord's
+  protocol primitive;
+- `optional` — policy-disabled by default; or
+- `none`.
 
-A distinct `mission:respond` permission is proposed rather than reusing
-`mission:update`, because answering a permission prompt authorizes an agent to
-take an action on a developer machine. That should be grantable separately from
-editing mission metadata. Needs RBAC sign-off.
+Setup/doctor must check:
 
-**Race resolution** is a single CAS: `UPDATE agent_requests SET status='resolved'
-… WHERE id=? AND status='requested' AND revision=?`. Zero rows ⇒ `409`, and the
-widget flips to "Answered in terminal." The held long-poll is woken by `NOTIFY`
-on a new channel alongside `overlord_execution_request_queue`.
+- the installed harness version supports every claimed event/output;
+- hook files are present, executable, trusted/enabled where the harness
+  requires trust, and point at real protocol commands;
+- channel bootstrap variables reach the agent;
+- the adapter can round-trip a synthetic event without persisting secrets; and
+- capability downgrades are reported, not hidden.
 
-## 4.6 Interaction with `ask`'s current side effects
+### 6.1 Current verified matrix
 
-Today `ask` moves the mission to review (§1.3). With `--wait` that is wrong while
-the agent is still blocked and reachable. Proposal:
+| Capability             | Claude                          | Codex                                                    | Cursor                   | Pi                                              | Antigravity              |
+| ---------------------- | ------------------------------- | -------------------------------------------------------- | ------------------------ | ----------------------------------------------- | ------------------------ |
+| Session start/end      | native                          | native                                                   | session hooks available  | native extension events                         | partial                  |
+| Terminal user prompt   | `UserPromptSubmit`              | `UserPromptSubmit`                                       | `beforeSubmitPrompt`     | `input`                                         | `PreInvocation` mapping  |
+| Permission observation | native                          | native                                                   | shell/MCP hooks          | `tool_call` gate possible                       | `PreToolUse` observation |
+| Permission resolution  | allow/deny + permission updates | allow/deny; no permission updates                        | unverified               | extension can block; remote round-trip to spike | none                     |
+| Provider/API failure   | typed `StopFailure`             | no documented equivalent                                 | no documented equivalent | provider/agent events to spike                  | none                     |
+| Tool lifecycle         | broad native coverage           | broad local-function coverage with documented exceptions | shell/MCP/file hooks     | native                                          | partial                  |
+| Active-turn input      | `asyncRewake`                   | no async hook support                                    | unverified               | extension path                                  | none                     |
+| Turn-boundary input    | `Stop`                          | `Stop`                                                   | stop follow-up           | extension path                                  | unverified               |
 
-- `ask --wait` writes the `ask` event and the `agent_requests` row, fires the
-  existing `agent_question` push, and puts the objective in a **blocked-but-live**
-  presentation — it does **not** move the mission to review yet.
-- On answer: resolve, append an `answer` event, resume normal `execute` phase.
-- On overall timeout or agent death: fall through to today's
-  `moveMissionToReview`, so the parked state is reached by the same path as now.
+Sources checked for this revision:
 
-This keeps the mission board honest: "waiting on a human, agent still alive" is a
-genuinely different state from "agent stopped, needs review," and the board
-already distinguishes blocked.
+- [Claude Code hooks reference](https://code.claude.com/docs/en/hooks)
+- [Codex lifecycle hooks](https://learn.chatgpt.com/docs/hooks)
+- [Pi extension events](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/extensions.md)
+- [Cursor `beforeSubmitPrompt` hook](https://cursor.com/marketplace/hooks/beforesubmitprompt)
+- [Cursor `beforeShellExecution` hook](https://cursor.com/marketplace/hooks/beforeshellexecution)
 
----
-
-# Part 5 — UI: widgets, not a chat pane
-
-## 5.1 Recommendation: redesign the feed; do not add a separate chat surface
-
-The objective floated both. Recommend **one surface**: keep the activity feed as
-the single mission narrative, upgrade its entries to interactive widgets, and pin
-one composer beneath it.
-
-Reasons:
-
-1. **The feed already is the transcript.** Two surfaces would diverge, and the
-   user would have to check both to know what happened.
-2. **A "chat" would look broken.** Overlord will never hold the agent's full
-   conversation — that lives in the terminal, and per §3.5 the only product that
-   mirrors it is Anthropic's own cloud relay. A chat UI implies completeness the
-   data cannot deliver. A feed of significant events plus a composer promises
-   exactly what it delivers.
-3. **Widgets + composer already covers 100% of the requested capability**:
-   answer questions, approve permissions, send follow-ups.
-4. It is what the objective's own instinct pointed at — *"expand on what have
-   essentially become activity feed widget types."* That instinct is right.
-
-## 5.2 Replace the boolean branches with a widget registry
-
-The current three-boolean, ternary-class-chain structure (§1.2) will not survive
-two more interactive types. Replace it:
-
-```ts
-type ActivityWidget = {
-  icon: LucideIcon | null;
-  label: string;
-  tone: 'neutral' | 'user' | 'attention' | 'positive' | 'negative';
-  /** Richer body; falls back to ExpandableSummary. */
-  Body?: ComponentType<{ event: MissionEventDto; missionId: string }>;
-  /** Interactive footer, rendered only while the owning request is actionable. */
-  Action?: ComponentType<{ event: MissionEventDto; missionId: string }>;
-};
-
-const ACTIVITY_WIDGETS: Record<MissionEventType, ActivityWidget> = { … };
-```
-
-`tone` collapses the scattered colour ternaries into one lookup, and unknown
-future types keep the existing neutral-dot fallback (`eventMeta`,
-`LiveActivityFeed.tsx:51`) so the client never breaks when the server vocabulary
-grows ahead of it.
-
-| Widget | Body | Action |
-| --- | --- | --- |
-| `ask` | question text | **Reply field + option buttons**, live countdown, "Answered in terminal" terminal state |
-| `permission_request` | tool name + redacted summary | **Allow once / Always allow / Deny** from `options_json`, countdown |
-| `delivery` | existing `DeliveryExpandable` | open delivery record |
-| `user_follow_up` | avatar + text (exists) | — |
-| `agent_message` (new) | queued instruction + delivery state | Cancel while `queued` |
-| `update`, `alert`, `decision`, `discussion_summary`, `status_change`, `execution_requested`, `awaiting_approval` | `ExpandableSummary` | — |
-
-Actions render from the **`agent_requests` row**, not from the event. The event
-is the immutable record; the request row carries the mutable status. That is why
-an answered question can keep its history entry while the buttons disappear.
-
-## 5.3 The composer
-
-Pinned at the foot of the Activity section (`MissionPanel.tsx:358-367`), enabled
-only when the mission has a live session. It must be **honest about latency** —
-this is the part most likely to be got wrong:
-
-- No live session → disabled, "No agent is running. Queue this as a new
-  objective instead."
-- Live session, harness supports `asyncRewake` → "Delivered to the agent."
-- Live session, `Stop`-only harness → "Queued — the agent will see this when it
-  finishes its current step."
-- Delivered → the queued widget flips to a `user_follow_up`-styled entry.
-
-Reuse `MentionableTextarea` / `RepositoryMentionTextarea`
-(`webapp/web/components/`) so `@`-mentions and repository references behave as
-they do elsewhere.
-
-## 5.4 Mobile
-
-The push side is already built: coo:444 ships an `agent_question` category
-enqueued from `askQuestion` itself, with a deep link and a strict
-payload-privacy rule (question text never leaves the database). Two additions:
-
-1. A `permission_request` notification category — needs a contract bump, since
-   `notification_preferences` categories are a closed set of four
-   (`CONTRACT.md:468`).
-2. **iOS actionable notifications** (`UNNotificationAction`) for allow/deny and a
-   text-input action for answering a question, hitting the same
-   `POST /api/agent-requests/:id/resolve`. This is where remote answering pays
-   off most — approving a command from a phone is the canonical use case.
-
-Payload privacy must hold: the notification carries the request id and category,
-never the tool input, command text, or question body. The client fetches detail
-over the authenticated API after unlock.
+The implementation spike must test the installed target versions, because a
+static online document is not a substitute for an adapter conformance fixture.
 
 ---
 
-# Part 6 — Phasing
+## 7. Persistence, realtime, and retention
 
-Ordered so each phase is independently shippable and useful.
+### 7.1 Tables
 
-**Phase 0 — Repair (small, do regardless).** Add the missing
-`permission-request` subcommand; accept `Stop`/`PermissionRequest` in
-`recordHookEvent`; produce the `deliveryStatus` the Stop hook already parses;
-migrate both hooks off the `MISSION_ID` gate to `cli/src/vcs-sessions.ts`; create
-the `hook_events` table; make hook failures observable in `~/.ovld/logs` instead
-of `/dev/null`; correct the connector conformance manifests. **Outcome: permission
-activity finally appears in the feed** — read-only, but real.
+Add these core tables in both SQLite and Postgres:
 
-**Phase 1 — Answerable questions (highest value / lowest risk).**
-`agent_requests`; `ask --wait` with bounded long-poll; the resolve route; the
-question widget with an inline reply field. No harness dependency at all.
-**Outcome: the `agent_question` push notification stops being a dead end.**
+1. `agent_session_channels`
+2. `agent_session_events`
+3. `agent_requests`
+4. `agent_session_inputs`
 
-**Phase 2 — Remote permission approval.** Make the `PermissionRequest` hook
-blocking with fallthrough to the terminal prompt; permission widget with the
-four ACP option kinds; `updatedPermissions` for `allow_always`. New connector
-capability flag. **Outcome: approve a command from the couch.**
+Retire the documented-but-never-migrated `hook_events` and
+`permission_requests` designs in the same contract-first change. Their useful
+roles are subsumed:
 
-**Phase 3 — Follow-up messages.** `agent_messages`; the composer;
-`messages --drain`; `asyncRewake` hook as fast path with the `Stop` hook and
-`PostToolUse` `additionalContext` as backstops. **Outcome: steer a running agent
-without the terminal.**
+- sanitized hook events become normalized `agent_session_events`; and
+- permissions become one kind of `agent_requests`.
 
-**Phase 4 — Feed redesign + mobile.** The widget registry refactor (worth doing
-after two interactive widgets exist, so the abstraction is derived rather than
-guessed); actionable iOS notifications; `permission_request` push category.
+There are no deployed rows to migrate, but the removal is still a contract
+change and must be explicit.
 
-**Phase 5 — Optional: `acp` execution target.** Overlord-as-ACP-client for
-headless/cloud/mobile-only execution, where there is no terminal to preserve.
-Additive; revisit once the ACP v2 draft settles, given it removes `fs/*` and
-`terminal/*`.
+### 7.2 Change feed and realtime
 
----
+Every channel/request/input mutation appends `entity_changes` in the same
+transaction. Event insertion appends an entity change and, when notable, the
+bounded `mission_events` projection.
 
-# Part 7 — Contract impact
+The existing SSE stream invalidates:
 
-Per `CONTRACT.md:680`, the contract must be updated **before** implementation.
-Anticipated changes, requiring a version bump to `30`:
+- the mission event list for notable summaries;
+- the active session/channel list;
+- the session event cursor;
+- request state; and
+- input delivery state.
 
-| Change | Contract artifact |
-| --- | --- |
-| New tables `agent_requests`, `agent_messages`, `hook_events` | `database/docs/09-database-schema-contract.md`, `10-database-table-groups.md` |
-| Retire unbuilt `permission_requests` + its closed vocabulary | schema contract + `CONTRACT.md` closed vocabularies |
-| New closed vocabularies `agent_requests.kind`/`.status`/`.resolved_via`, `agent_messages.status`/`.delivered_via` | `CONTRACT.md`, `contract/extension-points.yaml` |
-| New `mission_events.type` values (`answer`, `agent_message`) | closed vocabulary ⇒ bump |
-| New protocol subcommands + flags | `contract/protocol-commands.yaml` |
-| New "Human → Agent (Response Surface)" interaction surface | `CONTRACT.md` Interaction Surfaces |
-| Extend Connector → Protocol hook surface: hooks may now **block and return a decision** | `CONTRACT.md:415` |
-| New connector capability flags (e.g. `blockingPermissionHook`, `inboundMessages`) | `approvedConnectorCapabilities`, `contract/extension-points.yaml:144` |
-| New hook type `Notification` if adopted | `approvedHookTypes`, `contract/extension-points.yaml:158` |
-| New `mission:respond` RBAC permission | `overlord.rbac.toml`, `auth/src/rbac/` |
-| New push category `permission_request` | `notification_preferences` closed set |
+Postgres may use `LISTEN/NOTIFY` as a wake hint for request waits and input
+claims. SQLite uses bounded polling. As with runner claims, notifications never
+replace durable rows, authorization, CAS, or leases.
 
-The **blocking-hook change is the most significant contract edit.** Today the
-hook surface is documented as fire-and-forget notification
-(`CONTRACT.md:415-422`). Allowing a hook to block on a network round-trip and
-return an authorization decision changes its risk profile: a hung backend could
-stall a developer's agent. Mandatory rules to write into the contract:
+### 7.3 Retention
 
-- Every blocking hook declares a hard local timeout and **falls through to the
-  harness's own prompt** on timeout, error, offline backend, or missing session.
-- A hook must never block a tool call it cannot resolve.
-- Failure is always permissive-to-the-terminal, never permissive-to-the-agent: a
-  timeout yields *"ask the human at the keyboard,"* never *"allow."*
+Recommended default:
+
+- mission event projections: existing mission-history retention;
+- actionable requests and inputs: retained with the mission;
+- normalized non-tool session events: 90 days, operator-configurable;
+- optional tool telemetry: 7 days;
+- no transcript, raw tool payload, or model stream retention.
+
+Pruning is an explicit maintenance job and leaves request/input audit records
+intact. Retention is a PM policy choice but does not change the API shape.
 
 ---
 
-# Part 8 — Risks and open questions
+## 8. API and protocol surfaces
 
-**Risks**
+Names are proposed; implementation must update the contract before adding them.
 
-| Risk | Mitigation |
-| --- | --- |
-| A blocking hook stalls the agent when the backend is unreachable | Hard local timeout well under the hook timeout; fall through to the TUI prompt; never fail open |
-| `asyncRewake` / `rewakeMessage` are version-sensitive (`@internal`) | Treat as fast path only; `Stop` + `PostToolUse` are the portable guarantee; feature-detect and degrade |
-| Web and terminal answer simultaneously | Single revision CAS; loser gets `409` and a "answered in terminal" state |
-| A queued follow-up lands after the agent has moved on | Show queued-vs-delivered honestly; expire stale messages; allow cancel while `queued` |
-| Redacting permission payloads | Reuse the coo:444 bounded-sanitizer discipline; store redacted, never echo raw tool input to push |
-| Remote approval as a security regression | Separate `mission:respond` permission; audit-log every resolution with actor and `resolved_via` |
-| Scope creep toward mirroring the whole transcript | Explicit non-goal (§5.1) |
+### 8.1 Connector/agent protocol commands
 
-**Open questions for the PM**
+Prefer three generic commands over one command per native hook:
 
-1. **Retire `permission_requests`, or implement it as documented?** (§4.3 — I
-   recommend retire-and-supersede, but it edits the schema contract.)
-2. **Is a separate `mission:respond` permission right,** or should answering
-   reuse `mission:update`?
-3. **Should remote approval be opt-in per project or per workspace?** Some teams
-   will consider phone-approved `rm -rf` unacceptable regardless of RBAC.
-4. **How long should a request stay answerable?** `expires_at` needs a default;
-   an hour-old permission prompt for a long-dead tool call is a footgun.
-5. **Codex / Cursor / Antigravity parity.** Phase 1 works everywhere. Phase 2
-   depends on each harness's permission-hook return contract, which I have not
-   verified outside Claude Code. Worth a spike before committing Phase 2 to a
-   contract version.
+| Command                         | Purpose                                     |
+| ------------------------------- | ------------------------------------------- |
+| `ovld protocol session-event`   | Publish one `AgentSessionEventV1` envelope  |
+| `ovld protocol session-request` | Create/await/observe one normalized request |
+| `ovld protocol session-input`   | Claim/emit/acknowledge an inbound input     |
+
+`hook-event` remains a compatibility shim for existing
+`UserPromptSubmit` installations and delegates to `session-event` when a channel
+is available. The dead connector calls to `permission-request` are replaced by
+`session-request`; do not add a permission-only subsystem simply because old
+scripts guessed that command name.
+
+`ask` gains `--wait`, `--timeout-seconds`, and structured options by delegating
+to the same request service.
+
+### 8.2 Human REST surface
+
+| Route                                       | Purpose                                        | Permission                                                    |
+| ------------------------------------------- | ---------------------------------------------- | ------------------------------------------------------------- |
+| `GET /api/missions/:id/agent-sessions`      | Active/historical channel capability and state | `mission:read`                                                |
+| `GET /api/agent-sessions/:id/events`        | Cursor-paginated normalized events             | `mission:read`                                                |
+| `GET /api/agent-sessions/:id/requests`      | Request history/actionable requests            | `mission:read`                                                |
+| `POST /api/agent-requests/:id/resolve`      | Revision-CAS response                          | `agent_session:message` or `agent_permission:resolve` by kind |
+| `POST /api/agent-sessions/:id/inputs`       | Queue one session instruction                  | `agent_session:message`                                       |
+| `POST /api/agent-session-inputs/:id/cancel` | Cancel a queued input                          | `agent_session:message`                                       |
+
+### 8.3 Channel bootstrap and sentinel surface
+
+The existing runner `launching` transition additively returns a channel
+bootstrap. Manual launch uses a resource-derived session-channel preparation
+route. The channel-scoped API supports:
+
+- registration/credential exchange;
+- heartbeat;
+- event batch append;
+- request create/wait/application acknowledgement;
+- input claim/emitted/acknowledged/failed; and
+- clean channel end.
+
+This should be a versioned route family such as
+`/api/agent-session-channels/v1/*`. A channel credential can access exactly one
+channel. Human session/token auth cannot masquerade as an adapter, and a channel
+credential cannot resolve its own permission request.
 
 ---
 
-# Appendix — Verified schema extracts
+## 9. Security and privacy
 
-Extracted from the installed Claude Code build
-(`/usr/local/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe`) on
-2026-07-26, not from documentation. Where these disagree with published or
-secondary sources, they reflect the build actually running in this environment
-and should be re-verified against the version Overlord targets at
-implementation time.
+Remote agent control is more sensitive than ordinary mission editing.
 
-**Hook config entry fields:** `type`, `command`, `timeout` *(seconds)*,
-`statusMessage`, `once`, `async`, `asyncRewake`, `asyncTimeout`,
-`rewakeMessage` *(@internal)*, `rewakeSummary` *(@internal)*.
+Required controls:
 
-**`hookSpecificOutput` union members present in this build:** `PreToolUse`,
-`UserPromptSubmit`, `UserPromptExpansion`, `Setup`, `SubagentStart`,
-`PostToolUse`, `PostToolUseFailure`, `PostToolBatch`, `Stop`, `SubagentStop`,
-`PermissionDenied`, `Notification`, `PermissionRequest`, `Elicitation`,
-`ElicitationResult`, `CwdChanged`, `FileChanged`, `WorktreeCreate`,
-`MessageDisplay`.
+1. Separate message and permission-resolution RBAC permissions.
+2. Workspace policy ceiling plus per-project opt-in for remote permission
+   decisions.
+3. Allow-once and deny only in the first release.
+4. Revision CAS and immutable resolver attribution on every request.
+5. Audit log entries for permission resolution, input enqueue/cancel, adapter
+   application, and channel credential failure.
+6. Short-lived, hash-only channel credentials scoped to one channel.
+7. No credentials, raw tool inputs, question text, or command text in APNs
+   payloads.
+8. Adapter-side redaction plus server-side allowlists and size limits.
+9. No transcript upload or private transcript-path persistence.
+10. Fail toward the terminal: a remote timeout yields the native prompt, never
+    an implicit allow.
+11. Input injection is disabled for ended/lost channels and capability-checked
+    at enqueue time.
+12. Enterprise hook-trust/managed-hook policy is respected; Overlord never
+    bypasses it silently.
 
-**Top-level hook output fields:** `continue`, `suppressOutput`, `stopReason`,
-`decision` (`"approve" | "block"`), `reason`, `systemMessage`,
-`terminalSequence`, `hookSpecificOutput`.
+---
 
-```js
-// PermissionRequest — the remote-approval channel
-{ hookEventName: "PermissionRequest",
-  decision: union([
-    { behavior: "allow", updatedInput?: Record<string,unknown>,
-                         updatedPermissions?: Array<…> },
-    { behavior: "deny",  message?: string, interrupt?: boolean } ]) }
+## 10. Phasing
 
-// PreToolUse — fires earlier; can hard-deny
-{ hookEventName: "PreToolUse",
-  permissionDecision?: "allow" | "deny" | "ask" | "defer",
-  permissionDecisionReason?: string,
-  updatedInput?: Record<string,unknown>,
-  additionalContext?: string }
+Each phase is independently testable and does not require mission widgets.
 
-// Stop / PostToolUse — injection points
-{ hookEventName: "Stop",        additionalContext?: string }
-{ hookEventName: "PostToolUse", additionalContext?: string,
-  updatedToolOutput?: unknown, updatedMCPToolOutput?: unknown }
+### Phase 0 — Contract and connector truth
 
-// Elicitation — resolves an MCP elicitation before the TUI sees it
-{ hookEventName: "Elicitation",
-  action?: "accept" | "decline" | "cancel",
-  content?: Record<string,unknown> }
-```
+- Update `CONTRACT.md`, `contract/components.yaml`,
+  `contract/protocol-commands.yaml`, `contract/extension-points.yaml`, the
+  conformance schema, and the database schema contract first.
+- Replace inaccurate flat capability claims with the versioned interaction
+  capability block.
+- Correct existing connector scripts that invoke nonexistent commands or hook
+  types.
+- Make failures observable in bounded `~/.ovld/logs` diagnostics.
+- Add setup/doctor checks for hook trust, executability, native version, and
+  command existence.
 
-**Stop-hook blocking:** `stop_hook_active` on input; runtime sets
-`stopHookActive: true` and continues with transition reason
-`stop_hook_blocking`; consecutive-block cap defaults to 8, raisable via
-`CLAUDE_CODE_STOP_HOOK_BLOCK_CAP`.
+**Outcome:** the shipped manifests describe reality before new behavior relies
+on them.
 
-**Relevant env vars:** `BASH_DEFAULT_TIMEOUT_MS` (120000),
-`BASH_MAX_TIMEOUT_MS`, `CLAUDE_CODE_STOP_HOOK_BLOCK_CAP` (8).
+### Phase 1 — Channels and normalized events
 
-**`asyncRewake`, verbatim:** *"If true, hook runs in background and wakes the
-model on exit code 2 (blocking error). Implies async."* `rewakeMessage` is the
-*"Custom prefix for the system-reminder shown to the model when an asyncRewake
-hook exits with code 2. The hook output is appended after this prefix."*
+- Add channel/event tables and dual-dialect migrations.
+- Prepare/bind a channel across queue launch, manual launch, and protocol
+  attach.
+- Add the launch sentinel heartbeat/exit wrapper.
+- Add `session-event` and event ingestion/projection.
+- Implement session lifecycle and terminal user-prompt capture for Claude and
+  Codex first.
+- Exclude objective-launch prompts by launch correlation.
+
+**Outcome:** Overlord has a real-time, session-scoped event record without
+transcript mirroring.
+
+### Phase 2 — Answerable `ask`
+
+- Add `agent_requests`.
+- Implement `ask --wait` with bounded holds and overall expiry.
+- Add human list/resolve REST routes and revision CAS.
+- Prove Local/SQLite and Cloud/Postgres wait behavior.
+
+**Outcome:** the existing `agent_question` push no longer leads to a dead end.
+
+### Phase 3 — Remote permission decisions
+
+- Implement the bounded remote window and terminal handoff.
+- Add Claude and Codex permission translators.
+- Add project opt-in, RBAC, audit, and allow-once/deny policy.
+- Reconcile `application_state` from later native events where possible.
+- Spike Pi and Cursor resolution semantics before declaring support.
+
+**Outcome:** supported sessions can be approved remotely without weakening the
+native terminal fallback.
+
+### Phase 4 — Session instructions
+
+- Add the input queue, leases, and delivery state machine.
+- Add Claude `asyncRewake` as the active-turn fast path.
+- Add Claude/Codex/Cursor Stop-boundary delivery.
+- Implement Pi's extension-native input path.
+- Add echo correlation and capability-aware enqueue validation.
+
+**Outcome:** users can send follow-ups, retry, and continue instructions with
+honest latency/delivery status.
+
+### Phase 5 — Failures and optional tool telemetry
+
+- Add Claude `StopFailure` normalization.
+- Verify Pi provider/agent failure events.
+- Report only liveness/process loss for harnesses with no typed failure event.
+- Add opt-in metadata-only tool lifecycle events and retention.
+
+**Outcome:** the session view surfaces every event the adapter can guarantee
+without pretending unsupported failures were observed.
+
+### Phase 6 — Mission widgets and mobile
+
+Only after the contracts above stabilize:
+
+- design an activity/session widget registry;
+- render request-specific response controls;
+- add a capability-aware session composer;
+- add permission and failure push categories;
+- add authenticated actionable mobile notifications; and
+- decide whether session events live inline with mission activity or in a
+  filtered subview.
+
+This phase is intentionally a separate product-design objective.
+
+---
+
+## 11. Contract impact and module impact
+
+This design extends multiple stable surfaces and cannot be implemented under
+contract version 42 unchanged.
+
+### 11.1 Required contract changes
+
+| Change                                                     | Contract artifacts                                          |
+| ---------------------------------------------------------- | ----------------------------------------------------------- |
+| Agent Session Exchange ownership and channel identity      | `CONTRACT.md`, `contract/components.yaml`                   |
+| Session-channel adapter/sentinel REST surface              | `CONTRACT.md` interaction surfaces and REST ownership       |
+| Generic session protocol commands and `ask` flags          | `contract/protocol-commands.yaml`                           |
+| Four new core tables; retirement of two unmigrated designs | database schema contract and both dialect migrations        |
+| Versioned connector interaction capability block           | extension points and conformance-manifest schema            |
+| New approved native hook types used by adapters            | `contract/extension-points.yaml` where not already approved |
+| New open event/request/input vocabularies                  | schema contract controlled vocabularies                     |
+| New RBAC permissions                                       | RBAC config/types and schema-contract vocabulary docs       |
+| Channel credential scope and audit rules                   | Auth/REST interaction contract                              |
+
+No new `mission_events.type` is required for the proposed first version.
+
+### 11.2 Module impact
+
+| Module                     | Impact                                                                                                                                         |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/core` / protocol | Channel binding, event normalization service, request/input state machines, projection, idempotency, CAS                                       |
+| `backend`                  | Versioned channel API, human session/request/input REST routes, Postgres wake hints, resource-derived auth                                     |
+| `database`                 | Four tables in SQLite/Postgres, generated types, conformance tests, retirement of unmigrated table specs                                       |
+| `cli` / runner             | Channel preparation, scoped env, terminal sentinel wrapper, generic protocol commands; runner registration remains provenance only             |
+| `connectors`               | Per-agent native event translators, request decision outputs, input injection adapters, capability manifests and fixtures                      |
+| `auth`                     | Channel credential scope; `agent_session:message` and `agent_permission:resolve`; audit attribution                                            |
+| `webapp`                   | Later consumer of session/event/request/input DTOs; no architecture ownership                                                                  |
+| `desktop`                  | No new native logic; consumes REST like the webapp and continues to supervise the existing runner service only                                 |
+| mobile sibling resource    | Later REST/actionable-notification consumer; never receives channel credentials                                                                |
+| virtual gateways           | Pass channel bootstrap into the realized agent environment or implement the same versioned adapter surface; never route through a local runner |
+
+### 11.3 Contract invariants retained
+
+- Protocol attach/deliver remains the only agent lifecycle that completes an
+  objective.
+- Runner claiming remains target-level.
+- Runner registrations remain non-addressable diagnostics/liveness records.
+- Connectors do not write database tables directly.
+- REST and protocol use the same service layer.
+- Local and Cloud use the same logical API and persistence contract.
+- Mobile and browser clients are never execution targets.
+
+---
+
+## 12. Rejected alternatives
+
+### Put the exchange in `ovld runner supervise`
+
+Rejected because the runner does not own the terminal session, may restart, may
+not be the only runner serving the target, and does not exist for every manual
+or virtual launch.
+
+### Route messages to `claimed_by_runner_registration_id`
+
+Rejected because contract v40/v41 explicitly makes runner instances
+non-addressable. The column records who won the launch claim; it is not a
+session mailbox.
+
+### Tail Claude/Codex/Cursor transcript files
+
+Rejected because the formats are private/unstable, capture secrets and full
+model content, and cannot reliably distinguish displayed, accepted, retried,
+and failed interactions.
+
+### Proxy every agent through a PTY
+
+Rejected for this launch mode. It would make Overlord the terminal/process host,
+substantially changing failure, signal, TTY, and resume behavior. That is the
+same architectural direction as adopting ACP as the primary transport and
+violates the requirement to preserve the ordinary terminal interface.
+
+### AppleScript/tmux keystroke injection
+
+Rejected because it is platform/session-manager specific, races with the user,
+has no reliable acknowledgement, and cannot read semantic outcomes.
+
+### A mission-wide inbound queue
+
+Rejected because missions can have multiple sessions and harnesses. A message
+must not land in whichever adapter happens to poll first.
+
+### “First answer wins” across remote and terminal
+
+Rejected as a universal claim. Native prompts generally appear only after hooks
+return, and some harnesses cannot report the eventual terminal decision. The
+bounded remote window plus explicit terminal handoff is observable and honest.
+
+### One table/endpoint per native hook
+
+Rejected because it leaks harness vocabulary into core, duplicates request
+semantics, and makes every new connector a schema change.
+
+### Design the chat/widget UI now
+
+Rejected for this objective. A UI designed before capability and delivery-state
+semantics will either promise a full transcript or label `emitted` as
+`delivered`. Both are product bugs.
+
+---
+
+## 13. Acceptance criteria for the architecture
+
+An implementation following this plan is complete only when:
+
+1. two runners serving one target cannot consume or redirect each other's
+   session inputs;
+2. channel/session correlation survives runner restart and backend restart;
+3. queued, emitted, and acknowledged input states are distinguishable;
+4. objective-launch prompts never appear as human follow-ups;
+5. a terminal-entered prompt is captured once with native session/turn
+   correlation;
+6. duplicate and out-of-order adapter events are safe and diagnosable;
+7. a remote permission timeout always falls through to the terminal without
+   allowing the action;
+8. web/terminal permission races use explicit release semantics;
+9. precise provider failures appear only for adapters that declare and prove
+   them;
+10. raw transcripts, credentials, tool bodies, and file contents are absent
+    from database rows, logs, realtime DTOs, and push payloads;
+11. ended/lost sessions reject new instructions;
+12. Local SQLite and Cloud Postgres pass equivalent service/state-machine tests;
+13. connector conformance tests use recorded native fixtures for every claimed
+    event and decision output;
+14. setup/doctor detects missing, disabled, untrusted, stale, and unsupported
+    hooks;
+15. manual local, queued local, adopted AgentPod, and virtual-target launches
+    all bind the same logical session-channel contract; and
+16. the mission still completes only through normal protocol delivery.
+
+---
+
+## 14. Remaining PM policy choices
+
+These do not block architecture or Phase 0/1:
+
+1. **Remote permission default.** Recommendation: workspace-disabled by
+   default, workspace admin enables the ceiling, project owner enables the
+   project, and only allow-once/deny ship initially.
+2. **Detailed event retention.** Recommendation: 90 days for non-tool session
+   events and 7 days for optional tool metadata, with mission projections and
+   request/input audit retained normally.
+3. **Tool telemetry default.** Recommendation: off, with metadata-only opt-in.
+4. **Input grace period on a degraded channel.** Recommendation: reject when
+   already `lost`; allow a visibly queued input for up to two missed heartbeat
+   intervals while `degraded`, then expire it without emission.
+
+These defaults can be changed without moving the exchange into the runner or
+altering the channel/session identity.

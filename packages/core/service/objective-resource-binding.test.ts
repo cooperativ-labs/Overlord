@@ -100,7 +100,7 @@ describe('objective resource binding', () => {
     const now = new Date().toISOString();
     await db.run(
       `INSERT INTO execution_targets (id, workspace_id, type, label, status, created_at, updated_at)
-       VALUES ('other-target', ?, 'ssh', 'Other Device', 'active', ?, ?)`,
+       VALUES ('other-target', ?, 'virtual', 'Other Device', 'active', ?, ?)`,
       [ctx.workspace.id, now, now]
     );
     // Contract v39 moved per-target linkage off `project_resources` and onto the

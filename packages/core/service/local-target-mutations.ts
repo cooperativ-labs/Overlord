@@ -150,10 +150,10 @@ export async function createLocalTargetMutationRequest({
       `INSERT INTO execution_requests
            (id, workspace_id, project_id, mission_id, objective_id, execution_target_id,
             requested_agent, requested_model, requested_reasoning_effort, launch_mode,
-            launch_flags_json, target_kind, requested_source, idempotency_key, status,
+            launch_flags_json, requested_source, idempotency_key, status,
             requested_by_workspace_user_id, resolved_resource_id, resolved_working_directory,
             metadata_json, created_at, updated_at, revision)
-         VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, NULL, 'run', '{}', 'local', ?, NULL, 'queued', ?, NULL, NULL, ?, ?, ?, 1)`,
+         VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, NULL, 'run', '{}', ?, NULL, 'queued', ?, NULL, NULL, ?, ?, ?, 1)`,
       [
         id,
         ctx.workspace.id,

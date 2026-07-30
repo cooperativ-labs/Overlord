@@ -112,9 +112,9 @@ test('claiming a queued request fails when the primary resource is missing', asy
   await ctx.db.run(
     `INSERT INTO execution_requests
        (id, workspace_id, project_id, mission_id, objective_id, requested_agent,
-        launch_mode, launch_flags_json, target_kind, requested_source, status,
+        launch_mode, launch_flags_json, requested_source, status,
         created_at, updated_at, revision)
-     VALUES (?, ?, ?, ?, ?, 'codex', 'run', '{}', 'local', 'webapp', 'queued', ?, ?, 1)`,
+     VALUES (?, ?, ?, ?, ?, 'codex', 'run', '{}', 'webapp', 'queued', ?, ?, 1)`,
     [requestId, ctx.workspace.id, project.id, mission.id, objectives[0]?.id, now, now]
   );
 

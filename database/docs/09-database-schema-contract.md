@@ -499,25 +499,39 @@ Indexes:
 
 Represents where an objective can run. The local MVP has one local target per device.
 
-| Column                    | Type         | Required | Notes                                        |
-| ------------------------- | ------------ | -------- | -------------------------------------------- |
-| `id`                      | Id           | yes      |                                              |
-| `workspace_id`            | Id           | yes      | FK to `workspaces`.                          |
-| `device_id`               | Id           | no       | FK to `devices`; required for local targets. |
-| `owner_workspace_user_id` | Id           | no       | FK to `workspace_users`.                     |
-| `type`                    | text         | yes      | `local`, `ssh`, future adapter-defined.      |
-| `label`                   | text         | yes      |                                              |
-| `status`                  | text         | yes      | `active`, `disabled`, `unavailable`.         |
-| `connection_json`         | Json         | yes      | SSH host metadata later. No raw credentials. |
-| `created_at`              | TimestampUTC | yes      |                                              |
-| `updated_at`              | TimestampUTC | yes      |                                              |
-| `deleted_at`              | TimestampUTC | no       | Tombstone.                                   |
-| `revision`                | integer      | yes      |                                              |
+| Column                    | Type         | Required | Notes                                                                   |
+| ------------------------- | ------------ | -------- | ----------------------------------------------------------------------- |
+| `id`                      | Id           | yes      |                                                                         |
+| `workspace_id`            | Id           | yes      | FK to `workspaces`.                                                     |
+| `device_id`               | Id           | no       | FK to `devices`; required for local targets.                            |
+| `owner_workspace_user_id` | Id           | no       | FK to `workspace_users`.                                                |
+| `type`                    | text         | yes      | `local`, `virtual`, future adapter-defined.                             |
+| `lifecycle_kind`          | text         | yes      | `persistent` (default) or explicit `leased`.                            |
+| `lease_seconds`           | integer      | no       | Required for leased targets; bounded whole-minute lease period.         |
+| `lease_grace_seconds`     | integer      | no       | Required for leased targets; bounded whole-minute cleanup grace period. |
+| `lease_expires_at`        | TimestampUTC | no       | Required for leased targets; heartbeat renewal deadline.                |
+| `label`                   | text         | yes      |                                                                         |
+| `status`                  | text         | yes      | `active`, `disabled`, `unavailable`.                                    |
+| `connection_json`         | Json         | yes      | SSH host metadata later. No raw credentials.                            |
+| `created_at`              | TimestampUTC | yes      |                                                                         |
+| `updated_at`              | TimestampUTC | yes      |                                                                         |
+| `deleted_at`              | TimestampUTC | no       | Tombstone.                                                              |
+| `revision`                | integer      | yes      |                                                                         |
 
 Indexes:
 
 - `(workspace_id, type, status)`.
 - `(workspace_id, device_id)`.
+- `(workspace_id, lease_expires_at)` where active and `lifecycle_kind = 'leased'`.
+
+`persistent` remains the compatibility default. A leased policy is selected only by an explicit
+human declaration of an independent local target; it is never inherited by an adopted runner. A
+successful authorized local runner heartbeat atomically renews `lease_expires_at`. Expiry makes the
+target offline/ineligible only: it neither soft-deletes the target nor removes access, preferences,
+or target-scoped sources. During the configured grace period a returning runner can renew the same
+target. The durable backend `overlord.execution_target.lease_cleanup.v1` worker owns post-grace
+cleanup and rechecks the policy/revision and active claims before failing queued work with the
+redacted `execution_target_lease_expired` code and invoking the normal deletion cascade.
 
 ### `execution_target_runner_registrations`
 
@@ -597,7 +611,7 @@ Represents reusable per-profile launch preferences for a stable execution target
 | ----------------------- | ------------ | -------- | ----------------------------------------------------------------------- |
 | `id`                    | Id           | yes      |                                                                         |
 | `profile_id`            | Id           | yes      | FK to `profiles`.                                                       |
-| `target_type`           | text         | yes      | `local`, `ssh`, future adapter-defined.                                 |
+| `target_type`           | text         | yes      | `local`, `virtual`, future adapter-defined.                             |
 | `target_fingerprint`    | text         | yes      | Stable user-target identity. For local targets, the device fingerprint. |
 | `agent_configs_json`    | Json         | yes      | Per-user/per-target agent launch config, keyed by agent identifier.     |
 | `terminal_profile_json` | Json         | yes      | Per-user terminal profile for this target fingerprint.                  |
@@ -1387,7 +1401,6 @@ Durable queue for manual run and auto-advance.
 | `requested_reasoning_effort`        | text         | no       |                                                                                                                                                                                                       |
 | `launch_mode`                       | text         | yes      | `run`, `ask`, or adapter-defined.                                                                                                                                                                     |
 | `launch_flags_json`                 | Json         | yes      |                                                                                                                                                                                                       |
-| `target_kind`                       | text         | yes      | `any`, `local`, `ssh`, or adapter-defined.                                                                                                                                                            |
 | `requested_source`                  | text         | yes      | `manual_run`, `auto_advance`, `api`, `cli`, etc.                                                                                                                                                      |
 | `idempotency_key`                   | text         | no       | Required for auto-advance.                                                                                                                                                                            |
 | `status`                            | text         | yes      | `queued`, `claimed`, `launching`, `launched`, `failed`, `cleared`, `cancelled`, `expired`.                                                                                                            |
@@ -1477,7 +1490,10 @@ delivery-presentation composition. Its `payload_json` carries `{ "deliveryId": "
 only. Protocol delivery (`deliverSession` / `recordWork`) enqueues one job in the same
 transaction as the delivery insert; the backend composition worker claims, retries with
 lock expiry, and updates only `deliveries.payload_json.deliveryReport.presentation`.
-Delivery success never waits on the worker or Gemini.
+Delivery success never waits on the worker or Gemini. The core
+`overlord.execution_target.lease_cleanup.v1` type carries only `{ executionTargetId,
+expectedRevision }`; its handler rechecks the leased target transactionally before cleanup and is
+safe to replay after a worker restart.
 
 | Column          | Type         | Required | Notes                                                    |
 | --------------- | ------------ | -------- | -------------------------------------------------------- |
@@ -2206,7 +2222,7 @@ Closed values:
 Open extension values:
 
 - `workspaces.kind`, `profiles.kind`, `execution_targets.type`, `project_resources.type`, `storage_buckets.storage_backend`, `artifacts.type`, `mission_events.source`, `entity_changes.entity_type`, `entity_changes.source`, `outbox_messages.topic`, `worker_jobs.type` (including core-documented `overlord.delivery.compose.v1`), RBAC permission names, connector identifiers, and `webhook_subscriptions.event_types_json` values (the webhook event catalog).
-- `execution_targets.type` documents `local`, `ssh`, and now `virtual` as core values. A `virtual` target is realized by an external gateway over the Virtual Target Queue Surface.
+- `execution_targets.type` documents `local` and `virtual` as core values. A `virtual` target is realized by an external gateway over the Virtual Target Queue Surface.
 - Virtual execution target open vocabularies: `execution_target_registrations.gateway_key` (namespaced adapter key, e.g. `racecar` — **not** an `execution_targets.type`), `execution_target_registrations.health` (`healthy`, `degraded`, `unreachable`, `unknown`), `project_resource_sources.source_kind` (`git`, `local_checkout`, `source_bundle`, …), `execution_request_observations.kind` (`progress`, `launch`, `failure`, `lifecycle_resource`, …), `execution_request_grants.kind` (`launch`, `attachment`, `download`, `credential_reference`, …), `execution_requests.failure_code` (typed, e.g. `source_incompatible`), `execution_requests.failure_phase` (`claim`, `source`, `environment`, `launch`, …), and `mission_target_resources.kind` (`car`, `environment`, `run`, …).
 - Extension values must be namespaced unless they are accepted into core documentation.
 - `execution_requests.status` remains the **closed** vocabulary above and is **not** extended by virtual targets: preparation and realization are recorded as append-only `execution_request_observations`, not as new statuses.
@@ -2643,4 +2659,6 @@ To keep this contract up to date:
 ## Changelog
 
 - Virtual execution targets (coo:258, contract `3`): new core tables `execution_target_registrations`, `project_environment_definitions`, `project_resource_sources`, `execution_request_snapshots`, `execution_request_grants`, `execution_request_observations`, and `mission_target_resources`; additive `execution_requests` columns `launch_snapshot_id`, `failure_code`, `failure_phase`, and `claimed_by_gateway_instance_id`; new open vocabularies for gateway adapter keys, source kinds, observation kinds, grant kinds, and typed failure codes/phases; virtual-target redaction/retention rules; the `/api/virtual-targets/v1/*` REST boundary. `execution_requests.status` and all other closed vocabularies are unchanged.
+- Leased independent execution targets (coo:528, contract `43`): additive `execution_targets.lifecycle_kind`, `lease_seconds`, `lease_grace_seconds`, and `lease_expires_at`; existing rows backfill as persistent. The durable `overlord.execution_target.lease_cleanup.v1` worker rechecks a target's policy/revision and active requests before it may use the ordinary target-deletion cascade. Lease expiry itself is offline-only and never deletes target-owned links, preferences, or access.
+- Execution-target type vocabulary cleanup (coo:528, contract `44`): removes the unused core `ssh` value from `execution_targets.type` (legacy rows rewrite to `virtual`) and drops the dead `execution_requests.target_kind` column.
 - `0`: Initial public release baseline (portable SQLite/Postgres schema, extensions, vocabularies, and conformance requirements).

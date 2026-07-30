@@ -127,9 +127,9 @@ test('launching ignores stale active requests tied to completed objectives', asy
   db.prepare(
     `INSERT INTO execution_requests
        (id, workspace_id, project_id, mission_id, objective_id, requested_agent, launch_mode,
-        launch_flags_json, target_kind, requested_source, status, metadata_json, created_at,
+        launch_flags_json, requested_source, status, metadata_json, created_at,
         updated_at, revision)
-     VALUES (?, ?, ?, ?, ?, 'codex', 'run', '{}', 'any', 'webapp', 'queued', '{}', ?, ?, 1)`
+     VALUES (?, ?, ?, ?, ?, 'codex', 'run', '{}', 'webapp', 'queued', '{}', ?, ?, 1)`
   ).run(
     staleRequestId,
     missionRow.workspace_id,

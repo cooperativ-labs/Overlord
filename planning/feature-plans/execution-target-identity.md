@@ -361,8 +361,15 @@ linked path genuinely resolves on several machines — the same shape as pod ado
 
 Not covered by either trigger: a build box that clones fresh per run. A git-sourced primary cannot
 produce a working directory for a device runner today. That is a _materialization_ gap rather than a
-registration gap, and it is what the gateway/virtual path exists to solve — worth tracking
-separately, but out of scope here.
+registration gap, and it stays out of scope here.
+
+It is no longer, however, assumed to belong exclusively to the gateway/virtual path. It is designed
+separately in [`execution-target-materialization.md`](execution-target-materialization.md), which
+concludes that materialization is a **provider-neutral** contract with the device runner as its first
+implementer: Overlord resolves a resource identity and a desired materialization plan, the claimant
+resolves the path and reports it back, and a gateway remains the right answer only when a _foreign_
+system owns realization. That plan changes no target identity, registration trigger, adoption,
+liveness, or routing semantics described here, and requires no new tables.
 
 Everything else **stops** registering:
 
@@ -576,6 +583,164 @@ Phase 1 alone resolves the original complaint. Phases 2–4 complete onboarding,
 and user control. The type/`target_kind` cleanup in §4.6 and leased ephemeral-target lifecycle are
 separate follow-ups, not dependencies.
 
+## 5.1 Deferred follow-up: leased lifecycle for disposable independent targets
+
+This follow-up is deliberately about an **independent target** (for example, a disposable VM or
+sandbox which declares its own local target). It is not an adoption mechanism: an AgentPod keeps
+sharing its host target and an adopted runner cannot create, convert, renew, or clean up the host's
+target lifecycle.
+
+### Policy and creation
+
+Persistent is the default and preserves every existing declaration path. A human explicitly opts
+into a leased target at `register-target` / `add-et` or the equivalent machine-local desktop
+declaration by supplying `{ lifecycle: { kind: 'leased', leaseSeconds, graceSeconds } }`. The
+server accepts whole-minute values in the bounded ranges 5 minutes–7 days for `leaseSeconds` and
+1 hour–30 days for `graceSeconds`; no client, environment variable, runner, or heartbeat may
+silently select the policy. The stable `execution_targets.id` is still created once and is the
+routing identity for its entire retained lifetime.
+
+The schema stores `lifecycle_kind` (`persistent` | `leased`), `lease_seconds`, `lease_grace_seconds`,
+and `lease_expires_at` on `execution_targets`. Persistent rows have the latter three fields null;
+leased rows have all three non-null. Creation sets `lease_expires_at = now + leaseSeconds` so an
+unused disposable target naturally becomes offline and later eligible for cleanup.
+
+### Renewal, offline, and recovery
+
+Only a successful authorized local runner claim/heartbeat for that exact, active target renews a
+lease, atomically setting `lease_expires_at = now + lease_seconds`. A normal runner heartbeat
+continues to update its registration and is not a target creation path. Expiry is a derived
+availability result (`lease_expires_at <= now`): it makes the target offline/ineligible, but does
+**not** change `status`, soft-delete the target, clear resources or preferences, revoke access, or
+alter queued work. A returning runner may renew before the grace deadline and the same target id,
+links, preferences, and access resume normally.
+
+`status = disabled` is an explicit user retention action: it blocks claims and lease renewal, clears
+the cleanup schedule, and retains all target data until re-enabled or explicitly deleted. Re-enable
+starts a fresh lease window for a leased target; it does not require a new declaration. Explicit
+delete keeps today's no-active-work guard and uses the same cleanup primitive immediately. A
+deleted target is never revived by a heartbeat; recovery after deletion is a new explicit
+declaration with a new target id.
+
+### Grace, queue safety, and cleanup ownership
+
+At expiry the service schedules one idempotent `overlord.execution_target.lease_cleanup.v1`
+`worker_jobs` row for `lease_expires_at + lease_grace_seconds`; the worker payload contains only
+`{ executionTargetId, expectedRevision }`. The backend owns this worker and all cleanup writes;
+runners, gateways, and clients never delete target-owned rows. At execution it locks and reloads
+the target. A renewed lease, changed revision/policy, active status, or a deleted target makes the
+job a no-op/re-schedule, preventing an old timer from deleting a recovered target.
+
+Before soft deletion, cleanup expires stale claims using the existing request-recovery rules. It
+then transitions any remaining queued request targeted at this target to `failed` with the typed,
+redacted `execution_target_lease_expired` failure code; it never silently broadens a user-selected
+target to another runner. Retry is explicit and queues a new request through ordinary target
+selection, so a user may select a replacement target. Cleanup must not delete a target while a
+claim/launch remains live; it reschedules until that claim expires or reaches a terminal state.
+After queue safety is achieved it invokes the existing target deletion cascade (target access,
+target-scoped resource sources, and target preferences; then orphan-device soft deletion).
+
+Every renewal, disable/re-enable, lease-expiry observation, queued-work failure, and final deletion
+emits `entity_changes`; queue transitions also append `mission_events` in the same transaction.
+The workspace projection exposes only the non-secret lifecycle policy, lease expiry, and derived
+`unavailableReason` (`lease_expired`), never a cleanup job payload or runner addressing.
+
+### Migration and rollout
+
+Add matching SQLite and Postgres migrations after the current runner-registration migration. They
+add the four nullable columns and a paired CHECK enforcing the persistent/leased shapes, backfill
+every existing row as `persistent`, and add a partial index for active leased targets by
+`(workspace_id, lease_expires_at)`. They do not alter runner registrations, device identity,
+gateway registrations, target type vocabulary, resource links, or existing request status values.
+The worker is deployed only after both migrations; its retry/idempotency key is target id plus the
+target revision, and its handler is safe to run repeatedly or after restart.
+
+---
+
+## 5.2 Evaluated and declined: runner-instance routing within a shared target
+
+§4.2 left runner-specific routing "deliberately out of scope" with the note that the shared-filesystem
+adoption case "should not need it". That was an assertion, so it was tested against the shipped code
+and against every candidate workflow that could plausibly require it. **No justified case was found,
+and nothing is being built.** The invariant already stated in contract v40/v41 stands: an execution
+request selects a target, any healthy runner serving that target may claim it, and a runner instance
+is never individually addressable.
+
+This section records the evaluation so the question is not relitigated from intuition.
+
+### Why the shape almost never occurs
+
+Multiple runner instances on one target is not a general configuration — it is exactly one
+configuration. `resolveRunnerInstanceId` (`cli/src/runner-identity.ts`) persists one instance id per
+CLI data directory, so a second `ovld runner start` on the same machine, or the desktop runner
+service alongside a manual run, upserts the *same* registration row rather than creating a rival
+instance. An independent sandbox or VM gets its own target (§4.2's third row), which costs nothing.
+The only way to get two competing instances on one row is deliberate adoption: a container passing
+its host's `OVERLORD_EXECUTION_TARGET_ID` with `OVERLORD_RUNNER_RELATION=adopted`.
+
+And adoption is defined by resource identity, not convenience: §7.1 permits row-sharing **because the
+resources are the host's resources** — the pod mounts the host checkout, so resolving the host
+target's `project_resource_sources` is literally correct. Two runners that differ in what work they
+can actually do are, by that definition, not the same target. The remedy for them is the separate
+target that already exists, not a selector inside a shared one.
+
+### The candidate workflows, and what each actually resolves to
+
+**"Run this mission inside the sandbox pod rather than directly on my laptop."** This is the strongest
+candidate and it is already solved on a different axis. In the shipped product a pod is not a
+competing claimer — it is a *launch wrapper* on the host runner: `preCommand: "agent-pod"`
+(`connectors/docs/agent-harness-configuration-architecture.md`) with pre-launch commands such as
+`agent-pod file-access set {OVERLORD_PROJECT_RESOURCES_PATHS}`
+(`webapp/web/components/projects/project-settings/LaunchPage.tsx`). Isolation is therefore a launch
+configuration decision, resolved per target and per agent by `resolveClaimLaunchConfig`
+(`packages/core/service/project-execution-target.ts`), not a routing decision. Adding a runner
+selector would create a second, competing way to express the same intent.
+
+**"This runner has the agent binary and that one does not."** This is capability matching, not
+instance addressing — and the user should never be asked to hand-pick a process to work around it.
+The honest observation is that the capability channel is inert today: `capabilities` and
+`supportedAgents` are accepted on the claim (`backend/http/client-device.ts`), stored
+(`execution_target_runner_registrations`), and projected to the UI, but the CLI never sends them
+(`runnerRegistrationPayload` omits both) and no claim predicate reads them. See the tripwire below.
+
+**"Drain one runner without disabling the machine."** The control already exists and is the natural
+one: stop that runner process. A runner that is not polling does not claim. Target `status` remains
+the coarse, durable control; process lifecycle is the fine one. Neither needs a request field.
+
+**"Which runner ran this?"** Answered by `execution_requests.claimed_by_runner_registration_id` and
+the runner diagnostics in the v41 workspace projection. Provenance, not routing.
+
+**"Steer or message the agent on a particular runner."** Independently evaluated and rejected by the
+agent-interaction plan (`planning/feature-plans/agent-interaction-acp.md` §12, "Route messages to
+`claimed_by_runner_registration_id`"): the winning runner opens a terminal and then loses ownership of
+the agent's stdio, so interaction is keyed to an agent session channel. The one adjacent feature that
+might have wanted runner addressing concluded it wanted something else.
+
+### What the failure mode costs today
+
+If a runner does claim work it cannot run, the failure is loud and bounded rather than silent:
+`markExecutionFailed` is terminal for that request (no auto-requeue loop), `last_error` carries the
+reason, and `claimed_by_runner_registration_id` names the instance. That is an acceptable cost for a
+configuration a user has to opt into deliberately.
+
+### Tripwire that would reopen this
+
+Reopen only on evidence that two runners which *must* share one target row differ in what work they
+can accept — in practice, an adopting pod that runs its own polling runner and lacks an agent binary
+its host has. The correct response then is still not user-facing runner selection. It is
+**capability-based claim eligibility**: have the CLI publish `supportedAgents`, and have the claim
+predicate skip requests whose `requested_agent` the claiming instance cannot serve. That keeps
+routing target-level and automatic, requires no request field, no UI, and no new authorization
+model, and it degrades safely — an older runner publishing no capabilities keeps today's behavior.
+It would be a separate opt-in feature, not this one.
+
+### Consequences of this decision
+
+No schema change, no migration, no contract version bump, and no UI. `LaunchObjectiveBody` keeps
+`executionTargetId` as its only routing override. The invariants at `CONTRACT.md` "Claim competition
+is target-level" and `contract/components.yaml` (runner instances are never an addressable routing
+unit) are already correct and are left as written.
+
 ---
 
 ## 6. Contract impact
@@ -676,3 +841,21 @@ survives unchanged for exactly one reason: it is a **security boundary** (gatewa
 scoped to one target row; device runners claim from a workspace queue). Transport variety belongs
 in the provider registry, not in a persisted vocabulary. The vocabulary is contractually open even
 though the shipped database CHECK currently admits only documented core values. Detail in §4.6.
+
+### 7.4 Runner-instance routing — **not justified; routing stays target-level**
+
+Evaluated after the Phase 4 rollout rather than assumed. Every candidate workflow resolves to an
+axis that already exists: pod-versus-host isolation is launch configuration (`preCommand`), draining
+one runner is stopping that process, attribution is
+`execution_requests.claimed_by_runner_registration_id`, and steering an agent is an agent session
+channel (rejected independently in the agent-interaction plan). Two competing instances on one target
+row only ever arise from deliberate adoption, and adoption is licensed by §7.1 precisely because the
+two runners share the host's resources — runners that differ in what work they can do are a separate
+target, which is already free.
+
+So no request field, authorization rule, claimant identity, queue-competition rule, offline behavior,
+UI, or schema change is being added, and the existing contract invariants need no amendment. The one
+real gap found is capability heterogeneity, not addressing: `supportedAgents`/`capabilities` are
+accepted, stored, and projected but never published by the CLI and never read by the claim predicate.
+If that ever bites, the fix is automatic capability-based claim eligibility, not user-facing runner
+selection. Full evaluation and tripwire in §5.2.

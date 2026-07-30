@@ -3,12 +3,11 @@
  * Please do not edit it manually.
  */
 
-import type { ColumnType } from 'kysely';
+import type { ColumnType } from "kysely";
 
-export type Generated<T> =
-  T extends ColumnType<infer S, infer I, infer U>
-    ? ColumnType<S, I | undefined, U>
-    : ColumnType<T, T | undefined, T>;
+export type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
+  ? ColumnType<S, I | undefined, U>
+  : ColumnType<T, T | undefined, T>;
 
 export interface Account {
   accessToken: string | null;
@@ -155,6 +154,20 @@ export interface Deliveries {
   workspace_id: string;
 }
 
+export interface DevicePushTokens {
+  app_version: string | null;
+  bundle_id: string;
+  created_at: string;
+  device_token: string;
+  environment: string;
+  id: string | null;
+  last_registered_at: string;
+  last_sent_at: string | null;
+  platform: string;
+  profile_id: string;
+  updated_at: string;
+}
+
 export interface Devices {
   created_at: string;
   deleted_at: string | null;
@@ -248,7 +261,6 @@ export interface ExecutionRequests {
   resolved_working_directory: string | null;
   revision: Generated<number>;
   status: string;
-  target_kind: string;
   updated_at: string;
   workspace_id: string;
 }
@@ -355,6 +367,100 @@ export interface ExtEverhourWorkspaceConnections {
   workspace_id: string;
 }
 
+export interface ExtGithubInstallations {
+  created_at: string;
+  deleted_at: string | null;
+  github_account_login: string;
+  github_account_type: string | null;
+  github_installation_id: string;
+  id: string | null;
+  permissions_json: Generated<string>;
+  revision: Generated<number>;
+  updated_at: string;
+  workspace_id: string;
+}
+
+export interface ExtGithubMissionPullRequests {
+  base_branch: string;
+  created_at: string;
+  deleted_at: string | null;
+  github_pull_number: number;
+  head_branch: string;
+  html_url: string;
+  id: string | null;
+  mission_id: string;
+  project_id: string;
+  revision: Generated<number>;
+  state: string;
+  updated_at: string;
+  workspace_id: string;
+}
+
+export interface ExtGithubProjectInitializations {
+  clone_url: string | null;
+  created_at: string;
+  default_branch: string | null;
+  deleted_at: string | null;
+  failure_message: string | null;
+  full_name: string | null;
+  github_owner_login: string | null;
+  github_repo_id: string | null;
+  id: string | null;
+  idempotency_key: string;
+  mission_id: string;
+  profile_id: string;
+  project_id: string;
+  provisioning_status: string;
+  revision: Generated<number>;
+  updated_at: string;
+  workspace_id: string;
+}
+
+export interface ExtGithubProjectLinks {
+  created_at: string;
+  default_branch: string;
+  deleted_at: string | null;
+  full_name: string;
+  github_repo_id: string;
+  id: string | null;
+  metadata_json: Generated<string>;
+  project_id: string;
+  revision: Generated<number>;
+  updated_at: string;
+  workspace_id: string;
+}
+
+export interface ExtGithubUserConnections {
+  access_token_ciphertext: string;
+  access_token_expires_at: string | null;
+  avatar_url: string | null;
+  created_at: string;
+  deleted_at: string | null;
+  github_login: string;
+  github_user_id: string;
+  id: string | null;
+  last_validated_at: string;
+  profile_id: string;
+  refresh_token_ciphertext: string | null;
+  refresh_token_expires_at: string | null;
+  revision: Generated<number>;
+  scopes_json: Generated<string>;
+  updated_at: string;
+}
+
+export interface ExtGithubUserOauthStates {
+  consumed_at: string | null;
+  created_at: string;
+  deleted_at: string | null;
+  expires_at: string;
+  id: string | null;
+  profile_id: string;
+  return_url: string | null;
+  revision: Generated<number>;
+  state_hash: string;
+  updated_at: string;
+}
+
 export interface IdempotencyKeys {
   actor_workspace_user_id: string | null;
   created_at: string;
@@ -367,6 +473,17 @@ export interface IdempotencyKeys {
   status: string;
   updated_at: string;
   workspace_id: string;
+}
+
+export interface LiveActivityPushTokens {
+  activity_id: string;
+  created_at: string;
+  id: string | null;
+  last_content_hash: string | null;
+  last_sent_at: string | null;
+  profile_id: string;
+  push_token: string;
+  updated_at: string;
 }
 
 export interface MissionBranchObservations {
@@ -407,6 +524,7 @@ export interface Missions {
   active_branch: string | null;
   assigned_workspace_user_id: string | null;
   available_tools_json: Generated<string>;
+  blocking_question_seen_at: string | null;
   board_position: Generated<number>;
   branch_override: string | null;
   constraints_text: string | null;
@@ -421,6 +539,7 @@ export interface Missions {
   output_format_text: string | null;
   priority: string | null;
   project_id: string;
+  returned_to_execute_at: string | null;
   revision: Generated<number>;
   schedule_id: string | null;
   sequence_number: number;
@@ -440,6 +559,12 @@ export interface MissionSequences {
   scope_type: string;
   updated_at: string;
   workspace_id: string;
+}
+
+export interface MissionStatusSeen {
+  mission_id: string;
+  seen_at: string;
+  status_id: string;
 }
 
 export interface MissionTags {
@@ -473,6 +598,15 @@ export interface MyMissionPositions {
   updated_at: string;
   workspace_id: string;
   workspace_user_id: string;
+}
+
+export interface NotificationPreferences {
+  category: string;
+  created_at: string;
+  id: string | null;
+  mode: string;
+  profile_id: string;
+  updated_at: string;
 }
 
 export interface ObjectiveAttachments {
@@ -546,25 +680,6 @@ export interface OutboxMessages {
   workspace_id: string;
 }
 
-export interface WorkerJobs {
-  attempt_count: Generated<number>;
-  created_at: string;
-  deleted_at: string | null;
-  id: string | null;
-  last_error: string | null;
-  locked_by: string | null;
-  locked_until: string | null;
-  max_attempts: Generated<number>;
-  payload_json: string;
-  priority: Generated<number>;
-  revision: Generated<number>;
-  run_after: string;
-  status: Generated<string>;
-  type: string;
-  updated_at: string;
-  workspace_id: string;
-}
-
 export interface Profiles {
   created_at: string;
   deleted_at: string | null;
@@ -594,6 +709,8 @@ export interface ProjectEnvironmentDefinitions {
 }
 
 export interface ProjectResources {
+  access_level: Generated<string>;
+  access_mode: Generated<string>;
   created_at: string;
   deleted_at: string | null;
   id: string | null;
@@ -931,6 +1048,25 @@ export interface WebhookSubscriptions {
   workspace_id: string;
 }
 
+export interface WorkerJobs {
+  attempt_count: Generated<number>;
+  created_at: string;
+  deleted_at: string | null;
+  id: string | null;
+  last_error: string | null;
+  locked_by: string | null;
+  locked_until: string | null;
+  max_attempts: Generated<number>;
+  payload_json: string;
+  priority: Generated<number>;
+  revision: Generated<number>;
+  run_after: string;
+  status: Generated<string>;
+  type: string;
+  updated_at: string;
+  workspace_id: string;
+}
+
 export interface WorkspaceImages {
   alt_text: string | null;
   checksum_sha256: string | null;
@@ -1036,6 +1172,7 @@ export interface DB {
   change_rationales: ChangeRationales;
   changed_files: ChangedFiles;
   deliveries: Deliveries;
+  device_push_tokens: DevicePushTokens;
   devices: Devices;
   entity_changes: EntityChanges;
   execution_request_grants: ExecutionRequestGrants;
@@ -1048,14 +1185,23 @@ export interface DB {
   ext_everhour_mission_links: ExtEverhourMissionLinks;
   ext_everhour_project_links: ExtEverhourProjectLinks;
   ext_everhour_workspace_connections: ExtEverhourWorkspaceConnections;
+  ext_github_installations: ExtGithubInstallations;
+  ext_github_mission_pull_requests: ExtGithubMissionPullRequests;
+  ext_github_project_initializations: ExtGithubProjectInitializations;
+  ext_github_project_links: ExtGithubProjectLinks;
+  ext_github_user_connections: ExtGithubUserConnections;
+  ext_github_user_oauth_states: ExtGithubUserOauthStates;
   idempotency_keys: IdempotencyKeys;
+  live_activity_push_tokens: LiveActivityPushTokens;
   mission_branch_observations: MissionBranchObservations;
   mission_events: MissionEvents;
   mission_sequences: MissionSequences;
+  mission_status_seen: MissionStatusSeen;
   mission_tags: MissionTags;
   mission_target_resources: MissionTargetResources;
   missions: Missions;
   my_mission_positions: MyMissionPositions;
+  notification_preferences: NotificationPreferences;
   objective_attachments: ObjectiveAttachments;
   objectives: Objectives;
   organizations: Organizations;

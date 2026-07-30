@@ -1892,7 +1892,7 @@ export interface WebhookDeliveryAttemptsPageDto {
  * Documented core `execution_targets.type` values. Open vocabulary — adapters
  * may add namespaced values, so a `string` is always accepted on the wire.
  */
-export type ExecutionTargetType = 'local' | 'ssh' | 'virtual' | (string & {});
+export type ExecutionTargetType = 'local' | 'virtual' | (string & {});
 
 /** Gateway health as reported through registration/heartbeat. */
 export type VirtualTargetHealth = 'healthy' | 'degraded' | 'unreachable' | 'unknown';

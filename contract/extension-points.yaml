@@ -248,7 +248,7 @@ closedVocabularies:
 openVocabularies:
   - workspaces.kind            # e.g. local, hosted, or adapter-defined
   - users.kind                 # e.g. human, service, or adapter-defined
-  - execution_targets.type     # core values: local, ssh, virtual (virtual realized by an external gateway over the Virtual Target Queue Surface); adapter-defined values namespaced
+  - execution_targets.type     # core values: local, virtual (virtual realized by an external gateway over the Virtual Target Queue Surface); adapter-defined values namespaced
   - project_resources.type     # e.g. local_directory, remote_directory, or adapter-defined
   - execution_target_registrations.gateway_key   # namespaced gateway adapter key (e.g. racecar); not an execution_targets.type
   - project_resource_sources.source_kind         # git, local_checkout, source_bundle, or namespaced source kinds

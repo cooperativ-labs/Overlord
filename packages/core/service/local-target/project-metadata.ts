@@ -8,13 +8,7 @@
 // makes that automatic — only a co-located in-process provider writes.
 
 import { execFileSync } from 'node:child_process';
-import {
-  chmodSync,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  writeFileSync
-} from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { nowIso } from '../util.js';
@@ -202,10 +196,7 @@ function parseProjectJson(projectJsonPath: string): ProjectJsonContents | null {
       : undefined;
 
   return {
-    _warning:
-      typeof parsed._warning === 'string'
-        ? parsed._warning
-        : PROJECT_JSON_WARNING,
+    _warning: typeof parsed._warning === 'string' ? parsed._warning : PROJECT_JSON_WARNING,
     version: typeof parsed.version === 'number' ? parsed.version : 1,
     projectId: parsed.projectId,
     resourceId: parsed.resourceId,

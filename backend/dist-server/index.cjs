@@ -70254,6 +70254,106 @@ var init_doctor_checks = __esm({
 });
 
 // ../packages/core/service/local-target/project-metadata.ts
+function writeIfChanged(filePath, content) {
+  if (!(0, import_node_fs10.existsSync)(filePath) || (0, import_node_fs10.readFileSync)(filePath, "utf8") !== content) {
+    (0, import_node_fs10.writeFileSync)(filePath, content);
+  }
+}
+function replaceManagedBlock(content, block) {
+  const blockPattern = new RegExp(
+    `${INSTRUCTION_BLOCK_START}[\\s\\S]*?${INSTRUCTION_BLOCK_END}\\n?`,
+    "g"
+  );
+  const withoutExisting = content.replace(blockPattern, "").trimEnd();
+  return `${withoutExisting}${withoutExisting ? "\n\n" : ""}${block}
+`;
+}
+function ensureAgentInstructions(checkoutPath) {
+  for (const filename of ["AGENTS.md", "CLAUDE.md"]) {
+    const instructionPath = import_node_path12.default.join(checkoutPath, filename);
+    const existing = (0, import_node_fs10.existsSync)(instructionPath) ? (0, import_node_fs10.readFileSync)(instructionPath, "utf8") : "";
+    writeIfChanged(instructionPath, replaceManagedBlock(existing, PROJECT_METADATA_INSTRUCTION));
+  }
+}
+function ensureGitignore(checkoutPath) {
+  const gitignorePath = import_node_path12.default.join(checkoutPath, ".gitignore");
+  const existing = (0, import_node_fs10.existsSync)(gitignorePath) ? (0, import_node_fs10.readFileSync)(gitignorePath, "utf8") : "";
+  const existingPatterns = new Set(
+    existing.split(/\r?\n/).map((line2) => line2.trim().replace(/^\//, "")).filter(Boolean)
+  );
+  const additions = [".overlord/tmp/", ".overlord/logs/"].filter(
+    (pattern) => !existingPatterns.has(pattern)
+  );
+  if (additions.length === 0) return;
+  const separator = existing.length === 0 || existing.endsWith("\n") ? "" : "\n";
+  (0, import_node_fs10.writeFileSync)(gitignorePath, `${existing}${separator}${additions.join("\n")}
+`);
+}
+function resolveGitRoot(directoryPath) {
+  try {
+    return (0, import_node_child_process4.execFileSync)("git", ["-C", directoryPath, "rev-parse", "--show-toplevel"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"]
+    }).trim();
+  } catch {
+    return null;
+  }
+}
+function resolveGitHooksDirectory(gitRoot) {
+  try {
+    const gitPath2 = (0, import_node_child_process4.execFileSync)("git", ["-C", gitRoot, "rev-parse", "--git-path", "hooks"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"]
+    }).trim();
+    return import_node_path12.default.isAbsolute(gitPath2) ? gitPath2 : import_node_path12.default.resolve(gitRoot, gitPath2);
+  } catch {
+    return null;
+  }
+}
+function ensurePreCommitGuard(gitRoot) {
+  const hooksDirectory = resolveGitHooksDirectory(gitRoot);
+  if (!hooksDirectory) return;
+  (0, import_node_fs10.mkdirSync)(hooksDirectory, { recursive: true });
+  const guardPath = import_node_path12.default.join(hooksDirectory, HOOK_GUARD_FILENAME);
+  writeIfChanged(
+    guardPath,
+    `#!/bin/sh
+# Managed by Overlord: reject any staged project-link metadata change.
+if git diff --cached --quiet -- .overlord/project.json; then
+  exit 0
+fi
+echo "Overlord blocked this commit: .overlord/project.json is managed metadata and must not be changed." >&2
+exit 1
+`
+  );
+  (0, import_node_fs10.chmodSync)(guardPath, 493);
+  const preCommitPath = import_node_path12.default.join(hooksDirectory, "pre-commit");
+  const hookBlock = `${HOOK_BLOCK_START}
+"$(dirname "$0")/${HOOK_GUARD_FILENAME}" || exit $?
+${HOOK_BLOCK_END}`;
+  if (!(0, import_node_fs10.existsSync)(preCommitPath)) {
+    (0, import_node_fs10.writeFileSync)(preCommitPath, `#!/bin/sh
+${hookBlock}
+`);
+    (0, import_node_fs10.chmodSync)(preCommitPath, 493);
+    return;
+  }
+  const existing = (0, import_node_fs10.readFileSync)(preCommitPath, "utf8");
+  const blockPattern = new RegExp(`${HOOK_BLOCK_START}[\\s\\S]*?${HOOK_BLOCK_END}\\n?`, "g");
+  const updated = `${existing.replace(blockPattern, "").trimEnd()}
+
+${hookBlock}
+`;
+  writeIfChanged(preCommitPath, updated);
+  (0, import_node_fs10.chmodSync)(preCommitPath, 493);
+}
+function protectProjectMetadata(directoryPath) {
+  const gitRoot = resolveGitRoot(directoryPath);
+  const checkoutPath = gitRoot ?? directoryPath;
+  ensureAgentInstructions(checkoutPath);
+  ensureGitignore(checkoutPath);
+  if (gitRoot) ensurePreCommitGuard(gitRoot);
+}
 function parseProjectJson(projectJsonPath) {
   if (!(0, import_node_fs10.existsSync)(projectJsonPath)) return null;
   const parsed = JSON.parse((0, import_node_fs10.readFileSync)(projectJsonPath, "utf8"));
@@ -70263,12 +70363,13 @@ function parseProjectJson(projectJsonPath) {
       (entry) => typeof entry[0] === "string" && entry[0].trim().length > 0 && typeof entry[1] === "string" && entry[1].trim().length > 0
     )
   ) : {};
+  const resourceKey = typeof parsed.resourceKey === "string" && parsed.resourceKey.trim().length > 0 ? parsed.resourceKey.trim() : void 0;
   return {
-    _warning: typeof parsed._warning === "string" ? parsed._warning : "This file is managed by Overlord and is regenerated automatically when this folder is linked as a project resource. Do not edit it manually \u2014 manual changes will be overwritten.",
+    _warning: typeof parsed._warning === "string" ? parsed._warning : PROJECT_JSON_WARNING,
     version: typeof parsed.version === "number" ? parsed.version : 1,
     projectId: parsed.projectId,
     resourceId: parsed.resourceId,
-    resourceKey: typeof parsed.resourceKey === "string" && parsed.resourceKey.trim().length > 0 ? parsed.resourceKey.trim() : void 0,
+    ...resourceKey ? { resourceKey } : {},
     resourceIdsByExecutionTarget,
     isPrimary: parsed.isPrimary === true,
     linkedAt: typeof parsed.linkedAt === "string" ? parsed.linkedAt : nowIso()
@@ -70299,6 +70400,7 @@ function writeProjectJson({
   (0, import_node_fs10.mkdirSync)(overlordDir, { recursive: true });
   (0, import_node_fs10.mkdirSync)(import_node_path12.default.join(overlordDir, "tmp"), { recursive: true });
   (0, import_node_fs10.mkdirSync)(import_node_path12.default.join(overlordDir, "logs"), { recursive: true });
+  protectProjectMetadata(directoryPath);
   const projectJsonPath = import_node_path12.default.join(overlordDir, "project.json");
   const existing = readProjectJsonLink(projectJsonPath);
   const resourceIdsByExecutionTarget = {
@@ -70311,7 +70413,7 @@ function writeProjectJson({
     projectJsonPath,
     `${JSON.stringify(
       {
-        _warning: "This file is managed by Overlord and is regenerated automatically when this folder is linked as a project resource. Do not edit it manually \u2014 manual changes will be overwritten.",
+        _warning: PROJECT_JSON_WARNING,
         version: PROJECT_JSON_VERSION,
         projectId,
         resourceId,
@@ -70327,14 +70429,28 @@ function writeProjectJson({
   );
   return projectJsonPath;
 }
-var import_node_fs10, import_node_path12, PROJECT_JSON_VERSION;
+var import_node_child_process4, import_node_fs10, import_node_path12, PROJECT_JSON_VERSION, PROJECT_JSON_WARNING, INSTRUCTION_BLOCK_START, INSTRUCTION_BLOCK_END, PROJECT_METADATA_INSTRUCTION, HOOK_GUARD_FILENAME, HOOK_BLOCK_START, HOOK_BLOCK_END;
 var init_project_metadata = __esm({
   "../packages/core/service/local-target/project-metadata.ts"() {
     "use strict";
+    import_node_child_process4 = require("node:child_process");
     import_node_fs10 = require("node:fs");
     import_node_path12 = __toESM(require("node:path"), 1);
     init_util3();
     PROJECT_JSON_VERSION = 2;
+    PROJECT_JSON_WARNING = "STRICTLY PROTECTED: This file is managed exclusively by Overlord. Agents and users must not edit, replace, stage, commit, or delete it. Re-link the resource with Overlord to change it.";
+    INSTRUCTION_BLOCK_START = "<!-- OVERLORD PROJECT METADATA PROTECTION: START -->";
+    INSTRUCTION_BLOCK_END = "<!-- OVERLORD PROJECT METADATA PROTECTION: END -->";
+    PROJECT_METADATA_INSTRUCTION = `${INSTRUCTION_BLOCK_START}
+## Overlord project metadata \u2014 do not edit
+
+\`.overlord/project.json\` is exclusively managed by Overlord. Do not edit,
+replace, stage, commit, delete, or revert it. If its link metadata needs to
+change, use Overlord's resource-linking command instead.
+${INSTRUCTION_BLOCK_END}`;
+    HOOK_GUARD_FILENAME = "overlord-project-json-guard";
+    HOOK_BLOCK_START = "# >>> Overlord project metadata guard >>>";
+    HOOK_BLOCK_END = "# <<< Overlord project metadata guard <<<";
   }
 });
 
@@ -73455,10 +73571,10 @@ async function createLocalTargetMutationRequest({
       `INSERT INTO execution_requests
            (id, workspace_id, project_id, mission_id, objective_id, execution_target_id,
             requested_agent, requested_model, requested_reasoning_effort, launch_mode,
-            launch_flags_json, target_kind, requested_source, idempotency_key, status,
+            launch_flags_json, requested_source, idempotency_key, status,
             requested_by_workspace_user_id, resolved_resource_id, resolved_working_directory,
             metadata_json, created_at, updated_at, revision)
-         VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, NULL, 'run', '{}', 'local', ?, NULL, 'queued', ?, NULL, NULL, ?, ?, ?, 1)`,
+         VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, NULL, 'run', '{}', ?, NULL, 'queued', ?, NULL, NULL, ?, ?, ?, 1)`,
       [
         id,
         ctx.workspace.id,
@@ -133046,10 +133162,10 @@ async function createExecutionRequest({
            (id, workspace_id, project_id, mission_id, objective_id, execution_target_id,
             requested_agent,
             requested_model, requested_reasoning_effort, launch_mode, launch_flags_json,
-            target_kind, requested_source, idempotency_key, status, requested_by_workspace_user_id,
+            requested_source, idempotency_key, status, requested_by_workspace_user_id,
             resolved_resource_id, resolved_working_directory, metadata_json,
             created_at, updated_at, revision)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'run', ?, 'local', ?, ?, 'queued', ?, ?, ?, ?, ?, ?, 1)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'run', ?, ?, ?, 'queued', ?, ?, ?, ?, ?, ?, 1)`,
       [
         id,
         ctx.workspace.id,
@@ -143869,7 +143985,7 @@ init_dist();
 var import_node_crypto15 = require("node:crypto");
 
 // sql-studio/sql-studio.ts
-var import_node_child_process4 = require("node:child_process");
+var import_node_child_process5 = require("node:child_process");
 var import_node_fs16 = require("node:fs");
 var import_node_path26 = __toESM(require("node:path"), 1);
 function publicHost(host) {
@@ -143911,7 +144027,7 @@ function startSqlStudio(config4) {
     "sqlite",
     config4.databasePath
   ];
-  const launched = (0, import_node_child_process4.spawn)(binary2, args, {
+  const launched = (0, import_node_child_process5.spawn)(binary2, args, {
     stdio: ["ignore", "pipe", "pipe"]
   });
   let child = launched;
