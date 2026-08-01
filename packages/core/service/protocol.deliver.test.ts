@@ -1,7 +1,4 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
 import { describe, it } from 'node:test';
 
 import { listChangedFilesForReview } from './changes.js';
@@ -16,6 +13,7 @@ import {
   resumeFollowUp,
   updateSession
 } from './protocol.js';
+import { createIsolatedCheckout } from './test-checkout.ts';
 import { createSeededServiceContext } from './test-helpers.js';
 import { nowIso } from './util.js';
 
@@ -298,6 +296,61 @@ describe('deliverSession mechanical change capture', () => {
     await db.close();
   });
 
+  it('does not raise an awaiting-approval event for a blank draft slot after delivery', async () => {
+    const { db, ctx } = await setup();
+    const project = await createProject({ ctx, name: 'Deliver Blank Slot Approval' });
+    const { mission } = await createMissionWithObjectives({
+      ctx,
+      projectId: project.id,
+      objectives: [{ objective: 'Complete current objective' }]
+    });
+    const attached = await attachSession({ ctx, missionId: mission.displayId });
+
+    await deliverSession({
+      ctx,
+      missionId: mission.displayId,
+      sessionKey: attached.sessionKey,
+      summary: 'Delivered current objective.'
+    });
+
+    const approvalEvents = (await ctx.db.all(
+      `SELECT id FROM mission_events WHERE mission_id = ? AND type = 'awaiting_approval'`,
+      [mission.id]
+    )) as Array<{ id: string }>;
+    assert.deepEqual(approvalEvents, []);
+
+    await db.close();
+  });
+
+  it('raises an awaiting-approval event for an authored next objective after delivery', async () => {
+    const { db, ctx } = await setup();
+    const project = await createProject({ ctx, name: 'Deliver Authored Approval' });
+    const { mission } = await createMissionWithObjectives({
+      ctx,
+      projectId: project.id,
+      objectives: [
+        { objective: 'Complete current objective' },
+        { objective: 'Next authored objective' }
+      ]
+    });
+    const attached = await attachSession({ ctx, missionId: mission.displayId });
+
+    await deliverSession({
+      ctx,
+      missionId: mission.displayId,
+      sessionKey: attached.sessionKey,
+      summary: 'Delivered current objective.'
+    });
+
+    const approvalEvents = (await ctx.db.all(
+      `SELECT summary FROM mission_events WHERE mission_id = ? AND type = 'awaiting_approval'`,
+      [mission.id]
+    )) as Array<{ summary: string }>;
+    assert.equal(approvalEvents.length, 1);
+
+    await db.close();
+  });
+
   it('promotes a future objective over a blank draft placeholder after delivery', async () => {
     const { db, ctx } = await setup();
     const project = await createProject({ ctx, name: 'Deliver Future Before Placeholder' });
@@ -307,7 +360,14 @@ describe('deliverSession mechanical change capture', () => {
       objectives: [{ objective: 'Complete current objective' }]
     });
     const attached = await attachSession({ ctx, missionId: mission.displayId });
-    const placeholder = attached.futureObjectives.find(objective => objective.state === 'draft');
+    // Blank slots are withheld from the agent-facing arrays, so read the
+    // placeholder attach created straight from the database.
+    const placeholder = (await ctx.db.get(
+      `SELECT id FROM objectives
+         WHERE mission_id = ? AND state = 'draft' AND TRIM(instruction_text) = ''
+           AND deleted_at IS NULL`,
+      [mission.id]
+    )) as { id: string } | undefined;
     assert.ok(placeholder);
 
     const future = await insertObjective({
@@ -365,7 +425,7 @@ describe('deliverSession mechanical change capture', () => {
     await addProjectResource({
       ctx,
       projectId: project.id,
-      directoryPath: mkdtempSync(path.join(tmpdir(), 'ovld-auto-advance-')),
+      directoryPath: createIsolatedCheckout('ovld-auto-advance-'),
       isPrimary: true
     });
 

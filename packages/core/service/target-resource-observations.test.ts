@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, it } from 'node:test';
@@ -12,6 +12,7 @@ import {
   mergeResourceStatusWithObservation,
   recordTargetResourceObservations
 } from './target-resource-observations.ts';
+import { createIsolatedCheckout } from './test-checkout.ts';
 import { createSeededServiceContext } from './test-helpers.ts';
 import { nowIso } from './util.ts';
 
@@ -27,7 +28,7 @@ describe('target resource observations', () => {
     const { db, ctx } = await createSeededServiceContext({ source: 'cli' });
     const project = await createProject({ ctx, name: 'Observation project' });
     const target = await ensureCallerDeviceTarget({ ctx });
-    const resourceDir = mkdtempSync(path.join(tmpdir(), 'ovld-resource-obs-'));
+    const resourceDir = createIsolatedCheckout('ovld-resource-obs-');
     const now = nowIso();
     const resourceId = 'resource-obs-test';
 

@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, it } from 'node:test';
@@ -15,14 +14,15 @@ import { buildProjectResourceManifest } from './project-resource-manifest.js';
 import { addProjectResource, createProject, resolveObjectiveWorkingDirectory } from './projects.js';
 import { attachSession, deliverSession, loadMissionContext, updateSession } from './protocol.js';
 import { recordTargetResourceObservations } from './target-resource-observations.js';
+import { createIsolatedCheckout } from './test-checkout.ts';
 import { createSeededServiceContext } from './test-helpers.js';
 
 const WORKTREE_ROOT = path.join(tmpdir(), 'ovld-worktrees');
 // A co-located backend derives resource status by observing the checkout on disk,
 // so these have to be directories that actually exist — a placeholder path makes
 // every resource resolve as `missing`.
-const OPENOVERLORD_DIR = mkdtempSync(path.join(tmpdir(), 'overlord-checkout-'));
-const MOBILE_DIR = mkdtempSync(path.join(tmpdir(), 'overlord-mobile-checkout-'));
+const OPENOVERLORD_DIR = createIsolatedCheckout('overlord-checkout-');
+const MOBILE_DIR = createIsolatedCheckout('overlord-mobile-checkout-');
 
 async function seedCrossRepoProject({
   ctx,

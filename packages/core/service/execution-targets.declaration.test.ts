@@ -17,6 +17,7 @@ import {
   resolveClaimingDeviceTarget
 } from './execution-targets.js';
 import { addProjectResource, createProject, discoverProject } from './projects.js';
+import { createIsolatedCheckout } from './test-checkout.ts';
 import { createSeededServiceContext } from './test-helpers.js';
 
 /**
@@ -180,7 +181,7 @@ describe('execution targets are declared, never inferred (contract v38)', () => 
     await addProjectResource({
       ctx,
       projectId: project.id,
-      directoryPath: mkdtempSync(path.join(tmpdir(), 'ovld-linked-checkout-')),
+      directoryPath: createIsolatedCheckout('ovld-linked-checkout-'),
       isPrimary: true
     });
 

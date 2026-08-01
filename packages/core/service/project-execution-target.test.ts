@@ -1,8 +1,5 @@
 import { createSqliteClient, openInMemoryDatabase } from '@overlord/database';
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
 import { describe, it } from 'node:test';
 
 import { createServiceContext } from './context.js';
@@ -26,6 +23,7 @@ import {
   updateWorkspaceExecutionTargetStatus
 } from './project-execution-target.js';
 import { addProjectResource, createProject } from './projects.js';
+import { createIsolatedCheckout } from './test-checkout.ts';
 import { seedServiceOperator } from './test-helpers.js';
 import { newId, nowIso } from './util.js';
 
@@ -127,7 +125,7 @@ describe('project execution target selection', () => {
     const { ctx } = await setup();
     const project = await createProject({ ctx, name: 'Target Select' });
     const caller = await ensureCallerDeviceTarget({ ctx });
-    const resourcePath = mkdtempSync(path.join(tmpdir(), 'ovld-target-select-'));
+    const resourcePath = createIsolatedCheckout('ovld-target-select-');
     await addProjectResource({
       ctx,
       projectId: project.id,
@@ -140,7 +138,7 @@ describe('project execution target selection', () => {
       ctx,
       projectId: project.id,
       executionTargetId: vmTargetId,
-      resourcePath: mkdtempSync(path.join(tmpdir(), 'ovld-target-select-vm-'))
+      resourcePath: createIsolatedCheckout('ovld-target-select-vm-')
     });
 
     const selection = await getProjectExecutionTargetSelection({ ctx, projectId: project.id });
@@ -156,7 +154,7 @@ describe('project execution target selection', () => {
     await addProjectResource({
       ctx,
       projectId: project.id,
-      directoryPath: mkdtempSync(path.join(tmpdir(), 'ovld-launch-target-')),
+      directoryPath: createIsolatedCheckout('ovld-launch-target-'),
       isPrimary: true
     });
     const vmTargetId = await seedSecondTarget(ctx, 'Remote VM');
@@ -164,7 +162,7 @@ describe('project execution target selection', () => {
       ctx,
       projectId: project.id,
       executionTargetId: vmTargetId,
-      resourcePath: mkdtempSync(path.join(tmpdir(), 'ovld-launch-target-vm-'))
+      resourcePath: createIsolatedCheckout('ovld-launch-target-vm-')
     });
 
     await updateProjectExecutionTargetSelection({
@@ -195,7 +193,7 @@ describe('project execution target selection', () => {
     await addProjectResource({
       ctx,
       projectId: project.id,
-      directoryPath: mkdtempSync(path.join(tmpdir(), 'ovld-single-target-')),
+      directoryPath: createIsolatedCheckout('ovld-single-target-'),
       isPrimary: true
     });
     const caller = await ensureCallerDeviceTarget({ ctx });
@@ -219,7 +217,7 @@ describe('project execution target selection', () => {
     await addProjectResource({
       ctx,
       projectId: project.id,
-      directoryPath: mkdtempSync(path.join(tmpdir(), 'ovld-ambiguous-launch-')),
+      directoryPath: createIsolatedCheckout('ovld-ambiguous-launch-'),
       isPrimary: true
     });
     const vmTargetId = await seedSecondTarget(ctx, 'Other VM');
@@ -227,7 +225,7 @@ describe('project execution target selection', () => {
       ctx,
       projectId: project.id,
       executionTargetId: vmTargetId,
-      resourcePath: mkdtempSync(path.join(tmpdir(), 'ovld-ambiguous-launch-vm-'))
+      resourcePath: createIsolatedCheckout('ovld-ambiguous-launch-vm-')
     });
 
     const launch = await resolveLaunchExecutionTarget({ ctx, projectId: project.id });
@@ -241,7 +239,7 @@ describe('project execution target selection', () => {
     await addProjectResource({
       ctx,
       projectId: project.id,
-      directoryPath: mkdtempSync(path.join(tmpdir(), 'ovld-stamped-configs-')),
+      directoryPath: createIsolatedCheckout('ovld-stamped-configs-'),
       isPrimary: true
     });
     const caller = await ensureCallerDeviceTarget({ ctx });
@@ -263,7 +261,7 @@ describe('project execution target selection', () => {
     await addProjectResource({
       ctx,
       projectId: project.id,
-      directoryPath: mkdtempSync(path.join(tmpdir(), 'ovld-explicit-launch-')),
+      directoryPath: createIsolatedCheckout('ovld-explicit-launch-'),
       isPrimary: true
     });
     const target = await ensureCallerDeviceTarget({ ctx });
@@ -298,7 +296,7 @@ describe('project execution target selection', () => {
     await addProjectResource({
       ctx,
       projectId: project.id,
-      directoryPath: mkdtempSync(path.join(tmpdir(), 'ovld-ineligible-')),
+      directoryPath: createIsolatedCheckout('ovld-ineligible-'),
       isPrimary: true
     });
     const orphanTargetId = await seedSecondTarget(ctx, 'Orphan');
@@ -323,7 +321,7 @@ describe('project execution target selection', () => {
     await addProjectResource({
       ctx,
       projectId: project.id,
-      directoryPath: mkdtempSync(path.join(tmpdir(), 'ovld-pref-key-')),
+      directoryPath: createIsolatedCheckout('ovld-pref-key-'),
       isPrimary: true
     });
     const caller = await ensureCallerDeviceTarget({ ctx });
@@ -614,7 +612,7 @@ describe('execution target lifecycle', () => {
       ctx,
       projectId: project.id,
       executionTargetId: staleTargetId,
-      resourcePath: mkdtempSync(path.join(tmpdir(), 'ovld-delete-target-'))
+      resourcePath: createIsolatedCheckout('ovld-delete-target-')
     });
     await updateProjectExecutionTargetSelection({
       ctx,

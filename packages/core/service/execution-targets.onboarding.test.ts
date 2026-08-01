@@ -1,8 +1,5 @@
 import type { DatabaseClient } from '@overlord/database';
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
 import { describe, it } from 'node:test';
 
 import type { ServiceContext } from './context.js';
@@ -17,6 +14,7 @@ import {
 } from './execution-targets.js';
 import { registerActingExecutionTarget } from './project-execution-target.js';
 import { addProjectResource, createProject } from './projects.js';
+import { createIsolatedCheckout } from './test-checkout.ts';
 import { createSeededServiceContext } from './test-helpers.js';
 
 /**
@@ -154,7 +152,7 @@ describe('only intentional acts declare an execution target (contract v39)', () 
         addProjectResource({
           ctx: browser,
           projectId: project.id,
-          directoryPath: mkdtempSync(path.join(tmpdir(), 'ovld-browser-link-')),
+          directoryPath: createIsolatedCheckout('ovld-browser-link-'),
           isPrimary: true
         }),
       isNoTarget

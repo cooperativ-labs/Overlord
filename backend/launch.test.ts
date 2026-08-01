@@ -1,3 +1,4 @@
+import { createIsolatedCheckout } from '@overlord/core/service/test-checkout';
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -24,7 +25,7 @@ after(() => {
 test('launching an objective twice while a request is active returns the same request', async () => {
   const project = await createProject({ name: 'Idempotent Launch Test' });
   await createProjectResource(project.id, {
-    directoryPath: mkdtempSync(path.join(tmpdir(), 'overlord-launch-resource-')),
+    directoryPath: createIsolatedCheckout('overlord-launch-resource-'),
     executionTargetId: null,
     isPrimary: true
   });
@@ -75,7 +76,7 @@ test('launching an objective twice while a request is active returns the same re
 test('parking an active objective to submitted clears its queue and allows launching a sibling', async () => {
   const project = await createProject({ name: 'Disconnect Park Launch Test' });
   await createProjectResource(project.id, {
-    directoryPath: mkdtempSync(path.join(tmpdir(), 'overlord-launch-park-resource-')),
+    directoryPath: createIsolatedCheckout('overlord-launch-park-resource-'),
     executionTargetId: null,
     isPrimary: true
   });
@@ -108,7 +109,7 @@ test('parking an active objective to submitted clears its queue and allows launc
 test('launching ignores stale active requests tied to completed objectives', async () => {
   const project = await createProject({ name: 'Stale Completed Request Launch Test' });
   await createProjectResource(project.id, {
-    directoryPath: mkdtempSync(path.join(tmpdir(), 'overlord-launch-stale-resource-')),
+    directoryPath: createIsolatedCheckout('overlord-launch-stale-resource-'),
     executionTargetId: null,
     isPrimary: true
   });
@@ -152,7 +153,7 @@ test('launching ignores stale active requests tied to completed objectives', asy
 test('launching another objective while one is active is rejected without queueing', async () => {
   const project = await createProject({ name: 'Busy Mission Launch Test' });
   await createProjectResource(project.id, {
-    directoryPath: mkdtempSync(path.join(tmpdir(), 'overlord-launch-busy-resource-')),
+    directoryPath: createIsolatedCheckout('overlord-launch-busy-resource-'),
     executionTargetId: null,
     isPrimary: true
   });
@@ -229,7 +230,7 @@ test('launchObjective stamps an explicit execution target and rejects an ineligi
     // Omitted, not null: an omitted target on a local checkout is the
     // machine-local declaration (contract v39). An explicit null would write a
     // project-global source and declare nothing.
-    directoryPath: mkdtempSync(path.join(tmpdir(), 'overlord-launch-override-')),
+    directoryPath: createIsolatedCheckout('overlord-launch-override-'),
     isPrimary: true
   });
   const target = db

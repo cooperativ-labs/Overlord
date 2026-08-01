@@ -134,16 +134,17 @@ describe('protocol objective creation', () => {
 
     assert.equal(attached.objective.state, 'executing');
     assert.equal(attached.previousObjectives.length, 0);
-    assert.equal(attached.futureObjectives.length, 1);
+    // The blank slot is created for the UI but withheld from the agent, which
+    // would otherwise read it as a real objective awaiting approval.
+    assert.equal(attached.futureObjectives.length, 0);
 
-    const draft = attached.futureObjectives.find(objective => objective.state === 'draft');
-    assert.ok(draft);
-    assert.equal(draft.objective, '');
-    assert.equal(draft.title, 'New objective');
-
-    const draftRow = (await ctx.db.get(`SELECT assigned_agent FROM objectives WHERE id = ?`, [
-      draft.id
-    ])) as { assigned_agent: string | null };
+    const draftRow = (await ctx.db.get(
+      `SELECT instruction_text, title, assigned_agent FROM objectives
+         WHERE mission_id = ? AND state = 'draft' AND deleted_at IS NULL`,
+      [mission.id]
+    )) as { instruction_text: string; title: string; assigned_agent: string | null };
+    assert.equal(draftRow.instruction_text, '');
+    assert.equal(draftRow.title, 'New objective');
     assert.equal(draftRow.assigned_agent, 'claude');
 
     await db.close();
@@ -222,6 +223,42 @@ describe('protocol objective creation', () => {
     await db.close();
   });
 
+  it('excludes blank objective slots from the objective list handed to the agent', async () => {
+    const { db, ctx } = await createSeededServiceContext({ source: 'protocol' });
+    const project = await createProject({ ctx, name: 'Blank Slot Exclusion' });
+    const { mission, objectives } = await createMissionWithObjectives({
+      ctx,
+      projectId: project.id,
+      objectives: [
+        { objective: 'Already finished work' },
+        { objective: 'Work to do now' },
+        { objective: 'Real queued follow-up' }
+      ]
+    });
+
+    await ctx.db.run(`UPDATE objectives SET state = 'complete' WHERE id = ?`, [objectives[0]?.id]);
+    await ctx.db.run(`UPDATE objectives SET state = 'submitted' WHERE id = ?`, [objectives[1]?.id]);
+    // A blank slot is an input placeholder, not planned work.
+    await ctx.db.run(`UPDATE objectives SET instruction_text = '' WHERE id = ?`, [
+      objectives[0]?.id
+    ]);
+
+    const attached = await attachSession({
+      ctx,
+      missionId: mission.displayId,
+      agentIdentifier: 'codex'
+    });
+
+    assert.equal(attached.objective.id, objectives[1]?.id);
+    assert.deepEqual(attached.previousObjectives, []);
+    assert.deepEqual(
+      attached.futureObjectives.map(objective => objective.objective),
+      ['Real queued follow-up']
+    );
+
+    await db.close();
+  });
+
   it('splits completed prior work into previousObjectives, excluding the current objective', async () => {
     const { db, ctx } = await createSeededServiceContext({ source: 'protocol' });
     const project = await createProject({ ctx, name: 'Attach Previous Split' });
@@ -249,9 +286,9 @@ describe('protocol objective creation', () => {
       attached.previousObjectives.map(objective => objective.id),
       [objectives[0]?.id]
     );
-    // A fresh draft is created after the current objective -> futureObjectives.
-    assert.equal(attached.futureObjectives.length, 1);
-    assert.equal(attached.futureObjectives[0]?.state, 'draft');
+    // A fresh blank draft is created after the current objective, but blank
+    // slots are not planned work and never reach the agent.
+    assert.equal(attached.futureObjectives.length, 0);
 
     // The current objective never appears in either array.
     assert.ok(!attached.previousObjectives.some(o => o.id === attached.objective.id));

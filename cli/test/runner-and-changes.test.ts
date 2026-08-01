@@ -11,6 +11,7 @@ import {
 import { createMissionWithObjectives } from '@overlord/core/service/missions';
 import { addProjectResource, createProject } from '@overlord/core/service/projects';
 import { attachSession, deliverSession, updateSession } from '@overlord/core/service/protocol';
+import { createIsolatedCheckout } from '@overlord/core/service/test-checkout';
 import { newId } from '@overlord/core/service/util';
 import assert from 'node:assert/strict';
 import { rmSync } from 'node:fs';
@@ -54,7 +55,7 @@ test('execution request queue rejects when no primary resource is linked', async
 test('execution request queue rejects when the primary resource path is missing', async () => {
   const { db, ctx } = await createContext();
   const project = await createProject({ ctx, name: 'Missing Primary Path Test' });
-  const resourcePath = path.join(process.cwd(), '.overlord-missing-primary-test');
+  const resourcePath = path.join(createIsolatedCheckout('ovld-missing-primary-'), 'linked');
   await addProjectResource({
     ctx,
     projectId: project.id,
@@ -92,7 +93,7 @@ test('execution request queue rejects when the primary resource path is missing'
 test('claiming a queued request fails when the primary resource is missing', async () => {
   const { db, ctx } = await createContext();
   const project = await createProject({ ctx, name: 'Claim Missing Primary Test' });
-  const resourcePath = path.join(process.cwd(), '.overlord-missing-primary-claim-test');
+  const resourcePath = path.join(createIsolatedCheckout('ovld-missing-primary-claim-'), 'linked');
   await addProjectResource({
     ctx,
     projectId: project.id,
@@ -133,10 +134,11 @@ test('claiming a queued request fails when the primary resource is missing', asy
 test('execution request queue can create, claim, launch, and clear active requests', async () => {
   const { db, ctx } = await createContext();
   const project = await createProject({ ctx, name: 'Runner Test' });
+  const workingDirectory = createIsolatedCheckout('ovld-runner-');
   await addProjectResource({
     ctx,
     projectId: project.id,
-    directoryPath: process.cwd(),
+    directoryPath: workingDirectory,
     isPrimary: true
   });
   const { mission, objectives } = await createMissionWithObjectives({
@@ -168,7 +170,7 @@ test('execution request queue can create, claim, launch, and clear active reques
   const claimed = await claimNextExecutionRequest({ ctx });
   assert.ok(claimed);
   assert.equal(claimed.status, 'claimed');
-  assert.equal(claimed.workingDirectory, process.cwd());
+  assert.equal(claimed.workingDirectory, workingDirectory);
   assert.ok(claimed.claimedByDeviceId);
   assert.ok(claimed.claimedByExecutionTargetId);
   assert.ok(claimed.claimExpiresAt);
@@ -214,10 +216,11 @@ test('execution request queue can create, claim, launch, and clear active reques
 test('execution request state machine rejects illegal launch transitions', async () => {
   const { db, ctx } = await createContext();
   const project = await createProject({ ctx, name: 'Runner Illegal Transition Test' });
+  const workingDirectory = createIsolatedCheckout('ovld-runner-');
   await addProjectResource({
     ctx,
     projectId: project.id,
-    directoryPath: process.cwd(),
+    directoryPath: workingDirectory,
     isPrimary: true
   });
   const { mission, objectives } = await createMissionWithObjectives({
@@ -248,10 +251,11 @@ test('execution request state machine rejects illegal launch transitions', async
 test('stale claims expire with event and change records', async () => {
   const { db, ctx } = await createContext();
   const project = await createProject({ ctx, name: 'Runner Claim Expiry Test' });
+  const workingDirectory = createIsolatedCheckout('ovld-runner-');
   await addProjectResource({
     ctx,
     projectId: project.id,
-    directoryPath: process.cwd(),
+    directoryPath: workingDirectory,
     isPrimary: true
   });
   const { mission, objectives } = await createMissionWithObjectives({
@@ -288,10 +292,11 @@ test('stale claims expire with event and change records', async () => {
 test('launched requests expire when no agent attaches before the deadline', async () => {
   const { db, ctx } = await createContext();
   const project = await createProject({ ctx, name: 'Runner Launch Expiry Test' });
+  const workingDirectory = createIsolatedCheckout('ovld-runner-');
   await addProjectResource({
     ctx,
     projectId: project.id,
-    directoryPath: process.cwd(),
+    directoryPath: workingDirectory,
     isPrimary: true
   });
   const { mission, objectives } = await createMissionWithObjectives({
@@ -332,10 +337,11 @@ test('launched requests expire when no agent attaches before the deadline', asyn
 test('a launched request linked to a session is not expired', async () => {
   const { db, ctx } = await createContext();
   const project = await createProject({ ctx, name: 'Runner Launch Linked Test' });
+  const workingDirectory = createIsolatedCheckout('ovld-runner-');
   await addProjectResource({
     ctx,
     projectId: project.id,
-    directoryPath: process.cwd(),
+    directoryPath: workingDirectory,
     isPrimary: true
   });
   const { mission, objectives } = await createMissionWithObjectives({
@@ -379,10 +385,11 @@ test('a launched request linked to a session is not expired', async () => {
 test('attach links a launched execution request to the created session', async () => {
   const { db, ctx } = await createContext();
   const project = await createProject({ ctx, name: 'Attach Request Link Test' });
+  const workingDirectory = createIsolatedCheckout('ovld-runner-');
   await addProjectResource({
     ctx,
     projectId: project.id,
-    directoryPath: process.cwd(),
+    directoryPath: workingDirectory,
     isPrimary: true
   });
   const { mission, objectives } = await createMissionWithObjectives({
@@ -420,10 +427,11 @@ test('attach links a launched execution request to the created session', async (
 test('runner does not claim a queued request for a soft-deleted objective', async () => {
   const { db, ctx } = await createContext();
   const project = await createProject({ ctx, name: 'Deleted Objective Test' });
+  const workingDirectory = createIsolatedCheckout('ovld-runner-');
   await addProjectResource({
     ctx,
     projectId: project.id,
-    directoryPath: process.cwd(),
+    directoryPath: workingDirectory,
     isPrimary: true
   });
   const { mission, objectives } = await createMissionWithObjectives({
@@ -456,10 +464,11 @@ test('runner does not claim a queued request for a soft-deleted objective', asyn
 test('delivery auto-advance queues next objective when enabled', async () => {
   const { db, ctx } = await createContext();
   const project = await createProject({ ctx, name: 'Auto Advance Test' });
+  const workingDirectory = createIsolatedCheckout('ovld-runner-');
   await addProjectResource({
     ctx,
     projectId: project.id,
-    directoryPath: process.cwd(),
+    directoryPath: workingDirectory,
     isPrimary: true
   });
   const { mission, objectives } = await createMissionWithObjectives({
@@ -518,10 +527,11 @@ test('delivery auto-advance queues next objective when enabled', async () => {
 test('delivery auto-advance keeps the next objective explicit agent', async () => {
   const { db, ctx } = await createContext();
   const project = await createProject({ ctx, name: 'Auto Advance Explicit Agent' });
+  const workingDirectory = createIsolatedCheckout('ovld-runner-');
   await addProjectResource({
     ctx,
     projectId: project.id,
-    directoryPath: process.cwd(),
+    directoryPath: workingDirectory,
     isPrimary: true
   });
   const { mission, objectives } = await createMissionWithObjectives({

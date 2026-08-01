@@ -1,7 +1,4 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
 import { describe, it } from 'node:test';
 
 import { createExecutionRequest } from './execution-requests.js';
@@ -13,13 +10,14 @@ import {
   createProject,
   resolveObjectiveWorkingDirectory
 } from './projects.js';
+import { createIsolatedCheckout } from './test-checkout.ts';
 import { createSeededServiceContext } from './test-helpers.js';
 
 // A co-located backend derives resource status by observing the checkout on disk,
 // so a bound resource has to point at a directory that actually exists — a
 // placeholder path resolves as `missing` and fails connection assertions.
 function checkoutDir(prefix: string): string {
-  return mkdtempSync(path.join(tmpdir(), `${prefix}-`));
+  return createIsolatedCheckout(`${prefix}-`);
 }
 
 describe('objective resource binding', () => {

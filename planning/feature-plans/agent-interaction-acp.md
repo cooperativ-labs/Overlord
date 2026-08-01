@@ -122,7 +122,8 @@ must say so. “Sent” must never be presented as “the model saw it.”
 
 ### 1.6 How is the race between a remote answer and the terminal handled?
 
-**Answer: use an explicit remote-decision window, then hand off to the terminal.**
+**Answer: remote-first inside a bounded window, then a one-way handoff to the
+terminal — but the window length is driven by human presence, not by a constant.**
 
 The old plan said “first answer wins.” That overclaims what the harness APIs can
 observe. For a native permission prompt, the harness runs the blocking hook
@@ -142,6 +143,110 @@ approved or denied it locally.
 
 For `ovld protocol ask --wait`, there is no simultaneous terminal dialog. The
 CLI subprocess is the waiter, so revision CAS is sufficient.
+
+#### 1.6.1 Why the order cannot be reversed
+
+A “terminal gets the first two minutes, then remote takes over” design is not a
+policy we are choosing against. The mechanism forecloses it.
+
+The remote window exists only because the hook is _still blocked_. The hook is
+the sole moment at which Overlord can supply a decision, and it is a single
+call/response: the adapter is invoked, it may block, and it returns exactly one
+verdict. Returning “no decision” to let the terminal go first ends the hook.
+Once it has ended:
+
+- the harness draws its own dialog and blocks the session inside its TUI event
+  loop;
+- there is no further hook, callback, or API by which a late remote answer can
+  be delivered into that dialog; and
+- Overlord holds no stdio and no terminal pane (§2), so it cannot type into it
+  either.
+
+Reversal therefore does not delay the remote path, it deletes it. The two-minute
+grace would be followed by an interval in which the web/mobile controls are
+visible but unable to affect anything — precisely the dead end this feature
+exists to remove.
+
+The obvious workaround — return “deny” to dismiss the native dialog, then
+re-request remotely — is worse. A denial is reported to the model as a refusal
+and typically changes what it does next; it is not a neutral “ask again later.”
+
+#### 1.6.2 What the terminal user actually sees during the window
+
+They do not see a dialog they could answer. In Claude Code the TUI renders a
+`running <hook> hook…` spinner for the duration; the permission prompt is drawn
+only after the hook returns. So during the remote window there is nothing to
+respond to locally, and the interactive cost is not “a competing prompt” but
+“the session appears to stall.”
+
+That reframes the tradeoff. The window is not remote-vs-terminal contention; it
+is purely a question of _how long a present user is willing to watch a
+spinner_. Two minutes is far too long for someone at the keyboard and far too
+short for someone at lunch — which is exactly why a single constant is the wrong
+control.
+
+#### 1.6.3 Presence-driven window
+
+Set the window from evidence about where the human is:
+
+| Signal at request creation                                  | Window                                                               |
+| ----------------------------------------------------------- | -------------------------------------------------------------------- |
+| Local input activity within the last ~60s (user is present) | Short — default 30s, then release to the terminal                    |
+| No recent local activity, or no presence source available   | Long — default 30 min, bounded by the configured hook timeout        |
+| A remote client opens/views the request during the window   | Extend to the long window (a human is demonstrably engaged remotely) |
+
+Rationale for each branch:
+
+- A present user loses at most a few seconds before their normal prompt appears,
+  and gains the remote path for free when they walk away mid-run.
+- For an absent user, releasing to the terminal is strictly worse than waiting:
+  the native dialog blocks the agent until they return anyway, and the release
+  destroys the only channel that could have unblocked it. Holding the hook costs
+  nothing that was not already lost.
+- View-based extension is the cheap, honest version of “the user is handling it
+  remotely.” It requires no new presence source; it uses the request-read
+  receipt the mobile/web client already has to send.
+
+Presence source: Overlord Desktop can report system idle time (Electron
+`powerMonitor.getSystemIdleTime()`) on its existing device heartbeat, and the
+launch sentinel (§2.3) can forward it for that device. When no presence source
+is available — headless targets, AgentPod, a machine with no desktop app — the
+correct default is the long window, because an unattended target is the
+away case by definition.
+
+Both defaults are project-level settings, not constants, and both are bounded
+above by the adapter's configured hook timeout so the harness never aborts the
+hook out from under us.
+
+#### 1.6.4 What if they do try to respond in the terminal?
+
+Three cases, all of which must be explicit rather than emergent:
+
+1. **They return to the keyboard during a long window.** Local activity is a
+   release trigger, not just an initial input. The desktop heartbeat reporting a
+   transition from idle to active causes the backend to mark the open request
+   `released_to_terminal`; the adapter's next long-poll response tells it to
+   return no decision, and the native prompt appears within one poll interval
+   (target ≤2s). Touching the machine collapses the window. This is the direct
+   answer to the reversal request: the user does get terminal-first behavior
+   whenever they are actually at the terminal, without giving up the remote path
+   when they are not.
+2. **They press the interrupt key during the hook.** Treat this as cancellation
+   of the operation, not as a local approval. The request moves to `cancelled`,
+   a late remote resolution is rejected by revision CAS, and the UI shows
+   `cancelled (interrupted locally)` rather than a stale open control. The exact
+   harness behavior on interrupt during a blocking hook must be captured as a
+   recorded fixture in Phase 0 before Phase 3 relies on it; the state machine is
+   correct either way, but the observed-outcome labelling depends on what the
+   harness reports.
+3. **They answer the native dialog after release.** Remote controls are already
+   disabled. If the harness later emits an event proving the outcome, record it
+   as `resolution_observed`; if not, the request stays `released_to_terminal`
+   with an unknown local outcome. Never infer the local answer.
+
+A user who wants terminal-first unconditionally should get it as a setting —
+project-level `remote_permission_window = 0` — rather than as a reversed default
+that cannot deliver the second half of its promise.
 
 ### 1.7 Who may send instructions and approve tools remotely?
 
@@ -224,6 +329,14 @@ The sentinel does not parse output and does not claim inputs. Closing the
 terminal kills it; if its exit report is lost, the backend channel lease
 expires. This gives honest process/channel presence without turning a runner
 registration into a session address.
+
+The sentinel heartbeat is also the natural carrier for the human-presence signal
+that sizes the remote permission window (§1.6.3): when Overlord Desktop is
+running on that device it can attach a coarse system idle time
+(`powerMonitor.getSystemIdleTime()`), bucketed rather than exact. Presence is
+advisory only — it changes how long Overlord waits before handing a decision
+back to the terminal, and never changes what a decision means. Its absence is
+treated as “away,” which is the safe default for headless and AgentPod targets.
 
 ---
 
@@ -419,6 +532,8 @@ Suggested fields:
 | `status`                                                | `open`, `resolved`, `released_to_terminal`, `expired`, `cancelled` |
 | `resolution_json`, `resolved_by_workspace_user_id`      | Human decision and attribution                                     |
 | `resolved_at`, `expires_at`, `revision`                 | CAS and lifetime                                                   |
+| `window_expires_at`, `window_basis`                     | Presence-driven remote window and why it was chosen (§1.6.3)       |
+| `first_viewed_at`, `released_reason`                    | View extension; `timeout`, `local_activity`, `policy`              |
 | `application_state`                                     | `pending`, `emitted`, `applied`, `not_applied`, `unknown`          |
 | `application_observed_at`                               | Adapter acknowledgement when available                             |
 
@@ -464,11 +579,15 @@ For Claude and Codex today:
 
 - allow once and deny are supported;
 - no decision means fall through to the normal terminal prompt;
-- a local timeout is shorter than the harness hook timeout;
+- the adapter's remote window is presence-driven (§1.6.3) and is always bounded
+  below the harness hook timeout, so the harness never aborts the hook first;
+- while blocked, the adapter long-polls, so a release triggered by local
+  activity surfaces the native prompt within one poll interval rather than at
+  window expiry;
 - timeout, backend error, missing channel, or auth error never grants
   permission; and
 - remote resolution is disabled when the request becomes
-  `released_to_terminal`.
+  `released_to_terminal` or `cancelled`.
 
 If a later tool/permission event proves the decision took effect, the adapter
 sets `application_state = applied`. Otherwise it remains `emitted` or
@@ -754,6 +873,8 @@ Each phase is independently testable and does not require mission widgets.
 - Make failures observable in bounded `~/.ovld/logs` diagnostics.
 - Add setup/doctor checks for hook trust, executability, native version, and
   command existence.
+- Record fixtures for what each harness does when the user interrupts during a
+  blocking permission hook, since §1.6.4 case 2 labels the outcome from that.
 
 **Outcome:** the shipped manifests describe reality before new behavior relies
 on them.
@@ -783,7 +904,8 @@ transcript mirroring.
 
 ### Phase 3 — Remote permission decisions
 
-- Implement the bounded remote window and terminal handoff.
+- Implement the presence-driven remote window, view-based extension, and one-way
+  terminal handoff, including early release on local activity.
 - Add Claude and Codex permission translators.
 - Add project opt-in, RBAC, audit, and allow-once/deny policy.
 - Reconcile `application_state` from later native events where possible.
@@ -921,6 +1043,25 @@ Rejected as a universal claim. Native prompts generally appear only after hooks
 return, and some harnesses cannot report the eventual terminal decision. The
 bounded remote window plus explicit terminal handoff is observable and honest.
 
+### Terminal-first window, then remote (reversed order)
+
+Rejected because it is unimplementable, not merely undesirable. Overlord can
+only supply a decision while the permission hook is blocked, and letting the
+terminal go first requires returning from that hook — after which the harness
+draws its own dialog and there is no remaining path for a late remote answer
+(§1.6.1). The reversed design would show remote controls that cannot act.
+
+The underlying goal — a user away from the machine answering asynchronously,
+without a present user being made to wait — is met instead by the presence-driven
+window in §1.6.3 plus early release on local activity in §1.6.4.
+
+### A single fixed remote window for every request
+
+Rejected because the correct wait depends entirely on whether a human is at the
+terminal. Any constant is simultaneously too long for a present user watching a
+hook spinner and too short for an absent one. `remote_permission_window = 0`
+remains available as an explicit terminal-first opt-out.
+
 ### One table/endpoint per native hook
 
 Rejected because it leaks harness vocabulary into core, duplicates request
@@ -948,20 +1089,24 @@ An implementation following this plan is complete only when:
 6. duplicate and out-of-order adapter events are safe and diagnosable;
 7. a remote permission timeout always falls through to the terminal without
    allowing the action;
-8. web/terminal permission races use explicit release semantics;
-9. precise provider failures appear only for adapters that declare and prove
-   them;
-10. raw transcripts, credentials, tool bodies, and file contents are absent
+8. web/terminal permission races use explicit release semantics, and a request
+   released to the terminal can never afterwards be resolved remotely;
+9. local input activity during an open remote window releases the request to
+   the terminal within one adapter poll interval, and a local interrupt marks
+   it cancelled rather than approved;
+10. precise provider failures appear only for adapters that declare and prove
+    them;
+11. raw transcripts, credentials, tool bodies, and file contents are absent
     from database rows, logs, realtime DTOs, and push payloads;
-11. ended/lost sessions reject new instructions;
-12. Local SQLite and Cloud Postgres pass equivalent service/state-machine tests;
-13. connector conformance tests use recorded native fixtures for every claimed
+12. ended/lost sessions reject new instructions;
+13. Local SQLite and Cloud Postgres pass equivalent service/state-machine tests;
+14. connector conformance tests use recorded native fixtures for every claimed
     event and decision output;
-14. setup/doctor detects missing, disabled, untrusted, stale, and unsupported
+15. setup/doctor detects missing, disabled, untrusted, stale, and unsupported
     hooks;
-15. manual local, queued local, adopted AgentPod, and virtual-target launches
+16. manual local, queued local, adopted AgentPod, and virtual-target launches
     all bind the same logical session-channel contract; and
-16. the mission still completes only through normal protocol delivery.
+17. the mission still completes only through normal protocol delivery.
 
 ---
 
@@ -972,11 +1117,16 @@ These do not block architecture or Phase 0/1:
 1. **Remote permission default.** Recommendation: workspace-disabled by
    default, workspace admin enables the ceiling, project owner enables the
    project, and only allow-once/deny ship initially.
-2. **Detailed event retention.** Recommendation: 90 days for non-tool session
+2. **Remote permission window lengths.** Recommendation: 30s when local activity
+   was seen within the last 60s, 30 min otherwise, extended to the long value
+   once a remote client views the request, with `0` available as an explicit
+   terminal-first opt-out and every value capped below the adapter's hook
+   timeout. See §1.6.3.
+3. **Detailed event retention.** Recommendation: 90 days for non-tool session
    events and 7 days for optional tool metadata, with mission projections and
    request/input audit retained normally.
-3. **Tool telemetry default.** Recommendation: off, with metadata-only opt-in.
-4. **Input grace period on a degraded channel.** Recommendation: reject when
+4. **Tool telemetry default.** Recommendation: off, with metadata-only opt-in.
+5. **Input grace period on a degraded channel.** Recommendation: reject when
    already `lost`; allow a visibly queued input for up to two missed heartbeat
    intervals while `degraded`, then expire it without emission.
 

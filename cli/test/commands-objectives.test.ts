@@ -1,6 +1,6 @@
+import { createIsolatedCheckout } from '@overlord/core/service/test-checkout';
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 
@@ -67,7 +67,7 @@ test('ovld create sends objectives-json as one REST array payload', async () => 
 });
 
 test('ovld add-cwd writes local project metadata after resource creation', async () => {
-  const directory = mkdtempSync(path.join(tmpdir(), 'ovld-add-cwd-'));
+  const directory = createIsolatedCheckout('ovld-add-cwd-');
   const posts: Array<{ path: string; body: unknown }> = [];
   const runtime = {
     backend: {
@@ -135,7 +135,7 @@ test('ovld add-cwd writes local project metadata after resource creation', async
 });
 
 test('ovld add-cwd sends explicit resource key', async () => {
-  const directory = mkdtempSync(path.join(tmpdir(), 'ovld-add-cwd-key-'));
+  const directory = createIsolatedCheckout('ovld-add-cwd-key-');
   const posts: Array<{ path: string; body: unknown }> = [];
   const runtime = {
     backend: {

@@ -1,11 +1,10 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, it } from 'node:test';
 
 import { ensureCallerDeviceTarget } from './execution-targets.js';
 import { addProjectResource, createProject, deriveProjectResourceKey } from './projects.js';
+import { createIsolatedCheckout } from './test-checkout.ts';
 import { createSeededServiceContext } from './test-helpers.js';
 import { newId, nowIso } from './util.js';
 
@@ -136,7 +135,7 @@ describe('addProjectResource', () => {
 
     // Never point a test resource at the real checkout: addProjectResource
     // writes .overlord/project.json into the directory it links.
-    const addedDir = mkdtempSync(path.join(tmpdir(), 'ovld-added-'));
+    const addedDir = createIsolatedCheckout('ovld-added-');
     const added = await addProjectResource({
       ctx,
       projectId: project.id,

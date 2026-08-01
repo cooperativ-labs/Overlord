@@ -2,6 +2,10 @@ import { createSqliteClient, type DatabaseClient, openInMemoryDatabase } from '@
 
 import { createServiceContext, type ServiceContext } from './context.js';
 
+// Re-exported so the common `test-helpers` import also covers resource-directory
+// isolation; see ./test-checkout.ts for why linking an in-repo path is unsafe.
+export { createIsolatedCheckout } from './test-checkout.js';
+
 /**
  * Seeds the minimal operator chain service tests need. Fresh in-memory
  * databases no longer contain an implicit `local-workspace` row (the

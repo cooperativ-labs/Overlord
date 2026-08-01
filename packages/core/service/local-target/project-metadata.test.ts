@@ -1,16 +1,16 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, it } from 'node:test';
+
+import { createIsolatedCheckout } from '../test-checkout.ts';
 
 import { readProjectJsonLink, writeProjectJson } from './project-metadata.ts';
 
 describe('project metadata', () => {
   it('protects generated metadata with instructions, narrow ignores, and a pre-commit guard', () => {
-    const directory = mkdtempSync(path.join(tmpdir(), 'ovld-project-json-protected-'));
-    execFileSync('git', ['init', '--quiet', directory]);
+    const directory = createIsolatedCheckout('ovld-project-json-protected-');
     writeFileSync(path.join(directory, 'AGENTS.md'), '# Existing agent instructions\n');
     writeFileSync(path.join(directory, 'CLAUDE.md'), '# Existing Claude instructions\n');
 
@@ -63,7 +63,7 @@ describe('project metadata', () => {
   });
 
   it('reads legacy single-resource metadata', () => {
-    const directory = mkdtempSync(path.join(tmpdir(), 'ovld-project-json-legacy-'));
+    const directory = createIsolatedCheckout('ovld-project-json-legacy-');
     const overlordDir = path.join(directory, '.overlord');
     const projectJsonPath = path.join(overlordDir, 'project.json');
 
@@ -91,7 +91,7 @@ describe('project metadata', () => {
   });
 
   it('merges resource ids across execution targets and resolves the preferred target', () => {
-    const directory = mkdtempSync(path.join(tmpdir(), 'ovld-project-json-multi-'));
+    const directory = createIsolatedCheckout('ovld-project-json-multi-');
     const projectJsonPath = writeProjectJson({
       directoryPath: directory,
       projectId: 'project-1',

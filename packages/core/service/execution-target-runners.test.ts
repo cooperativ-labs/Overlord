@@ -1,8 +1,5 @@
 import type { DatabaseClient } from '@overlord/database';
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
 import { describe, it } from 'node:test';
 
 import type { ServiceContext } from './context.js';
@@ -18,6 +15,7 @@ import { ensureCallerDeviceTarget, NO_EXECUTION_TARGET_REGISTERED } from './exec
 import { createMissionWithObjectives } from './missions.js';
 import { listEligibleProjectExecutionTargets } from './project-execution-target.js';
 import { addProjectResource, createProject } from './projects.js';
+import { createIsolatedCheckout } from './test-checkout.ts';
 import { createSeededServiceContext } from './test-helpers.js';
 import { newId, nowIso } from './util.js';
 
@@ -74,7 +72,7 @@ async function seedQueuedRequest(ctx: ServiceContext, name: string): Promise<str
   await addProjectResource({
     ctx,
     projectId: project.id,
-    directoryPath: mkdtempSync(path.join(tmpdir(), 'ovld-runner-target-')),
+    directoryPath: createIsolatedCheckout('ovld-runner-target-'),
     isPrimary: true
   });
   const { mission, objectives } = await createMissionWithObjectives({
@@ -370,7 +368,7 @@ describe('local reachability follows runners, with a compatible rollout (contrac
     await addProjectResource({
       ctx,
       projectId: project.id,
-      directoryPath: mkdtempSync(path.join(tmpdir(), 'ovld-reachability-')),
+      directoryPath: createIsolatedCheckout('ovld-reachability-'),
       isPrimary: true
     });
     const host = await resolveRunnerTarget({ ctx, input: {} });

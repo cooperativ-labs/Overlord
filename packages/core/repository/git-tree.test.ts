@@ -43,7 +43,11 @@ test('readRepositoryTree returns tracked and untracked file structure', () => {
 });
 
 test('readRepositoryTree reports non-git directories', () => {
-  const dir = mkdtempSync(path.join(os.tmpdir(), 'overlord-not-git-'));
+  // This case needs a directory with no enclosing git repository at all, so it
+  // cannot use `os.tmpdir()`: Overlord pins TMPDIR to `<project>/.overlord/tmp`
+  // when it launches an agent, which would put the directory inside this
+  // checkout and make `readRepositoryTree` resolve a git root after all.
+  const dir = mkdtempSync(path.join(realpathSync('/tmp'), 'overlord-not-git-'));
   try {
     assert.throws(
       () => readRepositoryTree(dir),

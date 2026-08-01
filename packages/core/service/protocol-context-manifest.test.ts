@@ -1,13 +1,11 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
 import { describe, it } from 'node:test';
 
 import { createMissionWithObjectives } from './missions.js';
 import { buildProjectResourceManifestEntries } from './project-resource-manifest.js';
 import { addProjectResource, createProject } from './projects.js';
 import { attachSession, loadMissionContext, updateSession } from './protocol.js';
+import { createIsolatedCheckout } from './test-checkout.ts';
 import { createSeededServiceContext } from './test-helpers.js';
 
 describe('protocol context manifest', () => {
@@ -37,8 +35,8 @@ describe('protocol context manifest', () => {
   it('loadMissionContext includes projectResources and instructions for multi-resource projects', async () => {
     const { db, ctx } = await createSeededServiceContext();
     const project = await createProject({ ctx, name: 'Multi Repo Project' });
-    const backendDir = mkdtempSync(path.join(tmpdir(), 'ovld-backend-'));
-    const mobileDir = mkdtempSync(path.join(tmpdir(), 'ovld-mobile-'));
+    const backendDir = createIsolatedCheckout('ovld-backend-');
+    const mobileDir = createIsolatedCheckout('ovld-mobile-');
 
     await addProjectResource({
       ctx,
@@ -78,7 +76,7 @@ describe('protocol context manifest', () => {
     await addProjectResource({
       ctx,
       projectId: project.id,
-      directoryPath: mkdtempSync(path.join(tmpdir(), 'ovld-single-')),
+      directoryPath: createIsolatedCheckout('ovld-single-'),
       isPrimary: true
     });
 
@@ -104,7 +102,7 @@ describe('protocol context manifest', () => {
     const resource = await addProjectResource({
       ctx,
       projectId: project.id,
-      directoryPath: mkdtempSync(path.join(tmpdir(), 'ovld-fallback-')),
+      directoryPath: createIsolatedCheckout('ovld-fallback-'),
       resourceKey: 'backend',
       isPrimary: true
     });

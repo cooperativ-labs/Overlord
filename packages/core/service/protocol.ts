@@ -229,12 +229,23 @@ async function persistExternalSessionId({
 }
 
 /**
+ * A blank objective slot is a placeholder the UI keeps around so the user can
+ * type the next objective — it is not work anybody has planned. Agents must
+ * never see it, because an untyped slot reads to them like a real objective
+ * that is merely awaiting approval.
+ */
+function hasInstruction(objective: ObjectiveSummary): boolean {
+  return Boolean(objective.objective?.trim());
+}
+
+/**
  * Split a mission's objectives into the objectives before and after the current
  * one. Both arrays exclude the current objective (which is surfaced separately as
  * the top-level `objective`). `previousObjectives` are what has already been
  * worked (positioned before the current objective) and `futureObjectives` are
  * what is expected next (positioned after) — distinct from what the agent should
- * operate on today.
+ * operate on today. Objectives with empty instructions are excluded from both:
+ * they are empty input slots, not planned work.
  */
 function splitObjectivesAroundCurrent({
   objectives,
@@ -243,13 +254,14 @@ function splitObjectivesAroundCurrent({
   objectives: ObjectiveSummary[];
   currentObjective: ObjectiveSummary;
 }): { previousObjectives: ObjectiveSummary[]; futureObjectives: ObjectiveSummary[] } {
-  const previousObjectives = objectives.filter(
-    candidate =>
-      candidate.id !== currentObjective.id && candidate.position < currentObjective.position
+  const authored = objectives.filter(
+    candidate => candidate.id !== currentObjective.id && hasInstruction(candidate)
   );
-  const futureObjectives = objectives.filter(
-    candidate =>
-      candidate.id !== currentObjective.id && candidate.position > currentObjective.position
+  const previousObjectives = authored.filter(
+    candidate => candidate.position < currentObjective.position
+  );
+  const futureObjectives = authored.filter(
+    candidate => candidate.position > currentObjective.position
   );
   return { previousObjectives, futureObjectives };
 }
@@ -1939,12 +1951,15 @@ export async function deliverSession({
     now: nowIso()
   });
 
+  // A draft with no instruction text is the blank slot the UI keeps ready for the
+  // user to type into, not queued work. Treating it as the next objective raised
+  // a bogus "waiting for approval: New objective" status item on every delivery.
   const nextObjective = (await ctx.db.get(
     `SELECT id, title, auto_advance, assigned_agent, model, reasoning_effort, launch_config_json
        FROM objectives
        WHERE mission_id = ? AND position > (
          SELECT position FROM objectives WHERE id = ?
-       ) AND state = 'draft'
+       ) AND state = 'draft' AND TRIM(COALESCE(instruction_text, '')) <> ''
        ORDER BY position ASC LIMIT 1`,
     [mission.id, session.objective_id]
   )) as

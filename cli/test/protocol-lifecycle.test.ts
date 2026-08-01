@@ -6,6 +6,7 @@ import {
   recordHookEvent,
   updateSession
 } from '@overlord/core/service/protocol';
+import { createIsolatedCheckout } from '@overlord/core/service/test-checkout';
 import {
   listSqliteMigrationFiles,
   migrateDatabase,
@@ -23,7 +24,7 @@ test('protocol lifecycle: attach → update → deliver', async () => {
   await addProjectResource({
     ctx,
     projectId: project.id,
-    directoryPath: process.cwd(),
+    directoryPath: createIsolatedCheckout('ovld-lifecycle-'),
     isPrimary: true
   });
 

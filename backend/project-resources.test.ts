@@ -1,3 +1,4 @@
+import { createIsolatedCheckout } from '@overlord/core/service/test-checkout';
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -129,8 +130,8 @@ test('deleteProjectResourceSource removes only the selected source', async () =>
 });
 
 test('getProjectRepository selects the resource matching the requested key', async () => {
-  const primaryDir = mkdtempSync(path.join(tempDir, 'repo-primary-'));
-  const secondaryDir = mkdtempSync(path.join(tempDir, 'repo-secondary-'));
+  const primaryDir = createIsolatedCheckout('repo-primary-');
+  const secondaryDir = createIsolatedCheckout('repo-secondary-');
   const project = await createProject({ name: 'Repo resource selection' });
   const launchSettings = await getLaunchSettings();
 
@@ -169,7 +170,7 @@ test('getProjectRepository selects the resource matching the requested key', asy
 });
 
 test('createProject can create an initial primary resource atomically', async () => {
-  const resourceDir = mkdtempSync(path.join(tempDir, 'project-create-resource-'));
+  const resourceDir = createIsolatedCheckout('project-create-resource-');
   const launchSettings = await getLaunchSettings();
 
   const project = await createProject({

@@ -113,6 +113,12 @@ const AGENT_HISTORY_EXCLUDED_EVENT_TYPES = new Set([
 const EXECUTION_DIRECTIVE =
   'This is an execution session. After attaching, immediately execute the current objective. Do not wait for more instructions or ask for confirmation; only stop to ask a question when blocked.';
 
+/** Instruction text of an objective record, normalized across payload shapes. */
+function objectiveInstruction(objective: Record<string, unknown>): string {
+  const instruction = objective.instructionText ?? objective.instruction ?? '';
+  return typeof instruction === 'string' ? instruction.trim() : '';
+}
+
 async function loadMissionContext({
   runtime,
   missionId
@@ -131,7 +137,12 @@ async function loadMissionContext({
     .catch(() => []);
   const displayId = String(mission.displayId ?? mission.id ?? missionId);
   const title = String(mission.title ?? '(untitled)');
-  const objectives = Array.isArray(mission.objectives) ? mission.objectives.map(asRecord) : [];
+  // Blank objectives are the empty slots the UI keeps ready for the user to type
+  // the next objective into. They are not planned work, so they must never reach
+  // the agent — an untyped slot reads as a real objective awaiting approval.
+  const objectives = (
+    Array.isArray(mission.objectives) ? mission.objectives.map(asRecord) : []
+  ).filter(objective => objectiveInstruction(objective).length > 0);
 
   // Attachments are stored per objective and are not part of the mission detail
   // payload, so fetch them for each objective. Surfacing them in the launch
@@ -162,10 +173,10 @@ async function loadMissionContext({
     EXECUTION_DIRECTIVE,
     '',
     '## Objectives',
-    ...objectives.map((objective, index) => {
-      const instruction = objective.instructionText ?? objective.instruction ?? '';
-      return `${index + 1}. [${objective.state ?? 'unknown'}] ${instruction}`;
-    }),
+    ...objectives.map(
+      (objective, index) =>
+        `${index + 1}. [${objective.state ?? 'unknown'}] ${objectiveInstruction(objective)}`
+    ),
     '',
     ...(attachmentLines.length > 0
       ? [

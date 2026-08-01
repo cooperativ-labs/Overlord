@@ -6,7 +6,13 @@ import test from 'node:test';
 import { buildLaunchPlan } from '../src/launch.ts';
 import type { CliRuntime } from '../src/runtime.ts';
 
-function runtime({ title = 'Prompt Capture' }: { title?: string } = {}): CliRuntime {
+function runtime({
+  title = 'Prompt Capture',
+  objectives = [{ id: 'objective-uuid', state: 'executing', instructionText: 'Ship it' }]
+}: {
+  title?: string;
+  objectives?: Array<Record<string, unknown>>;
+} = {}): CliRuntime {
   return {
     backend: {
       baseUrl: 'http://127.0.0.1:4310',
@@ -26,7 +32,7 @@ function runtime({ title = 'Prompt Capture' }: { title?: string } = {}): CliRunt
             id: 'mission-uuid',
             displayId: 'coo:11',
             title,
-            objectives: [{ id: 'objective-uuid', state: 'executing', instructionText: 'Ship it' }]
+            objectives
           } as T;
         }
         throw new Error(`Unexpected GET ${requestPath}`);
@@ -82,6 +88,30 @@ test('buildLaunchPlan exports mission context for terminal prompt hooks', async 
   assert.ok(launchScript.includes(`export MISSION_ID='coo:11'`));
   assert.ok(launchScript.includes(`export OVERLORD_BACKEND_URL='http://127.0.0.1:4310'`));
   assert.ok(launchScript.includes(`'codex'`));
+});
+
+test('buildLaunchPlan omits blank objective slots from the prompt objective list', async () => {
+  const workingDirectory = mkdtempSync(path.join('/tmp', 'ovld-launch-blank-'));
+  const plan = await buildLaunchPlan({
+    runtime: runtime({
+      objectives: [
+        { id: 'objective-uuid', state: 'executing', instructionText: 'Ship it' },
+        { id: 'blank-uuid', state: 'draft', instructionText: '   ' },
+        { id: 'null-uuid', state: 'draft', instructionText: null }
+      ]
+    }),
+    options: {
+      agent: 'codex',
+      missionId: 'coo:11',
+      workingDirectory,
+      terminalLauncher: 'Terminal'
+    }
+  });
+
+  assert.match(plan.prompt, /1\. \[executing\] Ship it/);
+  // Blank slots exist only so the user can type a next objective; the agent
+  // must not see them as objectives awaiting approval.
+  assert.ok(!plan.prompt.includes('[draft]'));
 });
 
 test('buildLaunchPlan substitutes and exports launch env vars before pre-launch commands and the agent', async () => {
