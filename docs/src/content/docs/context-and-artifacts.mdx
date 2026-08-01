@@ -31,14 +31,9 @@ are stored as structured rows, not free-form text, and each covers one file:
 Agents cover every meaningful change with a rationale (formatting-only noise can
 be skipped), so review reads as a clear story instead of a wall of diff.
 
-## Checkpoints
-
-A **checkpoint** is a snapshot of the working tree after meaningful edits —
-think "save game" for the repository state the agent is using. Checkpoints give
-Overlord a stable anchor for review: which tree was live when rationales were
-recorded, and what reviewers should diff against. Delivery creates or updates a
-checkpoint automatically when a Git snapshot is available and links the rationale
-rows to it.
+In a git workspace, attach records a **VCS baseline** and delivery computes the
+run-attributable delta against current `git status`, so rationales stay tied to
+the files this objective actually changed.
 
 ## Artifacts
 
@@ -47,6 +42,21 @@ artifacts are structured entries such as `next_steps`, `test_results`,
 `migration`, `note`, `url`, and `decision`. User-uploaded files are attached to a
 **specific objective**, not the mission in the abstract, so a spec or screenshot
 stays tied to the instruction it supports.
+
+Agents can create artifacts **during a turn** without delivering:
+
+```bash
+ovld protocol add-artifact \
+  --mission-id <mission-id> \
+  --type note \
+  --label "Implementation plan" \
+  --content-text-file -
+```
+
+Hosted MCP exposes the same mutation as `overlord_add_artifact`. An optional
+session key (auto-injected from the attach cache when present) stamps
+session/objective provenance. `delivery_id` stays null until a later delivery
+optionally attaches more artifacts.
 
 Agents often create a plan or notes artifact in one objective, then revise it in
 a later objective or follow-up. Prefer updating the existing artifact in place
@@ -66,7 +76,7 @@ ovld protocol update-artifact \
 ```
 
 Hosted MCP exposes the same mutation as `overlord_update_artifact`. No session
-key is required. Supply the current `revision` as `--expected-revision` /
+key is required for updates. Supply the current `revision` as `--expected-revision` /
 `expectedRevision` (stale values return a conflict). Editable fields are
 `label`, `contentText`, and `externalUrl`; delivery provenance and structured
 `contentJson` stay immutable.

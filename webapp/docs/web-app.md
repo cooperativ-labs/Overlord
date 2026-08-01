@@ -168,7 +168,7 @@ These are upstream Overlord features that should not block CLI-first Overlord:
 - Protocol APIs should stay agent-safe and machine-readable.
 - UI-only endpoints should not become the source of truth for lifecycle transitions.
 - No repository contents should be read or displayed unless the local backend has an explicit linked directory and the user requested local changes/diff views.
-- VCS access is read-only; the web app must not create commits, refs, branches, stashes, checkpoints, tags, resets, checkouts, patches, or any other VCS mutation.
+- VCS access is read-only; the web app must not create commits, refs, branches, stashes, tags, resets, checkouts, patches, or any other VCS mutation.
 
 ## UX Requirements
 

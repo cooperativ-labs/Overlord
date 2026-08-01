@@ -1,0 +1,14 @@
+{
+  "fixtureVersion": 1,
+  "kind": "source-guard",
+  "description": "The sidecar owns OpenCode's loopback permission reply and truthful local-winner outcome.",
+  "path": "cli/src/agent-session/sidecar.ts",
+  "assert": {
+    "mustContain": [
+      "/permission/${encodeURIComponent(nativeId)}/reply",
+      "resolved-elsewhere",
+      "Allow once"
+    ],
+    "mustNotContain": ["always"]
+  }
+}

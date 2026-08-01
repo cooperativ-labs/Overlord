@@ -20,6 +20,39 @@ export const CONNECTOR_CORE_MCP_SHIM_RELATIVE_PATH = 'scripts/overlord-mcp.mjs';
 export const CONNECTOR_ADAPTER_KEY_PLACEHOLDER = '__OVERLORD_ADAPTER_KEY__';
 
 /**
+ * The shared agent-session hook, rendered per adapter *and per action*.
+ *
+ * The declared managed path spells the action — `scripts/agent-session-event.sh`,
+ * `scripts/agent-session-request.sh`, `scripts/agent-session-inbox.sh` — and the renderer
+ * substitutes it into the script. That
+ * is what makes the action fixed at install time: the harness invokes a script that can do
+ * exactly one thing, so a native payload can never select a CLI operation. A single script
+ * dispatching on `$1` would hand that choice to whatever wrote the registration, and hook
+ * registrations are the least-reviewed configuration on the machine.
+ */
+export const CONNECTOR_CORE_AGENT_SESSION_HOOK_SOURCE = 'agent-session-hook.sh';
+export const CONNECTOR_SESSION_ACTION_PLACEHOLDER = '__OVERLORD_SESSION_ACTION__';
+
+/** The closed set of actions a rendered hook may carry. */
+export const CONNECTOR_SESSION_ACTIONS = ['event', 'request', 'inbox'] as const;
+export type ConnectorSessionAction = (typeof CONNECTOR_SESSION_ACTIONS)[number];
+
+/**
+ * Parse `scripts/agent-session-<action>.sh`, returning the action or `null`.
+ *
+ * Rejects anything outside the closed action set, so a manifest cannot name
+ * `scripts/agent-session-../../etc-passwd.sh` or invent a fourth action by declaring one.
+ */
+export function connectorCoreAgentSessionAction(
+  relativePath: string
+): ConnectorSessionAction | null {
+  const match = /^scripts\/agent-session-([a-z]+)\.sh$/.exec(relativePath);
+  if (!match) return null;
+  const action = match[1] as ConnectorSessionAction;
+  return CONNECTOR_SESSION_ACTIONS.includes(action) ? action : null;
+}
+
+/**
  * Locate `connectors/core/overlord-mission`. The CLI package ships a copy under
  * `dist/connectors`, but source checkouts and development overrides are also
  * supported.
@@ -165,6 +198,49 @@ export function renderConnectorMcpShim({
 }
 
 /**
+ * Render the shared agent-session hook for one adapter and one fixed action.
+ *
+ * The rendered file must stay a standalone POSIX shell script: the harness executes it
+ * directly, so it may not import or source anything repo-local.
+ */
+export function renderConnectorAgentSessionHook({
+  adapterKey,
+  action,
+  coreRoot = connectorCoreRoot()
+}: {
+  adapterKey: string;
+  action: ConnectorSessionAction;
+  coreRoot?: string;
+}): string {
+  const scriptPath = path.join(
+    connectorCoreScriptsRoot(coreRoot),
+    CONNECTOR_CORE_AGENT_SESSION_HOOK_SOURCE
+  );
+  if (!existsSync(scriptPath)) {
+    throw new CliError({
+      message: `Connector core agent-session hook missing at ${scriptPath}.`
+    });
+  }
+  const source = readFileSync(scriptPath, 'utf8');
+  for (const placeholder of [
+    CONNECTOR_ADAPTER_KEY_PLACEHOLDER,
+    CONNECTOR_SESSION_ACTION_PLACEHOLDER
+  ]) {
+    if (!source.includes(placeholder)) {
+      throw new CliError({
+        message:
+          `Connector core agent-session hook at ${scriptPath} is missing ${placeholder}. ` +
+          `Both the adapter key and the action must stay substitution points — a hook that ` +
+          `chooses its own action at run time is exactly what this design forbids.`
+      });
+    }
+  }
+  return source
+    .replaceAll(CONNECTOR_ADAPTER_KEY_PLACEHOLDER, adapterKey)
+    .replaceAll(CONNECTOR_SESSION_ACTION_PLACEHOLDER, action);
+}
+
+/**
  * Adapter key for substitution. `setupConnector` passes it explicitly; the
  * fallback keeps the older `sourceDir`-only callers working, since every
  * adapter source directory is named for its key.
@@ -194,6 +270,11 @@ export function managedFileSourceExists({
   if (isConnectorCoreMcpShimPath(relativePath)) {
     return existsSync(path.join(connectorCoreScriptsRoot(coreRoot), 'overlord-mcp.mjs'));
   }
+  if (connectorCoreAgentSessionAction(relativePath)) {
+    return existsSync(
+      path.join(connectorCoreScriptsRoot(coreRoot), CONNECTOR_CORE_AGENT_SESSION_HOOK_SOURCE)
+    );
+  }
   return existsSync(path.join(sourceDir, relativePath));
 }
 
@@ -215,6 +296,16 @@ export function resolveManagedFileContents({
   if (isConnectorCoreMcpShimPath(relativePath)) {
     const rendered = renderConnectorMcpShim({
       adapterKey: resolveAdapterKey({ sourceDir, adapterKey }),
+      coreRoot
+    });
+    return Buffer.from(rendered, 'utf8');
+  }
+
+  const sessionAction = connectorCoreAgentSessionAction(relativePath);
+  if (sessionAction) {
+    const rendered = renderConnectorAgentSessionHook({
+      adapterKey: resolveAdapterKey({ sourceDir, adapterKey }),
+      action: sessionAction,
       coreRoot
     });
     return Buffer.from(rendered, 'utf8');

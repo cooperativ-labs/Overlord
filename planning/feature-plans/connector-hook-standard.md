@@ -91,15 +91,58 @@ a capability-gated policy, not as the way answering works.
 Every connector, in every shape, obeys these. Nothing below is negotiable per
 harness.
 
-1. **The native session id is the only key that binds an agent event to a
-   mission.** Never the working directory, never an environment variable alone,
-   never timing, never "the most recently attached mission."
+1. **A verified session channel credential is the only thing that authorizes an
+   agent event and scopes it to a mission.** The native session id is a
+   *correlation alias* — the key that says "these events came from the same
+   harness session" — and nothing more. Never the working directory, never an
+   environment variable alone, never timing, never "the most recently attached
+   mission," and never a native id somebody merely possesses.
 2. **No binding means no Overlord.** The adapter exits or ignores the event
    immediately, does nothing observable, and the harness behaves exactly as it
    would with Overlord uninstalled.
 3. **The harness's own behavior is the floor.** Overlord may pre-empt a native
    prompt when it can answer first; it may never remove the native prompt, and
    no failure path may manufacture an approval.
+
+### 3.0 Correlation is not authorization
+
+This invariant was originally written as "the native session id is the only key
+that binds an event to a mission," and that phrasing was wrong in a way worth
+naming, because the design it feeds
+([agent-interaction-acp.md](./agent-interaction-acp.md)) already separates the
+two concerns.
+
+| Concern                                  | Answered by                                          |
+| ---------------------------------------- | ---------------------------------------------------- |
+| "Which harness session produced this?"   | The native session id — a lookup alias               |
+| "Is this event allowed, and whose is it?" | The verified channel/session credential              |
+| "Which project is this checkout?"        | The working directory — and nothing else             |
+
+A native session id is a value the harness prints, logs, and passes to
+subprocesses. Treating possession of one as proof of scope would let anything
+that can read a log write into someone else's mission feed. So the channel — an
+`agent_session_channels` row created before launch and bound to
+`agent_sessions.id` at protocol `attach` — plus its short-lived, hash-stored,
+channel-scoped credential is the authority. The credential can affect exactly
+one channel; it cannot read mission context and cannot resolve a human decision.
+
+Three consequences follow:
+
+- **Cwd may locate, never create or authorize.** The working directory can help
+  find an existing local binding for a session that already has one. It can
+  never establish a binding, and it never makes an event in scope.
+- **`ovld agent-session bind` requires a credential**, either the active session
+  key or the channel credential. Possession of a native id alone never permits
+  binding or rebinding.
+- **Pre-attach events are not orphans.** They attach to the channel and become
+  session events when binding completes, so a harness that only reveals its
+  session id on the first event does not lose that window — and does not need a
+  cwd guess to cover it.
+
+"Short-lived" means revocable with the channel, not "expires halfway through a
+healthy long-running agent": the server extends the credential's bounded expiry
+with the channel lease and revokes it on `ended`/`lost` or at an absolute
+lifetime ceiling.
 
 ### 3.1 Why binding is not the working directory
 
@@ -127,6 +170,10 @@ because the native prompt is a correct outcome and misattribution is not.
 3. **Native session id from the harness's own API**, for Shape C, where the
    adapter can enumerate live sessions directly.
 4. **No binding.** No-op. **There is no cwd fallback for gating.**
+
+Every step above resolves *correlation*. In each case the event is authorized by
+the channel credential the launch (or an authenticated attach) provided; the
+native id only says which channel to attribute it to.
 
 Environment variables such as `MISSION_ID` (`cli/src/launch.ts:86`) remain
 useful for resolving _which mission_ when writing a binding. They are never

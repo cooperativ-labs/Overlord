@@ -1,0 +1,28 @@
+codecVersion: 1
+adapter: cursor
+eventNamePaths: [hook_event_name, event]
+projectRootPaths: [cwd]
+requests:
+  - native: beforeShellExecution
+    tool: shell
+    inputPath: command
+    inputWrapKey: command
+    requestIdPaths: [request_id]
+    callIdPaths: [call_id]
+    timeoutPaths: [timeout]
+  - native: beforeMCPExecution
+    tool: mcp
+    inputPath: tool_input
+    requestIdPaths: [request_id]
+    callIdPaths: [call_id]
+    timeoutPaths: [timeout]
+  - native: preToolUse
+    toolPath: tool_name
+    inputPath: tool_input
+    requestIdPaths: [request_id]
+    callIdPaths: [call_id]
+    timeoutPaths: [timeout]
+responses:
+  allow: { body: { permission: allow } }
+  deny: { body: { permission: deny } }
+  ask: { body: { permission: ask } }

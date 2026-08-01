@@ -64,6 +64,7 @@ The current tool catalog is mission-first:
 - `overlord_attach_session`
 - `overlord_update_session`
 - `overlord_deliver_session`
+- `overlord_add_artifact` — create a mission artifact mid-turn without delivering (type / label / contentText / externalUrl) via Protocol `add-artifact`
 - `overlord_update_artifact` — revise an existing mission artifact in place (label / contentText / externalUrl) via Protocol `update-artifact`
 - `overlord_record_work` — record work already finished in chat as one review-column mission (completed objective, file-change rationales, Gemini delivery summary), no attach/deliver cycle
 
@@ -86,9 +87,11 @@ that create missions require explicit `projectId`; clients should call
 repository resource carrying `.overlord/project.json`.
 
 `overlord_deliver_session` accepts the same optional `artifacts` shape as the
-Protocol delivery operation. This is the supported way for a hosted agent to
-publish a report or plan into a mission it has attached to; artifacts are
-validated and persisted by the existing Protocol Layer, never directly by MCP.
+Protocol delivery operation — still valid when finishing a turn. Agents can also
+publish artifacts mid-turn with `overlord_add_artifact` (Protocol `add-artifact` /
+REST `POST /api/missions/:id/artifacts`) without delivering; artifacts are
+validated and persisted by the existing Protocol/REST service layer, never
+directly by MCP.
 
 `overlord_update_artifact` is the supported way to revise such an artifact later
 (for example during a follow-up objective) without creating a duplicate. It

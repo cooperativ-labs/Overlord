@@ -1,0 +1,18 @@
+codecVersion: 1
+adapter: pi
+eventNamePaths: [type]
+projectRootPaths: [cwd]
+requests:
+  - native: tool_call
+    toolPath: tool_name
+    inputPath: tool_input
+    requestIdPaths: [request_id]
+    callIdPaths: [tool_use_id]
+    timeoutPaths: [timeout]
+responses:
+  allow: { body: {} }
+  deny:
+    body:
+      block: true
+      reason: Denied by an Overlord decision
+  ask: { body: {} }

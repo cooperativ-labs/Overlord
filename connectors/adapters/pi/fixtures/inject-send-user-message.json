@@ -1,0 +1,15 @@
+{
+  "fixtureVersion": 1,
+  "kind": "source-guard",
+  "description": "Pi extension drains the inbox through ovld, calls sendUserMessage, and confirms emission only afterwards.",
+  "path": "connectors/adapters/pi/extensions/overlord.ts",
+  "assert": {
+    "mustContain": [
+      "agent-session",
+      "inbox",
+      "sendUserMessage",
+      "--confirm",
+      "deliverAs"
+    ]
+  }
+}

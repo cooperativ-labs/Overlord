@@ -1,0 +1,213 @@
+# Cursor Agent CLI — agent-session interaction capabilities.
+#
+# Authoritative and fixture-backed. Validated against contract/harness-capabilities.schema.yaml.
+# See connectors/AGENTS.md → "Harness capability descriptors" before writing any code here.
+#
+# Cursor is the adapter where a naive reading gets it backwards: the shipped conformance
+# manifest claimed a universal PermissionRequest hook Cursor does not have, while the
+# capability it DOES have (per-tool-class decisions with allow/deny/ask) is richer than
+# Claude's in one respect. `decide.universal` is `unsupported` here, permanently, and the
+# false legacy claim is corrected in the generated projection.
+schemaVersion: 1
+adapter: cursor
+codec: cursor
+decisionCodecSpec: codec/cursor.decision-codec.yaml
+
+harness:
+  name: Cursor Agent CLI
+  verifiedVersion: '2026.07.23-e383d2b'
+  versionRange: '>=2026.07.01'
+  versionScheme: calendar
+
+integrationShape: callback
+
+binding:
+  source: payload
+  field: session_id
+  fallbackField: conversation_id
+  status: unverified
+  trackedAs: agent-session-verify-cursor-binding
+  notes: >-
+    Hook input carries `conversation_id` and an optional `session_id`. Which of the two is
+    stable across a resumed conversation, and whether either appears in the environment of a
+    tool subprocess, were not established. Binding on the wrong one silently misattributes a
+    session, so this must be settled by fixture before the adapter binds on it.
+
+decisionHold:
+  status: supported
+  timeoutField: timeout
+  timeoutUnit: seconds
+  defaultTimeoutSeconds: 60
+  maxTimeoutSeconds: null
+  fixture: fixtures/permission-request.json
+  notes: >-
+    The 60-second per-script default is an order of magnitude below any window sized for a
+    human who is away from the keyboard. The adapter must always set `timeout` explicitly
+    and must never rely on the default.
+
+capabilities:
+  observe.prompt:
+    status: not-implemented
+    native: beforeSubmitPrompt
+    trackedAs: agent-session-phase-1
+  observe.toolCall:
+    status: not-implemented
+    native: preToolUse
+    trackedAs: agent-session-phase-1
+  observe.toolResult:
+    status: not-implemented
+    native: postToolUse
+    trackedAs: agent-session-phase-1
+  observe.fileEdit:
+    status: not-implemented
+    native: afterFileEdit
+    trackedAs: agent-session-phase-1
+  observe.sessionLifecycle:
+    status: not-implemented
+    native: sessionStart
+    trackedAs: agent-session-phase-1
+  decide.shell:
+    status: supported
+    native: beforeShellExecution
+    fixtures: [fixtures/permission-request.json, fixtures/decision-codec.json]
+  decide.mcp:
+    status: supported
+    native: beforeMCPExecution
+    fixtures: [fixtures/permission-request.json, fixtures/decision-codec.json]
+  decide.fileWrite:
+    status: not-implemented
+    native: preToolUse
+    trackedAs: agent-session-phase-2
+  decide.anyTool:
+    status: supported
+    native: preToolUse
+    fixtures: [fixtures/permission-request.json, fixtures/decision-codec.json]
+  decide.universal:
+    status: unsupported
+    reason: >-
+      There is no single event covering every approval. Cursor's own Claude-compatibility map
+      resolves `PermissionRequest` to null and lists it as unsupported; coverage is per tool
+      class (shell, MCP, file read, generic pre-tool), so some approvals will never reach
+      Overlord and the UI must not imply otherwise.
+    evidenceRef: connector-harness-taxonomy.md#42-what-is-verified
+  answer.structuredQuestion:
+    status: unsupported
+    reason: >-
+      No hook step returns a structured question with options; the decision surfaces return
+      only allow/deny/ask plus free-text user/agent messages.
+    evidenceRef: connector-harness-taxonomy.md#42-what-is-verified
+  answer.persistentAllow:
+    status: unsupported
+    reason: Hook responses are per-call; there is no "always" reply that persists a rule.
+    evidenceRef: connector-harness-taxonomy.md#42-what-is-verified
+  inject.midTurn:
+    status: unsupported
+    reason: No mechanism exists to insert a message into a running turn.
+    evidenceRef: connector-harness-taxonomy.md#43-unique-challenges
+  inject.turnBoundary:
+    status: supported
+    native: stop
+    fixtures:
+      - fixtures/inject-followup-message.json
+      - fixtures/stop-calls-inbox.json
+    notes: >-
+      `stop` returns `followup_message`, a first-class continuation channel. It can only ever
+      report Queued(turn-boundary), never Delivered, and the UI must say so.
+  inject.nextTurn:
+    status: supported
+    native: stop
+    fixtures:
+      - fixtures/inject-followup-message.json
+    notes: >-
+      Cursor's followup_message is scheduled for the next turn; the same path covers
+      turn-boundary and next-turn naming.
+  terminal.concurrentAnswer:
+    status: unsupported
+    reason: >-
+      The native prompt is drawn only after the hook returns, so nobody can answer locally
+      while Overlord holds the decision.
+    evidenceRef: connector-harness-taxonomy.md#12-the-axis-that-actually-matters
+  terminal.statusSurface:
+    status: unverified
+    trackedAs: taxonomy-7.9
+    notes: Whether Cursor exposes an in-TUI status surface equivalent to Claude's statusMessage was not established.
+
+hazards:
+  - id: false-permission-hook-claim
+    severity: high
+    summary: >-
+      The shipped conformance manifest declared the `permissionHook` capability and a
+      `PermissionRequest` hook type. Cursor maps that event to null and lists it as
+      unsupported, so the declaration was false and would render remote controls that can
+      never fire. Corrected in this descriptor and in the generated legacy projection.
+    verification: verified
+    mitigation: implemented
+    fixture: fixtures/no-permission-request-hook.json
+    evidenceRef: connector-harness-taxonomy.md#43-unique-challenges
+  - id: reads-claude-hook-config
+    severity: high
+    summary: >-
+      Cursor resolves hooks from Claude's own project-local, project, and user configuration
+      in addition to its own. If plugin-provided hooks are expanded, Overlord's Claude hooks
+      may fire inside Cursor sessions and emit Claude-shaped decisions into a Cursor-shaped
+      contract — cross-connector misattribution with no code change on our side.
+    verification: unverified
+    mitigation: required
+    trackedAs: taxonomy-7.1
+  - id: allowlist-precedence
+    severity: medium
+    summary: >-
+      Reported upstream that beforeShellExecution allow/ask is ignored when a command
+      allowlist entry matches. A remote approval may be a no-op, so "we returned allow" is
+      not proof the decision was decisive.
+    verification: unverified
+    mitigation: required
+    trackedAs: taxonomy-7.8
+  - id: fail-closed-inverts-fallback
+    severity: high
+    summary: >-
+      Cursor's per-script `failClosed` converts a hook failure into a block, inverting the
+      core's fail-toward-the-harness rule. Overlord's hook registration must never set it.
+    verification: verified
+    mitigation: implemented
+    fixture: fixtures/fail-closed-unset.json
+  - id: post-tool-use-log-dir-precondition
+    severity: medium
+    summary: >-
+      The shipped postToolUse hook redirects stderr into ~/.ovld/logs without creating that
+      directory first (Claude's equivalent does). On a machine where the directory does not
+      yet exist the redirect fails and `ovld protocol record-touched` is never invoked, so
+      touched-file attribution silently records nothing for that session. Fixed in phase 0B by
+      creating the directory before the redirect, matching Claude's hook; the fixture guards
+      the hook against losing that line again.
+    verification: verified
+    mitigation: implemented
+    fixture: fixtures/post-tool-use-log-dir.json
+
+decisionShape:
+  codec: cursor
+  allowFixture: fixtures/decision-codec.json
+  denyFixture: fixtures/decision-codec.json
+  deferFixture: fixtures/decision-codec.json
+  neverSend: [hookSpecificOutput, permissionDecision, decision]
+  notes: >-
+    Cursor's own dialect is flat — `{ permission, user_message, agent_message }`. Claude's
+    nested `hookSpecificOutput` must never be emitted here even though Cursor would accept it
+    under `enableClaudeNestedHookSpecificOutputCompatibility`: relying on another vendor's
+    compatibility shim for our primary path is a dependency we do not need.
+    The decision-codec fixture executes the shared interpreter and pins all three outcomes.
+
+unboundSessionFixture: fixtures/unbound-session.json
+
+legacy:
+  capabilities:
+    - followUpHook
+    - stopHook
+    - editHook
+    - modelFlag
+    - permissionRules
+    - slashCommands
+  hookTypes:
+    - UserPromptSubmit
+    - PostToolUse
+    - Stop

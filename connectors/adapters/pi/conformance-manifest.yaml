@@ -1,4 +1,4 @@
-contractVersion: "37"
+contractVersion: "52"
 componentType: connector
 componentKey: pi
 label: "PI Connector"
@@ -6,6 +6,16 @@ description: "PI Agent skill and extension adapter for the Overlord mission prot
 
 connector:
   agentIdentifier: pi
+  # ── GENERATED: do not edit by hand ───────────────────────────────────────────
+  # Projected from connectors/adapters/pi/harness-capabilities.yaml by `yarn connectors:capabilities`.
+  # `capabilities` and `hookTypes` are the DEPRECATED hook-named projection, retained for
+  # one release. `harnessCapabilities` is the authoritative source.
+  integrationShape: extension
+  capabilityTier: 3
+  harnessCapabilities:
+    path: connectors/adapters/pi/harness-capabilities.yaml
+    schemaVersion: 1
+    digest: "1b4966a98c4994645dd4a46a930f38864e8eec3922603d4c5f2117dcbadcab79"
   capabilities:
     - followUpHook
     - nativeResume
@@ -14,8 +24,11 @@ connector:
     - contextFilePrompt
   hookTypes:
     - UserPromptSubmit
+  # ── END GENERATED ────────────────────────────────────────────────────────────
   installPath: "~/.pi/agent"
   managedFiles:
+    - "harness-capabilities.yaml"
+    - "CAPABILITIES.md"
     - "README.md"
     - "extensions/overlord.ts"
     - "prompt-wrapper.md"

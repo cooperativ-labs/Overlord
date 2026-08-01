@@ -1,0 +1,52 @@
+# Claude Code — agent-session event codec.
+#
+# Connector-owned, because the native event contract belongs to the Connector Layer. Compiled
+# into `cli/src/agent-session/codec-registry.generated.ts` by `yarn connectors:capabilities`;
+# the CLI executes this dialect but is not the source of truth for it.
+#
+# A codec is a DECLARATION, not a function, and that is the point. A function can do anything,
+# so reviewing one means reading code and holding it in your head. A declaration can only say
+# *where* native values live — it cannot invent a destination for them, because the only
+# destinations are the ones `packages/core/service/agent-session/pure/codec.ts` implements. So
+# "does this codec forward a raw payload?" is answerable by looking rather than by reasoning.
+codecVersion: 1
+adapter: claude
+
+# Claude names the event inside the payload, so one script can serve every registration.
+eventNamePath: hook_event_name
+
+# Correlation only. The channel credential is the authorization; a native session id is an
+# alias that answers "which harness conversation is this?" and nothing else.
+nativeSessionPaths:
+  - session_id
+
+# Used solely to relativize file paths so a card can say `src/app.ts` instead of disclosing
+# someone's home directory layout.
+projectRootPaths:
+  - cwd
+
+events:
+  # PostToolUse fires after the tool has already run, which makes it observational by
+  # construction: there is nothing left to decide, so it can never block a session.
+  - native: PostToolUse
+    kind: tool.completed
+    origin: agent
+    toolPath: tool_name
+    inputPath: tool_input
+    # A file-mutating tool becomes `file.edited` instead, so the feed can show a change
+    # timeline without the reader having to know which tool names mutate files.
+    fileEditKind: file.edited
+
+  # The one place raw user content flows, deliberately: the activity feed exists to show
+  # follow-up prompts. Secret redaction still runs over the text.
+  - native: UserPromptSubmit
+    kind: prompt.submitted
+    origin: user
+    promptPath: prompt
+
+  # `source` distinguishes startup / resume / clear / compact. It is a closed vocabulary from
+  # the harness, not free text, which is why it is safe to surface as a detail.
+  - native: SessionStart
+    kind: session.started
+    origin: system
+    detailPath: source

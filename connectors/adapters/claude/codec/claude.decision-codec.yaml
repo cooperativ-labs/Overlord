@@ -1,0 +1,23 @@
+codecVersion: 1
+adapter: claude
+eventNamePaths: [hook_event_name]
+projectRootPaths: [cwd]
+requests:
+  - native: PermissionRequest
+    toolPath: tool_name
+    inputPath: tool_input
+    requestIdPaths: [request_id]
+    callIdPaths: [tool_use_id]
+    timeoutPaths: [timeout]
+responses:
+  allow:
+    body:
+      hookSpecificOutput:
+        hookEventName: PermissionRequest
+        decision: allow
+  deny:
+    body:
+      hookSpecificOutput:
+        hookEventName: PermissionRequest
+        decision: deny
+  ask: { defer: true }

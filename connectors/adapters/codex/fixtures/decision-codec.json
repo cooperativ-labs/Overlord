@@ -1,0 +1,39 @@
+{
+  "fixtureVersion": 1,
+  "kind": "decision-codec",
+  "description": "Codex request reduction and exact allow/deny/defer output.",
+  "codec": "codec/codex.decision-codec.yaml",
+  "payload": {
+    "hook_event_name": "PermissionRequest",
+    "session_id": "session-1",
+    "cwd": "/repo",
+    "tool_name": "Bash",
+    "tool_input": { "command": "echo AKIAIOSFODNN7EXAMPLE" },
+    "request_id": "req-1",
+    "tool_use_id": "call-1",
+    "timeout": 45
+  },
+  "expect": {
+    "request": {
+      "kind": "permission",
+      "summary": "Run a shell command: echo [redacted] [secret-adjacent]",
+      "details": {
+        "tool": "shell",
+        "action": "Run a shell command",
+        "subject": "echo",
+        "detail": "echo [redacted]",
+        "riskMarkers": ["secret-adjacent"],
+        "formatterVersion": 1
+      },
+      "nativeRequestId": "req-1",
+      "nativeCallId": "call-1",
+      "harnessTimeoutSeconds": 45
+    },
+    "responses": {
+      "allow": "{\"hookSpecificOutput\":{\"hookEventName\":\"PermissionRequest\",\"decision\":{\"behavior\":\"allow\"}}}\n",
+      "deny": "{\"hookSpecificOutput\":{\"hookEventName\":\"PermissionRequest\",\"decision\":{\"behavior\":\"deny\"}}}\n",
+      "ask": null
+    }
+  },
+  "mustNotContain": ["AKIAIOSFODNN7EXAMPLE"]
+}

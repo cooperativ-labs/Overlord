@@ -250,10 +250,12 @@ Objective 3 · Implement runtime                         state: draft  [ Save ]
   and the completion timeline (which session delivered which objective).
 
 ### Context
+- Collapsed-by-default **Shared State** footer on the mission panel (web + desktop SPA).
 - `shared_context_entries` for the mission: key, value (string/JSON, syntax-aware),
   tags. This is the durable memory that later objectives inherit. Add/edit via
-  `write-context` (`POST /protocol/write-context`); filter by key substring/tag.
-  Read-only display warns against pasting secrets (per security boundaries).
+  `PUT /api/missions/:id/context` (same upsert as Protocol `write-context`);
+  list via `GET /api/missions/:id/context`. Read-only display warns against pasting
+  secrets (per security boundaries).
 
 ### Artifacts
 - Delivery artifacts grouped by `artifacts.type` (`test_results`, `next_steps`,
@@ -275,7 +277,7 @@ Objective 3 · Implement runtime                         state: draft  [ Save ]
 | Objective rail | objectives in mission payload | `objective` update → state pill / live dot |
 | Session strip | active `agent_sessions` | `agent_session` update + heartbeat → strip + age |
 | Activity | `GET /missions/:id/events` → `['mission', id, 'events']` | `mission_event` insert → prepend `EventItem` |
-| Context | `GET /missions/:id/context` | `shared_context_entry` deltas |
+| Context | `GET /api/missions/:id/context` | `shared_context_entry` deltas |
 | Artifacts | `GET /missions/:id/deliveries` | `delivery`/`artifact` deltas |
 | Changes | `GET /missions/:id/changes` | `changed_files`/`change_rationale` deltas |
 
@@ -297,7 +299,7 @@ supports) drives all of the above. Heartbeats update the session strip age but d
 | Answer an ask | `POST /protocol/update --event-type user_follow_up`/`decision` |
 | Approve/deny permission (G4) | `POST /protocol/permission-request` resolution |
 | Approve auto-advance gate | resolve `awaiting_approval` → queue next (doc 04) |
-| Write context | `POST /protocol/write-context` |
+| Write context | `PUT /api/missions/:id/context` |
 | Attach file to objective | `attachment-prepare-upload` → upload → `attachment-finalize-upload` |
 | Move mission status | `PATCH /missions/:id` status |
 

@@ -240,6 +240,25 @@ const tools = [
     )
   },
   {
+    name: 'overlord_add_artifact',
+    title: 'Add mission artifact',
+    description:
+      'Create a mission artifact during a turn without delivering (plan, notes, decision, URL). Provide type, label, and at least one of contentText or externalUrl. Optional sessionKey stamps provenance. Revise later with overlord_update_artifact.',
+    inputSchema: objectSchema(
+      {
+        missionId: stringProperty('Mission UUID or workspace display id.'),
+        type: stringProperty(
+          'Artifact type: test_results, next_steps, note, url, decision, or migration.'
+        ),
+        label: stringProperty('Human-facing label.'),
+        contentText: stringProperty('Optional Markdown/text content.'),
+        externalUrl: stringProperty('Optional HTTP(S) URL.'),
+        sessionKey: stringProperty('Optional live session key from attach.')
+      },
+      ['missionId', 'type', 'label']
+    )
+  },
+  {
     name: 'overlord_update_artifact',
     title: 'Update mission artifact',
     description:
@@ -412,6 +431,23 @@ function callOverlordTool(name, args) {
         : {})
     });
   }
+  if (name === 'overlord_add_artifact') {
+    const hasContentText = typeof args.contentText === 'string' && args.contentText.trim() !== '';
+    const hasExternalUrl = typeof args.externalUrl === 'string' && args.externalUrl.trim() !== '';
+    if (!hasContentText && !hasExternalUrl) {
+      throw new Error('Provide at least one of contentText or externalUrl');
+    }
+    return runProtocol('add-artifact', {
+      'mission-id': requiredString(args, 'missionId'),
+      type: requiredString(args, 'type'),
+      label: requiredString(args, 'label'),
+      ...(hasContentText ? { 'content-text': args.contentText } : {}),
+      ...(hasExternalUrl ? { 'external-url': args.externalUrl } : {}),
+      ...(optionalString(args, 'sessionKey')
+        ? { 'session-key': requiredString(args, 'sessionKey') }
+        : {})
+    });
+  }
   if (name === 'overlord_update_artifact') {
     if (typeof args.expectedRevision !== 'number' || !Number.isInteger(args.expectedRevision)) {
       throw new Error('expectedRevision must be an integer');
@@ -477,7 +513,7 @@ process.stdin.on('data', async chunk => {
         result: {
           protocolVersion: PROTOCOL_VERSION,
           capabilities: { tools: { listChanged: false } },
-          serverInfo: { name: 'overlord-__OVERLORD_ADAPTER_KEY__', version: '0.3.10' }
+          serverInfo: { name: 'overlord-__OVERLORD_ADAPTER_KEY__', version: '0.3.17' }
         }
       });
       continue;

@@ -56,6 +56,11 @@ sessionLifecycle:
       - --session-key
       - --execution-request-id
       - --execution-target-id
+      # Binds the session channel prepared before launch to the session attach creates.
+      # The channel ID only — never its credential, which reaches the backend solely as an
+      # Authorization header on /api/agent-session-channels/v1/*. The CLI fills this from
+      # OVERLORD_SESSION_CHANNEL_ID automatically when the launch path exported one.
+      - --session-channel-id
     returnsSessionKey: true
     responseShape: attach-response-v3
     clientCapture:
@@ -63,6 +68,7 @@ sessionLifecycle:
     sideEffects:
       - creates-agent-session
       - objective-state-to-executing
+      - binds-session-channel
 
   update:
     description: 'Post progress event; optionally record changed files and rationales'
@@ -268,6 +274,31 @@ missionDiscovery:
       - creates-delivery-record-without-session-attribution
 
 artifacts:
+  addArtifact:
+    description: >-
+      Create a mission artifact during a turn without delivering (same rules as
+      REST POST /api/missions/:id/artifacts). Delivery remains optional for
+      artifacts; agents may publish plans, notes, URLs, and similar records
+      mid-session and revise them later with update-artifact.
+    requiredFlags:
+      - --mission-id
+      - --type
+      - --label
+    optionalFlags:
+      - --session-key
+      - --content-text
+      - --content-text-file
+      - --external-url
+    rules:
+      - 'At least one of --content-text/--content-text-file or --external-url must be supplied'
+      - 'type is one of the core artifact types (test_results, next_steps, note, url, decision, migration) or a namespaced extension value accepted by the deployment CHECK'
+      - 'When --session-key is present (or auto-injected from the attach cache), session_id and objective_id are stamped from that live session'
+      - 'delivery_id is always null for mid-turn creates; deliver may still attach additional artifacts later'
+      - 'Non-HTTP(S) external URLs are rejected'
+    sideEffects:
+      - creates-artifact-row
+      - emits-artifact-entity-change-create
+
   updateArtifact:
     description: >-
       Update an existing mission artifact's human-facing label, contentText,

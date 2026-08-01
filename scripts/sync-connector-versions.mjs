@@ -10,6 +10,7 @@
  *   node scripts/sync-connector-versions.mjs --set 0.2.4
  *   node scripts/sync-connector-versions.mjs --check
  */
+import { spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -266,12 +267,29 @@ function main() {
   const changes = syncAllTargets(version);
   if (changes.length === 0) {
     console.log(`All connector version targets already at ${version}.`);
+    regenerateHarnessCapabilities();
     return;
   }
 
   console.log(`Synced connector versions to ${version}:`);
   for (const change of changes) {
     console.log(`  ${change.relPath}: ${change.oldVersion} → ${change.newVersion}`);
+  }
+
+  // Regenerate the harness capability artifacts in the same pass, so a connector edit can
+  // never leave the generated docs, the compiled CLI catalog, or the conformance projection
+  // describing a previous version of the adapter. Version sync invokes the dedicated
+  // generator; it deliberately does not itself become a schema compiler.
+  regenerateHarnessCapabilities();
+}
+
+function regenerateHarnessCapabilities() {
+  const generator = resolve(__dirname, 'generate-harness-capabilities.mjs');
+  const result = spawnSync(process.execPath, [generator], { stdio: 'inherit' });
+  if (result.status !== 0) {
+    throw new Error(
+      'Harness capability generation failed. Fix the descriptors above, then re-run this command.'
+    );
   }
 }
 

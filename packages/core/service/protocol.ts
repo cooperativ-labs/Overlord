@@ -1,6 +1,7 @@
 import { bindBool, UPDATE_EVENT_TYPES, UPDATE_PHASES } from '@overlord/database';
 import { createHash } from 'node:crypto';
 
+import { bindChannelToSession } from './agent-session/channels.js';
 import { recordChange } from './change-feed.js';
 import type { ServiceContext } from './context.js';
 import { resolveMissionId, resolveProjectId } from './context.js';
@@ -526,7 +527,8 @@ export async function attachSession({
   existingSessionKey,
   externalSessionId,
   executionRequestId,
-  executionTargetId = null
+  executionTargetId = null,
+  sessionChannelId = null
 }: {
   ctx: ServiceContext;
   missionId: string;
@@ -537,6 +539,17 @@ export async function attachSession({
   externalSessionId?: string | null;
   executionRequestId?: string | null;
   executionTargetId?: string | null;
+  /**
+   * The channel prepared by the launch path, named by `OVERLORD_SESSION_CHANNEL_ID`.
+   *
+   * Only the channel *id* travels here — never its credential, which stays in the launched
+   * process's environment and reaches the backend only through the adapter route family's
+   * Authorization header. Attach is already authenticated by the caller's own credential, so
+   * the id is enough to bind; and `bindChannelToSession` refuses a channel that belongs to
+   * another mission or is already bound elsewhere, so naming someone else's channel id
+   * achieves nothing.
+   */
+  sessionChannelId?: string | null;
 }): Promise<AttachResponse & { sessionKey: string }> {
   const mission = await getMissionSummary({ ctx, missionId });
   const objectives = await listObjectives({ ctx, missionId: mission.id });
@@ -584,6 +597,18 @@ export async function attachSession({
       objective: refreshedObjective,
       executionTargetId: resolvedTargetId
     });
+    if (sessionChannelId) {
+      await bindChannelToSession({
+        ctx,
+        channelId: sessionChannelId,
+        sessionId: existing.id,
+        missionId: context.mission.id,
+        objectiveId: existing.objective_id,
+        projectId: context.mission.projectId,
+        nativeSessionId: externalSessionId ?? null,
+        agentIdentifier
+      });
+    }
     return {
       ...refreshedContext,
       session: {
@@ -698,6 +723,24 @@ export async function attachSession({
       executionRequestId: executionRequestId ?? null
     });
   });
+
+  // Bind the prepared channel now that a session exists to bind it to. This is what turns the
+  // pre-attach window from a hole into a correlated prefix: events the harness published
+  // before the agent attached carry only a channel id, and this is where they acquire their
+  // session. The working directory takes no part — it can locate an existing binding, but it
+  // can never create one.
+  if (sessionChannelId) {
+    await bindChannelToSession({
+      ctx,
+      channelId: sessionChannelId,
+      sessionId,
+      missionId: context.mission.id,
+      objectiveId: objective.id,
+      projectId: context.mission.projectId,
+      nativeSessionId: externalSessionId ?? null,
+      agentIdentifier
+    });
+  }
 
   const refreshedMission = await getMissionSummary({ ctx, missionId: context.mission.id });
   const refreshedObjectives = await listObjectives({ ctx, missionId: context.mission.id });

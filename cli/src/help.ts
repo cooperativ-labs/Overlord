@@ -35,6 +35,9 @@ Connectors:
   ${primaryCommand} agent-setup <agent> [--dry-run]
                                                  Install/repair one connector (e.g. claude)
   ${primaryCommand} agent-setup all [--dry-run]  Install/repair all supported connectors
+  ${primaryCommand} agent-session capabilities [<agent>] [--json]
+                                                 What a harness can really do on the agent-session
+                                                 surfaces — fixture-backed, offline, authoritative
 
 Organizations:
   ${primaryCommand} org-setup --org-name "<name>" [--workspace-name <name>] [--workspace-slug <slug>]
@@ -60,6 +63,8 @@ Missions:
   ${primaryCommand} attach <missionId> [agent] [--json]
   ${primaryCommand} missions list [--status <csv>] [--project-id <id>] [--json]
   ${primaryCommand} mission context|events|deliveries|artifacts|rationales <missionId> [--json]
+  ${primaryCommand} requests [--json]             List open and recent agent decisions
+  ${primaryCommand} requests resolve <id> --revision <n> --decision allow|deny|ask [--text <text>]
 
 Launch and runner:
   ${primaryCommand} launch <agent> --mission-id <missionId> [--branch <name>] [--no-worktree] [--dry-run] [--json]

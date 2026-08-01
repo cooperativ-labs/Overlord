@@ -6,7 +6,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/bin/sh -c 'exec \"${CODEX_PLUGIN_ROOT:-$HOME/.codex/plugins/overlord}/scripts/permission-hook.sh\"'"
+            "command": "/bin/sh -c 'exec \"${CODEX_PLUGIN_ROOT:-$HOME/.codex/plugins/overlord}/scripts/agent-session-request.sh\"'",
+            "timeout": 35
           }
         ]
       }
@@ -18,6 +19,59 @@
           {
             "type": "command",
             "command": "/bin/sh -c 'exec \"${CODEX_PLUGIN_ROOT:-$HOME/.codex/plugins/overlord}/scripts/user-prompt-submit-hook.sh\"'"
+          }
+        ]
+      },
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/bin/sh -c 'exec \"${CODEX_PLUGIN_ROOT:-$HOME/.codex/plugins/overlord}/scripts/agent-session-event.sh\"'"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/bin/sh -c 'exec \"${CODEX_PLUGIN_ROOT:-$HOME/.codex/plugins/overlord}/scripts/agent-session-event.sh\"'"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/bin/sh -c 'exec \"${CODEX_PLUGIN_ROOT:-$HOME/.codex/plugins/overlord}/scripts/agent-session-event.sh\"'"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/bin/sh -c 'exec \"${CODEX_PLUGIN_ROOT:-$HOME/.codex/plugins/overlord}/scripts/agent-session-event.sh\"'"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/bin/sh -c 'exec \"${CODEX_PLUGIN_ROOT:-$HOME/.codex/plugins/overlord}/scripts/agent-session-inbox.sh\"'"
           }
         ]
       }

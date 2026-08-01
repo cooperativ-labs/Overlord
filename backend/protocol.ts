@@ -1,5 +1,5 @@
 import { type Permission, PERMISSIONS } from '@overlord/auth';
-import type { UpdateArtifactBody } from '@overlord/contract';
+import type { CreateArtifactBody, UpdateArtifactBody } from '@overlord/contract';
 
 import type { ServiceContext } from '../packages/core/service/context.ts';
 import { listAttachments } from '../packages/core/service/missions.ts';
@@ -39,7 +39,7 @@ import {
 } from './db.ts';
 import { ApiError } from './errors.ts';
 import { requirePermission, requireWorkspacePermission } from './rbac.ts';
-import { callerWorkspaceMemberships, updateArtifact } from './repository.ts';
+import { callerWorkspaceMemberships, createArtifact, updateArtifact } from './repository.ts';
 import { listWorkspaces } from './workspaces.ts';
 
 // ---- Protocol command dispatch -------------------------------------------
@@ -531,7 +531,10 @@ const handlers: Record<string, Handler> = {
       existingSessionKey: strFlag(body, '--session-key') ?? null,
       externalSessionId: externalSessionId(body),
       executionRequestId: strFlag(body, '--execution-request-id') ?? null,
-      executionTargetId: strFlag(body, '--execution-target-id') ?? null
+      executionTargetId: strFlag(body, '--execution-target-id') ?? null,
+      // The channel id only. Its credential never travels in a protocol flag — it reaches the
+      // backend solely as an Authorization header on the adapter route family.
+      sessionChannelId: strFlag(body, '--session-channel-id') ?? null
     }),
 
   update: (ctx, body) =>
@@ -765,6 +768,28 @@ const handlers: Record<string, Handler> = {
     });
   },
 
+  // Mid-turn artifact create (same service as REST POST). Optional session key
+  // stamps session/objective provenance when the agent is on a live turn.
+  'add-artifact': (_ctx, body) => {
+    const create: CreateArtifactBody = {
+      type: requireFlag(body, '--type'),
+      label: requireFlag(body, '--label')
+    };
+    if (hasFlag(body, '--content-text') || hasFlag(body, '--content-text-file')) {
+      const content = resolveInput(body, '--content-text', '--content-text-file');
+      create.contentText = content !== undefined && content.trim() ? content : null;
+    }
+    if (hasFlag(body, '--external-url')) {
+      const url = strFlag(body, '--external-url');
+      create.externalUrl = url !== undefined && url.trim() ? url : null;
+    }
+    const sessionKey = strFlag(body, '--session-key');
+    if (sessionKey) {
+      create.sessionKey = sessionKey;
+    }
+    return createArtifact(requireFlag(body, '--mission-id'), create);
+  },
+
   // In-place artifact edit (same service as REST PATCH). No session key — a
   // later objective or follow-up can revise an artifact created earlier.
   'update-artifact': (_ctx, body) => {
@@ -868,6 +893,7 @@ const SUBCOMMAND_PERMISSIONS: Record<string, Permission | null> = {
   'record-work': PERMISSIONS.MISSION_CREATE,
   'read-context': PERMISSIONS.MISSION_READ,
   'write-context': PERMISSIONS.MISSION_UPDATE,
+  'add-artifact': PERMISSIONS.ARTIFACT_CREATE,
   'update-artifact': PERMISSIONS.MISSION_UPDATE,
   'attachment-list': PERMISSIONS.ARTIFACT_READ,
   'attachment-download-url': PERMISSIONS.ARTIFACT_READ,

@@ -125,7 +125,7 @@ Agents may also make changed files visible before delivery without increasing pr
 
 CLI-first requirements:
 
-- Overlord may read VCS status and diffs for a linked project, but it must not create commits, refs, branches, stashes, checkpoints, tags, resets, checkouts, patches, or any other VCS mutation.
+- Overlord may read VCS status and diffs for a linked project, but it must not create commits, refs, branches, stashes, tags, resets, checkouts, patches, or any other VCS mutation.
 - Change views should be scoped around Overlord review units first: mission, objective, and delivery.
 - `ovld changes status --mission-id <id> [--objective-id <id>]`: summarize changed files and rationale coverage for the mission or objective.
 - `ovld changes diff --mission-id <id> [--objective-id <id>] [--path <path>]`: show read-only local VCS diffs grouped by objective context where possible.

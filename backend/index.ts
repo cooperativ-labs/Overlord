@@ -64,6 +64,13 @@ import {
   syncSqlStudioForWorkspace
 } from './sql-studio/sql-studio-manager.ts';
 import {
+  AGENT_SESSION_CHANNEL_ROUTE_PREFIX,
+  createAgentRequestHumanRouter,
+  createAgentSessionChannelRouter,
+  createAgentSessionInputHumanRouter,
+  prepareMissionSessionChannel
+} from './agent-session-routes.ts';
+import {
   auth,
   authNodeHandler,
   getAllowedBrowserOrigins,
@@ -124,6 +131,7 @@ import {
   ApiError,
   clearDefaultProjectPreference,
   clearMissionSchedule,
+  createArtifact,
   createMission,
   createObjective,
   createProject,
@@ -154,6 +162,7 @@ import {
   listMissionEvents,
   listMissionFileChanges,
   listMissions,
+  listMissionSharedContext,
   listObjectives,
   listProjectResources,
   listProjects,
@@ -186,7 +195,8 @@ import {
   updateProjectResource,
   updateProjectTag,
   updateWorkspaceStatus,
-  upsertMissionSchedule
+  upsertMissionSchedule,
+  upsertMissionSharedContext
 } from './repository.ts';
 import {
   deleteObjectiveAttachment,
@@ -552,6 +562,19 @@ if (mcpEnabled) {
     })().catch(next);
   });
 }
+
+// ---- Agent session channel adapter surface -------------------------------
+//
+// Mounted BEFORE the `/api` human authentication guard, and that ordering is
+// load-bearing rather than incidental. This route family accepts *only* a
+// channel-scoped `osc_…` credential; if it sat behind
+// `requireAuthenticatedSession`, a browser session, a USER_TOKEN, or — worse —
+// the loopback-trusted local-operator fallback would already have authenticated
+// the caller before this router ever saw the request. Adapter authority and
+// human authority are separate families, so they are separated here, in the
+// middleware chain, where the separation cannot be undone by a later refactor
+// of a shared handler.
+app.use(AGENT_SESSION_CHANNEL_ROUTE_PREFIX, createAgentSessionChannelRouter());
 
 app.use('/api', requireAuthenticatedSession);
 
@@ -1500,6 +1523,27 @@ app.patch(
   '/api/missions/:id/objectives/reorder',
   handle(req => reorderFutureObjectives(req.params.id, req.body), { mutates: true })
 );
+// Manual launch preparation.
+//
+// A queued launch gets its channel from the `launching` transition, where the backend is
+// already in the loop. `ovld launch` has no such moment, so it asks for one here — through
+// ordinary human authentication, gated on the same permission as attach, because preparing a
+// channel is the act of authorizing a future agent process to speak for this mission.
+//
+// This is deliberately a *human* route despite producing an adapter credential. The person
+// running `ovld launch` is who we are authorizing; the channel credential it mints is what the
+// launched process will hold. A channel credential can never call this route to mint another.
+// No route-level `requires`: like every other resource-scoped mission route, the handler
+// authorizes `session:attach` against the *mission's own* workspace. A route-level gate would
+// evaluate the caller's currently-active workspace, which is the wrong tenant whenever the
+// mission lives in a secondary one — rejecting legitimate callers and checking the wrong
+// membership for everyone else.
+app.post(
+  '/api/missions/:id/session-channel',
+  handle(req => prepareMissionSessionChannel(req.params.id, req.body ?? {}), { mutates: true })
+);
+app.use('/api/agent-requests', createAgentRequestHumanRouter());
+app.use('/api/agent-session-inputs', createAgentSessionInputHumanRouter());
 app.get(
   '/api/missions/:id/events',
   handle(req => listMissionEvents(req.params.id))
@@ -1511,6 +1555,24 @@ app.get(
 app.get(
   '/api/missions/:id/artifacts',
   handle(req => listArtifacts(req.params.id))
+);
+app.get(
+  '/api/missions/:id/context',
+  handle(req => listMissionSharedContext(req.params.id))
+);
+app.put(
+  '/api/missions/:id/context',
+  handle(req => upsertMissionSharedContext(req.params.id, req.body), {
+    mutates: true,
+    requires: PERMISSIONS.MISSION_UPDATE
+  })
+);
+app.post(
+  '/api/missions/:id/artifacts',
+  handle(req => createArtifact(req.params.id, req.body), {
+    mutates: true,
+    requires: PERMISSIONS.ARTIFACT_CREATE
+  })
 );
 app.patch(
   '/api/missions/:id/artifacts/:artifactId',

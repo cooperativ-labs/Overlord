@@ -69,7 +69,11 @@ This connector is intentionally reviewable against the four connector layers in 
 ### What ships
 
 - `skills/overlord-mission/SKILL.md` — Codex adapter template with a `<!-- @connector-core -->` marker; setup interpolates shared core content at install time.
-- `.codex-plugin/hooks.json` + `scripts/*.sh` — `UserPromptSubmit` follow-up capture and `PermissionRequest` notifications through `ovld protocol`.
+- `.codex-plugin/hooks.json` + rendered `scripts/agent-session-*.sh` — the fixed-action
+  agent-session runtime. Codex hooks deliver normalized prompt/tool/lifecycle events, route
+  permission callbacks through the channel-scoped request waiter, and use `Stop` only for
+  confirmed turn-boundary instruction delivery. The legacy `UserPromptSubmit` follow-up hook
+  remains additive for mission activity.
 - `.mcp.json` + `scripts/overlord-mcp.mjs` — MCP bridge to common `ovld protocol` operations. The shim is **generated**: it is rendered from `connectors/core/scripts/overlord-mcp.mjs` at setup time with the adapter key substituted, and there is no copy in this directory to edit.
 - `assets/` — branded plugin assets for Codex install surfaces.
 - `conformance-manifest.yaml` — connector conformance declaration for the Overlord contract.
@@ -80,6 +84,9 @@ The shared Connector Core source lives at `connectors/core/overlord-mission`. `o
 ### Omissions
 
 - **No `commands/` directory.** Codex reaches protocol operations through the MCP bridge and the mission skill. This is unported rather than declined — no Codex constraint is recorded against slash commands — so treat it as open work with its own mission, not as a settled decision.
-- **No `PostToolUse` or `Stop` hooks.** Only `UserPromptSubmit` and `PermissionRequest` are registered; the equivalent Codex events are not yet mapped.
+- **No app-server integration.** The app server remains experimental and is intentionally not
+  started beside a hook-driven session: two integration surfaces could race to decide the same
+  permission. The connector uses documented hooks only; a future app-server adapter must be a
+  separately selected integration shape with its own verified fixtures.
 
 See the [adapter capability matrix](../../README.md#adapter-capability-matrix) for how this compares across adapters.

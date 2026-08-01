@@ -1,0 +1,37 @@
+{
+  "fixtureVersion": 1,
+  "kind": "normalized-event",
+  "description": "Pi's narrow tool_call payload proves the extension sends structural tool metadata only, and the pure codec removes the write content before transport.",
+  "codec": "codec/pi.codec.yaml",
+  "occurredAt": "2026-08-01T00:00:00.000Z",
+  "payload": {
+    "type": "tool_call",
+    "session_id": "pi-session-1",
+    "cwd": "/repo",
+    "tool_name": "write",
+    "tool_use_id": "call-1",
+    "tool_input": { "path": "/repo/src/secret.ts", "content": "AKIAIOSFODNN7EXAMPLE" }
+  },
+  "expect": {
+    "eventId": "ev_40714af6012bb2c48821af40a7901d16",
+    "producerSequence": null,
+    "occurredAt": "2026-08-01T00:00:00.000Z",
+    "kind": "tool.called",
+    "severity": "info",
+    "nativeEvent": "tool_call",
+    "nativeTurnId": null,
+    "nativeCallId": "call-1",
+    "subagentId": null,
+    "correlationId": "pi-session-1",
+    "origin": "agent",
+    "summary": "Write a file: src/secret.ts: 20 bytes",
+    "payload": {
+      "tool": "write",
+      "action": "Write a file",
+      "subject": "src/secret.ts",
+      "detail": "20 bytes",
+      "formatterVersion": 1
+    }
+  },
+  "mustNotContain": ["AKIAIOSFODNN7EXAMPLE"]
+}

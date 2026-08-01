@@ -1,0 +1,9 @@
+{
+  "fixtureVersion": 1,
+  "kind": "source-guard",
+  "description": "Claude Stop inject path is registered via the shared inbox script (exact Stop block bytes are asserted in CLI unit tests).",
+  "path": "connectors/adapters/claude/hooks/hooks.json",
+  "assert": {
+    "mustContain": ["agent-session-inbox.sh", "\"Stop\""]
+  }
+}

@@ -1,4 +1,4 @@
-contractVersion: "37"
+contractVersion: "52"
 componentType: connector
 componentKey: claude
 label: "Claude Code Connector"
@@ -6,6 +6,16 @@ description: "Claude Code plugin adapter for the Overlord mission protocol workf
 
 connector:
   agentIdentifier: claude
+  # ── GENERATED: do not edit by hand ───────────────────────────────────────────
+  # Projected from connectors/adapters/claude/harness-capabilities.yaml by `yarn connectors:capabilities`.
+  # `capabilities` and `hookTypes` are the DEPRECATED hook-named projection, retained for
+  # one release. `harnessCapabilities` is the authoritative source.
+  integrationShape: callback
+  capabilityTier: 3
+  harnessCapabilities:
+    path: connectors/adapters/claude/harness-capabilities.yaml
+    schemaVersion: 1
+    digest: "58131e0daccf7382cada7d456bfb6ca38e6da8adefe065e4c053028f0c3d8aec"
   capabilities:
     - followUpHook
     - permissionHook
@@ -21,8 +31,11 @@ connector:
     - PermissionRequest
     - PostToolUse
     - Stop
+  # ── END GENERATED ────────────────────────────────────────────────────────────
   installPath: "~/.ovld/claude/marketplace/plugins/overlord"
   managedFiles:
+    - "harness-capabilities.yaml"
+    - "CAPABILITIES.md"
     - ".claude-plugin/plugin.json"
     - "README.md"
     - "commands/add-objectives.md"
@@ -35,6 +48,9 @@ connector:
     - "commands/record-work.md"
     - "commands/spawn.md"
     - "hooks/hooks.json"
+    - "scripts/agent-session-event.sh"
+    - "scripts/agent-session-request.sh"
+    - "scripts/agent-session-inbox.sh"
     - "scripts/permission-hook.sh"
     - "scripts/post-tool-use-hook.sh"
     - "scripts/stop-hook.sh"

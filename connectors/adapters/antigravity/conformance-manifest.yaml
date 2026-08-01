@@ -1,4 +1,4 @@
-contractVersion: "37"
+contractVersion: "52"
 componentType: connector
 componentKey: antigravity
 label: "Antigravity Connector"
@@ -6,16 +6,27 @@ description: "Antigravity plugin adapter for the Overlord mission protocol workf
 
 connector:
   agentIdentifier: antigravity
+  # ── GENERATED: do not edit by hand ───────────────────────────────────────────
+  # Projected from connectors/adapters/antigravity/harness-capabilities.yaml by `yarn connectors:capabilities`.
+  # `capabilities` and `hookTypes` are the DEPRECATED hook-named projection, retained for
+  # one release. `harnessCapabilities` is the authoritative source.
+  integrationShape: callback
+  capabilityTier: 0
+  harnessCapabilities:
+    path: connectors/adapters/antigravity/harness-capabilities.yaml
+    schemaVersion: 1
+    digest: "c021926c384a72bdaa62ac5f0eab57e80822c5d2996db75ea3c30c6bf5d09ce8"
   capabilities:
     - followUpHook
-    - permissionHook
     - contextFilePrompt
     - slashCommands
   hookTypes:
     - UserPromptSubmit
-    - PermissionRequest
+  # ── END GENERATED ────────────────────────────────────────────────────────────
   installPath: "~/.gemini/antigravity-cli/plugins/overlord"
   managedFiles:
+    - "harness-capabilities.yaml"
+    - "CAPABILITIES.md"
     - "plugin.json"
     - "mcp_config.json"
     - "hooks.json"

@@ -4,7 +4,7 @@
 # IMPORTANT: Update this file and CONTRACT.md together when adding components or surfaces.
 # Increment contractVersion when any stable interface changes.
 
-contractVersion: '44'
+contractVersion: '52'
 
 components:
   protocol:
@@ -23,6 +23,7 @@ components:
       - 'changed-file and change-rationale recording protocol'
       - 'idempotency key scope naming: protocol.*'
       - 'in-place mission artifact updates via update-artifact (same editable fields and revision CAS as REST PATCH /api/missions/:id/artifacts/:artifactId; no session key required)'
+      - 'mid-turn mission artifact creation via add-artifact (POST /api/protocol/add-artifact), which creates an artifact without a delivery using the same createArtifact service as REST POST /api/missions/:id/artifacts; optional session key stamps session/objective provenance when present'
       - 'agent-facing mission lifecycle commands only; runner queue/device/project-resource management commands live on CLI/Runner/REST surfaces'
     dependsOn:
       - database
@@ -38,6 +39,7 @@ components:
     owns:
       - 'table definitions, column types, indexes, foreign keys, CHECK constraints'
       - 'organizations table (grouping layer above workspaces) and the required workspaces.organization_id FK; workspaces remain the sole RBAC layer; slugs are unique per organization, not instance-wide'
+      - 'Agent Session Exchange core tables (agent_session_channels, agent_session_events, agent_requests, agent_session_inputs) declared by contract and migrated with the channel bootstrap; the scoped channel credential is hash-only and scoped to one channel, native_session_id is a correlation alias and never an authorization key, raw native payloads are never persisted, and no derived capability tier is persisted. The never-migrated hook_events and permission_requests designs are superseded by them; their closed status vocabulary and the mission_events permission_request value remain valid'
       - 'controlled vocabularies (closed and open sets)'
       - 'versioned deliveryReport payload storage in deliveries.payload_json; summary remains immutable agent-authored source text'
       - 'worker_jobs durable background queue including core types overlord.delivery.compose.v1, overlord.live_activity.dispatch.v1, and overlord.push_notification.dispatch.v1'
@@ -75,12 +77,22 @@ components:
       - 'per-user terminal profiles on user_execution_target_preferences for opening launched agents in a terminal window'
       - 'protocol session-key cache: persists the attach session key by (working directory, mission) and auto-injects --session-key when the flag is absent; cleared at deliver'
       - 'local mission-link formatter: ovld protocol mission-link reads the cwd active-mission pointer or launch environment and prints the credential-free Desktop mission deep link without a backend request'
+      - 'agent-session runtime: the ovld agent-session command family and the compiled harness catalog (cli/src/agent-session/catalog.generated.ts). The only local module that carries agent-session traffic to the backend, and only with the channel-scoped OVERLORD_SESSION_CHANNEL_TOKEN — never the user broad USER_TOKEN. The runtime reads the compiled catalog, never the descriptor YAML. Adding a sixth harness must add zero agent-session subcommands'
+      - 'ovld agent-session capabilities [<agent>] [--json]: offline human/agent-facing reader of the compiled catalog — no network call, no write, no subprocess'
+      - 'ovld agent-session event --agent <key> --payload-file -: the push path for callback and extension shapes. Gate, reduce on the machine, post, exit. Emits no stdout or stderr on any path and exits 0 on every path including failure, because an observational hook that speaks has produced output the user did not ask for and cannot turn off'
+      - 'ovld agent-session request --agent <key> --payload-file -: the call path for callback decision hooks. Gate, create, wait with waiter-lease renewal, emit exact native allow/deny or defer silently'
+      - 'ovld agent-session inbox --agent <key> [--payload-file -]: the inject path. Claims one pending instruction and emits harness-native bytes with honest Delivered / Queued(turn-boundary) / Unsupported reporting; Claude asyncRewake exits 2 with stderr; Cursor followup_message never reports Delivered'
+      - 'ovld agent-session sidecar --agent <key> --port <port>: the push path for control-plane shapes. Harness-agnostic — it is driven by the adapter descriptor and codec, so a sixth control-plane harness adds zero subcommands. Binds the harness control port on loopback only, mints a per-launch secret held in memory and never persisted or projected to a client, and re-reads harness state before resubscribing after a dropped stream'
+      - 'cli/src/agent-session/codec-registry.generated.ts: connector-owned event codecs compiled for execution. The CLI executes harness dialects but is never their source of truth'
+      - 'cli/src/agent-session/decision-codec-registry.generated.ts: connector-owned request/decision codecs compiled for execution. The pure interpreter reduces native request payloads into bounded redacted cards and emits the connector-declared exact native allow/deny/defer bytes'
+      - 'ovld doctor agent-session reporting: installed descriptor digest versus the compiled catalog, and which mission the current working directory native session is bound to, both without a network call for an unbound session'
       - 'human-readable CLI output format conventions'
     dependsOn:
       - auth
       - rest
     interactionSurfaces:
       - cliToRest
+      - connectorToAgentSessionRuntime
 
   connector:
     label: 'Connector Layer'
@@ -93,10 +105,20 @@ components:
       - 'deterministic terminal footers for adapters that declare the existing Stop hook capability'
       - 'ovld agent-setup <agent>/all and ovld doctor behavior'
       - 'connector capability declarations and approved capability flag set'
+      - 'per-adapter event codec declaration (connectors/adapters/<agent>/codec/<agent>.codec.yaml, referenced by the descriptor codecSpec field): a declaration of where native values live, never executable code. It cannot name a destination the core interpreter does not implement, and an unknown key is a generation error rather than a silently ignored field'
+      - 'per-adapter decision codec declaration (connectors/adapters/<agent>/codec/<agent>.decision-codec.yaml, referenced by decisionCodecSpec): native request paths and literal allow/deny/defer bodies compiled for the shared pure interpreter; exact bytes and redacted request cards are pinned by executable decision-codec fixtures'
+      - 'per-adapter harness capability descriptor (connectors/adapters/<agent>/harness-capabilities.yaml, validated by contract/harness-capabilities.schema.yaml) and its executable fixtures: the only hand-authored agent-session capability source, and simultaneously the runtime gating input, the CI contract, and the source of the generated CAPABILITIES.md, HARNESS-MATRIX.md, compiled CLI catalog, and deprecated conformance projection'
+      - 'connector-owned native event-normalization and decision codecs; resolve emits the harness exact native decision shape and every failure path returns no decision so the harness own behavior remains the floor'
+    doesNotOwn:
+      - 'any network call to the Overlord backend — adapters translate and hand off to the CLI, which owns transport, auth, retry, and redaction'
+      - 'the live session effective capability snapshot (computed by the backend from catalog plus runtime probes and policy)'
+      - 'capabilityTier, which is derived from passing fixtures and never authored or persisted'
     dependsOn:
       - protocol
+      - cli
     interactionSurfaces:
       - connectorToProtocol
+      - connectorToAgentSessionRuntime
 
   runner:
     label: 'Runner Layer'
@@ -139,6 +161,9 @@ components:
       - 'REST auth integration points'
       - 'desktop OAuth handoff: browser-only GET /api/auth/desktop/github starts only the configured GitHub provider with the fixed desktop callback, so Better Auth writes its OAuth state cookie in the system browser; GET /api/auth/desktop/callback derives a short-lived opaque ticket from an authenticated browser session and redirects only to overlord://auth/callback; POST /api/auth/desktop/exchange consumes it once and returns a Better Auth session token only to the Electron main process'
       - 'hosted-web OAuth handoff: browser-only GET /api/auth/browser/callback accepts only a configured trusted web origin, derives a short-lived opaque ticket from an authenticated browser session, and redirects to that origin; POST /api/auth/browser/exchange consumes it once and returns a Better Auth session token to the web client without placing a credential in the callback URL'
+      - 'versioned agent-session channel route family /api/agent-session-channels/v1/* — adapter event/request/input/heartbeat operations for exactly one channel, authenticated only by a channel-scoped credential; a normal user or session token is rejected there and a channel credential is rejected on every human route'
+      - 'separate authenticated human agent-session surfaces (resolve effective capabilities, list/answer requests, enqueue/cancel input) using session/token auth plus resource-derived RBAC, the permission-resolution RBAC and workspace policy ceiling, revision CAS, and immutable audit attribution'
+      - 'server-side payload allowlist and bounds for agent-session summaries, options, ids, sequences, timestamps, and diagnostic codes; formatter output renders as escaped plain text with explicit truncation'
       - 'SSE/WebSocket realtime endpoint (GET /realtime, compatibility GET /api/stream) and GET /sync/changes?after=<seq> catch-up read; both aggregate current readable memberships, filter before EntityChangeDto projection, expose workspaceId, and advance the global cursor past filtered rows'
       - 'SQL Studio launch metadata exposed through /api/meta'
       - 'webhook subscription management (/api/webhooks*: list/create, update/soft-delete, rotate-secret, test, deliveries, redeliver), gated by webhook:* permissions'
@@ -159,6 +184,8 @@ components:
       - 'authenticated mobile Live Activity registration routes: PUT and DELETE /api/mobile/live-activities/:activityId/push-token; registrations are private to the caller and APNs delivery is handled by the in-process live-activity dispatcher'
       - 'authenticated standard push routes: PUT /api/mobile/push/device-token and POST /api/mobile/push/device-token/revoke (opaque device token carried in the body, never the URL, with no read surface), plus GET/PUT /api/profile/notification-preferences returning { enabled, categories: { category, mode }[] }; alert/background APNs delivery is handled by the in-process push-notification dispatcher and never reuses ActivityKit tokens or topics'
       - 'editable mission artifacts: PATCH /api/missions/:id/artifacts/:artifactId accepts expectedRevision plus a non-empty subset of { label, contentText, externalUrl }, requires mission:update on the named mission, preserves delivery/session/objective provenance plus contentJson, rejects stale edits with 409 and non-HTTP(S) external URLs, and emits an artifact entity-change in the same transaction'
+      - 'mid-turn mission artifact creation: POST /api/missions/:id/artifacts accepts { type, label } plus at least one of { contentText, externalUrl }, requires artifact:create on the named mission, optionally stamps objectiveId/sessionId provenance, leaves delivery_id null, and emits an artifact entity-change insert in the same transaction'
+      - 'mission shared context: GET /api/missions/:id/context returns SharedContextEntryDto[] with mission:read; PUT /api/missions/:id/context upserts { key, value } with mission:update (same durable memory as Protocol write-context), and emits a shared_context_entry entity-change in the same transaction'
       - 'user-scoped GitHub repository authorization under /ext/github: authenticated connection metadata/authorization/disconnect and eligible-owner reads are account-wide; it reuses the Better Auth GitHub OAuth App client registration while maintaining a distinct explicit repo read:org grant, profile-bound hashed single-use state, and separately AES-256-GCM-encrypted token; its /api/auth/callback/github/repository callback is handled before the Better Auth wildcard; credentials never enter DTOs, logs, mobile/browser storage, realtime, or change projections, and the one-installation-per-workspace GitHub App integration remains separate'
       - 'composite project initialization: POST /api/projects/initialize authorizes project:create against its explicit workspace, atomically creates the project plus first mission/objective under a caller idempotency key, and optionally performs retryable private GitHub repository provisioning through the separate user OAuth connection; provisioning failure preserves the internal creation, while success records exactly one GitHub project link and one non-primary read-only git resource without changing the workspace GitHub App installation'
     dependsOn:
@@ -272,6 +299,7 @@ components:
       - 'OAuth protected-resource metadata for the hosted MCP resource'
       - 'mapping MCP tool calls to existing service/protocol operations'
       - 'hosted overlord_update_artifact tool forwarding to Protocol update-artifact'
+      - 'hosted overlord_add_artifact tool forwarding to Protocol add-artifact'
     dependsOn:
       - auth
       - protocol
@@ -355,6 +383,32 @@ interactionSurfaces:
       - 'Hook scripts must use ovld protocol hook-event or update'
       - 'Hooks may not add new event types without contract update'
       - 'UserPromptSubmit follow-up capture records user_follow_up activity without requiring a live session and without reopening execution'
+
+  connectorToAgentSessionRuntime:
+    description: 'Connector integrations hand native payloads to the CLI agent-session runtime, which is the only component that calls the versioned agent-session channel route family'
+    from: connector
+    to: cli
+    transport: subprocess-stdin-native-payload
+    authMechanism: channel-scoped-credential
+    routeFamily: '/api/agent-session-channels/v1/*'
+    rules:
+      - 'Adapters make zero network calls: they translate a native payload and hand it to ovld agent-session <action> --agent <key> --payload-file -, and the CLI owns transport, auth, retry, and redaction'
+      - 'The CLI presents a channel-scoped hash-stored OVERLORD_SESSION_CHANNEL_TOKEN bound to exactly one session channel, never the user broad USER_TOKEN. A channel credential cannot read mission context or resolve a human decision; a normal user or session token is rejected on the adapter route family'
+      - 'Credentials travel only through environment, stdin, or an authorization header — never argv, URLs, descriptor files, events, diagnostics, or crash text'
+      - 'A native session id is a correlation alias only. The verified channel/session credential is the authorization and mission scope; the working directory may locate an existing local binding but never creates one and never authorizes an event'
+      - 'Scope resolution runs before logging, interpreter spawn, filesystem write, or network access. An unbound session produces no request, no event, no database row, and no observable delay'
+      - 'The harness own behavior is the floor: timeout, backend error, missing binding, auth failure, or malformed response all return no decision, which yields the native prompt. No failure path may manufacture an approval and no decision call may retry with a broader credential'
+      - 'Payload reduction happens on the machine before transmission: no transcripts or transcript paths, no raw tool input or output, no file contents, no environment variables. Follow-up prompt text is the one deliberate exception, persisted in full for bound sessions'
+      - 'Clients gate controls on the live channel effective capability snapshot, never on the static catalog and never on the agent identifier'
+      - 'Human list/answer/enqueue surfaces are a separate auth family using ordinary session/token auth plus resource-derived RBAC'
+      - 'Adding a harness must add zero agent-session subcommands: everything harness-specific travels as data, and the adapter key selects connector-owned event and decision codecs'
+      - 'The session channel is created at the launching transition, before the agent process exists, so harness output published before attach lands somewhere durable and correctly authorized. POST /api/runner/requests/:id/launching additively returns a one-time sessionChannel bootstrap and the launch environment gains OVERLORD_SESSION_CHANNEL_ID and OVERLORD_SESSION_LAUNCH_KIND'
+      - 'The raw credential is never written into the terminal launch script under <checkout>/.overlord/tmp. It is staged in an owner-only 0600 file outside every checkout, keyed by a hash of the channel id, and removed on channel end or auth failure; OVERLORD_SESSION_CHANNEL_TOKEN stays a supported input for virtual gateways that realize the bootstrap directly into the environment'
+      - 'ovld protocol attach --session-channel-id binds the prepared channel to the new agent_sessions row and backfills the session id onto every pre-attach event and request. The flag carries the channel id only, never its credential'
+      - 'The adapter router is mounted ahead of the /api human authentication guard, so a browser session, a USER_TOKEN, and the loopback-trusted local-operator fallback are structurally unable to reach it. Every handler operates on the channel resolved from the credential, never one named in a request body or path'
+      - 'The shared connectors/core/scripts/agent-session-hook.sh is rendered per adapter as scripts/agent-session-<action>.sh with both the adapter key and a fixed action from a closed three-value set (event, request, inbox) substituted, so an untrusted native payload can never select which CLI operation runs'
+      - 'Ending or losing a channel revokes its credential, releases every open request to the terminal, and expires every queued input in one transaction. A waiter lease renewed by long poll, plus a server-side release sweep, is what guarantees a held decision is released even when the waiting process is killed'
+      - 'The blocking request runtime creates and observes requests only through its authenticated channel. Human request listing and resolution use ordinary session/token authentication in the request-owning workspace; a resolution requires an identified human actor, session:attach permission, and revision CAS. A callback returns an exact connector-native decision only when that human resolution wins; all other outcomes release to the harness without a decision'
 
   runnerToRest:
     description: 'CLI runner claims/updates execution requests through backend APIs, then launches agents locally'
@@ -442,6 +496,7 @@ interactionSurfaces:
       - 'Every tool call must pass through the same RBAC gates as the corresponding REST or protocol operation'
       - 'Mission creation tools require explicit projectId or a prior resolved project identity; missing or ambiguous project context is a tool error'
       - 'Hosted MCP delivery artifacts use the existing Protocol deliver artifact shape and lifecycle; MCP does not create artifact types or write artifact rows directly'
+      - 'Hosted MCP mid-turn artifact creation uses overlord_add_artifact → Protocol add-artifact → the same createArtifact service as REST POST; MCP does not write artifact rows directly'
       - 'Hosted MCP artifact updates use overlord_update_artifact → Protocol update-artifact → the same updateArtifact service as REST PATCH; MCP does not write artifact rows directly'
       - 'Hosted MCP must not expose local filesystem/worktree inspection, runner queue claiming, execution target mutation, or branch-action tools'
       - 'MCP Apps widget resources use ui://overlord/* URIs, self-contained HTML, and associated tool structuredContent only; no third-party frames, secrets, or unrestricted network access'

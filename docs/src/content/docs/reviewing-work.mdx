@@ -18,7 +18,7 @@ one place.
 - If an earlier objective left a plan artifact, did a follow-up revise it in
   place (rather than leaving a stale plan and a duplicate)?
 
-## File changes and checkpoints
+## File changes
 
 When an agent edits files, Overlord stores file-level **change records** — a
 short title, summary, why the change was made, and optional diff hints — so you
@@ -26,11 +26,10 @@ get more than a wall of terminal output. Those records are the durable story of
 the patch, separate from chat narrative, and they link back to the mission and
 objective that produced them.
 
-Each delivery is anchored to a **checkpoint**: a snapshot of the working tree
-captured after meaningful edits. The checkpoint tells the review UI exactly
-which tree was live when the rationales were recorded, so diffs open with the
-right context. In the desktop app you can inspect these diffs hunk-by-hunk with
-the attached rationale in the **Current Changes** view.
+Changed files for a delivery are the run-attributable delta from the attach-time
+VCS baseline, so the review UI opens diffs for the paths this objective actually
+touched. In the desktop app you can inspect these diffs hunk-by-hunk with the
+attached rationale in the **Current Changes** view.
 
 ## Inspect a delivery from the terminal
 

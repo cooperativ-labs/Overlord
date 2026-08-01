@@ -59,6 +59,11 @@ Requirements:
 
 - `read-context`: read persistent shared context.
 - `write-context`: write persistent shared context.
+- `add-artifact`: create a mission artifact during a turn without delivering
+  (same rules as REST `POST /api/missions/:id/artifacts`). Requires `--type`,
+  `--label`, and at least one of `--content-text`/`--content-text-file` or
+  `--external-url`. Optional `--session-key` stamps session/objective
+  provenance. Delivery may still attach additional artifacts later.
 - `update-artifact`: revise an existing mission artifact's label, Markdown
   content, and/or HTTP(S) URL in place (same rules as REST
   `PATCH /api/missions/:id/artifacts/:artifactId`). Requires

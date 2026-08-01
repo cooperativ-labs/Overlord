@@ -51,10 +51,12 @@ export type MissionEventSummary = {
 };
 
 export type SharedContextEntry = {
+  id?: string;
   key: string;
   value: unknown;
   tags: string[];
   updatedAt: string;
+  revision?: number;
 };
 
 export type ArtifactSummary = {
@@ -881,7 +883,7 @@ export async function listSharedContext({
 }): Promise<SharedContextEntry[]> {
   const resolved = await resolveMissionId(ctx, missionId);
   const params: Array<string | number> = [resolved.id];
-  let sql = `SELECT key, value_kind, value_text, value_json, updated_at
+  let sql = `SELECT id, key, value_kind, value_text, value_json, updated_at, revision
              FROM shared_context_entries
              WHERE mission_id = ? AND deleted_at IS NULL`;
 
@@ -894,21 +896,25 @@ export async function listSharedContext({
   params.push(limit);
 
   const rows = (await ctx.db.all(sql, params)) as Array<{
+    id: string;
     key: string;
     value_kind: string;
     value_text: string | null;
     value_json: string | null;
     updated_at: string;
+    revision: number;
   }>;
 
   return rows.map(row => ({
+    id: row.id,
     key: row.key,
     value:
       row.value_kind === 'json' && row.value_json
         ? (JSON.parse(row.value_json) as unknown)
         : row.value_text,
     tags: [],
-    updatedAt: row.updated_at
+    updatedAt: row.updated_at,
+    revision: row.revision
   }));
 }
 
@@ -932,31 +938,38 @@ export async function writeSharedContext({
   const resolved = await resolveMissionId(ctx, missionId);
   const now = nowIso();
   const existing = (await ctx.db.get(
-    `SELECT id FROM shared_context_entries
+    `SELECT id, revision FROM shared_context_entries
        WHERE mission_id = ? AND key = ? AND deleted_at IS NULL`,
     [resolved.id, trimmedKey]
-  )) as { id: string } | undefined;
+  )) as { id: string; revision: number } | undefined;
 
   const isJson = typeof value === 'object' && value !== null;
   const valueKind = isJson ? 'json' : 'string';
   const valueText = isJson ? null : String(value);
   const valueJson = isJson ? JSON.stringify(value) : null;
 
+  let entryId: string;
+  let revision: number;
+
   if (existing) {
+    entryId = existing.id;
+    revision = existing.revision + 1;
     await ctx.db.run(
       `UPDATE shared_context_entries
-         SET value_kind = ?, value_text = ?, value_json = ?, updated_at = ?, revision = revision + 1
+         SET value_kind = ?, value_text = ?, value_json = ?, updated_at = ?, revision = ?
          WHERE id = ?`,
-      [valueKind, valueText, valueJson, now, existing.id]
+      [valueKind, valueText, valueJson, now, revision, entryId]
     );
   } else {
+    entryId = newId();
+    revision = 1;
     await ctx.db.run(
       `INSERT INTO shared_context_entries
            (id, workspace_id, mission_id, key, value_kind, value_text, value_json,
             created_by_workspace_user_id, created_at, updated_at, revision)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
       [
-        newId(),
+        entryId,
         ctx.workspace.id,
         resolved.id,
         trimmedKey,
@@ -970,7 +983,25 @@ export async function writeSharedContext({
     );
   }
 
-  return { key: trimmedKey, value, tags: [], updatedAt: now };
+  await recordChange({
+    ctx,
+    entityType: 'shared_context_entry',
+    entityId: entryId,
+    operation: existing ? 'update' : 'insert',
+    entityRevision: revision,
+    projectId: resolved.projectId,
+    missionId: resolved.id,
+    changedFields: ['key', 'value_kind', 'value_text', 'value_json']
+  });
+
+  return {
+    id: entryId,
+    key: trimmedKey,
+    value,
+    tags: [],
+    updatedAt: now,
+    revision
+  };
 }
 
 export async function listArtifacts({

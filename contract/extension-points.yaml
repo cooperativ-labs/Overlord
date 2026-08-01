@@ -9,15 +9,14 @@
 # IMPORTANT: Adding a new capability flag, extension point, or vocabulary change
 # requires a contract version update in CONTRACT.md and components.yaml.
 
-contractVersion: "3"
+contractVersion: '6'
 
 # Sanctioned extension points — the only ways to extend Overlord
 extensionPoints:
-
   customConnector:
     id: custom-connector
-    description: "Add support for a new AI agent harness (e.g. a new IDE or CLI tool)"
-    mechanism: "New adapter files + conformance-manifest.yaml"
+    description: 'Add support for a new AI agent harness (e.g. a new IDE or CLI tool)'
+    mechanism: 'New adapter files + conformance-manifest.yaml'
     ownedBy: connector
     manifestRequirements:
       componentType: connector
@@ -26,26 +25,31 @@ extensionPoints:
         - contractVersion
         - connector.agentIdentifier
         - connector.capabilities
+        - connector.harnessCapabilities
     constraints:
       - "Must not duplicate connector core protocol rules — extend the core, don't replace it"
-      - "Capability flags must be from the approvedConnectorCapabilities list below"
-      - "Hook types must be from the approvedHookTypes list below"
-      - "Adding a new capability flag requires a contract update first"
+      - 'Must ship a harness-capabilities.yaml descriptor validating against contract/harness-capabilities.schema.yaml — it is the only hand-authored agent-session capability source'
+      - 'connector.capabilities, connector.hookTypes, connector.integrationShape, and connector.capabilityTier are a GENERATED projection of that descriptor; hand-editing them is a contract violation'
+      - 'A capability is proven by an executable fixture, not by inspection: `supported` without a passing fixture is a CI failure, not a claim'
+      - 'capabilityTier is derived, never authored; a connector may not declare more than its fixtures prove'
+      - 'Every adapter must ship the mandatory unbound-session negative fixture'
+      - 'Deprecated hook-named capability flags must be from the approvedConnectorCapabilities list below and hook types from approvedHookTypes'
+      - 'Adding a new capability flag or agent-session capability id requires a contract update first'
 
   customHarness:
     id: custom-harness
-    description: "User-authored or workspace-installed custom agent harness definition"
-    mechanism: "user_harness_extensions record + optional workspace_harness_extensions promotion"
+    description: 'User-authored or workspace-installed custom agent harness definition'
+    mechanism: 'user_harness_extensions record + optional workspace_harness_extensions promotion'
     ownedBy: extension
     constraints:
-      - "Personal extensions (user_harness_extensions) must not affect workspace behavior until explicitly promoted"
-      - "Workspace promotion snapshots a specific version — later personal edits require a new version and re-promotion"
-      - "Extension key must be stable lowercase (pattern: [a-z][a-z0-9-_]*)"
+      - 'Personal extensions (user_harness_extensions) must not affect workspace behavior until explicitly promoted'
+      - 'Workspace promotion snapshots a specific version — later personal edits require a new version and re-promotion'
+      - 'Extension key must be stable lowercase (pattern: [a-z][a-z0-9-_]*)'
 
   databaseAdapter:
     id: database-adapter
-    description: "Alternative database backend implementing the full logical schema"
-    mechanism: "Implement every required table, column, index, and constraint + pass adapter conformance tests"
+    description: 'Alternative database backend implementing the full logical schema'
+    mechanism: 'Implement every required table, column, index, and constraint + pass adapter conformance tests'
     ownedBy: database
     manifestRequirements:
       componentType: database-adapter
@@ -53,55 +57,55 @@ extensionPoints:
         - database.adapterKey
         - database.schemaContractVersion
     constraints:
-      - "Must implement ALL required tables, columns, indexes, and constraints from the schema contract"
-      - "Must pass the full adapter conformance test suite"
-      - "Must implement commit-safe entity_changes visibility (not raw sequence exposure for multi-writer)"
-      - "Adapter-specific optimizations (triggers, generated columns, NOTIFY) are allowed but must not break the logical contract"
+      - 'Must implement ALL required tables, columns, indexes, and constraints from the schema contract'
+      - 'Must pass the full adapter conformance test suite'
+      - 'Must implement commit-safe entity_changes visibility (not raw sequence exposure for multi-writer)'
+      - 'Adapter-specific optimizations (triggers, generated columns, NOTIFY) are allowed but must not break the logical contract'
 
   databaseExtension:
     id: database-extension
-    description: "Add extension-owned tables and migrations alongside core tables"
+    description: 'Add extension-owned tables and migrations alongside core tables'
     mechanism: "ext_<name>_ table prefix + schema_migrations with component = 'ext:<name>'"
     ownedBy: database
     constraints:
-      - "All extension tables must use the ext_<name>_ prefix"
-      - "Must not modify core table columns, constraints, or indexes"
-      - "Must not write to core tables directly — use service APIs or react via entity_changes/outbox_messages"
-      - "Metadata stored in core table JSON columns must use namespaced keys"
+      - 'All extension tables must use the ext_<name>_ prefix'
+      - 'Must not modify core table columns, constraints, or indexes'
+      - 'Must not write to core tables directly — use service APIs or react via entity_changes/outbox_messages'
+      - 'Metadata stored in core table JSON columns must use namespaced keys'
       - "Migration component must be 'ext:<name>' (pattern: ext:[a-z][a-z0-9-_]*)"
 
   authProvider:
     id: auth-provider
-    description: "Custom authentication or RBAC authorization provider"
-    mechanism: "Implement the auth/RBAC service boundary"
+    description: 'Custom authentication or RBAC authorization provider'
+    mechanism: 'Implement the auth/RBAC service boundary'
     ownedBy: auth
     manifestRequirements:
       componentType: auth-provider
     constraints:
-      - "Must preserve core audit_log actor attribution (actor_workspace_user_id, actor_token_id)"
-      - "Must not bypass token hash storage rules (raw secrets must never be persisted)"
-      - "Must implement role assignment CRUD through the same service boundary as the default provider"
-      - "Permission checks must return the same result shape as the default RBAC service"
+      - 'Must preserve core audit_log actor attribution (actor_workspace_user_id, actor_token_id)'
+      - 'Must not bypass token hash storage rules (raw secrets must never be persisted)'
+      - 'Must implement role assignment CRUD through the same service boundary as the default provider'
+      - 'Permission checks must return the same result shape as the default RBAC service'
 
   restExtension:
     id: rest-extension
-    description: "Add additional REST API endpoints under a namespaced prefix"
-    mechanism: "Namespaced endpoint prefix /ext/<name>/"
+    description: 'Add additional REST API endpoints under a namespaced prefix'
+    mechanism: 'Namespaced endpoint prefix /ext/<name>/'
     ownedBy: rest
     manifestRequirements:
       componentType: rest-module
       requiredFields:
         - restModule.endpointPrefix
     constraints:
-      - "All endpoints must be under /ext/<name>/ prefix"
-      - "Must not override or shadow core endpoint paths"
-      - "Must use the service layer for database access — no direct table writes"
-      - "Must use Auth Layer for authentication and authorization"
+      - 'All endpoints must be under /ext/<name>/ prefix'
+      - 'Must not override or shadow core endpoint paths'
+      - 'Must use the service layer for database access — no direct table writes'
+      - 'Must use Auth Layer for authentication and authorization'
 
   restConsumer:
     id: rest-consumer
-    description: "Integrate an external service as a documented client of the Overlord REST surface, with no database access. The sanctioned integration mechanism for a Virtual Target Gateway (e.g. Racecar)"
-    mechanism: "Vendored @overlord/contract subset + documented REST calls + conformance-manifest.yaml (componentType: rest-consumer)"
+    description: 'Integrate an external service as a documented client of the Overlord REST surface, with no database access. The sanctioned integration mechanism for a Virtual Target Gateway (e.g. Racecar)'
+    mechanism: 'Vendored @overlord/contract subset + documented REST calls + conformance-manifest.yaml (componentType: rest-consumer)'
     ownedBy: rest
     manifestRequirements:
       componentType: rest-consumer
@@ -111,55 +115,124 @@ extensionPoints:
         - restConsumer.endpoints
         - restConsumer.exportedTypes
     constraints:
-      - "Must interact only through documented REST endpoints — no direct database, service-layer, runner-claim, or host filesystem access"
-      - "A Virtual Target Gateway must be idempotent by executionRequestId so claim/retry/duplicate-delivery/restart yield exactly one realized environment and run"
-      - "Must preserve the normal protocol lifecycle: record observations and drive launching → launched|failed, but never complete an objective and never add a parallel request state machine"
-      - "Must vendor the published virtual-target DTOs and validate against the declared contractVersion"
-      - "Adapter keys and any source/observation/failure/grant/action kinds must be namespaced open-vocabulary values declared in the manifest — never new closed-vocabulary values or execution_targets.type values"
+      - 'Must interact only through documented REST endpoints — no direct database, service-layer, runner-claim, or host filesystem access'
+      - 'A Virtual Target Gateway must be idempotent by executionRequestId so claim/retry/duplicate-delivery/restart yield exactly one realized environment and run'
+      - 'Must preserve the normal protocol lifecycle: record observations and drive launching → launched|failed, but never complete an objective and never add a parallel request state machine'
+      - 'Must vendor the published virtual-target DTOs and validate against the declared contractVersion'
+      - 'Adapter keys and any source/observation/failure/grant/action kinds must be namespaced open-vocabulary values declared in the manifest — never new closed-vocabulary values or execution_targets.type values'
 
   customAutomation:
     id: custom-automation
-    description: "Add downstream automations to a repo that tracks OpenOverlord upstream, without editing the built-in registry"
-    mechanism: "Module(s) named by OVERLORD_AUTOMATIONS_MODULE that call registerAutomation / registerAutomations at import time; loaded at server boot via loadExternalAutomations()"
+    description: 'Add downstream automations to a repo that tracks OpenOverlord upstream, without editing the built-in registry'
+    mechanism: 'Module(s) named by OVERLORD_AUTOMATIONS_MODULE that call registerAutomation / registerAutomations at import time; loaded at server boot via loadExternalAutomations()'
     ownedBy: automations
     constraints:
-      - "Each automation id must be namespaced to the fork (e.g. acme:triage) to avoid colliding with built-ins"
-      - "Must not edit builtInAutomations in registry.ts — register only through the env-var seam"
-      - "Automations must not read or write domain tables directly — persistence goes through caller-supplied store interfaces"
-      - "Automations return null on provider unavailability or failure; callers supply deterministic fallbacks"
+      - 'Each automation id must be namespaced to the fork (e.g. acme:triage) to avoid colliding with built-ins'
+      - 'Must not edit builtInAutomations in registry.ts — register only through the env-var seam'
+      - 'Automations must not read or write domain tables directly — persistence goes through caller-supplied store interfaces'
+      - 'Automations return null on provider unavailability or failure; callers supply deterministic fallbacks'
 
   openVocabularyValue:
     id: open-vocabulary-value
-    description: "Add new values to open controlled vocabularies"
-    mechanism: "Declare value in conformance manifest; use namespaced value in code"
+    description: 'Add new values to open controlled vocabularies'
+    mechanism: 'Declare value in conformance manifest; use namespaced value in code'
     ownedBy: database
     constraints:
-      - "Values must be namespaced (e.g. com.example.my-type or mypackage:custom-source)"
-      - "Cannot add to closed vocabularies — those require a contract version bump"
+      - 'Values must be namespaced (e.g. com.example.my-type or mypackage:custom-source)'
+      - 'Cannot add to closed vocabularies — those require a contract version bump'
       - "Declare all new vocabulary values in the component's conformance manifest"
-      - "Values can be promoted to core by updating CONTRACT.md and the schema contract"
+      - 'Values can be promoted to core by updating CONTRACT.md and the schema contract'
 
 # Approved connector capability flags — closed set
 # Add here (with contract version bump) before declaring a new capability in a manifest
 approvedConnectorCapabilities:
-  - followUpHook        # Has a UserPromptSubmit hook that records follow-up messages
-  - permissionHook      # Has a PermissionRequest hook that records tool permission prompts
-  - stopHook            # Has a Stop hook for pending-delivery checks (future)
-  - editHook            # Has a PostToolUse hook that records touched files for delivery attribution
-  - nativeResume        # Can detect and report native harness session/thread IDs
-  - modelFlag           # Supports --model <model> launch flag
-  - effortFlag          # Supports --effort or equivalent thinking/reasoning flag
-  - contextFilePrompt   # Supports --append-system-prompt-file or equivalent context file flag
-  - permissionRules     # Supports declarative protocol permission rules (no interactive approval)
-  - slashCommands       # Supports slash commands for protocol operations
+  # Behavior-named agent-session capabilities. These describe what a connector DOES, not which
+  # Claude hook it came from, so they can also describe a connector that answers permissions
+  # over HTTP or injects a message through an in-process call. Emitted by the descriptor
+  # generator; never hand-declared.
+  - sessionEventStream # Emits normalized agent-session events (any integration shape)
+  - answerableRequests # Presents answerable requests resolvable from an Overlord surface
+  - remoteDecisionHold # Can hold a native decision open while a remote answer is awaited
+  - messageInjection # Can deliver an inbound instruction into a live or next turn
+  - nativeSessionBinding # Can resolve a native session id for correlation
+  # DEPRECATED hook-named flags, named after Claude hook types. Retained as generated aliases
+  # for one release so no shipped manifest breaks. Do not add new hook-named flags.
+  - followUpHook # Deprecated. Has a UserPromptSubmit hook that records follow-up messages
+  - permissionHook # Deprecated. Has a PermissionRequest hook that records tool permission prompts
+  - stopHook # Deprecated. Has a Stop hook for pending-delivery checks
+  - editHook # Deprecated. Has a PostToolUse hook that records touched files for delivery attribution
+  - nativeResume # Can detect and report native harness session/thread IDs
+  - modelFlag # Supports --model <model> launch flag
+  - effortFlag # Supports --effort or equivalent thinking/reasoning flag
+  - contextFilePrompt # Supports --append-system-prompt-file or equivalent context file flag
+  - permissionRules # Supports declarative protocol permission rules (no interactive approval)
+  - slashCommands # Supports slash commands for protocol operations
 
-# Approved hook types — closed set
-# Add here (with contract version bump) before implementing a new hook type
+# Approved hook types — closed set, DEPRECATED and harness-scoped.
+# A closed set of four Claude event names cannot describe Codex's fourteen, Cursor's
+# twenty-one, Pi's thirty-plus, or OpenCode's event bus. For capability purposes this list is
+# superseded by the agentSession.capabilityIds vocabulary below; it survives only as the
+# generated legacy projection for one release. Do not add values.
 approvedHookTypes:
-  - UserPromptSubmit    # Captures human follow-up messages after initial mission
-  - PermissionRequest   # Records tool permission prompts
-  - PostToolUse         # Records touched files after editing tools and shell commands
-  - Stop                # Checks pending delivery after agent turn (future)
+  - UserPromptSubmit # Captures human follow-up messages after initial mission
+  - PermissionRequest # Records tool permission prompts
+  - PostToolUse # Records touched files after editing tools and shell commands
+  - Stop # Checks pending delivery after agent turn (future)
+
+# Agent-session interaction vocabulary — closed sets.
+# The capability id vocabulary is closed so the same id means the same thing across every
+# adapter, and so the core can branch on a capability rather than on an agent identifier.
+agentSession:
+  descriptorSchema: contract/harness-capabilities.schema.yaml
+  descriptorPath: connectors/adapters/<agent>/harness-capabilities.yaml
+  capabilityIds:
+    - observe.prompt
+    - observe.toolCall
+    - observe.toolResult
+    - observe.fileEdit
+    - observe.sessionLifecycle
+    - decide.shell
+    - decide.mcp
+    - decide.fileWrite
+    - decide.anyTool
+    - decide.universal
+    - answer.structuredQuestion
+    - answer.persistentAllow
+    - inject.midTurn
+    - inject.turnBoundary
+    - inject.nextTurn
+    - terminal.concurrentAnswer
+    - terminal.statusSurface
+  capabilityStatuses:
+    - supported # Works today, proven by a passing executable fixture
+    - unsupported # The harness cannot do this. Do not attempt. Requires reason + evidenceRef
+    - not-implemented # The harness can; Overlord has not built it. Requires trackedAs
+    - unverified # Nobody knows. Find out before relying on it. Requires trackedAs
+  integrationShapes:
+    - callback # A subprocess the harness spawns per event; decision on stdout
+    - extension # In-process module; decision is a resolved promise
+    - controlPlane # Client of the harness's own API; decision is an HTTP call
+  capabilityTiers:
+    - 0 # Unsupported — mission works; no session interaction
+    - 1 # Observational — binding plus at least one normalized event
+    - 2 # Answerable — plus a held or peer decision path and native emission
+    - 3 # Conversational — plus honest injection (Delivered or nameable Queued)
+  fixtureKinds:
+    - native-payload # Assert the shape of a recorded native harness payload
+    - script-io # Run a shipped adapter script in a sandbox; assert io and side effects
+    - source-guard # Assert a repo file does or does not contain declared markers
+    - normalized-event # Run the shipped codec and interpreter on a recorded native payload;
+      # assert the exact normalized envelope AND that named raw content
+      # (file bodies, transcript paths, credentials) appears nowhere in it
+    - decision-codec # Run the shipped request/decision codec and pure interpreter; assert
+      # the bounded redacted request card and exact allow/deny/defer bytes
+  rules:
+    - 'capabilityTier is derived from passing fixtures only; it is never authored or persisted'
+    - 'Promoting a status out of `unsupported` must replace evidenceRef with executable fixtures in the same change'
+    - 'A native session id is a correlation alias; the verified channel/session credential is the authorization and mission scope'
+    - 'The working directory may locate an existing local binding but never creates one and never authorizes an event'
+    - "Clients gate controls on the live channel's effective capability snapshot, never on this static catalog and never on the agent identifier"
+    - 'A callback/extension decision capability requires a decision-codec fixture; a native-payload shape fixture alone cannot prove exact emitted bytes'
 
 # Controlled vocabularies
 # "closed" = only the values listed are valid; adding requires a contract version bump
@@ -176,9 +249,9 @@ closedVocabularies:
       - pending_delivery
       - complete
     transitions:
-      normal: "future → draft → submitted → launching → executing → complete"
-      followUp: "executing → pending_delivery (only after a prior delivery starts follow-up execution)"
-      reopen: "complete → executing or pending_delivery via explicit follow-up or admin transition with mission_events record"
+      normal: 'future → draft → submitted → launching → executing → complete'
+      followUp: 'executing → pending_delivery (only after a prior delivery starts follow-up execution)'
+      reopen: 'complete → executing or pending_delivery via explicit follow-up or admin transition with mission_events record'
 
   workspace_statuses.type:
     values:
@@ -189,9 +262,9 @@ closedVocabularies:
       - blocked
       - cancelled
     constraints:
-      - "Exactly one active status per workspace must have type=execute"
-      - "Exactly one active status per workspace must have type=review"
-      - "Exactly one active default status per workspace"
+      - 'Exactly one active status per workspace must have type=execute'
+      - 'Exactly one active status per workspace must have type=review'
+      - 'Exactly one active default status per workspace'
 
   execution_requests.status:
     values:
@@ -203,7 +276,7 @@ closedVocabularies:
       - cleared
       - cancelled
       - expired
-    transitions: "queued → claimed → launching → launched (normal); → failed | cleared | cancelled | expired (terminal)"
+    transitions: 'queued → claimed → launching → launched (normal); → failed | cleared | cancelled | expired (terminal)'
 
   agent_sessions.delivery_state:
     values:
@@ -246,22 +319,22 @@ closedVocabularies:
       - failed
 
 openVocabularies:
-  - workspaces.kind            # e.g. local, hosted, or adapter-defined
-  - users.kind                 # e.g. human, service, or adapter-defined
-  - execution_targets.type     # core values: local, virtual (virtual realized by an external gateway over the Virtual Target Queue Surface); adapter-defined values namespaced
-  - project_resources.type     # e.g. local_directory, remote_directory, or adapter-defined
-  - execution_target_registrations.gateway_key   # namespaced gateway adapter key (e.g. racecar); not an execution_targets.type
-  - project_resource_sources.source_kind         # git, local_checkout, source_bundle, or namespaced source kinds
-  - execution_request_observations.kind          # virtual preparation/launch/failure/lifecycle-resource observation kinds
-  - execution_request_grants.kind                # launch/attachment/download/credential_reference grant kinds
-  - execution_requests.failure_code              # typed virtual-target failure codes (e.g. source_incompatible); namespaced for adapter-specific codes
-  - mission_target_resources.kind                # adapter lifecycle-resource kinds (car/environment/run/…), referencing opaque external IDs only
-  - artifacts.type             # e.g. test_results, next_steps, note, url, decision, migration, or namespaced extension
-  - mission_events.source       # e.g. cli, api, hook, runner, web, or namespaced extension
+  - workspaces.kind # e.g. local, hosted, or adapter-defined
+  - users.kind # e.g. human, service, or adapter-defined
+  - execution_targets.type # core values: local, virtual (virtual realized by an external gateway over the Virtual Target Queue Surface); adapter-defined values namespaced
+  - project_resources.type # e.g. local_directory, remote_directory, or adapter-defined
+  - execution_target_registrations.gateway_key # namespaced gateway adapter key (e.g. racecar); not an execution_targets.type
+  - project_resource_sources.source_kind # git, local_checkout, source_bundle, or namespaced source kinds
+  - execution_request_observations.kind # virtual preparation/launch/failure/lifecycle-resource observation kinds
+  - execution_request_grants.kind # launch/attachment/download/credential_reference grant kinds
+  - execution_requests.failure_code # typed virtual-target failure codes (e.g. source_incompatible); namespaced for adapter-specific codes
+  - mission_target_resources.kind # adapter lifecycle-resource kinds (car/environment/run/…), referencing opaque external IDs only
+  - artifacts.type # e.g. test_results, next_steps, note, url, decision, migration, or namespaced extension
+  - mission_events.source # e.g. cli, api, hook, runner, web, or namespaced extension
   - entity_changes.entity_type # e.g. mission, objective, session, or namespaced extension
-  - entity_changes.source      # e.g. cli, api, runner, worker, hook, migration, or namespaced extension
-  - outbox_messages.topic      # e.g. attachment.delete_blob, webhook.deliver.v1, or namespaced extension
-  - worker_jobs.type           # job kind; namespaced extension
-  - rbac.permission_names      # RBAC capability/permission names; namespaced extension
+  - entity_changes.source # e.g. cli, api, runner, worker, hook, migration, or namespaced extension
+  - outbox_messages.topic # e.g. attachment.delete_blob, webhook.deliver.v1, or namespaced extension
+  - worker_jobs.type # job kind; namespaced extension
+  - rbac.permission_names # RBAC capability/permission names; namespaced extension
   - connector.agent_identifiers # e.g. codex, claude, cursor, or custom connector key
   - webhook_subscriptions.event_types_json # e.g. mission.delivered, mission.status_changed, objective.completed, mission.blocked, or namespaced extension

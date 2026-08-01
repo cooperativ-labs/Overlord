@@ -1,0 +1,42 @@
+# Codex CLI — agent-session event codec.
+#
+# This declarative dialect is compiled into the CLI.  Codex hook payloads carry the event name
+# and session id directly; they are correlation only.  The scoped channel credential remains
+# the sole authorization and mission-scope authority.
+codecVersion: 1
+adapter: codex
+
+eventNamePath: hook_event_name
+nativeSessionPaths:
+  - session_id
+projectRootPaths:
+  - cwd
+
+events:
+  - native: PreToolUse
+    kind: tool.called
+    origin: agent
+    toolPath: tool_name
+    inputPath: tool_input
+    callIdPath: tool_use_id
+    turnIdPath: turn_id
+
+  - native: PostToolUse
+    kind: tool.completed
+    origin: agent
+    toolPath: tool_name
+    inputPath: tool_input
+    callIdPath: tool_use_id
+    turnIdPath: turn_id
+    fileEditKind: file.edited
+
+  - native: UserPromptSubmit
+    kind: prompt.submitted
+    origin: user
+    promptPath: prompt
+    turnIdPath: turn_id
+
+  - native: SessionStart
+    kind: session.started
+    origin: system
+    detailPath: source

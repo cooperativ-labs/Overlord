@@ -1,0 +1,35 @@
+{
+  "fixtureVersion": 1,
+  "kind": "normalized-event",
+  "description": "A Claude SessionStart body. Proves observe.sessionLifecycle. `source` is a closed harness vocabulary rather than free text, which is why it is safe to surface as the event detail.",
+  "codec": "codec/claude.codec.yaml",
+  "occurredAt": "2026-01-01T00:00:00.000Z",
+  "payload": {
+    "session_id": "9f1b2c3d-4e5f-6071-8293-a4b5c6d7e8f9",
+    "transcript_path": "/Users/jake/.claude/projects/-repo/9f1b2c3d.jsonl",
+    "cwd": "/repo",
+    "hook_event_name": "SessionStart",
+    "source": "startup"
+  },
+  "expect": {
+    "eventId": "ev_cbfa04dde733a1aa87a6f254a79184d0",
+    "producerSequence": null,
+    "occurredAt": "2026-01-01T00:00:00.000Z",
+    "kind": "session.started",
+    "severity": "info",
+    "nativeEvent": "SessionStart",
+    "nativeTurnId": null,
+    "nativeCallId": null,
+    "subagentId": null,
+    "correlationId": "9f1b2c3d-4e5f-6071-8293-a4b5c6d7e8f9",
+    "origin": "system",
+    "summary": "Session started",
+    "payload": {
+      "detail": "startup"
+    }
+  },
+  "mustNotContain": [
+    ".jsonl",
+    "/Users/jake"
+  ]
+}

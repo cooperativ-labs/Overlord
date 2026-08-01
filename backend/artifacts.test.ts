@@ -9,7 +9,8 @@ const { bootstrapIntegrationTestDb } = await import('./test-helpers.ts');
 await bootstrapIntegrationTestDb({ sqlitePath: path.join(tempDir, 'webapp.sqlite') });
 
 const { db, nowIso } = await import('./db.ts');
-const { createMission, createProject, updateArtifact } = await import('./repository.ts');
+const { createMission, createProject, createArtifact, updateArtifact } =
+  await import('./repository.ts');
 const { ApiError } = await import('./errors.ts');
 
 async function createArtifactFixture(contentText: string | null = '# Initial artifact') {
@@ -125,4 +126,83 @@ test('protocol update-artifact revises an existing artifact without a session', 
   assert.equal(updated.label, 'Revised plan');
   assert.equal(updated.contentText, '## Updated\n\n- step one');
   assert.equal(updated.revision, 2);
+});
+
+test('creates a mid-turn artifact without a delivery', async () => {
+  const project = await createProject({ name: `Create artifacts ${Date.now()}` });
+  const mission = await createMission({
+    projectId: project.id,
+    firstObjective: 'Publish plan mid-turn'
+  });
+
+  const created = await createArtifact(mission.id, {
+    type: 'note',
+    label: 'Implementation plan',
+    contentText: '## Plan\n\n- step one',
+    objectiveId: mission.objectives[0].id
+  });
+
+  assert.equal(created.type, 'note');
+  assert.equal(created.label, 'Implementation plan');
+  assert.equal(created.contentText, '## Plan\n\n- step one');
+  assert.equal(created.deliveryId, null);
+  assert.equal(created.objectiveId, mission.objectives[0].id);
+  assert.equal(created.revision, 1);
+
+  const change = db
+    .prepare(
+      `SELECT entity_type, operation, entity_revision
+         FROM entity_changes WHERE entity_id = ? ORDER BY seq DESC LIMIT 1`
+    )
+    .get(created.id) as {
+    entity_type: string;
+    operation: string;
+    entity_revision: number;
+  };
+  assert.equal(change.entity_type, 'artifact');
+  assert.equal(change.operation, 'insert');
+  assert.equal(change.entity_revision, 1);
+});
+
+test('rejects creating an artifact without content', async () => {
+  const project = await createProject({ name: `Create empty ${Date.now()}` });
+  const mission = await createMission({ projectId: project.id, firstObjective: 'Need content' });
+
+  await assert.rejects(
+    createArtifact(mission.id, { type: 'note', label: 'Empty' }),
+    (error: unknown) => error instanceof ApiError && error.status === 400
+  );
+});
+
+test('protocol add-artifact creates an artifact without a delivery', async () => {
+  const project = await createProject({ name: `Protocol add ${Date.now()}` });
+  const mission = await createMission({
+    projectId: project.id,
+    firstObjective: 'Add via protocol'
+  });
+  const { runProtocolSubcommand } = await import('./protocol.ts');
+
+  const created = (await runProtocolSubcommand('add-artifact', {
+    flags: {
+      '--mission-id': mission.id,
+      '--type': 'decision',
+      '--label': 'Chosen approach',
+      '--content-text': 'Use REST POST for mid-turn creates.',
+      '--external-url': 'https://example.test/adr'
+    }
+  })) as {
+    type: string;
+    label: string;
+    contentText: string | null;
+    externalUrl: string | null;
+    deliveryId: string | null;
+    revision: number;
+  };
+
+  assert.equal(created.type, 'decision');
+  assert.equal(created.label, 'Chosen approach');
+  assert.equal(created.contentText, 'Use REST POST for mid-turn creates.');
+  assert.equal(created.externalUrl, 'https://example.test/adr');
+  assert.equal(created.deliveryId, null);
+  assert.equal(created.revision, 1);
 });

@@ -1,0 +1,13 @@
+{
+  "fixtureVersion": 1,
+  "kind": "source-guard",
+  "description": "Claude registers agent-session-inbox with asyncRewake for mid-turn inject, and on Stop for turn-boundary fallback.",
+  "path": "connectors/adapters/claude/hooks/hooks.json",
+  "assert": {
+    "mustContain": [
+      "agent-session-inbox.sh",
+      "\"asyncRewake\": true",
+      "\"Stop\""
+    ]
+  }
+}

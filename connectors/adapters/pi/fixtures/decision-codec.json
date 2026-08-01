@@ -1,0 +1,39 @@
+{
+  "fixtureVersion": 1,
+  "kind": "decision-codec",
+  "description": "Pi request reduction and exact fail-open allow/ask plus block output.",
+  "codec": "codec/pi.decision-codec.yaml",
+  "payload": {
+    "type": "tool_call",
+    "session_id": "session-1",
+    "cwd": "/repo",
+    "tool_name": "bash",
+    "tool_input": { "command": "echo AKIAIOSFODNN7EXAMPLE" },
+    "request_id": "req-1",
+    "tool_use_id": "call-1",
+    "timeout": 45
+  },
+  "expect": {
+    "request": {
+      "kind": "permission",
+      "summary": "Run a shell command: echo [redacted] [secret-adjacent]",
+      "details": {
+        "tool": "shell",
+        "action": "Run a shell command",
+        "subject": "echo",
+        "detail": "echo [redacted]",
+        "riskMarkers": ["secret-adjacent"],
+        "formatterVersion": 1
+      },
+      "nativeRequestId": "req-1",
+      "nativeCallId": "call-1",
+      "harnessTimeoutSeconds": 45
+    },
+    "responses": {
+      "allow": "{}\n",
+      "deny": "{\"block\":true,\"reason\":\"Denied by an Overlord decision\"}\n",
+      "ask": "{}\n"
+    }
+  },
+  "mustNotContain": ["AKIAIOSFODNN7EXAMPLE"]
+}

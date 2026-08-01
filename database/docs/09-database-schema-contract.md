@@ -1811,6 +1811,11 @@ Indexes:
 
 ### `hook_events`
 
+> **Superseded, never migrated (contract 45).** This design predates the Agent Session Exchange
+> and no adapter ever wrote it. Its role is subsumed by `agent_session_events` below: sanitized
+> hook payloads become normalized, harness-agnostic session events on a channel. It is retained
+> here only until the Exchange tables land, and no component may begin writing it.
+
 Raw-ish but sanitized connector lifecycle events. Important hook events should also create `mission_events`.
 
 | Column              | Type         | Required | Notes                                                 |
@@ -1835,6 +1840,12 @@ Indexes:
 - `(workspace_id, hook_type, created_at)`.
 
 ### `permission_requests`
+
+> **Superseded, never migrated (contract 45).** A permission becomes one kind of `agent_requests`
+> below, alongside blocking questions and structured choices; a table per prompt kind cannot
+> describe a harness whose approvals arrive over an event bus. The closed
+> `permission_requests.status` vocabulary and the `mission_events.type = permission_request`
+> value remain valid — only the dedicated table is retired. No component may begin writing it.
 
 Structured record for permission prompts, linked to events.
 
@@ -1861,6 +1872,54 @@ Indexes:
 
 - `(mission_id, created_at)`.
 - `(status, created_at)`.
+
+## Agent Session Exchange (migrated, contract 47)
+
+The Agent Session Exchange is the durable state behind session observation, answerable
+requests, and inbound instructions. Four core tables were **declared by contract 45 and
+migrated by contract 47** with the channel bootstrap
+(`20260801120000_agent_session_exchange.sql` in both dialects). They were recorded here before
+they existed so no component would invent a parallel shape, and so
+`hook_events`/`permission_requests` were retired against a named replacement rather than
+simply abandoned.
+
+They are core rather than `ext_` tables because they drive authorization, audit, presence, and
+UI gating.
+
+| Table | Role |
+| --- | --- |
+| `agent_session_channels` | One active root channel per Overlord agent session. Carries resource-derived authorization ids, a nullable `session_id` that becomes unique at protocol attach, launch/target/runner provenance, `agent_identifier`/`adapter_key`/`adapter_version`, the harness-alias `native_session_id`, the effective runtime `capabilities_json` snapshot, `state` (`preparing`, `online`, `degraded`, `ended`, `lost`), heartbeat/end diagnostics, and the normal timestamps, soft delete, and `revision`. |
+| `agent_session_events` | Append-only normalized session events, idempotent by producer id, with a monotonic per-channel sequence. Stores reduced, redacted content only. |
+| `agent_requests` | Answerable requests — permissions, blocking questions, structured choices — with their decision window, waiter lease, resolution attribution, and revision CAS. A permission is one kind of request, not its own table. |
+| `agent_session_inputs` | Durable queue of user-authored instructions with enqueue/lease/emit/acknowledge/fail states. An emitted input is never automatically retried. Additive `delivery_outcome` (`delivered`, `queued_turn_boundary`, `queued_next_turn`, `unsupported`) records what the adapter honestly reported at emit time so the UI can say "Queued (turn boundary)" for Cursor `followup_message` rather than inventing Delivered. |
+
+Rules that are contract, not implementation detail:
+
+- **The scoped channel credential is stored hash-only**, scoped to exactly one channel. It may
+  create events/requests, await resolutions, claim and acknowledge inputs, and heartbeat. It may
+  not read other mission data, resolve a human decision, or perform normal mission mutations.
+- **`native_session_id` is a correlation alias**, also copied to
+  `agent_sessions.external_session_id`. It is never an authorization key, and the working
+  directory is never a binding authority.
+- **Raw native payloads are never persisted** — no transcripts or transcript paths, no raw tool
+  input or output, no file contents, no environment variables. Stored summaries are bounded,
+  redacted, and carry a `formatter_version` so a request stays interpretable after the formatter
+  changes.
+- **No derived capability tier is persisted.** A connector's static tier is derived from
+  fixtures at build time; a session's effective capabilities live in `capabilities_json` on its
+  channel.
+- **Every channel/request/input mutation appends `entity_changes` in the same transaction**, and
+  notable events additionally project a bounded `mission_events` row.
+- `online` means a lease is being renewed, not that the model is generating; `lost` means the
+  lease expired without a clean end and revokes the channel credential.
+- **A channel is created before its session exists.** `session_id` is nullable and becomes
+  unique only once protocol attach binds it; binding backfills the session id onto every
+  pre-attach event and request in the same transaction. Events are idempotent by
+  `(channel_id, adapter_key, producer_event_id)`, because delivery is at least once by design.
+- **Ending or losing a channel is one transition, not three.** It revokes the credential,
+  releases every open request to the terminal, and expires every queued input together — so a
+  card can never stay answerable after its session is gone. An input that has reached `emitted`
+  is never re-leased or retried, however long its lease lapsed.
 
 ## Realtime, REST, And Sync
 
@@ -2521,6 +2580,7 @@ Recommended boundary:
 
 - `/projects`, `/projects/:id/resources`, `/projects/:id/repository`, `/missions`, `/missions/:id/objectives`, `/missions/:id/events`, `/missions/:id/context`, `/missions/:id/deliveries`, `/workspaces/:id/objectives.csv`. Project resource create/update bodies accept additive `resourceKey`; objective DTOs and create/update bodies expose additive `resourceKey`.
 - `PATCH /api/missions/:id/artifacts/:artifactId` edits an existing artifact's human-facing `label`, `contentText`, and/or `externalUrl` with `mission:update` permission on its mission. The caller supplies `expectedRevision`; stale writes return `409`, and external URLs must use HTTP(S). Its delivery/session/objective provenance and structured `contentJson` are immutable through this surface; the resulting artifact must retain at least one text, JSON, or URL content field. The transaction increments the artifact revision and appends an `artifact` entity change. The same mutation is also exposed as Protocol `POST /api/protocol/update-artifact` (`ovld protocol update-artifact`) and MCP `overlord_update_artifact`.
+- `POST /api/missions/:id/artifacts` creates a mission artifact without a delivery (`delivery_id` null) with `artifact:create` permission on its mission. The body supplies `{ type, label }` plus at least one of `{ contentText, externalUrl }`; optional `objectiveId` / `sessionId` stamp provenance, and Protocol/MCP may pass a live `sessionKey` instead. Non-HTTP(S) external URLs are rejected. The transaction appends an `artifact` entity-change create. The same mutation is exposed as Protocol `POST /api/protocol/add-artifact` (`ovld protocol add-artifact`) and MCP `overlord_add_artifact`. Delivery remains optional for artifacts and may still attach additional ones later.
 - `/workspace/my-missions` (read: missions assigned to the active actor across the active workspace, with personal `my_mission_positions` ordering) and `/workspace/my-missions/order` (persist a personal column reorder; a cross-column drag is a real mission status change validated by the `(workspace_id, status_id)` composite FK).
 - `/protocol/*` endpoints mirroring `ovld protocol`.
 - `/execution-requests` for runner queue operations.

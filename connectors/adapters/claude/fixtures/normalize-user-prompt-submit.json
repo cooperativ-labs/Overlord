@@ -1,0 +1,36 @@
+{
+  "fixtureVersion": 1,
+  "kind": "normalized-event",
+  "description": "A Claude UserPromptSubmit body. Proves observe.prompt. Prompt text is the ONE deliberate exception to payload reduction — the activity feed exists to show it — but secret redaction still runs, which this fixture pins.",
+  "codec": "codec/claude.codec.yaml",
+  "occurredAt": "2026-01-01T00:00:00.000Z",
+  "payload": {
+    "session_id": "9f1b2c3d-4e5f-6071-8293-a4b5c6d7e8f9",
+    "transcript_path": "/Users/jake/.claude/projects/-repo/9f1b2c3d.jsonl",
+    "cwd": "/repo",
+    "hook_event_name": "UserPromptSubmit",
+    "prompt": "please deploy using out_abcdefgh12345678 and then tell me what happened"
+  },
+  "expect": {
+    "eventId": "ev_d4024e7d5cab4fc8d8b219259fe56884",
+    "producerSequence": null,
+    "occurredAt": "2026-01-01T00:00:00.000Z",
+    "kind": "prompt.submitted",
+    "severity": "info",
+    "nativeEvent": "UserPromptSubmit",
+    "nativeTurnId": null,
+    "nativeCallId": null,
+    "subagentId": null,
+    "correlationId": "9f1b2c3d-4e5f-6071-8293-a4b5c6d7e8f9",
+    "origin": "user",
+    "summary": "please deploy using [redacted] and then tell me what happened",
+    "payload": {
+      "promptText": "please deploy using [redacted] and then tell me what happened"
+    }
+  },
+  "mustNotContain": [
+    "out_abcdefgh12345678",
+    ".jsonl",
+    "/Users/jake"
+  ]
+}

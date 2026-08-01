@@ -1,0 +1,30 @@
+{
+  "fixtureVersion": 1,
+  "kind": "normalized-event",
+  "description": "Recorded Codex SessionStart payload proves the hook session id can be correlated only after a channel has authorized it.",
+  "codec": "codec/codex.codec.yaml",
+  "occurredAt": "2026-08-01T00:00:00.000Z",
+  "payload": {
+    "session_id": "codex-session-1",
+    "transcript_path": "/Users/jake/.codex/sessions/secret.jsonl",
+    "cwd": "/repo",
+    "hook_event_name": "SessionStart",
+    "source": "startup"
+  },
+  "expect": {
+    "eventId": "ev_f68dd09c66d8f27815a8c7955608acf0",
+    "producerSequence": null,
+    "occurredAt": "2026-08-01T00:00:00.000Z",
+    "kind": "session.started",
+    "severity": "info",
+    "nativeEvent": "SessionStart",
+    "nativeTurnId": null,
+    "nativeCallId": null,
+    "subagentId": null,
+    "correlationId": "codex-session-1",
+    "origin": "system",
+    "summary": "Session started",
+    "payload": { "detail": "startup" }
+  },
+  "mustNotContain": ["secret.jsonl", "/Users/jake"]
+}

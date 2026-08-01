@@ -1,7 +1,9 @@
 #!/bin/bash
 # Overlord Cursor stop hook.
-# Checks whether the attached mission still needs delivery and, at most once,
-# asks Cursor to continue so the agent can deliver. It never delivers itself.
+# Prefers a pending session-input injection (Queued turn-boundary via followup_message)
+# when a channel is bound; otherwise checks whether the attached mission still needs
+# delivery and, at most once, asks Cursor to continue so the agent can deliver.
+# It never delivers itself.
 
 BODY=$(cat -)
 LOG_DIR="${HOME:-}/.ovld/logs"
@@ -16,6 +18,18 @@ if ! command -v ovld >/dev/null 2>&1; then
   log_hook "missing ovld, skipping"
   printf '{}'
   exit 0
+fi
+
+# Channel-bound inject path. The scope gate inside inbox exits quietly when unbound.
+if [ -n "${OVERLORD_SESSION_CHANNEL_ID:-}" ]; then
+  INBOX_OUT=$(printf '%s' "$BODY" | ovld agent-session inbox --agent cursor --payload-file - 2>/dev/null)
+  INBOX_EXIT=$?
+  if [ "$INBOX_EXIT" -eq 0 ] && [ -n "$INBOX_OUT" ]; then
+    # followup_message JSON from inbox — Queued(turn-boundary), never Delivered.
+    printf '%s' "$INBOX_OUT"
+    ovld protocol mission-link >&2 2>/dev/null || true
+    exit 0
+  fi
 fi
 
 if [ -z "${MISSION_ID:-}" ]; then

@@ -2,6 +2,7 @@ import { PERMISSIONS } from '@overlord/auth';
 import { type AgentLaunchFlagDto, normalizeAgentLaunchFlags } from '@overlord/contract';
 import type { DatabaseClient } from '@overlord/database';
 
+import { createSessionChannel } from '../../packages/core/service/agent-session/channels.ts';
 import type { ServiceContext } from '../../packages/core/service/context.ts';
 import { ServiceError } from '../../packages/core/service/errors.ts';
 import {
@@ -361,7 +362,67 @@ export async function updateRunnerRequestStatus({
       : status === 'launched'
         ? await markExecutionLaunched({ ctx, requestId })
         : await markExecutionFailed({ ctx, requestId, error: error ?? 'Launch failed' });
+
+  // The `launching` transition is where the session channel is prepared, because it is the
+  // last moment the backend is still in the loop before the agent process exists. Creating it
+  // any later would mean the harness could emit before there was anything authorized to
+  // receive it; creating it at claim time would mint a credential for work that may never
+  // launch.
+  //
+  // The raw credential is returned exactly once, here, and only to the runner that owns this
+  // claim. It is not readable back afterwards — the channel row stores only its hash.
+  if (status === 'launching') {
+    const bootstrap = await prepareSessionChannelForRequest({ ctx, request });
+    return { ...serviceSummaryToDto(request), sessionChannel: bootstrap };
+  }
   return serviceSummaryToDto(request);
+}
+
+/**
+ * Create the session channel for a launching execution request.
+ *
+ * Best-effort by design: a channel that cannot be created must not stop an agent from
+ * launching. Agent-session interaction is an enhancement layered on top of a mission; the
+ * mission itself has worked without it for the whole life of the product, and failing a launch
+ * because the observation layer hiccuped would trade a working feature for a broken one.
+ */
+async function prepareSessionChannelForRequest({
+  ctx,
+  request
+}: {
+  ctx: ServiceContext;
+  request: ExecutionRequestSummary;
+}): Promise<Record<string, unknown> | null> {
+  try {
+    const existing = await ctx.db.get<{ id: string }>(
+      `SELECT id FROM agent_session_channels
+         WHERE execution_request_id = ? AND deleted_at IS NULL
+           AND state IN ('preparing', 'online', 'degraded')`,
+      [request.id]
+    );
+    // A retried `launching` call must not mint a second credential for one launch.
+    if (existing) return null;
+
+    const { bootstrap } = await createSessionChannel({
+      ctx,
+      missionId: request.missionId,
+      objectiveId: request.objectiveId ?? null,
+      projectId: request.projectId ?? null,
+      executionRequestId: request.id,
+      executionTargetId: request.executionTargetId ?? null,
+      agentIdentifier: request.requestedAgent ?? null,
+      adapterKey: request.requestedAgent ?? null,
+      launchKind: 'queued'
+    });
+    return {
+      channelId: bootstrap.channelId,
+      token: bootstrap.token,
+      expiresAt: bootstrap.expiresAt,
+      launchKind: bootstrap.launchKind
+    };
+  } catch {
+    return null;
+  }
 }
 
 export async function completeRunnerMutationRequest({

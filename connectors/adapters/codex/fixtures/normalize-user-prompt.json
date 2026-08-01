@@ -1,0 +1,31 @@
+{
+  "fixtureVersion": 1,
+  "kind": "normalized-event",
+  "description": "Recorded Codex UserPromptSubmit payload proving prompt activity is redacted before it leaves the machine.",
+  "codec": "codec/codex.codec.yaml",
+  "occurredAt": "2026-08-01T00:00:00.000Z",
+  "payload": {
+    "session_id": "codex-session-1",
+    "turn_id": "turn-2",
+    "transcript_path": "/Users/jake/.codex/sessions/secret.jsonl",
+    "cwd": "/repo",
+    "hook_event_name": "UserPromptSubmit",
+    "prompt": "Use out_abcdefgh12345678 to deploy this safely"
+  },
+  "expect": {
+    "eventId": "ev_40f7cf5fb122a92ca01f900d3fada9c0",
+    "producerSequence": null,
+    "occurredAt": "2026-08-01T00:00:00.000Z",
+    "kind": "prompt.submitted",
+    "severity": "info",
+    "nativeEvent": "UserPromptSubmit",
+    "nativeTurnId": "turn-2",
+    "nativeCallId": null,
+    "subagentId": null,
+    "correlationId": "codex-session-1",
+    "origin": "user",
+    "summary": "Use [redacted] to deploy this safely",
+    "payload": { "promptText": "Use [redacted] to deploy this safely" }
+  },
+  "mustNotContain": ["out_abcdefgh12345678", "secret.jsonl", "/Users/jake"]
+}

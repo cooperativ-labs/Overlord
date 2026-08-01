@@ -1,0 +1,56 @@
+{
+  "fixtureVersion": 1,
+  "kind": "normalized-event",
+  "description": "An OpenCode /event frame for a completed tool part. The counterpart to Claude's normalize-post-tool-use-shell fixture: a control-plane harness and a callback harness producing the same normalized envelope is the Phase 1 acceptance criterion, executed.",
+  "codec": "codec/opencode.codec.yaml",
+  "nativeEventName": "message.part.updated",
+  "occurredAt": "2026-01-01T00:00:00.000Z",
+  "payload": {
+    "type": "message.part.updated",
+    "properties": {
+      "sessionID": "ses_7c1d2e3f4a5b",
+      "cwd": "/repo",
+      "part": {
+        "id": "prt_001",
+        "callID": "call_abc123",
+        "type": "tool",
+        "tool": "bash",
+        "state": {
+          "status": "completed",
+          "input": {
+            "command": "yarn test --silent",
+            "description": "Run the test suite"
+          },
+          "output": "PASS 412 tests\nDATABASE_URL=postgres://user:hunter2@db/app\n"
+        }
+      }
+    }
+  },
+  "expect": {
+    "eventId": "ev_2cf3e1650856df8ed746e228f6711be4",
+    "producerSequence": null,
+    "occurredAt": "2026-01-01T00:00:00.000Z",
+    "kind": "tool.completed",
+    "severity": "info",
+    "nativeEvent": "message.part.updated",
+    "nativeTurnId": null,
+    "nativeCallId": "call_abc123",
+    "subagentId": null,
+    "correlationId": "ses_7c1d2e3f4a5b",
+    "origin": "agent",
+    "summary": "Run a shell command: yarn test --silent",
+    "payload": {
+      "tool": "shell",
+      "action": "Run a shell command",
+      "subject": "yarn",
+      "detail": "yarn test --silent",
+      "outcome": "ok",
+      "formatterVersion": 1
+    }
+  },
+  "mustNotContain": [
+    "PASS 412 tests",
+    "hunter2",
+    "postgres://"
+  ]
+}

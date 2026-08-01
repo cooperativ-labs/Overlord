@@ -1,0 +1,30 @@
+{
+  "fixtureVersion": 1,
+  "kind": "normalized-event",
+  "description": "An OpenCode session.idle frame. Proves observe.sessionLifecycle for the control-plane shape, where lifecycle arrives as a bus event rather than a hook invocation.",
+  "codec": "codec/opencode.codec.yaml",
+  "nativeEventName": "session.idle",
+  "occurredAt": "2026-01-01T00:00:00.000Z",
+  "payload": {
+    "type": "session.idle",
+    "properties": {
+      "sessionID": "ses_7c1d2e3f4a5b"
+    }
+  },
+  "expect": {
+    "eventId": "ev_413ac0d98855960b0676fb21688ca183",
+    "producerSequence": null,
+    "occurredAt": "2026-01-01T00:00:00.000Z",
+    "kind": "session.ended",
+    "severity": "info",
+    "nativeEvent": "session.idle",
+    "nativeTurnId": null,
+    "nativeCallId": null,
+    "subagentId": null,
+    "correlationId": "ses_7c1d2e3f4a5b",
+    "origin": "system",
+    "summary": "Session ended",
+    "payload": {}
+  },
+  "mustNotContain": []
+}

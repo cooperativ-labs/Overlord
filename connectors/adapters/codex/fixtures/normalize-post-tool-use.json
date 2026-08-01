@@ -1,0 +1,34 @@
+{
+  "fixtureVersion": 1,
+  "kind": "normalized-event",
+  "description": "Recorded Codex PostToolUse payload proving file edits are reduced to structural metadata and never leak written content or tool output.",
+  "codec": "codec/codex.codec.yaml",
+  "occurredAt": "2026-08-01T00:00:00.000Z",
+  "payload": {
+    "session_id": "codex-session-1",
+    "turn_id": "turn-1",
+    "tool_use_id": "call-2",
+    "transcript_path": "/Users/jake/.codex/sessions/secret.jsonl",
+    "cwd": "/repo",
+    "hook_event_name": "PostToolUse",
+    "tool_name": "apply_patch",
+    "tool_input": { "command": "*** Begin Patch\n*** Update File: /repo/src/token.ts\n+const key = 'AKIAIOSFODNN7EXAMPLE';\n*** End Patch" },
+    "tool_response": { "text": "changed with postgres://user:hunter2@db/app" }
+  },
+  "expect": {
+    "eventId": "ev_b6414915d58f532e1e3eea254578e9b9",
+    "producerSequence": null,
+    "occurredAt": "2026-08-01T00:00:00.000Z",
+    "kind": "file.edited",
+    "severity": "info",
+    "nativeEvent": "PostToolUse",
+    "nativeTurnId": "turn-1",
+    "nativeCallId": "call-2",
+    "subagentId": null,
+    "correlationId": "codex-session-1",
+    "origin": "agent",
+    "summary": "Write a file",
+    "payload": { "tool": "edit", "action": "Write a file", "formatterVersion": 1 }
+  },
+  "mustNotContain": ["AKIAIOSFODNN7EXAMPLE", "hunter2", "secret.jsonl", "/Users/jake"]
+}

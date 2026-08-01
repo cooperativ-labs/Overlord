@@ -3,6 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { chmodSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
+import { writeChannelCredential } from './agent-session/channel.js';
 import { resolveAgentBinary } from './agent-binaries.js';
 import {
   buildPreLaunchVariables,
@@ -44,6 +45,16 @@ export type LaunchOptions = {
   executionRequestId?: string | null;
   executionTargetId?: string | null;
   /**
+   * The session channel prepared for this launch. Only the **id** is exported into the launch
+   * environment; the credential is staged in the owner-only global credential cache by
+   * `writeChannelCredential` and never written into the launch script, because that script
+   * lives in `<checkout>/.overlord/tmp` and a checkout-local secret is a secret you have
+   * already lost. See `cli/src/agent-session/channel.ts`.
+   */
+  sessionChannelId?: string | null;
+  sessionChannelToken?: string | null;
+  sessionChannelLaunchKind?: string | null;
+  /**
    * Open the agent in a new terminal window. A built-in name (`iTerm2`,
    * `Terminal`) or a raw prefix command (e.g. `open -a Ghostty --args`).
    * When omitted/null the agent runs inline in the current terminal.
@@ -75,11 +86,15 @@ function overlordLaunchEnv({
   backendUrl,
   missionId,
   executionRequestId,
+  sessionChannelId,
+  sessionChannelLaunchKind,
   projectResources
 }: {
   backendUrl: string;
   missionId: string;
   executionRequestId?: string | null;
+  sessionChannelId?: string | null;
+  sessionChannelLaunchKind?: string | null;
   projectResources?: unknown[] | null;
 }): Record<string, string> {
   return {
@@ -87,6 +102,12 @@ function overlordLaunchEnv({
     OVERLORD_MISSION_ID: missionId,
     OVERLORD_BACKEND_URL: backendUrl,
     ...(executionRequestId ? { OVERLORD_EXECUTION_REQUEST_ID: executionRequestId } : {}),
+    // The id, never the token. Everything in this map may be written into the terminal launch
+    // script under `<checkout>/.overlord/tmp`, so nothing secret may enter it.
+    ...(sessionChannelId ? { OVERLORD_SESSION_CHANNEL_ID: sessionChannelId } : {}),
+    ...(sessionChannelId
+      ? { OVERLORD_SESSION_LAUNCH_KIND: sessionChannelLaunchKind || 'unknown' }
+      : {}),
     ...(projectResources && projectResources.length > 0
       ? { OVERLORD_PROJECT_RESOURCES: JSON.stringify(projectResources) }
       : {})
@@ -319,10 +340,22 @@ export async function buildLaunchPlan({
     missionId: options.missionId,
     executionTargetId: options.executionTargetId
   });
+  // Stage the scoped credential before the agent starts, so it is on disk (owner-only, outside
+  // every checkout) by the time the launched process first looks for it. A dry run stages
+  // nothing: it must remain a pure description of what *would* happen.
+  if (options.sessionChannelId && options.sessionChannelToken && !options.dryRun) {
+    writeChannelCredential({
+      channelId: options.sessionChannelId,
+      token: options.sessionChannelToken
+    });
+  }
+
   const launchEnv = overlordLaunchEnv({
     backendUrl: runtime.backend.baseUrl,
     missionId: context.displayId,
     executionRequestId: options.executionRequestId,
+    sessionChannelId: options.sessionChannelId,
+    sessionChannelLaunchKind: options.sessionChannelLaunchKind,
     projectResources
   });
 

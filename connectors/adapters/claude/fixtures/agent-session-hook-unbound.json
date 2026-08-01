@@ -1,0 +1,26 @@
+{
+  "fixtureVersion": 1,
+  "kind": "script-io",
+  "description": "The negative test for the NEW agent-session registrations, executed against the shared core script that every adapter renders. In a session with no Overlord binding this must produce no output, no subprocess, no file, and no delay — the bash gate runs before the `ovld` spawn, so the assertion below is empty cliInvocations rather than a tolerated one. This is what narrows the `unbound-session-side-effects` hazard: the new path is silent, and only the legacy record-touched hook still spawns.",
+  "script": "connectors/core/scripts/agent-session-hook.sh",
+  "stdin": {
+    "session_id": "11111111-2222-3333-4444-555555555555",
+    "hook_event_name": "PostToolUse",
+    "cwd": "/private/unrelated-project",
+    "tool_name": "Write",
+    "tool_input": { "file_path": "/private/unrelated-project/notes.md" }
+  },
+  "env": {
+    "MISSION_ID": null,
+    "SESSION_KEY": null,
+    "OVERLORD_SESSION_CHANNEL_ID": null,
+    "OVERLORD_SESSION_CHANNEL_TOKEN": null
+  },
+  "expect": {
+    "exitCode": 0,
+    "stdout": "",
+    "stderr": "",
+    "cliInvocations": [],
+    "sandboxWrites": []
+  }
+}

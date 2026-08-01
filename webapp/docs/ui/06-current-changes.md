@@ -8,7 +8,7 @@ rationales. This is the web equivalent of `ovld changes status|diff|rationales`.
 the **Changes** tab on mission detail (doc 03) scoped to that mission/objective.
 
 > **Hard constraint:** VCS access is strictly read-only. This screen never creates
-> commits, refs, branches, stashes, checkpoints, tags, resets, checkouts, patches,
+> commits, refs, branches, stashes, tags, resets, checkouts, patches,
 > or any other mutation, and it never uploads repository contents to the backend.
 > It requires a **local backend** with a linked directory; without one it shows an
 > unavailable state.

@@ -34,9 +34,12 @@ import { InlineEditField } from './InlineEditField.tsx';
 import { LiveActivityFeed } from './LiveActivityFeed.tsx';
 import { LiveFileChanges } from './LiveFileChanges.tsx';
 import { MissionArtifactsSection } from './MissionArtifactsSection.tsx';
+import { MissionDeliveriesSection } from './MissionDeliveriesSection.tsx';
 import { MissionMemberSelect } from './MissionMemberSelect.tsx';
 import { MissionPanelHeader } from './MissionPanelHeader.tsx';
 import { MissionProjectSelect } from './MissionProjectSelect.tsx';
+import { MissionSessionInputsSection } from './MissionSessionInputsSection.tsx';
+import { MissionSharedStateFooter } from './MissionSharedStateFooter.tsx';
 import { MissionStatusSelect } from './MissionStatusSelect.tsx';
 import { MissionTagSelect } from './MissionTagSelect.tsx';
 import { MissionToolsAndCriteria } from './MissionToolsAndCriteria.tsx';
@@ -363,6 +366,18 @@ export function MissionPanel({
               <MissionArtifactsSection missionId={mission.id} />
             </div>
             <div className="space-y-3">
+              <h2 className="text-xs font-semibold uppercase tracking-wide text-(--color-ink-dim)">
+                Deliveries
+              </h2>
+              <MissionDeliveriesSection missionId={mission.id} objectives={mission.objectives} />
+            </div>
+            <div className="space-y-3">
+              <h2 className="text-xs font-semibold uppercase tracking-wide text-(--color-ink-dim)">
+                Session instructions
+              </h2>
+              <MissionSessionInputsSection missionId={mission.id} />
+            </div>
+            <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <h2 className="text-xs font-semibold uppercase tracking-wide text-(--color-ink-dim)">
                   Activity
@@ -380,6 +395,7 @@ export function MissionPanel({
           </div>
         </section>
       </div>
+      <MissionSharedStateFooter missionId={mission.id} />
     </div>
   );
 }

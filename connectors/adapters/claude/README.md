@@ -85,7 +85,9 @@ This connector is intentionally reviewable against the four connector layers in 
 
 - `skills/overlord-mission/SKILL.md` — Claude adapter template with a `<!-- @connector-core -->` marker; setup interpolates shared core content at install time.
 - `commands/*.md` — slash commands for session routing, objective discussion, mission creation, and work recording.
-- `hooks/hooks.json` + `scripts/*.sh` — hook-driven follow-up, permission, and stop-event capture.
+- `hooks/hooks.json` + `scripts/*.sh` — mission follow-up and touched-file capture plus the
+  scoped `ovld agent-session` observe, decision, and injection paths. Decision failures emit no
+  native response, so Claude retains its normal permission behavior.
 - `userConfig` for `overlord_url` and `user_token`; the hook scripts use the `ovld protocol` CLI and pass the plugin's USER_TOKEN to that CLI as `Overlord_USER_TOKEN`.
 - `conformance-manifest.yaml` — connector conformance declaration for the Overlord contract.
 - `prompt-wrapper.md` — Claude launch context-file guidance.

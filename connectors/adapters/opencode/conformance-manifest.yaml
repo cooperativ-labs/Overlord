@@ -1,0 +1,26 @@
+contractVersion: "52"
+componentType: connector
+componentKey: opencode
+label: "OpenCode Connector"
+description: "OpenCode control-plane adapter for the Overlord agent-session runtime."
+
+connector:
+  agentIdentifier: opencode
+  # ── GENERATED: do not edit by hand ───────────────────────────────────────────
+  # Projected from connectors/adapters/opencode/harness-capabilities.yaml by `yarn connectors:capabilities`.
+  # `capabilities` and `hookTypes` are the DEPRECATED hook-named projection, retained for
+  # one release. `harnessCapabilities` is the authoritative source.
+  integrationShape: controlPlane
+  capabilityTier: 3
+  harnessCapabilities:
+    path: connectors/adapters/opencode/harness-capabilities.yaml
+    schemaVersion: 1
+    digest: "83f146f0c4be8764608401886f374ebfc7bbe5dca8fcdecf3856a99030f778e6"
+  capabilities:
+  # ── END GENERATED ────────────────────────────────────────────────────────────
+  installPath: "~/.ovld/opencode"
+  managedFiles:
+    - "harness-capabilities.yaml"
+    - "CAPABILITIES.md"
+    - "README.md"
+    - "codec/opencode.codec.yaml"

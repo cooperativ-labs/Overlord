@@ -81,6 +81,7 @@ The tool catalog is mission-first:
 - `overlord_attach_session`
 - `overlord_update_session`
 - `overlord_deliver_session`
+- `overlord_add_artifact` — create a mission artifact mid-turn without delivering
 - `overlord_update_artifact` — revise an existing mission artifact in place
 - `overlord_record_work`
 
@@ -103,6 +104,12 @@ create missions require an explicit `projectId`. Call `overlord_resolve_project`
 first when project identity comes from an exposed repository resource carrying
 `.overlord/project.json`.
 </Aside>
+
+`overlord_add_artifact` forwards to Protocol `add-artifact` and uses the same
+service as REST `POST /api/missions/:id/artifacts`. Provide `missionId`, `type`,
+`label`, and at least one of `contentText` or `externalUrl`. Optional
+`sessionKey` stamps session/objective provenance. Use it to publish a plan,
+notes, or URL during a turn without delivering.
 
 `overlord_update_artifact` forwards to Protocol `update-artifact` and uses the
 same service as REST `PATCH /api/missions/:id/artifacts/:artifactId`. Provide

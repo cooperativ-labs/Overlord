@@ -68,10 +68,9 @@ reading prior chat:
 - **`agentInstructions`** — concise workflow guidance and pointers into the
   structured fields.
 
-In a git workspace, `attach` also records a **VCS baseline** and a local
-checkpoint (under `refs/overlord/checkpoints/<objectiveId>`) so changed-file
-attribution and provenance work automatically. Pass `--skip-checkpoint` only to
-intentionally bypass local provenance.
+In a git workspace, `attach` also records a **VCS baseline** (changed file paths
+from local `git status`) so delivery can compute the run-attributable delta
+automatically.
 
 ## Post progress while you work
 
@@ -203,8 +202,7 @@ objectives** running in the same checkout. Those are **not yours to undo.**
 
 <Aside type="danger">
   Never revert, restore, or delete another agent's work to make delivery succeed — no `git
-  checkout`/`restore`/`reset` of edits you didn't make, no deleting unfamiliar files, no `ovld
-  protocol revert` on another objective's checkpoint.
+  checkout`/`restore`/`reset` of edits you didn't make, and no deleting unfamiliar files.
 </Aside>
 
 If `deliver` fails with `missing_rationale` for a file you did not change, or
@@ -245,6 +243,24 @@ asks for follow-up work.
     and use the returned session key.
 - During follow-up execution, post updates and record change rationales just like
   the first pass, then **deliver again**.
+
+## Create an artifact during a turn
+
+Artifacts do not require delivery. Publish a plan, notes, decision, or URL
+mid-session, then revise it later if needed:
+
+```bash
+ovld protocol add-artifact \
+  --mission-id coo:312 \
+  --type note \
+  --label "Implementation plan" \
+  --content-text-file -
+```
+
+Provide `--type`, `--label`, and at least one of `--content-text` /
+`--content-text-file` or `--external-url`. An optional `--session-key`
+(auto-injected from the attach cache when present) stamps session/objective
+provenance. Hosted MCP exposes the same call as `overlord_add_artifact`.
 
 ## Update an existing artifact
 
@@ -297,6 +313,7 @@ ovld protocol add-objectives --mission-id coo:312 \
 | `changes`                        | Local preflight of changed-file attribution.              |
 | `resume-follow-up`               | Reopen a delivered objective for follow-up.               |
 | `read-context` / `write-context` | Read or store persistent shared context.                  |
+| `add-artifact`                   | Create a mission artifact mid-turn (no delivery required). |
 | `update-artifact`                | Revise an existing mission artifact in place.             |
 
 For the full CLI surface — management commands, the runner, project linking —

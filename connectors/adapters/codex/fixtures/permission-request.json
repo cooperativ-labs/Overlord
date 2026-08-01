@@ -1,0 +1,18 @@
+{
+  "fixtureVersion": 1,
+  "kind": "native-payload",
+  "description": "Recorded Codex PermissionRequest shape used by the callback request codec.",
+  "payload": {
+    "session_id": "codex-session-1",
+    "turn_id": "turn-1",
+    "hook_event_name": "PermissionRequest",
+    "tool_name": "Bash",
+    "timeout": 35,
+    "tool_input": { "command": "git push" }
+  },
+  "assert": {
+    "requiredPaths": ["session_id", "hook_event_name", "tool_name", "timeout"],
+    "equals": { "hook_event_name": "PermissionRequest" },
+    "bindingField": "session_id"
+  }
+}

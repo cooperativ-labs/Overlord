@@ -15,6 +15,10 @@ export default [
       '**/build/**',
       'coverage/**',
       'packages/core/types/db.ts',
+      // Generated harness capability catalog and compiled connector codecs
+      // (see scripts/generate-harness-capabilities.mjs)
+      'cli/src/agent-session/catalog.generated.ts',
+      'cli/src/agent-session/codec-registry.generated.ts',
       '**/*.d.ts',
       '**/*.js',
       // Desktop: bundled server, staged SPA/CLI, migrations (see desktop/.gitignore)

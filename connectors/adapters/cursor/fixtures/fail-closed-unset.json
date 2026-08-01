@@ -1,0 +1,10 @@
+{
+  "fixtureVersion": 1,
+  "kind": "source-guard",
+  "description": "Cursor's per-script failClosed converts a hook failure into a block, which inverts the core's fail-toward-the-harness rule. The installer that merges Overlord's hooks into ~/.cursor/hooks.json must never set it.",
+  "path": "cli/src/connectors.ts",
+  "assert": {
+    "mustContain": ["beforeShellExecution", "beforeMCPExecution"],
+    "mustNotContain": ["failClosed"]
+  }
+}

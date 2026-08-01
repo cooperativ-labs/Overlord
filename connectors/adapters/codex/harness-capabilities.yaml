@@ -1,0 +1,180 @@
+# Codex — agent-session interaction capabilities.
+#
+# Authoritative and fixture-backed. Validated against contract/harness-capabilities.schema.yaml.
+# See connectors/AGENTS.md → "Harness capability descriptors" before writing any code here.
+#
+# The supported hook surface is proven by recorded payload fixtures and the published Codex
+# hook schema. The app-server remains intentionally unselected: it is experimental and would
+# introduce a second authority capable of racing hook decisions.
+schemaVersion: 1
+adapter: codex
+codec: codex
+codecSpec: codec/codex.codec.yaml
+decisionCodecSpec: codec/codex.decision-codec.yaml
+
+harness:
+  name: Codex CLI
+  verifiedVersion: '0.146.0'
+  versionRange: '>=0.124.0'
+  versionScheme: semver
+
+integrationShape: callback
+
+binding:
+  source: payload
+  field: session_id
+  status: supported
+  fixture: fixtures/normalize-session-start.json
+  notes: >-
+    `CODEX_THREAD_ID` exists in the environment but is NOT known to equal the hook payload's
+    `session_id`; the binary distinguishes session ids, turn ids, and thread ids. Assuming
+    symmetry with Claude here is exactly the guess that produces silent misattribution, so
+    binding stays on the payload field until the equality is settled by fixture.
+
+decisionHold:
+  status: supported
+  fixture: fixtures/permission-request.json
+  timeoutField: timeout
+  timeoutUnit: seconds
+  defaultTimeoutSeconds: 600
+  maxTimeoutSeconds: null
+  trackedAs: agent-session-phase-4
+  notes: >-
+    Per-hook timeouts in seconds; the documentation gives a 600-second default. The adapter
+    must set `timeout` explicitly from the window policy and well below that default.
+
+capabilities:
+  observe.prompt:
+    status: supported
+    native: UserPromptSubmit
+    fixtures: [fixtures/normalize-user-prompt.json]
+  observe.toolCall:
+    status: supported
+    native: PreToolUse
+    fixtures: [fixtures/normalize-pre-tool-use.json]
+  observe.toolResult:
+    status: supported
+    native: PostToolUse
+    fixtures: [fixtures/normalize-post-tool-use.json]
+  observe.fileEdit:
+    status: supported
+    native: PostToolUse
+    fixtures: [fixtures/normalize-post-tool-use.json]
+  observe.sessionLifecycle:
+    status: supported
+    native: SessionStart
+    fixtures: [fixtures/normalize-session-start.json]
+  decide.shell:
+    status: supported
+    native: PermissionRequest
+    fixtures: [fixtures/permission-request.json, fixtures/decision-codec.json]
+  decide.mcp:
+    status: supported
+    native: PermissionRequest
+    fixtures: [fixtures/permission-request.json, fixtures/decision-codec.json]
+  decide.fileWrite:
+    status: supported
+    native: PermissionRequest
+    fixtures: [fixtures/permission-request.json, fixtures/decision-codec.json]
+  decide.anyTool:
+    status: not-implemented
+    native: PreToolUse
+    trackedAs: agent-session-phase-4
+  decide.universal:
+    status: supported
+    native: PermissionRequest
+    fixtures: [fixtures/permission-request.json, fixtures/decision-codec.json]
+    notes: >-
+      Codex PermissionRequest covers Bash, apply_patch/Edit/Write, and MCP tool names. The
+      codec emits only documented allow/deny behavior and deliberately never emits reserved
+      `updatedInput`, `updatedPermissions`, or `interrupt` fields.
+  answer.structuredQuestion:
+    status: unverified
+    native: ToolRequestUserInput
+    trackedAs: taxonomy-7.2
+    notes: >-
+      `codex app-server` exposes ToolRequestUserInput with per-option label/description and an
+      autoResolutionMs — an ACP-shaped structured question in everything but name. It is
+      unreachable until the single-subscriber question is settled.
+  answer.persistentAllow:
+    status: unverified
+    trackedAs: taxonomy-7.4
+  inject.midTurn:
+    status: unverified
+    native: ThreadInjectItems
+    trackedAs: taxonomy-7.2
+    notes: >-
+      ThreadInjectItems/TurnSteer exist on the experimental app-server surface only. The
+      binary carries "expected exactly one client subscribed to the thread, found {}", so if
+      the TUI is that one client Overlord cannot also subscribe and this path is closed.
+  inject.turnBoundary:
+    status: supported
+    native: Stop
+    fixtures: [fixtures/agent-session-hooks.json]
+  inject.nextTurn:
+    status: not-implemented
+    native: Stop
+    trackedAs: agent-session-phase-4
+  terminal.concurrentAnswer:
+    status: unsupported
+    reason: >-
+      On the hook path the native prompt is drawn only after the callback returns, so the
+      terminal cannot answer while Overlord holds the decision. (A future app-server
+      integration could change this; it would be a different integrationShape.)
+    evidenceRef: connector-harness-taxonomy.md#12-the-axis-that-actually-matters
+  terminal.statusSurface:
+    status: unverified
+    trackedAs: taxonomy-7.9
+
+hazards:
+  - id: two-integration-surfaces-could-disagree
+    severity: high
+    summary: >-
+      Hooks and `codex app-server` can both answer a permission. A session driven by both
+      would race in a way no revision CAS can settle, so exactly one surface must be chosen
+      and documented before either is built.
+    verification: verified
+    mitigation: implemented
+    fixture: fixtures/agent-session-hooks.json
+  - id: shipped-permission-hook-inert
+    severity: high
+    summary: >-
+      The former PermissionRequest hook called a nonexistent protocol command in the
+      background. The managed registration now invokes the fixed request runtime directly.
+    verification: verified
+    mitigation: implemented
+    fixture: fixtures/agent-session-hooks.json
+  - id: hooks-version-and-platform-gate
+    severity: medium
+    summary: >-
+      Hooks were experimental behind `features.codex_hooks` before v0.124. The connector
+      requires Codex >=0.124; installations outside that range must be treated as unavailable.
+    verification: verified
+    mitigation: required
+    trackedAs: agent-session-phase-4
+
+decisionShape:
+  codec: codex
+  neverSend: [updatedInput, updatedPermissions, interrupt, permission, followup_message]
+  allowFixture: fixtures/decision-codec.json
+  denyFixture: fixtures/decision-codec.json
+  deferFixture: fixtures/decision-codec.json
+  notes: >-
+    PermissionRequest accepts the documented hookSpecificOutput decision.behavior allow/deny
+    shape. `ask` remains a deliberate no-output defer so Codex shows its own approval prompt.
+    The adapter never emits updatedInput, updatedPermissions, or interrupt.
+
+unboundSessionFixture: fixtures/unbound-session.json
+
+legacy:
+  capabilities:
+    - followUpHook
+    - permissionHook
+    - nativeResume
+    - modelFlag
+    - effortFlag
+    - contextFilePrompt
+    - permissionRules
+  hookTypes:
+    - UserPromptSubmit
+    - PermissionRequest

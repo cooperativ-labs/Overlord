@@ -138,6 +138,7 @@ export const keys = {
   missionEvents: (id: string) => ['mission', id, 'events'] as const,
   missionDeliveries: (id: string) => ['mission', id, 'deliveries'] as const,
   missionArtifacts: (id: string) => ['mission', id, 'artifacts'] as const,
+  missionSharedContext: (id: string) => ['mission', id, 'context'] as const,
   missionFileChanges: (id: string) => ['mission', id, 'file-changes'] as const,
   objectiveAttachments: (objectiveId: string) => ['objective', objectiveId, 'attachments'] as const,
   agentCatalog: (workspaceId?: string | null) =>
@@ -496,7 +497,7 @@ export const useWorktrees = () => {
 export const useMissionEvents = (id: string) =>
   useQuery({ queryKey: keys.missionEvents(id), queryFn: () => api.listMissionEvents(id) });
 
-/** Delivery records are fetched only after a delivery activity entry is opened. */
+/** Delivery records are fetched for the Artifacts section delivery cards. */
 export const useMissionDeliveries = (id: string, enabled: boolean) =>
   useQuery<DeliveryDto[]>({
     queryKey: keys.missionDeliveries(id),
@@ -516,6 +517,30 @@ export function useUpdateMissionArtifact(missionId: string) {
       qc.setQueryData<import('../../shared/contract.ts').ArtifactDto[]>(
         keys.missionArtifacts(missionId),
         current => current?.map(item => (item.id === artifact.id ? artifact : item))
+      );
+    }
+  });
+}
+
+export const useMissionSharedContext = (id: string) =>
+  useQuery({
+    queryKey: keys.missionSharedContext(id),
+    queryFn: () => api.listMissionSharedContext(id)
+  });
+
+export function useUpsertMissionSharedContext(missionId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: import('../../shared/contract.ts').UpsertSharedContextBody) =>
+      api.upsertMissionSharedContext(missionId, body),
+    onSuccess: entry => {
+      qc.setQueryData<import('../../shared/contract.ts').SharedContextEntryDto[]>(
+        keys.missionSharedContext(missionId),
+        current => {
+          if (!current) return [entry];
+          const without = current.filter(item => item.id !== entry.id && item.key !== entry.key);
+          return [entry, ...without];
+        }
       );
     }
   });

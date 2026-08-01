@@ -271,6 +271,32 @@ export const hostedMcpToolDefinitions: ToolDefinition[] = [
     _meta: widget('ui://overlord/file-changes.html')
   },
   {
+    name: 'overlord_add_artifact',
+    title: 'Add mission artifact',
+    description:
+      'Use this to create a mission artifact during a turn without delivering — for example a plan, notes, ' +
+      'decision, or URL the reviewer should see while work continues. Provide type, label, and at ' +
+      'least one of contentText or externalUrl. Optional sessionKey stamps session/objective ' +
+      'provenance. Revise later with overlord_update_artifact. Delivery may still attach more artifacts.',
+    inputSchema: objectSchema(
+      {
+        missionId: stringProperty('Mission UUID or workspace display id such as coo:150.'),
+        type: stringProperty(
+          'Artifact type: test_results, next_steps, note, url, decision, or migration.'
+        ),
+        label: stringProperty('Human-facing label for the artifact.'),
+        contentText: stringProperty('Optional Markdown/text content.'),
+        externalUrl: stringProperty('Optional HTTP(S) URL.'),
+        sessionKey: stringProperty(
+          'Optional live session key from attach; stamps session/objective provenance when present.'
+        )
+      },
+      ['missionId', 'type', 'label']
+    ),
+    outputSchema: protocolOutputSchema('The created artifact DTO (revision 1).'),
+    annotations: writeAction
+  },
+  {
     name: 'overlord_update_artifact',
     title: 'Update mission artifact',
     description:

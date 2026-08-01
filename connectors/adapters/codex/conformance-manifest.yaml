@@ -1,4 +1,4 @@
-contractVersion: "37"
+contractVersion: "52"
 componentType: connector
 componentKey: codex
 label: "Codex Connector"
@@ -6,6 +6,16 @@ description: "Codex plugin adapter for the Overlord mission protocol workflow."
 
 connector:
   agentIdentifier: codex
+  # ── GENERATED: do not edit by hand ───────────────────────────────────────────
+  # Projected from connectors/adapters/codex/harness-capabilities.yaml by `yarn connectors:capabilities`.
+  # `capabilities` and `hookTypes` are the DEPRECATED hook-named projection, retained for
+  # one release. `harnessCapabilities` is the authoritative source.
+  integrationShape: callback
+  capabilityTier: 3
+  harnessCapabilities:
+    path: connectors/adapters/codex/harness-capabilities.yaml
+    schemaVersion: 1
+    digest: "c8cb9aabe2beac3777c5f565241079f068a4672509e427c760813e2341a0ed78"
   capabilities:
     - followUpHook
     - permissionHook
@@ -17,8 +27,14 @@ connector:
   hookTypes:
     - UserPromptSubmit
     - PermissionRequest
+  # ── END GENERATED ────────────────────────────────────────────────────────────
   installPath: "~/.codex/plugins/overlord"
   managedFiles:
+    - "harness-capabilities.yaml"
+    - "CAPABILITIES.md"
+    - "scripts/agent-session-event.sh"
+    - "scripts/agent-session-request.sh"
+    - "scripts/agent-session-inbox.sh"
     - ".codex-plugin/plugin.json"
     - ".codex-plugin/hooks.json"
     - ".mcp.json"

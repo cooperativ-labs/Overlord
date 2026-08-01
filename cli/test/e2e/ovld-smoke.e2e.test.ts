@@ -66,7 +66,18 @@ test('ovld agent-setup lists packaged connectors outside the source checkout', a
 
   assert.equal(result.exitCode, 0, result.stderr);
   const payload = JSON.parse(result.stdout) as { available: string[]; usage: string };
-  assert.deepEqual(payload.available.sort(), ['antigravity', 'claude', 'codex', 'cursor', 'pi']);
+  // `opencode` is listed because it has a conformance manifest and installable managed files
+  // (its descriptor and codec, which `ovld doctor` compares digests against). It is a
+  // control-plane adapter, so unlike the others there is no harness-side hook to install and
+  // nothing for OpenCode itself to invoke — see connectors/adapters/opencode/README.md.
+  assert.deepEqual(payload.available.sort(), [
+    'antigravity',
+    'claude',
+    'codex',
+    'cursor',
+    'opencode',
+    'pi'
+  ]);
 });
 
 test('ovld setup no longer accepts a connector argument', async () => {

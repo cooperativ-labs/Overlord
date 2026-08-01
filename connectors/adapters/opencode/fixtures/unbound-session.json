@@ -1,0 +1,10 @@
+{
+  "fixtureVersion": 1,
+  "kind": "source-guard",
+  "description": "The mandatory negative test, in the form Shape C admits. A control-plane adapter registers no hook and installs no script, so there is no process for an unbound session to start: the sidecar exists only because Overlord launched it, and it exits before any I/O when the scope gate finds no channel. What can be asserted statically is that the gate is the first thing it does and that it has no fallback to a broader credential.",
+  "path": "cli/src/agent-session/sidecar.ts",
+  "assert": {
+    "mustContain": ["resolveAgentSessionScope", "createChannelClient"],
+    "mustNotContain": ["USER_TOKEN", "loadConfig"]
+  }
+}

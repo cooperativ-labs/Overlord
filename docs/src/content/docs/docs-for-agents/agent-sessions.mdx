@@ -1,0 +1,140 @@
+---
+title: Agent-session adapters
+description: Diagnose Overlord observe, decide, and inject behavior across each supported harness.
+---
+
+This page is for an AI agent or maintainer diagnosing live session behavior. Do not infer a
+capability from an adapter name or from a hook that happens to exist. Start with the compiled,
+fixture-backed truth:
+
+```bash
+ovld agent-session capabilities <agent> --json
+ovld doctor
+```
+
+The four capability states are operational instructions: `supported` is fixture-proven,
+`unsupported` means do not attempt it, `not-implemented` is buildable work, and `unverified`
+means establish evidence before changing behavior. Source descriptors live at
+`connectors/adapters/<agent>/harness-capabilities.yaml`; generated `CAPABILITIES.md` files must
+not be edited.
+
+## Shared diagnostic order
+
+1. Confirm `OVERLORD_SESSION_CHANNEL_ID` exists in the launched process. Without it, the hook
+   must exit before spawning `ovld`; silence is correct.
+2. Run `ovld doctor` and repair stale managed files with `ovld agent-setup <agent>`.
+3. Read the adapter's static capability maximum, then verify the installed descriptor and live
+   binding separately. The catalog alone does not prove that the installed harness invoked a
+   hook or that project policy enabled an optional path.
+4. Identify the path: callback script, in-process extension, or control-plane sidecar.
+5. Keep mission lifecycle hooks (`ovld protocol`) separate from live session hooks
+   (`ovld agent-session`). The former can work while the latter is intentionally unbound.
+6. For a decision failure, verify exact native stdout and timeout before investigating REST. A
+   malformed or timed-out callback must emit nothing.
+
+## Claude Code
+
+**Shape:** callback plugin. **Observe:** `UserPromptSubmit`, `PostToolUse`, `SessionStart`.
+**Decide:** `PermissionRequest`. **Inject:** `asyncRewake` during a turn plus a Stop boundary.
+
+- The legacy follow-up and touched-file hooks remain additive. Removing them while repairing
+  agent-session events regresses mission activity or delivery attribution.
+- The decision response is Claude's `hookSpecificOutput` shape. Cursor's flat `permission`
+  response is never valid here.
+- `asyncRewake` reports Delivered only after Claude's documented stderr plus exit-2 signal is
+  emitted. The Stop path can block once to continue delivery.
+- If a callback fires twice, inspect Claude plugin registrations and Cursor compatibility
+  configuration; Cursor can load Claude hooks.
+- Fork/subagent native identity remains a declared hazard. Do not bind a child session by cwd or
+  assume it shares the parent's native id.
+
+## Codex
+
+**Shape:** callback plugin using documented hooks. **Observe:** prompt, pre/post tool, lifecycle.
+**Decide:** `PermissionRequest`. **Inject:** Stop-boundary delivery.
+
+- Codex hooks require a supported hook-era version. An installed plugin on an older binary can
+  look healthy while never invoking hooks.
+- The response is nested `hookSpecificOutput.decision.behavior`; `ask` deliberately emits no
+  bytes so Codex owns the native prompt.
+- Do not start an app-server decision subscriber beside the hook adapter. That creates two
+  authorities capable of resolving one permission.
+- The plugin root fallback is `~/.codex/plugins/overlord`. If managed scripts exist elsewhere,
+  refresh with `ovld agent-setup codex` rather than editing generated paths.
+- Stop injection is turn-boundary behavior, not mid-turn steering.
+
+## Cursor
+
+**Shape:** callback scripts. **Observe:** not currently promoted. **Decide:** per-tool shell, MCP,
+and generic pre-tool events. **Inject:** `stop` returning `followup_message`.
+
+- Cursor has no universal `PermissionRequest` event. Never restore the old manifest claim; use
+  `beforeShellExecution`, `beforeMCPExecution`, or `preToolUse` according to the descriptor.
+- Native output is flat: `{ "permission": "allow|deny|ask" }`. Claude's nested response may be
+  accepted only by an optional compatibility shim and is not Overlord's contract.
+- Keep `failClosed` unset. Otherwise a missing CLI, timeout, or backend loss becomes a denial
+  instead of Cursor's native fallback.
+- Cursor can read Claude hook configuration. Inspect both namespaces when commands duplicate or
+  a Claude-shaped response appears.
+- `followup_message` is recorded as **Queued (turn boundary)**, never Delivered. Cursor's command
+  allowlist may also take precedence over a hook response; an emitted allow is not proof it was
+  decisive.
+
+## Pi
+
+**Shape:** in-process TypeScript extension. **Observe:** input, tool call, agent start.
+**Decide:** optional async `tool_call` interceptor. **Inject:** `sendUserMessage` with confirmation.
+
+- Pi has no native permission dialog. A timeout, CLI failure, or transport failure lets the tool
+  run. Remote decisions require both `OVERLORD_PI_REMOTE_DECISIONS=enabled` and
+  `OVERLORD_PI_PROJECT_REMOTE_DECISIONS=enabled`.
+- Current builds do not expose those two gates as workspace/project settings. Treat the
+  decision interceptor as a development path unless the launcher deliberately supplies both;
+  observation and injection do not require them.
+- The extension uses an owner-only temporary payload file because `pi.exec` has no stdin API. It
+  must remove the file in `finally`; payload values must never move into argv.
+- Delivered is confirmed only after `sendUserMessage` succeeds and the input lease is confirmed.
+- The extension API is version-coupled. Treat an unsupported Pi version as a disabled extension,
+  not permission to guess at event shapes.
+
+## OpenCode
+
+**Shape:** supervised control-plane sidecar. There are no callback scripts.
+
+- A supervised launch must start `ovld agent-session sidecar --agent opencode --port <port>`,
+  bind OpenCode to loopback, and protect the control port with a per-launch password. The bundled
+  agent catalog does not yet start this sidecar automatically. Never expose the port to the LAN
+  or browser.
+- On reconnect, the sidecar re-reads `/permission` and `/question` before resubscribing to
+  `/event`. Replays are expected and deduplicate by producer event id.
+- The TUI and Overlord can truly answer concurrently on the event bus. A TUI win must mark the
+  request resolved elsewhere; do not apply callback-only waiter assumptions.
+- Injection uses `POST /session/{id}/prompt_async`. OpenCode's standing `always` permission is
+  intentionally hidden from remote controls.
+
+## Antigravity
+
+**Shape:** callback compatibility plugin, currently fixture-proven only at tier 0.
+
+- Mission lifecycle capture may work while agent-session observe/decide/inject remains
+  unverified. Do not promote UI controls based on the agent name or resemblance to Gemini.
+- `PreToolUse` currently returns allow for legacy telemetry and is not a remote decision path.
+- Native hook names differ from Claude's canonical legacy vocabulary. Record a native fixture
+  before changing mappings or claiming PostToolUse/Stop behavior.
+- Upgrade work belongs in a separate verification objective with executable fixtures.
+
+## Development verification
+
+```bash
+yarn connectors:capabilities:check
+yarn test:core
+yarn test:cli
+yarn test:backend
+```
+
+The capability check executes recorded payload, script I/O, source guard, normalized-event, and
+decision-codec fixtures. A callback/extension decision claim requires a decision-codec fixture
+that pins its redacted card and exact allow/deny/defer bytes.
+
+Related: [Architecture](/docs-for-agents/architecture/) ·
+[The agent protocol](/docs-for-agents/agent-protocol/) · [Live agent sessions](/agent-sessions/)

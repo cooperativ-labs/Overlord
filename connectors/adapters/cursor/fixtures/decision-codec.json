@@ -1,0 +1,38 @@
+{
+  "fixtureVersion": 1,
+  "kind": "decision-codec",
+  "description": "Cursor request reduction and exact flat allow/deny/ask output.",
+  "codec": "codec/cursor.decision-codec.yaml",
+  "payload": {
+    "event": "beforeShellExecution",
+    "session_id": "session-1",
+    "cwd": "/repo",
+    "command": "echo AKIAIOSFODNN7EXAMPLE",
+    "request_id": "req-1",
+    "call_id": "call-1",
+    "timeout": 45
+  },
+  "expect": {
+    "request": {
+      "kind": "permission",
+      "summary": "Run a shell command: echo [redacted] [secret-adjacent]",
+      "details": {
+        "tool": "shell",
+        "action": "Run a shell command",
+        "subject": "echo",
+        "detail": "echo [redacted]",
+        "riskMarkers": ["secret-adjacent"],
+        "formatterVersion": 1
+      },
+      "nativeRequestId": "req-1",
+      "nativeCallId": "call-1",
+      "harnessTimeoutSeconds": 45
+    },
+    "responses": {
+      "allow": "{\"permission\":\"allow\"}\n",
+      "deny": "{\"permission\":\"deny\"}\n",
+      "ask": "{\"permission\":\"ask\"}\n"
+    }
+  },
+  "mustNotContain": ["AKIAIOSFODNN7EXAMPLE", "hookSpecificOutput"]
+}

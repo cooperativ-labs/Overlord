@@ -25,6 +25,136 @@ export interface Account {
   userId: string;
 }
 
+export interface AgentRequests {
+  allows_free_text: Generated<number>;
+  application_observed_at: string | null;
+  application_state: Generated<string>;
+  channel_id: string;
+  created_at: string;
+  deleted_at: string | null;
+  details_json: Generated<string>;
+  expires_at: string | null;
+  first_viewed_at: string | null;
+  formatter_version: Generated<number>;
+  id: string | null;
+  kind: string;
+  mission_id: string | null;
+  native_call_id: string | null;
+  native_request_id: string | null;
+  objective_id: string | null;
+  options_json: Generated<string>;
+  project_id: string | null;
+  released_reason: string | null;
+  resolution_json: string | null;
+  resolved_at: string | null;
+  resolved_by_workspace_user_id: string | null;
+  revision: Generated<number>;
+  session_id: string | null;
+  source_event_id: string | null;
+  status: Generated<string>;
+  summary: string;
+  updated_at: string;
+  waiter_lease_expires_at: string | null;
+  waiter_lease_id: string | null;
+  window_basis: string | null;
+  window_expires_at: string | null;
+  workspace_id: string;
+}
+
+export interface AgentSessionChannels {
+  adapter_key: string | null;
+  adapter_version: string | null;
+  agent_identifier: string | null;
+  capabilities_json: Generated<string>;
+  created_at: string;
+  created_by_workspace_user_id: string | null;
+  credential_algorithm: Generated<string>;
+  credential_expires_at: string | null;
+  credential_hash: string | null;
+  credential_prefix: string | null;
+  credential_revoked_at: string | null;
+  deleted_at: string | null;
+  end_reason: string | null;
+  ended_at: string | null;
+  execution_request_id: string | null;
+  execution_target_id: string | null;
+  exit_code: number | null;
+  id: string | null;
+  last_heartbeat_at: string | null;
+  launch_kind: Generated<string>;
+  launch_prompt_id: string | null;
+  lease_expires_at: string | null;
+  mission_id: string | null;
+  native_session_id: string | null;
+  objective_id: string | null;
+  project_id: string | null;
+  revision: Generated<number>;
+  runner_registration_id: string | null;
+  session_id: string | null;
+  state: Generated<string>;
+  updated_at: string;
+  workspace_id: string;
+}
+
+export interface AgentSessionEvents {
+  actionability: string | null;
+  adapter_key: string;
+  channel_id: string;
+  channel_sequence: number;
+  correlation_id: string | null;
+  created_at: string;
+  deleted_at: string | null;
+  formatter_version: Generated<number>;
+  id: string | null;
+  kind: string;
+  mission_event_id: string | null;
+  mission_id: string | null;
+  native_call_id: string | null;
+  native_event: string | null;
+  native_turn_id: string | null;
+  objective_id: string | null;
+  occurred_at: string;
+  origin: string | null;
+  payload_json: Generated<string>;
+  producer_event_id: string;
+  producer_sequence: number | null;
+  project_id: string | null;
+  received_at: string;
+  revision: Generated<number>;
+  session_id: string | null;
+  severity: Generated<string>;
+  subagent_id: string | null;
+  summary: string | null;
+  updated_at: string;
+  workspace_id: string;
+}
+
+export interface AgentSessionInputs {
+  acknowledged_at: string | null;
+  attempt_count: Generated<number>;
+  body: string;
+  channel_id: string;
+  created_at: string;
+  created_by_workspace_user_id: string | null;
+  deleted_at: string | null;
+  delivery_outcome: string | null;
+  emitted_at: string | null;
+  id: string | null;
+  idempotency_key: string | null;
+  kind: string;
+  last_error_code: string | null;
+  lease_expires_at: string | null;
+  lease_id: string | null;
+  mission_id: string | null;
+  objective_id: string | null;
+  project_id: string | null;
+  revision: Generated<number>;
+  session_id: string;
+  status: Generated<string>;
+  updated_at: string;
+  workspace_id: string;
+}
+
 export interface AgentSessions {
   agent_identifier: string;
   connection_method: string;
@@ -1166,6 +1296,10 @@ export interface WorkspaceUsers {
 
 export interface DB {
   account: Account;
+  agent_requests: AgentRequests;
+  agent_session_channels: AgentSessionChannels;
+  agent_session_events: AgentSessionEvents;
+  agent_session_inputs: AgentSessionInputs;
   agent_sessions: AgentSessions;
   artifacts: Artifacts;
   attachments: Attachments;

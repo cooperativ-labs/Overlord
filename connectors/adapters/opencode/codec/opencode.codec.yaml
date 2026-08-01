@@ -1,0 +1,41 @@
+# OpenCode — agent-session event codec.
+#
+# OpenCode is Shape C: a control plane, not a callback harness. There is no hook script and no
+# held decision; the sidecar is a peer on the harness's own event bus, subscribing to a local
+# HTTP `/event` stream. The codec is nonetheless the same kind of object as Claude's, and that
+# is the load-bearing fact of Phase 1 — if the waist had been built against a callback shape
+# first, this file could not exist without a second normalization path.
+#
+# The one structural difference: OpenCode names the event in the SSE frame rather than in the
+# payload body, so there is no `eventNamePath` and the transport supplies the name.
+codecVersion: 1
+adapter: opencode
+
+nativeSessionPaths:
+  - properties.sessionID
+  - properties.info.sessionID
+
+projectRootPaths:
+  - properties.cwd
+  - properties.directory
+
+events:
+  # A tool part that has reached a terminal state. OpenCode streams the same part repeatedly as
+  # it progresses; the content-derived producer id means the intermediate frames collapse into
+  # one row rather than producing a card per keystroke of progress.
+  - native: message.part.updated
+    kind: tool.completed
+    origin: agent
+    toolPath: properties.part.tool
+    inputPath: properties.part.state.input
+    callIdPath: properties.part.callID
+    outcomePath: properties.part.state.status
+    fileEditKind: file.edited
+
+  - native: session.idle
+    kind: session.ended
+    origin: system
+
+  - native: session.updated
+    kind: session.started
+    origin: system

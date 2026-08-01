@@ -44,6 +44,7 @@ export const COMMAND_FLAGS: Record<string, readonly string[]> = {
   auth: ['--token', '--organization-id'],
   'user-token': ['--label', '--expires-in', '--no-expiry', '--scope', '--id'],
   prune: [],
+  'agent-session': ['--json'],
   'create-project': ['--name', '--directory', '--no-directory'],
   'org-setup': [
     '--org-name',
@@ -84,6 +85,8 @@ export const COMMAND_FLAGS: Record<string, readonly string[]> = {
     '--no-start'
   ],
   missions: ['--status', '--query', '--project-id', '--limit'],
+  requests: ['--revision', '--decision', '--text'],
+  inputs: ['--mission-id', '--channel-id', '--body', '--kind'],
   mission: [],
   changes: ['--mission-id', '--objective-id']
 };

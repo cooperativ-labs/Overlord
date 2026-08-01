@@ -1,0 +1,21 @@
+{
+  "fixtureVersion": 1,
+  "kind": "source-guard",
+  "description": "Pi uses the shared CLI runtime for normalized events and opt-in remote calls. Both policy gates must be true, raw payload files must be owner-only and removed, and every failure path must return Pi's native allow shape rather than a fabricated block.",
+  "path": "connectors/adapters/pi/extensions/overlord.ts",
+  "assert": {
+    "mustContain": [
+      "OVERLORD_PI_REMOTE_DECISIONS",
+      "OVERLORD_PI_PROJECT_REMOTE_DECISIONS",
+      "agent-session', 'event'",
+      "agent-session', 'request'",
+      "mkdtemp",
+      "chmod(directory, 0o700)",
+      "mode: 0o600",
+      "rm(directory, { recursive: true, force: true })",
+      "pi.on('tool_call', async",
+      "return decision ?? {}"
+    ],
+    "mustNotContain": ["fetch(", "USER_TOKEN", "backend-client", "https://"]
+  }
+}

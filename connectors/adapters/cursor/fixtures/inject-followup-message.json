@@ -1,0 +1,16 @@
+{
+  "fixtureVersion": 1,
+  "kind": "native-payload",
+  "description": "Cursor stop payload that the turn-boundary inject path consumes.",
+  "payload": {
+    "event": "stop",
+    "session_id": "session-cursor-1",
+    "conversation_id": "conv-1",
+    "loop_count": 0,
+    "status": "completed"
+  },
+  "assert": {
+    "requiredPaths": ["event", "session_id"],
+    "equals": { "event": "stop" }
+  }
+}

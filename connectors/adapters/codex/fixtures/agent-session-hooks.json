@@ -1,0 +1,20 @@
+{
+  "fixtureVersion": 1,
+  "kind": "source-guard",
+  "description": "Codex uses one channel-scoped hook surface: normalized events, callback decisions, and Stop-boundary inbox delivery. The legacy follow-up hook remains additive.",
+  "path": "connectors/adapters/codex/.codex-plugin/hooks.json",
+  "assert": {
+    "mustContain": [
+      "agent-session-event.sh",
+      "agent-session-request.sh",
+      "agent-session-inbox.sh",
+      "\"PreToolUse\"",
+      "\"PostToolUse\"",
+      "\"SessionStart\"",
+      "\"Stop\"",
+      "\"timeout\": 35",
+      "user-prompt-submit-hook.sh"
+    ],
+    "mustNotContain": ["permission-hook.sh"]
+  }
+}

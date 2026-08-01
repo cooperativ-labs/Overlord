@@ -1,0 +1,130 @@
+# Antigravity — agent-session interaction capabilities.
+#
+# Authoritative and fixture-backed. Validated against contract/harness-capabilities.schema.yaml.
+# See connectors/AGENTS.md → "Harness capability descriptors" before writing any code here.
+#
+# Antigravity was outside the five-harness verification survey, so its interaction
+# capabilities begin conservatively as `unverified` rather than inherited from a harness that
+# looks similar. Omitting a shipped connector from the generated matrix would make it less
+# truthful than the hand-written table it replaces; guessing its capabilities would be worse.
+# No UI control may be inferred from the agent name — only from a proven capability.
+schemaVersion: 1
+adapter: antigravity
+codec: antigravity
+
+harness:
+  name: Antigravity CLI
+  versionScheme: opaque
+
+integrationShape: callback
+
+binding:
+  source: payload
+  status: unverified
+  trackedAs: agent-session-verify-antigravity
+  notes: >-
+    No native session identifier has been established for Antigravity hook payloads. Until
+    one is, this connector cannot bind, and therefore cannot reach any interaction tier.
+
+decisionHold:
+  status: unverified
+  trackedAs: agent-session-verify-antigravity
+  notes: >-
+    The shipped hooks declare a 10-second timeout, but whether a held PreToolUse response
+    actually gates execution — and what the harness does when the hook exceeds that timeout —
+    was not verified.
+
+capabilities:
+  observe.prompt:
+    status: unverified
+    native: PreInvocation
+    trackedAs: agent-session-verify-antigravity
+  observe.toolCall:
+    status: unverified
+    native: PreToolUse
+    trackedAs: agent-session-verify-antigravity
+  observe.toolResult:
+    status: unverified
+    trackedAs: agent-session-verify-antigravity
+  observe.fileEdit:
+    status: unverified
+    trackedAs: agent-session-verify-antigravity
+  observe.sessionLifecycle:
+    status: unverified
+    trackedAs: agent-session-verify-antigravity
+  decide.shell:
+    status: unverified
+    native: PreToolUse
+    trackedAs: agent-session-verify-antigravity
+  decide.mcp:
+    status: unverified
+    trackedAs: agent-session-verify-antigravity
+  decide.fileWrite:
+    status: unverified
+    trackedAs: agent-session-verify-antigravity
+  decide.anyTool:
+    status: unverified
+    native: PreToolUse
+    trackedAs: agent-session-verify-antigravity
+  decide.universal:
+    status: unverified
+    trackedAs: agent-session-verify-antigravity
+  answer.structuredQuestion:
+    status: unverified
+    trackedAs: agent-session-verify-antigravity
+  answer.persistentAllow:
+    status: unverified
+    trackedAs: agent-session-verify-antigravity
+  inject.midTurn:
+    status: unverified
+    trackedAs: agent-session-verify-antigravity
+  inject.turnBoundary:
+    status: unverified
+    trackedAs: agent-session-verify-antigravity
+  inject.nextTurn:
+    status: unverified
+    trackedAs: agent-session-verify-antigravity
+  terminal.concurrentAnswer:
+    status: unverified
+    trackedAs: agent-session-verify-antigravity
+  terminal.statusSurface:
+    status: unverified
+    trackedAs: agent-session-verify-antigravity
+
+hazards:
+  - id: outside-verification-survey
+    severity: medium
+    summary: >-
+      Antigravity was not part of the harness verification survey. Every row above is
+      unverified rather than inferred, and this connector must stay at its fixture-proven
+      tier until a dedicated verification objective upgrades it.
+    verification: unverified
+    mitigation: required
+    trackedAs: agent-session-verify-antigravity
+  - id: pre-tool-use-always-allows
+    severity: medium
+    summary: >-
+      The shipped PreToolUse hook always answers `{"allow_tool":true}` and records the request
+      through a detached `ovld protocol permission-request` call to a subcommand that does not
+      exist. It therefore neither gates nor records anything, while its conformance manifest
+      declared the permissionHook capability.
+    verification: verified
+    mitigation: required
+    trackedAs: agent-session-verify-antigravity
+
+decisionShape:
+  codec: antigravity
+  neverSend: [hookSpecificOutput, permissionDecision, permission]
+  notes: >-
+    The observed response shape is a flat `{"allow_tool": boolean}`. No deny or defer shape
+    has been verified, so no decision codec may be written for this adapter yet.
+
+unboundSessionFixture: fixtures/unbound-session.json
+
+legacy:
+  capabilities:
+    - followUpHook
+    - contextFilePrompt
+    - slashCommands
+  hookTypes:
+    - UserPromptSubmit

@@ -670,6 +670,7 @@ const PROTOCOL_FILE_FLAGS = [
 
 /** Protocol subcommands that require a session key the cache can auto-inject. */
 const SESSION_KEY_SUBCOMMANDS = new Set([
+  'add-artifact',
   'update',
   'heartbeat',
   'ask',
@@ -780,6 +781,21 @@ export async function runProtocolCommand({
     process.env.OVERLORD_EXECUTION_REQUEST_ID
   ) {
     flags['--execution-request-id'] = process.env.OVERLORD_EXECUTION_REQUEST_ID;
+  }
+  // The launch path prepared a session channel and exported its id. Attach is what binds that
+  // channel to the session it was prepared for, so carry the id through automatically —
+  // requiring the agent to pass a flag it never saw would mean the binding silently never
+  // happens and the feed stays empty for the exact sessions Overlord itself launched.
+  //
+  // Only `OVERLORD_SESSION_CHANNEL_ID` is read here. `OVERLORD_SESSION_CHANNEL_TOKEN` is
+  // deliberately not: a credential must never become a protocol flag, because flags are argv,
+  // and argv is visible to every process on the machine.
+  if (
+    subcommand === 'attach' &&
+    typeof flags['--session-channel-id'] !== 'string' &&
+    process.env.OVERLORD_SESSION_CHANNEL_ID
+  ) {
+    flags['--session-channel-id'] = process.env.OVERLORD_SESSION_CHANNEL_ID;
   }
   const { fileInputs, stdin: protocolStdin } = await resolveProtocolFileInputs({
     flags: parsed.flags,
@@ -1414,12 +1430,32 @@ export async function runManagementCommand({
         missionId,
         branchAutomation: prepared.branchAutomation
       });
+      // A manual launch has no `launching` transition to hang the channel off, so it asks for
+      // one explicitly. Best-effort: a backend that cannot prepare a channel must not stop an
+      // agent from starting — the session simply behaves as it did before agent-session
+      // existed. A dry run asks for nothing, because it must stay a pure description.
+      const manualChannel = dryRun
+        ? {}
+        : asRecord(
+            await scopedRuntime.backend
+              .post({
+                path: `/api/missions/${encodeURIComponent(missionId)}/session-channel`,
+                body: { agent, objectiveId: objectiveId ?? undefined }
+              })
+              .catch(() => ({}))
+          );
+
       const result = await launchAgent({
         runtime: scopedRuntime,
         options: {
           agent,
           missionId,
           workingDirectory: prepared.workingDirectory,
+          sessionChannelId:
+            typeof manualChannel.channelId === 'string' ? manualChannel.channelId : undefined,
+          sessionChannelToken:
+            typeof manualChannel.token === 'string' ? manualChannel.token : undefined,
+          sessionChannelLaunchKind: 'manual',
           model: flagValue(parsed.flags, '--model'),
           thinking: flagValue(parsed.flags, '--thinking'),
           flags: repeatedLaunchFlags(rest, '--flag'),
@@ -1472,6 +1508,111 @@ export async function runManagementCommand({
         }
       }
       return;
+    }
+    case 'requests': {
+      const sub = parsed.positional[0];
+      if (!sub) {
+        const result = await runtime.backend.get<{ requests: unknown[] }>('/api/agent-requests');
+        if (json) printJson(result);
+        else {
+          for (const item of result.requests) {
+            const request = asRecord(item);
+            console.log(
+              `${request.id}\t${request.status}\t${request.kind}\t${request.summary}\trev ${request.revision}`
+            );
+          }
+        }
+        return;
+      }
+      if (sub !== 'resolve') {
+        throw new CliError({
+          message:
+            'Usage: ovld requests [--json] | ovld requests resolve <id> --revision <n> --decision allow|deny|ask [--text <text>]'
+        });
+      }
+      const requestId = parsed.positional[1];
+      const revision = Number(flagValue(parsed.flags, '--revision'));
+      const decision = flagValue(parsed.flags, '--decision');
+      if (
+        !requestId ||
+        !Number.isInteger(revision) ||
+        !decision ||
+        !['allow', 'deny', 'ask'].includes(decision)
+      ) {
+        throw new CliError({
+          message:
+            'Usage: ovld requests resolve <id> --revision <n> --decision allow|deny|ask [--text <text>]'
+        });
+      }
+      const text = flagValue(parsed.flags, '--text');
+      const result = await runtime.backend.post<unknown>({
+        path: `/api/agent-requests/${encodeURIComponent(requestId)}/resolve`,
+        body: {
+          expectedRevision: revision,
+          resolution: { decision, ...(text ? { text } : {}) }
+        }
+      });
+      if (json) printJson(result);
+      else {
+        const record = asRecord(result);
+        console.log(
+          record.resolved === true
+            ? 'Decision submitted.'
+            : 'Request was already resolved or released.'
+        );
+      }
+      return;
+    }
+    case 'inputs': {
+      const sub = parsed.positional[0];
+      if (!sub || sub === 'list') {
+        const missionId = flagValue(parsed.flags, '--mission-id') ?? parsed.positional[1];
+        if (!missionId) {
+          throw new CliError({
+            message:
+              'Usage: ovld inputs list --mission-id <id> [--json] | ovld inputs send --channel-id <id> --body <text> [--json]'
+          });
+        }
+        const result = await runtime.backend.get<{ inputs: unknown[] }>(
+          `/api/agent-session-inputs?missionId=${encodeURIComponent(missionId)}`
+        );
+        if (json) printJson(result);
+        else {
+          for (const item of result.inputs) {
+            const input = asRecord(item);
+            // deliveryLabel is the honest UI string — Cursor turn-boundary reads
+            // "Queued (turn boundary)", never "Delivered".
+            console.log(
+              `${input.id}\t${input.deliveryLabel ?? input.status}\t${input.kind}\t${String(input.body ?? '').slice(0, 80)}`
+            );
+          }
+        }
+        return;
+      }
+      if (sub === 'send') {
+        const channelId = flagValue(parsed.flags, '--channel-id');
+        const body = flagValue(parsed.flags, '--body');
+        if (!channelId || !body) {
+          throw new CliError({
+            message: 'Usage: ovld inputs send --channel-id <id> --body <text> [--json]'
+          });
+        }
+        const result = await runtime.backend.post<{ input: Record<string, unknown> }>({
+          path: '/api/agent-session-inputs',
+          body: { channelId, body, kind: flagValue(parsed.flags, '--kind') ?? 'instruction' }
+        });
+        if (json) printJson(result);
+        else {
+          console.log(
+            `Queued input ${result.input.id} (${result.input.deliveryLabel ?? result.input.status})`
+          );
+        }
+        return;
+      }
+      throw new CliError({
+        message:
+          'Usage: ovld inputs list --mission-id <id> [--json] | ovld inputs send --channel-id <id> --body <text> [--json]'
+      });
     }
     case 'mission': {
       const sub = parsed.positional[0];
@@ -1616,7 +1757,14 @@ async function runRunnerCommand({
         // Observation writeback is best-effort; launch should still proceed.
       }
     }
-    await runtime.backend.post({ path: `/api/runner/requests/${requestId}/launching` });
+    // The `launching` response additively carries the session-channel bootstrap. It is the
+    // only time the raw channel credential is available: the backend stores just its hash, so
+    // if this response is dropped the channel simply stays unbound and the session behaves
+    // exactly as it did before agent-session existed.
+    const launchingResponse = asRecord(
+      await runtime.backend.post({ path: `/api/runner/requests/${requestId}/launching` })
+    );
+    const sessionChannel = asRecord(launchingResponse.sessionChannel);
     try {
       const mutation = parseMutationFromMetadata(requestRecord.metadata);
       if (mutation) {
@@ -1696,6 +1844,12 @@ async function runRunnerCommand({
           launchEnvVars: parseLaunchEnvVarsValue(requestRecord.launchEnvVars),
           executionRequestId: requestId,
           executionTargetId: executionTargetId || undefined,
+          sessionChannelId:
+            typeof sessionChannel.channelId === 'string' ? sessionChannel.channelId : undefined,
+          sessionChannelToken:
+            typeof sessionChannel.token === 'string' ? sessionChannel.token : undefined,
+          sessionChannelLaunchKind:
+            typeof sessionChannel.launchKind === 'string' ? sessionChannel.launchKind : undefined,
           ...terminal,
           dryRun
         }

@@ -1,0 +1,49 @@
+{
+  "fixtureVersion": 1,
+  "kind": "normalized-event",
+  "description": "A Claude PostToolUse body for a Write call. Proves observe.fileEdit: the event becomes file.edited with a repo-relative path, and the file contents — deliberately containing a credential — appear nowhere in the envelope.",
+  "codec": "codec/claude.codec.yaml",
+  "occurredAt": "2026-01-01T00:00:00.000Z",
+  "payload": {
+    "session_id": "9f1b2c3d-4e5f-6071-8293-a4b5c6d7e8f9",
+    "transcript_path": "/Users/jake/.claude/projects/-repo/9f1b2c3d.jsonl",
+    "cwd": "/repo",
+    "hook_event_name": "PostToolUse",
+    "tool_name": "Write",
+    "tool_input": {
+      "file_path": "/repo/config/secrets.ts",
+      "content": "export const AWS_KEY = 'AKIAIOSFODNN7EXAMPLE';\nexport const DB = 'postgres://user:hunter2@db/app';\n"
+    }
+  },
+  "expect": {
+    "eventId": "ev_dd58d87232ee740e6bf9ed60c46d2ea8",
+    "producerSequence": null,
+    "occurredAt": "2026-01-01T00:00:00.000Z",
+    "kind": "file.edited",
+    "severity": "info",
+    "nativeEvent": "PostToolUse",
+    "nativeTurnId": null,
+    "nativeCallId": null,
+    "subagentId": null,
+    "correlationId": "9f1b2c3d-4e5f-6071-8293-a4b5c6d7e8f9",
+    "origin": "agent",
+    "summary": "Write a file: config/secrets.ts: 99 bytes",
+    "payload": {
+      "tool": "write",
+      "action": "Write a file",
+      "subject": "config/secrets.ts",
+      "detail": "99 bytes",
+      "paths": [
+        "config/secrets.ts"
+      ],
+      "formatterVersion": 1
+    }
+  },
+  "mustNotContain": [
+    "AKIAIOSFODNN7EXAMPLE",
+    "hunter2",
+    "postgres://",
+    "/Users/jake",
+    ".jsonl"
+  ]
+}

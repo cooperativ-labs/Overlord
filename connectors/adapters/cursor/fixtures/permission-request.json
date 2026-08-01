@@ -1,0 +1,17 @@
+{
+  "fixtureVersion": 1,
+  "kind": "native-payload",
+  "description": "Recorded Cursor beforeShellExecution payload used by the callback request codec.",
+  "payload": {
+    "event": "beforeShellExecution",
+    "session_id": "session-cursor-1",
+    "command": "yarn test",
+    "call_id": "call-1",
+    "request_id": "permission-1",
+    "timeout": 45
+  },
+  "assert": {
+    "requiredPaths": ["event", "session_id", "command", "request_id", "timeout"],
+    "equals": { "event": "beforeShellExecution" }
+  }
+}

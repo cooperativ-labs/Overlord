@@ -1,5 +1,6 @@
 /** Backend and local-only protocol subcommands exposed by the CLI. */
 export const SUPPORTED_PROTOCOL_SUBCOMMANDS = [
+  'add-artifact',
   'add-objectives',
   'ask',
   'attach',
@@ -97,6 +98,7 @@ Subcommands:
                          of hand-triaging \`git status\`
   read-context           Read shared persistent context for this mission
   write-context          Write shared persistent context for future sessions
+  add-artifact           Create a mission artifact during a turn (no delivery required)
   update-artifact        Update an existing mission artifact in place
   attachment-list        List all attachments for the mission
   attachment-download-url  Get the download URL for a specific attachment
@@ -404,6 +406,25 @@ update-artifact:
     --external-url <url>        Empty string clears the URL
   Returns:
     Updated ArtifactDto JSON (includes the new revision).
+
+add-artifact:
+  Purpose:
+    Create a mission artifact during a turn without delivering (same rules as
+    POST /api/missions/:id/artifacts). Use this to publish a plan, notes, URL,
+    or similar record mid-session; revise later with update-artifact. Delivery
+    may still attach additional artifacts. Optional --session-key (auto-injected
+    from the attach cache when present) stamps session/objective provenance.
+  Required:
+    --mission-id <id>
+    --type <type>               test_results | next_steps | note | url | decision | migration
+    --label <text>
+  Content (at least one required):
+    --content-text <text> or --content-text-file <path|->
+    --external-url <url>
+  Optional:
+    --session-key <key>
+  Returns:
+    Created ArtifactDto JSON (revision 1).
 
 attachment-list:
   Purpose:

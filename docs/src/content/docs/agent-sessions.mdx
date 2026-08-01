@@ -1,0 +1,150 @@
+---
+title: Live agent sessions
+description: Observe agent activity, answer held decisions, and send instructions without replacing your agent harness.
+---
+
+Overlord can connect a running agent session to its mission. This live connection is separate
+from the mission protocol: the protocol records attach, progress, questions, and delivery;
+the agent-session connection handles activity, time-bounded decisions, and instructions while
+the harness is running.
+
+## The three live paths
+
+```text
+Agent harness
+   │
+   ├─ observe ──► activity events in Overlord       (never blocks)
+   ├─ decide  ◄── allow or deny while a hook waits  (bounded wait)
+   └─ inject  ◄── instruction for this live session (delivery varies by harness)
+```
+
+- **Observe** reduces native events on the execution target before sending them. Tool inputs,
+  outputs, file contents, environment variables, and transcript paths are not uploaded. A
+  prompt is the deliberate exception because the activity feed exists to show it; secret
+  redaction still runs first.
+- **Decide** creates a short-lived request when the harness can pause for an answer. A callback
+  never advertises an answer window beyond the time it can actually wait; Overlord reserves 20%
+  of the native timeout for fallback. Many callback harnesses therefore allow only tens of
+  seconds even though Overlord's general away-user policy permits a longer window. If Overlord,
+  the network, or the waiter fails, Overlord emits no answer and returns control to the harness.
+  Pi is different and is described below.
+- **Inject** sends an instruction to a specific live session. The result is honest about what
+  the harness proved: **Delivered**, **Queued (turn boundary)**, **Queued (next turn)**, or
+  **Unsupported**. An instruction already emitted to a harness is never automatically retried.
+
+## Why a session channel exists
+
+The channel is created before the agent process starts, so startup events have somewhere
+authorized to land before the mission protocol attaches. Its credential is scoped to one
+channel and stored hash-only by the server. It cannot read mission context or act as a human,
+and a normal user token cannot impersonate an adapter.
+
+```text
+runner/manual launch
+    └─ creates channel + one-time credential
+          └─ starts harness
+                └─ protocol attach binds channel to agent session
+```
+
+The native harness session id is only a correlation label. Neither it nor the checkout path
+grants access. This matters when several missions, worktrees, or agents are active on the same
+machine.
+
+## Send an instruction
+
+In a mission panel, expand **Session instructions**, enter the message, and send it to the live
+channel. The status beside the message describes the strongest acknowledgement the connector
+received. For example, Cursor's `followup_message` is shown as **Queued (turn boundary)** rather
+than Delivered because Cursor does not acknowledge that the agent consumed it.
+
+From a terminal:
+
+```bash
+ovld inputs list --mission-id <mission-id>
+ovld inputs send --channel-id <channel-id> --body "Re-run the focused test before delivery."
+```
+
+The list response identifies the addressed channel. Sending requires that channel ID on purpose:
+a mission can have more than one session, and a mission ID alone does not identify which agent
+should receive the instruction.
+
+Use `ovld requests` to list a decision that a live adapter has already opened, then answer it
+with the request ID and revision shown. The static capability catalog is diagnostic evidence;
+it does not manufacture a request when the live harness never opened one.
+
+## Conflicts with hooks outside Overlord
+
+Overlord installs hooks additively and preserves existing configuration, but two valid hooks can
+still conflict because the harness decides ordering, timeout, and response composition.
+
+### Two hooks answer the same decision
+
+An external policy hook may auto-allow, deny, or rewrite a request while Overlord is holding the
+same callback for a human. Depending on the harness, first response, last response, or a merged
+response may win. Do not run two decision owners for the same native event unless that harness's
+composition rule is documented and tested.
+
+```text
+Permission event
+   ├─ Overlord hook ── waits for remote answer
+   └─ team hook     ── auto-allows immediately
+                         ▲ effective winner is harness-specific
+```
+
+For Codex, do not combine the hook adapter with an experimental app-server decision subscriber;
+select one integration shape. For Cursor, avoid routing Claude-shaped permission output into
+Cursor's flat decision contract.
+
+### A hook changes failure behavior
+
+Overlord's decision callbacks fail toward native behavior: no response means the harness shows
+its normal prompt or follows its normal policy. Settings such as Cursor's `failClosed` can turn a
+script error into a denial and invert that guarantee. Leave fail-closed behavior off for the
+Overlord hook and apply mandatory policy in a separate, deliberately tested control.
+
+Pi has no native permission prompt. Its optional decision interceptor therefore fails toward
+**running the tool**. It is disabled unless both workspace policy and project opt-in enable it;
+do not enable it without accepting the named fail-open deadline. Current builds do not expose
+those gates in Settings, so normal connector setup leaves Pi decisions disabled.
+
+### Timeouts stack
+
+Each callback, wrapper shell, and hook manager may impose a timeout. The shortest timeout wins.
+If another hook consumes most of the budget, an Overlord card can disappear just before it is
+answered. Keep unrelated observational hooks non-blocking and set decision timeouts from one
+policy owner.
+
+### Duplicate observation and side effects
+
+Overlord event retries deduplicate by a content-derived producer id, but an external hook still
+owns its own side effects. Two touched-file hooks can write two logs; two notification hooks can
+send two notifications. Deduplication of Overlord events does not make arbitrary hook commands
+idempotent.
+
+### Shared configuration namespaces
+
+Some harnesses read compatibility configuration belonging to another harness. Cursor may read
+Claude hook configuration in addition to Cursor's own file, which can make a Claude callback run
+inside a Cursor session. Keep connector installations current, avoid copying generated hook
+blocks between harnesses, and inspect both configurations when a hook fires twice.
+
+### Stdout is part of the decision protocol
+
+A decision hook's stdout is machine-readable native response data. Debug `echo` output, shell
+banners, or a wrapper that combines stderr with stdout can corrupt the response. Send custom
+diagnostics to stderr, redact them, and keep them bounded. Overlord itself stays silent on every
+failure-to-decide path.
+
+## Diagnose a live session
+
+```bash
+ovld doctor
+ovld agent-session capabilities <agent> --json
+```
+
+`ovld doctor` detects missing or stale managed connector files. The capabilities command is
+offline and shows what is fixture-proven, unsupported, not implemented, or still unverified.
+After an Overlord upgrade, refresh the connector with `ovld agent-setup <agent>`.
+
+Related: [Agents and connectors](/agents/) · [Data boundaries](/data-boundaries/) ·
+[Troubleshooting](/troubleshooting/)

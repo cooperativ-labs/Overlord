@@ -6,7 +6,7 @@
 ovld protocol attach --mission-id $MISSION_ID
 ```
 
-In a git workspace, `attach` automatically creates a local git checkpoint for each executing objective before work begins, stored under `refs/overlord/checkpoints/<objectiveId>`. Pass `--skip-checkpoint` only when intentionally bypassing local provenance.
+In a git workspace, `attach` records a VCS baseline (changed file paths from local `git status`) so delivery can compute the run-attributable delta automatically.
 
 ## Update
 
@@ -89,7 +89,6 @@ The working tree may contain file changes from **other agents, missions, or obje
 
 - `git checkout`, `git restore`, `git reset`, or any command that rolls back uncommitted edits you did not make for this mission
 - Deleting or overwriting files you do not recognize as your own
-- `ovld protocol revert` on another objective's checkpoint to "clean up" before deliver
 
 If `deliver` fails with `missing_rationale` for a file you did not change, or `git status` shows dirty paths outside your mission:
 
@@ -114,14 +113,6 @@ ovld protocol deliver --session-key <sessionKey> --mission-id $MISSION_ID \
 ```
 
 Ordinary deliver artifacts should use `next_steps`, `test_results`, `migration`, `note`, `url`, or `decision`.
-
-## Revert
-
-```bash
-ovld protocol revert --objective-id <objective-id>
-```
-
-`revert` restores the local working tree to the recorded objective state. Use only when explicitly asked to undo **this** objective's work. Never use `revert` — or any git rollback — to strip unrelated concurrent changes before delivery.
 
 ## Record Change Rationales
 

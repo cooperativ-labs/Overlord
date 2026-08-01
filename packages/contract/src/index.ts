@@ -634,6 +634,46 @@ export interface UpdateArtifactBody {
   externalUrl?: string | null;
 }
 
+/**
+ * One durable shared-context entry for a mission (`shared_context_entries`).
+ * Survives across objectives; agents write via Protocol `write-context`, humans
+ * via REST `PUT /api/missions/:id/context`.
+ */
+export interface SharedContextEntryDto {
+  id: string;
+  missionId: string;
+  key: string;
+  /** Parsed JSON when `valueKind` is `json`, otherwise the raw string. */
+  value: unknown;
+  valueKind: 'string' | 'json';
+  tags: string[];
+  updatedAt: string;
+  revision: number;
+}
+
+/** Upsert one shared-context entry by mission + key (Protocol `write-context` equivalent). */
+export interface UpsertSharedContextBody {
+  key: string;
+  value: unknown;
+}
+
+/** Create a mission artifact without a delivery (mid-turn / agent-published). */
+export interface CreateArtifactBody {
+  type: ArtifactType | string;
+  label: string;
+  contentText?: string | null;
+  externalUrl?: string | null;
+  /** Optional objective provenance when creating outside a live session. */
+  objectiveId?: string | null;
+  /** Optional session provenance (UUID). Protocol may resolve a session key instead. */
+  sessionId?: string | null;
+  /**
+   * Optional live session key. When provided, stamps `sessionId` and `objectiveId`
+   * from that session (overrides explicit ids). Used by Protocol/MCP.
+   */
+  sessionKey?: string | null;
+}
+
 export interface MissionDetailDto extends MissionDto {
   objectives: ObjectiveDto[];
   statuses: WorkspaceStatusDto[];

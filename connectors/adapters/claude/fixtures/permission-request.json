@@ -1,0 +1,17 @@
+{
+  "fixtureVersion": 1,
+  "kind": "native-payload",
+  "description": "Recorded Claude PermissionRequest payload used by the callback request codec.",
+  "payload": {
+    "hook_event_name": "PermissionRequest",
+    "session_id": "session-claude-1",
+    "tool_name": "Bash",
+    "tool_use_id": "call-1",
+    "request_id": "permission-1",
+    "timeout": 45
+  },
+  "assert": {
+    "requiredPaths": ["hook_event_name", "session_id", "tool_name", "request_id", "timeout"],
+    "equals": { "hook_event_name": "PermissionRequest" }
+  }
+}

@@ -1,0 +1,30 @@
+# Pi — agent-session event codec.
+#
+# Pi is an in-process extension, so it constructs this narrow payload before invoking the CLI.
+# The extension never transports an event object wholesale: only the allowlisted fields below
+# may enter the owner-only ephemeral payload file used by `pi.exec`.
+codecVersion: 1
+adapter: pi
+
+eventNamePath: type
+nativeSessionPaths:
+  - session_id
+projectRootPaths:
+  - cwd
+
+events:
+  - native: input
+    kind: prompt.submitted
+    origin: user
+    promptPath: prompt
+
+  - native: tool_call
+    kind: tool.called
+    origin: agent
+    toolPath: tool_name
+    inputPath: tool_input
+    callIdPath: tool_use_id
+
+  - native: agent_start
+    kind: session.started
+    origin: system

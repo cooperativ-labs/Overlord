@@ -228,6 +228,25 @@ const toolHandlers: Record<string, ToolHandler> = {
             }
           : undefined
     }),
+  overlord_add_artifact: args => {
+    const hasContentText = typeof args.contentText === 'string' && args.contentText.trim() !== '';
+    const hasExternalUrl = typeof args.externalUrl === 'string' && args.externalUrl.trim() !== '';
+    if (!hasContentText && !hasExternalUrl) {
+      throw new Error('Provide at least one of contentText or externalUrl');
+    }
+    const sessionKey = optionalString(args, 'sessionKey');
+    return runProtocolSubcommand('add-artifact', {
+      flags: {
+        '--mission-id': requiredString(args, 'missionId'),
+        '--type': requiredString(args, 'type'),
+        '--label': requiredString(args, 'label'),
+        ...(hasContentText ? { '--content-text-file': true } : {}),
+        ...(hasExternalUrl ? { '--external-url': args.externalUrl as string } : {}),
+        ...(sessionKey ? { '--session-key': sessionKey } : {})
+      },
+      fileInputs: hasContentText ? { '--content-text-file': args.contentText as string } : undefined
+    });
+  },
   overlord_update_artifact: args => {
     if (typeof args.expectedRevision !== 'number' || !Number.isInteger(args.expectedRevision)) {
       throw new Error('expectedRevision must be an integer');

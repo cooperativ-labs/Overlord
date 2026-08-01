@@ -1,6 +1,6 @@
 {
   "name": "overlord",
-  "version": "0.2607301714.0",
+  "version": "0.2608011442.0",
   "description": "Open-source management and coordination layer for AI coding agents",
   "type": "module",
   "private": true,
@@ -98,7 +98,7 @@
     "test:with-pg": "node scripts/with-test-db.mjs yarn test",
     "test:all": "yarn test",
     "test:watch": "node scripts/with-ovld-home.mjs tsx --test --watch 'packages/core/**/*.test.ts'",
-    "check": "yarn lint && yarn check:workspace-scoping && yarn check:conformance-versions && yarn typecheck && yarn test",
+    "check": "yarn lint && yarn check:workspace-scoping && yarn check:conformance-versions && yarn connectors:capabilities:check && yarn typecheck && yarn test",
     "lint": "eslint .",
     "fix": "eslint --fix .",
     "build:prod": "yarn db:build:prod && yarn auth:build:prod && yarn automations:build:prod && yarn core:build:prod && yarn cli:build:prod && yarn webapp:build:prod",
@@ -107,7 +107,10 @@
     "version:update:minor": "node scripts/version-update.mjs",
     "connectors:version:bump": "node scripts/sync-connector-versions.mjs --bump patch",
     "connectors:version:sync": "node scripts/sync-connector-versions.mjs --sync",
-    "connectors:version:check": "node scripts/sync-connector-versions.mjs --check"
+    "connectors:version:check": "node scripts/sync-connector-versions.mjs --check",
+    "connectors:capabilities": "node scripts/generate-harness-capabilities.mjs",
+    "connectors:capabilities:check": "node scripts/generate-harness-capabilities.mjs --check",
+    "connectors:check": "yarn connectors:version:check && yarn connectors:capabilities:check"
   },
   "dependencies": {
     "@overlord/auth": "workspace:*",

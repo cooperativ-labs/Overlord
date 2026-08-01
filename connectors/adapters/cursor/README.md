@@ -76,7 +76,10 @@ This connector is intentionally reviewable against the four connector layers in 
 - `skills/overlord-mission/SKILL.md` — Cursor adapter template with a `<!-- @connector-core -->` marker; setup interpolates shared core content at install time.
 - `commands/*.md` — slash commands for session routing, objective discussion, mission creation, and work recording.
 - `hooks/overlord-user-prompt-submit.sh` — `beforeSubmitPrompt` follow-up capture through `ovld protocol hook-event`.
-- `hooks/overlord-permission-request.sh` — observes `beforeShellExecution` and `beforeMCPExecution` through `ovld protocol permission-request`. It returns no allow/deny decision, leaving Cursor and user-installed hooks authoritative.
+- `hooks/overlord-permission-request.sh` — sends `beforeShellExecution` and
+  `beforeMCPExecution` to `ovld agent-session request`. When a scoped live channel is present it
+  can return Cursor's exact flat allow/deny response; on timeout or failure it emits no bytes so
+  Cursor keeps its native authority.
 - `hooks/overlord-post-tool-use.sh` — records `postToolUse` file edits and shell-mediated changes for exact per-session delivery attribution.
 - `hooks/overlord-stop.sh` — checks pending delivery through `ovld protocol hook-event`; when needed, it asks Cursor to continue once so the agent can finish delivery.
 - `rules/overlord-local.mdc` — always-on workflow rules for Cursor sessions.

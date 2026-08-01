@@ -1,0 +1,10 @@
+{
+  "fixtureVersion": 1,
+  "kind": "source-guard",
+  "description": "OpenCode sidecar drains pending inputs via prompt_async and never binds the control port off loopback.",
+  "path": "cli/src/agent-session/sidecar.ts",
+  "assert": {
+    "mustContain": ["prompt_async", "drainPendingInputs", "127.0.0.1"],
+    "mustNotContain": ["0.0.0.0"]
+  }
+}

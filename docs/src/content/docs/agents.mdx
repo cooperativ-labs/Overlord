@@ -47,6 +47,11 @@ mission record during an agent session.
 If you use an agent outside Overlord, you can still create or inspect missions
 with the CLI and keep the resulting delivery in the same project history.
 
+For a session launched by Overlord, the connector may also provide live activity,
+time-bounded decisions, and session instructions. These capabilities differ by harness and
+are gated from fixture-proven runtime evidence. See [Live agent sessions](/agent-sessions/) for
+the model, delivery labels, and conflicts with other hook systems.
+
 ## Slash commands
 
 Installing a connector also registers a set of slash commands you can use
@@ -68,3 +73,6 @@ for example `/overlord:attach`:
 After updating Overlord, rerun `ovld agent-setup <agent>` (or `all`) to repair
 or refresh the local connector files. Use `ovld doctor` when a connector or
 agent binary is not detected as expected.
+
+Related: [Live agent sessions](/agent-sessions/) ·
+[Agent-session adapter troubleshooting](/docs-for-agents/agent-sessions/)

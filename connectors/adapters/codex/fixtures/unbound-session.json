@@ -1,0 +1,26 @@
+{
+  "fixtureVersion": 1,
+  "kind": "script-io",
+  "description": "Mandatory negative test: Codex's channel-scoped decision hook in an unrelated unbound session. The shared bash gate must exit before it spawns the CLI, writes a log, or makes a request.",
+  "script": "connectors/core/scripts/agent-session-hook.sh",
+  "stdin": {
+    "hook_event_name": "PermissionRequest",
+    "session_id": "01J0000000000000000000",
+    "cwd": "/private/unrelated-project",
+    "tool_name": "shell",
+    "tool_input": { "command": ["bash", "-lc", "rm -rf ./build"] }
+  },
+  "env": {
+    "MISSION_ID": null,
+    "SESSION_KEY": null,
+    "OVERLORD_SESSION_CHANNEL_ID": null,
+    "OVERLORD_SESSION_CHANNEL_TOKEN": null
+  },
+  "expect": {
+    "exitCode": 0,
+    "stdout": "",
+    "stderr": "",
+    "cliInvocations": [],
+    "sandboxWrites": []
+  }
+}

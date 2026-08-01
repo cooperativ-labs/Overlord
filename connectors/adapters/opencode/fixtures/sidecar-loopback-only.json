@@ -1,0 +1,10 @@
+{
+  "fixtureVersion": 1,
+  "kind": "source-guard",
+  "description": "OpenCode's control port drives the agent and is unauthenticated by default: anything that can reach it owns the session. This guard pins the two properties that make the sidecar safe — the server is bound to a loopback address and a per-launch password is generated — and pins the absence of the shortcut that would undo both, binding to 0.0.0.0. A source guard rather than a runtime test because the dangerous version also works.",
+  "path": "cli/src/agent-session/sidecar.ts",
+  "assert": {
+    "mustContain": ["127.0.0.1", "OPENCODE_SERVER_PASSWORD", "randomBytes"],
+    "mustNotContain": ["0.0.0.0", "'::'"]
+  }
+}

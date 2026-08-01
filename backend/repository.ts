@@ -43,8 +43,10 @@ import {
   mergeResourceStatusWithObservation,
   type TargetResourceObservationRow
 } from '../packages/core/service/target-resource-observations.ts';
+import { hashSessionKey } from '../packages/core/service/util.ts';
 import type {
   ArtifactDto,
+  CreateArtifactBody,
   CreateMissionBody,
   CreateObjectiveBody,
   CreateProjectBody,
@@ -86,6 +88,7 @@ import type {
   ReorderWorkspaceStatusesBody,
   ScheduleDto,
   ScheduleInput,
+  SharedContextEntryDto,
   StatusType,
   TokenScope,
   UpdateArtifactBody,
@@ -97,6 +100,7 @@ import type {
   UpdateProjectTagBody,
   UpdateUserTokenBody,
   UpdateWorkspaceStatusBody,
+  UpsertSharedContextBody,
   UserTokenDto,
   WorkspaceStatusDto,
   WorktreeDto
@@ -4055,6 +4059,313 @@ export async function listArtifacts(missionRef: string, limit = 200): Promise<Ar
     [mission.id, mission.workspace_id, limit]
   )) as ArtifactRow[];
   return rows.map(toArtifactDto);
+}
+
+type SharedContextRow = {
+  id: string;
+  mission_id: string;
+  key: string;
+  value_kind: string;
+  value_text: string | null;
+  value_json: string | null;
+  updated_at: string;
+  revision: number;
+};
+
+function toSharedContextEntryDto(row: SharedContextRow): SharedContextEntryDto {
+  const valueKind = row.value_kind === 'json' ? 'json' : 'string';
+  return {
+    id: row.id,
+    missionId: row.mission_id,
+    key: row.key,
+    value:
+      valueKind === 'json' && row.value_json
+        ? (JSON.parse(row.value_json) as unknown)
+        : row.value_text,
+    valueKind,
+    tags: [],
+    updatedAt: row.updated_at,
+    revision: row.revision
+  };
+}
+
+/** GET /api/missions/:id/context — durable shared mission memory. */
+export async function listMissionSharedContext(
+  missionRef: string,
+  limit = 100
+): Promise<SharedContextEntryDto[]> {
+  const mission = await getMissionRow(missionRef, undefined, PERMISSIONS.MISSION_READ);
+  const rows = (await requireDatabaseClient().all(
+    `SELECT id, mission_id, key, value_kind, value_text, value_json, updated_at, revision
+       FROM shared_context_entries
+      WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL
+      ORDER BY updated_at DESC, key ASC
+      LIMIT ?`,
+    [mission.id, mission.workspace_id, limit]
+  )) as SharedContextRow[];
+  return rows.map(toSharedContextEntryDto);
+}
+
+/** PUT /api/missions/:id/context — upsert one shared-context entry by key. */
+export async function upsertMissionSharedContext(
+  missionRef: string,
+  body: UpsertSharedContextBody
+): Promise<SharedContextEntryDto> {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    throw new ApiError(400, 'Shared context body must be an object');
+  }
+
+  const key = typeof body.key === 'string' ? body.key.trim() : '';
+  if (!key) {
+    throw new ApiError(400, 'Shared context key is required');
+  }
+  if (body.value === undefined) {
+    throw new ApiError(400, 'Shared context value is required');
+  }
+
+  const isJson = typeof body.value === 'object' && body.value !== null;
+  const valueKind = isJson ? 'json' : 'string';
+  const valueText = isJson ? null : String(body.value);
+  const valueJson = isJson ? JSON.stringify(body.value) : null;
+
+  return requireDatabaseClient().transaction(async tx => {
+    const mission = await getMissionRow(missionRef, tx, PERMISSIONS.MISSION_UPDATE);
+    const now = nowIso();
+    const existing = (await tx.get(
+      `SELECT id, revision FROM shared_context_entries
+        WHERE mission_id = ? AND workspace_id = ? AND key = ? AND deleted_at IS NULL`,
+      [mission.id, mission.workspace_id, key]
+    )) as { id: string; revision: number } | undefined;
+
+    let entryId: string;
+    let revision: number;
+    let operation: 'insert' | 'update';
+
+    if (existing) {
+      entryId = existing.id;
+      revision = existing.revision + 1;
+      operation = 'update';
+      await tx.run(
+        `UPDATE shared_context_entries
+            SET value_kind = ?, value_text = ?, value_json = ?, updated_at = ?, revision = ?
+          WHERE id = ? AND workspace_id = ?`,
+        [valueKind, valueText, valueJson, now, revision, entryId, mission.workspace_id]
+      );
+    } else {
+      entryId = newId();
+      revision = 1;
+      operation = 'insert';
+      await tx.run(
+        `INSERT INTO shared_context_entries
+             (id, workspace_id, mission_id, key, value_kind, value_text, value_json,
+              created_by_workspace_user_id, created_at, updated_at, revision)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+        [
+          entryId,
+          mission.workspace_id,
+          mission.id,
+          key,
+          valueKind,
+          valueText,
+          valueJson,
+          getActorWorkspaceUserId(),
+          now,
+          now
+        ]
+      );
+    }
+
+    await recordChange(
+      {
+        entityType: 'shared_context_entry',
+        entityId: entryId,
+        operation,
+        entityRevision: revision,
+        workspaceId: mission.workspace_id,
+        projectId: mission.project_id,
+        missionId: mission.id,
+        changedFields: ['key', 'value_kind', 'value_text', 'value_json']
+      },
+      tx
+    );
+
+    const row = (await tx.get(
+      `SELECT id, mission_id, key, value_kind, value_text, value_json, updated_at, revision
+         FROM shared_context_entries
+        WHERE id = ? AND workspace_id = ?`,
+      [entryId, mission.workspace_id]
+    )) as SharedContextRow;
+
+    return toSharedContextEntryDto(row);
+  });
+}
+
+const CORE_ARTIFACT_TYPES = new Set([
+  'test_results',
+  'next_steps',
+  'note',
+  'url',
+  'decision',
+  'migration'
+]);
+
+function normalizeExternalUrl(value: string | null | undefined): string | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== 'string') {
+    throw new ApiError(400, 'Artifact externalUrl must be a string or null');
+  }
+  const externalUrl = value.trim() || null;
+  if (!externalUrl) return null;
+  try {
+    const url = new URL(externalUrl);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+      throw new Error('Unsupported protocol');
+    }
+  } catch {
+    throw new ApiError(400, 'Artifact externalUrl must be an http(s) URL');
+  }
+  return externalUrl;
+}
+
+/** Create a mission artifact without a delivery (mid-turn / agent-published). */
+export async function createArtifact(
+  missionRef: string,
+  body: CreateArtifactBody
+): Promise<ArtifactDto> {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    throw new ApiError(400, 'Artifact create body must be an object');
+  }
+
+  const type = typeof body.type === 'string' ? body.type.trim() : '';
+  if (!type) {
+    throw new ApiError(400, 'Artifact type is required');
+  }
+  // Core CHECK currently enumerates the six built-in types; namespaced extension
+  // values are accepted here and rejected by the DB if the deployment has not
+  // widened the constraint.
+  if (!CORE_ARTIFACT_TYPES.has(type) && !type.includes('.')) {
+    throw new ApiError(
+      400,
+      `Artifact type must be one of ${[...CORE_ARTIFACT_TYPES].join(', ')} or a namespaced extension value`
+    );
+  }
+
+  const label = typeof body.label === 'string' ? body.label.trim() : '';
+  if (!label) {
+    throw new ApiError(400, 'Artifact label is required');
+  }
+
+  let contentText: string | null = null;
+  if (body.contentText !== undefined && body.contentText !== null) {
+    if (typeof body.contentText !== 'string') {
+      throw new ApiError(400, 'Artifact contentText must be a string or null');
+    }
+    contentText = body.contentText.trim() ? body.contentText : null;
+  }
+  const externalUrl = normalizeExternalUrl(body.externalUrl);
+  if (!contentText && !externalUrl) {
+    throw new ApiError(400, 'Provide contentText and/or externalUrl');
+  }
+
+  return requireDatabaseClient().transaction(async tx => {
+    const mission = await getMissionRow(missionRef, tx, PERMISSIONS.ARTIFACT_CREATE);
+
+    let objectiveId: string | null =
+      typeof body.objectiveId === 'string' && body.objectiveId.trim()
+        ? body.objectiveId.trim()
+        : null;
+    let sessionId: string | null =
+      typeof body.sessionId === 'string' && body.sessionId.trim() ? body.sessionId.trim() : null;
+
+    const sessionKey =
+      typeof body.sessionKey === 'string' && body.sessionKey.trim() ? body.sessionKey.trim() : null;
+    if (sessionKey) {
+      const session = (await tx.get(
+        `SELECT id, mission_id, objective_id
+           FROM agent_sessions
+          WHERE workspace_id = ? AND session_key_hash = ? AND ended_at IS NULL AND deleted_at IS NULL
+          ORDER BY started_at DESC LIMIT 1`,
+        [mission.workspace_id, hashSessionKey(sessionKey)]
+      )) as { id: string; mission_id: string; objective_id: string } | undefined;
+      if (!session) {
+        throw new ApiError(401, 'Invalid or ended session key');
+      }
+      if (session.mission_id !== mission.id) {
+        throw new ApiError(400, 'Session key does not match mission');
+      }
+      sessionId = session.id;
+      objectiveId = session.objective_id;
+    } else if (objectiveId) {
+      const objective = (await tx.get(
+        `SELECT id FROM objectives
+          WHERE id = ? AND mission_id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+        [objectiveId, mission.id, mission.workspace_id]
+      )) as { id: string } | undefined;
+      if (!objective) {
+        throw new ApiError(404, 'Objective not found on mission');
+      }
+    } else if (sessionId) {
+      const session = (await tx.get(
+        `SELECT id, objective_id FROM agent_sessions
+          WHERE id = ? AND mission_id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+        [sessionId, mission.id, mission.workspace_id]
+      )) as { id: string; objective_id: string } | undefined;
+      if (!session) {
+        throw new ApiError(404, 'Session not found on mission');
+      }
+      if (!objectiveId) objectiveId = session.objective_id;
+    }
+
+    const id = newId();
+    const now = nowIso();
+    const actorId = getActorWorkspaceUserId();
+    await tx.run(
+      `INSERT INTO artifacts
+         (id, workspace_id, project_id, mission_id, objective_id, session_id, delivery_id,
+          type, label, content_text, external_url, created_by_workspace_user_id,
+          created_at, updated_at, revision)
+       VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, 1)`,
+      [
+        id,
+        mission.workspace_id,
+        mission.project_id,
+        mission.id,
+        objectiveId,
+        sessionId,
+        type,
+        label,
+        contentText,
+        externalUrl,
+        actorId,
+        now,
+        now
+      ]
+    );
+
+    const created = (await tx.get(
+      `SELECT id, workspace_id, project_id, mission_id, objective_id, session_id, delivery_id,
+              type, label, content_text, content_json, external_url, created_at, updated_at, revision
+         FROM artifacts
+        WHERE id = ? AND workspace_id = ?`,
+      [id, mission.workspace_id]
+    )) as ArtifactRow;
+
+    await recordChange(
+      {
+        entityType: 'artifact',
+        entityId: id,
+        operation: 'insert',
+        entityRevision: 1,
+        workspaceId: mission.workspace_id,
+        projectId: mission.project_id,
+        missionId: mission.id,
+        objectiveId,
+        changedFields: ['type', 'label', 'content_text', 'external_url']
+      },
+      tx
+    );
+    return toArtifactDto(created);
+  });
 }
 
 /** Update the human-facing presentation fields of an existing mission artifact. */

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
 
@@ -41,6 +41,42 @@ function readCachedNativeSessionId({
   } catch {
     return undefined;
   }
+}
+
+/**
+ * Record a harness's native session id for later correlation.
+ *
+ * This cache is a **lookup alias and nothing more**. Writing an entry grants no scope, and
+ * reading one authorizes no event: the entry's whole job is to let a later process ask "which
+ * harness conversation was this?" without re-deriving it. Authorization comes from the channel
+ * credential, which lives somewhere else entirely (`agent-session/channel.ts`) for exactly this
+ * reason — so that no future reader can mistake this file for a grant.
+ *
+ * The connectors' prompt hooks write this same shape inline today. Centralizing the writer here
+ * means the key derivation exists once rather than once per adapter shell script.
+ */
+export function writeNativeSessionId({
+  agent,
+  missionId,
+  externalSessionId,
+  workingDirectory = process.cwd()
+}: {
+  agent: string;
+  missionId: string;
+  externalSessionId: string;
+  workingDirectory?: string;
+}): void {
+  const filePath = sessionCachePath({
+    agent: agent.toLowerCase(),
+    missionId,
+    workingDirectory
+  });
+  mkdirSync(path.dirname(filePath), { recursive: true });
+  writeFileSync(
+    filePath,
+    JSON.stringify({ agent: agent.toLowerCase(), missionId, externalSessionId }),
+    'utf8'
+  );
 }
 
 function detectCodexSessionIdFromDisk(workingDirectory: string): string | undefined {

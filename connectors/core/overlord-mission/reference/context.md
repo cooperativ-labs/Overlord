@@ -3,6 +3,8 @@
 ```bash
 ovld protocol read-context --session-key <sessionKey> --mission-id $MISSION_ID
 ovld protocol write-context --session-key <sessionKey> --mission-id $MISSION_ID --key "key" --value '"json-value"'
+ovld protocol add-artifact --mission-id $MISSION_ID --type note --label "Implementation plan" \
+  --content-text-file -
 ovld protocol update-artifact --mission-id $MISSION_ID --artifact-id <artifact-id> \
   --expected-revision <n> --label "Revised plan" --content-text-file -
 ovld protocol attachment-list --session-key <sessionKey> --objective-id <objective-id>
@@ -11,6 +13,10 @@ ovld protocol attachment-download-url --session-key <sessionKey> --attachment-id
 ```
 
 The `attach` and `load-context` responses already include an `attachments` array plus `previousObjectives` and `futureObjectives` arrays — use those for `<attachment-id>` and `<objective-id>` values. The objective currently being executed is not repeated in those arrays; it is the top-level `objective`. `previousObjectives` are the objectives already worked (before the current one) and `futureObjectives` are the ones queued after it. Run `attachment-list` mid-session if new files have been uploaded since attach. `--mission-id` is optional for attachment calls when `--objective-id` or `--attachment-id` lets the server derive the mission.
+
+## Creating artifacts during a turn
+
+Artifacts do not require delivery. Publish a plan, notes, decision, or URL mid-session with `add-artifact` (or MCP `overlord_add_artifact`). Provide `--type`, `--label`, and at least one of `--content-text` / `--content-text-file` or `--external-url`. An optional `--session-key` (auto-injected from the attach cache when present) stamps session/objective provenance; `delivery_id` stays null. Delivery may still attach additional artifacts later.
 
 ## Updating existing artifacts
 
@@ -22,7 +28,7 @@ For large artifacts such as planning documents, architecture decisions, research
 
 - Save to a meaningful path in the repository (e.g., `ai/feature-plans/my-feature.md` for feature plans, `docs/decisions/my-decision.md` for architecture decision records).
 - Commit the file as part of the mission's work so it appears in `changeRationales`.
-- In the delivery, include a `note` or `decision` artifact with a concise summary and the repository file path — not the full document content.
+- Prefer `add-artifact` mid-turn (or a delivery artifact) with a `note` or `decision` type, a concise summary, and the repository file path — not the full document content.
 
 This keeps the mission feed readable while preserving the full document in version control where it can be reviewed, diffed, and referenced later. If that summary artifact already exists on the mission, revise it with `update-artifact` rather than creating another copy.
 

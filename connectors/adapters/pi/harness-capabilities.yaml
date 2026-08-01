@@ -1,0 +1,190 @@
+# Pi — agent-session interaction capabilities.
+#
+# Authoritative and fixture-backed. Validated against contract/harness-capabilities.schema.yaml.
+# See connectors/AGENTS.md → "Harness capability descriptors" before writing any code here.
+#
+# Pi is the one adapter with no native permission prompt at all. For every other harness
+# "fail toward the harness" means a human sees a dialog; for Pi it means THE TOOL RUNS. That
+# is a materially different risk posture: Pi's decision interception stays off by default,
+# requires an explicit workspace-policy ceiling plus project opt-in, and the UI must name the
+# fail-open behavior before it is enabled.
+schemaVersion: 1
+adapter: pi
+codec: pi
+codecSpec: codec/pi.codec.yaml
+decisionCodecSpec: codec/pi.decision-codec.yaml
+
+harness:
+  name: Pi Coding Agent
+  verifiedVersion: '0.83.0'
+  versionRange: '>=0.83.0 <0.84.0'
+  versionScheme: semver
+
+integrationShape: extension
+
+binding:
+  source: api
+  field: ctx.sessionManager.getSessionId()
+  status: supported
+  fixture: fixtures/agent-session-runtime.json
+  notes: >-
+    The extension runs in-process and can read the session id directly; the shipped extension
+    already writes it into the native-session cache. That cache is keyed by (cwd, mission,
+    agent) today — cwd may help LOCATE an existing binding but can never create one or
+    authorize an event. The channel credential is the authority.
+
+decisionHold:
+  status: supported
+  fixture: fixtures/agent-session-runtime.json
+  maxTimeoutSeconds: null
+  notes: >-
+    `tool_call` handlers are async, so a decision can be awaited without blocking any process
+    and there is no harness timeout ceiling. There is also no native prompt to release to:
+    a timed-out request must let the tool proceed.
+
+capabilities:
+  observe.prompt:
+    status: supported
+    native: input
+    fixtures: [fixtures/agent-session-runtime.json]
+    notes: >-
+      The shipped extension already captures `input` and posts legacy follow-up activity
+      through the CLI. That is not the normalized agent-session event graded here.
+  observe.toolCall:
+    status: supported
+    native: tool_call
+    fixtures: [fixtures/normalize-tool-call.json]
+  observe.toolResult:
+    status: not-implemented
+    native: tool_result
+    trackedAs: agent-session-phase-4
+  observe.fileEdit:
+    status: not-implemented
+    native: tool_execution_end
+    trackedAs: agent-session-phase-4
+  observe.sessionLifecycle:
+    status: supported
+    native: agent_start
+    fixtures: [fixtures/agent-session-runtime.json]
+  decide.shell:
+    status: supported
+    native: tool_call
+    fixtures: [fixtures/agent-session-runtime.json, fixtures/decision-codec.json]
+  decide.mcp:
+    status: supported
+    native: tool_call
+    fixtures: [fixtures/agent-session-runtime.json, fixtures/decision-codec.json]
+  decide.fileWrite:
+    status: supported
+    native: tool_call
+    fixtures: [fixtures/agent-session-runtime.json, fixtures/decision-codec.json]
+  decide.anyTool:
+    status: supported
+    native: tool_call
+    fixtures: [fixtures/agent-session-runtime.json, fixtures/decision-codec.json]
+  decide.universal:
+    status: supported
+    native: tool_call
+    fixtures: [fixtures/agent-session-runtime.json, fixtures/decision-codec.json]
+    notes: >-
+      One async handler covers every tool call, so coverage is genuinely universal — but the
+      only two outcomes are "return (the tool runs)" and "block with a reason (the model is
+      told it was refused)". There is no defer.
+  answer.structuredQuestion:
+    status: not-implemented
+    native: ctx.ui.select
+    trackedAs: agent-session-phase-4
+  answer.persistentAllow:
+    status: unsupported
+    reason: >-
+      Pi has no native permission model, so there is no standing allow rule for a reply to
+      write. A persistent grant would have to be invented by Overlord rather than recorded in
+      the harness, which is a different feature with its own audit and RBAC review.
+    evidenceRef: connector-harness-taxonomy.md#52-what-is-verified
+  inject.midTurn:
+    status: supported
+    native: sendUserMessage(deliverAs=steer)
+    fixtures: [fixtures/inject-send-user-message.json]
+    notes: >-
+      `steer` is genuine mid-turn injection. The extension claims via inbox, calls
+      sendUserMessage, then confirms — Delivered only after the harness accepts the message.
+  inject.turnBoundary:
+    status: supported
+    native: sendUserMessage(deliverAs=followUp)
+    fixtures: [fixtures/inject-send-user-message.json]
+  inject.nextTurn:
+    status: not-implemented
+    native: sendMessage(deliverAs=nextTurn)
+    trackedAs: agent-session-phase-4
+  terminal.concurrentAnswer:
+    status: unsupported
+    reason: >-
+      There is no native permission prompt for a human to answer concurrently. This is not a
+      timing limitation like the callback harnesses have; the surface does not exist.
+    evidenceRef: connector-harness-taxonomy.md#53-unique-challenges
+  terminal.statusSurface:
+    status: not-implemented
+    native: ctx.ui.notify
+    trackedAs: agent-session-phase-4
+
+hazards:
+  - id: no-native-floor-fails-open
+    severity: high
+    summary: >-
+      Pi has no dialog to fall back to, so a timed-out or failed remote decision must ALLOW
+      the tool. Every other adapter fails toward a human; this one fails toward execution.
+      Remote decisions stay off by default and require a workspace-policy ceiling plus project
+      opt-in whose consent text names the fail-open timeout.
+    verification: verified
+    mitigation: implemented
+    fixture: fixtures/agent-session-runtime.json
+  - id: block-is-visible-to-the-model
+    severity: medium
+    summary: >-
+      A block becomes a tool refusal in the conversation and changes what the agent does next,
+      so `block` must never be used as a "please wait" mechanism. The wait happens inside the
+      async handler, before returning.
+    verification: verified
+    mitigation: implemented
+    fixture: fixtures/agent-session-runtime.json
+  - id: in-process-blast-radius
+    severity: high
+    summary: >-
+      The extension runs with the agent's memory, credentials, and event loop. An unhandled
+      exception is a crash in someone's editor. It must hold no token, make no HTTP call, and
+      catch everything — all network work goes through the CLI.
+    verification: verified
+    mitigation: implemented
+    fixture: fixtures/extension-holds-no-credentials.json
+  - id: typed-api-version-coupling
+    severity: medium
+    summary: >-
+      The extension is typed against @earendil-works/pi-coding-agent 0.83.0. A typed
+      in-process API is far more breakable than JSON on stdin, so the adapter needs a version
+      check and a graceful "extension disabled, mission workflow unaffected" path.
+    verification: unverified
+    mitigation: required
+    trackedAs: taxonomy-7.10
+
+decisionShape:
+  codec: pi
+  allowFixture: fixtures/decision-codec.json
+  denyFixture: fixtures/decision-codec.json
+  deferFixture: fixtures/decision-codec.json
+  neverSend: [hookSpecificOutput, permissionDecision, permission]
+  notes: >-
+    Pi's decision is a resolved promise, not bytes: `{}` allows and `{ block: true, reason }`
+    denies. There is no defer value, which is why the fail-open posture must be a product
+    decision rather than an adapter default.
+
+unboundSessionFixture: fixtures/extension-holds-no-credentials.json
+
+legacy:
+  capabilities:
+    - followUpHook
+    - nativeResume
+    - modelFlag
+    - effortFlag
+    - contextFilePrompt
+  hookTypes:
+    - UserPromptSubmit

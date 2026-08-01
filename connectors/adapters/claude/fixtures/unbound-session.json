@@ -1,0 +1,26 @@
+{
+  "fixtureVersion": 1,
+  "kind": "script-io",
+  "description": "Mandatory negative test: what the shipped Claude PostToolUse hook does in a session with no Overlord binding, in an unrelated directory. Recorded truth, not an aspiration — the non-empty cliInvocations and sandboxWrites below are the reason hazard `unbound-session-side-effects` is declared and tracked for the agent-session runtime.",
+  "script": "connectors/adapters/claude/scripts/post-tool-use-hook.sh",
+  "stdin": {
+    "session_id": "11111111-2222-3333-4444-555555555555",
+    "hook_event_name": "PostToolUse",
+    "cwd": "/private/unrelated-project",
+    "tool_name": "Write",
+    "tool_input": { "file_path": "/private/unrelated-project/notes.md" }
+  },
+  "env": {
+    "MISSION_ID": null,
+    "SESSION_KEY": null,
+    "OVERLORD_SESSION_CHANNEL_ID": null,
+    "OVERLORD_SESSION_CHANNEL_TOKEN": null
+  },
+  "expect": {
+    "exitCode": 0,
+    "stdout": "",
+    "stderr": "",
+    "cliInvocations": ["protocol record-touched"],
+    "sandboxWrites": ["~/.ovld/logs/post-tool-use-hook.log"]
+  }
+}

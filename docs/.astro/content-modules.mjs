@@ -1,5 +1,6 @@
 
 export default new Map([
+["src/content/docs/agent-sessions.mdx", () => import("astro:content-layer-deferred-module?astro%3Acontent-layer-deferred-module=&fileName=src%2Fcontent%2Fdocs%2Fagent-sessions.mdx&astroContentModuleFlag=true")],
 ["src/content/docs/agents.mdx", () => import("astro:content-layer-deferred-module?astro%3Acontent-layer-deferred-module=&fileName=src%2Fcontent%2Fdocs%2Fagents.mdx&astroContentModuleFlag=true")],
 ["src/content/docs/authentication-and-permissions.mdx", () => import("astro:content-layer-deferred-module?astro%3Acontent-layer-deferred-module=&fileName=src%2Fcontent%2Fdocs%2Fauthentication-and-permissions.mdx&astroContentModuleFlag=true")],
 ["src/content/docs/cli.mdx", () => import("astro:content-layer-deferred-module?astro%3Acontent-layer-deferred-module=&fileName=src%2Fcontent%2Fdocs%2Fcli.mdx&astroContentModuleFlag=true")],
@@ -9,6 +10,7 @@ export default new Map([
 ["src/content/docs/data-boundaries.mdx", () => import("astro:content-layer-deferred-module?astro%3Acontent-layer-deferred-module=&fileName=src%2Fcontent%2Fdocs%2Fdata-boundaries.mdx&astroContentModuleFlag=true")],
 ["src/content/docs/desktop-app.mdx", () => import("astro:content-layer-deferred-module?astro%3Acontent-layer-deferred-module=&fileName=src%2Fcontent%2Fdocs%2Fdesktop-app.mdx&astroContentModuleFlag=true")],
 ["src/content/docs/docs-for-agents/agent-protocol.mdx", () => import("astro:content-layer-deferred-module?astro%3Acontent-layer-deferred-module=&fileName=src%2Fcontent%2Fdocs%2Fdocs-for-agents%2Fagent-protocol.mdx&astroContentModuleFlag=true")],
+["src/content/docs/docs-for-agents/agent-sessions.mdx", () => import("astro:content-layer-deferred-module?astro%3Acontent-layer-deferred-module=&fileName=src%2Fcontent%2Fdocs%2Fdocs-for-agents%2Fagent-sessions.mdx&astroContentModuleFlag=true")],
 ["src/content/docs/docs-for-agents/architecture.mdx", () => import("astro:content-layer-deferred-module?astro%3Acontent-layer-deferred-module=&fileName=src%2Fcontent%2Fdocs%2Fdocs-for-agents%2Farchitecture.mdx&astroContentModuleFlag=true")],
 ["src/content/docs/docs-for-agents/authentication.mdx", () => import("astro:content-layer-deferred-module?astro%3Acontent-layer-deferred-module=&fileName=src%2Fcontent%2Fdocs%2Fdocs-for-agents%2Fauthentication.mdx&astroContentModuleFlag=true")],
 ["src/content/docs/docs-for-agents/index.mdx", () => import("astro:content-layer-deferred-module?astro%3Acontent-layer-deferred-module=&fileName=src%2Fcontent%2Fdocs%2Fdocs-for-agents%2Findex.mdx&astroContentModuleFlag=true")],

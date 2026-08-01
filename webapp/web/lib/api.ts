@@ -25,6 +25,7 @@ import type {
   AgentCatalogDto,
   ArtifactDto,
   BranchActionBody,
+  CreateArtifactBody,
   CreateMissionBody,
   CreateObjectiveBody,
   CreateOrganizationOnboardingBody,
@@ -82,6 +83,7 @@ import type {
   ReorderWorkspaceStatusesBody,
   RotateWebhookSecretResultDto,
   ScheduleInput,
+  SharedContextEntryDto,
   StoredImageDto,
   UpdateAgentCatalogBody,
   UpdateAgentLaunchConfigBody,
@@ -102,6 +104,7 @@ import type {
   UpdateWorkspaceMemberRoleBody,
   UpdateWorkspaceStatusBody,
   UpdateWorktreeBranchAutomationBody,
+  UpsertSharedContextBody,
   UserTokenDto,
   WebhookDeliveryAttemptsPageDto,
   WebhookSubscriptionDto,
@@ -509,8 +512,14 @@ export const api = {
     request<DeliveryDto[]>('GET', `/api/missions/${id}/deliveries`),
   listMissionArtifacts: (id: string) =>
     request<ArtifactDto[]>('GET', `/api/missions/${id}/artifacts`),
+  createMissionArtifact: (missionId: string, body: CreateArtifactBody) =>
+    request<ArtifactDto>('POST', `/api/missions/${missionId}/artifacts`, body),
   updateMissionArtifact: (missionId: string, artifactId: string, body: UpdateArtifactBody) =>
     request<ArtifactDto>('PATCH', `/api/missions/${missionId}/artifacts/${artifactId}`, body),
+  listMissionSharedContext: (id: string) =>
+    request<SharedContextEntryDto[]>('GET', `/api/missions/${id}/context`),
+  upsertMissionSharedContext: (missionId: string, body: UpsertSharedContextBody) =>
+    request<SharedContextEntryDto>('PUT', `/api/missions/${missionId}/context`, body),
   listMissionFileChanges: (id: string) =>
     request<FileChangeDto[]>('GET', `/api/missions/${id}/file-changes`),
 
@@ -711,6 +720,32 @@ export const api = {
     request<GitHubPullRequestDto | null>('GET', `/ext/github/missions/${missionId}/pull-request`),
   createMissionGitHubPullRequest: (missionId: string, body: CreateGitHubPullRequestBody = {}) =>
     request<GitHubPullRequestDto>('POST', `/ext/github/missions/${missionId}/pull-request`, body),
+
+  listAgentSessionInputs: (missionId: string) =>
+    request<{
+      liveChannelId: string | null;
+      inputs: Array<{
+        id: string;
+        kind: string;
+        body: string;
+        status: string;
+        deliveryOutcome: string | null;
+        deliveryLabel: string;
+        createdAt: string;
+      }>;
+    }>('GET', `/api/agent-session-inputs?missionId=${encodeURIComponent(missionId)}`),
+  enqueueAgentSessionInput: (body: {
+    channelId: string;
+    body: string;
+    kind?: 'instruction' | 'retry' | 'continue';
+  }) =>
+    request<{
+      input: {
+        id: string;
+        deliveryLabel: string;
+        status: string;
+      };
+    }>('POST', '/api/agent-session-inputs', body),
 
   /** Dev-only loopback SQLite proxy for checkout-local capabilities in plain browser. */
   invokeLocalTarget: (call: LocalTargetBridgeCall) =>

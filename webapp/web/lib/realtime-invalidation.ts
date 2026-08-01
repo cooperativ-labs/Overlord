@@ -124,6 +124,11 @@ function routeChange(change: EntityChangeDto): QueryKey[] | null {
       if (!objectiveId) return null;
       return [keys.objectiveAttachments(objectiveId)];
     }
+    case 'shared_context_entry': {
+      const missionId = missionIdFor(change);
+      if (!missionId) return null;
+      return [keys.missionSharedContext(missionId)];
+    }
     case 'project': {
       const projectId = projectIdFor(change);
       if (!projectId) return null;

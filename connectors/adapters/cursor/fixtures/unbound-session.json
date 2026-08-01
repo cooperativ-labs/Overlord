@@ -1,0 +1,26 @@
+{
+  "fixtureVersion": 1,
+  "kind": "script-io",
+  "description": "Mandatory negative test: Cursor's decision-capable hook (registered on beforeShellExecution and beforeMCPExecution) in a session with no Overlord binding, in an unrelated directory. It must produce no output, no write, no CLI invocation, and no delay.",
+  "script": "connectors/adapters/cursor/hooks/overlord-permission-request.sh",
+  "stdin": {
+    "hook_event_name": "beforeShellExecution",
+    "conversation_id": "c-9f2a",
+    "session_id": "s-9f2a",
+    "workspace_roots": ["/private/unrelated-project"],
+    "command": "rm -rf ./build"
+  },
+  "env": {
+    "MISSION_ID": null,
+    "SESSION_KEY": null,
+    "OVERLORD_SESSION_CHANNEL_ID": null,
+    "OVERLORD_SESSION_CHANNEL_TOKEN": null
+  },
+  "expect": {
+    "exitCode": 0,
+    "stdout": "",
+    "stderr": "",
+    "cliInvocations": [],
+    "sandboxWrites": []
+  }
+}

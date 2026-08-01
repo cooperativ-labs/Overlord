@@ -1,0 +1,23 @@
+{
+  "fixtureVersion": 1,
+  "kind": "script-io",
+  "description": "Unbound inbox registration must spawn nothing and write nothing — the bash scope gate exits before ovld.",
+  "script": "connectors/core/scripts/agent-session-hook.sh",
+  "stdin": {
+    "hook_event_name": "SessionStart",
+    "session_id": "unbound"
+  },
+  "env": {
+    "MISSION_ID": null,
+    "SESSION_KEY": null,
+    "OVERLORD_SESSION_CHANNEL_ID": null,
+    "OVERLORD_SESSION_CHANNEL_TOKEN": null
+  },
+  "expect": {
+    "exitCode": 0,
+    "stdout": "",
+    "stderr": "",
+    "cliInvocations": [],
+    "sandboxWrites": []
+  }
+}

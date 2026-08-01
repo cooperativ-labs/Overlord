@@ -463,6 +463,7 @@ export async function runLocalCommand({
     case 'doctor': {
       const { createBackendClient } = await import('./backend-client.js');
       const { inspectConnector, listAvailableConnectors } = await import('./connectors.js');
+      const { inspectInstalledDescriptor } = await import('./agent-session/descriptor.js');
       const backend = createBackendClient();
       const health = await backend.health().catch(error => ({
         ok: false,
@@ -503,6 +504,54 @@ export async function runLocalCommand({
           detail: report.binaryFound
             ? `found on PATH`
             : `not found on PATH (install ${report.binaryName} to launch this agent)`
+        });
+
+        // Harness capability descriptor drift. A connector whose installed descriptor differs
+        // from the one compiled into this CLI is gating on capabilities that are not the ones
+        // installed — an otherwise invisible failure. This comparison is purely local: it
+        // hashes an installed file and reads the compiled catalog, and makes no network call.
+        const descriptorReport = inspectInstalledDescriptor({
+          agentKey,
+          installPath: report.installed ? report.installPath : null
+        });
+        checks.push({
+          name: `harness-descriptor:${agentKey}`,
+          ok: !descriptorReport.drift,
+          required: false,
+          detail: descriptorReport.detail
+        });
+      }
+
+      // Which mission, if any, this working directory's native agent session is bound to.
+      // An unbound session is the normal, silent case and must stay free of I/O: no request is
+      // made, nothing is written, and the check simply reports that nothing is bound.
+      {
+        const { readActiveMissionPointer } = await import('./agent-session/binding.js');
+        const binding = readActiveMissionPointer({ workingDirectory: process.cwd() });
+        checks.push({
+          name: 'agent-session-binding',
+          ok: true,
+          required: false,
+          detail: binding.detail
+        });
+      }
+
+      // Whether this process holds a session-channel credential, and where it came from.
+      // Reported without a network call and without revealing the credential itself: an
+      // unbound session must be able to run `doctor` with nothing requested on its behalf, and
+      // a bound one should be able to tell "no channel" apart from "channel, but the backend
+      // refused it" — the two failures look identical from the feed, which is empty either way.
+      {
+        const { resolveChannelBootstrap } = await import('./agent-session/channel.js');
+        const bootstrap = resolveChannelBootstrap();
+        checks.push({
+          name: 'agent-session-channel',
+          ok: true,
+          required: false,
+          detail: bootstrap
+            ? `channel ${bootstrap.channelId} (credential from ${bootstrap.source === 'env' ? 'the launch environment' : 'the owner-only local cache'})`
+            : 'no session channel in this process — an unlaunched or manually started session ' +
+              'carries no agent-session traffic, which is the silent default'
         });
       }
 

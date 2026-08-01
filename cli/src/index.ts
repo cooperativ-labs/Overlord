@@ -23,7 +23,8 @@ const DB_FREE_COMMANDS = new Set([
   'auth',
   'user-token',
   'prune',
-  'contract'
+  'contract',
+  'agent-session'
 ]);
 
 const KNOWN_COMMANDS = new Set([
@@ -44,6 +45,8 @@ const KNOWN_COMMANDS = new Set([
   'resume',
   'runner',
   'missions',
+  'requests',
+  'inputs',
   'mission',
   'changes',
   'execution',
@@ -114,6 +117,14 @@ async function dispatchCommand({
     case 'serve': {
       const { runServeCommand } = await import('./serve.js');
       await runServeCommand({ rest: args });
+      return;
+    }
+    case 'agent-session': {
+      // Local, offline capability reader. It never opens the CLI runtime or the backend
+      // client, so an unbound session can ask what a harness supports with no I/O.
+      const [subcommand, ...rest] = args;
+      const { runAgentSessionCommand } = await import('./agent-session/index.js');
+      await runAgentSessionCommand({ subcommand, args: rest, primaryCommand });
       return;
     }
     case 'contract': {

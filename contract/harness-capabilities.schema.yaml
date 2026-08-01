@@ -1,0 +1,377 @@
+# Overlord Harness Capabilities Descriptor Schema
+# JSON Schema (YAML format) for `connectors/adapters/<agent>/harness-capabilities.yaml`.
+#
+# This descriptor is the ONLY hand-authored source of agent-session interaction
+# capability truth for a connector. It is:
+#   - the runtime gating input (compiled into cli/src/agent-session/catalog.generated.ts),
+#   - the CI contract (every `supported` claim must have a passing executable fixture),
+#   - and the source the per-adapter CAPABILITIES.md and connectors/HARNESS-MATRIX.md
+#     pages are generated from.
+#
+# Validate + run fixtures + regenerate docs with:
+#   yarn connectors:capabilities          (write)
+#   yarn connectors:capabilities:check    (CI drift check)
+#
+# The deprecated hook-named `connector.capabilities` / `connector.hookTypes` flags in
+# conformance-manifest.yaml are a GENERATED legacy projection of this file plus the
+# adapter's `legacy:` block. Do not hand-edit them.
+
+'$schema': 'https://json-schema.org/draft/2020-12/schema'
+'$id': 'openoverlord/harness-capabilities/v1'
+title: 'Overlord Harness Capabilities Descriptor'
+description: >
+  Machine-readable declaration of what one agent harness connector can really do on the
+  agent-session interaction surfaces (push, call, inject), graded by the four capability
+  states and proven by executable fixtures.
+
+type: object
+additionalProperties: false
+required:
+  - schemaVersion
+  - adapter
+  - codec
+  - harness
+  - integrationShape
+  - binding
+  - decisionHold
+  - capabilities
+
+properties:
+  schemaVersion:
+    type: integer
+    const: 1
+    description: 'Descriptor schema version. Bump requires a contract version bump.'
+
+  adapter:
+    type: string
+    pattern: '^[a-z][a-z0-9_-]*$'
+    description: 'Adapter key — must equal the directory name and the conformance manifest componentKey.'
+
+  codec:
+    type: string
+    pattern: '^[a-z][a-z0-9_-]*$'
+    description: >
+      Connector-owned codec key. Native event normalization and native decision emission for
+      this harness live under the adapter; the CLI only executes the compiled codec.
+
+  codecSpec:
+    type: string
+    pattern: '^codec/[a-z0-9_-]+\.codec\.yaml$'
+    description: >
+      Adapter-relative path to the connector-owned event codec declaration, compiled into
+      cli/src/agent-session/codec-registry.generated.ts. Present once the adapter has a push
+      path; absent while a connector is declaration-only. The spec is a DECLARATION of where
+      native values live, never executable code, so what a codec can emit is bounded by the
+      core interpreter rather than by the codec author's discipline.
+
+  decisionCodecSpec:
+    type: string
+    pattern: '^codec/[a-z0-9_-]+\.decision-codec\.yaml$'
+    description: >
+      Adapter-relative path to the connector-owned request/decision codec declaration,
+      compiled into cli/src/agent-session/decision-codec-registry.generated.ts. The declaration
+      names native request paths and exact literal allow/deny/defer response bodies; the shared
+      pure interpreter owns validation, payload reduction, and emission.
+
+  harness:
+    type: object
+    additionalProperties: false
+    required: [name, versionScheme]
+    properties:
+      name:
+        type: string
+        description: 'Display name of the harness.'
+      verifiedVersion:
+        type: string
+        description: 'The harness version whose behavior was actually read/exercised.'
+      versionRange:
+        type: string
+        description: 'Range expressed in the syntax declared by versionScheme.'
+      versionScheme:
+        type: string
+        enum: [semver, calendar, opaque]
+
+  integrationShape:
+    type: string
+    enum: [callback, extension, controlPlane]
+    description: >
+      Where the adapter code runs and how a decision is returned. The core gates
+      decision-window policy on this value, never on the agent identifier.
+
+  # ── Session binding ──────────────────────────────────────────────────────────
+  #
+  # The native session id is a correlation/lookup alias only. Authorization and
+  # mission scope come from the verified channel/session credential. Neither cwd nor
+  # an unverified native id is a binding authority.
+
+  binding:
+    type: object
+    additionalProperties: false
+    required: [source, status]
+    properties:
+      source:
+        type: string
+        enum: [env, payload, api, none]
+        description: 'Where the native session id can be read from.'
+      field:
+        type: string
+        description: 'Environment variable, payload field, or API field carrying the native session id.'
+      fallbackField:
+        type: string
+        description: 'Secondary field used when `field` is absent.'
+      status:
+        '$ref': '#/$defs/capabilityStatus'
+      fixture:
+        '$ref': '#/$defs/fixtureRef'
+      reason:
+        type: string
+      evidenceRef:
+        '$ref': '#/$defs/evidenceRef'
+      trackedAs:
+        '$ref': '#/$defs/trackerRef'
+      notes:
+        type: string
+    allOf:
+      - '$ref': '#/$defs/statusEvidenceRules'
+      - if:
+          properties: { status: { const: supported } }
+          required: [status]
+        then:
+          required: [fixture]
+
+  # ── Holding a decision open ──────────────────────────────────────────────────
+
+  decisionHold:
+    type: object
+    additionalProperties: false
+    required: [status]
+    properties:
+      status:
+        '$ref': '#/$defs/capabilityStatus'
+      timeoutField:
+        type: string
+        description: 'Harness config key that bounds how long a decision may be held.'
+      timeoutUnit:
+        type: string
+        enum: [seconds, milliseconds]
+      defaultTimeoutSeconds:
+        type: number
+        description: 'Harness default when Overlord sets nothing. Null when the harness documents none.'
+      maxTimeoutSeconds:
+        type: ['number', 'null']
+        description: 'Hard ceiling the harness enforces, or null when unbounded.'
+      fixture:
+        '$ref': '#/$defs/fixtureRef'
+      reason:
+        type: string
+      evidenceRef:
+        '$ref': '#/$defs/evidenceRef'
+      trackedAs:
+        '$ref': '#/$defs/trackerRef'
+      notes:
+        type: string
+    allOf:
+      - '$ref': '#/$defs/statusEvidenceRules'
+      - if:
+          properties: { status: { const: supported } }
+          required: [status]
+        then:
+          required: [fixture]
+
+  # ── Capability vector ────────────────────────────────────────────────────────
+
+  capabilities:
+    type: object
+    minProperties: 1
+    description: >
+      Keyed by the closed capability-id vocabulary in contract/extension-points.yaml
+      (agentSession.capabilityIds). An id absent from this map is treated as `unverified`
+      by the generator and reported as an authoring gap.
+    propertyNames:
+      enum:
+        - observe.prompt
+        - observe.toolCall
+        - observe.toolResult
+        - observe.fileEdit
+        - observe.sessionLifecycle
+        - decide.shell
+        - decide.mcp
+        - decide.fileWrite
+        - decide.anyTool
+        - decide.universal
+        - answer.structuredQuestion
+        - answer.persistentAllow
+        - inject.midTurn
+        - inject.turnBoundary
+        - inject.nextTurn
+        - terminal.concurrentAnswer
+        - terminal.statusSurface
+    additionalProperties:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status:
+          '$ref': '#/$defs/capabilityStatus'
+        native:
+          type: string
+          description: 'Native event name, endpoint, or API call this capability rides on.'
+        fixtures:
+          type: array
+          minItems: 1
+          items:
+            '$ref': '#/$defs/fixtureRef'
+        reason:
+          type: string
+        evidenceRef:
+          '$ref': '#/$defs/evidenceRef'
+        trackedAs:
+          '$ref': '#/$defs/trackerRef'
+        notes:
+          type: string
+      allOf:
+        - '$ref': '#/$defs/statusEvidenceRules'
+        - if:
+            properties: { status: { const: supported } }
+            required: [status]
+          then:
+            required: [native, fixtures]
+
+  # ── Hazards ──────────────────────────────────────────────────────────────────
+
+  hazards:
+    type: array
+    items:
+      type: object
+      additionalProperties: false
+      required: [id, severity, summary, verification, mitigation]
+      properties:
+        id:
+          type: string
+          pattern: '^[a-z][a-z0-9-]*$'
+        severity:
+          type: string
+          enum: [low, medium, high]
+        summary:
+          type: string
+        verification:
+          type: string
+          enum: [verified, unverified]
+        mitigation:
+          type: string
+          enum: [required, implemented, accepted]
+        fixture:
+          '$ref': '#/$defs/fixtureRef'
+        evidenceRef:
+          '$ref': '#/$defs/evidenceRef'
+        trackedAs:
+          '$ref': '#/$defs/trackerRef'
+      allOf:
+        - if:
+            properties: { mitigation: { const: implemented } }
+            required: [mitigation]
+          then:
+            required: [fixture]
+        - if:
+            anyOf:
+              - properties: { verification: { const: unverified } }
+                required: [verification]
+              - properties: { mitigation: { const: required } }
+                required: [mitigation]
+          then:
+            required: [trackedAs]
+
+  # ── Native decision shape ────────────────────────────────────────────────────
+
+  decisionShape:
+    type: object
+    additionalProperties: false
+    required: [codec]
+    properties:
+      codec:
+        type: string
+        pattern: '^[a-z][a-z0-9_-]*$'
+      allowFixture:
+        '$ref': '#/$defs/fixtureRef'
+      denyFixture:
+        '$ref': '#/$defs/fixtureRef'
+      deferFixture:
+        '$ref': '#/$defs/fixtureRef'
+      neverSend:
+        type: array
+        items: { type: string }
+        description: 'Fields this harness rejects, reserves, or silently misreads. The codec must never emit them.'
+      notes:
+        type: string
+
+  # ── Negative test (mandatory) ────────────────────────────────────────────────
+
+  unboundSessionFixture:
+    '$ref': '#/$defs/fixtureRef'
+    description: >
+      Required executable proof that an unbound session in an unrelated directory produces
+      no request, event, network call, subprocess, or delay from this adapter's registered
+      integrations. Any local write the fixture records must be declared as a hazard.
+
+  # ── Legacy conformance projection inputs ─────────────────────────────────────
+
+  legacy:
+    type: object
+    additionalProperties: false
+    description: >
+      Hand-authored inputs for the generated deprecated conformance projection. Launch
+      capabilities (model/effort/context-file/permission-rules/slash-commands) are not
+      agent-session interaction capabilities and are carried through verbatim; the
+      hook-named interaction flags are validated against this descriptor before emission.
+    properties:
+      capabilities:
+        type: array
+        uniqueItems: true
+        items: { type: string }
+      hookTypes:
+        type: array
+        uniqueItems: true
+        items: { type: string }
+
+'$defs':
+  capabilityStatus:
+    type: string
+    enum: [supported, unsupported, not-implemented, unverified]
+    description: >
+      supported       — works today, proven by a passing executable fixture.
+      unsupported     — the harness cannot do this; do not attempt. Requires reason + evidenceRef.
+      not-implemented — the harness can; Overlord has not built it. Requires trackedAs.
+      unverified      — nobody knows. Find out before relying on it. Requires trackedAs.
+
+  fixtureRef:
+    type: string
+    pattern: '^fixtures/[A-Za-z0-9._-]+\.json$'
+    description: 'Adapter-relative path to an executable fixture.'
+
+  evidenceRef:
+    type: string
+    minLength: 3
+    description: 'Stable reference to the evidence for an `unsupported` claim (doc section anchor or source reference).'
+
+  trackerRef:
+    type: string
+    pattern: '^[a-z][a-z0-9._:-]*$'
+    description: 'Stable tracker id for unbuilt or unverified work (e.g. agent-session-phase-2, taxonomy-7.1, coo:562).'
+
+  statusEvidenceRules:
+    allOf:
+      - if:
+          properties: { status: { const: unsupported } }
+          required: [status]
+        then:
+          required: [reason, evidenceRef]
+      - if:
+          properties: { status: { const: not-implemented } }
+          required: [status]
+        then:
+          required: [trackedAs]
+      - if:
+          properties: { status: { const: unverified } }
+          required: [status]
+        then:
+          required: [trackedAs]

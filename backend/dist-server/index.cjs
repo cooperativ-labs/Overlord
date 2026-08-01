@@ -1980,7 +1980,7 @@ var require_utils2 = __commonJS({
     var nodeCrypto = require("crypto");
     module2.exports = {
       postgresMd5PasswordHash,
-      randomBytes: randomBytes10,
+      randomBytes: randomBytes11,
       deriveKey: deriveKey3,
       sha256: sha2562,
       hashByName,
@@ -1990,7 +1990,7 @@ var require_utils2 = __commonJS({
     var webCrypto = nodeCrypto.webcrypto || globalThis.crypto;
     var subtleCrypto = webCrypto.subtle;
     var textEncoder2 = new TextEncoder();
-    function randomBytes10(length) {
+    function randomBytes11(length) {
       return webCrypto.getRandomValues(Buffer.alloc(length));
     }
     async function md5(string4) {
@@ -62987,7 +62987,7 @@ var require_layer = __commonJS({
         next(err);
       }
     };
-    Layer.prototype.handle_request = function handle3(req, res, next) {
+    Layer.prototype.handle_request = function handle4(req, res, next) {
       var fn = this.handle;
       if (fn.length > 3) {
         return next();
@@ -63170,13 +63170,13 @@ var require_route = __commonJS({
     Route.prototype.all = function all() {
       var handles = flatten(slice.call(arguments));
       for (var i5 = 0; i5 < handles.length; i5++) {
-        var handle3 = handles[i5];
-        if (typeof handle3 !== "function") {
-          var type = toString.call(handle3);
+        var handle4 = handles[i5];
+        if (typeof handle4 !== "function") {
+          var type = toString.call(handle4);
           var msg = "Route.all() requires a callback function but got a " + type;
           throw new TypeError(msg);
         }
-        var layer = Layer("/", {}, handle3);
+        var layer = Layer("/", {}, handle4);
         layer.method = void 0;
         this.methods._all = true;
         this.stack.push(layer);
@@ -63187,14 +63187,14 @@ var require_route = __commonJS({
       Route.prototype[method] = function() {
         var handles = flatten(slice.call(arguments));
         for (var i5 = 0; i5 < handles.length; i5++) {
-          var handle3 = handles[i5];
-          if (typeof handle3 !== "function") {
-            var type = toString.call(handle3);
+          var handle4 = handles[i5];
+          if (typeof handle4 !== "function") {
+            var type = toString.call(handle4);
             var msg = "Route." + method + "() requires a callback function but got a " + type;
             throw new Error(msg);
           }
           debug("%s %o", method, this.path);
-          var layer = Layer("/", {}, handle3);
+          var layer = Layer("/", {}, handle4);
           layer.method = method;
           this.methods[method] = true;
           this.stack.push(layer);
@@ -63273,7 +63273,7 @@ var require_router = __commonJS({
       (this.params[name] = this.params[name] || []).push(fn);
       return this;
     };
-    proto.handle = function handle3(req, res, out) {
+    proto.handle = function handle4(req, res, out) {
       var self = this;
       debug("dispatching %s %s", req.method, req.url);
       var idx = 0;
@@ -66264,7 +66264,7 @@ var require_application = __commonJS({
   "../node_modules/express/lib/application.js"(exports2, module2) {
     "use strict";
     var finalhandler = require_finalhandler();
-    var Router3 = require_router();
+    var Router4 = require_router();
     var methods2 = require_methods();
     var middleware = require_init();
     var query = require_query3();
@@ -66329,7 +66329,7 @@ var require_application = __commonJS({
     };
     app2.lazyrouter = function lazyrouter() {
       if (!this._router) {
-        this._router = new Router3({
+        this._router = new Router4({
           caseSensitive: this.enabled("case sensitive routing"),
           strict: this.enabled("strict routing")
         });
@@ -66337,7 +66337,7 @@ var require_application = __commonJS({
         this._router.use(middleware.init(this));
       }
     };
-    app2.handle = function handle3(req, res, callback) {
+    app2.handle = function handle4(req, res, callback) {
       var router2 = this._router;
       var done = callback || finalhandler(req, res, {
         env: this.get("env"),
@@ -68210,7 +68210,7 @@ var require_express = __commonJS({
     var mixin = require_merge_descriptors();
     var proto = require_application();
     var Route = require_route();
-    var Router3 = require_router();
+    var Router4 = require_router();
     var req = require_request();
     var res = require_response();
     exports2 = module2.exports = createApplication;
@@ -68233,7 +68233,7 @@ var require_express = __commonJS({
     exports2.request = req;
     exports2.response = res;
     exports2.Route = Route;
-    exports2.Router = Router3;
+    exports2.Router = Router4;
     exports2.json = bodyParser.json;
     exports2.query = require_query3();
     exports2.raw = bodyParser.raw;
@@ -73778,7 +73778,7 @@ function nowIso2() {
   return (/* @__PURE__ */ new Date()).toISOString();
 }
 function newId2() {
-  return (0, import_node_crypto8.randomUUID)();
+  return (0, import_node_crypto9.randomUUID)();
 }
 async function oldestWorkspaceRowFromClient(client) {
   return client.get(
@@ -74061,13 +74061,13 @@ async function currentMaxSeq(client = requireDatabaseClient()) {
   );
   return row?.seq ?? 0;
 }
-var import_node_async_hooks2, import_node_crypto8, import_node_path14, databasePath, adapter, sqliteDb, DATABASE_DIALECT, databaseClient, databaseInitPromise, DATABASE_PATH, defaultWorkspace, ACTOR_WORKSPACE_USER_ID, requestContextStorage, WORKSPACE, loadWorkspaceRow, ACTIVE_TOKEN_SCOPES, ACTIVE_TOKEN_ID;
+var import_node_async_hooks2, import_node_crypto9, import_node_path14, databasePath, adapter, sqliteDb, DATABASE_DIALECT, databaseClient, databaseInitPromise, DATABASE_PATH, defaultWorkspace, ACTOR_WORKSPACE_USER_ID, requestContextStorage, WORKSPACE, loadWorkspaceRow, ACTIVE_TOKEN_SCOPES, ACTIVE_TOKEN_ID;
 var init_db = __esm({
   "db.ts"() {
     "use strict";
     init_dist();
     import_node_async_hooks2 = require("node:async_hooks");
-    import_node_crypto8 = require("node:crypto");
+    import_node_crypto9 = require("node:crypto");
     import_node_path14 = __toESM(require("node:path"), 1);
     init_config();
     init_env2();
@@ -78057,14 +78057,14 @@ var init_getProfileName = __esm({
 });
 
 // ../node_modules/@smithy/core/dist-es/submodules/config/shared-ini-file-loader/getSSOTokenFilepath.js
-var import_node_crypto10, import_node_path17, getSSOTokenFilepath;
+var import_node_crypto11, import_node_path17, getSSOTokenFilepath;
 var init_getSSOTokenFilepath = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/config/shared-ini-file-loader/getSSOTokenFilepath.js"() {
-    import_node_crypto10 = require("node:crypto");
+    import_node_crypto11 = require("node:crypto");
     import_node_path17 = require("node:path");
     init_getHomeDir();
     getSSOTokenFilepath = (id) => {
-      const hasher = (0, import_node_crypto10.createHash)("sha1");
+      const hasher = (0, import_node_crypto11.createHash)("sha1");
       const cacheName = hasher.update(id).digest("hex");
       return (0, import_node_path17.join)(getHomeDir(), ".aws", "sso", "cache", `${cacheName}.json`);
     };
@@ -80235,10 +80235,10 @@ function castSourceData(toCast, encoding) {
   }
   return fromArrayBuffer(toCast);
 }
-var import_node_crypto11, Hash;
+var import_node_crypto12, Hash;
 var init_hash_node = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/serde/hash-node/hash-node.js"() {
-    import_node_crypto11 = require("node:crypto");
+    import_node_crypto12 = require("node:crypto");
     init_buffer_from();
     init_toUint8Array();
     Hash = class {
@@ -80257,7 +80257,7 @@ var init_hash_node = __esm({
         return Promise.resolve(this.hash.digest());
       }
       reset() {
-        this.hash = this.secret ? (0, import_node_crypto11.createHmac)(this.algorithmIdentifier, castSourceData(this.secret)) : (0, import_node_crypto11.createHash)(this.algorithmIdentifier);
+        this.hash = this.secret ? (0, import_node_crypto12.createHmac)(this.algorithmIdentifier, castSourceData(this.secret)) : (0, import_node_crypto12.createHash)(this.algorithmIdentifier);
       }
     };
   }
@@ -81151,10 +81151,10 @@ __export(serde_exports, {
   toUtf8: () => toUtf8,
   v4: () => v4
 });
-var import_node_crypto12, Uint8ArrayBlobAdapter, _getRandomValues, v4, generateIdempotencyToken;
+var import_node_crypto13, Uint8ArrayBlobAdapter, _getRandomValues, v4, generateIdempotencyToken;
 var init_serde = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/serde/index.js"() {
-    import_node_crypto12 = require("node:crypto");
+    import_node_crypto13 = require("node:crypto");
     init_fromBase64();
     init_toBase64();
     init_Uint8ArrayBlobAdapter();
@@ -81191,7 +81191,7 @@ var init_serde = __esm({
     init_stream_collector();
     Uint8ArrayBlobAdapter = class extends bindUint8ArrayBlobAdapter(toUtf8, fromUtf8, toBase64, fromBase64) {
     };
-    _getRandomValues = import_node_crypto12.getRandomValues;
+    _getRandomValues = import_node_crypto13.getRandomValues;
     v4 = bindV4(_getRandomValues);
     generateIdempotencyToken = v4;
   }
@@ -106088,7 +106088,7 @@ var require_dist_cjs16 = __commonJS({
     var { setCredentialFeature: setCredentialFeature2 } = (init_client4(), __toCommonJS(client_exports2));
     var { CredentialsProviderError: CredentialsProviderError2, readFile: readFile4, parseKnownFiles: parseKnownFiles2, getProfileName: getProfileName2 } = (init_config3(), __toCommonJS(config_exports));
     var { HttpRequest: HttpRequest2 } = (init_protocols(), __toCommonJS(protocols_exports));
-    var { createHash: createHash17, createPrivateKey, createPublicKey, sign: sign3 } = require("node:crypto");
+    var { createHash: createHash18, createPrivateKey, createPublicKey, sign: sign3 } = require("node:crypto");
     var { promises } = require("node:fs");
     var { homedir: homedir2 } = require("node:os");
     var { dirname, join: join6 } = require("node:path");
@@ -106249,7 +106249,7 @@ var require_dist_cjs16 = __commonJS({
       getTokenFilePath() {
         const directory = process.env.AWS_LOGIN_CACHE_DIRECTORY ?? join6(homedir2(), ".aws", "login", "cache");
         const loginSessionBytes = Buffer.from(this.loginSession, "utf8");
-        const loginSessionSha256 = createHash17("sha256").update(loginSessionBytes).digest("hex");
+        const loginSessionSha256 = createHash18("sha256").update(loginSessionBytes).digest("hex");
         return join6(directory, `${loginSessionSha256}.json`);
       }
       derToRawSignature(derSignature) {
@@ -108278,7 +108278,7 @@ var init_Md5Js = __esm({
 function buildNativeClass() {
   return class Md5Node {
     digestLength = 16;
-    hash = (0, import_node_crypto13.createHash)("md5");
+    hash = (0, import_node_crypto14.createHash)("md5");
     update(data) {
       this.hash.update(toUint8Array(data));
     }
@@ -108287,19 +108287,19 @@ function buildNativeClass() {
       return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
     }
     reset() {
-      this.hash = (0, import_node_crypto13.createHash)("md5");
+      this.hash = (0, import_node_crypto14.createHash)("md5");
     }
   };
 }
-var import_node_crypto13, hasNativeCrypto, Md5Node;
+var import_node_crypto14, hasNativeCrypto, Md5Node;
 var init_Md5Node = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/checksum/md5/Md5Node.js"() {
-    import_node_crypto13 = require("node:crypto");
+    import_node_crypto14 = require("node:crypto");
     init_serde();
     init_Md5Js();
     hasNativeCrypto = (() => {
       try {
-        (0, import_node_crypto13.createHash)("md5");
+        (0, import_node_crypto14.createHash)("md5");
         return true;
       } catch {
         return false;
@@ -108643,7 +108643,7 @@ function buildNativeClass3() {
       this.finished = false;
     }
     createHash() {
-      return this.secret ? (0, import_node_crypto14.createHmac)("sha256", toBuffer(this.secret)) : (0, import_node_crypto14.createHash)("sha256");
+      return this.secret ? (0, import_node_crypto15.createHmac)("sha256", toBuffer(this.secret)) : (0, import_node_crypto15.createHash)("sha256");
     }
   };
 }
@@ -108656,14 +108656,14 @@ function toBuffer(data) {
   }
   return Buffer.from(data);
 }
-var import_node_crypto14, hasNativeCrypto2, Sha256Node;
+var import_node_crypto15, hasNativeCrypto2, Sha256Node;
 var init_Sha256Node = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/checksum/sha256/Sha256Node.js"() {
-    import_node_crypto14 = require("node:crypto");
+    import_node_crypto15 = require("node:crypto");
     init_Sha256Js();
     hasNativeCrypto2 = (() => {
       try {
-        (0, import_node_crypto14.createHash)("sha256");
+        (0, import_node_crypto15.createHash)("sha256");
         return true;
       } catch {
         return false;
@@ -131942,7 +131942,7 @@ function fromNodeHeaders(nodeHeaders) {
 
 // index.ts
 var import_cors = __toESM(require_lib3(), 1);
-var import_express3 = __toESM(require_express2(), 1);
+var import_express4 = __toESM(require_express2(), 1);
 var import_node_fs18 = require("node:fs");
 var import_node_path30 = __toESM(require("node:path"), 1);
 var import_node_url8 = require("node:url");
@@ -132574,7 +132574,7 @@ async function listSharedContext({
 }) {
   const resolved = await resolveMissionId(ctx, missionId);
   const params = [resolved.id];
-  let sql2 = `SELECT key, value_kind, value_text, value_json, updated_at
+  let sql2 = `SELECT id, key, value_kind, value_text, value_json, updated_at, revision
              FROM shared_context_entries
              WHERE mission_id = ? AND deleted_at IS NULL`;
   if (keySubstring?.trim()) {
@@ -132585,10 +132585,12 @@ async function listSharedContext({
   params.push(limit);
   const rows = await ctx.db.all(sql2, params);
   return rows.map((row) => ({
+    id: row.id,
     key: row.key,
     value: row.value_kind === "json" && row.value_json ? JSON.parse(row.value_json) : row.value_text,
     tags: [],
-    updatedAt: row.updated_at
+    updatedAt: row.updated_at,
+    revision: row.revision
   }));
 }
 async function writeSharedContext({
@@ -132604,7 +132606,7 @@ async function writeSharedContext({
   const resolved = await resolveMissionId(ctx, missionId);
   const now2 = nowIso();
   const existing = await ctx.db.get(
-    `SELECT id FROM shared_context_entries
+    `SELECT id, revision FROM shared_context_entries
        WHERE mission_id = ? AND key = ? AND deleted_at IS NULL`,
     [resolved.id, trimmedKey]
   );
@@ -132612,21 +132614,27 @@ async function writeSharedContext({
   const valueKind = isJson ? "json" : "string";
   const valueText = isJson ? null : String(value);
   const valueJson = isJson ? JSON.stringify(value) : null;
+  let entryId;
+  let revision;
   if (existing) {
+    entryId = existing.id;
+    revision = existing.revision + 1;
     await ctx.db.run(
       `UPDATE shared_context_entries
-         SET value_kind = ?, value_text = ?, value_json = ?, updated_at = ?, revision = revision + 1
+         SET value_kind = ?, value_text = ?, value_json = ?, updated_at = ?, revision = ?
          WHERE id = ?`,
-      [valueKind, valueText, valueJson, now2, existing.id]
+      [valueKind, valueText, valueJson, now2, revision, entryId]
     );
   } else {
+    entryId = newId();
+    revision = 1;
     await ctx.db.run(
       `INSERT INTO shared_context_entries
            (id, workspace_id, mission_id, key, value_kind, value_text, value_json,
             created_by_workspace_user_id, created_at, updated_at, revision)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
       [
-        newId(),
+        entryId,
         ctx.workspace.id,
         resolved.id,
         trimmedKey,
@@ -132639,7 +132647,24 @@ async function writeSharedContext({
       ]
     );
   }
-  return { key: trimmedKey, value, tags: [], updatedAt: now2 };
+  await recordChange({
+    ctx,
+    entityType: "shared_context_entry",
+    entityId: entryId,
+    operation: existing ? "update" : "insert",
+    entityRevision: revision,
+    projectId: resolved.projectId,
+    missionId: resolved.id,
+    changedFields: ["key", "value_kind", "value_text", "value_json"]
+  });
+  return {
+    id: entryId,
+    key: trimmedKey,
+    value,
+    tags: [],
+    updatedAt: now2,
+    revision
+  };
 }
 async function listArtifacts({
   ctx,
@@ -132809,7 +132834,373 @@ init_projects();
 
 // ../packages/core/service/protocol.ts
 init_dist();
+var import_node_crypto8 = require("node:crypto");
+
+// ../packages/core/service/agent-session/channels.ts
+init_change_feed();
+init_errors4();
+init_util3();
+
+// ../packages/core/service/agent-session/credential.ts
 var import_node_crypto7 = require("node:crypto");
+var SESSION_CHANNEL_TOKEN_PREFIX = "osc_";
+var SESSION_CHANNEL_TOKEN_HASH_ALGORITHM = "sha256";
+var SESSION_CHANNEL_LEASE_SECONDS = 180;
+var SESSION_CHANNEL_ABSOLUTE_LIFETIME_SECONDS = 60 * 60 * 24;
+function hashSessionChannelToken(rawToken) {
+  return (0, import_node_crypto7.createHash)(SESSION_CHANNEL_TOKEN_HASH_ALGORITHM).update(rawToken).digest("hex");
+}
+function generateSessionChannelToken() {
+  const prefix = `${SESSION_CHANNEL_TOKEN_PREFIX}${(0, import_node_crypto7.randomBytes)(4).toString("hex")}`;
+  const secret = `${prefix}${(0, import_node_crypto7.randomBytes)(32).toString("base64url")}`;
+  return { secret, prefix, hash: hashSessionChannelToken(secret) };
+}
+function addSeconds(iso, seconds) {
+  return new Date(new Date(iso).getTime() + seconds * 1e3).toISOString();
+}
+function renewedExpiry({
+  now: now2,
+  createdAt,
+  leaseSeconds = SESSION_CHANNEL_LEASE_SECONDS
+}) {
+  const ceiling = new Date(
+    new Date(createdAt).getTime() + SESSION_CHANNEL_ABSOLUTE_LIFETIME_SECONDS * 1e3
+  );
+  const renewed = new Date(new Date(now2).getTime() + leaseSeconds * 1e3);
+  return (renewed < ceiling ? renewed : ceiling).toISOString();
+}
+
+// ../packages/core/service/agent-session/channels.ts
+var CHANNEL_COLUMNS = `
+  id, workspace_id, project_id, mission_id, objective_id, session_id,
+  execution_request_id, execution_target_id, runner_registration_id,
+  launch_kind, launch_prompt_id, agent_identifier, adapter_key, adapter_version,
+  native_session_id, capabilities_json, state,
+  credential_prefix, credential_hash, credential_expires_at, credential_revoked_at,
+  last_heartbeat_at, lease_expires_at, ended_at, end_reason, exit_code,
+  created_at, updated_at, revision
+`;
+var LIVE_STATES = ["preparing", "online", "degraded"];
+async function getChannel({
+  ctx,
+  channelId
+}) {
+  const row = await ctx.db.get(
+    `SELECT ${CHANNEL_COLUMNS} FROM agent_session_channels
+       WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+    [channelId, ctx.workspace.id]
+  );
+  if (!row) throw new ServiceError("Session channel not found", "channel_not_found", 404);
+  return row;
+}
+async function createSessionChannel({
+  ctx,
+  missionId,
+  objectiveId = null,
+  projectId = null,
+  sessionId = null,
+  executionRequestId = null,
+  executionTargetId = null,
+  runnerRegistrationId = null,
+  agentIdentifier = null,
+  adapterKey = null,
+  adapterVersion = null,
+  launchKind = "unknown",
+  launchPromptId = null,
+  capabilities = {}
+}) {
+  const now2 = nowIso();
+  const channelId = newId();
+  const { secret, prefix, hash: hash2 } = generateSessionChannelToken();
+  const expiresAt = renewedExpiry({ now: now2, createdAt: now2 });
+  await ctx.db.transaction(async (tx) => {
+    const txCtx = { ...ctx, db: tx };
+    await tx.run(
+      `INSERT INTO agent_session_channels (
+           id, workspace_id, project_id, mission_id, objective_id, session_id,
+           execution_request_id, execution_target_id, runner_registration_id,
+           launch_kind, launch_prompt_id, agent_identifier, adapter_key, adapter_version,
+           capabilities_json, state,
+           credential_prefix, credential_hash, credential_algorithm, credential_expires_at,
+           lease_expires_at, created_by_workspace_user_id, created_at, updated_at, revision
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'preparing', ?, ?, 'sha256', ?, ?, ?, ?, ?, 1)`,
+      [
+        channelId,
+        ctx.workspace.id,
+        projectId,
+        missionId,
+        objectiveId,
+        sessionId,
+        executionRequestId,
+        executionTargetId,
+        runnerRegistrationId,
+        launchKind,
+        launchPromptId,
+        agentIdentifier,
+        adapterKey,
+        adapterVersion,
+        JSON.stringify(capabilities),
+        prefix,
+        hash2,
+        expiresAt,
+        expiresAt,
+        ctx.actorWorkspaceUserId,
+        now2,
+        now2
+      ]
+    );
+    await recordChange({
+      ctx: txCtx,
+      entityType: "agent_session_channel",
+      entityId: channelId,
+      operation: "insert",
+      entityRevision: 1,
+      projectId,
+      missionId,
+      objectiveId
+    });
+  });
+  return {
+    channel: await getChannel({ ctx, channelId }),
+    bootstrap: { channelId, token: secret, expiresAt, launchKind, launchPromptId }
+  };
+}
+async function authenticateChannelCredential({
+  db,
+  rawToken,
+  now: now2 = nowIso()
+}) {
+  const trimmed2 = rawToken.trim();
+  if (!trimmed2) return null;
+  const row = await db.get(
+    `SELECT ${CHANNEL_COLUMNS} FROM agent_session_channels
+       WHERE credential_hash = ? AND deleted_at IS NULL`,
+    [hashSessionChannelToken(trimmed2)]
+  );
+  if (!row) return null;
+  if (row.credential_revoked_at !== null) return null;
+  if (row.credential_expires_at !== null && row.credential_expires_at <= now2) return null;
+  if (!LIVE_STATES.includes(row.state)) return null;
+  return row;
+}
+async function bindChannelToSession({
+  ctx,
+  channelId,
+  sessionId,
+  missionId,
+  objectiveId,
+  projectId,
+  nativeSessionId = null,
+  agentIdentifier = null,
+  adapterKey = null,
+  adapterVersion = null
+}) {
+  const now2 = nowIso();
+  const existing = await ctx.db.get(
+    `SELECT ${CHANNEL_COLUMNS} FROM agent_session_channels
+       WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+    [channelId, ctx.workspace.id]
+  );
+  if (!existing) {
+    return;
+  }
+  if (existing.session_id !== null && existing.session_id !== sessionId) {
+    throw new ServiceError(
+      "Session channel is already bound to a different session",
+      "channel_already_bound",
+      409
+    );
+  }
+  if (existing.mission_id !== null && existing.mission_id !== missionId) {
+    throw new ServiceError(
+      "Session channel belongs to a different mission",
+      "channel_mission_mismatch",
+      409
+    );
+  }
+  await ctx.db.transaction(async (tx) => {
+    const txCtx = { ...ctx, db: tx };
+    const revision = existing.revision + 1;
+    const updated = await tx.run(
+      `UPDATE agent_session_channels
+          SET session_id = ?,
+              mission_id = COALESCE(mission_id, ?),
+              objective_id = ?,
+              project_id = COALESCE(project_id, ?),
+              native_session_id = COALESCE(?, native_session_id),
+              agent_identifier = COALESCE(?, agent_identifier),
+              adapter_key = COALESCE(?, adapter_key),
+              adapter_version = COALESCE(?, adapter_version),
+              state = CASE WHEN state = 'preparing' THEN 'online' ELSE state END,
+              updated_at = ?,
+              revision = ?
+        WHERE id = ? AND revision = ?`,
+      [
+        sessionId,
+        missionId,
+        objectiveId,
+        projectId,
+        nativeSessionId,
+        agentIdentifier,
+        adapterKey,
+        adapterVersion,
+        now2,
+        revision,
+        channelId,
+        existing.revision
+      ]
+    );
+    if (updated.changes === 0) {
+      throw new ServiceError("Session channel changed while binding", "channel_bind_conflict", 409);
+    }
+    await tx.run(
+      `UPDATE agent_session_events
+          SET session_id = ?, objective_id = COALESCE(objective_id, ?), updated_at = ?
+        WHERE channel_id = ? AND session_id IS NULL`,
+      [sessionId, objectiveId, now2, channelId]
+    );
+    await tx.run(
+      `UPDATE agent_requests
+          SET session_id = ?, objective_id = COALESCE(objective_id, ?), updated_at = ?
+        WHERE channel_id = ? AND session_id IS NULL`,
+      [sessionId, objectiveId, now2, channelId]
+    );
+    if (nativeSessionId) {
+      await tx.run(
+        `UPDATE agent_sessions
+            SET external_session_id = COALESCE(external_session_id, ?),
+                updated_at = ?, revision = revision + 1
+          WHERE id = ?`,
+        [nativeSessionId, now2, sessionId]
+      );
+    }
+    await recordChange({
+      ctx: txCtx,
+      entityType: "agent_session_channel",
+      entityId: channelId,
+      operation: "update",
+      entityRevision: revision,
+      projectId,
+      missionId,
+      objectiveId,
+      changedFields: ["session_id", "state", "native_session_id"]
+    });
+  });
+}
+async function heartbeatChannel({
+  ctx,
+  channelId,
+  state: state2 = "online",
+  capabilities,
+  nativeSessionId = null,
+  adapterVersion = null
+}) {
+  const existing = await getChannel({ ctx, channelId });
+  if (!LIVE_STATES.includes(existing.state)) {
+    throw new ServiceError("Session channel is no longer live", "channel_not_live", 409);
+  }
+  const now2 = nowIso();
+  const expiresAt = renewedExpiry({ now: now2, createdAt: existing.created_at });
+  await ctx.db.transaction(async (tx) => {
+    const txCtx = { ...ctx, db: tx };
+    const revision = existing.revision + 1;
+    await tx.run(
+      `UPDATE agent_session_channels
+          SET state = ?,
+              last_heartbeat_at = ?,
+              lease_expires_at = ?,
+              credential_expires_at = ?,
+              capabilities_json = COALESCE(?, capabilities_json),
+              native_session_id = COALESCE(?, native_session_id),
+              adapter_version = COALESCE(?, adapter_version),
+              updated_at = ?,
+              revision = ?
+        WHERE id = ?`,
+      [
+        state2,
+        now2,
+        expiresAt,
+        expiresAt,
+        capabilities ? JSON.stringify(capabilities) : null,
+        nativeSessionId,
+        adapterVersion,
+        now2,
+        revision,
+        channelId
+      ]
+    );
+    await recordChange({
+      ctx: txCtx,
+      entityType: "agent_session_channel",
+      entityId: channelId,
+      operation: "update",
+      entityRevision: revision,
+      projectId: existing.project_id,
+      missionId: existing.mission_id,
+      objectiveId: existing.objective_id,
+      changedFields: ["state", "last_heartbeat_at", "lease_expires_at"]
+    });
+  });
+  return { leaseExpiresAt: expiresAt, credentialExpiresAt: expiresAt };
+}
+async function endChannel({
+  ctx,
+  channelId,
+  reason = "session_ended",
+  exitCode = null,
+  state: state2 = "ended"
+}) {
+  const existing = await getChannel({ ctx, channelId });
+  if (!LIVE_STATES.includes(existing.state)) return;
+  const now2 = nowIso();
+  await ctx.db.transaction(async (tx) => {
+    const txCtx = { ...ctx, db: tx };
+    const revision = existing.revision + 1;
+    await tx.run(
+      `UPDATE agent_session_channels
+          SET state = ?,
+              ended_at = ?,
+              end_reason = ?,
+              exit_code = ?,
+              credential_revoked_at = ?,
+              lease_expires_at = NULL,
+              updated_at = ?,
+              revision = ?
+        WHERE id = ? AND revision = ?`,
+      [state2, now2, reason, exitCode, now2, now2, revision, channelId, existing.revision]
+    );
+    await tx.run(
+      `UPDATE agent_requests
+          SET status = 'released_to_terminal',
+              released_reason = ?,
+              waiter_lease_id = NULL,
+              waiter_lease_expires_at = NULL,
+              updated_at = ?,
+              revision = revision + 1
+        WHERE channel_id = ? AND status = 'open'`,
+      [state2 === "lost" ? "channel_lost" : "channel_ended", now2, channelId]
+    );
+    await tx.run(
+      `UPDATE agent_session_inputs
+          SET status = 'expired', last_error_code = ?, updated_at = ?, revision = revision + 1
+        WHERE channel_id = ? AND status IN ('queued', 'leased')`,
+      [state2 === "lost" ? "channel_lost" : "channel_ended", now2, channelId]
+    );
+    await recordChange({
+      ctx: txCtx,
+      entityType: "agent_session_channel",
+      entityId: channelId,
+      operation: "update",
+      entityRevision: revision,
+      projectId: existing.project_id,
+      missionId: existing.mission_id,
+      objectiveId: existing.objective_id,
+      changedFields: ["state", "ended_at", "end_reason", "credential_revoked_at"]
+    });
+  });
+}
+
+// ../packages/core/service/protocol.ts
 init_change_feed();
 init_context();
 init_delivery_report();
@@ -134309,15 +134700,21 @@ async function persistExternalSessionId({
     changedFields: ["external_session_id"]
   });
 }
+function hasInstruction(objective) {
+  return Boolean(objective.objective?.trim());
+}
 function splitObjectivesAroundCurrent({
   objectives,
   currentObjective
 }) {
-  const previousObjectives = objectives.filter(
-    (candidate) => candidate.id !== currentObjective.id && candidate.position < currentObjective.position
+  const authored = objectives.filter(
+    (candidate) => candidate.id !== currentObjective.id && hasInstruction(candidate)
   );
-  const futureObjectives = objectives.filter(
-    (candidate) => candidate.id !== currentObjective.id && candidate.position > currentObjective.position
+  const previousObjectives = authored.filter(
+    (candidate) => candidate.position < currentObjective.position
+  );
+  const futureObjectives = authored.filter(
+    (candidate) => candidate.position > currentObjective.position
   );
   return { previousObjectives, futureObjectives };
 }
@@ -134521,7 +134918,8 @@ async function attachSession({
   existingSessionKey,
   externalSessionId: externalSessionId2,
   executionRequestId,
-  executionTargetId = null
+  executionTargetId = null,
+  sessionChannelId = null
 }) {
   const mission = await getMissionSummary({ ctx, missionId });
   const objectives = await listObjectives({ ctx, missionId: mission.id });
@@ -134567,6 +134965,18 @@ async function attachSession({
       objective: refreshedObjective2,
       executionTargetId: resolvedTargetId
     });
+    if (sessionChannelId) {
+      await bindChannelToSession({
+        ctx,
+        channelId: sessionChannelId,
+        sessionId: existing.id,
+        missionId: context.mission.id,
+        objectiveId: existing.objective_id,
+        projectId: context.mission.projectId,
+        nativeSessionId: externalSessionId2 ?? null,
+        agentIdentifier
+      });
+    }
     return {
       ...refreshedContext2,
       session: {
@@ -134674,6 +135084,18 @@ async function attachSession({
       executionRequestId: executionRequestId ?? null
     });
   });
+  if (sessionChannelId) {
+    await bindChannelToSession({
+      ctx,
+      channelId: sessionChannelId,
+      sessionId,
+      missionId: context.mission.id,
+      objectiveId: objective.id,
+      projectId: context.mission.projectId,
+      nativeSessionId: externalSessionId2 ?? null,
+      agentIdentifier
+    });
+  }
   const refreshedMission = await getMissionSummary({ ctx, missionId: context.mission.id });
   const refreshedObjectives = await listObjectives({ ctx, missionId: context.mission.id });
   const refreshedObjective = refreshedObjectives.find((o3) => o3.id === objective.id) ?? {
@@ -134728,7 +135150,7 @@ async function connectSession({
   };
 }
 function promptHash(prompt) {
-  return (0, import_node_crypto7.createHash)("sha256").update(prompt).digest("hex");
+  return (0, import_node_crypto8.createHash)("sha256").update(prompt).digest("hex");
 }
 function objectiveFromSession(objectives, session) {
   if (!session) return void 0;
@@ -135629,7 +136051,7 @@ async function deliverSession({
        FROM objectives
        WHERE mission_id = ? AND position > (
          SELECT position FROM objectives WHERE id = ?
-       ) AND state = 'draft'
+       ) AND state = 'draft' AND TRIM(COALESCE(instruction_text, '')) <> ''
        ORDER BY position ASC LIMIT 1`,
     [mission.id, session.objective_id]
   );
@@ -136362,6 +136784,7 @@ function mergeMissionBranchObservation({
 
 // repository.ts
 init_project_execution_target();
+init_util3();
 
 // automation/commit-message-automation.ts
 var MAX_DIFF_CHARS = 12e3;
@@ -137454,7 +137877,7 @@ async function getObjectivePrompt(objectiveId) {
 init_local_target_mutation_queue();
 
 // ext/github/user-oauth.ts
-var import_node_crypto9 = require("node:crypto");
+var import_node_crypto10 = require("node:crypto");
 init_db();
 init_errors5();
 
@@ -137531,8 +137954,8 @@ function tokenAad(profileId, kind) {
   return Buffer.from(`overlord:github-user-oauth:v1:${profileId}:${kind}`, "utf8");
 }
 function encryptToken(token, profileId, kind, key) {
-  const nonce = (0, import_node_crypto9.randomBytes)(12);
-  const cipher = (0, import_node_crypto9.createCipheriv)("aes-256-gcm", key, nonce);
+  const nonce = (0, import_node_crypto10.randomBytes)(12);
+  const cipher = (0, import_node_crypto10.createCipheriv)("aes-256-gcm", key, nonce);
   cipher.setAAD(tokenAad(profileId, kind));
   const ciphertext = Buffer.concat([cipher.update(token, "utf8"), cipher.final()]);
   const tag2 = cipher.getAuthTag();
@@ -137544,7 +137967,7 @@ function decryptToken(envelope, profileId, kind, key) {
     throw new ApiError(503, "The stored GitHub connection cannot be decrypted.");
   }
   try {
-    const decipher = (0, import_node_crypto9.createDecipheriv)("aes-256-gcm", key, Buffer.from(nonceText, "base64url"));
+    const decipher = (0, import_node_crypto10.createDecipheriv)("aes-256-gcm", key, Buffer.from(nonceText, "base64url"));
     decipher.setAAD(tokenAad(profileId, kind));
     decipher.setAuthTag(Buffer.from(tagText, "base64url"));
     return Buffer.concat([
@@ -137606,7 +138029,7 @@ async function getGitHubUserConnection() {
   return connectionDto(await readConnection(client, profileId));
 }
 function stateHash(state2) {
-  return (0, import_node_crypto9.createHash)("sha256").update(state2).digest("hex");
+  return (0, import_node_crypto10.createHash)("sha256").update(state2).digest("hex");
 }
 function validatedReturnUrl(value, allowedBrowserOrigins2) {
   if (value === void 0 || value === null || value === "") return null;
@@ -137629,7 +138052,7 @@ async function beginGitHubUserAuthorization(body, allowedBrowserOrigins2) {
   const config4 = requireUserOAuthConfig();
   const client = requireDatabaseClient();
   const profileId = await activeProfileId(client);
-  const state2 = (0, import_node_crypto9.randomBytes)(32).toString("base64url");
+  const state2 = (0, import_node_crypto10.randomBytes)(32).toString("base64url");
   const now2 = nowIso2();
   const expiresAt = new Date(Date.now() + OAUTH_STATE_TTL_MS).toISOString();
   const returnUrl = validatedReturnUrl(body.returnTo, allowedBrowserOrigins2);
@@ -141558,6 +141981,256 @@ async function listArtifacts2(missionRef, limit = 200) {
   );
   return rows.map(toArtifactDto);
 }
+function toSharedContextEntryDto(row) {
+  const valueKind = row.value_kind === "json" ? "json" : "string";
+  return {
+    id: row.id,
+    missionId: row.mission_id,
+    key: row.key,
+    value: valueKind === "json" && row.value_json ? JSON.parse(row.value_json) : row.value_text,
+    valueKind,
+    tags: [],
+    updatedAt: row.updated_at,
+    revision: row.revision
+  };
+}
+async function listMissionSharedContext(missionRef, limit = 100) {
+  const mission = await getMissionRow(missionRef, void 0, PERMISSIONS.MISSION_READ);
+  const rows = await requireDatabaseClient().all(
+    `SELECT id, mission_id, key, value_kind, value_text, value_json, updated_at, revision
+       FROM shared_context_entries
+      WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL
+      ORDER BY updated_at DESC, key ASC
+      LIMIT ?`,
+    [mission.id, mission.workspace_id, limit]
+  );
+  return rows.map(toSharedContextEntryDto);
+}
+async function upsertMissionSharedContext(missionRef, body) {
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    throw new ApiError(400, "Shared context body must be an object");
+  }
+  const key = typeof body.key === "string" ? body.key.trim() : "";
+  if (!key) {
+    throw new ApiError(400, "Shared context key is required");
+  }
+  if (body.value === void 0) {
+    throw new ApiError(400, "Shared context value is required");
+  }
+  const isJson = typeof body.value === "object" && body.value !== null;
+  const valueKind = isJson ? "json" : "string";
+  const valueText = isJson ? null : String(body.value);
+  const valueJson = isJson ? JSON.stringify(body.value) : null;
+  return requireDatabaseClient().transaction(async (tx) => {
+    const mission = await getMissionRow(missionRef, tx, PERMISSIONS.MISSION_UPDATE);
+    const now2 = nowIso2();
+    const existing = await tx.get(
+      `SELECT id, revision FROM shared_context_entries
+        WHERE mission_id = ? AND workspace_id = ? AND key = ? AND deleted_at IS NULL`,
+      [mission.id, mission.workspace_id, key]
+    );
+    let entryId;
+    let revision;
+    let operation2;
+    if (existing) {
+      entryId = existing.id;
+      revision = existing.revision + 1;
+      operation2 = "update";
+      await tx.run(
+        `UPDATE shared_context_entries
+            SET value_kind = ?, value_text = ?, value_json = ?, updated_at = ?, revision = ?
+          WHERE id = ? AND workspace_id = ?`,
+        [valueKind, valueText, valueJson, now2, revision, entryId, mission.workspace_id]
+      );
+    } else {
+      entryId = newId2();
+      revision = 1;
+      operation2 = "insert";
+      await tx.run(
+        `INSERT INTO shared_context_entries
+             (id, workspace_id, mission_id, key, value_kind, value_text, value_json,
+              created_by_workspace_user_id, created_at, updated_at, revision)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+        [
+          entryId,
+          mission.workspace_id,
+          mission.id,
+          key,
+          valueKind,
+          valueText,
+          valueJson,
+          getActorWorkspaceUserId(),
+          now2,
+          now2
+        ]
+      );
+    }
+    await recordChange2(
+      {
+        entityType: "shared_context_entry",
+        entityId: entryId,
+        operation: operation2,
+        entityRevision: revision,
+        workspaceId: mission.workspace_id,
+        projectId: mission.project_id,
+        missionId: mission.id,
+        changedFields: ["key", "value_kind", "value_text", "value_json"]
+      },
+      tx
+    );
+    const row = await tx.get(
+      `SELECT id, mission_id, key, value_kind, value_text, value_json, updated_at, revision
+         FROM shared_context_entries
+        WHERE id = ? AND workspace_id = ?`,
+      [entryId, mission.workspace_id]
+    );
+    return toSharedContextEntryDto(row);
+  });
+}
+var CORE_ARTIFACT_TYPES = /* @__PURE__ */ new Set([
+  "test_results",
+  "next_steps",
+  "note",
+  "url",
+  "decision",
+  "migration"
+]);
+function normalizeExternalUrl(value) {
+  if (value === void 0 || value === null) return null;
+  if (typeof value !== "string") {
+    throw new ApiError(400, "Artifact externalUrl must be a string or null");
+  }
+  const externalUrl = value.trim() || null;
+  if (!externalUrl) return null;
+  try {
+    const url2 = new URL(externalUrl);
+    if (url2.protocol !== "http:" && url2.protocol !== "https:") {
+      throw new Error("Unsupported protocol");
+    }
+  } catch {
+    throw new ApiError(400, "Artifact externalUrl must be an http(s) URL");
+  }
+  return externalUrl;
+}
+async function createArtifact(missionRef, body) {
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    throw new ApiError(400, "Artifact create body must be an object");
+  }
+  const type = typeof body.type === "string" ? body.type.trim() : "";
+  if (!type) {
+    throw new ApiError(400, "Artifact type is required");
+  }
+  if (!CORE_ARTIFACT_TYPES.has(type) && !type.includes(".")) {
+    throw new ApiError(
+      400,
+      `Artifact type must be one of ${[...CORE_ARTIFACT_TYPES].join(", ")} or a namespaced extension value`
+    );
+  }
+  const label = typeof body.label === "string" ? body.label.trim() : "";
+  if (!label) {
+    throw new ApiError(400, "Artifact label is required");
+  }
+  let contentText = null;
+  if (body.contentText !== void 0 && body.contentText !== null) {
+    if (typeof body.contentText !== "string") {
+      throw new ApiError(400, "Artifact contentText must be a string or null");
+    }
+    contentText = body.contentText.trim() ? body.contentText : null;
+  }
+  const externalUrl = normalizeExternalUrl(body.externalUrl);
+  if (!contentText && !externalUrl) {
+    throw new ApiError(400, "Provide contentText and/or externalUrl");
+  }
+  return requireDatabaseClient().transaction(async (tx) => {
+    const mission = await getMissionRow(missionRef, tx, PERMISSIONS.ARTIFACT_CREATE);
+    let objectiveId = typeof body.objectiveId === "string" && body.objectiveId.trim() ? body.objectiveId.trim() : null;
+    let sessionId = typeof body.sessionId === "string" && body.sessionId.trim() ? body.sessionId.trim() : null;
+    const sessionKey = typeof body.sessionKey === "string" && body.sessionKey.trim() ? body.sessionKey.trim() : null;
+    if (sessionKey) {
+      const session = await tx.get(
+        `SELECT id, mission_id, objective_id
+           FROM agent_sessions
+          WHERE workspace_id = ? AND session_key_hash = ? AND ended_at IS NULL AND deleted_at IS NULL
+          ORDER BY started_at DESC LIMIT 1`,
+        [mission.workspace_id, hashSessionKey(sessionKey)]
+      );
+      if (!session) {
+        throw new ApiError(401, "Invalid or ended session key");
+      }
+      if (session.mission_id !== mission.id) {
+        throw new ApiError(400, "Session key does not match mission");
+      }
+      sessionId = session.id;
+      objectiveId = session.objective_id;
+    } else if (objectiveId) {
+      const objective = await tx.get(
+        `SELECT id FROM objectives
+          WHERE id = ? AND mission_id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+        [objectiveId, mission.id, mission.workspace_id]
+      );
+      if (!objective) {
+        throw new ApiError(404, "Objective not found on mission");
+      }
+    } else if (sessionId) {
+      const session = await tx.get(
+        `SELECT id, objective_id FROM agent_sessions
+          WHERE id = ? AND mission_id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+        [sessionId, mission.id, mission.workspace_id]
+      );
+      if (!session) {
+        throw new ApiError(404, "Session not found on mission");
+      }
+      if (!objectiveId) objectiveId = session.objective_id;
+    }
+    const id = newId2();
+    const now2 = nowIso2();
+    const actorId = getActorWorkspaceUserId();
+    await tx.run(
+      `INSERT INTO artifacts
+         (id, workspace_id, project_id, mission_id, objective_id, session_id, delivery_id,
+          type, label, content_text, external_url, created_by_workspace_user_id,
+          created_at, updated_at, revision)
+       VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, 1)`,
+      [
+        id,
+        mission.workspace_id,
+        mission.project_id,
+        mission.id,
+        objectiveId,
+        sessionId,
+        type,
+        label,
+        contentText,
+        externalUrl,
+        actorId,
+        now2,
+        now2
+      ]
+    );
+    const created = await tx.get(
+      `SELECT id, workspace_id, project_id, mission_id, objective_id, session_id, delivery_id,
+              type, label, content_text, content_json, external_url, created_at, updated_at, revision
+         FROM artifacts
+        WHERE id = ? AND workspace_id = ?`,
+      [id, mission.workspace_id]
+    );
+    await recordChange2(
+      {
+        entityType: "artifact",
+        entityId: id,
+        operation: "insert",
+        entityRevision: 1,
+        workspaceId: mission.workspace_id,
+        projectId: mission.project_id,
+        missionId: mission.id,
+        objectiveId,
+        changedFields: ["type", "label", "content_text", "external_url"]
+      },
+      tx
+    );
+    return toArtifactDto(created);
+  });
+}
 async function updateArtifact(missionRef, artifactId, body) {
   if (!body || typeof body !== "object" || Array.isArray(body)) {
     throw new ApiError(400, "Artifact update body must be an object");
@@ -143982,7 +144655,7 @@ async function revokeUserTokenSecret(rawToken) {
 
 // workspaces.ts
 init_dist();
-var import_node_crypto15 = require("node:crypto");
+var import_node_crypto16 = require("node:crypto");
 
 // sql-studio/sql-studio.ts
 var import_node_child_process5 = require("node:child_process");
@@ -150395,9 +151068,9 @@ var INVITATION_HASH_ALGORITHM = "sha256";
 var INVITATION_TTL_DAYS = 14;
 var WORKSPACE_ROLE_KEYS = /* @__PURE__ */ new Set(["ADMIN", "MANAGER", "MEMBER"]);
 function generateInvitationSecret() {
-  const prefix = `${INVITATION_TOKEN_SCHEME}_${(0, import_node_crypto15.randomBytes)(4).toString("hex")}`;
-  const secret = `${prefix}${(0, import_node_crypto15.randomBytes)(24).toString("hex")}`;
-  const hash2 = (0, import_node_crypto15.createHash)(INVITATION_HASH_ALGORITHM).update(secret).digest("hex");
+  const prefix = `${INVITATION_TOKEN_SCHEME}_${(0, import_node_crypto16.randomBytes)(4).toString("hex")}`;
+  const secret = `${prefix}${(0, import_node_crypto16.randomBytes)(24).toString("hex")}`;
+  const hash2 = (0, import_node_crypto16.createHash)(INVITATION_HASH_ALGORITHM).update(secret).digest("hex");
   return { secret, prefix, hash: hash2 };
 }
 var INVITATION_COLUMNS = "id, workspace_id, email, role_key, token_prefix, status, invited_by_workspace_user_id, expires_at, created_at, revision";
@@ -150561,7 +151234,7 @@ async function acceptWorkspaceInvitation(body) {
   if (!rawToken) throw new ApiError(400, "Invitation token is required");
   const profileId = getActiveProfileId();
   if (!profileId) throw new ApiError(401, "Authentication required");
-  const tokenHash = (0, import_node_crypto15.createHash)(INVITATION_HASH_ALGORITHM).update(rawToken).digest("hex");
+  const tokenHash = (0, import_node_crypto16.createHash)(INVITATION_HASH_ALGORITHM).update(rawToken).digest("hex");
   const client = requireDatabaseClient();
   const outcome = await client.transaction(async (tx) => {
     const invitation = await tx.get(
@@ -151133,7 +151806,10 @@ var handlers = {
     existingSessionKey: strFlag(body, "--session-key") ?? null,
     externalSessionId: externalSessionId(body),
     executionRequestId: strFlag(body, "--execution-request-id") ?? null,
-    executionTargetId: strFlag(body, "--execution-target-id") ?? null
+    executionTargetId: strFlag(body, "--execution-target-id") ?? null,
+    // The channel id only. Its credential never travels in a protocol flag — it reaches the
+    // backend solely as an Authorization header on the adapter route family.
+    sessionChannelId: strFlag(body, "--session-channel-id") ?? null
   }),
   update: (ctx, body) => updateSession2({
     ctx,
@@ -151324,6 +152000,27 @@ var handlers = {
       value
     });
   },
+  // Mid-turn artifact create (same service as REST POST). Optional session key
+  // stamps session/objective provenance when the agent is on a live turn.
+  "add-artifact": (_ctx, body) => {
+    const create = {
+      type: requireFlag(body, "--type"),
+      label: requireFlag(body, "--label")
+    };
+    if (hasFlag(body, "--content-text") || hasFlag(body, "--content-text-file")) {
+      const content = resolveInput(body, "--content-text", "--content-text-file");
+      create.contentText = content !== void 0 && content.trim() ? content : null;
+    }
+    if (hasFlag(body, "--external-url")) {
+      const url2 = strFlag(body, "--external-url");
+      create.externalUrl = url2 !== void 0 && url2.trim() ? url2 : null;
+    }
+    const sessionKey = strFlag(body, "--session-key");
+    if (sessionKey) {
+      create.sessionKey = sessionKey;
+    }
+    return createArtifact(requireFlag(body, "--mission-id"), create);
+  },
   // In-place artifact edit (same service as REST PATCH). No session key — a
   // later objective or follow-up can revise an artifact created earlier.
   "update-artifact": (_ctx, body) => {
@@ -151412,6 +152109,7 @@ var SUBCOMMAND_PERMISSIONS = {
   "record-work": PERMISSIONS.MISSION_CREATE,
   "read-context": PERMISSIONS.MISSION_READ,
   "write-context": PERMISSIONS.MISSION_UPDATE,
+  "add-artifact": PERMISSIONS.ARTIFACT_CREATE,
   "update-artifact": PERMISSIONS.MISSION_UPDATE,
   "attachment-list": PERMISSIONS.ARTIFACT_READ,
   "attachment-download-url": PERMISSIONS.ARTIFACT_READ,
@@ -151676,6 +152374,28 @@ var hostedMcpToolDefinitions = [
     ),
     annotations: writeAction,
     _meta: widget("ui://overlord/file-changes.html")
+  },
+  {
+    name: "overlord_add_artifact",
+    title: "Add mission artifact",
+    description: "Use this to create a mission artifact during a turn without delivering \u2014 for example a plan, notes, decision, or URL the reviewer should see while work continues. Provide type, label, and at least one of contentText or externalUrl. Optional sessionKey stamps session/objective provenance. Revise later with overlord_update_artifact. Delivery may still attach more artifacts.",
+    inputSchema: objectSchema(
+      {
+        missionId: stringProperty("Mission UUID or workspace display id such as coo:150."),
+        type: stringProperty(
+          "Artifact type: test_results, next_steps, note, url, decision, or migration."
+        ),
+        label: stringProperty("Human-facing label for the artifact."),
+        contentText: stringProperty("Optional Markdown/text content."),
+        externalUrl: stringProperty("Optional HTTP(S) URL."),
+        sessionKey: stringProperty(
+          "Optional live session key from attach; stamps session/objective provenance when present."
+        )
+      },
+      ["missionId", "type", "label"]
+    ),
+    outputSchema: protocolOutputSchema("The created artifact DTO (revision 1)."),
+    annotations: writeAction
   },
   {
     name: "overlord_update_artifact",
@@ -151965,6 +152685,25 @@ var toolHandlers = {
       ...Array.isArray(args.changeRationales) ? { "--change-rationales-file": JSON.stringify(args.changeRationales) } : {}
     } : void 0
   }),
+  overlord_add_artifact: (args) => {
+    const hasContentText = typeof args.contentText === "string" && args.contentText.trim() !== "";
+    const hasExternalUrl = typeof args.externalUrl === "string" && args.externalUrl.trim() !== "";
+    if (!hasContentText && !hasExternalUrl) {
+      throw new Error("Provide at least one of contentText or externalUrl");
+    }
+    const sessionKey = optionalString(args, "sessionKey");
+    return runProtocolSubcommand("add-artifact", {
+      flags: {
+        "--mission-id": requiredString(args, "missionId"),
+        "--type": requiredString(args, "type"),
+        "--label": requiredString(args, "label"),
+        ...hasContentText ? { "--content-text-file": true } : {},
+        ...hasExternalUrl ? { "--external-url": args.externalUrl } : {},
+        ...sessionKey ? { "--session-key": sessionKey } : {}
+      },
+      fileInputs: hasContentText ? { "--content-text-file": args.contentText } : void 0
+    });
+  },
   overlord_update_artifact: (args) => {
     if (typeof args.expectedRevision !== "number" || !Number.isInteger(args.expectedRevision)) {
       throw new Error("expectedRevision must be an integer");
@@ -152775,7 +153514,44 @@ async function updateRunnerRequestStatus({
 }) {
   const ctx = await requestRunnerContext(requestId);
   const request = status === "launching" ? await markExecutionLaunching({ ctx, requestId }) : status === "launched" ? await markExecutionLaunched({ ctx, requestId }) : await markExecutionFailed({ ctx, requestId, error: error53 ?? "Launch failed" });
+  if (status === "launching") {
+    const bootstrap = await prepareSessionChannelForRequest({ ctx, request });
+    return { ...serviceSummaryToDto(request), sessionChannel: bootstrap };
+  }
   return serviceSummaryToDto(request);
+}
+async function prepareSessionChannelForRequest({
+  ctx,
+  request
+}) {
+  try {
+    const existing = await ctx.db.get(
+      `SELECT id FROM agent_session_channels
+         WHERE execution_request_id = ? AND deleted_at IS NULL
+           AND state IN ('preparing', 'online', 'degraded')`,
+      [request.id]
+    );
+    if (existing) return null;
+    const { bootstrap } = await createSessionChannel({
+      ctx,
+      missionId: request.missionId,
+      objectiveId: request.objectiveId ?? null,
+      projectId: request.projectId ?? null,
+      executionRequestId: request.id,
+      executionTargetId: request.executionTargetId ?? null,
+      agentIdentifier: request.requestedAgent ?? null,
+      adapterKey: request.requestedAgent ?? null,
+      launchKind: "queued"
+    });
+    return {
+      channelId: bootstrap.channelId,
+      token: bootstrap.token,
+      expiresAt: bootstrap.expiresAt,
+      launchKind: bootstrap.launchKind
+    };
+  } catch {
+    return null;
+  }
 }
 async function completeRunnerMutationRequest({
   requestId,
@@ -153849,29 +154625,29 @@ async function deleteMissionTime(missionId, recordId) {
 }
 
 // ext/everhour/routes.ts
-function createEverhourExtensionRouter(handle3) {
+function createEverhourExtensionRouter(handle4) {
   const router2 = (0, import_express.Router)();
   router2.get(
     "/integration",
-    handle3(() => getEverhourIntegration(), { requires: PERMISSIONS.WORKSPACE_READ })
+    handle4(() => getEverhourIntegration(), { requires: PERMISSIONS.WORKSPACE_READ })
   );
   router2.put(
     "/integration",
-    handle3((req) => setEverhourApiKey(String(req.body?.apiKey ?? "")), {
+    handle4((req) => setEverhourApiKey(String(req.body?.apiKey ?? "")), {
       mutates: true,
       requires: PERMISSIONS.WORKSPACE_UPDATE
     })
   );
   router2.delete(
     "/integration",
-    handle3(() => clearEverhourApiKey(), {
+    handle4(() => clearEverhourApiKey(), {
       mutates: true,
       requires: PERMISSIONS.WORKSPACE_UPDATE
     })
   );
   router2.put(
     "/projects/:projectId/link",
-    handle3(
+    handle4(
       projectRoute(
         PERMISSIONS.PROJECT_UPDATE,
         (req) => linkProjectEverhour(req.params.projectId, req.body?.everhourProjectName ?? null)
@@ -153881,19 +154657,19 @@ function createEverhourExtensionRouter(handle3) {
   );
   router2.get(
     "/projects/:projectId/link",
-    handle3(
+    handle4(
       projectRoute(PERMISSIONS.PROJECT_READ, (req) => getProjectEverhourLink(req.params.projectId))
     )
   );
   router2.get(
     "/projects/:projectId",
-    handle3(
+    handle4(
       projectRoute(PERMISSIONS.PROJECT_READ, (req) => getProjectEverhourState(req.params.projectId))
     )
   );
   router2.post(
     "/projects/:projectId/timer/start",
-    handle3(
+    handle4(
       projectRoute(PERMISSIONS.PROJECT_UPDATE, (req) => startProjectTimer(req.params.projectId)),
       {
         mutates: true
@@ -153902,7 +154678,7 @@ function createEverhourExtensionRouter(handle3) {
   );
   router2.post(
     "/projects/:projectId/timer/stop",
-    handle3(
+    handle4(
       projectRoute(PERMISSIONS.PROJECT_UPDATE, (req) => stopProjectTimer(req.params.projectId)),
       {
         mutates: true
@@ -153911,7 +154687,7 @@ function createEverhourExtensionRouter(handle3) {
   );
   router2.post(
     "/projects/:projectId/time",
-    handle3(
+    handle4(
       projectRoute(
         PERMISSIONS.PROJECT_UPDATE,
         (req) => addProjectTime(req.params.projectId, req.body)
@@ -153923,7 +154699,7 @@ function createEverhourExtensionRouter(handle3) {
   );
   router2.patch(
     "/projects/:projectId/time/:recordId",
-    handle3(
+    handle4(
       projectRoute(
         PERMISSIONS.PROJECT_UPDATE,
         (req) => updateProjectTime(req.params.projectId, req.params.recordId, req.body)
@@ -153933,7 +154709,7 @@ function createEverhourExtensionRouter(handle3) {
   );
   router2.delete(
     "/projects/:projectId/time/:recordId",
-    handle3(
+    handle4(
       projectRoute(
         PERMISSIONS.PROJECT_UPDATE,
         (req) => deleteProjectTime(req.params.projectId, req.params.recordId)
@@ -153943,13 +154719,13 @@ function createEverhourExtensionRouter(handle3) {
   );
   router2.get(
     "/missions/:missionId",
-    handle3(
+    handle4(
       missionRoute(PERMISSIONS.MISSION_READ, (req) => getMissionEverhourState(req.params.missionId))
     )
   );
   router2.post(
     "/missions/:missionId/timer/start",
-    handle3(
+    handle4(
       missionRoute(PERMISSIONS.MISSION_UPDATE, (req) => startMissionTimer(req.params.missionId)),
       {
         mutates: true
@@ -153958,7 +154734,7 @@ function createEverhourExtensionRouter(handle3) {
   );
   router2.post(
     "/missions/:missionId/timer/stop",
-    handle3(
+    handle4(
       missionRoute(PERMISSIONS.MISSION_UPDATE, (req) => stopMissionTimer(req.params.missionId)),
       {
         mutates: true
@@ -153967,7 +154743,7 @@ function createEverhourExtensionRouter(handle3) {
   );
   router2.post(
     "/missions/:missionId/time",
-    handle3(
+    handle4(
       missionRoute(
         PERMISSIONS.MISSION_UPDATE,
         (req) => addMissionTime(req.params.missionId, req.body)
@@ -153979,7 +154755,7 @@ function createEverhourExtensionRouter(handle3) {
   );
   router2.patch(
     "/missions/:missionId/time/:recordId",
-    handle3(
+    handle4(
       missionRoute(
         PERMISSIONS.MISSION_UPDATE,
         (req) => updateMissionTime(req.params.missionId, req.params.recordId, req.body)
@@ -153989,7 +154765,7 @@ function createEverhourExtensionRouter(handle3) {
   );
   router2.delete(
     "/missions/:missionId/time/:recordId",
-    handle3(
+    handle4(
       missionRoute(
         PERMISSIONS.MISSION_UPDATE,
         (req) => deleteMissionTime(req.params.missionId, req.params.recordId)
@@ -154004,7 +154780,7 @@ function createEverhourExtensionRouter(handle3) {
 var import_express2 = __toESM(require_express2(), 1);
 
 // ext/github/service.ts
-var import_node_crypto16 = require("node:crypto");
+var import_node_crypto17 = require("node:crypto");
 init_db();
 init_errors5();
 var GITHUB_API2 = "https://api.github.com";
@@ -154035,7 +154811,7 @@ function appJwt(config4) {
     JSON.stringify({ iat: now2 - 60, exp: now2 + 9 * 60, iss: config4.appId })
   );
   const signingInput = `${encodedHeader}.${encodedPayload}`;
-  const signer = (0, import_node_crypto16.createSign)("RSA-SHA256");
+  const signer = (0, import_node_crypto17.createSign)("RSA-SHA256");
   signer.update(signingInput);
   signer.end();
   return `${signingInput}.${signer.sign(config4.privateKey, "base64url")}`;
@@ -154074,16 +154850,16 @@ async function githubFetch(path24, token, init2 = {}) {
 }
 function signedInstallState(workspaceId, privateKey) {
   const payload = base64url3(JSON.stringify({ workspaceId, expiresAt: Date.now() + STATE_TTL_MS }));
-  const mac3 = (0, import_node_crypto16.createHmac)("sha256", privateKey).update(payload).digest("base64url");
+  const mac3 = (0, import_node_crypto17.createHmac)("sha256", privateKey).update(payload).digest("base64url");
   return `${payload}.${mac3}`;
 }
 function verifyInstallState(value, workspaceId, privateKey) {
   const [payload, suppliedMac, ...extra] = value?.split(".") ?? [];
   if (!payload || !suppliedMac || extra.length)
     throw new ApiError(400, "Invalid GitHub installation state.");
-  const expectedMac = (0, import_node_crypto16.createHmac)("sha256", privateKey).update(payload).digest("base64url");
+  const expectedMac = (0, import_node_crypto17.createHmac)("sha256", privateKey).update(payload).digest("base64url");
   const sameLength = suppliedMac.length === expectedMac.length;
-  if (!sameLength || !(0, import_node_crypto16.timingSafeEqual)(Buffer.from(suppliedMac), Buffer.from(expectedMac))) {
+  if (!sameLength || !(0, import_node_crypto17.timingSafeEqual)(Buffer.from(suppliedMac), Buffer.from(expectedMac))) {
     throw new ApiError(400, "Invalid GitHub installation state.");
   }
   let decoded;
@@ -154453,15 +155229,15 @@ async function createMissionGitHubPullRequest(missionId, body) {
 }
 
 // ext/github/routes.ts
-function createGitHubExtensionRouter(handle3, options = {}) {
+function createGitHubExtensionRouter(handle4, options = {}) {
   const router2 = (0, import_express2.Router)();
   router2.get(
     "/user-connection",
-    handle3(() => getGitHubUserConnection())
+    handle4(() => getGitHubUserConnection())
   );
   router2.post(
     "/user-connection/authorize",
-    handle3(
+    handle4(
       (req) => beginGitHubUserAuthorization(
         {
           returnTo: typeof req.body?.returnTo === "string" ? req.body.returnTo : void 0
@@ -154473,23 +155249,23 @@ function createGitHubExtensionRouter(handle3, options = {}) {
   );
   router2.delete(
     "/user-connection",
-    handle3(() => disconnectGitHubUser(), { mutates: true })
+    handle4(() => disconnectGitHubUser(), { mutates: true })
   );
   router2.get(
     "/repository-owners",
-    handle3(() => listGitHubRepositoryOwners())
+    handle4(() => listGitHubRepositoryOwners())
   );
   router2.get(
     "/integration",
-    handle3(() => getGitHubIntegration(), { requires: PERMISSIONS.WORKSPACE_READ })
+    handle4(() => getGitHubIntegration(), { requires: PERMISSIONS.WORKSPACE_READ })
   );
   router2.post(
     "/install",
-    handle3(() => beginGitHubInstall(), { mutates: true, requires: PERMISSIONS.WORKSPACE_UPDATE })
+    handle4(() => beginGitHubInstall(), { mutates: true, requires: PERMISSIONS.WORKSPACE_UPDATE })
   );
   router2.get(
     "/callback",
-    handle3(
+    handle4(
       async (req) => {
         await completeGitHubInstall({
           installationId: String(req.query.installation_id ?? ""),
@@ -154502,23 +155278,23 @@ function createGitHubExtensionRouter(handle3, options = {}) {
   );
   router2.delete(
     "/integration",
-    handle3(() => disconnectGitHub(), { mutates: true, requires: PERMISSIONS.WORKSPACE_UPDATE })
+    handle4(() => disconnectGitHub(), { mutates: true, requires: PERMISSIONS.WORKSPACE_UPDATE })
   );
   router2.get(
     "/repos",
-    handle3((req) => listGitHubRepos(typeof req.query.q === "string" ? req.query.q : null), {
+    handle4((req) => listGitHubRepos(typeof req.query.q === "string" ? req.query.q : null), {
       requires: PERMISSIONS.PROJECT_READ
     })
   );
   router2.get(
     "/projects/:projectId/link",
-    handle3(
+    handle4(
       projectRoute(PERMISSIONS.PROJECT_READ, (req) => getProjectGitHubLink(req.params.projectId))
     )
   );
   router2.put(
     "/projects/:projectId/link",
-    handle3(
+    handle4(
       projectRoute(
         PERMISSIONS.PROJECT_UPDATE,
         (req) => linkProjectGitHub(req.params.projectId, {
@@ -154530,7 +155306,7 @@ function createGitHubExtensionRouter(handle3, options = {}) {
   );
   router2.get(
     "/missions/:missionId/pull-request",
-    handle3(
+    handle4(
       missionRoute(
         PERMISSIONS.MISSION_READ,
         (req) => getMissionGitHubPullRequest(req.params.missionId)
@@ -154539,7 +155315,7 @@ function createGitHubExtensionRouter(handle3, options = {}) {
   );
   router2.post(
     "/missions/:missionId/pull-request",
-    handle3(
+    handle4(
       missionRoute(
         PERMISSIONS.MISSION_UPDATE,
         (req) => createMissionGitHubPullRequest(req.params.missionId, req.body ?? {})
@@ -154610,6 +155386,1288 @@ function resolveServeSpa({
   const explicit = parseTruthyEnv(env3.OVERLORD_SERVE_SPA);
   if (explicit !== null) return explicit;
   return dialect === "sqlite";
+}
+
+// agent-session-routes.ts
+var import_express3 = __toESM(require_express2(), 1);
+
+// ../packages/core/service/agent-session/events.ts
+init_change_feed();
+init_errors4();
+init_util3();
+var MAX_EVENT_SUMMARY_LENGTH = 2e3;
+var MAX_EVENT_PAYLOAD_BYTES = 8 * 1024;
+var MAX_EVENT_IDENTIFIER_LENGTH = 200;
+function boundedText(value, max) {
+  if (typeof value !== "string") return null;
+  const trimmed2 = value.trim();
+  if (trimmed2 === "") return null;
+  return trimmed2.length <= max ? trimmed2 : `${trimmed2.slice(0, max - 1)}\u2026`;
+}
+function requiredIdentifier(value, field) {
+  const bounded2 = boundedText(value, MAX_EVENT_IDENTIFIER_LENGTH);
+  if (!bounded2) {
+    throw new ServiceError(`${field} is required`, "invalid_event", 400);
+  }
+  return bounded2;
+}
+function boundedPayload(payload) {
+  if (!payload) return "{}";
+  const serialized = JSON.stringify(payload);
+  if (Buffer.byteLength(serialized, "utf8") > MAX_EVENT_PAYLOAD_BYTES) {
+    throw new ServiceError(
+      `Event payload exceeds ${MAX_EVENT_PAYLOAD_BYTES} bytes`,
+      "event_payload_too_large",
+      413
+    );
+  }
+  return serialized;
+}
+function normalizeTimestamp2(value, fallback2) {
+  if (typeof value !== "string") return fallback2;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return fallback2;
+  return parsed > new Date(fallback2) ? fallback2 : parsed.toISOString();
+}
+async function appendSessionEvent({
+  ctx,
+  channel,
+  event
+}) {
+  const adapterKey = channel.adapter_key ?? channel.agent_identifier ?? "unknown";
+  const producerEventId = requiredIdentifier(event.producerEventId, "producerEventId");
+  const kind = requiredIdentifier(event.kind, "kind");
+  const existing = await ctx.db.get(
+    `SELECT id, channel_sequence FROM agent_session_events
+       WHERE channel_id = ? AND adapter_key = ? AND producer_event_id = ?`,
+    [channel.id, adapterKey, producerEventId]
+  );
+  if (existing) {
+    return { id: existing.id, channelSequence: existing.channel_sequence, duplicate: true };
+  }
+  const now2 = nowIso();
+  const id = newId();
+  const payloadJson = boundedPayload(event.payload);
+  const summary = boundedText(event.summary, MAX_EVENT_SUMMARY_LENGTH);
+  const inserted = await ctx.db.transaction(async (tx) => {
+    const txCtx = { ...ctx, db: tx };
+    const head = await tx.get(
+      `SELECT MAX(channel_sequence) AS next_sequence FROM agent_session_events
+         WHERE channel_id = ?`,
+      [channel.id]
+    );
+    const channelSequence = (head?.next_sequence ?? 0) + 1;
+    await tx.run(
+      `INSERT INTO agent_session_events (
+           id, workspace_id, project_id, mission_id, objective_id, channel_id, session_id,
+           adapter_key, producer_event_id, producer_sequence, channel_sequence,
+           occurred_at, received_at, kind, severity, actionability,
+           native_event, native_turn_id, native_call_id, subagent_id, correlation_id, origin,
+           summary, payload_json, formatter_version, created_at, updated_at, revision
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+      [
+        id,
+        channel.workspace_id,
+        channel.project_id,
+        channel.mission_id,
+        channel.objective_id,
+        channel.id,
+        channel.session_id,
+        adapterKey,
+        producerEventId,
+        typeof event.producerSequence === "number" ? event.producerSequence : null,
+        channelSequence,
+        normalizeTimestamp2(event.occurredAt, now2),
+        now2,
+        kind,
+        boundedText(event.severity, 32) ?? "notice",
+        boundedText(event.actionability, 32),
+        boundedText(event.nativeEvent, MAX_EVENT_IDENTIFIER_LENGTH),
+        boundedText(event.nativeTurnId, MAX_EVENT_IDENTIFIER_LENGTH),
+        boundedText(event.nativeCallId, MAX_EVENT_IDENTIFIER_LENGTH),
+        boundedText(event.subagentId, MAX_EVENT_IDENTIFIER_LENGTH),
+        boundedText(event.correlationId, MAX_EVENT_IDENTIFIER_LENGTH),
+        boundedText(event.origin, 32),
+        summary,
+        payloadJson,
+        event.formatterVersion ?? 1,
+        now2,
+        now2
+      ]
+    );
+    await recordChange({
+      ctx: txCtx,
+      entityType: "agent_session_event",
+      entityId: id,
+      operation: "insert",
+      entityRevision: 1,
+      projectId: channel.project_id,
+      missionId: channel.mission_id,
+      objectiveId: channel.objective_id
+    });
+    return channelSequence;
+  });
+  return { id, channelSequence: inserted, duplicate: false };
+}
+
+// ../packages/core/service/agent-session/inputs.ts
+init_change_feed();
+init_errors4();
+init_util3();
+
+// ../packages/core/service/agent-session/pure/inject.ts
+var DELIVERY_OUTCOMES = [
+  "delivered",
+  "queued_turn_boundary",
+  "queued_next_turn",
+  "unsupported"
+];
+function describeDeliveryOutcome({
+  status,
+  deliveryOutcome
+}) {
+  if (status === "acknowledged" || deliveryOutcome === "delivered") return "Delivered";
+  if (deliveryOutcome === "queued_turn_boundary") return "Queued (turn boundary)";
+  if (deliveryOutcome === "queued_next_turn") return "Queued (next turn)";
+  if (deliveryOutcome === "unsupported" || status === "failed") return "Unsupported";
+  if (status === "emitted") return "Sent to harness";
+  if (status === "queued" || status === "leased") return "Pending";
+  if (status === "cancelled") return "Cancelled";
+  if (status === "expired") return "Expired";
+  return status;
+}
+
+// ../packages/core/service/agent-session/inputs.ts
+var INPUT_LEASE_SECONDS = 60;
+var MAX_INPUT_BODY_LENGTH = 16e3;
+var INPUT_COLUMNS = `
+  id, workspace_id, project_id, mission_id, objective_id, channel_id, session_id,
+  kind, body, idempotency_key, created_by_workspace_user_id, status,
+  lease_id, lease_expires_at, emitted_at, acknowledged_at, attempt_count, last_error_code,
+  delivery_outcome, created_at, updated_at, revision
+`;
+function normalizeDeliveryOutcome(value) {
+  if (!value) return null;
+  return DELIVERY_OUTCOMES.includes(value) ? value : null;
+}
+async function getInput({
+  ctx,
+  inputId
+}) {
+  const row = await ctx.db.get(
+    `SELECT ${INPUT_COLUMNS} FROM agent_session_inputs
+       WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+    [inputId, ctx.workspace.id]
+  );
+  if (!row) throw new ServiceError("Session input not found", "input_not_found", 404);
+  return { ...row, delivery_outcome: normalizeDeliveryOutcome(row.delivery_outcome) };
+}
+async function listSessionInputs({
+  ctx,
+  missionId,
+  limit = 50
+}) {
+  const rows = await ctx.db.all(
+    `SELECT ${INPUT_COLUMNS} FROM agent_session_inputs
+       WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL
+       ORDER BY created_at DESC
+       LIMIT ?`,
+    [missionId, ctx.workspace.id, Math.min(200, Math.max(1, limit))]
+  );
+  return rows.map((row) => ({
+    ...row,
+    delivery_outcome: normalizeDeliveryOutcome(row.delivery_outcome)
+  }));
+}
+async function enqueueSessionInput({
+  ctx,
+  channel,
+  kind,
+  body,
+  idempotencyKey = null
+}) {
+  if (!channel.session_id) {
+    throw new ServiceError(
+      "This channel has no attached session to address",
+      "input_session_required",
+      409
+    );
+  }
+  if (channel.state === "ended" || channel.state === "lost") {
+    throw new ServiceError(
+      "This session channel has ended; queued input would never be delivered",
+      "input_channel_not_live",
+      409
+    );
+  }
+  const trimmed2 = body.trim();
+  if (!trimmed2) throw new ServiceError("Input body is required", "invalid_input", 400);
+  if (trimmed2.length > MAX_INPUT_BODY_LENGTH) {
+    throw new ServiceError(
+      `Input body exceeds ${MAX_INPUT_BODY_LENGTH} characters`,
+      "input_too_large",
+      413
+    );
+  }
+  if (idempotencyKey) {
+    const existing = await ctx.db.get(
+      `SELECT ${INPUT_COLUMNS} FROM agent_session_inputs
+         WHERE session_id = ? AND idempotency_key = ? AND deleted_at IS NULL`,
+      [channel.session_id, idempotencyKey]
+    );
+    if (existing) return existing;
+  }
+  const now2 = nowIso();
+  const id = newId();
+  await ctx.db.transaction(async (tx) => {
+    const txCtx = { ...ctx, db: tx };
+    await tx.run(
+      `INSERT INTO agent_session_inputs (
+           id, workspace_id, project_id, mission_id, objective_id, channel_id, session_id,
+           kind, body, idempotency_key, created_by_workspace_user_id, status,
+           attempt_count, created_at, updated_at, revision
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', 0, ?, ?, 1)`,
+      [
+        id,
+        channel.workspace_id,
+        channel.project_id,
+        channel.mission_id,
+        channel.objective_id,
+        channel.id,
+        channel.session_id,
+        kind,
+        trimmed2,
+        idempotencyKey,
+        ctx.actorWorkspaceUserId,
+        now2,
+        now2
+      ]
+    );
+    await recordChange({
+      ctx: txCtx,
+      entityType: "agent_session_input",
+      entityId: id,
+      operation: "insert",
+      entityRevision: 1,
+      projectId: channel.project_id,
+      missionId: channel.mission_id,
+      objectiveId: channel.objective_id
+    });
+  });
+  return await getInput({ ctx, inputId: id });
+}
+async function leaseNextInput({
+  ctx,
+  channelId,
+  leaseSeconds = INPUT_LEASE_SECONDS
+}) {
+  const now2 = nowIso();
+  const candidate = await ctx.db.get(
+    `SELECT ${INPUT_COLUMNS} FROM agent_session_inputs
+       WHERE channel_id = ? AND workspace_id = ? AND deleted_at IS NULL
+         AND (
+           status = 'queued'
+           OR (status = 'leased' AND lease_expires_at IS NOT NULL AND lease_expires_at <= ?)
+         )
+       ORDER BY created_at ASC
+       LIMIT 1`,
+    [channelId, ctx.workspace.id, now2]
+  );
+  if (!candidate) return null;
+  const leaseId = newId();
+  const leaseExpiresAt = addSeconds(now2, leaseSeconds);
+  const updated = await ctx.db.run(
+    `UPDATE agent_session_inputs
+        SET status = 'leased', lease_id = ?, lease_expires_at = ?,
+            attempt_count = attempt_count + 1, updated_at = ?, revision = ?
+      WHERE id = ? AND revision = ? AND status IN ('queued', 'leased')`,
+    [leaseId, leaseExpiresAt, now2, candidate.revision + 1, candidate.id, candidate.revision]
+  );
+  if (updated.changes === 0) return null;
+  await recordChange({
+    ctx,
+    entityType: "agent_session_input",
+    entityId: candidate.id,
+    operation: "update",
+    entityRevision: candidate.revision + 1,
+    projectId: candidate.project_id,
+    missionId: candidate.mission_id,
+    objectiveId: candidate.objective_id,
+    changedFields: ["status", "lease_id", "lease_expires_at", "attempt_count"]
+  });
+  return { input: await getInput({ ctx, inputId: candidate.id }), leaseId };
+}
+async function markInputEmitted({
+  ctx,
+  inputId,
+  leaseId,
+  deliveryOutcome = null
+}) {
+  const now2 = nowIso();
+  const outcome = normalizeDeliveryOutcome(deliveryOutcome);
+  const updated = await ctx.db.run(
+    `UPDATE agent_session_inputs
+        SET status = 'emitted', emitted_at = ?, lease_expires_at = NULL,
+            delivery_outcome = ?, updated_at = ?, revision = revision + 1
+      WHERE id = ? AND workspace_id = ? AND status = 'leased' AND lease_id = ?`,
+    [now2, outcome, now2, inputId, ctx.workspace.id, leaseId]
+  );
+  return { emitted: updated.changes > 0 };
+}
+async function markInputAcknowledged({
+  ctx,
+  inputId
+}) {
+  const now2 = nowIso();
+  const updated = await ctx.db.run(
+    `UPDATE agent_session_inputs
+        SET status = 'acknowledged', acknowledged_at = ?, delivery_outcome = 'delivered',
+            updated_at = ?, revision = revision + 1
+      WHERE id = ? AND workspace_id = ? AND status = 'emitted'`,
+    [now2, now2, inputId, ctx.workspace.id]
+  );
+  return { acknowledged: updated.changes > 0 };
+}
+async function markInputFailed({
+  ctx,
+  inputId,
+  errorCode
+}) {
+  const now2 = nowIso();
+  const updated = await ctx.db.run(
+    `UPDATE agent_session_inputs
+        SET status = 'failed', last_error_code = ?, lease_id = NULL, lease_expires_at = NULL,
+            updated_at = ?, revision = revision + 1
+      WHERE id = ? AND workspace_id = ? AND status IN ('queued', 'leased')`,
+    [errorCode.slice(0, 64), now2, inputId, ctx.workspace.id]
+  );
+  return { failed: updated.changes > 0 };
+}
+async function cancelSessionInput({
+  ctx,
+  inputId
+}) {
+  const now2 = nowIso();
+  const updated = await ctx.db.run(
+    `UPDATE agent_session_inputs
+        SET status = 'cancelled', updated_at = ?, revision = revision + 1
+      WHERE id = ? AND workspace_id = ? AND status = 'queued'`,
+    [now2, inputId, ctx.workspace.id]
+  );
+  return { cancelled: updated.changes > 0 };
+}
+
+// ../packages/core/service/agent-session/requests.ts
+init_change_feed();
+init_errors4();
+init_util3();
+
+// ../packages/core/service/agent-session/pure/window.ts
+var AWAY_DECISION_WINDOW_SECONDS = 30 * 60;
+
+// ../packages/core/service/agent-session/requests.ts
+var WAITER_LEASE_SECONDS = 20;
+var REMOTE_WINDOW_AWAY_SECONDS = 30 * 60;
+var MAX_REQUEST_SUMMARY_LENGTH = 2e3;
+var MAX_REQUEST_OPTIONS = 12;
+var REQUEST_COLUMNS = `
+  id, workspace_id, project_id, mission_id, objective_id, channel_id, session_id,
+  kind, native_request_id, native_call_id, summary, details_json, options_json,
+  allows_free_text, status, resolution_json, resolved_by_workspace_user_id, resolved_at,
+  expires_at, window_expires_at, window_basis, first_viewed_at, released_reason,
+  waiter_lease_id, waiter_lease_expires_at, application_state, application_observed_at,
+  created_at, updated_at, revision
+`;
+function boundedSummary(value) {
+  const trimmed2 = value.trim();
+  if (!trimmed2) throw new ServiceError("Request summary is required", "invalid_request", 400);
+  return trimmed2.length <= MAX_REQUEST_SUMMARY_LENGTH ? trimmed2 : `${trimmed2.slice(0, MAX_REQUEST_SUMMARY_LENGTH - 1)}\u2026`;
+}
+function boundedOptions(options) {
+  if (!options || options.length === 0) return "[]";
+  if (options.length > MAX_REQUEST_OPTIONS) {
+    throw new ServiceError(
+      `A request may carry at most ${MAX_REQUEST_OPTIONS} options`,
+      "invalid_request",
+      400
+    );
+  }
+  return JSON.stringify(
+    options.map((option) => ({
+      optionId: String(option.optionId).slice(0, 64),
+      label: String(option.label).slice(0, 200),
+      kind: String(option.kind).slice(0, 64)
+    }))
+  );
+}
+async function getRequest2({
+  ctx,
+  requestId
+}) {
+  const row = await ctx.db.get(
+    `SELECT ${REQUEST_COLUMNS} FROM agent_requests
+       WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+    [requestId, ctx.workspace.id]
+  );
+  if (!row) throw new ServiceError("Request not found", "request_not_found", 404);
+  return row;
+}
+async function createRequest({
+  ctx,
+  channel,
+  kind,
+  summary,
+  details = {},
+  options = [],
+  allowsFreeText = false,
+  nativeRequestId = null,
+  nativeCallId = null,
+  sourceEventId = null,
+  windowExpiresAt = null,
+  windowBasis = null,
+  expiresAt = null
+}) {
+  if (nativeRequestId) {
+    const existing = await ctx.db.get(
+      `SELECT ${REQUEST_COLUMNS} FROM agent_requests
+         WHERE channel_id = ? AND native_request_id = ? AND deleted_at IS NULL`,
+      [channel.id, nativeRequestId]
+    );
+    if (existing) return existing;
+  }
+  const now2 = nowIso();
+  const id = newId();
+  await ctx.db.transaction(async (tx) => {
+    const txCtx = { ...ctx, db: tx };
+    await tx.run(
+      `INSERT INTO agent_requests (
+           id, workspace_id, project_id, mission_id, objective_id, channel_id, session_id,
+           source_event_id, kind, native_request_id, native_call_id,
+           summary, details_json, formatter_version, options_json, allows_free_text,
+           status, expires_at, window_expires_at, window_basis, application_state,
+           created_at, updated_at, revision
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, 'open', ?, ?, ?, 'pending', ?, ?, 1)`,
+      [
+        id,
+        channel.workspace_id,
+        channel.project_id,
+        channel.mission_id,
+        channel.objective_id,
+        channel.id,
+        channel.session_id,
+        sourceEventId,
+        kind,
+        nativeRequestId,
+        nativeCallId,
+        boundedSummary(summary),
+        JSON.stringify(details ?? {}),
+        boundedOptions(options),
+        allowsFreeText ? 1 : 0,
+        expiresAt,
+        windowExpiresAt,
+        windowBasis,
+        now2,
+        now2
+      ]
+    );
+    await recordChange({
+      ctx: txCtx,
+      entityType: "agent_request",
+      entityId: id,
+      operation: "insert",
+      entityRevision: 1,
+      projectId: channel.project_id,
+      missionId: channel.mission_id,
+      objectiveId: channel.objective_id
+    });
+  });
+  return await getRequest2({ ctx, requestId: id });
+}
+async function acquireWaiterLease({
+  ctx,
+  requestId,
+  leaseId = newId(),
+  leaseSeconds = WAITER_LEASE_SECONDS
+}) {
+  const now2 = nowIso();
+  const leaseExpiresAt = addSeconds(now2, leaseSeconds);
+  const updated = await ctx.db.run(
+    `UPDATE agent_requests
+        SET waiter_lease_id = ?, waiter_lease_expires_at = ?, updated_at = ?,
+            revision = revision + 1
+      WHERE id = ? AND workspace_id = ? AND status = 'open' AND deleted_at IS NULL
+        AND (
+          waiter_lease_id IS NULL
+          OR waiter_lease_id = ?
+          OR waiter_lease_expires_at IS NULL
+          OR waiter_lease_expires_at <= ?
+        )`,
+    [leaseId, leaseExpiresAt, now2, requestId, ctx.workspace.id, leaseId, now2]
+  );
+  if (updated.changes === 0) {
+    throw new ServiceError(
+      "Request is not open, or another waiter holds its lease",
+      "waiter_lease_unavailable",
+      409
+    );
+  }
+  return { leaseId, leaseExpiresAt, request: await getRequest2({ ctx, requestId }) };
+}
+async function releaseRequestToTerminal({
+  ctx,
+  requestId,
+  reason
+}) {
+  const now2 = nowIso();
+  const existing = await getRequest2({ ctx, requestId });
+  const updated = await ctx.db.run(
+    `UPDATE agent_requests
+        SET status = 'released_to_terminal', released_reason = ?,
+            waiter_lease_id = NULL, waiter_lease_expires_at = NULL,
+            updated_at = ?, revision = ?
+      WHERE id = ? AND status = 'open' AND revision = ?`,
+    [reason, now2, existing.revision + 1, requestId, existing.revision]
+  );
+  if (updated.changes === 0) {
+    return { released: false, request: await getRequest2({ ctx, requestId }) };
+  }
+  await recordChange({
+    ctx,
+    entityType: "agent_request",
+    entityId: requestId,
+    operation: "update",
+    entityRevision: existing.revision + 1,
+    projectId: existing.project_id,
+    missionId: existing.mission_id,
+    objectiveId: existing.objective_id,
+    changedFields: ["status", "released_reason"]
+  });
+  return { released: true, request: await getRequest2({ ctx, requestId }) };
+}
+async function markRequestResolvedElsewhere({
+  ctx,
+  requestId
+}) {
+  return releaseRequestToTerminal({ ctx, requestId, reason: "local_activity" }).then(
+    async (result) => {
+      if (result.released) {
+        await ctx.db.run(
+          `UPDATE agent_requests SET released_reason = 'resolved_elsewhere' WHERE id = ?`,
+          [requestId]
+        );
+        return { changed: true, request: await getRequest2({ ctx, requestId }) };
+      }
+      return { changed: false, request: result.request };
+    }
+  );
+}
+async function resolveRequest({
+  ctx,
+  requestId,
+  resolution,
+  expectedRevision
+}) {
+  const existing = await getRequest2({ ctx, requestId });
+  if (expectedRevision !== void 0 && expectedRevision !== existing.revision) {
+    throw new ServiceError("Request changed since it was read", "agent_request_conflict", 409);
+  }
+  if (!ctx.actorWorkspaceUserId) {
+    throw new ServiceError(
+      "A request resolution requires an identified human actor",
+      "resolver_required",
+      403
+    );
+  }
+  const now2 = nowIso();
+  const updated = await ctx.db.run(
+    `UPDATE agent_requests
+        SET status = 'resolved', resolution_json = ?, resolved_by_workspace_user_id = ?,
+            resolved_at = ?, waiter_lease_id = NULL, waiter_lease_expires_at = NULL,
+            updated_at = ?, revision = ?
+      WHERE id = ? AND status = 'open' AND revision = ?`,
+    [
+      JSON.stringify(resolution),
+      ctx.actorWorkspaceUserId,
+      now2,
+      now2,
+      existing.revision + 1,
+      requestId,
+      existing.revision
+    ]
+  );
+  if (updated.changes === 0) {
+    return { resolved: false, request: await getRequest2({ ctx, requestId }) };
+  }
+  await recordChange({
+    ctx,
+    entityType: "agent_request",
+    entityId: requestId,
+    operation: "update",
+    entityRevision: existing.revision + 1,
+    projectId: existing.project_id,
+    missionId: existing.mission_id,
+    objectiveId: existing.objective_id,
+    changedFields: ["status", "resolution_json", "resolved_by_workspace_user_id"]
+  });
+  return { resolved: true, request: await getRequest2({ ctx, requestId }) };
+}
+async function recordRequestApplication({
+  ctx,
+  requestId,
+  applicationState
+}) {
+  const now2 = nowIso();
+  await ctx.db.run(
+    `UPDATE agent_requests
+        SET application_state = ?, application_observed_at = ?, updated_at = ?,
+            revision = revision + 1
+      WHERE id = ? AND workspace_id = ?`,
+    [applicationState, now2, now2, requestId, ctx.workspace.id]
+  );
+}
+
+// agent-session-routes.ts
+init_errors4();
+init_db();
+var MAX_ADAPTER_BODY_BYTES = 64 * 1024;
+function extractChannelCredential(req) {
+  const header = req.headers.authorization;
+  if (typeof header === "string" && header.startsWith("Bearer ")) {
+    return header.slice("Bearer ".length).trim() || null;
+  }
+  return null;
+}
+async function requireChannelCredential(req, res, next) {
+  try {
+    const rawToken = extractChannelCredential(req);
+    if (!rawToken) {
+      res.status(401).json({ error: "Session channel credential required" });
+      return;
+    }
+    const channel = await authenticateChannelCredential({
+      db: requireDatabaseClient(),
+      rawToken
+    });
+    if (!channel) {
+      res.status(401).json({ error: "Session channel credential required" });
+      return;
+    }
+    const workspace = await requireDatabaseClient().get(`SELECT id, slug, name FROM workspaces WHERE id = ? AND deleted_at IS NULL`, [
+      channel.workspace_id
+    ]);
+    if (!workspace) {
+      res.status(401).json({ error: "Session channel credential required" });
+      return;
+    }
+    req.channel = channel;
+    req.channelContext = {
+      db: requireDatabaseClient(),
+      workspace,
+      actorWorkspaceUserId: null,
+      source: "protocol"
+    };
+    next();
+  } catch (err) {
+    next(err);
+  }
+}
+function channelScope(req) {
+  if (!req.channelContext || !req.channel) {
+    throw new ServiceError("Channel scope missing", "channel_scope_missing", 401);
+  }
+  return { ctx: req.channelContext, channel: req.channel };
+}
+function handle2(fn) {
+  return (req, res, next) => {
+    void (async () => {
+      try {
+        const payload = await fn(req, res);
+        if (!res.headersSent) res.json(payload ?? { ok: true });
+      } catch (err) {
+        if (err instanceof ServiceError) {
+          res.status(err.status).json({ error: err.message, code: err.code });
+          return;
+        }
+        next(err);
+      }
+    })();
+  };
+}
+function asRecord(value) {
+  return value && typeof value === "object" ? value : {};
+}
+function optionalString2(value) {
+  return typeof value === "string" && value.trim() !== "" ? value.trim() : null;
+}
+function createAgentSessionChannelRouter() {
+  const router2 = (0, import_express3.Router)();
+  router2.use(import_express3.default.json({ limit: MAX_ADAPTER_BODY_BYTES }));
+  router2.use((req, res, next) => {
+    void requireChannelCredential(req, res, next);
+  });
+  router2.get(
+    "/self",
+    handle2(async (req) => {
+      const { ctx, channel } = channelScope(req);
+      const current = await getChannel({ ctx, channelId: channel.id });
+      return {
+        channelId: current.id,
+        state: current.state,
+        bound: current.session_id !== null,
+        missionId: current.mission_id,
+        adapterKey: current.adapter_key,
+        capabilities: JSON.parse(current.capabilities_json),
+        leaseExpiresAt: current.lease_expires_at
+      };
+    })
+  );
+  router2.post(
+    "/heartbeat",
+    handle2(async (req) => {
+      const { ctx, channel } = channelScope(req);
+      const body = asRecord(req.body);
+      const state2 = body.state === "degraded" ? "degraded" : "online";
+      const lease = await heartbeatChannel({
+        ctx,
+        channelId: channel.id,
+        state: state2,
+        capabilities: body.capabilities ? asRecord(body.capabilities) : void 0,
+        nativeSessionId: optionalString2(body.nativeSessionId),
+        adapterVersion: optionalString2(body.adapterVersion)
+      });
+      return { ok: true, ...lease };
+    })
+  );
+  router2.post(
+    "/events",
+    handle2(async (req) => {
+      const { ctx, channel } = channelScope(req);
+      const body = asRecord(req.body);
+      const rawEvents = Array.isArray(body.events) ? body.events : [body];
+      if (rawEvents.length === 0) return { accepted: [] };
+      if (rawEvents.length > 100) {
+        throw new ServiceError("At most 100 events per batch", "event_batch_too_large", 413);
+      }
+      const accepted = [];
+      for (const raw of rawEvents) {
+        const event = asRecord(raw);
+        accepted.push(
+          await appendSessionEvent({
+            ctx,
+            channel,
+            event: {
+              producerEventId: String(event.eventId ?? ""),
+              producerSequence: typeof event.producerSequence === "number" ? event.producerSequence : null,
+              occurredAt: optionalString2(event.occurredAt),
+              kind: String(event.kind ?? ""),
+              severity: optionalString2(event.severity),
+              actionability: optionalString2(event.actionability),
+              nativeEvent: optionalString2(event.nativeEvent),
+              nativeTurnId: optionalString2(event.nativeTurnId),
+              nativeCallId: optionalString2(event.nativeCallId),
+              subagentId: optionalString2(event.subagentId),
+              correlationId: optionalString2(event.correlationId),
+              origin: optionalString2(event.origin),
+              summary: optionalString2(event.summary),
+              payload: event.payload ? asRecord(event.payload) : null
+            }
+          })
+        );
+      }
+      return { accepted };
+    })
+  );
+  router2.post(
+    "/requests",
+    handle2(async (req) => {
+      const { ctx, channel } = channelScope(req);
+      const body = asRecord(req.body);
+      const kind = String(body.kind ?? "question");
+      if (kind !== "question" && kind !== "permission" && kind !== "choice" && kind !== "retry") {
+        throw new ServiceError("Unknown request kind", "invalid_request", 400);
+      }
+      const request = await createRequest({
+        ctx,
+        channel,
+        kind,
+        summary: String(body.summary ?? ""),
+        details: body.details ? asRecord(body.details) : {},
+        options: Array.isArray(body.options) ? body.options : [],
+        allowsFreeText: body.allowsFreeText === true,
+        nativeRequestId: optionalString2(body.nativeRequestId),
+        nativeCallId: optionalString2(body.nativeCallId),
+        windowExpiresAt: optionalString2(body.windowExpiresAt),
+        windowBasis: optionalString2(body.windowBasis)
+      });
+      return {
+        requestId: request.id,
+        status: request.status,
+        revision: request.revision,
+        windowExpiresAt: request.window_expires_at
+      };
+    })
+  );
+  router2.get(
+    "/requests/:id",
+    handle2(async (req) => {
+      const { ctx, channel } = channelScope(req);
+      const request = await getRequest2({ ctx, requestId: req.params.id });
+      if (request.channel_id !== channel.id) {
+        throw new ServiceError("Request not found", "request_not_found", 404);
+      }
+      return requestDto(request);
+    })
+  );
+  router2.post(
+    "/requests/:id/lease",
+    handle2(async (req) => {
+      const { ctx, channel } = channelScope(req);
+      const body = asRecord(req.body);
+      const request = await ctx.db.get(
+        `SELECT channel_id FROM agent_requests WHERE id = ? AND workspace_id = ?`,
+        [req.params.id, ctx.workspace.id]
+      );
+      if (!request || request.channel_id !== channel.id) {
+        throw new ServiceError("Request not found", "request_not_found", 404);
+      }
+      const lease = await acquireWaiterLease({
+        ctx,
+        requestId: req.params.id,
+        ...optionalString2(body.leaseId) ? { leaseId: optionalString2(body.leaseId) } : {}
+      });
+      return {
+        leaseId: lease.leaseId,
+        leaseExpiresAt: lease.leaseExpiresAt,
+        status: lease.request.status,
+        revision: lease.request.revision,
+        resolution: lease.request.resolution_json ? JSON.parse(lease.request.resolution_json) : null
+      };
+    })
+  );
+  router2.post(
+    "/requests/:id/release",
+    handle2(async (req) => {
+      const { ctx, channel } = channelScope(req);
+      const body = asRecord(req.body);
+      const request = await ctx.db.get(
+        `SELECT channel_id FROM agent_requests WHERE id = ? AND workspace_id = ?`,
+        [req.params.id, ctx.workspace.id]
+      );
+      if (!request || request.channel_id !== channel.id) {
+        throw new ServiceError("Request not found", "request_not_found", 404);
+      }
+      const reason = String(body.reason ?? "timeout");
+      const allowed2 = ["timeout", "local_activity", "policy", "interrupt"];
+      const result = await releaseRequestToTerminal({
+        ctx,
+        requestId: req.params.id,
+        reason: allowed2.includes(reason) ? reason : "timeout"
+      });
+      return {
+        released: result.released,
+        status: result.request.status,
+        resolution: result.request.resolution_json ? JSON.parse(result.request.resolution_json) : null
+      };
+    })
+  );
+  router2.post(
+    "/requests/:id/application",
+    handle2(async (req) => {
+      const { ctx, channel } = channelScope(req);
+      const body = asRecord(req.body);
+      const request = await ctx.db.get(
+        `SELECT channel_id FROM agent_requests WHERE id = ? AND workspace_id = ?`,
+        [req.params.id, ctx.workspace.id]
+      );
+      if (!request || request.channel_id !== channel.id) {
+        throw new ServiceError("Request not found", "request_not_found", 404);
+      }
+      const state2 = String(body.applicationState ?? "unknown");
+      const allowed2 = ["emitted", "applied", "not_applied", "unknown"];
+      await recordRequestApplication({
+        ctx,
+        requestId: req.params.id,
+        applicationState: allowed2.includes(state2) ? state2 : "unknown"
+      });
+      return { ok: true };
+    })
+  );
+  router2.post(
+    "/requests/:id/resolved-elsewhere",
+    handle2(async (req) => {
+      const { ctx, channel } = channelScope(req);
+      const request = await getRequest2({ ctx, requestId: req.params.id });
+      if (request.channel_id !== channel.id) {
+        throw new ServiceError("Request not found", "request_not_found", 404);
+      }
+      const result = await markRequestResolvedElsewhere({ ctx, requestId: request.id });
+      return {
+        changed: result.changed,
+        status: result.request.status,
+        releasedReason: result.request.released_reason
+      };
+    })
+  );
+  router2.post(
+    "/inputs/claim",
+    handle2(async (req) => {
+      const { ctx, channel } = channelScope(req);
+      const leased = await leaseNextInput({ ctx, channelId: channel.id });
+      if (!leased) return { input: null };
+      return {
+        input: {
+          id: leased.input.id,
+          kind: leased.input.kind,
+          body: leased.input.body,
+          leaseId: leased.leaseId,
+          leaseExpiresAt: leased.input.lease_expires_at
+        }
+      };
+    })
+  );
+  router2.post(
+    "/inputs/:id/emitted",
+    handle2(async (req) => {
+      const { ctx, channel } = channelScope(req);
+      const body = asRecord(req.body);
+      const row = await ctx.db.get(
+        `SELECT channel_id FROM agent_session_inputs WHERE id = ? AND workspace_id = ?`,
+        [req.params.id, ctx.workspace.id]
+      );
+      if (!row || row.channel_id !== channel.id) {
+        throw new ServiceError("Session input not found", "input_not_found", 404);
+      }
+      const leaseId = optionalString2(body.leaseId);
+      if (!leaseId) throw new ServiceError("leaseId is required", "invalid_input", 400);
+      const deliveryOutcome = optionalString2(body.deliveryOutcome);
+      return await markInputEmitted({
+        ctx,
+        inputId: req.params.id,
+        leaseId,
+        deliveryOutcome: deliveryOutcome === "delivered" || deliveryOutcome === "queued_turn_boundary" || deliveryOutcome === "queued_next_turn" || deliveryOutcome === "unsupported" ? deliveryOutcome : null
+      });
+    })
+  );
+  router2.post(
+    "/inputs/:id/acknowledged",
+    handle2(async (req) => {
+      const { ctx, channel } = channelScope(req);
+      const row = await ctx.db.get(
+        `SELECT channel_id FROM agent_session_inputs WHERE id = ? AND workspace_id = ?`,
+        [req.params.id, ctx.workspace.id]
+      );
+      if (!row || row.channel_id !== channel.id) {
+        throw new ServiceError("Session input not found", "input_not_found", 404);
+      }
+      return await markInputAcknowledged({ ctx, inputId: req.params.id });
+    })
+  );
+  router2.post(
+    "/inputs/:id/failed",
+    handle2(async (req) => {
+      const { ctx, channel } = channelScope(req);
+      const body = asRecord(req.body);
+      const row = await ctx.db.get(
+        `SELECT channel_id FROM agent_session_inputs WHERE id = ? AND workspace_id = ?`,
+        [req.params.id, ctx.workspace.id]
+      );
+      if (!row || row.channel_id !== channel.id) {
+        throw new ServiceError("Session input not found", "input_not_found", 404);
+      }
+      return await markInputFailed({
+        ctx,
+        inputId: req.params.id,
+        errorCode: optionalString2(body.errorCode) ?? "adapter_error"
+      });
+    })
+  );
+  router2.post(
+    "/end",
+    handle2(async (req) => {
+      const { ctx, channel } = channelScope(req);
+      const body = asRecord(req.body);
+      await endChannel({
+        ctx,
+        channelId: channel.id,
+        reason: optionalString2(body.reason) ?? "session_ended",
+        exitCode: typeof body.exitCode === "number" ? body.exitCode : null
+      });
+      return { ok: true };
+    })
+  );
+  return router2;
+}
+function requestDto(request) {
+  return {
+    id: request.id,
+    channelId: request.channel_id,
+    missionId: request.mission_id,
+    objectiveId: request.objective_id,
+    kind: request.kind,
+    summary: request.summary,
+    options: JSON.parse(request.options_json),
+    allowsFreeText: request.allows_free_text === 1,
+    status: request.status,
+    resolution: request.resolution_json ? JSON.parse(request.resolution_json) : null,
+    revision: request.revision,
+    windowExpiresAt: request.window_expires_at,
+    releasedReason: request.released_reason,
+    applicationState: request.application_state,
+    createdAt: request.created_at
+  };
+}
+function createAgentRequestHumanRouter() {
+  const router2 = (0, import_express3.Router)();
+  router2.use(import_express3.default.json({ limit: "32kb" }));
+  router2.get(
+    "/",
+    handle2(async () => {
+      const client = requireDatabaseClient();
+      const memberships = await callerWorkspaceMemberships(client);
+      const authorized = [];
+      for (const membership of memberships) {
+        try {
+          const workspaceUserId = await requireWorkspacePermission({
+            workspaceId: membership.workspaceId,
+            permission: PERMISSIONS.SESSION_READ,
+            db: client,
+            notFoundMessage: "Request not found"
+          });
+          authorized.push({ workspaceId: membership.workspaceId, workspaceUserId });
+        } catch {
+        }
+      }
+      if (authorized.length === 0) return { requests: [] };
+      const placeholders = authorized.map(() => "?").join(", ");
+      const rows = await client.all(
+        `SELECT ${REQUEST_COLUMNS_FOR_ROUTE} FROM agent_requests
+          WHERE workspace_id IN (${placeholders}) AND deleted_at IS NULL
+          ORDER BY created_at DESC LIMIT 200`,
+        authorized.map((entry) => entry.workspaceId)
+      );
+      return { requests: rows.map(requestDto) };
+    })
+  );
+  router2.post(
+    "/:id/resolve",
+    handle2(async (req) => {
+      const client = requireDatabaseClient();
+      const row = await client.get(
+        `SELECT workspace_id FROM agent_requests WHERE id = ? AND deleted_at IS NULL`,
+        [req.params.id]
+      );
+      if (!row) throw new ServiceError("Request not found", "request_not_found", 404);
+      const workspaceUserId = await requireWorkspacePermission({
+        workspaceId: row.workspace_id,
+        permission: PERMISSIONS.SESSION_ATTACH,
+        db: client,
+        notFoundMessage: "Request not found"
+      });
+      const ctx = await buildWebappServiceContextForWorkspace(
+        row.workspace_id,
+        client,
+        workspaceUserId
+      );
+      const body = asRecord(req.body);
+      if (typeof body.expectedRevision !== "number") {
+        throw new ServiceError("expectedRevision is required", "agent_request_conflict", 409);
+      }
+      const result = await resolveRequest({
+        ctx,
+        requestId: req.params.id,
+        resolution: body.resolution ? asRecord(body.resolution) : {},
+        expectedRevision: body.expectedRevision
+      });
+      return { resolved: result.resolved, request: requestDto(result.request) };
+    })
+  );
+  return router2;
+}
+function inputDto(input) {
+  return {
+    id: input.id,
+    channelId: input.channel_id,
+    missionId: input.mission_id,
+    objectiveId: input.objective_id,
+    sessionId: input.session_id,
+    kind: input.kind,
+    body: input.body,
+    status: input.status,
+    deliveryOutcome: input.delivery_outcome,
+    /** Honest UI label — Cursor turn-boundary must read "Queued (turn boundary)". */
+    deliveryLabel: describeDeliveryOutcome({
+      status: input.status,
+      deliveryOutcome: input.delivery_outcome
+    }),
+    attemptCount: input.attempt_count,
+    lastErrorCode: input.last_error_code,
+    emittedAt: input.emitted_at,
+    acknowledgedAt: input.acknowledged_at,
+    createdAt: input.created_at,
+    revision: input.revision
+  };
+}
+function createAgentSessionInputHumanRouter() {
+  const router2 = (0, import_express3.Router)();
+  router2.use(import_express3.default.json({ limit: "64kb" }));
+  router2.get(
+    "/",
+    handle2(async (req) => {
+      const missionId = typeof req.query.missionId === "string" ? req.query.missionId : null;
+      if (!missionId) throw new ServiceError("missionId is required", "invalid_input", 400);
+      const client = requireDatabaseClient();
+      const memberships = await callerWorkspaceMemberships(client);
+      if (memberships.length === 0) return { inputs: [] };
+      const placeholders = memberships.map(() => "?").join(", ");
+      const mission = await client.get(
+        `SELECT id, workspace_id FROM missions
+           WHERE (id = ? OR display_id = ?) AND deleted_at IS NULL
+             AND workspace_id IN (${placeholders})`,
+        [missionId, missionId, ...memberships.map((entry) => entry.workspaceId)]
+      );
+      if (!mission) throw new ServiceError("Mission not found", "mission_not_found", 404);
+      const workspaceUserId = await requireWorkspacePermission({
+        workspaceId: mission.workspace_id,
+        permission: PERMISSIONS.SESSION_READ,
+        db: client,
+        notFoundMessage: "Mission not found"
+      });
+      const ctx = await buildWebappServiceContextForWorkspace(
+        mission.workspace_id,
+        client,
+        workspaceUserId
+      );
+      const inputs = await listSessionInputs({ ctx, missionId: mission.id });
+      const liveChannel = await client.get(
+        `SELECT id FROM agent_session_channels
+           WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL
+             AND state IN ('preparing', 'online', 'degraded')
+           ORDER BY created_at DESC LIMIT 1`,
+        [mission.id, mission.workspace_id]
+      );
+      return {
+        liveChannelId: liveChannel?.id ?? null,
+        inputs: inputs.map(inputDto)
+      };
+    })
+  );
+  router2.post(
+    "/",
+    handle2(async (req) => {
+      const body = asRecord(req.body);
+      const channelId = optionalString2(body.channelId);
+      const text = optionalString2(body.body);
+      const kind = body.kind === "retry" || body.kind === "continue" || body.kind === "instruction" ? body.kind : "instruction";
+      if (!channelId || !text) {
+        throw new ServiceError("channelId and body are required", "invalid_input", 400);
+      }
+      const client = requireDatabaseClient();
+      const channelRow = await client.get(
+        `SELECT workspace_id FROM agent_session_channels WHERE id = ? AND deleted_at IS NULL`,
+        [channelId]
+      );
+      if (!channelRow)
+        throw new ServiceError("Session channel not found", "channel_not_found", 404);
+      const workspaceUserId = await requireWorkspacePermission({
+        workspaceId: channelRow.workspace_id,
+        permission: PERMISSIONS.SESSION_ATTACH,
+        db: client,
+        notFoundMessage: "Session channel not found"
+      });
+      const ctx = await buildWebappServiceContextForWorkspace(
+        channelRow.workspace_id,
+        client,
+        workspaceUserId
+      );
+      const channel = await getChannel({ ctx, channelId });
+      const input = await enqueueSessionInput({
+        ctx,
+        channel,
+        kind,
+        body: text,
+        idempotencyKey: optionalString2(body.idempotencyKey)
+      });
+      return { input: inputDto(input) };
+    })
+  );
+  router2.post(
+    "/:id/cancel",
+    handle2(async (req) => {
+      const client = requireDatabaseClient();
+      const row = await client.get(
+        `SELECT workspace_id FROM agent_session_inputs WHERE id = ? AND deleted_at IS NULL`,
+        [req.params.id]
+      );
+      if (!row) throw new ServiceError("Session input not found", "input_not_found", 404);
+      const workspaceUserId = await requireWorkspacePermission({
+        workspaceId: row.workspace_id,
+        permission: PERMISSIONS.SESSION_ATTACH,
+        db: client,
+        notFoundMessage: "Session input not found"
+      });
+      const ctx = await buildWebappServiceContextForWorkspace(
+        row.workspace_id,
+        client,
+        workspaceUserId
+      );
+      const result = await cancelSessionInput({ ctx, inputId: req.params.id });
+      const input = await getInput({ ctx, inputId: req.params.id });
+      return { cancelled: result.cancelled, input: inputDto(input) };
+    })
+  );
+  return router2;
+}
+var REQUEST_COLUMNS_FOR_ROUTE = `
+  id, workspace_id, project_id, mission_id, objective_id, channel_id, session_id,
+  kind, native_request_id, native_call_id, summary, details_json, options_json,
+  allows_free_text, status, resolution_json, resolved_by_workspace_user_id, resolved_at,
+  expires_at, window_expires_at, window_basis, first_viewed_at, released_reason,
+  waiter_lease_id, waiter_lease_expires_at, application_state, application_observed_at,
+  created_at, updated_at, revision
+`;
+var AGENT_SESSION_CHANNEL_ROUTE_PREFIX = "/api/agent-session-channels/v1";
+async function prepareMissionSessionChannel(missionRef, body) {
+  const payload = asRecord(body);
+  const client = requireDatabaseClient();
+  const memberships = await callerWorkspaceMemberships(client);
+  if (memberships.length === 0) {
+    throw new ServiceError("Mission not found", "mission_not_found", 404);
+  }
+  const placeholders = memberships.map(() => "?").join(", ");
+  const mission = await client.get(
+    `SELECT id, project_id, workspace_id FROM missions
+       WHERE (id = ? OR display_id = ?) AND deleted_at IS NULL
+         AND workspace_id IN (${placeholders})`,
+    [missionRef, missionRef, ...memberships.map((entry) => entry.workspaceId)]
+  );
+  if (!mission) throw new ServiceError("Mission not found", "mission_not_found", 404);
+  const workspaceUserId = await requireWorkspacePermission({
+    workspaceId: mission.workspace_id,
+    permission: PERMISSIONS.SESSION_ATTACH,
+    db: client,
+    notFoundMessage: "Mission not found"
+  });
+  const ctx = await buildWebappServiceContextForWorkspace(
+    mission.workspace_id,
+    client,
+    workspaceUserId
+  );
+  const { bootstrap } = await createSessionChannel({
+    ctx,
+    missionId: mission.id,
+    projectId: mission.project_id,
+    objectiveId: optionalString2(payload.objectiveId),
+    executionTargetId: optionalString2(payload.executionTargetId),
+    agentIdentifier: optionalString2(payload.agent),
+    adapterKey: optionalString2(payload.agent),
+    launchKind: "manual"
+  });
+  return {
+    channelId: bootstrap.channelId,
+    token: bootstrap.token,
+    expiresAt: bootstrap.expiresAt,
+    launchKind: bootstrap.launchKind
+  };
 }
 
 // auth.ts
@@ -155751,7 +157809,7 @@ async function rescheduleJob(client, id, attemptCount, delayMs, lastError) {
 var deliveryComposeWorker = new DeliveryComposeWorker();
 
 // desktop-oauth-handoff.ts
-var import_node_crypto17 = require("node:crypto");
+var import_node_crypto18 = require("node:crypto");
 var HANDOFF_TTL_MS = 6e4;
 var TICKET_PATTERN = /^[A-Za-z0-9_-]{32,128}$/;
 var handoffs = /* @__PURE__ */ new Map();
@@ -155762,7 +157820,7 @@ function discardExpiredHandoffs(now2 = Date.now()) {
 }
 function createOAuthHandoff(sessionToken, audience) {
   discardExpiredHandoffs();
-  const ticket = (0, import_node_crypto17.randomBytes)(32).toString("base64url");
+  const ticket = (0, import_node_crypto18.randomBytes)(32).toString("base64url");
   handoffs.set(ticket, { audience, sessionToken, expiresAt: Date.now() + HANDOFF_TTL_MS });
   return ticket;
 }
@@ -155811,7 +157869,7 @@ init_env_profile();
 init_errors5();
 
 // live-activities.ts
-var import_node_crypto18 = require("node:crypto");
+var import_node_crypto19 = require("node:crypto");
 init_util3();
 init_db();
 init_errors5();
@@ -155937,7 +157995,7 @@ async function buildLiveActivityContentState(db, profileId, now2 = /* @__PURE__ 
   };
 }
 function liveActivityContentHash(state2) {
-  return (0, import_node_crypto18.createHash)("sha256").update(
+  return (0, import_node_crypto19.createHash)("sha256").update(
     JSON.stringify(
       state2 && {
         running: state2.running,
@@ -155951,7 +158009,7 @@ function liveActivityContentHash(state2) {
 init_util3();
 
 // apns-client.ts
-var import_node_crypto19 = require("node:crypto");
+var import_node_crypto20 = require("node:crypto");
 var import_node_http2 = __toESM(require("node:http2"), 1);
 var SANDBOX_HOST = "https://api.sandbox.push.apple.com";
 var PRODUCTION_HOST = "https://api.push.apple.com";
@@ -155980,7 +158038,7 @@ function apnsJwt(config4) {
   const signingInput = `${b64url(JSON.stringify({ alg: "ES256", kid: config4.keyId }))}.${b64url(
     JSON.stringify({ iss: config4.teamId, iat: now2 })
   )}`;
-  const signer = (0, import_node_crypto19.createSign)("SHA256");
+  const signer = (0, import_node_crypto20.createSign)("SHA256");
   signer.update(signingInput);
   signer.end();
   const signature = signer.sign({ key: config4.privateKey, dsaEncoding: "ieee-p1363" });
@@ -156209,7 +158267,7 @@ async function finishJob(db, id, status, lastError) {
 var liveActivityDispatcher = new LiveActivityDispatcher();
 
 // oauth.ts
-var import_node_crypto20 = require("node:crypto");
+var import_node_crypto21 = require("node:crypto");
 init_db();
 init_errors5();
 var CLIENT_ID_PREFIX = "ovlc_";
@@ -156245,12 +158303,12 @@ function oauthSigningSecret() {
   return process.env.OVERLORD_OAUTH_SIGNING_SECRET?.trim() || process.env.BETTER_AUTH_SECRET?.trim() || "overlord-local-oauth-development-secret";
 }
 function signPayload(payload) {
-  return (0, import_node_crypto20.createHmac)("sha256", oauthSigningSecret()).update(payload).digest("base64url");
+  return (0, import_node_crypto21.createHmac)("sha256", oauthSigningSecret()).update(payload).digest("base64url");
 }
 function fixedTimeEqual(a5, b5) {
   const left = Buffer.from(a5);
   const right = Buffer.from(b5);
-  return left.length === right.length && (0, import_node_crypto20.timingSafeEqual)(left, right);
+  return left.length === right.length && (0, import_node_crypto21.timingSafeEqual)(left, right);
 }
 function jsonError(res, status, error53, description) {
   res.status(status).json({ error: error53, error_description: description });
@@ -156487,7 +158545,7 @@ async function handleOAuthApprove(req, res) {
     scope: "mission_lifecycle",
     expiresAt: new Date(Date.now() + USER_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1e3).toISOString()
   });
-  const code = `${AUTH_CODE_PREFIX}${(0, import_node_crypto20.randomBytes)(32).toString("base64url")}`;
+  const code = `${AUTH_CODE_PREFIX}${(0, import_node_crypto21.randomBytes)(32).toString("base64url")}`;
   authorizationCodes.set(code, {
     clientId: parsed.clientId,
     redirectUri: parsed.redirectUri,
@@ -156531,7 +158589,7 @@ async function handleOAuthToken(req, res) {
     jsonError(res, 400, "invalid_target", "OAuth resource does not match the authorization code.");
     return;
   }
-  const challenge = (0, import_node_crypto20.createHash)("sha256").update(codeVerifier).digest("base64url");
+  const challenge = (0, import_node_crypto21.createHash)("sha256").update(codeVerifier).digest("base64url");
   if (!codeVerifier || challenge !== entry.codeChallenge) {
     await revokeOrphanedAccessToken(entry.accessToken);
     jsonError(res, 400, "invalid_grant", "PKCE verification failed.");
@@ -156940,7 +158998,7 @@ async function finishJob2(db, id, status, lastError) {
 var pushNotificationDispatcher = new PushNotificationDispatcher();
 
 // storage.ts
-var import_node_crypto21 = require("node:crypto");
+var import_node_crypto22 = require("node:crypto");
 var import_node_fs17 = require("node:fs");
 var import_node_path29 = __toESM(require("node:path"), 1);
 var import_node_url7 = require("node:url");
@@ -157024,7 +159082,7 @@ async function writeImageObject(bucket, input, storageKeyFor) {
     storageKey,
     sizeBytes: input.bytes.length,
     contentType,
-    checksum: (0, import_node_crypto21.createHash)("sha256").update(input.bytes).digest("hex"),
+    checksum: (0, import_node_crypto22.createHash)("sha256").update(input.bytes).digest("hex"),
     publicUrl: publicUrlFor(bucket.bucket_key, storageKey)
   };
 }
@@ -157255,7 +159313,7 @@ async function uploadObjectiveAttachment(input) {
     contentType: contentType ?? "application/octet-stream"
   });
   const filename = input.filename.trim() || `attachment${import_node_path29.default.extname(storageKey)}`;
-  const checksum3 = (0, import_node_crypto21.createHash)("sha256").update(input.bytes).digest("hex");
+  const checksum3 = (0, import_node_crypto22.createHash)("sha256").update(input.bytes).digest("hex");
   return requireDatabaseClient().transaction(async (tx) => {
     await tx.run(
       `INSERT INTO attachments (
@@ -157510,14 +159568,14 @@ init_webhook_events();
 init_db();
 
 // webhook-security.ts
-var import_node_crypto22 = require("node:crypto");
+var import_node_crypto23 = require("node:crypto");
 var import_promises5 = __toESM(require("node:dns/promises"), 1);
 var import_node_net = require("node:net");
 init_db();
 init_errors5();
 function signWebhookPayload(secret, rawBody) {
   const timestamp = Math.floor(Date.now() / 1e3);
-  const signature = (0, import_node_crypto22.createHmac)("sha256", secret).update(`${timestamp}.${rawBody}`).digest("hex");
+  const signature = (0, import_node_crypto23.createHmac)("sha256", secret).update(`${timestamp}.${rawBody}`).digest("hex");
   return { header: `t=${timestamp},v1=${signature}`, timestamp };
 }
 function internalHostPatterns() {
@@ -157844,7 +159902,7 @@ var webhookDispatcher = new WebhookDispatcher();
 
 // webhooks.ts
 init_dist();
-var import_node_crypto23 = require("node:crypto");
+var import_node_crypto24 = require("node:crypto");
 init_webhook_events();
 init_db();
 init_errors5();
@@ -157880,7 +159938,7 @@ function toSubscriptionDto(row) {
   };
 }
 function generateWebhookSecret() {
-  return { secret: `${WEBHOOK_SECRET_SCHEME}_${(0, import_node_crypto23.randomBytes)(24).toString("hex")}` };
+  return { secret: `${WEBHOOK_SECRET_SCHEME}_${(0, import_node_crypto24.randomBytes)(24).toString("hex")}` };
 }
 function normalizeEventTypes(input) {
   if (!Array.isArray(input) || input.length === 0) {
@@ -158300,7 +160358,7 @@ function parsePort(value, name) {
   if (Number.isInteger(port) && port >= 0 && port < 65536) return port;
   throw new Error(`${name} must be an integer port from 0 to 65535; got ${JSON.stringify(value)}`);
 }
-var app = (0, import_express3.default)();
+var app = (0, import_express4.default)();
 var allowedBrowserOrigins = getAllowedBrowserOrigins();
 app.use(
   (0, import_cors.default)({
@@ -158391,7 +160449,7 @@ app.get("/api/auth/browser/callback", async (req, res, next) => {
     next(error53);
   }
 });
-app.post("/api/auth/desktop/exchange", import_express3.default.json(), (req, res) => {
+app.post("/api/auth/desktop/exchange", import_express4.default.json(), (req, res) => {
   const ticket = typeof req.body?.ticket === "string" ? req.body.ticket : "";
   const token = consumeDesktopOAuthHandoff(ticket);
   if (!token) {
@@ -158400,7 +160458,7 @@ app.post("/api/auth/desktop/exchange", import_express3.default.json(), (req, res
   }
   res.json({ token });
 });
-app.post("/api/auth/browser/exchange", import_express3.default.json(), (req, res) => {
+app.post("/api/auth/browser/exchange", import_express4.default.json(), (req, res) => {
   const ticket = typeof req.body?.ticket === "string" ? req.body.ticket : "";
   const token = consumeBrowserOAuthHandoff(ticket);
   if (!token) {
@@ -158429,8 +160487,8 @@ app.get("/api/auth/callback/github/repository", async (req, res, next) => {
   }
 });
 app.all("/api/auth/*", authNodeHandler);
-var jsonBody = import_express3.default.json();
-var urlEncodedBody = import_express3.default.urlencoded({ extended: false });
+var jsonBody = import_express4.default.json();
+var urlEncodedBody = import_express4.default.urlencoded({ extended: false });
 function isRawUploadRequest(req) {
   if (req.method !== "POST") return false;
   if (req.path.startsWith("/api/uploads/")) return true;
@@ -158443,7 +160501,7 @@ app.use((req, res, next) => {
 app.get("/api/auth-providers", (_req, res) => {
   res.json({ email: true, github: githubOAuthConfigFromEnv() !== null });
 });
-function handle2(fn, options = {}) {
+function handle3(fn, options = {}) {
   return (req, res, next) => {
     void (async () => {
       try {
@@ -158485,11 +160543,11 @@ app.post("/oauth/token", urlEncodedBody, (req, res, next) => {
 app.post("/oauth/revoke", urlEncodedBody, (req, res, next) => {
   void handleOAuthRevoke(req, res).catch(next);
 });
-app.post("/oauth/authorize/request", requireAuthenticatedSession, handle2(handleOAuthRequestInfo));
+app.post("/oauth/authorize/request", requireAuthenticatedSession, handle3(handleOAuthRequestInfo));
 app.post(
   "/oauth/authorize/approve",
   requireAuthenticatedSession,
-  handle2(
+  handle3(
     async (req, res) => {
       await handleOAuthApprove(req, res);
     },
@@ -158511,10 +160569,11 @@ if (mcpEnabled) {
     })().catch(next);
   });
 }
+app.use(AGENT_SESSION_CHANNEL_ROUTE_PREFIX, createAgentSessionChannelRouter());
 app.use("/api", requireAuthenticatedSession);
 app.get(
   "/api/meta",
-  handle2(
+  handle3(
     async () => ({
       ...await buildMeta(),
       databasePath: DATABASE_PATH,
@@ -158555,13 +160614,13 @@ app.get(
 );
 app.get(
   "/api/diagnostics/execution-target-migration",
-  handle2(() => getExecutionTargetMigrationDiagnostics(), {
+  handle3(() => getExecutionTargetMigrationDiagnostics(), {
     requires: PERMISSIONS.WORKSPACE_READ
   })
 );
 app.post(
   "/api/onboarding",
-  handle2(
+  handle3(
     async (req, res) => {
       const result = await createOrganizationOnboarding(req.body);
       realtime.refreshAll();
@@ -158572,7 +160631,7 @@ app.post(
 );
 app.get(
   "/api/organizations",
-  handle2(async () => {
+  handle3(async () => {
     const profileId = getActiveProfileId();
     if (!profileId) throw new ApiError(401, "Authentication required");
     return listOrganizationsForUser(profileId);
@@ -158580,7 +160639,7 @@ app.get(
 );
 app.patch(
   "/api/organizations/:id",
-  handle2(
+  handle3(
     async (req) => {
       const result = await updateOrganization(req.params.id, req.body);
       realtime.refreshAll();
@@ -158591,21 +160650,21 @@ app.patch(
 );
 app.get(
   "/api/organizations/:id/admins",
-  handle2((req) => listOrganizationAdmins(req.params.id))
+  handle3((req) => listOrganizationAdmins(req.params.id))
 );
 app.post(
   "/api/organizations/:id/admins",
-  handle2((req) => addOrganizationAdmin(req.params.id, req.body), { mutates: true })
+  handle3((req) => addOrganizationAdmin(req.params.id, req.body), { mutates: true })
 );
 app.delete(
   "/api/organizations/:id/admins/:userId",
-  handle2((req) => removeOrganizationAdmin(req.params.id, { userId: req.params.userId }), {
+  handle3((req) => removeOrganizationAdmin(req.params.id, { userId: req.params.userId }), {
     mutates: true
   })
 );
 app.get(
   "/api/workspaces",
-  handle2(async () => {
+  handle3(async () => {
     if (getActorWorkspaceUserId())
       await requirePermission(PERMISSIONS.WORKSPACE_READ, {
         workspaceId: getActiveWorkspaceId(),
@@ -158616,7 +160675,7 @@ app.get(
 );
 app.post(
   "/api/workspaces",
-  handle2(
+  handle3(
     async (req, res) => {
       if (getActorWorkspaceUserId())
         await requirePermission(PERMISSIONS.WORKSPACE_CREATE, {
@@ -158632,7 +160691,7 @@ app.post(
 );
 app.patch(
   "/api/workspaces/:id",
-  handle2(
+  handle3(
     async (req) => {
       const result = await updateWorkspace(req.params.id, req.body);
       if (result.isActive) realtime.refreshAll();
@@ -158645,7 +160704,7 @@ app.patch(
 );
 app.delete(
   "/api/workspaces/:id",
-  handle2(
+  handle3(
     async (req, res) => {
       const result = await deleteWorkspace(req.params.id);
       realtime.refreshAll();
@@ -158657,18 +160716,18 @@ app.delete(
 );
 app.get(
   "/api/workspaces/:id/members",
-  handle2((req) => listWorkspaceMembers(req.params.id))
+  handle3((req) => listWorkspaceMembers(req.params.id))
 );
 app.delete(
   "/api/workspaces/:id/members/:workspaceUserId",
-  handle2((req) => removeWorkspaceMember(req.params.id, req.params.workspaceUserId), {
+  handle3((req) => removeWorkspaceMember(req.params.id, req.params.workspaceUserId), {
     // Target-workspace authorization is performed by `removeWorkspaceMember`.
     mutates: true
   })
 );
 app.patch(
   "/api/workspaces/:id/members/:workspaceUserId/role",
-  handle2((req) => updateWorkspaceMemberRole(req.params.id, req.params.workspaceUserId, req.body), {
+  handle3((req) => updateWorkspaceMemberRole(req.params.id, req.params.workspaceUserId, req.body), {
     // Target-workspace authorization is performed by `updateWorkspaceMemberRole`.
     mutates: true
   })
@@ -158676,25 +160735,25 @@ app.patch(
 app.get(
   "/api/workspaces/:id/invitations",
   // Target-workspace authorization is performed by `listWorkspaceInvitations`.
-  handle2((req) => listWorkspaceInvitations(req.params.id))
+  handle3((req) => listWorkspaceInvitations(req.params.id))
 );
 app.post(
   "/api/workspaces/:id/invitations",
-  handle2((req) => inviteWorkspaceMember(req.params.id, req.body), {
+  handle3((req) => inviteWorkspaceMember(req.params.id, req.body), {
     // Target-workspace authorization is performed by `inviteWorkspaceMember`.
     mutates: true
   })
 );
 app.delete(
   "/api/workspaces/:id/invitations/:invitationId",
-  handle2((req) => revokeWorkspaceInvitation(req.params.id, req.params.invitationId), {
+  handle3((req) => revokeWorkspaceInvitation(req.params.id, req.params.invitationId), {
     // Target-workspace authorization is performed by `revokeWorkspaceInvitation`.
     mutates: true
   })
 );
 app.post(
   "/api/invitations/accept",
-  handle2(
+  handle3(
     async (req, res) => {
       const result = await acceptWorkspaceInvitation(req.body);
       realtime.refreshAll();
@@ -158705,7 +160764,7 @@ app.post(
 );
 app.get(
   "/api/workspaces/:id/objectives.csv",
-  handle2(
+  handle3(
     async (req, res) => {
       const exportFile = await exportWorkspaceObjectivesCsv(req.params.id);
       res.setHeader("Content-Type", "text/csv; charset=utf-8");
@@ -158717,29 +160776,29 @@ app.get(
 );
 app.get(
   "/api/workspaces/:id/projects",
-  handle2((req) => listProjectsForWorkspace(req.params.id, void 0, parseProjectListLifecycle(req)))
+  handle3((req) => listProjectsForWorkspace(req.params.id, void 0, parseProjectListLifecycle(req)))
 );
 app.get(
   "/api/workspaces/:id/statuses",
-  handle2((req) => listWorkspaceStatusesForWorkspace(req.params.id))
+  handle3((req) => listWorkspaceStatusesForWorkspace(req.params.id))
 );
 app.get(
   "/api/workspaces/:id/execution-targets",
-  handle2((req) => getWorkspaceExecutionTargets(req.params.id))
+  handle3((req) => getWorkspaceExecutionTargets(req.params.id))
 );
 app.post(
   "/api/workspaces/:id/execution-targets",
-  handle2((req) => registerWorkspaceExecutionTarget(req.params.id, req.body), { mutates: true })
+  handle3((req) => registerWorkspaceExecutionTarget(req.params.id, req.body), { mutates: true })
 );
 app.patch(
   "/api/workspaces/:id/execution-targets/:targetId",
-  handle2((req) => updateWorkspaceExecutionTarget(req.params.id, req.params.targetId, req.body), {
+  handle3((req) => updateWorkspaceExecutionTarget(req.params.id, req.params.targetId, req.body), {
     mutates: true
   })
 );
 app.delete(
   "/api/workspaces/:id/execution-targets/:targetId",
-  handle2(
+  handle3(
     async (req) => {
       await removeWorkspaceExecutionTarget(req.params.id, req.params.targetId);
       return { ok: true };
@@ -158749,21 +160808,21 @@ app.delete(
 );
 app.post(
   "/api/workspaces/:id/statuses",
-  handle2((req) => createWorkspaceStatus(req.body, req.params.id), { mutates: true })
+  handle3((req) => createWorkspaceStatus(req.body, req.params.id), { mutates: true })
 );
 app.patch(
   "/api/workspaces/:id/statuses/reorder",
-  handle2((req) => reorderWorkspaceStatuses(req.body, req.params.id), { mutates: true })
+  handle3((req) => reorderWorkspaceStatuses(req.body, req.params.id), { mutates: true })
 );
 app.patch(
   "/api/workspaces/:id/statuses/:statusId",
-  handle2((req) => updateWorkspaceStatus(req.params.statusId, req.body, req.params.id), {
+  handle3((req) => updateWorkspaceStatus(req.params.statusId, req.body, req.params.id), {
     mutates: true
   })
 );
 app.delete(
   "/api/workspaces/:id/statuses/:statusId",
-  handle2(
+  handle3(
     async (req) => {
       await deleteWorkspaceStatus(req.params.statusId, req.params.id);
       return { ok: true };
@@ -158773,73 +160832,73 @@ app.delete(
 );
 app.get(
   "/api/workspaces/:id/agent-catalog",
-  handle2((req) => getAgentCatalog(req.params.id))
+  handle3((req) => getAgentCatalog(req.params.id))
 );
 app.put(
   "/api/workspaces/:id/agent-catalog",
-  handle2((req) => updateAgentCatalog(req.body, req.params.id), { mutates: true })
+  handle3((req) => updateAgentCatalog(req.body, req.params.id), { mutates: true })
 );
 app.post(
   "/api/workspaces/:id/agent-catalog/refresh",
-  handle2((req) => refreshAgentCatalog(req.params.id), { mutates: true })
+  handle3((req) => refreshAgentCatalog(req.params.id), { mutates: true })
 );
 app.get(
   "/api/profile",
-  handle2(() => getProfile(), { requires: PERMISSIONS.PROFILE_SELF_READ })
+  handle3(() => getProfile(), { requires: PERMISSIONS.PROFILE_SELF_READ })
 );
 app.patch(
   "/api/profile",
-  handle2((req) => updateProfile(req.body), {
+  handle3((req) => updateProfile(req.body), {
     mutates: true,
     requires: PERMISSIONS.PROFILE_SELF_UPDATE
   })
 );
 app.get(
   "/api/profile/default-project",
-  handle2(() => getDefaultProjectPreference(), { requires: PERMISSIONS.PROFILE_SELF_READ })
+  handle3(() => getDefaultProjectPreference(), { requires: PERMISSIONS.PROFILE_SELF_READ })
 );
 app.put(
   "/api/profile/default-project",
-  handle2((req) => setDefaultProjectPreference(String(req.body?.projectId ?? "")), {
+  handle3((req) => setDefaultProjectPreference(String(req.body?.projectId ?? "")), {
     mutates: true,
     requires: PERMISSIONS.PROFILE_SELF_UPDATE
   })
 );
 app.delete(
   "/api/profile/default-project",
-  handle2(() => clearDefaultProjectPreference(), {
+  handle3(() => clearDefaultProjectPreference(), {
     mutates: true,
     requires: PERMISSIONS.PROFILE_SELF_UPDATE
   })
 );
 app.get(
   "/api/user-tokens",
-  handle2(() => listUserTokens(), { requires: PERMISSIONS.USER_TOKEN_SELF_LIST })
+  handle3(() => listUserTokens(), { requires: PERMISSIONS.USER_TOKEN_SELF_LIST })
 );
 app.post(
   "/api/user-tokens",
-  handle2((req) => createUserToken(req.body), {
+  handle3((req) => createUserToken(req.body), {
     mutates: true,
     requires: PERMISSIONS.USER_TOKEN_SELF_CREATE
   })
 );
 app.patch(
   "/api/user-tokens/:id",
-  handle2((req) => renameUserToken(req.params.id, req.body), {
+  handle3((req) => renameUserToken(req.params.id, req.body), {
     mutates: true,
     requires: PERMISSIONS.USER_TOKEN_SELF_ROTATE
   })
 );
 app.post(
   "/api/user-tokens/:id/revoke",
-  handle2((req) => revokeUserToken(req.params.id), {
+  handle3((req) => revokeUserToken(req.params.id), {
     mutates: true,
     requires: PERMISSIONS.USER_TOKEN_SELF_REVOKE
   })
 );
 app.delete(
   "/api/user-tokens/:id",
-  handle2(
+  handle3(
     async (req, res) => {
       await deleteRevokedUserToken(req.params.id);
       res.status(204).end();
@@ -158852,33 +160911,33 @@ app.delete(
 );
 app.get(
   "/api/webhooks",
-  handle2(() => listWebhookSubscriptions(), { requires: PERMISSIONS.WEBHOOK_READ })
+  handle3(() => listWebhookSubscriptions(), { requires: PERMISSIONS.WEBHOOK_READ })
 );
 app.post(
   "/api/webhooks",
   // A project-bound subscription resolves and authorizes the project's own
   // workspace inside the service; an active-workspace guard would reject B.
-  handle2((req) => createWebhookSubscription(req.body), { mutates: true })
+  handle3((req) => createWebhookSubscription(req.body), { mutates: true })
 );
 app.patch(
   "/api/webhooks/:id",
-  handle2((req) => updateWebhookSubscription(req.params.id, req.body), { mutates: true })
+  handle3((req) => updateWebhookSubscription(req.params.id, req.body), { mutates: true })
 );
 app.delete(
   "/api/webhooks/:id",
-  handle2((req) => deleteWebhookSubscription(req.params.id), { mutates: true })
+  handle3((req) => deleteWebhookSubscription(req.params.id), { mutates: true })
 );
 app.post(
   "/api/webhooks/:id/rotate-secret",
-  handle2((req) => rotateWebhookSecret(req.params.id), { mutates: true })
+  handle3((req) => rotateWebhookSecret(req.params.id), { mutates: true })
 );
 app.post(
   "/api/webhooks/:id/test",
-  handle2((req) => testWebhookSubscription(req.params.id), { mutates: true })
+  handle3((req) => testWebhookSubscription(req.params.id), { mutates: true })
 );
 app.get(
   "/api/webhooks/:id/deliveries",
-  handle2(
+  handle3(
     (req) => listWebhookDeliveries(req.params.id, {
       before: typeof req.query.before === "string" ? req.query.before : null,
       limit: typeof req.query.limit === "string" ? Number(req.query.limit) : void 0
@@ -158888,9 +160947,9 @@ app.get(
 );
 app.post(
   "/api/webhooks/:id/deliveries/:outboxId/redeliver",
-  handle2((req) => redeliverWebhookDelivery(req.params.id, req.params.outboxId), { mutates: true })
+  handle3((req) => redeliverWebhookDelivery(req.params.id, req.params.outboxId), { mutates: true })
 );
-var rawImageBody = import_express3.default.raw({ type: () => true, limit: MAX_IMAGE_BYTES });
+var rawImageBody = import_express4.default.raw({ type: () => true, limit: MAX_IMAGE_BYTES });
 var UPLOAD_HANDLERS = {
   "user-images": { permission: PERMISSIONS.USER_IMAGE_SELF_CREATE, upload: uploadUserImage },
   "workspace-images": {
@@ -158911,7 +160970,7 @@ var STORAGE_READ_PERMISSIONS = {
 app.post(
   "/api/uploads/:bucketKey",
   rawImageBody,
-  handle2(
+  handle3(
     async (req) => {
       const uploadHandler = UPLOAD_HANDLERS[req.params.bucketKey];
       if (!uploadHandler) {
@@ -159028,60 +161087,60 @@ app.get(
 );
 app.get(
   "/api/projects",
-  handle2((req) => listProjects(void 0, parseProjectListLifecycle(req)))
+  handle3((req) => listProjects(void 0, parseProjectListLifecycle(req)))
 );
 app.post(
   "/api/projects",
-  handle2((req) => createProject2(req.body), { mutates: true })
+  handle3((req) => createProject2(req.body), { mutates: true })
 );
 app.post(
   "/api/projects/initialize",
-  handle2((req) => initializeProject(req.body), { mutates: true })
+  handle3((req) => initializeProject(req.body), { mutates: true })
 );
 app.patch(
   "/api/projects/reorder",
-  handle2((req) => reorderProjects(req.body), { mutates: true })
+  handle3((req) => reorderProjects(req.body), { mutates: true })
 );
 app.get(
   "/api/projects/:id",
-  handle2((req) => getProject2(req.params.id))
+  handle3((req) => getProject2(req.params.id))
 );
 app.patch(
   "/api/projects/:id",
-  handle2((req) => updateProject(req.params.id, req.body), { mutates: true })
+  handle3((req) => updateProject(req.params.id, req.body), { mutates: true })
 );
 app.delete(
   "/api/projects/:id",
-  handle2((req) => deleteProject(req.params.id), { mutates: true })
+  handle3((req) => deleteProject(req.params.id), { mutates: true })
 );
 app.get(
   "/api/workspace/statuses",
-  handle2(() => listWorkspaceStatuses(), { requires: PERMISSIONS.WORKSPACE_READ })
+  handle3(() => listWorkspaceStatuses(), { requires: PERMISSIONS.WORKSPACE_READ })
 );
 app.post(
   "/api/workspace/statuses",
-  handle2((req) => createWorkspaceStatus(req.body), {
+  handle3((req) => createWorkspaceStatus(req.body), {
     mutates: true,
     requires: PERMISSIONS.WORKSPACE_UPDATE
   })
 );
 app.patch(
   "/api/workspace/statuses/reorder",
-  handle2((req) => reorderWorkspaceStatuses(req.body), {
+  handle3((req) => reorderWorkspaceStatuses(req.body), {
     mutates: true,
     requires: PERMISSIONS.WORKSPACE_UPDATE
   })
 );
 app.patch(
   "/api/workspace/statuses/:statusId",
-  handle2((req) => updateWorkspaceStatus(req.params.statusId, req.body), {
+  handle3((req) => updateWorkspaceStatus(req.params.statusId, req.body), {
     mutates: true,
     requires: PERMISSIONS.WORKSPACE_UPDATE
   })
 );
 app.delete(
   "/api/workspace/statuses/:statusId",
-  handle2(
+  handle3(
     (req) => {
       deleteWorkspaceStatus(req.params.statusId);
       return { ok: true };
@@ -159091,18 +161150,18 @@ app.delete(
 );
 app.get(
   "/api/workspace/my-missions",
-  handle2(() => listWorkspaceMyMissions(), { requires: PERMISSIONS.MISSION_READ })
+  handle3(() => listWorkspaceMyMissions(), { requires: PERMISSIONS.MISSION_READ })
 );
 app.patch(
   "/api/workspace/my-missions/order",
-  handle2((req) => reorderWorkspaceMyMissions(req.body), {
+  handle3((req) => reorderWorkspaceMyMissions(req.body), {
     mutates: true,
     requires: PERMISSIONS.MISSION_UPDATE
   })
 );
 app.put(
   "/api/mobile/live-activities/:activityId/push-token",
-  handle2(
+  handle3(
     async (req) => {
       await registerLiveActivityPushToken(req.params.activityId, req.body);
       return { ok: true };
@@ -159112,7 +161171,7 @@ app.put(
 );
 app.delete(
   "/api/mobile/live-activities/:activityId/push-token",
-  handle2(
+  handle3(
     async (req, res) => {
       await revokeLiveActivityPushToken(req.params.activityId);
       res.status(204).end();
@@ -159122,7 +161181,7 @@ app.delete(
 );
 app.put(
   "/api/mobile/push/device-token",
-  handle2(
+  handle3(
     async (req, res) => {
       await registerDevicePushToken(req.body);
       res.status(204).end();
@@ -159132,7 +161191,7 @@ app.put(
 );
 app.post(
   "/api/mobile/push/device-token/revoke",
-  handle2(
+  handle3(
     async (req, res) => {
       await revokeDevicePushToken(req.body);
       res.status(204).end();
@@ -159142,31 +161201,31 @@ app.post(
 );
 app.get(
   "/api/profile/notification-preferences",
-  handle2(() => getNotificationPreferences())
+  handle3(() => getNotificationPreferences())
 );
 app.put(
   "/api/profile/notification-preferences",
-  handle2((req) => updateNotificationPreferences(req.body), { mutates: true })
+  handle3((req) => updateNotificationPreferences(req.body), { mutates: true })
 );
 app.get(
   "/api/projects/:id/tags",
-  handle2((req) => listProjectTags(req.params.id))
+  handle3((req) => listProjectTags(req.params.id))
 );
 app.post(
   "/api/projects/:id/tags",
-  handle2((req) => createProjectTag(req.params.id, req.body), {
+  handle3((req) => createProjectTag(req.params.id, req.body), {
     mutates: true
   })
 );
 app.patch(
   "/api/projects/:id/tags/:tagId",
-  handle2((req) => updateProjectTag(req.params.id, req.params.tagId, req.body), {
+  handle3((req) => updateProjectTag(req.params.id, req.params.tagId, req.body), {
     mutates: true
   })
 );
 app.delete(
   "/api/projects/:id/tags/:tagId",
-  handle2(
+  handle3(
     (req) => {
       deleteProjectTag(req.params.id, req.params.tagId);
       return { ok: true };
@@ -159176,23 +161235,23 @@ app.delete(
 );
 app.get(
   "/api/projects/:id/resources",
-  handle2((req) => listProjectResources2(req.params.id))
+  handle3((req) => listProjectResources2(req.params.id))
 );
 app.post(
   "/api/projects/:id/resources",
-  handle2((req) => createProjectResource(req.params.id, req.body), {
+  handle3((req) => createProjectResource(req.params.id, req.body), {
     mutates: true
   })
 );
 app.patch(
   "/api/projects/:id/resources/:resourceId",
-  handle2((req) => updateProjectResource(req.params.id, req.params.resourceId, req.body), {
+  handle3((req) => updateProjectResource(req.params.id, req.params.resourceId, req.body), {
     mutates: true
   })
 );
 app.delete(
   "/api/projects/:id/resources/:resourceId",
-  handle2(
+  handle3(
     (req) => {
       deleteProjectResource(req.params.id, req.params.resourceId);
       return { ok: true };
@@ -159202,7 +161261,7 @@ app.delete(
 );
 app.delete(
   "/api/projects/:id/resources/:resourceId/sources/:sourceId",
-  handle2(
+  handle3(
     async (req) => {
       await deleteProjectResourceSource(req.params.id, req.params.resourceId, req.params.sourceId);
       return { ok: true };
@@ -159212,7 +161271,7 @@ app.delete(
 );
 app.get(
   "/api/projects/:id/repository",
-  handle2((req) => {
+  handle3((req) => {
     const executionTargetId = typeof req.query.executionTargetId === "string" && req.query.executionTargetId.trim() ? req.query.executionTargetId.trim() : null;
     const resourceKey = typeof req.query.resourceKey === "string" && req.query.resourceKey.trim() ? req.query.resourceKey.trim() : null;
     return getProjectRepository(req.params.id, executionTargetId, resourceKey);
@@ -159220,7 +161279,7 @@ app.get(
 );
 app.post(
   "/api/local-target/invoke",
-  handle2(
+  handle3(
     (req) => {
       const call = req.body;
       if (!call?.capability || !call?.input) {
@@ -159236,23 +161295,23 @@ app.post(
 );
 app.get(
   "/api/projects/:id/missions",
-  handle2((req) => listMissions2(req.params.id))
+  handle3((req) => listMissions2(req.params.id))
 );
-app.use("/ext/everhour", requireAuthenticatedSession, createEverhourExtensionRouter(handle2));
+app.use("/ext/everhour", requireAuthenticatedSession, createEverhourExtensionRouter(handle3));
 app.use(
   "/ext/github",
   requireAuthenticatedSession,
-  createGitHubExtensionRouter(handle2, { allowedBrowserOrigins: getAllowedBrowserOrigins() })
+  createGitHubExtensionRouter(handle3, { allowedBrowserOrigins: getAllowedBrowserOrigins() })
 );
 app.patch(
   "/api/projects/:id/board/reorder",
-  handle2((req) => reorderBoardColumn(req.params.id, req.body), {
+  handle3((req) => reorderBoardColumn(req.params.id, req.body), {
     mutates: true
   })
 );
 app.get(
   "/api/missions/search",
-  handle2(async (req) => {
+  handle3(async (req) => {
     const query = typeof req.query.q === "string" ? req.query.q : null;
     const projectId = typeof req.query.projectId === "string" && req.query.projectId.trim() ? req.query.projectId.trim() : null;
     const parsedLimit = Number.parseInt(
@@ -159265,7 +161324,7 @@ app.get(
 );
 app.post(
   "/api/missions",
-  handle2((req) => createMission(req.body), { mutates: true })
+  handle3((req) => createMission(req.body), { mutates: true })
 );
 app.get(
   "/api/missions/:id",
@@ -159273,7 +161332,7 @@ app.get(
   // indicators seen (a no-op when none are unseen), then return detail. `mutates`
   // so the resulting change-feed entry is flushed to realtime clients and the
   // board/My Missions cards drop the corner dots immediately.
-  handle2(
+  handle3(
     async (req) => {
       await markMissionStatusesSeen(req.params.id);
       return getMissionDetail(req.params.id);
@@ -159283,96 +161342,120 @@ app.get(
 );
 app.patch(
   "/api/missions/:id",
-  handle2((req) => updateMission(req.params.id, req.body), { mutates: true })
+  handle3((req) => updateMission(req.params.id, req.body), { mutates: true })
 );
 app.delete(
   "/api/missions/:id",
-  handle2((req) => deleteMission(req.params.id), { mutates: true })
+  handle3((req) => deleteMission(req.params.id), { mutates: true })
 );
 app.post(
   "/api/missions/:id/generate-title",
-  handle2((req) => generateMissionTitle(req.params.id), { mutates: true })
+  handle3((req) => generateMissionTitle(req.params.id), { mutates: true })
 );
 app.post(
   "/api/missions/:id/generate-commit-message",
-  handle2((req) => generateCommitMessage(req.params.id, req.body ?? {}))
+  handle3((req) => generateCommitMessage(req.params.id, req.body ?? {}))
 );
 app.get(
   "/api/missions/:id/objectives",
-  handle2((req) => listObjectives2(req.params.id))
+  handle3((req) => listObjectives2(req.params.id))
 );
 app.patch(
   "/api/missions/:id/objectives/reorder",
-  handle2((req) => reorderFutureObjectives(req.params.id, req.body), { mutates: true })
+  handle3((req) => reorderFutureObjectives(req.params.id, req.body), { mutates: true })
 );
+app.post(
+  "/api/missions/:id/session-channel",
+  handle3((req) => prepareMissionSessionChannel(req.params.id, req.body ?? {}), { mutates: true })
+);
+app.use("/api/agent-requests", createAgentRequestHumanRouter());
+app.use("/api/agent-session-inputs", createAgentSessionInputHumanRouter());
 app.get(
   "/api/missions/:id/events",
-  handle2((req) => listMissionEvents2(req.params.id))
+  handle3((req) => listMissionEvents2(req.params.id))
 );
 app.get(
   "/api/missions/:id/deliveries",
-  handle2((req) => listMissionDeliveries(req.params.id))
+  handle3((req) => listMissionDeliveries(req.params.id))
 );
 app.get(
   "/api/missions/:id/artifacts",
-  handle2((req) => listArtifacts2(req.params.id))
+  handle3((req) => listArtifacts2(req.params.id))
+);
+app.get(
+  "/api/missions/:id/context",
+  handle3((req) => listMissionSharedContext(req.params.id))
+);
+app.put(
+  "/api/missions/:id/context",
+  handle3((req) => upsertMissionSharedContext(req.params.id, req.body), {
+    mutates: true,
+    requires: PERMISSIONS.MISSION_UPDATE
+  })
+);
+app.post(
+  "/api/missions/:id/artifacts",
+  handle3((req) => createArtifact(req.params.id, req.body), {
+    mutates: true,
+    requires: PERMISSIONS.ARTIFACT_CREATE
+  })
 );
 app.patch(
   "/api/missions/:id/artifacts/:artifactId",
-  handle2((req) => updateArtifact(req.params.id, req.params.artifactId, req.body), {
+  handle3((req) => updateArtifact(req.params.id, req.params.artifactId, req.body), {
     mutates: true,
     requires: PERMISSIONS.MISSION_UPDATE
   })
 );
 app.get(
   "/api/missions/:id/file-changes",
-  handle2((req) => listMissionFileChanges(req.params.id))
+  handle3((req) => listMissionFileChanges(req.params.id))
 );
 app.post(
   "/api/missions/schedule/preview",
-  handle2((req) => previewMissionSchedule(req.body), { requires: PERMISSIONS.MISSION_READ })
+  handle3((req) => previewMissionSchedule(req.body), { requires: PERMISSIONS.MISSION_READ })
 );
 app.get(
   "/api/missions/:id/schedule",
-  handle2((req) => getMissionSchedule(req.params.id))
+  handle3((req) => getMissionSchedule(req.params.id))
 );
 app.put(
   "/api/missions/:id/schedule",
-  handle2((req) => upsertMissionSchedule(req.params.id, req.body), { mutates: true })
+  handle3((req) => upsertMissionSchedule(req.params.id, req.body), { mutates: true })
 );
 app.delete(
   "/api/missions/:id/schedule",
-  handle2((req) => clearMissionSchedule(req.params.id), { mutates: true })
+  handle3((req) => clearMissionSchedule(req.params.id), { mutates: true })
 );
 app.post(
   "/api/objectives",
-  handle2((req) => createObjective(req.body), { mutates: true })
+  handle3((req) => createObjective(req.body), { mutates: true })
 );
 app.patch(
   "/api/objectives/:id",
-  handle2((req) => updateObjective(req.params.id, req.body), { mutates: true })
+  handle3((req) => updateObjective(req.params.id, req.body), { mutates: true })
 );
 app.delete(
   "/api/objectives/:id",
-  handle2((req) => deleteObjective(req.params.id), { mutates: true })
+  handle3((req) => deleteObjective(req.params.id), { mutates: true })
 );
 app.post(
   "/api/objectives/:id/launch",
-  handle2((req) => launchObjective(req.params.id, req.body), { mutates: true })
+  handle3((req) => launchObjective(req.params.id, req.body), { mutates: true })
 );
 app.get(
   "/api/objectives/:id/prompt",
-  handle2((req) => getObjectivePrompt(req.params.id))
+  handle3((req) => getObjectivePrompt(req.params.id))
 );
-var rawAttachmentBody = import_express3.default.raw({ type: () => true, limit: MAX_ATTACHMENT_BYTES });
+var rawAttachmentBody = import_express4.default.raw({ type: () => true, limit: MAX_ATTACHMENT_BYTES });
 app.get(
   "/api/objectives/:id/attachments",
-  handle2((req) => listObjectiveAttachments(req.params.id))
+  handle3((req) => listObjectiveAttachments(req.params.id))
 );
 app.post(
   "/api/objectives/:id/attachments",
   rawAttachmentBody,
-  handle2(
+  handle3(
     (req) => {
       const headerName = req.header("x-upload-filename");
       const filename = headerName ? decodeURIComponent(headerName) : "attachment";
@@ -159388,87 +161471,87 @@ app.post(
 );
 app.delete(
   "/api/objectives/:id/attachments/:attachmentId",
-  handle2((req) => deleteObjectiveAttachment(req.params.id, req.params.attachmentId), {
+  handle3((req) => deleteObjectiveAttachment(req.params.id, req.params.attachmentId), {
     mutates: true
   })
 );
 app.get(
   "/api/agent-catalog",
-  handle2(() => getAgentCatalog(), { requires: PERMISSIONS.LAUNCH_READ })
+  handle3(() => getAgentCatalog(), { requires: PERMISSIONS.LAUNCH_READ })
 );
 app.post(
   "/api/agent-catalog/refresh",
-  handle2(() => refreshAgentCatalog(), { mutates: true, requires: PERMISSIONS.LAUNCH_CONFIGURE })
+  handle3(() => refreshAgentCatalog(), { mutates: true, requires: PERMISSIONS.LAUNCH_CONFIGURE })
 );
 app.put(
   "/api/agent-catalog",
-  handle2((req) => updateAgentCatalog(req.body), {
+  handle3((req) => updateAgentCatalog(req.body), {
     mutates: true,
     requires: PERMISSIONS.LAUNCH_CONFIGURE
   })
 );
 app.get(
   "/api/launch-settings",
-  handle2(() => getLaunchSettings(), { requires: PERMISSIONS.LAUNCH_READ })
+  handle3(() => getLaunchSettings(), { requires: PERMISSIONS.LAUNCH_READ })
 );
 app.patch(
   "/api/launch-settings/agents/:agentKey",
-  handle2((req) => updateAgentLaunchConfig(req.params.agentKey, req.body), {
+  handle3((req) => updateAgentLaunchConfig(req.params.agentKey, req.body), {
     mutates: true,
     requires: PERMISSIONS.LAUNCH_CONFIGURE
   })
 );
 app.patch(
   "/api/launch-settings/terminal-profile",
-  handle2((req) => updateTerminalProfile2(req.body), {
+  handle3((req) => updateTerminalProfile2(req.body), {
     mutates: true,
     requires: PERMISSIONS.LAUNCH_CONFIGURE
   })
 );
 app.patch(
   "/api/launch-settings/worktree-branch-automation",
-  handle2((req) => updateWorktreeBranchAutomation(req.body), {
+  handle3((req) => updateWorktreeBranchAutomation(req.body), {
     mutates: true,
     requires: PERMISSIONS.LAUNCH_CONFIGURE
   })
 );
 app.get(
   "/api/workspaces/:id/launch-settings",
-  handle2((req) => getLaunchSettings(req.params.id))
+  handle3((req) => getLaunchSettings(req.params.id))
 );
 app.patch(
   "/api/workspaces/:id/launch-settings/agents/:agentKey",
-  handle2((req) => updateAgentLaunchConfig(req.params.agentKey, req.body, req.params.id), {
+  handle3((req) => updateAgentLaunchConfig(req.params.agentKey, req.body, req.params.id), {
     mutates: true
   })
 );
 app.patch(
   "/api/workspaces/:id/launch-settings/terminal-profile",
-  handle2((req) => updateTerminalProfile2(req.body, req.params.id), { mutates: true })
+  handle3((req) => updateTerminalProfile2(req.body, req.params.id), { mutates: true })
 );
 app.patch(
   "/api/workspaces/:id/launch-settings/worktree-branch-automation",
-  handle2((req) => updateWorktreeBranchAutomation(req.body, req.params.id), { mutates: true })
+  handle3((req) => updateWorktreeBranchAutomation(req.body, req.params.id), { mutates: true })
 );
 app.get(
   "/api/projects/:id/launch-preference",
-  handle2((req) => getLaunchPreference(req.params.id))
+  handle3((req) => getLaunchPreference(req.params.id))
 );
 app.put(
   "/api/projects/:id/launch-preference",
-  handle2((req) => updateLaunchPreference(req.params.id, req.body), { mutates: true })
+  handle3((req) => updateLaunchPreference(req.params.id, req.body), { mutates: true })
 );
 app.get(
   "/api/projects/:id/execution-target",
-  handle2((req) => getProjectExecutionTarget(req.params.id))
+  handle3((req) => getProjectExecutionTarget(req.params.id))
 );
 app.put(
   "/api/projects/:id/execution-target",
-  handle2((req) => updateProjectExecutionTarget(req.params.id, req.body), { mutates: true })
+  handle3((req) => updateProjectExecutionTarget(req.params.id, req.body), { mutates: true })
 );
 app.post(
   "/api/execution-targets/:id/observations",
-  handle2(
+  handle3(
     (req) => postExecutionTargetObservations({
       executionTargetId: req.params.id,
       body: req.body
@@ -159478,7 +161561,7 @@ app.post(
 );
 app.post(
   "/api/execution-targets/:id/mission-branch-observations",
-  handle2(
+  handle3(
     (req) => postMissionBranchObservations({
       executionTargetId: req.params.id,
       body: req.body
@@ -159488,18 +161571,18 @@ app.post(
 );
 app.post(
   "/api/protocol/:subcommand",
-  handle2((req) => runProtocolSubcommand(req.params.subcommand, req.body ?? {}), { mutates: true })
+  handle3((req) => runProtocolSubcommand(req.params.subcommand, req.body ?? {}), { mutates: true })
 );
 app.get(
   "/api/runner/status",
-  handle2((req) => {
+  handle3((req) => {
     const projectId = typeof req.query.projectId === "string" && req.query.projectId.trim() ? req.query.projectId.trim() : null;
     return runnerStatus(projectId);
   }, {})
 );
 app.post(
   "/api/runner/claim",
-  handle2(
+  handle3(
     (req) => claimRunnerRequest({
       projectId: typeof req.body?.projectId === "string" ? req.body.projectId : null,
       clientDevice: {
@@ -159516,7 +161599,7 @@ app.post(
 );
 app.post(
   "/api/runner/clear",
-  handle2(
+  handle3(
     (req) => clearRunnerRequests({
       objectiveId: typeof req.body?.objectiveId === "string" ? req.body.objectiveId : null,
       projectId: typeof req.body?.projectId === "string" ? req.body.projectId : null
@@ -159526,19 +161609,19 @@ app.post(
 );
 app.post(
   "/api/runner/requests/:id/launching",
-  handle2((req) => updateRunnerRequestStatus({ requestId: req.params.id, status: "launching" }), {
+  handle3((req) => updateRunnerRequestStatus({ requestId: req.params.id, status: "launching" }), {
     mutates: true
   })
 );
 app.post(
   "/api/runner/requests/:id/launched",
-  handle2((req) => updateRunnerRequestStatus({ requestId: req.params.id, status: "launched" }), {
+  handle3((req) => updateRunnerRequestStatus({ requestId: req.params.id, status: "launched" }), {
     mutates: true
   })
 );
 app.post(
   "/api/runner/requests/:id/failed",
-  handle2(
+  handle3(
     (req) => updateRunnerRequestStatus({
       requestId: req.params.id,
       status: "failed",
@@ -159549,7 +161632,7 @@ app.post(
 );
 app.post(
   "/api/runner/requests/:id/completed",
-  handle2(
+  handle3(
     (req) => completeRunnerMutationRequest({
       requestId: req.params.id,
       mutationResult: req.body?.mutationResult
@@ -159559,7 +161642,7 @@ app.post(
 );
 app.post(
   "/api/missions/:id/branch-prepared",
-  handle2(
+  handle3(
     (req) => recordBranchPrepared({
       missionId: req.params.id,
       requestId: typeof req.body?.requestId === "string" ? req.body.requestId : null,
@@ -159570,32 +161653,32 @@ app.post(
 );
 app.post(
   "/api/missions/:id/branch/action",
-  handle2((req) => performBranchAction(req.params.id, req.body ?? {}), { mutates: true })
+  handle3((req) => performBranchAction(req.params.id, req.body ?? {}), { mutates: true })
 );
 app.get(
   "/api/missions/:id/branches",
-  handle2((req) => listMissionBranches(req.params.id))
+  handle3((req) => listMissionBranches(req.params.id))
 );
 app.get(
   "/api/worktrees",
-  handle2(() => listWorktrees(), { requires: PERMISSIONS.PROJECT_READ })
+  handle3(() => listWorktrees(), { requires: PERMISSIONS.PROJECT_READ })
 );
 app.post(
   "/api/worktrees/remove",
-  handle2((req) => removeWorktree(req.body ?? {}), {
+  handle3((req) => removeWorktree(req.body ?? {}), {
     mutates: true,
     requires: PERMISSIONS.PROJECT_UPDATE
   })
 );
 app.post(
   "/api/worktrees/purge-merged",
-  handle2((req) => purgeMergedWorktrees(req.body ?? {}), {
+  handle3((req) => purgeMergedWorktrees(req.body ?? {}), {
     mutates: true,
     requires: PERMISSIONS.PROJECT_UPDATE
   })
 );
 if (resolveServeSpa({ dialect: DATABASE_DIALECT }) && (0, import_node_fs18.existsSync)(distDir)) {
-  app.use(import_express3.default.static(distDir));
+  app.use(import_express4.default.static(distDir));
   app.get("*", (req, res, next) => {
     if (req.path.startsWith("/api/")) return next();
     res.sendFile(import_node_path30.default.join(distDir, "index.html"));

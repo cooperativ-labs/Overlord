@@ -1,4 +1,4 @@
-contractVersion: "37"
+contractVersion: "52"
 componentType: connector
 componentKey: cursor
 label: "Cursor Connector"
@@ -6,9 +6,18 @@ description: "Cursor plugin adapter for the Overlord mission protocol workflow."
 
 connector:
   agentIdentifier: cursor
+  # ── GENERATED: do not edit by hand ───────────────────────────────────────────
+  # Projected from connectors/adapters/cursor/harness-capabilities.yaml by `yarn connectors:capabilities`.
+  # `capabilities` and `hookTypes` are the DEPRECATED hook-named projection, retained for
+  # one release. `harnessCapabilities` is the authoritative source.
+  integrationShape: callback
+  capabilityTier: 0
+  harnessCapabilities:
+    path: connectors/adapters/cursor/harness-capabilities.yaml
+    schemaVersion: 1
+    digest: "5241e4ab23c78af568a9cb06faa78486722bb21b34c96fa8589da02653e1a390"
   capabilities:
     - followUpHook
-    - permissionHook
     - stopHook
     - editHook
     - modelFlag
@@ -16,11 +25,13 @@ connector:
     - slashCommands
   hookTypes:
     - UserPromptSubmit
-    - PermissionRequest
     - PostToolUse
     - Stop
+  # ── END GENERATED ────────────────────────────────────────────────────────────
   installPath: "~/.cursor/plugins/local/overlord"
   managedFiles:
+    - "harness-capabilities.yaml"
+    - "CAPABILITIES.md"
     - ".cursor-plugin/plugin.json"
     - "README.md"
     - "commands/add-objectives.md"

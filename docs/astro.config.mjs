@@ -56,7 +56,8 @@ export default defineConfig({
             { label: 'Projects and resources', slug: 'projects' },
             { label: 'Execution targets', slug: 'execution-targets' },
             { label: 'Terminal and IDE preferences', slug: 'terminal-and-ide' },
-            { label: 'Agents and connectors', slug: 'agents' }
+            { label: 'Agents and connectors', slug: 'agents' },
+            { label: 'Live agent sessions', slug: 'agent-sessions' }
           ]
         },
         {
@@ -83,6 +84,7 @@ export default defineConfig({
             { label: 'The agent protocol', slug: 'docs-for-agents/agent-protocol' },
             { label: 'Authentication & troubleshooting', slug: 'docs-for-agents/authentication' },
             { label: 'Architecture', slug: 'docs-for-agents/architecture' },
+            { label: 'Agent-session adapters', slug: 'docs-for-agents/agent-sessions' },
             { label: 'MCP access', slug: 'docs-for-agents/mcp' },
             { label: 'Webhooks', slug: 'docs-for-agents/webhooks' }
           ]

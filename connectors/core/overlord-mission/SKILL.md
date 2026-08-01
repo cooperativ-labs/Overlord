@@ -96,7 +96,7 @@ For mission creation examples, project discovery, and `--objectives-json` format
 ovld protocol attach --mission-id $MISSION_ID
 ```
 
-In a git workspace, `attach` automatically creates a local git checkpoint for each executing objective before work begins, stored under `refs/overlord/checkpoints/<objectiveId>`. Pass `--skip-checkpoint` only when intentionally bypassing local provenance.
+In a git workspace, `attach` records a VCS baseline (changed file paths from local `git status`) so delivery can compute the run-attributable delta automatically.
 
 ### Update
 
@@ -222,7 +222,6 @@ The working tree may contain file changes from **other agents, missions, or obje
 
 - `git checkout`, `git restore`, `git reset`, or any command that rolls back uncommitted edits you did not make for this mission
 - Deleting or overwriting files you do not recognize as your own
-- `ovld protocol revert` on another objective's checkpoint to "clean up" before deliver
 
 If `deliver` fails with `missing_rationale` for a file you did not change, or `git status` shows dirty paths outside your mission:
 
@@ -248,14 +247,6 @@ ovld protocol deliver --session-key <sessionKey> --mission-id $MISSION_ID \
 ```
 
 Ordinary deliver artifacts should use `next_steps`, `test_results`, `migration`, `note`, `url`, or `decision`.
-
-### Revert
-
-```bash
-ovld protocol revert --objective-id <objective-id>
-```
-
-`revert` restores the local working tree to the recorded objective state. Use only when explicitly asked to undo **this** objective's work. Never use `revert` — or any git rollback — to strip unrelated concurrent changes before delivery.
 
 ### Record Change Rationales
 
@@ -407,6 +398,7 @@ Field shape, inline vs stdin piping, and `record-change-rationales` syntax are i
 - The `summary` in deliver is what the PM reads first, so write it as a narrative, not a command list.
 - When a summary or question contains backticks, `$vars`, or other shell-special characters, always use `--summary-file -` (or `--question-file -`) with a single-quoted heredoc (`<<'EOF'`). Never retry by stripping or escaping content — pipe stdin instead. See [reference/shell-escaping.md](reference/shell-escaping.md).
 - Use `write-context` for facts a future agent session should know.
+- Use `add-artifact` (or MCP `overlord_add_artifact`) to publish a plan, notes, decision, or URL artifact during a turn without delivering. Delivery may still attach additional artifacts later.
 - Use `update-artifact` (or MCP `overlord_update_artifact`) to revise an existing mission artifact in place instead of delivering a duplicate when a later objective updates a plan or notes.
 - If a protocol or MCP call fails with auth/session errors, run `ovld auth repair` yourself before asking the user to log in again or proceed without Overlord updates.
 - If you must run `ovld auth login`, `--organization-id <id>` is optional — it validates/scopes that login or command but does not create a stored default organization.

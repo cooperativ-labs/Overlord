@@ -1,0 +1,51 @@
+{
+  "fixtureVersion": 1,
+  "kind": "normalized-event",
+  "description": "A real Claude PostToolUse body for a Bash call, through the shipped codec and normalizer. Proves observe.toolCall/observe.toolResult and, via mustNotContain, that the transcript path and raw command output never leave the machine.",
+  "codec": "codec/claude.codec.yaml",
+  "occurredAt": "2026-01-01T00:00:00.000Z",
+  "payload": {
+    "session_id": "9f1b2c3d-4e5f-6071-8293-a4b5c6d7e8f9",
+    "transcript_path": "/Users/jake/.claude/projects/-repo/9f1b2c3d.jsonl",
+    "cwd": "/repo",
+    "hook_event_name": "PostToolUse",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "yarn test --silent",
+      "description": "Run the test suite"
+    },
+    "tool_response": {
+      "stdout": "PASS 412 tests\nDATABASE_URL=postgres://user:hunter2@db/app\n",
+      "stderr": "",
+      "interrupted": false
+    }
+  },
+  "expect": {
+    "eventId": "ev_8058564c6f88657201557980029d81ab",
+    "producerSequence": null,
+    "occurredAt": "2026-01-01T00:00:00.000Z",
+    "kind": "tool.completed",
+    "severity": "info",
+    "nativeEvent": "PostToolUse",
+    "nativeTurnId": null,
+    "nativeCallId": null,
+    "subagentId": null,
+    "correlationId": "9f1b2c3d-4e5f-6071-8293-a4b5c6d7e8f9",
+    "origin": "agent",
+    "summary": "Run a shell command: yarn test --silent",
+    "payload": {
+      "tool": "shell",
+      "action": "Run a shell command",
+      "subject": "yarn",
+      "detail": "yarn test --silent",
+      "formatterVersion": 1
+    }
+  },
+  "mustNotContain": [
+    "transcript",
+    ".jsonl",
+    "PASS 412 tests",
+    "hunter2",
+    "/Users/jake"
+  ]
+}

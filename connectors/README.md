@@ -70,26 +70,40 @@ or the harness extension catalog (→ Extension System, see [Database module](..
 
 ### Adapter capability matrix
 
-Adapters deliberately differ. This table records what each one ships and, where a
-mechanism is absent, whether the gap is a decision or simply unported work — so a
+> **Agent-session interaction capabilities are not documented here.** What a harness can
+> observe, decide, and inject — and whether a gap is a hard limit, unbuilt work, or simply
+> unknown — lives in the generated, fixture-backed [harness capability
+> matrix](HARNESS-MATRIX.md) and each adapter's `CAPABILITIES.md`. Prose maintained by hand
+> alongside code drifts, and a matrix that is 60% accurate is worse than none because it is
+> trusted. Run `ovld agent-session capabilities <agent>` for the same answer in a terminal.
+
+The table below is about **packaging**, not interaction: which files each adapter ships and,
+where a mechanism is absent, whether the gap is a decision or simply unported work — so a
 contributor adding an adapter can tell signal from neglect. Source of truth for the
 "ships" columns is each adapter's `conformance-manifest.yaml`.
 
-| Adapter | Commands | Hooks | Local MCP shim | MCP config | Rules | Native resume |
-|---|---|---|---|---|---|---|
-| `claude` | `commands/` | `hooks/hooks.json` (4 types) | — | — | — | — |
-| `codex` | — | `.codex-plugin/hooks.json` + `scripts/*.sh` (2 types) | rendered | `.mcp.json` | — | yes |
-| `cursor` | `commands/` | `hooks/*.sh` (4 types) | rendered | `mcp.json` | `rules/` | — |
-| `antigravity` | `skills/*.md` | `hooks.json` + `scripts/*.sh` (2 types) | rendered | `mcp_config.json` | — | — |
-| `pi` | — | `extensions/overlord.ts` (`input` event) | — | — | — | yes |
+| Adapter       | Commands      | Hooks                                                 | Local MCP shim | MCP config        | Rules    | Native resume |
+| ------------- | ------------- | ----------------------------------------------------- | -------------- | ----------------- | -------- | ------------- |
+| `claude`      | `commands/`   | `hooks/hooks.json` (5 types)                          | —              | —                 | —        | —             |
+| `codex`       | —             | `.codex-plugin/hooks.json` + `scripts/*.sh` (2 types) | rendered       | `.mcp.json`       | —        | yes           |
+| `cursor`      | `commands/`   | `hooks/*.sh` (4 types)                                | rendered       | `mcp.json`        | `rules/` | —             |
+| `antigravity` | `skills/*.md` | `hooks.json` + `scripts/*.sh` (2 types)               | rendered       | `mcp_config.json` | —        | —             |
+| `pi`          | —             | `extensions/overlord.ts` (input/tool/session events)  | —              | —                 | —        | yes           |
+| `opencode`    | —             | none — control plane, see below                       | —              | —                 | —        | —             |
 
 Intentional omissions:
 
+- **`opencode` ships no hooks, and never will.** It is a control-plane harness (Shape C): it
+  runs a local HTTP server and publishes an event stream, so integration means subscribing
+  rather than being invoked. Overlord drives it with `ovld agent-session sidecar`, started
+  alongside the harness. The sidecar implements event reconciliation, concurrent permission
+  observation, and `prompt_async` instruction delivery, but the bundled agent catalog does not
+  yet start it automatically. A supervised execution target must supply that launch integration.
 - **`claude` ships no local MCP shim.** The Claude plugin reaches Overlord's hosted
   MCP server, so a local stdio bridge would duplicate it.
-- **`pi` ships no shim, hooks directory, or commands.** PI integrates through a
-  single TypeScript extension, and it has no native permission-request hook — its
-  `input` event carries follow-up capture only.
+- **`pi` ships no shim, hooks directory, or commands.** PI integrates through one TypeScript
+  extension. It has no native permission dialog; its optional `tool_call` decision interceptor
+  is fail-open and requires explicit workspace and project opt-in.
 - **`antigravity` passes no model or effort flag.** Antigravity selects the model
   internally; see [05 — Connectors and Agent Plugins](docs/05-connectors-and-agent-plugins.md#antigravity-connector).
 - **`cursor` passes no effort/thinking flag.** Deferred, not declined — recorded in
