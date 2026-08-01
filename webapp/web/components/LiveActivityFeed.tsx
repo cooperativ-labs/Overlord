@@ -16,8 +16,14 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { AuthenticatedAvatarImage, Avatar, AvatarFallback } from '@/components/ui/avatar';
 
 import type { MissionEventDto, MissionEventType } from '../../shared/contract.ts';
+import { groupMissionFeedItems } from '../lib/mission-feed.ts';
 import { useMissionEvents } from '../lib/queries.ts';
 
+import {
+  AgentSessionFeedCard,
+  useAgentSessionFeed
+} from './agent-session/AgentSessionActivity.tsx';
+import { SessionChannelHealthCard } from './agent-session/SessionChannelHealthCard.tsx';
 import { Markdown } from './Markdown.tsx';
 import { Badge, Spinner } from './ui.tsx';
 
@@ -39,50 +45,6 @@ const EVENT_META: Record<MissionEventType, { icon: LucideIcon; label: string }> 
   awaiting_approval: { icon: HelpCircle, label: 'Awaiting approval' },
   status_change: { icon: ArrowRightLeft, label: 'Status changed' }
 };
-
-/**
- * Operational launch/lifecycle events that clutter the feed when shown as
- * separate rows. Collapsed into one "Execution status" section per contiguous
- * run (newest-first feed order). Both types share MissionEventDto fields
- * `type`, `objectiveId`, `phase`, `summary`, and `createdAt`; runner/queue
- * writers also stash `executionRequestId` in payload_json, but that key is not
- * on the feed DTO yet — contiguity + type membership is enough for the UI.
- */
-const EXECUTION_STATUS_EVENT_TYPES = new Set<string>(['status_change', 'execution_requested']);
-
-type FeedItem =
-  | { kind: 'event'; event: MissionEventDto }
-  | { kind: 'execution_status'; events: MissionEventDto[] };
-
-/** Delivery events render in the Artifacts section instead of the activity feed. */
-const ACTIVITY_FEED_EXCLUDED_TYPES = new Set<string>(['delivery']);
-
-/**
- * Collapse contiguous `status_change` / `execution_requested` rows into a single
- * execution-status section. Input is newest-first (API order); each group's
- * `events[0]` is therefore the most recent status. Delivery rows are omitted.
- */
-function groupActivityFeedItems(events: MissionEventDto[]): FeedItem[] {
-  const filtered = events.filter(event => !ACTIVITY_FEED_EXCLUDED_TYPES.has(event.type));
-  const items: FeedItem[] = [];
-  let i = 0;
-  while (i < filtered.length) {
-    const event = filtered[i]!;
-    if (!EXECUTION_STATUS_EVENT_TYPES.has(event.type)) {
-      items.push({ kind: 'event', event });
-      i += 1;
-      continue;
-    }
-    const group: MissionEventDto[] = [event];
-    i += 1;
-    while (i < filtered.length && EXECUTION_STATUS_EVENT_TYPES.has(filtered[i]!.type)) {
-      group.push(filtered[i]!);
-      i += 1;
-    }
-    items.push({ kind: 'execution_status', events: group });
-  }
-  return items;
-}
 
 function eventMeta(type: string): { icon: LucideIcon | null; label: string } {
   return EVENT_META[type as MissionEventType] ?? { icon: null, label: type.replace(/_/g, ' ') };
@@ -388,15 +350,20 @@ function ExecutionStatusSection({
 }
 
 /**
- * Realtime feed of a mission's workflow history (`mission_events`). The query is
- * invalidated by the global SSE change feed, so updates written by the agent or
- * CLI in another process stream into the panel without a manual refresh.
- * Contiguous launch/status rows collapse into an expandable Execution status
- * section so runner churn does not dominate the timeline. Delivery events
- * render under Artifacts instead.
+ * Realtime feed of a mission's workflow history (`mission_events`) interleaved
+ * with the Agent Session Module's action cards. Both queries are invalidated by
+ * the global SSE change feed, so a permission raised by the agent or an update
+ * written by the CLI in another process streams into the panel without a manual
+ * refresh.
+ *
+ * The order the panel reads in is Artifacts → Deliveries → updates and
+ * interactive requests → status changes. This component owns the last two: the
+ * mid-feed timeline (newest-first) and the collapsed Execution status section
+ * anchored beneath it. Delivery events render under Artifacts instead.
  */
 export function LiveActivityFeed({ missionId }: { missionId: string }) {
   const eventsQ = useMissionEvents(missionId);
+  const agentSession = useAgentSessionFeed(missionId);
 
   if (eventsQ.isLoading) {
     return (
@@ -415,25 +382,31 @@ export function LiveActivityFeed({ missionId }: { missionId: string }) {
   }
 
   const events = eventsQ.data ?? [];
-  if (events.length === 0) {
+  const { midFeed, executionStatus } = groupMissionFeedItems(events, agentSession.items);
+
+  if (midFeed.length === 0 && executionStatus.length === 0 && !agentSession.channel) {
     return <p className="text-sm italic text-(--color-ink-dim)">No activity yet.</p>;
   }
 
-  const feedItems = groupActivityFeedItems(events);
-
   return (
     <div className="grid min-w-0 gap-3">
-      {feedItems.map(item =>
-        item.kind === 'execution_status' ? (
-          <ExecutionStatusSection
-            key={`execution-status-${item.events[0]!.id}`}
-            events={item.events}
+      {/* Channel health is current state, not history, so it sits above the timeline. */}
+      <SessionChannelHealthCard channel={agentSession.channel} />
+      {midFeed.map(item =>
+        item.kind === 'agent_session' ? (
+          <AgentSessionFeedCard
+            key={item.id}
+            item={item.item}
             missionId={missionId}
+            channel={agentSession.channel}
           />
         ) : (
-          <ActivityEntry key={item.event.id} event={item.event} missionId={missionId} />
+          <ActivityEntry key={item.id} event={item.event} missionId={missionId} />
         )
       )}
+      {executionStatus.length > 0 ? (
+        <ExecutionStatusSection events={executionStatus} missionId={missionId} />
+      ) : null}
     </div>
   );
 }

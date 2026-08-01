@@ -119,6 +119,36 @@ test('routes mission events, deliveries, attachments, and shared context to scop
   ]);
 });
 
+test('routes agent-session changes to the mission panel action-card queries', () => {
+  const { client, calls } = fakeClient();
+
+  const mode = invalidateRealtimeChanges(client, [
+    change({
+      entityType: 'agent_request',
+      entityId: 'request-1',
+      changedFields: ['status']
+    }),
+    change({
+      entityType: 'agent_session_input',
+      entityId: 'input-1',
+      changedFields: ['status']
+    }),
+    // A channel transition releases open requests, so it must invalidate both queries — a card
+    // that keeps its buttons after the session is lost is the failure this routing prevents.
+    change({
+      entityType: 'agent_session_channel',
+      entityId: 'channel-1',
+      changedFields: ['state']
+    })
+  ]);
+
+  assert.equal(mode, 'targeted');
+  assert.deepEqual(calls, [
+    ['mission', 'mission-1', 'agent-requests'],
+    ['mission', 'mission-1', 'agent-session-inputs']
+  ]);
+});
+
 test('falls back to full invalidation for malformed or unroutable changes', () => {
   for (const changes of [
     { changes: [] },

@@ -23,6 +23,9 @@ import type {
   AcceptWorkspaceInvitationBody,
   AddOrganizationAdminBody,
   AgentCatalogDto,
+  AgentRequestDto,
+  AgentSessionInputDto,
+  AgentSessionInputsResponse,
   ArtifactDto,
   BranchActionBody,
   CreateArtifactBody,
@@ -722,18 +725,15 @@ export const api = {
     request<GitHubPullRequestDto>('POST', `/ext/github/missions/${missionId}/pull-request`, body),
 
   listAgentSessionInputs: (missionId: string) =>
-    request<{
-      liveChannelId: string | null;
-      inputs: Array<{
-        id: string;
-        kind: string;
-        body: string;
-        status: string;
-        deliveryOutcome: string | null;
-        deliveryLabel: string;
-        createdAt: string;
-      }>;
-    }>('GET', `/api/agent-session-inputs?missionId=${encodeURIComponent(missionId)}`),
+    request<AgentSessionInputsResponse>(
+      'GET',
+      `/api/agent-session-inputs?missionId=${encodeURIComponent(missionId)}`
+    ),
+  cancelAgentSessionInput: (inputId: string) =>
+    request<{ cancelled: boolean; input: AgentSessionInputDto }>(
+      'POST',
+      `/api/agent-session-inputs/${encodeURIComponent(inputId)}/cancel`
+    ),
   enqueueAgentSessionInput: (body: {
     channelId: string;
     body: string;
@@ -746,6 +746,31 @@ export const api = {
         status: string;
       };
     }>('POST', '/api/agent-session-inputs', body),
+
+  listAgentRequests: (missionId: string) =>
+    request<{ requests: AgentRequestDto[] }>(
+      'GET',
+      `/api/agent-requests?missionId=${encodeURIComponent(missionId)}`
+    ),
+  /**
+   * Answer a request. `expectedRevision` is required by the server: a stale card must lose
+   * rather than overwrite a decision someone else already made.
+   */
+  resolveAgentRequest: (
+    requestId: string,
+    body: { resolution: Record<string, unknown>; expectedRevision: number }
+  ) =>
+    request<{ resolved: boolean; request: AgentRequestDto }>(
+      'POST',
+      `/api/agent-requests/${encodeURIComponent(requestId)}/resolve`,
+      body
+    ),
+  /** Hand the decision back to the native terminal prompt without answering it. */
+  releaseAgentRequest: (requestId: string) =>
+    request<{ released: boolean; request: AgentRequestDto }>(
+      'POST',
+      `/api/agent-requests/${encodeURIComponent(requestId)}/release`
+    ),
 
   /** Dev-only loopback SQLite proxy for checkout-local capabilities in plain browser. */
   invokeLocalTarget: (call: LocalTargetBridgeCall) =>

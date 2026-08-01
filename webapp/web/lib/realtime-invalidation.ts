@@ -119,6 +119,19 @@ function routeChange(change: EntityChangeDto): QueryKey[] | null {
     case 'execution_request': {
       return missionWorkflowKeys(change);
     }
+    case 'agent_request': {
+      const missionId = missionIdFor(change);
+      if (!missionId) return null;
+      return [keys.missionAgentRequests(missionId)];
+    }
+    case 'agent_session_input':
+    case 'agent_session_channel': {
+      // A channel transition changes what the mission panel may still offer (its state and
+      // capability snapshot ride on the inputs query), and it releases open requests.
+      const missionId = missionIdFor(change);
+      if (!missionId) return null;
+      return [keys.missionAgentSessionInputs(missionId), keys.missionAgentRequests(missionId)];
+    }
     case 'attachment': {
       const objectiveId = objectiveIdFor(change);
       if (!objectiveId) return null;

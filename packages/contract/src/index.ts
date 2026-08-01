@@ -895,6 +895,96 @@ export interface MissionEventDto {
   createdAt: string;
 }
 
+// ---- Agent Session Exchange human surfaces (coo:563, contract v53) --------
+
+/**
+ * The kinds of answerable request a session can raise. One model rather than one shape per
+ * native hook — a permission is a *kind* of request, not its own subsystem.
+ */
+export type AgentRequestKind = 'question' | 'permission' | 'choice' | 'retry';
+
+/**
+ * Terminal states matter to the UI as much as `open` does: a card that stays answerable after
+ * the decision left for the terminal is exactly the failure this vocabulary exists to prevent.
+ */
+export type AgentRequestStatus =
+  | 'open'
+  | 'resolved'
+  | 'released_to_terminal'
+  | 'expired'
+  | 'cancelled';
+
+/** A discrete answer a client may return by id. Never rendered when the adapter cannot apply it. */
+export interface AgentRequestOptionDto {
+  optionId: string;
+  label: string;
+  /** Open vocabulary describing what the option means to the harness (`allow_once`, …). */
+  kind: string;
+}
+
+export interface AgentRequestDto {
+  id: string;
+  channelId: string;
+  missionId: string | null;
+  objectiveId: string | null;
+  kind: AgentRequestKind | string;
+  /** Bounded, redacted card text produced by the pure formatters — never a raw native payload. */
+  summary: string;
+  options: AgentRequestOptionDto[];
+  allowsFreeText: boolean;
+  status: AgentRequestStatus | string;
+  resolution: Record<string, unknown> | null;
+  /** Required by `POST /:id/resolve`; a stale card loses the CAS instead of overwriting. */
+  revision: number;
+  /** End of the presence-sized remote decision window, after which the terminal owns it. */
+  windowExpiresAt: string | null;
+  releasedReason: string | null;
+  /** Whether a resolution was merely emitted or actually observed to apply in the harness. */
+  applicationState: string;
+  resolvedAt: string | null;
+  createdAt: string;
+}
+
+/** Honest inject states. `emitted` is not `acknowledged`, and neither one is "the agent read it". */
+export interface AgentSessionInputDto {
+  id: string;
+  kind: string;
+  body: string;
+  status: string;
+  deliveryOutcome: string | null;
+  /** Server-authored label; renders "Queued (turn boundary)" where that is the truth. */
+  deliveryLabel: string;
+  attemptCount?: number;
+  lastErrorCode?: string | null;
+  emittedAt?: string | null;
+  acknowledgedAt?: string | null;
+  createdAt: string;
+  revision?: number;
+}
+
+/**
+ * The live channel's effective capability snapshot. Clients gate controls on this — never on
+ * the static connector catalog and never on the agent identifier.
+ */
+export interface AgentSessionChannelSnapshotDto {
+  id: string;
+  /** `preparing` | `online` | `degraded` | `ended` | `lost`. */
+  state: string;
+  agentIdentifier: string | null;
+  adapterKey: string | null;
+  capabilities: Record<string, unknown>;
+  lastHeartbeatAt: string | null;
+  endedAt: string | null;
+  endReason: string | null;
+}
+
+export interface AgentSessionInputsResponse {
+  /** Set only while the channel can still be addressed; null once it ended or was lost. */
+  liveChannelId: string | null;
+  liveChannel: AgentSessionChannelSnapshotDto | null;
+  inputs: AgentSessionInputDto[];
+}
+
 // ---- Delivery reports (coo:364, contract v15) -----------------------------
 
 /** Sources allowed to support a persisted delivery-report item. */

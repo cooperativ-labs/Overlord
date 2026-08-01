@@ -550,8 +550,47 @@ function requestDto(request: Awaited<ReturnType<typeof getRequest>>): Record<str
     windowExpiresAt: request.window_expires_at,
     releasedReason: request.released_reason,
     applicationState: request.application_state,
+    resolvedAt: request.resolved_at,
     createdAt: request.created_at
   };
+}
+
+/**
+ * Resolve a mission the caller can actually see, then return that mission's requests.
+ *
+ * The mission is looked up across the caller's memberships rather than their currently-active
+ * workspace: a mission can live in a secondary workspace, and authorizing against the active
+ * one would check the wrong tenant. `session:read` is then required in the mission's own
+ * workspace before a single row is read.
+ */
+async function missionScopedRequests(
+  client: ReturnType<typeof requireDatabaseClient>,
+  missionRef: string
+): Promise<Record<string, unknown>[]> {
+  const memberships = await callerWorkspaceMemberships(client);
+  if (memberships.length === 0)
+    throw new ServiceError('Mission not found', 'mission_not_found', 404);
+  const placeholders = memberships.map(() => '?').join(', ');
+  const mission = await client.get<{ id: string; workspace_id: string }>(
+    `SELECT id, workspace_id FROM missions
+       WHERE (id = ? OR display_id = ?) AND deleted_at IS NULL
+         AND workspace_id IN (${placeholders})`,
+    [missionRef, missionRef, ...memberships.map(entry => entry.workspaceId)]
+  );
+  if (!mission) throw new ServiceError('Mission not found', 'mission_not_found', 404);
+  await requireWorkspacePermission({
+    workspaceId: mission.workspace_id,
+    permission: PERMISSIONS.SESSION_READ,
+    db: client,
+    notFoundMessage: 'Mission not found'
+  });
+  const rows = await client.all<Awaited<ReturnType<typeof getRequest>>>(
+    `SELECT ${REQUEST_COLUMNS_FOR_ROUTE} FROM agent_requests
+      WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL
+      ORDER BY created_at DESC LIMIT 200`,
+    [mission.id, mission.workspace_id]
+  );
+  return rows.map(requestDto);
 }
 
 /** Ordinary-human request inbox. This router is mounted behind normal API authentication. */
@@ -561,8 +600,16 @@ export function createAgentRequestHumanRouter(): Router {
 
   router.get(
     '/',
-    handle(async () => {
+    handle(async req => {
       const client = requireDatabaseClient();
+      const missionRef = typeof req.query.missionId === 'string' ? req.query.missionId : null;
+      // A mission-scoped read resolves the mission inside the caller's own memberships and
+      // authorizes against the mission's *own* workspace, the same way every other
+      // resource-scoped mission route does. The unfiltered inbox below is a different query
+      // with a different authorization shape, so the two do not share a code path.
+      if (missionRef) {
+        return { requests: await missionScopedRequests(client, missionRef) };
+      }
       const memberships = await callerWorkspaceMemberships(client);
       const authorized: { workspaceId: string; workspaceUserId: string }[] = [];
       for (const membership of memberships) {
@@ -621,6 +668,44 @@ export function createAgentRequestHumanRouter(): Router {
         expectedRevision: body.expectedRevision
       });
       return { resolved: result.resolved, request: requestDto(result.request) };
+    })
+  );
+
+  /**
+   * "Respond in terminal" — hand the decision back to the native prompt.
+   *
+   * This is a *release*, not an answer: it never records a resolution and never names an
+   * option, so a human who does not want to decide remotely cannot accidentally decide
+   * remotely. Losing the race is a normal outcome rather than an error — a request that was
+   * already resolved or already released comes back `released: false` with its real terminal
+   * state, so the card can stop claiming it owns a decision it does not own.
+   */
+  router.post(
+    '/:id/release',
+    handle(async req => {
+      const client = requireDatabaseClient();
+      const row = await client.get<{ workspace_id: string }>(
+        `SELECT workspace_id FROM agent_requests WHERE id = ? AND deleted_at IS NULL`,
+        [req.params.id]
+      );
+      if (!row) throw new ServiceError('Request not found', 'request_not_found', 404);
+      const workspaceUserId = await requireWorkspacePermission({
+        workspaceId: row.workspace_id,
+        permission: PERMISSIONS.SESSION_ATTACH,
+        db: client,
+        notFoundMessage: 'Request not found'
+      });
+      const ctx = await buildWebappServiceContextForWorkspace(
+        row.workspace_id,
+        client,
+        workspaceUserId
+      );
+      const result = await releaseRequestToTerminal({
+        ctx,
+        requestId: req.params.id,
+        reason: 'policy'
+      });
+      return { released: result.released, request: requestDto(result.request) };
     })
   );
   return router;
@@ -690,15 +775,47 @@ export function createAgentSessionInputHumanRouter(): Router {
         workspaceUserId
       );
       const inputs = await listSessionInputs({ ctx, missionId: mission.id });
-      const liveChannel = await client.get<{ id: string }>(
-        `SELECT id FROM agent_session_channels
+      // The most recent channel, live or not. A client gates its controls on this snapshot,
+      // so it needs to see an `ended`/`lost` channel too — a UI that only ever hears about
+      // live channels has no way to stop offering controls once the session is gone.
+      const channel = await client.get<{
+        id: string;
+        state: string;
+        agent_identifier: string | null;
+        adapter_key: string | null;
+        capabilities_json: string;
+        last_heartbeat_at: string | null;
+        ended_at: string | null;
+        end_reason: string | null;
+      }>(
+        `SELECT id, state, agent_identifier, adapter_key, capabilities_json,
+                last_heartbeat_at, ended_at, end_reason
+           FROM agent_session_channels
            WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL
-             AND state IN ('preparing', 'online', 'degraded')
            ORDER BY created_at DESC LIMIT 1`,
         [mission.id, mission.workspace_id]
       );
+      const isLive =
+        channel !== undefined &&
+        channel !== null &&
+        ['preparing', 'online', 'degraded'].includes(channel.state);
       return {
-        liveChannelId: liveChannel?.id ?? null,
+        // Retained for existing callers: the id only when the channel can still be addressed.
+        liveChannelId: isLive ? channel!.id : null,
+        // The effective capability snapshot clients must gate on. No credential, credential
+        // prefix, lease, or native session id is projected here.
+        liveChannel: channel
+          ? {
+              id: channel.id,
+              state: channel.state,
+              agentIdentifier: channel.agent_identifier,
+              adapterKey: channel.adapter_key,
+              capabilities: JSON.parse(channel.capabilities_json) as unknown,
+              lastHeartbeatAt: channel.last_heartbeat_at,
+              endedAt: channel.ended_at,
+              endReason: channel.end_reason
+            }
+          : null,
         inputs: inputs.map(inputDto)
       };
     })

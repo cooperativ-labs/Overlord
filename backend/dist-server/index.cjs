@@ -156413,16 +156413,47 @@ function requestDto(request) {
     windowExpiresAt: request.window_expires_at,
     releasedReason: request.released_reason,
     applicationState: request.application_state,
+    resolvedAt: request.resolved_at,
     createdAt: request.created_at
   };
+}
+async function missionScopedRequests(client, missionRef) {
+  const memberships = await callerWorkspaceMemberships(client);
+  if (memberships.length === 0)
+    throw new ServiceError("Mission not found", "mission_not_found", 404);
+  const placeholders = memberships.map(() => "?").join(", ");
+  const mission = await client.get(
+    `SELECT id, workspace_id FROM missions
+       WHERE (id = ? OR display_id = ?) AND deleted_at IS NULL
+         AND workspace_id IN (${placeholders})`,
+    [missionRef, missionRef, ...memberships.map((entry) => entry.workspaceId)]
+  );
+  if (!mission) throw new ServiceError("Mission not found", "mission_not_found", 404);
+  await requireWorkspacePermission({
+    workspaceId: mission.workspace_id,
+    permission: PERMISSIONS.SESSION_READ,
+    db: client,
+    notFoundMessage: "Mission not found"
+  });
+  const rows = await client.all(
+    `SELECT ${REQUEST_COLUMNS_FOR_ROUTE} FROM agent_requests
+      WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL
+      ORDER BY created_at DESC LIMIT 200`,
+    [mission.id, mission.workspace_id]
+  );
+  return rows.map(requestDto);
 }
 function createAgentRequestHumanRouter() {
   const router2 = (0, import_express3.Router)();
   router2.use(import_express3.default.json({ limit: "32kb" }));
   router2.get(
     "/",
-    handle2(async () => {
+    handle2(async (req) => {
       const client = requireDatabaseClient();
+      const missionRef = typeof req.query.missionId === "string" ? req.query.missionId : null;
+      if (missionRef) {
+        return { requests: await missionScopedRequests(client, missionRef) };
+      }
       const memberships = await callerWorkspaceMemberships(client);
       const authorized = [];
       for (const membership of memberships) {
@@ -156479,6 +156510,34 @@ function createAgentRequestHumanRouter() {
         expectedRevision: body.expectedRevision
       });
       return { resolved: result.resolved, request: requestDto(result.request) };
+    })
+  );
+  router2.post(
+    "/:id/release",
+    handle2(async (req) => {
+      const client = requireDatabaseClient();
+      const row = await client.get(
+        `SELECT workspace_id FROM agent_requests WHERE id = ? AND deleted_at IS NULL`,
+        [req.params.id]
+      );
+      if (!row) throw new ServiceError("Request not found", "request_not_found", 404);
+      const workspaceUserId = await requireWorkspacePermission({
+        workspaceId: row.workspace_id,
+        permission: PERMISSIONS.SESSION_ATTACH,
+        db: client,
+        notFoundMessage: "Request not found"
+      });
+      const ctx = await buildWebappServiceContextForWorkspace(
+        row.workspace_id,
+        client,
+        workspaceUserId
+      );
+      const result = await releaseRequestToTerminal({
+        ctx,
+        requestId: req.params.id,
+        reason: "policy"
+      });
+      return { released: result.released, request: requestDto(result.request) };
     })
   );
   return router2;
@@ -156538,15 +156597,30 @@ function createAgentSessionInputHumanRouter() {
         workspaceUserId
       );
       const inputs = await listSessionInputs({ ctx, missionId: mission.id });
-      const liveChannel = await client.get(
-        `SELECT id FROM agent_session_channels
+      const channel = await client.get(
+        `SELECT id, state, agent_identifier, adapter_key, capabilities_json,
+                last_heartbeat_at, ended_at, end_reason
+           FROM agent_session_channels
            WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL
-             AND state IN ('preparing', 'online', 'degraded')
            ORDER BY created_at DESC LIMIT 1`,
         [mission.id, mission.workspace_id]
       );
+      const isLive = channel !== void 0 && channel !== null && ["preparing", "online", "degraded"].includes(channel.state);
       return {
-        liveChannelId: liveChannel?.id ?? null,
+        // Retained for existing callers: the id only when the channel can still be addressed.
+        liveChannelId: isLive ? channel.id : null,
+        // The effective capability snapshot clients must gate on. No credential, credential
+        // prefix, lease, or native session id is projected here.
+        liveChannel: channel ? {
+          id: channel.id,
+          state: channel.state,
+          agentIdentifier: channel.agent_identifier,
+          adapterKey: channel.adapter_key,
+          capabilities: JSON.parse(channel.capabilities_json),
+          lastHeartbeatAt: channel.last_heartbeat_at,
+          endedAt: channel.ended_at,
+          endReason: channel.end_reason
+        } : null,
         inputs: inputs.map(inputDto)
       };
     })

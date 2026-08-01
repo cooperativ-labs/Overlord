@@ -140,6 +140,10 @@ export const keys = {
   missionArtifacts: (id: string) => ['mission', id, 'artifacts'] as const,
   missionSharedContext: (id: string) => ['mission', id, 'context'] as const,
   missionFileChanges: (id: string) => ['mission', id, 'file-changes'] as const,
+  /** Answerable agent-session requests (permission / question / choice / retry) for a mission. */
+  missionAgentRequests: (id: string) => ['mission', id, 'agent-requests'] as const,
+  /** Inbound instructions queued from Overlord into a mission's live session. */
+  missionAgentSessionInputs: (id: string) => ['mission', id, 'agent-session-inputs'] as const,
   objectiveAttachments: (objectiveId: string) => ['objective', objectiveId, 'attachments'] as const,
   agentCatalog: (workspaceId?: string | null) =>
     workspaceId ? (['agent-catalog', workspaceId] as const) : (['agent-catalog'] as const),
@@ -504,6 +508,65 @@ export const useMissionDeliveries = (id: string, enabled: boolean) =>
     queryFn: () => api.listMissionDeliveries(id),
     enabled
   });
+
+/**
+ * Answerable agent-session requests for one mission.
+ *
+ * Polled in addition to realtime invalidation: an open permission has a short, presence-sized
+ * decision window, and a card that only refreshes when an SSE frame happens to arrive can keep
+ * offering buttons for a decision the server already released to the terminal.
+ */
+export const useMissionAgentRequests = (id: string) =>
+  useQuery({
+    queryKey: keys.missionAgentRequests(id),
+    queryFn: () => api.listAgentRequests(id).then(result => result.requests),
+    refetchInterval: 5_000
+  });
+
+export const useMissionAgentSessionInputs = (id: string) =>
+  useQuery({
+    queryKey: keys.missionAgentSessionInputs(id),
+    queryFn: () => api.listAgentSessionInputs(id),
+    refetchInterval: 5_000
+  });
+
+/**
+ * Answer a request under revision CAS. A `resolved: false` response is not an error — it means
+ * the decision was already made elsewhere, and the caller must show that instead of success.
+ */
+export function useResolveAgentRequest(missionId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      requestId,
+      resolution,
+      expectedRevision
+    }: {
+      requestId: string;
+      resolution: Record<string, unknown>;
+      expectedRevision: number;
+    }) => api.resolveAgentRequest(requestId, { resolution, expectedRevision }),
+    onSettled: () => qc.invalidateQueries({ queryKey: keys.missionAgentRequests(missionId) })
+  });
+}
+
+/** Hand a request back to the native terminal prompt without answering it. */
+export function useReleaseAgentRequest(missionId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (requestId: string) => api.releaseAgentRequest(requestId),
+    onSettled: () => qc.invalidateQueries({ queryKey: keys.missionAgentRequests(missionId) })
+  });
+}
+
+/** Cancel a queued instruction. Only meaningful while it has not been emitted. */
+export function useCancelAgentSessionInput(missionId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (inputId: string) => api.cancelAgentSessionInput(inputId),
+    onSettled: () => qc.invalidateQueries({ queryKey: keys.missionAgentSessionInputs(missionId) })
+  });
+}
 
 export const useMissionArtifacts = (id: string) =>
   useQuery({ queryKey: keys.missionArtifacts(id), queryFn: () => api.listMissionArtifacts(id) });

@@ -1,36 +1,27 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
 import { api } from '../lib/api.ts';
-
-type SessionInputDto = {
-  id: string;
-  kind: string;
-  body: string;
-  status: string;
-  deliveryOutcome: string | null;
-  deliveryLabel: string;
-  createdAt: string;
-};
+import { keys, useMissionAgentSessionInputs } from '../lib/queries.ts';
 
 /**
- * Mission follow-up instructions with honest delivery labels.
+ * Composer for follow-up instructions sent into a mission's live session.
  *
- * Cursor's turn-boundary path must render "Queued (turn boundary)" — never "Delivered" —
- * because followup_message schedules the next turn rather than placing text in the agent's
- * current context.
+ * This section used to also list every instruction it had sent. It no longer does: those rows
+ * now appear as {@link SessionInputStatusCard}s in the activity timeline, in reverse
+ * chronological order alongside the requests and updates they interleave with. Showing them
+ * twice made the same message look like two events.
+ *
+ * The composer is gated on the live channel snapshot rather than on whether the mission looks
+ * busy — a session that has ended cannot be addressed, and offering an input box for it would
+ * accept text that goes nowhere.
  */
 export function MissionSessionInputsSection({ missionId }: { missionId: string }) {
   const queryClient = useQueryClient();
   const [body, setBody] = useState('');
-  const inputsQ = useQuery({
-    queryKey: ['agent-session-inputs', missionId],
-    queryFn: () => api.listAgentSessionInputs(missionId),
-    refetchInterval: 5_000
-  });
+  const inputsQ = useMissionAgentSessionInputs(missionId);
 
   const channelId = inputsQ.data?.liveChannelId ?? null;
-  const inputs: SessionInputDto[] = inputsQ.data?.inputs ?? [];
 
   const send = useMutation({
     mutationFn: async (text: string) => {
@@ -43,7 +34,9 @@ export function MissionSessionInputsSection({ missionId }: { missionId: string }
     },
     onSuccess: async () => {
       setBody('');
-      await queryClient.invalidateQueries({ queryKey: ['agent-session-inputs', missionId] });
+      await queryClient.invalidateQueries({
+        queryKey: keys.missionAgentSessionInputs(missionId)
+      });
     }
   });
 
@@ -51,7 +44,8 @@ export function MissionSessionInputsSection({ missionId }: { missionId: string }
     <section className="space-y-3">
       <p className="text-xs text-(--color-ink-dim)">
         Delivery labels are honest: Delivered means the agent has the message; Queued (turn
-        boundary) means it will arrive at the next turn.
+        boundary) means it will arrive at the next turn. Sent instructions appear in the activity
+        timeline.
       </p>
       {channelId ? (
         <form
@@ -82,23 +76,6 @@ export function MissionSessionInputsSection({ missionId }: { missionId: string }
       {send.isError ? (
         <p className="text-xs text-red-600">{(send.error as Error).message}</p>
       ) : null}
-      <ul className="space-y-2">
-        {inputs.length === 0 ? (
-          <li className="text-xs italic text-(--color-ink-dim)">No instructions yet.</li>
-        ) : (
-          inputs.map(input => (
-            <li key={input.id} className="rounded border border-(--color-line) px-3 py-2 text-sm">
-              <div className="flex items-baseline justify-between gap-2">
-                <span className="font-medium text-(--color-ink)">{input.deliveryLabel}</span>
-                <span className="text-[11px] text-(--color-ink-dim)">
-                  {new Date(input.createdAt).toLocaleString()}
-                </span>
-              </div>
-              <p className="mt-1 whitespace-pre-wrap text-(--color-ink-dim)">{input.body}</p>
-            </li>
-          ))
-        )}
-      </ul>
     </section>
   );
 }
