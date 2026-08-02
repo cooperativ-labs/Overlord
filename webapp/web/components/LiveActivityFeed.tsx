@@ -16,7 +16,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { AuthenticatedAvatarImage, Avatar, AvatarFallback } from '@/components/ui/avatar';
 
 import type { MissionEventDto, MissionEventType } from '../../shared/contract.ts';
-import { groupMissionFeedItems } from '../lib/mission-feed.ts';
+import { groupMissionFeedItems, resolveFollowUpPresentation } from '../lib/mission-feed.ts';
 import { useMissionEvents } from '../lib/queries.ts';
 
 import {
@@ -189,7 +189,8 @@ function ActivityEntry({
   compact?: boolean;
 }) {
   const { icon: Icon, label } = eventMeta(event.type);
-  const isUserFollowUp = event.type === 'user_follow_up';
+  // A follow-up is the user speaking, whether the hook posted it or the agent relayed it.
+  const { isFollowUp: isUserFollowUp, summary } = resolveFollowUpPresentation(event);
   // Blocking questions posted via `ovld protocol ask` land as `ask` events. Give
   // them a subtle amber/orange outline + wash so they stand out as needing a reply.
   const isBlockingQuestion = event.type === 'ask';
@@ -200,15 +201,19 @@ function ActivityEntry({
       className={
         isBlockingQuestion
           ? 'flex min-w-0 gap-3 rounded-md border border-amber-400/50 bg-amber-50/60 px-3 py-2 dark:border-amber-500/40 dark:bg-amber-500/10'
-          : compact
-            ? 'flex min-w-0 gap-3 py-1'
-            : 'flex min-w-0 gap-3'
+          : isUserFollowUp
+            ? 'flex min-w-0 gap-3 rounded-md border border-sky-400/40 bg-sky-50/60 px-3 py-2 dark:border-sky-500/30 dark:bg-sky-500/10'
+            : compact
+              ? 'flex min-w-0 gap-3 py-1'
+              : 'flex min-w-0 gap-3'
       }
     >
       <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center">
-        {isUserFollowUp && event.actor ? (
+        {isUserFollowUp ? (
+          // The person is the identity of the row, so their avatar replaces the type icon.
+          // With no avatar image the fallback still carries their initials, never a generic glyph.
           <Avatar size="sm" title={userLabel}>
-            {event.actor.avatarUrl ? (
+            {event.actor?.avatarUrl ? (
               <AuthenticatedAvatarImage src={event.actor.avatarUrl} alt={userLabel} />
             ) : null}
             <AvatarFallback className="rounded-full text-[9px]">
@@ -218,11 +223,9 @@ function ActivityEntry({
         ) : Icon ? (
           <Icon
             className={
-              isUserFollowUp
-                ? 'h-3.5 w-3.5 text-sky-500'
-                : isBlockingQuestion
-                  ? 'h-3.5 w-3.5 text-amber-600 dark:text-amber-400'
-                  : 'h-3.5 w-3.5 text-(--color-ink-dim)'
+              isBlockingQuestion
+                ? 'h-3.5 w-3.5 text-amber-600 dark:text-amber-400'
+                : 'h-3.5 w-3.5 text-(--color-ink-dim)'
             }
           />
         ) : (
@@ -240,21 +243,20 @@ function ActivityEntry({
                   : 'text-xs font-medium text-(--color-ink)'
             }
           >
-            {isUserFollowUp && event.actor ? userLabel : label}
+            {isUserFollowUp ? userLabel : label}
           </span>
-          {isUserFollowUp && event.actor ? (
-            <span className="text-[11px] text-(--color-ink-dim)">Follow-up</span>
-          ) : null}
-          {event.phase && (
+          {/* A follow-up's header is the person's name. The event type and the workflow phase it
+              landed in are agent bookkeeping, and repeating them here buried who was speaking. */}
+          {!isUserFollowUp && event.phase ? (
             <Badge className="px-2 py-0 text-[10px] uppercase tracking-wide">{event.phase}</Badge>
-          )}
+          ) : null}
           <span className="text-[11px] text-(--color-ink-dim)">
             {formatTimestamp(event.createdAt)}
           </span>
         </div>
-        {event.summary ? (
+        {summary ? (
           <ExpandableSummary
-            text={event.summary}
+            text={summary}
             tone={isUserFollowUp ? 'text-sky-700 dark:text-sky-300' : 'text-(--color-ink-dim)'}
           />
         ) : (

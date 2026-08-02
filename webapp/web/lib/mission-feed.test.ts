@@ -12,7 +12,8 @@ import {
   formatCountdown,
   groupMissionFeedItems,
   isChannelLive,
-  isRequestAnswerable
+  isRequestAnswerable,
+  resolveFollowUpPresentation
 } from './mission-feed.ts';
 
 function event(overrides: Partial<MissionEventDto> & { id: string }): MissionEventDto {
@@ -162,5 +163,48 @@ describe('formatCountdown', () => {
   it('switches to minutes past a minute', () => {
     assert.equal(formatCountdown(29_000), '29s left');
     assert.equal(formatCountdown(90_000), '1m left');
+  });
+});
+
+describe('resolveFollowUpPresentation', () => {
+  it('presents a hook-posted follow-up as the user speaking', () => {
+    const result = resolveFollowUpPresentation(
+      event({ id: 'e1', type: 'user_follow_up', summary: 'move the selector above the input' })
+    );
+    assert.deepEqual(result, {
+      isFollowUp: true,
+      summary: 'move the selector above the input'
+    });
+  });
+
+  it('recognizes an agent-relayed follow-up and strips the marker', () => {
+    for (const summary of ['Follow-up: do X', 'follow up: do X', 'Followup:do X']) {
+      assert.deepEqual(resolveFollowUpPresentation(event({ id: 'e2', summary })), {
+        isFollowUp: true,
+        summary: 'do X'
+      });
+    }
+  });
+
+  it('leaves ordinary updates alone', () => {
+    assert.deepEqual(
+      resolveFollowUpPresentation(event({ id: 'e3', summary: 'Ran the suite; all green.' })),
+      { isFollowUp: false, summary: 'Ran the suite; all green.' }
+    );
+  });
+
+  it('does not reinterpret other event types that happen to use the marker', () => {
+    const decision = event({ id: 'e4', type: 'decision', summary: 'Follow-up: ship it' });
+    assert.deepEqual(resolveFollowUpPresentation(decision), {
+      isFollowUp: false,
+      summary: 'Follow-up: ship it'
+    });
+  });
+
+  it('keeps a marker-only update as an update, since it carries no user message', () => {
+    assert.deepEqual(resolveFollowUpPresentation(event({ id: 'e5', summary: 'Follow-up:  ' })), {
+      isFollowUp: false,
+      summary: 'Follow-up:  '
+    });
   });
 });

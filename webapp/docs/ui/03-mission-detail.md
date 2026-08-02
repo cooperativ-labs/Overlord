@@ -230,8 +230,8 @@ Objective 3 · Implement runtime                         state: draft  [ Save ]
 
   | `mission_events.type` | Rendering |
   | --- | --- |
-  | `update` | progress narrative; expandable; shows linked changed-files when present |
-  | `user_follow_up` | human message, verbatim, visually attributed to the user |
+  | `update` | progress narrative; expandable; shows linked changed-files when present. An update whose summary opens with a `Follow-up:` marker is an agent-relayed human message and renders as `user_follow_up` |
+  | `user_follow_up` | human message, verbatim, attributed to the user: the actor's avatar replaces the type icon and their name replaces the type label, with no phase badge |
   | `alert` | non-blocking warning style |
   | `discussion_summary` | pinned-style conclusion |
   | `decision` | decision callout |

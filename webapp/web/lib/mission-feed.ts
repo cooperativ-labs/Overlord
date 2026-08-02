@@ -29,6 +29,46 @@ export const EXECUTION_STATUS_EVENT_TYPES: ReadonlySet<string> = new Set([
 /** Delivery events render in the Artifacts section instead of the activity feed. */
 export const ACTIVITY_FEED_EXCLUDED_TYPES: ReadonlySet<string> = new Set(['delivery']);
 
+/**
+ * A user follow-up reaches the feed by two routes. The `UserPromptSubmit` hook posts it as a
+ * `user_follow_up` event, but an agent that relays the message itself posts an ordinary `update`
+ * whose summary opens with a `Follow-up:` marker. Both are the user speaking, so both must read
+ * as the user speaking — an agent-relayed follow-up rendered as "Update / EXECUTE" hides who
+ * actually asked for the work.
+ */
+const RELAYED_FOLLOW_UP_MARKER = /^follow[\s-]?up\s*:\s*/i;
+
+export interface FollowUpPresentation {
+  /** Render with the actor's avatar and name instead of an event-type icon and label. */
+  isFollowUp: boolean;
+  /** Summary with any relay marker removed, so the header is not repeated in the body. */
+  summary: string;
+}
+
+/**
+ * Decide whether an event should present as a user follow-up, and strip the relay marker.
+ *
+ * Marker detection is deliberately limited to `update` events: every other type has its own
+ * meaning in the feed, and a `decision` or `alert` that happens to start with "Follow-up:" is
+ * still that type of event.
+ */
+export function resolveFollowUpPresentation(
+  event: Pick<MissionEventDto, 'type' | 'summary'>
+): FollowUpPresentation {
+  const summary = event.summary ?? '';
+  if (event.type === 'user_follow_up') {
+    return { isFollowUp: true, summary: summary.replace(RELAYED_FOLLOW_UP_MARKER, '') };
+  }
+  if (event.type === 'update' && RELAYED_FOLLOW_UP_MARKER.test(summary)) {
+    const stripped = summary.replace(RELAYED_FOLLOW_UP_MARKER, '');
+    // A bare "Follow-up:" with nothing after it carries no user message; leave it as an update.
+    return stripped.trim()
+      ? { isFollowUp: true, summary: stripped }
+      : { isFollowUp: false, summary };
+  }
+  return { isFollowUp: false, summary };
+}
+
 /** One Agent Session Module row: an answerable request, or an instruction sent into the session. */
 export type AgentSessionFeedItem =
   | { kind: 'agent_request'; createdAt: string; id: string; request: AgentRequestDto }
