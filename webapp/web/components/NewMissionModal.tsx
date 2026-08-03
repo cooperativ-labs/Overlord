@@ -1,4 +1,4 @@
-import { AlertTriangle, Check, ChevronDown, Loader2, Play, Tag } from 'lucide-react';
+import { AlertTriangle, ArrowUp, Check, ChevronDown, Loader2, Play, Tag } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
 import { AgentModelChooserButton } from '@/components/objectives/AgentModelChooserButton.tsx';
@@ -516,11 +516,15 @@ export function NewMissionModal({
 
               <Button
                 variant="secondary"
-                className="h-8 px-3 text-xs"
+                className="h-8 gap-1.5 px-3 text-xs"
                 onClick={() => void submit(false)}
                 disabled={!canSubmit}
               >
-                {pendingAction === 'save' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                {pendingAction === 'save' ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <ArrowUp className="h-3.5 w-3.5" />
+                )}
                 Save
               </Button>
 

@@ -37,6 +37,7 @@ import {
 } from './discover-project-local.js';
 import { CliError } from './errors.js';
 import { launchAgent } from './launch.js';
+import { recoverLaunchBootstrapFromProjectTmp } from './launch-bootstrap.js';
 import { missionLinkLine } from './mission-link.js';
 import { resolveNativeSessionId } from './native-session.js';
 import { runOrgSetupCommand } from './org-setup.js';
@@ -790,12 +791,38 @@ export async function runProtocolCommand({
   // Only `OVERLORD_SESSION_CHANNEL_ID` is read here. `OVERLORD_SESSION_CHANNEL_TOKEN` is
   // deliberately not: a credential must never become a protocol flag, because flags are argv,
   // and argv is visible to every process on the machine.
-  if (
-    subcommand === 'attach' &&
-    typeof flags['--session-channel-id'] !== 'string' &&
-    process.env.OVERLORD_SESSION_CHANNEL_ID
-  ) {
-    flags['--session-channel-id'] = process.env.OVERLORD_SESSION_CHANNEL_ID;
+  //
+  // Agent-pod / `agp` launches often strip the Overlord launch exports from the agent process
+  // environment even though they remain in `.overlord/tmp/launch-*.sh`. Recover the non-secret
+  // channel id (and execution request id) from that script so attach still binds.
+  if (subcommand === 'attach') {
+    const needsChannelId = typeof flags['--session-channel-id'] !== 'string';
+    const needsExecutionRequestId = typeof flags['--execution-request-id'] !== 'string';
+    if (needsChannelId && process.env.OVERLORD_SESSION_CHANNEL_ID) {
+      flags['--session-channel-id'] = process.env.OVERLORD_SESSION_CHANNEL_ID;
+    }
+    if (
+      (needsChannelId && typeof flags['--session-channel-id'] !== 'string') ||
+      (needsExecutionRequestId && typeof flags['--execution-request-id'] !== 'string')
+    ) {
+      const missionHint =
+        (typeof missionId === 'string' && missionId.trim() ? missionId.trim() : null) ??
+        process.env.MISSION_ID ??
+        process.env.OVERLORD_MISSION_ID ??
+        null;
+      if (missionHint) {
+        const recovered = recoverLaunchBootstrapFromProjectTmp({
+          workingDirectory,
+          missionId: missionHint
+        });
+        if (needsChannelId && recovered.sessionChannelId) {
+          flags['--session-channel-id'] = recovered.sessionChannelId;
+        }
+        if (needsExecutionRequestId && recovered.executionRequestId) {
+          flags['--execution-request-id'] = recovered.executionRequestId;
+        }
+      }
+    }
   }
   const { fileInputs, stdin: protocolStdin } = await resolveProtocolFileInputs({
     flags: parsed.flags,

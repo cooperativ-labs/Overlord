@@ -1,4 +1,4 @@
-import { Bot, Check, CheckCircle2, ChevronDown, Copy, Loader2, MoreVertical } from 'lucide-react';
+import { Check, CheckCircle2, ChevronDown, Copy, Loader2, MoreVertical, Play } from 'lucide-react';
 import { useRef, useState } from 'react';
 
 import type { ExecutionRequestDto, ObjectiveDto } from '../../../shared/contract.ts';
@@ -211,7 +211,7 @@ export function AgentLaunchButton({
       ) : isQueued ? (
         <Check className={cn(styles.icon, 'text-sky-500')} />
       ) : (
-        <Bot className={styles.icon} />
+        <Play className={styles.icon} />
       )}
       <span
         className={cn(
@@ -357,7 +357,7 @@ export function AgentLaunchButton({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="min-w-[180px]">
             <DropdownMenuItem className="gap-2 text-xs" onClick={handleRun} disabled={isDisabled}>
-              <Bot className="h-3.5 w-3.5" />
+              <Play className="h-3.5 w-3.5" />
               <span>Run</span>
             </DropdownMenuItem>
             <DropdownMenuItem className="gap-2 text-xs" onClick={() => void handleCopyPrompt()}>

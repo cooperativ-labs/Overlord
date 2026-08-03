@@ -1189,7 +1189,12 @@ export function usePromoteInboxItem() {
   return useMutation({
     mutationFn: ({ id, projectId }: { id: string; projectId: string }) =>
       api.promoteInboxItem(id, projectId),
-    onSuccess: () => invalidateAll(qc)
+    onSuccess: mission => {
+      // Seed the mission cache so sticky Inbox cards can keep editing/running
+      // without waiting for a follow-up fetch.
+      qc.setQueryData(keys.mission(mission.id), mission);
+      invalidateAll(qc);
+    }
   });
 }
 

@@ -515,6 +515,60 @@ export async function endChannel({
 }
 
 /**
+ * Find a prepared channel that attach should bind when the launch bootstrap did not reach
+ * the agent process (common for agent-pod / `agp` launches that strip `OVERLORD_SESSION_*`).
+ *
+ * Preference order: matching execution request, then matching objective, then the newest
+ * unbound live channel for the mission. Only unbound rows are considered — a channel already
+ * bound to another session must not be stolen by a later attach.
+ */
+export async function findBindableChannelForMission({
+  ctx,
+  missionId,
+  objectiveId = null,
+  executionRequestId = null
+}: {
+  ctx: ServiceContext;
+  missionId: string;
+  objectiveId?: string | null;
+  executionRequestId?: string | null;
+}): Promise<string | null> {
+  if (executionRequestId) {
+    const byRequest = await ctx.db.get<{ id: string }>(
+      `SELECT id FROM agent_session_channels
+         WHERE workspace_id = ? AND mission_id = ? AND execution_request_id = ?
+           AND session_id IS NULL AND deleted_at IS NULL
+           AND state IN ('preparing', 'online', 'degraded')
+         ORDER BY created_at DESC LIMIT 1`,
+      [ctx.workspace.id, missionId, executionRequestId]
+    );
+    if (byRequest?.id) return byRequest.id;
+  }
+
+  if (objectiveId) {
+    const byObjective = await ctx.db.get<{ id: string }>(
+      `SELECT id FROM agent_session_channels
+         WHERE workspace_id = ? AND mission_id = ? AND objective_id = ?
+           AND session_id IS NULL AND deleted_at IS NULL
+           AND state IN ('preparing', 'online', 'degraded')
+         ORDER BY created_at DESC LIMIT 1`,
+      [ctx.workspace.id, missionId, objectiveId]
+    );
+    if (byObjective?.id) return byObjective.id;
+  }
+
+  const byMission = await ctx.db.get<{ id: string }>(
+    `SELECT id FROM agent_session_channels
+       WHERE workspace_id = ? AND mission_id = ?
+         AND session_id IS NULL AND deleted_at IS NULL
+         AND state IN ('preparing', 'online', 'degraded')
+       ORDER BY created_at DESC LIMIT 1`,
+    [ctx.workspace.id, missionId]
+  );
+  return byMission?.id ?? null;
+}
+
+/**
  * Sweep channels whose lease expired without a clean end.
  *
  * This is the backstop for the case the process-exit path cannot cover: a killed VM, a severed

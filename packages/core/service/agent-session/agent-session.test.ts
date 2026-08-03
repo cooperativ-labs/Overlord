@@ -13,6 +13,7 @@ import {
   createSessionChannel,
   endChannel,
   expireLostChannels,
+  findBindableChannelForMission,
   heartbeatChannel
 } from './channels.js';
 import { appendSessionEvent } from './events.js';
@@ -178,6 +179,32 @@ describe('channel binding at attach', () => {
         }),
       /already bound/i
     );
+
+    await db.close();
+  });
+
+  it('binds the mission preparing channel when attach omits sessionChannelId', async () => {
+    const { ctx, db, missionId, projectId } = await seedMission();
+    const { channel } = await createSessionChannel({
+      ctx,
+      missionId,
+      projectId,
+      launchKind: 'queued'
+    });
+
+    const attached = await attachSession({
+      ctx,
+      missionId,
+      agentIdentifier: 'cursor'
+    });
+
+    const bound = await db.get<{ session_id: string; state: string }>(
+      `SELECT session_id, state FROM agent_session_channels WHERE id = ?`,
+      [channel.id]
+    );
+    assert.equal(bound?.session_id, attached.session.id);
+    assert.equal(bound?.state, 'online');
+    assert.equal(await findBindableChannelForMission({ ctx, missionId }), null);
 
     await db.close();
   });

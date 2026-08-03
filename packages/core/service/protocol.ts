@@ -1,7 +1,10 @@
 import { bindBool, UPDATE_EVENT_TYPES, UPDATE_PHASES } from '@overlord/database';
 import { createHash } from 'node:crypto';
 
-import { bindChannelToSession } from './agent-session/channels.js';
+import {
+  bindChannelToSession,
+  findBindableChannelForMission
+} from './agent-session/channels.js';
 import { recordChange } from './change-feed.js';
 import type { ServiceContext } from './context.js';
 import { resolveMissionId, resolveProjectId } from './context.js';
@@ -597,10 +600,18 @@ export async function attachSession({
       objective: refreshedObjective,
       executionTargetId: resolvedTargetId
     });
-    if (sessionChannelId) {
+    const resolvedChannelId =
+      sessionChannelId ??
+      (await findBindableChannelForMission({
+        ctx,
+        missionId: context.mission.id,
+        objectiveId: existing.objective_id,
+        executionRequestId: executionRequestId ?? null
+      }));
+    if (resolvedChannelId) {
       await bindChannelToSession({
         ctx,
-        channelId: sessionChannelId,
+        channelId: resolvedChannelId,
         sessionId: existing.id,
         missionId: context.mission.id,
         objectiveId: existing.objective_id,
@@ -729,10 +740,22 @@ export async function attachSession({
   // before the agent attached carry only a channel id, and this is where they acquire their
   // session. The working directory takes no part — it can locate an existing binding, but it
   // can never create one.
-  if (sessionChannelId) {
+  //
+  // When the launch wrapper stripped `OVERLORD_SESSION_CHANNEL_ID` (agent-pod), resolve the
+  // unbound live channel for this mission/execution so the Activity health card still flips
+  // off `preparing` once the agent has clearly attached via protocol.
+  const resolvedChannelId =
+    sessionChannelId ??
+    (await findBindableChannelForMission({
+      ctx,
+      missionId: context.mission.id,
+      objectiveId: objective.id,
+      executionRequestId: executionRequestId ?? null
+    }));
+  if (resolvedChannelId) {
     await bindChannelToSession({
       ctx,
-      channelId: sessionChannelId,
+      channelId: resolvedChannelId,
       sessionId,
       missionId: context.mission.id,
       objectiveId: objective.id,

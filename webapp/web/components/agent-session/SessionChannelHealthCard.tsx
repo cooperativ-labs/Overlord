@@ -11,6 +11,10 @@ import { AgentSessionCardShell, CardBadge, formatCardTimestamp } from './AgentSe
  * a row every time a heartbeat slips. A healthy `online` channel renders nothing at all: the
  * mission panel does not need a green light telling it that nothing is wrong.
  *
+ * `preparing` means the Agent Session *channel* has not bound yet — not that the agent process
+ * is idle. Protocol attach/update/deliver can proceed independently; this card only speaks to
+ * the interactive pipe that carries permission prompts and session inputs.
+ *
  * It matters because every action card in this section is gated on this channel. When it goes
  * `lost` or `ended`, the buttons above disappear, and a human deserves to be told why rather
  * than watching controls silently vanish.
@@ -21,10 +25,10 @@ const STATE_COPY: Record<
   { title: string; tone: 'neutral' | 'alert'; icon: typeof Radio; body: string }
 > = {
   preparing: {
-    title: 'Session starting',
+    title: 'Agent Session channel starting',
     tone: 'neutral',
     icon: PlugZap,
-    body: 'The agent process has not connected yet. Requests it raises will appear here.'
+    body: 'The interactive Agent Session channel is not connected yet. The agent may already be running this mission via protocol; permission prompts and session inputs appear here only after this channel connects.'
   },
   degraded: {
     title: 'Session degraded',
