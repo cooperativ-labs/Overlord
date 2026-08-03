@@ -1,5 +1,5 @@
 import { Link, useRouterState } from '@tanstack/react-router';
-import { Inbox, Settings } from 'lucide-react';
+import { Inbox, KanbanIcon, Settings } from 'lucide-react';
 import { useState } from 'react';
 
 import { NavUser } from '@/components/nav-user';
@@ -78,7 +78,7 @@ export function AppSidebar() {
                     isActive={isMyMissionsActive}
                     tooltip="My Missions"
                   >
-                    <Inbox />
+                    <KanbanIcon />
                     <span>My Missions</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -88,13 +88,13 @@ export function AppSidebar() {
 
           {organizationId
             ? workspaces.map(workspace => (
-                <WorkspaceSidebarSection
-                  key={workspace.id}
-                  workspace={workspace}
-                  organizationId={organizationId}
-                  onOpenWorkspaceSettings={setWorkspaceSettingsId}
-                />
-              ))
+              <WorkspaceSidebarSection
+                key={workspace.id}
+                workspace={workspace}
+                organizationId={organizationId}
+                onOpenWorkspaceSettings={setWorkspaceSettingsId}
+              />
+            ))
             : null}
         </SidebarContent>
         <SidebarFooter>

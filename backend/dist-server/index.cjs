@@ -142536,7 +142536,7 @@ function validateInboxBody(body) {
   const objectives = body.objectives.map((item) => typeof item === "string" ? item.trim() : "");
   if (!objectives[0]) throw new ApiError(400, "Inbox objective is required");
   const dueDatetime = body.dueDatetime === void 0 || body.dueDatetime === null ? null : body.dueDatetime;
-  if (typeof dueDatetime !== "string" || dueDatetime && Number.isNaN(Date.parse(dueDatetime))) {
+  if (dueDatetime !== null && (typeof dueDatetime !== "string" || Number.isNaN(Date.parse(dueDatetime)))) {
     throw new ApiError(400, "dueDatetime must be a valid ISO-8601 datetime or null");
   }
   const priority = body.priority === void 0 || body.priority === null ? null : body.priority;
