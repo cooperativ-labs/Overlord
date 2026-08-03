@@ -32,8 +32,9 @@ branch actions.
 
 ## Hosted MCP Rules
 
-- Mission creation must require explicit `projectId` or a resolved project
-  identity. Hosted MCP must not choose a default project implicitly.
+- Mission creation with `projectId` creates a normal mission in that project.
+  Inbox-capable tools may omit it only to create the caller's account-owned
+  inbox item; hosted MCP must never choose a default project implicitly.
 - Keep checkout-local operations out of hosted MCP. Local connector MCP shims
   remain the correct place for CLI/worktree behavior.
 - Tool names use the `overlord_<verb>_<noun>` prefix.

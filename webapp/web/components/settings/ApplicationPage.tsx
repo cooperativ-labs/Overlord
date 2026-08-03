@@ -1,5 +1,7 @@
 import { useTheme } from 'next-themes';
+import { useState } from 'react';
 
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
   Select,
@@ -17,6 +19,9 @@ const themeOptions = [
 
 export function ApplicationPage() {
   const { theme, setTheme } = useTheme();
+  const [projectWindowMinutes, setProjectWindowMinutes] = useState(
+    () => window.localStorage.getItem('overlord.defaultProjectWindowMinutes') ?? '15'
+  );
 
   return (
     <div className="space-y-6">
@@ -48,6 +53,28 @@ export function ApplicationPage() {
         </Select>
         <p className="text-xs text-muted-foreground">
           System follows your OS appearance setting. Stored locally in this browser.
+        </p>
+      </div>
+
+      <div className="max-w-md space-y-2">
+        <Label htmlFor="default-project-window">Recent project window (minutes)</Label>
+        <Input
+          id="default-project-window"
+          type="number"
+          min="0"
+          value={projectWindowMinutes}
+          onChange={event => {
+            const value = event.target.value;
+            setProjectWindowMinutes(value);
+            const parsed = Number(value);
+            if (Number.isFinite(parsed) && parsed >= 0) {
+              window.localStorage.setItem('overlord.defaultProjectWindowMinutes', String(parsed));
+            }
+          }}
+        />
+        <p className="text-xs text-muted-foreground">
+          A mission composer uses your default project only when it was modified within this window;
+          otherwise it starts in Inbox. Stored locally in this browser.
         </p>
       </div>
     </div>

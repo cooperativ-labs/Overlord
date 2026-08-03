@@ -69492,6 +69492,26 @@ var init_config = __esm({
   }
 });
 
+// ../packages/core/service/errors.ts
+var ServiceError;
+var init_errors4 = __esm({
+  "../packages/core/service/errors.ts"() {
+    "use strict";
+    ServiceError = class extends Error {
+      constructor(message2, code, status = 400, details) {
+        super(message2);
+        this.code = code;
+        this.status = status;
+        this.details = details;
+        this.name = "ServiceError";
+      }
+      code;
+      status;
+      details;
+    };
+  }
+});
+
 // ../packages/core/service/util.ts
 function nowIso() {
   return (/* @__PURE__ */ new Date()).toISOString();
@@ -69587,26 +69607,6 @@ var init_change_feed = __esm({
   "../packages/core/service/change-feed.ts"() {
     "use strict";
     init_util3();
-  }
-});
-
-// ../packages/core/service/errors.ts
-var ServiceError;
-var init_errors4 = __esm({
-  "../packages/core/service/errors.ts"() {
-    "use strict";
-    ServiceError = class extends Error {
-      constructor(message2, code, status = 400, details) {
-        super(message2);
-        this.code = code;
-        this.status = status;
-        this.details = details;
-        this.name = "ServiceError";
-      }
-      code;
-      status;
-      details;
-    };
   }
 });
 
@@ -131949,6 +131949,9 @@ var import_node_url8 = require("node:url");
 init_config();
 init_env2();
 
+// protocol.ts
+init_errors4();
+
 // ../packages/core/service/missions.ts
 init_dist();
 init_change_feed();
@@ -142383,6 +142386,9 @@ async function createMissionTx(body, client = requireDatabaseClient(), alreadyIn
     if (!["low", "normal", "high", "urgent"].includes(priority)) {
       throw new ApiError(400, "Invalid priority");
     }
+    if (body.dueDatetime !== void 0 && body.dueDatetime !== null && Number.isNaN(Date.parse(body.dueDatetime))) {
+      throw new ApiError(400, "dueDatetime must be a valid ISO-8601 datetime or null");
+    }
     const now2 = nowIso2();
     const id = newId2();
     const sequence = await nextMissionSequence2(tx, workspaceId);
@@ -142396,8 +142402,8 @@ async function createMissionTx(body, client = requireDatabaseClient(), alreadyIn
       `INSERT INTO missions
        (id, workspace_id, project_id, display_id, sequence_number, title,
         status_id, status_type, board_position, priority, available_tools_json, execution_target_intent_json,
-        metadata_json, created_by_workspace_user_id, assigned_workspace_user_id, created_at, updated_at, revision)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', '{}', '{}', ?, ?, ?, ?, 1)`,
+        metadata_json, created_by_workspace_user_id, assigned_workspace_user_id, due_datetime, created_at, updated_at, revision)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', '{}', '{}', ?, ?, ?, ?, ?, 1)`,
       [
         id,
         workspaceId,
@@ -142411,6 +142417,7 @@ async function createMissionTx(body, client = requireDatabaseClient(), alreadyIn
         priority,
         workspaceUserId,
         assignedWorkspaceUserId,
+        body.dueDatetime ?? null,
         now2,
         now2
       ]
@@ -142519,6 +142526,152 @@ async function createMission(body) {
     });
   }
   return detail;
+}
+function validateInboxBody(body) {
+  const title = typeof body.title === "string" ? body.title.trim() : "";
+  if (!title) throw new ApiError(400, "Inbox title is required");
+  if (!Array.isArray(body.objectives) || body.objectives.length !== 1) {
+    throw new ApiError(400, "Inbox objectives must contain exactly one item");
+  }
+  const objectives = body.objectives.map((item) => typeof item === "string" ? item.trim() : "");
+  if (!objectives[0]) throw new ApiError(400, "Inbox objective is required");
+  const dueDatetime = body.dueDatetime === void 0 || body.dueDatetime === null ? null : body.dueDatetime;
+  if (typeof dueDatetime !== "string" || dueDatetime && Number.isNaN(Date.parse(dueDatetime))) {
+    throw new ApiError(400, "dueDatetime must be a valid ISO-8601 datetime or null");
+  }
+  const priority = body.priority === void 0 || body.priority === null ? null : body.priority;
+  if (priority !== null && !["low", "normal", "high", "urgent"].includes(String(priority))) {
+    throw new ApiError(400, "Invalid priority");
+  }
+  return { title, objectives, dueDatetime, priority };
+}
+function toInboxItemDto(row) {
+  let objectives;
+  try {
+    objectives = JSON.parse(row.objectives_json);
+  } catch {
+    throw new ApiError(500, "Stored inbox item is invalid");
+  }
+  return {
+    id: row.id,
+    title: row.title,
+    objectives,
+    dueDatetime: row.due_datetime,
+    priority: row.priority,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
+async function activeInboxProfileId(db) {
+  const profileId = await resolveActiveProfileId(db);
+  if (!profileId) throw new ApiError(401, "Authentication required");
+  return profileId;
+}
+async function ownedInboxRow(db, profileId, id) {
+  const row = await db.get(
+    `SELECT id, title, objectives_json, due_datetime, priority, created_at, updated_at
+       FROM inbox_items WHERE id = ? AND profile_id = ?`,
+    [id, profileId]
+  );
+  if (!row) throw new ApiError(404, "Inbox item not found");
+  return row;
+}
+async function listInboxItems() {
+  const db = requireDatabaseClient();
+  const profileId = await activeInboxProfileId(db);
+  const rows = await db.all(
+    `SELECT id, title, objectives_json, due_datetime, priority, created_at, updated_at
+       FROM inbox_items WHERE profile_id = ? ORDER BY created_at DESC`,
+    [profileId]
+  );
+  return rows.map(toInboxItemDto);
+}
+async function getInboxItem(id) {
+  const db = requireDatabaseClient();
+  return toInboxItemDto(await ownedInboxRow(db, await activeInboxProfileId(db), id));
+}
+async function createInboxItem(body) {
+  const db = requireDatabaseClient();
+  const profileId = await activeInboxProfileId(db);
+  const input = validateInboxBody(body);
+  const now2 = nowIso2();
+  const row = {
+    id: newId2(),
+    title: input.title,
+    objectives_json: JSON.stringify(input.objectives),
+    due_datetime: input.dueDatetime,
+    priority: input.priority,
+    created_at: now2,
+    updated_at: now2
+  };
+  await db.run(
+    `INSERT INTO inbox_items (id, profile_id, title, objectives_json, due_datetime, priority, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [row.id, profileId, row.title, row.objectives_json, row.due_datetime, row.priority, now2, now2]
+  );
+  return toInboxItemDto(row);
+}
+async function updateInboxItem(id, body) {
+  const db = requireDatabaseClient();
+  const profileId = await activeInboxProfileId(db);
+  const existing = await ownedInboxRow(db, profileId, id);
+  const input = validateInboxBody({
+    title: body.title ?? existing.title,
+    objectives: body.objectives ?? JSON.parse(existing.objectives_json),
+    dueDatetime: body.dueDatetime === void 0 ? existing.due_datetime : body.dueDatetime,
+    priority: body.priority === void 0 ? existing.priority : body.priority
+  });
+  const now2 = nowIso2();
+  await db.run(
+    `UPDATE inbox_items SET title = ?, objectives_json = ?, due_datetime = ?, priority = ?, updated_at = ?
+      WHERE id = ? AND profile_id = ?`,
+    [
+      input.title,
+      JSON.stringify(input.objectives),
+      input.dueDatetime,
+      input.priority,
+      now2,
+      id,
+      profileId
+    ]
+  );
+  return {
+    id,
+    title: input.title,
+    objectives: input.objectives,
+    dueDatetime: input.dueDatetime,
+    priority: input.priority,
+    createdAt: existing.created_at,
+    updatedAt: now2
+  };
+}
+async function deleteInboxItem(id) {
+  const db = requireDatabaseClient();
+  const profileId = await activeInboxProfileId(db);
+  await ownedInboxRow(db, profileId, id);
+  await db.run(`DELETE FROM inbox_items WHERE id = ? AND profile_id = ?`, [id, profileId]);
+}
+async function promoteInboxItem(id, projectId) {
+  const db = requireDatabaseClient();
+  const profileId = await activeInboxProfileId(db);
+  const missionId = await db.transaction(async (tx) => {
+    const item = await ownedInboxRow(tx, profileId, id);
+    const objectives = JSON.parse(item.objectives_json);
+    const created = await createMissionTx(
+      {
+        projectId,
+        title: item.title,
+        objectives: objectives.map((objective) => ({ objective })),
+        dueDatetime: item.due_datetime,
+        ...item.priority ? { priority: item.priority } : {}
+      },
+      tx,
+      true
+    );
+    await tx.run(`DELETE FROM inbox_items WHERE id = ? AND profile_id = ?`, [id, profileId]);
+    return created.missionId;
+  });
+  return getMissionDetail(missionId);
 }
 async function generateMissionTitle(missionRef) {
   const detail = await getMissionDetail(missionRef);
@@ -151907,12 +152060,41 @@ var handlers = {
     executionTargetId: strFlag(body, "--execution-target-id") ?? null
   }),
   // Mission creation and discovery -----------------------------------------
-  create: (ctx, body) => protocolCreate({
-    ctx,
-    projectId: strFlag(body, "--project-id") ?? null,
-    objectives: objectiveInputs(body),
-    title: strFlag(body, "--title") ?? null
-  }),
+  create: async (ctx, body) => {
+    const objectives = objectiveInputs(body);
+    if (boolFlag(body, "--inbox")) {
+      const first = objectives[0]?.objective?.trim();
+      if (!first) throw new ApiError(400, "Inbox creation requires an objective");
+      return {
+        unassigned: true,
+        inboxItem: await createInboxItem({
+          title: strFlag(body, "--title")?.trim() || first,
+          objectives: [first]
+        })
+      };
+    }
+    try {
+      return await protocolCreate({
+        ctx,
+        projectId: strFlag(body, "--project-id") ?? null,
+        objectives,
+        title: strFlag(body, "--title") ?? null
+      });
+    } catch (error53) {
+      if (strFlag(body, "--project-id") || !(error53 instanceof ServiceError) || error53.code !== "project_not_found") {
+        throw error53;
+      }
+      const first = objectives[0]?.objective?.trim();
+      if (!first) throw error53;
+      return {
+        unassigned: true,
+        inboxItem: await createInboxItem({
+          title: strFlag(body, "--title")?.trim() || first,
+          objectives: [first]
+        })
+      };
+    }
+  },
   prompt: (ctx, body) => protocolPrompt({
     ctx,
     projectId: strFlag(body, "--project-id") ?? null,
@@ -152099,7 +152281,7 @@ var SUBCOMMAND_PERMISSIONS = {
   deliver: PERMISSIONS.EVENT_CREATE,
   "hook-event": PERMISSIONS.EVENT_CREATE,
   "resume-follow-up": PERMISSIONS.SESSION_ATTACH,
-  create: PERMISSIONS.MISSION_CREATE,
+  create: null,
   prompt: PERMISSIONS.MISSION_CREATE,
   "load-context": PERMISSIONS.MISSION_READ,
   connect: PERMISSIONS.SESSION_ATTACH,
@@ -152215,19 +152397,33 @@ var hostedMcpToolDefinitions = [
   {
     name: "overlord_create_mission",
     title: "Create Overlord mission",
-    description: "Use this only when the user explicitly asks to create a mission in the specified project. This creates a draft mission; hosted MCP never chooses a project implicitly.",
+    description: "Create a draft mission in projectId, or an account-owned inbox item when projectId is omitted. Hosted MCP never chooses a project implicitly.",
     inputSchema: objectSchema(
       {
-        projectId: stringProperty("Required Overlord project id, slug, or name."),
+        projectId: stringProperty("Optional Overlord project id, slug, or name."),
         objective: stringProperty("Initial objective text."),
         title: stringProperty("Optional mission title."),
         resourceKey: stringProperty("Optional logical project resource key for the objective.")
       },
-      ["projectId", "objective"]
+      ["objective"]
     ),
     outputSchema: protocolOutputSchema(
-      "The newly created draft mission and its initial objective."
+      "The newly created draft mission, or an explicit unassigned inbox item."
     ),
+    annotations: writeAction
+  },
+  {
+    name: "overlord_create_inbox_item",
+    title: "Create inbox item",
+    description: "Create a private, account-owned unassigned task capture.",
+    inputSchema: objectSchema(
+      {
+        title: stringProperty("Inbox item title."),
+        objective: stringProperty("The one objective captured in v1.")
+      },
+      ["title", "objective"]
+    ),
+    outputSchema: protocolOutputSchema("The new explicit unassigned inbox item."),
     annotations: writeAction
   },
   {
@@ -152616,10 +152812,18 @@ var toolHandlers = {
   overlord_create_mission: (args) => runProtocolSubcommand(
     "create",
     protocolBody({
-      "--project-id": requiredString(args, "projectId"),
+      ...optionalString(args, "projectId") ? { "--project-id": requiredString(args, "projectId") } : { "--inbox": true },
       "--objective": requiredString(args, "objective"),
       ...optionalString(args, "title") ? { "--title": requiredString(args, "title") } : {},
       ...optionalString(args, "resourceKey") ? { "--resource": requiredString(args, "resourceKey") } : {}
+    })
+  ),
+  overlord_create_inbox_item: (args) => runProtocolSubcommand(
+    "create",
+    protocolBody({
+      "--inbox": true,
+      "--title": requiredString(args, "title"),
+      "--objective": requiredString(args, "objective")
     })
   ),
   overlord_load_mission_context: (args) => runProtocolSubcommand(
@@ -161380,6 +161584,38 @@ app.use(
 app.patch(
   "/api/projects/:id/board/reorder",
   handle3((req) => reorderBoardColumn(req.params.id, req.body), {
+    mutates: true
+  })
+);
+app.get(
+  "/api/inbox",
+  handle3(() => listInboxItems())
+);
+app.post(
+  "/api/inbox",
+  handle3((req) => createInboxItem(req.body), { mutates: true })
+);
+app.get(
+  "/api/inbox/:id",
+  handle3((req) => getInboxItem(req.params.id))
+);
+app.patch(
+  "/api/inbox/:id",
+  handle3((req) => updateInboxItem(req.params.id, req.body), { mutates: true })
+);
+app.delete(
+  "/api/inbox/:id",
+  handle3(
+    async (req) => {
+      await deleteInboxItem(req.params.id);
+      return { ok: true };
+    },
+    { mutates: true }
+  )
+);
+app.post(
+  "/api/inbox/:id/promote",
+  handle3((req) => promoteInboxItem(req.params.id, String(req.body?.projectId ?? "")), {
     mutates: true
   })
 );

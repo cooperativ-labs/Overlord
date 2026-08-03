@@ -103,19 +103,33 @@ export const hostedMcpToolDefinitions: ToolDefinition[] = [
     name: 'overlord_create_mission',
     title: 'Create Overlord mission',
     description:
-      'Use this only when the user explicitly asks to create a mission in the specified project. This creates a draft mission; hosted MCP never chooses a project implicitly.',
+      'Create a draft mission in projectId, or an account-owned inbox item when projectId is omitted. Hosted MCP never chooses a project implicitly.',
     inputSchema: objectSchema(
       {
-        projectId: stringProperty('Required Overlord project id, slug, or name.'),
+        projectId: stringProperty('Optional Overlord project id, slug, or name.'),
         objective: stringProperty('Initial objective text.'),
         title: stringProperty('Optional mission title.'),
         resourceKey: stringProperty('Optional logical project resource key for the objective.')
       },
-      ['projectId', 'objective']
+      ['objective']
     ),
     outputSchema: protocolOutputSchema(
-      'The newly created draft mission and its initial objective.'
+      'The newly created draft mission, or an explicit unassigned inbox item.'
     ),
+    annotations: writeAction
+  },
+  {
+    name: 'overlord_create_inbox_item',
+    title: 'Create inbox item',
+    description: 'Create a private, account-owned unassigned task capture.',
+    inputSchema: objectSchema(
+      {
+        title: stringProperty('Inbox item title.'),
+        objective: stringProperty('The one objective captured in v1.')
+      },
+      ['title', 'objective']
+    ),
+    outputSchema: protocolOutputSchema('The new explicit unassigned inbox item.'),
     annotations: writeAction
   },
   {

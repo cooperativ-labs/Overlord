@@ -42,6 +42,7 @@ Requirements:
 
 - `ovld create "<objective>"`: create a draft mission/objective from a prompt-like string.
 - `ovld create --objectives-json '[{"objective":"..."}]'`: create one mission with ordered objectives.
+- `ovld inbox create --title "<title>" --objective "<objective>": create a private, account-owned unassigned capture; `ovld protocol create --inbox` is the protocol equivalent.
 - `ovld prompt "<objective>"`: create a mission and immediately queue or launch execution.
 - `ovld attach [missionId] [agent]`: search/select a mission and launch an agent interactively.
 - `ovld missions list [--status <csv>] [--project-id <id-or-name>] [--limit <n>]`: list missions.

@@ -1,7 +1,6 @@
 import { CheckCircle2, Terminal, TimerOff, XCircle } from 'lucide-react';
 
 import type { AgentRequestDto, AgentSessionChannelSnapshotDto } from '../../../shared/contract.ts';
-
 import { isChannelLive } from '../../lib/mission-feed.ts';
 
 /**

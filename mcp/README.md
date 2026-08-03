@@ -59,6 +59,7 @@ The current tool catalog is mission-first:
 - `overlord_create_project`
 - `overlord_search_missions`
 - `overlord_create_mission`
+- `overlord_create_inbox_item`
 - `overlord_load_mission_context`
 - `overlord_add_objectives`
 - `overlord_attach_session`

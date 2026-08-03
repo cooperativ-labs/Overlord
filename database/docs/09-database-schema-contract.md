@@ -275,6 +275,33 @@ Indexes:
 - Optional unique lowercased `handle` where present.
 - Optional unique `(email)` where present.
 
+### `inbox_items`
+
+Private, profile-owned unassigned mission captures. An inbox item deliberately has
+no workspace, organization, project, status, execution, or realtime identity. It
+can be created and edited while its owner has no workspace membership, then is
+consumed atomically when a destination project creates the ordinary mission.
+
+| Column            | Type         | Required | Notes                                                              |
+| ----------------- | ------------ | -------- | ------------------------------------------------------------------ |
+| `id`              | Id           | yes      | Stable inbox item ID.                                              |
+| `profile_id`      | Id           | yes      | FK to `profiles`, `ON DELETE CASCADE`; sole authorization owner.  |
+| `title`           | text         | yes      | Trimmed, non-empty capture title.                                 |
+| `objectives_json` | Json         | yes      | Array of trimmed objective strings; exactly one entry in v1.      |
+| `due_datetime`    | TimestampUTC | no       | Optional due date/time copied to the promoted mission.            |
+| `priority`        | text         | no       | `low`, `normal`, `high`, or `urgent`; copied to promoted mission. |
+| `created_at`      | TimestampUTC | yes      |                                                                    |
+| `updated_at`      | TimestampUTC | yes      |                                                                    |
+
+Indexes:
+
+- `(profile_id, created_at DESC)` for the owner's newest-first inbox list.
+
+`inbox_items` intentionally has neither `revision` nor a soft-delete tombstone in
+v1: it is private, lacks a workspace change feed, and promotion/delete removes it.
+Services validate its JSON shape before persistence and scope every read/mutation
+by `profile_id`, returning `404` for another owner's row.
+
 ### `workspace_users`
 
 Represents a profile's membership and effective identity inside a workspace. Workspace-scoped resources such as mission assignments, role assignments, project ownership, and workflow attribution should reference `workspace_users.id`, not the global `profiles.id`.
@@ -2579,6 +2606,7 @@ The REST API should be the primary remote access path. It should expose domain r
 Recommended boundary:
 
 - `/projects`, `/projects/:id/resources`, `/projects/:id/repository`, `/missions`, `/missions/:id/objectives`, `/missions/:id/events`, `/missions/:id/context`, `/missions/:id/deliveries`, `/workspaces/:id/objectives.csv`. Project resource create/update bodies accept additive `resourceKey`; objective DTOs and create/update bodies expose additive `resourceKey`.
+- `/api/inbox` is the account-owned unassigned-capture surface: `GET` lists the caller's newest-first items, `POST` creates one, and `GET/PATCH/DELETE /api/inbox/:id` reads, edits, or removes only an owned item. `POST /api/inbox/:id/promote` accepts `{ projectId }`, authorizes `mission:create` on that project's workspace, creates an ordinary mission from the item fields, and consumes the item in the same transaction. `InboxItemDto` is `{ id, title, objectives, dueDatetime, priority, createdAt, updatedAt }`. Inbox changes do not enter workspace `entity_changes`; clients refetch their own list, while promotion uses normal mission realtime.
 - `PATCH /api/missions/:id/artifacts/:artifactId` edits an existing artifact's human-facing `label`, `contentText`, and/or `externalUrl` with `mission:update` permission on its mission. The caller supplies `expectedRevision`; stale writes return `409`, and external URLs must use HTTP(S). Its delivery/session/objective provenance and structured `contentJson` are immutable through this surface; the resulting artifact must retain at least one text, JSON, or URL content field. The transaction increments the artifact revision and appends an `artifact` entity change. The same mutation is also exposed as Protocol `POST /api/protocol/update-artifact` (`ovld protocol update-artifact`) and MCP `overlord_update_artifact`.
 - `POST /api/missions/:id/artifacts` creates a mission artifact without a delivery (`delivery_id` null) with `artifact:create` permission on its mission. The body supplies `{ type, label }` plus at least one of `{ contentText, externalUrl }`; optional `objectiveId` / `sessionId` stamp provenance, and Protocol/MCP may pass a live `sessionKey` instead. Non-HTTP(S) external URLs are rejected. The transaction appends an `artifact` entity-change create. The same mutation is exposed as Protocol `POST /api/protocol/add-artifact` (`ovld protocol add-artifact`) and MCP `overlord_add_artifact`. Delivery remains optional for artifacts and may still attach additional ones later.
 - `/workspace/my-missions` (read: missions assigned to the active actor across the active workspace, with personal `my_mission_positions` ordering) and `/workspace/my-missions/order` (persist a personal column reorder; a cross-column drag is a real mission status change validated by the `(workspace_id, status_id)` composite FK).
@@ -2718,6 +2746,7 @@ To keep this contract up to date:
 
 ## Changelog
 
+- Account-owned inbox items (coo:574, contract `54`): adds profile-owned `inbox_items` with private capture fields only, an ordered owner index, and atomic promotion into an ordinary destination-project mission. The table is intentionally outside workspace realtime and is hard-deleted on promotion, item deletion, or profile deletion.
 - Virtual execution targets (coo:258, contract `3`): new core tables `execution_target_registrations`, `project_environment_definitions`, `project_resource_sources`, `execution_request_snapshots`, `execution_request_grants`, `execution_request_observations`, and `mission_target_resources`; additive `execution_requests` columns `launch_snapshot_id`, `failure_code`, `failure_phase`, and `claimed_by_gateway_instance_id`; new open vocabularies for gateway adapter keys, source kinds, observation kinds, grant kinds, and typed failure codes/phases; virtual-target redaction/retention rules; the `/api/virtual-targets/v1/*` REST boundary. `execution_requests.status` and all other closed vocabularies are unchanged.
 - Leased independent execution targets (coo:528, contract `43`): additive `execution_targets.lifecycle_kind`, `lease_seconds`, `lease_grace_seconds`, and `lease_expires_at`; existing rows backfill as persistent. The durable `overlord.execution_target.lease_cleanup.v1` worker rechecks a target's policy/revision and active requests before it may use the ordinary target-deletion cascade. Lease expiry itself is offline-only and never deletes target-owned links, preferences, or access.
 - Execution-target type vocabulary cleanup (coo:528, contract `44`): removes the unused core `ssh` value from `execution_targets.type` (legacy rows rewrite to `virtual`) and drops the dead `execution_requests.target_kind` column.

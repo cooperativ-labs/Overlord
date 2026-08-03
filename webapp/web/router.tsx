@@ -120,6 +120,12 @@ const projectsRoute = createRoute({
   component: lazyRouteComponent(() => import('./pages/ProjectsPage.tsx'), 'ProjectsPage')
 });
 
+const inboxRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/inbox',
+  component: lazyRouteComponent(() => import('./pages/InboxPage.tsx'), 'InboxPage')
+});
+
 const myMissionsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/user',
@@ -168,6 +174,7 @@ export const routeTree = rootRoute.addChildren([
   acceptInviteRoute,
   oauthApproveRoute,
   indexRoute,
+  inboxRoute,
   projectsRoute,
   workspaceLegacyRedirectRoute,
   workspaceMissionLegacyRedirectRoute,

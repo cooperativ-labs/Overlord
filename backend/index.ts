@@ -132,6 +132,7 @@ import {
   clearDefaultProjectPreference,
   clearMissionSchedule,
   createArtifact,
+  createInboxItem,
   createMission,
   createObjective,
   createProject,
@@ -139,6 +140,7 @@ import {
   createProjectTag,
   createUserToken,
   createWorkspaceStatus,
+  deleteInboxItem,
   deleteMission,
   deleteObjective,
   deleteProject,
@@ -150,6 +152,7 @@ import {
   generateCommitMessage,
   generateMissionTitle,
   getDefaultProjectPreference,
+  getInboxItem,
   getMissionDetail,
   getMissionSchedule,
   getProfile,
@@ -157,6 +160,7 @@ import {
   getProjectRepository,
   initializeProject,
   listArtifacts,
+  listInboxItems,
   listMissionBranches,
   listMissionDeliveries,
   listMissionEvents,
@@ -176,6 +180,7 @@ import {
   markMissionStatusesSeen,
   performBranchAction,
   previewMissionSchedule,
+  promoteInboxItem,
   purgeMergedWorktrees,
   removeWorktree,
   renameUserToken,
@@ -188,6 +193,7 @@ import {
   searchMissions,
   setDefaultProjectPreference,
   updateArtifact,
+  updateInboxItem,
   updateMission,
   updateObjective,
   updateProfile,
@@ -1458,6 +1464,39 @@ app.patch(
 );
 
 // ---- Missions -------------------------------------------------------------
+
+app.get(
+  '/api/inbox',
+  handle(() => listInboxItems())
+);
+app.post(
+  '/api/inbox',
+  handle(req => createInboxItem(req.body), { mutates: true })
+);
+app.get(
+  '/api/inbox/:id',
+  handle(req => getInboxItem(req.params.id))
+);
+app.patch(
+  '/api/inbox/:id',
+  handle(req => updateInboxItem(req.params.id, req.body), { mutates: true })
+);
+app.delete(
+  '/api/inbox/:id',
+  handle(
+    async req => {
+      await deleteInboxItem(req.params.id);
+      return { ok: true };
+    },
+    { mutates: true }
+  )
+);
+app.post(
+  '/api/inbox/:id/promote',
+  handle(req => promoteInboxItem(req.params.id, String(req.body?.projectId ?? '')), {
+    mutates: true
+  })
+);
 
 app.get(
   '/api/missions/search',

@@ -28,6 +28,7 @@ import {
   useAccessibleWorkspaces,
   useAgentCatalog,
   useAllProjects,
+  useCreateInboxItem,
   useCreateMission,
   useDefaultProject,
   useLaunchObjective,
@@ -75,6 +76,7 @@ export function NewMissionModal({
   );
   const workspaces = useAccessibleWorkspaces();
   const createMission = useCreateMission();
+  const createInboxItem = useCreateInboxItem();
   const defaultProjectQ = useDefaultProject();
   const launchObjective = useLaunchObjective();
   const updateObjective = useUpdateObjective();
@@ -89,12 +91,20 @@ export function NewMissionModal({
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const fallbackProjectId = defaultProjectQ.data?.projectId ?? null;
+  const recentDefaultProjectId = useMemo(() => {
+    const candidate = defaultProjectId ?? fallbackProjectId;
+    const project = projects.find(item => item.id === candidate);
+    const stored = Number(
+      window.localStorage.getItem('overlord.defaultProjectWindowMinutes') ?? '15'
+    );
+    const minutes = Number.isFinite(stored) && stored >= 0 ? stored : 15;
+    return project && Date.now() - Date.parse(project.updatedAt) <= minutes * 60_000
+      ? project.id
+      : null;
+  }, [defaultProjectId, fallbackProjectId, projects]);
 
   const selectedProjectId =
-    projectId ||
-    (defaultProjectId && projects.some(project => project.id === defaultProjectId)
-      ? defaultProjectId
-      : (fallbackProjectId ?? projects[0]?.id ?? ''));
+    projectId === '__inbox__' ? '' : projectId || recentDefaultProjectId || '';
 
   const selectedProject = projects.find(project => project.id === selectedProjectId) ?? null;
 
@@ -165,15 +175,13 @@ export function NewMissionModal({
     setSelectedTagIds([]);
     setSubmitError(null);
     setProjectId(current => {
-      if (defaultProjectId && projects.some(project => project.id === defaultProjectId)) {
-        return defaultProjectId;
-      }
+      if (recentDefaultProjectId) return recentDefaultProjectId;
       if (current && projects.some(project => project.id === current)) {
         return current;
       }
-      return fallbackProjectId ?? projects[0]?.id ?? '';
+      return '';
     });
-  }, [defaultProjectId, fallbackProjectId, open, projects]);
+  }, [open, projects, recentDefaultProjectId]);
 
   // Tags are project-scoped — drop any that no longer belong to the project.
   useEffect(() => {
@@ -193,13 +201,13 @@ export function NewMissionModal({
   const isBusy = pendingAction !== null;
   const isManual = selection.agent === MANUAL_AGENT_KEY;
   const canSubmit =
-    Boolean(instruction.trim()) && Boolean(selectedProjectId) && selectionLoaded && !isBusy;
+    Boolean(instruction.trim()) && (!selectedProjectId || selectionLoaded) && !isBusy;
   const canRun =
     canSubmit && !isManual && primaryConnection.connected && targetAvailability.available;
 
   async function submit(shouldLaunch: boolean) {
     const text = instruction.trim();
-    if (!text || !selectedProjectId || !selectionLoaded || isBusy) return;
+    if (!text || (selectedProjectId && !selectionLoaded) || isBusy) return;
 
     setPendingAction(shouldLaunch ? 'run' : 'save');
     setSubmitError(null);
@@ -220,6 +228,18 @@ export function NewMissionModal({
       // column's "Add mission" button). Statuses are workspace-scoped, so a
       // caller-supplied status only applies while the chosen project is in
       // the same workspace as the surface that supplied it.
+      if (!selectedProjectId) {
+        if (shouldLaunch) throw new Error('Assign a project before running this task');
+        await createInboxItem.mutateAsync({
+          title: text,
+          objectives: [text],
+          dueDatetime: defaultDueDate
+            ? buildDueDatetime({ selectedDate: defaultDueDate, currentDueDatetime: null })
+            : null
+        });
+        onClose();
+        return;
+      }
       const defaultProject = defaultProjectId
         ? (projects.find(project => project.id === defaultProjectId) ?? null)
         : null;
@@ -292,7 +312,7 @@ export function NewMissionModal({
   async function handleDialogClose() {
     if (isBusy) return;
     const text = instruction.trim();
-    if (!text || !selectedProjectId || !selectionLoaded) {
+    if (!text || (selectedProjectId && !selectionLoaded)) {
       onClose();
       return;
     }
@@ -361,6 +381,21 @@ export function NewMissionModal({
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="min-w-[180px]">
                   <DropdownMenuLabel>Project</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    className="gap-2 text-xs"
+                    onClick={() => {
+                      setProjectId('__inbox__');
+                      setResourceKey(null);
+                      setSelectedTagIds([]);
+                    }}
+                  >
+                    <span className="h-3 w-3 shrink-0 rounded-[4px] border border-muted-foreground" />
+                    <span className="truncate">No project (Inbox)</span>
+                    {!selectedProjectId ? (
+                      <Check className="ml-auto h-3 w-3 text-muted-foreground" />
+                    ) : null}
+                  </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   {projectGroups.map((group, groupIndex) => (
                     <div key={group.workspace.id}>

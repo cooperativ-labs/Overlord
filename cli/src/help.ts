@@ -59,6 +59,7 @@ Execution targets:
 
 Missions:
   ${primaryCommand} create "<objective>" [--objectives-json '[...]'] [--json]
+  ${primaryCommand} inbox create --title "<title>" --objective "<objective>" [--json]
   ${primaryCommand} prompt "<objective>" [--json]
   ${primaryCommand} attach <missionId> [agent] [--json]
   ${primaryCommand} missions list [--status <csv>] [--project-id <id>] [--json]

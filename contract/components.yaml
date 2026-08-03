@@ -4,7 +4,7 @@
 # IMPORTANT: Update this file and CONTRACT.md together when adding components or surfaces.
 # Increment contractVersion when any stable interface changes.
 
-contractVersion: '53'
+contractVersion: '54'
 
 components:
   protocol:
@@ -24,6 +24,7 @@ components:
       - 'idempotency key scope naming: protocol.*'
       - 'in-place mission artifact updates via update-artifact (same editable fields and revision CAS as REST PATCH /api/missions/:id/artifacts/:artifactId; no session key required)'
       - 'mid-turn mission artifact creation via add-artifact (POST /api/protocol/add-artifact), which creates an artifact without a delivery using the same createArtifact service as REST POST /api/missions/:id/artifacts; optional session key stamps session/objective provenance when present'
+      - 'account-owned inbox capture: protocol create --inbox explicitly creates a private profile-owned inbox item; ordinary non-executing create falls back to inbox only after explicit and discovered project resolution fail, while prompt and record-work remain project-required'
       - 'agent-facing mission lifecycle commands only; runner queue/device/project-resource management commands live on CLI/Runner/REST surfaces'
     dependsOn:
       - database
@@ -41,6 +42,7 @@ components:
       - 'organizations table (grouping layer above workspaces) and the required workspaces.organization_id FK; workspaces remain the sole RBAC layer; slugs are unique per organization, not instance-wide'
       - 'Agent Session Exchange core tables (agent_session_channels, agent_session_events, agent_requests, agent_session_inputs) declared by contract and migrated with the channel bootstrap; the scoped channel credential is hash-only and scoped to one channel, native_session_id is a correlation alias and never an authorization key, raw native payloads are never persisted, and no derived capability tier is persisted. The never-migrated hook_events and permission_requests designs are superseded by them; their closed status vocabulary and the mission_events permission_request value remain valid'
       - 'controlled vocabularies (closed and open sets)'
+      - 'profile-owned inbox_items: a minimal private unassigned capture with one v1 objective array entry, optional due datetime and priority, profile cascade deletion, and no workspace/project/status/session state'
       - 'versioned deliveryReport payload storage in deliveries.payload_json; summary remains immutable agent-authored source text'
       - 'worker_jobs durable background queue including core types overlord.delivery.compose.v1, overlord.live_activity.dispatch.v1, and overlord.push_notification.dispatch.v1'
       - 'private live_activity_push_tokens registrations keyed by profile and ActivityKit activity id; APNs tokens are never projected through REST, realtime, or audit payloads'
@@ -87,6 +89,7 @@ components:
       - 'cli/src/agent-session/decision-codec-registry.generated.ts: connector-owned request/decision codecs compiled for execution. The pure interpreter reduces native request payloads into bounded redacted cards and emits the connector-declared exact native allow/deny/defer bytes'
       - 'ovld doctor agent-session reporting: installed descriptor digest versus the compiled catalog, and which mission the current working directory native session is bound to, both without a network call for an unbound session'
       - 'human-readable CLI output format conventions'
+      - 'ovld inbox create alias for non-executing account-owned capture'
     dependsOn:
       - auth
       - rest
@@ -153,6 +156,7 @@ components:
     owns:
       - 'URL paths and HTTP method contracts'
       - 'request/response DTO shapes (camelCase, derived from logical schema)'
+      - 'profile-owned inbox routes: authenticated GET/POST /api/inbox, GET/PATCH/DELETE /api/inbox/:id, and POST /api/inbox/:id/promote; profile isolation returns 404, promotion requires mission:create on the destination project and atomically creates its normal mission then consumes the capture; inbox writes are intentionally outside workspace realtime'
       - 'delivery read projection: GET /api/missions/:id/deliveries returns normalized DeliveryDto records and delivery mission events expose an additive deliveryId without raw payload JSON'
       - 'admin-only workspace objective CSV export (GET /api/workspaces/:id/objectives.csv) as a text/csv attachment'
       - 'read-only derived mission branch metadata (MissionBranchDto) from missions.active_branch, predicted via the service layer copy of the branch-planning algorithm (backend/branch-planning.ts) pinned to contract/branch-planning-vectors.json, then merged with latest client branch observations when available'

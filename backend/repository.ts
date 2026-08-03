@@ -47,6 +47,7 @@ import { hashSessionKey } from '../packages/core/service/util.ts';
 import type {
   ArtifactDto,
   CreateArtifactBody,
+  CreateInboxItemBody,
   CreateMissionBody,
   CreateObjectiveBody,
   CreateProjectBody,
@@ -60,6 +61,7 @@ import type {
   DeliveryReportPayloadV1,
   FileChangeDto,
   GenerateCommitMessageResultDto,
+  InboxItemDto,
   InitializeProjectBody,
   InitializeProjectResultDto,
   MissionBranchDto,
@@ -92,6 +94,7 @@ import type {
   StatusType,
   TokenScope,
   UpdateArtifactBody,
+  UpdateInboxItemBody,
   UpdateMissionBody,
   UpdateObjectiveBody,
   UpdateProfileBody,
@@ -4560,6 +4563,13 @@ async function createMissionTx(
     if (!['low', 'normal', 'high', 'urgent'].includes(priority)) {
       throw new ApiError(400, 'Invalid priority');
     }
+    if (
+      body.dueDatetime !== undefined &&
+      body.dueDatetime !== null &&
+      Number.isNaN(Date.parse(body.dueDatetime))
+    ) {
+      throw new ApiError(400, 'dueDatetime must be a valid ISO-8601 datetime or null');
+    }
 
     const now = nowIso();
     const id = newId();
@@ -4578,8 +4588,8 @@ async function createMissionTx(
       `INSERT INTO missions
        (id, workspace_id, project_id, display_id, sequence_number, title,
         status_id, status_type, board_position, priority, available_tools_json, execution_target_intent_json,
-        metadata_json, created_by_workspace_user_id, assigned_workspace_user_id, created_at, updated_at, revision)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', '{}', '{}', ?, ?, ?, ?, 1)`,
+        metadata_json, created_by_workspace_user_id, assigned_workspace_user_id, due_datetime, created_at, updated_at, revision)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', '{}', '{}', ?, ?, ?, ?, ?, 1)`,
       [
         id,
         workspaceId,
@@ -4593,6 +4603,7 @@ async function createMissionTx(
         priority,
         workspaceUserId,
         assignedWorkspaceUserId,
+        body.dueDatetime ?? null,
         now,
         now
       ]
@@ -4743,6 +4754,190 @@ export async function createMission(body: CreateMissionBody): Promise<MissionDet
   }
 
   return detail;
+}
+
+type InboxItemRow = {
+  id: string;
+  title: string;
+  objectives_json: string;
+  due_datetime: string | null;
+  priority: InboxItemDto['priority'];
+  created_at: string;
+  updated_at: string;
+};
+
+function validateInboxBody(body: {
+  title?: unknown;
+  objectives?: unknown;
+  dueDatetime?: unknown;
+  priority?: unknown;
+}): {
+  title: string;
+  objectives: string[];
+  dueDatetime: string | null;
+  priority: InboxItemDto['priority'];
+} {
+  const title = typeof body.title === 'string' ? body.title.trim() : '';
+  if (!title) throw new ApiError(400, 'Inbox title is required');
+  if (!Array.isArray(body.objectives) || body.objectives.length !== 1) {
+    throw new ApiError(400, 'Inbox objectives must contain exactly one item');
+  }
+  const objectives = body.objectives.map(item => (typeof item === 'string' ? item.trim() : ''));
+  if (!objectives[0]) throw new ApiError(400, 'Inbox objective is required');
+  const dueDatetime =
+    body.dueDatetime === undefined || body.dueDatetime === null ? null : body.dueDatetime;
+  if (typeof dueDatetime !== 'string' || (dueDatetime && Number.isNaN(Date.parse(dueDatetime)))) {
+    throw new ApiError(400, 'dueDatetime must be a valid ISO-8601 datetime or null');
+  }
+  const priority = body.priority === undefined || body.priority === null ? null : body.priority;
+  if (priority !== null && !['low', 'normal', 'high', 'urgent'].includes(String(priority))) {
+    throw new ApiError(400, 'Invalid priority');
+  }
+  return { title, objectives, dueDatetime, priority: priority as InboxItemDto['priority'] };
+}
+
+function toInboxItemDto(row: InboxItemRow): InboxItemDto {
+  let objectives: string[];
+  try {
+    objectives = JSON.parse(row.objectives_json) as string[];
+  } catch {
+    throw new ApiError(500, 'Stored inbox item is invalid');
+  }
+  return {
+    id: row.id,
+    title: row.title,
+    objectives,
+    dueDatetime: row.due_datetime,
+    priority: row.priority,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
+
+async function activeInboxProfileId(db: DatabaseClient): Promise<string> {
+  const profileId = await resolveActiveProfileId(db);
+  if (!profileId) throw new ApiError(401, 'Authentication required');
+  return profileId;
+}
+
+async function ownedInboxRow(
+  db: DatabaseClient,
+  profileId: string,
+  id: string
+): Promise<InboxItemRow> {
+  const row = await db.get<InboxItemRow>(
+    `SELECT id, title, objectives_json, due_datetime, priority, created_at, updated_at
+       FROM inbox_items WHERE id = ? AND profile_id = ?`,
+    [id, profileId]
+  );
+  if (!row) throw new ApiError(404, 'Inbox item not found');
+  return row;
+}
+
+export async function listInboxItems(): Promise<InboxItemDto[]> {
+  const db = requireDatabaseClient();
+  const profileId = await activeInboxProfileId(db);
+  const rows = await db.all<InboxItemRow>(
+    `SELECT id, title, objectives_json, due_datetime, priority, created_at, updated_at
+       FROM inbox_items WHERE profile_id = ? ORDER BY created_at DESC`,
+    [profileId]
+  );
+  return rows.map(toInboxItemDto);
+}
+
+export async function getInboxItem(id: string): Promise<InboxItemDto> {
+  const db = requireDatabaseClient();
+  return toInboxItemDto(await ownedInboxRow(db, await activeInboxProfileId(db), id));
+}
+
+export async function createInboxItem(body: CreateInboxItemBody): Promise<InboxItemDto> {
+  const db = requireDatabaseClient();
+  const profileId = await activeInboxProfileId(db);
+  const input = validateInboxBody(body);
+  const now = nowIso();
+  const row: InboxItemRow = {
+    id: newId(),
+    title: input.title,
+    objectives_json: JSON.stringify(input.objectives),
+    due_datetime: input.dueDatetime,
+    priority: input.priority,
+    created_at: now,
+    updated_at: now
+  };
+  await db.run(
+    `INSERT INTO inbox_items (id, profile_id, title, objectives_json, due_datetime, priority, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [row.id, profileId, row.title, row.objectives_json, row.due_datetime, row.priority, now, now]
+  );
+  return toInboxItemDto(row);
+}
+
+export async function updateInboxItem(
+  id: string,
+  body: UpdateInboxItemBody
+): Promise<InboxItemDto> {
+  const db = requireDatabaseClient();
+  const profileId = await activeInboxProfileId(db);
+  const existing = await ownedInboxRow(db, profileId, id);
+  const input = validateInboxBody({
+    title: body.title ?? existing.title,
+    objectives: body.objectives ?? JSON.parse(existing.objectives_json),
+    dueDatetime: body.dueDatetime === undefined ? existing.due_datetime : body.dueDatetime,
+    priority: body.priority === undefined ? existing.priority : body.priority
+  });
+  const now = nowIso();
+  await db.run(
+    `UPDATE inbox_items SET title = ?, objectives_json = ?, due_datetime = ?, priority = ?, updated_at = ?
+      WHERE id = ? AND profile_id = ?`,
+    [
+      input.title,
+      JSON.stringify(input.objectives),
+      input.dueDatetime,
+      input.priority,
+      now,
+      id,
+      profileId
+    ]
+  );
+  return {
+    id,
+    title: input.title,
+    objectives: input.objectives,
+    dueDatetime: input.dueDatetime,
+    priority: input.priority,
+    createdAt: existing.created_at,
+    updatedAt: now
+  };
+}
+
+export async function deleteInboxItem(id: string): Promise<void> {
+  const db = requireDatabaseClient();
+  const profileId = await activeInboxProfileId(db);
+  await ownedInboxRow(db, profileId, id);
+  await db.run(`DELETE FROM inbox_items WHERE id = ? AND profile_id = ?`, [id, profileId]);
+}
+
+export async function promoteInboxItem(id: string, projectId: string): Promise<MissionDetailDto> {
+  const db = requireDatabaseClient();
+  const profileId = await activeInboxProfileId(db);
+  const missionId = await db.transaction(async tx => {
+    const item = await ownedInboxRow(tx, profileId, id);
+    const objectives = JSON.parse(item.objectives_json) as string[];
+    const created = await createMissionTx(
+      {
+        projectId,
+        title: item.title,
+        objectives: objectives.map(objective => ({ objective })),
+        dueDatetime: item.due_datetime,
+        ...(item.priority ? { priority: item.priority } : {})
+      },
+      tx,
+      true
+    );
+    await tx.run(`DELETE FROM inbox_items WHERE id = ? AND profile_id = ?`, [id, profileId]);
+    return created.missionId;
+  });
+  return getMissionDetail(missionId);
 }
 
 /**

@@ -6,12 +6,14 @@ type ProjectPickerPanelProps = {
   projects: ProjectOption[];
   selectedProjectId: string;
   onSelect: (projectId: string) => void;
+  onSelectInbox: () => void;
 };
 
 export function ProjectPickerPanel({
   projects,
   selectedProjectId,
-  onSelect
+  onSelect,
+  onSelectInbox
 }: ProjectPickerPanelProps) {
   // Projects can span every workspace the caller is a member of (coo:324);
   // label the groups only when more than one workspace is represented.
@@ -20,6 +22,17 @@ export function ProjectPickerPanel({
 
   return (
     <div className="electron-no-drag rounded-xl border bg-background/95 p-2 shadow-lg backdrop-blur-md">
+      <button
+        type="button"
+        onClick={onSelectInbox}
+        className={cn(
+          'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted',
+          !selectedProjectId && 'bg-muted/60'
+        )}
+      >
+        <span className="h-3 w-3 rounded-[4px] border border-muted-foreground" />
+        <span className="truncate">No project (Inbox)</span>
+      </button>
       {projects.length === 0 ? (
         <p className="px-2 py-1.5 text-sm text-muted-foreground">No projects</p>
       ) : (

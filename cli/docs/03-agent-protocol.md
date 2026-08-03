@@ -31,7 +31,10 @@ Requirements:
 
 Requirements:
 
-- `create`: create a draft mission/objective without attaching.
+- `create`: create a draft mission/objective without attaching. `--inbox`
+  explicitly creates an account-owned unassigned capture; ordinary non-executing
+  create uses that fallback only after explicit and discovered project resolution
+  fail. `prompt` and `record-work` still require a resolved project.
 - `prompt`: create a mission and attach or queue execution immediately.
 - `load-context`: read mission context without creating a session.
 - `connect`: create a lightweight session key without full context.

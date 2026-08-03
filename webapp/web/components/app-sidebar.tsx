@@ -23,10 +23,11 @@ import {
 import { WorkspaceSettingsModal } from '@/components/workspaces/WorkspaceSettingsModal';
 import { WorkspaceSidebarSection } from '@/components/WorkspaceSidebarSection';
 import { DRAG_REGION, getDesktopChrome, NO_DRAG_REGION } from '@/lib/desktop-chrome';
-import { useMeta } from '@/lib/queries';
+import { useInboxItems, useMeta } from '@/lib/queries';
 
 export function AppSidebar() {
   const meta = useMeta();
+  const inbox = useInboxItems();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsInitialNav, setSettingsInitialNav] = useState<SettingsNavSection | undefined>();
   const [workspaceSettingsId, setWorkspaceSettingsId] = useState<string | null>(null);
@@ -59,6 +60,18 @@ export function AppSidebar() {
             <SidebarGroupLabel>Organization</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    render={<Link to="/inbox" />}
+                    isActive={pathname === '/inbox'}
+                    tooltip="Inbox"
+                  >
+                    <Inbox />
+                    <span>
+                      Inbox{(inbox.data?.length ?? 0) > 0 ? ` (${inbox.data?.length})` : ''}
+                    </span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     render={<Link to="/user" />}

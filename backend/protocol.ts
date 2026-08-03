@@ -2,6 +2,7 @@ import { type Permission, PERMISSIONS } from '@overlord/auth';
 import type { CreateArtifactBody, UpdateArtifactBody } from '@overlord/contract';
 
 import type { ServiceContext } from '../packages/core/service/context.ts';
+import { ServiceError } from '../packages/core/service/errors.ts';
 import { listAttachments } from '../packages/core/service/missions.ts';
 import { registerActingExecutionTarget } from '../packages/core/service/project-execution-target.ts';
 import {
@@ -39,7 +40,12 @@ import {
 } from './db.ts';
 import { ApiError } from './errors.ts';
 import { requirePermission, requireWorkspacePermission } from './rbac.ts';
-import { callerWorkspaceMemberships, createArtifact, updateArtifact } from './repository.ts';
+import {
+  callerWorkspaceMemberships,
+  createArtifact,
+  createInboxItem,
+  updateArtifact
+} from './repository.ts';
 import { listWorkspaces } from './workspaces.ts';
 
 // ---- Protocol command dispatch -------------------------------------------
@@ -646,13 +652,45 @@ const handlers: Record<string, Handler> = {
     }),
 
   // Mission creation and discovery -----------------------------------------
-  create: (ctx, body) =>
-    protocolCreate({
-      ctx,
-      projectId: strFlag(body, '--project-id') ?? null,
-      objectives: objectiveInputs(body),
-      title: strFlag(body, '--title') ?? null
-    }),
+  create: async (ctx, body) => {
+    const objectives = objectiveInputs(body);
+    if (boolFlag(body, '--inbox')) {
+      const first = objectives[0]?.objective?.trim();
+      if (!first) throw new ApiError(400, 'Inbox creation requires an objective');
+      return {
+        unassigned: true,
+        inboxItem: await createInboxItem({
+          title: strFlag(body, '--title')?.trim() || first,
+          objectives: [first]
+        })
+      };
+    }
+    try {
+      return await protocolCreate({
+        ctx,
+        projectId: strFlag(body, '--project-id') ?? null,
+        objectives,
+        title: strFlag(body, '--title') ?? null
+      });
+    } catch (error) {
+      if (
+        strFlag(body, '--project-id') ||
+        !(error instanceof ServiceError) ||
+        error.code !== 'project_not_found'
+      ) {
+        throw error;
+      }
+      const first = objectives[0]?.objective?.trim();
+      if (!first) throw error;
+      return {
+        unassigned: true,
+        inboxItem: await createInboxItem({
+          title: strFlag(body, '--title')?.trim() || first,
+          objectives: [first]
+        })
+      };
+    }
+  },
 
   prompt: (ctx, body) =>
     protocolPrompt({
@@ -883,7 +921,7 @@ const SUBCOMMAND_PERMISSIONS: Record<string, Permission | null> = {
   deliver: PERMISSIONS.EVENT_CREATE,
   'hook-event': PERMISSIONS.EVENT_CREATE,
   'resume-follow-up': PERMISSIONS.SESSION_ATTACH,
-  create: PERMISSIONS.MISSION_CREATE,
+  create: null,
   prompt: PERMISSIONS.MISSION_CREATE,
   'load-context': PERMISSIONS.MISSION_READ,
   connect: PERMISSIONS.SESSION_ATTACH,

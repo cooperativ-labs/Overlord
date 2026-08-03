@@ -1576,6 +1576,8 @@ export interface CreateMissionBody {
   /** Optional when `firstObjective` or `objectives` is provided; otherwise required. */
   title?: string;
   priority?: MissionPriority;
+  /** Optional one-time due date for a newly created mission. */
+  dueDatetime?: string | null;
   statusId?: string;
   /** Assign the mission to a workspace member (`workspace_users.id`), or `null` to create unassigned. Defaults to the creator when omitted. */
   assignedWorkspaceUserId?: string | null;
@@ -1590,6 +1592,32 @@ export interface CreateMissionBody {
   }>;
   /** Optional `project_tags.id` values to assign to the new mission. Must belong to `projectId`. */
   tagIds?: string[];
+}
+
+/** Private, account-owned draft that has not yet become a workspace mission. */
+export interface InboxItemDto {
+  id: string;
+  title: string;
+  objectives: string[];
+  dueDatetime: string | null;
+  priority: MissionPriority | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateInboxItemBody {
+  title: string;
+  /** Exactly one non-empty objective in v1. */
+  objectives: string[];
+  dueDatetime?: string | null;
+  priority?: MissionPriority | null;
+}
+
+export interface UpdateInboxItemBody {
+  title?: string;
+  objectives?: string[];
+  dueDatetime?: string | null;
+  priority?: MissionPriority | null;
 }
 
 export interface UpdateMissionBody {

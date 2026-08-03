@@ -228,10 +228,12 @@ sessionLifecycle:
 
 missionDiscovery:
   create:
-    description: 'Create a draft mission and objective without attaching'
+    description: 'Create a draft mission and objective without attaching, or an account-owned inbox item with --inbox/fallback when no project resolves'
+    optionalFlags:
+      - --inbox
     sideEffects:
-      - creates-mission
-      - creates-objective-in-draft-state
+      - creates-mission-or-inbox-item
+      - creates-objective-in-draft-state-when-project-resolved
 
   prompt:
     description: 'Create a mission and immediately attach or queue execution'

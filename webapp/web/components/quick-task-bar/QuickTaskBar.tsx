@@ -29,6 +29,7 @@ import {
   useAccessibleWorkspaces,
   useAgentCatalog,
   useAllProjects,
+  useCreateInboxItem,
   useCreateMission,
   useLaunchObjective,
   useLaunchPreference,
@@ -62,6 +63,7 @@ export function QuickTaskBar({ defaultProjectId = null }: QuickTaskBarProps) {
   const projectsQ = useAllProjects();
   const workspaces = useAccessibleWorkspaces();
   const createMission = useCreateMission();
+  const createInboxItem = useCreateInboxItem();
   const launchObjective = useLaunchObjective();
   const updateObjective = useUpdateObjective();
   const settingsQ = useLaunchSettings();
@@ -76,7 +78,8 @@ export function QuickTaskBar({ defaultProjectId = null }: QuickTaskBarProps) {
           color: project.color,
           workspaceId: project.workspaceId,
           workspaceName:
-            workspaces.find(workspace => workspace.id === project.workspaceId)?.name ?? null
+            workspaces.find(workspace => workspace.id === project.workspaceId)?.name ?? null,
+          updatedAt: project.updatedAt
         })),
     [projectsQ.data, workspaces]
   );
@@ -86,9 +89,7 @@ export function QuickTaskBar({ defaultProjectId = null }: QuickTaskBarProps) {
   // picker or # selection ahead of all other defaults.
   const lastManualProjectIdRef = useRef<string | null>(null);
   const [objective, setObjective] = useState('');
-  const [selectedProjectId, setSelectedProjectId] = useState(() =>
-    resolveProjectId(projects, defaultProjectId)
-  );
+  const [selectedProjectId, setSelectedProjectId] = useState('');
   const [stagedFiles, setStagedFiles] = useState<StagedFile[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeMenu, setActiveMenu] = useState<'project' | 'agent' | 'resource' | null>(null);
@@ -104,6 +105,18 @@ export function QuickTaskBar({ defaultProjectId = null }: QuickTaskBarProps) {
   }, []);
 
   const selectedProject = projects.find(project => project.id === selectedProjectId) ?? null;
+  const recentDefaultProjectId = useMemo(() => {
+    const project = projects.find(item => item.id === defaultProjectId);
+    const stored = Number(
+      window.localStorage.getItem('overlord.defaultProjectWindowMinutes') ?? '15'
+    );
+    const minutes = Number.isFinite(stored) && stored >= 0 ? stored : 15;
+    return project &&
+      project.updatedAt &&
+      Date.now() - Date.parse(project.updatedAt) <= minutes * 60_000
+      ? project.id
+      : null;
+  }, [defaultProjectId, projects]);
 
   const preferenceQ = useLaunchPreference(selectedProjectId);
   const resourcesQ = useProjectResources(selectedProjectId);
@@ -165,10 +178,18 @@ export function QuickTaskBar({ defaultProjectId = null }: QuickTaskBarProps) {
   });
 
   useEffect(() => {
-    setSelectedProjectId(current =>
-      resolveProjectId(projects, lastManualProjectIdRef.current, current, defaultProjectId)
-    );
-  }, [defaultProjectId, projects]);
+    setSelectedProjectId(current => {
+      if (lastManualProjectIdRef.current || current || recentDefaultProjectId) {
+        return resolveProjectId(
+          projects,
+          lastManualProjectIdRef.current,
+          current,
+          recentDefaultProjectId
+        );
+      }
+      return '';
+    });
+  }, [projects, recentDefaultProjectId]);
 
   const selectProject = useCallback((projectId: string) => {
     lastManualProjectIdRef.current = projectId;
@@ -239,9 +260,17 @@ export function QuickTaskBar({ defaultProjectId = null }: QuickTaskBarProps) {
     if (!quickTaskApi) return;
     const off = quickTaskApi.onShown(() => {
       requestAnimationFrame(() => {
-        setSelectedProjectId(current =>
-          resolveProjectId(projects, lastManualProjectIdRef.current, current, defaultProjectId)
-        );
+        setSelectedProjectId(current => {
+          if (lastManualProjectIdRef.current || current || recentDefaultProjectId) {
+            return resolveProjectId(
+              projects,
+              lastManualProjectIdRef.current,
+              current,
+              recentDefaultProjectId
+            );
+          }
+          return '';
+        });
         setObjectiveSelection(defaultSelection);
         setSelectedResourceKey(null);
         setActiveMenu(null);
@@ -253,7 +282,7 @@ export function QuickTaskBar({ defaultProjectId = null }: QuickTaskBarProps) {
     return () => {
       off?.();
     };
-  }, [autoResize, defaultProjectId, defaultSelection, projects, resolveTextarea]);
+  }, [autoResize, defaultSelection, projects, recentDefaultProjectId, resolveTextarea]);
 
   const handleClose = useCallback(() => {
     const quickTaskApi = getQuickTaskApi();
@@ -320,13 +349,20 @@ export function QuickTaskBar({ defaultProjectId = null }: QuickTaskBarProps) {
 
   async function handleSubmit(shouldLaunch = false) {
     const trimmed = objective.trim();
-    if (!trimmed || !selectedProject || isSubmitting || !selectionLoaded) return;
+    if (!trimmed || isSubmitting || (selectedProject && !selectionLoaded)) return;
 
     setIsSubmitting(true);
     setSubmitError(null);
     const filesToUpload = stagedFiles;
 
     try {
+      if (!selectedProject) {
+        if (shouldLaunch) throw new Error('Assign a project before running this task');
+        await createInboxItem.mutateAsync({ title: trimmed, objectives: [trimmed] });
+        setObjective('');
+        handleClose();
+        return;
+      }
       if (shouldLaunch && objectiveSelection.agent === MANUAL_AGENT_KEY) {
         throw new Error('Please select an agent to launch this task');
       }
@@ -398,7 +434,7 @@ export function QuickTaskBar({ defaultProjectId = null }: QuickTaskBarProps) {
   }
 
   const canSubmit =
-    Boolean(objective.trim()) && !isSubmitting && Boolean(selectedProject) && selectionLoaded;
+    Boolean(objective.trim()) && !isSubmitting && (!selectedProject || selectionLoaded);
 
   const canLaunch =
     canSubmit &&
@@ -427,40 +463,36 @@ export function QuickTaskBar({ defaultProjectId = null }: QuickTaskBarProps) {
           'overflow-hidden'
         )}
       >
-        {selectedProject ? (
-          <RepositoryMentionTextarea
-            autoListContinuation="shift-enter"
-            projectId={selectedProject.id}
-            value={objective}
-            onValueChange={nextValue => {
-              setObjective(nextValue);
-              autoResize();
-            }}
-            projectMentionOptions={projects}
-            projectMentionSelectionBehavior="select"
-            onProjectMentionSelect={project => {
-              selectProject(project.id);
-            }}
-            onMentionSelect={() => {
-              requestAnimationFrame(() => autoResize());
-            }}
-            mentionMenuMode="inline"
-            onMentionMenuOpenChange={handleMentionMenuOpenChange}
-            onKeyDown={handleKeyDown}
-            placeholder="Write an objective (# selects project)"
-            rows={1}
-            containerClassName="electron-no-drag"
-            menuClassName="electron-no-drag"
-            className={cn(
-              'w-full resize-none border-none bg-transparent text-base leading-relaxed shadow-none',
-              'focus:outline-none focus:ring-0',
-              'placeholder:text-muted-foreground/70'
-            )}
-            disabled={isSubmitting}
-          />
-        ) : (
-          <p className="text-sm text-muted-foreground">Create a project before using quick task.</p>
-        )}
+        <RepositoryMentionTextarea
+          autoListContinuation="shift-enter"
+          projectId={selectedProject?.id ?? ''}
+          value={objective}
+          onValueChange={nextValue => {
+            setObjective(nextValue);
+            autoResize();
+          }}
+          projectMentionOptions={projects}
+          projectMentionSelectionBehavior="select"
+          onProjectMentionSelect={project => {
+            selectProject(project.id);
+          }}
+          onMentionSelect={() => {
+            requestAnimationFrame(() => autoResize());
+          }}
+          mentionMenuMode="inline"
+          onMentionMenuOpenChange={handleMentionMenuOpenChange}
+          onKeyDown={handleKeyDown}
+          placeholder="Write an objective (# selects project)"
+          rows={1}
+          containerClassName="electron-no-drag"
+          menuClassName="electron-no-drag"
+          className={cn(
+            'w-full resize-none border-none bg-transparent text-base leading-relaxed shadow-none',
+            'focus:outline-none focus:ring-0',
+            'placeholder:text-muted-foreground/70'
+          )}
+          disabled={isSubmitting}
+        />
 
         <StagedFilesRow stagedFiles={stagedFiles} onRemoveFile={handleRemoveFile} />
 
@@ -640,6 +672,12 @@ export function QuickTaskBar({ defaultProjectId = null }: QuickTaskBarProps) {
           selectedProjectId={selectedProjectId}
           onSelect={projectId => {
             selectProject(projectId);
+            setActiveMenu(null);
+          }}
+          onSelectInbox={() => {
+            lastManualProjectIdRef.current = null;
+            setSelectedProjectId('');
+            setSelectedResourceKey(null);
             setActiveMenu(null);
           }}
         />

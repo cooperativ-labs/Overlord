@@ -47,6 +47,7 @@ const KNOWN_COMMANDS = new Set([
   'missions',
   'requests',
   'inputs',
+  'inbox',
   'mission',
   'changes',
   'execution',
@@ -146,6 +147,29 @@ async function dispatchCommand({
       const runtime = openCliRuntime();
       try {
         await runProtocolCommand({ runtime, subcommand, args: rest, stdin, primaryCommand });
+      } finally {
+        runtime.close();
+      }
+      return;
+    }
+    case 'inbox': {
+      const [subcommand, ...rest] = args;
+      if (subcommand !== 'create') {
+        throw new CliError({
+          message: 'Usage: ovld inbox create --title <title> --objective <objective>'
+        });
+      }
+      const { openCliRuntime } = await import('./runtime.js');
+      const { runProtocolCommand } = await import('./commands.js');
+      const runtime = openCliRuntime();
+      try {
+        await runProtocolCommand({
+          runtime,
+          subcommand: 'create',
+          args: ['--inbox', ...rest],
+          stdin,
+          primaryCommand
+        });
       } finally {
         runtime.close();
       }

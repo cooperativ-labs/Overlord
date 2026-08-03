@@ -128,12 +128,23 @@ const toolHandlers: Record<string, ToolHandler> = {
     runProtocolSubcommand(
       'create',
       protocolBody({
-        '--project-id': requiredString(args, 'projectId'),
+        ...(optionalString(args, 'projectId')
+          ? { '--project-id': requiredString(args, 'projectId') }
+          : { '--inbox': true }),
         '--objective': requiredString(args, 'objective'),
         ...(optionalString(args, 'title') ? { '--title': requiredString(args, 'title') } : {}),
         ...(optionalString(args, 'resourceKey')
           ? { '--resource': requiredString(args, 'resourceKey') }
           : {})
+      })
+    ),
+  overlord_create_inbox_item: args =>
+    runProtocolSubcommand(
+      'create',
+      protocolBody({
+        '--inbox': true,
+        '--title': requiredString(args, 'title'),
+        '--objective': requiredString(args, 'objective')
       })
     ),
   overlord_load_mission_context: args =>

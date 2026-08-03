@@ -16,6 +16,7 @@ import type {
   AcceptWorkspaceInvitationBody,
   AddOrganizationAdminBody,
   BranchActionBody,
+  CreateInboxItemBody,
   CreateMissionBody,
   CreateObjectiveBody,
   CreateOrganizationOnboardingBody,
@@ -27,6 +28,7 @@ import type {
   CreateWorkspaceBody,
   CreateWorkspaceStatusBody,
   DeliveryDto,
+  InboxItemDto,
   InviteWorkspaceMemberBody,
   LaunchObjectiveBody,
   LaunchPreferenceDto,
@@ -48,6 +50,7 @@ import type {
   UpdateAgentCatalogBody,
   UpdateAgentLaunchConfigBody,
   UpdateArtifactBody,
+  UpdateInboxItemBody,
   UpdateLaunchPreferenceBody,
   UpdateMissionBody,
   UpdateObjectiveBody,
@@ -106,6 +109,7 @@ export const keys = {
   organizations: ['organizations'] as const,
   organizationAdmins: (id: string) => ['organization', id, 'admins'] as const,
   defaultProject: ['profile', 'default-project'] as const,
+  inbox: ['inbox'] as const,
   workspaces: ['workspaces'] as const,
   workspaceMembers: (id: string) => ['workspace', id, 'members'] as const,
   workspaceExecutionTargets: (id: string) => ['workspace', id, 'execution-targets'] as const,
@@ -1147,6 +1151,44 @@ export function useCreateMission() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: CreateMissionBody) => api.createMission(body),
+    onSuccess: () => invalidateAll(qc)
+  });
+}
+
+export function useInboxItems() {
+  return useQuery<InboxItemDto[]>({ queryKey: keys.inbox, queryFn: api.listInboxItems });
+}
+
+export function useCreateInboxItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: CreateInboxItemBody) => api.createInboxItem(body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.inbox })
+  });
+}
+
+export function useUpdateInboxItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: UpdateInboxItemBody }) =>
+      api.updateInboxItem(id, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.inbox })
+  });
+}
+
+export function useDeleteInboxItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.deleteInboxItem(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.inbox })
+  });
+}
+
+export function usePromoteInboxItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, projectId }: { id: string; projectId: string }) =>
+      api.promoteInboxItem(id, projectId),
     onSuccess: () => invalidateAll(qc)
   });
 }

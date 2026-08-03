@@ -29,6 +29,7 @@ import type {
   ArtifactDto,
   BranchActionBody,
   CreateArtifactBody,
+  CreateInboxItemBody,
   CreateMissionBody,
   CreateObjectiveBody,
   CreateOrganizationOnboardingBody,
@@ -47,6 +48,7 @@ import type {
   FileChangeDto,
   GenerateCommitMessageBody,
   GenerateCommitMessageResultDto,
+  InboxItemDto,
   InviteWorkspaceMemberBody,
   InviteWorkspaceMemberResultDto,
   LaunchObjectiveBody,
@@ -91,6 +93,7 @@ import type {
   UpdateAgentCatalogBody,
   UpdateAgentLaunchConfigBody,
   UpdateArtifactBody,
+  UpdateInboxItemBody,
   UpdateLaunchPreferenceBody,
   UpdateMissionBody,
   UpdateObjectiveBody,
@@ -481,6 +484,13 @@ export const api = {
   getMission: (id: string) => request<MissionDetailDto>('GET', `/api/missions/${id}`),
   createMission: (body: CreateMissionBody) =>
     request<MissionDetailDto>('POST', '/api/missions', body),
+  listInboxItems: () => request<InboxItemDto[]>('GET', '/api/inbox'),
+  createInboxItem: (body: CreateInboxItemBody) => request<InboxItemDto>('POST', '/api/inbox', body),
+  updateInboxItem: (id: string, body: UpdateInboxItemBody) =>
+    request<InboxItemDto>('PATCH', `/api/inbox/${id}`, body),
+  deleteInboxItem: (id: string) => request<{ ok: true }>('DELETE', `/api/inbox/${id}`),
+  promoteInboxItem: (id: string, projectId: string) =>
+    request<MissionDetailDto>('POST', `/api/inbox/${id}/promote`, { projectId }),
   updateMission: (id: string, body: UpdateMissionBody) =>
     request<MissionDetailDto>('PATCH', `/api/missions/${id}`, body),
   getMissionSchedule: (id: string) =>
