@@ -570,57 +570,61 @@ export function QuickTaskBar({ defaultProjectId = null }: QuickTaskBarProps) {
               </button>
             ) : null}
 
-            <button
-              type="button"
-              aria-label={`Choose agent and model: ${selectedAgentFullLabel}`}
-              aria-expanded={activeMenu === 'agent'}
-              title={selectedAgentFullLabel}
-              onClick={() => setActiveMenu(current => (current === 'agent' ? null : 'agent'))}
-              disabled={isSubmitting || !catalog}
-              className={cn(
-                'electron-no-drag flex h-8 shrink-0 items-center gap-1 rounded-full px-2 text-xs text-muted-foreground shadow-sm transition-colors',
-                activeMenu === 'agent' && 'bg-muted text-foreground',
-                isSubmitting || !catalog
-                  ? 'cursor-not-allowed opacity-60'
-                  : 'cursor-pointer hover:bg-muted hover:text-foreground'
-              )}
-            >
-              {hasSelectedAgentIcon ? (
-                <AgentIcon
-                  agentKey={selectedAgentIconKey}
-                  size={14}
-                  alt=""
-                  className="h-3.5 w-3.5 shrink-0"
-                />
-              ) : (
-                <Bot className="h-3.5 w-3.5 shrink-0" />
-              )}
-              <ChevronDown className="h-3 w-3 shrink-0" />
-            </button>
+            {selectedProject ? (
+              <button
+                type="button"
+                aria-label={`Choose agent and model: ${selectedAgentFullLabel}`}
+                aria-expanded={activeMenu === 'agent'}
+                title={selectedAgentFullLabel}
+                onClick={() => setActiveMenu(current => (current === 'agent' ? null : 'agent'))}
+                disabled={isSubmitting || !catalog}
+                className={cn(
+                  'electron-no-drag flex h-8 shrink-0 items-center gap-1 rounded-full px-2 text-xs text-muted-foreground shadow-sm transition-colors',
+                  activeMenu === 'agent' && 'bg-muted text-foreground',
+                  isSubmitting || !catalog
+                    ? 'cursor-not-allowed opacity-60'
+                    : 'cursor-pointer hover:bg-muted hover:text-foreground'
+                )}
+              >
+                {hasSelectedAgentIcon ? (
+                  <AgentIcon
+                    agentKey={selectedAgentIconKey}
+                    size={14}
+                    alt=""
+                    className="h-3.5 w-3.5 shrink-0"
+                  />
+                ) : (
+                  <Bot className="h-3.5 w-3.5 shrink-0" />
+                )}
+                <ChevronDown className="h-3 w-3 shrink-0" />
+              </button>
+            ) : null}
           </div>
 
           <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              aria-label={isSubmitting ? 'Submitting' : 'Run'}
-              title="Save and run (cmd+enter)"
-              onClick={() => void handleSubmit(true)}
-              disabled={!canLaunch}
-              className={cn(
-                'electron-no-drag flex h-8 items-center gap-1.5 rounded-full px-3 text-sm font-medium transition-colors',
-                canLaunch
-                  ? 'bg-primary text-white hover:bg-primary/90'
-                  : 'bg-muted text-muted-foreground/60'
-              )}
-            >
-              {isSubmitting ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <div className="flex items-center gap-1">
-                  <Play className="h-3.5 w-3.5" /> Run
-                </div>
-              )}
-            </button>
+            {selectedProject ? (
+              <button
+                type="button"
+                aria-label={isSubmitting ? 'Submitting' : 'Run'}
+                title="Save and run (cmd+enter)"
+                onClick={() => void handleSubmit(true)}
+                disabled={!canLaunch}
+                className={cn(
+                  'electron-no-drag flex h-8 items-center gap-1.5 rounded-full px-3 text-sm font-medium transition-colors',
+                  canLaunch
+                    ? 'bg-primary text-white hover:bg-primary/90'
+                    : 'bg-muted text-muted-foreground/60'
+                )}
+              >
+                {isSubmitting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <div className="flex items-center gap-1">
+                    <Play className="h-3.5 w-3.5" /> Run
+                  </div>
+                )}
+              </button>
+            ) : null}
 
             <button
               type="button"
@@ -690,7 +694,7 @@ export function QuickTaskBar({ defaultProjectId = null }: QuickTaskBarProps) {
             setActiveMenu(null);
           }}
         />
-      ) : activeMenu === 'agent' && catalog ? (
+      ) : activeMenu === 'agent' && selectedProject && catalog ? (
         <AgentModelPickerPanel
           catalog={catalog}
           selection={objectiveSelection}

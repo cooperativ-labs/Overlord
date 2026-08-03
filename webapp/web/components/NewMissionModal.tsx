@@ -501,16 +501,18 @@ export function NewMissionModal({
             </div>
 
             <div className="flex shrink-0 items-center gap-1.5">
-              <AgentModelChooserButton
-                catalog={catalog}
-                selection={selection}
-                onChange={handleSelectionChange}
-                agentConfigs={agentConfigs}
-                onLaunchConfigCommit={(agentKey, config) =>
-                  updateAgentConfig.mutate({ agentKey, body: config })
-                }
-                disabled={isBusy}
-              />
+              {selectedProjectId ? (
+                <AgentModelChooserButton
+                  catalog={catalog}
+                  selection={selection}
+                  onChange={handleSelectionChange}
+                  agentConfigs={agentConfigs}
+                  onLaunchConfigCommit={(agentKey, config) =>
+                    updateAgentConfig.mutate({ agentKey, body: config })
+                  }
+                  disabled={isBusy}
+                />
+              ) : null}
 
               <Button
                 variant="secondary"
@@ -522,7 +524,7 @@ export function NewMissionModal({
                 Save
               </Button>
 
-              {isManual ? null : (
+              {selectedProjectId && !isManual ? (
                 <Button
                   variant="primary"
                   className="h-8 gap-1.5 px-3 text-xs"
@@ -536,7 +538,7 @@ export function NewMissionModal({
                   )}
                   Run
                 </Button>
-              )}
+              ) : null}
             </div>
           </div>
         </div>
