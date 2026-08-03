@@ -133202,6 +133202,44 @@ async function endChannel({
     });
   });
 }
+async function findBindableChannelForMission({
+  ctx,
+  missionId,
+  objectiveId = null,
+  executionRequestId = null
+}) {
+  if (executionRequestId) {
+    const byRequest = await ctx.db.get(
+      `SELECT id FROM agent_session_channels
+         WHERE workspace_id = ? AND mission_id = ? AND execution_request_id = ?
+           AND session_id IS NULL AND deleted_at IS NULL
+           AND state IN ('preparing', 'online', 'degraded')
+         ORDER BY created_at DESC LIMIT 1`,
+      [ctx.workspace.id, missionId, executionRequestId]
+    );
+    if (byRequest?.id) return byRequest.id;
+  }
+  if (objectiveId) {
+    const byObjective = await ctx.db.get(
+      `SELECT id FROM agent_session_channels
+         WHERE workspace_id = ? AND mission_id = ? AND objective_id = ?
+           AND session_id IS NULL AND deleted_at IS NULL
+           AND state IN ('preparing', 'online', 'degraded')
+         ORDER BY created_at DESC LIMIT 1`,
+      [ctx.workspace.id, missionId, objectiveId]
+    );
+    if (byObjective?.id) return byObjective.id;
+  }
+  const byMission = await ctx.db.get(
+    `SELECT id FROM agent_session_channels
+       WHERE workspace_id = ? AND mission_id = ?
+         AND session_id IS NULL AND deleted_at IS NULL
+         AND state IN ('preparing', 'online', 'degraded')
+       ORDER BY created_at DESC LIMIT 1`,
+    [ctx.workspace.id, missionId]
+  );
+  return byMission?.id ?? null;
+}
 
 // ../packages/core/service/protocol.ts
 init_change_feed();
@@ -134968,10 +135006,16 @@ async function attachSession({
       objective: refreshedObjective2,
       executionTargetId: resolvedTargetId
     });
-    if (sessionChannelId) {
+    const resolvedChannelId2 = sessionChannelId ?? await findBindableChannelForMission({
+      ctx,
+      missionId: context.mission.id,
+      objectiveId: existing.objective_id,
+      executionRequestId: executionRequestId ?? null
+    });
+    if (resolvedChannelId2) {
       await bindChannelToSession({
         ctx,
-        channelId: sessionChannelId,
+        channelId: resolvedChannelId2,
         sessionId: existing.id,
         missionId: context.mission.id,
         objectiveId: existing.objective_id,
@@ -135087,10 +135131,16 @@ async function attachSession({
       executionRequestId: executionRequestId ?? null
     });
   });
-  if (sessionChannelId) {
+  const resolvedChannelId = sessionChannelId ?? await findBindableChannelForMission({
+    ctx,
+    missionId: context.mission.id,
+    objectiveId: objective.id,
+    executionRequestId: executionRequestId ?? null
+  });
+  if (resolvedChannelId) {
     await bindChannelToSession({
       ctx,
-      channelId: sessionChannelId,
+      channelId: resolvedChannelId,
       sessionId,
       missionId: context.mission.id,
       objectiveId: objective.id,
