@@ -76,8 +76,8 @@ Changes:
   ${primaryCommand} changes rationales --mission-id <id> [--objective-id <id>] [--json]
 
 Agents:
-  Built-in agents (claude, codex, cursor, pi) need an installed connector
-  (${primaryCommand} agent-setup <agent>). Launch with:
+  Built-in agents (claude, codex, cursor, pi, antigravity, opencode) need an
+  installed connector (${primaryCommand} agent-setup <agent>). Launch with:
   ${primaryCommand} launch <agent> --mission-id <missionId>
   Use ${primaryCommand} protocol help for the full mission lifecycle reference.
   Key protocol commands: auth-status, discover-project, create, prompt, attach,
