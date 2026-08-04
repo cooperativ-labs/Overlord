@@ -53,15 +53,15 @@ return JSON by default.
 | `ovld org-setup --org-name <name> [--workspace-name <name>] [--workspace-slug <slug>] [--logo <path>] [--no-input] [--if-needed] [--json]` | Create an organization and its first workspace when the signed-in profile has none. |
 
 Supported built-in connector names currently include `claude`, `codex`, `cursor`,
-and `pi`.
+`pi`, `antigravity`, and `opencode`.
 
 ## Projects and resources
 
 | Command | What it does |
 | --- | --- |
 | `ovld create-project --name <name> [--directory <path>\|--no-directory] [--json]` | Create a project and optionally link a local directory. |
-| `ovld add-cwd [--directory <path>] [--project-id <id>] [--key <resource-key>] [--primary true\|false] [--json]` | Link a local checkout. |
-| `ovld add-url --url <git-url> --project-id <id> [--key <resource-key>] [--primary true\|false]` | Add or update a remote Git source. |
+| `ovld add-cwd [--directory <path>] [--project-id <id>] [--key <resource-key>] [--primary true\|false] [--access read\|read_write] [--json]` | Link a local checkout. |
+| `ovld add-url --url <git-url> --project-id <id> [--key <resource-key>] [--primary true\|false] [--access read\|read_write]` | Add or update a remote Git source. |
 | `ovld add-et --name <name> [--workspace-id <id-or-name>] [--json]` | Announce this machine as an execution target (provisions or renames its local target). |
 
 ## Missions and launches
@@ -69,6 +69,7 @@ and `pi`.
 | Command | What it does |
 | --- | --- |
 | `ovld create "<objective>" [--objectives-json <json>] [--title <text>] [--project-id <id>] [--json]` | Create a draft mission. |
+| `ovld inbox create --title <text> --objective <text> [--json]` | Create a private, account-owned unassigned task capture. |
 | `ovld prompt "<objective>" [--objectives-json <json>] [--title <text>] [--project-id <id>] [--agent <id>] [--json]` | Create a mission and queue execution. |
 | `ovld attach <mission-id> [agent] [--objective-id <id>] [--model <id>] [--thinking <level>] [--json]` | Queue an agent for an existing mission. |
 | `ovld execution --mission-id <id> [--objective-id <id>] [--agent <id>] [--model <id>] [--thinking <level>] [--json]` | Alias of `attach` that requires the mission flag. |
@@ -97,6 +98,29 @@ and repeat `--flag <value>` to pass supported options through to the agent.
 | `ovld runner service uninstall [--json]` | Remove the registered service. |
 | `ovld changes status --mission-id <id> [--objective-id <id>] [--json]` | Show changed-file status for a mission. |
 | `ovld changes rationales --mission-id <id> [--objective-id <id>] [--json]` | List recorded file-change rationales. |
+
+## Live sessions and decisions
+
+These commands cover the [agent-session](/agent-sessions/) surface — the live observe/decide/inject
+channel between a running agent harness and Overlord, separate from the durable mission protocol.
+
+| Command | What it does |
+| --- | --- |
+| `ovld requests [--json]` | List open and recent agent decisions (time-bounded permission requests). |
+| `ovld requests resolve <id> --revision <n> --decision allow\|deny\|ask [--text <text>]` | Answer a held decision. |
+| `ovld inputs list --mission-id <id> [--json]` | List session instructions queued or delivered to a mission's live channels. |
+| `ovld inputs send --channel-id <id> --body <text> [--kind <kind>] [--json]` | Send an instruction to one live session channel. |
+| `ovld agent-session capabilities [<agent>] [--json]` | Print the fixture-backed capability descriptor for a harness — offline, authoritative. |
+| `ovld agent-session bind --agent <key> --native-session-id <id> [--mission-id <id>]` | Correlate a harness-native session id with this process's channel. |
+| `ovld agent-session event --agent <key> --payload-file -` | Push one native harness event (connector-internal; silent, never blocks). |
+| `ovld agent-session request --agent <key> --payload-file -` | Wait for a remote decision or defer to the harness (connector-internal). |
+| `ovld agent-session inbox --agent <key> --payload-file -` | Claim one pending instruction and emit it natively (connector-internal). |
+| `ovld agent-session sidecar --agent <key> --port <port>` | Drive a control-plane harness event stream, such as OpenCode (connector-internal). |
+
+`agent-session event`, `request`, `inbox`, and `sidecar` are the adapter runtime commands
+connectors invoke from hooks and extensions; `capabilities` and `bind` are the ones you would
+run directly while diagnosing a connector. See
+[Agent-session adapters](/docs-for-agents/agent-sessions/) for per-harness behavior.
 
 ## Agent protocol
 

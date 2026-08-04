@@ -24,7 +24,7 @@ OpenCode, Antigravity, and others). A connector is what lets an agent speak the
 Install or refresh a connector with:
 
 ```bash
-ovld agent-setup <agent>    # claude | codex | cursor | pi | all
+ovld agent-setup <agent>    # claude | codex | cursor | pi | antigravity | opencode | all
 ovld doctor                 # verify managed files and permissions
 ```
 
@@ -38,6 +38,8 @@ connector contract version changes.
 - [Codex](adapters/codex/README.md): Codex plugin with hooks, MCP bridge, and permission warmup.
 - [Cursor](adapters/cursor/README.md): Cursor plugin with slash commands, hooks, rules, and MCP bridge.
 - [PI](adapters/pi/README.md): PI Agent skill and extension with follow-up capture and native-session resume.
+- [Antigravity](adapters/antigravity/README.md): Antigravity plugin exposing the local mission workflow to Antigravity CLI/IDE sessions.
+- [OpenCode](adapters/opencode/README.md): control-plane connector (Shape C) driven by `ovld agent-session sidecar` — no hook scripts.
 
 ### Extension point
 

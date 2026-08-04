@@ -66,7 +66,7 @@ For behavioral specs and acceptance criteria, see the other docs in this folder.
 | Command | Description | Positional args | Flags |
 | ------- | ----------- | --------------- | ----- |
 | `ovld agent-setup` | List installable agent connectors | — | `--json` |
-| `ovld agent-setup <agent>` | Install or repair one connector (e.g. `claude`, `codex`, `cursor`, `pi`) | `agent` | `--dry-run`, `--home <path>`, `--json` |
+| `ovld agent-setup <agent>` | Install or repair one connector (e.g. `claude`, `codex`, `cursor`, `pi`, `antigravity`, `opencode`) | `agent` | `--dry-run`, `--home <path>`, `--json` |
 | `ovld agent-setup all` | Install or repair all supported connectors | — | `--dry-run`, `--home <path>`, `--json` |
 
 ---
@@ -86,7 +86,8 @@ Prompts interactively for omitted fields on a TTY; `--no-input` fails fast inste
 | Command | Description | Positional args | Flags |
 | ------- | ----------- | --------------- | ----- |
 | `ovld create-project` | Create a project and optionally link the current directory | — | `--name <name>` (required), `--directory <path>`, `--no-directory`, `--json` |
-| `ovld add-cwd` | Link a checkout directory to a project | — | `--directory <path>` (default: cwd), `--project-id <id-or-name>`, `--key <resourceKey>`, `--primary` (`true`, `false`) (default: true), `--json` |
+| `ovld add-cwd` | Link a checkout directory to a project | — | `--directory <path>` (default: cwd), `--project-id <id-or-name>`, `--key <resourceKey>`, `--primary` (`true`, `false`) (default: true), `--access` (`read`, `read_write`), `--json` |
+| `ovld add-url` | Add or update a remote Git source on a project | — | `--url <git-url>` (required), `--project-id <id-or-name>` (required), `--key <resourceKey>`, `--primary` (`true`, `false`), `--access` (`read`, `read_write`), `--json` |
 
 When `--project-id` is omitted on an interactive terminal, the CLI prompts to pick a project. Non-interactively it uses the first available project.
 
@@ -109,6 +110,7 @@ Registration is workspace-scoped and "parentless" (no project/mission identifies
 | Command | Description | Positional args | Flags |
 | ------- | ----------- | --------------- | ----- |
 | `ovld create` | Create a draft mission | `"<objective>"` | `--objectives-json <json>`, `--title <text>`, `--project-id <id>`, `--json` |
+| `ovld inbox create` | Create a private, account-owned unassigned task capture (one objective) | — | `--title <text>` (required), `--objective <text>` (required), `--json` |
 | `ovld prompt` | Create a mission and queue execution | `"<objective>"` | `--objectives-json <json>`, `--title <text>`, `--project-id <id>`, `--agent <id>`, `--json` |
 | `ovld attach` | Queue an agent for a mission (does not spawn locally) | `missionId`, `agent` (optional) | `--mission-id <id>`, `--objective-id <id>`, `--agent <id>`, `--model <id>`, `--thinking <level>`, `--json` |
 | `ovld execution` | Alias of `ovld attach` with required `--mission-id` | — | `--mission-id <id>` (required), `--objective-id <id>`, `--agent <id>`, `--model <id>`, `--thinking <level>`, `--json` |
@@ -167,6 +169,47 @@ environment snapshot including the user token, so they are written owner-only
 | ------- | ----------- | --------------- | ----- |
 | `ovld changes status` | Show file-change status for a mission | — | `--mission-id <id>` (required), `--json` |
 | `ovld changes rationales` | List change rationales for a mission | — | `--mission-id <id>` (required), `--json` |
+
+---
+
+## Requests
+
+Time-bounded agent decisions raised by a live callback (see [agent-session](#agent-session)) surface here for a human to answer.
+
+| Command | Description | Positional args | Flags |
+| ------- | ----------- | --------------- | ----- |
+| `ovld requests` | List open and recent agent decisions | — | `--json` |
+| `ovld requests resolve <id>` | Answer a held decision | `id` | `--revision <n>` (required), `--decision <allow\|deny\|ask>` (required), `--text <text>` |
+
+---
+
+## Inputs
+
+Session instructions sent to a live agent-session channel while the harness is running. Distinct from `ovld protocol update`, which posts to the durable mission record.
+
+| Command | Description | Positional args | Flags |
+| ------- | ----------- | --------------- | ----- |
+| `ovld inputs list` | List session instructions for a mission's live channels | — | `--mission-id <id>` (required), `--json` |
+| `ovld inputs send` | Send an instruction to one live session channel | — | `--channel-id <id>` (required), `--body <text>` (required), `--kind <kind>` (default: `instruction`), `--json` |
+
+The list response identifies the addressed channel; sending requires that channel id because a mission can have more than one live session.
+
+---
+
+## Agent session
+
+`ovld agent-session` is the local, offline agent-session runtime surface — separate from `ovld protocol`. `capabilities` and `bind` are safe to run directly; `event`, `request`, `inbox`, and `sidecar` are the adapter runtime commands connectors invoke from hooks and extensions.
+
+| Command | Description | Positional args | Flags |
+| ------- | ----------- | --------------- | ----- |
+| `ovld agent-session capabilities [<agent>]` | Print the fixture-backed capability descriptor (compiled catalog, no network/filesystem I/O) | `agent` (optional) | `--json` |
+| `ovld agent-session bind` | Correlate a harness-native session id with this process's channel | — | `--agent <key>` (required), `--native-session-id <id>` (required), `--mission-id <id>` |
+| `ovld agent-session event` | Push one native harness event; silent, never blocks, always exits 0 | — | `--agent <key>` (required), `--payload-file <path\|->` |
+| `ovld agent-session request` | Wait for a remote decision or defer to the harness | — | `--agent <key>` (required), `--payload-file <path\|->` |
+| `ovld agent-session inbox` | Claim one pending instruction and emit it natively | — | `--agent <key>` (required), `--payload-file <path\|->`, `--confirm <input-id>`, `--lease-id <lease>`, `--wait-ms <n>` |
+| `ovld agent-session sidecar` | Drive a control-plane harness event stream (e.g. OpenCode) | — | `--agent <key>` (required), `--port <port>` (required) |
+
+See `connectors/docs/` and `docs/src/content/docs/docs-for-agents/agent-sessions.mdx` for per-harness observe/decide/inject behavior.
 
 ---
 
@@ -242,7 +285,7 @@ Each item in `--skip-rationale-for-json` / `--skip-rationale-for-file`:
 
 ## Commands that do not require a backend
 
-`help`, `version`, `update`, `init`, `doctor`, `setup`, `agent-setup`, `serve`, `config`, `auth`, `user-token`, `prune`
+`help`, `version`, `update`, `init`, `doctor`, `setup`, `agent-setup`, `serve`, `config`, `auth`, `user-token`, `prune`, `contract`, `agent-session`
 
 All other commands require a configured, reachable backend URL and authentication (except `protocol auth-status`, which reports readiness either way).
 

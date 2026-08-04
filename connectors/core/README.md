@@ -26,7 +26,9 @@ follow:
 - repair local auth/setup before asking the user to intervene
 
 You do not install Connector Core directly. It is bundled into each agent adapter
-(Claude, Codex, Cursor, PI) when you run `ovld agent-setup <agent>`. See the
+that ships a skill/command bundle (Claude, Codex, Cursor, PI, Antigravity) when you
+run `ovld agent-setup <agent>`. OpenCode is a control-plane connector with no skill
+bundle — see [its README](../adapters/opencode/README.md). See the
 [connectors module README](../README.md) for setup instructions.
 
 ## For Developers
