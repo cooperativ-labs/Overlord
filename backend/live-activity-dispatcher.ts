@@ -1,6 +1,12 @@
 import type { DatabaseClient } from '@overlord/database';
 
 import { LIVE_ACTIVITY_DISPATCH_JOB_TYPE } from '../packages/core/service/live-activity-jobs.ts';
+import {
+  claimNextWorkerJob,
+  finishWorkerJob,
+  retryWorkerJob,
+  type ClaimedWorkerJob
+} from '../packages/core/service/worker-jobs.ts';
 import { newId, nowIso } from '../packages/core/service/util.ts';
 
 import { type ApnsConfig, apnsConfig, type ApnsResult, sendApnsRequest } from './apns-client.ts';
@@ -12,18 +18,9 @@ import {
 } from './live-activities.ts';
 
 const POLL_INTERVAL_MS = 1_500;
-const LOCK_TTL_MS = 60_000;
 const UNCHANGED_MIN_INTERVAL_MS = 5 * 60 * 1000;
 const COMPLETION_DISMISSAL_MS = 10 * 60 * 1000;
-const RETRY_BACKOFF_MS = [15_000, 60_000, 300_000, 900_000, 3_600_000];
-
-type WorkerJobRow = {
-  id: string;
-  payload_json: string;
-  attempt_count: number;
-  max_attempts: number;
-  revision: number;
-};
+type WorkerJobRow = ClaimedWorkerJob;
 
 type TokenRow = {
   id: string;
@@ -99,7 +96,11 @@ class LiveActivityDispatcher {
     this.polling = true;
     try {
       const db = requireDatabaseClient();
-      const job = await claimNextJob(db, this.workerId);
+      const job = await claimNextWorkerJob({
+        db,
+        jobType: LIVE_ACTIVITY_DISPATCH_JOB_TYPE,
+        workerId: this.workerId
+      });
       if (job) await this.processJob(db, job);
     } catch (error) {
       console.error('[live-activity-dispatcher] poll failed', error);
@@ -115,7 +116,7 @@ class LiveActivityDispatcher {
       if (typeof payload.profileId !== 'string' || !payload.profileId) throw new Error('profileId');
       profileId = payload.profileId;
     } catch {
-      await finishJob(db, job.id, 'failed', 'Malformed profile payload');
+      await finishWorkerJob(db, job.id, 'failed', 'Malformed profile payload');
       return;
     }
 
@@ -126,7 +127,7 @@ class LiveActivityDispatcher {
         [profileId]
       );
       if (tokens.length === 0) {
-        await finishJob(db, job.id, 'succeeded', null);
+        await finishWorkerJob(db, job.id, 'succeeded', null);
         return;
       }
       const state = await buildLiveActivityContentState(db, profileId);
@@ -162,71 +163,17 @@ class LiveActivityDispatcher {
           );
         }
       }
-      await finishJob(db, job.id, 'succeeded', null);
+      await finishWorkerJob(db, job.id, 'succeeded', null);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       if (job.attempt_count >= job.max_attempts) {
-        await finishJob(db, job.id, 'failed', message);
+        await finishWorkerJob(db, job.id, 'failed', message);
       } else {
-        const delay =
-          RETRY_BACKOFF_MS[Math.min(job.attempt_count - 1, RETRY_BACKOFF_MS.length - 1)]!;
-        await db.run(
-          `UPDATE worker_jobs SET status = 'queued', run_after = ?, last_error = ?, locked_by = NULL,
-             locked_until = NULL, updated_at = ?, revision = revision + 1 WHERE id = ?`,
-          [new Date(Date.now() + delay).toISOString(), message, nowIso(), job.id]
-        );
+        await retryWorkerJob(db, job.id, job.attempt_count, message);
       }
     }
   }
 }
 
-async function claimNextJob(db: DatabaseClient, workerId: string): Promise<WorkerJobRow | null> {
-  return db.transaction(async tx => {
-    const now = nowIso();
-    await tx.run(
-      `UPDATE worker_jobs SET status = 'queued', locked_by = NULL, locked_until = NULL, updated_at = ?, revision = revision + 1
-       WHERE type = ? AND status = 'running' AND deleted_at IS NULL AND locked_until < ?`,
-      [now, LIVE_ACTIVITY_DISPATCH_JOB_TYPE, now]
-    );
-    const lock = tx.dialect === 'postgres' ? 'FOR UPDATE SKIP LOCKED' : '';
-    const candidate = await tx.get<WorkerJobRow>(
-      `SELECT id, payload_json, attempt_count, max_attempts, revision FROM worker_jobs
-        WHERE type = ? AND status = 'queued' AND deleted_at IS NULL AND run_after <= ?
-        ORDER BY priority ASC, run_after ASC LIMIT 1 ${lock}`,
-      [LIVE_ACTIVITY_DISPATCH_JOB_TYPE, now]
-    );
-    if (!candidate) return null;
-    const updated = await tx.run(
-      `UPDATE worker_jobs SET status = 'running', attempt_count = attempt_count + 1, locked_by = ?, locked_until = ?, updated_at = ?, revision = revision + 1
-        WHERE id = ? AND status = 'queued' AND revision = ?`,
-      [
-        workerId,
-        new Date(Date.parse(now) + LOCK_TTL_MS).toISOString(),
-        now,
-        candidate.id,
-        candidate.revision
-      ]
-    );
-    return updated.changes === 0
-      ? null
-      : {
-          ...candidate,
-          attempt_count: candidate.attempt_count + 1,
-          revision: candidate.revision + 1
-        };
-  });
-}
-
-async function finishJob(
-  db: DatabaseClient,
-  id: string,
-  status: 'succeeded' | 'failed',
-  lastError: string | null
-): Promise<void> {
-  await db.run(
-    `UPDATE worker_jobs SET status = ?, last_error = ?, locked_by = NULL, locked_until = NULL, updated_at = ?, revision = revision + 1 WHERE id = ?`,
-    [status, lastError, nowIso(), id]
-  );
-}
-
 export const liveActivityDispatcher = new LiveActivityDispatcher();
+export const __testables = { apnsPayload, LiveActivityDispatcher };

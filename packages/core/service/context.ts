@@ -16,6 +16,13 @@ export type ServiceContext = {
   workspace: WorkspaceContext;
   actorWorkspaceUserId: string | null;
   source: 'cli' | 'protocol' | 'webapp' | 'runner';
+  /**
+   * User token the request authenticated with, when one did. Recorded on
+   * change-feed rows so a token-driven write stays attributable to the token
+   * and not just the member behind it. The CLI/protocol/service paths leave
+   * this unset; the REST layer supplies the active token.
+   */
+  actorTokenId?: string | null;
   /** Client machine identity (browser/desktop/CLI). Required on hosted backends. */
   clientDevice?: ClientDeviceIdentity | null;
 };

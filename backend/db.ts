@@ -188,8 +188,6 @@ export async function resolveActorForWorkspace(
   return row?.id ?? null;
 }
 
-export const resolveActorForWorkspaceAsync = resolveActorForWorkspace;
-
 /**
  * Resolve the workspace_user row the *current request's authenticated caller*
  * owns in `workspaceId` — their own membership, not the workspace's oldest
@@ -440,6 +438,7 @@ export function buildWebappServiceContext(
     db: client,
     workspace: { id: workspace.id, slug: workspace.slug, name: workspace.name },
     actorWorkspaceUserId: getActorWorkspaceUserId(),
+    actorTokenId: getActiveTokenId(),
     source: 'webapp',
     clientDevice: getClientDeviceIdentity()
   };
@@ -469,6 +468,7 @@ export async function buildWebappServiceContextForWorkspace(
     db: client,
     workspace,
     actorWorkspaceUserId,
+    actorTokenId: getActiveTokenId(),
     source: 'webapp',
     clientDevice: getClientDeviceIdentity()
   };

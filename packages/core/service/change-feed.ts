@@ -101,8 +101,9 @@ export async function recordChange({
     entityRevision,
     changedFields,
     actorWorkspaceUserId: ctx.actorWorkspaceUserId,
-    // The protocol/service path does not attribute changes to a token.
-    actorTokenId: null,
+    // The protocol/service path does not attribute changes to a token; the REST
+    // layer passes the authenticating token through on the context.
+    actorTokenId: ctx.actorTokenId ?? null,
     source: ctx.source
   });
 }

@@ -87,8 +87,18 @@ async function nextMissionSequence(ctx: ServiceContext): Promise<number> {
     [ctx.workspace.id]
   )) as { id: string; next_value: number } | undefined;
 
+  // A workspace provisioned before the counter existed (or one seeded outside
+  // the normal bootstrap) has no row yet. Start it at 1 rather than failing the
+  // create — matching what the REST path has always done.
   if (!row) {
-    throw new ServiceError('Mission sequence not initialized', 'internal_error', 500);
+    const seq = 1;
+    await ctx.db.run(
+      `INSERT INTO mission_sequences
+         (id, workspace_id, scope_type, scope_id, counter_name, next_value, updated_at)
+       VALUES (?, ?, 'workspace', ?, 'mission', ?, ?)`,
+      [newId(), ctx.workspace.id, ctx.workspace.id, seq + 1, nowIso()]
+    );
+    return seq;
   }
 
   const seq = row.next_value;
@@ -146,6 +156,70 @@ async function getExecuteStatusId(ctx: ServiceContext): Promise<{
     throw new ServiceError('Workspace has no execute status', 'validation_error', 409);
   }
   return row;
+}
+
+/**
+ * Look up an explicitly-chosen workspace status. The board lets a REST caller
+ * create a mission directly into any column, so creation cannot always go
+ * through the default/review lookups above.
+ */
+async function getWorkspaceStatusById(
+  ctx: ServiceContext,
+  statusId: string
+): Promise<{ id: string; type: string }> {
+  const row = (await ctx.db.get(
+    `SELECT id, type FROM workspace_statuses
+       WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+    [statusId, ctx.workspace.id]
+  )) as { id: string; type: string } | undefined;
+
+  if (!row) {
+    throw new ServiceError('Unknown status for workspace', 'validation_error');
+  }
+  return row;
+}
+
+/**
+ * Attach tag definitions to a freshly-created mission. Each tag must belong to
+ * the mission's own project (and not be soft-deleted), so a mission can never
+ * carry a foreign-project tag. Insert-only: it assumes the mission has no tag
+ * rows yet, which is true on the create path.
+ */
+export async function assignMissionTags({
+  ctx,
+  missionId,
+  projectId,
+  tagIds,
+  now
+}: {
+  ctx: ServiceContext;
+  missionId: string;
+  projectId: string;
+  tagIds: string[] | undefined;
+  now: string;
+}): Promise<void> {
+  const unique = [...new Set((tagIds ?? []).map(value => value.trim()).filter(Boolean))];
+  if (unique.length === 0) return;
+
+  for (const tagId of unique) {
+    const tag = (await ctx.db.get(
+      `SELECT id FROM project_tags
+         WHERE id = ? AND project_id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+      [tagId, projectId, ctx.workspace.id]
+    )) as { id: string } | undefined;
+    if (!tag) {
+      throw new ServiceError('Tag does not belong to this project', 'validation_error');
+    }
+  }
+
+  for (const tagId of unique) {
+    // Portable upsert-ignore: works on both modern SQLite and PostgreSQL.
+    await ctx.db.run(
+      `INSERT INTO mission_tags (mission_id, tag_id, created_at) VALUES (?, ?, ?)
+         ON CONFLICT DO NOTHING`,
+      [missionId, tagId, now]
+    );
+  }
 }
 
 async function topBoardPosition(
@@ -451,12 +525,24 @@ export async function ensureNextDraftObjective({
   }
 }
 
+/**
+ * The single mission-creation entry point for every surface — CLI, Protocol,
+ * MCP, and the REST API (`backend/repository.ts::createMissionTx` delegates
+ * here). The optional fields below exist because the board exposes them at
+ * creation time; callers that omit them get the plain agent-created mission
+ * shape (default status, `normal` priority, no due date, no assignee, no tags).
+ */
 export async function createMissionWithObjectives({
   ctx,
   projectId,
   objectives,
   title,
-  statusType
+  statusType,
+  statusId,
+  priority,
+  dueDatetime,
+  assignedWorkspaceUserId,
+  tagIds
 }: {
   ctx: ServiceContext;
   projectId: string;
@@ -468,20 +554,33 @@ export async function createMissionWithObjectives({
   }>;
   title?: string | null;
   statusType?: 'draft' | 'review';
+  /** Explicit target column. Wins over `statusType` when both are supplied. */
+  statusId?: string | null;
+  priority?: string | null;
+  dueDatetime?: string | null;
+  assignedWorkspaceUserId?: string | null;
+  tagIds?: string[];
 }): Promise<{ mission: MissionSummary; objectives: ObjectiveSummary[] }> {
-  if (objectives.length === 0) {
+  const explicitTitle = title?.trim() ?? '';
+  // A titled mission may legitimately start with no objectives at all (the
+  // board's "new mission" card authors them afterwards); an untitled one has
+  // nothing to name itself from, so it must carry at least one.
+  if (objectives.length === 0 && !explicitTitle) {
     throw new ServiceError('At least one objective is required', 'validation_error');
   }
 
   const resolvedProjectId = await resolveProjectId(ctx, projectId);
   const firstInstruction = objectives[0]?.objective.trim() ?? '';
-  if (!firstInstruction) {
+  if (objectives.length > 0 && !firstInstruction) {
     throw new ServiceError('First objective instruction is required', 'validation_error');
   }
 
-  const missionTitle = title?.trim() || initialTitleFromInstruction(firstInstruction);
-  const status =
-    statusType === 'review' ? await getReviewStatusId(ctx) : await getDefaultStatusId(ctx);
+  const missionTitle = explicitTitle || initialTitleFromInstruction(firstInstruction);
+  const status = statusId
+    ? await getWorkspaceStatusById(ctx, statusId)
+    : statusType === 'review'
+      ? await getReviewStatusId(ctx)
+      : await getDefaultStatusId(ctx);
 
   const now = nowIso();
   const missionId = newId();
@@ -497,8 +596,8 @@ export async function createMissionWithObjectives({
            (id, workspace_id, project_id, display_id, sequence_number, title,
             status_id, status_type, board_position, priority, available_tools_json,
             execution_target_intent_json, metadata_json, created_by_workspace_user_id,
-            created_at, updated_at, revision)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'normal', '[]', '{}', '{}', ?, ?, ?, 1)`,
+            assigned_workspace_user_id, due_datetime, created_at, updated_at, revision)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', '{}', '{}', ?, ?, ?, ?, ?, 1)`,
       [
         missionId,
         ctx.workspace.id,
@@ -509,7 +608,10 @@ export async function createMissionWithObjectives({
         status.id,
         status.type,
         await topBoardPosition(txCtx, resolvedProjectId, status.id),
+        priority ?? 'normal',
         ctx.actorWorkspaceUserId,
+        assignedWorkspaceUserId ?? null,
+        dueDatetime ?? null,
         now,
         now
       ]
@@ -548,6 +650,14 @@ export async function createMissionWithObjectives({
         })
       );
     }
+
+    await assignMissionTags({
+      ctx: txCtx,
+      missionId,
+      projectId: resolvedProjectId,
+      tagIds,
+      now
+    });
   });
 
   return {

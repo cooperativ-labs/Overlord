@@ -15,27 +15,24 @@ import {
   reconcileDeliveryComposeDraft
 } from '../packages/core/service/delivery-compose.ts';
 import { newId, nowIso } from '../packages/core/service/util.ts';
-import { DELIVERY_COMPOSE_JOB_TYPE } from '../packages/core/service/worker-jobs.ts';
+import {
+  claimNextWorkerJob,
+  finishWorkerJob,
+  retryWorkerJob,
+  DELIVERY_COMPOSE_JOB_TYPE,
+  type ClaimedWorkerJob
+} from '../packages/core/service/worker-jobs.ts';
 
 import { recordChange, requireDatabaseClient } from './db.ts';
 
 const POLL_INTERVAL_MS = 1500;
 const CLAIM_BATCH_SIZE = 5;
-const LOCK_TTL_MS = 60_000;
-const RETRY_BACKOFF_MS = [15_000, 60_000, 300_000, 900_000, 3_600_000];
 const MAX_COMPOSE_SUMMARY_CHARS = 6_000;
 const MAX_COMPOSE_AUXILIARY_CHARS = 2_000;
 const MAX_COMPOSE_RATIONALE_CHARS = 800;
 const MAX_COMPOSE_EVENT_CHARS = 1_000;
 
-type WorkerJobRow = {
-  id: string;
-  workspace_id: string;
-  payload_json: string;
-  attempt_count: number;
-  max_attempts: number;
-  revision: number;
-};
+type WorkerJobRow = ClaimedWorkerJob;
 
 type DeliveryRow = {
   id: string;
@@ -104,7 +101,11 @@ class DeliveryComposeWorker {
     try {
       const client = requireDatabaseClient();
       for (let i = 0; i < CLAIM_BATCH_SIZE; i++) {
-        const row = await claimNextComposeJob(client, this.workerId);
+        const row = await claimNextWorkerJob({
+          db: client,
+          jobType: DELIVERY_COMPOSE_JOB_TYPE,
+          workerId: this.workerId
+        });
         if (!row) break;
         await this.processJob(client, row);
       }
@@ -125,7 +126,7 @@ class DeliveryComposeWorker {
       }
       deliveryId = payload.deliveryId.trim();
     } catch (err) {
-      await markJobTerminal(client, job.id, 'failed', `Malformed payload: ${String(err)}`);
+      await finishWorkerJob(client, job.id, 'failed', `Malformed payload: ${String(err)}`);
       return;
     }
 
@@ -133,7 +134,7 @@ class DeliveryComposeWorker {
     try {
       const result = await this.composeAndPersist(client, deliveryId);
       if (result.kind === 'missing') {
-        await markJobTerminal(client, job.id, 'cancelled', 'Delivery not found');
+        await finishWorkerJob(client, job.id, 'cancelled', 'Delivery not found');
         logComposeMetric('delivery_compose_failed', {
           jobId: job.id,
           deliveryId,
@@ -143,7 +144,7 @@ class DeliveryComposeWorker {
         });
         return;
       }
-      await markJobTerminal(client, job.id, 'succeeded', null);
+      await finishWorkerJob(client, job.id, 'succeeded', null);
       logComposeMetric(
         result.presentationStatus === 'composed'
           ? 'delivery_compose_composed'
@@ -162,7 +163,7 @@ class DeliveryComposeWorker {
       const message = err instanceof Error ? err.message : String(err);
       console.warn(`[delivery-compose-worker] job ${job.id} failed:`, message);
       if (attemptNumber >= job.max_attempts) {
-        await markJobTerminal(client, job.id, 'failed', message);
+        await finishWorkerJob(client, job.id, 'failed', message);
         await persistFallbackPresentation(client, deliveryId, message).catch(persistErr => {
           console.warn('[delivery-compose-worker] fallback persist failed', persistErr);
         });
@@ -174,8 +175,7 @@ class DeliveryComposeWorker {
         });
         return;
       }
-      const delay = RETRY_BACKOFF_MS[Math.min(attemptNumber - 1, RETRY_BACKOFF_MS.length - 1)]!;
-      await rescheduleJob(client, job.id, attemptNumber, delay, message);
+      await retryWorkerJob(client, job.id, attemptNumber, message);
       logComposeMetric('delivery_compose_failed', {
         jobId: job.id,
         deliveryId,
@@ -481,100 +481,6 @@ function toComposeInput({
 
 function boundComposeText(value: string, maxChars: number): string {
   return value.length <= maxChars ? value : value.slice(0, maxChars);
-}
-
-async function claimNextComposeJob(
-  client: DatabaseClient,
-  workerId: string
-): Promise<WorkerJobRow | null> {
-  return client.transaction(async tx => {
-    const now = nowIso();
-    const lockClause = tx.dialect === 'postgres' ? 'FOR UPDATE SKIP LOCKED' : '';
-
-    // Reclaim stale locks into the selectable set by resetting them first.
-    await tx.run(
-      `UPDATE worker_jobs
-          SET status = 'queued', locked_by = NULL, locked_until = NULL, updated_at = ?,
-              revision = revision + 1
-        WHERE type = ?
-          AND status = 'running'
-          AND deleted_at IS NULL
-          AND locked_until IS NOT NULL
-          AND locked_until < ?`,
-      [now, DELIVERY_COMPOSE_JOB_TYPE, now]
-    );
-
-    const candidate = (await tx.get(
-      `SELECT id, workspace_id, payload_json, attempt_count, max_attempts, revision
-         FROM worker_jobs
-        WHERE type = ?
-          AND status = 'queued'
-          AND deleted_at IS NULL
-          AND run_after <= ?
-        ORDER BY priority ASC, run_after ASC
-        LIMIT 1 ${lockClause}`,
-      [DELIVERY_COMPOSE_JOB_TYPE, now]
-    )) as WorkerJobRow | undefined;
-    if (!candidate) return null;
-
-    const lockedUntil = new Date(Date.parse(now) + LOCK_TTL_MS).toISOString();
-    const updated = await tx.run(
-      `UPDATE worker_jobs
-          SET status = 'running',
-              attempt_count = attempt_count + 1,
-              locked_by = ?,
-              locked_until = ?,
-              updated_at = ?,
-              revision = revision + 1
-        WHERE id = ? AND status = 'queued' AND revision = ?`,
-      [workerId, lockedUntil, now, candidate.id, candidate.revision]
-    );
-    if (updated.changes === 0) return null;
-
-    return {
-      ...candidate,
-      attempt_count: candidate.attempt_count + 1,
-      revision: candidate.revision + 1
-    };
-  });
-}
-
-async function markJobTerminal(
-  client: DatabaseClient,
-  id: string,
-  status: 'succeeded' | 'failed' | 'cancelled',
-  lastError: string | null
-): Promise<void> {
-  await client.run(
-    `UPDATE worker_jobs
-         SET status = ?, last_error = ?, locked_by = NULL, locked_until = NULL,
-             updated_at = ?, revision = revision + 1
-       WHERE id = ?`,
-    [status, lastError, nowIso(), id]
-  );
-}
-
-async function rescheduleJob(
-  client: DatabaseClient,
-  id: string,
-  attemptCount: number,
-  delayMs: number,
-  lastError: string | null
-): Promise<void> {
-  const runAfter = new Date(Date.now() + delayMs).toISOString();
-  await client.run(
-    `UPDATE worker_jobs
-         SET status = 'queued',
-             run_after = ?,
-             last_error = ?,
-             locked_by = NULL,
-             locked_until = NULL,
-             updated_at = ?,
-             revision = revision + 1
-       WHERE id = ?`,
-    [runAfter, lastError, nowIso(), id]
-  );
-  void attemptCount;
 }
 
 export const deliveryComposeWorker = new DeliveryComposeWorker();

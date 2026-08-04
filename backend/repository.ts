@@ -11,7 +11,12 @@ import {
 } from '@overlord/auth';
 import { generateDateFromSchedule, type ScheduleLike } from '@overlord/automations';
 import type { CreatedGitHubRepositoryDto } from '@overlord/contract/ext/github';
-import { bindBool, type DatabaseClient } from '@overlord/database';
+import {
+  bindBool,
+  type DatabaseClient,
+  OBJECTIVE_STATES,
+  type ObjectiveState
+} from '@overlord/database';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -36,6 +41,11 @@ import {
   missionSearchMissionIdColumn,
   missionSearchWorkspaceParams
 } from '../packages/core/service/mission-search-sql.ts';
+import {
+  assignMissionTags as assignMissionTagsOnCreate,
+  createMissionWithObjectives,
+  insertObjective as createObjectiveOnMission
+} from '../packages/core/service/missions.ts';
 import { resolveProjectExecutionTargetForLaunch } from '../packages/core/service/project-execution-target.ts';
 import { enqueuePushNotificationForMission } from '../packages/core/service/push-notification-jobs.ts';
 import {
@@ -118,7 +128,6 @@ import {
 } from './automation/title-automation.ts';
 import {
   dequeueObjective,
-  getLaunchPreference,
   LAUNCHABLE_STATES,
   listMissionExecutionRequests,
   readWorktreeBranchAutomationEnabled
@@ -4535,7 +4544,6 @@ async function createMissionTx(
     }
 
     const explicitTitle = (body.title ?? '').trim();
-    const title = explicitTitle || initialTitleFromInstruction(instruction);
 
     // Resolve the target project's own workspace (coo:135) — a mission created
     // on a secondary-workspace project must not be validated/stamped against the
@@ -4546,19 +4554,9 @@ async function createMissionTx(
       db: tx
     });
 
-    // Resolve the target status: explicit choice or the workspace's default.
-    let statusRow: WorkspaceStatusRow | undefined;
-    if (body.statusId) {
-      statusRow = await getWorkspaceStatus(tx, workspaceId, body.statusId);
-    } else {
-      statusRow = (await tx.get(
-        `SELECT * FROM workspace_statuses
-           WHERE workspace_id = ? AND is_default = ? AND deleted_at IS NULL LIMIT 1`,
-        [workspaceId, bindBool(DATABASE_DIALECT, true)]
-      )) as WorkspaceStatusRow | undefined;
-      if (!statusRow) throw new ApiError(409, 'Workspace has no default status');
-    }
-
+    // REST-specific request validation stays here, ahead of the shared create,
+    // so the API keeps answering 400 for malformed input rather than surfacing a
+    // service-layer error shape.
     const priority = body.priority ?? 'normal';
     if (!['low', 'normal', 'high', 'urgent'].includes(priority)) {
       throw new ApiError(400, 'Invalid priority');
@@ -4571,85 +4569,42 @@ async function createMissionTx(
       throw new ApiError(400, 'dueDatetime must be a valid ISO-8601 datetime or null');
     }
 
-    const now = nowIso();
-    const id = newId();
-    const sequence = await nextMissionSequence(tx, workspaceId);
-    const workspaceRow = (await tx.get(`SELECT slug FROM workspaces WHERE id = ?`, [
-      workspaceId
-    ])) as { slug: string };
-    const displayId = `${workspaceRow.slug}:${sequence}`;
-    const boardPosition = await topBoardPosition(tx, body.projectId, statusRow.id);
+    // The board can create a mission straight into a chosen column; validating
+    // the id here keeps the REST 400 ("Unknown status for workspace") and lets
+    // the shared create take an already-checked status.
+    if (body.statusId) await getWorkspaceStatus(tx, workspaceId, body.statusId);
+
+    // Unlike the agent surfaces, a REST-created mission defaults to being owned
+    // by whoever created it.
     const assignedWorkspaceUserId =
       body.assignedWorkspaceUserId === undefined
         ? workspaceUserId
         : await resolveAssignedWorkspaceUserId(tx, workspaceId, body.assignedWorkspaceUserId);
 
-    await tx.run(
-      `INSERT INTO missions
-       (id, workspace_id, project_id, display_id, sequence_number, title,
-        status_id, status_type, board_position, priority, available_tools_json, execution_target_intent_json,
-        metadata_json, created_by_workspace_user_id, assigned_workspace_user_id, due_datetime, created_at, updated_at, revision)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', '{}', '{}', ?, ?, ?, ?, ?, 1)`,
-      [
-        id,
-        workspaceId,
-        body.projectId,
-        displayId,
-        sequence,
-        title,
-        statusRow.id,
-        statusRow.type,
-        boardPosition,
-        priority,
-        workspaceUserId,
-        assignedWorkspaceUserId,
-        body.dueDatetime ?? null,
-        now,
-        now
-      ]
-    );
-
-    await recordChange(
-      {
-        entityType: 'mission',
-        entityId: id,
-        operation: 'insert',
-        entityRevision: 1,
-        projectId: body.projectId,
-        missionId: id,
-        workspaceId
-      },
-      tx
-    );
-
-    const objectiveIds: string[] = [];
-    for (const item of objectiveInputs) {
-      if (!item.objective.trim()) {
-        throw new ApiError(400, 'Objective instruction is required');
-      }
-      const objective = await insertObjective(
-        tx,
-        { workspaceId, workspaceUserId },
-        {
-          missionId: id,
-          instructionText: item.objective,
-          ...(item.title !== undefined ? { title: item.title ?? undefined } : {}),
-          autoAdvance: item.autoAdvance ?? false,
-          ...(item.resourceKey !== undefined ? { resourceKey: item.resourceKey } : {})
-        }
-      );
-      objectiveIds.push(objective.id);
-    }
-
-    await assignMissionTags(tx, {
-      workspaceId,
-      missionId: id,
+    const ctx = await buildWebappServiceContextForWorkspace(workspaceId, tx, workspaceUserId);
+    const created = await createMissionWithObjectives({
+      ctx,
       projectId: body.projectId,
-      tagIds: body.tagIds,
-      now
+      objectives: objectiveInputs.map(item => ({
+        objective: item.objective,
+        ...(item.title !== undefined ? { title: item.title } : {}),
+        autoAdvance: item.autoAdvance ?? false,
+        ...(item.resourceKey !== undefined ? { resourceKey: item.resourceKey } : {})
+      })),
+      title: explicitTitle || initialTitleFromInstruction(instruction),
+      ...(body.statusId ? { statusId: body.statusId } : {}),
+      priority,
+      dueDatetime: body.dueDatetime ?? null,
+      assignedWorkspaceUserId,
+      ...(body.tagIds !== undefined ? { tagIds: body.tagIds } : {})
     });
 
-    return { missionId: id, objectiveIds, instruction, shouldGenerateMissionTitle: !explicitTitle };
+    return {
+      missionId: created.mission.id,
+      objectiveIds: created.objectives.map(objective => objective.id),
+      instruction,
+      shouldGenerateMissionTitle: !explicitTitle
+    };
   };
   return alreadyInTransaction ? execute(client) : client.transaction(execute);
 }
@@ -4708,7 +4663,10 @@ async function syncMissionTags(
 }
 
 /**
- * Assign tag definitions to a mission. Intended to run inside the create transaction.
+ * Assign tag definitions to a mission that has none yet. Intended to run inside
+ * the create transaction; delegates to the shared service helper that mission
+ * creation itself uses, so the "tag must belong to this project" rule has one
+ * implementation on the create path.
  */
 async function assignMissionTags(
   db: DatabaseClient,
@@ -4727,7 +4685,8 @@ async function assignMissionTags(
   }
 ): Promise<void> {
   if (!tagIds || tagIds.length === 0) return;
-  await syncMissionTags(db, { workspaceId, missionId, projectId, tagIds, now });
+  const ctx = await buildWebappServiceContextForWorkspace(workspaceId, db);
+  await assignMissionTagsOnCreate({ ctx, missionId, projectId, tagIds, now });
 }
 
 export async function createMission(body: CreateMissionBody): Promise<MissionDetailDto> {
@@ -6230,16 +6189,6 @@ export async function listObjectives(
   return rows.map(toObjectiveDto);
 }
 
-const VALID_STATES = [
-  'future',
-  'draft',
-  'submitted',
-  'launching',
-  'executing',
-  'pending_delivery',
-  'complete'
-];
-
 /** Active pipeline states a user can disconnect back to the next-up queue. */
 const DISCONNECT_FROM_STATES = ['launching', 'executing', 'pending_delivery'] as const;
 
@@ -6419,107 +6368,33 @@ type InternalCreateObjectiveBody = CreateObjectiveBody & { assignedAgent?: strin
 // Runs on the provided transaction-scoped client. `ctx` carries the mission's own
 // workspace (resolved by the caller, independent of the request's active
 // workspace — coo:135) and the acting member's identity within it.
+//
+// The insert itself lives in the shared service layer so REST, CLI, Protocol and
+// MCP all create objectives through one implementation (CONTRACT.md's "REST API →
+// Database uses the same service layer as CLI and Protocol"). This wrapper only
+// adapts the REST shapes: a workspace-scoped ctx in, a full `ObjectiveDto` out.
 async function insertObjective(
   db: DatabaseClient,
   ctx: { workspaceId: string; workspaceUserId: string | null },
   body: InternalCreateObjectiveBody
 ): Promise<ObjectiveDto> {
-  const { workspaceId, workspaceUserId } = ctx;
-  const instruction = (body.instructionText ?? '').trim();
-
-  const mission = (await db.get(
-    `SELECT id, project_id FROM missions WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-    [body.missionId, workspaceId]
-  )) as { id: string; project_id: string } | undefined;
-  if (!mission) throw new ApiError(404, 'Mission not found');
-
-  const normalizedResourceKey = await assertObjectiveResourceKeyOnProject(
+  const serviceCtx = await buildWebappServiceContextForWorkspace(
+    ctx.workspaceId,
     db,
-    mission.project_id,
-    body.resourceKey
+    ctx.workspaceUserId
   );
+  const created = await createObjectiveOnMission({
+    ctx: serviceCtx,
+    missionId: body.missionId,
+    instructionText: body.instructionText ?? '',
+    ...(body.title !== undefined ? { title: body.title } : {}),
+    ...(body.state !== undefined ? { state: body.state } : {}),
+    autoAdvance: body.autoAdvance ?? false,
+    ...(body.assignedAgent !== undefined ? { assignedAgent: body.assignedAgent } : {}),
+    ...(body.resourceKey !== undefined ? { resourceKey: body.resourceKey } : {})
+  });
 
-  const requestedState = body.state ?? 'draft';
-  if (!VALID_STATES.includes(requestedState)) throw new ApiError(400, 'Invalid objective state');
-
-  const draftRow = (await db.get(
-    `SELECT id FROM objectives
-       WHERE mission_id = ? AND workspace_id = ? AND state = 'draft' AND deleted_at IS NULL
-       LIMIT 1`,
-    [body.missionId, workspaceId]
-  )) as { id: string } | undefined;
-  const state = requestedState === 'draft' && draftRow ? 'future' : requestedState;
-
-  // Blank instructions are allowed only for editable slots that are authored
-  // inline afterwards (`draft`/`future`) — the add-objective affordance creates
-  // such a slot and renders it directly as a DraftObjective card. Submitted and
-  // later states still require instruction text.
-  const allowsBlankInstruction = state === 'draft' || state === 'future';
-  if (!instruction && !allowsBlankInstruction) {
-    throw new ApiError(400, 'Objective instruction is required');
-  }
-
-  const maxRow = (await db.get(
-    `SELECT MAX(position) AS max_pos FROM objectives WHERE mission_id = ? AND deleted_at IS NULL`,
-    [body.missionId]
-  )) as { max_pos: number | null };
-  const position = (maxRow.max_pos ?? -1) + 1;
-
-  // Editable slots (draft/future) default to the project's last-used launch
-  // selection so the agent is always recorded on the objective. The launch button
-  // reads the stored agent, and auto-advance/execution use it, so what the user
-  // sees and what runs stay in agreement instead of falling back to a hardcoded
-  // runner default.
-  const explicitAgent = body.assignedAgent?.trim() || null;
-  const launchSelection =
-    !explicitAgent && (state === 'draft' || state === 'future')
-      ? await getLaunchPreference(mission.project_id, db)
-      : { selectedAgent: null, selectedModel: null, selectedReasoningEffort: null };
-
-  const now = nowIso();
-  const id = newId();
-  await db.run(
-    `INSERT INTO objectives
-       (id, workspace_id, project_id, mission_id, position, title, instruction_text, state,
-        assigned_agent, model, reasoning_effort, agent_flags_json, auto_advance,
-        execution_metadata_json, resource_key, created_by_workspace_user_id, created_at, updated_at, revision)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}', ?, '{}', ?, ?, ?, ?, 1)`,
-    [
-      id,
-      workspaceId,
-      mission.project_id,
-      body.missionId,
-      position,
-      body.title?.trim() ||
-        (instruction ? initialTitleFromInstruction(instruction) : 'New objective'),
-      instruction,
-      state,
-      explicitAgent ?? launchSelection.selectedAgent,
-      explicitAgent ? null : launchSelection.selectedModel,
-      explicitAgent ? null : launchSelection.selectedReasoningEffort,
-      bindBool(DATABASE_DIALECT, body.autoAdvance ?? false),
-      normalizedResourceKey,
-      workspaceUserId,
-      now,
-      now
-    ]
-  );
-
-  await recordChange(
-    {
-      entityType: 'objective',
-      entityId: id,
-      operation: 'insert',
-      entityRevision: 1,
-      projectId: mission.project_id,
-      missionId: body.missionId,
-      objectiveId: id,
-      workspaceId
-    },
-    db
-  );
-
-  const row = (await db.get(`SELECT * FROM objectives WHERE id = ?`, [id])) as ObjectiveRow;
+  const row = (await db.get(`SELECT * FROM objectives WHERE id = ?`, [created.id])) as ObjectiveRow;
   return toObjectiveDto(row);
 }
 
@@ -6722,7 +6597,9 @@ async function updateObjectiveTx(
       changed.push('title');
     }
     if (body.state !== undefined) {
-      if (!VALID_STATES.includes(body.state)) throw new ApiError(400, 'Invalid objective state');
+      if (!OBJECTIVE_STATES.includes(body.state as ObjectiveState)) {
+        throw new ApiError(400, 'Invalid objective state');
+      }
       if (existing.state === 'complete' && body.state === 'future') {
         throw new ApiError(400, 'Completed objectives cannot be moved back to the future queue.');
       }

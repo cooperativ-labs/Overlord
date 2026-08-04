@@ -47,18 +47,6 @@ export async function actorIsAdmin({
   return defaultAuthorizer.can(actor, '*').allowed || roles.includes(Role.ADMIN);
 }
 
-export async function requireAdmin({
-  workspaceId,
-  workspaceUserId
-}: {
-  workspaceId: string;
-  workspaceUserId?: string | null;
-}): Promise<void> {
-  if (!(await actorIsAdmin({ workspaceId, workspaceUserId }))) {
-    throw new ApiError(403, 'Admin role required');
-  }
-}
-
 /**
  * Whether the current request's actor may perform `action`. The decision is the
  * actor's role grants **intersected with** the authenticating token's scope

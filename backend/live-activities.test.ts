@@ -17,6 +17,9 @@ const {
   registerLiveActivityPushToken,
   revokeLiveActivityPushToken
 } = await import('./live-activities.ts');
+const { __testables } = await import('./live-activity-dispatcher.ts');
+const { enqueueLiveActivityDispatchJob } =
+  await import('../packages/core/service/live-activity-jobs.ts');
 
 test('registers opaque tokens privately and coalesces a first refresh job', async () => {
   await withRequestContextAsync(async () => {
@@ -73,6 +76,28 @@ test('builds a bounded account snapshot and hashes only visible content', async 
     liveActivityContentHash(state),
     liveActivityContentHash(state && { ...state, updatedAt: '2099-01-01T00:00:00.000Z' })
   );
+});
+
+test('the dispatcher claims and completes a live-activity job without APNs credentials', async () => {
+  db.prepare(`DELETE FROM worker_jobs WHERE type = 'overlord.live_activity.dispatch.v1'`).run();
+  await enqueueLiveActivityDispatchJob({
+    db: requireDatabaseClient(),
+    workspaceId: 'local-workspace',
+    profileId: 'operator-user'
+  });
+
+  const dispatcher = new __testables.LiveActivityDispatcher();
+  dispatcher.pollNow();
+  await new Promise(resolve => setTimeout(resolve, 50));
+
+  const job = db
+    .prepare(
+      `SELECT status, last_error FROM worker_jobs
+        WHERE type = 'overlord.live_activity.dispatch.v1' ORDER BY created_at DESC LIMIT 1`
+    )
+    .get() as { status: string; last_error: string | null };
+  assert.equal(job.status, 'succeeded');
+  assert.equal(job.last_error, null);
 });
 
 test.after(() => rmSync(tempDir, { recursive: true, force: true }));

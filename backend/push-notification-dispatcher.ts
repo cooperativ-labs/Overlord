@@ -5,6 +5,12 @@ import {
   PUSH_NOTIFICATION_DISPATCH_JOB_TYPE,
   type PushNotificationCategory
 } from '../packages/core/service/push-notification-jobs.ts';
+import {
+  claimNextWorkerJob,
+  finishWorkerJob,
+  retryWorkerJob,
+  type ClaimedWorkerJob
+} from '../packages/core/service/worker-jobs.ts';
 import { newId, nowIso } from '../packages/core/service/util.ts';
 
 import {
@@ -22,18 +28,10 @@ import {
 } from './push-notifications.ts';
 
 const POLL_INTERVAL_MS = 1_500;
-const LOCK_TTL_MS = 60_000;
-const RETRY_BACKOFF_MS = [15_000, 60_000, 300_000, 900_000, 3_600_000];
 /** A stale "awaiting review" ping is noise, so alerts are allowed to expire. */
 const ALERT_EXPIRATION_MS = 60 * 60 * 1000;
 
-type WorkerJobRow = {
-  id: string;
-  payload_json: string;
-  attempt_count: number;
-  max_attempts: number;
-  revision: number;
-};
+type WorkerJobRow = ClaimedWorkerJob;
 
 type DeviceTokenRow = {
   id: string;
@@ -151,7 +149,11 @@ class PushNotificationDispatcher {
     this.polling = true;
     try {
       const db = requireDatabaseClient();
-      const job = await claimNextJob(db, this.workerId);
+      const job = await claimNextWorkerJob({
+        db,
+        jobType: PUSH_NOTIFICATION_DISPATCH_JOB_TYPE,
+        workerId: this.workerId
+      });
       if (job) await this.processJob(db, job);
     } catch (error) {
       console.error('[push-notification-dispatcher] poll failed', error);
@@ -163,14 +165,14 @@ class PushNotificationDispatcher {
   private async processJob(db: DatabaseClient, job: WorkerJobRow): Promise<void> {
     const target = parseJob(job.payload_json);
     if (!target) {
-      await finishJob(db, job.id, 'failed', 'Malformed push notification payload');
+      await finishWorkerJob(db, job.id, 'failed', 'Malformed push notification payload');
       return;
     }
 
     try {
       const mode = await resolveNotificationMode(db, target.profileId, target.category);
       if (mode === 'off') {
-        await finishJob(db, job.id, 'succeeded', null);
+        await finishWorkerJob(db, job.id, 'succeeded', null);
         return;
       }
       const tokens = await db.all<DeviceTokenRow>(
@@ -179,7 +181,7 @@ class PushNotificationDispatcher {
         [target.profileId]
       );
       if (tokens.length === 0) {
-        await finishJob(db, job.id, 'succeeded', null);
+        await finishWorkerJob(db, job.id, 'succeeded', null);
         return;
       }
       const presentation = await buildPushNotificationPresentation({
@@ -191,7 +193,7 @@ class PushNotificationDispatcher {
       if (!presentation) {
         // The mission was deleted, reassigned, or is no longer readable by the
         // recipient; dropping the queued notification is the correct outcome.
-        await finishJob(db, job.id, 'succeeded', null);
+        await finishWorkerJob(db, job.id, 'succeeded', null);
         return;
       }
       const { body } = apnsBody(presentation, mode);
@@ -215,73 +217,18 @@ class PushNotificationDispatcher {
           [now, now, token.id]
         );
       }
-      await finishJob(db, job.id, 'succeeded', null);
+      await finishWorkerJob(db, job.id, 'succeeded', null);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       if (job.attempt_count >= job.max_attempts) {
-        await finishJob(db, job.id, 'failed', message);
+        await finishWorkerJob(db, job.id, 'failed', message);
       } else {
-        const delay =
-          RETRY_BACKOFF_MS[Math.min(job.attempt_count - 1, RETRY_BACKOFF_MS.length - 1)]!;
-        await db.run(
-          `UPDATE worker_jobs SET status = 'queued', run_after = ?, last_error = ?, locked_by = NULL,
-             locked_until = NULL, updated_at = ?, revision = revision + 1 WHERE id = ?`,
-          [new Date(Date.now() + delay).toISOString(), message, nowIso(), job.id]
-        );
+        await retryWorkerJob(db, job.id, job.attempt_count, message);
       }
     }
   }
 }
 
-async function claimNextJob(db: DatabaseClient, workerId: string): Promise<WorkerJobRow | null> {
-  return db.transaction(async tx => {
-    const now = nowIso();
-    await tx.run(
-      `UPDATE worker_jobs SET status = 'queued', locked_by = NULL, locked_until = NULL, updated_at = ?, revision = revision + 1
-       WHERE type = ? AND status = 'running' AND deleted_at IS NULL AND locked_until < ?`,
-      [now, PUSH_NOTIFICATION_DISPATCH_JOB_TYPE, now]
-    );
-    const lock = tx.dialect === 'postgres' ? 'FOR UPDATE SKIP LOCKED' : '';
-    const candidate = await tx.get<WorkerJobRow>(
-      `SELECT id, payload_json, attempt_count, max_attempts, revision FROM worker_jobs
-        WHERE type = ? AND status = 'queued' AND deleted_at IS NULL AND run_after <= ?
-        ORDER BY priority ASC, run_after ASC LIMIT 1 ${lock}`,
-      [PUSH_NOTIFICATION_DISPATCH_JOB_TYPE, now]
-    );
-    if (!candidate) return null;
-    const updated = await tx.run(
-      `UPDATE worker_jobs SET status = 'running', attempt_count = attempt_count + 1, locked_by = ?, locked_until = ?, updated_at = ?, revision = revision + 1
-        WHERE id = ? AND status = 'queued' AND revision = ?`,
-      [
-        workerId,
-        new Date(Date.parse(now) + LOCK_TTL_MS).toISOString(),
-        now,
-        candidate.id,
-        candidate.revision
-      ]
-    );
-    return updated.changes === 0
-      ? null
-      : {
-          ...candidate,
-          attempt_count: candidate.attempt_count + 1,
-          revision: candidate.revision + 1
-        };
-  });
-}
-
-async function finishJob(
-  db: DatabaseClient,
-  id: string,
-  status: 'succeeded' | 'failed',
-  lastError: string | null
-): Promise<void> {
-  await db.run(
-    `UPDATE worker_jobs SET status = ?, last_error = ?, locked_by = NULL, locked_until = NULL, updated_at = ?, revision = revision + 1 WHERE id = ?`,
-    [status, lastError, nowIso(), id]
-  );
-}
-
 export const pushNotificationDispatcher = new PushNotificationDispatcher();
 /** Exported for tests: drives one claim/deliver cycle synchronously. */
-export const __testables = { apnsBody, claimNextJob, PushNotificationDispatcher };
+export const __testables = { apnsBody, PushNotificationDispatcher };
