@@ -5,13 +5,13 @@ import {
   PUSH_NOTIFICATION_DISPATCH_JOB_TYPE,
   type PushNotificationCategory
 } from '../packages/core/service/push-notification-jobs.ts';
+import { newId, nowIso } from '../packages/core/service/util.ts';
 import {
+  type ClaimedWorkerJob,
   claimNextWorkerJob,
   finishWorkerJob,
-  retryWorkerJob,
-  type ClaimedWorkerJob
+  retryWorkerJob
 } from '../packages/core/service/worker-jobs.ts';
-import { newId, nowIso } from '../packages/core/service/util.ts';
 
 import {
   type ApnsConfig,

@@ -157,6 +157,39 @@ test('buildLaunchPlan substitutes and exports launch env vars before pre-launch 
   assert.ok(preLaunchIdx < agentIdx);
 });
 
+test('buildLaunchPlan pins the Claude subagent caps and lets a project override them', async () => {
+  const workingDirectory = mkdtempSync(path.join('/tmp', 'ovld-launch-subagents-'));
+  const plan = await buildLaunchPlan({
+    runtime: runtime(),
+    options: { agent: 'claude', missionId: 'coo:11', workingDirectory }
+  });
+
+  // Pinned to the harness's own documented values, so the number this run used is a property of
+  // the launch rather than of whichever Claude Code build happens to be installed.
+  assert.equal(plan.env.CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS, '20');
+  assert.equal(plan.env.CLAUDE_CODE_MAX_SUBAGENTS_PER_SESSION, '200');
+  assert.equal(plan.env.CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH, '3');
+
+  // Harness defaults are the floor, not the ceiling: a project that sets its own wins.
+  const overridden = await buildLaunchPlan({
+    runtime: runtime(),
+    options: {
+      agent: 'claude',
+      missionId: 'coo:11',
+      workingDirectory,
+      launchEnvVars: { CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS: '4' }
+    }
+  });
+  assert.equal(overridden.env.CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS, '4');
+
+  // They are Claude-specific, not a global default leaking into every harness.
+  const codex = await buildLaunchPlan({
+    runtime: runtime(),
+    options: { agent: 'codex', missionId: 'coo:11', workingDirectory }
+  });
+  assert.equal(codex.env.CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS, undefined);
+});
+
 test('buildLaunchPlan passes PI model and thinking separately with a context file input', async () => {
   const workingDirectory = mkdtempSync(path.join('/tmp', 'ovld-launch-pi-'));
   const plan = await buildLaunchPlan({

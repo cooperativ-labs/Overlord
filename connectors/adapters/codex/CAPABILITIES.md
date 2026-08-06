@@ -6,7 +6,7 @@
 
 **Harness version verified** `0.146.0` · **range** `>=0.124.0` · **scheme** `semver`
 
-**Descriptor digest** `c8cb9aabe2beac3777c5f565241079f068a4672509e427c760813e2341a0ed78`
+**Descriptor digest** `ad12a2a5006966b0d00f074290a6d8d2396c23343305fb8504d6d489313dacc7`
 
 > The tier is derived from passing fixtures, never authored. `unsupported` means the harness
 > cannot do it — do not attempt it. `not-implemented` means it is buildable and unbuilt: that is
@@ -64,6 +64,8 @@ Per-hook timeouts in seconds; the documentation gives a 600-second default. The 
 
 ### Capability notes
 
+- **`observe.toolCall`** — PreToolUse fires for MCP tool calls, not only shell and patch tools. Re-verified against the installed 0.146.0 binary and the matching upstream tag: the upstream suite `hooks_mcp.rs` (under codex-rs/core/tests/suite) proves a PreToolUse hook can both deny and rewrite an MCP call before it executes, and the binary carries a distinct "Tool call blocked by PreToolUse hook: {}. Tool: {}" message alongside the shell-only one. `tool_name` is the full MCP identifier (`mcp__<server>__<tool>`) and the matcher matches that string, so a matcher written for a bare tool name will silently never fire.
+- **`observe.toolResult`** — Also covers MCP tool results, on the same 0.146.0 evidence as `observe.toolCall`. What PostToolUse cannot do is rewrite one: the binary rejects a returned `updatedMCPToolOutput` as unsupported. Observation of an MCP result is therefore reliable; mutation of it is not.
 - **`decide.universal`** — Codex PermissionRequest covers Bash, apply_patch/Edit/Write, and MCP tool names. The codec emits only documented allow/deny behavior and deliberately never emits reserved `updatedInput`, `updatedPermissions`, or `interrupt` fields.
 - **`answer.structuredQuestion`** — `codex app-server` exposes ToolRequestUserInput with per-option label/description and an autoResolutionMs — an ACP-shaped structured question in everything but name. It is unreachable until the single-subscriber question is settled.
 - **`inject.midTurn`** — ThreadInjectItems/TurnSteer exist on the experimental app-server surface only. The binary carries "expected exactly one client subscribed to the thread, found {}", so if the TUI is that one client Overlord cannot also subscribe and this path is closed.
@@ -74,11 +76,14 @@ Per-hook timeouts in seconds; the documentation gives a 600-second default. The 
 | --- | --- | --- | --- | --- |
 | `two-integration-surfaces-could-disagree` | high | verified | implemented | fixture `fixtures/agent-session-hooks.json` |
 | `shipped-permission-hook-inert` | high | verified | implemented | fixture `fixtures/agent-session-hooks.json` |
+| `prompt-and-agent-hook-handlers-inert` | low | verified | accepted | — |
 | `hooks-version-and-platform-gate` | medium | verified | required | `agent-session-phase-4` |
 
 **`two-integration-surfaces-could-disagree`** — Hooks and `codex app-server` can both answer a permission. A session driven by both would race in a way no revision CAS can settle, so exactly one surface must be chosen and documented before either is built.
 
 **`shipped-permission-hook-inert`** — The former PermissionRequest hook called a nonexistent protocol command in the background. The managed registration now invokes the fixed request runtime directly.
+
+**`prompt-and-agent-hook-handlers-inert`** — Codex 0.146.0 accepts three hook handler types — `command`, `prompt`, and `agent` — but only `command` runs. Hook discovery parses `prompt` and `agent` and then skips them with a "not supported yet" warning, so a manifest that used either would install cleanly, list in `hooks`, and never execute. The connector must keep emitting `command` handlers only, and must not read the presence of these variants in the schema as availability. `command` is a shell command line run through `$SHELL -lc` (`/bin/sh` when SHELL is unset) — it is not restricted to Bash and not restricted to shell scripting, since the command may invoke any interpreter.
 
 **`hooks-version-and-platform-gate`** — Hooks were experimental behind `features.codex_hooks` before v0.124. The connector requires Codex >=0.124; installations outside that range must be treated as unavailable.
 
@@ -90,7 +95,7 @@ Per-hook timeouts in seconds; the documentation gives a 600-second default. The 
 - **Deny fixture** `fixtures/decision-codec.json`
 - **Defer fixture** `fixtures/decision-codec.json`
 
-PermissionRequest accepts the documented hookSpecificOutput decision.behavior allow/deny shape. `ask` remains a deliberate no-output defer so Codex shows its own approval prompt. The adapter never emits updatedInput, updatedPermissions, or interrupt.
+PermissionRequest accepts the documented hookSpecificOutput decision.behavior allow/deny shape. `ask` remains a deliberate no-output defer so Codex shows its own approval prompt. The adapter never emits updatedInput, updatedPermissions, or interrupt. The reserved list is not symmetric across events at 0.146.0: PermissionRequest rejects `updatedInput` as unsupported, while PreToolUse accepts it together with `permissionDecision: "allow"` and will rewrite the call. Keeping `updatedInput` on `neverSend` stays a deliberate policy choice — silently editing a tool call a user approved is not a decision Overlord should make — and not an inference about what the harness can do.
 
 ## Unbound-session negative test
 

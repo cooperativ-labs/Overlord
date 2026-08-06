@@ -4,9 +4,9 @@
 
 **Adapter** `claude` · **Codec** `claude` · **Integration shape** `callback` · **Capability tier** 3 (Conversational)
 
-**Harness version verified** `2.1.220` · **range** `>=2.1.0` · **scheme** `semver`
+**Harness version verified** `2.1.221` · **range** `>=2.1.0` · **scheme** `semver`
 
-**Descriptor digest** `58131e0daccf7382cada7d456bfb6ca38e6da8adefe065e4c053028f0c3d8aec`
+**Descriptor digest** `a90745bb59252df29006cf632a030108e68fde84f956910e02cc842833e6f8d6`
 
 > The tier is derived from passing fixtures, never authored. `unsupported` means the harness
 > cannot do it — do not attempt it. `not-implemented` means it is buildable and unbuilt: that is
@@ -83,14 +83,20 @@ Per-command `timeout` in seconds with no documented ceiling. Omitting `decision`
 | `shipped-stop-hook-inert` | medium | verified | required | `agent-session-phase-3` |
 | `unbound-session-side-effects` | medium | verified | required | `agent-session-phase-4` |
 | `fork-and-subagent-identity-unknown` | medium | unverified | required | `taxonomy-7.6` |
+| `subagent-stop-unregistered` | medium | verified | required | `coo:585` |
+| `subagent-commits-escape-delivery-delta` | high | verified | required | `coo:585` |
 
 **`shipped-permission-hook-inert`** — The installed PermissionRequest hook calls a `ovld protocol permission-request` subcommand that does not exist, backgrounds the call with `) & disown`, and is gated on a MISSION_ID environment variable launched sessions do not always set. It records nothing and, being backgrounded with stdout discarded, is structurally incapable of returning a decision. The shipped conformance `permissionHook` flag therefore overstates what happens today.
 
-**`shipped-stop-hook-inert`** — The installed Stop hook calls `ovld protocol hook-event --hook-type Stop`, which the CLI rejects, and then parses a `deliveryStatus` field nothing produces. Its mission-link footer still works.
+**`shipped-stop-hook-inert`** — The installed Stop hook calls `ovld protocol hook-event --hook-type Stop`, which the CLI rejects, and then parses a `deliveryStatus` field nothing produces. Its mission-link footer still works. Confirmed again at 2.1.221 from a live agent-pod session: every entry in ~/.ovld/logs/stop-hook.log takes the `no launch mission id` branch and returns before the delivery check, because the hook gates on a `MISSION_ID` environment variable the pod does not set. The PostToolUse hook works in the same session because it resolves the mission from the per-cwd active-session manifest instead; the Stop hook should resolve it the same way.
 
 **`unbound-session-side-effects`** — NARROWED, NOT CLOSED. The new agent-session registrations gate in bash on OVERLORD_SESSION_CHANNEL_ID before spawning anything, so they are completely silent in an unbound session (proved by fixtures/agent-session-hook-unbound.json). The LEGACY PostToolUse hook still spawns `ovld protocol record-touched` and appends to ~/.ovld/logs in every session on the machine, because its scope gate lives inside the CLI rather than before the spawn (proved by fixtures/unbound-session.json). It stays installed on purpose: it is what feeds touched-file change attribution at deliver time, and removing it before the normalized path has demonstrated equivalent attribution would trade a privacy nit for a data-loss bug. Closing this means retiring the legacy hook, which is a migration, not a patch.
 
-**`fork-and-subagent-identity-unknown`** — Whether an in-process fork mints a new native session id, and whether subagent tool calls carry the parent's id, are both unverified. Guessing either routes a session's requests to the wrong mission.
+**`fork-and-subagent-identity-unknown`** — Whether an in-process fork mints a new native session id, and whether subagent tool calls carry the parent's id, are both unverified. Guessing either routes a session's requests to the wrong mission. Partially narrowed at 2.1.221: the binary carries distinct `SubagentStart` and `SubagentStop` hook events, converts an agent-frontmatter `Stop` registration into `SubagentStop` ("subagents trigger SubagentStop"), and records `parent_session_id` and `agent_type` as separate fields from `session_id`. That the harness distinguishes the two identities is now established; which value lands in a subagent hook payload's `session_id` is still not, and that is the part binding depends on. Read it from a real subagent payload before changing any binding code.
+
+**`subagent-stop-unregistered`** — The adapter registers `Stop` and no subagent-lifecycle event. Claude Code 2.1.221 fires `SubagentStop` — not `Stop` — when a subagent finishes, and subagents now run in the background past the parent's turn boundary, so the shipped Stop registration is guaranteed not to run for work a subagent completes after the parent stopped. Nothing is lost today because that registration is already inert (see `shipped-stop-hook-inert`), which is exactly why the fix is to repair the Stop path first and only then decide whether the repaired body should also ride `SubagentStop`. Registering the current inert script on a second event would add a spawn per subagent completion and buy nothing.
+
+**`subagent-commits-escape-delivery-delta`** — Delivery change attribution is computed from `git status --porcelain` against the attach baseline (cli/src/vcs.ts `readChangedFiles` / `filterRunAttributableChanges`); nothing in that path consults HEAD or the commit graph. A background subagent that commits, merges, or opens a PR for its own work therefore removes those files from the worktree delta, and they vanish from the delivery report entirely — not flagged, not skipped, silently absent. The PostToolUse touched-files log is unaffected (its key is `sha256(abspath(cwd) + "\0" + MISSION_ID)`, so a subagent sharing the cwd writes to the same log), which means the evidence that the edit happened survives while the delta that decides coverage does not. Closing this means teaching the delta about commits made since the baseline, which is a CLI change with branch and worktree semantics to settle, not a hook edit.
 
 ## Native decision shape
 

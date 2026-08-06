@@ -88,13 +88,13 @@ export function AppSidebar() {
 
           {organizationId
             ? workspaces.map(workspace => (
-              <WorkspaceSidebarSection
-                key={workspace.id}
-                workspace={workspace}
-                organizationId={organizationId}
-                onOpenWorkspaceSettings={setWorkspaceSettingsId}
-              />
-            ))
+                <WorkspaceSidebarSection
+                  key={workspace.id}
+                  workspace={workspace}
+                  organizationId={organizationId}
+                  onOpenWorkspaceSettings={setWorkspaceSettingsId}
+                />
+              ))
             : null}
         </SidebarContent>
         <SidebarFooter>

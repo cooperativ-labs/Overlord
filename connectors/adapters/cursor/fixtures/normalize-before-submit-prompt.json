@@ -1,0 +1,31 @@
+{
+  "fixtureVersion": 1,
+  "kind": "normalized-event",
+  "description": "A Cursor beforeSubmitPrompt body. Proves observe.prompt: the composer prompt becomes prompt.submitted correlated to conversation_id, and the credential pasted into the prompt is redacted before the text is persisted. It also pins the `hook_event_name` spelling of the event name.",
+  "codec": "codec/cursor.codec.yaml",
+  "occurredAt": "2026-01-01T00:00:00.000Z",
+  "payload": {
+    "conversation_id": "conv_7f3a91c2",
+    "hook_event_name": "beforeSubmitPrompt",
+    "cwd": "/repo",
+    "prompt": "Re-run the migration against staging, my token is out_live_9f3ab21c7d"
+  },
+  "expect": {
+    "eventId": "ev_735b2ab46b295c9b6fbde04faa4ce9cf",
+    "producerSequence": null,
+    "occurredAt": "2026-01-01T00:00:00.000Z",
+    "kind": "prompt.submitted",
+    "severity": "info",
+    "nativeEvent": "beforeSubmitPrompt",
+    "nativeTurnId": null,
+    "nativeCallId": null,
+    "subagentId": null,
+    "correlationId": "conv_7f3a91c2",
+    "origin": "user",
+    "summary": "Re-run the migration against staging, my token is [redacted]",
+    "payload": {
+      "promptText": "Re-run the migration against staging, my token is [redacted]"
+    }
+  },
+  "mustNotContain": ["out_live_9f3ab21c7d"]
+}

@@ -286,6 +286,53 @@ test('codec: the same normalized event comes out of a callback and a control pla
   assert.notEqual(claude.eventId, opencode.eventId);
 });
 
+/**
+ * The plural event-name form, which exists for Cursor: it names the event `hook_event_name` on
+ * some hooks and `event` on others. The failure this guards against is silent rather than loud —
+ * an unresolved name matches no rule, and matching no rule is the interpreter's normal "nothing
+ * to say" outcome — so a regression here would look exactly like a harness that never fired.
+ */
+const CURSOR_CODEC: CodecSpec = {
+  codecVersion: 1,
+  adapter: 'cursor',
+  eventNamePaths: ['hook_event_name', 'event'],
+  nativeSessionPaths: ['conversation_id'],
+  projectRootPaths: ['cwd'],
+  events: [
+    { native: 'beforeSubmitPrompt', kind: 'prompt.submitted', origin: 'user', promptPath: 'prompt' }
+  ]
+};
+
+test('codec: eventNamePaths resolves the native name from either spelling', () => {
+  const base = { conversation_id: 'conv-1', cwd: '/repo', prompt: 'ship it' };
+  const viaHookEventName = normalizeNativeEvent({
+    codec: CURSOR_CODEC,
+    payload: { ...base, hook_event_name: 'beforeSubmitPrompt' },
+    occurredAt: '2026-08-01T00:00:00.000Z'
+  });
+  const viaEvent = normalizeNativeEvent({
+    codec: CURSOR_CODEC,
+    payload: { ...base, event: 'beforeSubmitPrompt' },
+    occurredAt: '2026-08-01T00:00:00.000Z'
+  });
+
+  assert.equal(viaHookEventName?.kind, 'prompt.submitted');
+  assert.equal(viaEvent?.kind, 'prompt.submitted');
+  // Same conversation, same event name, same instant: the spelling of the name field is not
+  // part of the identity, so both must reduce to one event rather than two.
+  assert.equal(viaHookEventName?.eventId, viaEvent?.eventId);
+
+  // A name that resolves to no rule stays silence, not an error.
+  assert.equal(
+    normalizeNativeEvent({
+      codec: CURSOR_CODEC,
+      payload: { ...base, event: 'sessionStart' },
+      occurredAt: '2026-08-01T00:00:00.000Z'
+    }),
+    null
+  );
+});
+
 test('codec: a file-editing tool becomes a file.edited event with a repo-relative path', () => {
   const event = normalizeNativeEvent({
     codec: CLAUDE_CODEC,

@@ -19,6 +19,7 @@ export default [
       // (see scripts/generate-harness-capabilities.mjs)
       'cli/src/agent-session/catalog.generated.ts',
       'cli/src/agent-session/codec-registry.generated.ts',
+      'cli/src/agent-session/decision-codec-registry.generated.ts',
       '**/*.d.ts',
       '**/*.js',
       // Desktop: bundled server, staged SPA/CLI, migrations (see desktop/.gitignore)

@@ -1,9 +1,10 @@
 import { Link } from '@tanstack/react-router';
 import { useMemo, useState } from 'react';
 
-import type { MissionDetailDto } from '../../shared/contract.ts';
 import { InboxMissionCard } from '@/components/InboxMissionCard.tsx';
 import { useInboxItems } from '@/lib/queries.ts';
+
+import type { MissionDetailDto } from '../../shared/contract.ts';
 
 export function InboxPage() {
   const inbox = useInboxItems();

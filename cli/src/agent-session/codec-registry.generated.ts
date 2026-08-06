@@ -93,6 +93,46 @@ export const AGENT_SESSION_CODECS: Record<string, CodecSpec> = {
       }
     ]
   },
+  "cursor": {
+    "codecVersion": 1,
+    "adapter": "cursor",
+    "eventNamePaths": [
+      "hook_event_name",
+      "event"
+    ],
+    "nativeSessionPaths": [
+      "conversation_id",
+      "session_id"
+    ],
+    "projectRootPaths": [
+      "cwd"
+    ],
+    "events": [
+      {
+        "native": "beforeSubmitPrompt",
+        "kind": "prompt.submitted",
+        "origin": "user",
+        "promptPath": "prompt"
+      },
+      {
+        "native": "preToolUse",
+        "kind": "tool.called",
+        "origin": "agent",
+        "toolPath": "tool_name",
+        "inputPath": "tool_input",
+        "callIdPath": "call_id"
+      },
+      {
+        "native": "postToolUse",
+        "kind": "tool.completed",
+        "origin": "agent",
+        "toolPath": "tool_name",
+        "inputPath": "tool_input",
+        "callIdPath": "call_id",
+        "fileEditKind": "file.edited"
+      }
+    ]
+  },
   "opencode": {
     "codecVersion": 1,
     "adapter": "opencode",

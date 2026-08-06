@@ -87,7 +87,13 @@ const CURSOR_HOOK_COMMANDS = {
   beforeSubmitPrompt: 'plugins/local/overlord/hooks/overlord-user-prompt-submit.sh',
   beforePermission: 'plugins/local/overlord/hooks/overlord-permission-request.sh',
   postToolUse: 'plugins/local/overlord/hooks/overlord-post-tool-use.sh',
-  stop: 'plugins/local/overlord/hooks/overlord-stop.sh'
+  stop: 'plugins/local/overlord/hooks/overlord-stop.sh',
+  // The rendered core agent-session script, action fixed to `event` at install time. It is a
+  // separate registration from the protocol hooks above rather than a line added to them: those
+  // scripts speak the legacy `ovld protocol` surface and this one publishes normalized events on
+  // the session channel, and the scope gate that makes an unbound session free lives in the
+  // rendered script's first line.
+  agentSessionEvent: 'plugins/local/overlord/scripts/agent-session-event.sh'
 } as const;
 const CURSOR_PROTOCOL_PERMISSION = 'Shell(ovld protocol:*)';
 const CODEX_PLUGIN_KEY = 'overlord@overlord-local';
@@ -371,7 +377,25 @@ function configureCursorHarness({
       command: CURSOR_HOOK_COMMANDS.stop,
       marker: 'overlord-stop',
       extra: { loop_limit: 1 }
-    }) && 'stop'
+    }) && 'stop',
+    // Agent-session observation. Registered on the three events whose payload shapes
+    // `codec/cursor.codec.yaml` declares — sessionStart is deliberately absent, because no
+    // recorded payload establishes its field names and a rule on a guessed path fails silently.
+    mergeHook({
+      event: 'beforeSubmitPrompt',
+      command: CURSOR_HOOK_COMMANDS.agentSessionEvent,
+      marker: 'agent-session-event'
+    }) && 'beforeSubmitPrompt (agent-session)',
+    mergeHook({
+      event: 'preToolUse',
+      command: CURSOR_HOOK_COMMANDS.agentSessionEvent,
+      marker: 'agent-session-event'
+    }) && 'preToolUse (agent-session)',
+    mergeHook({
+      event: 'postToolUse',
+      command: CURSOR_HOOK_COMMANDS.agentSessionEvent,
+      marker: 'agent-session-event'
+    }) && 'postToolUse (agent-session)'
   ].filter((event): event is string => Boolean(event));
 
   if (installedHookEvents.length > 0) {

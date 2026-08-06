@@ -69066,11 +69066,10 @@ var init_agent_catalog_defaults = __esm({
         label: "Codex",
         availableByDefault: true,
         models: [
-          {
-            id: "gpt-5.4",
-            displayName: "GPT-5.4",
-            reasoningOptions: ["low", "medium", "high", "xhigh"]
-          },
+          // `gpt-5.4` was removed from the bundled menu ahead of its 2026-08-31 retirement for
+          // ChatGPT-authenticated Codex sessions: a launch that picks it would start failing on
+          // that date with a vendor-side error the mission report cannot explain. An instance
+          // that still has access can re-add it through `[agent_catalog]` in overlord.toml.
           {
             id: "gpt-5.5",
             displayName: "GPT-5.5",
@@ -69092,7 +69091,7 @@ var init_agent_catalog_defaults = __esm({
             reasoningOptions: ["none", "low", "medium", "high", "xhigh", "max"]
           }
         ],
-        defaultModel: "gpt-5.4",
+        defaultModel: "gpt-5.6-terra",
         defaultReasoningEffort: "medium",
         reasoningLabel: "Effort"
       },
@@ -69177,7 +69176,11 @@ var init_agent_catalog_defaults = __esm({
             reasoningOptions: []
           }
         ],
-        defaultModel: "auto",
+        // `auto` stays selectable, but it is not the default any more: it routes each turn through
+        // Cursor's own model router, so two runs of the same objective can execute on different
+        // models and a delivery report cannot say which one produced the work. Mission execution
+        // wants a model it can name; a user who wants the router can still pick it explicitly.
+        defaultModel: "composer-2.5",
         defaultReasoningEffort: null,
         reasoningLabel: "Thinking"
       }
@@ -69598,8 +69601,9 @@ async function recordChange({
     entityRevision,
     changedFields,
     actorWorkspaceUserId: ctx.actorWorkspaceUserId,
-    // The protocol/service path does not attribute changes to a token.
-    actorTokenId: null,
+    // The protocol/service path does not attribute changes to a token; the REST
+    // layer passes the authenticating token through on the context.
+    actorTokenId: ctx.actorTokenId ?? null,
     source: ctx.source
   });
 }
@@ -73911,6 +73915,7 @@ function buildWebappServiceContext(client = requireDatabaseClient()) {
     db: client,
     workspace: { id: workspace.id, slug: workspace.slug, name: workspace.name },
     actorWorkspaceUserId: getActorWorkspaceUserId(),
+    actorTokenId: getActiveTokenId(),
     source: "webapp",
     clientDevice: getClientDeviceIdentity()
   };
@@ -73927,6 +73932,7 @@ async function buildWebappServiceContextForWorkspace(workspaceId, client = requi
     db: client,
     workspace,
     actorWorkspaceUserId,
+    actorTokenId: getActiveTokenId(),
     source: "webapp",
     clientDevice: getClientDeviceIdentity()
   };
@@ -132016,7 +132022,14 @@ async function nextMissionSequence(ctx) {
     [ctx.workspace.id]
   );
   if (!row) {
-    throw new ServiceError("Mission sequence not initialized", "internal_error", 500);
+    const seq2 = 1;
+    await ctx.db.run(
+      `INSERT INTO mission_sequences
+         (id, workspace_id, scope_type, scope_id, counter_name, next_value, updated_at)
+       VALUES (?, ?, 'workspace', ?, 'mission', ?, ?)`,
+      [newId(), ctx.workspace.id, ctx.workspace.id, seq2 + 1, nowIso()]
+    );
+    return seq2;
   }
   const seq = row.next_value;
   await ctx.db.run(`UPDATE mission_sequences SET next_value = ?, updated_at = ? WHERE id = ?`, [
@@ -132058,6 +132071,44 @@ async function getExecuteStatusId(ctx) {
     throw new ServiceError("Workspace has no execute status", "validation_error", 409);
   }
   return row;
+}
+async function getWorkspaceStatusById(ctx, statusId) {
+  const row = await ctx.db.get(
+    `SELECT id, type FROM workspace_statuses
+       WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+    [statusId, ctx.workspace.id]
+  );
+  if (!row) {
+    throw new ServiceError("Unknown status for workspace", "validation_error");
+  }
+  return row;
+}
+async function assignMissionTags({
+  ctx,
+  missionId,
+  projectId,
+  tagIds,
+  now: now2
+}) {
+  const unique = [...new Set((tagIds ?? []).map((value) => value.trim()).filter(Boolean))];
+  if (unique.length === 0) return;
+  for (const tagId of unique) {
+    const tag2 = await ctx.db.get(
+      `SELECT id FROM project_tags
+         WHERE id = ? AND project_id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+      [tagId, projectId, ctx.workspace.id]
+    );
+    if (!tag2) {
+      throw new ServiceError("Tag does not belong to this project", "validation_error");
+    }
+  }
+  for (const tagId of unique) {
+    await ctx.db.run(
+      `INSERT INTO mission_tags (mission_id, tag_id, created_at) VALUES (?, ?, ?)
+         ON CONFLICT DO NOTHING`,
+      [missionId, tagId, now2]
+    );
+  }
 }
 async function topBoardPosition(ctx, projectId, statusId) {
   const row = await ctx.db.get(
@@ -132283,18 +132334,24 @@ async function createMissionWithObjectives({
   projectId,
   objectives,
   title,
-  statusType
+  statusType,
+  statusId,
+  priority,
+  dueDatetime,
+  assignedWorkspaceUserId,
+  tagIds
 }) {
-  if (objectives.length === 0) {
+  const explicitTitle = title?.trim() ?? "";
+  if (objectives.length === 0 && !explicitTitle) {
     throw new ServiceError("At least one objective is required", "validation_error");
   }
   const resolvedProjectId = await resolveProjectId(ctx, projectId);
   const firstInstruction = objectives[0]?.objective.trim() ?? "";
-  if (!firstInstruction) {
+  if (objectives.length > 0 && !firstInstruction) {
     throw new ServiceError("First objective instruction is required", "validation_error");
   }
-  const missionTitle = title?.trim() || initialTitleFromInstruction(firstInstruction);
-  const status = statusType === "review" ? await getReviewStatusId(ctx) : await getDefaultStatusId(ctx);
+  const missionTitle = explicitTitle || initialTitleFromInstruction(firstInstruction);
+  const status = statusId ? await getWorkspaceStatusById(ctx, statusId) : statusType === "review" ? await getReviewStatusId(ctx) : await getDefaultStatusId(ctx);
   const now2 = nowIso();
   const missionId = newId();
   const sequence = await nextMissionSequence(ctx);
@@ -132307,8 +132364,8 @@ async function createMissionWithObjectives({
            (id, workspace_id, project_id, display_id, sequence_number, title,
             status_id, status_type, board_position, priority, available_tools_json,
             execution_target_intent_json, metadata_json, created_by_workspace_user_id,
-            created_at, updated_at, revision)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'normal', '[]', '{}', '{}', ?, ?, ?, 1)`,
+            assigned_workspace_user_id, due_datetime, created_at, updated_at, revision)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', '{}', '{}', ?, ?, ?, ?, ?, 1)`,
       [
         missionId,
         ctx.workspace.id,
@@ -132319,7 +132376,10 @@ async function createMissionWithObjectives({
         status.id,
         status.type,
         await topBoardPosition(txCtx, resolvedProjectId, status.id),
+        priority ?? "normal",
         ctx.actorWorkspaceUserId,
+        assignedWorkspaceUserId ?? null,
+        dueDatetime ?? null,
         now2,
         now2
       ]
@@ -132355,6 +132415,13 @@ async function createMissionWithObjectives({
         })
       );
     }
+    await assignMissionTags({
+      ctx: txCtx,
+      missionId,
+      projectId: resolvedProjectId,
+      tagIds,
+      now: now2
+    });
   });
   return {
     mission: await getMissionSummary({ ctx, missionId }),
@@ -134579,6 +134646,68 @@ init_util3();
 var DELIVERY_COMPOSE_JOB_TYPE = "overlord.delivery.compose.v1";
 var DEFAULT_MAX_ATTEMPTS = 5;
 var DEFAULT_PRIORITY = 50;
+var DEFAULT_LOCK_TTL_MS = 6e4;
+var WORKER_JOB_RETRY_BACKOFF_MS = [15e3, 6e4, 3e5, 9e5, 36e5];
+function workerJobRetryDelay(attemptCount) {
+  return WORKER_JOB_RETRY_BACKOFF_MS[Math.min(Math.max(attemptCount - 1, 0), WORKER_JOB_RETRY_BACKOFF_MS.length - 1)];
+}
+async function claimNextWorkerJob({
+  db,
+  jobType,
+  workerId,
+  now: now2 = nowIso(),
+  lockTtlMs = DEFAULT_LOCK_TTL_MS
+}) {
+  return db.transaction(async (tx) => {
+    await tx.run(
+      `UPDATE worker_jobs SET status = 'queued', locked_by = NULL, locked_until = NULL, updated_at = ?, revision = revision + 1
+       WHERE type = ? AND status = 'running' AND deleted_at IS NULL AND locked_until < ?`,
+      [now2, jobType, now2]
+    );
+    const lockClause = tx.dialect === "postgres" ? "FOR UPDATE SKIP LOCKED" : "";
+    const candidate = await tx.get(
+      `SELECT id, payload_json, attempt_count, max_attempts, revision FROM worker_jobs
+        WHERE type = ? AND status = 'queued' AND deleted_at IS NULL AND run_after <= ?
+        ORDER BY priority ASC, run_after ASC LIMIT 1 ${lockClause}`,
+      [jobType, now2]
+    );
+    if (!candidate) return null;
+    const updated = await tx.run(
+      `UPDATE worker_jobs SET status = 'running', attempt_count = attempt_count + 1, locked_by = ?, locked_until = ?, updated_at = ?, revision = revision + 1
+        WHERE id = ? AND status = 'queued' AND revision = ?`,
+      [
+        workerId,
+        new Date(Date.parse(now2) + lockTtlMs).toISOString(),
+        now2,
+        candidate.id,
+        candidate.revision
+      ]
+    );
+    return updated.changes === 0 ? null : {
+      ...candidate,
+      attempt_count: candidate.attempt_count + 1,
+      revision: candidate.revision + 1
+    };
+  });
+}
+async function finishWorkerJob(db, id, status, lastError, now2 = nowIso()) {
+  await db.run(
+    `UPDATE worker_jobs SET status = ?, last_error = ?, locked_by = NULL, locked_until = NULL, updated_at = ?, revision = revision + 1 WHERE id = ?`,
+    [status, lastError, now2, id]
+  );
+}
+async function retryWorkerJob(db, id, attemptCount, lastError, now2 = nowIso()) {
+  await db.run(
+    `UPDATE worker_jobs SET status = 'queued', run_after = ?, last_error = ?, locked_by = NULL,
+       locked_until = NULL, updated_at = ?, revision = revision + 1 WHERE id = ?`,
+    [
+      new Date(Date.parse(now2) + workerJobRetryDelay(attemptCount)).toISOString(),
+      lastError,
+      now2,
+      id
+    ]
+  );
+}
 function deliveryIdPredicate(dialect) {
   return dialect === "postgres" ? "payload_json->>'deliveryId' = ?" : "json_extract(payload_json, '$.deliveryId') = ?";
 }
@@ -142415,23 +142544,11 @@ async function createMissionTx(body, client = requireDatabaseClient(), alreadyIn
       throw new ApiError(400, "Describe the work to be done (title or first objective)");
     }
     const explicitTitle = (body.title ?? "").trim();
-    const title = explicitTitle || initialTitleFromInstruction2(instruction);
     const { workspaceId, workspaceUserId } = await requireProjectPermission({
       projectId: body.projectId,
       permission: PERMISSIONS.MISSION_CREATE,
       db: tx
     });
-    let statusRow;
-    if (body.statusId) {
-      statusRow = await getWorkspaceStatus(tx, workspaceId, body.statusId);
-    } else {
-      statusRow = await tx.get(
-        `SELECT * FROM workspace_statuses
-           WHERE workspace_id = ? AND is_default = ? AND deleted_at IS NULL LIMIT 1`,
-        [workspaceId, bindBool(DATABASE_DIALECT, true)]
-      );
-      if (!statusRow) throw new ApiError(409, "Workspace has no default status");
-    }
     const priority = body.priority ?? "normal";
     if (!["low", "normal", "high", "urgent"].includes(priority)) {
       throw new ApiError(400, "Invalid priority");
@@ -142439,77 +142556,31 @@ async function createMissionTx(body, client = requireDatabaseClient(), alreadyIn
     if (body.dueDatetime !== void 0 && body.dueDatetime !== null && Number.isNaN(Date.parse(body.dueDatetime))) {
       throw new ApiError(400, "dueDatetime must be a valid ISO-8601 datetime or null");
     }
-    const now2 = nowIso2();
-    const id = newId2();
-    const sequence = await nextMissionSequence2(tx, workspaceId);
-    const workspaceRow = await tx.get(`SELECT slug FROM workspaces WHERE id = ?`, [
-      workspaceId
-    ]);
-    const displayId = `${workspaceRow.slug}:${sequence}`;
-    const boardPosition = await topBoardPosition2(tx, body.projectId, statusRow.id);
+    if (body.statusId) await getWorkspaceStatus(tx, workspaceId, body.statusId);
     const assignedWorkspaceUserId = body.assignedWorkspaceUserId === void 0 ? workspaceUserId : await resolveAssignedWorkspaceUserId(tx, workspaceId, body.assignedWorkspaceUserId);
-    await tx.run(
-      `INSERT INTO missions
-       (id, workspace_id, project_id, display_id, sequence_number, title,
-        status_id, status_type, board_position, priority, available_tools_json, execution_target_intent_json,
-        metadata_json, created_by_workspace_user_id, assigned_workspace_user_id, due_datetime, created_at, updated_at, revision)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', '{}', '{}', ?, ?, ?, ?, ?, 1)`,
-      [
-        id,
-        workspaceId,
-        body.projectId,
-        displayId,
-        sequence,
-        title,
-        statusRow.id,
-        statusRow.type,
-        boardPosition,
-        priority,
-        workspaceUserId,
-        assignedWorkspaceUserId,
-        body.dueDatetime ?? null,
-        now2,
-        now2
-      ]
-    );
-    await recordChange2(
-      {
-        entityType: "mission",
-        entityId: id,
-        operation: "insert",
-        entityRevision: 1,
-        projectId: body.projectId,
-        missionId: id,
-        workspaceId
-      },
-      tx
-    );
-    const objectiveIds = [];
-    for (const item of objectiveInputs2) {
-      if (!item.objective.trim()) {
-        throw new ApiError(400, "Objective instruction is required");
-      }
-      const objective = await insertObjective2(
-        tx,
-        { workspaceId, workspaceUserId },
-        {
-          missionId: id,
-          instructionText: item.objective,
-          ...item.title !== void 0 ? { title: item.title ?? void 0 } : {},
-          autoAdvance: item.autoAdvance ?? false,
-          ...item.resourceKey !== void 0 ? { resourceKey: item.resourceKey } : {}
-        }
-      );
-      objectiveIds.push(objective.id);
-    }
-    await assignMissionTags(tx, {
-      workspaceId,
-      missionId: id,
+    const ctx = await buildWebappServiceContextForWorkspace(workspaceId, tx, workspaceUserId);
+    const created = await createMissionWithObjectives({
+      ctx,
       projectId: body.projectId,
-      tagIds: body.tagIds,
-      now: now2
+      objectives: objectiveInputs2.map((item) => ({
+        objective: item.objective,
+        ...item.title !== void 0 ? { title: item.title } : {},
+        autoAdvance: item.autoAdvance ?? false,
+        ...item.resourceKey !== void 0 ? { resourceKey: item.resourceKey } : {}
+      })),
+      title: explicitTitle || initialTitleFromInstruction2(instruction),
+      ...body.statusId ? { statusId: body.statusId } : {},
+      priority,
+      dueDatetime: body.dueDatetime ?? null,
+      assignedWorkspaceUserId,
+      ...body.tagIds !== void 0 ? { tagIds: body.tagIds } : {}
     });
-    return { missionId: id, objectiveIds, instruction, shouldGenerateMissionTitle: !explicitTitle };
+    return {
+      missionId: created.mission.id,
+      objectiveIds: created.objectives.map((objective) => objective.id),
+      instruction,
+      shouldGenerateMissionTitle: !explicitTitle
+    };
   };
   return alreadyInTransaction ? execute2(client) : client.transaction(execute2);
 }
@@ -142546,7 +142617,7 @@ async function syncMissionTags(db, {
     );
   }
 }
-async function assignMissionTags(db, {
+async function assignMissionTags2(db, {
   workspaceId,
   missionId,
   projectId,
@@ -142554,7 +142625,8 @@ async function assignMissionTags(db, {
   now: now2
 }) {
   if (!tagIds || tagIds.length === 0) return;
-  await syncMissionTags(db, { workspaceId, missionId, projectId, tagIds, now: now2 });
+  const ctx = await buildWebappServiceContextForWorkspace(workspaceId, db);
+  await assignMissionTags({ ctx, missionId, projectId, tagIds, now: now2 });
 }
 async function createMission(body) {
   const { missionId, objectiveIds, instruction, shouldGenerateMissionTitle } = await createMissionTx(body);
@@ -143429,7 +143501,7 @@ async function createScheduledDuplicateIfNeeded(tx, mission, newStatusType) {
     mission.id
   ]);
   if (tagRows.length > 0) {
-    await assignMissionTags(tx, {
+    await assignMissionTags2(tx, {
       workspaceId: mission.workspace_id,
       missionId: newMissionId,
       projectId: mission.project_id,
@@ -143708,15 +143780,6 @@ async function listObjectives2(missionId, db = requireDatabaseClient()) {
   );
   return rows.map(toObjectiveDto);
 }
-var VALID_STATES = [
-  "future",
-  "draft",
-  "submitted",
-  "launching",
-  "executing",
-  "pending_delivery",
-  "complete"
-];
 var DISCONNECT_FROM_STATES = ["launching", "executing", "pending_delivery"];
 async function applyObjectivePositionUpdates(tx, options) {
   const { workspaceId, missionId, projectId, rows, positionById, now: now2 } = options;
@@ -143837,79 +143900,22 @@ async function reorderFutureObjectives(missionId, body) {
   return listObjectives2(missionId);
 }
 async function insertObjective2(db, ctx, body) {
-  const { workspaceId, workspaceUserId } = ctx;
-  const instruction = (body.instructionText ?? "").trim();
-  const mission = await db.get(
-    `SELECT id, project_id FROM missions WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-    [body.missionId, workspaceId]
-  );
-  if (!mission) throw new ApiError(404, "Mission not found");
-  const normalizedResourceKey = await assertObjectiveResourceKeyOnProject(
+  const serviceCtx = await buildWebappServiceContextForWorkspace(
+    ctx.workspaceId,
     db,
-    mission.project_id,
-    body.resourceKey
+    ctx.workspaceUserId
   );
-  const requestedState = body.state ?? "draft";
-  if (!VALID_STATES.includes(requestedState)) throw new ApiError(400, "Invalid objective state");
-  const draftRow = await db.get(
-    `SELECT id FROM objectives
-       WHERE mission_id = ? AND workspace_id = ? AND state = 'draft' AND deleted_at IS NULL
-       LIMIT 1`,
-    [body.missionId, workspaceId]
-  );
-  const state2 = requestedState === "draft" && draftRow ? "future" : requestedState;
-  const allowsBlankInstruction = state2 === "draft" || state2 === "future";
-  if (!instruction && !allowsBlankInstruction) {
-    throw new ApiError(400, "Objective instruction is required");
-  }
-  const maxRow = await db.get(
-    `SELECT MAX(position) AS max_pos FROM objectives WHERE mission_id = ? AND deleted_at IS NULL`,
-    [body.missionId]
-  );
-  const position = (maxRow.max_pos ?? -1) + 1;
-  const explicitAgent = body.assignedAgent?.trim() || null;
-  const launchSelection = !explicitAgent && (state2 === "draft" || state2 === "future") ? await getLaunchPreference(mission.project_id, db) : { selectedAgent: null, selectedModel: null, selectedReasoningEffort: null };
-  const now2 = nowIso2();
-  const id = newId2();
-  await db.run(
-    `INSERT INTO objectives
-       (id, workspace_id, project_id, mission_id, position, title, instruction_text, state,
-        assigned_agent, model, reasoning_effort, agent_flags_json, auto_advance,
-        execution_metadata_json, resource_key, created_by_workspace_user_id, created_at, updated_at, revision)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}', ?, '{}', ?, ?, ?, ?, 1)`,
-    [
-      id,
-      workspaceId,
-      mission.project_id,
-      body.missionId,
-      position,
-      body.title?.trim() || (instruction ? initialTitleFromInstruction2(instruction) : "New objective"),
-      instruction,
-      state2,
-      explicitAgent ?? launchSelection.selectedAgent,
-      explicitAgent ? null : launchSelection.selectedModel,
-      explicitAgent ? null : launchSelection.selectedReasoningEffort,
-      bindBool(DATABASE_DIALECT, body.autoAdvance ?? false),
-      normalizedResourceKey,
-      workspaceUserId,
-      now2,
-      now2
-    ]
-  );
-  await recordChange2(
-    {
-      entityType: "objective",
-      entityId: id,
-      operation: "insert",
-      entityRevision: 1,
-      projectId: mission.project_id,
-      missionId: body.missionId,
-      objectiveId: id,
-      workspaceId
-    },
-    db
-  );
-  const row = await db.get(`SELECT * FROM objectives WHERE id = ?`, [id]);
+  const created = await insertObjective({
+    ctx: serviceCtx,
+    missionId: body.missionId,
+    instructionText: body.instructionText ?? "",
+    ...body.title !== void 0 ? { title: body.title } : {},
+    ...body.state !== void 0 ? { state: body.state } : {},
+    autoAdvance: body.autoAdvance ?? false,
+    ...body.assignedAgent !== void 0 ? { assignedAgent: body.assignedAgent } : {},
+    ...body.resourceKey !== void 0 ? { resourceKey: body.resourceKey } : {}
+  });
+  const row = await db.get(`SELECT * FROM objectives WHERE id = ?`, [created.id]);
   return toObjectiveDto(row);
 }
 function createObjectiveTx(body) {
@@ -144070,7 +144076,9 @@ async function updateObjectiveTx(id, body) {
       changed.push("title");
     }
     if (body.state !== void 0) {
-      if (!VALID_STATES.includes(body.state)) throw new ApiError(400, "Invalid objective state");
+      if (!OBJECTIVE_STATES.includes(body.state)) {
+        throw new ApiError(400, "Invalid objective state");
+      }
       if (existing.state === "complete" && body.state === "future") {
         throw new ApiError(400, "Completed objectives cannot be moved back to the future queue.");
       }
@@ -157723,8 +157731,6 @@ init_util3();
 init_db();
 var POLL_INTERVAL_MS = 1500;
 var CLAIM_BATCH_SIZE = 5;
-var LOCK_TTL_MS = 6e4;
-var RETRY_BACKOFF_MS = [15e3, 6e4, 3e5, 9e5, 36e5];
 var MAX_COMPOSE_SUMMARY_CHARS = 6e3;
 var MAX_COMPOSE_AUXILIARY_CHARS = 2e3;
 var MAX_COMPOSE_RATIONALE_CHARS = 800;
@@ -157755,7 +157761,11 @@ var DeliveryComposeWorker = class {
     try {
       const client = requireDatabaseClient();
       for (let i5 = 0; i5 < CLAIM_BATCH_SIZE; i5++) {
-        const row = await claimNextComposeJob(client, this.workerId);
+        const row = await claimNextWorkerJob({
+          db: client,
+          jobType: DELIVERY_COMPOSE_JOB_TYPE,
+          workerId: this.workerId
+        });
         if (!row) break;
         await this.processJob(client, row);
       }
@@ -157775,14 +157785,14 @@ var DeliveryComposeWorker = class {
       }
       deliveryId = payload.deliveryId.trim();
     } catch (err) {
-      await markJobTerminal(client, job.id, "failed", `Malformed payload: ${String(err)}`);
+      await finishWorkerJob(client, job.id, "failed", `Malformed payload: ${String(err)}`);
       return;
     }
     const attemptNumber = job.attempt_count;
     try {
       const result = await this.composeAndPersist(client, deliveryId);
       if (result.kind === "missing") {
-        await markJobTerminal(client, job.id, "cancelled", "Delivery not found");
+        await finishWorkerJob(client, job.id, "cancelled", "Delivery not found");
         logComposeMetric("delivery_compose_failed", {
           jobId: job.id,
           deliveryId,
@@ -157792,7 +157802,7 @@ var DeliveryComposeWorker = class {
         });
         return;
       }
-      await markJobTerminal(client, job.id, "succeeded", null);
+      await finishWorkerJob(client, job.id, "succeeded", null);
       logComposeMetric(
         result.presentationStatus === "composed" ? "delivery_compose_composed" : "delivery_compose_fallback",
         {
@@ -157809,7 +157819,7 @@ var DeliveryComposeWorker = class {
       const message2 = err instanceof Error ? err.message : String(err);
       console.warn(`[delivery-compose-worker] job ${job.id} failed:`, message2);
       if (attemptNumber >= job.max_attempts) {
-        await markJobTerminal(client, job.id, "failed", message2);
+        await finishWorkerJob(client, job.id, "failed", message2);
         await persistFallbackPresentation(client, deliveryId, message2).catch((persistErr) => {
           console.warn("[delivery-compose-worker] fallback persist failed", persistErr);
         });
@@ -157821,8 +157831,7 @@ var DeliveryComposeWorker = class {
         });
         return;
       }
-      const delay = RETRY_BACKOFF_MS[Math.min(attemptNumber - 1, RETRY_BACKOFF_MS.length - 1)];
-      await rescheduleJob(client, job.id, attemptNumber, delay, message2);
+      await retryWorkerJob(client, job.id, attemptNumber, message2);
       logComposeMetric("delivery_compose_failed", {
         jobId: job.id,
         deliveryId,
@@ -158061,78 +158070,6 @@ function toComposeInput({
 }
 function boundComposeText(value, maxChars) {
   return value.length <= maxChars ? value : value.slice(0, maxChars);
-}
-async function claimNextComposeJob(client, workerId) {
-  return client.transaction(async (tx) => {
-    const now2 = nowIso();
-    const lockClause = tx.dialect === "postgres" ? "FOR UPDATE SKIP LOCKED" : "";
-    await tx.run(
-      `UPDATE worker_jobs
-          SET status = 'queued', locked_by = NULL, locked_until = NULL, updated_at = ?,
-              revision = revision + 1
-        WHERE type = ?
-          AND status = 'running'
-          AND deleted_at IS NULL
-          AND locked_until IS NOT NULL
-          AND locked_until < ?`,
-      [now2, DELIVERY_COMPOSE_JOB_TYPE, now2]
-    );
-    const candidate = await tx.get(
-      `SELECT id, workspace_id, payload_json, attempt_count, max_attempts, revision
-         FROM worker_jobs
-        WHERE type = ?
-          AND status = 'queued'
-          AND deleted_at IS NULL
-          AND run_after <= ?
-        ORDER BY priority ASC, run_after ASC
-        LIMIT 1 ${lockClause}`,
-      [DELIVERY_COMPOSE_JOB_TYPE, now2]
-    );
-    if (!candidate) return null;
-    const lockedUntil = new Date(Date.parse(now2) + LOCK_TTL_MS).toISOString();
-    const updated = await tx.run(
-      `UPDATE worker_jobs
-          SET status = 'running',
-              attempt_count = attempt_count + 1,
-              locked_by = ?,
-              locked_until = ?,
-              updated_at = ?,
-              revision = revision + 1
-        WHERE id = ? AND status = 'queued' AND revision = ?`,
-      [workerId, lockedUntil, now2, candidate.id, candidate.revision]
-    );
-    if (updated.changes === 0) return null;
-    return {
-      ...candidate,
-      attempt_count: candidate.attempt_count + 1,
-      revision: candidate.revision + 1
-    };
-  });
-}
-async function markJobTerminal(client, id, status, lastError) {
-  await client.run(
-    `UPDATE worker_jobs
-         SET status = ?, last_error = ?, locked_by = NULL, locked_until = NULL,
-             updated_at = ?, revision = revision + 1
-       WHERE id = ?`,
-    [status, lastError, nowIso(), id]
-  );
-}
-async function rescheduleJob(client, id, attemptCount, delayMs, lastError) {
-  const runAfter = new Date(Date.now() + delayMs).toISOString();
-  await client.run(
-    `UPDATE worker_jobs
-         SET status = 'queued',
-             run_after = ?,
-             last_error = ?,
-             locked_by = NULL,
-             locked_until = NULL,
-             updated_at = ?,
-             revision = revision + 1
-       WHERE id = ?`,
-    [runAfter, lastError, nowIso(), id]
-  );
-  void attemptCount;
 }
 var deliveryComposeWorker = new DeliveryComposeWorker();
 
@@ -158423,10 +158360,8 @@ async function sendApnsRequest({
 // live-activity-dispatcher.ts
 init_db();
 var POLL_INTERVAL_MS2 = 1500;
-var LOCK_TTL_MS2 = 6e4;
 var UNCHANGED_MIN_INTERVAL_MS = 5 * 60 * 1e3;
 var COMPLETION_DISMISSAL_MS = 10 * 60 * 1e3;
-var RETRY_BACKOFF_MS2 = [15e3, 6e4, 3e5, 9e5, 36e5];
 function apnsPayload(state2) {
   const now2 = Date.now();
   const completionHold = state2 && state2.running.length === 0 && state2.recentCompletion !== null;
@@ -158480,7 +158415,11 @@ var LiveActivityDispatcher = class {
     this.polling = true;
     try {
       const db = requireDatabaseClient();
-      const job = await claimNextJob(db, this.workerId);
+      const job = await claimNextWorkerJob({
+        db,
+        jobType: LIVE_ACTIVITY_DISPATCH_JOB_TYPE,
+        workerId: this.workerId
+      });
       if (job) await this.processJob(db, job);
     } catch (error53) {
       console.error("[live-activity-dispatcher] poll failed", error53);
@@ -158495,7 +158434,7 @@ var LiveActivityDispatcher = class {
       if (typeof payload.profileId !== "string" || !payload.profileId) throw new Error("profileId");
       profileId = payload.profileId;
     } catch {
-      await finishJob(db, job.id, "failed", "Malformed profile payload");
+      await finishWorkerJob(db, job.id, "failed", "Malformed profile payload");
       return;
     }
     try {
@@ -158505,7 +158444,7 @@ var LiveActivityDispatcher = class {
         [profileId]
       );
       if (tokens.length === 0) {
-        await finishJob(db, job.id, "succeeded", null);
+        await finishWorkerJob(db, job.id, "succeeded", null);
         return;
       }
       const state2 = await buildLiveActivityContentState(db, profileId);
@@ -158536,62 +158475,17 @@ var LiveActivityDispatcher = class {
           );
         }
       }
-      await finishJob(db, job.id, "succeeded", null);
+      await finishWorkerJob(db, job.id, "succeeded", null);
     } catch (error53) {
       const message2 = error53 instanceof Error ? error53.message : String(error53);
       if (job.attempt_count >= job.max_attempts) {
-        await finishJob(db, job.id, "failed", message2);
+        await finishWorkerJob(db, job.id, "failed", message2);
       } else {
-        const delay = RETRY_BACKOFF_MS2[Math.min(job.attempt_count - 1, RETRY_BACKOFF_MS2.length - 1)];
-        await db.run(
-          `UPDATE worker_jobs SET status = 'queued', run_after = ?, last_error = ?, locked_by = NULL,
-             locked_until = NULL, updated_at = ?, revision = revision + 1 WHERE id = ?`,
-          [new Date(Date.now() + delay).toISOString(), message2, nowIso(), job.id]
-        );
+        await retryWorkerJob(db, job.id, job.attempt_count, message2);
       }
     }
   }
 };
-async function claimNextJob(db, workerId) {
-  return db.transaction(async (tx) => {
-    const now2 = nowIso();
-    await tx.run(
-      `UPDATE worker_jobs SET status = 'queued', locked_by = NULL, locked_until = NULL, updated_at = ?, revision = revision + 1
-       WHERE type = ? AND status = 'running' AND deleted_at IS NULL AND locked_until < ?`,
-      [now2, LIVE_ACTIVITY_DISPATCH_JOB_TYPE, now2]
-    );
-    const lock = tx.dialect === "postgres" ? "FOR UPDATE SKIP LOCKED" : "";
-    const candidate = await tx.get(
-      `SELECT id, payload_json, attempt_count, max_attempts, revision FROM worker_jobs
-        WHERE type = ? AND status = 'queued' AND deleted_at IS NULL AND run_after <= ?
-        ORDER BY priority ASC, run_after ASC LIMIT 1 ${lock}`,
-      [LIVE_ACTIVITY_DISPATCH_JOB_TYPE, now2]
-    );
-    if (!candidate) return null;
-    const updated = await tx.run(
-      `UPDATE worker_jobs SET status = 'running', attempt_count = attempt_count + 1, locked_by = ?, locked_until = ?, updated_at = ?, revision = revision + 1
-        WHERE id = ? AND status = 'queued' AND revision = ?`,
-      [
-        workerId,
-        new Date(Date.parse(now2) + LOCK_TTL_MS2).toISOString(),
-        now2,
-        candidate.id,
-        candidate.revision
-      ]
-    );
-    return updated.changes === 0 ? null : {
-      ...candidate,
-      attempt_count: candidate.attempt_count + 1,
-      revision: candidate.revision + 1
-    };
-  });
-}
-async function finishJob(db, id, status, lastError) {
-  await db.run(
-    `UPDATE worker_jobs SET status = ?, last_error = ?, locked_by = NULL, locked_until = NULL, updated_at = ?, revision = revision + 1 WHERE id = ?`,
-    [status, lastError, nowIso(), id]
-  );
-}
 var liveActivityDispatcher = new LiveActivityDispatcher();
 
 // oauth.ts
@@ -159126,8 +159020,6 @@ async function buildPushNotificationPresentation({
 
 // push-notification-dispatcher.ts
 var POLL_INTERVAL_MS3 = 1500;
-var LOCK_TTL_MS3 = 6e4;
-var RETRY_BACKOFF_MS3 = [15e3, 6e4, 3e5, 9e5, 36e5];
 var ALERT_EXPIRATION_MS = 60 * 60 * 1e3;
 function parseJob(payloadJson) {
   try {
@@ -159209,7 +159101,11 @@ var PushNotificationDispatcher = class {
     this.polling = true;
     try {
       const db = requireDatabaseClient();
-      const job = await claimNextJob2(db, this.workerId);
+      const job = await claimNextWorkerJob({
+        db,
+        jobType: PUSH_NOTIFICATION_DISPATCH_JOB_TYPE,
+        workerId: this.workerId
+      });
       if (job) await this.processJob(db, job);
     } catch (error53) {
       console.error("[push-notification-dispatcher] poll failed", error53);
@@ -159220,13 +159116,13 @@ var PushNotificationDispatcher = class {
   async processJob(db, job) {
     const target = parseJob(job.payload_json);
     if (!target) {
-      await finishJob2(db, job.id, "failed", "Malformed push notification payload");
+      await finishWorkerJob(db, job.id, "failed", "Malformed push notification payload");
       return;
     }
     try {
       const mode = await resolveNotificationMode(db, target.profileId, target.category);
       if (mode === "off") {
-        await finishJob2(db, job.id, "succeeded", null);
+        await finishWorkerJob(db, job.id, "succeeded", null);
         return;
       }
       const tokens = await db.all(
@@ -159235,7 +159131,7 @@ var PushNotificationDispatcher = class {
         [target.profileId]
       );
       if (tokens.length === 0) {
-        await finishJob2(db, job.id, "succeeded", null);
+        await finishWorkerJob(db, job.id, "succeeded", null);
         return;
       }
       const presentation = await buildPushNotificationPresentation({
@@ -159245,7 +159141,7 @@ var PushNotificationDispatcher = class {
         category: target.category
       });
       if (!presentation) {
-        await finishJob2(db, job.id, "succeeded", null);
+        await finishWorkerJob(db, job.id, "succeeded", null);
         return;
       }
       const { body } = apnsBody(presentation, mode);
@@ -159267,62 +159163,17 @@ var PushNotificationDispatcher = class {
           [now2, now2, token.id]
         );
       }
-      await finishJob2(db, job.id, "succeeded", null);
+      await finishWorkerJob(db, job.id, "succeeded", null);
     } catch (error53) {
       const message2 = error53 instanceof Error ? error53.message : String(error53);
       if (job.attempt_count >= job.max_attempts) {
-        await finishJob2(db, job.id, "failed", message2);
+        await finishWorkerJob(db, job.id, "failed", message2);
       } else {
-        const delay = RETRY_BACKOFF_MS3[Math.min(job.attempt_count - 1, RETRY_BACKOFF_MS3.length - 1)];
-        await db.run(
-          `UPDATE worker_jobs SET status = 'queued', run_after = ?, last_error = ?, locked_by = NULL,
-             locked_until = NULL, updated_at = ?, revision = revision + 1 WHERE id = ?`,
-          [new Date(Date.now() + delay).toISOString(), message2, nowIso(), job.id]
-        );
+        await retryWorkerJob(db, job.id, job.attempt_count, message2);
       }
     }
   }
 };
-async function claimNextJob2(db, workerId) {
-  return db.transaction(async (tx) => {
-    const now2 = nowIso();
-    await tx.run(
-      `UPDATE worker_jobs SET status = 'queued', locked_by = NULL, locked_until = NULL, updated_at = ?, revision = revision + 1
-       WHERE type = ? AND status = 'running' AND deleted_at IS NULL AND locked_until < ?`,
-      [now2, PUSH_NOTIFICATION_DISPATCH_JOB_TYPE, now2]
-    );
-    const lock = tx.dialect === "postgres" ? "FOR UPDATE SKIP LOCKED" : "";
-    const candidate = await tx.get(
-      `SELECT id, payload_json, attempt_count, max_attempts, revision FROM worker_jobs
-        WHERE type = ? AND status = 'queued' AND deleted_at IS NULL AND run_after <= ?
-        ORDER BY priority ASC, run_after ASC LIMIT 1 ${lock}`,
-      [PUSH_NOTIFICATION_DISPATCH_JOB_TYPE, now2]
-    );
-    if (!candidate) return null;
-    const updated = await tx.run(
-      `UPDATE worker_jobs SET status = 'running', attempt_count = attempt_count + 1, locked_by = ?, locked_until = ?, updated_at = ?, revision = revision + 1
-        WHERE id = ? AND status = 'queued' AND revision = ?`,
-      [
-        workerId,
-        new Date(Date.parse(now2) + LOCK_TTL_MS3).toISOString(),
-        now2,
-        candidate.id,
-        candidate.revision
-      ]
-    );
-    return updated.changes === 0 ? null : {
-      ...candidate,
-      attempt_count: candidate.attempt_count + 1,
-      revision: candidate.revision + 1
-    };
-  });
-}
-async function finishJob2(db, id, status, lastError) {
-  await db.run(
-    `UPDATE worker_jobs SET status = ?, last_error = ?, locked_by = NULL, locked_until = NULL, updated_at = ?, revision = revision + 1 WHERE id = ?`,
-    [status, lastError, nowIso(), id]
-  );
-}
 var pushNotificationDispatcher = new PushNotificationDispatcher();
 
 // storage.ts
@@ -159992,7 +159843,7 @@ var POLL_INTERVAL_MS4 = 1e3;
 var CLAIM_BATCH_SIZE2 = 10;
 var REQUEST_TIMEOUT_MS = 1e4;
 var RESPONSE_SNIPPET_LIMIT = 1e3;
-var RETRY_BACKOFF_MS4 = [3e4, 12e4, 6e5, 36e5, 216e5, 864e5];
+var RETRY_BACKOFF_MS = [3e4, 12e4, 6e5, 36e5, 216e5, 864e5];
 var AUTO_DISABLE_FAILURE_THRESHOLD = 20;
 var WebhookDispatcher = class {
   pollTimer = null;
@@ -160120,10 +159971,10 @@ var WebhookDispatcher = class {
       await recordSubscriptionSuccess(client, subscription.id);
       return;
     }
-    if (attemptNumber >= RETRY_BACKOFF_MS4.length) {
+    if (attemptNumber >= RETRY_BACKOFF_MS.length) {
       await markOutboxTerminal(client, row.id, "failed", errorMessage);
     } else {
-      const delayMs = RETRY_BACKOFF_MS4[Math.min(attemptNumber - 1, RETRY_BACKOFF_MS4.length - 1)];
+      const delayMs = RETRY_BACKOFF_MS[Math.min(attemptNumber - 1, RETRY_BACKOFF_MS.length - 1)];
       await rescheduleOutbox(client, row.id, attemptNumber, delayMs, errorMessage);
     }
     await recordSubscriptionFailure(client, subscription.id, subscription.consecutive_failures);

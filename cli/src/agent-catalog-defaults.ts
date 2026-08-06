@@ -48,12 +48,10 @@ export const BUNDLED_AGENT_CATALOG: Record<string, CatalogAgent> = {
     label: 'Codex',
     availableByDefault: true,
     models: [
-      {
-        id: 'gpt-5.4',
-        displayName: 'GPT-5.4',
-        reasoningOptions: ['low', 'medium', 'high', 'xhigh']
-      },
-
+      // `gpt-5.4` was removed from the bundled menu ahead of its 2026-08-31 retirement for
+      // ChatGPT-authenticated Codex sessions: a launch that picks it would start failing on
+      // that date with a vendor-side error the mission report cannot explain. An instance
+      // that still has access can re-add it through `[agent_catalog]` in overlord.toml.
       {
         id: 'gpt-5.5',
         displayName: 'GPT-5.5',
@@ -75,7 +73,7 @@ export const BUNDLED_AGENT_CATALOG: Record<string, CatalogAgent> = {
         reasoningOptions: ['none', 'low', 'medium', 'high', 'xhigh', 'max']
       }
     ],
-    defaultModel: 'gpt-5.4',
+    defaultModel: 'gpt-5.6-terra',
     defaultReasoningEffort: 'medium',
     reasoningLabel: 'Effort'
   },
@@ -161,7 +159,11 @@ export const BUNDLED_AGENT_CATALOG: Record<string, CatalogAgent> = {
         reasoningOptions: []
       }
     ],
-    defaultModel: 'auto',
+    // `auto` stays selectable, but it is not the default any more: it routes each turn through
+    // Cursor's own model router, so two runs of the same objective can execute on different
+    // models and a delivery report cannot say which one produced the work. Mission execution
+    // wants a model it can name; a user who wants the router can still pick it explicitly.
+    defaultModel: 'composer-2.5',
     defaultReasoningEffort: null,
     reasoningLabel: 'Thinking'
   }

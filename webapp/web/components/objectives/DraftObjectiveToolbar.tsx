@@ -1,4 +1,4 @@
-import { ArrowUpCircle, Loader2 } from 'lucide-react';
+import { ArrowUpToLine, Loader2 } from 'lucide-react';
 
 import type {
   ExecutionRequestDto,
@@ -93,7 +93,7 @@ export function DraftObjectiveToolbar({
           {update.isPending ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
           ) : (
-            <ArrowUpCircle className="h-3.5 w-3.5" />
+            <ArrowUpToLine className="h-3.5 w-3.5" />
           )}
           Promote
         </Button>

@@ -1,0 +1,41 @@
+{
+  "fixtureVersion": 1,
+  "kind": "normalized-event",
+  "description": "A Cursor postToolUse body for a Write call. Proves observe.toolResult and observe.fileEdit: the event becomes file.edited with a repo-relative path, and the file contents — deliberately carrying credentials — appear nowhere in the envelope. It is also the fixture that pins the `event` spelling of the event name, which is why the codec declares eventNamePaths rather than a single path.",
+  "codec": "codec/cursor.codec.yaml",
+  "occurredAt": "2026-01-01T00:00:00.000Z",
+  "payload": {
+    "conversation_id": "conv_7f3a91c2",
+    "event": "postToolUse",
+    "cwd": "/repo",
+    "tool_name": "Write",
+    "call_id": "call_2b81",
+    "tool_input": {
+      "file_path": "/repo/config/secrets.ts",
+      "content": "export const AWS_KEY = 'AKIAIOSFODNN7EXAMPLE';\nexport const DB = 'postgres://user:hunter2@db/app';\n"
+    }
+  },
+  "expect": {
+    "eventId": "ev_005e149f289472f0bb9c94aea6c5cfa0",
+    "producerSequence": null,
+    "occurredAt": "2026-01-01T00:00:00.000Z",
+    "kind": "file.edited",
+    "severity": "info",
+    "nativeEvent": "postToolUse",
+    "nativeTurnId": null,
+    "nativeCallId": "call_2b81",
+    "subagentId": null,
+    "correlationId": "conv_7f3a91c2",
+    "origin": "agent",
+    "summary": "Write a file: config/secrets.ts: 99 bytes",
+    "payload": {
+      "tool": "write",
+      "action": "Write a file",
+      "subject": "config/secrets.ts",
+      "detail": "99 bytes",
+      "paths": ["config/secrets.ts"],
+      "formatterVersion": 1
+    }
+  },
+  "mustNotContain": ["AKIAIOSFODNN7EXAMPLE", "hunter2", "postgres://", "/repo/config"]
+}

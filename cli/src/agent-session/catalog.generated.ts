@@ -272,11 +272,11 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
     "codec": "claude",
     "integrationShape": "callback",
     "capabilityTier": 3,
-    "descriptorDigest": "58131e0daccf7382cada7d456bfb6ca38e6da8adefe065e4c053028f0c3d8aec",
+    "descriptorDigest": "a90745bb59252df29006cf632a030108e68fde84f956910e02cc842833e6f8d6",
     "descriptorSchemaVersion": 1,
     "harness": {
       "name": "Claude Code",
-      "verifiedVersion": "2.1.220",
+      "verifiedVersion": "2.1.221",
       "versionRange": ">=2.1.0",
       "versionScheme": "semver"
     },
@@ -426,7 +426,7 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
       {
         "id": "shipped-stop-hook-inert",
         "severity": "medium",
-        "summary": "The installed Stop hook calls `ovld protocol hook-event --hook-type Stop`, which the CLI rejects, and then parses a `deliveryStatus` field nothing produces. Its mission-link footer still works.",
+        "summary": "The installed Stop hook calls `ovld protocol hook-event --hook-type Stop`, which the CLI rejects, and then parses a `deliveryStatus` field nothing produces. Its mission-link footer still works. Confirmed again at 2.1.221 from a live agent-pod session: every entry in ~/.ovld/logs/stop-hook.log takes the `no launch mission id` branch and returns before the delivery check, because the hook gates on a `MISSION_ID` environment variable the pod does not set. The PostToolUse hook works in the same session because it resolves the mission from the per-cwd active-session manifest instead; the Stop hook should resolve it the same way.",
         "verification": "verified",
         "mitigation": "required",
         "trackedAs": "agent-session-phase-3"
@@ -442,10 +442,26 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
       {
         "id": "fork-and-subagent-identity-unknown",
         "severity": "medium",
-        "summary": "Whether an in-process fork mints a new native session id, and whether subagent tool calls carry the parent's id, are both unverified. Guessing either routes a session's requests to the wrong mission.",
+        "summary": "Whether an in-process fork mints a new native session id, and whether subagent tool calls carry the parent's id, are both unverified. Guessing either routes a session's requests to the wrong mission. Partially narrowed at 2.1.221: the binary carries distinct `SubagentStart` and `SubagentStop` hook events, converts an agent-frontmatter `Stop` registration into `SubagentStop` (\"subagents trigger SubagentStop\"), and records `parent_session_id` and `agent_type` as separate fields from `session_id`. That the harness distinguishes the two identities is now established; which value lands in a subagent hook payload's `session_id` is still not, and that is the part binding depends on. Read it from a real subagent payload before changing any binding code.",
         "verification": "unverified",
         "mitigation": "required",
         "trackedAs": "taxonomy-7.6"
+      },
+      {
+        "id": "subagent-stop-unregistered",
+        "severity": "medium",
+        "summary": "The adapter registers `Stop` and no subagent-lifecycle event. Claude Code 2.1.221 fires `SubagentStop` — not `Stop` — when a subagent finishes, and subagents now run in the background past the parent's turn boundary, so the shipped Stop registration is guaranteed not to run for work a subagent completes after the parent stopped. Nothing is lost today because that registration is already inert (see `shipped-stop-hook-inert`), which is exactly why the fix is to repair the Stop path first and only then decide whether the repaired body should also ride `SubagentStop`. Registering the current inert script on a second event would add a spawn per subagent completion and buy nothing.",
+        "verification": "verified",
+        "mitigation": "required",
+        "trackedAs": "coo:585"
+      },
+      {
+        "id": "subagent-commits-escape-delivery-delta",
+        "severity": "high",
+        "summary": "Delivery change attribution is computed from `git status --porcelain` against the attach baseline (cli/src/vcs.ts `readChangedFiles` / `filterRunAttributableChanges`); nothing in that path consults HEAD or the commit graph. A background subagent that commits, merges, or opens a PR for its own work therefore removes those files from the worktree delta, and they vanish from the delivery report entirely — not flagged, not skipped, silently absent. The PostToolUse touched-files log is unaffected (its key is `sha256(abspath(cwd) + \"\\0\" + MISSION_ID)`, so a subagent sharing the cwd writes to the same log), which means the evidence that the edit happened survives while the delta that decides coverage does not. Closing this means teaching the delta about commits made since the baseline, which is a CLI change with branch and worktree semantics to settle, not a hook edit.",
+        "verification": "verified",
+        "mitigation": "required",
+        "trackedAs": "coo:585"
       }
     ],
     "decisionShape": {
@@ -463,7 +479,7 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
     "codec": "codex",
     "integrationShape": "callback",
     "capabilityTier": 3,
-    "descriptorDigest": "c8cb9aabe2beac3777c5f565241079f068a4672509e427c760813e2341a0ed78",
+    "descriptorDigest": "ad12a2a5006966b0d00f074290a6d8d2396c23343305fb8504d6d489313dacc7",
     "descriptorSchemaVersion": 1,
     "harness": {
       "name": "Codex CLI",
@@ -623,6 +639,14 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
         "trackedAs": null
       },
       {
+        "id": "prompt-and-agent-hook-handlers-inert",
+        "severity": "low",
+        "summary": "Codex 0.146.0 accepts three hook handler types — `command`, `prompt`, and `agent` — but only `command` runs. Hook discovery parses `prompt` and `agent` and then skips them with a \"not supported yet\" warning, so a manifest that used either would install cleanly, list in `hooks`, and never execute. The connector must keep emitting `command` handlers only, and must not read the presence of these variants in the schema as availability. `command` is a shell command line run through `$SHELL -lc` (`/bin/sh` when SHELL is unset) — it is not restricted to Bash and not restricted to shell scripting, since the command may invoke any interpreter.",
+        "verification": "verified",
+        "mitigation": "accepted",
+        "trackedAs": null
+      },
+      {
         "id": "hooks-version-and-platform-gate",
         "severity": "medium",
         "summary": "Hooks were experimental behind `features.codex_hooks` before v0.124. The connector requires Codex >=0.124; installations outside that range must be treated as unavailable.",
@@ -647,7 +671,7 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
     "codec": "cursor",
     "integrationShape": "callback",
     "capabilityTier": 0,
-    "descriptorDigest": "5241e4ab23c78af568a9cb06faa78486722bb21b34c96fa8589da02653e1a390",
+    "descriptorDigest": "4f6c4bb7a8c3637a6fc3ddd31e0ea98c8fd354badbb61117c3263561ec17ff74",
     "descriptorSchemaVersion": 1,
     "harness": {
       "name": "Cursor Agent CLI",
@@ -670,32 +694,32 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
     },
     "capabilities": {
       "observe.prompt": {
-        "status": "not-implemented",
+        "status": "supported",
         "native": "beforeSubmitPrompt",
         "reason": null,
         "evidenceRef": null,
-        "trackedAs": "agent-session-phase-1"
+        "trackedAs": null
       },
       "observe.toolCall": {
-        "status": "not-implemented",
+        "status": "supported",
         "native": "preToolUse",
         "reason": null,
         "evidenceRef": null,
-        "trackedAs": "agent-session-phase-1"
+        "trackedAs": null
       },
       "observe.toolResult": {
-        "status": "not-implemented",
+        "status": "supported",
         "native": "postToolUse",
         "reason": null,
         "evidenceRef": null,
-        "trackedAs": "agent-session-phase-1"
+        "trackedAs": null
       },
       "observe.fileEdit": {
-        "status": "not-implemented",
-        "native": "afterFileEdit",
+        "status": "supported",
+        "native": "postToolUse",
         "reason": null,
         "evidenceRef": null,
-        "trackedAs": "agent-session-phase-1"
+        "trackedAs": null
       },
       "observe.sessionLifecycle": {
         "status": "not-implemented",
@@ -1214,7 +1238,7 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
   }
 ];
 
-export const HARNESS_CATALOG_DIGEST = '8f2e05e7ff99b08c1800996561b54d52ba0a347616e7a2e8800272033d444f7e';
+export const HARNESS_CATALOG_DIGEST = '6f047304e488db018479b5b3349d2153e37b4398903ac65d8e47ac9e3be3783d';
 
 export function findHarnessDescriptor(adapter: string): HarnessDescriptor | undefined {
   return HARNESS_DESCRIPTORS.find(entry => entry.adapter === adapter);

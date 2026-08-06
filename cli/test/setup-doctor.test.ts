@@ -166,6 +166,21 @@ test('cursor setup merges lifecycle hooks and permission rules', () => {
       )
     );
 
+    // Agent-session observation rides its own registration on each of the three events the
+    // Cursor event codec declares, alongside — never instead of — the legacy protocol hooks,
+    // which speak a different CLI surface.
+    for (const event of ['beforeSubmitPrompt', 'preToolUse', 'postToolUse']) {
+      assert.ok(
+        hooks.hooks[event].some((entry: { command: string }) =>
+          entry.command.endsWith('/scripts/agent-session-event.sh')
+        ),
+        `${event} is missing the agent-session event registration`
+      );
+    }
+    // sessionStart is deliberately unregistered: no recorded payload establishes its field
+    // names, so the codec declares no rule for it and a registration would only cost a spawn.
+    assert.equal(hooks.hooks.sessionStart, undefined);
+
     const settings = JSON.parse(readFileSync(path.join(home, '.cursor', 'settings.json'), 'utf8'));
     assert.ok(settings.permissions.allow.includes('Shell(ovld protocol:*)'));
 
@@ -177,6 +192,7 @@ test('cursor setup merges lifecycle hooks and permission rules', () => {
       'beforeSubmitPrompt',
       'beforeShellExecution',
       'beforeMCPExecution',
+      'preToolUse',
       'postToolUse',
       'stop'
     ]) {

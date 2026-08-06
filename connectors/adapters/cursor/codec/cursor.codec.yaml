@@ -1,0 +1,71 @@
+# Cursor Agent CLI — agent-session event codec.
+#
+# Cursor already had a *decision* codec (`cursor.decision-codec.yaml`) and no event codec, which
+# is the whole reason every `observe.*` capability read `not-implemented`: the adapter could hold
+# and answer a permission request, but nothing it saw ever reached the activity feed.
+#
+# Field names here are not guessed. Each one is already load-bearing somewhere in the shipped
+# adapter, which is the only evidence standard that survives not being able to run the harness:
+#
+#   `hook_event_name` / `event`  — both declared in cursor.decision-codec.yaml
+#   `cwd`                        — same
+#   `tool_name`, `tool_input`    — same (preToolUse), and `tool_input.file_path` is what the
+#                                  shipped postToolUse hook feeds to `ovld protocol record-touched`
+#   `prompt` (then `message`)    — read by hooks/overlord-user-prompt-submit.sh
+#   `conversation_id`            — read by the same hook, and persisted as the native session alias
+#
+# `sessionStart` is deliberately absent. Cursor has the event, but no shipped code in this repo
+# has ever read one of its payloads, so its `source`-equivalent field name is unknown. Declaring
+# a rule on a guessed field would not fail loudly — an unresolved path just produces a card with
+# no detail — so `observe.sessionLifecycle` stays `not-implemented` until a real payload is read.
+codecVersion: 1
+adapter: cursor
+
+# Cursor is the adapter that forced the plural form: `hook_event_name` is its Claude-compatible
+# name and `event` its own. Order matters only in that the first non-empty one wins; both are
+# treated as the same authority.
+eventNamePaths:
+  - hook_event_name
+  - event
+
+# Correlation only. `conversation_id` is the id the shipped prompt hook already persists as this
+# session's external alias, so using anything else here would split one conversation across two
+# identities. Neither value authorizes anything — the channel credential does.
+nativeSessionPaths:
+  - conversation_id
+  - session_id
+
+# Used solely to relativize file paths, so a card can say `src/app.ts` rather than disclose
+# someone's home directory layout.
+projectRootPaths:
+  - cwd
+
+events:
+  # Cursor's composer prompt. Same deliberate exception as every other adapter: prompt text is
+  # the one raw user content that flows, because showing follow-up prompts is what the activity
+  # feed is for. Secret redaction still runs over it.
+  - native: beforeSubmitPrompt
+    kind: prompt.submitted
+    origin: user
+    promptPath: prompt
+
+  # Fires before the call runs. This rule is observational only — the decision path for the same
+  # event lives in cursor.decision-codec.yaml and is reached through a different action script,
+  # so nothing here can allow, deny, or delay a tool call.
+  - native: preToolUse
+    kind: tool.called
+    origin: agent
+    toolPath: tool_name
+    inputPath: tool_input
+    callIdPath: call_id
+
+  # Fires after the tool has already run, which makes it observational by construction. A
+  # file-mutating tool becomes `file.edited` instead, so the feed can render a change timeline
+  # without the reader having to know which Cursor tool names mutate files.
+  - native: postToolUse
+    kind: tool.completed
+    origin: agent
+    toolPath: tool_name
+    inputPath: tool_input
+    callIdPath: call_id
+    fileEditKind: file.edited

@@ -16,11 +16,11 @@ import {
 } from '../packages/core/service/delivery-compose.ts';
 import { newId, nowIso } from '../packages/core/service/util.ts';
 import {
+  type ClaimedWorkerJob,
   claimNextWorkerJob,
-  finishWorkerJob,
-  retryWorkerJob,
   DELIVERY_COMPOSE_JOB_TYPE,
-  type ClaimedWorkerJob
+  finishWorkerJob,
+  retryWorkerJob
 } from '../packages/core/service/worker-jobs.ts';
 
 import { recordChange, requireDatabaseClient } from './db.ts';

@@ -29,7 +29,7 @@ From an OpenOverlord checkout:
 ovld agent-setup cursor
 ```
 
-This copies managed plugin files to `~/.cursor/plugins/local/overlord`, merges Overlord's prompt, permission, tool-result, and stop hooks into `~/.cursor/hooks.json`, and adds a `Shell(ovld protocol:*)` permission allow rule to `~/.cursor/settings.json` when missing. Existing hooks and settings are preserved.
+This copies managed plugin files to `~/.cursor/plugins/local/overlord`, merges Overlord's prompt, permission, tool-call, tool-result, agent-session observation, and stop hooks into `~/.cursor/hooks.json`, and adds a `Shell(ovld protocol:*)` permission allow rule to `~/.cursor/settings.json` when missing. Existing hooks and settings are preserved.
 
 Re-run safely any time the connector contract version changes:
 
@@ -82,6 +82,7 @@ This connector is intentionally reviewable against the four connector layers in 
   Cursor keeps its native authority.
 - `hooks/overlord-post-tool-use.sh` — records `postToolUse` file edits and shell-mediated changes for exact per-session delivery attribution.
 - `hooks/overlord-stop.sh` — checks pending delivery through `ovld protocol hook-event`; when needed, it asks Cursor to continue once so the agent can finish delivery.
+- `scripts/agent-session-event.sh` — **generated**, like the MCP shim: rendered from `connectors/core/scripts/agent-session-hook.sh` with the adapter key and the fixed `event` action substituted at setup time. Registered on `beforeSubmitPrompt`, `preToolUse`, and `postToolUse`, it publishes normalized activity events on the session channel through `codec/cursor.codec.yaml`. It is a separate registration from the protocol hooks above rather than a line added to them, because those speak the older `ovld protocol` surface, and because the scope gate that makes an unbound session cost nothing has to be the script's own first line. `sessionStart` is deliberately unregistered: no recorded Cursor payload establishes its field names, and a codec rule on a guessed path degrades silently rather than failing.
 - `rules/overlord-local.mdc` — always-on workflow rules for Cursor sessions.
 - `mcp.json` + `scripts/overlord-mcp.mjs` — MCP bridge to common `ovld protocol` operations. The shim is **generated**: it is rendered from `connectors/core/scripts/overlord-mcp.mjs` at setup time with the adapter key substituted, and there is no copy in this directory to edit.
 - `conformance-manifest.yaml` — connector conformance declaration for the Overlord contract.
@@ -96,4 +97,4 @@ The shared Connector Core source lives at `connectors/core/overlord-mission`. `o
 
 See the [adapter capability matrix](../../README.md#adapter-capability-matrix) for how this compares across adapters.
 
-Cursor's generic `preToolUse` hook is intentionally not used for permission capture. Cursor currently documents that `ask` is not enforced for `preToolUse`; the narrower shell and MCP hooks expose the native permission-decision schema without changing the user's policy. Cursor also documents hook execution as fail-open by default, so Overlord telemetry failures do not strand the agent.
+Cursor's generic `preToolUse` hook is intentionally not used for *permission capture* — it is registered for observation only, which is a different action script and cannot allow, deny, or delay a call. Cursor currently documents that `ask` is not enforced for `preToolUse`; the narrower shell and MCP hooks expose the native permission-decision schema without changing the user's policy. Cursor also documents hook execution as fail-open by default, so Overlord telemetry failures do not strand the agent.

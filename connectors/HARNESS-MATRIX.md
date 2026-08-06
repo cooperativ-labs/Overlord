@@ -15,7 +15,7 @@ Legend: ✅ supported (fixture-proven) · ⛔ unsupported (harness cannot) · �
 | Adapter | Harness | Verified version | Shape | Tier | Binding | Decision hold |
 | --- | --- | --- | --- | --- | --- | --- |
 | [`antigravity`](adapters/antigravity/CAPABILITIES.md) | Antigravity CLI | — | `callback` | 0 (Unsupported) | ❓ unverified | ❓ unverified |
-| [`claude`](adapters/claude/CAPABILITIES.md) | Claude Code | `2.1.220` | `callback` | 3 (Conversational) | ✅ supported | ✅ supported |
+| [`claude`](adapters/claude/CAPABILITIES.md) | Claude Code | `2.1.221` | `callback` | 3 (Conversational) | ✅ supported | ✅ supported |
 | [`codex`](adapters/codex/CAPABILITIES.md) | Codex CLI | `0.146.0` | `callback` | 3 (Conversational) | ✅ supported | ✅ supported |
 | [`cursor`](adapters/cursor/CAPABILITIES.md) | Cursor Agent CLI | `2026.07.23-e383d2b` | `callback` | 0 (Unsupported) | ❓ unverified | ✅ supported |
 | [`opencode`](adapters/opencode/CAPABILITIES.md) | OpenCode | — | `controlPlane` | 3 (Conversational) | ✅ supported | ✅ supported |
@@ -25,10 +25,10 @@ Legend: ✅ supported (fixture-proven) · ⛔ unsupported (harness cannot) · �
 
 | Capability | `antigravity` | `claude` | `codex` | `cursor` | `opencode` | `pi` |
 | --- | --- | --- | --- | --- | --- | --- |
-| `observe.prompt` | ❓ unverified | ✅ supported | ✅ supported | 🚧 not-implemented | 🚧 not-implemented | ✅ supported |
-| `observe.toolCall` | ❓ unverified | 🚧 not-implemented | ✅ supported | 🚧 not-implemented | 🚧 not-implemented | ✅ supported |
-| `observe.toolResult` | ❓ unverified | ✅ supported | ✅ supported | 🚧 not-implemented | ✅ supported | 🚧 not-implemented |
-| `observe.fileEdit` | ❓ unverified | ✅ supported | ✅ supported | 🚧 not-implemented | ✅ supported | 🚧 not-implemented |
+| `observe.prompt` | ❓ unverified | ✅ supported | ✅ supported | ✅ supported | 🚧 not-implemented | ✅ supported |
+| `observe.toolCall` | ❓ unverified | 🚧 not-implemented | ✅ supported | ✅ supported | 🚧 not-implemented | ✅ supported |
+| `observe.toolResult` | ❓ unverified | ✅ supported | ✅ supported | ✅ supported | ✅ supported | 🚧 not-implemented |
+| `observe.fileEdit` | ❓ unverified | ✅ supported | ✅ supported | ✅ supported | ✅ supported | 🚧 not-implemented |
 | `observe.sessionLifecycle` | ❓ unverified | ✅ supported | ✅ supported | 🚧 not-implemented | ✅ supported | ✅ supported |
 | `decide.shell` | ❓ unverified | ✅ supported | ✅ supported | ✅ supported | ✅ supported | ✅ supported |
 | `decide.mcp` | ❓ unverified | ✅ supported | ✅ supported | ✅ supported | ✅ supported | ✅ supported |
@@ -52,6 +52,9 @@ Legend: ✅ supported (fixture-proven) · ⛔ unsupported (harness cannot) · �
 | `claude` | `shipped-stop-hook-inert` | medium | verified | required | `agent-session-phase-3` |
 | `claude` | `unbound-session-side-effects` | medium | verified | required | `agent-session-phase-4` |
 | `claude` | `fork-and-subagent-identity-unknown` | medium | unverified | required | `taxonomy-7.6` |
+| `claude` | `subagent-stop-unregistered` | medium | verified | required | `coo:585` |
+| `claude` | `subagent-commits-escape-delivery-delta` | high | verified | required | `coo:585` |
+| `codex` | `prompt-and-agent-hook-handlers-inert` | low | verified | accepted | — |
 | `codex` | `hooks-version-and-platform-gate` | medium | verified | required | `agent-session-phase-4` |
 | `cursor` | `reads-claude-hook-config` | high | unverified | required | `taxonomy-7.1` |
 | `cursor` | `allowlist-precedence` | medium | unverified | required | `taxonomy-7.8` |

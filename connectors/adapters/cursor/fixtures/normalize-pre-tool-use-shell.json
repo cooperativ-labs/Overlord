@@ -1,0 +1,40 @@
+{
+  "fixtureVersion": 1,
+  "kind": "normalized-event",
+  "description": "A Cursor preToolUse body for a Shell call. Proves observe.toolCall: the event becomes tool.called with the destructive risk marker derived on the machine, and the raw command survives only as a bounded detail. This is the observational path for preToolUse; the decision path for the same native event is proven separately by fixtures/decision-codec.json and reached through a different action script.",
+  "codec": "codec/cursor.codec.yaml",
+  "occurredAt": "2026-01-01T00:00:00.000Z",
+  "payload": {
+    "conversation_id": "conv_7f3a91c2",
+    "hook_event_name": "preToolUse",
+    "cwd": "/repo",
+    "tool_name": "Shell",
+    "call_id": "call_44c0",
+    "tool_input": {
+      "command": "rm -rf ./build && yarn build"
+    }
+  },
+  "expect": {
+    "eventId": "ev_ad3ad02aaa00e3b1da140996b421f7cb",
+    "producerSequence": null,
+    "occurredAt": "2026-01-01T00:00:00.000Z",
+    "kind": "tool.called",
+    "severity": "info",
+    "nativeEvent": "preToolUse",
+    "nativeTurnId": null,
+    "nativeCallId": "call_44c0",
+    "subagentId": null,
+    "correlationId": "conv_7f3a91c2",
+    "origin": "agent",
+    "summary": "Run a shell command: rm -rf ./build && yarn build [destructive]",
+    "payload": {
+      "tool": "shell",
+      "action": "Run a shell command",
+      "subject": "rm",
+      "detail": "rm -rf ./build && yarn build",
+      "riskMarkers": ["destructive"],
+      "formatterVersion": 1
+    }
+  },
+  "mustNotContain": ["/repo/build"]
+}

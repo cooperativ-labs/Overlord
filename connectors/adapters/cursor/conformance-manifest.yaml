@@ -15,7 +15,7 @@ connector:
   harnessCapabilities:
     path: connectors/adapters/cursor/harness-capabilities.yaml
     schemaVersion: 1
-    digest: "5241e4ab23c78af568a9cb06faa78486722bb21b34c96fa8589da02653e1a390"
+    digest: "4f6c4bb7a8c3637a6fc3ddd31e0ea98c8fd354badbb61117c3263561ec17ff74"
   capabilities:
     - followUpHook
     - stopHook
@@ -47,6 +47,7 @@ connector:
     - "hooks/overlord-permission-request.sh"
     - "hooks/overlord-post-tool-use.sh"
     - "hooks/overlord-stop.sh"
+    - "scripts/agent-session-event.sh"
     - "mcp.json"
     - "prompt-wrapper.md"
     - "rules/overlord-local.mdc"

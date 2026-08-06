@@ -1,14 +1,7 @@
 import { Link } from '@tanstack/react-router';
 import { AlertTriangle, ArrowUp, Check, ChevronDown, Loader2, Play, Trash2 } from 'lucide-react';
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { type ReactNode, useEffect, useMemo, useState } from 'react';
 
-import type {
-  AgentCatalogDto,
-  AgentLaunchConfigDto,
-  InboxItemDto,
-  MissionDetailDto,
-  ProjectResourceDto
-} from '../../shared/contract.ts';
 import { AgentModelChooserButton } from '@/components/objectives/AgentModelChooserButton.tsx';
 import {
   type AgentModelSelection,
@@ -46,6 +39,14 @@ import {
   useUpdateLaunchPreference,
   useUpdateObjective
 } from '@/lib/queries.ts';
+
+import type {
+  AgentCatalogDto,
+  AgentLaunchConfigDto,
+  InboxItemDto,
+  MissionDetailDto,
+  ProjectResourceDto
+} from '../../shared/contract.ts';
 
 type InboxMissionCardProps =
   | {

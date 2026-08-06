@@ -574,11 +574,33 @@ const CODEC_RULE_KEYS = new Set([
  * *invented* key is how a codec author would try to route a native field somewhere the
  * interpreter does not sanction.
  */
-function validateCodec({ adapter, codec, errors }) {
+function validateCodec({ adapter, codec, errors, integrationShape }) {
   const at = field => `${adapter} codec ${field}`;
   if (codec?.codecVersion !== 1) errors.push(`${at('codecVersion')}: must be 1`);
   if (codec?.adapter !== adapter) {
     errors.push(`${at('adapter')}: must equal the adapter directory name (${adapter})`);
+  }
+  if (codec?.eventNamePaths !== undefined) {
+    // A misdeclared plural is silent at runtime: the name never resolves, no rule matches, and
+    // the interpreter's normal "nothing to say" outcome hides it. Reject it here instead.
+    if (
+      !Array.isArray(codec.eventNamePaths) ||
+      codec.eventNamePaths.length === 0 ||
+      codec.eventNamePaths.some(entry => typeof entry !== 'string' || entry === '')
+    ) {
+      errors.push(`${at('eventNamePaths')}: must be a non-empty array of dotted paths`);
+    }
+  }
+  if (
+    integrationShape !== 'controlPlane' &&
+    codec?.eventNamePath === undefined &&
+    codec?.eventNamePaths === undefined
+  ) {
+    // Only a control-plane adapter may omit both, because there the transport names the event.
+    // A callback adapter that omits them normalizes nothing at all.
+    errors.push(
+      `${at('eventNamePath')}: a payload-named codec needs eventNamePath or eventNamePaths`
+    );
   }
   if (!Array.isArray(codec?.events) || codec.events.length === 0) {
     errors.push(`${at('events')}: at least one event rule is required`);
@@ -954,7 +976,7 @@ function main() {
         errors.push(`${adapter}: codecSpec not found: ${descriptor.codecSpec}`);
       } else {
         const codec = parseYaml(readFileSync(codecPath, 'utf8'));
-        validateCodec({ adapter, codec, errors });
+        validateCodec({ adapter, codec, errors, integrationShape: descriptor?.integrationShape });
         codecs.push({ adapter, codec });
       }
     }

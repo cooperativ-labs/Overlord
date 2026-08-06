@@ -11,6 +11,7 @@
 schemaVersion: 1
 adapter: cursor
 codec: cursor
+codecSpec: codec/cursor.codec.yaml
 decisionCodecSpec: codec/cursor.decision-codec.yaml
 
 harness:
@@ -33,6 +34,15 @@ binding:
     tool subprocess, were not established. Binding on the wrong one silently misattributes a
     session, so this must be settled by fixture before the adapter binds on it.
 
+    This is now the *only* thing holding Cursor at tier 0. Four `observe.*` capabilities and
+    three `decide.*` capabilities are fixture-proven, and `inject.turnBoundary` with them —
+    enough for tier 3 on every axis the tier derivation reads except this one. Recording a
+    real Cursor hook payload across a resume, and flipping this node, is therefore a
+    single-session piece of work with a three-tier payoff, not an incremental improvement.
+    Note that the shipped prompt hook and `codec/cursor.codec.yaml` both already treat
+    `conversation_id` as the primary identity; if the recorded evidence says `session_id` is
+    the stable one, both must change together or one session splits into two.
+
 decisionHold:
   status: supported
   timeoutField: timeout
@@ -47,25 +57,42 @@ decisionHold:
 
 capabilities:
   observe.prompt:
-    status: not-implemented
+    status: supported
     native: beforeSubmitPrompt
-    trackedAs: agent-session-phase-1
+    fixtures: [fixtures/normalize-before-submit-prompt.json]
   observe.toolCall:
-    status: not-implemented
+    status: supported
     native: preToolUse
-    trackedAs: agent-session-phase-1
+    fixtures: [fixtures/normalize-pre-tool-use-shell.json]
+    notes: >-
+      preToolUse carries both an observational and a decision registration, rendered as two
+      different action scripts (`event` and `request`). The observational one cannot allow,
+      deny, or delay a call — the action is fixed at install time, so neither registration can
+      become the other.
   observe.toolResult:
-    status: not-implemented
+    status: supported
     native: postToolUse
-    trackedAs: agent-session-phase-1
+    fixtures: [fixtures/normalize-post-tool-use-write.json]
   observe.fileEdit:
-    status: not-implemented
-    native: afterFileEdit
-    trackedAs: agent-session-phase-1
+    status: supported
+    native: postToolUse
+    fixtures: [fixtures/normalize-post-tool-use-write.json]
+    notes: >-
+      Carried on postToolUse rather than on Cursor's dedicated `afterFileEdit`, for the same
+      reason Claude carries it on PostToolUse: one registration then covers every mutation,
+      including the ones a shell command makes, and the split into `file.edited` happens where
+      the normalized tool name is already known. `afterFileEdit` remains available if a future
+      need appears for edit-level granularity the tool-level event cannot express.
   observe.sessionLifecycle:
     status: not-implemented
     native: sessionStart
     trackedAs: agent-session-phase-1
+    notes: >-
+      Cursor fires the event, but no shipped code in this repo has ever read one of its
+      payloads, so the field carrying the equivalent of Claude's `source` is unknown. A codec
+      rule on a guessed path would not fail loudly — an unresolved path yields a card with no
+      detail — so this stays unbuilt until a real payload is recorded, rather than being
+      claimed on an assumed field name.
   decide.shell:
     status: supported
     native: beforeShellExecution

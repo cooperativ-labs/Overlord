@@ -6,7 +6,7 @@
 
 **Harness version verified** `2026.07.23-e383d2b` · **range** `>=2026.07.01` · **scheme** `calendar`
 
-**Descriptor digest** `5241e4ab23c78af568a9cb06faa78486722bb21b34c96fa8589da02653e1a390`
+**Descriptor digest** `4f6c4bb7a8c3637a6fc3ddd31e0ea98c8fd354badbb61117c3263561ec17ff74`
 
 > The tier is derived from passing fixtures, never authored. `unsupported` means the harness
 > cannot do it — do not attempt it. `not-implemented` means it is buildable and unbuilt: that is
@@ -24,6 +24,7 @@
 | Evidence | tracked as `agent-session-verify-cursor-binding` |
 
 Hook input carries `conversation_id` and an optional `session_id`. Which of the two is stable across a resumed conversation, and whether either appears in the environment of a tool subprocess, were not established. Binding on the wrong one silently misattributes a session, so this must be settled by fixture before the adapter binds on it.
+This is now the *only* thing holding Cursor at tier 0. Four `observe.*` capabilities and three `decide.*` capabilities are fixture-proven, and `inject.turnBoundary` with them — enough for tier 3 on every axis the tier derivation reads except this one. Recording a real Cursor hook payload across a resume, and flipping this node, is therefore a single-session piece of work with a three-tier payoff, not an incremental improvement. Note that the shipped prompt hook and `codec/cursor.codec.yaml` both already treat `conversation_id` as the primary identity; if the recorded evidence says `session_id` is the stable one, both must change together or one session splits into two.
 
 The native session id is a **correlation alias only**. Authorization and mission scope come
 from the verified channel/session credential; neither the working directory nor an unverified
@@ -45,10 +46,10 @@ The 60-second per-script default is an order of magnitude below any window sized
 
 | Capability | Status | Native | Evidence |
 | --- | --- | --- | --- |
-| `observe.prompt` | 🚧 not-implemented | `beforeSubmitPrompt` | tracked as `agent-session-phase-1` |
-| `observe.toolCall` | 🚧 not-implemented | `preToolUse` | tracked as `agent-session-phase-1` |
-| `observe.toolResult` | 🚧 not-implemented | `postToolUse` | tracked as `agent-session-phase-1` |
-| `observe.fileEdit` | 🚧 not-implemented | `afterFileEdit` | tracked as `agent-session-phase-1` |
+| `observe.prompt` | ✅ supported | `beforeSubmitPrompt` | fixtures: `fixtures/normalize-before-submit-prompt.json` |
+| `observe.toolCall` | ✅ supported | `preToolUse` | fixtures: `fixtures/normalize-pre-tool-use-shell.json` |
+| `observe.toolResult` | ✅ supported | `postToolUse` | fixtures: `fixtures/normalize-post-tool-use-write.json` |
+| `observe.fileEdit` | ✅ supported | `postToolUse` | fixtures: `fixtures/normalize-post-tool-use-write.json` |
 | `observe.sessionLifecycle` | 🚧 not-implemented | `sessionStart` | tracked as `agent-session-phase-1` |
 | `decide.shell` | ✅ supported | `beforeShellExecution` | fixtures: `fixtures/permission-request.json`, `fixtures/decision-codec.json` |
 | `decide.mcp` | ✅ supported | `beforeMCPExecution` | fixtures: `fixtures/permission-request.json`, `fixtures/decision-codec.json` |
@@ -65,6 +66,9 @@ The 60-second per-script default is an order of magnitude below any window sized
 
 ### Capability notes
 
+- **`observe.toolCall`** — preToolUse carries both an observational and a decision registration, rendered as two different action scripts (`event` and `request`). The observational one cannot allow, deny, or delay a call — the action is fixed at install time, so neither registration can become the other.
+- **`observe.fileEdit`** — Carried on postToolUse rather than on Cursor's dedicated `afterFileEdit`, for the same reason Claude carries it on PostToolUse: one registration then covers every mutation, including the ones a shell command makes, and the split into `file.edited` happens where the normalized tool name is already known. `afterFileEdit` remains available if a future need appears for edit-level granularity the tool-level event cannot express.
+- **`observe.sessionLifecycle`** — Cursor fires the event, but no shipped code in this repo has ever read one of its payloads, so the field carrying the equivalent of Claude's `source` is unknown. A codec rule on a guessed path would not fail loudly — an unresolved path yields a card with no detail — so this stays unbuilt until a real payload is recorded, rather than being claimed on an assumed field name.
 - **`inject.turnBoundary`** — `stop` returns `followup_message`, a first-class continuation channel. It can only ever report Queued(turn-boundary), never Delivered, and the UI must say so.
 - **`inject.nextTurn`** — Cursor's followup_message is scheduled for the next turn; the same path covers turn-boundary and next-turn naming.
 - **`terminal.statusSurface`** — Whether Cursor exposes an in-TUI status surface equivalent to Claude's statusMessage was not established.

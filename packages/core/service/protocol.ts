@@ -1,10 +1,7 @@
 import { bindBool, UPDATE_EVENT_TYPES, UPDATE_PHASES } from '@overlord/database';
 import { createHash } from 'node:crypto';
 
-import {
-  bindChannelToSession,
-  findBindableChannelForMission
-} from './agent-session/channels.js';
+import { bindChannelToSession, findBindableChannelForMission } from './agent-session/channels.js';
 import { recordChange } from './change-feed.js';
 import type { ServiceContext } from './context.js';
 import { resolveMissionId, resolveProjectId } from './context.js';

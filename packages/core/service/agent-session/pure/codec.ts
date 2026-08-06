@@ -66,6 +66,17 @@ export type CodecSpec = {
   adapter: string;
   /** Where the native event name lives when the payload carries it. */
   eventNamePath?: string;
+  /**
+   * Candidate paths for the native event name, tried in order after `eventNamePath`.
+   *
+   * Most harnesses name the event in exactly one place, and those codecs should keep using the
+   * singular field. Cursor is the exception that forced the plural: it carries the name as
+   * `hook_event_name` on some events and `event` on others, which a single path cannot express.
+   * Getting it wrong there is invisible rather than loud — an unresolved name means no rule
+   * matches, and no rule matching is the interpreter's normal "nothing to say" outcome — so the
+   * failure would look exactly like a harness that simply never fired.
+   */
+  eventNamePaths?: string[];
   /** Candidate paths for the native session id, tried in order. Correlation only. */
   nativeSessionPaths?: string[];
   /** Candidate paths for the working directory, used only to relativize file paths. */
@@ -125,8 +136,11 @@ export function findCodecRule(
 }
 
 export function resolveNativeEventName(codec: CodecSpec, payload: unknown): string | null {
-  const fromPayload = firstString(payload, codec.eventNamePath ? [codec.eventNamePath] : []);
-  return fromPayload;
+  const paths = [
+    ...(codec.eventNamePath ? [codec.eventNamePath] : []),
+    ...(codec.eventNamePaths ?? [])
+  ];
+  return firstString(payload, paths);
 }
 
 export function resolveNativeSessionId(codec: CodecSpec, payload: unknown): string | null {

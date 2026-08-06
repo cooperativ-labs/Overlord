@@ -114,6 +114,29 @@ function overlordLaunchEnv({
   };
 }
 
+/**
+ * Harness-specific launch environment.
+ *
+ * These are limits the harness already applies to itself. Pinning them makes the value this
+ * run used a property of the launch rather than of whichever harness build happens to be
+ * installed: Claude Code moved its subagent caps three times across 2.1.212–2.1.220, and a
+ * fan-out that silently truncates mid-mission is indistinguishable, in the delivery report,
+ * from an agent that chose to do less work.
+ *
+ * They are layered *under* the project's own `launchEnvVars`, so a project that wants a
+ * different ceiling sets one and wins.
+ */
+function agentLaunchEnv(agent: string): Record<string, string> {
+  if (agent === 'claude') {
+    return {
+      CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS: '20',
+      CLAUDE_CODE_MAX_SUBAGENTS_PER_SESSION: '200',
+      CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH: '3'
+    };
+  }
+  return {};
+}
+
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 }
@@ -386,7 +409,11 @@ export async function buildLaunchPlan({
     options.launchEnvVars && Object.keys(options.launchEnvVars).length > 0
       ? substituteLaunchEnvVars(options.launchEnvVars, launchVariables)
       : {};
-  const exportedEnv = { ...launchEnv, ...resolvedEnvVars };
+  const exportedEnv = {
+    ...agentLaunchEnv(options.agent),
+    ...launchEnv,
+    ...resolvedEnvVars
+  };
 
   const prompt =
     launchContext.length > 4000
