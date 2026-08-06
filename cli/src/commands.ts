@@ -1784,15 +1784,24 @@ async function runRunnerCommand({
         // Observation writeback is best-effort; launch should still proceed.
       }
     }
-    // The `launching` response additively carries the session-channel bootstrap. It is the
-    // only time the raw channel credential is available: the backend stores just its hash, so
-    // if this response is dropped the channel simply stays unbound and the session behaves
-    // exactly as it did before agent-session existed.
-    const launchingResponse = asRecord(
-      await runtime.backend.post({ path: `/api/runner/requests/${requestId}/launching` })
-    );
-    const sessionChannel = asRecord(launchingResponse.sessionChannel);
     try {
+      // The `launching` response additively carries the session-channel bootstrap. It is the
+      // only time the raw channel credential is available: the backend stores just its hash, so
+      // if this response is dropped the channel simply stays unbound and the session behaves
+      // exactly as it did before agent-session existed.
+      //
+      // This call must stay INSIDE the try: it is the claim-to-launch handoff, and a failure
+      // here (transient network error, a 409 because the request was cleared under us, an
+      // auth blip) used to escape before any reporting ran. The request then sat in `claimed`
+      // with no `failed` event and no `last_error`, the claim query only ever reconsiders
+      // `queued` rows, and an expired claim moves to the terminal `expired` status — so the
+      // work was never retried and the UI kept rendering "Queued" forever with nothing
+      // anywhere saying why. Reporting the failure returns the objective to a launchable
+      // state on the first poll instead of stranding it until someone clears the queue.
+      const launchingResponse = asRecord(
+        await runtime.backend.post({ path: `/api/runner/requests/${requestId}/launching` })
+      );
+      const sessionChannel = asRecord(launchingResponse.sessionChannel);
       const mutation = parseMutationFromMetadata(requestRecord.metadata);
       if (mutation) {
         const mutationResult = await executeLocalTargetMutation({ mutation });
@@ -1892,10 +1901,18 @@ async function runRunnerCommand({
       }
       return { launched: true, longPoll };
     } catch (error) {
-      await runtime.backend.post({
-        path: `/api/runner/requests/${requestId}/failed`,
-        body: { error: error instanceof Error ? error.message : String(error) }
-      });
+      // Best-effort: the report is how the backend learns this claim died, but a
+      // failure to report must never replace the real error with "could not reach
+      // the backend" or a 409 from a request that is already terminal — that is
+      // what the supervisor writes to `runner-service.json` and shows the user.
+      try {
+        await runtime.backend.post({
+          path: `/api/runner/requests/${requestId}/failed`,
+          body: { error: error instanceof Error ? error.message : String(error) }
+        });
+      } catch {
+        // Reporting failed too; surface the original cause below.
+      }
       throw error;
     }
   };

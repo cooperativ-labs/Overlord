@@ -611,8 +611,24 @@ export interface LiveActivityPushTokens {
   id: string | null;
   last_content_hash: string | null;
   last_sent_at: string | null;
+  origin: Generated<string>;
   profile_id: string;
   push_token: string;
+  updated_at: string;
+}
+
+export interface LiveActivityStartTokens {
+  activity_type: string;
+  app_version: string | null;
+  bundle_id: string;
+  created_at: string;
+  environment: string;
+  id: string | null;
+  last_registered_at: string;
+  last_started_at: string | null;
+  platform: string;
+  profile_id: string;
+  start_token: string;
   updated_at: string;
 }
 
@@ -1327,6 +1343,7 @@ export interface DB {
   ext_github_user_oauth_states: ExtGithubUserOauthStates;
   idempotency_keys: IdempotencyKeys;
   live_activity_push_tokens: LiveActivityPushTokens;
+  live_activity_start_tokens: LiveActivityStartTokens;
   mission_branch_observations: MissionBranchObservations;
   mission_events: MissionEvents;
   mission_sequences: MissionSequences;

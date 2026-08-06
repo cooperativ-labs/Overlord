@@ -398,8 +398,17 @@ export const useWorkspaceStatuses = (workspaceId?: string | null) =>
     enabled: workspaceId !== null
   });
 
+// Project-scoped queries are routinely mounted before a project is chosen (the
+// quick-task bar, the new-mission modal). Without this guard they request
+// `/api/projects//resources` and every sibling project route with an empty id,
+// which the backend answers 404 — a burst of red herrings in the request log
+// that looks like a launch failure and is only an unselected project.
 export const useProjectResources = (id: string) =>
-  useQuery({ queryKey: keys.projectResources(id), queryFn: () => api.listProjectResources(id) });
+  useQuery({
+    queryKey: keys.projectResources(id),
+    queryFn: () => api.listProjectResources(id),
+    enabled: Boolean(id)
+  });
 
 export const useProjectTags = (id: string | null) =>
   useQuery({
@@ -415,7 +424,8 @@ export const useProjectRepository = (
 ) =>
   useQuery({
     queryKey: keys.projectRepository(id, executionTargetId, resourceKey ?? null),
-    queryFn: () => api.getProjectRepository(id, executionTargetId, resourceKey ?? null)
+    queryFn: () => api.getProjectRepository(id, executionTargetId, resourceKey ?? null),
+    enabled: Boolean(id)
   });
 
 export const useMissions = (projectId: string) =>
@@ -1706,14 +1716,16 @@ export const useLaunchPreference = (projectId: string) =>
   useQuery({
     queryKey: keys.launchPreference(projectId),
     queryFn: () => api.getLaunchPreference(projectId),
-    staleTime: 60_000
+    staleTime: 60_000,
+    enabled: Boolean(projectId)
   });
 
 export const useProjectExecutionTarget = (projectId: string) =>
   useQuery({
     queryKey: keys.projectExecutionTarget(projectId),
     queryFn: () => api.getProjectExecutionTarget(projectId),
-    staleTime: 30_000
+    staleTime: 30_000,
+    enabled: Boolean(projectId)
   });
 
 export function useUpdateProjectExecutionTarget(projectId: string) {

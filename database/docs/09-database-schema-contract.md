@@ -2073,6 +2073,7 @@ APNs tokens appear in REST reads, change feeds, audit payloads, or logs.
 | `push_token`        | text         | yes      | Opaque APNs ActivityKit token; private at rest.                      |
 | `last_content_hash` | text         | no       | SHA-256 of the last visible snapshot sent to this activity.          |
 | `last_sent_at`      | TimestampUTC | no       | Supports five-minute coalescing of unchanged visible progress.       |
+| `origin`            | text         | yes      | Closed set: `local`, `push_to_start`. Defaults to `local`.           |
 | `created_at`        | TimestampUTC | yes      |                                                                      |
 | `updated_at`        | TimestampUTC | yes      |                                                                      |
 
@@ -2085,7 +2086,46 @@ Delivery is driven by durable `worker_jobs.type = 'overlord.live_activity.dispat
 Jobs carry only the target profile ID and are idempotently coalesced; the dispatcher
 recomputes presentation state at delivery time. APNs credential material is process
 configuration, not database data. Invalid-token APNs responses delete the matching
-registration.
+registration. `origin = 'push_to_start'` records that the row is the per-activity
+**update** token handed over after APNs remotely started the activity; the presence of
+any row at all is what suppresses a second remote start for that account.
+
+### `live_activity_start_tokens`
+
+Private ActivityKit **push-to-start** registration for one app install. A third
+credential family, distinct from both tables around it: a push-to-start token is
+scoped to the `(install, activity type)` pair, outlives every individual activity,
+and is the only credential that may carry an `event: "start"` payload. Holding a row
+here is the account's consent to desktop-initiated Live Activities; deleting it
+withdraws that consent. Neither the tokens nor this table appear in REST reads,
+change feeds, audit payloads, or logs.
+
+| Column               | Type         | Required | Notes                                                                          |
+| -------------------- | ------------ | -------- | ------------------------------------------------------------------------------ |
+| `id`                 | Id           | yes      |                                                                                |
+| `profile_id`         | Id           | yes      | FK to `profiles`; the single account this token currently belongs to.          |
+| `start_token`        | text         | yes      | Opaque ActivityKit push-to-start token; globally unique so re-registration reassigns the install. |
+| `platform`           | text         | yes      | Closed set: `ios`.                                                             |
+| `environment`        | text         | yes      | Closed set: `sandbox`, `production`. Selects the APNs host per registration.   |
+| `bundle_id`          | text         | yes      | App target that owns the token; forms the `…push-type.liveactivity` topic.     |
+| `activity_type`      | text         | yes      | ActivityKit attributes type name sent as `attributes-type`.                    |
+| `app_version`        | text         | no       | Diagnostics only.                                                              |
+| `last_registered_at` | TimestampUTC | yes      | Refreshed on every re-registration.                                            |
+| `last_started_at`    | TimestampUTC | no       | Supports the five-minute in-flight cooldown between remote starts.             |
+| `created_at`         | TimestampUTC | yes      |                                                                                |
+| `updated_at`         | TimestampUTC | yes      |                                                                                |
+
+Indexes:
+
+- Unique `(start_token)`.
+- `(profile_id)` for lifecycle fan-out.
+
+Delivery is driven by durable `worker_jobs.type = 'overlord.live_activity.start.v1'`,
+enqueued when an assigned mission enters execution and coalesced per profile. Jobs
+carry only the target profile and triggering mission IDs. A start is skipped when the
+account already holds any `live_activity_push_tokens` row, when no mission is running,
+or while a previous start is still inside the cooldown. Invalid-token APNs responses
+delete the matching registration.
 
 ### `device_push_tokens`
 

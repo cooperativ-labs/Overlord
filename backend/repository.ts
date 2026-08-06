@@ -26,7 +26,10 @@ import {
   declareActingDeviceTarget,
   NO_EXECUTION_TARGET_REGISTERED
 } from '../packages/core/service/execution-targets.ts';
-import { enqueueLiveActivityRefreshForMission } from '../packages/core/service/live-activity-jobs.ts';
+import {
+  enqueueLiveActivityRefreshForMission,
+  enqueueLiveActivityStartForMission
+} from '../packages/core/service/live-activity-jobs.ts';
 import { resolveBackendResourceProvider } from '../packages/core/service/local-target/index.ts';
 import type { TargetMetadata } from '../packages/core/service/local-target/types.ts';
 import {
@@ -6743,12 +6746,23 @@ async function updateObjectiveTx(
       body.state !== existing.state &&
       (body.state === 'executing' || body.state === 'complete' || existing.state === 'executing')
     ) {
-      await enqueueLiveActivityRefreshForMission({
-        db: tx,
-        workspaceId,
-        missionId: existing.mission_id,
-        now
-      });
+      // Entering execution may also need to *start* the activity; every other
+      // transition only refreshes one that is already on screen.
+      if (body.state === 'executing') {
+        await enqueueLiveActivityStartForMission({
+          db: tx,
+          workspaceId,
+          missionId: existing.mission_id,
+          now
+        });
+      } else {
+        await enqueueLiveActivityRefreshForMission({
+          db: tx,
+          workspaceId,
+          missionId: existing.mission_id,
+          now
+        });
+      }
     }
 
     if (

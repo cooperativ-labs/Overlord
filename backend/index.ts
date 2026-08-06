@@ -98,7 +98,12 @@ import {
 } from './desktop-oauth-handoff.ts';
 import { ENV_PROFILE } from './env-profile.ts';
 import { apiErrorFromDatabaseError } from './errors.ts';
-import { registerLiveActivityPushToken, revokeLiveActivityPushToken } from './live-activities.ts';
+import {
+  registerLiveActivityPushToken,
+  registerLiveActivityStartToken,
+  revokeLiveActivityPushToken,
+  revokeLiveActivityStartToken
+} from './live-activities.ts';
 import { liveActivityDispatcher } from './live-activity-dispatcher.ts';
 import {
   handleOAuthApprove,
@@ -1308,6 +1313,32 @@ app.delete(
   handle(
     async (req, res) => {
       await revokeLiveActivityPushToken(req.params.activityId);
+      res.status(204).end();
+    },
+    { mutates: true }
+  )
+);
+
+// Push-to-start registration. A third credential family: this token is scoped to
+// the install and activity type rather than to one activity, so like a device
+// token it travels in the body rather than the URL and has no read surface.
+// Holding a row here is the account's consent to desktop-initiated activities;
+// revoking is how that consent is withdrawn.
+app.put(
+  '/api/mobile/live-activities/start-token',
+  handle(
+    async (req, res) => {
+      await registerLiveActivityStartToken(req.body);
+      res.status(204).end();
+    },
+    { mutates: true }
+  )
+);
+app.post(
+  '/api/mobile/live-activities/start-token/revoke',
+  handle(
+    async (req, res) => {
+      await revokeLiveActivityStartToken(req.body);
       res.status(204).end();
     },
     { mutates: true }

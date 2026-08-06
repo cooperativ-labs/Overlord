@@ -9,7 +9,10 @@ import { buildDeliveryReport, markDeliveryPresentationPending } from './delivery
 import { ServiceError } from './errors.js';
 import { createExecutionRequest, linkExecutionRequestToSession } from './execution-requests.js';
 import { findActingDeviceExecutionTargetId } from './execution-targets.js';
-import { enqueueLiveActivityRefreshForMission } from './live-activity-jobs.js';
+import {
+  enqueueLiveActivityRefreshForMission,
+  enqueueLiveActivityStartForMission
+} from './live-activity-jobs.js';
 import {
   type ArtifactSummary,
   type AttachmentSummary,
@@ -668,7 +671,11 @@ export async function attachSession({
         ...(currentObjectiveAssignment?.assigned_agent ? [] : ['assigned_agent'])
       ]
     });
-    await enqueueLiveActivityRefreshForMission({
+    // The objective just entered execution, which is exactly the moment a
+    // desktop-launched mission should appear on the assignee's Lock Screen even
+    // though they never opened the phone: refresh any activity already running
+    // and, failing that, ask APNs to start one.
+    await enqueueLiveActivityStartForMission({
       db: txCtx.db,
       workspaceId: ctx.workspace.id,
       missionId: context.mission.id,
