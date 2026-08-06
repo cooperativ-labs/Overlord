@@ -3980,6 +3980,7 @@ interface FileChangeRow {
   impact: string;
   diff_state: string | null;
   vcs_status: string | null;
+  resource_key: string | null;
   created_at: string;
 }
 
@@ -3998,10 +3999,15 @@ export async function listMissionFileChanges(
   const rows = (await requireDatabaseClient().all(
     `SELECT cr.id, cr.mission_id, cr.objective_id, cr.file_path, cr.label, cr.summary,
               cr.why, cr.impact, cr.created_at,
-              cf.current_diff_state AS diff_state, cf.vcs_status AS vcs_status
+              cf.current_diff_state AS diff_state, cf.vcs_status AS vcs_status,
+              COALESCE(pr_cf.resource_key, o.resource_key) AS resource_key
          FROM change_rationales cr
          LEFT JOIN changed_files cf
            ON cf.id = cr.changed_file_id AND cf.deleted_at IS NULL
+         LEFT JOIN objectives o
+           ON o.id = cr.objective_id AND o.deleted_at IS NULL
+         LEFT JOIN project_resources pr_cf
+           ON pr_cf.id = cf.resource_id AND pr_cf.deleted_at IS NULL
         WHERE cr.mission_id = ? AND cr.workspace_id = ?
           AND cr.deleted_at IS NULL
         ORDER BY cr.created_at DESC, cr.id DESC
@@ -4020,6 +4026,7 @@ export async function listMissionFileChanges(
     impact: row.impact,
     diffState: (row.diff_state as FileChangeDto['diffState']) ?? null,
     vcsStatus: row.vcs_status,
+    resourceKey: row.resource_key?.trim() || null,
     createdAt: row.created_at
   }));
 }

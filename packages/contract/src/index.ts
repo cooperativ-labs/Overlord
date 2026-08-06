@@ -1133,6 +1133,8 @@ export interface FileChangeDto {
   diffState: FileChangeDiffState;
   /** Version-control status of the file (e.g. `modified`, `added`), when known. */
   vcsStatus: string | null;
+  /** Logical project resource the change belongs to, when known. */
+  resourceKey: string | null;
   createdAt: string;
 }
 

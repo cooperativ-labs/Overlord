@@ -134213,6 +134213,7 @@ init_execution_targets();
 // ../packages/core/service/live-activity-jobs.ts
 init_util3();
 var LIVE_ACTIVITY_DISPATCH_JOB_TYPE = "overlord.live_activity.dispatch.v1";
+var LIVE_ACTIVITY_START_JOB_TYPE = "overlord.live_activity.start.v1";
 function profilePredicate(dialect) {
   return dialect === "postgres" ? "payload_json->>'profileId' = ?" : "json_extract(payload_json, '$.profileId') = ?";
 }
@@ -134247,11 +134248,10 @@ async function enqueueLiveActivityDispatchJob({
   );
   return true;
 }
-async function enqueueLiveActivityRefreshForMission({
+async function missionOwnerProfileId({
   db,
   workspaceId,
-  missionId,
-  now: now2 = nowIso()
+  missionId
 }) {
   const owner = await db.get(
     `SELECT wu.profile_id
@@ -134261,7 +134261,59 @@ async function enqueueLiveActivityRefreshForMission({
         AND wu.deleted_at IS NULL AND wu.status = 'active'`,
     [missionId, workspaceId]
   );
-  return owner ? enqueueLiveActivityDispatchJob({ db, workspaceId, profileId: owner.profile_id, now: now2 }) : false;
+  return owner?.profile_id ?? null;
+}
+async function enqueueLiveActivityRefreshForMission({
+  db,
+  workspaceId,
+  missionId,
+  now: now2 = nowIso()
+}) {
+  const profileId = await missionOwnerProfileId({ db, workspaceId, missionId });
+  return profileId ? enqueueLiveActivityDispatchJob({ db, workspaceId, profileId, now: now2 }) : false;
+}
+async function enqueueLiveActivityStartJob({
+  db,
+  workspaceId,
+  profileId,
+  missionId,
+  now: now2 = nowIso()
+}) {
+  const existing = await db.get(
+    `SELECT id FROM worker_jobs
+       WHERE workspace_id = ? AND type = ? AND status IN ('queued', 'running')
+         AND deleted_at IS NULL AND ${profilePredicate(db.dialect)}
+       LIMIT 1`,
+    [workspaceId, LIVE_ACTIVITY_START_JOB_TYPE, profileId]
+  );
+  if (existing) return false;
+  await db.run(
+    `INSERT INTO worker_jobs
+       (id, workspace_id, type, status, priority, run_after, attempt_count, max_attempts,
+        payload_json, created_at, updated_at, revision)
+       VALUES (?, ?, ?, 'queued', 40, ?, 0, 5, ?, ?, ?, 1)`,
+    [
+      newId(),
+      workspaceId,
+      LIVE_ACTIVITY_START_JOB_TYPE,
+      now2,
+      JSON.stringify({ profileId, missionId }),
+      now2,
+      now2
+    ]
+  );
+  return true;
+}
+async function enqueueLiveActivityStartForMission({
+  db,
+  workspaceId,
+  missionId,
+  now: now2 = nowIso()
+}) {
+  const profileId = await missionOwnerProfileId({ db, workspaceId, missionId });
+  if (!profileId) return false;
+  await enqueueLiveActivityDispatchJob({ db, workspaceId, profileId, now: now2 });
+  return enqueueLiveActivityStartJob({ db, workspaceId, profileId, missionId, now: now2 });
 }
 
 // ../packages/core/service/profiles.ts
@@ -135202,7 +135254,7 @@ async function attachSession({
         ...currentObjectiveAssignment?.assigned_agent ? [] : ["assigned_agent"]
       ]
     });
-    await enqueueLiveActivityRefreshForMission({
+    await enqueueLiveActivityStartForMission({
       db: txCtx.db,
       workspaceId: ctx.workspace.id,
       missionId: context.mission.id,
@@ -144211,12 +144263,21 @@ async function updateObjectiveTx(id, body) {
       tx
     );
     if (body.state !== void 0 && body.state !== existing.state && (body.state === "executing" || body.state === "complete" || existing.state === "executing")) {
-      await enqueueLiveActivityRefreshForMission({
-        db: tx,
-        workspaceId,
-        missionId: existing.mission_id,
-        now: now2
-      });
+      if (body.state === "executing") {
+        await enqueueLiveActivityStartForMission({
+          db: tx,
+          workspaceId,
+          missionId: existing.mission_id,
+          now: now2
+        });
+      } else {
+        await enqueueLiveActivityRefreshForMission({
+          db: tx,
+          workspaceId,
+          missionId: existing.mission_id,
+          now: now2
+        });
+      }
     }
     if (body.state === "executing" && body.state !== existing.state && (existing.state === "draft" || existing.state === "future" || existing.state === "submitted" || existing.state === "launching")) {
       await ensureDraftSlotAfterObjectiveLeavesQueue(tx, {
@@ -158141,6 +158202,12 @@ init_errors5();
 var MAX_RUNNING = 2;
 var COMPLETION_HOLD_MS = 30 * 60 * 1e3;
 var TITLE_MAX_LENGTH = 80;
+var START_TOKEN_MAX_LENGTH = 512;
+var BUNDLE_ID_MAX_LENGTH = 255;
+var ACTIVITY_TYPE_MAX_LENGTH = 128;
+var APP_VERSION_MAX_LENGTH = 64;
+var LIVE_ACTIVITY_ATTRIBUTES_TYPE = "OverlordActivityAttributes";
+var LIVE_ACTIVITY_ACCOUNT_LABEL = "My Missions";
 function bounded(value, max) {
   return value.length <= max ? value : `${value.slice(0, max - 1)}\u2026`;
 }
@@ -158172,6 +158239,27 @@ function toSnapshot(row) {
     projectColorHex: projectColor(row.project_settings_json)
   };
 }
+function requiredString2(value, field, max) {
+  const normalized = typeof value === "string" ? value.trim() : "";
+  if (!normalized) throw new ApiError(400, `${field} is required`);
+  if (normalized.length > max) throw new ApiError(400, `${field} is too long`);
+  return normalized;
+}
+async function requireOwnWorkspaceId(db, profileId) {
+  const workspace = await db.get(
+    `SELECT w.id FROM workspace_users wu JOIN workspaces w ON w.id = wu.workspace_id
+      WHERE wu.profile_id = ? AND wu.status = 'active' AND wu.deleted_at IS NULL
+        AND w.deleted_at IS NULL ORDER BY wu.created_at ASC LIMIT 1`,
+    [profileId]
+  );
+  if (!workspace) throw new ApiError(403, "No active workspace membership");
+  return workspace.id;
+}
+async function requireOwnProfileId(db) {
+  const profileId = await resolveActiveProfileId(db);
+  if (!profileId) throw new ApiError(401, "Authentication required");
+  return profileId;
+}
 async function registerLiveActivityPushToken(activityId, body) {
   const normalizedActivityId = activityId.trim();
   const pushToken = typeof body.pushToken === "string" ? body.pushToken.trim() : "";
@@ -158181,16 +158269,13 @@ async function registerLiveActivityPushToken(activityId, body) {
   if (normalizedActivityId.length > 255 || pushToken.length > 4096) {
     throw new ApiError(400, "Live Activity registration is too large");
   }
+  if (body.startedByPush !== void 0 && typeof body.startedByPush !== "boolean") {
+    throw new ApiError(400, "startedByPush must be a boolean");
+  }
+  const origin = body.startedByPush === true ? "push_to_start" : "local";
   const db = requireDatabaseClient();
-  const profileId = await resolveActiveProfileId(db);
-  if (!profileId) throw new ApiError(401, "Authentication required");
-  const workspace = await db.get(
-    `SELECT w.id FROM workspace_users wu JOIN workspaces w ON w.id = wu.workspace_id
-      WHERE wu.profile_id = ? AND wu.status = 'active' AND wu.deleted_at IS NULL
-        AND w.deleted_at IS NULL ORDER BY wu.created_at ASC LIMIT 1`,
-    [profileId]
-  );
-  if (!workspace) throw new ApiError(403, "No active workspace membership");
+  const profileId = await requireOwnProfileId(db);
+  const workspaceId = await requireOwnWorkspaceId(db, profileId);
   const now2 = nowIso();
   await db.transaction(async (tx) => {
     const existing = await tx.get(
@@ -158200,32 +158285,97 @@ async function registerLiveActivityPushToken(activityId, body) {
     if (existing) {
       await tx.run(
         `UPDATE live_activity_push_tokens
-            SET push_token = ?, last_content_hash = NULL, last_sent_at = NULL, updated_at = ?
+            SET push_token = ?, origin = ?, last_content_hash = NULL, last_sent_at = NULL,
+                updated_at = ?
           WHERE id = ?`,
-        [pushToken, now2, existing.id]
+        [pushToken, origin, now2, existing.id]
       );
     } else {
       await tx.run(
         `INSERT INTO live_activity_push_tokens
-           (id, profile_id, activity_id, push_token, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-        [newId(), profileId, normalizedActivityId, pushToken, now2, now2]
+           (id, profile_id, activity_id, push_token, origin, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [newId(), profileId, normalizedActivityId, pushToken, origin, now2, now2]
       );
     }
     await enqueueLiveActivityDispatchJob({
       db: tx,
-      workspaceId: workspace.id,
+      workspaceId,
       profileId,
       now: now2
     });
   });
 }
+async function registerLiveActivityStartToken(body) {
+  const startToken = requiredString2(body.startToken, "startToken", START_TOKEN_MAX_LENGTH);
+  const bundleId = requiredString2(body.bundleId, "bundleId", BUNDLE_ID_MAX_LENGTH);
+  const environmentRaw = typeof body.environment === "string" ? body.environment.trim() : "";
+  if (environmentRaw !== "sandbox" && environmentRaw !== "production") {
+    throw new ApiError(400, "environment must be sandbox or production");
+  }
+  const environment = environmentRaw;
+  const activityTypeRaw = typeof body.activityType === "string" ? body.activityType.trim() : "";
+  if (activityTypeRaw.length > ACTIVITY_TYPE_MAX_LENGTH) {
+    throw new ApiError(400, "activityType is too long");
+  }
+  const activityType = activityTypeRaw || LIVE_ACTIVITY_ATTRIBUTES_TYPE;
+  const appVersionRaw = typeof body.appVersion === "string" ? body.appVersion.trim() : "";
+  if (appVersionRaw.length > APP_VERSION_MAX_LENGTH) {
+    throw new ApiError(400, "appVersion is too long");
+  }
+  const appVersion = appVersionRaw || null;
+  const db = requireDatabaseClient();
+  const profileId = await requireOwnProfileId(db);
+  const now2 = nowIso();
+  await db.transaction(async (tx) => {
+    const existing = await tx.get(
+      `SELECT id FROM live_activity_start_tokens WHERE start_token = ?`,
+      [startToken]
+    );
+    if (existing) {
+      await tx.run(
+        `UPDATE live_activity_start_tokens
+            SET profile_id = ?, platform = 'ios', environment = ?, bundle_id = ?,
+                activity_type = ?, app_version = ?, last_registered_at = ?, updated_at = ?
+          WHERE id = ?`,
+        [profileId, environment, bundleId, activityType, appVersion, now2, now2, existing.id]
+      );
+      return;
+    }
+    await tx.run(
+      `INSERT INTO live_activity_start_tokens
+         (id, profile_id, start_token, platform, environment, bundle_id, activity_type,
+          app_version, last_registered_at, last_started_at, created_at, updated_at)
+       VALUES (?, ?, ?, 'ios', ?, ?, ?, ?, ?, NULL, ?, ?)`,
+      [
+        newId(),
+        profileId,
+        startToken,
+        environment,
+        bundleId,
+        activityType,
+        appVersion,
+        now2,
+        now2,
+        now2
+      ]
+    );
+  });
+}
+async function revokeLiveActivityStartToken(body) {
+  const startToken = requiredString2(body.startToken, "startToken", START_TOKEN_MAX_LENGTH);
+  const db = requireDatabaseClient();
+  const profileId = await requireOwnProfileId(db);
+  await db.run(`DELETE FROM live_activity_start_tokens WHERE profile_id = ? AND start_token = ?`, [
+    profileId,
+    startToken
+  ]);
+}
 async function revokeLiveActivityPushToken(activityId) {
   const normalizedActivityId = activityId.trim();
   if (!normalizedActivityId) throw new ApiError(400, "activityId is required");
   const db = requireDatabaseClient();
-  const profileId = await resolveActiveProfileId(db);
-  if (!profileId) throw new ApiError(401, "Authentication required");
+  const profileId = await requireOwnProfileId(db);
   await db.run(`DELETE FROM live_activity_push_tokens WHERE profile_id = ? AND activity_id = ?`, [
     profileId,
     normalizedActivityId
@@ -158362,6 +158512,8 @@ init_db();
 var POLL_INTERVAL_MS2 = 1500;
 var UNCHANGED_MIN_INTERVAL_MS = 5 * 60 * 1e3;
 var COMPLETION_DISMISSAL_MS = 10 * 60 * 1e3;
+var START_COOLDOWN_MS = 5 * 60 * 1e3;
+var STALE_DATE_MS = 30 * 60 * 1e3;
 function apnsPayload(state2) {
   const now2 = Date.now();
   const completionHold = state2 && state2.running.length === 0 && state2.recentCompletion !== null;
@@ -158383,19 +158535,46 @@ function apnsPayload(state2) {
     );
   return { event, body: JSON.stringify({ aps }) };
 }
+function apnsStartPayload(state2, activityType) {
+  const now2 = Date.now();
+  const primary = state2.running[0] ?? state2.recentCompletion;
+  return JSON.stringify({
+    aps: {
+      timestamp: Math.floor(now2 / 1e3),
+      event: "start",
+      "stale-date": Math.floor((now2 + STALE_DATE_MS) / 1e3),
+      "attributes-type": activityType,
+      attributes: { accountLabel: LIVE_ACTIVITY_ACCOUNT_LABEL },
+      "content-state": state2,
+      // On iOS 18+, ask the system to provide the per-activity update token to
+      // the app immediately after this remote start. Without it, a start can
+      // render successfully but the server has no token for subsequent update
+      // or end events until the user opens the app.
+      "input-push-token": 1,
+      alert: {
+        title: primary ? primary.title : LIVE_ACTIVITY_ACCOUNT_LABEL,
+        body: primary ? `${primary.projectName} \xB7 ${primary.displayId}` : "Mission running"
+      }
+    }
+  });
+}
 async function sendApns({
   token,
   body,
-  config: config4
+  config: config4,
+  priority = "5",
+  bundleId,
+  host
 }) {
   return sendApnsRequest({
     token,
     body,
     config: config4,
+    host,
     headers: {
-      "apns-topic": `${config4.bundleId}.push-type.liveactivity`,
+      "apns-topic": `${bundleId ?? config4.bundleId}.push-type.liveactivity`,
       "apns-push-type": "liveactivity",
-      "apns-priority": "5"
+      "apns-priority": priority
     }
   });
 }
@@ -158421,6 +158600,12 @@ var LiveActivityDispatcher = class {
         workerId: this.workerId
       });
       if (job) await this.processJob(db, job);
+      const startJob = await claimNextWorkerJob({
+        db,
+        jobType: LIVE_ACTIVITY_START_JOB_TYPE,
+        workerId: this.workerId
+      });
+      if (startJob) await this.processStartJob(db, startJob);
     } catch (error53) {
       console.error("[live-activity-dispatcher] poll failed", error53);
     } finally {
@@ -158477,12 +158662,91 @@ var LiveActivityDispatcher = class {
       }
       await finishWorkerJob(db, job.id, "succeeded", null);
     } catch (error53) {
-      const message2 = error53 instanceof Error ? error53.message : String(error53);
-      if (job.attempt_count >= job.max_attempts) {
-        await finishWorkerJob(db, job.id, "failed", message2);
-      } else {
-        await retryWorkerJob(db, job.id, job.attempt_count, message2);
+      await this.failOrRetry(db, job, error53);
+    }
+  }
+  /**
+   * Push-to-start: ask APNs to create the activity on the assigned account's
+   * devices when a desktop-launched mission starts executing.
+   *
+   * A start is only ever correct when the account has nothing on screen, so this
+   * is a no-op when an update registration already exists — whether the user
+   * started that activity in the app or an earlier push started it — and while a
+   * previous start is still in flight. Once the device answers by registering the
+   * new activity's update token, the ordinary dispatch job owns every later
+   * update and the end.
+   */
+  async processStartJob(db, job) {
+    let profileId;
+    try {
+      const payload = JSON.parse(job.payload_json);
+      if (typeof payload.profileId !== "string" || !payload.profileId) throw new Error("profileId");
+      profileId = payload.profileId;
+    } catch {
+      await finishWorkerJob(db, job.id, "failed", "Malformed profile payload");
+      return;
+    }
+    try {
+      const startTokens = await db.all(
+        `SELECT id, start_token, environment, bundle_id, activity_type, last_started_at
+           FROM live_activity_start_tokens WHERE profile_id = ?`,
+        [profileId]
+      );
+      if (startTokens.length === 0) {
+        await finishWorkerJob(db, job.id, "succeeded", null);
+        return;
       }
+      const live = await db.get(
+        `SELECT id FROM live_activity_push_tokens WHERE profile_id = ? LIMIT 1`,
+        [profileId]
+      );
+      if (live) {
+        await finishWorkerJob(db, job.id, "succeeded", null);
+        return;
+      }
+      const state2 = await buildLiveActivityContentState(db, profileId);
+      if (!state2 || state2.running.length === 0) {
+        await finishWorkerJob(db, job.id, "succeeded", null);
+        return;
+      }
+      const config4 = apnsConfig();
+      const startedAtCutoff = Date.now() - START_COOLDOWN_MS;
+      for (const token of startTokens) {
+        const lastStarted = token.last_started_at ? Date.parse(token.last_started_at) : NaN;
+        if (Number.isFinite(lastStarted) && lastStarted > startedAtCutoff) continue;
+        if (!config4) continue;
+        const response = await sendApns({
+          token: token.start_token,
+          body: apnsStartPayload(state2, token.activity_type),
+          config: config4,
+          priority: "10",
+          bundleId: token.bundle_id,
+          host: apnsHostFor(token.environment === "sandbox" ? "sandbox" : "production")
+        });
+        if (isRetiredTokenResponse(response)) {
+          await db.run(`DELETE FROM live_activity_start_tokens WHERE id = ?`, [token.id]);
+          continue;
+        }
+        if (response.status < 200 || response.status >= 300) {
+          throw new Error(`APNs ${response.status}: ${response.body || "unknown response"}`);
+        }
+        const now2 = nowIso();
+        await db.run(
+          `UPDATE live_activity_start_tokens SET last_started_at = ?, updated_at = ? WHERE id = ?`,
+          [now2, now2, token.id]
+        );
+      }
+      await finishWorkerJob(db, job.id, "succeeded", null);
+    } catch (error53) {
+      await this.failOrRetry(db, job, error53);
+    }
+  }
+  async failOrRetry(db, job, error53) {
+    const message2 = error53 instanceof Error ? error53.message : String(error53);
+    if (job.attempt_count >= job.max_attempts) {
+      await finishWorkerJob(db, job.id, "failed", message2);
+    } else {
+      await retryWorkerJob(db, job.id, job.attempt_count, message2);
     }
   }
 };
@@ -158839,8 +159103,8 @@ init_util3();
 init_db();
 init_errors5();
 var DEVICE_TOKEN_MAX_LENGTH = 512;
-var BUNDLE_ID_MAX_LENGTH = 255;
-var APP_VERSION_MAX_LENGTH = 64;
+var BUNDLE_ID_MAX_LENGTH2 = 255;
+var APP_VERSION_MAX_LENGTH2 = 64;
 var PROJECT_NAME_MAX_LENGTH = 40;
 var DEFAULT_MODE = "alert";
 var CATEGORY_VERBS = {
@@ -158849,22 +159113,22 @@ var CATEGORY_VERBS = {
   mission_complete: "finished",
   mission_failed: "failed"
 };
-function requiredString2(value, field, max) {
+function requiredString3(value, field, max) {
   const normalized = typeof value === "string" ? value.trim() : "";
   if (!normalized) throw new ApiError(400, `${field} is required`);
   if (normalized.length > max) throw new ApiError(400, `${field} is too long`);
   return normalized;
 }
 async function registerDevicePushToken(body) {
-  const deviceToken = requiredString2(body.deviceToken, "deviceToken", DEVICE_TOKEN_MAX_LENGTH);
-  const bundleId = requiredString2(body.bundleId, "bundleId", BUNDLE_ID_MAX_LENGTH);
+  const deviceToken = requiredString3(body.deviceToken, "deviceToken", DEVICE_TOKEN_MAX_LENGTH);
+  const bundleId = requiredString3(body.bundleId, "bundleId", BUNDLE_ID_MAX_LENGTH2);
   const environmentRaw = typeof body.environment === "string" ? body.environment.trim() : "";
   if (environmentRaw !== "sandbox" && environmentRaw !== "production") {
     throw new ApiError(400, "environment must be sandbox or production");
   }
   const environment = environmentRaw;
   const appVersionRaw = typeof body.appVersion === "string" ? body.appVersion.trim() : "";
-  if (appVersionRaw.length > APP_VERSION_MAX_LENGTH) {
+  if (appVersionRaw.length > APP_VERSION_MAX_LENGTH2) {
     throw new ApiError(400, "appVersion is too long");
   }
   const appVersion = appVersionRaw || null;
@@ -158897,7 +159161,7 @@ async function registerDevicePushToken(body) {
   });
 }
 async function revokeDevicePushToken(body) {
-  const deviceToken = requiredString2(body.deviceToken, "deviceToken", DEVICE_TOKEN_MAX_LENGTH);
+  const deviceToken = requiredString3(body.deviceToken, "deviceToken", DEVICE_TOKEN_MAX_LENGTH);
   const db = requireDatabaseClient();
   const profileId = await resolveActiveProfileId(db);
   if (!profileId) throw new ApiError(401, "Authentication required");
@@ -161353,6 +161617,26 @@ app.delete(
   handle3(
     async (req, res) => {
       await revokeLiveActivityPushToken(req.params.activityId);
+      res.status(204).end();
+    },
+    { mutates: true }
+  )
+);
+app.put(
+  "/api/mobile/live-activities/start-token",
+  handle3(
+    async (req, res) => {
+      await registerLiveActivityStartToken(req.body);
+      res.status(204).end();
+    },
+    { mutates: true }
+  )
+);
+app.post(
+  "/api/mobile/live-activities/start-token/revoke",
+  handle3(
+    async (req, res) => {
+      await revokeLiveActivityStartToken(req.body);
       res.status(204).end();
     },
     { mutates: true }
