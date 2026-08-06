@@ -142158,10 +142158,15 @@ async function listMissionFileChanges(missionRef, limit = 200) {
   const rows = await requireDatabaseClient().all(
     `SELECT cr.id, cr.mission_id, cr.objective_id, cr.file_path, cr.label, cr.summary,
               cr.why, cr.impact, cr.created_at,
-              cf.current_diff_state AS diff_state, cf.vcs_status AS vcs_status
+              cf.current_diff_state AS diff_state, cf.vcs_status AS vcs_status,
+              COALESCE(pr_cf.resource_key, o.resource_key) AS resource_key
          FROM change_rationales cr
          LEFT JOIN changed_files cf
            ON cf.id = cr.changed_file_id AND cf.deleted_at IS NULL
+         LEFT JOIN objectives o
+           ON o.id = cr.objective_id AND o.deleted_at IS NULL
+         LEFT JOIN project_resources pr_cf
+           ON pr_cf.id = cf.resource_id AND pr_cf.deleted_at IS NULL
         WHERE cr.mission_id = ? AND cr.workspace_id = ?
           AND cr.deleted_at IS NULL
         ORDER BY cr.created_at DESC, cr.id DESC
@@ -142180,6 +142185,7 @@ async function listMissionFileChanges(missionRef, limit = 200) {
     impact: row.impact,
     diffState: row.diff_state ?? null,
     vcsStatus: row.vcs_status,
+    resourceKey: row.resource_key?.trim() || null,
     createdAt: row.created_at
   }));
 }
@@ -158546,11 +158552,6 @@ function apnsStartPayload(state2, activityType) {
       "attributes-type": activityType,
       attributes: { accountLabel: LIVE_ACTIVITY_ACCOUNT_LABEL },
       "content-state": state2,
-      // On iOS 18+, ask the system to provide the per-activity update token to
-      // the app immediately after this remote start. Without it, a start can
-      // render successfully but the server has no token for subsequent update
-      // or end events until the user opens the app.
-      "input-push-token": 1,
       alert: {
         title: primary ? primary.title : LIVE_ACTIVITY_ACCOUNT_LABEL,
         body: primary ? `${primary.projectName} \xB7 ${primary.displayId}` : "Mission running"
