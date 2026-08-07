@@ -49,7 +49,12 @@ test('does not group when the project has only one resource', () => {
   const result = groupMissionFileChanges({
     fileChanges: [
       fileChange({ id: 'fc-1', resourceKey: 'primary' }),
-      fileChange({ id: 'fc-2', resourceKey: 'primary', filePath: 'README.md', fileName: 'README.md' })
+      fileChange({
+        id: 'fc-2',
+        resourceKey: 'primary',
+        filePath: 'README.md',
+        fileName: 'README.md'
+      })
     ],
     resources: [resource()]
   });

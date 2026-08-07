@@ -529,8 +529,7 @@ interface MissionRow {
   board_position: number;
   priority: string | null;
   assigned_workspace_user_id: string | null;
-  acceptance_criteria_text: string | null;
-  available_tools_json: string;
+  notes_text: string | null;
   schedule_id: string | null;
   due_datetime: string | null;
   created_at: string;
@@ -781,18 +780,6 @@ async function promoteFallbackPrimary(
   );
 }
 
-function parseAvailableTools(json: string): string[] {
-  try {
-    const arr = JSON.parse(json);
-    if (!Array.isArray(arr)) return [];
-    return arr
-      .map(item => (typeof item === 'string' ? item : ((item as { name?: string })?.name ?? '')))
-      .filter(Boolean);
-  } catch {
-    return [];
-  }
-}
-
 function toMissionDto(r: MissionRow, tags: ProjectTagDto[] = []): MissionDto {
   return {
     id: r.id,
@@ -806,8 +793,7 @@ function toMissionDto(r: MissionRow, tags: ProjectTagDto[] = []): MissionDto {
     boardPosition: r.board_position,
     priority: r.priority as MissionDto['priority'],
     assignedWorkspaceUserId: r.assigned_workspace_user_id,
-    acceptanceCriteria: r.acceptance_criteria_text,
-    availableTools: parseAvailableTools(r.available_tools_json),
+    notes: r.notes_text,
     scheduleId: r.schedule_id,
     dueDatetime: r.due_datetime,
     createdAt: r.created_at,
@@ -3475,7 +3461,7 @@ const selectMissionsSql = `
   SELECT t.id, t.workspace_id, t.project_id, t.display_id, t.sequence_number, t.title,
          t.status_id, t.status_type, t.board_position, t.priority,
          t.assigned_workspace_user_id,
-         t.acceptance_criteria_text, t.available_tools_json,
+         t.notes_text,
          t.schedule_id, t.due_datetime,
          t.created_at, t.updated_at, t.revision, t.active_branch, t.branch_override,
          t.worktree_preference,
@@ -3553,7 +3539,7 @@ async function searchMissionsInWorkspace({
     `SELECT t.id, t.workspace_id, t.project_id, t.display_id, t.sequence_number, t.title,
               t.status_id, t.status_type, t.board_position, t.priority,
               t.assigned_workspace_user_id,
-              t.acceptance_criteria_text, t.available_tools_json,
+              t.notes_text,
               t.schedule_id, t.due_datetime,
               t.created_at, t.updated_at, t.revision,
               (SELECT COUNT(*) FROM objectives o
@@ -5014,18 +5000,10 @@ async function patchMissionFieldsTx(id: string, body: UpdateMissionBody): Promis
         }
       }
     }
-    if (body.acceptanceCriteria !== undefined) {
-      fields.push('acceptance_criteria_text = ?');
-      setParams.push(body.acceptanceCriteria?.trim() || null);
-      changed.push('acceptance_criteria_text');
-    }
-    if (body.availableTools !== undefined) {
-      if (!Array.isArray(body.availableTools))
-        throw new ApiError(400, 'availableTools must be an array');
-      const toolsJson = JSON.stringify(body.availableTools.map(name => ({ name })));
-      fields.push('available_tools_json = ?');
-      setParams.push(toolsJson);
-      changed.push('available_tools_json');
+    if (body.notes !== undefined) {
+      fields.push('notes_text = ?');
+      setParams.push(body.notes?.trim() || null);
+      changed.push('notes_text');
     }
     if (body.branchOverride !== undefined) {
       const override = body.branchOverride?.trim() || null;
@@ -5186,17 +5164,10 @@ async function moveMissionProjectTx({
       );
       changed.push('assigned_workspace_user_id');
     }
-    if (body.acceptanceCriteria !== undefined) {
-      fields.push('acceptance_criteria_text = ?');
-      setParams.push(body.acceptanceCriteria?.trim() || null);
-      changed.push('acceptance_criteria_text');
-    }
-    if (body.availableTools !== undefined) {
-      if (!Array.isArray(body.availableTools))
-        throw new ApiError(400, 'availableTools must be an array');
-      fields.push('available_tools_json = ?');
-      setParams.push(JSON.stringify(body.availableTools.map(name => ({ name }))));
-      changed.push('available_tools_json');
+    if (body.notes !== undefined) {
+      fields.push('notes_text = ?');
+      setParams.push(body.notes?.trim() || null);
+      changed.push('notes_text');
     }
 
     const now = nowIso();
@@ -5763,9 +5734,9 @@ async function createScheduledDuplicateIfNeeded(
     `INSERT INTO missions
        (id, workspace_id, project_id, display_id, sequence_number, title,
         status_id, status_type, board_position, priority, assigned_workspace_user_id,
-        acceptance_criteria_text, available_tools_json, execution_target_intent_json,
+        notes_text, execution_target_intent_json,
         metadata_json, schedule_id, due_datetime, created_at, updated_at, revision)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}', '{}', ?, ?, ?, ?, 1)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}', '{}', ?, ?, ?, ?, 1)`,
     [
       newMissionId,
       mission.workspace_id,
@@ -5778,8 +5749,7 @@ async function createScheduledDuplicateIfNeeded(
       boardPosition,
       mission.priority ?? 'normal',
       mission.assigned_workspace_user_id,
-      mission.acceptance_criteria_text,
-      mission.available_tools_json,
+      mission.notes_text,
       mission.schedule_id,
       nextDueDatetime,
       now,
@@ -5915,7 +5885,7 @@ function selectMyMissionsSql(pairPlaceholders: string): string {
   SELECT t.id, t.workspace_id, t.project_id, t.display_id, t.sequence_number, t.title,
          t.status_id, t.status_type, t.board_position, t.priority,
          t.assigned_workspace_user_id,
-         t.acceptance_criteria_text, t.available_tools_json,
+         t.notes_text,
          t.schedule_id, t.due_datetime,
          t.created_at, t.updated_at, t.revision,
          p.name AS project_name, p.settings_json AS project_settings_json,

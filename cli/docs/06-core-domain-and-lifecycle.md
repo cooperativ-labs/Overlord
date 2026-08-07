@@ -54,7 +54,7 @@ Requirements:
 
 - Human-readable mission identifier such as `1:1204` can be retained for compatibility, but MVP can also support a simple local sequence.
 - The default human-readable mission sequence is workspace-scoped. If project-scoped sequences are introduced later, treat that as a schema migration rather than a config-only change.
-- Fields should cover title, objective summary, status, priority, project, constraints, acceptance criteria, available tools, output format, creator, timestamps, and execution target intent.
+- Fields should cover title, objective summary, status, priority, project, constraints, human-only notes (never sent to agents), output format, creator, timestamps, and execution target intent.
 - Missions contain ordered objectives.
 - Missions retain activity history, delivery records, artifacts, attachments, shared context, and change rationales.
 - A mission can be agent-executable or human-only.

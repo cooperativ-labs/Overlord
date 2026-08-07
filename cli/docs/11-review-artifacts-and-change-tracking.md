@@ -141,7 +141,7 @@ Future web/desktop requirements are documented in [web-app.md](../../webapp/docs
 
 Humans should be able to review:
 
-- Mission title/objective and acceptance criteria.
+- Mission title/objective and human-only notes.
 - Session progress updates.
 - Blocking questions and answers.
 - Delivery summary.

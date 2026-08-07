@@ -36,13 +36,13 @@ import { LiveFileChanges } from './LiveFileChanges.tsx';
 import { MissionArtifactsSection } from './MissionArtifactsSection.tsx';
 import { MissionDeliveriesSection } from './MissionDeliveriesSection.tsx';
 import { MissionMemberSelect } from './MissionMemberSelect.tsx';
+import { MissionNotes } from './MissionNotes.tsx';
 import { MissionPanelHeader } from './MissionPanelHeader.tsx';
 import { MissionProjectSelect } from './MissionProjectSelect.tsx';
 import { MissionSessionInputsSection } from './MissionSessionInputsSection.tsx';
 import { MissionSharedStateFooter } from './MissionSharedStateFooter.tsx';
 import { MissionStatusSelect } from './MissionStatusSelect.tsx';
 import { MissionTagSelect } from './MissionTagSelect.tsx';
-import { MissionToolsAndCriteria } from './MissionToolsAndCriteria.tsx';
 import { Button, Spinner } from './ui.tsx';
 
 /**
@@ -350,13 +350,9 @@ export function MissionPanel({
           </div>
         </section>
 
-        {/* Subtle section — supporting context: tools and activity */}
+        {/* Subtle section — supporting context: notes and activity */}
         <section className="flex flex-col px-5 pt-5 bg-muted h-full pb-10">
-          <MissionToolsAndCriteria
-            missionId={mission.id}
-            availableTools={mission.availableTools}
-            acceptanceCriteria={mission.acceptanceCriteria}
-          />
+          <MissionNotes missionId={mission.id} notes={mission.notes} />
           <Separator />
           <div className="flex flex-col gap-6 mt-8">
             <div className="space-y-3">

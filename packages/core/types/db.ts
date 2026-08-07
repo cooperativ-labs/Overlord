@@ -605,6 +605,17 @@ export interface IdempotencyKeys {
   workspace_id: string;
 }
 
+export interface InboxItems {
+  created_at: string;
+  due_datetime: string | null;
+  id: string | null;
+  objectives_json: string;
+  priority: string | null;
+  profile_id: string;
+  title: string;
+  updated_at: string;
+}
+
 export interface LiveActivityPushTokens {
   activity_id: string;
   created_at: string;
@@ -666,10 +677,8 @@ export interface MissionEvents {
 }
 
 export interface Missions {
-  acceptance_criteria_text: string | null;
   active_branch: string | null;
   assigned_workspace_user_id: string | null;
-  available_tools_json: Generated<string>;
   blocking_question_seen_at: string | null;
   board_position: Generated<number>;
   branch_override: string | null;
@@ -682,6 +691,7 @@ export interface Missions {
   execution_target_intent_json: Generated<string>;
   id: string | null;
   metadata_json: Generated<string>;
+  notes_text: string | null;
   output_format_text: string | null;
   priority: string | null;
   project_id: string;
@@ -1342,6 +1352,7 @@ export interface DB {
   ext_github_user_connections: ExtGithubUserConnections;
   ext_github_user_oauth_states: ExtGithubUserOauthStates;
   idempotency_keys: IdempotencyKeys;
+  inbox_items: InboxItems;
   live_activity_push_tokens: LiveActivityPushTokens;
   live_activity_start_tokens: LiveActivityStartTokens;
   mission_branch_observations: MissionBranchObservations;

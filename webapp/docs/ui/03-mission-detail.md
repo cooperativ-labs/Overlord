@@ -157,7 +157,7 @@ A persistent header, a left objective rail, and a tabbed main panel.
 | Status badge | `missions.status_type` | click → status menu (same transitions as board) |
 | Meta line | project, `priority`, `execution_target_intent_json`, creator, `updated_at` | priority editable inline |
 | Primary actions | — | **Run objective** (doc 04), **Add objective**, **Review →** (appears when status is `review` / a delivery exists), and contextual **Ask shown** / **Resume follow-up** |
-| ⋯ menu | — | edit constraints/acceptance/tools/output, change priority, change assignee (G1), archive |
+| ⋯ menu | — | edit constraints/output, change priority, change assignee (G1), archive |
 
 The header also hosts **attention banners** (full-width, dismiss-to-act): a
 pending `ask` ("Agent is blocked: …  [Answer]"), a `permission_request`

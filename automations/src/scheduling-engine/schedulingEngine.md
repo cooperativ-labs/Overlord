@@ -192,7 +192,7 @@ The scheduling side effect is triggered from mission status changes in
    - uses the schedule's configurable `next_status_id` when set and still valid
    - otherwise falls back to the workspace default/next-up status
 5. duplicate the mission fields that should carry forward (title, project,
-   tags, tools, acceptance criteria, constraints, `schedule_id`) and set the new
+   tags, notes, constraints, `schedule_id`) and set the new
    `due_datetime`
 6. copy the latest objective instruction text into the duplicate's draft objective
 7. place the duplicate at the end of the chosen board column

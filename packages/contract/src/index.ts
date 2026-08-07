@@ -523,10 +523,11 @@ export interface MissionDto {
    * when unassigned. Matches a `WorkspaceMemberDto.workspaceUserId`.
    */
   assignedWorkspaceUserId: string | null;
-  /** Human-readable acceptance criteria for the mission. */
-  acceptanceCriteria: string | null;
-  /** Tool names available to the agent working on this mission. */
-  availableTools: string[];
+  /**
+   * Human-only notes for mission viewers. Never included in agent attach/load
+   * context or protocol prompt assembly.
+   */
+  notes: string | null;
   /** `schedules.id` this mission repeats on, or `null` when unscheduled. */
   scheduleId: string | null;
   /** Computed next due date/time (ISO-8601), or `null` when unscheduled. */
@@ -1630,8 +1631,8 @@ export interface UpdateMissionBody {
   statusId?: string;
   /** Assign the mission to a workspace member (`workspace_users.id`), or `null` to unassign. */
   assignedWorkspaceUserId?: string | null;
-  acceptanceCriteria?: string | null;
-  availableTools?: string[];
+  /** Human-only mission notes; never sent to agents. */
+  notes?: string | null;
   /**
    * Pin the branch the mission's next launch should use (overriding the planner's
    * default), or `null` to clear the override and return to automatic selection.

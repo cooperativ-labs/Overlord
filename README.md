@@ -124,7 +124,7 @@ The top-level container. A project is mapped to a git repository and a local wor
 
 #### Mission 🎫
 
-A unit of work, identified like `1:1204` (`<workspace>:<sequence>`). A mission represents a feature, bug, or goal that may take one or many steps to complete. Missions hold the shared state that every objective beneath them can read and contribute to: history, attachments, artifacts, acceptance criteria, and recorded change rationales.
+A unit of work, identified like `1:1204` (`<workspace>:<sequence>`). A mission represents a feature, bug, or goal that may take one or many steps to complete. Missions hold the shared state that every objective beneath them can read and contribute to: history, attachments, artifacts, human-only notes, and recorded change rationales.
 
 #### Objective 🎯
 

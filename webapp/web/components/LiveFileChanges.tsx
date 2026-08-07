@@ -1,12 +1,12 @@
 import { useMergedProjectRepository } from '@/components/projects/ProjectRepositoryContext.tsx';
+import { groupMissionFileChanges } from '@/lib/group-mission-file-changes.ts';
+import { resolveResourceForKey } from '@/lib/project-resources.ts';
 import {
   useMissionFileChanges,
   useProfile,
   useProjectExecutionTarget,
   useProjectResources
 } from '@/lib/queries';
-import { groupMissionFileChanges } from '@/lib/group-mission-file-changes.ts';
-import { resolveResourceForKey } from '@/lib/project-resources.ts';
 
 import { FileChangeResourceGroupHeader } from './FileChangeResourceGroupHeader.tsx';
 import { LiveFileChangeCard } from './LiveFileChangeCard.tsx';

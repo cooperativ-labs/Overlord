@@ -433,9 +433,6 @@ responseShapes:
       - required protocol workflow instructions
     promptContextOptionalContent:
       - constraints
-      - acceptance criteria
-      - available tools
-      - output format
       - attachments
       - artifacts
       - shared context
@@ -483,9 +480,6 @@ responseShapes:
       - awaiting_approval
     promptContextOptionalContent:
       - constraints
-      - acceptance criteria
-      - available tools
-      - output format
       - attachments
       - artifacts
       - shared context

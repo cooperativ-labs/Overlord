@@ -5,7 +5,8 @@ import { Fragment, type ReactNode } from 'react';
  *
  * The webapp ships no markdown library, and event summaries are authored by
  * agents/CLI using a small, predictable subset of markdown (headings, bold,
- * italics, inline code, fenced code, lists, blockquotes, links, rules). This
+ * italics, inline code, fenced code, lists, blockquotes, links, rules, tables).
+ * This
  * renderer covers that subset and deliberately ignores exotic syntax rather
  * than pulling in a full CommonMark parser. Output is real React elements
  * (no `dangerouslySetInnerHTML`), so untrusted text can never inject markup.
@@ -126,7 +127,20 @@ type Block =
   | { type: 'ol'; items: string[] }
   | { type: 'quote'; text: string }
   | { type: 'hr' }
+  | { type: 'table'; headers: string[]; rows: string[][] }
   | { type: 'p'; text: string };
+
+function parseTableRow(line: string): string[] {
+  let trimmed = line.trim();
+  if (trimmed.startsWith('|')) trimmed = trimmed.slice(1);
+  if (trimmed.endsWith('|')) trimmed = trimmed.slice(0, -1);
+  return trimmed.split('|').map(cell => cell.trim());
+}
+
+function isTableSeparator(line: string): boolean {
+  const cells = parseTableRow(line);
+  return cells.length > 0 && cells.every(cell => /^:?-{3,}:?$/.test(cell));
+}
 
 function parseBlocks(source: string): Block[] {
   const lines = source.replace(/\r\n/g, '\n').split('\n');
@@ -192,6 +206,23 @@ function parseBlocks(source: string): Block[] {
       continue;
     }
 
+    // GFM table — header row, separator row, then body rows.
+    if (line.includes('|')) {
+      const tableLines: string[] = [];
+      let j = i;
+      while (j < lines.length && lines[j].includes('|') && lines[j].trim() !== '') {
+        tableLines.push(lines[j]);
+        j += 1;
+      }
+      if (tableLines.length >= 2 && isTableSeparator(tableLines[1])) {
+        const headers = parseTableRow(tableLines[0]);
+        const rows = tableLines.slice(2).map(parseTableRow);
+        blocks.push({ type: 'table', headers, rows });
+        i = j;
+        continue;
+      }
+    }
+
     // Blockquote.
     if (/^\s*>\s?/.test(line)) {
       const quote: string[] = [];
@@ -213,7 +244,8 @@ function parseBlocks(source: string): Block[] {
         /^\s*[-*+]\s+/.test(l) ||
         /^\s*\d+[.)]\s+/.test(l) ||
         /^\s*>\s?/.test(l) ||
-        /^(-{3,}|\*{3,}|_{3,})$/.test(l.trim())
+        /^(-{3,}|\*{3,}|_{3,})$/.test(l.trim()) ||
+        l.includes('|')
       ) {
         break;
       }
@@ -288,6 +320,39 @@ export function Markdown({ text }: { text: string }) {
             );
           case 'hr':
             return <hr key={key} className="border-(--color-border)" />;
+          case 'table':
+            return (
+              <div key={key} className="overflow-x-auto">
+                <table className="w-full min-w-max border-collapse text-sm">
+                  <thead>
+                    <tr>
+                      {block.headers.map((header, j) => (
+                        <th
+                          key={`${key}-h-${j}`}
+                          className="border border-(--color-border) bg-(--color-surface-2) px-2 py-1 text-left font-semibold"
+                        >
+                          {renderInline(header, `${key}-h-${j}`)}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {block.rows.map((row, r) => (
+                      <tr key={`${key}-r-${r}`}>
+                        {block.headers.map((_, c) => (
+                          <td
+                            key={`${key}-r-${r}-c-${c}`}
+                            className="border border-(--color-border) px-2 py-1 align-top"
+                          >
+                            {renderInline(row[c] ?? '', `${key}-r-${r}-c-${c}`)}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            );
           default:
             return (
               <p key={key} className="whitespace-pre-wrap wrap-anywhere">

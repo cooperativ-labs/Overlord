@@ -594,10 +594,10 @@ export async function createMissionWithObjectives({
     await txCtx.db.run(
       `INSERT INTO missions
            (id, workspace_id, project_id, display_id, sequence_number, title,
-            status_id, status_type, board_position, priority, available_tools_json,
+            status_id, status_type, board_position, priority,
             execution_target_intent_json, metadata_json, created_by_workspace_user_id,
             assigned_workspace_user_id, due_datetime, created_at, updated_at, revision)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', '{}', '{}', ?, ?, ?, ?, ?, 1)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}', '{}', ?, ?, ?, ?, ?, 1)`,
       [
         missionId,
         ctx.workspace.id,

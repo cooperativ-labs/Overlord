@@ -153,7 +153,7 @@ New mission · Open0
 │ First objective* [ multi-line objective / prompt text …    ]   │
 │                  [                                          ]   │
 │ Priority [ normal ▾ ]   Status [ next-up ▾ ]   Tags [+]        │
-│ ▸ Advanced (constraints, acceptance criteria, tools, output)   │
+│ ▸ Advanced (constraints, output format)                        │
 │ ▸ Objectives (add more ordered objectives now)                 │
 │ Agent [ claude ▾ ] Model [ opus ▾ ] Effort [ high ▾ ]          │
 │ Auto-advance [x]                                               │
@@ -168,7 +168,7 @@ New mission · Open0
   (`POST /protocol/prompt` or create + `request-execution`); requires a runnable
   working directory or it surfaces the repair before queuing.
 - **Advanced** exposes the mission fields agents consume: `constraints_text`,
-  `acceptance_criteria_text`, `available_tools_json`, `output_format_text`.
+  `output_format_text`.
 - **Objectives** lets the user add multiple ordered objectives up front (one mission,
   several agent passes) — the canonical "mission = goal, objective = step" model.
 

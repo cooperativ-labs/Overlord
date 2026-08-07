@@ -88,7 +88,7 @@ Requirements:
 - Add objective.
 - Reorder draft/future objectives.
 - Attach files to a specific objective.
-- Show acceptance criteria, constraints, available tools, and output format.
+- Show private human-only notes (not sent to agents), constraints, and output format.
 - Activity timeline with progress updates, follow-ups, decisions, questions, and deliveries.
 - Shared context viewer.
 - Artifact viewer.
