@@ -140262,6 +140262,27 @@ async function getTagsByMission(missionIds) {
   return byMission;
 }
 function toObjectiveDto(r5) {
+  let launchConfigOverrides = {};
+  try {
+    const parsed = r5.launch_config_json ? JSON.parse(r5.launch_config_json) : {};
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      for (const [targetKey, rawAgents] of Object.entries(parsed)) {
+        if (!rawAgents || typeof rawAgents !== "object" || Array.isArray(rawAgents)) continue;
+        const agents = {};
+        for (const [agentKey, rawConfig] of Object.entries(rawAgents)) {
+          if (!rawConfig || typeof rawConfig !== "object" || Array.isArray(rawConfig)) continue;
+          const config4 = rawConfig;
+          agents[agentKey] = {
+            preCommand: typeof config4.preCommand === "string" ? config4.preCommand : "",
+            flags: normalizeAgentLaunchFlags(config4.flags)
+          };
+        }
+        if (Object.keys(agents).length > 0) launchConfigOverrides[targetKey] = agents;
+      }
+    }
+  } catch {
+    launchConfigOverrides = {};
+  }
   return {
     id: r5.id,
     workspaceId: r5.workspace_id,
@@ -140280,7 +140301,8 @@ function toObjectiveDto(r5) {
     revision: r5.revision,
     externalSessionId: r5.external_session_id ?? null,
     branch: r5.branch ?? null,
-    resourceKey: r5.resource_key?.trim() || null
+    resourceKey: r5.resource_key?.trim() || null,
+    launchConfigOverrides
   };
 }
 function slugify4(input) {
@@ -144215,6 +144237,33 @@ async function updateObjectiveTx(id, body) {
       fields.push("resource_key = ?");
       setParams.push(nextResourceKey);
       changed.push("resource_key");
+    }
+    if (body.launchConfigOverride !== void 0) {
+      const agentKey = body.launchConfigAgent?.trim();
+      if (!agentKey) throw new ApiError(400, "launchConfigAgent is required");
+      let launchConfigs = {};
+      try {
+        const parsed = existing.launch_config_json ? JSON.parse(existing.launch_config_json) : {};
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          launchConfigs = parsed;
+        }
+      } catch {
+        launchConfigs = {};
+      }
+      const anyTarget = { ...launchConfigs["*"] ?? {} };
+      if (body.launchConfigOverride === null) {
+        delete anyTarget[agentKey];
+      } else {
+        anyTarget[agentKey] = {
+          preCommand: body.launchConfigOverride.preCommand?.trim() ?? "",
+          flags: normalizeAgentLaunchFlags(body.launchConfigOverride.flags)
+        };
+      }
+      if (Object.keys(anyTarget).length > 0) launchConfigs["*"] = anyTarget;
+      else delete launchConfigs["*"];
+      fields.push("launch_config_json = ?");
+      setParams.push(Object.keys(launchConfigs).length > 0 ? JSON.stringify(launchConfigs) : null);
+      changed.push("launch_config_json");
     }
     if (fields.length === 0) {
       return { objective: toObjectiveDto(existing), regenerateTitle: false };

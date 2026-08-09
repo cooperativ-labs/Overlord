@@ -36,11 +36,12 @@ import {
   useLaunchSettings,
   useProjectExecutionTarget,
   useProjectResources,
-  useUpdateAgentLaunchConfig,
   useUpdateLaunchPreference,
   useUpdateObjective
 } from '@/lib/queries.ts';
 import { cn } from '@/lib/utils';
+
+import type { AgentLaunchConfigDto } from '../../../shared/contract.ts';
 
 import { AgentModelPickerPanel } from './AgentModelPickerPanel.tsx';
 import { ProjectPickerPanel } from './ProjectPickerPanel.tsx';
@@ -121,7 +122,6 @@ export function QuickTaskBar({ defaultProjectId = null }: QuickTaskBarProps) {
   const preferenceQ = useLaunchPreference(selectedProjectId);
   const resourcesQ = useProjectResources(selectedProjectId);
   const updatePreference = useUpdateLaunchPreference(selectedProjectId);
-  const updateAgentConfig = useUpdateAgentLaunchConfig();
   // The agent/model catalog follows the selected project's own workspace, so
   // cross-workspace projects offer their workspace's agents (coo:324).
   const catalogQ = useAgentCatalog(selectedProject?.workspaceId);
@@ -147,9 +147,13 @@ export function QuickTaskBar({ defaultProjectId = null }: QuickTaskBarProps) {
 
   const [objectiveSelection, setObjectiveSelection] =
     useState<AgentModelSelection>(defaultSelection);
+  const [explicitLaunchConfigs, setExplicitLaunchConfigs] = useState<
+    Record<string, AgentLaunchConfigDto>
+  >({});
 
   useEffect(() => {
     setObjectiveSelection(defaultSelection);
+    setExplicitLaunchConfigs({});
   }, [defaultSelection]);
 
   const selectedAgentDef = catalog?.agents.find(a => a.key === objectiveSelection.agent);
@@ -388,7 +392,8 @@ export function QuickTaskBar({ defaultProjectId = null }: QuickTaskBarProps) {
           body: {
             agent: objectiveSelection.agent,
             model: objectiveSelection.model,
-            reasoningEffort: objectiveSelection.reasoningEffort
+            reasoningEffort: objectiveSelection.reasoningEffort,
+            launchConfigOverride: explicitLaunchConfigs[objectiveSelection.agent]
           }
         });
       } else {
@@ -397,7 +402,13 @@ export function QuickTaskBar({ defaultProjectId = null }: QuickTaskBarProps) {
           body: {
             assignedAgent: objectiveSelection.agent,
             model: objectiveSelection.model,
-            reasoningEffort: objectiveSelection.reasoningEffort
+            reasoningEffort: objectiveSelection.reasoningEffort,
+            ...(explicitLaunchConfigs[objectiveSelection.agent]
+              ? {
+                  launchConfigAgent: objectiveSelection.agent,
+                  launchConfigOverride: explicitLaunchConfigs[objectiveSelection.agent]
+                }
+              : {})
           }
         });
         updatePreference.mutate({
@@ -701,7 +712,7 @@ export function QuickTaskBar({ defaultProjectId = null }: QuickTaskBarProps) {
           onChange={handleSelectionChange}
           agentConfigs={agentConfigs}
           onLaunchConfigCommit={(agentKey, config) => {
-            updateAgentConfig.mutate({ agentKey, body: config });
+            setExplicitLaunchConfigs(previous => ({ ...previous, [agentKey]: config }));
           }}
         />
       ) : null}

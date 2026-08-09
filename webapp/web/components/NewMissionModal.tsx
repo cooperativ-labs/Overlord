@@ -37,10 +37,11 @@ import {
   useProjectExecutionTarget,
   useProjectResources,
   useProjectTags,
-  useUpdateAgentLaunchConfig,
   useUpdateLaunchPreference,
   useUpdateObjective
 } from '@/lib/queries.ts';
+
+import type { AgentLaunchConfigDto } from '../../shared/contract.ts';
 
 import { Dialog, DialogContent, DialogTitle } from './ui/dialog';
 
@@ -81,7 +82,6 @@ export function NewMissionModal({
   const launchObjective = useLaunchObjective();
   const updateObjective = useUpdateObjective();
   const settingsQ = useLaunchSettings();
-  const updateAgentConfig = useUpdateAgentLaunchConfig();
 
   const [instruction, setInstruction] = useState('');
   const [resourceKey, setResourceKey] = useState<string | null>(null);
@@ -162,9 +162,13 @@ export function NewMissionModal({
   }, [catalog, preferenceQ.data]);
 
   const [selection, setSelection] = useState<AgentModelSelection>(defaultSelection);
+  const [explicitLaunchConfigs, setExplicitLaunchConfigs] = useState<
+    Record<string, AgentLaunchConfigDto>
+  >({});
 
   useEffect(() => {
     setSelection(defaultSelection);
+    setExplicitLaunchConfigs({});
   }, [defaultSelection]);
 
   // Reset transient state each time the modal opens; keep the project sticky.
@@ -275,7 +279,8 @@ export function NewMissionModal({
           body: {
             agent: selection.agent,
             model: selection.model,
-            reasoningEffort: selection.reasoningEffort
+            reasoningEffort: selection.reasoningEffort,
+            launchConfigOverride: explicitLaunchConfigs[selection.agent]
           }
         });
       } else {
@@ -284,7 +289,13 @@ export function NewMissionModal({
           body: {
             assignedAgent: selection.agent,
             model: selection.model,
-            reasoningEffort: selection.reasoningEffort
+            reasoningEffort: selection.reasoningEffort,
+            ...(explicitLaunchConfigs[selection.agent]
+              ? {
+                  launchConfigAgent: selection.agent,
+                  launchConfigOverride: explicitLaunchConfigs[selection.agent]
+                }
+              : {})
           }
         });
         if (selectedProjectId) {
@@ -508,7 +519,7 @@ export function NewMissionModal({
                   onChange={handleSelectionChange}
                   agentConfigs={agentConfigs}
                   onLaunchConfigCommit={(agentKey, config) =>
-                    updateAgentConfig.mutate({ agentKey, body: config })
+                    setExplicitLaunchConfigs(previous => ({ ...previous, [agentKey]: config }))
                   }
                   disabled={isBusy}
                 />

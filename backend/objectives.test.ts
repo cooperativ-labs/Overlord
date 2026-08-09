@@ -120,6 +120,33 @@ test('clearing a submitted objective instruction to empty is still rejected', as
   );
 });
 
+test('objective launch mechanics are persisted as an explicit any-target override', async () => {
+  const project = await createProject({ name: 'Objective launch override' });
+  const mission = await createMission({ projectId: project.id, firstObjective: 'Build it' });
+  const objectiveId = mission.objectives[0]!.id;
+
+  const updated = await updateObjective(objectiveId, {
+    launchConfigAgent: 'codex',
+    launchConfigOverride: {
+      preCommand: 'agp',
+      flags: [{ name: '--sandbox', value: 'workspace-write' }]
+    }
+  });
+
+  assert.deepEqual(updated.launchConfigOverrides, {
+    '*': {
+      codex: {
+        preCommand: 'agp',
+        flags: [{ name: '--sandbox', value: 'workspace-write' }]
+      }
+    }
+  });
+  const stored = db
+    .prepare(`SELECT launch_config_json FROM objectives WHERE id = ?`)
+    .get(objectiveId) as { launch_config_json: string };
+  assert.deepEqual(JSON.parse(stored.launch_config_json), updated.launchConfigOverrides);
+});
+
 test('new draft objectives inherit the project last-used agent', async () => {
   const project = await createProject({ name: 'Default Agent Objectives' });
   updateLaunchPreference(project.id, {

@@ -605,6 +605,8 @@ export interface ObjectiveDto {
   branch: string | null;
   /** Logical project resource this objective runs in; null inherits the primary. */
   resourceKey: string | null;
+  /** Explicit per-objective launch overrides keyed by target id (`*` means any target), then agent. */
+  launchConfigOverrides?: Record<string, Record<string, AgentLaunchConfigDto>>;
 }
 
 export type ArtifactType =
@@ -1819,12 +1821,15 @@ export interface UpdateObjectiveBody {
   model?: string | null;
   reasoningEffort?: string | null;
   resourceKey?: string | null;
+  /** Save an explicit any-target launch override for `launchConfigAgent`. */
+  launchConfigOverride?: AgentLaunchConfigDto | null;
+  launchConfigAgent?: string;
 }
 
 /**
  * Queue an execution request for an objective. The server persists the
  * selection onto the objective, resolves the launch config (objective override
- * → user target config → workspace default → empty), snapshots it into the
+ * → resource-source default → user target config → workspace default → empty), snapshots it into the
  * request, and moves a draft objective to `launching`.
  */
 export interface LaunchObjectiveBody {

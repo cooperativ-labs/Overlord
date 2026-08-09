@@ -584,6 +584,7 @@ interface ObjectiveRow {
   model: string | null;
   reasoning_effort: string | null;
   resource_key: string | null;
+  launch_config_json: string | null;
   created_at: string;
   updated_at: string;
   revision: number;
@@ -1660,6 +1661,33 @@ async function getTagsByMission(missionIds: string[]): Promise<Map<string, Proje
 }
 
 function toObjectiveDto(r: ObjectiveRow): ObjectiveDto {
+  let launchConfigOverrides: Record<
+    string,
+    Record<string, { preCommand: string; flags: ReturnType<typeof normalizeAgentLaunchFlags> }>
+  > = {};
+  try {
+    const parsed = r.launch_config_json ? (JSON.parse(r.launch_config_json) as unknown) : {};
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      for (const [targetKey, rawAgents] of Object.entries(parsed)) {
+        if (!rawAgents || typeof rawAgents !== 'object' || Array.isArray(rawAgents)) continue;
+        const agents: Record<
+          string,
+          { preCommand: string; flags: ReturnType<typeof normalizeAgentLaunchFlags> }
+        > = {};
+        for (const [agentKey, rawConfig] of Object.entries(rawAgents)) {
+          if (!rawConfig || typeof rawConfig !== 'object' || Array.isArray(rawConfig)) continue;
+          const config = rawConfig as { preCommand?: unknown; flags?: unknown };
+          agents[agentKey] = {
+            preCommand: typeof config.preCommand === 'string' ? config.preCommand : '',
+            flags: normalizeAgentLaunchFlags(config.flags)
+          };
+        }
+        if (Object.keys(agents).length > 0) launchConfigOverrides[targetKey] = agents;
+      }
+    }
+  } catch {
+    launchConfigOverrides = {};
+  }
   return {
     id: r.id,
     workspaceId: r.workspace_id,
@@ -1678,7 +1706,8 @@ function toObjectiveDto(r: ObjectiveRow): ObjectiveDto {
     revision: r.revision,
     externalSessionId: r.external_session_id ?? null,
     branch: r.branch ?? null,
-    resourceKey: r.resource_key?.trim() || null
+    resourceKey: r.resource_key?.trim() || null,
+    launchConfigOverrides
   };
 }
 
@@ -6786,6 +6815,35 @@ async function updateObjectiveTx(
       fields.push('resource_key = ?');
       setParams.push(nextResourceKey);
       changed.push('resource_key');
+    }
+    if (body.launchConfigOverride !== undefined) {
+      const agentKey = body.launchConfigAgent?.trim();
+      if (!agentKey) throw new ApiError(400, 'launchConfigAgent is required');
+      let launchConfigs: Record<string, Record<string, unknown>> = {};
+      try {
+        const parsed = existing.launch_config_json
+          ? (JSON.parse(existing.launch_config_json) as unknown)
+          : {};
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          launchConfigs = parsed as Record<string, Record<string, unknown>>;
+        }
+      } catch {
+        launchConfigs = {};
+      }
+      const anyTarget = { ...(launchConfigs['*'] ?? {}) };
+      if (body.launchConfigOverride === null) {
+        delete anyTarget[agentKey];
+      } else {
+        anyTarget[agentKey] = {
+          preCommand: body.launchConfigOverride.preCommand?.trim() ?? '',
+          flags: normalizeAgentLaunchFlags(body.launchConfigOverride.flags)
+        };
+      }
+      if (Object.keys(anyTarget).length > 0) launchConfigs['*'] = anyTarget;
+      else delete launchConfigs['*'];
+      fields.push('launch_config_json = ?');
+      setParams.push(Object.keys(launchConfigs).length > 0 ? JSON.stringify(launchConfigs) : null);
+      changed.push('launch_config_json');
     }
     if (fields.length === 0) {
       return { objective: toObjectiveDto(existing), regenerateTitle: false };

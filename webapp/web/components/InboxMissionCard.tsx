@@ -34,7 +34,6 @@ import {
   useProjectExecutionTarget,
   useProjectResources,
   usePromoteInboxItem,
-  useUpdateAgentLaunchConfig,
   useUpdateInboxItem,
   useUpdateLaunchPreference,
   useUpdateObjective
@@ -93,7 +92,6 @@ function UnassignedInboxMissionCard({
   const launchObjective = useLaunchObjective();
   const updateObjective = useUpdateObjective();
   const settingsQ = useLaunchSettings();
-  const updateAgentConfig = useUpdateAgentLaunchConfig();
 
   const [instruction, setInstruction] = useState(item.objectives[0] ?? item.title);
   const [projectId, setProjectId] = useState('');
@@ -151,8 +149,12 @@ function UnassignedInboxMissionCard({
   }, [catalog, preferenceQ.data]);
 
   const [selection, setSelection] = useState<AgentModelSelection>(defaultSelection);
+  const [explicitLaunchConfigs, setExplicitLaunchConfigs] = useState<
+    Record<string, AgentLaunchConfigDto>
+  >({});
   useEffect(() => {
     setSelection(defaultSelection);
+    setExplicitLaunchConfigs({});
   }, [defaultSelection]);
 
   const handleSelectionChange = (next: AgentModelSelection) => {
@@ -227,7 +229,8 @@ function UnassignedInboxMissionCard({
           body: {
             agent: selection.agent,
             model: selection.model,
-            reasoningEffort: selection.reasoningEffort
+            reasoningEffort: selection.reasoningEffort,
+            launchConfigOverride: explicitLaunchConfigs[selection.agent]
           }
         });
       } else {
@@ -236,7 +239,13 @@ function UnassignedInboxMissionCard({
           body: {
             assignedAgent: selection.agent,
             model: selection.model,
-            reasoningEffort: selection.reasoningEffort
+            reasoningEffort: selection.reasoningEffort,
+            ...(explicitLaunchConfigs[selection.agent]
+              ? {
+                  launchConfigAgent: selection.agent,
+                  launchConfigOverride: explicitLaunchConfigs[selection.agent]
+                }
+              : {})
           }
         });
         updatePreference.mutate({
@@ -291,7 +300,7 @@ function UnassignedInboxMissionCard({
       catalog={catalog}
       agentConfigs={agentConfigs}
       onLaunchConfigCommit={(agentKey, config) =>
-        updateAgentConfig.mutate({ agentKey, body: config })
+        setExplicitLaunchConfigs(previous => ({ ...previous, [agentKey]: config }))
       }
       selectionLoaded={selectionLoaded}
       primaryConnection={primaryConnection}
@@ -325,7 +334,6 @@ function PromotedInboxMissionCard({ initialMission }: { initialMission: MissionD
   const launchObjective = useLaunchObjective();
   const updateObjective = useUpdateObjective();
   const settingsQ = useLaunchSettings();
-  const updateAgentConfig = useUpdateAgentLaunchConfig();
 
   const [instruction, setInstruction] = useState(objective?.instructionText ?? mission.title);
   const [resourceKey, setResourceKey] = useState<string | null>(objective?.resourceKey ?? null);
@@ -356,7 +364,10 @@ function PromotedInboxMissionCard({ initialMission }: { initialMission: MissionD
   const showWorkspaceGroups = projectGroups.length > 1;
 
   const catalog = catalogQ.data ?? null;
-  const agentConfigs = settingsQ.data?.agentConfigs ?? {};
+  const agentConfigs = {
+    ...(settingsQ.data?.agentConfigs ?? {}),
+    ...(objective?.launchConfigOverrides?.['*'] ?? {})
+  };
   const selectionLoaded = Boolean(catalog) && !preferenceQ.isLoading && !settingsQ.isLoading;
   const primaryConnection = objectiveResourceConnection({
     resources: resourcesQ.data ?? [],
@@ -391,9 +402,13 @@ function PromotedInboxMissionCard({ initialMission }: { initialMission: MissionD
   }, [catalog, objective, preferenceQ.data]);
 
   const [selection, setSelection] = useState<AgentModelSelection>(defaultSelection);
+  const [explicitLaunchConfigs, setExplicitLaunchConfigs] = useState<
+    Record<string, AgentLaunchConfigDto>
+  >(objective?.launchConfigOverrides?.['*'] ?? {});
   useEffect(() => {
     setSelection(defaultSelection);
-  }, [defaultSelection]);
+    setExplicitLaunchConfigs(objective?.launchConfigOverrides?.['*'] ?? {});
+  }, [defaultSelection, objective?.launchConfigOverrides]);
 
   const handleSelectionChange = (next: AgentModelSelection) => {
     setSelection(next);
@@ -439,7 +454,13 @@ function PromotedInboxMissionCard({ initialMission }: { initialMission: MissionD
                 assignedAgent: selection.agent,
                 model: selection.model,
                 reasoningEffort: selection.reasoningEffort
-              })
+              }),
+          ...(explicitLaunchConfigs[selection.agent]
+            ? {
+                launchConfigAgent: selection.agent,
+                launchConfigOverride: explicitLaunchConfigs[selection.agent]
+              }
+            : {})
         }
       });
 
@@ -449,7 +470,8 @@ function PromotedInboxMissionCard({ initialMission }: { initialMission: MissionD
           body: {
             agent: selection.agent,
             model: selection.model,
-            reasoningEffort: selection.reasoningEffort
+            reasoningEffort: selection.reasoningEffort,
+            launchConfigOverride: explicitLaunchConfigs[selection.agent]
           }
         });
       } else {
@@ -490,7 +512,7 @@ function PromotedInboxMissionCard({ initialMission }: { initialMission: MissionD
       catalog={catalog}
       agentConfigs={agentConfigs}
       onLaunchConfigCommit={(agentKey, config) =>
-        updateAgentConfig.mutate({ agentKey, body: config })
+        setExplicitLaunchConfigs(previous => ({ ...previous, [agentKey]: config }))
       }
       selectionLoaded={selectionLoaded}
       primaryConnection={primaryConnection}

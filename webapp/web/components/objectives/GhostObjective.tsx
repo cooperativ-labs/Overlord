@@ -2,7 +2,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Play } from 'lucide-react';
 import { type ChangeEvent, useCallback, useEffect, useRef, useState } from 'react';
 
-import type { ObjectiveDto } from '../../../shared/contract.ts';
+import type { AgentLaunchConfigDto, ObjectiveDto } from '../../../shared/contract.ts';
 import { api } from '../../lib/api.ts';
 import { keys, useCreateObjective, useProjectResources } from '../../lib/queries.ts';
 import { useRepositoryMentionOptions } from '../../lib/useRepositoryMentionOptions.ts';
@@ -191,6 +191,16 @@ export function GhostObjective({
     [materializeForSetting, setSelection, onMaterialized]
   );
 
+  const handleLaunchConfigCommit = useCallback(
+    async (agentKey: string, config: AgentLaunchConfigDto) => {
+      const created = await materializeForSetting();
+      if (!created) return;
+      commitLaunchConfig(agentKey, config, created.id);
+      onMaterialized?.();
+    },
+    [commitLaunchConfig, materializeForSetting, onMaterialized]
+  );
+
   const handleAttachmentFiles = useCallback(
     async (files: File[]) => {
       setAttachError(null);
@@ -312,7 +322,9 @@ export function GhostObjective({
             selection={effectiveSelection}
             onChange={handleAgentSelectionChange}
             agentConfigs={agentConfigs}
-            onLaunchConfigCommit={commitLaunchConfig}
+            onLaunchConfigCommit={(agentKey, config) =>
+              void handleLaunchConfigCommit(agentKey, config)
+            }
           />
 
           <Tooltip>

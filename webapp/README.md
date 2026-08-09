@@ -8,9 +8,9 @@ through `better-sqlite3`.
 A first slice has landed: a realtime console for **projects, missions, and
 objectives** — list/create/edit each, with the UI reflecting database changes
 (including writes made by the CLI) live over Server-Sent Events. The settings
-surface now covers per-user local execution-target launch defaults (terminal
-profile plus per-agent flags/pre-commands); launching objectives still follows
-the existing mission/objective controls.
+surface covers per-user local execution-target launch defaults and per-source
+project defaults (per-agent flags/pre-commands). Objective-specific edits are
+stored with the objective and take precedence over both.
 
 ## Table of Contents
 
@@ -38,7 +38,7 @@ Open that URL in your browser to manage projects, missions, and objectives on a
 realtime Kanban board. Changes made through the CLI appear live without a
 manual refresh. The settings surface lets you configure per-user local
 execution-target launch defaults (terminal profile plus per-agent flags and
-pre-commands).
+pre-commands) and source-specific defaults under Project settings → Resources.
 
 ### AI title summarization
 
@@ -122,6 +122,7 @@ camelCase per the [REST API Boundary](../database/docs/09-database-schema-contra
 | `GET /api/launch-settings` | The acting user's local execution-target launch defaults |
 | `PATCH /api/launch-settings/agents/:agentKey` | Persist per-agent pre-command / flags to `user_execution_target_preferences.agent_configs_json` |
 | `PATCH /api/launch-settings/terminal-profile` | Persist the local terminal launcher profile to `user_execution_target_preferences.terminal_profile_json` |
+| `PATCH /api/projects/:id/resources/:resourceId/sources/:sourceId` | Replace per-agent pre-command / flag defaults on one project resource source |
 | `GET/POST /api/projects`, `GET/PATCH /api/projects/:id` | Projects (PATCH covers rename / describe / archive) |
 | `GET /api/workspace/statuses` | Workspace card statuses (board columns, shared across projects) |
 | `POST /api/workspace/statuses` | Add a workspace status |

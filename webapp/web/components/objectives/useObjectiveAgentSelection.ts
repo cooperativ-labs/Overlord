@@ -6,7 +6,6 @@ import {
   useLaunchPreference,
   useLaunchSettings,
   useProject,
-  useUpdateAgentLaunchConfig,
   useUpdateLaunchPreference,
   useUpdateObjective
 } from '../../lib/queries.ts';
@@ -21,7 +20,7 @@ import type { AgentModelSelection } from './AgentModelSelector.tsx';
  */
 type SelectableObjective = Pick<
   ObjectiveDto,
-  'id' | 'projectId' | 'assignedAgent' | 'model' | 'reasoningEffort'
+  'id' | 'projectId' | 'assignedAgent' | 'model' | 'reasoningEffort' | 'launchConfigOverrides'
 >;
 
 /**
@@ -33,9 +32,8 @@ type SelectableObjective = Pick<
  * - Selection changes persist to BOTH the objective (`assigned_agent`,
  *   `model`, `reasoning_effort`) and the project launch preference, so the
  *   next objective in this project starts from the same choice.
- * - Launch-config (pre-command/flags) edits persist to the user's per-target
- *   agent configs (`user_execution_target_preferences.agent_configs_json`) —
- *   launch mechanics, not preference.
+ * - Launch-config (pre-command/flags) edits persist with this objective as an
+ *   explicit any-target override. Device and resource defaults remain defaults.
  */
 export function useObjectiveAgentSelection(objective: SelectableObjective) {
   // The catalog is the objective's own workspace's — a mission open from a
@@ -53,11 +51,13 @@ export function useObjectiveAgentSelection(objective: SelectableObjective) {
   const preferenceQ = useLaunchPreference(objective.projectId);
   const updateObjective = useUpdateObjective();
   const updatePreference = useUpdateLaunchPreference(objective.projectId);
-  const updateAgentConfig = useUpdateAgentLaunchConfig(workspaceId);
 
   const catalog = catalogQ.data ?? null;
   const preference = preferenceQ.data ?? null;
-  const agentConfigs = settingsQ.data?.agentConfigs ?? {};
+  const agentConfigs = useMemo(() => {
+    const inherited = settingsQ.data?.agentConfigs ?? {};
+    return { ...inherited, ...(objective.launchConfigOverrides?.['*'] ?? {}) };
+  }, [objective.launchConfigOverrides, settingsQ.data?.agentConfigs]);
   const loaded = Boolean(catalog) && !preferenceQ.isLoading;
 
   const selection = useMemo<AgentModelSelection>(() => {
@@ -111,10 +111,14 @@ export function useObjectiveAgentSelection(objective: SelectableObjective) {
   );
 
   const commitLaunchConfig = useCallback(
-    (agentKey: string, config: AgentLaunchConfigDto) => {
-      updateAgentConfig.mutate({ agentKey, body: config });
+    (agentKey: string, config: AgentLaunchConfigDto, targetId: string = objective.id) => {
+      if (!targetId) return;
+      updateObjective.mutate({
+        id: targetId,
+        body: { launchConfigAgent: agentKey, launchConfigOverride: config }
+      });
     },
-    [updateAgentConfig]
+    [objective.id, updateObjective]
   );
 
   return { catalog, agentConfigs, preference, selection, setSelection, commitLaunchConfig, loaded };
