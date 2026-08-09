@@ -187,6 +187,9 @@ function routeChange(change: EntityChangeDto): QueryKey[] | null {
     case 'profile': {
       return [keys.profile, keys.meta];
     }
+    case 'notification': {
+      return [keys.notifications];
+    }
     case 'user_token': {
       return [keys.userTokens];
     }

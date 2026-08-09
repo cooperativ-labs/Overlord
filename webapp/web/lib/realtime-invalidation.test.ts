@@ -149,6 +149,21 @@ test('routes agent-session changes to the mission panel action-card queries', ()
   ]);
 });
 
+test('routes durable notification changes to the profile-owned history query', () => {
+  const { client, calls } = fakeClient();
+
+  const mode = invalidateRealtimeChanges(client, [
+    change({
+      entityType: 'notification',
+      entityId: 'notification-1',
+      changedFields: []
+    })
+  ]);
+
+  assert.equal(mode, 'targeted');
+  assert.deepEqual(calls, [['notifications']]);
+});
+
 test('falls back to full invalidation for malformed or unroutable changes', () => {
   for (const changes of [
     { changes: [] },

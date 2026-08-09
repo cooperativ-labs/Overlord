@@ -72,9 +72,12 @@ test('builds a bounded account snapshot and hashes only visible content', async 
   assert.equal(state?.running.length, 1);
   assert.equal(state?.running[0]?.title, 'Run this');
   assert.equal(state?.running[0]?.projectColorHex, '#22aa44');
+  assert.equal(typeof state?.updatedAt, 'number');
+  assert.ok(Number.isInteger(state?.updatedAt));
+  assert.ok((state?.updatedAt ?? 0) > 1_000_000_000);
   assert.equal(
     liveActivityContentHash(state),
-    liveActivityContentHash(state && { ...state, updatedAt: '2099-01-01T00:00:00.000Z' })
+    liveActivityContentHash(state && { ...state, updatedAt: 4_102_444_800 })
   );
 });
 

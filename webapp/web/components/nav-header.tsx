@@ -3,6 +3,7 @@ import { Plus, RefreshCw, TicketPlus } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { NewMissionModal } from '@/components/NewMissionModal.tsx';
+import { NotificationDrawer } from '@/components/notifications/NotificationDrawer.tsx';
 import { Button } from '@/components/ui/button';
 import { SidebarTrigger, useSidebar } from '@/components/ui/sidebar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip.tsx';
@@ -99,6 +100,7 @@ export function NavHeader() {
         className="flex shrink-0 items-center gap-2"
         style={isDesktop ? NO_DRAG_REGION : undefined}
       >
+        <NotificationDrawer />
         <Tooltip>
           <TooltipTrigger
             render={

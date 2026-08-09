@@ -1,8 +1,8 @@
-export type SystemNotificationType = 'update' | 'warning' | 'info';
+export type AppBannerType = 'update' | 'warning' | 'info';
 
-export type SystemNotification = {
+export type AppBanner = {
   id: string;
-  type: SystemNotificationType;
+  type: AppBannerType;
   title: string;
   message: string;
   /** Optional action button */

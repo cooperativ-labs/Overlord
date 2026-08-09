@@ -1,6 +1,13 @@
 import type { DatabaseClient } from '@overlord/database';
 
-import { newId, nowIso } from './util.js';
+import {
+  NOTIFICATION_MODES,
+  type NotificationMode,
+  type NotificationTypeForTransport,
+  notificationTypesForTransport
+} from './notifications/catalog.js';
+import { nowIso } from './util.js';
+import { enqueueWorkerJob, missionOwnerProfileId } from './worker-jobs.js';
 
 /**
  * Durable backend job that sends one standard APNs alert/background push.
@@ -12,22 +19,17 @@ import { newId, nowIso } from './util.js';
  */
 export const PUSH_NOTIFICATION_DISPATCH_JOB_TYPE = 'overlord.push_notification.dispatch.v1';
 
-/** Lifecycle-only categories. Progress updates and heartbeats never notify. */
-export const PUSH_NOTIFICATION_CATEGORIES = [
-  'mission_awaiting_review',
-  'agent_question',
-  'mission_complete',
-  'mission_failed'
-] as const;
+/** Lifecycle-only categories eligible for the existing standard APNs transport. */
+export const PUSH_NOTIFICATION_CATEGORIES = notificationTypesForTransport('apns');
 
-export type PushNotificationCategory = (typeof PUSH_NOTIFICATION_CATEGORIES)[number];
+export type PushNotificationCategory = NotificationTypeForTransport<'apns'>;
 
 /** Reserved master-switch category stored alongside the real ones. */
 export const PUSH_NOTIFICATION_MASTER_CATEGORY = 'all';
 
-export const PUSH_NOTIFICATION_MODES = ['alert', 'silent', 'off'] as const;
+export const PUSH_NOTIFICATION_MODES = NOTIFICATION_MODES;
 
-export type PushNotificationMode = (typeof PUSH_NOTIFICATION_MODES)[number];
+export type PushNotificationMode = NotificationMode;
 
 export function isPushNotificationCategory(value: unknown): value is PushNotificationCategory {
   return (
@@ -49,12 +51,6 @@ export type PushNotificationJobPayload = {
   category: PushNotificationCategory;
   dedupeKey: string;
 };
-
-function dedupePredicate(dialect: DatabaseClient['dialect']): string {
-  return dialect === 'postgres'
-    ? "payload_json->>'dedupeKey' = ?"
-    : "json_extract(payload_json, '$.dedupeKey') = ?";
-}
 
 export function pushNotificationDedupeKey({
   profileId,
@@ -94,15 +90,6 @@ export async function enqueuePushNotificationJob({
   now?: string;
 }): Promise<boolean> {
   const dedupeKey = pushNotificationDedupeKey({ profileId, category, missionId, objectiveId });
-  const existing = await db.get<{ id: string }>(
-    `SELECT id FROM worker_jobs
-       WHERE workspace_id = ? AND type = ? AND status IN ('queued', 'running')
-         AND deleted_at IS NULL AND ${dedupePredicate(db.dialect)}
-       LIMIT 1`,
-    [workspaceId, PUSH_NOTIFICATION_DISPATCH_JOB_TYPE, dedupeKey]
-  );
-  if (existing) return false;
-
   const payload: PushNotificationJobPayload = {
     profileId,
     missionId,
@@ -110,22 +97,17 @@ export async function enqueuePushNotificationJob({
     category,
     dedupeKey
   };
-  await db.run(
-    `INSERT INTO worker_jobs
-       (id, workspace_id, type, status, priority, run_after, attempt_count, max_attempts,
-        payload_json, created_at, updated_at, revision)
-       VALUES (?, ?, ?, 'queued', 40, ?, 0, 5, ?, ?, ?, 1)`,
-    [
-      newId(),
-      workspaceId,
-      PUSH_NOTIFICATION_DISPATCH_JOB_TYPE,
-      now,
-      JSON.stringify(payload),
-      now,
-      now
-    ]
-  );
-  return true;
+  const result = await enqueueWorkerJob({
+    db,
+    workspaceId,
+    type: PUSH_NOTIFICATION_DISPATCH_JOB_TYPE,
+    dedupeBy: { field: 'dedupeKey', value: dedupeKey },
+    payload,
+    priority: 40,
+    maxAttempts: 5,
+    now
+  });
+  return result.enqueued;
 }
 
 /**
@@ -147,19 +129,12 @@ export async function enqueuePushNotificationForMission({
   objectiveId?: string | null;
   now?: string;
 }): Promise<boolean> {
-  const owner = await db.get<{ profile_id: string }>(
-    `SELECT wu.profile_id
-       FROM missions m
-       JOIN workspace_users wu ON wu.id = m.assigned_workspace_user_id
-      WHERE m.id = ? AND m.workspace_id = ? AND m.deleted_at IS NULL
-        AND wu.deleted_at IS NULL AND wu.status = 'active'`,
-    [missionId, workspaceId]
-  );
-  return owner
+  const profileId = await missionOwnerProfileId({ db, workspaceId, missionId });
+  return profileId
     ? enqueuePushNotificationJob({
         db,
         workspaceId,
-        profileId: owner.profile_id,
+        profileId,
         category,
         missionId,
         objectiveId,

@@ -49,8 +49,8 @@ import {
   createMissionWithObjectives,
   insertObjective as createObjectiveOnMission
 } from '../packages/core/service/missions.ts';
+import { emitNotification } from '../packages/core/service/notifications/notifications.ts';
 import { resolveProjectExecutionTargetForLaunch } from '../packages/core/service/project-execution-target.ts';
-import { enqueuePushNotificationForMission } from '../packages/core/service/push-notification-jobs.ts';
 import {
   loadTargetResourceObservations,
   mergeResourceStatusWithObservation,
@@ -5097,11 +5097,20 @@ async function patchMissionFieldsTx(id: string, body: UpdateMissionBody): Promis
     // Closing the mission is the end of the story the assignee has been tracking,
     // so it earns its own category rather than another awaiting-review ping.
     if (scheduleTriggerStatusType === 'complete' && existing.status_type !== 'complete') {
-      await enqueuePushNotificationForMission({
+      await emitNotification({
         db: tx,
         workspaceId: existing.workspace_id,
         missionId: id,
-        category: 'mission_complete',
+        type: 'mission_complete',
+        now
+      });
+    }
+    if (returnedToExecute) {
+      await emitNotification({
+        db: tx,
+        workspaceId: existing.workspace_id,
+        missionId: id,
+        type: 'returned_to_execute',
         now
       });
     }
@@ -5171,7 +5180,8 @@ async function moveMissionProjectTx({
     }
 
     const now = nowIso();
-    if (statusRow.type === 'execute' && existing.status_type !== 'execute') {
+    const returnedToExecute = statusRow.type === 'execute' && existing.status_type !== 'execute';
+    if (returnedToExecute) {
       fields.push('returned_to_execute_at = ?');
       setParams.push(now);
       changed.push('returned_to_execute_at');
@@ -5202,6 +5212,15 @@ async function moveMissionProjectTx({
       },
       tx
     );
+    if (returnedToExecute) {
+      await emitNotification({
+        db: tx,
+        workspaceId: existing.workspace_id,
+        missionId: id,
+        type: 'returned_to_execute',
+        now
+      });
+    }
   });
 }
 
@@ -5377,6 +5396,15 @@ export async function reorderBoardColumn(
           tx
         );
         await createScheduledDuplicateIfNeeded(tx, existing, statusRow.type as StatusType);
+        if (statusRow.type === 'execute' && existing.status_type !== 'execute') {
+          await emitNotification({
+            db: tx,
+            workspaceId,
+            missionId,
+            type: 'returned_to_execute',
+            now
+          });
+        }
       }
     }
   });
@@ -6725,6 +6753,14 @@ async function updateObjectiveTx(
           db: tx,
           workspaceId,
           missionId: existing.mission_id,
+          now
+        });
+        await emitNotification({
+          db: tx,
+          workspaceId,
+          missionId: existing.mission_id,
+          objectiveId: id,
+          type: 'agent_started',
           now
         });
       } else {

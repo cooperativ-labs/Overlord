@@ -4,10 +4,10 @@ import { useState } from 'react';
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import { LoadingButton } from '@/components/ui/loading-button';
 
-import { useSystemNotifications } from './SystemNotificationContext';
-import type { SystemNotificationType } from './types';
+import { useAppBanners } from './AppBannerContext';
+import type { AppBannerType } from './types';
 
-function notificationIcon(type: SystemNotificationType) {
+function notificationIcon(type: AppBannerType) {
   switch (type) {
     case 'update':
       return <RefreshCw className="h-3.5 w-3.5 shrink-0" />;
@@ -18,7 +18,7 @@ function notificationIcon(type: SystemNotificationType) {
   }
 }
 
-function notificationColor(type: SystemNotificationType) {
+function notificationColor(type: AppBannerType) {
   switch (type) {
     case 'update':
       return 'border-blue-500/30 bg-blue-50/80 text-blue-800 dark:bg-blue-950/80 dark:text-blue-300';
@@ -29,8 +29,8 @@ function notificationColor(type: SystemNotificationType) {
   }
 }
 
-export function SystemNotificationBanner() {
-  const { notifications, dismissNotification } = useSystemNotifications();
+export function AppBannerStack() {
+  const { notifications, dismissNotification } = useAppBanners();
   const [actionStates, setActionStates] = useState<Record<string, ButtonLoadingState>>({});
   const [copiedIds, setCopiedIds] = useState<Record<string, boolean>>({});
 

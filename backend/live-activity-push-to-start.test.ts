@@ -199,7 +199,7 @@ test('the start payload carries the ActivityKit start event, attributes, and bou
           }
         ],
         recentCompletion: null,
-        updatedAt: '2026-08-06T00:00:00.000Z'
+        updatedAt: 1_754_438_400
       },
       'OverlordActivityAttributes'
     )
@@ -210,11 +210,14 @@ test('the start payload carries the ActivityKit start event, attributes, and bou
   assert.deepEqual(body.aps.attributes, { accountLabel: 'My Missions' });
   assert.equal(typeof body.aps['stale-date'], 'number');
   assert.deepEqual((body.aps.alert as { title: string }).title, 'Run the thing');
-  assert.deepEqual(Object.keys(body.aps['content-state'] as object).sort(), [
-    'recentCompletion',
-    'running',
-    'updatedAt'
-  ]);
+  const contentState = body.aps['content-state'] as {
+    recentCompletion: unknown;
+    running: unknown[];
+    updatedAt: unknown;
+  };
+  assert.deepEqual(Object.keys(contentState).sort(), ['recentCompletion', 'running', 'updatedAt']);
+  assert.equal(contentState.updatedAt, 1_754_438_400);
+  assert.equal(typeof contentState.updatedAt, 'number');
 });
 
 test('the dispatcher completes a start job without APNs credentials and leaves no start stamp', async () => {

@@ -4,13 +4,8 @@ import {
   LIVE_ACTIVITY_DISPATCH_JOB_TYPE,
   LIVE_ACTIVITY_START_JOB_TYPE
 } from '../packages/core/service/live-activity-jobs.ts';
-import { newId, nowIso } from '../packages/core/service/util.ts';
-import {
-  type ClaimedWorkerJob,
-  claimNextWorkerJob,
-  finishWorkerJob,
-  retryWorkerJob
-} from '../packages/core/service/worker-jobs.ts';
+import { nowIso } from '../packages/core/service/util.ts';
+import type { ClaimedWorkerJob } from '../packages/core/service/worker-jobs.ts';
 
 import {
   type ApnsConfig,
@@ -27,8 +22,8 @@ import {
   liveActivityContentHash,
   type LiveActivityContentState
 } from './live-activities.ts';
+import { WorkerJobPoller } from './worker-job-poller.ts';
 
-const POLL_INTERVAL_MS = 1_500;
 const UNCHANGED_MIN_INTERVAL_MS = 5 * 60 * 1000;
 const COMPLETION_DISMISSAL_MS = 10 * 60 * 1000;
 /**
@@ -68,7 +63,7 @@ function apnsPayload(state: LiveActivityContentState | null): {
   const finalState: LiveActivityContentState = state ?? {
     running: [],
     recentCompletion: null,
-    updatedAt: new Date(now).toISOString()
+    updatedAt: Math.floor(now / 1000)
   };
   const aps: Record<string, unknown> = {
     timestamp: Math.floor(now / 1000),
@@ -140,102 +135,85 @@ async function sendApns({
   });
 }
 
-class LiveActivityDispatcher {
-  private timer: NodeJS.Timeout | null = null;
-  private polling = false;
-  private readonly workerId = `live-activity:${process.pid}:${newId().slice(0, 8)}`;
-
-  start(): void {
-    if (this.timer) return;
-    this.timer = setInterval(() => void this.poll(), POLL_INTERVAL_MS);
+class LiveActivityDispatcher extends WorkerJobPoller {
+  constructor() {
+    super({
+      workerIdPrefix: 'live-activity',
+      jobTypes: [LIVE_ACTIVITY_DISPATCH_JOB_TYPE, LIVE_ACTIVITY_START_JOB_TYPE],
+      logPrefix: 'live-activity-dispatcher'
+    });
   }
 
-  pollNow(): void {
-    void this.poll();
+  protected databaseClient(): DatabaseClient {
+    return requireDatabaseClient();
   }
 
-  private async poll(): Promise<void> {
-    if (this.polling) return;
-    this.polling = true;
-    try {
-      const db = requireDatabaseClient();
-      const job = await claimNextWorkerJob({
-        db,
-        jobType: LIVE_ACTIVITY_DISPATCH_JOB_TYPE,
-        workerId: this.workerId
-      });
-      if (job) await this.processJob(db, job);
-      const startJob = await claimNextWorkerJob({
-        db,
-        jobType: LIVE_ACTIVITY_START_JOB_TYPE,
-        workerId: this.workerId
-      });
-      if (startJob) await this.processStartJob(db, startJob);
-    } catch (error) {
-      console.error('[live-activity-dispatcher] poll failed', error);
-    } finally {
-      this.polling = false;
+  protected async processJob(
+    db: DatabaseClient,
+    job: WorkerJobRow,
+    jobType: string
+  ): Promise<void> {
+    if (jobType === LIVE_ACTIVITY_START_JOB_TYPE) {
+      await this.processStartJob(db, job);
+      return;
     }
+    await this.processDispatchJob(db, job);
   }
 
-  private async processJob(db: DatabaseClient, job: WorkerJobRow): Promise<void> {
+  private async processDispatchJob(db: DatabaseClient, job: WorkerJobRow): Promise<void> {
     let profileId: string;
     try {
       const payload = JSON.parse(job.payload_json) as { profileId?: unknown };
       if (typeof payload.profileId !== 'string' || !payload.profileId) throw new Error('profileId');
       profileId = payload.profileId;
     } catch {
-      await finishWorkerJob(db, job.id, 'failed', 'Malformed profile payload');
+      await this.finishJob(db, job, 'failed', 'Malformed profile payload');
       return;
     }
 
-    try {
-      const tokens = await db.all<TokenRow>(
-        `SELECT id, activity_id, push_token, last_content_hash, last_sent_at
+    const tokens = await db.all<TokenRow>(
+      `SELECT id, activity_id, push_token, last_content_hash, last_sent_at
            FROM live_activity_push_tokens WHERE profile_id = ?`,
-        [profileId]
-      );
-      if (tokens.length === 0) {
-        await finishWorkerJob(db, job.id, 'succeeded', null);
-        return;
-      }
-      const state = await buildLiveActivityContentState(db, profileId);
-      const hash = liveActivityContentHash(state);
-      const payload = apnsPayload(state);
-      const config = apnsConfig();
-      for (const token of tokens) {
-        const sentAt = token.last_sent_at ? Date.parse(token.last_sent_at) : NaN;
-        if (
-          payload.event === 'update' &&
-          token.last_content_hash === hash &&
-          Number.isFinite(sentAt) &&
-          Date.now() - sentAt < UNCHANGED_MIN_INTERVAL_MS
-        ) {
-          continue;
-        }
-        if (!config) continue; // Local development remains fully functional without APNs credentials.
-        const response = await sendApns({ token: token.push_token, body: payload.body, config });
-        if (response.status === 400 || response.status === 410) {
-          await db.run(`DELETE FROM live_activity_push_tokens WHERE id = ?`, [token.id]);
-          continue;
-        }
-        if (response.status < 200 || response.status >= 300) {
-          throw new Error(`APNs ${response.status}: ${response.body || 'unknown response'}`);
-        }
-        if (payload.event === 'end') {
-          await db.run(`DELETE FROM live_activity_push_tokens WHERE id = ?`, [token.id]);
-        } else {
-          const now = nowIso();
-          await db.run(
-            `UPDATE live_activity_push_tokens SET last_content_hash = ?, last_sent_at = ?, updated_at = ? WHERE id = ?`,
-            [hash, now, now, token.id]
-          );
-        }
-      }
-      await finishWorkerJob(db, job.id, 'succeeded', null);
-    } catch (error) {
-      await this.failOrRetry(db, job, error);
+      [profileId]
+    );
+    if (tokens.length === 0) {
+      await this.finishJob(db, job);
+      return;
     }
+    const state = await buildLiveActivityContentState(db, profileId);
+    const hash = liveActivityContentHash(state);
+    const payload = apnsPayload(state);
+    const config = apnsConfig();
+    for (const token of tokens) {
+      const sentAt = token.last_sent_at ? Date.parse(token.last_sent_at) : NaN;
+      if (
+        payload.event === 'update' &&
+        token.last_content_hash === hash &&
+        Number.isFinite(sentAt) &&
+        Date.now() - sentAt < UNCHANGED_MIN_INTERVAL_MS
+      ) {
+        continue;
+      }
+      if (!config) continue; // Local development remains fully functional without APNs credentials.
+      const response = await sendApns({ token: token.push_token, body: payload.body, config });
+      if (isRetiredTokenResponse(response)) {
+        await db.run(`DELETE FROM live_activity_push_tokens WHERE id = ?`, [token.id]);
+        continue;
+      }
+      if (response.status < 200 || response.status >= 300) {
+        throw new Error(`APNs ${response.status}: ${response.body || 'unknown response'}`);
+      }
+      if (payload.event === 'end') {
+        await db.run(`DELETE FROM live_activity_push_tokens WHERE id = ?`, [token.id]);
+      } else {
+        const now = nowIso();
+        await db.run(
+          `UPDATE live_activity_push_tokens SET last_content_hash = ?, last_sent_at = ?, updated_at = ? WHERE id = ?`,
+          [hash, now, now, token.id]
+        );
+      }
+    }
+    await this.finishJob(db, job);
   }
 
   /**
@@ -256,78 +234,65 @@ class LiveActivityDispatcher {
       if (typeof payload.profileId !== 'string' || !payload.profileId) throw new Error('profileId');
       profileId = payload.profileId;
     } catch {
-      await finishWorkerJob(db, job.id, 'failed', 'Malformed profile payload');
+      await this.finishJob(db, job, 'failed', 'Malformed profile payload');
       return;
     }
 
-    try {
-      // No push-to-start registration means the account never consented to (or
-      // cannot support) desktop-initiated activities. That is a success, not a
-      // failure: local starts remain the fallback.
-      const startTokens = await db.all<StartTokenRow>(
-        `SELECT id, start_token, environment, bundle_id, activity_type, last_started_at
+    // No push-to-start registration means the account never consented to (or
+    // cannot support) desktop-initiated activities. That is a success, not a
+    // failure: local starts remain the fallback.
+    const startTokens = await db.all<StartTokenRow>(
+      `SELECT id, start_token, environment, bundle_id, activity_type, last_started_at
            FROM live_activity_start_tokens WHERE profile_id = ?`,
-        [profileId]
-      );
-      if (startTokens.length === 0) {
-        await finishWorkerJob(db, job.id, 'succeeded', null);
-        return;
-      }
-      const live = await db.get<{ id: string }>(
-        `SELECT id FROM live_activity_push_tokens WHERE profile_id = ? LIMIT 1`,
-        [profileId]
-      );
-      if (live) {
-        await finishWorkerJob(db, job.id, 'succeeded', null);
-        return;
-      }
-      const state = await buildLiveActivityContentState(db, profileId);
-      // A bare completion hold is not worth interrupting for; only an actually
-      // running mission earns a new Lock Screen activity.
-      if (!state || state.running.length === 0) {
-        await finishWorkerJob(db, job.id, 'succeeded', null);
-        return;
-      }
-      const config = apnsConfig();
-      const startedAtCutoff = Date.now() - START_COOLDOWN_MS;
-      for (const token of startTokens) {
-        const lastStarted = token.last_started_at ? Date.parse(token.last_started_at) : NaN;
-        if (Number.isFinite(lastStarted) && lastStarted > startedAtCutoff) continue;
-        if (!config) continue; // Local development remains functional without APNs credentials.
-        const response = await sendApns({
-          token: token.start_token,
-          body: apnsStartPayload(state, token.activity_type),
-          config,
-          priority: '10',
-          bundleId: token.bundle_id,
-          host: apnsHostFor(token.environment === 'sandbox' ? 'sandbox' : 'production')
-        });
-        if (isRetiredTokenResponse(response)) {
-          await db.run(`DELETE FROM live_activity_start_tokens WHERE id = ?`, [token.id]);
-          continue;
-        }
-        if (response.status < 200 || response.status >= 300) {
-          throw new Error(`APNs ${response.status}: ${response.body || 'unknown response'}`);
-        }
-        const now = nowIso();
-        await db.run(
-          `UPDATE live_activity_start_tokens SET last_started_at = ?, updated_at = ? WHERE id = ?`,
-          [now, now, token.id]
-        );
-      }
-      await finishWorkerJob(db, job.id, 'succeeded', null);
-    } catch (error) {
-      await this.failOrRetry(db, job, error);
+      [profileId]
+    );
+    if (startTokens.length === 0) {
+      await this.finishJob(db, job);
+      return;
     }
-  }
-
-  private async failOrRetry(db: DatabaseClient, job: WorkerJobRow, error: unknown): Promise<void> {
-    const message = error instanceof Error ? error.message : String(error);
-    if (job.attempt_count >= job.max_attempts) {
-      await finishWorkerJob(db, job.id, 'failed', message);
-    } else {
-      await retryWorkerJob(db, job.id, job.attempt_count, message);
+    const live = await db.get<{ id: string }>(
+      `SELECT id FROM live_activity_push_tokens WHERE profile_id = ? LIMIT 1`,
+      [profileId]
+    );
+    if (live) {
+      await this.finishJob(db, job);
+      return;
     }
+    const state = await buildLiveActivityContentState(db, profileId);
+    // A bare completion hold is not worth interrupting for; only an actually
+    // running mission earns a new Lock Screen activity.
+    if (!state || state.running.length === 0) {
+      await this.finishJob(db, job);
+      return;
+    }
+    const config = apnsConfig();
+    const startedAtCutoff = Date.now() - START_COOLDOWN_MS;
+    for (const token of startTokens) {
+      const lastStarted = token.last_started_at ? Date.parse(token.last_started_at) : NaN;
+      if (Number.isFinite(lastStarted) && lastStarted > startedAtCutoff) continue;
+      if (!config) continue; // Local development remains functional without APNs credentials.
+      const response = await sendApns({
+        token: token.start_token,
+        body: apnsStartPayload(state, token.activity_type),
+        config,
+        priority: '10',
+        bundleId: token.bundle_id,
+        host: apnsHostFor(token.environment === 'sandbox' ? 'sandbox' : 'production')
+      });
+      if (isRetiredTokenResponse(response)) {
+        await db.run(`DELETE FROM live_activity_start_tokens WHERE id = ?`, [token.id]);
+        continue;
+      }
+      if (response.status < 200 || response.status >= 300) {
+        throw new Error(`APNs ${response.status}: ${response.body || 'unknown response'}`);
+      }
+      const now = nowIso();
+      await db.run(
+        `UPDATE live_activity_start_tokens SET last_started_at = ?, updated_at = ? WHERE id = ?`,
+        [now, now, token.id]
+      );
+    }
+    await this.finishJob(db, job);
   }
 }
 

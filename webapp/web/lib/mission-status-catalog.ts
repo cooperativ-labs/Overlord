@@ -1,3 +1,5 @@
+import { NOTIFICATION_CATALOG } from '../../../packages/core/service/notifications/catalog.ts';
+
 /**
  * Declarative catalog of mission "status indicators" — the single source of truth
  * for what each notifiable / seen-tracked mission status *is* (its label, corner-dot
@@ -8,8 +10,8 @@
  *   - Card indicators: {@link ../pages/missionCardState.ts#getMissionCardState}
  *     maps `MissionDto` flags to the active indicators, and
  *     {@link ../pages/MissionCardStateOverlay.tsx} renders their corner dots.
- *   - Native notifications: {@link ./native-workflow-notifications.ts} reads the
- *     `notification` profile (title + optional `soundUrl`) when firing a toast.
+ *   - Durable notification rendering: server rows use this catalog's fixed
+ *     descriptors; the webapp never derives workflow candidates from status changes.
  *
  * Adding a new status is a catalog entry here plus (for card indicators) one
  * `MissionDto` flag and one aggregate. The catalog is intentionally a static,
@@ -66,23 +68,23 @@ export const MISSION_STATUS_INDICATORS: Record<MissionStatusIndicatorId, Mission
   blocking_question: {
     id: 'blocking_question',
     label: 'Blocking question',
-    dotClassName: 'bg-orange-500',
+    dotClassName: NOTIFICATION_CATALOG.agent_question.dotClassName,
     ariaLabel: 'Blocking question awaiting your response',
-    seenTracked: true,
+    seenTracked: NOTIFICATION_CATALOG.agent_question.seenTracked,
     notification: {
-      title: 'Blocking question'
-      // soundUrl: added when the yellow-orange chime asset ships.
+      title: NOTIFICATION_CATALOG.agent_question.label,
+      soundUrl: NOTIFICATION_CATALOG.agent_question.soundUrl ?? undefined
     }
   },
   returned_to_execute: {
     id: 'returned_to_execute',
     label: 'Returned to execute',
-    dotClassName: 'bg-blue-500',
+    dotClassName: NOTIFICATION_CATALOG.returned_to_execute.dotClassName,
     ariaLabel: 'Mission returned to execute stage',
-    seenTracked: true,
+    seenTracked: NOTIFICATION_CATALOG.returned_to_execute.seenTracked,
     notification: {
-      title: 'Returned to execute'
-      // soundUrl: added when the chime asset ships.
+      title: NOTIFICATION_CATALOG.returned_to_execute.label,
+      soundUrl: NOTIFICATION_CATALOG.returned_to_execute.soundUrl ?? undefined
     }
   }
 };

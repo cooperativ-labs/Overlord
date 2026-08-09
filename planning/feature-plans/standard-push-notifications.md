@@ -152,23 +152,27 @@ Index on `profile_id`. Private: never projected through REST reads, realtime,
 entity changes, or audit payloads — the same rule `live_activity_push_tokens`
 already carries.
 
-### `notification_preferences` (new core table)
+### `notification_preferences` (superseded by coo:637 P4)
 
-One row per `(profile_id, category)` plus the profile-level master switch stored
-in `profiles`-adjacent form as the reserved category `all`.
+The original standard-push design used one row per `(profile_id, category)`.
+P4 supersedes that storage shape with `(profile_id, type, transport)` rows and
+the reserved `(all, all)` master row. Existing category rows fan out to every
+catalog-eligible transport during migration; Live Activity delivery remains
+outside the master switch.
 
 | Column | Notes |
 | --- | --- |
 | `id` | text PK |
 | `profile_id` | FK → `profiles(id)` ON DELETE CASCADE |
-| `category` | `all` \| `mission_awaiting_review` \| `agent_question` \| `mission_complete` \| `mission_failed` |
-| `mode` | `alert` \| `silent` \| `off` (`all` uses `alert`/`off` only) |
+| `type` | `all` or a shared notification-catalog id |
+| `transport` | `all` for the master row, otherwise catalog-eligible `apns` \| `realtime` \| `in_app` |
+| `mode` | `alert` \| `silent` \| `off` (`(all, all)` uses `alert`/`off` only) |
 | `created_at`, `updated_at` | timestamps |
-| | `UNIQUE (profile_id, category)` |
+| | `UNIQUE (profile_id, type, transport)` |
 
-Absent rows mean "default" (`alert`), so a new account is opted in at the policy
-layer but still receives nothing until it registers a token — OS permission
-remains the real gate.
+Absent rows mean the catalog descriptor's `defaultMode`, so a new account is
+opted in at the policy layer but still receives nothing until it registers a
+token — OS permission remains the real gate.
 
 ## Surfaces
 
@@ -179,10 +183,13 @@ remains the real gate.
 - `POST /api/mobile/push/device-token/revoke` — `{ deviceToken }` → `204`,
   idempotent. A `POST` rather than `DELETE` so the token stays out of the URL and
   therefore out of access logs and proxy caches.
-- `GET /api/profile/notification-preferences` →
-  `{ enabled: boolean, categories: { category, mode }[] }`.
-- `PUT /api/profile/notification-preferences` — `{ enabled?, categories? }` →
-  the same shape. Partial updates merge; unknown categories are rejected `400`.
+- `GET /api/profile/notification-preferences` → canonical
+  `{ enabled: boolean, preferences: { type, transport, mode }[] }`, plus an
+  additive APNs `{ categories: { category, mode }[] }` compatibility projection
+  for released mobile builds.
+- `PUT /api/profile/notification-preferences` accepts `{ enabled?, preferences? }`;
+  the legacy `categories?` field remains an APNs-only compatibility alias. Partial
+  updates merge; unknown types, transports, pairs, or modes are rejected `400`.
 
 Preferences are profile state readable by any of the profile's own clients (web
 and desktop settings UI, not only mobile), which is why they live under

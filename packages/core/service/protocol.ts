@@ -2,6 +2,7 @@ import { bindBool, UPDATE_EVENT_TYPES, UPDATE_PHASES } from '@overlord/database'
 import { createHash } from 'node:crypto';
 
 import { bindChannelToSession, findBindableChannelForMission } from './agent-session/channels.js';
+import { emitNotification } from './notifications/notifications.js';
 import { recordChange } from './change-feed.js';
 import type { ServiceContext } from './context.js';
 import { resolveMissionId, resolveProjectId } from './context.js';
@@ -43,7 +44,6 @@ import {
   findPrimaryProjectResource,
   findProjectResourceByKey
 } from './projects.js';
-import { enqueuePushNotificationForMission } from './push-notification-jobs.js';
 import { generateSessionKey, hashSessionKey, newId, nowIso } from './util.js';
 import { enqueueWebhookEvent } from './webhook-events.js';
 import { enqueueDeliveryComposeJob } from './worker-jobs.js';
@@ -1470,14 +1470,14 @@ export async function askQuestion({
       projectId: mission.projectId,
       entity: { missionId: mission.id, objectiveId: session.objective_id, sessionId: session.id }
     });
-    // A blocked agent cannot make progress until a person answers, which is
-    // exactly the case a standard push exists for. The question text itself stays
-    // in the mission event — the payload only says which mission needs input.
-    await enqueuePushNotificationForMission({
+    // A blocked agent cannot make progress until a person answers. The question
+    // text itself stays in the mission event — the durable notification stores
+    // only trusted type and identity references for every eligible transport.
+    await emitNotification({
       db: txCtx.db,
       workspaceId: ctx.workspace.id,
       missionId: mission.id,
-      category: 'agent_question',
+      type: 'agent_question',
       objectiveId: session.objective_id,
       now
     });
@@ -2172,11 +2172,11 @@ export async function deliverSession({
   }
 
   if (!autoAdvanceQueued) {
-    await enqueuePushNotificationForMission({
+    await emitNotification({
       db: ctx.db,
       workspaceId: ctx.workspace.id,
       missionId: mission.id,
-      category: 'mission_awaiting_review',
+      type: 'mission_awaiting_review',
       objectiveId: session.objective_id
     });
   }

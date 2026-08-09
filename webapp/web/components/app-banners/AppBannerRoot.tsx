@@ -1,18 +1,15 @@
-import { SystemNotificationBanner } from './SystemNotificationBanner';
+import { AppBannerStack } from './AppBannerStack';
 import { useAppUpdateNotifications } from './useAppUpdateNotifications';
 import { useCliUpdateNotifications } from './useCliUpdateNotifications';
-import { useNativeWorkflowNotifications } from './useNativeWorkflowNotifications';
 
 /**
- * Root component that renders the system notification banner and wires up
- * notification sources such as desktop app update availability.
+ * Root component that renders app-update and CLI-update banners.
  *
- * Must be placed inside SystemNotificationProvider.
+ * Must be placed inside AppBannerProvider.
  */
-export function SystemNotificationRoot() {
+export function AppBannerRoot() {
   useAppUpdateNotifications();
   useCliUpdateNotifications();
-  useNativeWorkflowNotifications();
 
-  return <SystemNotificationBanner />;
+  return <AppBannerStack />;
 }

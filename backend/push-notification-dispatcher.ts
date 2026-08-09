@@ -5,13 +5,8 @@ import {
   PUSH_NOTIFICATION_DISPATCH_JOB_TYPE,
   type PushNotificationCategory
 } from '../packages/core/service/push-notification-jobs.ts';
-import { newId, nowIso } from '../packages/core/service/util.ts';
-import {
-  type ClaimedWorkerJob,
-  claimNextWorkerJob,
-  finishWorkerJob,
-  retryWorkerJob
-} from '../packages/core/service/worker-jobs.ts';
+import { nowIso } from '../packages/core/service/util.ts';
+import type { ClaimedWorkerJob } from '../packages/core/service/worker-jobs.ts';
 
 import {
   type ApnsConfig,
@@ -26,8 +21,8 @@ import {
   type PushNotificationPresentation,
   resolveNotificationMode
 } from './push-notifications.ts';
+import { WorkerJobPoller } from './worker-job-poller.ts';
 
-const POLL_INTERVAL_MS = 1_500;
 /** A stale "awaiting review" ping is noise, so alerts are allowed to expire. */
 const ALERT_EXPIRATION_MS = 60 * 60 * 1000;
 
@@ -130,105 +125,99 @@ async function sendStandardPush({
   });
 }
 
-class PushNotificationDispatcher {
-  private timer: NodeJS.Timeout | null = null;
-  private polling = false;
-  private readonly workerId = `push-notification:${process.pid}:${newId().slice(0, 8)}`;
-
-  start(): void {
-    if (this.timer) return;
-    this.timer = setInterval(() => void this.poll(), POLL_INTERVAL_MS);
+/**
+ * The standard-device-token transport. It intentionally accepts an already
+ * resolved mode so the durable notification dispatcher can own policy while
+ * this module stays responsible only for the existing APNs delivery path.
+ */
+export async function deliverStandardPush({
+  db,
+  profileId,
+  missionId,
+  category,
+  mode
+}: {
+  db: DatabaseClient;
+  profileId: string;
+  missionId: string;
+  category: PushNotificationCategory;
+  mode: 'alert' | 'silent';
+}): Promise<void> {
+  const tokens = await db.all<DeviceTokenRow>(
+    `SELECT id, device_token, environment, bundle_id
+         FROM device_push_tokens WHERE profile_id = ?`,
+    [profileId]
+  );
+  if (tokens.length === 0) return;
+  const presentation = await buildPushNotificationPresentation({
+    db,
+    profileId,
+    missionId,
+    category
+  });
+  if (!presentation) {
+    // The mission was deleted, reassigned, or is no longer readable by the
+    // recipient; dropping the queued notification is the correct outcome.
+    return;
   }
-
-  pollNow(): void {
-    void this.poll();
-  }
-
-  private async poll(): Promise<void> {
-    if (this.polling) return;
-    this.polling = true;
-    try {
-      const db = requireDatabaseClient();
-      const job = await claimNextWorkerJob({
-        db,
-        jobType: PUSH_NOTIFICATION_DISPATCH_JOB_TYPE,
-        workerId: this.workerId
-      });
-      if (job) await this.processJob(db, job);
-    } catch (error) {
-      console.error('[push-notification-dispatcher] poll failed', error);
-    } finally {
-      this.polling = false;
+  const { body } = apnsBody(presentation, mode);
+  // One collapse id per (mission, category): a rapid re-delivery replaces the
+  // previous banner instead of stacking, and distinct categories never merge.
+  const collapseId = `${category}:${missionId}`.slice(0, 64);
+  const config = apnsConfig();
+  for (const token of tokens) {
+    if (!config) continue; // Local development stays functional without APNs credentials.
+    const response = await sendStandardPush({ token, body, config, mode, collapseId });
+    if (isRetiredTokenResponse(response)) {
+      await db.run(`DELETE FROM device_push_tokens WHERE id = ?`, [token.id]);
+      continue;
     }
+    if (response.status < 200 || response.status >= 300) {
+      throw new Error(`APNs ${response.status}: ${response.body || 'unknown response'}`);
+    }
+    const now = nowIso();
+    await db.run(`UPDATE device_push_tokens SET last_sent_at = ?, updated_at = ? WHERE id = ?`, [
+      now,
+      now,
+      token.id
+    ]);
+  }
+}
+
+class PushNotificationDispatcher extends WorkerJobPoller {
+  constructor() {
+    super({
+      workerIdPrefix: 'push-notification',
+      jobTypes: [PUSH_NOTIFICATION_DISPATCH_JOB_TYPE],
+      logPrefix: 'push-notification-dispatcher'
+    });
   }
 
-  private async processJob(db: DatabaseClient, job: WorkerJobRow): Promise<void> {
+  protected databaseClient(): DatabaseClient {
+    return requireDatabaseClient();
+  }
+
+  protected async processJob(db: DatabaseClient, job: WorkerJobRow): Promise<void> {
     const target = parseJob(job.payload_json);
     if (!target) {
-      await finishWorkerJob(db, job.id, 'failed', 'Malformed push notification payload');
+      await this.finishJob(db, job, 'failed', 'Malformed push notification payload');
       return;
     }
 
-    try {
-      const mode = await resolveNotificationMode(db, target.profileId, target.category);
-      if (mode === 'off') {
-        await finishWorkerJob(db, job.id, 'succeeded', null);
-        return;
-      }
-      const tokens = await db.all<DeviceTokenRow>(
-        `SELECT id, device_token, environment, bundle_id
-           FROM device_push_tokens WHERE profile_id = ?`,
-        [target.profileId]
-      );
-      if (tokens.length === 0) {
-        await finishWorkerJob(db, job.id, 'succeeded', null);
-        return;
-      }
-      const presentation = await buildPushNotificationPresentation({
+    const mode = await resolveNotificationMode(db, target.profileId, target.category, 'apns');
+    if (mode !== 'off') {
+      await deliverStandardPush({
         db,
         profileId: target.profileId,
         missionId: target.missionId,
-        category: target.category
+        category: target.category,
+        mode
       });
-      if (!presentation) {
-        // The mission was deleted, reassigned, or is no longer readable by the
-        // recipient; dropping the queued notification is the correct outcome.
-        await finishWorkerJob(db, job.id, 'succeeded', null);
-        return;
-      }
-      const { body } = apnsBody(presentation, mode);
-      // One collapse id per (mission, category): a rapid re-delivery replaces the
-      // previous banner instead of stacking, and distinct categories never merge.
-      const collapseId = `${target.category}:${target.missionId}`.slice(0, 64);
-      const config = apnsConfig();
-      for (const token of tokens) {
-        if (!config) continue; // Local development stays functional without APNs credentials.
-        const response = await sendStandardPush({ token, body, config, mode, collapseId });
-        if (isRetiredTokenResponse(response)) {
-          await db.run(`DELETE FROM device_push_tokens WHERE id = ?`, [token.id]);
-          continue;
-        }
-        if (response.status < 200 || response.status >= 300) {
-          throw new Error(`APNs ${response.status}: ${response.body || 'unknown response'}`);
-        }
-        const now = nowIso();
-        await db.run(
-          `UPDATE device_push_tokens SET last_sent_at = ?, updated_at = ? WHERE id = ?`,
-          [now, now, token.id]
-        );
-      }
-      await finishWorkerJob(db, job.id, 'succeeded', null);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      if (job.attempt_count >= job.max_attempts) {
-        await finishWorkerJob(db, job.id, 'failed', message);
-      } else {
-        await retryWorkerJob(db, job.id, job.attempt_count, message);
-      }
     }
+    await this.finishJob(db, job);
   }
 }
 
 export const pushNotificationDispatcher = new PushNotificationDispatcher();
 /** Exported for tests: drives one claim/deliver cycle synchronously. */
-export const __testables = { apnsBody, PushNotificationDispatcher };
+export const __testables = { apnsBody, PushNotificationDispatcher, deliverStandardPush };

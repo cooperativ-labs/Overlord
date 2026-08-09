@@ -1,4 +1,9 @@
 const STORAGE_KEY = 'overlord-native-notifications-enabled';
+
+/**
+ * A device-local mute layered on top of the account-owned notification
+ * preferences. It cannot enable a server-disabled type or transport.
+ */
 const CHANGE_EVENT = 'overlord-native-notifications-change';
 
 export function isNativeNotificationsEnabled(): boolean {

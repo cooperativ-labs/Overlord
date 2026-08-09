@@ -60,16 +60,17 @@ Every Overlord installation needs these. They cover the fundamental workflow: cr
 
 ### Queue, Idempotency, and Change Feed
 
-| Table                       | Purpose                                                                  |
-| --------------------------- | ------------------------------------------------------------------------ |
-| `execution_requests`        | Durable queue for manual runs and auto-advance.                          |
-| `idempotency_keys`          | Guards REST, protocol, hook, and worker calls against duplicate effects. |
-| `entity_changes`            | Canonical change feed for realtime, REST polling, and sync.              |
-| `live_activity_push_tokens` | Private per-profile ActivityKit/APNs registrations.                      |
-| `live_activity_start_tokens` | Private per-install ActivityKit push-to-start registrations.            |
-| `device_push_tokens`        | Private standard APNs device-token registrations, one per app install.  |
-| `notification_preferences`  | Per-profile standard push categories and modes.                         |
-| `schema_migrations`         | Tracks which migrations have been applied per adapter and component.     |
+| Table                        | Purpose                                                                  |
+| ---------------------------- | ------------------------------------------------------------------------ |
+| `execution_requests`         | Durable queue for manual runs and auto-advance.                          |
+| `idempotency_keys`           | Guards REST, protocol, hook, and worker calls against duplicate effects. |
+| `entity_changes`             | Canonical change feed for realtime, REST polling, and sync.              |
+| `live_activity_push_tokens`  | Private per-profile ActivityKit/APNs registrations.                      |
+| `live_activity_start_tokens` | Private per-install ActivityKit push-to-start registrations.             |
+| `device_push_tokens`         | Private standard APNs device-token registrations, one per app install.   |
+| `notification_preferences`   | Per-profile catalog type/transport delivery modes and master switch.     |
+| `notifications`              | Durable profile-addressed mission-notification history.                  |
+| `schema_migrations`          | Tracks which migrations have been applied per adapter and component.     |
 
 ---
 

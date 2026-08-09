@@ -282,16 +282,16 @@ no workspace, organization, project, status, execution, or realtime identity. It
 can be created and edited while its owner has no workspace membership, then is
 consumed atomically when a destination project creates the ordinary mission.
 
-| Column            | Type         | Required | Notes                                                              |
-| ----------------- | ------------ | -------- | ------------------------------------------------------------------ |
-| `id`              | Id           | yes      | Stable inbox item ID.                                              |
+| Column            | Type         | Required | Notes                                                             |
+| ----------------- | ------------ | -------- | ----------------------------------------------------------------- |
+| `id`              | Id           | yes      | Stable inbox item ID.                                             |
 | `profile_id`      | Id           | yes      | FK to `profiles`, `ON DELETE CASCADE`; sole authorization owner.  |
 | `title`           | text         | yes      | Trimmed, non-empty capture title.                                 |
 | `objectives_json` | Json         | yes      | Array of trimmed objective strings; exactly one entry in v1.      |
 | `due_datetime`    | TimestampUTC | no       | Optional due date/time copied to the promoted mission.            |
 | `priority`        | text         | no       | `low`, `normal`, `high`, or `urgent`; copied to promoted mission. |
-| `created_at`      | TimestampUTC | yes      |                                                                    |
-| `updated_at`      | TimestampUTC | yes      |                                                                    |
+| `created_at`      | TimestampUTC | yes      |                                                                   |
+| `updated_at`      | TimestampUTC | yes      |                                                                   |
 
 Indexes:
 
@@ -1912,12 +1912,12 @@ simply abandoned.
 They are core rather than `ext_` tables because they drive authorization, audit, presence, and
 UI gating.
 
-| Table | Role |
-| --- | --- |
+| Table                    | Role                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `agent_session_channels` | One active root channel per Overlord agent session. Carries resource-derived authorization ids, a nullable `session_id` that becomes unique at protocol attach, launch/target/runner provenance, `agent_identifier`/`adapter_key`/`adapter_version`, the harness-alias `native_session_id`, the effective runtime `capabilities_json` snapshot, `state` (`preparing`, `online`, `degraded`, `ended`, `lost`), heartbeat/end diagnostics, and the normal timestamps, soft delete, and `revision`. |
-| `agent_session_events` | Append-only normalized session events, idempotent by producer id, with a monotonic per-channel sequence. Stores reduced, redacted content only. |
-| `agent_requests` | Answerable requests — permissions, blocking questions, structured choices — with their decision window, waiter lease, resolution attribution, and revision CAS. A permission is one kind of request, not its own table. |
-| `agent_session_inputs` | Durable queue of user-authored instructions with enqueue/lease/emit/acknowledge/fail states. An emitted input is never automatically retried. Additive `delivery_outcome` (`delivered`, `queued_turn_boundary`, `queued_next_turn`, `unsupported`) records what the adapter honestly reported at emit time so the UI can say "Queued (turn boundary)" for Cursor `followup_message` rather than inventing Delivered. |
+| `agent_session_events`   | Append-only normalized session events, idempotent by producer id, with a monotonic per-channel sequence. Stores reduced, redacted content only.                                                                                                                                                                                                                                                                                                                                                  |
+| `agent_requests`         | Answerable requests — permissions, blocking questions, structured choices — with their decision window, waiter lease, resolution attribution, and revision CAS. A permission is one kind of request, not its own table.                                                                                                                                                                                                                                                                          |
+| `agent_session_inputs`   | Durable queue of user-authored instructions with enqueue/lease/emit/acknowledge/fail states. An emitted input is never automatically retried. Additive `delivery_outcome` (`delivered`, `queued_turn_boundary`, `queued_next_turn`, `unsupported`) records what the adapter honestly reported at emit time so the UI can say "Queued (turn boundary)" for Cursor `followup_message` rather than inventing Delivered.                                                                             |
 
 Rules that are contract, not implementation detail:
 
@@ -2099,20 +2099,20 @@ here is the account's consent to desktop-initiated Live Activities; deleting it
 withdraws that consent. Neither the tokens nor this table appear in REST reads,
 change feeds, audit payloads, or logs.
 
-| Column               | Type         | Required | Notes                                                                          |
-| -------------------- | ------------ | -------- | ------------------------------------------------------------------------------ |
-| `id`                 | Id           | yes      |                                                                                |
-| `profile_id`         | Id           | yes      | FK to `profiles`; the single account this token currently belongs to.          |
+| Column               | Type         | Required | Notes                                                                                             |
+| -------------------- | ------------ | -------- | ------------------------------------------------------------------------------------------------- |
+| `id`                 | Id           | yes      |                                                                                                   |
+| `profile_id`         | Id           | yes      | FK to `profiles`; the single account this token currently belongs to.                             |
 | `start_token`        | text         | yes      | Opaque ActivityKit push-to-start token; globally unique so re-registration reassigns the install. |
-| `platform`           | text         | yes      | Closed set: `ios`.                                                             |
-| `environment`        | text         | yes      | Closed set: `sandbox`, `production`. Selects the APNs host per registration.   |
-| `bundle_id`          | text         | yes      | App target that owns the token; forms the `…push-type.liveactivity` topic.     |
-| `activity_type`      | text         | yes      | ActivityKit attributes type name sent as `attributes-type`.                    |
-| `app_version`        | text         | no       | Diagnostics only.                                                              |
-| `last_registered_at` | TimestampUTC | yes      | Refreshed on every re-registration.                                            |
-| `last_started_at`    | TimestampUTC | no       | Supports the five-minute in-flight cooldown between remote starts.             |
-| `created_at`         | TimestampUTC | yes      |                                                                                |
-| `updated_at`         | TimestampUTC | yes      |                                                                                |
+| `platform`           | text         | yes      | Closed set: `ios`.                                                                                |
+| `environment`        | text         | yes      | Closed set: `sandbox`, `production`. Selects the APNs host per registration.                      |
+| `bundle_id`          | text         | yes      | App target that owns the token; forms the `…push-type.liveactivity` topic.                        |
+| `activity_type`      | text         | yes      | ActivityKit attributes type name sent as `attributes-type`.                                       |
+| `app_version`        | text         | no       | Diagnostics only.                                                                                 |
+| `last_registered_at` | TimestampUTC | yes      | Refreshed on every re-registration.                                                               |
+| `last_started_at`    | TimestampUTC | no       | Supports the five-minute in-flight cooldown between remote starts.                                |
+| `created_at`         | TimestampUTC | yes      |                                                                                                   |
+| `updated_at`         | TimestampUTC | yes      |                                                                                                   |
 
 Indexes:
 
@@ -2156,28 +2156,66 @@ Indexes:
 
 ### `notification_preferences`
 
-Per-account standard push preferences. One row per `(profile_id, category)`; a missing
-row means the default (`alert`). The reserved `all` category is the master switch and
-suppresses standard push only — Live Activity delivery is unaffected.
+Per-account notification preferences. One row per `(profile_id, type, transport)`;
+a missing row means that catalog descriptor's `defaultMode`. The reserved `(all, all)`
+row is the master switch and suppresses notification transports only — Live Activity
+delivery is unaffected. Migrations fan an existing category row out to every
+catalog-eligible transport, preserving the user's chosen mode rather than narrowing it.
 
 | Column       | Type         | Required | Notes                                                                                                 |
 | ------------ | ------------ | -------- | ----------------------------------------------------------------------------------------------------- |
 | `id`         | Id           | yes      |                                                                                                       |
 | `profile_id` | Id           | yes      | FK to `profiles`.                                                                                     |
-| `category`   | text         | yes      | Closed set: `all`, `mission_awaiting_review`, `agent_question`, `mission_complete`, `mission_failed`. |
-| `mode`       | text         | yes      | Closed set: `alert`, `silent`, `off`. The `all` category uses only `alert`/`off`.                     |
+| `type`       | text         | yes      | `all`, or a shared notification-catalog id.                                                             |
+| `transport`  | text         | yes      | `all` for the master row, otherwise a catalog-eligible `apns`, `realtime`, or `in_app` transport.      |
+| `mode`       | text         | yes      | Closed set: `alert`, `silent`, `off`. The `(all, all)` row uses only `alert`/`off`.                      |
 | `created_at` | TimestampUTC | yes      |                                                                                                       |
 | `updated_at` | TimestampUTC | yes      |                                                                                                       |
 
 Indexes:
 
-- Unique `(profile_id, category)`.
+- Unique `(profile_id, type, transport)`.
 
 Delivery is driven by durable `worker_jobs.type = 'overlord.push_notification.dispatch.v1'`.
 Jobs carry only ids (profile, mission, objective, category) and a dedupe key; the
 dispatcher recomputes the bounded alert presentation at delivery time and never stores
 or transmits objective instructions, prompts, summaries, or event payloads. Invalid-token
 APNs responses (`410 Unregistered`, `400 BadDeviceToken`) delete the matching registration.
+
+### `notifications`
+
+Durable, profile-addressed mission-notification history. `emitNotification()` writes one
+row only when the mission currently has an active assigned owner; it uses that assignment
+as the addressing rule, so unassigned missions never create notification rows. The row is
+safe to expose to its recipient through the authenticated notification-history REST
+surface and realtime change feed, but it contains no APNs token, instruction, prompt,
+summary, question text, or raw mission-event payload. Soft dismissal preserves audit and
+revision semantics while hiding the row from ordinary history reads.
+
+| Column                 | Type         | Required | Notes                                                                                                                                          |
+| ---------------------- | ------------ | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                   | Id           | yes      |                                                                                                                                                |
+| `workspace_id`         | Id           | yes      | FK to `workspaces`; provides change-feed tenancy.                                                                                              |
+| `recipient_profile_id` | Id           | yes      | FK to `profiles`; exactly one recipient.                                                                                                       |
+| `type`                 | text         | yes      | Core catalog id: `mission_awaiting_review`, `agent_question`, `mission_complete`, `mission_failed`, `agent_started`, or `returned_to_execute`. |
+| `mission_id`           | Id           | yes      | FK to `missions`; delivery-time presentation is recomputed from this id.                                                                       |
+| `objective_id`         | Id           | no       | FK to `objectives` when the lifecycle event is objective-specific.                                                                             |
+| `created_at`           | TimestampUTC | yes      |                                                                                                                                                |
+| `read_at`              | TimestampUTC | no       | Set by the recipient's revision-CAS read action.                                                                                               |
+| `revision`             | integer      | yes      | Incremented for read and dismissal changes.                                                                                                    |
+| `deleted_at`           | TimestampUTC | no       | Soft dismissal timestamp.                                                                                                                      |
+
+Indexes:
+
+- `(recipient_profile_id, deleted_at, created_at)` for history reads.
+- `(workspace_id, mission_id)` for lifecycle inspection.
+
+Dispatch is driven by durable `worker_jobs.type = 'overlord.notification.dispatch.v1'`.
+Its payload carries only the notification id. The dispatcher rechecks the row and its
+recipient at delivery, applies existing per-category APNs preference only to eligible
+standard-push types, and appends `entity_changes.entity_type = 'notification'` for
+realtime consumers. Standard device tokens remain separate from both ActivityKit token
+families; Live Activities remain on their own job types and dispatcher.
 
 ### `webhook_subscriptions`
 

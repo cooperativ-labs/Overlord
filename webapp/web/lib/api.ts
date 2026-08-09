@@ -62,6 +62,8 @@ import type {
   MissionScheduleDto,
   MyMissionReorderRequest,
   MyMissionsResponse,
+  NotificationDto,
+  NotificationPreferencesDto,
   ObjectiveAttachmentDto,
   ObjectiveDto,
   ObjectivePromptDto,
@@ -96,6 +98,7 @@ import type {
   UpdateInboxItemBody,
   UpdateLaunchPreferenceBody,
   UpdateMissionBody,
+  UpdateNotificationPreferencesBody,
   UpdateObjectiveBody,
   UpdateOrganizationBody,
   UpdateProfileBody,
@@ -288,6 +291,19 @@ export const api = {
     request<DefaultProjectPreferenceDto>('PUT', '/api/profile/default-project', { projectId }),
   clearDefaultProject: () =>
     request<DefaultProjectPreferenceDto>('DELETE', '/api/profile/default-project'),
+  getNotificationPreferences: () =>
+    request<NotificationPreferencesDto>('GET', '/api/profile/notification-preferences'),
+  updateNotificationPreferences: (body: UpdateNotificationPreferencesBody) =>
+    request<NotificationPreferencesDto>('PUT', '/api/profile/notification-preferences', body),
+  listNotifications: () => request<NotificationDto[]>('GET', '/api/notifications'),
+  markNotificationRead: (id: string, expectedRevision: number) =>
+    request<NotificationDto>('PATCH', `/api/notifications/${encodeURIComponent(id)}/read`, {
+      expectedRevision
+    }),
+  dismissNotification: (id: string, expectedRevision: number) =>
+    request<{ ok: true }>('DELETE', `/api/notifications/${encodeURIComponent(id)}`, {
+      expectedRevision
+    }),
 
   /**
    * Core upload service: stream a single image File to a storage bucket and get

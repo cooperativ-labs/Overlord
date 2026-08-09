@@ -3,11 +3,9 @@ import { RouterProvider } from '@tanstack/react-router';
 import { StrictMode, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 
+import { AppBannerProvider, AppBannerRoot } from './components/app-banners';
 import { AuthGate } from './components/auth/AuthGate.tsx';
-import {
-  SystemNotificationProvider,
-  SystemNotificationRoot
-} from './components/system-notifications';
+import { NotificationRenderer } from './components/notifications/NotificationRenderer.tsx';
 import { ThemeProvider } from './components/theme-provider.tsx';
 import { TooltipProvider } from './components/ui/tooltip.tsx';
 import { applyDesktopChromeDocumentAttributes } from './lib/desktop-chrome.ts';
@@ -50,13 +48,14 @@ createRoot(rootElement).render(
       <TooltipProvider>
         <QueryClientProvider client={queryClient}>
           <AuthGate>
-            <SystemNotificationProvider>
+            <AppBannerProvider>
               <RealtimeProvider>
                 <DesktopDeepLinkNavigation />
+                <NotificationRenderer />
                 <RouterProvider router={router} />
-                <SystemNotificationRoot />
+                <AppBannerRoot />
               </RealtimeProvider>
-            </SystemNotificationProvider>
+            </AppBannerProvider>
           </AuthGate>
         </QueryClientProvider>
       </TooltipProvider>

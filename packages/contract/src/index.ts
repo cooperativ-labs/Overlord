@@ -1608,6 +1608,58 @@ export interface InboxItemDto {
   updatedAt: string;
 }
 
+/** Durable, profile-owned mission notification safe for REST and realtime reads. */
+export interface NotificationDto {
+  id: string;
+  workspaceId: string;
+  type:
+    | 'mission_awaiting_review'
+    | 'agent_question'
+    | 'mission_complete'
+    | 'mission_failed'
+    | 'agent_started'
+    | 'returned_to_execute';
+  missionId: string;
+  objectiveId: string | null;
+  createdAt: string;
+  readAt: string | null;
+  revision: number;
+  /** Bounded presentation recomputed on read; never stored with the notification row. */
+  presentation: {
+    body: string;
+  };
+}
+
+/** One transport-specific notification preference owned by the authenticated profile. */
+export interface NotificationPreferenceDto {
+  type: NotificationDto['type'];
+  transport: 'apns' | 'realtime' | 'in_app';
+  mode: 'alert' | 'silent' | 'off';
+}
+
+/**
+ * Canonical notification preference API projection. `categories` is retained
+ * only as an additive APNs compatibility projection for older mobile clients.
+ */
+export interface NotificationPreferencesDto {
+  enabled: boolean;
+  preferences: NotificationPreferenceDto[];
+  categories: Array<{
+    category: Extract<
+      NotificationDto['type'],
+      'mission_awaiting_review' | 'agent_question' | 'mission_complete' | 'mission_failed'
+    >;
+    mode: 'alert' | 'silent' | 'off';
+  }>;
+}
+
+export interface UpdateNotificationPreferencesBody {
+  enabled?: boolean;
+  preferences?: NotificationPreferenceDto[];
+  /** Deprecated APNs-only compatibility alias for older mobile clients. */
+  categories?: NotificationPreferencesDto['categories'];
+}
+
 export interface CreateInboxItemBody {
   title: string;
   /** Exactly one non-empty objective in v1. */

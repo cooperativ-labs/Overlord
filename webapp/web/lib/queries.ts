@@ -36,6 +36,7 @@ import type {
   MissionDto,
   MissionScheduleDto,
   MyMissionsResponse,
+  NotificationDto,
   ObjectiveAttachmentDto,
   PreviewScheduleBody,
   ProjectDto,
@@ -110,6 +111,8 @@ export const keys = {
   organizationAdmins: (id: string) => ['organization', id, 'admins'] as const,
   defaultProject: ['profile', 'default-project'] as const,
   inbox: ['inbox'] as const,
+  notifications: ['notifications'] as const,
+  notificationPreferences: ['profile', 'notification-preferences'] as const,
   workspaces: ['workspaces'] as const,
   workspaceMembers: (id: string) => ['workspace', id, 'members'] as const,
   workspaceExecutionTargets: (id: string) => ['workspace', id, 'execution-targets'] as const,
@@ -178,6 +181,30 @@ function invalidateAll(qc: QueryClient) {
 export const useMeta = () => useQuery({ queryKey: keys.meta, queryFn: api.meta });
 
 export const useProfile = () => useQuery({ queryKey: keys.profile, queryFn: api.getProfile });
+
+export const useNotifications = () =>
+  useQuery<NotificationDto[]>({ queryKey: keys.notifications, queryFn: api.listNotifications });
+
+export const useNotificationPreferences = () =>
+  useQuery({ queryKey: keys.notificationPreferences, queryFn: api.getNotificationPreferences });
+
+export function useMarkNotificationRead() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, revision }: { id: string; revision: number }) =>
+      api.markNotificationRead(id, revision),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: keys.notifications })
+  });
+}
+
+export function useDismissNotification() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, revision }: { id: string; revision: number }) =>
+      api.dismissNotification(id, revision),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: keys.notifications })
+  });
+}
 
 export const useDefaultProject = () =>
   useQuery({ queryKey: keys.defaultProject, queryFn: api.getDefaultProject });

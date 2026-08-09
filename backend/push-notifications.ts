@@ -1,5 +1,13 @@
+import type { NotificationPreferenceDto, NotificationPreferencesDto } from '@overlord/contract';
 import type { DatabaseClient } from '@overlord/database';
 
+import {
+  NOTIFICATION_CATALOG,
+  NOTIFICATION_TRANSPORTS,
+  NOTIFICATION_TYPES,
+  type NotificationTransport,
+  type NotificationType
+} from '../packages/core/service/notifications/catalog.ts';
 import {
   isPushNotificationCategory,
   isPushNotificationMode,
@@ -24,21 +32,15 @@ const DEFAULT_MODE: PushNotificationMode = 'alert';
 
 export type DevicePushEnvironment = 'sandbox' | 'production';
 
-export type NotificationPreferences = {
-  enabled: boolean;
-  categories: Array<{ category: PushNotificationCategory; mode: PushNotificationMode }>;
-};
+export type NotificationPreferences = NotificationPreferencesDto;
 
 /**
  * Fixed per-category verbs. Never derived from user text, so a notification body
  * cannot be made to say something a category does not mean.
  */
-const CATEGORY_VERBS: Record<PushNotificationCategory, string> = {
-  mission_awaiting_review: 'is ready for review',
-  agent_question: 'needs your input',
-  mission_complete: 'finished',
-  mission_failed: 'failed'
-};
+const CATEGORY_VERBS: Record<PushNotificationCategory, string> = Object.fromEntries(
+  PUSH_NOTIFICATION_CATEGORIES.map(category => [category, NOTIFICATION_CATALOG[category].verb])
+) as Record<PushNotificationCategory, string>;
 
 export type PushNotificationPresentation = {
   title: string;
@@ -133,21 +135,60 @@ export async function revokeDevicePushToken(body: { deviceToken?: unknown }): Pr
 
 // ---- Preferences ----------------------------------------------------------
 
-type PreferenceRow = { category: string; mode: string };
+type PreferenceRow = { type: string; transport: string; mode: string };
+
+type PreferenceUpdate = {
+  type: NotificationType | typeof PUSH_NOTIFICATION_MASTER_CATEGORY;
+  transport: NotificationTransport | 'all';
+  mode: PushNotificationMode;
+};
 
 async function readPreferenceRows(db: DatabaseClient, profileId: string): Promise<PreferenceRow[]> {
   return db.all<PreferenceRow>(
-    `SELECT category, mode FROM notification_preferences WHERE profile_id = ?`,
+    `SELECT type, transport, mode FROM notification_preferences WHERE profile_id = ?`,
     [profileId]
   );
 }
 
+function preferenceKey(type: string, transport: string): string {
+  return `${type}:${transport}`;
+}
+
+function isNotificationType(value: unknown): value is NotificationType {
+  return typeof value === 'string' && (NOTIFICATION_TYPES as readonly string[]).includes(value);
+}
+
+function isNotificationTransport(value: unknown): value is NotificationTransport {
+  return (
+    typeof value === 'string' && (NOTIFICATION_TRANSPORTS as readonly string[]).includes(value)
+  );
+}
+
+function isEligibleTransport(type: NotificationType, transport: NotificationTransport): boolean {
+  return (NOTIFICATION_CATALOG[type].transports as readonly NotificationTransport[]).includes(
+    transport
+  );
+}
+
 function toPreferences(rows: PreferenceRow[]): NotificationPreferences {
-  const stored = new Map(rows.map(row => [row.category, row.mode]));
+  const stored = new Map(rows.map(row => [preferenceKey(row.type, row.transport), row.mode]));
+  const preferences: NotificationPreferenceDto[] = NOTIFICATION_TYPES.flatMap(type =>
+    (NOTIFICATION_CATALOG[type].transports as readonly NotificationTransport[]).map(transport => {
+      const mode = stored.get(preferenceKey(type, transport));
+      return {
+        type,
+        transport,
+        mode: isPushNotificationMode(mode) ? mode : NOTIFICATION_CATALOG[type].defaultMode
+      };
+    })
+  );
   return {
-    enabled: stored.get(PUSH_NOTIFICATION_MASTER_CATEGORY) !== 'off',
+    enabled: stored.get(preferenceKey(PUSH_NOTIFICATION_MASTER_CATEGORY, 'all')) !== 'off',
+    preferences,
+    // This projection lets released iOS builds continue decoding and updating
+    // their existing APNs-only controls while newer clients use `preferences`.
     categories: PUSH_NOTIFICATION_CATEGORIES.map(category => {
-      const mode = stored.get(category);
+      const mode = stored.get(preferenceKey(category, 'apns'));
       return { category, mode: isPushNotificationMode(mode) ? mode : DEFAULT_MODE };
     })
   };
@@ -161,24 +202,44 @@ export async function getNotificationPreferences(): Promise<NotificationPreferen
   return toPreferences(await readPreferenceRows(db, profileId));
 }
 
-type PreferencesBody = { enabled?: unknown; categories?: unknown };
-
 /**
- * Merges a partial preference update. Omitted categories keep their stored
- * value; unknown categories or modes are rejected rather than silently dropped,
- * so a client bug cannot quietly disable a user's alerts.
+ * Merges a partial preference update. Omitted entries keep their stored value;
+ * unknown types, transports, pairs, or modes are rejected rather than silently
+ * dropped. `categories` remains an APNs-only compatibility alias for released
+ * mobile clients; new callers use the transport-specific `preferences` array.
  */
+type PreferencesBody = { enabled?: unknown; preferences?: unknown; categories?: unknown };
+
 export async function updateNotificationPreferences(
   body: PreferencesBody
 ): Promise<NotificationPreferences> {
-  const updates: Array<{ category: string; mode: PushNotificationMode }> = [];
+  const updates: PreferenceUpdate[] = [];
 
   if (body.enabled !== undefined) {
     if (typeof body.enabled !== 'boolean') throw new ApiError(400, 'enabled must be a boolean');
     updates.push({
-      category: PUSH_NOTIFICATION_MASTER_CATEGORY,
+      type: PUSH_NOTIFICATION_MASTER_CATEGORY,
+      transport: 'all',
       mode: body.enabled ? 'alert' : 'off'
     });
+  }
+
+  if (body.preferences !== undefined) {
+    if (!Array.isArray(body.preferences)) throw new ApiError(400, 'preferences must be an array');
+    for (const entry of body.preferences) {
+      const record = (entry ?? {}) as { type?: unknown; transport?: unknown; mode?: unknown };
+      if (!isNotificationType(record.type)) throw new ApiError(400, 'Unknown notification type');
+      if (!isNotificationTransport(record.transport)) {
+        throw new ApiError(400, 'Unknown notification transport');
+      }
+      if (!isEligibleTransport(record.type, record.transport)) {
+        throw new ApiError(400, 'Notification type is not eligible for this transport');
+      }
+      if (!isPushNotificationMode(record.mode)) {
+        throw new ApiError(400, 'Unknown notification mode');
+      }
+      updates.push({ type: record.type, transport: record.transport, mode: record.mode });
+    }
   }
 
   if (body.categories !== undefined) {
@@ -191,7 +252,7 @@ export async function updateNotificationPreferences(
       if (!isPushNotificationMode(record.mode)) {
         throw new ApiError(400, 'Unknown notification mode');
       }
-      updates.push({ category: record.category, mode: record.mode });
+      updates.push({ type: record.category, transport: 'apns', mode: record.mode });
     }
   }
 
@@ -205,8 +266,9 @@ export async function updateNotificationPreferences(
   await db.transaction(async tx => {
     for (const update of updates) {
       const existing = await tx.get<{ id: string }>(
-        `SELECT id FROM notification_preferences WHERE profile_id = ? AND category = ?`,
-        [profileId, update.category]
+        `SELECT id FROM notification_preferences
+          WHERE profile_id = ? AND type = ? AND transport = ?`,
+        [profileId, update.type, update.transport]
       );
       if (existing) {
         await tx.run(`UPDATE notification_preferences SET mode = ?, updated_at = ? WHERE id = ?`, [
@@ -216,9 +278,10 @@ export async function updateNotificationPreferences(
         ]);
       } else {
         await tx.run(
-          `INSERT INTO notification_preferences (id, profile_id, category, mode, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?)`,
-          [newId(), profileId, update.category, update.mode, now, now]
+          `INSERT INTO notification_preferences
+             (id, profile_id, type, transport, mode, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [newId(), profileId, update.type, update.transport, update.mode, now, now]
         );
       }
     }
@@ -228,17 +291,21 @@ export async function updateNotificationPreferences(
 }
 
 /**
- * Resolves the effective delivery mode for one category, honouring the master
- * switch. Used by the dispatcher, not by any REST read.
+ * Resolves the effective delivery mode for one type/transport pair, honouring
+ * the master switch. Used by dispatchers, not by REST reads.
  */
 export async function resolveNotificationMode(
   db: DatabaseClient,
   profileId: string,
-  category: PushNotificationCategory
+  type: NotificationType,
+  transport: NotificationTransport
 ): Promise<PushNotificationMode> {
   const preferences = toPreferences(await readPreferenceRows(db, profileId));
   if (!preferences.enabled) return 'off';
-  return preferences.categories.find(entry => entry.category === category)?.mode ?? DEFAULT_MODE;
+  return (
+    preferences.preferences.find(entry => entry.type === type && entry.transport === transport)
+      ?.mode ?? NOTIFICATION_CATALOG[type].defaultMode
+  );
 }
 
 // ---- Presentation --------------------------------------------------------

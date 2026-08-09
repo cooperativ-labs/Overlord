@@ -1,6 +1,7 @@
 import type { DatabaseClient } from '@overlord/database';
 
-import { newId, nowIso } from './util.js';
+import { nowIso } from './util.js';
+import { enqueueWorkerJob, missionOwnerProfileId } from './worker-jobs.js';
 
 /** Durable backend job that recomputes one profile's private Live Activity snapshot. */
 export const LIVE_ACTIVITY_DISPATCH_JOB_TYPE = 'overlord.live_activity.dispatch.v1';
@@ -15,12 +16,6 @@ export const LIVE_ACTIVITY_DISPATCH_JOB_TYPE = 'overlord.live_activity.dispatch.
  * already-running activity fresh.
  */
 export const LIVE_ACTIVITY_START_JOB_TYPE = 'overlord.live_activity.start.v1';
-
-function profilePredicate(dialect: DatabaseClient['dialect']): string {
-  return dialect === 'postgres'
-    ? "payload_json->>'profileId' = ?"
-    : "json_extract(payload_json, '$.profileId') = ?";
-}
 
 /**
  * Coalesce active refreshes for a profile. The worker deliberately recomputes
@@ -37,51 +32,17 @@ export async function enqueueLiveActivityDispatchJob({
   profileId: string;
   now?: string;
 }): Promise<boolean> {
-  const existing = await db.get<{ id: string }>(
-    `SELECT id FROM worker_jobs
-       WHERE workspace_id = ? AND type = ? AND status IN ('queued', 'running')
-         AND deleted_at IS NULL AND ${profilePredicate(db.dialect)}
-       LIMIT 1`,
-    [workspaceId, LIVE_ACTIVITY_DISPATCH_JOB_TYPE, profileId]
-  );
-  if (existing) return false;
-
-  await db.run(
-    `INSERT INTO worker_jobs
-       (id, workspace_id, type, status, priority, run_after, attempt_count, max_attempts,
-        payload_json, created_at, updated_at, revision)
-       VALUES (?, ?, ?, 'queued', 40, ?, 0, 5, ?, ?, ?, 1)`,
-    [
-      newId(),
-      workspaceId,
-      LIVE_ACTIVITY_DISPATCH_JOB_TYPE,
-      now,
-      JSON.stringify({ profileId }),
-      now,
-      now
-    ]
-  );
-  return true;
-}
-
-async function missionOwnerProfileId({
-  db,
-  workspaceId,
-  missionId
-}: {
-  db: DatabaseClient;
-  workspaceId: string;
-  missionId: string;
-}): Promise<string | null> {
-  const owner = await db.get<{ profile_id: string }>(
-    `SELECT wu.profile_id
-       FROM missions m
-       JOIN workspace_users wu ON wu.id = m.assigned_workspace_user_id
-      WHERE m.id = ? AND m.workspace_id = ? AND m.deleted_at IS NULL
-        AND wu.deleted_at IS NULL AND wu.status = 'active'`,
-    [missionId, workspaceId]
-  );
-  return owner?.profile_id ?? null;
+  const result = await enqueueWorkerJob({
+    db,
+    workspaceId,
+    type: LIVE_ACTIVITY_DISPATCH_JOB_TYPE,
+    dedupeBy: { field: 'profileId', value: profileId },
+    payload: { profileId },
+    priority: 40,
+    maxAttempts: 5,
+    now
+  });
+  return result.enqueued;
 }
 
 /** Queue the account that owns the affected mission, if it has an assignee. */
@@ -119,31 +80,17 @@ export async function enqueueLiveActivityStartJob({
   missionId: string;
   now?: string;
 }): Promise<boolean> {
-  const existing = await db.get<{ id: string }>(
-    `SELECT id FROM worker_jobs
-       WHERE workspace_id = ? AND type = ? AND status IN ('queued', 'running')
-         AND deleted_at IS NULL AND ${profilePredicate(db.dialect)}
-       LIMIT 1`,
-    [workspaceId, LIVE_ACTIVITY_START_JOB_TYPE, profileId]
-  );
-  if (existing) return false;
-
-  await db.run(
-    `INSERT INTO worker_jobs
-       (id, workspace_id, type, status, priority, run_after, attempt_count, max_attempts,
-        payload_json, created_at, updated_at, revision)
-       VALUES (?, ?, ?, 'queued', 40, ?, 0, 5, ?, ?, ?, 1)`,
-    [
-      newId(),
-      workspaceId,
-      LIVE_ACTIVITY_START_JOB_TYPE,
-      now,
-      JSON.stringify({ profileId, missionId }),
-      now,
-      now
-    ]
-  );
-  return true;
+  const result = await enqueueWorkerJob({
+    db,
+    workspaceId,
+    type: LIVE_ACTIVITY_START_JOB_TYPE,
+    dedupeBy: { field: 'profileId', value: profileId },
+    payload: { profileId, missionId },
+    priority: 40,
+    maxAttempts: 5,
+    now
+  });
+  return result.enqueued;
 }
 
 /**

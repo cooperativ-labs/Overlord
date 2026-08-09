@@ -1,19 +1,19 @@
 import { createContext, type ReactNode, useCallback, useContext, useMemo, useState } from 'react';
 
-import type { SystemNotification } from './types';
+import type { AppBanner } from './types';
 
-type SystemNotificationContextValue = {
-  notifications: SystemNotification[];
-  addNotification: (notification: SystemNotification) => void;
+type AppBannerContextValue = {
+  notifications: AppBanner[];
+  addNotification: (notification: AppBanner) => void;
   dismissNotification: (id: string) => void;
 };
 
-const SystemNotificationContext = createContext<SystemNotificationContextValue | null>(null);
+const AppBannerContext = createContext<AppBannerContextValue | null>(null);
 
-export function SystemNotificationProvider({ children }: { children: ReactNode }) {
-  const [notifications, setNotifications] = useState<SystemNotification[]>([]);
+export function AppBannerProvider({ children }: { children: ReactNode }) {
+  const [notifications, setNotifications] = useState<AppBanner[]>([]);
 
-  const addNotification = useCallback((notification: SystemNotification) => {
+  const addNotification = useCallback((notification: AppBanner) => {
     // If it has a dismissKey, check localStorage first
     if (notification.dismissKey) {
       const dismissed = localStorage.getItem(notification.dismissKey);
@@ -44,17 +44,13 @@ export function SystemNotificationProvider({ children }: { children: ReactNode }
     [notifications, addNotification, dismissNotification]
   );
 
-  return (
-    <SystemNotificationContext.Provider value={value}>
-      {children}
-    </SystemNotificationContext.Provider>
-  );
+  return <AppBannerContext.Provider value={value}>{children}</AppBannerContext.Provider>;
 }
 
-export function useSystemNotifications() {
-  const context = useContext(SystemNotificationContext);
+export function useAppBanners() {
+  const context = useContext(AppBannerContext);
   if (!context) {
-    throw new Error('useSystemNotifications must be used inside SystemNotificationProvider');
+    throw new Error('useAppBanners must be used inside AppBannerProvider');
   }
   return context;
 }

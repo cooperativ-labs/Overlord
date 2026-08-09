@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 
-import { useSystemNotifications } from './SystemNotificationContext';
+import { useAppBanners } from './AppBannerContext';
 
 const CLI_UPDATE_NOTIFICATION_ID = 'cli-update-available';
 
@@ -15,7 +15,7 @@ function dismissKeyForVersion(status: CliUpdateStatus): string {
  * `window.overlord.cliUpdates`; on the web (no shell) it does nothing.
  */
 export function useCliUpdateNotifications() {
-  const { addNotification, dismissNotification } = useSystemNotifications();
+  const { addNotification, dismissNotification } = useAppBanners();
 
   useEffect(() => {
     const bridge = typeof window === 'undefined' ? undefined : window.overlord;

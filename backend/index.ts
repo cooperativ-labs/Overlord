@@ -105,6 +105,8 @@ import {
   revokeLiveActivityStartToken
 } from './live-activities.ts';
 import { liveActivityDispatcher } from './live-activity-dispatcher.ts';
+import { notificationDispatcher } from './notification-dispatcher.ts';
+import { dismissNotification, listNotifications, markNotificationRead } from './notifications.ts';
 import {
   handleOAuthApprove,
   handleOAuthRegister,
@@ -516,6 +518,7 @@ function handle(
           deliveryComposeWorker.pollNow();
           liveActivityDispatcher.pollNow();
           pushNotificationDispatcher.pollNow();
+          notificationDispatcher.pollNow();
         }
         if (!res.headersSent) res.json(result ?? { ok: true });
       } catch (err) {
@@ -570,6 +573,7 @@ if (mcpEnabled) {
       deliveryComposeWorker.pollNow();
       liveActivityDispatcher.pollNow();
       pushNotificationDispatcher.pollNow();
+      notificationDispatcher.pollNow();
     })().catch(next);
   });
 }
@@ -1381,6 +1385,28 @@ app.put(
   handle(req => updateNotificationPreferences(req.body), { mutates: true })
 );
 
+// ---- Durable notification history ---------------------------------------
+// Rows are scoped to the authenticated profile rather than the active workspace;
+// the service resolves their workspace only when writing a realtime change.
+app.get(
+  '/api/notifications',
+  handle(() => listNotifications())
+);
+app.patch(
+  '/api/notifications/:id/read',
+  handle(req => markNotificationRead(req.params.id, req.body), { mutates: true })
+);
+app.delete(
+  '/api/notifications/:id',
+  handle(
+    async req => {
+      await dismissNotification(req.params.id, req.body);
+      return { ok: true };
+    },
+    { mutates: true }
+  )
+);
+
 app.get(
   '/api/projects/:id/tags',
   handle(req => listProjectTags(req.params.id))
@@ -2049,6 +2075,7 @@ async function start(): Promise<void> {
   deliveryComposeWorker.start();
   liveActivityDispatcher.start();
   pushNotificationDispatcher.start();
+  notificationDispatcher.start();
 
   const server = app.listen(bindPort, bindHost, () => {
     const databaseLabel =

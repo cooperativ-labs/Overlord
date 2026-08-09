@@ -22,6 +22,28 @@ export type ClaimedWorkerJob = {
   revision: number;
 };
 
+/**
+ * One JSON field used to coalesce otherwise identical active worker jobs.
+ * The field name is intentionally constrained before it is incorporated into
+ * the dialect-specific SQL expression; values remain bound parameters.
+ */
+export type WorkerJobDedupeBy = {
+  field: string;
+  value: string;
+};
+
+export function workerJobJsonFieldPredicate(
+  dialect: DatabaseClient['dialect'],
+  field: string
+): string {
+  if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(field)) {
+    throw new Error(`Invalid worker job JSON field: ${field}`);
+  }
+  return dialect === 'postgres'
+    ? `payload_json->>'${field}' = ?`
+    : `json_extract(payload_json, '$.${field}') = ?`;
+}
+
 export function workerJobRetryDelay(attemptCount: number): number {
   return WORKER_JOB_RETRY_BACKOFF_MS[
     Math.min(Math.max(attemptCount - 1, 0), WORKER_JOB_RETRY_BACKOFF_MS.length - 1)
@@ -114,10 +136,52 @@ export async function retryWorkerJob(
   );
 }
 
-function deliveryIdPredicate(dialect: ServiceContext['db']['dialect']): string {
-  return dialect === 'postgres'
-    ? "payload_json->>'deliveryId' = ?"
-    : "json_extract(payload_json, '$.deliveryId') = ?";
+/**
+ * Enqueue a durable worker job if no identical job is already queued or
+ * running. Jobs carry only caller-provided payloads; each worker owns how that
+ * payload is interpreted and delivered.
+ */
+export async function enqueueWorkerJob({
+  db,
+  workspaceId,
+  type,
+  dedupeBy,
+  payload,
+  priority = DEFAULT_PRIORITY,
+  maxAttempts = DEFAULT_MAX_ATTEMPTS,
+  now = nowIso()
+}: {
+  db: DatabaseClient;
+  workspaceId: string;
+  type: string;
+  dedupeBy: WorkerJobDedupeBy;
+  payload: unknown;
+  priority?: number;
+  maxAttempts?: number;
+  now?: string;
+}): Promise<{ jobId: string | null; enqueued: boolean }> {
+  const existing = await db.get<{ id: string }>(
+    `SELECT id FROM worker_jobs
+       WHERE workspace_id = ?
+         AND type = ?
+         AND status IN ('queued', 'running')
+         AND deleted_at IS NULL
+         AND ${workerJobJsonFieldPredicate(db.dialect, dedupeBy.field)}
+       ORDER BY created_at ASC
+       LIMIT 1`,
+    [workspaceId, type, dedupeBy.value]
+  );
+  if (existing) return { jobId: existing.id, enqueued: false };
+
+  const jobId = newId();
+  await db.run(
+    `INSERT INTO worker_jobs
+         (id, workspace_id, type, status, priority, run_after, attempt_count, max_attempts,
+          payload_json, created_at, updated_at, revision)
+       VALUES (?, ?, ?, 'queued', ?, ?, 0, ?, ?, ?, ?, 1)`,
+    [jobId, workspaceId, type, priority, now, maxAttempts, JSON.stringify(payload), now, now]
+  );
+  return { jobId, enqueued: true };
 }
 
 /**
@@ -137,44 +201,53 @@ export async function enqueueDeliveryComposeJob({
   maxAttempts?: number;
   priority?: number;
 }): Promise<{ jobId: string | null; enqueued: boolean }> {
-  const existing = (await ctx.db.get(
-    `SELECT id FROM worker_jobs
-       WHERE workspace_id = ?
-         AND type = ?
-         AND status IN ('queued', 'running')
-         AND deleted_at IS NULL
-         AND ${deliveryIdPredicate(ctx.db.dialect)}
-       ORDER BY created_at ASC
-       LIMIT 1`,
-    [ctx.workspace.id, DELIVERY_COMPOSE_JOB_TYPE, deliveryId]
-  )) as { id: string } | undefined;
-  if (existing) {
-    return { jobId: existing.id, enqueued: false };
-  }
-
-  const jobId = newId();
-  await ctx.db.run(
-    `INSERT INTO worker_jobs
-         (id, workspace_id, type, status, priority, run_after, attempt_count, max_attempts,
-          payload_json, created_at, updated_at, revision)
-       VALUES (?, ?, ?, 'queued', ?, ?, 0, ?, ?, ?, ?, 1)`,
-    [
-      jobId,
-      ctx.workspace.id,
-      DELIVERY_COMPOSE_JOB_TYPE,
-      priority,
-      now,
-      maxAttempts,
-      JSON.stringify({ deliveryId }),
-      now,
-      now
-    ]
-  );
+  const result = await enqueueWorkerJob({
+    db: ctx.db,
+    workspaceId: ctx.workspace.id,
+    type: DELIVERY_COMPOSE_JOB_TYPE,
+    dedupeBy: { field: 'deliveryId', value: deliveryId },
+    payload: { deliveryId },
+    priority,
+    maxAttempts,
+    now
+  });
   // Structured operational metric only: delivery content and prompt inputs are
   // intentionally never logged.
-  console.info(
-    '[delivery-compose-worker]',
-    JSON.stringify({ event: 'delivery_compose_queued', deliveryId, jobId, maxAttempts, priority })
+  if (result.enqueued) {
+    console.info(
+      '[delivery-compose-worker]',
+      JSON.stringify({
+        event: 'delivery_compose_queued',
+        deliveryId,
+        jobId: result.jobId,
+        maxAttempts,
+        priority
+      })
+    );
+  }
+  return result;
+}
+
+/**
+ * Resolves the active workspace profile assigned to a mission. Assignment is
+ * the shared addressing rule for standard push and both Live Activity paths.
+ */
+export async function missionOwnerProfileId({
+  db,
+  workspaceId,
+  missionId
+}: {
+  db: DatabaseClient;
+  workspaceId: string;
+  missionId: string;
+}): Promise<string | null> {
+  const owner = await db.get<{ profile_id: string }>(
+    `SELECT wu.profile_id
+       FROM missions m
+       JOIN workspace_users wu ON wu.id = m.assigned_workspace_user_id
+      WHERE m.id = ? AND m.workspace_id = ? AND m.deleted_at IS NULL
+        AND wu.deleted_at IS NULL AND wu.status = 'active'`,
+    [missionId, workspaceId]
   );
-  return { jobId, enqueued: true };
+  return owner?.profile_id ?? null;
 }

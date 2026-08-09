@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 
-import { useSystemNotifications } from './SystemNotificationContext';
+import { useAppBanners } from './AppBannerContext';
 
 const AVAILABLE_NOTIFICATION_ID = 'app-update-available';
 const DOWNLOADED_NOTIFICATION_ID = 'app-update-downloaded';
@@ -21,7 +21,7 @@ function dismissKeyForVersion(status: DesktopUpdateStatus): string {
  * `window.overlord.updates.install()` (quit-and-install).
  */
 export function useAppUpdateNotifications() {
-  const { addNotification, dismissNotification } = useSystemNotifications();
+  const { addNotification, dismissNotification } = useAppBanners();
 
   useEffect(() => {
     const bridge = typeof window === 'undefined' ? undefined : window.overlord;

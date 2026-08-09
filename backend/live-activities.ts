@@ -30,7 +30,8 @@ export type LiveActivityMissionSnapshot = {
 export type LiveActivityContentState = {
   running: LiveActivityMissionSnapshot[];
   recentCompletion: LiveActivityMissionSnapshot | null;
-  updatedAt: string;
+  /** Unix epoch seconds. ActivityKit's push JSONDecoder cannot parse ISO-8601. */
+  updatedAt: number;
 };
 
 type RegistrationBody = { pushToken?: unknown; startedByPush?: unknown };
@@ -308,7 +309,7 @@ export async function buildLiveActivityContentState(
   return {
     running: running.map(toSnapshot),
     recentCompletion: completion ? toSnapshot(completion) : null,
-    updatedAt: now.toISOString()
+    updatedAt: Math.floor(now.getTime() / 1000)
   };
 }
 

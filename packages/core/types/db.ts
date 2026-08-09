@@ -757,12 +757,26 @@ export interface MyMissionPositions {
 }
 
 export interface NotificationPreferences {
-  category: string;
   created_at: string;
   id: string | null;
   mode: string;
   profile_id: string;
+  transport: string;
+  type: string;
   updated_at: string;
+}
+
+export interface Notifications {
+  created_at: string;
+  deleted_at: string | null;
+  id: string | null;
+  mission_id: string;
+  objective_id: string | null;
+  read_at: string | null;
+  recipient_profile_id: string;
+  revision: Generated<number>;
+  type: string;
+  workspace_id: string;
 }
 
 export interface ObjectiveAttachments {
@@ -1364,6 +1378,7 @@ export interface DB {
   missions: Missions;
   my_mission_positions: MyMissionPositions;
   notification_preferences: NotificationPreferences;
+  notifications: Notifications;
   objective_attachments: ObjectiveAttachments;
   objectives: Objectives;
   organizations: Organizations;

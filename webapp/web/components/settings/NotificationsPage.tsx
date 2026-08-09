@@ -1,13 +1,25 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { api } from '@/lib/api';
 import { getDesktopChrome } from '@/lib/desktop-chrome';
 import {
   isNativeNotificationsEnabled,
   setNativeNotificationsEnabled,
   subscribeNativeNotificationsEnabled
 } from '@/lib/native-notification-preferences';
+import { keys, useNotificationPreferences } from '@/lib/queries';
+
+import type {
+  NotificationMode,
+  NotificationType
+} from '../../../../packages/core/service/notifications/catalog.ts';
+import {
+  NOTIFICATION_CATALOG,
+  NOTIFICATION_TYPES
+} from '../../../../packages/core/service/notifications/catalog.ts';
 
 type PermissionStatus = NotificationPermission | 'unsupported';
 
@@ -32,7 +44,10 @@ function permissionLabel(status: PermissionStatus): string {
 
 export function NotificationsPage() {
   const { isDesktop } = getDesktopChrome();
+  const queryClient = useQueryClient();
+  const preferences = useNotificationPreferences();
   const [enabled, setEnabled] = useState(() => isNativeNotificationsEnabled());
+  const [isSaving, setIsSaving] = useState(false);
   const [permission, setPermission] = useState<PermissionStatus>(() =>
     readPermissionStatus({ isDesktop })
   );
@@ -49,23 +64,101 @@ export function NotificationsPage() {
     setEnabled(next);
   }
 
+  async function updateAccountPreferences(body: {
+    enabled?: boolean;
+    preferences?: Array<{ type: NotificationType; transport: 'realtime'; mode: NotificationMode }>;
+  }) {
+    setIsSaving(true);
+    try {
+      const updated = await api.updateNotificationPreferences(body);
+      queryClient.setQueryData(keys.notificationPreferences, updated);
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  const accountEnabled = preferences.data?.enabled ?? true;
+  const realtimeModes = new Map(
+    preferences.data?.preferences
+      .filter(preference => preference.transport === 'realtime')
+      .map(preference => [preference.type, preference.mode]) ?? []
+  );
+
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-base font-medium">Notifications</h2>
         <p className="text-sm text-muted-foreground">
-          Native alerts when agents start work, ask blocking questions, or deliver for review.
+          Choose what this account receives, then optionally mute native alerts on this device.
         </p>
       </div>
 
       <div className="max-w-xl space-y-4">
         <div className="flex items-center justify-between gap-4 rounded-lg border p-4">
           <div className="space-y-1">
-            <Label htmlFor="native-notifications-toggle">Native notifications</Label>
+            <Label htmlFor="account-notifications-toggle">Account notifications</Label>
+            <p className="text-xs text-muted-foreground">
+              Turns all notification transports on or off for your account. Live Activities are
+              unchanged.
+            </p>
+          </div>
+          <Switch
+            id="account-notifications-toggle"
+            checked={accountEnabled}
+            disabled={preferences.isLoading || isSaving}
+            onCheckedChange={next => void updateAccountPreferences({ enabled: next })}
+          />
+        </div>
+
+        <div className="space-y-3 rounded-lg border p-4">
+          <div>
+            <h3 className="text-sm font-medium">Desktop and browser alerts</h3>
+            <p className="text-xs text-muted-foreground">
+              These account settings also apply when you open Overlord on another computer.
+            </p>
+          </div>
+          {NOTIFICATION_TYPES.map(type => {
+            const descriptor = NOTIFICATION_CATALOG[type];
+            if (!descriptor.transports.includes('realtime')) return null;
+            return (
+              <label className="flex items-center justify-between gap-4" key={type}>
+                <span className="space-y-1">
+                  <span className="block text-sm font-medium">{descriptor.label}</span>
+                  <span className="block text-xs text-muted-foreground">{descriptor.detail}</span>
+                </span>
+                <select
+                  aria-label={`${descriptor.label} notification mode`}
+                  className="h-9 rounded-md border bg-background px-2 text-sm"
+                  disabled={preferences.isLoading || isSaving || !accountEnabled}
+                  onChange={event =>
+                    void updateAccountPreferences({
+                      preferences: [
+                        {
+                          type,
+                          transport: 'realtime',
+                          mode: event.target.value as NotificationMode
+                        }
+                      ]
+                    })
+                  }
+                  value={realtimeModes.get(type) ?? descriptor.defaultMode}
+                >
+                  <option value="alert">Alert</option>
+                  <option value="silent">Silent</option>
+                  <option value="off">Off</option>
+                </select>
+              </label>
+            );
+          })}
+        </div>
+
+        <div className="flex items-center justify-between gap-4 rounded-lg border p-4">
+          <div className="space-y-1">
+            <Label htmlFor="native-notifications-toggle">Mute this device</Label>
             <p className="text-xs text-muted-foreground">
               {isDesktop
-                ? 'Uses the desktop shell notification center. Stored on this machine.'
-                : 'Uses your browser notification permission. Stored in this browser.'}
+                ? 'Uses the desktop shell notification center. This cannot override account settings.'
+                : 'Uses your browser permission. This cannot override account settings.'}
             </p>
           </div>
           <Switch
@@ -94,15 +187,6 @@ export function NotificationsPage() {
             ) : null}
           </div>
         ) : null}
-
-        <div className="rounded-lg border px-4 py-3">
-          <h3 className="text-sm font-medium">You will be notified when</h3>
-          <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
-            <li>An agent starts executing an objective</li>
-            <li>An agent asks a blocking question</li>
-            <li>An objective is delivered and ready for review</li>
-          </ul>
-        </div>
       </div>
     </div>
   );

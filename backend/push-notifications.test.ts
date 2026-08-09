@@ -177,6 +177,67 @@ test('defaults every category to alert and merges partial preference updates', a
   });
 });
 
+test('uses catalog type and transport pairs as the canonical preference shape', async () => {
+  const defaults = await withRequestContextAsync(async () => {
+    setActiveProfileId('operator-user');
+    return getNotificationPreferences();
+  });
+  assert.equal(defaults.preferences.length, 16);
+  assert.deepEqual(
+    defaults.preferences.find(
+      entry => entry.type === 'agent_started' && entry.transport === 'realtime'
+    ),
+    { type: 'agent_started', transport: 'realtime', mode: 'silent' }
+  );
+
+  const updated = await withRequestContextAsync(async () => {
+    setActiveProfileId('operator-user');
+    return updateNotificationPreferences({
+      preferences: [
+        { type: 'agent_question', transport: 'realtime', mode: 'silent' },
+        { type: 'agent_started', transport: 'realtime', mode: 'alert' }
+      ]
+    });
+  });
+  assert.equal(
+    updated.preferences.find(
+      entry => entry.type === 'agent_question' && entry.transport === 'realtime'
+    )?.mode,
+    'silent'
+  );
+  assert.equal(
+    updated.preferences.find(entry => entry.type === 'agent_question' && entry.transport === 'apns')
+      ?.mode,
+    'alert',
+    'transport-specific updates must not overwrite another transport'
+  );
+
+  await withRequestContextAsync(async () => {
+    setActiveProfileId('operator-user');
+    await assert.rejects(
+      () =>
+        updateNotificationPreferences({
+          preferences: [{ type: 'unknown', transport: 'realtime', mode: 'alert' }]
+        }),
+      { status: 400 }
+    );
+    await assert.rejects(
+      () =>
+        updateNotificationPreferences({
+          preferences: [{ type: 'agent_started', transport: 'apns', mode: 'alert' }]
+        }),
+      { status: 400 }
+    );
+    await assert.rejects(
+      () =>
+        updateNotificationPreferences({
+          preferences: [{ type: 'agent_question', transport: 'realtime', mode: 'vibrate' }]
+        }),
+      { status: 400 }
+    );
+  });
+});
+
 test('the master switch suppresses every category without touching stored modes', async () => {
   const client = requireDatabaseClient();
   await withRequestContextAsync(async () => {
@@ -184,8 +245,14 @@ test('the master switch suppresses every category without touching stored modes'
     await updateNotificationPreferences({ enabled: false });
   });
 
-  assert.equal(await resolveNotificationMode(client, 'operator-user', 'agent_question'), 'off');
-  assert.equal(await resolveNotificationMode(client, 'operator-user', 'mission_complete'), 'off');
+  assert.equal(
+    await resolveNotificationMode(client, 'operator-user', 'agent_question', 'apns'),
+    'off'
+  );
+  assert.equal(
+    await resolveNotificationMode(client, 'operator-user', 'mission_complete', 'apns'),
+    'off'
+  );
 
   const restored = await withRequestContextAsync(async () => {
     setActiveProfileId('operator-user');
@@ -198,7 +265,7 @@ test('the master switch suppresses every category without touching stored modes'
     'the master switch must not overwrite per-category modes'
   );
   assert.equal(
-    await resolveNotificationMode(client, 'operator-user', 'mission_complete'),
+    await resolveNotificationMode(client, 'operator-user', 'mission_complete', 'apns'),
     'silent'
   );
 });
@@ -340,19 +407,22 @@ test('a mission with no assignee produces no standard push', async () => {
   assert.equal(queuedJobs().length, 0);
 });
 
-test('closing a mission enqueues mission_complete exactly once', async () => {
-  db.prepare(`DELETE FROM worker_jobs WHERE type = 'overlord.push_notification.dispatch.v1'`).run();
+test('closing a mission emits mission_complete exactly once', async () => {
+  db.prepare(`DELETE FROM worker_jobs WHERE type = 'overlord.notification.dispatch.v1'`).run();
+  db.prepare(`DELETE FROM notifications`).run();
   const project = await createProject({ name: 'Completion Project' });
   const mission = await createMission({ projectId: project.id, firstObjective: 'Work' });
 
   await updateMission(mission.id, { statusId: 'local-workspace-done' });
   await updateMission(mission.id, { statusId: 'local-workspace-done' });
 
-  const payloads = queuedJobs().map(row => JSON.parse(row.payload_json) as { category: string });
+  const notifications = db
+    .prepare(`SELECT type FROM notifications WHERE mission_id = ? ORDER BY created_at ASC`)
+    .all(mission.id) as Array<{ type: string }>;
   assert.deepEqual(
-    payloads.map(payload => payload.category),
+    notifications.map(notification => notification.type),
     ['mission_complete'],
-    're-saving the same status must not enqueue a second notification'
+    're-saving the same status must not emit a second notification'
   );
 });
 
