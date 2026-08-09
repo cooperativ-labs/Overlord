@@ -7,6 +7,7 @@ import {
   manageObjectiveLifecycle,
   type ObjectiveLifecycleObjective,
   planEnsureDraftSlot,
+  shouldDiscardEmptiedObjective,
   validateObjectiveLifecycle
 } from './index.js';
 
@@ -70,7 +71,7 @@ describe('objective lifecycle rules', () => {
     );
   });
 
-  it('plans unconditional draft-slot refill independently from auto-advance', () => {
+  it('plans draft-slot refill by promoting a future objective, never by creating a blank one', () => {
     assert.deepEqual(
       planEnsureDraftSlot([
         objective({ id: 'done', position: 0, state: 'complete', assignedAgent: 'codex' }),
@@ -79,13 +80,68 @@ describe('objective lifecycle rules', () => {
       { action: 'promote_future', objectiveId: 'future' }
     );
 
+    // With nothing authored to promote, the empty next-up slot is the client's
+    // unsaved composer, so the planner persists nothing.
     assert.deepEqual(
-      planEnsureDraftSlot(
-        [objective({ id: 'done', position: 0, state: 'complete', assignedAgent: 'codex' })],
-        { previousObjectiveId: 'done' }
-      ),
-      { action: 'create_blank_draft', assignedAgent: 'codex' }
+      planEnsureDraftSlot([
+        objective({ id: 'done', position: 0, state: 'complete', assignedAgent: 'codex' })
+      ]),
+      { action: 'none', reason: 'no_future_objective' }
     );
+
+    // A legacy blank future row is not work to promote either — the planner has
+    // to agree with the `TRIM(instruction_text) <> ''` guard in the backend and
+    // core refill queries, or the two would disagree about the same mission.
+    assert.deepEqual(
+      planEnsureDraftSlot([
+        objective({ id: 'done', position: 0, state: 'complete' }),
+        objective({ id: 'blank-future', position: 1, state: 'future', instructionText: '  ' })
+      ]),
+      { action: 'none', reason: 'no_future_objective' }
+    );
+
+    // ...but an authored future objective behind the blank one still refills it.
+    assert.deepEqual(
+      planEnsureDraftSlot([
+        objective({ id: 'blank-future', position: 0, state: 'future', instructionText: '' }),
+        objective({ id: 'authored', position: 1, state: 'future' })
+      ]),
+      { action: 'promote_future', objectiveId: 'authored' }
+    );
+  });
+
+  it('discards an emptied draft or future objective instead of keeping a blank row', () => {
+    for (const state of ['draft', 'future'] as const) {
+      assert.equal(
+        shouldDiscardEmptiedObjective(objective({ id: state, state, instructionText: '   ' })),
+        true,
+        `${state} objective emptied of text should be discarded`
+      );
+    }
+
+    // Attachments are real work, so the objective survives without text.
+    assert.equal(
+      shouldDiscardEmptiedObjective(objective({ id: 'with-file', state: 'future' }), {
+        attachmentCount: 1
+      }),
+      false
+    );
+
+    // Text present — nothing to discard, whatever the state.
+    assert.equal(
+      shouldDiscardEmptiedObjective(objective({ id: 'authored', state: 'draft' })),
+      false
+    );
+
+    // Objectives past the editable slot are history and are never removed by an
+    // empty commit, even if their text somehow reads blank.
+    for (const state of ['submitted', 'launching', 'executing', 'complete'] as const) {
+      assert.equal(
+        shouldDiscardEmptiedObjective(objective({ id: state, state, instructionText: '' })),
+        false,
+        `${state} objective must not be discarded`
+      );
+    }
   });
 
   it('keeps pre-attach submitted or launching objectives in the next-up slot', () => {

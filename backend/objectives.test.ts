@@ -136,9 +136,13 @@ test('new draft objectives inherit the project last-used agent', async () => {
   assert.equal(firstObjective.model, 'claude-opus-4-8');
   assert.equal(firstObjective.reasoningEffort, 'high');
 
-  // A blank draft slot added afterwards (the add-objective affordance) also stamps
-  // the agent rather than leaving it null for auto-advance to misread.
-  const added = await createObjective({ missionId: mission.id, instructionText: '' });
+  // An objective added afterwards (the add-objective affordance, which persists
+  // only once the composer has text) also stamps the agent rather than leaving
+  // it null for auto-advance to misread.
+  const added = await createObjective({
+    missionId: mission.id,
+    instructionText: 'Follow-up objective'
+  });
   assert.equal(added.assignedAgent, 'claude');
   assert.equal(added.model, 'claude-opus-4-8');
   assert.equal(added.reasoningEffort, 'high');
@@ -257,8 +261,8 @@ test('marking a queued objective executing promotes future over a blank draft pl
   assert.ok(placeholderRow.deleted_at);
 });
 
-test('marking the only queued objective executing creates a blank draft fallback', async () => {
-  const project = await createProject({ name: 'Blank Draft On Execute' });
+test('marking the only queued objective executing persists no blank draft fallback', async () => {
+  const project = await createProject({ name: 'No Blank Draft On Execute' });
   const mission = await createMission({ projectId: project.id, firstObjective: 'Execute first' });
   const running = mission.objectives[0]!;
 
@@ -277,12 +281,12 @@ test('marking the only queued objective executing creates a blank draft fallback
     assigned_agent: string | null;
   }>;
 
+  // The empty next-up slot is the mission panel's client-only composer, so
+  // nothing is written until the user actually authors an objective.
   assert.deepEqual(
     rows.map(row => row.state),
-    ['executing', 'draft']
+    ['executing']
   );
-  assert.equal(rows[1]!.instruction_text, '');
-  assert.equal(rows[1]!.assigned_agent, 'codex');
 });
 
 test('promoting a future objective splices it into the draft slot and cascades positions', async () => {

@@ -27,7 +27,12 @@ export type InlineEditFieldProps = {
   missionMentionOptions?: MissionMentionOption[];
   /** Render the value as static, non-editable text. */
   disabled?: boolean;
-  /** Commit an empty trimmed value instead of reverting to the previous value. */
+  /**
+   * Commit an empty trimmed value instead of reverting to the previous value.
+   * Empty commits only ever fire when the edit finishes (blur, ⌘/Ctrl+Enter),
+   * never from the debounced autosave — otherwise clearing a field to retype it
+   * would fire the caller's "value is now empty" handling mid-keystroke.
+   */
   commitEmpty?: boolean;
   /** Accessible label for the editor. */
   ariaLabel?: string;
@@ -130,11 +135,13 @@ export function InlineEditField({
       saveTimeoutRef.current = setTimeout(() => {
         saveTimeoutRef.current = null;
         const trimmed = draftRef.current.trim();
+        // Deliberately no empty commit here — see `commitEmpty`. An empty
+        // autosave is indistinguishable from "user is still mid-edit", and
+        // callers treat it as a destructive signal (deleting the objective).
         if (trimmed && trimmed !== value) onSave(trimmed);
-        else if (!trimmed && commitEmpty) onSave('');
       }, DEBOUNCE_SAVE_MS);
     },
-    [clearPendingSave, commitEmpty, debounceSaveOnChange, onSave, value]
+    [clearPendingSave, debounceSaveOnChange, onSave, value]
   );
 
   if (disabled || !editing) {

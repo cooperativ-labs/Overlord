@@ -18,8 +18,7 @@ if ! command -v ovld >/dev/null 2>&1; then
 fi
 
 if [ -z "${MISSION_ID:-}" ]; then
-  log_hook "no launch mission id; printing any cwd mission-link pointer"
-  ovld protocol mission-link 2>/dev/null || true
+  log_hook "no launch mission id, skipping delivery check"
   exit 0
 fi
 
@@ -77,10 +76,6 @@ except Exception:
 else
   log_hook "hook-event failed exit=$OVLD_EXIT"
 fi
-
-# Keep the current mission reachable at the bottom of every completed turn.
-# This is local-only and deliberately does not affect Stop-hook delivery state.
-ovld protocol mission-link 2>/dev/null || true
 
 rm -f "$RESPONSE_FILE"
 exit 0

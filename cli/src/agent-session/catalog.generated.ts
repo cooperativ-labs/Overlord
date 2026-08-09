@@ -272,7 +272,7 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
     "codec": "claude",
     "integrationShape": "callback",
     "capabilityTier": 3,
-    "descriptorDigest": "a90745bb59252df29006cf632a030108e68fde84f956910e02cc842833e6f8d6",
+    "descriptorDigest": "bdeb8c46cb12d692aced13597c6c2120312c303f3aaeb597b891d83e054db365",
     "descriptorSchemaVersion": 1,
     "harness": {
       "name": "Claude Code",
@@ -426,7 +426,7 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
       {
         "id": "shipped-stop-hook-inert",
         "severity": "medium",
-        "summary": "The installed Stop hook calls `ovld protocol hook-event --hook-type Stop`, which the CLI rejects, and then parses a `deliveryStatus` field nothing produces. Its mission-link footer still works. Confirmed again at 2.1.221 from a live agent-pod session: every entry in ~/.ovld/logs/stop-hook.log takes the `no launch mission id` branch and returns before the delivery check, because the hook gates on a `MISSION_ID` environment variable the pod does not set. The PostToolUse hook works in the same session because it resolves the mission from the per-cwd active-session manifest instead; the Stop hook should resolve it the same way.",
+        "summary": "The installed Stop hook calls `ovld protocol hook-event --hook-type Stop`, which the CLI rejects, and then parses a `deliveryStatus` field nothing produces. Confirmed again at 2.1.221 from a live agent-pod session: every entry in ~/.ovld/logs/stop-hook.log takes the `no launch mission id` branch and returns before the delivery check, because the hook gates on a `MISSION_ID` environment variable the pod does not set. The PostToolUse hook works in the same session because it resolves the mission from the per-cwd active-session manifest instead; the Stop hook should resolve it the same way.",
         "verification": "verified",
         "mitigation": "required",
         "trackedAs": "agent-session-phase-3"
@@ -1238,7 +1238,7 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
   }
 ];
 
-export const HARNESS_CATALOG_DIGEST = '6f047304e488db018479b5b3349d2153e37b4398903ac65d8e47ac9e3be3783d';
+export const HARNESS_CATALOG_DIGEST = '9bf0a21f8df7f6bf417dc00c474980432a8b3167e56b56579f4bf5e51d81bbf4';
 
 export function findHarnessDescriptor(adapter: string): HarnessDescriptor | undefined {
   return HARNESS_DESCRIPTORS.find(entry => entry.adapter === adapter);

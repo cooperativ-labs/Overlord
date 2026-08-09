@@ -47,21 +47,7 @@ test('iTerm2 launcher drives osascript to open a new window', () => {
   assert.ok(script.includes(`'claude'`));
 });
 
-test('terminal launch prints a mission deeplink banner and OSC title', () => {
-  const exec = resolveLaunchExecution({
-    ...AGENT,
-    terminalLauncher: 'iTerm2',
-    missionLink: { displayId: 'coo:502', title: 'Investigate linking' },
-    extraEnv: { MISSION_ID: 'coo:502' }
-  });
-  const script = exec.args[1] ?? '';
-  assert.ok(script.includes(`coo:502 · overlord://missions/coo:502 — Investigate linking`));
-  // AppleScript doubles backslashes, so the bash `\033` appears as `\\033` here.
-  assert.ok(script.includes(`\\\\033]0;coo:502 — Investigate linking\\\\007`));
-  assert.ok(script.includes(`export MISSION_ID='coo:502'`));
-});
-
-test('terminal launch without missionLink keeps the prior shape', () => {
+test('terminal launch exports mission environment without a mission-link banner', () => {
   const exec = resolveLaunchExecution({
     ...AGENT,
     terminalLauncher: 'iTerm2',

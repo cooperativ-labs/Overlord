@@ -686,7 +686,6 @@ export async function attachSession({
       ctx: txCtx,
       missionId: context.mission.id,
       projectId: context.mission.projectId,
-      assignedAgent: inheritedDraftAgent || null,
       now
     });
 
@@ -2017,7 +2016,6 @@ export async function deliverSession({
     ctx: ctx,
     missionId: mission.id,
     projectId: mission.projectId,
-    assignedAgent: deliveredObjective?.assigned_agent ?? null,
     now: nowIso()
   });
 

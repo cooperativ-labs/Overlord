@@ -36,6 +36,7 @@ export {
   objectiveHasInstructionText,
   objectiveInstructionText,
   planEnsureDraftSlot,
+  shouldDiscardEmptiedObjective,
   sortObjectivesByLifecycleOrder,
   validateObjectiveLifecycle
 } from './rules.js';
@@ -44,10 +45,6 @@ export type ManageObjectiveLifecycleInput = {
   objectives: ObjectiveLifecycleObjective[];
   mission?: {
     humanOnly?: boolean;
-  };
-  ensureDraftSlot?: {
-    previousObjectiveId?: string;
-    assignedAgent?: string | null;
   };
   planAutoAdvance?: boolean;
 };
@@ -81,7 +78,7 @@ export function manageObjectiveLifecycle(
     nextUpObjectiveId: view.nextUpObjective?.id ?? null,
     hasNonExecuted: view.hasNonExecuted,
     violations: view.violations,
-    ensureDraftSlotPlan: planEnsureDraftSlot(input.objectives, input.ensureDraftSlot),
+    ensureDraftSlotPlan: planEnsureDraftSlot(input.objectives),
     autoAdvanceDecision: input.planAutoAdvance
       ? decideAutoAdvanceAfterDelivery(input.objectives, autoAdvanceOptions)
       : null

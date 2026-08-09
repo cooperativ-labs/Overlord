@@ -444,17 +444,25 @@ export async function insertObjective({
   });
 }
 
+/**
+ * Refills the next-up draft slot after an objective leaves the queue by
+ * promoting the first authored `future` objective, dropping any leftover blank
+ * draft it replaces.
+ *
+ * It never *creates* a blank draft. A stored objective with no instruction text
+ * is indistinguishable from real work to agents, counts, and auto-advance, so
+ * the "empty field to type into" is a client-only composer (the mission panel's
+ * ghost objective card) that persists an objective only once it has content.
+ */
 export async function ensureNextDraftObjective({
   ctx,
   missionId,
   projectId,
-  assignedAgent,
   now
 }: {
   ctx: ServiceContext;
   missionId: string;
   projectId: string;
-  assignedAgent: string | null;
   now: string;
 }): Promise<void> {
   const drafts = (await ctx.db.all(
@@ -466,9 +474,12 @@ export async function ensureNextDraftObjective({
 
   if (drafts.some(draft => draft.instruction_text.trim())) return;
 
+  // Only an authored future objective refills the slot; a blank one (legacy rows
+  // from when blank slots were persisted) is not real work to promote.
   const nextFuture = (await ctx.db.get(
     `SELECT id, revision FROM objectives
        WHERE mission_id = ? AND state = 'future' AND deleted_at IS NULL
+         AND TRIM(instruction_text) <> ''
        ORDER BY position ASC, created_at ASC LIMIT 1`,
     [missionId]
   )) as { id: string; revision: number } | undefined;
@@ -510,17 +521,6 @@ export async function ensureNextDraftObjective({
       missionId,
       objectiveId: nextFuture.id,
       changedFields: ['state']
-    });
-    return;
-  }
-
-  if (drafts.length === 0) {
-    await insertObjective({
-      ctx,
-      missionId,
-      instructionText: '',
-      state: 'draft',
-      assignedAgent
     });
   }
 }

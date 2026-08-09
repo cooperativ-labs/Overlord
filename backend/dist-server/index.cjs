@@ -70303,60 +70303,11 @@ function resolveGitRoot(directoryPath) {
     return null;
   }
 }
-function resolveGitHooksDirectory(gitRoot) {
-  try {
-    const gitPath2 = (0, import_node_child_process4.execFileSync)("git", ["-C", gitRoot, "rev-parse", "--git-path", "hooks"], {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"]
-    }).trim();
-    return import_node_path12.default.isAbsolute(gitPath2) ? gitPath2 : import_node_path12.default.resolve(gitRoot, gitPath2);
-  } catch {
-    return null;
-  }
-}
-function ensurePreCommitGuard(gitRoot) {
-  const hooksDirectory = resolveGitHooksDirectory(gitRoot);
-  if (!hooksDirectory) return;
-  (0, import_node_fs10.mkdirSync)(hooksDirectory, { recursive: true });
-  const guardPath = import_node_path12.default.join(hooksDirectory, HOOK_GUARD_FILENAME);
-  writeIfChanged(
-    guardPath,
-    `#!/bin/sh
-# Managed by Overlord: reject any staged project-link metadata change.
-if git diff --cached --quiet -- .overlord/project.json; then
-  exit 0
-fi
-echo "Overlord blocked this commit: .overlord/project.json is managed metadata and must not be changed." >&2
-exit 1
-`
-  );
-  (0, import_node_fs10.chmodSync)(guardPath, 493);
-  const preCommitPath = import_node_path12.default.join(hooksDirectory, "pre-commit");
-  const hookBlock = `${HOOK_BLOCK_START}
-"$(dirname "$0")/${HOOK_GUARD_FILENAME}" || exit $?
-${HOOK_BLOCK_END}`;
-  if (!(0, import_node_fs10.existsSync)(preCommitPath)) {
-    (0, import_node_fs10.writeFileSync)(preCommitPath, `#!/bin/sh
-${hookBlock}
-`);
-    (0, import_node_fs10.chmodSync)(preCommitPath, 493);
-    return;
-  }
-  const existing = (0, import_node_fs10.readFileSync)(preCommitPath, "utf8");
-  const blockPattern = new RegExp(`${HOOK_BLOCK_START}[\\s\\S]*?${HOOK_BLOCK_END}\\n?`, "g");
-  const updated = `${existing.replace(blockPattern, "").trimEnd()}
-
-${hookBlock}
-`;
-  writeIfChanged(preCommitPath, updated);
-  (0, import_node_fs10.chmodSync)(preCommitPath, 493);
-}
 function protectProjectMetadata(directoryPath) {
   const gitRoot = resolveGitRoot(directoryPath);
   const checkoutPath = gitRoot ?? directoryPath;
   ensureAgentInstructions(checkoutPath);
   ensureGitignore(checkoutPath);
-  if (gitRoot) ensurePreCommitGuard(gitRoot);
 }
 function parseProjectJson(projectJsonPath) {
   if (!(0, import_node_fs10.existsSync)(projectJsonPath)) return null;
@@ -70433,7 +70384,7 @@ function writeProjectJson({
   );
   return projectJsonPath;
 }
-var import_node_child_process4, import_node_fs10, import_node_path12, PROJECT_JSON_VERSION, PROJECT_JSON_WARNING, INSTRUCTION_BLOCK_START, INSTRUCTION_BLOCK_END, PROJECT_METADATA_INSTRUCTION, HOOK_GUARD_FILENAME, HOOK_BLOCK_START, HOOK_BLOCK_END;
+var import_node_child_process4, import_node_fs10, import_node_path12, PROJECT_JSON_VERSION, PROJECT_JSON_WARNING, INSTRUCTION_BLOCK_START, INSTRUCTION_BLOCK_END, PROJECT_METADATA_INSTRUCTION;
 var init_project_metadata = __esm({
   "../packages/core/service/local-target/project-metadata.ts"() {
     "use strict";
@@ -70452,9 +70403,6 @@ var init_project_metadata = __esm({
 replace, stage, commit, delete, or revert it. If its link metadata needs to
 change, use Overlord's resource-linking command instead.
 ${INSTRUCTION_BLOCK_END}`;
-    HOOK_GUARD_FILENAME = "overlord-project-json-guard";
-    HOOK_BLOCK_START = "# >>> Overlord project metadata guard >>>";
-    HOOK_BLOCK_END = "# <<< Overlord project metadata guard <<<";
   }
 });
 
@@ -130975,7 +130923,7 @@ function deriveObjectiveLifecycleView(objectives) {
     violations: validateObjectiveLifecycle(orderedObjectives)
   };
 }
-function planEnsureDraftSlot(objectives, options = {}) {
+function planEnsureDraftSlot(objectives) {
   const ordered = sortObjectivesByLifecycleOrder(objectives);
   if (ordered.some((objective) => objective.state === "draft")) {
     return { action: "none", reason: "draft_slot_filled" };
@@ -130983,13 +130931,11 @@ function planEnsureDraftSlot(objectives, options = {}) {
   if (ordered.some((objective) => objective.state === "submitted" || objective.state === "launching")) {
     return { action: "none", reason: "next_up_still_launching" };
   }
-  const nextFuture = ordered.find(isFutureObjective);
+  const nextFuture = ordered.find((objective) => isFutureObjective(objective) && objectiveHasInstructionText(objective));
   if (nextFuture) {
     return { action: "promote_future", objectiveId: nextFuture.id };
   }
-  const previousObjective = options.previousObjectiveId ? ordered.find((objective) => objective.id === options.previousObjectiveId) : null;
-  const inheritedAgent = options.assignedAgent ?? previousObjective?.assignedAgent ?? [...ordered].reverse().find((objective) => objective.assignedAgent)?.assignedAgent ?? null;
-  return { action: "create_blank_draft", assignedAgent: inheritedAgent };
+  return { action: "none", reason: "no_future_objective" };
 }
 function decideAutoAdvanceAfterDelivery(objectives, options = {}) {
   const nextDraft = sortObjectivesByLifecycleOrder(objectives).find((objective) => objective.state === "draft" && objectiveHasInstructionText(objective));
@@ -131033,7 +130979,7 @@ function manageObjectiveLifecycle(input) {
     nextUpObjectiveId: view.nextUpObjective?.id ?? null,
     hasNonExecuted: view.hasNonExecuted,
     violations: view.violations,
-    ensureDraftSlotPlan: planEnsureDraftSlot(input.objectives, input.ensureDraftSlot),
+    ensureDraftSlotPlan: planEnsureDraftSlot(input.objectives),
     autoAdvanceDecision: input.planAutoAdvance ? decideAutoAdvanceAfterDelivery(input.objectives, autoAdvanceOptions) : null
   };
 }
@@ -132265,7 +132211,6 @@ async function ensureNextDraftObjective({
   ctx,
   missionId,
   projectId,
-  assignedAgent,
   now: now2
 }) {
   const drafts = await ctx.db.all(
@@ -132278,6 +132223,7 @@ async function ensureNextDraftObjective({
   const nextFuture = await ctx.db.get(
     `SELECT id, revision FROM objectives
        WHERE mission_id = ? AND state = 'future' AND deleted_at IS NULL
+         AND TRIM(instruction_text) <> ''
        ORDER BY position ASC, created_at ASC LIMIT 1`,
     [missionId]
   );
@@ -132317,16 +132263,6 @@ async function ensureNextDraftObjective({
       objectiveId: nextFuture.id,
       changedFields: ["state"]
     });
-    return;
-  }
-  if (drafts.length === 0) {
-    await insertObjective({
-      ctx,
-      missionId,
-      instructionText: "",
-      state: "draft",
-      assignedAgent
-    });
   }
 }
 async function createMissionWithObjectives({
@@ -132362,10 +132298,10 @@ async function createMissionWithObjectives({
     await txCtx.db.run(
       `INSERT INTO missions
            (id, workspace_id, project_id, display_id, sequence_number, title,
-            status_id, status_type, board_position, priority, available_tools_json,
+            status_id, status_type, board_position, priority,
             execution_target_intent_json, metadata_json, created_by_workspace_user_id,
             assigned_workspace_user_id, due_datetime, created_at, updated_at, revision)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', '{}', '{}', ?, ?, ?, ?, ?, 1)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}', '{}', ?, ?, ?, ?, ?, 1)`,
       [
         missionId,
         ctx.workspace.id,
@@ -135264,7 +135200,6 @@ async function attachSession({
       ctx: txCtx,
       missionId: context.mission.id,
       projectId: context.mission.projectId,
-      assignedAgent: inheritedDraftAgent || null,
       now: now2
     });
     await moveMissionToExecute({ ctx: txCtx, missionId: context.mission.id });
@@ -136277,7 +136212,6 @@ async function deliverSession({
     ctx,
     missionId: mission.id,
     projectId: mission.projectId,
-    assignedAgent: deliveredObjective?.assigned_agent ?? null,
     now: nowIso()
   });
   const nextObjective = await ctx.db.get(
@@ -139723,15 +139657,6 @@ async function promoteFallbackPrimary(db, {
     [bindBool(DATABASE_DIALECT, true), now2, fallback2.id]
   );
 }
-function parseAvailableTools(json2) {
-  try {
-    const arr = JSON.parse(json2);
-    if (!Array.isArray(arr)) return [];
-    return arr.map((item) => typeof item === "string" ? item : item?.name ?? "").filter(Boolean);
-  } catch {
-    return [];
-  }
-}
 function toMissionDto(r5, tags = []) {
   return {
     id: r5.id,
@@ -139745,8 +139670,7 @@ function toMissionDto(r5, tags = []) {
     boardPosition: r5.board_position,
     priority: r5.priority,
     assignedWorkspaceUserId: r5.assigned_workspace_user_id,
-    acceptanceCriteria: r5.acceptance_criteria_text,
-    availableTools: parseAvailableTools(r5.available_tools_json),
+    notes: r5.notes_text,
     scheduleId: r5.schedule_id,
     dueDatetime: r5.due_datetime,
     createdAt: r5.created_at,
@@ -141797,7 +141721,7 @@ var selectMissionsSql = `
   SELECT t.id, t.workspace_id, t.project_id, t.display_id, t.sequence_number, t.title,
          t.status_id, t.status_type, t.board_position, t.priority,
          t.assigned_workspace_user_id,
-         t.acceptance_criteria_text, t.available_tools_json,
+         t.notes_text,
          t.schedule_id, t.due_datetime,
          t.created_at, t.updated_at, t.revision, t.active_branch, t.branch_override,
          t.worktree_preference,
@@ -141858,7 +141782,7 @@ async function searchMissionsInWorkspace({
     `SELECT t.id, t.workspace_id, t.project_id, t.display_id, t.sequence_number, t.title,
               t.status_id, t.status_type, t.board_position, t.priority,
               t.assigned_workspace_user_id,
-              t.acceptance_criteria_text, t.available_tools_json,
+              t.notes_text,
               t.schedule_id, t.due_datetime,
               t.created_at, t.updated_at, t.revision,
               (SELECT COUNT(*) FROM objectives o
@@ -142930,18 +142854,10 @@ async function patchMissionFieldsTx(id, body) {
         }
       }
     }
-    if (body.acceptanceCriteria !== void 0) {
-      fields.push("acceptance_criteria_text = ?");
-      setParams.push(body.acceptanceCriteria?.trim() || null);
-      changed.push("acceptance_criteria_text");
-    }
-    if (body.availableTools !== void 0) {
-      if (!Array.isArray(body.availableTools))
-        throw new ApiError(400, "availableTools must be an array");
-      const toolsJson = JSON.stringify(body.availableTools.map((name) => ({ name })));
-      fields.push("available_tools_json = ?");
-      setParams.push(toolsJson);
-      changed.push("available_tools_json");
+    if (body.notes !== void 0) {
+      fields.push("notes_text = ?");
+      setParams.push(body.notes?.trim() || null);
+      changed.push("notes_text");
     }
     if (body.branchOverride !== void 0) {
       const override = body.branchOverride?.trim() || null;
@@ -143082,17 +142998,10 @@ async function moveMissionProjectTx({
       );
       changed.push("assigned_workspace_user_id");
     }
-    if (body.acceptanceCriteria !== void 0) {
-      fields.push("acceptance_criteria_text = ?");
-      setParams.push(body.acceptanceCriteria?.trim() || null);
-      changed.push("acceptance_criteria_text");
-    }
-    if (body.availableTools !== void 0) {
-      if (!Array.isArray(body.availableTools))
-        throw new ApiError(400, "availableTools must be an array");
-      fields.push("available_tools_json = ?");
-      setParams.push(JSON.stringify(body.availableTools.map((name) => ({ name }))));
-      changed.push("available_tools_json");
+    if (body.notes !== void 0) {
+      fields.push("notes_text = ?");
+      setParams.push(body.notes?.trim() || null);
+      changed.push("notes_text");
     }
     const now2 = nowIso2();
     if (statusRow.type === "execute" && existing.status_type !== "execute") {
@@ -143520,9 +143429,9 @@ async function createScheduledDuplicateIfNeeded(tx, mission, newStatusType) {
     `INSERT INTO missions
        (id, workspace_id, project_id, display_id, sequence_number, title,
         status_id, status_type, board_position, priority, assigned_workspace_user_id,
-        acceptance_criteria_text, available_tools_json, execution_target_intent_json,
+        notes_text, execution_target_intent_json,
         metadata_json, schedule_id, due_datetime, created_at, updated_at, revision)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}', '{}', ?, ?, ?, ?, 1)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}', '{}', ?, ?, ?, ?, 1)`,
     [
       newMissionId,
       mission.workspace_id,
@@ -143535,8 +143444,7 @@ async function createScheduledDuplicateIfNeeded(tx, mission, newStatusType) {
       boardPosition,
       mission.priority ?? "normal",
       mission.assigned_workspace_user_id,
-      mission.acceptance_criteria_text,
-      mission.available_tools_json,
+      mission.notes_text,
       mission.schedule_id,
       nextDueDatetime,
       now2,
@@ -143630,7 +143538,7 @@ function selectMyMissionsSql(pairPlaceholders) {
   SELECT t.id, t.workspace_id, t.project_id, t.display_id, t.sequence_number, t.title,
          t.status_id, t.status_type, t.board_position, t.priority,
          t.assigned_workspace_user_id,
-         t.acceptance_criteria_text, t.available_tools_json,
+         t.notes_text,
          t.schedule_id, t.due_datetime,
          t.created_at, t.updated_at, t.revision,
          p.name AS project_name, p.settings_json AS project_settings_json,
@@ -144000,10 +143908,8 @@ async function createObjective(body) {
 }
 async function ensureDraftSlotAfterObjectiveLeavesQueue(db, {
   workspaceId,
-  workspaceUserId,
   missionId,
   projectId,
-  assignedAgent,
   now: now2
 }) {
   const drafts = await db.all(
@@ -144016,6 +143922,7 @@ async function ensureDraftSlotAfterObjectiveLeavesQueue(db, {
   const nextFuture = await db.get(
     `SELECT id, revision FROM objectives
        WHERE mission_id = ? AND workspace_id = ? AND state = 'future' AND deleted_at IS NULL
+         AND TRIM(instruction_text) <> ''
        ORDER BY position ASC, created_at ASC LIMIT 1`,
     [missionId, workspaceId]
   );
@@ -144062,19 +143969,6 @@ async function ensureDraftSlotAfterObjectiveLeavesQueue(db, {
         workspaceId
       },
       db
-    );
-    return;
-  }
-  if (drafts.length === 0) {
-    await insertObjective2(
-      db,
-      { workspaceId, workspaceUserId },
-      {
-        missionId,
-        instructionText: "",
-        state: "draft",
-        assignedAgent
-      }
     );
   }
 }
@@ -144288,10 +144182,8 @@ async function updateObjectiveTx(id, body) {
     if (body.state === "executing" && body.state !== existing.state && (existing.state === "draft" || existing.state === "future" || existing.state === "submitted" || existing.state === "launching")) {
       await ensureDraftSlotAfterObjectiveLeavesQueue(tx, {
         workspaceId,
-        workspaceUserId,
         missionId: existing.mission_id,
         projectId: existing.project_id,
-        assignedAgent: body.assignedAgent !== void 0 ? body.assignedAgent?.trim() || null : existing.assigned_agent,
         now: now2
       });
     }

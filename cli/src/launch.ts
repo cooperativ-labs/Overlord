@@ -446,8 +446,7 @@ export async function buildLaunchPlan({
         workingDirectory: options.workingDirectory,
         preCommand: options.preCommand,
         extraEnv: exportedEnv,
-        preLaunchCommands,
-        missionLink: { displayId: context.displayId, title: context.title }
+        preLaunchCommands
       })
     );
     chmodSync(terminalScriptPath, 0o700);
@@ -464,8 +463,7 @@ export async function buildLaunchPlan({
     terminalLaunchBackground: options.terminalLaunchBackground,
     terminalScriptPath,
     extraEnv: exportedEnv,
-    preLaunchCommands,
-    missionLink: { displayId: context.displayId, title: context.title }
+    preLaunchCommands
   });
 
   return {

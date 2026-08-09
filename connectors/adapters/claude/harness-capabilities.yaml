@@ -183,8 +183,8 @@ hazards:
     severity: medium
     summary: >-
       The installed Stop hook calls `ovld protocol hook-event --hook-type Stop`, which the CLI
-      rejects, and then parses a `deliveryStatus` field nothing produces. Its mission-link
-      footer still works. Confirmed again at 2.1.221 from a live agent-pod session: every entry
+      rejects, and then parses a `deliveryStatus` field nothing produces. Confirmed again at
+      2.1.221 from a live agent-pod session: every entry
       in ~/.ovld/logs/stop-hook.log takes the `no launch mission id` branch and returns before
       the delivery check, because the hook gates on a `MISSION_ID` environment variable the pod
       does not set. The PostToolUse hook works in the same session because it resolves the

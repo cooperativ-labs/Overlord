@@ -6404,21 +6404,27 @@ export async function createObjective(body: CreateObjectiveBody): Promise<Object
   return objective;
 }
 
+/**
+ * Refills the next-up draft slot after an objective leaves the queue by
+ * promoting the first authored `future` objective (and dropping any leftover
+ * blank draft it replaces).
+ *
+ * It never *creates* a blank draft. A stored objective with no instruction text
+ * is indistinguishable from real work to agents, counts, and auto-advance, so
+ * the "empty field to type into" is a client-only composer (the mission panel's
+ * ghost objective card) that persists an objective only once it has content.
+ */
 async function ensureDraftSlotAfterObjectiveLeavesQueue(
   db: DatabaseClient,
   {
     workspaceId,
-    workspaceUserId,
     missionId,
     projectId,
-    assignedAgent,
     now
   }: {
     workspaceId: string;
-    workspaceUserId: string | null;
     missionId: string;
     projectId: string;
-    assignedAgent: string | null;
     now: string;
   }
 ): Promise<void> {
@@ -6435,9 +6441,12 @@ async function ensureDraftSlotAfterObjectiveLeavesQueue(
 
   if (drafts.some(draft => draft.instruction_text.trim())) return;
 
+  // Only an authored future objective refills the slot; a blank one (legacy rows
+  // from when blank slots were persisted) is not real work to promote.
   const nextFuture = (await db.get(
     `SELECT id, revision FROM objectives
        WHERE mission_id = ? AND workspace_id = ? AND state = 'future' AND deleted_at IS NULL
+         AND TRIM(instruction_text) <> ''
        ORDER BY position ASC, created_at ASC LIMIT 1`,
     [missionId, workspaceId]
   )) as { id: string; revision: number } | undefined;
@@ -6488,20 +6497,6 @@ async function ensureDraftSlotAfterObjectiveLeavesQueue(
         workspaceId
       },
       db
-    );
-    return;
-  }
-
-  if (drafts.length === 0) {
-    await insertObjective(
-      db,
-      { workspaceId, workspaceUserId },
-      {
-        missionId,
-        instructionText: '',
-        state: 'draft',
-        assignedAgent
-      }
     );
   }
 }
@@ -6752,13 +6747,8 @@ async function updateObjectiveTx(
     ) {
       await ensureDraftSlotAfterObjectiveLeavesQueue(tx, {
         workspaceId,
-        workspaceUserId,
         missionId: existing.mission_id,
         projectId: existing.project_id,
-        assignedAgent:
-          body.assignedAgent !== undefined
-            ? body.assignedAgent?.trim() || null
-            : existing.assigned_agent,
         now
       });
     }

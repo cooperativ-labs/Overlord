@@ -29,9 +29,11 @@ export type ObjectiveLifecycleViolation = {
 };
 
 export type EnsureDraftSlotPlan =
-  | { action: 'none'; reason: 'draft_slot_filled' | 'next_up_still_launching' }
-  | { action: 'promote_future'; objectiveId: string }
-  | { action: 'create_blank_draft'; assignedAgent: string | null };
+  | {
+      action: 'none';
+      reason: 'draft_slot_filled' | 'next_up_still_launching' | 'no_future_objective';
+    }
+  | { action: 'promote_future'; objectiveId: string };
 
 export type AutoAdvanceDecision =
   | { action: 'none'; reason: 'no_non_empty_draft' | 'human_only_mission' }
@@ -139,6 +141,31 @@ export function canEditObjectiveInstruction(objective: ObjectiveLifecycleObjecti
   );
 }
 
+/**
+ * Whether an objective whose instruction text was just cleared should be
+ * discarded rather than saved as a blank row.
+ *
+ * Blank objectives are not part of the model: the "empty field to type into" is
+ * a client-only composer, so an unsaved-yet objective the user empties out is
+ * simply not work and disappears. Only the editable states qualify — an
+ * executing or complete objective is history and is never removed this way.
+ *
+ * `attachmentCount` is the escape hatch: an objective carrying attachments is
+ * real work even with no text, so it is kept and the empty text is saved.
+ *
+ * Callers must only ask this when the *edit has finished* (blur, ⌘/Ctrl+Enter).
+ * A debounced autosave firing mid-keystroke cannot be told apart from a user who
+ * cleared the field to retype it, and would delete the card out from under them.
+ */
+export function shouldDiscardEmptiedObjective(
+  objective: ObjectiveLifecycleObjective,
+  { attachmentCount = 0 }: { attachmentCount?: number } = {}
+): boolean {
+  if (objectiveHasInstructionText(objective)) return false;
+  if (attachmentCount > 0) return false;
+  return isFutureObjective(objective) || objective.state === 'draft';
+}
+
 export function sortObjectivesByLifecycleOrder<TObjective extends ObjectiveLifecycleObjective>(
   objectives: readonly TObjective[]
 ): TObjective[] {
@@ -229,9 +256,18 @@ export function deriveObjectiveLifecycleView<TObjective extends ObjectiveLifecyc
   };
 }
 
+/**
+ * Plans the next-up slot refill after an objective leaves the queue.
+ *
+ * A mission's "empty slot to type into" is a **client-only** affordance (the
+ * mission panel's ghost objective card), never a persisted blank objective: a
+ * stored objective with no instruction text is indistinguishable from real work
+ * to agents, counts, and auto-advance. So this planner only ever promotes an
+ * already-authored future objective; when there is none it does nothing and the
+ * UI renders its own unsaved composer.
+ */
 export function planEnsureDraftSlot(
-  objectives: readonly ObjectiveLifecycleObjective[],
-  options: { previousObjectiveId?: string; assignedAgent?: string | null } = {}
+  objectives: readonly ObjectiveLifecycleObjective[]
 ): EnsureDraftSlotPlan {
   const ordered = sortObjectivesByLifecycleOrder(objectives);
   if (ordered.some(objective => objective.state === 'draft')) {
@@ -243,21 +279,18 @@ export function planEnsureDraftSlot(
     return { action: 'none', reason: 'next_up_still_launching' };
   }
 
-  const nextFuture = ordered.find(isFutureObjective);
+  // Only an authored future objective refills the slot. A blank one is a legacy
+  // row from when blank slots were persisted, not work to promote — matching the
+  // `TRIM(instruction_text) <> ''` guard the backend and core refill paths use,
+  // so the planner and the implementations cannot disagree.
+  const nextFuture = ordered.find(
+    objective => isFutureObjective(objective) && objectiveHasInstructionText(objective)
+  );
   if (nextFuture) {
     return { action: 'promote_future', objectiveId: nextFuture.id };
   }
 
-  const previousObjective = options.previousObjectiveId
-    ? ordered.find(objective => objective.id === options.previousObjectiveId)
-    : null;
-  const inheritedAgent =
-    options.assignedAgent ??
-    previousObjective?.assignedAgent ??
-    [...ordered].reverse().find(objective => objective.assignedAgent)?.assignedAgent ??
-    null;
-
-  return { action: 'create_blank_draft', assignedAgent: inheritedAgent };
+  return { action: 'none', reason: 'no_future_objective' };
 }
 
 export function decideAutoAdvanceAfterDelivery(

@@ -15,7 +15,10 @@ import {
   verticalListSortingStrategy
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { deriveObjectiveLifecycleView } from '@overlord/automations/objective-manager';
+import {
+  deriveObjectiveLifecycleView,
+  objectiveHasInstructionText
+} from '@overlord/automations/objective-manager';
 import { GripVertical } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -26,8 +29,10 @@ import type {
 } from '../../../shared/contract.ts';
 import { useReorderFutureObjectives } from '../../lib/queries.ts';
 import { cn } from '../../lib/utils.ts';
+import { Button } from '../ui.tsx';
 
 import { DraftObjective } from './DraftObjective.tsx';
+import { GhostObjective } from './GhostObjective.tsx';
 import { ObjectiveCollapsibleItem } from './ObjectiveCollapsibleItem.tsx';
 
 /**
@@ -85,9 +90,17 @@ function SortableFutureObjective({
  *    launch cards.
  * 3. **Future** — {@link DraftObjective} cards made sortable via dnd-kit so they
  *    can be reordered; the new order is persisted optimistically.
+ *
+ * Plus the {@link GhostObjective} composer, which is *not* an objective: the
+ * always-available empty field used to be a blank objective row written to the
+ * database, which every other surface then had to filter out. It is now purely
+ * client-side and only persists an objective once it has instruction text, so
+ * "Add objective" and the next-up slot never create empty work.
  */
 export function MissionObjectivesSection({ mission }: { mission: MissionDetailDto }) {
   const reorder = useReorderFutureObjectives();
+  /** Whether the user asked for an extra (queued) composer via "+ Add objective". */
+  const [extraSlotRequested, setExtraSlotRequested] = useState(false);
 
   const lifecycleView = useMemo(
     () => deriveObjectiveLifecycleView(mission.objectives),
@@ -147,7 +160,19 @@ export function MissionObjectivesSection({ mission }: { mission: MissionDetailDt
     );
   }
 
-  const hasNonExecuted = lifecycleView.hasNonExecuted;
+  // The next-up composer only appears when nothing occupies the editable slot.
+  // A legacy blank draft row (written before the slot became client-only) still
+  // renders as its own card, so we must not stack a ghost on top of it.
+  const showNextUpGhost = editableObjectives.length === 0;
+  // A second composer, queued behind the next-up objective, appears only when
+  // the user explicitly asks for another slot.
+  const showQueuedGhost = extraSlotRequested && !showNextUpGhost;
+  const hasBlankSlot =
+    showNextUpGhost ||
+    showQueuedGhost ||
+    [...editableObjectives, ...orderedFutureObjectives].some(
+      objective => !objectiveHasInstructionText(objective)
+    );
 
   return (
     <div className="space-y-3">
@@ -159,42 +184,70 @@ export function MissionObjectivesSection({ mission }: { mission: MissionDetailDt
         </div>
       ) : null}
 
-      {hasNonExecuted ? (
-        <div className="space-y-3">
-          {editableObjectives.map(objective => (
-            <DraftObjective
-              key={objective.id}
-              objective={objective}
-              siblings={objectives}
-              executionRequests={mission.executionRequests}
-            />
-          ))}
+      <div className="space-y-3">
+        {editableObjectives.map(objective => (
+          <DraftObjective
+            key={objective.id}
+            objective={objective}
+            siblings={objectives}
+            executionRequests={mission.executionRequests}
+          />
+        ))}
 
-          {orderedFutureObjectives.length > 0 ? (
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              onDragEnd={handleDragEnd}
+        {showNextUpGhost ? (
+          <GhostObjective
+            missionId={mission.id}
+            projectId={mission.projectId}
+            autoFocus={extraSlotRequested}
+            onMaterialized={() => setExtraSlotRequested(false)}
+            onDismissEmpty={() => setExtraSlotRequested(false)}
+          />
+        ) : null}
+
+        {orderedFutureObjectives.length > 0 ? (
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext
+              items={orderedFutureObjectives.map(o => o.id)}
+              strategy={verticalListSortingStrategy}
             >
-              <SortableContext
-                items={orderedFutureObjectives.map(o => o.id)}
-                strategy={verticalListSortingStrategy}
-              >
-                <div className="space-y-3">
-                  {orderedFutureObjectives.map(objective => (
-                    <SortableFutureObjective
-                      key={objective.id}
-                      objective={objective}
-                      siblings={objectives}
-                      executionRequests={mission.executionRequests}
-                    />
-                  ))}
-                </div>
-              </SortableContext>
-            </DndContext>
-          ) : null}
+              <div className="space-y-3">
+                {orderedFutureObjectives.map(objective => (
+                  <SortableFutureObjective
+                    key={objective.id}
+                    objective={objective}
+                    siblings={objectives}
+                    executionRequests={mission.executionRequests}
+                  />
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
+        ) : null}
+
+        {showQueuedGhost ? (
+          <GhostObjective
+            missionId={mission.id}
+            projectId={mission.projectId}
+            autoFocus
+            onMaterialized={() => setExtraSlotRequested(false)}
+            onDismissEmpty={() => setExtraSlotRequested(false)}
+          />
+        ) : null}
+
+        <div>
+          <Button
+            variant="secondary"
+            onClick={() => setExtraSlotRequested(true)}
+            disabled={hasBlankSlot}
+          >
+            + Add objective
+          </Button>
         </div>
-      ) : null}
+      </div>
     </div>
   );
 }

@@ -360,15 +360,15 @@ describe('deliverSession mechanical change capture', () => {
       objectives: [{ objective: 'Complete current objective' }]
     });
     const attached = await attachSession({ ctx, missionId: mission.displayId });
-    // Blank slots are withheld from the agent-facing arrays, so read the
-    // placeholder attach created straight from the database.
-    const placeholder = (await ctx.db.get(
-      `SELECT id FROM objectives
-         WHERE mission_id = ? AND state = 'draft' AND TRIM(instruction_text) = ''
-           AND deleted_at IS NULL`,
-      [mission.id]
-    )) as { id: string } | undefined;
-    assert.ok(placeholder);
+    // Blank slots are no longer persisted; this stands in for a legacy row left
+    // over from when the mission panel's empty field was written to the database.
+    const placeholder = await insertObjective({
+      ctx,
+      missionId: mission.id,
+      instructionText: '',
+      state: 'draft'
+    });
+    assert.equal(placeholder.state, 'draft');
 
     const future = await insertObjective({
       ctx,

@@ -15,8 +15,8 @@ function gitRootOf(directory: string): string {
 
 describe('createIsolatedCheckout', () => {
   // Regression guard for the real damage this helper exists to prevent: linking
-  // a resource rewrites the *enclosing git root's* AGENTS.md, CLAUDE.md,
-  // .gitignore and pre-commit hook. Before this helper, tests linked
+  // a resource rewrites the *enclosing git root's* AGENTS.md, CLAUDE.md, and
+  // .gitignore. Before this helper, tests linked
   // `process.cwd()` or a `tmpdir()` path — and Overlord pins TMPDIR to
   // `<project>/.overlord/tmp` in agent sessions — so both resolved to this
   // repository and every test run mutated the working tree.
@@ -40,13 +40,7 @@ describe('createIsolatedCheckout', () => {
 
     // Every artifact the metadata-protection pass produces lands here, not in
     // whatever repository happens to enclose `tmpdir()`.
-    for (const relative of [
-      '.overlord/project.json',
-      'AGENTS.md',
-      'CLAUDE.md',
-      '.gitignore',
-      '.git/hooks/pre-commit'
-    ]) {
+    for (const relative of ['.overlord/project.json', 'AGENTS.md', 'CLAUDE.md', '.gitignore']) {
       assert.equal(existsSync(path.join(directory, relative)), true, relative);
     }
     assert.match(

@@ -16,8 +16,8 @@ let cleanupRegistered = false;
  *
  * Linking a resource does far more than write `<dir>/.overlord/project.json`:
  * `writeProjectJson` walks up to the *enclosing git root* and rewrites that
- * checkout's `AGENTS.md`, `CLAUDE.md`, `.gitignore`, and
- * `.git/hooks/pre-commit`. A test that links any directory inside this
+ * checkout's `AGENTS.md`, `CLAUDE.md`, and `.gitignore`. A test that links
+ * any directory inside this
  * repository therefore mutates the real working tree.
  *
  * Two habits make that easy to do by accident:

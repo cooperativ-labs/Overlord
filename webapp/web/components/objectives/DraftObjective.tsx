@@ -1,3 +1,4 @@
+import { shouldDiscardEmptiedObjective } from '@overlord/automations/objective-manager';
 import { ChevronUp } from 'lucide-react';
 import { useState } from 'react';
 
@@ -87,7 +88,17 @@ export function DraftObjective({ objective, siblings, executionRequests }: Draft
             projectMentionOptions={projectMentionOptions}
             missionMentionOptions={missionMentionOptions}
             onSave={instructionText => {
-              if (!instructionText.trim() && objective.state === 'future') {
+              // An emptied draft or future objective is no longer work, so it
+              // deletes itself rather than lingering as a blank row. Empty
+              // saves only arrive when the edit finishes (see `commitEmpty` in
+              // InlineEditField), so clearing the field to retype does not
+              // delete the card mid-edit.
+              if (
+                shouldDiscardEmptiedObjective(
+                  { ...objective, instructionText },
+                  { attachmentCount: attachments.length }
+                )
+              ) {
                 remove.mutate(objective.id);
                 return;
               }

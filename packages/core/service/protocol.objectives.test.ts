@@ -113,7 +113,7 @@ describe('protocol objective creation', () => {
     await db.close();
   });
 
-  it('creates a blank draft slot when attach consumes the only next-up objective', async () => {
+  it('persists no blank draft slot when attach consumes the only next-up objective', async () => {
     const { db, ctx } = await createSeededServiceContext({ source: 'protocol' });
     const project = await createProject({ ctx, name: 'Attach Refill' });
     const { mission, objectives } = await createMissionWithObjectives({
@@ -134,18 +134,16 @@ describe('protocol objective creation', () => {
 
     assert.equal(attached.objective.state, 'executing');
     assert.equal(attached.previousObjectives.length, 0);
-    // The blank slot is created for the UI but withheld from the agent, which
-    // would otherwise read it as a real objective awaiting approval.
     assert.equal(attached.futureObjectives.length, 0);
 
+    // The empty next-up field is the mission panel's client-only composer, so
+    // execution leaves no draft row behind for agents or counts to misread.
     const draftRow = (await ctx.db.get(
-      `SELECT instruction_text, title, assigned_agent FROM objectives
+      `SELECT id FROM objectives
          WHERE mission_id = ? AND state = 'draft' AND deleted_at IS NULL`,
       [mission.id]
-    )) as { instruction_text: string; title: string; assigned_agent: string | null };
-    assert.equal(draftRow.instruction_text, '');
-    assert.equal(draftRow.title, 'New objective');
-    assert.equal(draftRow.assigned_agent, 'claude');
+    )) as { id: string } | undefined;
+    assert.equal(draftRow, undefined);
 
     await db.close();
   });

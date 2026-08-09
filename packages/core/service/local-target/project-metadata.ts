@@ -8,7 +8,7 @@
 // makes that automatic — only a co-located in-process provider writes.
 
 import { execFileSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { nowIso } from '../util.js';
@@ -26,10 +26,6 @@ const PROJECT_METADATA_INSTRUCTION = `${INSTRUCTION_BLOCK_START}
 replace, stage, commit, delete, or revert it. If its link metadata needs to
 change, use Overlord's resource-linking command instead.
 ${INSTRUCTION_BLOCK_END}`;
-const HOOK_GUARD_FILENAME = 'overlord-project-json-guard';
-const HOOK_BLOCK_START = '# >>> Overlord project metadata guard >>>';
-const HOOK_BLOCK_END = '# <<< Overlord project metadata guard <<<';
-
 function writeIfChanged(filePath: string, content: string): void {
   if (!existsSync(filePath) || readFileSync(filePath, 'utf8') !== content) {
     writeFileSync(filePath, content);
@@ -82,60 +78,11 @@ function resolveGitRoot(directoryPath: string): string | null {
   }
 }
 
-function resolveGitHooksDirectory(gitRoot: string): string | null {
-  try {
-    const gitPath = execFileSync('git', ['-C', gitRoot, 'rev-parse', '--git-path', 'hooks'], {
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'ignore']
-    }).trim();
-    return path.isAbsolute(gitPath) ? gitPath : path.resolve(gitRoot, gitPath);
-  } catch {
-    return null;
-  }
-}
-
-function ensurePreCommitGuard(gitRoot: string): void {
-  const hooksDirectory = resolveGitHooksDirectory(gitRoot);
-  if (!hooksDirectory) return;
-  mkdirSync(hooksDirectory, { recursive: true });
-
-  const guardPath = path.join(hooksDirectory, HOOK_GUARD_FILENAME);
-  writeIfChanged(
-    guardPath,
-    `#!/bin/sh
-# Managed by Overlord: reject any staged project-link metadata change.
-if git diff --cached --quiet -- .overlord/project.json; then
-  exit 0
-fi
-echo "Overlord blocked this commit: .overlord/project.json is managed metadata and must not be changed." >&2
-exit 1
-`
-  );
-  chmodSync(guardPath, 0o755);
-
-  const preCommitPath = path.join(hooksDirectory, 'pre-commit');
-  const hookBlock = `${HOOK_BLOCK_START}
-"$(dirname "$0")/${HOOK_GUARD_FILENAME}" || exit $?
-${HOOK_BLOCK_END}`;
-  if (!existsSync(preCommitPath)) {
-    writeFileSync(preCommitPath, `#!/bin/sh\n${hookBlock}\n`);
-    chmodSync(preCommitPath, 0o755);
-    return;
-  }
-
-  const existing = readFileSync(preCommitPath, 'utf8');
-  const blockPattern = new RegExp(`${HOOK_BLOCK_START}[\\s\\S]*?${HOOK_BLOCK_END}\\n?`, 'g');
-  const updated = `${existing.replace(blockPattern, '').trimEnd()}\n\n${hookBlock}\n`;
-  writeIfChanged(preCommitPath, updated);
-  chmodSync(preCommitPath, 0o755);
-}
-
 function protectProjectMetadata(directoryPath: string): void {
   const gitRoot = resolveGitRoot(directoryPath);
   const checkoutPath = gitRoot ?? directoryPath;
   ensureAgentInstructions(checkoutPath);
   ensureGitignore(checkoutPath);
-  if (gitRoot) ensurePreCommitGuard(gitRoot);
 }
 
 export interface ProjectJsonContents {

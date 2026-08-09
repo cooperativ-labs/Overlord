@@ -27,15 +27,13 @@ if [ -n "${OVERLORD_SESSION_CHANNEL_ID:-}" ]; then
   if [ "$INBOX_EXIT" -eq 0 ] && [ -n "$INBOX_OUT" ]; then
     # followup_message JSON from inbox — Queued(turn-boundary), never Delivered.
     printf '%s' "$INBOX_OUT"
-    ovld protocol mission-link >&2 2>/dev/null || true
     exit 0
   fi
 fi
 
 if [ -z "${MISSION_ID:-}" ]; then
-  log_hook "no launch mission id; printing any cwd mission-link pointer"
+  log_hook "no launch mission id, skipping delivery check"
   printf '{}'
-  ovld protocol mission-link >&2 2>/dev/null || true
   exit 0
 fi
 
@@ -89,11 +87,6 @@ else
   log_hook "hook-event failed exit=$OVLD_EXIT"
   printf '{}'
 fi
-
-# Preserve Cursor's machine-readable stdout response; the human-facing footer
-# belongs on stderr after Cursor has consumed that JSON. mission-link does not
-# call the backend or alter the hook response above.
-ovld protocol mission-link >&2 2>/dev/null || true
 
 rm -f "$RESPONSE_FILE"
 exit 0

@@ -4,7 +4,7 @@
 # IMPORTANT: Update this file and CONTRACT.md together when adding components or surfaces.
 # Increment contractVersion when any stable interface changes.
 
-contractVersion: '56'
+contractVersion: '58'
 
 components:
   protocol:
@@ -73,12 +73,11 @@ components:
       - 'ovld config set: select a local loopback backend URL or hosted/cloud backend URL'
       - 'ovld auth login: first-run backend onboarding before authentication'
       - 'project linking and discovery from working directory, with a packaged-mode fallback to the OS app-data overlord.toml'
-      - 'configuration file locations: overlord.toml, .overlord/project.json (legacy resourceId plus additive resourceIdsByExecutionTarget map keyed by execution_targets.id, plus additive resourceKey for logical checkout identity); linking a read_write checkout idempotently maintains its agent no-edit instruction block, ignores only .overlord/tmp/ and .overlord/logs/, and installs a local pre-commit guard for .overlord/project.json'
+      - 'configuration file locations: overlord.toml, .overlord/project.json (legacy resourceId plus additive resourceIdsByExecutionTarget map keyed by execution_targets.id, plus additive resourceKey for logical checkout identity); linking a read_write checkout idempotently maintains its agent no-edit instruction block and ignores only .overlord/tmp/ and .overlord/logs/'
       - 'project resource registration commands: ovld add-cwd --key <resourceKey> upserts a target-scoped local_checkout source on the project-scoped identity; ovld add-url --url <git-url> upserts its project-global git source'
       - 'backend URL settings: backend_url and backend_mode (local/cloud)'
       - 'per-user terminal profiles on user_execution_target_preferences for opening launched agents in a terminal window'
       - 'protocol session-key cache: persists the attach session key by (working directory, mission) and auto-injects --session-key when the flag is absent; cleared at deliver'
-      - 'local mission-link formatter: ovld protocol mission-link reads the cwd active-mission pointer or launch environment and prints the credential-free Desktop mission deep link without a backend request'
       - 'agent-session runtime: the ovld agent-session command family and the compiled harness catalog (cli/src/agent-session/catalog.generated.ts). The only local module that carries agent-session traffic to the backend, and only with the channel-scoped OVERLORD_SESSION_CHANNEL_TOKEN — never the user broad USER_TOKEN. The runtime reads the compiled catalog, never the descriptor YAML. Adding a sixth harness must add zero agent-session subcommands'
       - 'ovld agent-session capabilities [<agent>] [--json]: offline human/agent-facing reader of the compiled catalog — no network call, no write, no subprocess'
       - 'ovld agent-session event --agent <key> --payload-file -: the push path for callback and extension shapes. Gate, reduce on the machine, post, exit. Emits no stdout or stderr on any path and exits 0 on every path including failure, because an observational hook that speaks has produced output the user did not ask for and cannot turn off'
@@ -105,7 +104,6 @@ components:
       - 'connector core workflow instructions'
       - 'per-agent plugin/adapter files and managed file manifests'
       - 'hook scripts and their event contracts'
-      - 'deterministic terminal footers for adapters that declare the existing Stop hook capability'
       - 'ovld agent-setup <agent>/all and ovld doctor behavior'
       - 'connector capability declarations and approved capability flag set'
       - 'per-adapter event codec declaration (connectors/adapters/<agent>/codec/<agent>.codec.yaml, referenced by the descriptor codecSpec field): a declaration of where native values live, never executable code. It cannot name a destination the core interpreter does not implement, and an unknown key is a generation error rather than a silently ignored field'

@@ -1,14 +1,9 @@
-import {
-  deriveObjectiveLifecycleView,
-  objectiveHasInstructionText
-} from '@overlord/automations/objective-manager';
 import { useNavigate } from '@tanstack/react-router';
 import { ArrowRightToLine, Loader2, Sparkles, Unplug } from 'lucide-react';
 import { useRef, useState } from 'react';
 
 import type { MissionDetailDto } from '../../shared/contract.ts';
 import {
-  useCreateObjective,
   useGenerateMissionTitle,
   useMission,
   useUpdateMission,
@@ -44,39 +39,6 @@ import { MissionSharedStateFooter } from './MissionSharedStateFooter.tsx';
 import { MissionStatusSelect } from './MissionStatusSelect.tsx';
 import { MissionTagSelect } from './MissionTagSelect.tsx';
 import { Button, Spinner } from './ui.tsx';
-
-/**
- * Adds a new objective by creating a blank editable slot rather than opening a
- * separate composer. The slot renders directly as a {@link MissionObjectivesSection}
- * `DraftObjective` card for inline authoring (with `@`/`#`/`$` mentions). The
- * server promotes it to `future` automatically when a draft already exists, so a
- * draft is always the next-up slot and extra slots queue behind it. The button
- * disables while a blank slot already awaits input to avoid stacking empties.
- */
-function AddObjective({ mission }: { mission: MissionDetailDto }) {
-  const create = useCreateObjective();
-  const lifecycleView = deriveObjectiveLifecycleView(mission.objectives);
-
-  const hasBlankSlot = [
-    ...lifecycleView.editableObjectives,
-    ...lifecycleView.futureObjectives
-  ].some(objective => !objectiveHasInstructionText(objective));
-  const disabled = hasBlankSlot || create.isPending;
-
-  const addObjective = () => {
-    if (disabled) return;
-    create.mutate({ missionId: mission.id, instructionText: '', state: 'draft' });
-  };
-
-  return (
-    <div className="space-y-1">
-      <Button variant="secondary" onClick={addObjective} disabled={disabled}>
-        {create.isPending ? 'Adding…' : '+ Add objective'}
-      </Button>
-      {create.isError && <p className="text-xs text-red-400">{(create.error as Error).message}</p>}
-    </div>
-  );
-}
 
 /** Generates the mission title from its primary objective via the Automations Layer summarizer. */
 function GenerateMissionTitleButton({ mission }: { mission: MissionDetailDto }) {
@@ -346,7 +308,6 @@ export function MissionPanel({
         <section className="border-b border-(--color-border) bg-(--color-surface-1) pb-5 pt-2">
           <div className="flex flex-col gap-3 px-5 ">
             <MissionObjectivesSection mission={mission} />
-            <AddObjective mission={mission} />
           </div>
         </section>
 

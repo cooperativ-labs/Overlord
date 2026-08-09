@@ -142,7 +142,7 @@ Requirements:
 - Written into linked project directories.
 - Stores local project identifier, resource label, whether the directory is primary, and enough metadata for project discovery.
 - Must remain tracked: linking never ignores `project.json` or the whole `.overlord/` directory.
-- Is exclusively managed by Overlord. Linking writes a marked no-edit rule to the checkout's `AGENTS.md` and `CLAUDE.md`, and installs a local pre-commit guard that rejects staged changes to it.
+- Is exclusively managed by Overlord. Linking writes a marked no-edit rule to the checkout's `AGENTS.md` and `CLAUDE.md`.
 
 ### `~/.ovld/` (global CLI config) and local backend data
 
