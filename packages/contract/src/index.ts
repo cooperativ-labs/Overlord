@@ -21,6 +21,8 @@ export {
   agentLaunchFlagKey,
   agentLaunchFlagsToArgv,
   formatAgentLaunchFlagText,
+  formatOvldLaunchCommand,
+  formatShellWord,
   normalizeAgentLaunchFlags,
   parseAgentLaunchFlagText
 } from './agent-launch-flags.js';
@@ -1327,6 +1329,13 @@ export interface ObjectivePromptDto {
   objectiveId: string;
   missionId: string;
   prompt: string;
+}
+
+/** Paste-ready `ovld launch` command for the selected agent and launch mechanics. */
+export interface ObjectiveLaunchCommandDto {
+  objectiveId: string;
+  missionId: string;
+  command: string;
 }
 
 // ---- Realtime feed ----

@@ -1,6 +1,8 @@
 import {
   agentLaunchFlagsToArgv,
   formatAgentLaunchFlagText,
+  formatOvldLaunchCommand,
+  formatShellWord,
   normalizeAgentLaunchFlags,
   parseAgentLaunchFlagText
 } from '@overlord/contract';
@@ -48,5 +50,27 @@ test('formatAgentLaunchFlagText renders boolean and positional flags', () => {
   assert.equal(
     formatAgentLaunchFlagText({ name: '--permission-mode', value: 'auto' }),
     '--permission-mode auto'
+  );
+});
+
+test('formatShellWord quotes values that need shell protection', () => {
+  assert.equal(formatShellWord('cursor'), 'cursor');
+  assert.equal(formatShellWord('gpt-5.6-terra'), 'gpt-5.6-terra');
+  assert.equal(formatShellWord('--sandbox workspace-write'), "'--sandbox workspace-write'");
+  assert.equal(formatShellWord("don't"), "'don'\\''t'");
+});
+
+test('formatOvldLaunchCommand builds a paste-ready ovld launch invocation', () => {
+  assert.equal(
+    formatOvldLaunchCommand({
+      agent: 'cursor',
+      missionDisplayId: 'coo:659',
+      objectiveId: 'obj-1',
+      model: 'gpt-5.6-terra',
+      thinking: 'high',
+      preCommand: 'agp',
+      flags: [{ name: '--sandbox', value: 'workspace-write' }]
+    }),
+    "ovld launch cursor --mission-id coo:659 --objective-id obj-1 --model gpt-5.6-terra --thinking high --pre-command agp --flag '--sandbox workspace-write'"
   );
 });

@@ -14,7 +14,8 @@ const { entityChangeDtoFromRow, parseChangedFields, readChangesAfter } =
   await import('./realtime.ts');
 const { createMission, createProject, createObjective, reorderFutureObjectives, updateObjective } =
   await import('./repository.ts');
-const { updateLaunchPreference } = await import('./execution/launch.ts');
+const { getObjectiveLaunchCommand, getObjectivePrompt, updateLaunchPreference } =
+  await import('./execution/launch.ts');
 const { ApiError } = await import('./errors.ts');
 
 // Operator is seeded by bootstrapIntegrationTestDb.
@@ -117,6 +118,47 @@ test('clearing a submitted objective instruction to empty is still rejected', as
   await assert.rejects(
     updateObjective(objectiveId, { instructionText: '   ' }),
     (err: unknown) => err instanceof ApiError && err.status === 400
+  );
+});
+
+test('copyable objective prompts avoid shell-unbalanced Markdown fences', async () => {
+  const project = await createProject({ name: 'Copyable Prompt Test' });
+  const mission = await createMission({
+    projectId: project.id,
+    firstObjective: 'Use the supplied terminal command.'
+  });
+
+  const prompt = await getObjectivePrompt(mission.objectives[0]!.id);
+
+  assert.doesNotMatch(prompt.prompt, /```/);
+  assert.match(prompt.prompt, /\n {4}ovld protocol attach --mission-id /);
+});
+
+test('copyable launch commands include agent, mission, and resolved launch mechanics', async () => {
+  const project = await createProject({ name: 'Copyable Launch Command Test' });
+  const mission = await createMission({
+    projectId: project.id,
+    firstObjective: 'Launch from the terminal.'
+  });
+  const objectiveId = mission.objectives[0]!.id;
+
+  await updateObjective(objectiveId, {
+    launchConfigAgent: 'cursor',
+    launchConfigOverride: {
+      preCommand: 'agp',
+      flags: [{ name: '--sandbox', value: 'workspace-write' }]
+    }
+  });
+
+  const launchCommand = await getObjectiveLaunchCommand(objectiveId, {
+    agent: 'cursor',
+    model: 'gpt-5.6-terra',
+    reasoningEffort: 'high'
+  });
+
+  assert.equal(
+    launchCommand.command,
+    `ovld launch cursor --mission-id ${mission.displayId} --objective-id ${objectiveId} --model gpt-5.6-terra --thinking high --pre-command agp --flag '--sandbox workspace-write'`
   );
 });
 

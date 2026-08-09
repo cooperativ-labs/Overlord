@@ -60,8 +60,8 @@ const sizeStyles: Record<
 
 /**
  * Split run button for an objective: the primary action queues an execution
- * request for the selected agent/model; the caret offers Run and a copyable
- * prompt for driving an agent manually. When the manual pseudo-agent is
+ * request for the selected agent/model; the caret offers Run, a copyable prompt
+ * for driving an agent manually, and a paste-ready `ovld launch` command. When the manual pseudo-agent is
  * selected, the run affordance is replaced with a Complete button that marks
  * the objective complete. Mirrors the legacy AgentSplitButton: confirm-before-
  * queue when an agent is already working the mission (enabling auto-advance
@@ -82,7 +82,7 @@ export function AgentLaunchButton({
   const resourcesQ = useProjectResources(objective.projectId);
   const executionTargetQ = useProjectExecutionTarget(objective.projectId);
   const [showActiveConfirm, setShowActiveConfirm] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [copiedKind, setCopiedKind] = useState<'prompt' | 'cli' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [executionTargetId, setExecutionTargetId] = useState<string>('');
   const copyResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -181,16 +181,37 @@ export function AgentLaunchButton({
     queueLaunch();
   }
 
+  async function copyToClipboard(text: string, kind: 'prompt' | 'cli') {
+    await navigator.clipboard.writeText(text);
+    setCopiedKind(kind);
+    if (copyResetRef.current) clearTimeout(copyResetRef.current);
+    copyResetRef.current = setTimeout(() => setCopiedKind(null), 2000);
+  }
+
   async function handleCopyPrompt() {
     setError(null);
     try {
       const { prompt } = await api.getObjectivePrompt(objective.id);
-      await navigator.clipboard.writeText(prompt);
-      setCopied(true);
-      if (copyResetRef.current) clearTimeout(copyResetRef.current);
-      copyResetRef.current = setTimeout(() => setCopied(false), 2000);
+      await copyToClipboard(prompt, 'prompt');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to copy prompt');
+    }
+  }
+
+  async function handleCopyCliCommand() {
+    if (isManual) return;
+    setError(null);
+    try {
+      const { command } = await api.getObjectiveLaunchCommand({
+        id: objective.id,
+        agent: selection.agent,
+        model: selection.model,
+        reasoningEffort: selection.reasoningEffort,
+        executionTargetId: executionTargetId || null
+      });
+      await copyToClipboard(command, 'cli');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to copy CLI command');
     }
   }
 
@@ -362,7 +383,11 @@ export function AgentLaunchButton({
             </DropdownMenuItem>
             <DropdownMenuItem className="gap-2 text-xs" onClick={() => void handleCopyPrompt()}>
               <Copy className="h-3.5 w-3.5" />
-              <span>{copied ? 'Copied ✓' : 'Copy prompt'}</span>
+              <span>{copiedKind === 'prompt' ? 'Copied ✓' : 'Copy prompt'}</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem className="gap-2 text-xs" onClick={() => void handleCopyCliCommand()}>
+              <Copy className="h-3.5 w-3.5" />
+              <span>{copiedKind === 'cli' ? 'Copied ✓' : 'Copy CLI command'}</span>
             </DropdownMenuItem>
             <div className="border-t px-2 py-2">
               <label

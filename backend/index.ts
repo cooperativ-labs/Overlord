@@ -23,6 +23,7 @@ import {
   getAgentCatalog,
   getLaunchPreference,
   getLaunchSettings,
+  getObjectiveLaunchCommand,
   getObjectivePrompt,
   launchObjective,
   refreshAgentCatalog,
@@ -1737,6 +1738,19 @@ app.post(
 app.get(
   '/api/objectives/:id/prompt',
   handle(req => getObjectivePrompt(req.params.id))
+);
+app.get(
+  '/api/objectives/:id/launch-command',
+  handle(req =>
+    getObjectiveLaunchCommand(req.params.id, {
+      agent: typeof req.query.agent === 'string' ? req.query.agent : '',
+      model: typeof req.query.model === 'string' ? req.query.model : null,
+      reasoningEffort:
+        typeof req.query.reasoningEffort === 'string' ? req.query.reasoningEffort : null,
+      executionTargetId:
+        typeof req.query.executionTargetId === 'string' ? req.query.executionTargetId : null
+    })
+  )
 );
 
 // ---- Objective attachments -----------------------------------------------

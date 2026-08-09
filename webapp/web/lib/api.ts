@@ -66,6 +66,7 @@ import type {
   NotificationPreferencesDto,
   ObjectiveAttachmentDto,
   ObjectiveDto,
+  ObjectiveLaunchCommandDto,
   ObjectivePromptDto,
   OrganizationAdminDto,
   OrganizationDto,
@@ -575,6 +576,28 @@ export const api = {
     request<ExecutionRequestDto>('POST', `/api/objectives/${id}/launch`, body),
   getObjectivePrompt: (id: string) =>
     request<ObjectivePromptDto>('GET', `/api/objectives/${id}/prompt`),
+  getObjectiveLaunchCommand: ({
+    id,
+    agent,
+    model,
+    reasoningEffort,
+    executionTargetId
+  }: {
+    id: string;
+    agent: string;
+    model?: string | null;
+    reasoningEffort?: string | null;
+    executionTargetId?: string | null;
+  }) => {
+    const params = new URLSearchParams({ agent });
+    if (model) params.set('model', model);
+    if (reasoningEffort) params.set('reasoningEffort', reasoningEffort);
+    if (executionTargetId) params.set('executionTargetId', executionTargetId);
+    return request<ObjectiveLaunchCommandDto>(
+      'GET',
+      `/api/objectives/${id}/launch-command?${params.toString()}`
+    );
+  },
 
   listObjectiveAttachments: (objectiveId: string) =>
     request<ObjectiveAttachmentDto[]>('GET', `/api/objectives/${objectiveId}/attachments`),

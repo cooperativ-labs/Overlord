@@ -17,7 +17,7 @@
  *   `execution_requests.launch_flags_json` for the runner to consume verbatim.
  */
 import { type Permission, PERMISSIONS } from '@overlord/auth';
-import { normalizeAgentLaunchFlags } from '@overlord/contract';
+import { formatOvldLaunchCommand, normalizeAgentLaunchFlags } from '@overlord/contract';
 import type { ServiceContext } from '@overlord/core/service/context';
 import {
   DEFAULT_TERMINAL_PROFILE,
@@ -59,6 +59,7 @@ import type {
   LaunchObjectiveBody,
   LaunchPreferenceDto,
   LaunchSettingsDto,
+  ObjectiveLaunchCommandDto,
   ObjectivePromptDto,
   TerminalProfileDto,
   UpdateAgentCatalogBody,
@@ -1237,10 +1238,96 @@ export async function getObjectivePrompt(objectiveId: string): Promise<Objective
     `Attach to this mission before doing anything else, then post updates while you`,
     `work and deliver a summary when you finish:`,
     ``,
-    '```bash',
-    `ovld protocol attach --mission-id ${row.display_id}`,
-    '```'
+    // Markdown code fences use backticks, which leave a shell with an unmatched
+    // command substitution when a copied prompt is pasted into a terminal.
+    // Indentation preserves a clearly copyable command without shell syntax.
+    `    ovld protocol attach --mission-id ${row.display_id}`
   ].join('\n');
 
   return { objectiveId: row.id, missionId: row.mission_id, prompt };
+}
+
+export type ObjectiveLaunchCommandQuery = {
+  agent: string;
+  model?: string | null;
+  reasoningEffort?: string | null;
+  executionTargetId?: string | null;
+};
+
+/**
+ * Build a paste-ready `ovld launch` command for the objective using the caller's
+ * current agent/model selection and the same launch-config resolution order as
+ * `launchObjective`.
+ */
+export async function getObjectiveLaunchCommand(
+  objectiveId: string,
+  query: ObjectiveLaunchCommandQuery
+): Promise<ObjectiveLaunchCommandDto> {
+  const agentKey = (query.agent ?? '').trim();
+  if (!agentKey) throw new ApiError(400, 'agent is required');
+
+  const db = requireDatabaseClient();
+  const row = await db.get<{
+    id: string;
+    mission_id: string;
+    project_id: string;
+    launch_config_json: string | null;
+    resource_key: string | null;
+    workspace_id: string;
+    display_id: string;
+  }>(
+    `SELECT o.id, o.mission_id, o.project_id, o.launch_config_json, o.resource_key,
+              o.workspace_id, t.display_id
+         FROM objectives o
+         JOIN missions t ON t.id = o.mission_id
+        WHERE o.id = ? AND o.deleted_at IS NULL`,
+    [objectiveId]
+  );
+  if (!row) throw new ApiError(404, 'Objective not found');
+
+  const profileId = await resolveActiveProfileId(db);
+  const workspaceUserId = profileId
+    ? await findActiveMembershipId(row.workspace_id, profileId, db)
+    : null;
+  if (
+    !workspaceUserId ||
+    !(await actorCan(PERMISSIONS.OBJECTIVE_READ, {
+      workspaceId: row.workspace_id,
+      workspaceUserId
+    }))
+  ) {
+    throw new ApiError(404, 'Objective not found');
+  }
+
+  const serviceCtx = await buildWebappServiceContextForWorkspace(
+    row.workspace_id,
+    db,
+    workspaceUserId
+  );
+  const launchTarget = await resolveLaunchExecutionTarget({
+    ctx: serviceCtx,
+    projectId: row.project_id,
+    executionTargetId: query.executionTargetId
+  });
+  const resolved = await resolveLaunchConfig({
+    ctx: serviceCtx,
+    objectiveLaunchConfigJson: row.launch_config_json,
+    executionTargetId: launchTarget.executionTargetId,
+    agentKey,
+    userConfigs: launchTarget.agentConfigs,
+    projectId: row.project_id,
+    objectiveResourceKey: row.resource_key
+  });
+
+  const command = formatOvldLaunchCommand({
+    agent: agentKey,
+    missionDisplayId: row.display_id,
+    objectiveId: row.id,
+    model: query.model,
+    thinking: query.reasoningEffort,
+    preCommand: resolved.config.preCommand,
+    flags: resolved.config.flags
+  });
+
+  return { objectiveId: row.id, missionId: row.mission_id, command };
 }

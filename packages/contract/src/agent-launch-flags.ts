@@ -90,3 +90,47 @@ export function formatAgentLaunchFlagText(flag: AgentLaunchFlagDto): string {
   const value = flag.value?.trim();
   return value ? `${name} ${value}` : name;
 }
+
+/** Shell-safe quoting for a single argv token when pasting into bash/zsh. */
+export function formatShellWord(value: string): string {
+  if (/^[a-zA-Z0-9_@./:-]+$/.test(value)) return value;
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+/**
+ * Format a paste-ready `ovld launch` invocation with the selected agent, mission,
+ * optional objective pin, model/thinking, pre-command wrapper, and `--flag` passthroughs.
+ */
+export function formatOvldLaunchCommand({
+  agent,
+  missionDisplayId,
+  objectiveId = null,
+  model = null,
+  thinking = null,
+  preCommand = '',
+  flags = []
+}: {
+  agent: string;
+  missionDisplayId: string;
+  objectiveId?: string | null;
+  model?: string | null;
+  thinking?: string | null;
+  preCommand?: string;
+  flags?: AgentLaunchFlagDto[];
+}): string {
+  const parts = ['ovld', 'launch', formatShellWord(agent.trim())];
+  parts.push('--mission-id', formatShellWord(missionDisplayId.trim()));
+  const objective = objectiveId?.trim();
+  if (objective) parts.push('--objective-id', formatShellWord(objective));
+  const modelId = model?.trim();
+  if (modelId) parts.push('--model', formatShellWord(modelId));
+  const thinkingLevel = thinking?.trim();
+  if (thinkingLevel) parts.push('--thinking', formatShellWord(thinkingLevel));
+  const wrapper = preCommand.trim();
+  if (wrapper) parts.push('--pre-command', formatShellWord(wrapper));
+  for (const flag of flags) {
+    const flagText = formatAgentLaunchFlagText(flag);
+    if (flagText) parts.push('--flag', formatShellWord(flagText));
+  }
+  return parts.join(' ');
+}

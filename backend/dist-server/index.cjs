@@ -72382,6 +72382,33 @@ function formatAgentLaunchFlagText(flag) {
   const value = flag.value?.trim();
   return value ? `${name} ${value}` : name;
 }
+function formatShellWord(value) {
+  if (/^[a-zA-Z0-9_@./:-]+$/.test(value))
+    return value;
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+function formatOvldLaunchCommand({ agent, missionDisplayId, objectiveId = null, model = null, thinking = null, preCommand = "", flags = [] }) {
+  const parts = ["ovld", "launch", formatShellWord(agent.trim())];
+  parts.push("--mission-id", formatShellWord(missionDisplayId.trim()));
+  const objective = objectiveId?.trim();
+  if (objective)
+    parts.push("--objective-id", formatShellWord(objective));
+  const modelId = model?.trim();
+  if (modelId)
+    parts.push("--model", formatShellWord(modelId));
+  const thinkingLevel = thinking?.trim();
+  if (thinkingLevel)
+    parts.push("--thinking", formatShellWord(thinkingLevel));
+  const wrapper = preCommand.trim();
+  if (wrapper)
+    parts.push("--pre-command", formatShellWord(wrapper));
+  for (const flag of flags) {
+    const flagText = formatAgentLaunchFlagText(flag);
+    if (flagText)
+      parts.push("--flag", formatShellWord(flagText));
+  }
+  return parts.join(" ");
+}
 var init_agent_launch_flags = __esm({
   "../packages/contract/dist/agent-launch-flags.js"() {
     "use strict";
@@ -73119,9 +73146,9 @@ async function readProjectResourceSourceLaunchDefault({
     [projectId, objectiveResourceKey]
   ) : await ctx.db.get(
     `SELECT id FROM project_resources
-          WHERE project_id = ? AND is_primary = 1 AND deleted_at IS NULL
+          WHERE project_id = ? AND is_primary = ? AND deleted_at IS NULL
           ORDER BY created_at ASC LIMIT 1`,
-    [projectId]
+    [projectId, bindBool(ctx.db.dialect, true)]
   );
   if (!resource) return null;
   const source = executionTargetId ? await ctx.db.get(
@@ -73488,6 +73515,7 @@ var init_project_execution_target = __esm({
   "../packages/core/service/project-execution-target.ts"() {
     "use strict";
     init_dist6();
+    init_dist();
     init_local_target();
     init_change_feed();
     init_devices();
@@ -138034,11 +138062,63 @@ async function getObjectivePrompt(objectiveId) {
     `Attach to this mission before doing anything else, then post updates while you`,
     `work and deliver a summary when you finish:`,
     ``,
-    "```bash",
-    `ovld protocol attach --mission-id ${row.display_id}`,
-    "```"
+    // Markdown code fences use backticks, which leave a shell with an unmatched
+    // command substitution when a copied prompt is pasted into a terminal.
+    // Indentation preserves a clearly copyable command without shell syntax.
+    `    ovld protocol attach --mission-id ${row.display_id}`
   ].join("\n");
   return { objectiveId: row.id, missionId: row.mission_id, prompt };
+}
+async function getObjectiveLaunchCommand(objectiveId, query) {
+  const agentKey = (query.agent ?? "").trim();
+  if (!agentKey) throw new ApiError(400, "agent is required");
+  const db = requireDatabaseClient();
+  const row = await db.get(
+    `SELECT o.id, o.mission_id, o.project_id, o.launch_config_json, o.resource_key,
+              o.workspace_id, t.display_id
+         FROM objectives o
+         JOIN missions t ON t.id = o.mission_id
+        WHERE o.id = ? AND o.deleted_at IS NULL`,
+    [objectiveId]
+  );
+  if (!row) throw new ApiError(404, "Objective not found");
+  const profileId = await resolveActiveProfileId(db);
+  const workspaceUserId = profileId ? await findActiveMembershipId(row.workspace_id, profileId, db) : null;
+  if (!workspaceUserId || !await actorCan(PERMISSIONS.OBJECTIVE_READ, {
+    workspaceId: row.workspace_id,
+    workspaceUserId
+  })) {
+    throw new ApiError(404, "Objective not found");
+  }
+  const serviceCtx = await buildWebappServiceContextForWorkspace(
+    row.workspace_id,
+    db,
+    workspaceUserId
+  );
+  const launchTarget = await resolveLaunchExecutionTarget({
+    ctx: serviceCtx,
+    projectId: row.project_id,
+    executionTargetId: query.executionTargetId
+  });
+  const resolved = await resolveLaunchConfig({
+    ctx: serviceCtx,
+    objectiveLaunchConfigJson: row.launch_config_json,
+    executionTargetId: launchTarget.executionTargetId,
+    agentKey,
+    userConfigs: launchTarget.agentConfigs,
+    projectId: row.project_id,
+    objectiveResourceKey: row.resource_key
+  });
+  const command = formatOvldLaunchCommand({
+    agent: agentKey,
+    missionDisplayId: row.display_id,
+    objectiveId: row.id,
+    model: query.model,
+    thinking: query.reasoningEffort,
+    preCommand: resolved.config.preCommand,
+    flags: resolved.config.flags
+  });
+  return { objectiveId: row.id, missionId: row.mission_id, command };
 }
 
 // repository.ts
@@ -162458,6 +162538,17 @@ app.post(
 app.get(
   "/api/objectives/:id/prompt",
   handle3((req) => getObjectivePrompt(req.params.id))
+);
+app.get(
+  "/api/objectives/:id/launch-command",
+  handle3(
+    (req) => getObjectiveLaunchCommand(req.params.id, {
+      agent: typeof req.query.agent === "string" ? req.query.agent : "",
+      model: typeof req.query.model === "string" ? req.query.model : null,
+      reasoningEffort: typeof req.query.reasoningEffort === "string" ? req.query.reasoningEffort : null,
+      executionTargetId: typeof req.query.executionTargetId === "string" ? req.query.executionTargetId : null
+    })
+  )
 );
 var rawAttachmentBody = import_express4.default.raw({ type: () => true, limit: MAX_ATTACHMENT_BYTES });
 app.get(
