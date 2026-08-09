@@ -1,5 +1,5 @@
 import { type AgentLaunchFlagDto, normalizeAgentLaunchFlags } from '@overlord/contract';
-import type { DatabaseClient } from '@overlord/database';
+import { bindBool, type DatabaseClient } from '@overlord/database';
 
 import { isCoLocatedBackend } from './local-target/index.js';
 import { recordChange } from './change-feed.js';
@@ -553,9 +553,9 @@ async function readProjectResourceSourceLaunchDefault({
       )
     : await ctx.db.get<{ id: string }>(
         `SELECT id FROM project_resources
-          WHERE project_id = ? AND is_primary = 1 AND deleted_at IS NULL
+          WHERE project_id = ? AND is_primary = ? AND deleted_at IS NULL
           ORDER BY created_at ASC LIMIT 1`,
-        [projectId]
+        [projectId, bindBool(ctx.db.dialect, true)]
       );
   if (!resource) return null;
 

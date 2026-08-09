@@ -17,7 +17,8 @@ import { claimNextExecutionRequest } from './execution-requests.js';
 import { backendHostFingerprint, ensureCallerDeviceTarget } from './execution-targets.js';
 import {
   getProjectExecutionTargetSelection,
-  listEligibleProjectExecutionTargets
+  listEligibleProjectExecutionTargets,
+  resolveLaunchConfig
 } from './project-execution-target.js';
 import { findPrimaryProjectResource } from './projects.js';
 import { claimNextQueuedRequest, recoverStaleExecutionRequests } from './queue-runtime.js';
@@ -613,6 +614,19 @@ for (const adapter of adapters) {
         });
         assert.ok(primary);
         assert.equal(primary.executionTargetId, graph.executionTargetId);
+
+        // A launch without an objective resource key falls back to the primary
+        // resource. This specifically guards boolean binding on PostgreSQL,
+        // where `is_primary = 1` is invalid.
+        const launchConfig = await resolveLaunchConfig({
+          ctx,
+          objectiveLaunchConfigJson: null,
+          executionTargetId: graph.executionTargetId,
+          agentKey: 'codex',
+          userConfigs: {},
+          projectId: graph.projectId
+        });
+        assert.equal(launchConfig.source, 'none');
 
         const selection = await getProjectExecutionTargetSelection({
           ctx,
