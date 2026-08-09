@@ -618,7 +618,9 @@ export interface InboxItems {
 
 export interface LiveActivityPushTokens {
   activity_id: string;
+  bundle_id: string;
   created_at: string;
+  environment: string;
   id: string | null;
   last_content_hash: string | null;
   last_sent_at: string | null;

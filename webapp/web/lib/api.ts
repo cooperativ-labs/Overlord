@@ -105,6 +105,7 @@ import type {
   UpdateProjectBody,
   UpdateProjectExecutionTargetBody,
   UpdateProjectResourceBody,
+  UpdateProjectResourceSourceBody,
   UpdateProjectTagBody,
   UpdateTerminalProfileBody,
   UpdateUserTokenBody,
@@ -447,6 +448,17 @@ export const api = {
     request<{ ok: true }>(
       'DELETE',
       `/api/projects/${projectId}/resources/${resourceId}/sources/${sourceId}`
+    ),
+  updateProjectResourceSource: (
+    projectId: string,
+    resourceId: string,
+    sourceId: string,
+    body: UpdateProjectResourceSourceBody
+  ) =>
+    request<ProjectResourceDto>(
+      'PATCH',
+      `/api/projects/${projectId}/resources/${resourceId}/sources/${sourceId}`,
+      body
     ),
   recordTargetResourceObservations: (
     executionTargetId: string,

@@ -40,6 +40,8 @@ type TokenRow = {
   id: string;
   activity_id: string;
   push_token: string;
+  environment: string;
+  bundle_id: string;
   last_content_hash: string | null;
   last_sent_at: string | null;
 };
@@ -172,7 +174,7 @@ class LiveActivityDispatcher extends WorkerJobPoller {
     }
 
     const tokens = await db.all<TokenRow>(
-      `SELECT id, activity_id, push_token, last_content_hash, last_sent_at
+      `SELECT id, activity_id, push_token, environment, bundle_id, last_content_hash, last_sent_at
            FROM live_activity_push_tokens WHERE profile_id = ?`,
       [profileId]
     );
@@ -195,7 +197,15 @@ class LiveActivityDispatcher extends WorkerJobPoller {
         continue;
       }
       if (!config) continue; // Local development remains fully functional without APNs credentials.
-      const response = await sendApns({ token: token.push_token, body: payload.body, config });
+      // Per-registration environment/bundle win over OVERLORD_APNS_ENV /
+      // OVERLORD_IOS_BUNDLE_ID so a debug install is never sent to production.
+      const response = await sendApns({
+        token: token.push_token,
+        body: payload.body,
+        config,
+        bundleId: token.bundle_id,
+        host: apnsHostFor(token.environment === 'sandbox' ? 'sandbox' : 'production')
+      });
       if (isRetiredTokenResponse(response)) {
         await db.run(`DELETE FROM live_activity_push_tokens WHERE id = ?`, [token.id]);
         continue;

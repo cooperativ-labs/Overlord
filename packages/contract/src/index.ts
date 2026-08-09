@@ -379,8 +379,15 @@ export interface ProjectResourceSourceDto {
   executionTargetId: string | null;
   sourceKind: string;
   descriptor: Record<string, unknown>;
+  /** Project-owned per-agent defaults used when an objective has no explicit override. */
+  launchDefaults?: Record<string, AgentLaunchConfigDto>;
   observedRevision: string | null;
   observedContentDigest: string | null;
+}
+
+/** Replaces the per-agent launch defaults stored on one resource source. */
+export interface UpdateProjectResourceSourceBody {
+  launchDefaults: Record<string, AgentLaunchConfigDto>;
 }
 
 export interface CreateProjectResourceBody {
@@ -1658,6 +1665,22 @@ export interface UpdateNotificationPreferencesBody {
   preferences?: NotificationPreferenceDto[];
   /** Deprecated APNs-only compatibility alias for older mobile clients. */
   categories?: NotificationPreferencesDto['categories'];
+}
+
+/** APNs delivery environment for device and Live Activity token registrations. */
+export type DevicePushEnvironment = 'sandbox' | 'production';
+
+/**
+ * Body for `PUT /api/mobile/live-activities/:activityId/push-token`.
+ * `environment` and `bundleId` select the APNs host and liveactivity topic per
+ * registration — the same fields required for push-to-start and device tokens.
+ */
+export interface LiveActivityPushTokenBody {
+  pushToken: string;
+  environment: DevicePushEnvironment;
+  bundleId: string;
+  /** True when this update token is the handoff after APNs remotely started the activity. */
+  startedByPush?: boolean;
 }
 
 export interface CreateInboxItemBody {

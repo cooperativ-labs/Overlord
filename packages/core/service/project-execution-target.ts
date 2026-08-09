@@ -524,7 +524,74 @@ export function parseAgentConfigs(json: string): Record<string, AgentLaunchConfi
 }
 
 /** How the effective launch config was resolved, most specific first. */
-export type LaunchConfigSource = 'objective' | 'user_target' | 'workspace' | 'none';
+export type LaunchConfigSource =
+  | 'objective'
+  | 'resource_source'
+  | 'user_target'
+  | 'workspace'
+  | 'none';
+
+/** Read the default attached to the source the runner will use for this objective. */
+async function readProjectResourceSourceLaunchDefault({
+  ctx,
+  projectId,
+  objectiveResourceKey,
+  executionTargetId,
+  agentKey
+}: {
+  ctx: ServiceContext;
+  projectId: string;
+  objectiveResourceKey: string | null;
+  executionTargetId: string | null;
+  agentKey: string;
+}): Promise<AgentLaunchConfig | null> {
+  const resource = objectiveResourceKey
+    ? await ctx.db.get<{ id: string }>(
+        `SELECT id FROM project_resources
+          WHERE project_id = ? AND resource_key = ? AND deleted_at IS NULL`,
+        [projectId, objectiveResourceKey]
+      )
+    : await ctx.db.get<{ id: string }>(
+        `SELECT id FROM project_resources
+          WHERE project_id = ? AND is_primary = 1 AND deleted_at IS NULL
+          ORDER BY created_at ASC LIMIT 1`,
+        [projectId]
+      );
+  if (!resource) return null;
+
+  const source = executionTargetId
+    ? await ctx.db.get<{ descriptor_json: string }>(
+        `SELECT descriptor_json FROM project_resource_sources
+          WHERE resource_id = ? AND deleted_at IS NULL
+            AND (execution_target_id = ? OR execution_target_id IS NULL)
+          ORDER BY CASE WHEN execution_target_id = ? THEN 0 ELSE 1 END,
+                   CASE WHEN source_kind = 'local_checkout' THEN 0 ELSE 1 END,
+                   created_at ASC
+          LIMIT 1`,
+        [resource.id, executionTargetId, executionTargetId]
+      )
+    : await ctx.db.get<{ descriptor_json: string }>(
+        `SELECT descriptor_json FROM project_resource_sources
+          WHERE resource_id = ? AND execution_target_id IS NULL AND deleted_at IS NULL
+          ORDER BY CASE WHEN source_kind = 'local_checkout' THEN 0 ELSE 1 END, created_at ASC
+          LIMIT 1`,
+        [resource.id]
+      );
+  if (!source) return null;
+  try {
+    const descriptor = JSON.parse(source.descriptor_json) as {
+      launchDefaults?: Record<string, { preCommand?: unknown; flags?: unknown }>;
+    };
+    const value = descriptor.launchDefaults?.[agentKey];
+    if (!value || typeof value !== 'object') return null;
+    return {
+      preCommand: typeof value.preCommand === 'string' ? value.preCommand : '',
+      flags: normalizeAgentLaunchFlags(value.flags)
+    };
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Read the workspace catalog's launch default for one agent (the lowest-priority
@@ -563,9 +630,10 @@ async function readWorkspaceAgentLaunchDefault(
  * Resolution" in connectors/docs/agent-harness-configuration-architecture.md):
  *
  * 1. `objectives.launch_config_json[targetId][agentKey]` — authoritative when present
- * 2. The user's per-target config (`user_execution_target_preferences.agent_configs_json`)
- * 3. The workspace catalog's launch default for the agent
- * 4. Empty (no pre-command, no flags)
+ * 2. The selected project-resource source's per-agent default
+ * 3. The user's per-target config (`user_execution_target_preferences.agent_configs_json`)
+ * 4. The workspace catalog's launch default for the agent
+ * 5. Empty (no pre-command, no flags)
  *
  * Shared by the manual webapp launch path and the core auto-advance path so both
  * stamp the same `execution_requests.launch_flags_json`.
@@ -575,21 +643,25 @@ export async function resolveLaunchConfig({
   objectiveLaunchConfigJson,
   executionTargetId,
   agentKey,
-  userConfigs
+  userConfigs,
+  projectId = null,
+  objectiveResourceKey = null
 }: {
   ctx: ServiceContext;
   objectiveLaunchConfigJson: string | null;
   executionTargetId: string | null;
   agentKey: string;
   userConfigs: Record<string, AgentLaunchConfig>;
+  projectId?: string | null;
+  objectiveResourceKey?: string | null;
 }): Promise<{ config: AgentLaunchConfig; source: LaunchConfigSource }> {
-  if (executionTargetId && objectiveLaunchConfigJson) {
+  if (objectiveLaunchConfigJson) {
     try {
       const parsed = JSON.parse(objectiveLaunchConfigJson) as Record<
         string,
         Record<string, unknown>
       >;
-      const override = parsed?.[executionTargetId]?.[agentKey];
+      const override = parsed?.[executionTargetId ?? '*']?.[agentKey] ?? parsed?.['*']?.[agentKey];
       if (override && typeof override === 'object') {
         const cast = override as { preCommand?: unknown; flags?: unknown };
         return {
@@ -602,6 +674,19 @@ export async function resolveLaunchConfig({
       }
     } catch {
       /* treat unparseable override as absent */
+    }
+  }
+
+  if (projectId) {
+    const resourceSourceDefault = await readProjectResourceSourceLaunchDefault({
+      ctx,
+      projectId,
+      objectiveResourceKey,
+      executionTargetId,
+      agentKey
+    });
+    if (resourceSourceDefault) {
+      return { config: resourceSourceDefault, source: 'resource_source' };
     }
   }
 
@@ -664,9 +749,12 @@ export async function resolveClaimLaunchConfig({
   if (!key || !targetId) return snapshot;
 
   const objective = (await ctx.db.get(
-    `SELECT launch_config_json FROM objectives WHERE id = ? AND deleted_at IS NULL`,
+    `SELECT project_id, resource_key, launch_config_json
+       FROM objectives WHERE id = ? AND deleted_at IS NULL`,
     [objectiveId]
-  )) as { launch_config_json: string | null } | undefined;
+  )) as
+    | { project_id: string; resource_key: string | null; launch_config_json: string | null }
+    | undefined;
 
   const userConfigs = await readAgentConfigsForExecutionTarget({
     ctx,
@@ -677,7 +765,9 @@ export async function resolveClaimLaunchConfig({
     objectiveLaunchConfigJson: objective?.launch_config_json ?? null,
     executionTargetId: targetId,
     agentKey: key,
-    userConfigs
+    userConfigs,
+    projectId: objective?.project_id ?? null,
+    objectiveResourceKey: objective?.resource_key ?? null
   });
   return resolved.config;
 }

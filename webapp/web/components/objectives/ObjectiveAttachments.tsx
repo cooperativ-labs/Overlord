@@ -20,9 +20,13 @@ import { cn } from '../../lib/utils.ts';
 import { Button } from '../ui/button.tsx';
 import { type FileDropZoneDragState, useFileDropZone } from '../ui/file-drop-zone.tsx';
 
-/** Client-side mirror of the server's per-attachment ceiling. */
-const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
-const MAX_ATTACHMENT_LABEL = '25 MB';
+/**
+ * Client-side mirror of the server's per-attachment ceiling. Exported so the
+ * ghost composer (GhostObjective) can apply the same guard before an
+ * objective exists to attach to.
+ */
+export const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
+export const MAX_ATTACHMENT_LABEL = '25 MB';
 
 function formatFileSize(bytes: number | null): string {
   if (bytes === null) return '';

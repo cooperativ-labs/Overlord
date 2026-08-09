@@ -19,7 +19,8 @@ const {
   deleteProjectResourceSource,
   getProjectRepository,
   listProjectResources,
-  updateProjectResource
+  updateProjectResource,
+  updateProjectResourceSource
 } = await import('./repository.ts');
 const { getLaunchSettings } = await import('./execution/launch.ts');
 
@@ -127,6 +128,44 @@ test('deleteProjectResourceSource removes only the selected source', async () =>
   assert.ok(remaining);
   assert.equal(remaining.sources.length, 1);
   assert.equal(remaining.sources[0]?.executionTargetId, null);
+});
+
+test('resource source launch defaults persist without replacing its path', async () => {
+  const project = await createProject({ name: 'Source launch defaults' });
+  const resource = await createProjectResource(project.id, {
+    directoryPath: '/tmp/source-launch-defaults',
+    resourceKey: 'primary',
+    executionTargetId: null,
+    isPrimary: true
+  });
+  const source = resource.sources[0];
+  assert.ok(source);
+
+  const updated = await updateProjectResourceSource(project.id, resource.id, source.id, {
+    launchDefaults: {
+      codex: {
+        preCommand: 'agp',
+        flags: [{ name: '--sandbox', value: 'workspace-write' }]
+      }
+    }
+  });
+
+  assert.equal(updated.sources[0]?.descriptor.path, '/tmp/source-launch-defaults');
+  assert.deepEqual(updated.sources[0]?.launchDefaults, {
+    codex: {
+      preCommand: 'agp',
+      flags: [{ name: '--sandbox', value: 'workspace-write' }]
+    }
+  });
+
+  const edited = await createProjectResource(project.id, {
+    directoryPath: '/tmp/source-launch-defaults-moved',
+    resourceKey: 'primary',
+    executionTargetId: null,
+    isPrimary: true
+  });
+  assert.equal(edited.sources[0]?.descriptor.path, '/tmp/source-launch-defaults-moved');
+  assert.deepEqual(edited.sources[0]?.launchDefaults, updated.sources[0]?.launchDefaults);
 });
 
 test('getProjectRepository selects the resource matching the requested key', async () => {

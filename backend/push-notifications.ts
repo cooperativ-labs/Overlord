@@ -350,12 +350,15 @@ export async function buildPushNotificationPresentation({
   );
   if (!mission) return null;
 
+  // Icon badge = unread durable notifications for this profile (same definition
+  // the mobile drawer and web history use). Missions-in-review is a different
+  // queue metric and must not drive the home-screen badge.
   const badgeRow = await db.get<{ count: number }>(
     `SELECT COUNT(*) AS count
-       FROM missions m
-       JOIN workspace_users wu ON wu.id = m.assigned_workspace_user_id
-      WHERE m.deleted_at IS NULL AND m.status_type = 'review'
-        AND wu.profile_id = ? AND wu.status = 'active' AND wu.deleted_at IS NULL`,
+       FROM notifications
+      WHERE recipient_profile_id = ?
+        AND deleted_at IS NULL
+        AND read_at IS NULL`,
     [profileId]
   );
 

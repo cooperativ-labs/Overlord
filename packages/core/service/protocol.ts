@@ -2023,7 +2023,8 @@ export async function deliverSession({
   // user to type into, not queued work. Treating it as the next objective raised
   // a bogus "waiting for approval: New objective" status item on every delivery.
   const nextObjective = (await ctx.db.get(
-    `SELECT id, title, auto_advance, assigned_agent, model, reasoning_effort, launch_config_json
+    `SELECT id, title, auto_advance, assigned_agent, model, reasoning_effort,
+            launch_config_json, resource_key
        FROM objectives
        WHERE mission_id = ? AND position > (
          SELECT position FROM objectives WHERE id = ?
@@ -2039,6 +2040,7 @@ export async function deliverSession({
         model: string | null;
         reasoning_effort: string | null;
         launch_config_json: string | null;
+        resource_key: string | null;
       }
     | undefined;
 
@@ -2105,7 +2107,9 @@ export async function deliverSession({
           objectiveLaunchConfigJson: nextObjective.launch_config_json,
           executionTargetId,
           agentKey: resolvedAgent ?? '',
-          userConfigs: agentConfigs
+          userConfigs: agentConfigs,
+          projectId: mission.projectId,
+          objectiveResourceKey: nextObjective.resource_key
         });
         await createExecutionRequest({
           ctx: ctx,

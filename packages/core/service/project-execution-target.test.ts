@@ -17,6 +17,7 @@ import {
   registerActingExecutionTarget,
   renameWorkspaceExecutionTarget,
   resolveClaimLaunchConfig,
+  resolveLaunchConfig,
   resolveLaunchExecutionTarget,
   resolveProjectExecutionTargetForLaunch,
   updateProjectExecutionTargetSelection,
@@ -341,6 +342,66 @@ describe('project execution target selection', () => {
 });
 
 describe('resolveClaimLaunchConfig', () => {
+  it('prefers an objective override, then the selected resource source default', async () => {
+    const { ctx } = await setup();
+    const caller = await ensureCallerDeviceTarget({ ctx });
+    const project = await createProject({ ctx, name: 'Resource source defaults' });
+    await addProjectResource({
+      ctx,
+      projectId: project.id,
+      directoryPath: createIsolatedCheckout('ovld-source-default-'),
+      resourceKey: 'ios',
+      isPrimary: true
+    });
+    await ctx.db.run(
+      `UPDATE project_resource_sources
+          SET descriptor_json = ?
+        WHERE project_id = ? AND execution_target_id = ? AND source_kind = 'local_checkout'`,
+      [
+        JSON.stringify({
+          path: '/tmp/ios',
+          launchDefaults: {
+            codex: { preCommand: 'xcrun', flags: [{ name: '--ios' }] }
+          }
+        }),
+        project.id,
+        caller.executionTargetId
+      ]
+    );
+
+    const fromSource = await resolveLaunchConfig({
+      ctx,
+      objectiveLaunchConfigJson: null,
+      executionTargetId: caller.executionTargetId,
+      agentKey: 'codex',
+      userConfigs: { codex: { preCommand: 'user-default', flags: [] } },
+      projectId: project.id,
+      objectiveResourceKey: 'ios'
+    });
+    assert.equal(fromSource.source, 'resource_source');
+    assert.deepEqual(fromSource.config, {
+      preCommand: 'xcrun',
+      flags: [{ name: '--ios', value: null }]
+    });
+
+    const explicit = await resolveLaunchConfig({
+      ctx,
+      objectiveLaunchConfigJson: JSON.stringify({
+        '*': { codex: { preCommand: 'objective', flags: [{ name: '--explicit' }] } }
+      }),
+      executionTargetId: caller.executionTargetId,
+      agentKey: 'codex',
+      userConfigs: {},
+      projectId: project.id,
+      objectiveResourceKey: 'ios'
+    });
+    assert.equal(explicit.source, 'objective');
+    assert.deepEqual(explicit.config, {
+      preCommand: 'objective',
+      flags: [{ name: '--explicit', value: null }]
+    });
+  });
+
   it('returns the queue-time snapshot unchanged when it carries pre-command or flags', async () => {
     const { ctx } = await setup();
     const caller = await ensureCallerDeviceTarget({ ctx });

@@ -315,6 +315,54 @@ test('builds a bounded, allowlisted payload snapshot', async () => {
   assert.equal(foreign, null, 'a profile that is not the assignee never gets a snapshot');
 });
 
+test('APNs badge counts unread notifications, not missions in review', async () => {
+  const client = requireDatabaseClient();
+  const project = await createProject({ name: 'Badge Project', color: '#abcdef' });
+  const mission = await createMission({
+    projectId: project.id,
+    title: 'Needs review',
+    firstObjective: 'Ship'
+  });
+  // Put several missions in review so a missions-in-review counter would diverge.
+  for (let index = 0; index < 3; index += 1) {
+    const extra = await createMission({
+      projectId: project.id,
+      title: `Review queue ${index}`,
+      firstObjective: 'Work'
+    });
+    await updateMission(extra.id, { statusType: 'review' });
+  }
+  await updateMission(mission.id, { statusType: 'review' });
+
+  db.prepare(`DELETE FROM notifications`).run();
+  const now = '2026-08-09T10:00:00.000Z';
+  db.prepare(
+    `INSERT INTO notifications
+       (id, workspace_id, recipient_profile_id, type, mission_id, objective_id,
+        created_at, read_at, revision, deleted_at)
+     VALUES (?, 'local-workspace', 'operator-user', 'mission_awaiting_review', ?, NULL, ?, NULL, 1, NULL)`
+  ).run('notif-unread-1', mission.id, now);
+  db.prepare(
+    `INSERT INTO notifications
+       (id, workspace_id, recipient_profile_id, type, mission_id, objective_id,
+        created_at, read_at, revision, deleted_at)
+     VALUES (?, 'local-workspace', 'operator-user', 'agent_question', ?, NULL, ?, ?, 1, NULL)`
+  ).run('notif-read-1', mission.id, now, now);
+
+  const presentation = await buildPushNotificationPresentation({
+    db: client,
+    profileId: 'operator-user',
+    missionId: mission.id,
+    category: 'mission_awaiting_review'
+  });
+  assert.ok(presentation);
+  assert.equal(
+    presentation.badge,
+    1,
+    'badge must equal unread notification rows, ignoring the larger review queue'
+  );
+});
+
 test('alert and silent payloads carry only the allowlisted APNs fields', () => {
   const presentation = {
     title: 'Overlord',

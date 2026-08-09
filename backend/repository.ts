@@ -113,6 +113,7 @@ import type {
   UpdateProfileBody,
   UpdateProjectBody,
   UpdateProjectResourceBody,
+  UpdateProjectResourceSourceBody,
   UpdateProjectTagBody,
   UpdateUserTokenBody,
   UpdateWorkspaceStatusBody,
@@ -121,6 +122,7 @@ import type {
   WorkspaceStatusDto,
   WorktreeDto
 } from '../webapp/shared/contract.ts';
+import { normalizeAgentLaunchFlags } from '../webapp/shared/contract.ts';
 
 import { generateCommitMessageFromDiff } from './automation/commit-message-automation.ts';
 import {
@@ -507,11 +509,31 @@ function toSourceDto(source: ProjectResourceSourceRow) {
   } catch {
     descriptor = {};
   }
+  const rawLaunchDefaults = descriptor.launchDefaults;
+  const launchDefaults: Record<
+    string,
+    { preCommand: string; flags: ReturnType<typeof normalizeAgentLaunchFlags> }
+  > = {};
+  if (
+    rawLaunchDefaults &&
+    typeof rawLaunchDefaults === 'object' &&
+    !Array.isArray(rawLaunchDefaults)
+  ) {
+    for (const [agentKey, value] of Object.entries(rawLaunchDefaults)) {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) continue;
+      const config = value as { preCommand?: unknown; flags?: unknown };
+      launchDefaults[agentKey] = {
+        preCommand: typeof config.preCommand === 'string' ? config.preCommand : '',
+        flags: normalizeAgentLaunchFlags(config.flags)
+      };
+    }
+  }
   return {
     id: source.id,
     executionTargetId: source.execution_target_id,
     sourceKind: source.source_kind,
     descriptor,
+    launchDefaults,
     observedRevision: source.observed_revision,
     observedContentDigest: source.observed_content_digest
   };
@@ -2414,22 +2436,22 @@ async function findProjectResourceSource({
   resourceId: string;
   executionTargetId: string | null;
   sourceKind: string;
-}): Promise<{ id: string } | undefined> {
+}): Promise<{ id: string; descriptor_json: string } | undefined> {
   if (executionTargetId === null) {
     return (await db.get(
-      `SELECT id FROM project_resource_sources
+      `SELECT id, descriptor_json FROM project_resource_sources
         WHERE resource_id = ? AND execution_target_id IS NULL
           AND source_kind = ? AND deleted_at IS NULL`,
       [resourceId, sourceKind]
-    )) as { id: string } | undefined;
+    )) as { id: string; descriptor_json: string } | undefined;
   }
 
   return (await db.get(
-    `SELECT id FROM project_resource_sources
+    `SELECT id, descriptor_json FROM project_resource_sources
       WHERE resource_id = ? AND execution_target_id = ?
         AND source_kind = ? AND deleted_at IS NULL`,
     [resourceId, executionTargetId, sourceKind]
-  )) as { id: string } | undefined;
+  )) as { id: string; descriptor_json: string } | undefined;
 }
 
 async function insertProjectResource(
@@ -2500,13 +2522,31 @@ async function insertProjectResource(
       [resolvedAccessMode, now, resourceId]
     );
   }
-  const descriptor = JSON.stringify(sourceUrl ? { url: sourceUrl } : { path: resourcePath });
-  const source = (await findProjectResourceSource({
+  const source = await findProjectResourceSource({
     db,
     resourceId,
     executionTargetId,
     sourceKind
-  })) as { id: string } | undefined;
+  });
+  let descriptorObject: Record<string, unknown> = {};
+  if (source) {
+    try {
+      const parsed = JSON.parse(source.descriptor_json) as unknown;
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        descriptorObject = parsed as Record<string, unknown>;
+      }
+    } catch {
+      descriptorObject = {};
+    }
+  }
+  if (sourceUrl) {
+    descriptorObject.url = sourceUrl;
+    delete descriptorObject.path;
+  } else {
+    descriptorObject.path = resourcePath;
+    delete descriptorObject.url;
+  }
+  const descriptor = JSON.stringify(descriptorObject);
   if (source) {
     await db.run(
       `UPDATE project_resource_sources SET descriptor_json = ?, updated_at = ?, revision = revision + 1 WHERE id = ?`,
@@ -2764,6 +2804,101 @@ export async function deleteProjectResourceSource(
         workspaceId: resource.workspace_id
       },
       tx
+    );
+  });
+}
+
+/** Replace launch defaults on one source without disturbing its materialization descriptor. */
+export async function updateProjectResourceSource(
+  projectId: string,
+  resourceId: string,
+  sourceId: string,
+  body: UpdateProjectResourceSourceBody
+): Promise<ProjectResourceDto> {
+  return requireDatabaseClient().transaction(async tx => {
+    const resource = await getProjectResourceRow(
+      tx,
+      projectId,
+      resourceId,
+      PERMISSIONS.PROJECT_UPDATE
+    );
+    const source = await tx.get<ProjectResourceSourceRow>(
+      `SELECT id, resource_id, execution_target_id, source_kind, descriptor_json,
+              observed_revision, observed_content_digest
+         FROM project_resource_sources
+        WHERE id = ? AND project_id = ? AND resource_id = ? AND deleted_at IS NULL`,
+      [sourceId, projectId, resourceId]
+    );
+    if (!source) throw new ApiError(404, 'Project resource source not found');
+    if (
+      !body.launchDefaults ||
+      typeof body.launchDefaults !== 'object' ||
+      Array.isArray(body.launchDefaults)
+    ) {
+      throw new ApiError(400, 'launchDefaults must be an object keyed by agent');
+    }
+
+    let descriptor: Record<string, unknown> = {};
+    try {
+      const parsed = JSON.parse(source.descriptor_json) as unknown;
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        descriptor = parsed as Record<string, unknown>;
+      }
+    } catch {
+      descriptor = {};
+    }
+    const launchDefaults: Record<
+      string,
+      { preCommand: string; flags: ReturnType<typeof normalizeAgentLaunchFlags> }
+    > = {};
+    for (const [rawAgentKey, rawConfig] of Object.entries(body.launchDefaults)) {
+      const agentKey = rawAgentKey.trim();
+      if (!agentKey || !rawConfig || typeof rawConfig !== 'object') continue;
+      const preCommand =
+        typeof rawConfig.preCommand === 'string' ? rawConfig.preCommand.trim() : '';
+      const flags = normalizeAgentLaunchFlags(rawConfig.flags);
+      if (!preCommand && flags.length === 0) continue;
+      launchDefaults[agentKey] = { preCommand, flags };
+    }
+    if (Object.keys(launchDefaults).length > 0) descriptor.launchDefaults = launchDefaults;
+    else delete descriptor.launchDefaults;
+
+    const now = nowIso();
+    const revision = resource.revision + 1;
+    await tx.run(
+      `UPDATE project_resource_sources
+          SET descriptor_json = ?, updated_at = ?, revision = revision + 1
+        WHERE id = ?`,
+      [JSON.stringify(descriptor), now, sourceId]
+    );
+    await tx.run(`UPDATE project_resources SET updated_at = ?, revision = ? WHERE id = ?`, [
+      now,
+      revision,
+      resourceId
+    ]);
+    await recordChange(
+      {
+        entityType: 'project_resource',
+        entityId: resourceId,
+        operation: 'update',
+        entityRevision: revision,
+        projectId,
+        changedFields: ['sources.launch_defaults'],
+        workspaceId: resource.workspace_id
+      },
+      tx
+    );
+
+    const sources = await tx.all<ProjectResourceSourceRow>(
+      `SELECT id, resource_id, execution_target_id, source_kind, descriptor_json,
+              observed_revision, observed_content_digest
+         FROM project_resource_sources WHERE resource_id = ? AND deleted_at IS NULL`,
+      [resourceId]
+    );
+    return toProjectResourceDto(
+      await getProjectResourceRow(tx, projectId, resourceId),
+      new Map(),
+      sources
     );
   });
 }

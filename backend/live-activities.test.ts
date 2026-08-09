@@ -21,17 +21,32 @@ const { __testables } = await import('./live-activity-dispatcher.ts');
 const { enqueueLiveActivityDispatchJob } =
   await import('../packages/core/service/live-activity-jobs.ts');
 
+const PUSH_REGISTRATION = {
+  pushToken: 'opaque-token-1',
+  environment: 'sandbox' as const,
+  bundleId: 'io.cooperativ.overlord'
+};
+
 test('registers opaque tokens privately and coalesces a first refresh job', async () => {
   await withRequestContextAsync(async () => {
     setActiveProfileId('operator-user');
-    await registerLiveActivityPushToken('activity-1', { pushToken: 'opaque-token-1' });
-    await registerLiveActivityPushToken('activity-1', { pushToken: 'opaque-token-2' });
+    await registerLiveActivityPushToken('activity-1', PUSH_REGISTRATION);
+    await registerLiveActivityPushToken('activity-1', {
+      ...PUSH_REGISTRATION,
+      pushToken: 'opaque-token-2',
+      environment: 'production'
+    });
   });
 
   const registration = db
-    .prepare(`SELECT push_token FROM live_activity_push_tokens WHERE activity_id = 'activity-1'`)
-    .get() as { push_token: string };
+    .prepare(
+      `SELECT push_token, environment, bundle_id FROM live_activity_push_tokens
+        WHERE activity_id = 'activity-1'`
+    )
+    .get() as { push_token: string; environment: string; bundle_id: string };
   assert.equal(registration.push_token, 'opaque-token-2');
+  assert.equal(registration.environment, 'production');
+  assert.equal(registration.bundle_id, 'io.cooperativ.overlord');
   const jobs = db
     .prepare(
       `SELECT COUNT(*) AS count FROM worker_jobs
@@ -52,6 +67,28 @@ test('registers opaque tokens privately and coalesces a first refresh job', asyn
     ).count,
     0
   );
+});
+
+test('rejects Live Activity update-token registrations without APNs routing fields', async () => {
+  await withRequestContextAsync(async () => {
+    setActiveProfileId('operator-user');
+    await assert.rejects(
+      () =>
+        registerLiveActivityPushToken('activity-missing-bundle', {
+          pushToken: 'token',
+          environment: 'sandbox'
+        }),
+      /bundleId is required/
+    );
+    await assert.rejects(
+      () =>
+        registerLiveActivityPushToken('activity-missing-env', {
+          pushToken: 'token',
+          bundleId: 'io.cooperativ.overlord'
+        }),
+      /environment must be sandbox or production/
+    );
+  });
 });
 
 test('builds a bounded account snapshot and hashes only visible content', async () => {

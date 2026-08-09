@@ -206,6 +206,7 @@ import {
   updateProfile,
   updateProject,
   updateProjectResource,
+  updateProjectResourceSource,
   updateProjectTag,
   updateWorkspaceStatus,
   upsertMissionSchedule,
@@ -1466,6 +1467,19 @@ app.delete(
       await deleteProjectResourceSource(req.params.id, req.params.resourceId, req.params.sourceId);
       return { ok: true as const };
     },
+    { mutates: true }
+  )
+);
+app.patch(
+  '/api/projects/:id/resources/:resourceId/sources/:sourceId',
+  handle(
+    req =>
+      updateProjectResourceSource(
+        req.params.id,
+        req.params.resourceId,
+        req.params.sourceId,
+        req.body
+      ),
     { mutates: true }
   )
 );

@@ -928,7 +928,7 @@ Indexes:
 - `(project_id, state, updated_at)`.
 - `(mission_id, state, position)`.
 
-Services should set `completed_at` when an objective enters `complete`. A null `launch_config_json` means the runner should inherit execution-target or user-target launch defaults; a non-null object means the objective intentionally overrides those defaults, even when the override contains empty flags or no pre-command.
+Services should set `completed_at` when an objective enters `complete`. A null `launch_config_json` means the runner should inherit resource-source, execution-target, or workspace launch defaults; a non-null object means the objective intentionally overrides those defaults, even when the override contains empty flags or no pre-command. Overrides are keyed by execution-target id and agent; `*` is the target key for an explicit override captured before a specific target is selected.
 
 Services validate non-null `resource_key` values at submit/launch boundaries
 against the mission project. The column intentionally does not FK to
@@ -1617,21 +1617,21 @@ Typed source descriptor for a project resource: how a gateway materializes the
 resource without Overlord persisting remote paths or secrets. A resource may
 have target-specific descriptors.
 
-| Column                    | Type         | Required | Notes                                                                                                                                                  |
-| ------------------------- | ------------ | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `id`                      | Id           | yes      |                                                                                                                                                        |
-| `workspace_id`            | Id           | yes      | FK to `workspaces`.                                                                                                                                    |
-| `project_id`              | Id           | yes      | FK to `projects`.                                                                                                                                      |
-| `resource_id`             | Id           | yes      | FK to `project_resources`.                                                                                                                             |
-| `execution_target_id`     | Id           | no       | FK to `execution_targets` when the descriptor is target-specific; null is a project-global descriptor.                                                 |
-| `source_kind`             | text         | yes      | Open vocabulary: `git`, `local_checkout`, `source_bundle`, or namespaced kinds.                                                                        |
-| `descriptor_json`         | Json         | yes      | Canonical source descriptor (e.g. git URL + credential-reference ID; opaque `targetRelativeRef`). No raw secrets, no server-readable filesystem paths. |
-| `observed_revision`       | text         | no       | Gateway-observed commit/revision.                                                                                                                      |
-| `observed_content_digest` | text         | no       | Gateway-observed content digest.                                                                                                                       |
-| `created_at`              | TimestampUTC | yes      |                                                                                                                                                        |
-| `updated_at`              | TimestampUTC | yes      |                                                                                                                                                        |
-| `deleted_at`              | TimestampUTC | no       | Tombstone.                                                                                                                                             |
-| `revision`                | integer      | yes      |                                                                                                                                                        |
+| Column                    | Type         | Required | Notes                                                                                                                                                                                                                                                                                                                                                                       |
+| ------------------------- | ------------ | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                      | Id           | yes      |                                                                                                                                                                                                                                                                                                                                                                             |
+| `workspace_id`            | Id           | yes      | FK to `workspaces`.                                                                                                                                                                                                                                                                                                                                                         |
+| `project_id`              | Id           | yes      | FK to `projects`.                                                                                                                                                                                                                                                                                                                                                           |
+| `resource_id`             | Id           | yes      | FK to `project_resources`.                                                                                                                                                                                                                                                                                                                                                  |
+| `execution_target_id`     | Id           | no       | FK to `execution_targets` when the descriptor is target-specific; null is a project-global descriptor.                                                                                                                                                                                                                                                                      |
+| `source_kind`             | text         | yes      | Open vocabulary: `git`, `local_checkout`, `source_bundle`, or namespaced kinds.                                                                                                                                                                                                                                                                                             |
+| `descriptor_json`         | Json         | yes      | Canonical source descriptor (e.g. git URL + credential-reference ID; opaque `targetRelativeRef`) plus optional `launchDefaults`, an object keyed by agent identifier whose values contain `preCommand` and normalized `flags`. No raw secrets; local-checkout paths remain local-target descriptors and virtual descriptors never contain server-readable filesystem paths. |
+| `observed_revision`       | text         | no       | Gateway-observed commit/revision.                                                                                                                                                                                                                                                                                                                                           |
+| `observed_content_digest` | text         | no       | Gateway-observed content digest.                                                                                                                                                                                                                                                                                                                                            |
+| `created_at`              | TimestampUTC | yes      |                                                                                                                                                                                                                                                                                                                                                                             |
+| `updated_at`              | TimestampUTC | yes      |                                                                                                                                                                                                                                                                                                                                                                             |
+| `deleted_at`              | TimestampUTC | no       | Tombstone.                                                                                                                                                                                                                                                                                                                                                                  |
+| `revision`                | integer      | yes      |                                                                                                                                                                                                                                                                                                                                                                             |
 
 Indexes:
 
@@ -2064,17 +2064,19 @@ Private ActivityKit registration for one account-level Live Activity. This is an
 operational table, not a user-facing notification history: neither activity IDs nor
 APNs tokens appear in REST reads, change feeds, audit payloads, or logs.
 
-| Column              | Type         | Required | Notes                                                                |
-| ------------------- | ------------ | -------- | -------------------------------------------------------------------- |
-| `id`                | Id           | yes      |                                                                      |
-| `profile_id`        | Id           | yes      | FK to `profiles`; the authenticated account that owns this activity. |
-| `activity_id`       | text         | yes      | Opaque ActivityKit activity identifier. Unique with `profile_id`.    |
-| `push_token`        | text         | yes      | Opaque APNs ActivityKit token; private at rest.                      |
-| `last_content_hash` | text         | no       | SHA-256 of the last visible snapshot sent to this activity.          |
-| `last_sent_at`      | TimestampUTC | no       | Supports five-minute coalescing of unchanged visible progress.       |
-| `origin`            | text         | yes      | Closed set: `local`, `push_to_start`. Defaults to `local`.           |
-| `created_at`        | TimestampUTC | yes      |                                                                      |
-| `updated_at`        | TimestampUTC | yes      |                                                                      |
+| Column              | Type         | Required | Notes                                                                        |
+| ------------------- | ------------ | -------- | ---------------------------------------------------------------------------- |
+| `id`                | Id           | yes      |                                                                              |
+| `profile_id`        | Id           | yes      | FK to `profiles`; the authenticated account that owns this activity.         |
+| `activity_id`       | text         | yes      | Opaque ActivityKit activity identifier. Unique with `profile_id`.            |
+| `push_token`        | text         | yes      | Opaque APNs ActivityKit token; private at rest.                              |
+| `environment`       | text         | yes      | Closed set: `sandbox`, `production`. Selects the APNs host per registration. |
+| `bundle_id`         | text         | yes      | App target that owns the token; forms the `…push-type.liveactivity` topic.   |
+| `last_content_hash` | text         | no       | SHA-256 of the last visible snapshot sent to this activity.                  |
+| `last_sent_at`      | TimestampUTC | no       | Supports five-minute coalescing of unchanged visible progress.               |
+| `origin`            | text         | yes      | Closed set: `local`, `push_to_start`. Defaults to `local`.                   |
+| `created_at`        | TimestampUTC | yes      |                                                                              |
+| `updated_at`        | TimestampUTC | yes      |                                                                              |
 
 Indexes:
 
@@ -2083,11 +2085,14 @@ Indexes:
 
 Delivery is driven by durable `worker_jobs.type = 'overlord.live_activity.dispatch.v1'`.
 Jobs carry only the target profile ID and are idempotently coalesced; the dispatcher
-recomputes presentation state at delivery time. APNs credential material is process
-configuration, not database data. Invalid-token APNs responses delete the matching
-registration. `origin = 'push_to_start'` records that the row is the per-activity
-**update** token handed over after APNs remotely started the activity; the presence of
-any row at all is what suppresses a second remote start for that account.
+recomputes presentation state at delivery time and sends on the registration's own
+`<bundle_id>.push-type.liveactivity` topic and `environment` host — the same
+per-registration routing used by `live_activity_start_tokens` and `device_push_tokens`.
+APNs signing credentials remain process configuration; host and topic are not. Invalid-token
+APNs responses delete the matching registration. `origin = 'push_to_start'` records that
+the row is the per-activity **update** token handed over after APNs remotely started the
+activity; the presence of any row at all is what suppresses a second remote start for that
+account.
 
 ### `live_activity_start_tokens`
 
@@ -2162,15 +2167,15 @@ row is the master switch and suppresses notification transports only — Live Ac
 delivery is unaffected. Migrations fan an existing category row out to every
 catalog-eligible transport, preserving the user's chosen mode rather than narrowing it.
 
-| Column       | Type         | Required | Notes                                                                                                 |
-| ------------ | ------------ | -------- | ----------------------------------------------------------------------------------------------------- |
-| `id`         | Id           | yes      |                                                                                                       |
-| `profile_id` | Id           | yes      | FK to `profiles`.                                                                                     |
-| `type`       | text         | yes      | `all`, or a shared notification-catalog id.                                                             |
-| `transport`  | text         | yes      | `all` for the master row, otherwise a catalog-eligible `apns`, `realtime`, or `in_app` transport.      |
-| `mode`       | text         | yes      | Closed set: `alert`, `silent`, `off`. The `(all, all)` row uses only `alert`/`off`.                      |
-| `created_at` | TimestampUTC | yes      |                                                                                                       |
-| `updated_at` | TimestampUTC | yes      |                                                                                                       |
+| Column       | Type         | Required | Notes                                                                                             |
+| ------------ | ------------ | -------- | ------------------------------------------------------------------------------------------------- |
+| `id`         | Id           | yes      |                                                                                                   |
+| `profile_id` | Id           | yes      | FK to `profiles`.                                                                                 |
+| `type`       | text         | yes      | `all`, or a shared notification-catalog id.                                                       |
+| `transport`  | text         | yes      | `all` for the master row, otherwise a catalog-eligible `apns`, `realtime`, or `in_app` transport. |
+| `mode`       | text         | yes      | Closed set: `alert`, `silent`, `off`. The `(all, all)` row uses only `alert`/`off`.               |
+| `created_at` | TimestampUTC | yes      |                                                                                                   |
+| `updated_at` | TimestampUTC | yes      |                                                                                                   |
 
 Indexes:
 

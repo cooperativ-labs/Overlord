@@ -1071,11 +1071,7 @@ export async function launchObjective(
       changed.push('reasoning_effort');
     }
     let launchConfigJson = objective.launch_config_json;
-    if (
-      executionTargetId &&
-      body.launchConfigOverride !== undefined &&
-      body.launchConfigOverride !== null
-    ) {
+    if (body.launchConfigOverride !== undefined && body.launchConfigOverride !== null) {
       let parsed: Record<string, Record<string, unknown>>;
       try {
         parsed = launchConfigJson
@@ -1084,8 +1080,9 @@ export async function launchObjective(
       } catch {
         parsed = {};
       }
-      parsed[executionTargetId] = {
-        ...(parsed[executionTargetId] ?? {}),
+      const launchConfigTargetKey = executionTargetId ?? '*';
+      parsed[launchConfigTargetKey] = {
+        ...(parsed[launchConfigTargetKey] ?? {}),
         [agentKey]: {
           preCommand: body.launchConfigOverride.preCommand ?? '',
           flags: normalizeAgentLaunchFlags(body.launchConfigOverride.flags)
@@ -1130,7 +1127,9 @@ export async function launchObjective(
       objectiveLaunchConfigJson: launchConfigJson,
       executionTargetId,
       agentKey,
-      userConfigs: agentConfigs
+      userConfigs: agentConfigs,
+      projectId: objective.project_id,
+      objectiveResourceKey: objective.resource_key
     });
 
     // An objective stays in `launching` state until the runner claims and

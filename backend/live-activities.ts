@@ -34,7 +34,12 @@ export type LiveActivityContentState = {
   updatedAt: number;
 };
 
-type RegistrationBody = { pushToken?: unknown; startedByPush?: unknown };
+type RegistrationBody = {
+  pushToken?: unknown;
+  environment?: unknown;
+  bundleId?: unknown;
+  startedByPush?: unknown;
+};
 type StartTokenBody = {
   startToken?: unknown;
   environment?: unknown;
@@ -43,6 +48,7 @@ type StartTokenBody = {
   appVersion?: unknown;
 };
 export type LiveActivityStartEnvironment = 'sandbox' | 'production';
+export type LiveActivityPushEnvironment = LiveActivityStartEnvironment;
 type SnapshotRow = {
   id: string;
   title: string;
@@ -146,6 +152,12 @@ export async function registerLiveActivityPushToken(
   if (normalizedActivityId.length > 255 || pushToken.length > 4096) {
     throw new ApiError(400, 'Live Activity registration is too large');
   }
+  const bundleId = requiredString(body.bundleId, 'bundleId', BUNDLE_ID_MAX_LENGTH);
+  const environmentRaw = typeof body.environment === 'string' ? body.environment.trim() : '';
+  if (environmentRaw !== 'sandbox' && environmentRaw !== 'production') {
+    throw new ApiError(400, 'environment must be sandbox or production');
+  }
+  const environment: LiveActivityPushEnvironment = environmentRaw;
   if (body.startedByPush !== undefined && typeof body.startedByPush !== 'boolean') {
     throw new ApiError(400, 'startedByPush must be a boolean');
   }
@@ -164,17 +176,28 @@ export async function registerLiveActivityPushToken(
     if (existing) {
       await tx.run(
         `UPDATE live_activity_push_tokens
-            SET push_token = ?, origin = ?, last_content_hash = NULL, last_sent_at = NULL,
-                updated_at = ?
+            SET push_token = ?, environment = ?, bundle_id = ?, origin = ?,
+                last_content_hash = NULL, last_sent_at = NULL, updated_at = ?
           WHERE id = ?`,
-        [pushToken, origin, now, existing.id]
+        [pushToken, environment, bundleId, origin, now, existing.id]
       );
     } else {
       await tx.run(
         `INSERT INTO live_activity_push_tokens
-           (id, profile_id, activity_id, push_token, origin, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [newId(), profileId, normalizedActivityId, pushToken, origin, now, now]
+           (id, profile_id, activity_id, push_token, environment, bundle_id, origin,
+            created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          newId(),
+          profileId,
+          normalizedActivityId,
+          pushToken,
+          environment,
+          bundleId,
+          origin,
+          now,
+          now
+        ]
       );
     }
     await enqueueLiveActivityDispatchJob({

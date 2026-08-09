@@ -4,7 +4,7 @@
 # IMPORTANT: Update this file and CONTRACT.md together when adding components or surfaces.
 # Increment contractVersion when any stable interface changes.
 
-contractVersion: '62'
+contractVersion: '65'
 
 components:
   protocol:
@@ -45,10 +45,10 @@ components:
       - 'profile-owned inbox_items: a minimal private unassigned capture with one v1 objective array entry, optional due datetime and priority, profile cascade deletion, and no workspace/project/status/session state'
       - 'versioned deliveryReport payload storage in deliveries.payload_json; summary remains immutable agent-authored source text'
       - 'worker_jobs durable background queue including core types overlord.delivery.compose.v1, overlord.live_activity.dispatch.v1, overlord.push_notification.dispatch.v1, and overlord.notification.dispatch.v1'
-      - 'private live_activity_push_tokens registrations keyed by profile and ActivityKit activity id; APNs tokens are never projected through REST, realtime, or audit payloads'
+      - 'private live_activity_push_tokens registrations keyed by profile and ActivityKit activity id, carrying environment and bundle_id so update/end pushes select the APNs host and liveactivity topic per registration; APNs tokens are never projected through REST, realtime, or audit payloads'
       - 'private device_push_tokens registrations (globally unique device_token bound to one profile, with platform, environment, and bundle_id) and notification_preferences rows unique per (profile_id, type, transport), with a reserved (all, all) master row; standard APNs device tokens are stored separately from ActivityKit tokens and are never projected through REST, realtime, or audit payloads'
       - 'private notifications history rows addressed to exactly one assigned mission-owner profile, with workspace/mission/objective references, read and soft-dismiss lifecycle, revision CAS, and no token, prompt, instruction, summary, or event payload storage'
-      - 'project_resources as project-scoped logical identities and project_resource_sources as the sole target/source materialization descriptors (local checkout paths, Git, bundles, or opaque virtual handles); existing resource rows are intentionally discarded by the contract-v4 migration rather than carried through a legacy compatibility shape'
+      - 'project_resources as project-scoped logical identities and project_resource_sources as the sole target/source materialization descriptors (local checkout paths, Git, bundles, or opaque virtual handles), with optional per-agent launchDefaults (pre-command and normalized flags) in descriptor_json; existing resource rows are intentionally discarded by the contract-v4 migration rather than carried through a legacy compatibility shape'
       - 'execution_target_runner_registrations: one-to-many live runner processes serving one local execution target (runner_instance_id, native/adopted relation, non-secret label/runner_version/capabilities_json/supported_agents_json, health/last_heartbeat_at/last_error_code); source of truth for local target reachability, distinct from the gateway-owned one-per-virtual-target execution_target_registrations; execution_requests.claimed_by_runner_registration_id records the winning runner instance'
       - 'explicit leased lifecycle policy for disposable independent local execution targets: lifecycle_kind, lease duration/grace/expiry, compare-and-set heartbeat renewal, and an idempotent backend cleanup worker; expiry is offline only and never performs cleanup'
       - 'virtual execution target core tables (execution_target_registrations, project_environment_definitions, project_resource_sources, execution_request_snapshots, execution_request_grants, execution_request_observations, mission_target_resources) and additive execution_requests snapshot/failure/gateway columns; immutable snapshot (payload_json + SHA-256 payload_digest) created in the same transaction as the queued request and never updated; grant records store hashes/opaque IDs, never bearer values'
@@ -129,6 +129,7 @@ components:
     owns:
       - 'execution_requests queue claiming and launch'
       - 'working directory resolution: explicit workingDirectory, objective resource_key on the claiming target, primary target resource, then cwd .overlord/project.json fallback'
+      - 'effective launch-config resolution shared by manual, auto-advance, and claim-time paths: objective override, selected project-resource source defaults, user execution-target defaults, workspace defaults, then empty'
       - 'per-mission branch/worktree preparation before local agent spawn when enabled'
       - 'same-mission branch/worktree reuse: an existing planned worktree on the expected mission branch may be reused even when dirty so sequential objectives can continue uncommitted work'
       - 'runner launch environment, including OVERLORD_PROJECT_RESOURCES sibling-resource manifest resolved for the launching target'
@@ -154,6 +155,7 @@ components:
     referenceSection: 'REST API Boundary'
     owns:
       - 'URL paths and HTTP method contracts'
+      - 'project resource-source launch defaults via PATCH /api/projects/:id/resources/:resourceId/sources/:sourceId, preserving the materialization fields in descriptor_json while replacing per-agent launchDefaults'
       - 'request/response DTO shapes (camelCase, derived from logical schema)'
       - 'profile-owned inbox routes: authenticated GET/POST /api/inbox, GET/PATCH/DELETE /api/inbox/:id, and POST /api/inbox/:id/promote; profile isolation returns 404, promotion requires mission:create on the destination project and atomically creates its normal mission then consumes the capture; inbox writes are intentionally outside workspace realtime'
       - 'delivery read projection: GET /api/missions/:id/deliveries returns normalized DeliveryDto records and delivery mission events expose an additive deliveryId without raw payload JSON'
@@ -340,7 +342,7 @@ interactionSurfaces:
       - 'Device tokens are carried in the request body, never the URL, and are never returned by a read endpoint, included in realtime, or written to application logs'
       - 'Notification preferences are caller-profile state addressed by every shared notification-catalog type and its catalog-declared transport, each with mode alert|silent|off. The reserved (all, all) master switch never affects Live Activity delivery. Unknown types, transports, ineligible pairs, or modes are rejected 400. GET adds an APNs categories projection and PUT accepts it as an APNs-only compatibility alias so older mobile builds remain usable; backend, webapp, mobile, and database consume the same canonical preference rows.'
       - 'The mobile app never sends mission data or an APNs payload; the backend recomputes the bounded alert snapshot from authorized data at delivery time'
-      - 'APNs payloads carry only bounded project name, sanitized mission title and display id, badge count, mission id, category, and deep link — never tokens, instructions, prompts, summaries, question text, file paths, or event payloads'
+      - 'APNs payloads carry only bounded project name, sanitized mission title and display id, unread-notification badge count (not missions-in-review), mission id, category, and deep link — never tokens, instructions, prompts, summaries, question text, file paths, or event payloads'
 
   agentToProtocol:
     description: 'Agents invoke ovld protocol subcommands via subprocess CLI'

@@ -14,6 +14,17 @@ import {
 import type { AgentModelSelection } from './AgentModelSelector.tsx';
 
 /**
+ * The slice of an objective this hook actually reads. Loosened from the full
+ * `ObjectiveDto` so a not-yet-created ghost objective (see GhostObjective)
+ * can resolve the same default selection — project preference, then catalog
+ * default — before any real objective exists to read from.
+ */
+type SelectableObjective = Pick<
+  ObjectiveDto,
+  'id' | 'projectId' | 'assignedAgent' | 'model' | 'reasoningEffort'
+>;
+
+/**
  * Wires an objective's agent/model selection to its storage owners, following
  * connectors/docs/agent-harness-configuration-architecture.md:
  *
@@ -26,7 +37,7 @@ import type { AgentModelSelection } from './AgentModelSelector.tsx';
  *   agent configs (`user_execution_target_preferences.agent_configs_json`) —
  *   launch mechanics, not preference.
  */
-export function useObjectiveAgentSelection(objective: ObjectiveDto) {
+export function useObjectiveAgentSelection(objective: SelectableObjective) {
   // The catalog is the objective's own workspace's — a mission open from a
   // secondary workspace offers that workspace's agents, not the active one's
   // (coo:324).
@@ -72,13 +83,17 @@ export function useObjectiveAgentSelection(objective: ObjectiveDto) {
   }, [catalog, objective.assignedAgent, objective.model, objective.reasoningEffort, preference]);
 
   const setSelection = useCallback(
-    (next: AgentModelSelection) => {
+    // `targetId` defaults to the bound objective but can be overridden — the
+    // ghost composer resolves its selection against this hook before a real
+    // objective exists, then supplies the freshly-materialized id once one
+    // does (see GhostObjective).
+    (next: AgentModelSelection, targetId: string = objective.id) => {
       // Both persistence calls must succeed for the selector to treat the
       // change as committed; either failing should surface to the caller so
       // it can stop a per-button loading indicator.
       return Promise.all([
         updateObjective.mutateAsync({
-          id: objective.id,
+          id: targetId,
           body: {
             assignedAgent: next.agent,
             model: next.model,

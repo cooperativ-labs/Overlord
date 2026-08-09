@@ -73106,6 +73106,53 @@ function parseAgentConfigs(json2) {
   }
   return configs;
 }
+async function readProjectResourceSourceLaunchDefault({
+  ctx,
+  projectId,
+  objectiveResourceKey,
+  executionTargetId,
+  agentKey
+}) {
+  const resource = objectiveResourceKey ? await ctx.db.get(
+    `SELECT id FROM project_resources
+          WHERE project_id = ? AND resource_key = ? AND deleted_at IS NULL`,
+    [projectId, objectiveResourceKey]
+  ) : await ctx.db.get(
+    `SELECT id FROM project_resources
+          WHERE project_id = ? AND is_primary = 1 AND deleted_at IS NULL
+          ORDER BY created_at ASC LIMIT 1`,
+    [projectId]
+  );
+  if (!resource) return null;
+  const source = executionTargetId ? await ctx.db.get(
+    `SELECT descriptor_json FROM project_resource_sources
+          WHERE resource_id = ? AND deleted_at IS NULL
+            AND (execution_target_id = ? OR execution_target_id IS NULL)
+          ORDER BY CASE WHEN execution_target_id = ? THEN 0 ELSE 1 END,
+                   CASE WHEN source_kind = 'local_checkout' THEN 0 ELSE 1 END,
+                   created_at ASC
+          LIMIT 1`,
+    [resource.id, executionTargetId, executionTargetId]
+  ) : await ctx.db.get(
+    `SELECT descriptor_json FROM project_resource_sources
+          WHERE resource_id = ? AND execution_target_id IS NULL AND deleted_at IS NULL
+          ORDER BY CASE WHEN source_kind = 'local_checkout' THEN 0 ELSE 1 END, created_at ASC
+          LIMIT 1`,
+    [resource.id]
+  );
+  if (!source) return null;
+  try {
+    const descriptor = JSON.parse(source.descriptor_json);
+    const value = descriptor.launchDefaults?.[agentKey];
+    if (!value || typeof value !== "object") return null;
+    return {
+      preCommand: typeof value.preCommand === "string" ? value.preCommand : "",
+      flags: normalizeAgentLaunchFlags(value.flags)
+    };
+  } catch {
+    return null;
+  }
+}
 async function readWorkspaceAgentLaunchDefault(ctx, agentKey) {
   const row = await ctx.db.get(
     `SELECT settings_json FROM workspaces WHERE id = ? AND deleted_at IS NULL`,
@@ -73131,12 +73178,14 @@ async function resolveLaunchConfig({
   objectiveLaunchConfigJson,
   executionTargetId,
   agentKey,
-  userConfigs
+  userConfigs,
+  projectId = null,
+  objectiveResourceKey = null
 }) {
-  if (executionTargetId && objectiveLaunchConfigJson) {
+  if (objectiveLaunchConfigJson) {
     try {
       const parsed = JSON.parse(objectiveLaunchConfigJson);
-      const override = parsed?.[executionTargetId]?.[agentKey];
+      const override = parsed?.[executionTargetId ?? "*"]?.[agentKey] ?? parsed?.["*"]?.[agentKey];
       if (override && typeof override === "object") {
         const cast = override;
         return {
@@ -73148,6 +73197,18 @@ async function resolveLaunchConfig({
         };
       }
     } catch {
+    }
+  }
+  if (projectId) {
+    const resourceSourceDefault = await readProjectResourceSourceLaunchDefault({
+      ctx,
+      projectId,
+      objectiveResourceKey,
+      executionTargetId,
+      agentKey
+    });
+    if (resourceSourceDefault) {
+      return { config: resourceSourceDefault, source: "resource_source" };
     }
   }
   if (userConfigs[agentKey]) {
@@ -73174,7 +73235,8 @@ async function resolveClaimLaunchConfig({
   const targetId = claimingExecutionTargetId?.trim() || null;
   if (!key || !targetId) return snapshot;
   const objective = await ctx.db.get(
-    `SELECT launch_config_json FROM objectives WHERE id = ? AND deleted_at IS NULL`,
+    `SELECT project_id, resource_key, launch_config_json
+       FROM objectives WHERE id = ? AND deleted_at IS NULL`,
     [objectiveId]
   );
   const userConfigs = await readAgentConfigsForExecutionTarget({
@@ -73186,7 +73248,9 @@ async function resolveClaimLaunchConfig({
     objectiveLaunchConfigJson: objective?.launch_config_json ?? null,
     executionTargetId: targetId,
     agentKey: key,
-    userConfigs
+    userConfigs,
+    projectId: objective?.project_id ?? null,
+    objectiveResourceKey: objective?.resource_key ?? null
   });
   return resolved.config;
 }
@@ -133244,6 +133308,194 @@ async function findBindableChannelForMission({
   return byMission?.id ?? null;
 }
 
+// ../packages/core/service/notifications/notifications.ts
+init_util3();
+
+// ../packages/core/service/worker-jobs.ts
+init_util3();
+var DELIVERY_COMPOSE_JOB_TYPE = "overlord.delivery.compose.v1";
+var DEFAULT_MAX_ATTEMPTS = 5;
+var DEFAULT_PRIORITY = 50;
+var DEFAULT_LOCK_TTL_MS = 6e4;
+var WORKER_JOB_RETRY_BACKOFF_MS = [15e3, 6e4, 3e5, 9e5, 36e5];
+function workerJobJsonFieldPredicate(dialect, field) {
+  if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(field)) {
+    throw new Error(`Invalid worker job JSON field: ${field}`);
+  }
+  return dialect === "postgres" ? `payload_json->>'${field}' = ?` : `json_extract(payload_json, '$.${field}') = ?`;
+}
+function workerJobRetryDelay(attemptCount) {
+  return WORKER_JOB_RETRY_BACKOFF_MS[Math.min(Math.max(attemptCount - 1, 0), WORKER_JOB_RETRY_BACKOFF_MS.length - 1)];
+}
+async function claimNextWorkerJob({
+  db,
+  jobType,
+  workerId,
+  now: now2 = nowIso(),
+  lockTtlMs = DEFAULT_LOCK_TTL_MS
+}) {
+  return db.transaction(async (tx) => {
+    await tx.run(
+      `UPDATE worker_jobs SET status = 'queued', locked_by = NULL, locked_until = NULL, updated_at = ?, revision = revision + 1
+       WHERE type = ? AND status = 'running' AND deleted_at IS NULL AND locked_until < ?`,
+      [now2, jobType, now2]
+    );
+    const lockClause = tx.dialect === "postgres" ? "FOR UPDATE SKIP LOCKED" : "";
+    const candidate = await tx.get(
+      `SELECT id, payload_json, attempt_count, max_attempts, revision FROM worker_jobs
+        WHERE type = ? AND status = 'queued' AND deleted_at IS NULL AND run_after <= ?
+        ORDER BY priority ASC, run_after ASC LIMIT 1 ${lockClause}`,
+      [jobType, now2]
+    );
+    if (!candidate) return null;
+    const updated = await tx.run(
+      `UPDATE worker_jobs SET status = 'running', attempt_count = attempt_count + 1, locked_by = ?, locked_until = ?, updated_at = ?, revision = revision + 1
+        WHERE id = ? AND status = 'queued' AND revision = ?`,
+      [
+        workerId,
+        new Date(Date.parse(now2) + lockTtlMs).toISOString(),
+        now2,
+        candidate.id,
+        candidate.revision
+      ]
+    );
+    return updated.changes === 0 ? null : {
+      ...candidate,
+      attempt_count: candidate.attempt_count + 1,
+      revision: candidate.revision + 1
+    };
+  });
+}
+async function finishWorkerJob(db, id, status, lastError, now2 = nowIso()) {
+  await db.run(
+    `UPDATE worker_jobs SET status = ?, last_error = ?, locked_by = NULL, locked_until = NULL, updated_at = ?, revision = revision + 1 WHERE id = ?`,
+    [status, lastError, now2, id]
+  );
+}
+async function retryWorkerJob(db, id, attemptCount, lastError, now2 = nowIso()) {
+  await db.run(
+    `UPDATE worker_jobs SET status = 'queued', run_after = ?, last_error = ?, locked_by = NULL,
+       locked_until = NULL, updated_at = ?, revision = revision + 1 WHERE id = ?`,
+    [
+      new Date(Date.parse(now2) + workerJobRetryDelay(attemptCount)).toISOString(),
+      lastError,
+      now2,
+      id
+    ]
+  );
+}
+async function enqueueWorkerJob({
+  db,
+  workspaceId,
+  type,
+  dedupeBy,
+  payload,
+  priority = DEFAULT_PRIORITY,
+  maxAttempts = DEFAULT_MAX_ATTEMPTS,
+  now: now2 = nowIso()
+}) {
+  const existing = await db.get(
+    `SELECT id FROM worker_jobs
+       WHERE workspace_id = ?
+         AND type = ?
+         AND status IN ('queued', 'running')
+         AND deleted_at IS NULL
+         AND ${workerJobJsonFieldPredicate(db.dialect, dedupeBy.field)}
+       ORDER BY created_at ASC
+       LIMIT 1`,
+    [workspaceId, type, dedupeBy.value]
+  );
+  if (existing) return { jobId: existing.id, enqueued: false };
+  const jobId = newId();
+  await db.run(
+    `INSERT INTO worker_jobs
+         (id, workspace_id, type, status, priority, run_after, attempt_count, max_attempts,
+          payload_json, created_at, updated_at, revision)
+       VALUES (?, ?, ?, 'queued', ?, ?, 0, ?, ?, ?, ?, 1)`,
+    [jobId, workspaceId, type, priority, now2, maxAttempts, JSON.stringify(payload), now2, now2]
+  );
+  return { jobId, enqueued: true };
+}
+async function enqueueDeliveryComposeJob({
+  ctx,
+  deliveryId,
+  now: now2 = nowIso(),
+  maxAttempts = DEFAULT_MAX_ATTEMPTS,
+  priority = DEFAULT_PRIORITY
+}) {
+  const result = await enqueueWorkerJob({
+    db: ctx.db,
+    workspaceId: ctx.workspace.id,
+    type: DELIVERY_COMPOSE_JOB_TYPE,
+    dedupeBy: { field: "deliveryId", value: deliveryId },
+    payload: { deliveryId },
+    priority,
+    maxAttempts,
+    now: now2
+  });
+  if (result.enqueued) {
+    console.info(
+      "[delivery-compose-worker]",
+      JSON.stringify({
+        event: "delivery_compose_queued",
+        deliveryId,
+        jobId: result.jobId,
+        maxAttempts,
+        priority
+      })
+    );
+  }
+  return result;
+}
+async function missionOwnerProfileId({
+  db,
+  workspaceId,
+  missionId
+}) {
+  const owner = await db.get(
+    `SELECT wu.profile_id
+       FROM missions m
+       JOIN workspace_users wu ON wu.id = m.assigned_workspace_user_id
+      WHERE m.id = ? AND m.workspace_id = ? AND m.deleted_at IS NULL
+        AND wu.deleted_at IS NULL AND wu.status = 'active'`,
+    [missionId, workspaceId]
+  );
+  return owner?.profile_id ?? null;
+}
+
+// ../packages/core/service/notifications/notifications.ts
+var NOTIFICATION_DISPATCH_JOB_TYPE = "overlord.notification.dispatch.v1";
+async function emitNotification({
+  db,
+  workspaceId,
+  missionId,
+  objectiveId = null,
+  type,
+  now: now2 = nowIso()
+}) {
+  const recipientProfileId = await missionOwnerProfileId({ db, workspaceId, missionId });
+  if (!recipientProfileId) return { notificationId: null, emitted: false };
+  const notificationId = newId();
+  await db.run(
+    `INSERT INTO notifications
+         (id, workspace_id, recipient_profile_id, type, mission_id, objective_id,
+          created_at, read_at, revision, deleted_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, NULL, 1, NULL)`,
+    [notificationId, workspaceId, recipientProfileId, type, missionId, objectiveId, now2]
+  );
+  await enqueueWorkerJob({
+    db,
+    workspaceId,
+    type: NOTIFICATION_DISPATCH_JOB_TYPE,
+    dedupeBy: { field: "notificationId", value: notificationId },
+    payload: { notificationId },
+    priority: 40,
+    maxAttempts: 5,
+    now: now2
+  });
+  return { notificationId, emitted: true };
+}
+
 // ../packages/core/service/protocol.ts
 init_change_feed();
 init_context();
@@ -133258,105 +133510,6 @@ init_errors4();
 init_execution_target_runners();
 init_local_target_mutations();
 init_projects();
-
-// ../packages/core/service/push-notification-jobs.ts
-init_util3();
-var PUSH_NOTIFICATION_DISPATCH_JOB_TYPE = "overlord.push_notification.dispatch.v1";
-var PUSH_NOTIFICATION_CATEGORIES = [
-  "mission_awaiting_review",
-  "agent_question",
-  "mission_complete",
-  "mission_failed"
-];
-var PUSH_NOTIFICATION_MASTER_CATEGORY = "all";
-var PUSH_NOTIFICATION_MODES = ["alert", "silent", "off"];
-function isPushNotificationCategory(value) {
-  return typeof value === "string" && PUSH_NOTIFICATION_CATEGORIES.includes(value);
-}
-function isPushNotificationMode(value) {
-  return typeof value === "string" && PUSH_NOTIFICATION_MODES.includes(value);
-}
-function dedupePredicate(dialect) {
-  return dialect === "postgres" ? "payload_json->>'dedupeKey' = ?" : "json_extract(payload_json, '$.dedupeKey') = ?";
-}
-function pushNotificationDedupeKey({
-  profileId,
-  category,
-  missionId,
-  objectiveId
-}) {
-  return `${profileId}:${category}:${missionId}:${objectiveId ?? "-"}`;
-}
-async function enqueuePushNotificationJob({
-  db,
-  workspaceId,
-  profileId,
-  category,
-  missionId,
-  objectiveId = null,
-  now: now2 = nowIso()
-}) {
-  const dedupeKey = pushNotificationDedupeKey({ profileId, category, missionId, objectiveId });
-  const existing = await db.get(
-    `SELECT id FROM worker_jobs
-       WHERE workspace_id = ? AND type = ? AND status IN ('queued', 'running')
-         AND deleted_at IS NULL AND ${dedupePredicate(db.dialect)}
-       LIMIT 1`,
-    [workspaceId, PUSH_NOTIFICATION_DISPATCH_JOB_TYPE, dedupeKey]
-  );
-  if (existing) return false;
-  const payload = {
-    profileId,
-    missionId,
-    objectiveId,
-    category,
-    dedupeKey
-  };
-  await db.run(
-    `INSERT INTO worker_jobs
-       (id, workspace_id, type, status, priority, run_after, attempt_count, max_attempts,
-        payload_json, created_at, updated_at, revision)
-       VALUES (?, ?, ?, 'queued', 40, ?, 0, 5, ?, ?, ?, 1)`,
-    [
-      newId(),
-      workspaceId,
-      PUSH_NOTIFICATION_DISPATCH_JOB_TYPE,
-      now2,
-      JSON.stringify(payload),
-      now2,
-      now2
-    ]
-  );
-  return true;
-}
-async function enqueuePushNotificationForMission({
-  db,
-  workspaceId,
-  missionId,
-  category,
-  objectiveId = null,
-  now: now2 = nowIso()
-}) {
-  const owner = await db.get(
-    `SELECT wu.profile_id
-       FROM missions m
-       JOIN workspace_users wu ON wu.id = m.assigned_workspace_user_id
-      WHERE m.id = ? AND m.workspace_id = ? AND m.deleted_at IS NULL
-        AND wu.deleted_at IS NULL AND wu.status = 'active'`,
-    [missionId, workspaceId]
-  );
-  return owner ? enqueuePushNotificationJob({
-    db,
-    workspaceId,
-    profileId: owner.profile_id,
-    category,
-    missionId,
-    objectiveId,
-    now: now2
-  }) : false;
-}
-
-// ../packages/core/service/execution-requests.ts
 init_util3();
 var ACTIVE_EXECUTION_REQUEST_STATUSES = ["queued", "claimed", "launching"];
 var LAUNCHABLE_OBJECTIVE_STATES2 = ["draft", "submitted", "launching"];
@@ -133934,11 +134087,11 @@ async function markExecutionFailed({
       summary: `Agent run failed: ${error53}`,
       payload: { error: error53 }
     });
-    await enqueuePushNotificationForMission({
+    await emitNotification({
       db: txCtx.db,
       workspaceId: ctx.workspace.id,
       missionId: row.mission_id,
-      category: "mission_failed",
+      type: "mission_failed",
       objectiveId: row.objective_id,
       now: now2
     });
@@ -134150,54 +134303,23 @@ init_execution_targets();
 init_util3();
 var LIVE_ACTIVITY_DISPATCH_JOB_TYPE = "overlord.live_activity.dispatch.v1";
 var LIVE_ACTIVITY_START_JOB_TYPE = "overlord.live_activity.start.v1";
-function profilePredicate(dialect) {
-  return dialect === "postgres" ? "payload_json->>'profileId' = ?" : "json_extract(payload_json, '$.profileId') = ?";
-}
 async function enqueueLiveActivityDispatchJob({
   db,
   workspaceId,
   profileId,
   now: now2 = nowIso()
 }) {
-  const existing = await db.get(
-    `SELECT id FROM worker_jobs
-       WHERE workspace_id = ? AND type = ? AND status IN ('queued', 'running')
-         AND deleted_at IS NULL AND ${profilePredicate(db.dialect)}
-       LIMIT 1`,
-    [workspaceId, LIVE_ACTIVITY_DISPATCH_JOB_TYPE, profileId]
-  );
-  if (existing) return false;
-  await db.run(
-    `INSERT INTO worker_jobs
-       (id, workspace_id, type, status, priority, run_after, attempt_count, max_attempts,
-        payload_json, created_at, updated_at, revision)
-       VALUES (?, ?, ?, 'queued', 40, ?, 0, 5, ?, ?, ?, 1)`,
-    [
-      newId(),
-      workspaceId,
-      LIVE_ACTIVITY_DISPATCH_JOB_TYPE,
-      now2,
-      JSON.stringify({ profileId }),
-      now2,
-      now2
-    ]
-  );
-  return true;
-}
-async function missionOwnerProfileId({
-  db,
-  workspaceId,
-  missionId
-}) {
-  const owner = await db.get(
-    `SELECT wu.profile_id
-       FROM missions m
-       JOIN workspace_users wu ON wu.id = m.assigned_workspace_user_id
-      WHERE m.id = ? AND m.workspace_id = ? AND m.deleted_at IS NULL
-        AND wu.deleted_at IS NULL AND wu.status = 'active'`,
-    [missionId, workspaceId]
-  );
-  return owner?.profile_id ?? null;
+  const result = await enqueueWorkerJob({
+    db,
+    workspaceId,
+    type: LIVE_ACTIVITY_DISPATCH_JOB_TYPE,
+    dedupeBy: { field: "profileId", value: profileId },
+    payload: { profileId },
+    priority: 40,
+    maxAttempts: 5,
+    now: now2
+  });
+  return result.enqueued;
 }
 async function enqueueLiveActivityRefreshForMission({
   db,
@@ -134215,30 +134337,17 @@ async function enqueueLiveActivityStartJob({
   missionId,
   now: now2 = nowIso()
 }) {
-  const existing = await db.get(
-    `SELECT id FROM worker_jobs
-       WHERE workspace_id = ? AND type = ? AND status IN ('queued', 'running')
-         AND deleted_at IS NULL AND ${profilePredicate(db.dialect)}
-       LIMIT 1`,
-    [workspaceId, LIVE_ACTIVITY_START_JOB_TYPE, profileId]
-  );
-  if (existing) return false;
-  await db.run(
-    `INSERT INTO worker_jobs
-       (id, workspace_id, type, status, priority, run_after, attempt_count, max_attempts,
-        payload_json, created_at, updated_at, revision)
-       VALUES (?, ?, ?, 'queued', 40, ?, 0, 5, ?, ?, ?, 1)`,
-    [
-      newId(),
-      workspaceId,
-      LIVE_ACTIVITY_START_JOB_TYPE,
-      now2,
-      JSON.stringify({ profileId, missionId }),
-      now2,
-      now2
-    ]
-  );
-  return true;
+  const result = await enqueueWorkerJob({
+    db,
+    workspaceId,
+    type: LIVE_ACTIVITY_START_JOB_TYPE,
+    dedupeBy: { field: "profileId", value: profileId },
+    payload: { profileId, missionId },
+    priority: 40,
+    maxAttempts: 5,
+    now: now2
+  });
+  return result.enqueued;
 }
 async function enqueueLiveActivityStartForMission({
   db,
@@ -134628,124 +134737,6 @@ function formatProjectResourcesInstructions(projectResources) {
 init_projects();
 init_util3();
 init_webhook_events();
-
-// ../packages/core/service/worker-jobs.ts
-init_util3();
-var DELIVERY_COMPOSE_JOB_TYPE = "overlord.delivery.compose.v1";
-var DEFAULT_MAX_ATTEMPTS = 5;
-var DEFAULT_PRIORITY = 50;
-var DEFAULT_LOCK_TTL_MS = 6e4;
-var WORKER_JOB_RETRY_BACKOFF_MS = [15e3, 6e4, 3e5, 9e5, 36e5];
-function workerJobRetryDelay(attemptCount) {
-  return WORKER_JOB_RETRY_BACKOFF_MS[Math.min(Math.max(attemptCount - 1, 0), WORKER_JOB_RETRY_BACKOFF_MS.length - 1)];
-}
-async function claimNextWorkerJob({
-  db,
-  jobType,
-  workerId,
-  now: now2 = nowIso(),
-  lockTtlMs = DEFAULT_LOCK_TTL_MS
-}) {
-  return db.transaction(async (tx) => {
-    await tx.run(
-      `UPDATE worker_jobs SET status = 'queued', locked_by = NULL, locked_until = NULL, updated_at = ?, revision = revision + 1
-       WHERE type = ? AND status = 'running' AND deleted_at IS NULL AND locked_until < ?`,
-      [now2, jobType, now2]
-    );
-    const lockClause = tx.dialect === "postgres" ? "FOR UPDATE SKIP LOCKED" : "";
-    const candidate = await tx.get(
-      `SELECT id, payload_json, attempt_count, max_attempts, revision FROM worker_jobs
-        WHERE type = ? AND status = 'queued' AND deleted_at IS NULL AND run_after <= ?
-        ORDER BY priority ASC, run_after ASC LIMIT 1 ${lockClause}`,
-      [jobType, now2]
-    );
-    if (!candidate) return null;
-    const updated = await tx.run(
-      `UPDATE worker_jobs SET status = 'running', attempt_count = attempt_count + 1, locked_by = ?, locked_until = ?, updated_at = ?, revision = revision + 1
-        WHERE id = ? AND status = 'queued' AND revision = ?`,
-      [
-        workerId,
-        new Date(Date.parse(now2) + lockTtlMs).toISOString(),
-        now2,
-        candidate.id,
-        candidate.revision
-      ]
-    );
-    return updated.changes === 0 ? null : {
-      ...candidate,
-      attempt_count: candidate.attempt_count + 1,
-      revision: candidate.revision + 1
-    };
-  });
-}
-async function finishWorkerJob(db, id, status, lastError, now2 = nowIso()) {
-  await db.run(
-    `UPDATE worker_jobs SET status = ?, last_error = ?, locked_by = NULL, locked_until = NULL, updated_at = ?, revision = revision + 1 WHERE id = ?`,
-    [status, lastError, now2, id]
-  );
-}
-async function retryWorkerJob(db, id, attemptCount, lastError, now2 = nowIso()) {
-  await db.run(
-    `UPDATE worker_jobs SET status = 'queued', run_after = ?, last_error = ?, locked_by = NULL,
-       locked_until = NULL, updated_at = ?, revision = revision + 1 WHERE id = ?`,
-    [
-      new Date(Date.parse(now2) + workerJobRetryDelay(attemptCount)).toISOString(),
-      lastError,
-      now2,
-      id
-    ]
-  );
-}
-function deliveryIdPredicate(dialect) {
-  return dialect === "postgres" ? "payload_json->>'deliveryId' = ?" : "json_extract(payload_json, '$.deliveryId') = ?";
-}
-async function enqueueDeliveryComposeJob({
-  ctx,
-  deliveryId,
-  now: now2 = nowIso(),
-  maxAttempts = DEFAULT_MAX_ATTEMPTS,
-  priority = DEFAULT_PRIORITY
-}) {
-  const existing = await ctx.db.get(
-    `SELECT id FROM worker_jobs
-       WHERE workspace_id = ?
-         AND type = ?
-         AND status IN ('queued', 'running')
-         AND deleted_at IS NULL
-         AND ${deliveryIdPredicate(ctx.db.dialect)}
-       ORDER BY created_at ASC
-       LIMIT 1`,
-    [ctx.workspace.id, DELIVERY_COMPOSE_JOB_TYPE, deliveryId]
-  );
-  if (existing) {
-    return { jobId: existing.id, enqueued: false };
-  }
-  const jobId = newId();
-  await ctx.db.run(
-    `INSERT INTO worker_jobs
-         (id, workspace_id, type, status, priority, run_after, attempt_count, max_attempts,
-          payload_json, created_at, updated_at, revision)
-       VALUES (?, ?, ?, 'queued', ?, ?, 0, ?, ?, ?, ?, 1)`,
-    [
-      jobId,
-      ctx.workspace.id,
-      DELIVERY_COMPOSE_JOB_TYPE,
-      priority,
-      now2,
-      maxAttempts,
-      JSON.stringify({ deliveryId }),
-      now2,
-      now2
-    ]
-  );
-  console.info(
-    "[delivery-compose-worker]",
-    JSON.stringify({ event: "delivery_compose_queued", deliveryId, jobId, maxAttempts, priority })
-  );
-  return { jobId, enqueued: true };
-}
-
-// ../packages/core/service/protocol.ts
 var PROTOCOL_WORKFLOW = `
 
 1. Read the current objective from the top-level \`objective\` field in this JSON response, then immediately begin executing it. This is an execution session: do not wait for more instructions or ask for confirmation.
@@ -135829,11 +135820,11 @@ async function askQuestion({
       projectId: mission.projectId,
       entity: { missionId: mission.id, objectiveId: session.objective_id, sessionId: session.id }
     });
-    await enqueuePushNotificationForMission({
+    await emitNotification({
       db: txCtx.db,
       workspaceId: ctx.workspace.id,
       missionId: mission.id,
-      category: "agent_question",
+      type: "agent_question",
       objectiveId: session.objective_id,
       now: now2
     });
@@ -136215,7 +136206,8 @@ async function deliverSession({
     now: nowIso()
   });
   const nextObjective = await ctx.db.get(
-    `SELECT id, title, auto_advance, assigned_agent, model, reasoning_effort, launch_config_json
+    `SELECT id, title, auto_advance, assigned_agent, model, reasoning_effort,
+            launch_config_json, resource_key
        FROM objectives
        WHERE mission_id = ? AND position > (
          SELECT position FROM objectives WHERE id = ?
@@ -136271,7 +136263,9 @@ async function deliverSession({
           objectiveLaunchConfigJson: nextObjective.launch_config_json,
           executionTargetId,
           agentKey: resolvedAgent ?? "",
-          userConfigs: agentConfigs
+          userConfigs: agentConfigs,
+          projectId: mission.projectId,
+          objectiveResourceKey: nextObjective.resource_key
         });
         await createExecutionRequest({
           ctx,
@@ -136331,11 +136325,11 @@ async function deliverSession({
     }
   }
   if (!autoAdvanceQueued) {
-    await enqueuePushNotificationForMission({
+    await emitNotification({
       db: ctx.db,
       workspaceId: ctx.workspace.id,
       missionId: mission.id,
-      category: "mission_awaiting_review",
+      type: "mission_awaiting_review",
       objectiveId: session.objective_id
     });
   }
@@ -136953,6 +136947,9 @@ function mergeMissionBranchObservation({
 // repository.ts
 init_project_execution_target();
 init_util3();
+
+// ../webapp/shared/contract.ts
+init_dist6();
 
 // automation/commit-message-automation.ts
 var MAX_DIFF_CHARS = 12e3;
@@ -137909,15 +137906,16 @@ async function launchObjective(objectiveId, body) {
       changed.push("reasoning_effort");
     }
     let launchConfigJson = objective.launch_config_json;
-    if (executionTargetId && body.launchConfigOverride !== void 0 && body.launchConfigOverride !== null) {
+    if (body.launchConfigOverride !== void 0 && body.launchConfigOverride !== null) {
       let parsed;
       try {
         parsed = launchConfigJson ? JSON.parse(launchConfigJson) : {};
       } catch {
         parsed = {};
       }
-      parsed[executionTargetId] = {
-        ...parsed[executionTargetId] ?? {},
+      const launchConfigTargetKey = executionTargetId ?? "*";
+      parsed[launchConfigTargetKey] = {
+        ...parsed[launchConfigTargetKey] ?? {},
         [agentKey]: {
           preCommand: body.launchConfigOverride.preCommand ?? "",
           flags: normalizeAgentLaunchFlags(body.launchConfigOverride.flags)
@@ -137960,7 +137958,9 @@ async function launchObjective(objectiveId, body) {
       objectiveLaunchConfigJson: launchConfigJson,
       executionTargetId,
       agentKey,
-      userConfigs: agentConfigs
+      userConfigs: agentConfigs,
+      projectId: objective.project_id,
+      objectiveResourceKey: objective.resource_key
     });
     const activeRequestRow = await tx.get(
       `SELECT ${EXECUTION_REQUEST_COLUMNS} FROM execution_requests
@@ -139499,11 +139499,24 @@ function toSourceDto(source) {
   } catch {
     descriptor = {};
   }
+  const rawLaunchDefaults = descriptor.launchDefaults;
+  const launchDefaults = {};
+  if (rawLaunchDefaults && typeof rawLaunchDefaults === "object" && !Array.isArray(rawLaunchDefaults)) {
+    for (const [agentKey, value] of Object.entries(rawLaunchDefaults)) {
+      if (!value || typeof value !== "object" || Array.isArray(value)) continue;
+      const config4 = value;
+      launchDefaults[agentKey] = {
+        preCommand: typeof config4.preCommand === "string" ? config4.preCommand : "",
+        flags: normalizeAgentLaunchFlags(config4.flags)
+      };
+    }
+  }
   return {
     id: source.id,
     executionTargetId: source.execution_target_id,
     sourceKind: source.source_kind,
     descriptor,
+    launchDefaults,
     observedRevision: source.observed_revision,
     observedContentDigest: source.observed_content_digest
   };
@@ -140858,14 +140871,14 @@ async function findProjectResourceSource({
 }) {
   if (executionTargetId === null) {
     return await db.get(
-      `SELECT id FROM project_resource_sources
+      `SELECT id, descriptor_json FROM project_resource_sources
         WHERE resource_id = ? AND execution_target_id IS NULL
           AND source_kind = ? AND deleted_at IS NULL`,
       [resourceId, sourceKind]
     );
   }
   return await db.get(
-    `SELECT id FROM project_resource_sources
+    `SELECT id, descriptor_json FROM project_resource_sources
       WHERE resource_id = ? AND execution_target_id = ?
         AND source_kind = ? AND deleted_at IS NULL`,
     [resourceId, executionTargetId, sourceKind]
@@ -140922,13 +140935,31 @@ async function insertProjectResource(db, project, body, pathRequiredMessage, opt
       [resolvedAccessMode, now2, resourceId]
     );
   }
-  const descriptor = JSON.stringify(sourceUrl ? { url: sourceUrl } : { path: resourcePath });
   const source = await findProjectResourceSource({
     db,
     resourceId,
     executionTargetId,
     sourceKind
   });
+  let descriptorObject = {};
+  if (source) {
+    try {
+      const parsed = JSON.parse(source.descriptor_json);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        descriptorObject = parsed;
+      }
+    } catch {
+      descriptorObject = {};
+    }
+  }
+  if (sourceUrl) {
+    descriptorObject.url = sourceUrl;
+    delete descriptorObject.path;
+  } else {
+    descriptorObject.path = resourcePath;
+    delete descriptorObject.url;
+  }
+  const descriptor = JSON.stringify(descriptorObject);
   if (source) {
     await db.run(
       `UPDATE project_resource_sources SET descriptor_json = ?, updated_at = ?, revision = revision + 1 WHERE id = ?`,
@@ -141148,6 +141179,83 @@ async function deleteProjectResourceSource(projectId, resourceId, sourceId) {
         workspaceId: resource.workspace_id
       },
       tx
+    );
+  });
+}
+async function updateProjectResourceSource(projectId, resourceId, sourceId, body) {
+  return requireDatabaseClient().transaction(async (tx) => {
+    const resource = await getProjectResourceRow(
+      tx,
+      projectId,
+      resourceId,
+      PERMISSIONS.PROJECT_UPDATE
+    );
+    const source = await tx.get(
+      `SELECT id, resource_id, execution_target_id, source_kind, descriptor_json,
+              observed_revision, observed_content_digest
+         FROM project_resource_sources
+        WHERE id = ? AND project_id = ? AND resource_id = ? AND deleted_at IS NULL`,
+      [sourceId, projectId, resourceId]
+    );
+    if (!source) throw new ApiError(404, "Project resource source not found");
+    if (!body.launchDefaults || typeof body.launchDefaults !== "object" || Array.isArray(body.launchDefaults)) {
+      throw new ApiError(400, "launchDefaults must be an object keyed by agent");
+    }
+    let descriptor = {};
+    try {
+      const parsed = JSON.parse(source.descriptor_json);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        descriptor = parsed;
+      }
+    } catch {
+      descriptor = {};
+    }
+    const launchDefaults = {};
+    for (const [rawAgentKey, rawConfig] of Object.entries(body.launchDefaults)) {
+      const agentKey = rawAgentKey.trim();
+      if (!agentKey || !rawConfig || typeof rawConfig !== "object") continue;
+      const preCommand = typeof rawConfig.preCommand === "string" ? rawConfig.preCommand.trim() : "";
+      const flags = normalizeAgentLaunchFlags(rawConfig.flags);
+      if (!preCommand && flags.length === 0) continue;
+      launchDefaults[agentKey] = { preCommand, flags };
+    }
+    if (Object.keys(launchDefaults).length > 0) descriptor.launchDefaults = launchDefaults;
+    else delete descriptor.launchDefaults;
+    const now2 = nowIso2();
+    const revision = resource.revision + 1;
+    await tx.run(
+      `UPDATE project_resource_sources
+          SET descriptor_json = ?, updated_at = ?, revision = revision + 1
+        WHERE id = ?`,
+      [JSON.stringify(descriptor), now2, sourceId]
+    );
+    await tx.run(`UPDATE project_resources SET updated_at = ?, revision = ? WHERE id = ?`, [
+      now2,
+      revision,
+      resourceId
+    ]);
+    await recordChange2(
+      {
+        entityType: "project_resource",
+        entityId: resourceId,
+        operation: "update",
+        entityRevision: revision,
+        projectId,
+        changedFields: ["sources.launch_defaults"],
+        workspaceId: resource.workspace_id
+      },
+      tx
+    );
+    const sources = await tx.all(
+      `SELECT id, resource_id, execution_target_id, source_kind, descriptor_json,
+              observed_revision, observed_content_digest
+         FROM project_resource_sources WHERE resource_id = ? AND deleted_at IS NULL`,
+      [resourceId]
+    );
+    return toProjectResourceDto(
+      await getProjectResourceRow(tx, projectId, resourceId),
+      /* @__PURE__ */ new Map(),
+      sources
     );
   });
 }
@@ -142943,11 +143051,20 @@ async function patchMissionFieldsTx(id, body) {
       await createScheduledDuplicateIfNeeded(tx, existing, scheduleTriggerStatusType);
     }
     if (scheduleTriggerStatusType === "complete" && existing.status_type !== "complete") {
-      await enqueuePushNotificationForMission({
+      await emitNotification({
         db: tx,
         workspaceId: existing.workspace_id,
         missionId: id,
-        category: "mission_complete",
+        type: "mission_complete",
+        now: now2
+      });
+    }
+    if (returnedToExecute) {
+      await emitNotification({
+        db: tx,
+        workspaceId: existing.workspace_id,
+        missionId: id,
+        type: "returned_to_execute",
         now: now2
       });
     }
@@ -143004,7 +143121,8 @@ async function moveMissionProjectTx({
       changed.push("notes_text");
     }
     const now2 = nowIso2();
-    if (statusRow.type === "execute" && existing.status_type !== "execute") {
+    const returnedToExecute = statusRow.type === "execute" && existing.status_type !== "execute";
+    if (returnedToExecute) {
       fields.push("returned_to_execute_at = ?");
       setParams.push(now2);
       changed.push("returned_to_execute_at");
@@ -143034,6 +143152,15 @@ async function moveMissionProjectTx({
       },
       tx
     );
+    if (returnedToExecute) {
+      await emitNotification({
+        db: tx,
+        workspaceId: existing.workspace_id,
+        missionId: id,
+        type: "returned_to_execute",
+        now: now2
+      });
+    }
   });
 }
 async function updateMission(id, body) {
@@ -143170,6 +143297,15 @@ async function reorderBoardColumn(projectId, body) {
           tx
         );
         await createScheduledDuplicateIfNeeded(tx, existing, statusRow.type);
+        if (statusRow.type === "execute" && existing.status_type !== "execute") {
+          await emitNotification({
+            db: tx,
+            workspaceId,
+            missionId,
+            type: "returned_to_execute",
+            now: now2
+          });
+        }
       }
     }
   });
@@ -144168,6 +144304,14 @@ async function updateObjectiveTx(id, body) {
           db: tx,
           workspaceId,
           missionId: existing.mission_id,
+          now: now2
+        });
+        await emitNotification({
+          db: tx,
+          workspaceId,
+          missionId: existing.mission_id,
+          objectiveId: id,
+          type: "agent_started",
           now: now2
         });
       } else {
@@ -152223,11 +152367,11 @@ var handlers = {
   // In-place artifact edit (same service as REST PATCH). No session key — a
   // later objective or follow-up can revise an artifact created earlier.
   "update-artifact": (_ctx, body) => {
-    const expectedRevision = intFlag(body, "--expected-revision");
-    if (expectedRevision === void 0) {
+    const expectedRevision2 = intFlag(body, "--expected-revision");
+    if (expectedRevision2 === void 0) {
       throw new ApiError(400, "Missing required flag: --expected-revision");
     }
-    const update = { expectedRevision };
+    const update = { expectedRevision: expectedRevision2 };
     if (hasFlag(body, "--label")) {
       update.label = strFlag(body, "--label") ?? "";
     }
@@ -156186,10 +156330,10 @@ async function resolveRequest({
   ctx,
   requestId,
   resolution,
-  expectedRevision
+  expectedRevision: expectedRevision2
 }) {
   const existing = await getRequest2({ ctx, requestId });
-  if (expectedRevision !== void 0 && expectedRevision !== existing.revision) {
+  if (expectedRevision2 !== void 0 && expectedRevision2 !== existing.revision) {
     throw new ServiceError("Request changed since it was read", "agent_request_conflict", 409);
   }
   if (!ctx.actorWorkspaceUserId) {
@@ -158167,6 +158311,12 @@ async function registerLiveActivityPushToken(activityId, body) {
   if (normalizedActivityId.length > 255 || pushToken.length > 4096) {
     throw new ApiError(400, "Live Activity registration is too large");
   }
+  const bundleId = requiredString2(body.bundleId, "bundleId", BUNDLE_ID_MAX_LENGTH);
+  const environmentRaw = typeof body.environment === "string" ? body.environment.trim() : "";
+  if (environmentRaw !== "sandbox" && environmentRaw !== "production") {
+    throw new ApiError(400, "environment must be sandbox or production");
+  }
+  const environment = environmentRaw;
   if (body.startedByPush !== void 0 && typeof body.startedByPush !== "boolean") {
     throw new ApiError(400, "startedByPush must be a boolean");
   }
@@ -158183,17 +158333,28 @@ async function registerLiveActivityPushToken(activityId, body) {
     if (existing) {
       await tx.run(
         `UPDATE live_activity_push_tokens
-            SET push_token = ?, origin = ?, last_content_hash = NULL, last_sent_at = NULL,
-                updated_at = ?
+            SET push_token = ?, environment = ?, bundle_id = ?, origin = ?,
+                last_content_hash = NULL, last_sent_at = NULL, updated_at = ?
           WHERE id = ?`,
-        [pushToken, origin, now2, existing.id]
+        [pushToken, environment, bundleId, origin, now2, existing.id]
       );
     } else {
       await tx.run(
         `INSERT INTO live_activity_push_tokens
-           (id, profile_id, activity_id, push_token, origin, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [newId(), profileId, normalizedActivityId, pushToken, origin, now2, now2]
+           (id, profile_id, activity_id, push_token, environment, bundle_id, origin,
+            created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          newId(),
+          profileId,
+          normalizedActivityId,
+          pushToken,
+          environment,
+          bundleId,
+          origin,
+          now2,
+          now2
+        ]
       );
     }
     await enqueueLiveActivityDispatchJob({
@@ -158304,7 +158465,7 @@ async function buildLiveActivityContentState(db, profileId, now2 = /* @__PURE__ 
   return {
     running: running.map(toSnapshot),
     recentCompletion: completion ? toSnapshot(completion) : null,
-    updatedAt: now2.toISOString()
+    updatedAt: Math.floor(now2.getTime() / 1e3)
   };
 }
 function liveActivityContentHash(state2) {
@@ -158407,7 +158568,72 @@ async function sendApnsRequest({
 
 // live-activity-dispatcher.ts
 init_db();
-var POLL_INTERVAL_MS2 = 1500;
+
+// worker-job-poller.ts
+init_util3();
+var DEFAULT_POLL_INTERVAL_MS = 1500;
+var WorkerJobPoller = class {
+  timer = null;
+  polling = false;
+  workerId;
+  constructor({
+    workerIdPrefix,
+    jobTypes,
+    logPrefix,
+    pollIntervalMs = DEFAULT_POLL_INTERVAL_MS
+  }) {
+    this.workerId = `${workerIdPrefix}:${process.pid}:${newId().slice(0, 8)}`;
+    this.jobTypes = jobTypes;
+    this.logPrefix = logPrefix;
+    this.pollIntervalMs = pollIntervalMs;
+  }
+  jobTypes;
+  logPrefix;
+  pollIntervalMs;
+  start() {
+    if (this.timer) return;
+    this.timer = setInterval(() => void this.poll(), this.pollIntervalMs);
+  }
+  /** Drives one claim/deliver cycle without waiting for the next interval. */
+  pollNow() {
+    void this.poll();
+  }
+  async finishJob(db, job, status = "succeeded", lastError = null) {
+    await finishWorkerJob(db, job.id, status, lastError);
+  }
+  async failOrRetry(db, job, error53) {
+    const message2 = error53 instanceof Error ? error53.message : String(error53);
+    if (job.attempt_count >= job.max_attempts) {
+      await finishWorkerJob(db, job.id, "failed", message2);
+    } else {
+      await retryWorkerJob(db, job.id, job.attempt_count, message2);
+    }
+  }
+  async poll() {
+    if (this.polling) return;
+    this.polling = true;
+    try {
+      const db = this.databaseClient();
+      for (const jobType of this.jobTypes) {
+        const job = await claimNextWorkerJob({ db, jobType, workerId: this.workerId });
+        if (job) await this.processClaimedJob(db, job, jobType);
+      }
+    } catch (error53) {
+      console.error(`[${this.logPrefix}] poll failed`, error53);
+    } finally {
+      this.polling = false;
+    }
+  }
+  async processClaimedJob(db, job, jobType) {
+    try {
+      await this.processJob(db, job, jobType);
+    } catch (error53) {
+      await this.failOrRetry(db, job, error53);
+    }
+  }
+};
+
+// live-activity-dispatcher.ts
 var UNCHANGED_MIN_INTERVAL_MS = 5 * 60 * 1e3;
 var COMPLETION_DISMISSAL_MS = 10 * 60 * 1e3;
 var START_COOLDOWN_MS = 5 * 60 * 1e3;
@@ -158419,7 +158645,7 @@ function apnsPayload(state2) {
   const finalState = state2 ?? {
     running: [],
     recentCompletion: null,
-    updatedAt: new Date(now2).toISOString()
+    updatedAt: Math.floor(now2 / 1e3)
   };
   const aps = {
     timestamp: Math.floor(now2 / 1e3),
@@ -158471,92 +158697,78 @@ async function sendApns({
     }
   });
 }
-var LiveActivityDispatcher = class {
-  timer = null;
-  polling = false;
-  workerId = `live-activity:${process.pid}:${newId().slice(0, 8)}`;
-  start() {
-    if (this.timer) return;
-    this.timer = setInterval(() => void this.poll(), POLL_INTERVAL_MS2);
+var LiveActivityDispatcher = class extends WorkerJobPoller {
+  constructor() {
+    super({
+      workerIdPrefix: "live-activity",
+      jobTypes: [LIVE_ACTIVITY_DISPATCH_JOB_TYPE, LIVE_ACTIVITY_START_JOB_TYPE],
+      logPrefix: "live-activity-dispatcher"
+    });
   }
-  pollNow() {
-    void this.poll();
+  databaseClient() {
+    return requireDatabaseClient();
   }
-  async poll() {
-    if (this.polling) return;
-    this.polling = true;
-    try {
-      const db = requireDatabaseClient();
-      const job = await claimNextWorkerJob({
-        db,
-        jobType: LIVE_ACTIVITY_DISPATCH_JOB_TYPE,
-        workerId: this.workerId
-      });
-      if (job) await this.processJob(db, job);
-      const startJob = await claimNextWorkerJob({
-        db,
-        jobType: LIVE_ACTIVITY_START_JOB_TYPE,
-        workerId: this.workerId
-      });
-      if (startJob) await this.processStartJob(db, startJob);
-    } catch (error53) {
-      console.error("[live-activity-dispatcher] poll failed", error53);
-    } finally {
-      this.polling = false;
-    }
-  }
-  async processJob(db, job) {
-    let profileId;
-    try {
-      const payload = JSON.parse(job.payload_json);
-      if (typeof payload.profileId !== "string" || !payload.profileId) throw new Error("profileId");
-      profileId = payload.profileId;
-    } catch {
-      await finishWorkerJob(db, job.id, "failed", "Malformed profile payload");
+  async processJob(db, job, jobType) {
+    if (jobType === LIVE_ACTIVITY_START_JOB_TYPE) {
+      await this.processStartJob(db, job);
       return;
     }
+    await this.processDispatchJob(db, job);
+  }
+  async processDispatchJob(db, job) {
+    let profileId;
     try {
-      const tokens = await db.all(
-        `SELECT id, activity_id, push_token, last_content_hash, last_sent_at
-           FROM live_activity_push_tokens WHERE profile_id = ?`,
-        [profileId]
-      );
-      if (tokens.length === 0) {
-        await finishWorkerJob(db, job.id, "succeeded", null);
-        return;
-      }
-      const state2 = await buildLiveActivityContentState(db, profileId);
-      const hash2 = liveActivityContentHash(state2);
-      const payload = apnsPayload(state2);
-      const config4 = apnsConfig();
-      for (const token of tokens) {
-        const sentAt = token.last_sent_at ? Date.parse(token.last_sent_at) : NaN;
-        if (payload.event === "update" && token.last_content_hash === hash2 && Number.isFinite(sentAt) && Date.now() - sentAt < UNCHANGED_MIN_INTERVAL_MS) {
-          continue;
-        }
-        if (!config4) continue;
-        const response = await sendApns({ token: token.push_token, body: payload.body, config: config4 });
-        if (response.status === 400 || response.status === 410) {
-          await db.run(`DELETE FROM live_activity_push_tokens WHERE id = ?`, [token.id]);
-          continue;
-        }
-        if (response.status < 200 || response.status >= 300) {
-          throw new Error(`APNs ${response.status}: ${response.body || "unknown response"}`);
-        }
-        if (payload.event === "end") {
-          await db.run(`DELETE FROM live_activity_push_tokens WHERE id = ?`, [token.id]);
-        } else {
-          const now2 = nowIso();
-          await db.run(
-            `UPDATE live_activity_push_tokens SET last_content_hash = ?, last_sent_at = ?, updated_at = ? WHERE id = ?`,
-            [hash2, now2, now2, token.id]
-          );
-        }
-      }
-      await finishWorkerJob(db, job.id, "succeeded", null);
-    } catch (error53) {
-      await this.failOrRetry(db, job, error53);
+      const payload2 = JSON.parse(job.payload_json);
+      if (typeof payload2.profileId !== "string" || !payload2.profileId) throw new Error("profileId");
+      profileId = payload2.profileId;
+    } catch {
+      await this.finishJob(db, job, "failed", "Malformed profile payload");
+      return;
     }
+    const tokens = await db.all(
+      `SELECT id, activity_id, push_token, environment, bundle_id, last_content_hash, last_sent_at
+           FROM live_activity_push_tokens WHERE profile_id = ?`,
+      [profileId]
+    );
+    if (tokens.length === 0) {
+      await this.finishJob(db, job);
+      return;
+    }
+    const state2 = await buildLiveActivityContentState(db, profileId);
+    const hash2 = liveActivityContentHash(state2);
+    const payload = apnsPayload(state2);
+    const config4 = apnsConfig();
+    for (const token of tokens) {
+      const sentAt = token.last_sent_at ? Date.parse(token.last_sent_at) : NaN;
+      if (payload.event === "update" && token.last_content_hash === hash2 && Number.isFinite(sentAt) && Date.now() - sentAt < UNCHANGED_MIN_INTERVAL_MS) {
+        continue;
+      }
+      if (!config4) continue;
+      const response = await sendApns({
+        token: token.push_token,
+        body: payload.body,
+        config: config4,
+        bundleId: token.bundle_id,
+        host: apnsHostFor(token.environment === "sandbox" ? "sandbox" : "production")
+      });
+      if (isRetiredTokenResponse(response)) {
+        await db.run(`DELETE FROM live_activity_push_tokens WHERE id = ?`, [token.id]);
+        continue;
+      }
+      if (response.status < 200 || response.status >= 300) {
+        throw new Error(`APNs ${response.status}: ${response.body || "unknown response"}`);
+      }
+      if (payload.event === "end") {
+        await db.run(`DELETE FROM live_activity_push_tokens WHERE id = ?`, [token.id]);
+      } else {
+        const now2 = nowIso();
+        await db.run(
+          `UPDATE live_activity_push_tokens SET last_content_hash = ?, last_sent_at = ?, updated_at = ? WHERE id = ?`,
+          [hash2, now2, now2, token.id]
+        );
+      }
+    }
+    await this.finishJob(db, job);
   }
   /**
    * Push-to-start: ask APNs to create the activity on the assigned account's
@@ -158576,74 +158788,751 @@ var LiveActivityDispatcher = class {
       if (typeof payload.profileId !== "string" || !payload.profileId) throw new Error("profileId");
       profileId = payload.profileId;
     } catch {
-      await finishWorkerJob(db, job.id, "failed", "Malformed profile payload");
+      await this.finishJob(db, job, "failed", "Malformed profile payload");
       return;
     }
-    try {
-      const startTokens = await db.all(
-        `SELECT id, start_token, environment, bundle_id, activity_type, last_started_at
+    const startTokens = await db.all(
+      `SELECT id, start_token, environment, bundle_id, activity_type, last_started_at
            FROM live_activity_start_tokens WHERE profile_id = ?`,
-        [profileId]
-      );
-      if (startTokens.length === 0) {
-        await finishWorkerJob(db, job.id, "succeeded", null);
-        return;
-      }
-      const live = await db.get(
-        `SELECT id FROM live_activity_push_tokens WHERE profile_id = ? LIMIT 1`,
-        [profileId]
-      );
-      if (live) {
-        await finishWorkerJob(db, job.id, "succeeded", null);
-        return;
-      }
-      const state2 = await buildLiveActivityContentState(db, profileId);
-      if (!state2 || state2.running.length === 0) {
-        await finishWorkerJob(db, job.id, "succeeded", null);
-        return;
-      }
-      const config4 = apnsConfig();
-      const startedAtCutoff = Date.now() - START_COOLDOWN_MS;
-      for (const token of startTokens) {
-        const lastStarted = token.last_started_at ? Date.parse(token.last_started_at) : NaN;
-        if (Number.isFinite(lastStarted) && lastStarted > startedAtCutoff) continue;
-        if (!config4) continue;
-        const response = await sendApns({
-          token: token.start_token,
-          body: apnsStartPayload(state2, token.activity_type),
-          config: config4,
-          priority: "10",
-          bundleId: token.bundle_id,
-          host: apnsHostFor(token.environment === "sandbox" ? "sandbox" : "production")
-        });
-        if (isRetiredTokenResponse(response)) {
-          await db.run(`DELETE FROM live_activity_start_tokens WHERE id = ?`, [token.id]);
-          continue;
-        }
-        if (response.status < 200 || response.status >= 300) {
-          throw new Error(`APNs ${response.status}: ${response.body || "unknown response"}`);
-        }
-        const now2 = nowIso();
-        await db.run(
-          `UPDATE live_activity_start_tokens SET last_started_at = ?, updated_at = ? WHERE id = ?`,
-          [now2, now2, token.id]
-        );
-      }
-      await finishWorkerJob(db, job.id, "succeeded", null);
-    } catch (error53) {
-      await this.failOrRetry(db, job, error53);
+      [profileId]
+    );
+    if (startTokens.length === 0) {
+      await this.finishJob(db, job);
+      return;
     }
-  }
-  async failOrRetry(db, job, error53) {
-    const message2 = error53 instanceof Error ? error53.message : String(error53);
-    if (job.attempt_count >= job.max_attempts) {
-      await finishWorkerJob(db, job.id, "failed", message2);
-    } else {
-      await retryWorkerJob(db, job.id, job.attempt_count, message2);
+    const live = await db.get(
+      `SELECT id FROM live_activity_push_tokens WHERE profile_id = ? LIMIT 1`,
+      [profileId]
+    );
+    if (live) {
+      await this.finishJob(db, job);
+      return;
     }
+    const state2 = await buildLiveActivityContentState(db, profileId);
+    if (!state2 || state2.running.length === 0) {
+      await this.finishJob(db, job);
+      return;
+    }
+    const config4 = apnsConfig();
+    const startedAtCutoff = Date.now() - START_COOLDOWN_MS;
+    for (const token of startTokens) {
+      const lastStarted = token.last_started_at ? Date.parse(token.last_started_at) : NaN;
+      if (Number.isFinite(lastStarted) && lastStarted > startedAtCutoff) continue;
+      if (!config4) continue;
+      const response = await sendApns({
+        token: token.start_token,
+        body: apnsStartPayload(state2, token.activity_type),
+        config: config4,
+        priority: "10",
+        bundleId: token.bundle_id,
+        host: apnsHostFor(token.environment === "sandbox" ? "sandbox" : "production")
+      });
+      if (isRetiredTokenResponse(response)) {
+        await db.run(`DELETE FROM live_activity_start_tokens WHERE id = ?`, [token.id]);
+        continue;
+      }
+      if (response.status < 200 || response.status >= 300) {
+        throw new Error(`APNs ${response.status}: ${response.body || "unknown response"}`);
+      }
+      const now2 = nowIso();
+      await db.run(
+        `UPDATE live_activity_start_tokens SET last_started_at = ?, updated_at = ? WHERE id = ?`,
+        [now2, now2, token.id]
+      );
+    }
+    await this.finishJob(db, job);
   }
 };
 var liveActivityDispatcher = new LiveActivityDispatcher();
+
+// notification-dispatcher.ts
+init_change_feed();
+
+// ../packages/core/service/notifications/catalog.ts
+var NOTIFICATION_TYPES = [
+  "mission_awaiting_review",
+  "agent_question",
+  "mission_complete",
+  "mission_failed",
+  "agent_started",
+  "returned_to_execute"
+];
+var NOTIFICATION_MODES = ["alert", "silent", "off"];
+var NOTIFICATION_TRANSPORTS = ["apns", "realtime", "in_app"];
+var NOTIFICATION_CATALOG = {
+  agent_question: {
+    id: "agent_question",
+    label: "Agent questions",
+    detail: "An agent is blocked and asked a question.",
+    verb: "needs your input",
+    defaultMode: "alert",
+    transports: ["apns", "realtime", "in_app"],
+    icon: "questionmark.bubble.fill",
+    dotClassName: "bg-orange-500",
+    soundUrl: null,
+    seenTracked: true
+  },
+  mission_awaiting_review: {
+    id: "mission_awaiting_review",
+    label: "Ready for review",
+    detail: "A mission is ready for your review.",
+    verb: "is ready for review",
+    defaultMode: "alert",
+    transports: ["apns", "realtime", "in_app"],
+    icon: "checkmark.circle.fill",
+    dotClassName: null,
+    soundUrl: null,
+    seenTracked: false
+  },
+  mission_failed: {
+    id: "mission_failed",
+    label: "Launch failed",
+    detail: "An agent run could not be launched.",
+    verb: "failed",
+    defaultMode: "alert",
+    transports: ["apns", "realtime", "in_app"],
+    icon: "exclamationmark.triangle.fill",
+    dotClassName: null,
+    soundUrl: null,
+    seenTracked: false
+  },
+  mission_complete: {
+    id: "mission_complete",
+    label: "Mission complete",
+    detail: "A mission has been completed.",
+    verb: "finished",
+    defaultMode: "alert",
+    transports: ["apns", "realtime", "in_app"],
+    icon: "checkmark.seal.fill",
+    dotClassName: null,
+    soundUrl: null,
+    seenTracked: false
+  },
+  agent_started: {
+    id: "agent_started",
+    label: "Agent started",
+    detail: "An agent started work on an objective.",
+    verb: "started working",
+    defaultMode: "silent",
+    transports: ["realtime", "in_app"],
+    icon: "play.circle.fill",
+    dotClassName: null,
+    soundUrl: null,
+    seenTracked: false
+  },
+  returned_to_execute: {
+    id: "returned_to_execute",
+    label: "Returned to execute",
+    detail: "A mission was returned to the execute stage.",
+    verb: "returned to execute",
+    defaultMode: "alert",
+    transports: ["realtime", "in_app"],
+    icon: "arrow.uturn.backward.circle.fill",
+    dotClassName: "bg-blue-500",
+    soundUrl: null,
+    seenTracked: true
+  }
+};
+function notificationTypesForTransport(transport) {
+  return NOTIFICATION_TYPES.filter(
+    (type) => NOTIFICATION_CATALOG[type].transports.includes(transport)
+  );
+}
+
+// ../packages/core/service/push-notification-jobs.ts
+init_util3();
+var PUSH_NOTIFICATION_DISPATCH_JOB_TYPE = "overlord.push_notification.dispatch.v1";
+var PUSH_NOTIFICATION_CATEGORIES = notificationTypesForTransport("apns");
+var PUSH_NOTIFICATION_MASTER_CATEGORY = "all";
+var PUSH_NOTIFICATION_MODES = NOTIFICATION_MODES;
+function isPushNotificationCategory(value) {
+  return typeof value === "string" && PUSH_NOTIFICATION_CATEGORIES.includes(value);
+}
+function isPushNotificationMode(value) {
+  return typeof value === "string" && PUSH_NOTIFICATION_MODES.includes(value);
+}
+
+// notification-dispatcher.ts
+init_db();
+
+// push-notification-dispatcher.ts
+init_util3();
+init_db();
+
+// push-notifications.ts
+init_util3();
+init_db();
+init_errors5();
+var DEVICE_TOKEN_MAX_LENGTH = 512;
+var BUNDLE_ID_MAX_LENGTH2 = 255;
+var APP_VERSION_MAX_LENGTH2 = 64;
+var PROJECT_NAME_MAX_LENGTH = 40;
+var DEFAULT_MODE = "alert";
+var CATEGORY_VERBS = Object.fromEntries(
+  PUSH_NOTIFICATION_CATEGORIES.map((category) => [category, NOTIFICATION_CATALOG[category].verb])
+);
+function requiredString3(value, field, max) {
+  const normalized = typeof value === "string" ? value.trim() : "";
+  if (!normalized) throw new ApiError(400, `${field} is required`);
+  if (normalized.length > max) throw new ApiError(400, `${field} is too long`);
+  return normalized;
+}
+async function registerDevicePushToken(body) {
+  const deviceToken = requiredString3(body.deviceToken, "deviceToken", DEVICE_TOKEN_MAX_LENGTH);
+  const bundleId = requiredString3(body.bundleId, "bundleId", BUNDLE_ID_MAX_LENGTH2);
+  const environmentRaw = typeof body.environment === "string" ? body.environment.trim() : "";
+  if (environmentRaw !== "sandbox" && environmentRaw !== "production") {
+    throw new ApiError(400, "environment must be sandbox or production");
+  }
+  const environment = environmentRaw;
+  const appVersionRaw = typeof body.appVersion === "string" ? body.appVersion.trim() : "";
+  if (appVersionRaw.length > APP_VERSION_MAX_LENGTH2) {
+    throw new ApiError(400, "appVersion is too long");
+  }
+  const appVersion = appVersionRaw || null;
+  const db = requireDatabaseClient();
+  const profileId = await resolveActiveProfileId(db);
+  if (!profileId) throw new ApiError(401, "Authentication required");
+  const now2 = nowIso();
+  await db.transaction(async (tx) => {
+    const existing = await tx.get(
+      `SELECT id FROM device_push_tokens WHERE device_token = ?`,
+      [deviceToken]
+    );
+    if (existing) {
+      await tx.run(
+        `UPDATE device_push_tokens
+            SET profile_id = ?, platform = 'ios', environment = ?, bundle_id = ?, app_version = ?,
+                last_registered_at = ?, updated_at = ?
+          WHERE id = ?`,
+        [profileId, environment, bundleId, appVersion, now2, now2, existing.id]
+      );
+      return;
+    }
+    await tx.run(
+      `INSERT INTO device_push_tokens
+         (id, profile_id, device_token, platform, environment, bundle_id, app_version,
+          last_registered_at, last_sent_at, created_at, updated_at)
+       VALUES (?, ?, ?, 'ios', ?, ?, ?, ?, NULL, ?, ?)`,
+      [newId(), profileId, deviceToken, environment, bundleId, appVersion, now2, now2, now2]
+    );
+  });
+}
+async function revokeDevicePushToken(body) {
+  const deviceToken = requiredString3(body.deviceToken, "deviceToken", DEVICE_TOKEN_MAX_LENGTH);
+  const db = requireDatabaseClient();
+  const profileId = await resolveActiveProfileId(db);
+  if (!profileId) throw new ApiError(401, "Authentication required");
+  await db.run(`DELETE FROM device_push_tokens WHERE profile_id = ? AND device_token = ?`, [
+    profileId,
+    deviceToken
+  ]);
+}
+async function readPreferenceRows(db, profileId) {
+  return db.all(
+    `SELECT type, transport, mode FROM notification_preferences WHERE profile_id = ?`,
+    [profileId]
+  );
+}
+function preferenceKey(type, transport) {
+  return `${type}:${transport}`;
+}
+function isNotificationType(value) {
+  return typeof value === "string" && NOTIFICATION_TYPES.includes(value);
+}
+function isNotificationTransport(value) {
+  return typeof value === "string" && NOTIFICATION_TRANSPORTS.includes(value);
+}
+function isEligibleTransport(type, transport) {
+  return NOTIFICATION_CATALOG[type].transports.includes(
+    transport
+  );
+}
+function toPreferences(rows) {
+  const stored = new Map(rows.map((row) => [preferenceKey(row.type, row.transport), row.mode]));
+  const preferences = NOTIFICATION_TYPES.flatMap(
+    (type) => NOTIFICATION_CATALOG[type].transports.map((transport) => {
+      const mode = stored.get(preferenceKey(type, transport));
+      return {
+        type,
+        transport,
+        mode: isPushNotificationMode(mode) ? mode : NOTIFICATION_CATALOG[type].defaultMode
+      };
+    })
+  );
+  return {
+    enabled: stored.get(preferenceKey(PUSH_NOTIFICATION_MASTER_CATEGORY, "all")) !== "off",
+    preferences,
+    // This projection lets released iOS builds continue decoding and updating
+    // their existing APNs-only controls while newer clients use `preferences`.
+    categories: PUSH_NOTIFICATION_CATEGORIES.map((category) => {
+      const mode = stored.get(preferenceKey(category, "apns"));
+      return { category, mode: isPushNotificationMode(mode) ? mode : DEFAULT_MODE };
+    })
+  };
+}
+async function getNotificationPreferences() {
+  const db = requireDatabaseClient();
+  const profileId = await resolveActiveProfileId(db);
+  if (!profileId) throw new ApiError(401, "Authentication required");
+  return toPreferences(await readPreferenceRows(db, profileId));
+}
+async function updateNotificationPreferences(body) {
+  const updates = [];
+  if (body.enabled !== void 0) {
+    if (typeof body.enabled !== "boolean") throw new ApiError(400, "enabled must be a boolean");
+    updates.push({
+      type: PUSH_NOTIFICATION_MASTER_CATEGORY,
+      transport: "all",
+      mode: body.enabled ? "alert" : "off"
+    });
+  }
+  if (body.preferences !== void 0) {
+    if (!Array.isArray(body.preferences)) throw new ApiError(400, "preferences must be an array");
+    for (const entry of body.preferences) {
+      const record2 = entry ?? {};
+      if (!isNotificationType(record2.type)) throw new ApiError(400, "Unknown notification type");
+      if (!isNotificationTransport(record2.transport)) {
+        throw new ApiError(400, "Unknown notification transport");
+      }
+      if (!isEligibleTransport(record2.type, record2.transport)) {
+        throw new ApiError(400, "Notification type is not eligible for this transport");
+      }
+      if (!isPushNotificationMode(record2.mode)) {
+        throw new ApiError(400, "Unknown notification mode");
+      }
+      updates.push({ type: record2.type, transport: record2.transport, mode: record2.mode });
+    }
+  }
+  if (body.categories !== void 0) {
+    if (!Array.isArray(body.categories)) throw new ApiError(400, "categories must be an array");
+    for (const entry of body.categories) {
+      const record2 = entry ?? {};
+      if (!isPushNotificationCategory(record2.category)) {
+        throw new ApiError(400, "Unknown notification category");
+      }
+      if (!isPushNotificationMode(record2.mode)) {
+        throw new ApiError(400, "Unknown notification mode");
+      }
+      updates.push({ type: record2.category, transport: "apns", mode: record2.mode });
+    }
+  }
+  const db = requireDatabaseClient();
+  const profileId = await resolveActiveProfileId(db);
+  if (!profileId) throw new ApiError(401, "Authentication required");
+  if (updates.length === 0) return toPreferences(await readPreferenceRows(db, profileId));
+  const now2 = nowIso();
+  await db.transaction(async (tx) => {
+    for (const update of updates) {
+      const existing = await tx.get(
+        `SELECT id FROM notification_preferences
+          WHERE profile_id = ? AND type = ? AND transport = ?`,
+        [profileId, update.type, update.transport]
+      );
+      if (existing) {
+        await tx.run(`UPDATE notification_preferences SET mode = ?, updated_at = ? WHERE id = ?`, [
+          update.mode,
+          now2,
+          existing.id
+        ]);
+      } else {
+        await tx.run(
+          `INSERT INTO notification_preferences
+             (id, profile_id, type, transport, mode, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [newId(), profileId, update.type, update.transport, update.mode, now2, now2]
+        );
+      }
+    }
+  });
+  return toPreferences(await readPreferenceRows(db, profileId));
+}
+async function resolveNotificationMode(db, profileId, type, transport) {
+  const preferences = toPreferences(await readPreferenceRows(db, profileId));
+  if (!preferences.enabled) return "off";
+  return preferences.preferences.find((entry) => entry.type === type && entry.transport === transport)?.mode ?? NOTIFICATION_CATALOG[type].defaultMode;
+}
+async function buildPushNotificationPresentation({
+  db,
+  profileId,
+  missionId,
+  category
+}) {
+  const mission = await db.get(
+    `SELECT m.id, m.title, m.display_id, p.name AS project_name
+       FROM missions m
+       JOIN projects p ON p.id = m.project_id AND p.deleted_at IS NULL
+       JOIN workspace_users wu ON wu.id = m.assigned_workspace_user_id
+      WHERE m.id = ? AND m.deleted_at IS NULL AND wu.profile_id = ?
+        AND wu.status = 'active' AND wu.deleted_at IS NULL`,
+    [missionId, profileId]
+  );
+  if (!mission) return null;
+  const badgeRow = await db.get(
+    `SELECT COUNT(*) AS count
+       FROM notifications
+      WHERE recipient_profile_id = ?
+        AND deleted_at IS NULL
+        AND read_at IS NULL`,
+    [profileId]
+  );
+  const title = presentationTitle(mission.title) || "Untitled mission";
+  return {
+    title: bounded(mission.project_name.trim() || "Project", PROJECT_NAME_MAX_LENGTH),
+    body: `${mission.display_id}: ${title} ${CATEGORY_VERBS[category]}`,
+    badge: Number(badgeRow?.count ?? 0),
+    missionId: mission.id,
+    category,
+    deepLink: `overlord://missions/${mission.id}`
+  };
+}
+
+// push-notification-dispatcher.ts
+var ALERT_EXPIRATION_MS = 60 * 60 * 1e3;
+function parseJob(payloadJson) {
+  try {
+    const payload = JSON.parse(payloadJson);
+    if (typeof payload.profileId !== "string" || !payload.profileId) return null;
+    if (typeof payload.missionId !== "string" || !payload.missionId) return null;
+    if (!isPushNotificationCategory(payload.category)) return null;
+    return {
+      profileId: payload.profileId,
+      missionId: payload.missionId,
+      category: payload.category
+    };
+  } catch {
+    return null;
+  }
+}
+function apnsBody(presentation, mode) {
+  const aps = mode === "alert" ? {
+    alert: { title: presentation.title, body: presentation.body },
+    sound: "default",
+    badge: presentation.badge,
+    "thread-id": presentation.missionId
+  } : {
+    "content-available": 1,
+    badge: presentation.badge,
+    "thread-id": presentation.missionId
+  };
+  return {
+    body: JSON.stringify({
+      aps,
+      data: {
+        missionId: presentation.missionId,
+        category: presentation.category,
+        deepLink: presentation.deepLink
+      }
+    })
+  };
+}
+async function sendStandardPush({
+  token,
+  body,
+  config: config4,
+  mode,
+  collapseId
+}) {
+  const headers = {
+    // The plain bundle-id topic — never the `.push-type.liveactivity` suffix.
+    "apns-topic": token.bundle_id,
+    "apns-push-type": mode === "alert" ? "alert" : "background",
+    "apns-priority": mode === "alert" ? "10" : "5",
+    "apns-collapse-id": collapseId
+  };
+  if (mode === "alert") {
+    headers["apns-expiration"] = String(Math.floor((Date.now() + ALERT_EXPIRATION_MS) / 1e3));
+  }
+  return sendApnsRequest({
+    token: token.device_token,
+    body,
+    config: config4,
+    headers,
+    // Per-registration environment wins over OVERLORD_APNS_ENV so a debug or
+    // TestFlight install is never sent through the production APNs host.
+    host: apnsHostFor(token.environment === "sandbox" ? "sandbox" : "production")
+  });
+}
+async function deliverStandardPush({
+  db,
+  profileId,
+  missionId,
+  category,
+  mode
+}) {
+  const tokens = await db.all(
+    `SELECT id, device_token, environment, bundle_id
+         FROM device_push_tokens WHERE profile_id = ?`,
+    [profileId]
+  );
+  if (tokens.length === 0) return;
+  const presentation = await buildPushNotificationPresentation({
+    db,
+    profileId,
+    missionId,
+    category
+  });
+  if (!presentation) {
+    return;
+  }
+  const { body } = apnsBody(presentation, mode);
+  const collapseId = `${category}:${missionId}`.slice(0, 64);
+  const config4 = apnsConfig();
+  for (const token of tokens) {
+    if (!config4) continue;
+    const response = await sendStandardPush({ token, body, config: config4, mode, collapseId });
+    if (isRetiredTokenResponse(response)) {
+      await db.run(`DELETE FROM device_push_tokens WHERE id = ?`, [token.id]);
+      continue;
+    }
+    if (response.status < 200 || response.status >= 300) {
+      throw new Error(`APNs ${response.status}: ${response.body || "unknown response"}`);
+    }
+    const now2 = nowIso();
+    await db.run(`UPDATE device_push_tokens SET last_sent_at = ?, updated_at = ? WHERE id = ?`, [
+      now2,
+      now2,
+      token.id
+    ]);
+  }
+}
+var PushNotificationDispatcher = class extends WorkerJobPoller {
+  constructor() {
+    super({
+      workerIdPrefix: "push-notification",
+      jobTypes: [PUSH_NOTIFICATION_DISPATCH_JOB_TYPE],
+      logPrefix: "push-notification-dispatcher"
+    });
+  }
+  databaseClient() {
+    return requireDatabaseClient();
+  }
+  async processJob(db, job) {
+    const target = parseJob(job.payload_json);
+    if (!target) {
+      await this.finishJob(db, job, "failed", "Malformed push notification payload");
+      return;
+    }
+    const mode = await resolveNotificationMode(db, target.profileId, target.category, "apns");
+    if (mode !== "off") {
+      await deliverStandardPush({
+        db,
+        profileId: target.profileId,
+        missionId: target.missionId,
+        category: target.category,
+        mode
+      });
+    }
+    await this.finishJob(db, job);
+  }
+};
+var pushNotificationDispatcher = new PushNotificationDispatcher();
+
+// notification-dispatcher.ts
+function isNotificationType2(value) {
+  return typeof value === "string" && NOTIFICATION_TYPES.includes(value);
+}
+function parseJob2(payloadJson) {
+  try {
+    const payload = JSON.parse(payloadJson);
+    return typeof payload.notificationId === "string" && payload.notificationId ? { notificationId: payload.notificationId } : null;
+  } catch {
+    return null;
+  }
+}
+var REALTIME_NOTIFICATION_TYPES = new Set(notificationTypesForTransport("realtime"));
+var NotificationDispatcher = class extends WorkerJobPoller {
+  constructor() {
+    super({
+      workerIdPrefix: "notification",
+      jobTypes: [NOTIFICATION_DISPATCH_JOB_TYPE],
+      logPrefix: "notification-dispatcher"
+    });
+  }
+  databaseClient() {
+    return requireDatabaseClient();
+  }
+  async processJob(db, job) {
+    const payload = parseJob2(job.payload_json);
+    if (!payload) {
+      await this.finishJob(db, job, "failed", "Malformed notification dispatch payload");
+      return;
+    }
+    const row = await db.get(
+      `SELECT n.id, n.workspace_id, n.recipient_profile_id, n.type, n.mission_id, n.objective_id,
+              n.revision, m.project_id
+         FROM notifications n
+         JOIN missions m ON m.id = n.mission_id
+        WHERE n.id = ? AND n.deleted_at IS NULL`,
+      [payload.notificationId]
+    );
+    if (!row) {
+      await this.finishJob(db, job);
+      return;
+    }
+    if (!isNotificationType2(row.type)) {
+      await this.finishJob(db, job, "failed", "Invalid notification type");
+      return;
+    }
+    if (isPushNotificationCategory(row.type)) {
+      const mode = await resolveNotificationMode(db, row.recipient_profile_id, row.type, "apns");
+      if (mode !== "off") {
+        await deliverStandardPush({
+          db,
+          profileId: row.recipient_profile_id,
+          missionId: row.mission_id,
+          category: row.type,
+          mode
+        });
+      }
+    }
+    if (REALTIME_NOTIFICATION_TYPES.has(row.type) && await resolveNotificationMode(db, row.recipient_profile_id, row.type, "realtime") !== "off") {
+      await insertEntityChange(db, {
+        workspaceId: row.workspace_id,
+        projectId: row.project_id,
+        missionId: row.mission_id,
+        objectiveId: row.objective_id,
+        entityType: "notification",
+        entityId: row.id,
+        operation: "insert",
+        entityRevision: row.revision,
+        changedFields: [],
+        actorWorkspaceUserId: null,
+        source: "notification_dispatcher"
+      });
+    }
+    await this.finishJob(db, job);
+  }
+};
+var notificationDispatcher = new NotificationDispatcher();
+
+// notifications.ts
+init_change_feed();
+init_util3();
+init_db();
+init_errors5();
+function isNotificationType3(value) {
+  return NOTIFICATION_TYPES.includes(value);
+}
+function toNotificationDto(row) {
+  if (!isNotificationType3(row.type))
+    throw new Error(`Invalid stored notification type: ${row.type}`);
+  return {
+    id: row.id,
+    workspaceId: row.workspace_id,
+    type: row.type,
+    missionId: row.mission_id,
+    objectiveId: row.objective_id,
+    createdAt: row.created_at,
+    readAt: row.read_at,
+    revision: row.revision,
+    // Keep user-authored text out of the durable row. This bounded projection is
+    // recomputed from the current mission on every REST read, just as APNs
+    // presentation is recomputed at dispatch time.
+    presentation: {
+      body: `${row.display_id}: ${presentationTitle(row.mission_title) || "Untitled mission"} ${NOTIFICATION_CATALOG[row.type].verb}`
+    }
+  };
+}
+async function activeNotificationProfileId(db) {
+  const profileId = await resolveActiveProfileId(db);
+  if (!profileId) throw new ApiError(401, "Authentication required");
+  return profileId;
+}
+async function ownedNotificationRow(db, profileId, id) {
+  const row = await db.get(
+    `SELECT n.id, n.workspace_id, n.recipient_profile_id, n.type, n.mission_id, n.objective_id,
+            n.created_at, n.read_at, n.revision, n.deleted_at, m.project_id, m.title AS mission_title,
+            m.display_id
+       FROM notifications n
+       JOIN missions m ON m.id = n.mission_id
+      WHERE n.id = ? AND n.recipient_profile_id = ? AND n.deleted_at IS NULL`,
+    [id, profileId]
+  );
+  if (!row) throw new ApiError(404, "Notification not found");
+  return row;
+}
+function expectedRevision(body) {
+  const revision = body?.expectedRevision;
+  if (!Number.isInteger(revision) || revision < 1) {
+    throw new ApiError(400, "expectedRevision must be a positive integer");
+  }
+  return revision;
+}
+async function listNotifications() {
+  const db = requireDatabaseClient();
+  const profileId = await activeNotificationProfileId(db);
+  const rows = await db.all(
+    `SELECT n.id, n.workspace_id, n.recipient_profile_id, n.type, n.mission_id, n.objective_id,
+            n.created_at, n.read_at, n.revision, n.deleted_at, m.project_id, m.title AS mission_title,
+            m.display_id
+       FROM notifications n
+       JOIN missions m ON m.id = n.mission_id
+      WHERE n.recipient_profile_id = ? AND n.deleted_at IS NULL
+      ORDER BY n.created_at DESC, n.id DESC`,
+    [profileId]
+  );
+  return rows.map(toNotificationDto);
+}
+async function markNotificationRead(id, body) {
+  const db = requireDatabaseClient();
+  const profileId = await activeNotificationProfileId(db);
+  const revision = expectedRevision(body);
+  return db.transaction(async (tx) => {
+    const existing = await ownedNotificationRow(tx, profileId, id);
+    const now2 = nowIso();
+    const nextRevision = existing.revision + 1;
+    const updated = await tx.run(
+      `UPDATE notifications SET read_at = ?, revision = ?
+        WHERE id = ? AND recipient_profile_id = ? AND deleted_at IS NULL AND revision = ?`,
+      [now2, nextRevision, id, profileId, revision]
+    );
+    if (updated.changes === 0) throw new ApiError(409, "Notification changed while marking read");
+    await insertEntityChange(tx, {
+      workspaceId: existing.workspace_id,
+      projectId: existing.project_id,
+      missionId: existing.mission_id,
+      objectiveId: existing.objective_id,
+      entityType: "notification",
+      entityId: id,
+      operation: "update",
+      entityRevision: nextRevision,
+      changedFields: ["read_at"],
+      actorWorkspaceUserId: null,
+      source: "rest"
+    });
+    return toNotificationDto({ ...existing, read_at: now2, revision: nextRevision });
+  });
+}
+async function dismissNotification(id, body) {
+  const db = requireDatabaseClient();
+  const profileId = await activeNotificationProfileId(db);
+  const revision = expectedRevision(body);
+  await db.transaction(async (tx) => {
+    const existing = await ownedNotificationRow(tx, profileId, id);
+    const now2 = nowIso();
+    const nextRevision = existing.revision + 1;
+    const updated = await tx.run(
+      `UPDATE notifications SET deleted_at = ?, revision = ?
+        WHERE id = ? AND recipient_profile_id = ? AND deleted_at IS NULL AND revision = ?`,
+      [now2, nextRevision, id, profileId, revision]
+    );
+    if (updated.changes === 0) throw new ApiError(409, "Notification changed while dismissing");
+    await insertEntityChange(tx, {
+      workspaceId: existing.workspace_id,
+      projectId: existing.project_id,
+      missionId: existing.mission_id,
+      objectiveId: existing.objective_id,
+      entityType: "notification",
+      entityId: id,
+      operation: "delete",
+      entityRevision: nextRevision,
+      changedFields: ["deleted_at"],
+      actorWorkspaceUserId: null,
+      source: "rest"
+    });
+  });
+}
 
 // oauth.ts
 var import_node_crypto21 = require("node:crypto");
@@ -158986,352 +159875,6 @@ async function handleOAuthRevoke(req, res) {
   if (token) await revokeUserTokenSecret(token);
   res.status(200).json({ ok: true });
 }
-
-// push-notification-dispatcher.ts
-init_util3();
-init_db();
-
-// push-notifications.ts
-init_util3();
-init_db();
-init_errors5();
-var DEVICE_TOKEN_MAX_LENGTH = 512;
-var BUNDLE_ID_MAX_LENGTH2 = 255;
-var APP_VERSION_MAX_LENGTH2 = 64;
-var PROJECT_NAME_MAX_LENGTH = 40;
-var DEFAULT_MODE = "alert";
-var CATEGORY_VERBS = {
-  mission_awaiting_review: "is ready for review",
-  agent_question: "needs your input",
-  mission_complete: "finished",
-  mission_failed: "failed"
-};
-function requiredString3(value, field, max) {
-  const normalized = typeof value === "string" ? value.trim() : "";
-  if (!normalized) throw new ApiError(400, `${field} is required`);
-  if (normalized.length > max) throw new ApiError(400, `${field} is too long`);
-  return normalized;
-}
-async function registerDevicePushToken(body) {
-  const deviceToken = requiredString3(body.deviceToken, "deviceToken", DEVICE_TOKEN_MAX_LENGTH);
-  const bundleId = requiredString3(body.bundleId, "bundleId", BUNDLE_ID_MAX_LENGTH2);
-  const environmentRaw = typeof body.environment === "string" ? body.environment.trim() : "";
-  if (environmentRaw !== "sandbox" && environmentRaw !== "production") {
-    throw new ApiError(400, "environment must be sandbox or production");
-  }
-  const environment = environmentRaw;
-  const appVersionRaw = typeof body.appVersion === "string" ? body.appVersion.trim() : "";
-  if (appVersionRaw.length > APP_VERSION_MAX_LENGTH2) {
-    throw new ApiError(400, "appVersion is too long");
-  }
-  const appVersion = appVersionRaw || null;
-  const db = requireDatabaseClient();
-  const profileId = await resolveActiveProfileId(db);
-  if (!profileId) throw new ApiError(401, "Authentication required");
-  const now2 = nowIso();
-  await db.transaction(async (tx) => {
-    const existing = await tx.get(
-      `SELECT id FROM device_push_tokens WHERE device_token = ?`,
-      [deviceToken]
-    );
-    if (existing) {
-      await tx.run(
-        `UPDATE device_push_tokens
-            SET profile_id = ?, platform = 'ios', environment = ?, bundle_id = ?, app_version = ?,
-                last_registered_at = ?, updated_at = ?
-          WHERE id = ?`,
-        [profileId, environment, bundleId, appVersion, now2, now2, existing.id]
-      );
-      return;
-    }
-    await tx.run(
-      `INSERT INTO device_push_tokens
-         (id, profile_id, device_token, platform, environment, bundle_id, app_version,
-          last_registered_at, last_sent_at, created_at, updated_at)
-       VALUES (?, ?, ?, 'ios', ?, ?, ?, ?, NULL, ?, ?)`,
-      [newId(), profileId, deviceToken, environment, bundleId, appVersion, now2, now2, now2]
-    );
-  });
-}
-async function revokeDevicePushToken(body) {
-  const deviceToken = requiredString3(body.deviceToken, "deviceToken", DEVICE_TOKEN_MAX_LENGTH);
-  const db = requireDatabaseClient();
-  const profileId = await resolveActiveProfileId(db);
-  if (!profileId) throw new ApiError(401, "Authentication required");
-  await db.run(`DELETE FROM device_push_tokens WHERE profile_id = ? AND device_token = ?`, [
-    profileId,
-    deviceToken
-  ]);
-}
-async function readPreferenceRows(db, profileId) {
-  return db.all(
-    `SELECT category, mode FROM notification_preferences WHERE profile_id = ?`,
-    [profileId]
-  );
-}
-function toPreferences(rows) {
-  const stored = new Map(rows.map((row) => [row.category, row.mode]));
-  return {
-    enabled: stored.get(PUSH_NOTIFICATION_MASTER_CATEGORY) !== "off",
-    categories: PUSH_NOTIFICATION_CATEGORIES.map((category) => {
-      const mode = stored.get(category);
-      return { category, mode: isPushNotificationMode(mode) ? mode : DEFAULT_MODE };
-    })
-  };
-}
-async function getNotificationPreferences() {
-  const db = requireDatabaseClient();
-  const profileId = await resolveActiveProfileId(db);
-  if (!profileId) throw new ApiError(401, "Authentication required");
-  return toPreferences(await readPreferenceRows(db, profileId));
-}
-async function updateNotificationPreferences(body) {
-  const updates = [];
-  if (body.enabled !== void 0) {
-    if (typeof body.enabled !== "boolean") throw new ApiError(400, "enabled must be a boolean");
-    updates.push({
-      category: PUSH_NOTIFICATION_MASTER_CATEGORY,
-      mode: body.enabled ? "alert" : "off"
-    });
-  }
-  if (body.categories !== void 0) {
-    if (!Array.isArray(body.categories)) throw new ApiError(400, "categories must be an array");
-    for (const entry of body.categories) {
-      const record2 = entry ?? {};
-      if (!isPushNotificationCategory(record2.category)) {
-        throw new ApiError(400, "Unknown notification category");
-      }
-      if (!isPushNotificationMode(record2.mode)) {
-        throw new ApiError(400, "Unknown notification mode");
-      }
-      updates.push({ category: record2.category, mode: record2.mode });
-    }
-  }
-  const db = requireDatabaseClient();
-  const profileId = await resolveActiveProfileId(db);
-  if (!profileId) throw new ApiError(401, "Authentication required");
-  if (updates.length === 0) return toPreferences(await readPreferenceRows(db, profileId));
-  const now2 = nowIso();
-  await db.transaction(async (tx) => {
-    for (const update of updates) {
-      const existing = await tx.get(
-        `SELECT id FROM notification_preferences WHERE profile_id = ? AND category = ?`,
-        [profileId, update.category]
-      );
-      if (existing) {
-        await tx.run(`UPDATE notification_preferences SET mode = ?, updated_at = ? WHERE id = ?`, [
-          update.mode,
-          now2,
-          existing.id
-        ]);
-      } else {
-        await tx.run(
-          `INSERT INTO notification_preferences (id, profile_id, category, mode, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?)`,
-          [newId(), profileId, update.category, update.mode, now2, now2]
-        );
-      }
-    }
-  });
-  return toPreferences(await readPreferenceRows(db, profileId));
-}
-async function resolveNotificationMode(db, profileId, category) {
-  const preferences = toPreferences(await readPreferenceRows(db, profileId));
-  if (!preferences.enabled) return "off";
-  return preferences.categories.find((entry) => entry.category === category)?.mode ?? DEFAULT_MODE;
-}
-async function buildPushNotificationPresentation({
-  db,
-  profileId,
-  missionId,
-  category
-}) {
-  const mission = await db.get(
-    `SELECT m.id, m.title, m.display_id, p.name AS project_name
-       FROM missions m
-       JOIN projects p ON p.id = m.project_id AND p.deleted_at IS NULL
-       JOIN workspace_users wu ON wu.id = m.assigned_workspace_user_id
-      WHERE m.id = ? AND m.deleted_at IS NULL AND wu.profile_id = ?
-        AND wu.status = 'active' AND wu.deleted_at IS NULL`,
-    [missionId, profileId]
-  );
-  if (!mission) return null;
-  const badgeRow = await db.get(
-    `SELECT COUNT(*) AS count
-       FROM missions m
-       JOIN workspace_users wu ON wu.id = m.assigned_workspace_user_id
-      WHERE m.deleted_at IS NULL AND m.status_type = 'review'
-        AND wu.profile_id = ? AND wu.status = 'active' AND wu.deleted_at IS NULL`,
-    [profileId]
-  );
-  const title = presentationTitle(mission.title) || "Untitled mission";
-  return {
-    title: bounded(mission.project_name.trim() || "Project", PROJECT_NAME_MAX_LENGTH),
-    body: `${mission.display_id}: ${title} ${CATEGORY_VERBS[category]}`,
-    badge: Number(badgeRow?.count ?? 0),
-    missionId: mission.id,
-    category,
-    deepLink: `overlord://missions/${mission.id}`
-  };
-}
-
-// push-notification-dispatcher.ts
-var POLL_INTERVAL_MS3 = 1500;
-var ALERT_EXPIRATION_MS = 60 * 60 * 1e3;
-function parseJob(payloadJson) {
-  try {
-    const payload = JSON.parse(payloadJson);
-    if (typeof payload.profileId !== "string" || !payload.profileId) return null;
-    if (typeof payload.missionId !== "string" || !payload.missionId) return null;
-    if (!isPushNotificationCategory(payload.category)) return null;
-    return {
-      profileId: payload.profileId,
-      missionId: payload.missionId,
-      category: payload.category
-    };
-  } catch {
-    return null;
-  }
-}
-function apnsBody(presentation, mode) {
-  const aps = mode === "alert" ? {
-    alert: { title: presentation.title, body: presentation.body },
-    sound: "default",
-    badge: presentation.badge,
-    "thread-id": presentation.missionId
-  } : {
-    "content-available": 1,
-    badge: presentation.badge,
-    "thread-id": presentation.missionId
-  };
-  return {
-    body: JSON.stringify({
-      aps,
-      data: {
-        missionId: presentation.missionId,
-        category: presentation.category,
-        deepLink: presentation.deepLink
-      }
-    })
-  };
-}
-async function sendStandardPush({
-  token,
-  body,
-  config: config4,
-  mode,
-  collapseId
-}) {
-  const headers = {
-    // The plain bundle-id topic — never the `.push-type.liveactivity` suffix.
-    "apns-topic": token.bundle_id,
-    "apns-push-type": mode === "alert" ? "alert" : "background",
-    "apns-priority": mode === "alert" ? "10" : "5",
-    "apns-collapse-id": collapseId
-  };
-  if (mode === "alert") {
-    headers["apns-expiration"] = String(Math.floor((Date.now() + ALERT_EXPIRATION_MS) / 1e3));
-  }
-  return sendApnsRequest({
-    token: token.device_token,
-    body,
-    config: config4,
-    headers,
-    // Per-registration environment wins over OVERLORD_APNS_ENV so a debug or
-    // TestFlight install is never sent through the production APNs host.
-    host: apnsHostFor(token.environment === "sandbox" ? "sandbox" : "production")
-  });
-}
-var PushNotificationDispatcher = class {
-  timer = null;
-  polling = false;
-  workerId = `push-notification:${process.pid}:${newId().slice(0, 8)}`;
-  start() {
-    if (this.timer) return;
-    this.timer = setInterval(() => void this.poll(), POLL_INTERVAL_MS3);
-  }
-  pollNow() {
-    void this.poll();
-  }
-  async poll() {
-    if (this.polling) return;
-    this.polling = true;
-    try {
-      const db = requireDatabaseClient();
-      const job = await claimNextWorkerJob({
-        db,
-        jobType: PUSH_NOTIFICATION_DISPATCH_JOB_TYPE,
-        workerId: this.workerId
-      });
-      if (job) await this.processJob(db, job);
-    } catch (error53) {
-      console.error("[push-notification-dispatcher] poll failed", error53);
-    } finally {
-      this.polling = false;
-    }
-  }
-  async processJob(db, job) {
-    const target = parseJob(job.payload_json);
-    if (!target) {
-      await finishWorkerJob(db, job.id, "failed", "Malformed push notification payload");
-      return;
-    }
-    try {
-      const mode = await resolveNotificationMode(db, target.profileId, target.category);
-      if (mode === "off") {
-        await finishWorkerJob(db, job.id, "succeeded", null);
-        return;
-      }
-      const tokens = await db.all(
-        `SELECT id, device_token, environment, bundle_id
-           FROM device_push_tokens WHERE profile_id = ?`,
-        [target.profileId]
-      );
-      if (tokens.length === 0) {
-        await finishWorkerJob(db, job.id, "succeeded", null);
-        return;
-      }
-      const presentation = await buildPushNotificationPresentation({
-        db,
-        profileId: target.profileId,
-        missionId: target.missionId,
-        category: target.category
-      });
-      if (!presentation) {
-        await finishWorkerJob(db, job.id, "succeeded", null);
-        return;
-      }
-      const { body } = apnsBody(presentation, mode);
-      const collapseId = `${target.category}:${target.missionId}`.slice(0, 64);
-      const config4 = apnsConfig();
-      for (const token of tokens) {
-        if (!config4) continue;
-        const response = await sendStandardPush({ token, body, config: config4, mode, collapseId });
-        if (isRetiredTokenResponse(response)) {
-          await db.run(`DELETE FROM device_push_tokens WHERE id = ?`, [token.id]);
-          continue;
-        }
-        if (response.status < 200 || response.status >= 300) {
-          throw new Error(`APNs ${response.status}: ${response.body || "unknown response"}`);
-        }
-        const now2 = nowIso();
-        await db.run(
-          `UPDATE device_push_tokens SET last_sent_at = ?, updated_at = ? WHERE id = ?`,
-          [now2, now2, token.id]
-        );
-      }
-      await finishWorkerJob(db, job.id, "succeeded", null);
-    } catch (error53) {
-      const message2 = error53 instanceof Error ? error53.message : String(error53);
-      if (job.attempt_count >= job.max_attempts) {
-        await finishWorkerJob(db, job.id, "failed", message2);
-      } else {
-        await retryWorkerJob(db, job.id, job.attempt_count, message2);
-      }
-    }
-  }
-};
-var pushNotificationDispatcher = new PushNotificationDispatcher();
 
 // storage.ts
 var import_node_crypto22 = require("node:crypto");
@@ -159996,7 +160539,7 @@ function redactSecretLikeTokens(text) {
 }
 
 // webhook-dispatcher.ts
-var POLL_INTERVAL_MS4 = 1e3;
+var POLL_INTERVAL_MS2 = 1e3;
 var CLAIM_BATCH_SIZE2 = 10;
 var REQUEST_TIMEOUT_MS = 1e4;
 var RESPONSE_SNIPPET_LIMIT = 1e3;
@@ -160007,7 +160550,7 @@ var WebhookDispatcher = class {
   polling = false;
   start() {
     if (this.pollTimer) return;
-    this.pollTimer = setInterval(() => void this.poll(), POLL_INTERVAL_MS4);
+    this.pollTimer = setInterval(() => void this.poll(), POLL_INTERVAL_MS2);
   }
   /** Nudge an immediate poll — mirrors `realtime.pollNow()`, called from the same `handle()` mutation hook. */
   pollNow() {
@@ -160853,6 +161396,7 @@ function handle3(fn, options = {}) {
           deliveryComposeWorker.pollNow();
           liveActivityDispatcher.pollNow();
           pushNotificationDispatcher.pollNow();
+          notificationDispatcher.pollNow();
         }
         if (!res.headersSent) res.json(result ?? { ok: true });
       } catch (err) {
@@ -160902,6 +161446,7 @@ if (mcpEnabled) {
       deliveryComposeWorker.pollNow();
       liveActivityDispatcher.pollNow();
       pushNotificationDispatcher.pollNow();
+      notificationDispatcher.pollNow();
     })().catch(next);
   });
 }
@@ -161564,6 +162109,24 @@ app.put(
   handle3((req) => updateNotificationPreferences(req.body), { mutates: true })
 );
 app.get(
+  "/api/notifications",
+  handle3(() => listNotifications())
+);
+app.patch(
+  "/api/notifications/:id/read",
+  handle3((req) => markNotificationRead(req.params.id, req.body), { mutates: true })
+);
+app.delete(
+  "/api/notifications/:id",
+  handle3(
+    async (req) => {
+      await dismissNotification(req.params.id, req.body);
+      return { ok: true };
+    },
+    { mutates: true }
+  )
+);
+app.get(
   "/api/projects/:id/tags",
   handle3((req) => listProjectTags(req.params.id))
 );
@@ -161622,6 +162185,18 @@ app.delete(
       await deleteProjectResourceSource(req.params.id, req.params.resourceId, req.params.sourceId);
       return { ok: true };
     },
+    { mutates: true }
+  )
+);
+app.patch(
+  "/api/projects/:id/resources/:resourceId/sources/:sourceId",
+  handle3(
+    (req) => updateProjectResourceSource(
+      req.params.id,
+      req.params.resourceId,
+      req.params.sourceId,
+      req.body
+    ),
     { mutates: true }
   )
 );
@@ -162112,6 +162687,7 @@ async function start() {
   deliveryComposeWorker.start();
   liveActivityDispatcher.start();
   pushNotificationDispatcher.start();
+  notificationDispatcher.start();
   const server = app.listen(bindPort, bindHost, () => {
     const databaseLabel = DATABASE_DIALECT === "postgres" ? "postgres (DATABASE_URL)" : DATABASE_PATH;
     console.log(`[webapp] Overlord web server listening on ${bindHost}:${bindPort}`);

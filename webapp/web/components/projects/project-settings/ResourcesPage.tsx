@@ -5,11 +5,13 @@ import {
   HardDrive,
   Pencil,
   Plus,
+  SlidersHorizontal,
   Trash2,
   X
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
+import { AgentLaunchFooter } from '@/components/objectives/AgentLaunchFooter';
 import { useProjectRepositoryContext } from '@/components/projects/ProjectRepositoryContext.tsx';
 import {
   Accordion,
@@ -49,6 +51,7 @@ import {
 import { useCopyToClipboard } from '@/lib/hooks/use-copy-to-clipboard';
 import { writeLocalProjectMetadata } from '@/lib/project-metadata';
 import {
+  useAgentCatalog,
   useCreateProjectResource,
   useDeleteProjectResource,
   useDeleteProjectResourceSource,
@@ -57,11 +60,14 @@ import {
   useProjectResources,
   useUpdateProject,
   useUpdateProjectExecutionTarget,
-  useUpdateProjectResource
+  useUpdateProjectResource,
+  useUpdateProjectResourceSource
 } from '@/lib/queries';
 import { cn } from '@/lib/utils';
 
 import type {
+  AgentCatalogAgentDto,
+  AgentLaunchConfigDto,
   EligibleExecutionTargetDto,
   ProjectResourceAccessMode,
   ProjectResourceDto,
@@ -149,22 +155,47 @@ function SourceRow({
   resource,
   source,
   label,
+  agents,
   onSaved
 }: {
   projectId: string;
   resource: ProjectResourceDto;
   source: ProjectResourceSourceDto;
   label: string;
+  agents: AgentCatalogAgentDto[];
   onSaved: () => void;
 }) {
   const { copied, copy } = useCopyToClipboard();
   const createResource = useCreateProjectResource(projectId);
   const deleteSource = useDeleteProjectResourceSource(projectId);
+  const updateSource = useUpdateProjectResourceSource(projectId);
   const value = sourceDescriptorValue(source);
   const isGit = source.sourceKind === 'git';
   const [isEditing, setIsEditing] = useState(false);
   const [draft, setDraft] = useState(value);
   const [error, setError] = useState<string | null>(null);
+  const [launchDefaultsOpen, setLaunchDefaultsOpen] = useState(false);
+  const [launchDefaults, setLaunchDefaults] = useState(source.launchDefaults ?? {});
+
+  useEffect(() => setLaunchDefaults(source.launchDefaults ?? {}), [source.launchDefaults]);
+
+  async function handleLaunchDefaultCommit(agentKey: string, config: AgentLaunchConfigDto) {
+    const next = { ...launchDefaults };
+    if (config.preCommand.trim() || config.flags.length > 0) next[agentKey] = config;
+    else delete next[agentKey];
+    setLaunchDefaults(next);
+    setError(null);
+    try {
+      await updateSource.mutateAsync({
+        resourceId: resource.id,
+        sourceId: source.id,
+        body: { launchDefaults: next }
+      });
+      onSaved();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save launch defaults.');
+    }
+  }
 
   function startEditing() {
     setDraft(value);
@@ -324,6 +355,16 @@ function SourceRow({
         type="button"
         size="icon"
         variant="ghost"
+        className="size-7 shrink-0"
+        onClick={() => setLaunchDefaultsOpen(true)}
+        aria-label={`Configure launch defaults for ${value || sourceKindLabel(source.sourceKind)}`}
+      >
+        <SlidersHorizontal className="size-3.5" />
+      </Button>
+      <Button
+        type="button"
+        size="icon"
+        variant="ghost"
         className="size-7 shrink-0 text-muted-foreground hover:text-destructive"
         disabled={deleteSource.isPending}
         onClick={() => void handleDelete()}
@@ -332,6 +373,45 @@ function SourceRow({
         <Trash2 className="size-3.5" />
       </Button>
       {error ? <p className="text-xs text-destructive">{error}</p> : null}
+      <Dialog open={launchDefaultsOpen} onOpenChange={setLaunchDefaultsOpen}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Source launch defaults</DialogTitle>
+            <DialogDescription>
+              These pre-commands and flags apply when an objective uses this source and does not
+              have its own launch override.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-5">
+            {agents.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No agents are configured.</p>
+            ) : (
+              agents.map((agent, index) => {
+                const config = launchDefaults[agent.key] ?? { preCommand: '', flags: [] };
+                return (
+                  <div key={agent.key} className={cn('space-y-2', index > 0 && 'border-t pt-5')}>
+                    <div>
+                      <h4 className="text-sm font-medium">{agent.label}</h4>
+                      <p className="text-xs text-muted-foreground">
+                        Saved with this {sourceKindLabel(source.sourceKind).toLowerCase()} source.
+                      </p>
+                    </div>
+                    <AgentLaunchFooter
+                      key={`${source.id}:${agent.key}:${JSON.stringify(config)}`}
+                      agentKey={agent.key}
+                      preCommand={config.preCommand}
+                      flags={config.flags}
+                      onCommit={next => void handleLaunchDefaultCommit(agent.key, next)}
+                      sourceHint="Overrides user/device defaults for objectives using this source."
+                    />
+                  </div>
+                );
+              })
+            )}
+            {error ? <p className="text-xs text-destructive">{error}</p> : null}
+          </div>
+        </DialogContent>
+      </Dialog>
     </li>
   );
 }
@@ -1003,6 +1083,7 @@ export function ResourcesPage({ open, projectId }: ResourcesPageProps) {
   const updateExecutionTarget = useUpdateProjectExecutionTarget(projectId);
   const resourcesQ = useProjectResources(projectId);
   const launchSettingsQ = useLaunchSettings();
+  const agentCatalogQ = useAgentCatalog();
   const projectQ = useProject(projectId);
   const updateProject = useUpdateProject(projectId);
   const updateResource = useUpdateProjectResource(projectId);
@@ -1418,6 +1499,7 @@ export function ResourcesPage({ open, projectId }: ResourcesPageProps) {
                           resource={resource}
                           source={source}
                           label={resolveTargetLabel(source.executionTargetId)}
+                          agents={agentCatalogQ.data?.agents ?? []}
                           onSaved={() => void resourcesQ.refetch()}
                         />
                       ))}

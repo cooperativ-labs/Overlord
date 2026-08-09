@@ -255,6 +255,8 @@ test('a start is skipped while the account already has a live activity registere
     // per-activity *update* token, registered against the existing route.
     await registerLiveActivityPushToken('activity-from-push', {
       pushToken: 'update-token-1',
+      environment: 'sandbox',
+      bundleId: 'io.cooperativ.overlord',
       startedByPush: true
     });
   });

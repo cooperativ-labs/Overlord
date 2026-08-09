@@ -60,6 +60,7 @@ import type {
   UpdateProjectBody,
   UpdateProjectExecutionTargetBody,
   UpdateProjectResourceBody,
+  UpdateProjectResourceSourceBody,
   UpdateProjectTagBody,
   UpdateTerminalProfileBody,
   UpdateUserTokenBody,
@@ -1154,6 +1155,22 @@ export function useDeleteProjectResourceSource(projectId: string) {
   return useMutation({
     mutationFn: ({ resourceId, sourceId }: { resourceId: string; sourceId: string }) =>
       api.deleteProjectResourceSource(projectId, resourceId, sourceId),
+    onSuccess: () => invalidateAll(qc)
+  });
+}
+
+export function useUpdateProjectResourceSource(projectId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      resourceId,
+      sourceId,
+      body
+    }: {
+      resourceId: string;
+      sourceId: string;
+      body: UpdateProjectResourceSourceBody;
+    }) => api.updateProjectResourceSource(projectId, resourceId, sourceId, body),
     onSuccess: () => invalidateAll(qc)
   });
 }
