@@ -11,7 +11,8 @@ import type { MissionDto, WorkspaceMemberDto } from '../../shared/contract.ts';
 import {
   MissionAssigneeAvatar,
   MissionCompleteCheckbox,
-  MissionDueDateBadge
+  MissionDueDateBadge,
+  MissionOriginMark
 } from './MissionCardPrimitives.tsx';
 import { MissionDraftResourceBadge } from './MissionDraftResourceBadge.tsx';
 
@@ -124,6 +125,10 @@ export function MissionListCard({
           </span>
         ) : null}
         <MissionTimerCircleButton missionId={mission.id} />
+        <MissionOriginMark
+          createdByKind={mission.createdByKind}
+          createdByAgent={mission.createdByAgent}
+        />
         <MissionAssigneeAvatar assignee={assignee} />
       </div>
     </div>

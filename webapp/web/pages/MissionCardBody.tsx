@@ -10,6 +10,7 @@ import { MissionCardHoverFooter } from './MissionCardHoverFooter.tsx';
 import {
   MissionAssigneeSummary,
   MissionDueDateBadge,
+  MissionOriginMark,
   ProjectColorDot
 } from './MissionCardPrimitives.tsx';
 import { MissionCardState } from './missionCardState.ts';
@@ -90,6 +91,10 @@ export function MissionCardBody({
                   </TooltipContent>
                 </Tooltip>
               ) : null}
+              <MissionOriginMark
+                createdByKind={mission.createdByKind}
+                createdByAgent={mission.createdByAgent}
+              />
               <MissionAssigneeSummary assignee={assignee} />
             </div>
           </div>

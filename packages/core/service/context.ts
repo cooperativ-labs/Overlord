@@ -11,6 +11,15 @@ export type WorkspaceContext = {
 
 export type { ClientDeviceIdentity } from './device-identity.js';
 
+/** Who authored rows written through a service context. */
+export type CreationOrigin = {
+  kind: 'human' | 'agent' | 'automation';
+  /** Connector/agent identifier as supplied, e.g. `claude-code`, `hosted-mcp`. */
+  agent?: string | null;
+  /** `agent_sessions.id` when the creating call ran inside a live session. */
+  sessionId?: string | null;
+};
+
 export type ServiceContext = {
   db: DatabaseClient;
   workspace: WorkspaceContext;
@@ -25,7 +34,25 @@ export type ServiceContext = {
   actorTokenId?: string | null;
   /** Client machine identity (browser/desktop/CLI). Required on hosted backends. */
   clientDevice?: ClientDeviceIdentity | null;
+  /** Who authored rows written through this context. Defaults from `source`. */
+  origin?: CreationOrigin;
 };
+
+/**
+ * Resolve the creation provenance stamped onto mission/objective inserts.
+ * An explicit `ctx.origin` always wins; otherwise protocol → agent, runner →
+ * automation, everything else → human.
+ */
+export function resolveOrigin(ctx: ServiceContext): Required<CreationOrigin> {
+  if (ctx.origin) {
+    return { agent: null, sessionId: null, ...ctx.origin };
+  }
+  return {
+    kind: ctx.source === 'protocol' ? 'agent' : ctx.source === 'runner' ? 'automation' : 'human',
+    agent: null,
+    sessionId: null
+  };
+}
 
 export async function createServiceContext({
   db,

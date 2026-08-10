@@ -228,7 +228,7 @@ test('PI setup installs its extension and rendered skill without modifying other
   }
 });
 
-test('codex setup merges marketplace, rules, and hook commands', () => {
+test('codex setup merges marketplace and rules without corrupting managed hook commands', () => {
   const home = tempHome();
   try {
     const result = setupConnector({ agentKey: 'codex', home });
@@ -245,10 +245,24 @@ test('codex setup merges marketplace, rules, and hook commands', () => {
     const hooks = JSON.parse(
       readFileSync(path.join(result.installPath, '.codex-plugin', 'hooks.json'), 'utf8')
     );
+    const commandsFor = (event: string): string[] =>
+      (hooks.hooks[event] ?? []).flatMap((group: { hooks: { command: string }[] }) =>
+        group.hooks.map(hook => hook.command)
+      );
     assert.ok(
-      hooks.hooks.UserPromptSubmit[0].hooks[0].command.includes('user-prompt-submit-hook.sh')
+      commandsFor('UserPromptSubmit').some(command =>
+        command.includes('user-prompt-submit-hook.sh')
+      )
     );
-    assert.ok(hooks.hooks.PermissionRequest[0].hooks[0].command.includes('permission-hook.sh'));
+    assert.ok(
+      commandsFor('UserPromptSubmit').some(command => command.includes('agent-session-event.sh'))
+    );
+    assert.ok(
+      commandsFor('PermissionRequest').some(command => command.includes('agent-session-request.sh'))
+    );
+    assert.ok(
+      !commandsFor('PermissionRequest').some(command => command.includes('permission-hook.sh'))
+    );
 
     inspectAndAssertHealthy(home, 'codex');
   } finally {

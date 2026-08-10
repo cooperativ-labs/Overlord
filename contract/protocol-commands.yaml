@@ -230,12 +230,25 @@ missionDiscovery:
     description: 'Create a draft mission and objective without attaching, or an account-owned inbox item with --inbox/fallback when no project resolves'
     optionalFlags:
       - --inbox
+      - --agent
+      - --assigned-to
+      - --session-key
+    rules:
+      - '--agent names the connector/agent identifier authoring the row and is recorded as creation provenance (missions.created_by_agent / objectives.created_by_agent); it does not select the agent that will run the work'
+      - '--assigned-to resolves one workspace member by workspace_users.id, profile UUID, orgid:username, bare username, or email; an unresolvable member is rejected with the same "Assignee is not a member of this workspace" error REST uses and is never silently left unassigned'
+      - '--session-key additionally attributes the created row to the calling agent session (created_by_session_id) and lets an omitted --assigned-to inherit the session mission assignee'
     sideEffects:
       - creates-mission-or-inbox-item
       - creates-objective-in-draft-state-when-project-resolved
 
   prompt:
     description: 'Create a mission and immediately attach or queue execution'
+    optionalFlags:
+      - --agent
+      - --assigned-to
+      - --session-key
+    rules:
+      - '--agent, --assigned-to, and --session-key carry the same meaning and resolution rules as on create'
     sideEffects:
       - creates-mission
       - attaches-or-queues-execution
@@ -267,8 +280,11 @@ missionDiscovery:
 
   recordWork:
     description: 'Record already-completed chat work as a review mission without an attached session'
+    optionalFlags:
+      - --assigned-to
     rules:
       - 'For work already done in chat, not for in-progress work'
+      - '--assigned-to resolves one workspace member by the same rules as on create; an unresolvable member is rejected rather than silently left unassigned'
     sideEffects:
       - creates-mission-in-review-status
       - creates-completed-objective

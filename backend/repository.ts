@@ -60,6 +60,7 @@ import { hashSessionKey } from '../packages/core/service/util.ts';
 import type {
   ArtifactDto,
   CreateArtifactBody,
+  CreatedByKind,
   CreateInboxItemBody,
   CreateMissionBody,
   CreateObjectiveBody,
@@ -79,6 +80,7 @@ import type {
   InitializeProjectResultDto,
   MissionBranchDto,
   MissionBranchListDto,
+  MissionCreatedFromDto,
   MissionDetailDto,
   MissionDto,
   MissionEventDto,
@@ -568,6 +570,15 @@ interface MissionRow {
   has_unseen_blocking_question: number;
   has_unseen_returned_to_execute: number;
   draft_objective_resource_key: string | null;
+  created_by_kind: string | null;
+  created_by_agent: string | null;
+  created_by_workspace_user_id: string | null;
+  /**
+   * Only selected by `selectMissionsSql`, which the detail read goes through.
+   * The search and My Missions projections omit it: nothing renders
+   * `createdFrom` on a card, and resolving it would cost a join per row.
+   */
+  created_by_session_id?: string | null;
 }
 
 interface ObjectiveRow {
@@ -590,6 +601,9 @@ interface ObjectiveRow {
   revision: number;
   branch: string | null;
   external_session_id?: string | null;
+  created_by_kind: string | null;
+  created_by_agent: string | null;
+  created_by_workspace_user_id: string | null;
 }
 
 // ---- serializers ---------------------------------------------------------
@@ -803,6 +817,15 @@ async function promoteFallbackPrimary(
   );
 }
 
+// `created_by_kind` is NOT NULL in both tables, so the null branch only fires
+// for a projection that did not select the column. Falling back to 'human'
+// keeps `createdByKind` non-optional on the wire, which is what lets every
+// client render provenance without a null branch. Biasing an unknown value to
+// 'human' is also the safe direction: it under-claims rather than misattributes.
+function toCreatedByKind(value: string | null | undefined): CreatedByKind {
+  return value === 'agent' || value === 'automation' ? value : 'human';
+}
+
 function toMissionDto(r: MissionRow, tags: ProjectTagDto[] = []): MissionDto {
   return {
     id: r.id,
@@ -830,7 +853,10 @@ function toMissionDto(r: MissionRow, tags: ProjectTagDto[] = []): MissionDto {
     hasUnseenBlockingQuestion: r.has_unseen_blocking_question === 1,
     hasUnseenReturnedToExecute: r.has_unseen_returned_to_execute === 1,
     draftObjectiveResourceKey: r.draft_objective_resource_key?.trim() || null,
-    tags
+    tags,
+    createdByKind: toCreatedByKind(r.created_by_kind),
+    createdByAgent: r.created_by_agent ?? null,
+    createdByWorkspaceUserId: r.created_by_workspace_user_id ?? null
   };
 }
 
@@ -1707,6 +1733,9 @@ function toObjectiveDto(r: ObjectiveRow): ObjectiveDto {
     externalSessionId: r.external_session_id ?? null,
     branch: r.branch ?? null,
     resourceKey: r.resource_key?.trim() || null,
+    createdByKind: toCreatedByKind(r.created_by_kind),
+    createdByAgent: r.created_by_agent ?? null,
+    createdByWorkspaceUserId: r.created_by_workspace_user_id ?? null,
     launchConfigOverrides
   };
 }
@@ -3629,6 +3658,8 @@ const selectMissionsSql = `
          t.schedule_id, t.due_datetime,
          t.created_at, t.updated_at, t.revision, t.active_branch, t.branch_override,
          t.worktree_preference,
+         t.created_by_kind, t.created_by_agent, t.created_by_workspace_user_id,
+         t.created_by_session_id,
          (SELECT COUNT(*) FROM objectives o
             WHERE o.mission_id = t.id AND o.deleted_at IS NULL) AS objective_count,
          (SELECT COUNT(*) FROM objectives o
@@ -3757,6 +3788,7 @@ async function searchMissionsInWorkspace({
               t.notes_text,
               t.schedule_id, t.due_datetime,
               t.created_at, t.updated_at, t.revision,
+              t.created_by_kind, t.created_by_agent, t.created_by_workspace_user_id,
               (SELECT COUNT(*) FROM objectives o
                  WHERE o.mission_id = t.id AND o.deleted_at IS NULL) AS objective_count,
               (SELECT COUNT(*) FROM objectives o
@@ -4011,6 +4043,39 @@ export async function markMissionStatusesSeen(missionRef: string): Promise<void>
   });
 }
 
+/**
+ * Resolves what the authoring agent was working on when it filed this mission.
+ *
+ * `missions.created_by_session_id` is a soft reference with no foreign key, so
+ * the session (and its mission) may be gone; every failure to resolve returns
+ * `null` rather than throwing, and the mission page renders without the
+ * provenance line. This is detail-only on purpose — a board of 200 cards should
+ * not pay two joins each for a sentence nobody can read at card size.
+ */
+async function missionCreatedFromDto(
+  row: MissionRow,
+  db: DatabaseClient = requireDatabaseClient()
+): Promise<MissionCreatedFromDto | null> {
+  const sessionId = row.created_by_session_id?.trim();
+  if (!sessionId) return null;
+  const found = (await db.get(
+    `SELECT s.id, s.mission_id, s.agent_identifier, m.display_id
+       FROM agent_sessions s
+       LEFT JOIN missions m ON m.id = s.mission_id AND m.deleted_at IS NULL
+      WHERE s.id = ? AND s.workspace_id = ? AND s.deleted_at IS NULL`,
+    [sessionId, row.workspace_id]
+  )) as
+    | { id: string; mission_id: string; agent_identifier: string; display_id: string | null }
+    | undefined;
+  if (!found?.display_id) return null;
+  return {
+    sessionId: found.id,
+    missionId: found.mission_id,
+    missionDisplayId: found.display_id,
+    agentIdentifier: found.agent_identifier
+  };
+}
+
 export async function getMissionDetail(missionRef: string): Promise<MissionDetailDto> {
   const row = await getMissionRow(missionRef);
   const mission = toMissionDto(row, await getMissionTags(row.id));
@@ -4022,7 +4087,8 @@ export async function getMissionDetail(missionRef: string): Promise<MissionDetai
     objectives,
     statuses,
     executionRequests,
-    branch: await missionBranchDto(row)
+    branch: await missionBranchDto(row),
+    createdFrom: await missionCreatedFromDto(row)
   };
 }
 
@@ -5978,8 +6044,10 @@ async function createScheduledDuplicateIfNeeded(
        (id, workspace_id, project_id, display_id, sequence_number, title,
         status_id, status_type, board_position, priority, assigned_workspace_user_id,
         notes_text, execution_target_intent_json,
-        metadata_json, schedule_id, due_datetime, created_at, updated_at, revision)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}', '{}', ?, ?, ?, ?, 1)`,
+        metadata_json, schedule_id, due_datetime,
+        created_by_kind, created_by_agent, created_by_session_id,
+        created_at, updated_at, revision)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}', '{}', ?, ?, 'automation', NULL, NULL, ?, ?, 1)`,
     [
       newMissionId,
       mission.workspace_id,
@@ -6033,14 +6101,18 @@ async function createScheduledDuplicateIfNeeded(
     [mission.id]
   )) as { instruction_text: string } | undefined;
 
-  await insertObjective(
-    tx,
-    { workspaceId: mission.workspace_id, workspaceUserId: null },
-    {
-      missionId: newMissionId,
-      instructionText: latestObjective?.instruction_text ?? ''
-    }
-  );
+  // Scheduled regenerations are Overlord automation, not a human retyping the
+  // original. Pass origin on the service context so insertObjective stamps
+  // created_by_kind = 'automation' rather than defaulting from webapp source.
+  const automationCtx = {
+    ...(await buildWebappServiceContextForWorkspace(mission.workspace_id, tx, null)),
+    origin: { kind: 'automation' as const }
+  };
+  await createObjectiveOnMission({
+    ctx: automationCtx,
+    missionId: newMissionId,
+    instructionText: latestObjective?.instruction_text ?? ''
+  });
 }
 
 // ---- My Missions (selected-workspace aggregate) ---------------------------
@@ -6131,6 +6203,7 @@ function selectMyMissionsSql(pairPlaceholders: string): string {
          t.notes_text,
          t.schedule_id, t.due_datetime,
          t.created_at, t.updated_at, t.revision,
+         t.created_by_kind, t.created_by_agent, t.created_by_workspace_user_id,
          p.name AS project_name, p.settings_json AS project_settings_json,
          mtp.position AS my_position,
          (SELECT COUNT(*) FROM objectives o

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import { ServiceError } from './errors.js';
-import { createMissionWithObjectives } from './missions.js';
+import { createMissionWithObjectives, insertObjective } from './missions.js';
 import { createProject } from './projects.js';
 import { createSeededServiceContext } from './test-helpers.js';
 
@@ -244,5 +244,135 @@ describe('createMissionWithObjectives — optional board fields', () => {
 
     assert.equal(mission.title, 'Placeholder mission');
     assert.deepEqual(objectives, []);
+  });
+});
+
+describe('createMissionWithObjectives — creation provenance', () => {
+  async function provenanceRow(
+    db: DatabaseClient,
+    missionId: string
+  ): Promise<{
+    created_by_kind: string;
+    created_by_agent: string | null;
+    created_by_session_id: string | null;
+  }> {
+    return (await db.get(
+      `SELECT created_by_kind, created_by_agent, created_by_session_id
+         FROM missions WHERE id = ?`,
+      [missionId]
+    )) as {
+      created_by_kind: string;
+      created_by_agent: string | null;
+      created_by_session_id: string | null;
+    };
+  }
+
+  it("stamps 'agent' for a protocol-source context", async () => {
+    const { db, ctx } = await createSeededServiceContext({ source: 'protocol' });
+    const project = await createProject({ ctx, name: 'Provenance Protocol' });
+
+    const { mission, objectives } = await createMissionWithObjectives({
+      ctx,
+      projectId: project.id,
+      objectives: [{ objective: 'Filed by an agent surface' }]
+    });
+
+    const missionRow = await provenanceRow(db, mission.id);
+    assert.equal(missionRow.created_by_kind, 'agent');
+    assert.equal(missionRow.created_by_agent, null);
+    assert.equal(missionRow.created_by_session_id, null);
+
+    const objectiveRow = (await db.get(`SELECT created_by_kind FROM objectives WHERE id = ?`, [
+      objectives[0]!.id
+    ])) as { created_by_kind: string };
+    assert.equal(objectiveRow.created_by_kind, 'agent');
+  });
+
+  it("stamps 'human' for a webapp-source context", async () => {
+    const { db, ctx } = await createSeededServiceContext({ source: 'webapp' });
+    const project = await createProject({ ctx, name: 'Provenance Webapp' });
+
+    const { mission } = await createMissionWithObjectives({
+      ctx,
+      projectId: project.id,
+      objectives: [{ objective: 'Typed on the board' }]
+    });
+
+    assert.equal((await provenanceRow(db, mission.id)).created_by_kind, 'human');
+  });
+
+  it('lets an explicit ctx.origin win over the source default', async () => {
+    const { db, ctx } = await createSeededServiceContext({ source: 'webapp' });
+    const project = await createProject({ ctx, name: 'Provenance Explicit' });
+
+    const { mission } = await createMissionWithObjectives({
+      ctx: {
+        ...ctx,
+        origin: {
+          kind: 'agent',
+          agent: 'claude-code',
+          sessionId: 'session-explicit-1'
+        }
+      },
+      projectId: project.id,
+      objectives: [{ objective: 'Explicit origin override' }]
+    });
+
+    const row = await provenanceRow(db, mission.id);
+    assert.equal(row.created_by_kind, 'agent');
+    assert.equal(row.created_by_agent, 'claude-code');
+    assert.equal(row.created_by_session_id, 'session-explicit-1');
+  });
+
+  it("stamps an objective from its creating context, independent of the mission's kind", async () => {
+    const { db, ctx } = await createSeededServiceContext({ source: 'webapp' });
+    const project = await createProject({ ctx, name: 'Provenance Independent' });
+
+    const { mission } = await createMissionWithObjectives({
+      ctx,
+      projectId: project.id,
+      objectives: [{ objective: 'Human-authored mission' }]
+    });
+    assert.equal((await provenanceRow(db, mission.id)).created_by_kind, 'human');
+
+    const agentObjective = await insertObjective({
+      ctx: {
+        ...ctx,
+        origin: { kind: 'agent', agent: 'cursor', sessionId: null }
+      },
+      missionId: mission.id,
+      instructionText: 'Agent-added follow-up'
+    });
+
+    const objectiveRow = (await db.get(
+      `SELECT created_by_kind, created_by_agent FROM objectives WHERE id = ?`,
+      [agentObjective.id]
+    )) as { created_by_kind: string; created_by_agent: string | null };
+    assert.equal(objectiveRow.created_by_kind, 'agent');
+    assert.equal(objectiveRow.created_by_agent, 'cursor');
+
+    const humanObjective = (await db.get(
+      `SELECT created_by_kind FROM objectives
+         WHERE mission_id = ? AND id != ? AND deleted_at IS NULL
+         ORDER BY position ASC LIMIT 1`,
+      [mission.id, agentObjective.id]
+    )) as { created_by_kind: string };
+    assert.equal(humanObjective.created_by_kind, 'human');
+  });
+
+  it('rejects a fourth created_by_kind via CHECK', async () => {
+    const { db, ctx } = await createSeededServiceContext({ source: 'webapp' });
+    const project = await createProject({ ctx, name: 'Provenance Check' });
+    const { mission } = await createMissionWithObjectives({
+      ctx,
+      projectId: project.id,
+      objectives: [{ objective: 'Baseline' }]
+    });
+
+    await assert.rejects(
+      db.run(`UPDATE missions SET created_by_kind = 'bot' WHERE id = ?`, [mission.id]),
+      (err: unknown) =>
+        err instanceof Error && /CHECK|constraint|created_by_kind/i.test(String(err.message))
+    );
   });
 });

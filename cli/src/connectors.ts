@@ -463,36 +463,7 @@ function mergeCodexRules(existingContent: string): string {
   return `${trimmed}\n\n${managedBlock}\n`;
 }
 
-function rewriteCodexHookCommands({
-  hooks,
-  eventName,
-  targetCommand
-}: {
-  hooks: Record<string, unknown>;
-  eventName: string;
-  targetCommand: string;
-}): void {
-  const hookRoot = hooks.hooks;
-  if (!hookRoot || typeof hookRoot !== 'object' || Array.isArray(hookRoot)) return;
-  const groups = (hookRoot as Record<string, unknown>)[eventName];
-  if (!Array.isArray(groups)) return;
-  for (const group of groups) {
-    if (!group || typeof group !== 'object') continue;
-    const entries = (group as Record<string, unknown>).hooks;
-    if (!Array.isArray(entries)) continue;
-    for (const hook of entries) {
-      if (
-        hook &&
-        typeof hook === 'object' &&
-        (hook as Record<string, unknown>).type === 'command'
-      ) {
-        (hook as Record<string, unknown>).command = targetCommand;
-      }
-    }
-  }
-}
-
-/** Merge Codex marketplace, rules, hook paths, and plugin enablement without clobbering user settings. */
+/** Merge Codex marketplace, rules, and plugin enablement without clobbering user settings. */
 function configureCodexHarness({
   home,
   installPath,
@@ -507,8 +478,6 @@ function configureCodexHarness({
   const rulesPath = path.join(home, '.codex', 'rules', 'default.rules');
   const legacyAgentsPath = path.join(home, '.codex', 'AGENTS.md');
   const hooksPath = path.join(installPath, '.codex-plugin', 'hooks.json');
-  const userPromptHook = path.join(installPath, 'scripts', 'user-prompt-submit-hook.sh');
-  const permissionHook = path.join(installPath, 'scripts', 'permission-hook.sh');
 
   const currentMarketplace = readJsonObject(marketplacePath) ?? {
     name: 'overlord-local',
@@ -536,7 +505,6 @@ function configureCodexHarness({
   if (dryRun) {
     warnings.push(`Would update Codex marketplace at ${marketplacePath}.`);
     warnings.push(`Would merge protocol permission rules into ${rulesPath}.`);
-    warnings.push(`Would rewrite Codex hook commands in ${hooksPath}.`);
     if (existsSync(legacyAgentsPath)) {
       warnings.push(`Would remove legacy Codex bundle at ${legacyAgentsPath}.`);
     }
@@ -568,20 +536,11 @@ function configureCodexHarness({
   mkdirSync(path.dirname(rulesPath), { recursive: true });
   writeFileSync(rulesPath, mergeCodexRules(existingRules));
 
-  const hooks = readJsonObject(hooksPath);
-  if (hooks) {
-    rewriteCodexHookCommands({
-      hooks,
-      eventName: 'PermissionRequest',
-      targetCommand: permissionHook
-    });
-    rewriteCodexHookCommands({
-      hooks,
-      eventName: 'UserPromptSubmit',
-      targetCommand: userPromptHook
-    });
-    writeFileSync(hooksPath, `${JSON.stringify(hooks, null, 2)}\n`);
-  } else {
+  // hooks.json is a managed connector file whose commands deliberately use CODEX_PLUGIN_ROOT
+  // with an installed-path fallback. Rewriting every handler in an event used to collapse the
+  // agent-session request/event registrations back onto the legacy scripts, leaving a freshly
+  // installed plugin different from its source manifest.
+  if (!readJsonObject(hooksPath)) {
     warnings.push(`Codex hook manifest missing or invalid at ${hooksPath}.`);
   }
 

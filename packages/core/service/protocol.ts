@@ -47,6 +47,7 @@ import {
 import { generateSessionKey, hashSessionKey, newId, nowIso } from './util.js';
 import { enqueueWebhookEvent } from './webhook-events.js';
 import { enqueueDeliveryComposeJob } from './worker-jobs.js';
+import { resolveAgentMissionAssignee } from './workspace-members.js';
 
 export type SessionSummary = {
   id: string;
@@ -2192,7 +2193,8 @@ export async function protocolCreate({
   ctx,
   projectId,
   objectives,
-  title
+  title,
+  assignedTo
 }: {
   ctx: ServiceContext;
   projectId?: string | null;
@@ -2203,14 +2205,18 @@ export async function protocolCreate({
     resourceKey?: string | null;
   }>;
   title?: string | null;
+  /** Explicit `--assigned-to` member ref; when omitted, the §7.1 default chain applies. */
+  assignedTo?: string | null;
 }): Promise<{ mission: MissionSummary; objectives: ObjectiveSummary[] }> {
   const resolvedProjectId = projectId
     ? await resolveProjectId(ctx, projectId)
     : (await discoverProject({ ctx })).projectId;
+  const assignedWorkspaceUserId = await resolveAgentMissionAssignee({ ctx, assignedTo });
   return await createMissionWithObjectives({
     ctx,
     projectId: resolvedProjectId,
     objectives,
+    assignedWorkspaceUserId,
     ...(title !== undefined ? { title } : {})
   });
 }
@@ -2221,7 +2227,8 @@ export async function protocolPrompt({
   objectives,
   title,
   agentIdentifier = 'unknown',
-  externalSessionId
+  externalSessionId,
+  assignedTo
 }: {
   ctx: ServiceContext;
   projectId?: string | null;
@@ -2234,14 +2241,18 @@ export async function protocolPrompt({
   title?: string | null;
   agentIdentifier?: string;
   externalSessionId?: string | null;
+  /** Explicit `--assigned-to` member ref; when omitted, the §7.1 default chain applies. */
+  assignedTo?: string | null;
 }): Promise<AttachResponse & { sessionKey: string }> {
   const discovery = projectId
     ? { projectId: await resolveProjectId(ctx, projectId) }
     : await discoverProject({ ctx });
+  const assignedWorkspaceUserId = await resolveAgentMissionAssignee({ ctx, assignedTo });
   const created = await createMissionWithObjectives({
     ctx,
     projectId: discovery.projectId,
     objectives,
+    assignedWorkspaceUserId,
     ...(title !== undefined ? { title } : {})
   });
 
@@ -2271,7 +2282,8 @@ export async function recordWork({
   artifacts = [],
   changeRationales = [],
   changedFiles = [],
-  payloadJson
+  payloadJson,
+  assignedTo
 }: {
   ctx: ServiceContext;
   projectId?: string | null;
@@ -2282,6 +2294,8 @@ export async function recordWork({
   changeRationales?: ChangeRationaleInput[];
   changedFiles?: Array<{ filePath: string; vcsStatus?: string | null }>;
   payloadJson?: Record<string, unknown> | null;
+  /** Explicit `--assigned-to` member ref; when omitted, the §7.1 default chain applies. */
+  assignedTo?: string | null;
 }): Promise<{ mission: MissionSummary; deliveryId: string }> {
   const trimmedSummary = summary.trim();
   if (!trimmedSummary) {
@@ -2292,11 +2306,13 @@ export async function recordWork({
     ? await resolveProjectId(ctx, projectId)
     : (await discoverProject({ ctx })).projectId;
 
+  const assignedWorkspaceUserId = await resolveAgentMissionAssignee({ ctx, assignedTo });
   const created = await createMissionWithObjectives({
     ctx,
     projectId: resolvedProjectId,
     objectives: [{ objective }],
     statusType: 'review',
+    assignedWorkspaceUserId,
     ...(title !== undefined ? { title } : {})
   });
 

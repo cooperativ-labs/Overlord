@@ -135,6 +135,9 @@ const toolHandlers: Record<string, ToolHandler> = {
         ...(optionalString(args, 'title') ? { '--title': requiredString(args, 'title') } : {}),
         ...(optionalString(args, 'resourceKey')
           ? { '--resource': requiredString(args, 'resourceKey') }
+          : {}),
+        ...(optionalString(args, 'assignedTo')
+          ? { '--assigned-to': requiredString(args, 'assignedTo') }
           : {})
       })
     ),

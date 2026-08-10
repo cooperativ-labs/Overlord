@@ -62,6 +62,14 @@ export type ObjectiveState =
   | 'pending_delivery'
   | 'complete';
 
+/**
+ * Actor class that authored a mission or objective row (`created_by_kind`).
+ * Closed vocabulary — `human` is a filed-by-a-person row, `agent` is one an
+ * agent connector authored, `automation` is one Overlord itself generated
+ * (scheduled regeneration). Rows predating creation provenance report `human`.
+ */
+export type CreatedByKind = 'human' | 'agent' | 'automation';
+
 export type EntityType = 'project' | 'mission' | 'objective';
 
 export type ChangeOperation = 'insert' | 'update' | 'delete' | 'restore';
@@ -580,6 +588,22 @@ export interface MissionDto {
   /** Tags assigned to this mission, resolved from its project's `project_tags`. */
   tags: ProjectTagDto[];
   /**
+   * Actor class that authored this row. Non-optional: rows written before
+   * creation provenance existed report `'human'`, so no client needs a null
+   * branch. See `CreatedByKind`.
+   */
+  createdByKind: CreatedByKind;
+  /**
+   * Connector/agent identifier that authored it (`claude-code`, `hosted-mcp`),
+   * or `null` when a human or automation did.
+   */
+  createdByAgent: string | null;
+  /**
+   * `workspace_users.id` of the member the authoring actor acted as, or on
+   * behalf of — for an agent row, the human behind the token it used.
+   */
+  createdByWorkspaceUserId: string | null;
+  /**
    * Every non-deleted objective on this mission, ordered by `position`, present
    * only when the caller opted in (`GET /api/projects/:id/missions?includeObjectives=1`).
    * Omitted otherwise — clients that need objective bodies for a whole board
@@ -616,6 +640,16 @@ export interface ObjectiveDto {
   branch: string | null;
   /** Logical project resource this objective runs in; null inherits the primary. */
   resourceKey: string | null;
+  /**
+   * Actor class that authored this objective. Independent of its mission's:
+   * an agent can add objectives to a mission a human filed, and vice versa.
+   * Non-optional; pre-provenance rows report `'human'`.
+   */
+  createdByKind: CreatedByKind;
+  /** Connector/agent identifier that authored it, or `null`. */
+  createdByAgent: string | null;
+  /** `workspace_users.id` the authoring actor acted as, or on behalf of. */
+  createdByWorkspaceUserId: string | null;
   /** Explicit per-objective launch overrides keyed by target id (`*` means any target), then agent. */
   launchConfigOverrides?: Record<string, Record<string, AgentLaunchConfigDto>>;
 }
@@ -695,6 +729,26 @@ export interface CreateArtifactBody {
   sessionKey?: string | null;
 }
 
+/**
+ * The agent session a mission was created from, resolved from the soft
+ * `missions.created_by_session_id` reference. Detail-only: it costs a
+ * `LEFT JOIN` and is worth paying once per mission page, never per board row.
+ *
+ * `null` when the mission was not agent-created, or when the referenced session
+ * has since been deleted — the reference carries no foreign key precisely so a
+ * dangling provenance pointer can never block a delete.
+ */
+export interface MissionCreatedFromDto {
+  /** `agent_sessions.id` that authored the mission. */
+  sessionId: string;
+  /** The mission the authoring session was working on. */
+  missionId: string;
+  /** That mission's human-readable identifier, e.g. `coo:668`. */
+  missionDisplayId: string;
+  /** Connector identifier of the authoring session. */
+  agentIdentifier: string;
+}
+
 export interface MissionDetailDto extends MissionDto {
   objectives: ObjectiveDto[];
   statuses: WorkspaceStatusDto[];
@@ -702,6 +756,8 @@ export interface MissionDetailDto extends MissionDto {
   executionRequests: ExecutionRequestDto[];
   /** Read-only branch/worktree metadata derived from `missions.active_branch`. */
   branch: MissionBranchDto | null;
+  /** What the authoring agent was working on when it filed this mission. */
+  createdFrom: MissionCreatedFromDto | null;
 }
 
 // ---- Mission scheduling ----------------------------------------------------

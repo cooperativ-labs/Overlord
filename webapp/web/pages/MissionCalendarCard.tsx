@@ -7,7 +7,11 @@ import { cn } from '@/lib/utils';
 
 import type { MissionDto } from '../../shared/contract.ts';
 
-import { MissionCompleteCheckbox, projectColorTint } from './MissionCardPrimitives.tsx';
+import {
+  MissionCompleteCheckbox,
+  MissionOriginMark,
+  projectColorTint
+} from './MissionCardPrimitives.tsx';
 
 export function MissionCalendarCard({
   mission,
@@ -104,6 +108,13 @@ export function MissionCalendarCard({
           </TooltipContent>
         </Tooltip>
       </div>
+      {/* No tooltip here: the whole cell already carries one for the title, and
+          a second trigger inside it would fight the first for the same hover. */}
+      <MissionOriginMark
+        createdByKind={mission.createdByKind}
+        createdByAgent={mission.createdByAgent}
+        withTooltip={false}
+      />
     </div>
   );
 }

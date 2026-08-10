@@ -4,7 +4,7 @@
 # IMPORTANT: Update this file and CONTRACT.md together when adding components or surfaces.
 # Increment contractVersion when any stable interface changes.
 
-contractVersion: '66'
+contractVersion: '67'
 
 components:
   protocol:
@@ -42,6 +42,7 @@ components:
       - 'organizations table (grouping layer above workspaces) and the required workspaces.organization_id FK; workspaces remain the sole RBAC layer; slugs are unique per organization, not instance-wide'
       - 'Agent Session Exchange core tables (agent_session_channels, agent_session_events, agent_requests, agent_session_inputs) declared by contract and migrated with the channel bootstrap; the scoped channel credential is hash-only and scoped to one channel, native_session_id is a correlation alias and never an authorization key, raw native payloads are never persisted, and no derived capability tier is persisted. The never-migrated hook_events and permission_requests designs are superseded by them; their closed status vocabulary and the mission_events permission_request value remain valid'
       - 'controlled vocabularies (closed and open sets)'
+      - 'creation provenance on missions and objectives: created_by_kind (closed human/agent/automation, NOT NULL DEFAULT human), created_by_agent (open connector identifier), and created_by_session_id as a deliberate soft reference to agent_sessions.id with no foreign key, so a dangling provenance pointer can never block a delete; provenance is read as a column on rows already selected and carries no new index'
       - 'profile-owned inbox_items: a minimal private unassigned capture with one v1 objective array entry, optional due datetime and priority, profile cascade deletion, and no workspace/project/status/session state'
       - 'versioned deliveryReport payload storage in deliveries.payload_json; summary remains immutable agent-authored source text'
       - 'worker_jobs durable background queue including core types overlord.delivery.compose.v1, overlord.live_activity.dispatch.v1, overlord.push_notification.dispatch.v1, and overlord.notification.dispatch.v1'
@@ -157,6 +158,7 @@ components:
       - 'URL paths and HTTP method contracts'
       - 'project resource-source launch defaults via PATCH /api/projects/:id/resources/:resourceId/sources/:sourceId, preserving the materialization fields in descriptor_json while replacing per-agent launchDefaults'
       - 'request/response DTO shapes (camelCase, derived from logical schema)'
+      - 'creation-provenance projection: MissionDto/ObjectiveDto carry non-optional createdByKind (human fallback in the mapper), createdByAgent, and createdByWorkspaceUserId; MissionDetailDto alone carries createdFrom (sessionId, missionId, missionDisplayId, agentIdentifier, or null) via a LEFT JOIN that tolerates a missing session and is never paid per board row'
       - 'profile-owned inbox routes: authenticated GET/POST /api/inbox, GET/PATCH/DELETE /api/inbox/:id, and POST /api/inbox/:id/promote; profile isolation returns 404, promotion requires mission:create on the destination project and atomically creates its normal mission then consumes the capture; inbox writes are intentionally outside workspace realtime'
       - 'delivery read projection: GET /api/missions/:id/deliveries returns normalized DeliveryDto records and delivery mission events expose an additive deliveryId without raw payload JSON'
       - 'admin-only workspace objective CSV export (GET /api/workspaces/:id/objectives.csv) as a text/csv attachment'
@@ -286,6 +288,7 @@ components:
       - 'standard user-notification permission prompt and APNs device-token registration, rotation, sync, and revocation on sign-out; device tokens are kept strictly separate from ActivityKit tokens'
       - 'user-visible notification preference UI backed by the profile notification-preferences routes, and handling of notification taps into mission deep links'
       - 'authenticated registration, rotation, and revocation calls to the Mobile → REST surface'
+      - "presentation of the additive creation-provenance fields decoded from MissionDto/ObjectiveDto (createdByKind, createdByAgent, createdByWorkspaceUserId) as optionals defaulting to human; an agent-authored objective read back in the mission chat feed is attributed rather than presented as the operator's own text, and the attribution leads the accessibility label"
     dependsOn:
       - rest
     interactionSurfaces:
@@ -306,6 +309,7 @@ components:
       - 'mapping MCP tool calls to existing service/protocol operations'
       - 'hosted overlord_update_artifact tool forwarding to Protocol update-artifact'
       - 'hosted overlord_add_artifact tool forwarding to Protocol add-artifact'
+      - 'additive assignedTo input on overlord_create_mission, forwarded to the same service-layer member resolver as Protocol --assigned-to (workspace_users.id, profile UUID, orgid:username, bare username, or email); an unresolvable member is an error, never a silent fallback to unassigned'
     dependsOn:
       - auth
       - protocol

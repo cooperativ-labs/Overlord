@@ -69615,6 +69615,16 @@ var init_change_feed = __esm({
 });
 
 // ../packages/core/service/context.ts
+function resolveOrigin(ctx) {
+  if (ctx.origin) {
+    return { agent: null, sessionId: null, ...ctx.origin };
+  }
+  return {
+    kind: ctx.source === "protocol" ? "agent" : ctx.source === "runner" ? "automation" : "human",
+    agent: null,
+    sessionId: null
+  };
+}
 async function resolveMissionId(ctx, missionRef) {
   const byId = await ctx.db.get(
     `SELECT id, display_id, project_id FROM missions
@@ -132252,12 +132262,15 @@ async function insertObjective({
   const resolvedAssignedAgent = explicitAgent ?? launchSelection.agent;
   const resolvedModel = explicitAgent ? null : launchSelection.model;
   const resolvedReasoningEffort = explicitAgent ? null : launchSelection.reasoningEffort;
+  const origin = resolveOrigin(ctx);
   await ctx.db.run(
     `INSERT INTO objectives
          (id, workspace_id, project_id, mission_id, position, title, instruction_text, state,
           assigned_agent, model, reasoning_effort, agent_flags_json, auto_advance,
-          execution_metadata_json, resource_key, created_by_workspace_user_id, created_at, updated_at, revision)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}', ?, '{}', ?, ?, ?, ?, 1)`,
+          execution_metadata_json, resource_key, created_by_workspace_user_id,
+          created_by_kind, created_by_agent, created_by_session_id,
+          created_at, updated_at, revision)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}', ?, '{}', ?, ?, ?, ?, ?, ?, ?, 1)`,
     [
       id,
       ctx.workspace.id,
@@ -132273,6 +132286,9 @@ async function insertObjective({
       bindBool(ctx.db.dialect, autoAdvance),
       normalizedResourceKey,
       ctx.actorWorkspaceUserId,
+      origin.kind,
+      origin.agent,
+      origin.sessionId,
       now2,
       now2
     ]
@@ -132387,13 +132403,16 @@ async function createMissionWithObjectives({
   const createdObjectives = [];
   await ctx.db.transaction(async (tx) => {
     const txCtx = { ...ctx, db: tx };
+    const origin = resolveOrigin(txCtx);
     await txCtx.db.run(
       `INSERT INTO missions
            (id, workspace_id, project_id, display_id, sequence_number, title,
             status_id, status_type, board_position, priority,
             execution_target_intent_json, metadata_json, created_by_workspace_user_id,
-            assigned_workspace_user_id, due_datetime, created_at, updated_at, revision)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}', '{}', ?, ?, ?, ?, ?, 1)`,
+            assigned_workspace_user_id, due_datetime,
+            created_by_kind, created_by_agent, created_by_session_id,
+            created_at, updated_at, revision)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}', '{}', ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
       [
         missionId,
         ctx.workspace.id,
@@ -132408,6 +132427,9 @@ async function createMissionWithObjectives({
         ctx.actorWorkspaceUserId,
         assignedWorkspaceUserId ?? null,
         dueDatetime ?? null,
+        origin.kind,
+        origin.agent,
+        origin.sessionId,
         now2,
         now2
       ]
@@ -134765,6 +134787,103 @@ function formatProjectResourcesInstructions(projectResources) {
 init_projects();
 init_util3();
 init_webhook_events();
+
+// ../packages/core/service/workspace-members.ts
+init_errors4();
+var ASSIGNEE_NOT_MEMBER = "Assignee is not a member of this workspace";
+async function resolveWorkspaceMemberId({
+  ctx,
+  member: member2
+}) {
+  const trimmed2 = member2.trim();
+  if (!trimmed2) {
+    throw new ServiceError(ASSIGNEE_NOT_MEMBER, "validation_error");
+  }
+  const byWorkspaceUserId = await ctx.db.get(
+    `SELECT id FROM workspace_users
+        WHERE id = ? AND workspace_id = ? AND status = 'active' AND deleted_at IS NULL`,
+    [trimmed2, ctx.workspace.id]
+  );
+  if (byWorkspaceUserId) return byWorkspaceUserId.id;
+  const byProfileId = await ctx.db.get(
+    `SELECT id FROM workspace_users
+        WHERE profile_id = ? AND workspace_id = ? AND status = 'active' AND deleted_at IS NULL`,
+    [trimmed2, ctx.workspace.id]
+  );
+  if (byProfileId) return byProfileId.id;
+  const colon = trimmed2.indexOf(":");
+  if (colon > 0) {
+    const byMemberKey = await ctx.db.get(
+      `SELECT id FROM workspace_users
+          WHERE workspace_id = ? AND status = 'active' AND deleted_at IS NULL
+            AND lower(member_key) = lower(?)`,
+      [ctx.workspace.id, trimmed2]
+    );
+    if (byMemberKey) return byMemberKey.id;
+    const left = trimmed2.slice(0, colon);
+    const username = trimmed2.slice(colon + 1).trim();
+    if (username) {
+      const byOrgAndHandle = await ctx.db.get(
+        `SELECT wu.id
+           FROM workspace_users wu
+           JOIN profiles p ON p.id = wu.profile_id AND p.deleted_at IS NULL
+           JOIN workspaces w ON w.id = wu.workspace_id AND w.deleted_at IS NULL
+          WHERE wu.workspace_id = ? AND wu.status = 'active' AND wu.deleted_at IS NULL
+            AND lower(p.handle) = lower(?)
+            AND (w.organization_id = ? OR w.id = ? OR lower(w.slug) = lower(?))`,
+        [ctx.workspace.id, username, left, left, left]
+      );
+      if (byOrgAndHandle) return byOrgAndHandle.id;
+    }
+    throw new ServiceError(ASSIGNEE_NOT_MEMBER, "validation_error");
+  }
+  const byHandle = await ctx.db.get(
+    `SELECT wu.id
+       FROM workspace_users wu
+       JOIN profiles p ON p.id = wu.profile_id AND p.deleted_at IS NULL
+      WHERE wu.workspace_id = ? AND wu.status = 'active' AND wu.deleted_at IS NULL
+        AND lower(p.handle) = lower(?)`,
+    [ctx.workspace.id, trimmed2]
+  );
+  if (byHandle) return byHandle.id;
+  const byEmail = await ctx.db.get(
+    `SELECT wu.id
+       FROM workspace_users wu
+       JOIN profiles p ON p.id = wu.profile_id AND p.deleted_at IS NULL
+      WHERE wu.workspace_id = ? AND wu.status = 'active' AND wu.deleted_at IS NULL
+        AND lower(p.email) = lower(?)`,
+    [ctx.workspace.id, trimmed2]
+  );
+  if (byEmail) return byEmail.id;
+  throw new ServiceError(ASSIGNEE_NOT_MEMBER, "validation_error");
+}
+async function resolveAgentMissionAssignee({
+  ctx,
+  assignedTo
+}) {
+  if (assignedTo !== void 0 && assignedTo !== null) {
+    return resolveWorkspaceMemberId({ ctx, member: assignedTo });
+  }
+  const sessionId = ctx.origin?.sessionId ?? null;
+  if (sessionId) {
+    const parent = await ctx.db.get(
+      `SELECT m.assigned_workspace_user_id, m.created_by_workspace_user_id
+         FROM agent_sessions s
+         JOIN missions m ON m.id = s.mission_id AND m.deleted_at IS NULL
+        WHERE s.id = ? AND s.workspace_id = ? AND s.deleted_at IS NULL`,
+      [sessionId, ctx.workspace.id]
+    );
+    if (parent?.assigned_workspace_user_id) {
+      return parent.assigned_workspace_user_id;
+    }
+    if (parent?.created_by_workspace_user_id) {
+      return parent.created_by_workspace_user_id;
+    }
+  }
+  return ctx.actorWorkspaceUserId;
+}
+
+// ../packages/core/service/protocol.ts
 var PROTOCOL_WORKFLOW = `
 
 1. Read the current objective from the top-level \`objective\` field in this JSON response, then immediately begin executing it. This is an execution session: do not wait for more instructions or ask for confirmation.
@@ -136367,13 +136486,16 @@ async function protocolCreate({
   ctx,
   projectId,
   objectives,
-  title
+  title,
+  assignedTo
 }) {
   const resolvedProjectId = projectId ? await resolveProjectId(ctx, projectId) : (await discoverProject({ ctx })).projectId;
+  const assignedWorkspaceUserId = await resolveAgentMissionAssignee({ ctx, assignedTo });
   return await createMissionWithObjectives({
     ctx,
     projectId: resolvedProjectId,
     objectives,
+    assignedWorkspaceUserId,
     ...title !== void 0 ? { title } : {}
   });
 }
@@ -136383,13 +136505,16 @@ async function protocolPrompt({
   objectives,
   title,
   agentIdentifier = "unknown",
-  externalSessionId: externalSessionId2
+  externalSessionId: externalSessionId2,
+  assignedTo
 }) {
   const discovery = projectId ? { projectId: await resolveProjectId(ctx, projectId) } : await discoverProject({ ctx });
+  const assignedWorkspaceUserId = await resolveAgentMissionAssignee({ ctx, assignedTo });
   const created = await createMissionWithObjectives({
     ctx,
     projectId: discovery.projectId,
     objectives,
+    assignedWorkspaceUserId,
     ...title !== void 0 ? { title } : {}
   });
   const submitted = await ctx.db.run(
@@ -136415,18 +136540,21 @@ async function recordWork({
   artifacts = [],
   changeRationales = [],
   changedFiles = [],
-  payloadJson
+  payloadJson,
+  assignedTo
 }) {
   const trimmedSummary = summary.trim();
   if (!trimmedSummary) {
     throw new ServiceError("Summary is required for record-work", "validation_error");
   }
   const resolvedProjectId = projectId ? await resolveProjectId(ctx, projectId) : (await discoverProject({ ctx })).projectId;
+  const assignedWorkspaceUserId = await resolveAgentMissionAssignee({ ctx, assignedTo });
   const created = await createMissionWithObjectives({
     ctx,
     projectId: resolvedProjectId,
     objectives: [{ objective }],
     statusType: "review",
+    assignedWorkspaceUserId,
     ...title !== void 0 ? { title } : {}
   });
   const now2 = nowIso();
@@ -139750,6 +139878,9 @@ async function promoteFallbackPrimary(db, {
     [bindBool(DATABASE_DIALECT, true), now2, fallback2.id]
   );
 }
+function toCreatedByKind(value) {
+  return value === "agent" || value === "automation" ? value : "human";
+}
 function toMissionDto(r5, tags = []) {
   return {
     id: r5.id,
@@ -139777,7 +139908,10 @@ function toMissionDto(r5, tags = []) {
     hasUnseenBlockingQuestion: r5.has_unseen_blocking_question === 1,
     hasUnseenReturnedToExecute: r5.has_unseen_returned_to_execute === 1,
     draftObjectiveResourceKey: r5.draft_objective_resource_key?.trim() || null,
-    tags
+    tags,
+    createdByKind: toCreatedByKind(r5.created_by_kind),
+    createdByAgent: r5.created_by_agent ?? null,
+    createdByWorkspaceUserId: r5.created_by_workspace_user_id ?? null
   };
 }
 function resolveWorktreeRoot() {
@@ -140382,6 +140516,9 @@ function toObjectiveDto(r5) {
     externalSessionId: r5.external_session_id ?? null,
     branch: r5.branch ?? null,
     resourceKey: r5.resource_key?.trim() || null,
+    createdByKind: toCreatedByKind(r5.created_by_kind),
+    createdByAgent: r5.created_by_agent ?? null,
+    createdByWorkspaceUserId: r5.created_by_workspace_user_id ?? null,
     launchConfigOverrides
   };
 }
@@ -141935,6 +142072,8 @@ var selectMissionsSql = `
          t.schedule_id, t.due_datetime,
          t.created_at, t.updated_at, t.revision, t.active_branch, t.branch_override,
          t.worktree_preference,
+         t.created_by_kind, t.created_by_agent, t.created_by_workspace_user_id,
+         t.created_by_session_id,
          (SELECT COUNT(*) FROM objectives o
             WHERE o.mission_id = t.id AND o.deleted_at IS NULL) AS objective_count,
          (SELECT COUNT(*) FROM objectives o
@@ -141958,18 +142097,50 @@ ${missionHasUnseenReturnedToExecuteSql},
   FROM missions t
   WHERE t.workspace_id = ? AND t.deleted_at IS NULL
 `;
-async function listMissions2(projectId) {
+async function getObjectivesByMission(missionIds, db = requireDatabaseClient()) {
+  const byMission = /* @__PURE__ */ new Map();
+  if (missionIds.length === 0) return byMission;
+  const placeholders = missionIds.map(() => "?").join(", ");
+  const rows = await db.all(
+    `SELECT o.*,
+         (
+           SELECT s.external_session_id
+             FROM agent_sessions s
+            WHERE s.objective_id = o.id AND s.deleted_at IS NULL
+            ORDER BY s.started_at DESC
+            LIMIT 1
+         ) AS external_session_id
+         FROM objectives o
+        WHERE o.mission_id IN (${placeholders}) AND o.deleted_at IS NULL
+        ORDER BY o.mission_id ASC, o.position ASC`,
+    missionIds
+  );
+  for (const row of rows) {
+    const list2 = byMission.get(row.mission_id) ?? [];
+    list2.push(toObjectiveDto(row));
+    byMission.set(row.mission_id, list2);
+  }
+  return byMission;
+}
+async function listMissions2(projectId, options = {}) {
   const { workspaceId } = await requireProjectPermission({
     projectId,
     permission: PERMISSIONS.MISSION_READ
   });
+  if (options.includeObjectives) {
+    await requireProjectPermission({ projectId, permission: PERMISSIONS.OBJECTIVE_READ });
+  }
   const rows = await requireDatabaseClient().all(
     `${selectMissionsSql} AND t.project_id = ?
          ORDER BY t.board_position ASC, t.sequence_number DESC`,
     [workspaceId, projectId]
   );
   const tagsByMission = await getTagsByMission(rows.map((row) => row.id));
-  return rows.map((row) => toMissionDto(row, tagsByMission.get(row.id) ?? []));
+  const objectivesByMission = options.includeObjectives ? await getObjectivesByMission(rows.map((row) => row.id)) : null;
+  return rows.map((row) => {
+    const dto = toMissionDto(row, tagsByMission.get(row.id) ?? []);
+    return objectivesByMission ? { ...dto, objectives: objectivesByMission.get(row.id) ?? [] } : dto;
+  });
 }
 async function searchMissionsInWorkspace({
   query,
@@ -141995,6 +142166,7 @@ async function searchMissionsInWorkspace({
               t.notes_text,
               t.schedule_id, t.due_datetime,
               t.created_at, t.updated_at, t.revision,
+              t.created_by_kind, t.created_by_agent, t.created_by_workspace_user_id,
               (SELECT COUNT(*) FROM objectives o
                  WHERE o.mission_id = t.id AND o.deleted_at IS NULL) AS objective_count,
               (SELECT COUNT(*) FROM objectives o
@@ -142187,6 +142359,24 @@ async function markMissionStatusesSeen(missionRef) {
     );
   });
 }
+async function missionCreatedFromDto(row, db = requireDatabaseClient()) {
+  const sessionId = row.created_by_session_id?.trim();
+  if (!sessionId) return null;
+  const found = await db.get(
+    `SELECT s.id, s.mission_id, s.agent_identifier, m.display_id
+       FROM agent_sessions s
+       LEFT JOIN missions m ON m.id = s.mission_id AND m.deleted_at IS NULL
+      WHERE s.id = ? AND s.workspace_id = ? AND s.deleted_at IS NULL`,
+    [sessionId, row.workspace_id]
+  );
+  if (!found?.display_id) return null;
+  return {
+    sessionId: found.id,
+    missionId: found.mission_id,
+    missionDisplayId: found.display_id,
+    agentIdentifier: found.agent_identifier
+  };
+}
 async function getMissionDetail(missionRef) {
   const row = await getMissionRow(missionRef);
   const mission = toMissionDto(row, await getMissionTags(row.id));
@@ -142198,7 +142388,8 @@ async function getMissionDetail(missionRef) {
     objectives,
     statuses,
     executionRequests,
-    branch: await missionBranchDto(row)
+    branch: await missionBranchDto(row),
+    createdFrom: await missionCreatedFromDto(row)
   };
 }
 async function listMissionEvents2(missionRef, limit = 200) {
@@ -143668,8 +143859,10 @@ async function createScheduledDuplicateIfNeeded(tx, mission, newStatusType) {
        (id, workspace_id, project_id, display_id, sequence_number, title,
         status_id, status_type, board_position, priority, assigned_workspace_user_id,
         notes_text, execution_target_intent_json,
-        metadata_json, schedule_id, due_datetime, created_at, updated_at, revision)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}', '{}', ?, ?, ?, ?, 1)`,
+        metadata_json, schedule_id, due_datetime,
+        created_by_kind, created_by_agent, created_by_session_id,
+        created_at, updated_at, revision)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}', '{}', ?, ?, 'automation', NULL, NULL, ?, ?, 1)`,
     [
       newMissionId,
       mission.workspace_id,
@@ -143719,14 +143912,15 @@ async function createScheduledDuplicateIfNeeded(tx, mission, newStatusType) {
        ORDER BY position DESC LIMIT 1`,
     [mission.id]
   );
-  await insertObjective2(
-    tx,
-    { workspaceId: mission.workspace_id, workspaceUserId: null },
-    {
-      missionId: newMissionId,
-      instructionText: latestObjective?.instruction_text ?? ""
-    }
-  );
+  const automationCtx = {
+    ...await buildWebappServiceContextForWorkspace(mission.workspace_id, tx, null),
+    origin: { kind: "automation" }
+  };
+  await insertObjective({
+    ctx: automationCtx,
+    missionId: newMissionId,
+    instructionText: latestObjective?.instruction_text ?? ""
+  });
 }
 var STATUS_UNAVAILABLE_FOR_WORKSPACE = "STATUS_UNAVAILABLE_FOR_WORKSPACE";
 var MY_POSITION_STEP2 = 100;
@@ -143779,6 +143973,7 @@ function selectMyMissionsSql(pairPlaceholders) {
          t.notes_text,
          t.schedule_id, t.due_datetime,
          t.created_at, t.updated_at, t.revision,
+         t.created_by_kind, t.created_by_agent, t.created_by_workspace_user_id,
          p.name AS project_name, p.settings_json AS project_settings_json,
          mtp.position AS my_position,
          (SELECT COUNT(*) FROM objectives o
@@ -152042,6 +152237,29 @@ function boolFlag(body, name) {
   const value = flagsOf(body)[name];
   return value === true || value === "true";
 }
+async function resolveSessionId(body) {
+  const sessionKey = strFlag(body, "--session-key");
+  if (!sessionKey) return null;
+  const session = await serviceDatabaseClient().get(
+    `SELECT id FROM agent_sessions
+      WHERE session_key_hash = ? AND deleted_at IS NULL`,
+    [hashSessionKey(sessionKey)]
+  );
+  return session?.id ?? null;
+}
+async function withAgentOrigin({
+  ctx,
+  body
+}) {
+  return {
+    ...ctx,
+    origin: {
+      kind: "agent",
+      agent: strFlag(body, "--agent") ?? null,
+      sessionId: await resolveSessionId(body)
+    }
+  };
+}
 function hasFlag(body, name) {
   return name in flagsOf(body);
 }
@@ -152364,11 +152582,13 @@ var handlers = {
       };
     }
     try {
+      const assignedTo = strFlag(body, "--assigned-to");
       return await protocolCreate({
-        ctx,
+        ctx: await withAgentOrigin({ ctx, body }),
         projectId: strFlag(body, "--project-id") ?? null,
         objectives,
-        title: strFlag(body, "--title") ?? null
+        title: strFlag(body, "--title") ?? null,
+        ...assignedTo !== void 0 ? { assignedTo } : {}
       });
     } catch (error53) {
       if (strFlag(body, "--project-id") || !(error53 instanceof ServiceError) || error53.code !== "project_not_found") {
@@ -152385,14 +152605,18 @@ var handlers = {
       };
     }
   },
-  prompt: (ctx, body) => protocolPrompt({
-    ctx,
-    projectId: strFlag(body, "--project-id") ?? null,
-    objectives: objectiveInputs(body),
-    title: strFlag(body, "--title") ?? null,
-    agentIdentifier: strFlag(body, "--agent") ?? "unknown",
-    externalSessionId: externalSessionId(body)
-  }),
+  prompt: async (ctx, body) => {
+    const assignedTo = strFlag(body, "--assigned-to");
+    return protocolPrompt({
+      ctx: await withAgentOrigin({ ctx, body }),
+      projectId: strFlag(body, "--project-id") ?? null,
+      objectives: objectiveInputs(body),
+      title: strFlag(body, "--title") ?? null,
+      agentIdentifier: strFlag(body, "--agent") ?? "unknown",
+      externalSessionId: externalSessionId(body),
+      ...assignedTo !== void 0 ? { assignedTo } : {}
+    });
+  },
   "load-context": (ctx, body) => loadMissionContext({
     ctx,
     missionId: requireFlag(body, "--mission-id"),
@@ -152412,12 +152636,12 @@ var handlers = {
     limit: intFlag(body, "--limit") ?? 25
   }),
   "discuss-objective": (ctx, body) => discussObjective({ ctx, missionId: requireFlag(body, "--mission-id") }),
-  "add-objectives": (ctx, body) => addObjectivesToMission({
-    ctx,
+  "add-objectives": async (ctx, body) => addObjectivesToMission({
+    ctx: await withAgentOrigin({ ctx, body }),
     missionId: requireFlag(body, "--mission-id"),
     objectives: parseJsonInput(body, "--objectives-json", "--objectives-file") ?? []
   }),
-  "record-work": (ctx, body) => {
+  "record-work": async (ctx, body) => {
     const envelope = parseDeliveryPayloadEnvelope(body);
     const {
       objective: payloadObjective,
@@ -152443,8 +152667,9 @@ var handlers = {
         'Missing objective text (use --objective, a positional argument, or an "objective" field in --payload-json)'
       );
     }
+    const assignedTo = strFlag(body, "--assigned-to");
     return recordWork({
-      ctx,
+      ctx: await withAgentOrigin({ ctx, body }),
       projectId: strFlag(body, "--project-id") ?? null,
       summary: resolveInput(body, "--summary", "--summary-file") ?? envelope.summary ?? "",
       objective,
@@ -152452,7 +152677,8 @@ var handlers = {
       artifacts: artifacts ?? envelope.artifacts ?? [],
       changeRationales: changeRationales ?? envelope.changeRationales ?? [],
       changedFiles: changedFiles ?? (Array.isArray(payloadChangedFiles) ? payloadChangedFiles : []),
-      payloadJson: restPayload
+      payloadJson: restPayload,
+      ...assignedTo !== void 0 ? { assignedTo } : {}
     });
   },
   // Shared context ---------------------------------------------------------
@@ -152693,7 +152919,10 @@ var hostedMcpToolDefinitions = [
         projectId: stringProperty("Optional Overlord project id, slug, or name."),
         objective: stringProperty("Initial objective text."),
         title: stringProperty("Optional mission title."),
-        resourceKey: stringProperty("Optional logical project resource key for the objective.")
+        resourceKey: stringProperty("Optional logical project resource key for the objective."),
+        assignedTo: stringProperty(
+          "Optional workspace member to own the mission (workspace_users.id, profile UUID, orgid:username, bare username, or email). Rejected when the member is not in the workspace; meaningless on the inbox fallback."
+        )
       },
       ["objective"]
     ),
@@ -153105,7 +153334,8 @@ var toolHandlers = {
       ...optionalString(args, "projectId") ? { "--project-id": requiredString(args, "projectId") } : { "--inbox": true },
       "--objective": requiredString(args, "objective"),
       ...optionalString(args, "title") ? { "--title": requiredString(args, "title") } : {},
-      ...optionalString(args, "resourceKey") ? { "--resource": requiredString(args, "resourceKey") } : {}
+      ...optionalString(args, "resourceKey") ? { "--resource": requiredString(args, "resourceKey") } : {},
+      ...optionalString(args, "assignedTo") ? { "--assigned-to": requiredString(args, "assignedTo") } : {}
     })
   ),
   overlord_create_inbox_item: (args) => runProtocolSubcommand(
@@ -162050,6 +162280,13 @@ function parseProjectListLifecycle(req) {
   if (value === "active" || value === "archived" || value === "all") return value;
   throw new ApiError(400, "lifecycle must be one of: active, archived, all");
 }
+function isTruthyQueryFlag(value) {
+  const raw = Array.isArray(value) ? value[0] : value;
+  if (raw === void 0 || raw === null) return false;
+  if (typeof raw !== "string") return false;
+  const normalized = raw.trim().toLowerCase();
+  return normalized !== "0" && normalized !== "false";
+}
 function streamRealtime(req, res) {
   void (async () => {
     try {
@@ -162355,7 +162592,14 @@ app.post(
 );
 app.get(
   "/api/projects/:id/missions",
-  handle3((req) => listMissions2(req.params.id))
+  // `?includeObjectives=1` embeds each mission's objectives (one extra batched
+  // query for the whole board) so chat-style clients do not fan out into one
+  // `GET /api/missions/:id/objectives` per mission.
+  handle3(
+    (req) => listMissions2(req.params.id, {
+      includeObjectives: isTruthyQueryFlag(req.query.includeObjectives)
+    })
+  )
 );
 app.use("/ext/everhour", requireAuthenticatedSession, createEverhourExtensionRouter(handle3));
 app.use(

@@ -8,7 +8,8 @@ import {
   FolderOpen,
   GitBranch,
   Loader2,
-  Paperclip
+  Paperclip,
+  Sparkles
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -16,6 +17,7 @@ import type { ObjectiveDto } from '../../../shared/contract.ts';
 import { getAgentIcon } from '../../lib/helpers/agent-icons.ts';
 import { buildAgentResumeCommand } from '../../lib/helpers/agent-resume-command.ts';
 import { useCopyToClipboard } from '../../lib/hooks/use-copy-to-clipboard.ts';
+import { objectiveOriginLabel } from '../../lib/mission-origin.ts';
 import { missionDraftResourceBadgeKey, projectResourceLabel } from '../../lib/project-resources.ts';
 import {
   useAgentCatalog,
@@ -84,6 +86,12 @@ export function ObjectiveCollapsibleItem({
   const hasAgentIcon = objective.assignedAgent
     ? getAgentIcon(objective.assignedAgent) !== null
     : false;
+  // Provenance sits *after* the title, never in the leading icon slot: that slot
+  // already means "this agent will run this objective", and one row cannot carry
+  // two different agent claims in the same position. This is what distinguishes
+  // "I queued these three steps" from "the agent decomposed my mission into
+  // three steps" inside a single mission panel.
+  const originLabel = objectiveOriginLabel(objective);
   // Lets the user reopen the agent's own conversation thread in a terminal to
   // discuss what happened in this objective — outside Overlord entirely (no
   // execution request or session). Only available once the objective recorded a
@@ -139,6 +147,18 @@ export function ObjectiveCollapsibleItem({
                   >
                     {objective.title ?? `Objective ${index + 1}`}
                   </p>
+                  {originLabel ? (
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <span className="inline-flex shrink-0" aria-label={originLabel}>
+                            <Sparkles className="h-3 w-3 text-muted-foreground/70" aria-hidden />
+                          </span>
+                        }
+                      />
+                      <TooltipContent side="top">{originLabel}</TooltipContent>
+                    </Tooltip>
+                  ) : null}
                   {hasAttachments ? (
                     <Tooltip>
                       <TooltipTrigger

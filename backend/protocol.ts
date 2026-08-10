@@ -197,6 +197,39 @@ function boolFlag(body: ProtocolRequestBody, name: string): boolean {
   return value === true || value === 'true';
 }
 
+/**
+ * Resolve `agent_sessions.id` from `--session-key` when present. Soft lookup —
+ * a missing or unknown key yields null rather than failing the create path.
+ */
+async function resolveSessionId(body: ProtocolRequestBody): Promise<string | null> {
+  const sessionKey = strFlag(body, '--session-key');
+  if (!sessionKey) return null;
+  const session = await serviceDatabaseClient().get<{ id: string }>(
+    `SELECT id FROM agent_sessions
+      WHERE session_key_hash = ? AND deleted_at IS NULL`,
+    [hashSessionKey(sessionKey)]
+  );
+  return session?.id ?? null;
+}
+
+/** Stamp agent authorship provenance onto a protocol create-ish context. */
+async function withAgentOrigin({
+  ctx,
+  body
+}: {
+  ctx: ServiceContext;
+  body: ProtocolRequestBody;
+}): Promise<ServiceContext> {
+  return {
+    ...ctx,
+    origin: {
+      kind: 'agent',
+      agent: strFlag(body, '--agent') ?? null,
+      sessionId: await resolveSessionId(body)
+    }
+  };
+}
+
 /** True when the flag appears at all, regardless of value. */
 function hasFlag(body: ProtocolRequestBody, name: string): boolean {
   return name in flagsOf(body);
@@ -666,11 +699,13 @@ const handlers: Record<string, Handler> = {
       };
     }
     try {
+      const assignedTo = strFlag(body, '--assigned-to');
       return await protocolCreate({
-        ctx,
+        ctx: await withAgentOrigin({ ctx, body }),
         projectId: strFlag(body, '--project-id') ?? null,
         objectives,
-        title: strFlag(body, '--title') ?? null
+        title: strFlag(body, '--title') ?? null,
+        ...(assignedTo !== undefined ? { assignedTo } : {})
       });
     } catch (error) {
       if (
@@ -692,15 +727,18 @@ const handlers: Record<string, Handler> = {
     }
   },
 
-  prompt: (ctx, body) =>
-    protocolPrompt({
-      ctx,
+  prompt: async (ctx, body) => {
+    const assignedTo = strFlag(body, '--assigned-to');
+    return protocolPrompt({
+      ctx: await withAgentOrigin({ ctx, body }),
       projectId: strFlag(body, '--project-id') ?? null,
       objectives: objectiveInputs(body),
       title: strFlag(body, '--title') ?? null,
       agentIdentifier: strFlag(body, '--agent') ?? 'unknown',
-      externalSessionId: externalSessionId(body)
-    }),
+      externalSessionId: externalSessionId(body),
+      ...(assignedTo !== undefined ? { assignedTo } : {})
+    });
+  },
 
   'load-context': (ctx, body) =>
     loadMissionContext({
@@ -729,9 +767,9 @@ const handlers: Record<string, Handler> = {
   'discuss-objective': (ctx, body) =>
     discussObjective({ ctx, missionId: requireFlag(body, '--mission-id') }),
 
-  'add-objectives': (ctx, body) =>
+  'add-objectives': async (ctx, body) =>
     addObjectivesToMission({
-      ctx,
+      ctx: await withAgentOrigin({ ctx, body }),
       missionId: requireFlag(body, '--mission-id'),
       objectives:
         parseJsonInput<
@@ -739,7 +777,7 @@ const handlers: Record<string, Handler> = {
         >(body, '--objectives-json', '--objectives-file') ?? []
     }),
 
-  'record-work': (ctx, body) => {
+  'record-work': async (ctx, body) => {
     const envelope = parseDeliveryPayloadEnvelope(body);
     // record-work is often driven from a single streamed JSON envelope, so
     // `objective`, `title`, and `changedFiles` may arrive either as flags or as
@@ -773,8 +811,9 @@ const handlers: Record<string, Handler> = {
         'Missing objective text (use --objective, a positional argument, or an "objective" field in --payload-json)'
       );
     }
+    const assignedTo = strFlag(body, '--assigned-to');
     return recordWork({
-      ctx,
+      ctx: await withAgentOrigin({ ctx, body }),
       projectId: strFlag(body, '--project-id') ?? null,
       summary: resolveInput(body, '--summary', '--summary-file') ?? envelope.summary ?? '',
       objective,
@@ -782,7 +821,8 @@ const handlers: Record<string, Handler> = {
       artifacts: artifacts ?? envelope.artifacts ?? [],
       changeRationales: changeRationales ?? envelope.changeRationales ?? [],
       changedFiles: changedFiles ?? (Array.isArray(payloadChangedFiles) ? payloadChangedFiles : []),
-      payloadJson: restPayload
+      payloadJson: restPayload,
+      ...(assignedTo !== undefined ? { assignedTo } : {})
     });
   },
 

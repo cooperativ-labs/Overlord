@@ -2,7 +2,7 @@ import { bindBool, OBJECTIVE_STATES } from '@overlord/database';
 
 import { recordChange } from './change-feed.js';
 import type { ServiceContext } from './context.js';
-import { resolveMissionId, resolveProjectId } from './context.js';
+import { resolveMissionId, resolveOrigin, resolveProjectId } from './context.js';
 import { ServiceError } from './errors.js';
 import {
   buildMissionSearchMatch,
@@ -393,13 +393,16 @@ export async function insertObjective({
   const resolvedAssignedAgent = explicitAgent ?? launchSelection.agent;
   const resolvedModel = explicitAgent ? null : launchSelection.model;
   const resolvedReasoningEffort = explicitAgent ? null : launchSelection.reasoningEffort;
+  const origin = resolveOrigin(ctx);
 
   await ctx.db.run(
     `INSERT INTO objectives
          (id, workspace_id, project_id, mission_id, position, title, instruction_text, state,
           assigned_agent, model, reasoning_effort, agent_flags_json, auto_advance,
-          execution_metadata_json, resource_key, created_by_workspace_user_id, created_at, updated_at, revision)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}', ?, '{}', ?, ?, ?, ?, 1)`,
+          execution_metadata_json, resource_key, created_by_workspace_user_id,
+          created_by_kind, created_by_agent, created_by_session_id,
+          created_at, updated_at, revision)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}', ?, '{}', ?, ?, ?, ?, ?, ?, ?, 1)`,
     [
       id,
       ctx.workspace.id,
@@ -415,6 +418,9 @@ export async function insertObjective({
       bindBool(ctx.db.dialect, autoAdvance),
       normalizedResourceKey,
       ctx.actorWorkspaceUserId,
+      origin.kind,
+      origin.agent,
+      origin.sessionId,
       now,
       now
     ]
@@ -591,13 +597,16 @@ export async function createMissionWithObjectives({
 
   await ctx.db.transaction(async tx => {
     const txCtx = { ...ctx, db: tx };
+    const origin = resolveOrigin(txCtx);
     await txCtx.db.run(
       `INSERT INTO missions
            (id, workspace_id, project_id, display_id, sequence_number, title,
             status_id, status_type, board_position, priority,
             execution_target_intent_json, metadata_json, created_by_workspace_user_id,
-            assigned_workspace_user_id, due_datetime, created_at, updated_at, revision)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}', '{}', ?, ?, ?, ?, ?, 1)`,
+            assigned_workspace_user_id, due_datetime,
+            created_by_kind, created_by_agent, created_by_session_id,
+            created_at, updated_at, revision)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}', '{}', ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
       [
         missionId,
         ctx.workspace.id,
@@ -612,6 +621,9 @@ export async function createMissionWithObjectives({
         ctx.actorWorkspaceUserId,
         assignedWorkspaceUserId ?? null,
         dueDatetime ?? null,
+        origin.kind,
+        origin.agent,
+        origin.sessionId,
         now,
         now
       ]

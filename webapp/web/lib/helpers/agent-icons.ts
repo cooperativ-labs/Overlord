@@ -21,6 +21,52 @@ const AGENT_ICONS: Record<string, AgentIconMeta> = {
   gemini: { src: '/images/icons/gemini.svg', invertDark: false }
 };
 
+/**
+ * Connector identifiers that do not equal their icon key. Provenance records
+ * the identifier the connector reports (`claude-code`), while the icon map is
+ * keyed by the shorter workspace catalog key (`claude`), so the two only meet
+ * through this table.
+ */
+const AGENT_KEY_ALIASES: Record<string, string> = {
+  'claude-code': 'claude',
+  'gemini-cli': 'gemini',
+  'codex-cli': 'codex',
+  'cursor-agent': 'cursor'
+};
+
+/** Human-facing names for identifiers whose display name is not just capitalized. */
+const AGENT_DISPLAY_NAMES: Record<string, string> = {
+  claude: 'Claude Code',
+  codex: 'Codex',
+  cursor: 'Cursor',
+  opencode: 'OpenCode',
+  antigravity: 'Antigravity',
+  pi: 'Pi',
+  gemini: 'Gemini',
+  'hosted-mcp': 'Overlord MCP'
+};
+
+/**
+ * Folds a connector/agent identifier onto the canonical key the icon and name
+ * tables use. Returns null for a blank identifier so callers can branch once.
+ */
+export function normalizeAgentKey(key: string | null | undefined): string | null {
+  const trimmed = key?.trim().toLowerCase();
+  if (!trimmed) return null;
+  return AGENT_KEY_ALIASES[trimmed] ?? trimmed;
+}
+
+/**
+ * The name to show a person for an agent identifier. Falls back to the raw
+ * identifier rather than to a generic label: an unmapped connector is still
+ * more useful named than anonymized.
+ */
+export function agentDisplayName(key: string | null | undefined): string | null {
+  const normalized = normalizeAgentKey(key);
+  if (!normalized) return null;
+  return AGENT_DISPLAY_NAMES[normalized] ?? key?.trim() ?? null;
+}
+
 /** Resolve an agent's icon metadata by connector key. Returns null when unmapped. */
 export function getAgentIcon(key: string | null | undefined): AgentIconMeta | null {
   if (!key) return null;

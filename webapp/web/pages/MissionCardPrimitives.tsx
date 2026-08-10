@@ -1,11 +1,12 @@
-import { Check } from 'lucide-react';
+import { Check, Sparkles } from 'lucide-react';
 
 import { formatDueDatetimeLabel } from '@/components/scheduling/schedule-utils.ts';
 import { AuthenticatedAvatarImage, Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { missionOriginLabel } from '@/lib/mission-origin.ts';
 import { cn } from '@/lib/utils';
 
-import type { WorkspaceMemberDto } from '../../shared/contract.ts';
+import type { CreatedByKind, WorkspaceMemberDto } from '../../shared/contract.ts';
 
 function formatOrdinalDayOfMonth({ date }: { date: Date }): string {
   const day = date.getDate();
@@ -196,6 +197,47 @@ export function MissionAssigneeAvatar({
         {memberInitials(assignee)}
       </AvatarFallback>
     </Avatar>
+  );
+}
+
+/**
+ * The one mark that means "an agent authored this row", shared by every card
+ * surface so board, list, and calendar can never drift apart.
+ *
+ * Deliberately generic: `AgentIcon` already means *which agent runs this*, and
+ * a card that showed a brand mark for both claims would put two different
+ * statements — sometimes naming two different agents — behind one glyph in one
+ * row. The specific author is named in the tooltip and spelled out in full on
+ * the mission detail header, where there is room for words.
+ *
+ * Renders nothing for a human-authored row, which is almost every row today.
+ */
+export function MissionOriginMark({
+  createdByKind,
+  createdByAgent,
+  withTooltip = true
+}: {
+  createdByKind: CreatedByKind;
+  createdByAgent: string | null;
+  /** Off for the calendar cell, which is too dense to host another tooltip. */
+  withTooltip?: boolean;
+}) {
+  const label = missionOriginLabel({ createdByKind, createdByAgent });
+  if (!label) return null;
+
+  const mark = (
+    <span className="inline-flex shrink-0" aria-label={label}>
+      <Sparkles className="h-3 w-3 text-muted-foreground/70" aria-hidden />
+    </span>
+  );
+
+  if (!withTooltip) return mark;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger render={mark} />
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
   );
 }
 

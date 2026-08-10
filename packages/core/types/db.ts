@@ -3,11 +3,12 @@
  * Please do not edit it manually.
  */
 
-import type { ColumnType } from "kysely";
+import type { ColumnType } from 'kysely';
 
-export type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
-  ? ColumnType<S, I | undefined, U>
-  : ColumnType<T, T | undefined, T>;
+export type Generated<T> =
+  T extends ColumnType<infer S, infer I, infer U>
+    ? ColumnType<S, I | undefined, U>
+    : ColumnType<T, T | undefined, T>;
 
 export interface Account {
   accessToken: string | null;
@@ -686,6 +687,9 @@ export interface Missions {
   branch_override: string | null;
   constraints_text: string | null;
   created_at: string;
+  created_by_agent: string | null;
+  created_by_kind: Generated<string>;
+  created_by_session_id: string | null;
   created_by_workspace_user_id: string | null;
   deleted_at: string | null;
   display_id: string;
@@ -810,6 +814,9 @@ export interface Objectives {
   branch: string | null;
   completed_at: string | null;
   created_at: string;
+  created_by_agent: string | null;
+  created_by_kind: Generated<string>;
+  created_by_session_id: string | null;
   created_by_workspace_user_id: string | null;
   deleted_at: string | null;
   execution_metadata_json: Generated<string>;

@@ -26,6 +26,24 @@ const LAUNCH_FLAGS = [
 ] as const;
 
 /**
+ * Flags owned by the existing `ovld agent-session` subcommands.
+ *
+ * Top-level validation sees the whole argument vector before `index.ts` dispatches to
+ * `event`, `request`, `inbox`, and the other subcommands, so this must be the union of their
+ * accepted flags. The subcommand runtime still enforces which values are required together.
+ */
+const AGENT_SESSION_FLAGS = [
+  '--agent',
+  '--native-session-id',
+  '--mission-id',
+  '--payload-file',
+  '--port',
+  '--confirm',
+  '--lease-id',
+  '--wait-ms'
+] as const;
+
+/**
  * Per-command allowlist of accepted flags, keyed by the top-level `ovld`
  * command token. A command whose token is absent from this map is not
  * validated — most importantly `protocol`, whose subcommand flags are owned by
@@ -44,7 +62,7 @@ export const COMMAND_FLAGS: Record<string, readonly string[]> = {
   auth: ['--token', '--organization-id'],
   'user-token': ['--label', '--expires-in', '--no-expiry', '--scope', '--id'],
   prune: [],
-  'agent-session': ['--json'],
+  'agent-session': AGENT_SESSION_FLAGS,
   'create-project': ['--name', '--directory', '--no-directory'],
   'org-setup': [
     '--org-name',

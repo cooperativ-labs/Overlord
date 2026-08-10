@@ -71,6 +71,24 @@ test('launch-family commands share the same flag set', () => {
   }
 });
 
+test('agent-session accepts the flags used by rendered hook commands', () => {
+  for (const argv of [
+    ['event', '--agent', 'codex', '--payload-file', '-'],
+    ['request', '--agent', 'codex', '--payload-file', '-'],
+    ['inbox', '--agent', 'codex', '--payload-file', '-', '--wait-ms', '5000'],
+    ['bind', '--agent', 'codex', '--native-session-id', 'native-1', '--mission-id', 'coo:1']
+  ]) {
+    assert.doesNotThrow(() => assertFor('agent-session', argv));
+  }
+});
+
+test('agent-session still rejects flags outside its subcommand union', () => {
+  assert.throws(
+    () => assertFor('agent-session', ['event', '--agent', 'codex', '--payload-fiel', '-']),
+    /Unknown flag for `ovld agent-session`: --payload-fiel/
+  );
+});
+
 test('every KNOWN command except protocol is registered', () => {
   // Guards against a new command being added to index.ts without a flag list,
   // which would silently reintroduce the ignore-unknown-flags behavior.

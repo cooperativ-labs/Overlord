@@ -109,7 +109,10 @@ export const hostedMcpToolDefinitions: ToolDefinition[] = [
         projectId: stringProperty('Optional Overlord project id, slug, or name.'),
         objective: stringProperty('Initial objective text.'),
         title: stringProperty('Optional mission title.'),
-        resourceKey: stringProperty('Optional logical project resource key for the objective.')
+        resourceKey: stringProperty('Optional logical project resource key for the objective.'),
+        assignedTo: stringProperty(
+          'Optional workspace member to own the mission (workspace_users.id, profile UUID, orgid:username, bare username, or email). Rejected when the member is not in the workspace; meaningless on the inbox fallback.'
+        )
       },
       ['objective']
     ),
