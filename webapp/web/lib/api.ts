@@ -496,8 +496,11 @@ export const api = {
   getRunnerStatus: () => request<RunnerQueueStatus>('GET', '/api/runner/status'),
   clearRunnerQueue: (body: { objectiveId?: string; projectId?: string } = {}) =>
     request<{ cleared: number }>('POST', '/api/runner/clear', body),
-  listMissions: (projectId: string) =>
-    request<MissionDto[]>('GET', `/api/projects/${projectId}/missions`),
+  listMissions: (projectId: string, options: { includeObjectives?: boolean } = {}) =>
+    request<MissionDto[]>(
+      'GET',
+      `/api/projects/${projectId}/missions${options.includeObjectives ? '?includeObjectives=1' : ''}`
+    ),
   reorderBoardColumn: (projectId: string, body: ReorderBoardColumnBody) =>
     request<MissionDto[]>('PATCH', `/api/projects/${projectId}/board/reorder`, body),
   listWorkspaceMyMissions: () => request<MyMissionsResponse>('GET', `/api/workspace/my-missions`),

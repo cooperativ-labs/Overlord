@@ -3653,11 +3653,54 @@ ${missionHasUnseenReturnedToExecuteSql},
   WHERE t.workspace_id = ? AND t.deleted_at IS NULL
 `;
 
-export async function listMissions(projectId: string): Promise<MissionDto[]> {
+/**
+ * Every non-deleted objective belonging to `missionIds`, grouped by mission and
+ * ordered by `position`, resolved in a single statement. This is the batched
+ * counterpart to `listObjectives` and exists so a client that renders objective
+ * bodies for a whole board (the mobile chat feed) does not have to issue one
+ * request — and one query — per mission. The caller is responsible for
+ * authorizing the mission set before calling.
+ */
+async function getObjectivesByMission(
+  missionIds: string[],
+  db: DatabaseClient = requireDatabaseClient()
+): Promise<Map<string, ObjectiveDto[]>> {
+  const byMission = new Map<string, ObjectiveDto[]>();
+  if (missionIds.length === 0) return byMission;
+  const placeholders = missionIds.map(() => '?').join(', ');
+  const rows = (await db.all(
+    `SELECT o.*,
+         (
+           SELECT s.external_session_id
+             FROM agent_sessions s
+            WHERE s.objective_id = o.id AND s.deleted_at IS NULL
+            ORDER BY s.started_at DESC
+            LIMIT 1
+         ) AS external_session_id
+         FROM objectives o
+        WHERE o.mission_id IN (${placeholders}) AND o.deleted_at IS NULL
+        ORDER BY o.mission_id ASC, o.position ASC`,
+    missionIds
+  )) as ObjectiveRow[];
+  for (const row of rows) {
+    const list = byMission.get(row.mission_id) ?? [];
+    list.push(toObjectiveDto(row));
+    byMission.set(row.mission_id, list);
+  }
+  return byMission;
+}
+
+export async function listMissions(
+  projectId: string,
+  options: { includeObjectives?: boolean } = {}
+): Promise<MissionDto[]> {
   const { workspaceId } = await requireProjectPermission({
     projectId,
     permission: PERMISSIONS.MISSION_READ
   });
+  if (options.includeObjectives) {
+    await requireProjectPermission({ projectId, permission: PERMISSIONS.OBJECTIVE_READ });
+  }
   // Board order: ascending board_position within each column, with
   // sequence_number DESC as a stable tiebreaker (e.g. brand-new missions that
   // share a position before the column is first reordered).
@@ -3667,7 +3710,15 @@ export async function listMissions(projectId: string): Promise<MissionDto[]> {
     [workspaceId, projectId]
   )) as MissionRow[];
   const tagsByMission = await getTagsByMission(rows.map(row => row.id));
-  return rows.map(row => toMissionDto(row, tagsByMission.get(row.id) ?? []));
+  const objectivesByMission = options.includeObjectives
+    ? await getObjectivesByMission(rows.map(row => row.id))
+    : null;
+  return rows.map(row => {
+    const dto = toMissionDto(row, tagsByMission.get(row.id) ?? []);
+    return objectivesByMission
+      ? { ...dto, objectives: objectivesByMission.get(row.id) ?? [] }
+      : dto;
+  });
 }
 
 async function searchMissionsInWorkspace({

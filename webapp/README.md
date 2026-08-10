@@ -134,7 +134,7 @@ camelCase per the [REST API Boundary](../database/docs/09-database-schema-contra
 | `PATCH /api/projects/:id/resources/:resourceId` | Set a project resource as primary |
 | `DELETE /api/projects/:id/resources/:resourceId` | Remove a linked project resource |
 | `GET /api/projects/:id/repository?executionTargetId=...` | Git repository metadata and file tree for the selected linked resource |
-| `GET /api/projects/:id/missions` | Missions in a project |
+| `GET /api/projects/:id/missions` | Missions in a project (`?includeObjectives=1` embeds each mission's objectives in one batched read) |
 | `POST /api/missions`, `GET/PATCH/DELETE /api/missions/:id` | Missions (DELETE soft-deletes mission + objectives) |
 | `GET /api/missions/:id/objectives` | Objectives of a mission |
 | `POST /api/objectives`, `PATCH/DELETE /api/objectives/:id` | Objectives |

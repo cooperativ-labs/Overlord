@@ -579,6 +579,15 @@ export interface MissionDto {
   draftObjectiveResourceKey: string | null;
   /** Tags assigned to this mission, resolved from its project's `project_tags`. */
   tags: ProjectTagDto[];
+  /**
+   * Every non-deleted objective on this mission, ordered by `position`, present
+   * only when the caller opted in (`GET /api/projects/:id/missions?includeObjectives=1`).
+   * Omitted otherwise — clients that need objective bodies for a whole board
+   * (for example the mobile chat feed, which renders one message per objective)
+   * should ask for them here instead of issuing one
+   * `GET /api/missions/:id/objectives` per mission.
+   */
+  objectives?: ObjectiveDto[];
 }
 
 export interface ObjectiveDto {

@@ -12,8 +12,14 @@ const { db, WORKSPACE, setActiveWorkspaceUser, nowIso, newId, recordChange } =
   await import('./db.ts');
 const { entityChangeDtoFromRow, parseChangedFields, readChangesAfter } =
   await import('./realtime.ts');
-const { createMission, createProject, createObjective, reorderFutureObjectives, updateObjective } =
-  await import('./repository.ts');
+const {
+  createMission,
+  createProject,
+  createObjective,
+  listMissions,
+  reorderFutureObjectives,
+  updateObjective
+} = await import('./repository.ts');
 const { getObjectiveLaunchCommand, getObjectivePrompt, updateLaunchPreference } =
   await import('./execution/launch.ts');
 const { ApiError } = await import('./errors.ts');
@@ -221,6 +227,43 @@ test('new draft objectives leave the agent unset without a launch preference', a
   const project = await createProject({ name: 'No Preference Objectives' });
   const mission = await createMission({ projectId: project.id, firstObjective: 'Do the thing' });
   assert.equal(mission.objectives[0]!.assignedAgent, null);
+});
+
+test('listing missions can embed every objective in one batched read', async () => {
+  const project = await createProject({ name: 'Batched Objectives Listing' });
+  const first = await createMission({
+    projectId: project.id,
+    firstObjective: 'First mission work'
+  });
+  const second = await createMission({
+    projectId: project.id,
+    firstObjective: 'Second mission work'
+  });
+  const secondFollowUp = await createObjective({
+    missionId: second.id,
+    instructionText: 'Second mission follow-up',
+    state: 'draft'
+  });
+
+  // Default listing stays lean: no objective bodies unless asked for.
+  const lean = await listMissions(project.id);
+  assert.equal(lean.length, 2);
+  assert.ok(lean.every(mission => mission.objectives === undefined));
+
+  const withObjectives = await listMissions(project.id, { includeObjectives: true });
+  const firstDto = withObjectives.find(mission => mission.id === first.id)!;
+  const secondDto = withObjectives.find(mission => mission.id === second.id)!;
+
+  assert.deepEqual(
+    firstDto.objectives?.map(objective => objective.instructionText),
+    ['First mission work']
+  );
+  // Objectives arrive grouped by mission and ordered by position.
+  assert.deepEqual(
+    secondDto.objectives?.map(objective => objective.instructionText),
+    ['Second mission work', 'Second mission follow-up']
+  );
+  assert.equal(secondDto.objectives?.[1]!.id, secondFollowUp.id);
 });
 
 test('reordering future objectives persists swaps without violating the unique position constraint', async () => {

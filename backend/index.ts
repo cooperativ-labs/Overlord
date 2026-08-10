@@ -1173,6 +1173,17 @@ function parseProjectListLifecycle(req: Request): ProjectListLifecycle {
   throw new ApiError(400, 'lifecycle must be one of: active, archived, all');
 }
 
+/** Reads an opt-in boolean query flag: present-and-not-false counts as true. */
+function isTruthyQueryFlag(value: unknown): boolean {
+  const raw = Array.isArray(value) ? value[0] : value;
+  if (raw === undefined || raw === null) return false;
+  if (typeof raw !== 'string') return false;
+  // A bare `?flag` arrives as an empty string and means "on"; only an explicit
+  // `0`/`false` opts back out.
+  const normalized = raw.trim().toLowerCase();
+  return normalized !== '0' && normalized !== 'false';
+}
+
 function streamRealtime(req: Request, res: Response): void {
   void (async () => {
     try {
@@ -1516,7 +1527,14 @@ app.post(
 );
 app.get(
   '/api/projects/:id/missions',
-  handle(req => listMissions(req.params.id))
+  // `?includeObjectives=1` embeds each mission's objectives (one extra batched
+  // query for the whole board) so chat-style clients do not fan out into one
+  // `GET /api/missions/:id/objectives` per mission.
+  handle(req =>
+    listMissions(req.params.id, {
+      includeObjectives: isTruthyQueryFlag(req.query.includeObjectives)
+    })
+  )
 );
 
 // Extension routers run behind `requireAuthenticatedSession` exactly like every
