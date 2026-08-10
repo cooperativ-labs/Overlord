@@ -245,7 +245,10 @@ function parseBlocks(source: string): Block[] {
         /^\s*\d+[.)]\s+/.test(l) ||
         /^\s*>\s?/.test(l) ||
         /^(-{3,}|\*{3,}|_{3,})$/.test(l.trim()) ||
-        l.includes('|')
+        (l.includes('|') &&
+          i + 1 < lines.length &&
+          lines[i + 1].includes('|') &&
+          isTableSeparator(lines[i + 1]))
       ) {
         break;
       }
