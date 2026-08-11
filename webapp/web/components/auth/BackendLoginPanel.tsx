@@ -12,6 +12,7 @@ import {
   SelectValue
 } from '@/components/ui/select';
 import { DEFAULT_CLOUD_BACKEND_URL } from '@/lib/backend-defaults';
+import { getDesktopBridge } from '@/lib/desktop-chrome';
 import { cn } from '@/lib/utils';
 
 type BackendProfileRow = {
@@ -31,7 +32,7 @@ type BackendLoginPanelProps = {
 };
 
 export function BackendLoginPanel({ embedded = false }: BackendLoginPanelProps) {
-  const bridge = typeof window === 'undefined' ? undefined : window.overlord;
+  const bridge = getDesktopBridge();
   const [profiles, setProfiles] = useState<BackendProfileRow[]>([]);
   const [activeId, setActiveId] = useState<string>('local');
   const [activeUrl, setActiveUrl] = useState('');

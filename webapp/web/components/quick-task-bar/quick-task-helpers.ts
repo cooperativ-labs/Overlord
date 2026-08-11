@@ -36,8 +36,7 @@ export type IdleScheduler = {
 };
 
 export function getQuickTaskApi(): QuickTaskWindowApi | null {
-  if (typeof window === 'undefined') return null;
-  return window.overlord?.quickTask ?? null;
+  return getDesktopBridge()?.quickTask ?? null;
 }
 
 export function resolveProjectId(
@@ -51,3 +50,4 @@ export function resolveProjectId(
   }
   return projects[0]?.id ?? '';
 }
+import { getDesktopBridge } from '@/lib/desktop-chrome';

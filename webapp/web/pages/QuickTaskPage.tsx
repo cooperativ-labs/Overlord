@@ -1,11 +1,12 @@
 import { useEffect } from 'react';
 
 import { QuickTaskBar } from '@/components/quick-task-bar/QuickTaskBar.tsx';
+import { getDesktopChrome } from '@/lib/desktop-chrome';
 import { useAllProjects, useDefaultProject } from '@/lib/queries.ts';
 
 function QuickTaskChrome() {
   useEffect(() => {
-    if (window.overlord?.isDesktop !== true) return;
+    if (!getDesktopChrome().isDesktop) return;
     document.documentElement.dataset.electron = 'true';
     document.documentElement.dataset.quickTask = 'true';
     return () => {

@@ -14,6 +14,7 @@ import type { ReactNode } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { getApiBaseUrl, getAuthBaseUrl, isRemoteBackend } from '@/lib/api-base.ts';
+import { getDesktopChrome } from '@/lib/desktop-chrome';
 import { useCopyToClipboard } from '@/lib/hooks/use-copy-to-clipboard';
 import { useMeta } from '@/lib/queries';
 
@@ -57,7 +58,7 @@ type McpPageProps = {
 
 function resolveMcpBaseUrl(): string {
   const apiBase = getApiBaseUrl().trim();
-  const isDesktop = typeof window !== 'undefined' && window.overlord?.isDesktop === true;
+  const { isDesktop } = getDesktopChrome();
   const isLocalhost =
     typeof window !== 'undefined' &&
     (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
@@ -192,7 +193,7 @@ function LocalModeDisclaimer({
 
 export function McpPage({ onNavigateToBackend, onNavigateToTokens }: McpPageProps) {
   const meta = useMeta();
-  const isDesktop = typeof window !== 'undefined' && window.overlord?.isDesktop === true;
+  const { isDesktop } = getDesktopChrome();
   const isCloudBackend = isHostedMcpBackend({
     backendMode: meta.data?.backendMode,
     clientUsesRemoteBackend: isRemoteBackend()

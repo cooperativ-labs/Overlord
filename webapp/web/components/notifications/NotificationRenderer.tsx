@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react';
 import { NOTIFICATION_CATALOG } from '../../../../packages/core/service/notifications/catalog.ts';
 import type { NotificationDto } from '../../../shared/contract.ts';
 import { api } from '../../lib/api.ts';
+import { getDesktopBridge } from '../../lib/desktop-chrome.ts';
 import { isNativeNotificationsEnabled } from '../../lib/native-notification-preferences.ts';
 import { keys } from '../../lib/queries.ts';
 import { useRealtime } from '../../lib/realtime.tsx';
@@ -58,7 +59,7 @@ async function renderNotification({
     tag: notification.id,
     soundUrl: descriptor.soundUrl ?? undefined
   };
-  const shownByDesktop = await window.overlord?.showNotification?.(payload);
+  const shownByDesktop = await getDesktopBridge()?.showNotification?.(payload);
   if (shownByDesktop) return;
   await showBrowserNotification(notification);
 }

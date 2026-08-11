@@ -22,7 +22,7 @@ import { Label } from '@/components/ui/label';
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import { LoadingButton } from '@/components/ui/loading-button';
 import { api } from '@/lib/api';
-import { getDesktopChrome } from '@/lib/desktop-chrome';
+import { getDesktopBridge, getDesktopChrome } from '@/lib/desktop-chrome';
 import { writeLocalProjectMetadata } from '@/lib/project-metadata';
 import { useCreateProject, useLaunchSettings, useMeta } from '@/lib/queries';
 
@@ -41,6 +41,7 @@ export function ProjectCreatorModal({ open, onOpenChange, workspaceId }: Project
   const targetWorkspaceId = workspaceId ?? meta.data?.workspace?.id;
   const launchSettingsQ = useLaunchSettings(targetWorkspaceId);
   const { isDesktop } = getDesktopChrome();
+  const bridge = getDesktopBridge();
   const [phase, setPhase] = useState<ModalPhase>('create');
   const [createdProjectId, setCreatedProjectId] = useState<string | null>(null);
   const [name, setName] = useState('');
@@ -50,7 +51,7 @@ export function ProjectCreatorModal({ open, onOpenChange, workspaceId }: Project
   const [error, setError] = useState<string | null>(null);
   const [createButtonState, setCreateButtonState] = useState<ButtonLoadingState>('default');
 
-  const canBrowseDirectories = isDesktop && typeof window.overlord?.chooseDirectory === 'function';
+  const canBrowseDirectories = isDesktop && typeof bridge?.chooseDirectory === 'function';
   const isLinkCliPhase = !isDesktop && phase === 'link-cli' && createdProjectId !== null;
 
   function resetModalState() {
@@ -80,7 +81,7 @@ export function ProjectCreatorModal({ open, onOpenChange, workspaceId }: Project
   }
 
   async function handleBrowseDirectory() {
-    const chooseDirectory = window.overlord?.chooseDirectory;
+    const chooseDirectory = bridge?.chooseDirectory;
     if (!chooseDirectory) return;
 
     setError(null);

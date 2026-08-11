@@ -16,8 +16,9 @@ function readStoredTheme(): NativeThemeSource {
 
 /** Push the SPA theme to the desktop shell so macOS vibrancy respects dark mode. */
 export function syncDesktopNativeTheme(theme?: NativeThemeSource): void {
-  const bridge = typeof window === 'undefined' ? undefined : window.overlord;
+  const bridge = getDesktopBridge();
   if (!bridge?.setNativeThemeSource) return;
 
   void bridge.setNativeThemeSource(theme ?? readStoredTheme());
 }
+import { getDesktopBridge } from './desktop-chrome.ts';

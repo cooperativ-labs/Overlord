@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { getDesktopBridge } from '@/lib/desktop-chrome';
 
 const initialStatus: DesktopUpdateStatus = {
   state: 'idle',
@@ -24,7 +25,7 @@ const stateLabels: Record<DesktopUpdateState, string> = {
 };
 
 export function DesktopUpdatesPage() {
-  const bridge = typeof window === 'undefined' ? undefined : window.overlord;
+  const bridge = getDesktopBridge();
   const [status, setStatus] = useState<DesktopUpdateStatus>(initialStatus);
   const [busyAction, setBusyAction] = useState<'check' | 'install' | null>(null);
 

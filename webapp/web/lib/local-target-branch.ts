@@ -24,6 +24,7 @@ import {
 } from './local-target-client.ts';
 import { reportMissionBranchObservation } from './mission-branch-observations.ts';
 import { resolveResourceForKey } from './project-resources.ts';
+import { keys } from './query-keys.ts';
 
 export {
   useLocalTargetCapabilityAvailable,
@@ -371,7 +372,7 @@ export function useObservedMissionBranch({
           branch: observed
         });
         if (recorded > 0) {
-          await queryClient.invalidateQueries({ queryKey: ['mission', mission.id] });
+          await queryClient.invalidateQueries({ queryKey: keys.mission(mission.id) });
         }
       }
       return observed;

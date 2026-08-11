@@ -48,6 +48,7 @@ import {
   parseExecutionTargetSelectorValue,
   resolveExecutionTargetSelectorValue
 } from '@/lib/execution-target-selection';
+import { getDesktopBridge } from '@/lib/desktop-chrome';
 import { useCopyToClipboard } from '@/lib/hooks/use-copy-to-clipboard';
 import { writeLocalProjectMetadata } from '@/lib/project-metadata';
 import {
@@ -463,8 +464,8 @@ function AddSourceForm({
   const [targetValue, setTargetValue] = useState(() => firstAvailableTargetValue());
   const [isBrowsing, setIsBrowsing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const canBrowseDirectories =
-    typeof window !== 'undefined' && typeof window.overlord?.chooseDirectory === 'function';
+  const bridge = getDesktopBridge();
+  const canBrowseDirectories = typeof bridge?.chooseDirectory === 'function';
 
   useEffect(() => {
     setTargetValue(firstAvailableTargetValue());
@@ -476,7 +477,7 @@ function AddSourceForm({
   const addDisabled = createResource.isPending || selectedTargetInUse || gitAlreadyExists;
 
   async function handleBrowseDirectory() {
-    const chooseDirectory = window.overlord?.chooseDirectory;
+    const chooseDirectory = bridge?.chooseDirectory;
     if (!chooseDirectory) return;
     setError(null);
     setIsBrowsing(true);
@@ -751,8 +752,8 @@ function AddResourceDialog({
   );
   const [isBrowsing, setIsBrowsing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const canBrowseDirectories =
-    typeof window !== 'undefined' && typeof window.overlord?.chooseDirectory === 'function';
+  const bridge = getDesktopBridge();
+  const canBrowseDirectories = typeof bridge?.chooseDirectory === 'function';
 
   // Reset the form each time the dialog opens so stale input never leaks between
   // separate add-resource attempts.
@@ -776,7 +777,7 @@ function AddResourceDialog({
   const duplicateKey = trimmedKey.length > 0 && existingResourceKeys.includes(trimmedKey);
 
   async function handleBrowseDirectory() {
-    const chooseDirectory = window.overlord?.chooseDirectory;
+    const chooseDirectory = bridge?.chooseDirectory;
     if (!chooseDirectory) return;
     setError(null);
     setIsBrowsing(true);

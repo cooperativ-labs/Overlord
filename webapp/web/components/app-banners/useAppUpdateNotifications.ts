@@ -1,5 +1,7 @@
 import { useEffect } from 'react';
 
+import { getDesktopBridge } from '@/lib/desktop-chrome';
+
 import { useAppBanners } from './AppBannerContext';
 
 const AVAILABLE_NOTIFICATION_ID = 'app-update-available';
@@ -24,7 +26,7 @@ export function useAppUpdateNotifications() {
   const { addNotification, dismissNotification } = useAppBanners();
 
   useEffect(() => {
-    const bridge = typeof window === 'undefined' ? undefined : window.overlord;
+    const bridge = getDesktopBridge();
     if (!bridge?.updates) return;
 
     let cancelled = false;

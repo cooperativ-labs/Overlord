@@ -16,8 +16,17 @@ export type DesktopChrome = {
   isMacDesktop: boolean;
 };
 
+/**
+ * Returns the feature-detected desktop preload bridge when the SPA is running
+ * in Electron. Components should use this instead of reading `window.overlord`
+ * directly so desktop-host detection has one implementation.
+ */
+export function getDesktopBridge(): OverlordDesktopBridge | undefined {
+  return typeof window === 'undefined' ? undefined : window.overlord;
+}
+
 export function getDesktopChrome(): DesktopChrome {
-  const bridge = typeof window === 'undefined' ? undefined : window.overlord;
+  const bridge = getDesktopBridge();
   const isDesktop = bridge?.isDesktop === true;
   return {
     isDesktop,

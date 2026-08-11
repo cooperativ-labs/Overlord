@@ -5,6 +5,7 @@ import type { CapabilityResult } from '../../../packages/core/service/local-targ
 
 import type { LocalTargetServerCapability } from './api.ts';
 import { api } from './api.ts';
+import { getDesktopBridge } from './desktop-chrome.ts';
 
 let cachedServerLocalTarget: LocalTargetServerCapability | null = null;
 let serverLocalTargetPromise: Promise<LocalTargetServerCapability> | null = null;
@@ -25,7 +26,7 @@ async function resolveServerLocalTarget(): Promise<LocalTargetServerCapability> 
 
 /** True when the desktop shell exposes the unified local-target IPC bridge. */
 export function hasDesktopLocalTargetBridge(): boolean {
-  return typeof window !== 'undefined' && typeof window.overlord?.invokeLocalTarget === 'function';
+  return typeof getDesktopBridge()?.invokeLocalTarget === 'function';
 }
 
 /**
@@ -35,9 +36,8 @@ export function hasDesktopLocalTargetBridge(): boolean {
 export async function invokeLocalTarget<T>(
   call: LocalTargetBridgeCall
 ): Promise<CapabilityResult<T>> {
-  if (hasDesktopLocalTargetBridge()) {
-    return (await window.overlord!.invokeLocalTarget!(call)) as CapabilityResult<T>;
-  }
+  const invokeLocalTarget = getDesktopBridge()?.invokeLocalTarget;
+  if (invokeLocalTarget) return (await invokeLocalTarget(call)) as CapabilityResult<T>;
 
   const serverCapability = await resolveServerLocalTarget();
   if (serverCapability === 'in_process_server') {

@@ -1,9 +1,10 @@
 # Web App Module
 
-The web control center and the REST/realtime API that backs it. Overlord is
-CLI-first; the web app is a **Vite-powered React SPA** over a small Express
-REST + realtime layer that reads and writes the local SQLite database directly
-through `better-sqlite3`.
+The web control center: a **Vite-powered React SPA** in `webapp/web/` over the
+Express REST + realtime server in [`backend/`](../backend/AGENTS.md). Local
+editions open SQLite under `OVLD_HOME`; hosted editions use Postgres. Typed DTOs
+come from `@overlord/contract` (re-exported for the SPA via
+`webapp/shared/contract.ts`).
 
 A first slice has landed: a realtime console for **projects, missions, and
 objectives** — list/create/edit each, with the UI reflecting database changes
@@ -85,14 +86,19 @@ Initialise that database first with `yarn start:local` from the repo root.
 
 ```
 webapp/
-  web/        ← the React SPA (pure consumer of the REST surface)
-  shared/     ← the typed API contract (camelCase DTOs) shared by server + web
-  docs/       ← design + planning specs (below)
+  web/                 ← the React SPA (pure consumer of the REST surface)
+  shared/contract.ts   ← re-exports @overlord/contract for SPA imports
+  docs/                ← design + planning specs (below)
 
-backend/
-  *.ts        ← the `rest` contract component: Express REST routes + SSE realtime,
-              ← opening the SQLite DB via better-sqlite3 (db.ts, repository.ts,
-              ← realtime.ts, index.ts)
+backend/               ← the `rest` contract component (see backend/AGENTS.md)
+  index.ts             ← Express app entry + route registration
+  db.ts                ← DatabaseClient + entity_changes writer
+  repository.ts        ← core per-resource reads/mutations
+  realtime.ts          ← SSE emitter driven by the entity_changes feed
+  ext/<name>/          ← namespaced /ext/<name>/ extension routers
+  *.ts                 ← other domain modules (webhooks, organizations, …)
+
+packages/contract/     ← canonical typed DTOs (@overlord/contract)
 ```
 
 Realtime works off the `entity_changes` feed: every mutation appends a row in
@@ -147,7 +153,8 @@ shared service layer lands.
 
 ### Contract Component
 
-Maps to the **REST API Layer** (`rest`) in [`CONTRACT.md`](../CONTRACT.md), which owns:
+The SPA consumes the **REST API Layer** (`rest`) owned by
+[`backend/`](../backend/AGENTS.md) / [`CONTRACT.md`](../CONTRACT.md), which owns:
 
 - URL paths and HTTP method contracts
 - Request/response DTO shapes (derived from the logical schema's camelCase field names)
@@ -174,18 +181,19 @@ docs](docs/ui/README.md) and [implementation plan](docs/implementation-plan.md)
 — execution & runner, review & delivery, current changes, connectors, settings,
 users/roles/tokens — are still deferred and remain CLI-only.
 
-> **Scope note for this slice:** some server paths still read and write the
-> SQLite database directly through `better-sqlite3` rather than calling the
-> shared service layer in `packages/core/service/`. Move those REST handlers
-> onto the service layer as the areas are touched per `AGENTS.md`, so business
-> logic is not duplicated.
+> **Scope note for this slice:** some `backend/` paths still read and write the
+> database directly rather than calling the shared service layer in
+> `packages/core/service/`. Move those REST handlers onto the service layer as
+> the areas are touched per [`backend/AGENTS.md`](../backend/AGENTS.md), so
+> business logic is not duplicated.
 
 ### Code & Tests
 
-- `server/` — Express REST + SSE realtime over `better-sqlite3` (`db.ts`,
-  `repository.ts`, `realtime.ts`, `index.ts`).
+- `../backend/` — Express REST + SSE realtime (`db.ts`, `repository.ts`,
+  `realtime.ts`, `index.ts`, plus domain modules and `ext/`). Agent extension
+  guide: [`backend/AGENTS.md`](../backend/AGENTS.md).
 - `web/` — the React SPA (`main.tsx`, `router.tsx`, `lib/`, `components/`, `pages/`).
-- `shared/contract.ts` — the typed DTO contract.
+- `shared/contract.ts` — re-exports `@overlord/contract` for SPA imports.
 
 `yarn typecheck` and `yarn build:prod` both pass. The realtime path is verified
 end-to-end (a write from a separate process is reflected in the UI without a

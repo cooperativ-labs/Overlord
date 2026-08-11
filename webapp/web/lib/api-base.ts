@@ -38,7 +38,7 @@ export function isRemoteBackend(): boolean {
 
 /** True when the SPA runs inside the Electron desktop shell. */
 export function isDesktopShell(): boolean {
-  return Boolean(typeof window !== 'undefined' && window.overlord);
+  return Boolean(getDesktopBridge());
 }
 
 /**
@@ -61,7 +61,7 @@ export function getActiveBackendInfo(): DesktopBackendInfo | null {
 }
 
 function hasDesktopBridge(): boolean {
-  return Boolean(typeof window !== 'undefined' && window.overlord);
+  return Boolean(getDesktopBridge());
 }
 
 function browserSessionStorageKey(): string | null {
@@ -146,7 +146,7 @@ export function getAuthBaseUrl(): string {
 }
 
 async function loadStoredTokensForActiveBackend(): Promise<void> {
-  const bridge = window.overlord;
+  const bridge = getDesktopBridge();
   if (!activeBackend) return;
   if (!bridge) {
     sessionToken = readBrowserSessionToken();
@@ -183,7 +183,7 @@ function persistActiveBackendKey(): void {
 }
 
 export async function initApiConfig(): Promise<void> {
-  const bridge = typeof window === 'undefined' ? undefined : window.overlord;
+  const bridge = getDesktopBridge();
   if (bridge?.getActiveBackend) {
     activeBackend = await bridge.getActiveBackend();
     persistActiveBackendKey();
@@ -253,7 +253,7 @@ export async function persistAuthSessionToken(token: string): Promise<void> {
     return;
   }
   if (previous && previous !== sessionToken) clearActiveWorkspaceId();
-  const bridge = window.overlord;
+  const bridge = getDesktopBridge();
   if (!activeBackend) return;
   if (!bridge?.setSessionToken) {
     writeBrowserSessionToken(sessionToken);
@@ -264,7 +264,7 @@ export async function persistAuthSessionToken(token: string): Promise<void> {
 
 export async function clearAuthTokens(): Promise<void> {
   sessionToken = null;
-  const bridge = window.overlord;
+  const bridge = getDesktopBridge();
   clearBrowserSessionToken();
   clearActiveWorkspaceId();
   if (!activeBackend) return;
@@ -294,3 +294,4 @@ export async function persistAuthSessionFromSignInResult(data: unknown): Promise
   if (typeof token !== 'string' || token.trim().length === 0) return;
   await persistAuthSessionToken(token);
 }
+import { getDesktopBridge } from './desktop-chrome.ts';

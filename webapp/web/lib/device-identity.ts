@@ -1,6 +1,7 @@
 import type { ClientDeviceIdentity } from '../../../packages/core/service/device-identity.ts';
 
 import { isRemoteBackend } from './api-base.ts';
+import { getDesktopBridge } from './desktop-chrome.ts';
 
 const DEVICE_FINGERPRINT_HEADER = 'x-overlord-device-fingerprint';
 const DEVICE_LABEL_HEADER = 'x-overlord-device-label';
@@ -35,7 +36,7 @@ export async function resolveClientDeviceIdentity(): Promise<ClientDeviceIdentit
   if (cachedIdentity) return cachedIdentity;
   if (!loadPromise) {
     loadPromise = (async () => {
-      const bridge = window.overlord;
+      const bridge = getDesktopBridge();
       if (bridge?.getDeviceIdentity) {
         cachedIdentity = await bridge.getDeviceIdentity();
         return cachedIdentity;

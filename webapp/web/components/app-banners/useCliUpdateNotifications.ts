@@ -1,5 +1,7 @@
 import { useEffect } from 'react';
 
+import { getDesktopBridge } from '@/lib/desktop-chrome';
+
 import { useAppBanners } from './AppBannerContext';
 
 const CLI_UPDATE_NOTIFICATION_ID = 'cli-update-available';
@@ -18,7 +20,7 @@ export function useCliUpdateNotifications() {
   const { addNotification, dismissNotification } = useAppBanners();
 
   useEffect(() => {
-    const bridge = typeof window === 'undefined' ? undefined : window.overlord;
+    const bridge = getDesktopBridge();
     if (!bridge?.cliUpdates) return;
 
     let cancelled = false;

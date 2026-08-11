@@ -77,6 +77,7 @@ import type {
 import { api } from './api.ts';
 import { clearAuthTokens, persistActiveWorkspaceId } from './api-base.ts';
 import { authClient, normalizeEmail } from './auth-client.ts';
+import { getDesktopBridge } from './desktop-chrome.ts';
 import {
   fetchMissionBranchesFromLocalTarget,
   fetchWorktreesFromLocalTarget,
@@ -96,80 +97,24 @@ import {
   useIsRemoteExecutionTargetForProject
 } from './local-target-remote.ts';
 import { persistActiveOrganizationId } from './org-preferences.ts';
+export { keys } from './query-keys.ts';
+import { keys } from './query-keys.ts';
+export * from './queries/github.ts';
+import {
+  createReorderBoardColumnMutation,
+  createReorderFutureObjectivesMutation,
+  createReorderMyMissionsMutation
+} from './queries/optimistic-updates.ts';
+export type {
+  ReorderBoardColumnVars,
+  ReorderFutureObjectivesVars,
+  ReorderMyMissionsVars
+} from './queries/optimistic-updates.ts';
 import {
   invalidateMissionEverhourQueries,
   invalidateNonEverhourQueries,
   invalidateProjectEverhourQueries
 } from './query-invalidation.ts';
-
-export const keys = {
-  meta: ['meta'] as const,
-  profile: ['profile'] as const,
-  userTokens: ['user-tokens'] as const,
-  webhookSubscriptions: ['webhooks'] as const,
-  webhookDeliveries: (id: string) => ['webhooks', id, 'deliveries'] as const,
-  organizations: ['organizations'] as const,
-  organizationAdmins: (id: string) => ['organization', id, 'admins'] as const,
-  defaultProject: ['profile', 'default-project'] as const,
-  inbox: ['inbox'] as const,
-  notifications: ['notifications'] as const,
-  notificationPreferences: ['profile', 'notification-preferences'] as const,
-  workspaces: ['workspaces'] as const,
-  workspaceMembers: (id: string) => ['workspace', id, 'members'] as const,
-  workspaceExecutionTargets: (id: string) => ['workspace', id, 'execution-targets'] as const,
-  workspaceInvitations: (id: string) => ['workspace', id, 'invitations'] as const,
-  projects: (workspaceId?: string, lifecycle: ProjectListLifecycle = 'active') =>
-    workspaceId
-      ? (['workspace', workspaceId, 'projects', lifecycle] as const)
-      : (['projects', lifecycle] as const),
-  project: (id: string) => ['project', id] as const,
-  workspaceStatuses: (workspaceId?: string | null) =>
-    workspaceId
-      ? (['workspace', workspaceId, 'statuses'] as const)
-      : (['workspace', 'statuses'] as const),
-  projectResources: (id: string) => ['project', id, 'resources'] as const,
-  projectTags: (id: string) => ['project', id, 'tags'] as const,
-  projectRepository: (id: string, executionTargetId: string | null, resourceKey?: string | null) =>
-    [
-      'project',
-      id,
-      'repository',
-      executionTargetId ?? 'primary',
-      resourceKey ?? 'primary'
-    ] as const,
-  missions: (projectId: string) => ['project', projectId, 'missions'] as const,
-  myMissions: ['workspace', 'my-missions'] as const,
-  mission: (id: string) => ['mission', id] as const,
-  missionSchedule: (id: string) => ['mission', id, 'schedule'] as const,
-  missionBranches: (id: string) => ['mission', id, 'branches'] as const,
-  worktrees: ['worktrees'] as const,
-  missionEvents: (id: string) => ['mission', id, 'events'] as const,
-  missionDeliveries: (id: string) => ['mission', id, 'deliveries'] as const,
-  missionArtifacts: (id: string) => ['mission', id, 'artifacts'] as const,
-  missionSharedContext: (id: string) => ['mission', id, 'context'] as const,
-  missionFileChanges: (id: string) => ['mission', id, 'file-changes'] as const,
-  /** Answerable agent-session requests (permission / question / choice / retry) for a mission. */
-  missionAgentRequests: (id: string) => ['mission', id, 'agent-requests'] as const,
-  /** Inbound instructions queued from Overlord into a mission's live session. */
-  missionAgentSessionInputs: (id: string) => ['mission', id, 'agent-session-inputs'] as const,
-  objectiveAttachments: (objectiveId: string) => ['objective', objectiveId, 'attachments'] as const,
-  agentCatalog: (workspaceId?: string | null) =>
-    workspaceId ? (['agent-catalog', workspaceId] as const) : (['agent-catalog'] as const),
-  runnerStatus: ['runner', 'status'] as const,
-  runnerServiceStatus: ['runner', 'service-status'] as const,
-  launchSettings: (workspaceId?: string | null) =>
-    workspaceId ? (['launch-settings', workspaceId] as const) : (['launch-settings'] as const),
-  launchPreference: (projectId: string) => ['project', projectId, 'launch-preference'] as const,
-  projectExecutionTarget: (projectId: string) =>
-    ['project', projectId, 'execution-target'] as const,
-  everhourIntegration: ['integrations', 'everhour'] as const,
-  projectEverhourLink: (projectId: string) => ['project', projectId, 'everhour-link'] as const,
-  projectEverhour: (projectId: string) => ['project', projectId, 'everhour'] as const,
-  missionEverhour: (id: string) => ['mission', id, 'everhour'] as const,
-  githubIntegration: ['integrations', 'github'] as const,
-  projectGitHubLink: (projectId: string) => ['project', projectId, 'github-link'] as const,
-  missionGitHubPullRequest: (id: string) => ['mission', id, 'github-pull-request'] as const
-};
 
 // Mutations still invalidate eagerly so the originating user sees their change
 // instantly; the realtime feed later reconciles the scoped query keys it can map.
@@ -251,7 +196,7 @@ export const useRunnerStatus = (options?: { enabled?: boolean; refetchInterval?:
  * fails, so consumers can quietly fall back to queue-only signals.
  */
 export const useRunnerServiceStatus = (options?: { enabled?: boolean }) => {
-  const runnerService = typeof window === 'undefined' ? undefined : window.overlord?.runnerService;
+  const runnerService = getDesktopBridge()?.runnerService;
   return useQuery({
     queryKey: keys.runnerServiceStatus,
     queryFn: async () => {
@@ -1510,22 +1455,6 @@ export function usePurgeMergedWorktrees() {
   });
 }
 
-export interface ReorderBoardColumnVars {
-  projectId: string;
-  /** Destination column / status. */
-  statusId: string;
-  /** Destination column's semantic type — used only for the optimistic patch. */
-  statusType: StatusType;
-  /** Every mission id that should occupy the column, top-to-bottom, after the move. */
-  orderedMissionIds: string[];
-}
-
-/** Mirrors the server's board order: board_position ASC, sequence_number DESC. */
-function byBoardOrder(a: MissionDto, b: MissionDto): number {
-  if (a.boardPosition !== b.boardPosition) return a.boardPosition - b.boardPosition;
-  return b.sequenceNumber - a.sequenceNumber;
-}
-
 /**
  * Reorders a board column with an optimistic cache update: the new order/status
  * shows instantly and is reverted only if the server rejects the change. The
@@ -1533,51 +1462,7 @@ function byBoardOrder(a: MissionDto, b: MissionDto): number {
  */
 export function useReorderBoardColumn() {
   const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ projectId, statusId, orderedMissionIds }: ReorderBoardColumnVars) =>
-      api.reorderBoardColumn(projectId, { statusId, orderedMissionIds }),
-    onMutate: async (vars: ReorderBoardColumnVars) => {
-      await qc.cancelQueries({ queryKey: keys.missions(vars.projectId) });
-      const previous = qc.getQueryData<MissionDto[]>(keys.missions(vars.projectId));
-      if (previous) {
-        const positionById = new Map(
-          vars.orderedMissionIds.map((id, index) => [id, (index + 1) * 100])
-        );
-        const next = previous
-          .map(mission => {
-            const position = positionById.get(mission.id);
-            return position === undefined
-              ? mission
-              : {
-                  ...mission,
-                  statusId: vars.statusId,
-                  statusType: vars.statusType,
-                  boardPosition: position
-                };
-          })
-          .sort(byBoardOrder);
-        qc.setQueryData(keys.missions(vars.projectId), next);
-      }
-      return { previous };
-    },
-    onError: (_err, vars, context) => {
-      if (context?.previous) {
-        qc.setQueryData(keys.missions(vars.projectId), context.previous);
-      }
-    },
-    onSettled: (_data, _err, vars) => {
-      void qc.invalidateQueries({ queryKey: keys.missions(vars.projectId) });
-    }
-  });
-}
-
-export interface ReorderMyMissionsVars {
-  /** Destination column / status. */
-  statusId: string;
-  /** Destination column's semantic type — used only for the optimistic patch. */
-  statusType: StatusType;
-  /** Every mission id that should occupy the column, top-to-bottom, after the move. */
-  orderedMissionIds: string[];
+  return useMutation(createReorderBoardColumnMutation(qc));
 }
 
 /**
@@ -1588,39 +1473,7 @@ export interface ReorderMyMissionsVars {
  */
 export function useReorderMyMissions() {
   const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ statusId, orderedMissionIds }: ReorderMyMissionsVars) =>
-      api.reorderWorkspaceMyMissions({ statusId, orderedMissionIds }),
-    onMutate: async (vars: ReorderMyMissionsVars) => {
-      await qc.cancelQueries({ queryKey: keys.myMissions });
-      const previous = qc.getQueryData<MyMissionsResponse>(keys.myMissions);
-      if (previous) {
-        const positionById = new Map(
-          vars.orderedMissionIds.map((id, index) => [id, (index + 1) * 100])
-        );
-        qc.setQueryData<MyMissionsResponse>(keys.myMissions, {
-          missions: previous.missions.map(mission => {
-            const position = positionById.get(mission.id);
-            return position === undefined
-              ? mission
-              : {
-                  ...mission,
-                  statusId: vars.statusId,
-                  statusType: vars.statusType,
-                  myPosition: position
-                };
-          })
-        });
-      }
-      return { previous };
-    },
-    onError: (_err, _vars, context) => {
-      if (context?.previous) qc.setQueryData(keys.myMissions, context.previous);
-    },
-    onSettled: () => {
-      void qc.invalidateQueries({ queryKey: keys.myMissions });
-    }
-  });
+  return useMutation(createReorderMyMissionsMutation(qc));
 }
 
 export function useCreateObjective() {
@@ -1684,10 +1537,6 @@ export function useDeleteObjectiveAttachment(objectiveId: string) {
   });
 }
 
-export interface ReorderFutureObjectivesVars extends ReorderFutureObjectivesBody {
-  missionId: string;
-}
-
 /**
  * Reorders a mission's future objectives with an optimistic cache update: the new
  * order shows instantly and is reverted only if the server rejects it. The
@@ -1695,43 +1544,7 @@ export interface ReorderFutureObjectivesVars extends ReorderFutureObjectivesBody
  */
 export function useReorderFutureObjectives() {
   const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ missionId, orderedObjectiveIds }: ReorderFutureObjectivesVars) =>
-      api.reorderFutureObjectives(missionId, { orderedObjectiveIds }),
-    onMutate: async (vars: ReorderFutureObjectivesVars) => {
-      await qc.cancelQueries({ queryKey: keys.mission(vars.missionId) });
-      const previous = qc.getQueryData<MissionDetailDto>(keys.mission(vars.missionId));
-      if (previous) {
-        // Renumber the future group to match the requested order, starting at the
-        // lowest position it currently occupies, then re-sort by position.
-        const orderIndex = new Map(vars.orderedObjectiveIds.map((id, index) => [id, index]));
-        const basePosition = Math.min(
-          ...previous.objectives.filter(o => orderIndex.has(o.id)).map(o => o.position)
-        );
-        const next = {
-          ...previous,
-          objectives: previous.objectives
-            .map(objective => {
-              const index = orderIndex.get(objective.id);
-              return index === undefined
-                ? objective
-                : { ...objective, position: basePosition + index };
-            })
-            .sort((a, b) => a.position - b.position)
-        };
-        qc.setQueryData(keys.mission(vars.missionId), next);
-      }
-      return { previous };
-    },
-    onError: (_err, vars, context) => {
-      if (context?.previous) {
-        qc.setQueryData(keys.mission(vars.missionId), context.previous);
-      }
-    },
-    onSettled: (_data, _err, vars) => {
-      void qc.invalidateQueries({ queryKey: keys.mission(vars.missionId) });
-    }
-  });
+  return useMutation(createReorderFutureObjectivesMutation(qc));
 }
 
 // ---- Agent launch ----------------------------------------------------------
@@ -1877,55 +1690,6 @@ export function useClearEverhourApiKey() {
       invalidateMissionEverhourQueries(qc);
       invalidateProjectEverhourQueries(qc);
     }
-  });
-}
-
-// ---- GitHub integration --------------------------------------------------
-
-export const useGitHubIntegration = () =>
-  useQuery({ queryKey: keys.githubIntegration, queryFn: () => api.getGitHubIntegration() });
-
-export function useBeginGitHubInstall() {
-  return useMutation({ mutationFn: () => api.beginGitHubInstall() });
-}
-
-export function useDisconnectGitHub() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: () => api.disconnectGitHub(),
-    onSuccess: data => {
-      qc.setQueryData(keys.githubIntegration, data);
-      void qc.invalidateQueries({ predicate: query => query.queryKey[2] === 'github-link' });
-    }
-  });
-}
-
-export const useProjectGitHubLink = (projectId: string, options: { enabled?: boolean } = {}) =>
-  useQuery({
-    queryKey: keys.projectGitHubLink(projectId),
-    queryFn: () => api.getProjectGitHubLink(projectId),
-    enabled: options.enabled ?? true
-  });
-
-export function useLinkProjectGitHub(projectId: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (body: LinkProjectGitHubBody) => api.linkProjectGitHub(projectId, body),
-    onSuccess: data => qc.setQueryData(keys.projectGitHubLink(projectId), data)
-  });
-}
-
-export const useMissionGitHubPullRequest = (missionId: string) =>
-  useQuery({
-    queryKey: keys.missionGitHubPullRequest(missionId),
-    queryFn: () => api.getMissionGitHubPullRequest(missionId)
-  });
-
-export function useCreateMissionGitHubPullRequest(missionId: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: () => api.createMissionGitHubPullRequest(missionId),
-    onSuccess: data => qc.setQueryData(keys.missionGitHubPullRequest(missionId), data)
   });
 }
 

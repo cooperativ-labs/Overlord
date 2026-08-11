@@ -15,6 +15,7 @@ import { Label } from '@/components/ui/label';
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import { LoadingButton } from '@/components/ui/loading-button';
 import { DEFAULT_CLOUD_BACKEND_URL } from '@/lib/backend-defaults';
+import { getDesktopBridge } from '@/lib/desktop-chrome';
 import { useCopyToClipboard } from '@/lib/hooks/use-copy-to-clipboard';
 
 function cliConfigCommand({ mode, backendUrl }: { mode: 'local' | 'remote'; backendUrl: string }) {
@@ -58,7 +59,7 @@ type BackendProfileRow = {
 };
 
 export function BackendPage() {
-  const bridge = typeof window === 'undefined' ? undefined : window.overlord;
+  const bridge = getDesktopBridge();
   const [profiles, setProfiles] = useState<BackendProfileRow[]>([]);
   const [activeId, setActiveId] = useState<string>('local');
   const [label, setLabel] = useState('Overlord Cloud');

@@ -35,6 +35,7 @@ import { UserTokensPage } from '@/components/settings/UserTokensPage';
 import { WebhooksPage } from '@/components/settings/WebhooksPage';
 import { WorktreesPage } from '@/components/settings/WorktreesPage';
 import { useLocalTargetUnavailable } from '@/lib/local-target-client.ts';
+import { getDesktopChrome } from '@/lib/desktop-chrome';
 import { useMeta, useProfile } from '@/lib/queries';
 
 type SettingsModalProps = {
@@ -84,7 +85,7 @@ export function SettingsModal({ open, onOpenChange, initialNav }: SettingsModalP
   const profile = useProfile();
   const isAdmin = (profile.data?.roles ?? []).includes('ADMIN');
   const localTargetUnavailable = useLocalTargetUnavailable();
-  const isDesktop = typeof window !== 'undefined' && window.overlord?.isDesktop === true;
+  const { isDesktop } = getDesktopChrome();
   const resolvedAppNavItems = useMemo<SettingsNavItem[]>(
     () => [...appNavItems, ...(isAdmin ? adminAppNavItems : [])],
     [isAdmin]

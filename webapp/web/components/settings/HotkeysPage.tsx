@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 
 import { HotkeyCaptureButton } from '@/components/settings/HotkeyCaptureButton';
 import { Button } from '@/components/ui/button';
-import { getDesktopChrome } from '@/lib/desktop-chrome';
+import { getDesktopBridge, getDesktopChrome } from '@/lib/desktop-chrome';
 
 type HotkeyItem = {
   action: string;
@@ -11,6 +11,7 @@ type HotkeyItem = {
 
 export function HotkeysPage() {
   const { isDesktop } = getDesktopChrome();
+  const bridge = getDesktopBridge();
   const [items, setItems] = useState<HotkeyItem[]>([]);
 
   const [quickTaskAccelerator, setQuickTaskAccelerator] = useState<string | null>(null);
@@ -30,7 +31,7 @@ export function HotkeysPage() {
 
   useEffect(() => {
     if (!isDesktop) return;
-    const api = window.overlord?.quickTask;
+    const api = bridge?.quickTask;
     if (!api) return;
     api
       .getHotkey()
@@ -42,10 +43,10 @@ export function HotkeysPage() {
         // The desktop shell is present but the hotkey could not be read; leave
         // the editor hidden rather than surfacing a transient error.
       });
-  }, [isDesktop]);
+  }, [bridge, isDesktop]);
 
   async function persistHotkey(accelerator: string) {
-    const api = window.overlord?.quickTask;
+    const api = bridge?.quickTask;
     if (!api) return;
     setIsSavingHotkey(true);
     setHotkeyError(null);

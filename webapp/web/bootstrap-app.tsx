@@ -8,7 +8,7 @@ import { AuthGate } from './components/auth/AuthGate.tsx';
 import { NotificationRenderer } from './components/notifications/NotificationRenderer.tsx';
 import { ThemeProvider } from './components/theme-provider.tsx';
 import { TooltipProvider } from './components/ui/tooltip.tsx';
-import { applyDesktopChromeDocumentAttributes } from './lib/desktop-chrome.ts';
+import { applyDesktopChromeDocumentAttributes, getDesktopBridge } from './lib/desktop-chrome.ts';
 import { syncDesktopNativeTheme } from './lib/desktop-native-theme.ts';
 import { RealtimeProvider } from './lib/realtime.tsx';
 import { router } from './router.tsx';
@@ -31,7 +31,7 @@ if (!rootElement) throw new Error('Root element #root not found');
 
 function DesktopDeepLinkNavigation() {
   useEffect(() => {
-    const onNavigate = window.overlord?.onNavigate;
+    const onNavigate = getDesktopBridge()?.onNavigate;
     if (!onNavigate) return;
     return onNavigate(route => {
       const match = /^\/user\/missions\/([A-Za-z0-9:_-]{1,64})$/.exec(route);

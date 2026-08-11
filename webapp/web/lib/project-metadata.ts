@@ -1,4 +1,5 @@
 import type { ProjectResourceDto } from '../../shared/contract.ts';
+import { getDesktopBridge } from './desktop-chrome.ts';
 
 export async function writeLocalProjectMetadata({
   directoryPath,
@@ -9,7 +10,7 @@ export async function writeLocalProjectMetadata({
   projectId: string;
   resource: ProjectResourceDto;
 }): Promise<void> {
-  const writeProjectMetadata = window.overlord?.writeProjectMetadata;
+  const writeProjectMetadata = getDesktopBridge()?.writeProjectMetadata;
   if (!writeProjectMetadata) return;
   await writeProjectMetadata({
     directoryPath,

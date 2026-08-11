@@ -12,6 +12,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog';
 import { api } from '@/lib/api';
+import { getDesktopBridge } from '@/lib/desktop-chrome';
 import { useCopyToClipboard } from '@/lib/hooks/use-copy-to-clipboard';
 import { keys, useRunnerStatus } from '@/lib/queries';
 import { hasRunnerQueueError, runnerQueueErrorMessage } from '@/lib/runner-status';
@@ -71,7 +72,7 @@ function CommandRow({ command }: { command: string }) {
  * operations). Falls back to copyable commands in a plain browser.
  */
 function ServiceControls() {
-  const bridge = typeof window === 'undefined' ? undefined : window.overlord;
+  const bridge = getDesktopBridge();
   const runnerService = bridge?.runnerService;
   const queryClient = useQueryClient();
   const [status, setStatus] = useState<ServiceStatus | null>(null);

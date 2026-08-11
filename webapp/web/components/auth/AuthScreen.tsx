@@ -19,6 +19,7 @@ import {
   socialSignInFetchOptions,
   validateEmail
 } from '@/lib/auth-client';
+import { getDesktopBridge } from '@/lib/desktop-chrome';
 
 type AuthMode = 'sign-in' | 'create-account';
 
@@ -73,6 +74,7 @@ function socialSignInCallbackError(code: string): string {
 }
 
 export function AuthScreen({ onAuthenticated }: AuthScreenProps) {
+  const bridge = getDesktopBridge();
   const [mode, setMode] = useState<AuthMode>(() =>
     typeof window === 'undefined' ? 'sign-in' : parseAuthModeFromSearch(window.location.search)
   );
@@ -91,8 +93,7 @@ export function AuthScreen({ onAuthenticated }: AuthScreenProps) {
   // The backend chooser only exists in the desktop shell (Electron preload bridge).
   // In the browser/cloud build there is no bridge, so we skip the backend section and
   // its separator instead of rendering an empty inset box.
-  const hasBackendChooser =
-    typeof window !== 'undefined' && Boolean(window.overlord?.switchBackend);
+  const hasBackendChooser = Boolean(bridge?.switchBackend);
 
   useEffect(() => {
     syncAuthModeSearchParam(mode);
@@ -148,10 +149,10 @@ export function AuthScreen({ onAuthenticated }: AuthScreenProps) {
     try {
       const desktopRemote = isDesktopRemoteBackend();
       if (desktopRemote) {
-        if (!window.overlord?.openExternal) {
+        if (!bridge?.openExternal) {
           throw new Error('Unable to open GitHub sign-in in your default browser.');
         }
-        const opened = await window.overlord.openExternal(
+        const opened = await bridge.openExternal(
           `${getAuthBaseUrl()}/api/auth/desktop/github`
         );
         if (!opened) throw new Error('Unable to open GitHub sign-in in your default browser.');
