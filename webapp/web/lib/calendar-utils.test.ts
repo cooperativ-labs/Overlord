@@ -153,4 +153,13 @@ describe('date helpers', () => {
     assert.equal(addDays(startOfDay(base), 1).getDate(), 16);
     assert.equal(addMonths(base, 1).getMonth(), 1);
   });
+
+  it('isWeekend flags Saturday and Sunday only', () => {
+    // 2026-01-11 is a Sunday, 2026-01-17 is a Saturday; the days between are weekdays.
+    assert.equal(isWeekend(new Date(2026, 0, 11)), true);
+    assert.equal(isWeekend(new Date(2026, 0, 17)), true);
+    for (let day = 12; day <= 16; day += 1) {
+      assert.equal(isWeekend(new Date(2026, 0, day)), false, `2026-01-${day} should be a weekday`);
+    }
+  });
 });

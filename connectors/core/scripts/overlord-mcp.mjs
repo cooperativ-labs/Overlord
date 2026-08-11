@@ -124,15 +124,30 @@ const tools = [
     name: 'overlord_create_mission',
     title: 'Create Overlord mission',
     description:
-      'Create a mission in an explicit project. Hosted MCP never chooses a default project implicitly.',
+      'Use this to create a draft mission in projectId, or an account-owned inbox item when projectId is omitted. Hosted MCP never chooses a project implicitly.',
     inputSchema: objectSchema(
       {
-        projectId: stringProperty('Required Overlord project id, slug, or name.'),
+        projectId: stringProperty('Optional Overlord project id, slug, or name.'),
         objective: stringProperty('Initial objective text.'),
         title: stringProperty('Optional mission title.'),
-        resourceKey: stringProperty('Optional logical project resource key for the objective.')
+        resourceKey: stringProperty('Optional logical project resource key for the objective.'),
+        assignedTo: stringProperty(
+          'Optional workspace member to own the mission (workspace_users.id, profile UUID, orgid:username, bare username, or email). Rejected when the member is not in the workspace; meaningless on the inbox fallback.'
+        )
       },
-      ['projectId', 'objective']
+      ['objective']
+    )
+  },
+  {
+    name: 'overlord_create_inbox_item',
+    title: 'Create inbox item',
+    description: 'Use this to create a private, account-owned unassigned task capture.',
+    inputSchema: objectSchema(
+      {
+        title: stringProperty('Inbox item title.'),
+        objective: stringProperty('The one objective captured in v1.')
+      },
+      ['title', 'objective']
     )
   },
   {
@@ -353,12 +368,24 @@ function callOverlordTool(name, args) {
   }
   if (name === 'overlord_create_mission') {
     return runProtocol('create', {
-      'project-id': requiredString(args, 'projectId'),
+      ...(optionalString(args, 'projectId')
+        ? { 'project-id': requiredString(args, 'projectId') }
+        : { inbox: true }),
       objective: requiredString(args, 'objective'),
       ...(optionalString(args, 'title') ? { title: requiredString(args, 'title') } : {}),
       ...(optionalString(args, 'resourceKey')
         ? { resource: requiredString(args, 'resourceKey') }
+        : {}),
+      ...(optionalString(args, 'assignedTo')
+        ? { 'assigned-to': requiredString(args, 'assignedTo') }
         : {})
+    });
+  }
+  if (name === 'overlord_create_inbox_item') {
+    return runProtocol('create', {
+      inbox: true,
+      title: requiredString(args, 'title'),
+      objective: requiredString(args, 'objective')
     });
   }
   if (name === 'overlord_load_mission_context') {

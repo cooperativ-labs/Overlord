@@ -41,6 +41,14 @@ function queuedJobs(): Array<{ payload_json: string }> {
     .all() as Array<{ payload_json: string }>;
 }
 
+function reviewStatusId(): string {
+  const row = db
+    .prepare(`SELECT id FROM workspace_statuses WHERE workspace_id = ? AND type = 'review'`)
+    .get('local-workspace') as { id: string } | undefined;
+  if (!row) throw new Error('Seed workspace has no review-type status');
+  return row.id;
+}
+
 test('registers, rotates, and revokes a device token privately', async () => {
   await withRequestContextAsync(async () => {
     setActiveProfileId('operator-user');
@@ -330,9 +338,9 @@ test('APNs badge counts unread notifications, not missions in review', async () 
       title: `Review queue ${index}`,
       firstObjective: 'Work'
     });
-    await updateMission(extra.id, { statusType: 'review' });
+    await updateMission(extra.id, { statusId: reviewStatusId() });
   }
-  await updateMission(mission.id, { statusType: 'review' });
+  await updateMission(mission.id, { statusId: reviewStatusId() });
 
   db.prepare(`DELETE FROM notifications`).run();
   const now = '2026-08-09T10:00:00.000Z';

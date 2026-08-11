@@ -226,7 +226,7 @@ async function insertQueuedRequest(
        (id, workspace_id, project_id, mission_id, objective_id,
         launch_mode, requested_source, idempotency_key, status,
         created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, 'run', 'local', 'webapp', ?, 'queued', ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, 'run', 'webapp', ?, 'queued', ?, ?)`,
     [
       id,
       WORKSPACE_ID,
