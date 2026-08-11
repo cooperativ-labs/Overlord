@@ -1,24 +1,14 @@
 {
   "fixtureVersion": 1,
-  "kind": "script-io",
-  "description": "Mandatory negative test: Antigravity's PreToolUse hook in a session with no Overlord binding, in an unrelated directory. It must make no write, no CLI invocation, and no delay. Its stdout is the harness's required allow response, which is the correct fail-toward-the-harness behavior for an unbound session.",
-  "script": "connectors/adapters/antigravity/scripts/pre-tool-use-hook.sh",
-  "stdin": {
-    "hook_event_name": "PreToolUse",
-    "tool_name": "run_command",
-    "tool_input": { "command": "rm -rf ./build" }
-  },
-  "env": {
-    "MISSION_ID": null,
-    "SESSION_KEY": null,
-    "OVERLORD_SESSION_CHANNEL_ID": null,
-    "OVERLORD_SESSION_CHANNEL_TOKEN": null
-  },
-  "expect": {
-    "exitCode": 0,
-    "stdout": "{\"allow_tool\":true}",
-    "stderr": "",
-    "cliInvocations": [],
-    "sandboxWrites": []
+  "kind": "source-guard",
+  "description": "Mandatory negative test: the Antigravity adapter registers no callback in an unbound session while its native decision and prompt-capture paths remain unimplemented.",
+  "path": "connectors/adapters/antigravity/hooks.json",
+  "assert": {
+    "mustNotContain": [
+      "PreInvocation",
+      "PreToolUse",
+      "pre-invocation-hook.sh",
+      "pre-tool-use-hook.sh"
+    ]
   }
 }

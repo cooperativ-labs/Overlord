@@ -8,8 +8,8 @@ description: Antigravity adapter for the shared Overlord mission workflow.
 ## Antigravity Adapter Notes
 
 - Agent identifier: `antigravity` for `ovld protocol create` and `ovld protocol prompt`.
-- Follow-up capture: the installed `PreInvocation` hook (Antigravity's closest analog to the canonical `UserPromptSubmit` hook) records ordinary post-delivery user turns. Do not manually publish `user_follow_up` unless the hook is unavailable.
-- Permission capture: the installed `PreToolUse` hook (Antigravity's closest analog to the canonical `PermissionRequest` hook) publishes permission activity through `ovld protocol` and always allows the underlying tool call — it only records, it never gates.
+- Follow-up capture: Antigravity's documented hooks do not expose the submitted prompt, so this adapter does not claim automatic `user_follow_up` capture. Publish follow-up activity through the normal mission workflow when needed.
+- Permission capture: no decision hook is registered until Antigravity's documented `PreToolUse` response dialect is implemented through the channel-scoped agent-session runtime. Never manufacture an `allow` response as a failure fallback.
 - Model selection: do not pass `--model` or an effort/thinking flag. Antigravity manages model selection internally; the launch prompt only carries mission/objective context.
 - MCP bridge: the installed `overlord` MCP server exposes the hosted-compatible `overlord_*` mission tool catalog backed by `ovld protocol`.
 - Slash commands: each file under `skills/` (this skill plus `attach`, `connect`, `load`, `create`, `prompt`, `discuss-objective`, `add-objectives`, `record-work`, `spawn`) is auto-registered by Antigravity as a `/<name>` command.

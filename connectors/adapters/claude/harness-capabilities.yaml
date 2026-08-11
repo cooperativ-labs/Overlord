@@ -14,7 +14,7 @@ decisionCodecSpec: codec/claude.decision-codec.yaml
 
 harness:
   name: Claude Code
-  verifiedVersion: '2.1.221'
+  verifiedVersion: '2.1.227'
   versionRange: '>=2.1.0'
   versionScheme: semver
 
@@ -230,8 +230,10 @@ hazards:
     summary: >-
       The adapter registers `Stop` and no subagent-lifecycle event. Claude Code 2.1.221 fires
       `SubagentStop` — not `Stop` — when a subagent finishes, and subagents now run in the
-      background past the parent's turn boundary, so the shipped Stop registration is
-      guaranteed not to run for work a subagent completes after the parent stopped. Nothing is
+      background past the parent's turn boundary. Version 2.1.224 also removed the
+      200-subagent-per-session spawn cap, increasing the frequency of this gap,
+      so the shipped Stop registration is guaranteed not to run for work a
+      subagent completes after the parent stopped. Nothing is
       lost today because that registration is already inert (see `shipped-stop-hook-inert`),
       which is exactly why the fix is to repair the Stop path first and only then decide
       whether the repaired body should also ride `SubagentStop`. Registering the current
@@ -245,8 +247,10 @@ hazards:
     summary: >-
       Delivery change attribution is computed from `git status --porcelain` against the attach
       baseline (cli/src/vcs.ts `readChangedFiles` / `filterRunAttributableChanges`); nothing in
-      that path consults HEAD or the commit graph. A background subagent that commits, merges,
-      or opens a PR for its own work therefore removes those files from the worktree delta, and
+      that path consults HEAD or the commit graph. Claude Code 2.1.221 made background-session
+      commit-and-push behavior an explicit work-preservation default. A
+      background subagent that commits, merges, or opens a PR for its own work
+      therefore removes those files from the worktree delta, and
       they vanish from the delivery report entirely — not flagged, not skipped, silently
       absent. The PostToolUse touched-files log is unaffected (its key is
       `sha256(abspath(cwd) + "\0" + MISSION_ID)`, so a subagent sharing the cwd writes to the

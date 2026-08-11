@@ -15,13 +15,10 @@ connector:
   harnessCapabilities:
     path: connectors/adapters/antigravity/harness-capabilities.yaml
     schemaVersion: 1
-    digest: "c021926c384a72bdaa62ac5f0eab57e80822c5d2996db75ea3c30c6bf5d09ce8"
+    digest: "e7313b23f98b6ed15a1a32849291a2a391523d4c06403bf395ecbcadfa3b11ac"
   capabilities:
-    - followUpHook
     - contextFilePrompt
     - slashCommands
-  hookTypes:
-    - UserPromptSubmit
   # ── END GENERATED ────────────────────────────────────────────────────────────
   installPath: "~/.gemini/antigravity-cli/plugins/overlord"
   managedFiles:
@@ -33,8 +30,6 @@ connector:
     - "README.md"
     - "prompt-wrapper.md"
     - "scripts/overlord-mcp.mjs"
-    - "scripts/pre-invocation-hook.sh"
-    - "scripts/pre-tool-use-hook.sh"
     - "skills/attach.md"
     - "skills/connect.md"
     - "skills/create.md"

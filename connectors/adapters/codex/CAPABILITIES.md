@@ -4,9 +4,9 @@
 
 **Adapter** `codex` · **Codec** `codex` · **Integration shape** `callback` · **Capability tier** 3 (Conversational)
 
-**Harness version verified** `0.146.0` · **range** `>=0.124.0` · **scheme** `semver`
+**Harness version verified** `0.147.0` · **range** `>=0.124.0` · **scheme** `semver`
 
-**Descriptor digest** `ad12a2a5006966b0d00f074290a6d8d2396c23343305fb8504d6d489313dacc7`
+**Descriptor digest** `4b318751579af39c81ea0c1ea7be718d66cda313622f1c5edb1cff5e3dfe8659`
 
 > The tier is derived from passing fixtures, never authored. `unsupported` means the harness
 > cannot do it — do not attempt it. `not-implemented` means it is buildable and unbuilt: that is
@@ -38,7 +38,7 @@ native id is a binding authority.
 | Harness ceiling | none documented |
 | Evidence | fixtures: `fixtures/permission-request.json` |
 
-Per-hook timeouts in seconds; the documentation gives a 600-second default. The adapter must set `timeout` explicitly from the window policy and well below that default.
+Per-hook timeouts in seconds; the documentation gives a 600-second default. The adapter must set `timeout` explicitly from the window policy and well below that default. A local 0.147.0 `codex exec --approve-for-me` smoke test still emitted PermissionRequest after the workspace sandbox failed and automatic review retried the shell command, so auto-review does not bypass the installed request hook.
 
 ## Capabilities
 

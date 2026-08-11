@@ -72,9 +72,9 @@ This connector is intentionally reviewable against the four connector layers in 
 - `plugin.json` — Antigravity plugin manifest (name, description, metadata).
 - `skills/overlord-mission/SKILL.md` — Antigravity adapter template with a `<!-- @connector-core -->` marker; setup interpolates shared core content at install time.
 - `skills/attach.md`, `skills/connect.md`, `skills/load.md`, `skills/create.md`, `skills/prompt.md`, `skills/discuss-objective.md`, `skills/add-objectives.md`, `skills/record-work.md`, `skills/spawn.md` — one skill per protocol operation; Antigravity auto-registers each as a `/<name>` slash command.
-- `hooks.json` + `scripts/pre-invocation-hook.sh` + `scripts/pre-tool-use-hook.sh` — legacy
-  follow-up and pre-tool compatibility hooks (see the limitations below). These are not a
-  fixture-proven agent-session decision path.
+- `hooks.json` — intentionally empty until a fixture-proven agent-session callback is installed.
+  The former compatibility hooks were removed because the documented native payloads cannot
+  support their claimed behavior safely.
 - `mcp_config.json` + `scripts/overlord-mcp.mjs` — MCP bridge to common `ovld protocol` operations. The shim is **generated**: it is rendered from `connectors/core/scripts/overlord-mcp.mjs` at setup time with the adapter key substituted, and there is no copy in this directory to edit.
 - `conformance-manifest.yaml` — connector conformance declaration for the Overlord contract.
 - `prompt-wrapper.md` — Antigravity launch guidance.
@@ -93,13 +93,17 @@ See the [adapter capability matrix](../../README.md#adapter-capability-matrix) f
 
 Antigravity's native hook events are `PreToolUse`, `PostToolUse`, `PreInvocation`, `PostInvocation`, and `Stop` — it has no event literally named `UserPromptSubmit` or `PermissionRequest` the way Claude Code and Codex do. This adapter maps Antigravity's native events onto Overlord's canonical hook-type vocabulary the same way the Cursor adapter maps `beforeSubmitPrompt` onto `UserPromptSubmit`:
 
-- `PreInvocation` (fires before each agent turn) → recorded as the canonical `UserPromptSubmit` follow-up-capture hook.
-- `PreToolUse` (fires before each tool call) → the legacy script always responds
-  `{"allow_tool":true}`. Its detached `ovld protocol permission-request` target is not a current
-  protocol command, so it neither gates nor reliably records the request. The generated
-  capability descriptor keeps Antigravity at tier 0 until a native fixture-backed path replaces
-  this compatibility hook.
+- `PreInvocation` receives invocation counters and common metadata, including `conversationId`,
+  but no submitted prompt. It therefore cannot implement canonical `UserPromptSubmit` capture
+  without reading the raw transcript, which the connector privacy contract forbids.
+- `PreToolUse` receives `toolCall`, `stepIdx`, and `conversationId`, and requires a `decision`
+  response (`allow`, `deny`, `ask`, `force_ask`, or `deny_unless_prior_grant`). The former
+  compatibility hook emitted the unrelated `allow_tool` field and called a nonexistent protocol
+  command. It has been removed rather than replaced with an unconditional native `allow`, which
+  would bypass Antigravity's own permission prompt.
 
-Both hook scripts are defensive: they no-op on any missing `MISSION_ID`, missing `ovld` binary, or unexpected payload shape, and they always return a well-formed allow response so a hook failure never blocks the Antigravity session. Antigravity's public docs do not yet pin an exact `PreInvocation` payload shape the way they do for `PreToolUse` (`toolCall.args`), so `pre-invocation-hook.sh` probes a few plausible field names (`prompt`, `message`, `text`, `input`) for the human turn text; adjust this once the official schema is confirmed.
+The descriptor records the first-party schema and keeps the decision capabilities unimplemented
+until a real installed `agy` binary can exercise the exact failure and timeout behavior through
+the channel-scoped agent-session runtime.
 
 No `Stop` hook or permission-rule file ships yet — Antigravity's pending-delivery check and any declarative auto-approval mechanism should be added once their concrete formats are confirmed, matching the "can be implemented after local MVP" note in `connectors/docs/05-connectors-and-agent-plugins.md`.

@@ -1,8 +1,8 @@
 {
   "$schema": "https://antigravity.google/schemas/v1/plugin.json",
   "name": "overlord",
-  "version": "0.3.20",
-  "description": "Chat-driven access to Overlord mission protocol workflows with hook-driven activity capture.",
+  "version": "0.3.21",
+  "description": "Chat-driven access to Overlord mission protocol workflows through skills and MCP.",
   "author": {
     "name": "Cooperativ",
     "url": "https://github.com/cooperativ-labs"

@@ -100,17 +100,18 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
     "codec": "antigravity",
     "integrationShape": "callback",
     "capabilityTier": 0,
-    "descriptorDigest": "c021926c384a72bdaa62ac5f0eab57e80822c5d2996db75ea3c30c6bf5d09ce8",
+    "descriptorDigest": "e7313b23f98b6ed15a1a32849291a2a391523d4c06403bf395ecbcadfa3b11ac",
     "descriptorSchemaVersion": 1,
     "harness": {
       "name": "Antigravity CLI",
+      "verifiedVersion": "docs: Antigravity CLI v1.1.11 / Antigravity 2.0 v2.6.0",
       "versionScheme": "opaque"
     },
     "binding": {
       "source": "payload",
-      "field": null,
+      "field": "conversationId",
       "fallbackField": null,
-      "status": "unverified"
+      "status": "supported"
     },
     "decisionHold": {
       "status": "unverified",
@@ -121,42 +122,42 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
     },
     "capabilities": {
       "observe.prompt": {
-        "status": "unverified",
+        "status": "unsupported",
         "native": "PreInvocation",
-        "reason": null,
-        "evidenceRef": null,
-        "trackedAs": "agent-session-verify-antigravity"
+        "reason": "PreInvocation exposes invocation counters and common metadata but no submitted prompt. Reading transcriptPath to reconstruct one would violate the raw-transcript privacy boundary.",
+        "evidenceRef": "https://antigravity.google/docs/hooks#preinvocation",
+        "trackedAs": null
       },
       "observe.toolCall": {
-        "status": "unverified",
+        "status": "not-implemented",
         "native": "PreToolUse",
         "reason": null,
         "evidenceRef": null,
         "trackedAs": "agent-session-verify-antigravity"
       },
       "observe.toolResult": {
-        "status": "unverified",
-        "native": null,
+        "status": "not-implemented",
+        "native": "PostToolUse",
         "reason": null,
         "evidenceRef": null,
         "trackedAs": "agent-session-verify-antigravity"
       },
       "observe.fileEdit": {
-        "status": "unverified",
-        "native": null,
+        "status": "not-implemented",
+        "native": "PostToolUse",
         "reason": null,
         "evidenceRef": null,
         "trackedAs": "agent-session-verify-antigravity"
       },
       "observe.sessionLifecycle": {
-        "status": "unverified",
-        "native": null,
+        "status": "not-implemented",
+        "native": "Stop",
         "reason": null,
         "evidenceRef": null,
         "trackedAs": "agent-session-verify-antigravity"
       },
       "decide.shell": {
-        "status": "unverified",
+        "status": "not-implemented",
         "native": "PreToolUse",
         "reason": null,
         "evidenceRef": null,
@@ -170,14 +171,14 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
         "trackedAs": "agent-session-verify-antigravity"
       },
       "decide.fileWrite": {
-        "status": "unverified",
-        "native": null,
+        "status": "not-implemented",
+        "native": "PreToolUse",
         "reason": null,
         "evidenceRef": null,
         "trackedAs": "agent-session-verify-antigravity"
       },
       "decide.anyTool": {
-        "status": "unverified",
+        "status": "not-implemented",
         "native": "PreToolUse",
         "reason": null,
         "evidenceRef": null,
@@ -198,29 +199,29 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
         "trackedAs": "agent-session-verify-antigravity"
       },
       "answer.persistentAllow": {
-        "status": "unverified",
-        "native": null,
+        "status": "not-implemented",
+        "native": "PreToolUse.permissionOverrides",
         "reason": null,
         "evidenceRef": null,
         "trackedAs": "agent-session-verify-antigravity"
       },
       "inject.midTurn": {
-        "status": "unverified",
+        "status": "unsupported",
         "native": null,
-        "reason": null,
-        "evidenceRef": null,
-        "trackedAs": "agent-session-verify-antigravity"
+        "reason": "PreInvocation and PostInvocation can inject only at model-invocation boundaries; the hook surface has no path to deliver input while a model or tool call is actively running.",
+        "evidenceRef": "https://antigravity.google/docs/hooks#preinvocation",
+        "trackedAs": null
       },
       "inject.turnBoundary": {
-        "status": "unverified",
-        "native": null,
+        "status": "not-implemented",
+        "native": "Stop",
         "reason": null,
         "evidenceRef": null,
         "trackedAs": "agent-session-verify-antigravity"
       },
       "inject.nextTurn": {
-        "status": "unverified",
-        "native": null,
+        "status": "not-implemented",
+        "native": "PreInvocation.injectSteps.userMessage",
         "reason": null,
         "evidenceRef": null,
         "trackedAs": "agent-session-verify-antigravity"
@@ -244,7 +245,7 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
       {
         "id": "outside-verification-survey",
         "severity": "medium",
-        "summary": "Antigravity was not part of the harness verification survey. Every row above is unverified rather than inferred, and this connector must stay at its fixture-proven tier until a dedicated verification objective upgrades it.",
+        "summary": "Antigravity was not part of the original harness verification survey. The current first-party docs now establish hook names, payload fields, and response shapes, but the `agy` binary was unavailable for empirical timeout, failure, resume, and headless tests. The connector must stay at its fixture-proven tier until those paths are exercised.",
         "verification": "unverified",
         "mitigation": "required",
         "trackedAs": "agent-session-verify-antigravity"
@@ -252,15 +253,24 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
       {
         "id": "pre-tool-use-always-allows",
         "severity": "medium",
-        "summary": "The shipped PreToolUse hook always answers `{\"allow_tool\":true}` and records the request through a detached `ovld protocol permission-request` call to a subcommand that does not exist. It therefore neither gates nor records anything, while its conformance manifest declared the permissionHook capability.",
+        "summary": "The former PreToolUse hook answered `{\"allow_tool\":true}` even though the first-party response contract requires `decision`, and called a nonexistent detached protocol command. It neither gated nor recorded reliably; changing it to native `decision: allow` would have silently bypassed the harness permission system, so the registration was removed.",
         "verification": "verified",
-        "mitigation": "required",
-        "trackedAs": "agent-session-verify-antigravity"
+        "mitigation": "implemented",
+        "trackedAs": null
+      },
+      {
+        "id": "pre-invocation-has-no-prompt",
+        "severity": "high",
+        "summary": "The former follow-up hook guessed prompt/message/text/input fields on PreInvocation, but the first-party schema contains none of them. It could never capture a normal follow-up; reconstructing one from transcriptPath would violate the raw-transcript privacy boundary. The false followUpHook projection and the registration were removed.",
+        "verification": "verified",
+        "mitigation": "implemented",
+        "trackedAs": null
       }
     ],
     "decisionShape": {
       "codec": "antigravity",
       "neverSend": [
+        "allow_tool",
         "hookSpecificOutput",
         "permissionDecision",
         "permission"
@@ -272,11 +282,11 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
     "codec": "claude",
     "integrationShape": "callback",
     "capabilityTier": 3,
-    "descriptorDigest": "bdeb8c46cb12d692aced13597c6c2120312c303f3aaeb597b891d83e054db365",
+    "descriptorDigest": "5c25dafa68e2f4d0862be4378f4b7a2506ace3a4fe6b806a0e392188604f20d8",
     "descriptorSchemaVersion": 1,
     "harness": {
       "name": "Claude Code",
-      "verifiedVersion": "2.1.221",
+      "verifiedVersion": "2.1.227",
       "versionRange": ">=2.1.0",
       "versionScheme": "semver"
     },
@@ -450,7 +460,7 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
       {
         "id": "subagent-stop-unregistered",
         "severity": "medium",
-        "summary": "The adapter registers `Stop` and no subagent-lifecycle event. Claude Code 2.1.221 fires `SubagentStop` — not `Stop` — when a subagent finishes, and subagents now run in the background past the parent's turn boundary, so the shipped Stop registration is guaranteed not to run for work a subagent completes after the parent stopped. Nothing is lost today because that registration is already inert (see `shipped-stop-hook-inert`), which is exactly why the fix is to repair the Stop path first and only then decide whether the repaired body should also ride `SubagentStop`. Registering the current inert script on a second event would add a spawn per subagent completion and buy nothing.",
+        "summary": "The adapter registers `Stop` and no subagent-lifecycle event. Claude Code 2.1.221 fires `SubagentStop` — not `Stop` — when a subagent finishes, and subagents now run in the background past the parent's turn boundary. Version 2.1.224 also removed the 200-subagent-per-session spawn cap, increasing the frequency of this gap, so the shipped Stop registration is guaranteed not to run for work a subagent completes after the parent stopped. Nothing is lost today because that registration is already inert (see `shipped-stop-hook-inert`), which is exactly why the fix is to repair the Stop path first and only then decide whether the repaired body should also ride `SubagentStop`. Registering the current inert script on a second event would add a spawn per subagent completion and buy nothing.",
         "verification": "verified",
         "mitigation": "required",
         "trackedAs": "coo:585"
@@ -458,7 +468,7 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
       {
         "id": "subagent-commits-escape-delivery-delta",
         "severity": "high",
-        "summary": "Delivery change attribution is computed from `git status --porcelain` against the attach baseline (cli/src/vcs.ts `readChangedFiles` / `filterRunAttributableChanges`); nothing in that path consults HEAD or the commit graph. A background subagent that commits, merges, or opens a PR for its own work therefore removes those files from the worktree delta, and they vanish from the delivery report entirely — not flagged, not skipped, silently absent. The PostToolUse touched-files log is unaffected (its key is `sha256(abspath(cwd) + \"\\0\" + MISSION_ID)`, so a subagent sharing the cwd writes to the same log), which means the evidence that the edit happened survives while the delta that decides coverage does not. Closing this means teaching the delta about commits made since the baseline, which is a CLI change with branch and worktree semantics to settle, not a hook edit.",
+        "summary": "Delivery change attribution is computed from `git status --porcelain` against the attach baseline (cli/src/vcs.ts `readChangedFiles` / `filterRunAttributableChanges`); nothing in that path consults HEAD or the commit graph. Claude Code 2.1.221 made background-session commit-and-push behavior an explicit work-preservation default. A background subagent that commits, merges, or opens a PR for its own work therefore removes those files from the worktree delta, and they vanish from the delivery report entirely — not flagged, not skipped, silently absent. The PostToolUse touched-files log is unaffected (its key is `sha256(abspath(cwd) + \"\\0\" + MISSION_ID)`, so a subagent sharing the cwd writes to the same log), which means the evidence that the edit happened survives while the delta that decides coverage does not. Closing this means teaching the delta about commits made since the baseline, which is a CLI change with branch and worktree semantics to settle, not a hook edit.",
         "verification": "verified",
         "mitigation": "required",
         "trackedAs": "coo:585"
@@ -479,11 +489,11 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
     "codec": "codex",
     "integrationShape": "callback",
     "capabilityTier": 3,
-    "descriptorDigest": "ad12a2a5006966b0d00f074290a6d8d2396c23343305fb8504d6d489313dacc7",
+    "descriptorDigest": "4b318751579af39c81ea0c1ea7be718d66cda313622f1c5edb1cff5e3dfe8659",
     "descriptorSchemaVersion": 1,
     "harness": {
       "name": "Codex CLI",
-      "verifiedVersion": "0.146.0",
+      "verifiedVersion": "0.147.0",
       "versionRange": ">=0.124.0",
       "versionScheme": "semver"
     },
@@ -670,20 +680,20 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
     "adapter": "cursor",
     "codec": "cursor",
     "integrationShape": "callback",
-    "capabilityTier": 0,
-    "descriptorDigest": "4f6c4bb7a8c3637a6fc3ddd31e0ea98c8fd354badbb61117c3263561ec17ff74",
+    "capabilityTier": 3,
+    "descriptorDigest": "f5cf848a2f9287bda3ddd2a4158ce8c05ce0fdadde32212c975062edf6f64ce8",
     "descriptorSchemaVersion": 1,
     "harness": {
       "name": "Cursor Agent CLI",
-      "verifiedVersion": "2026.07.23-e383d2b",
+      "verifiedVersion": "2026.08.04-aaa8809",
       "versionRange": ">=2026.07.01",
       "versionScheme": "calendar"
     },
     "binding": {
       "source": "payload",
-      "field": "session_id",
-      "fallbackField": "conversation_id",
-      "status": "unverified"
+      "field": "conversation_id",
+      "fallbackField": "session_id",
+      "status": "supported"
     },
     "decisionHold": {
       "status": "supported",
@@ -1238,7 +1248,7 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
   }
 ];
 
-export const HARNESS_CATALOG_DIGEST = '9bf0a21f8df7f6bf417dc00c474980432a8b3167e56b56579f4bf5e51d81bbf4';
+export const HARNESS_CATALOG_DIGEST = '7600395c3c63a383961856a0ff87105cfb2e019c2f5f7fa946c9d9109c90e8d9';
 
 export function findHarnessDescriptor(adapter: string): HarnessDescriptor | undefined {
   return HARNESS_DESCRIPTORS.find(entry => entry.adapter === adapter);

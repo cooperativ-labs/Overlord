@@ -11,11 +11,11 @@ connector:
   # `capabilities` and `hookTypes` are the DEPRECATED hook-named projection, retained for
   # one release. `harnessCapabilities` is the authoritative source.
   integrationShape: callback
-  capabilityTier: 0
+  capabilityTier: 3
   harnessCapabilities:
     path: connectors/adapters/cursor/harness-capabilities.yaml
     schemaVersion: 1
-    digest: "4f6c4bb7a8c3637a6fc3ddd31e0ea98c8fd354badbb61117c3263561ec17ff74"
+    digest: "f5cf848a2f9287bda3ddd2a4158ce8c05ce0fdadde32212c975062edf6f64ce8"
   capabilities:
     - followUpHook
     - stopHook

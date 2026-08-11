@@ -50,7 +50,14 @@ function printHumanResult(result: SetupResult): void {
   const verb = result.dryRun ? 'Would install' : 'Installed';
   printLine(`${verb} connector "${result.agentKey}" → ${result.installPath}`);
   for (const file of result.files) {
-    const marker = file.action === 'written' ? '+' : file.action === 'would-write' ? '~' : '=';
+    const marker =
+      file.action === 'written'
+        ? '+'
+        : file.action === 'would-write'
+          ? '~'
+          : file.action === 'removed' || file.action === 'would-remove'
+            ? '-'
+            : '=';
     printLine(`  ${marker} ${file.path}${file.executable ? ' (executable)' : ''}`);
   }
   for (const warning of result.warnings) {

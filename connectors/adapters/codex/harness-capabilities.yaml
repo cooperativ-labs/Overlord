@@ -14,7 +14,7 @@ decisionCodecSpec: codec/codex.decision-codec.yaml
 
 harness:
   name: Codex CLI
-  verifiedVersion: '0.146.0'
+  verifiedVersion: '0.147.0'
   versionRange: '>=0.124.0'
   versionScheme: semver
 
@@ -41,7 +41,10 @@ decisionHold:
   trackedAs: agent-session-phase-4
   notes: >-
     Per-hook timeouts in seconds; the documentation gives a 600-second default. The adapter
-    must set `timeout` explicitly from the window policy and well below that default.
+    must set `timeout` explicitly from the window policy and well below that default. A local
+    0.147.0 `codex exec --approve-for-me` smoke test still emitted PermissionRequest after the
+    workspace sandbox failed and automatic review retried the shell command, so auto-review does
+    not bypass the installed request hook.
 
 capabilities:
   observe.prompt:

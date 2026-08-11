@@ -6,6 +6,7 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   rmSync,
   statSync,
   writeFileSync
@@ -47,7 +48,7 @@ export type ConnectorManifest = {
 
 export type ManagedFileResult = {
   path: string;
-  action: 'written' | 'unchanged' | 'would-write';
+  action: 'written' | 'unchanged' | 'would-write' | 'removed' | 'would-remove';
   executable: boolean;
 };
 
@@ -690,6 +691,36 @@ export function setupConnector({
 
   const files: ManagedFileResult[] = [];
   const stateFiles: Array<{ path: string; sha256: string }> = [];
+  const previousState = readInstallState(agentKey, resolvedHome);
+  const declaredFiles = new Set(manifest.connector.managedFiles);
+
+  if (previousState?.installPath === installPath && existsSync(installPath)) {
+    const resolvedInstallPath = realpathSync(installPath);
+    for (const recorded of previousState.files) {
+      if (declaredFiles.has(recorded.path)) continue;
+
+      const target = path.resolve(installPath, recorded.path);
+      const resolvedTarget = existsSync(target) ? realpathSync(target) : target;
+      if (!resolvedTarget.startsWith(`${resolvedInstallPath}${path.sep}`)) {
+        warnings.push(
+          `Refusing to remove obsolete managed path outside install root: ${recorded.path}`
+        );
+        continue;
+      }
+      if (!existsSync(target) || !statSync(target).isFile()) continue;
+      if (sha256(readFileSync(target)) !== recorded.sha256) {
+        warnings.push(`Preserved modified obsolete managed file: ${recorded.path}`);
+        continue;
+      }
+
+      if (!dryRun) rmSync(target);
+      files.push({
+        path: recorded.path,
+        action: dryRun ? 'would-remove' : 'removed',
+        executable: false
+      });
+    }
+  }
 
   for (const relativePath of manifest.connector.managedFiles) {
     if (!managedFileSourceExists({ sourceDir, relativePath })) {

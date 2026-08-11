@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -111,6 +112,46 @@ test('setup installs exactly the managed files and is idempotent', () => {
     assert.ok(second.files.every(file => file.action === 'unchanged'));
 
     inspectAndAssertHealthy(home);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('setup removes unchanged obsolete managed files and preserves modified ones', () => {
+  const home = tempHome();
+  try {
+    const first = setupConnector({ agentKey: 'claude', home });
+    const statePath = path.join(home, '.ovld', 'connectors', 'claude.json');
+    const obsoletePath = 'scripts/obsolete-hook.sh';
+    const obsoleteTarget = path.join(first.installPath, obsoletePath);
+    const original = '#!/bin/sh\nexit 0\n';
+    mkdirSync(path.dirname(obsoleteTarget), { recursive: true });
+    writeFileSync(obsoleteTarget, original);
+
+    const state = JSON.parse(readFileSync(statePath, 'utf8'));
+    state.files.push({
+      path: obsoletePath,
+      sha256: createHash('sha256').update(original).digest('hex')
+    });
+    writeFileSync(statePath, `${JSON.stringify(state, null, 2)}\n`);
+
+    const cleaned = setupConnector({ agentKey: 'claude', home });
+    assert.ok(cleaned.files.some(file => file.path === obsoletePath && file.action === 'removed'));
+    assert.equal(existsSync(obsoleteTarget), false);
+
+    writeFileSync(obsoleteTarget, `${original}# user edit\n`);
+    state.files[state.files.length - 1].sha256 = createHash('sha256')
+      .update(original)
+      .digest('hex');
+    writeFileSync(statePath, `${JSON.stringify(state, null, 2)}\n`);
+
+    const preserved = setupConnector({ agentKey: 'claude', home });
+    assert.ok(existsSync(obsoleteTarget));
+    assert.ok(
+      preserved.warnings.some(warning =>
+        warning.includes('Preserved modified obsolete managed file')
+      )
+    );
   } finally {
     rmSync(home, { recursive: true, force: true });
   }

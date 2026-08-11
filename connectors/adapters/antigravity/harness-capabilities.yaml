@@ -14,56 +14,69 @@ codec: antigravity
 
 harness:
   name: Antigravity CLI
+  verifiedVersion: 'docs: Antigravity CLI v1.1.11 / Antigravity 2.0 v2.6.0'
   versionScheme: opaque
 
 integrationShape: callback
 
 binding:
   source: payload
-  status: unverified
-  trackedAs: agent-session-verify-antigravity
+  field: conversationId
+  status: supported
+  fixture: fixtures/official-pre-tool-use.json
   notes: >-
-    No native session identifier has been established for Antigravity hook payloads. Until
-    one is, this connector cannot bind, and therefore cannot reach any interaction tier.
+    The first-party hook contract defines `conversationId` as the unique UUID of the active
+    agent conversation and includes it in every hook payload. It remains a correlation alias;
+    the verified channel credential is the authorization and mission scope. The local `agy`
+    binary was unavailable for an empirical resume test, so no interaction capability is
+    promoted solely from this binding proof.
 
 decisionHold:
   status: unverified
   trackedAs: agent-session-verify-antigravity
   notes: >-
-    The shipped hooks declare a 10-second timeout, but whether a held PreToolUse response
-    actually gates execution — and what the harness does when the hook exceeds that timeout —
-    was not verified.
+    The first-party docs define command-hook timeouts (30 seconds by default) and a synchronous
+    PreToolUse `decision` response, but do not define timeout, crash, non-zero-exit, or malformed
+    JSON fallback behavior. Keep the remote decision hold unverified until an installed binary
+    exercises those failure paths.
 
 capabilities:
   observe.prompt:
-    status: unverified
+    status: unsupported
     native: PreInvocation
-    trackedAs: agent-session-verify-antigravity
+    reason: >-
+      PreInvocation exposes invocation counters and common metadata but no submitted prompt.
+      Reading transcriptPath to reconstruct one would violate the raw-transcript privacy boundary.
+    evidenceRef: https://antigravity.google/docs/hooks#preinvocation
   observe.toolCall:
-    status: unverified
+    status: not-implemented
     native: PreToolUse
     trackedAs: agent-session-verify-antigravity
   observe.toolResult:
-    status: unverified
+    status: not-implemented
+    native: PostToolUse
     trackedAs: agent-session-verify-antigravity
   observe.fileEdit:
-    status: unverified
+    status: not-implemented
+    native: PostToolUse
     trackedAs: agent-session-verify-antigravity
   observe.sessionLifecycle:
-    status: unverified
+    status: not-implemented
+    native: Stop
     trackedAs: agent-session-verify-antigravity
   decide.shell:
-    status: unverified
+    status: not-implemented
     native: PreToolUse
     trackedAs: agent-session-verify-antigravity
   decide.mcp:
     status: unverified
     trackedAs: agent-session-verify-antigravity
   decide.fileWrite:
-    status: unverified
+    status: not-implemented
+    native: PreToolUse
     trackedAs: agent-session-verify-antigravity
   decide.anyTool:
-    status: unverified
+    status: not-implemented
     native: PreToolUse
     trackedAs: agent-session-verify-antigravity
   decide.universal:
@@ -73,16 +86,22 @@ capabilities:
     status: unverified
     trackedAs: agent-session-verify-antigravity
   answer.persistentAllow:
-    status: unverified
+    status: not-implemented
+    native: PreToolUse.permissionOverrides
     trackedAs: agent-session-verify-antigravity
   inject.midTurn:
-    status: unverified
-    trackedAs: agent-session-verify-antigravity
+    status: unsupported
+    reason: >-
+      PreInvocation and PostInvocation can inject only at model-invocation boundaries; the hook
+      surface has no path to deliver input while a model or tool call is actively running.
+    evidenceRef: https://antigravity.google/docs/hooks#preinvocation
   inject.turnBoundary:
-    status: unverified
+    status: not-implemented
+    native: Stop
     trackedAs: agent-session-verify-antigravity
   inject.nextTurn:
-    status: unverified
+    status: not-implemented
+    native: PreInvocation.injectSteps.userMessage
     trackedAs: agent-session-verify-antigravity
   terminal.concurrentAnswer:
     status: unverified
@@ -95,36 +114,47 @@ hazards:
   - id: outside-verification-survey
     severity: medium
     summary: >-
-      Antigravity was not part of the harness verification survey. Every row above is
-      unverified rather than inferred, and this connector must stay at its fixture-proven
-      tier until a dedicated verification objective upgrades it.
+      Antigravity was not part of the original harness verification survey. The current
+      first-party docs now establish hook names, payload fields, and response shapes, but the
+      `agy` binary was unavailable for empirical timeout, failure, resume, and headless tests.
+      The connector must stay at its fixture-proven tier until those paths are exercised.
     verification: unverified
     mitigation: required
     trackedAs: agent-session-verify-antigravity
   - id: pre-tool-use-always-allows
     severity: medium
     summary: >-
-      The shipped PreToolUse hook always answers `{"allow_tool":true}` and records the request
-      through a detached `ovld protocol permission-request` call to a subcommand that does not
-      exist. It therefore neither gates nor records anything, while its conformance manifest
-      declared the permissionHook capability.
+      The former PreToolUse hook answered `{"allow_tool":true}` even though the first-party
+      response contract requires `decision`, and called a nonexistent detached protocol command.
+      It neither gated nor recorded reliably; changing it to native `decision: allow` would have
+      silently bypassed the harness permission system, so the registration was removed.
     verification: verified
-    mitigation: required
-    trackedAs: agent-session-verify-antigravity
+    mitigation: implemented
+    fixture: fixtures/unbound-session.json
+  - id: pre-invocation-has-no-prompt
+    severity: high
+    summary: >-
+      The former follow-up hook guessed prompt/message/text/input fields on PreInvocation, but
+      the first-party schema contains none of them. It could never capture a normal follow-up;
+      reconstructing one from transcriptPath would violate the raw-transcript privacy boundary.
+      The false followUpHook projection and the registration were removed.
+    verification: verified
+    mitigation: implemented
+    fixture: fixtures/unbound-session.json
 
 decisionShape:
   codec: antigravity
-  neverSend: [hookSpecificOutput, permissionDecision, permission]
+  neverSend: [allow_tool, hookSpecificOutput, permissionDecision, permission]
   notes: >-
-    The observed response shape is a flat `{"allow_tool": boolean}`. No deny or defer shape
-    has been verified, so no decision codec may be written for this adapter yet.
+    The first-party response is `{ decision, reason?, permissionOverrides? }`, with decision
+    values allow, deny, ask, force_ask, and deny_unless_prior_grant. No decision codec ships
+    until an installed binary verifies failure fallback and exact emitted bytes; in particular,
+    no failure path may manufacture `decision: allow`.
 
 unboundSessionFixture: fixtures/unbound-session.json
 
 legacy:
   capabilities:
-    - followUpHook
     - contextFilePrompt
     - slashCommands
-  hookTypes:
-    - UserPromptSubmit
+  hookTypes: []

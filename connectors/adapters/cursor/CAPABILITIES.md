@@ -2,11 +2,11 @@
 
 # Cursor Agent CLI — Overlord agent-session capabilities
 
-**Adapter** `cursor` · **Codec** `cursor` · **Integration shape** `callback` · **Capability tier** 0 (Unsupported)
+**Adapter** `cursor` · **Codec** `cursor` · **Integration shape** `callback` · **Capability tier** 3 (Conversational)
 
-**Harness version verified** `2026.07.23-e383d2b` · **range** `>=2026.07.01` · **scheme** `calendar`
+**Harness version verified** `2026.08.04-aaa8809` · **range** `>=2026.07.01` · **scheme** `calendar`
 
-**Descriptor digest** `4f6c4bb7a8c3637a6fc3ddd31e0ea98c8fd354badbb61117c3263561ec17ff74`
+**Descriptor digest** `f5cf848a2f9287bda3ddd2a4158ce8c05ce0fdadde32212c975062edf6f64ce8`
 
 > The tier is derived from passing fixtures, never authored. `unsupported` means the harness
 > cannot do it — do not attempt it. `not-implemented` means it is buildable and unbuilt: that is
@@ -17,14 +17,13 @@
 
 | Field | Value |
 | --- | --- |
-| Status | ❓ unverified |
+| Status | ✅ supported |
 | Source | `payload` |
-| Field | `session_id` |
-| Fallback field | `conversation_id` |
-| Evidence | tracked as `agent-session-verify-cursor-binding` |
+| Field | `conversation_id` |
+| Fallback field | `session_id` |
+| Evidence | fixtures: `fixtures/normalize-before-submit-prompt.json` |
 
-Hook input carries `conversation_id` and an optional `session_id`. Which of the two is stable across a resumed conversation, and whether either appears in the environment of a tool subprocess, were not established. Binding on the wrong one silently misattributes a session, so this must be settled by fixture before the adapter binds on it.
-This is now the *only* thing holding Cursor at tier 0. Four `observe.*` capabilities and three `decide.*` capabilities are fixture-proven, and `inject.turnBoundary` with them — enough for tier 3 on every axis the tier derivation reads except this one. Recording a real Cursor hook payload across a resume, and flipping this node, is therefore a single-session piece of work with a three-tier payoff, not an incremental improvement. Note that the shipped prompt hook and `codec/cursor.codec.yaml` both already treat `conversation_id` as the primary identity; if the recorded evidence says `session_id` is the stable one, both must change together or one session splits into two.
+Cursor's current first-party hook reference defines `conversation_id` as stable across many turns. The executable prompt fixture and the shipped prompt/event codecs already use that field as the primary correlation alias, so the descriptor now matches the runtime instead of preferring the optional `session_id`. The verified channel credential remains the authority; neither identifier grants mission scope. A local authenticated resume probe was unavailable, so `session_id` remains a compatibility fallback rather than a competing primary identity.
 
 The native session id is a **correlation alias only**. Authorization and mission scope come
 from the verified channel/session credential; neither the working directory nor an unverified
