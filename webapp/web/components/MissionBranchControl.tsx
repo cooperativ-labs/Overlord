@@ -23,6 +23,7 @@ import type {
   MissionDetailDto
 } from '../../shared/contract.ts';
 import { ApiRequestError } from '../lib/api.ts';
+import { useCopyToClipboard } from '../lib/hooks/use-copy-to-clipboard.ts';
 import {
   resolvePrimaryResourceForTarget,
   useObservedMissionBranch
@@ -111,12 +112,7 @@ const BRANCH_STATUS_META: Record<
 };
 
 function CopyIconButton({ value, label }: { value: string; label: string }) {
-  const [copied, setCopied] = useState(false);
-  const copy = async () => {
-    await navigator.clipboard.writeText(value);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1200);
-  };
+  const { copied, copy } = useCopyToClipboard({ resetMs: 1200 });
 
   return (
     <Tooltip>
@@ -127,7 +123,7 @@ function CopyIconButton({ value, label }: { value: string; label: string }) {
             variant="ghost"
             size="icon-xs"
             aria-label={label}
-            onClick={() => void copy()}
+            onClick={() => void copy(value)}
           >
             {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
           </IconButton>
@@ -146,15 +142,9 @@ function CopyIconButton({ value, label }: { value: string; label: string }) {
  * worktree exists (i.e. before the branch is prepared).
  */
 function BranchCopyMenu({ branch }: { branch: MissionBranchDto }) {
-  const [copied, setCopied] = useState(false);
+  const { copied, copy } = useCopyToClipboard({ resetMs: 1200 });
   const path = branch.worktreePath;
   const cdCommand = path ? `cd ${JSON.stringify(path)}` : null;
-
-  const copy = (value: string) => {
-    void navigator.clipboard.writeText(value);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1200);
-  };
 
   return (
     <DropdownMenu>
@@ -166,14 +156,14 @@ function BranchCopyMenu({ branch }: { branch: MissionBranchDto }) {
         <ChevronDown className="h-3 w-3 opacity-60" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-44">
-        <DropdownMenuItem onClick={() => copy(branch.name)}>
+        <DropdownMenuItem onClick={() => void copy(branch.name)}>
           <GitBranch />
           Branch name
         </DropdownMenuItem>
         <DropdownMenuItem
           disabled={!cdCommand}
           onClick={() => {
-            if (cdCommand) copy(cdCommand);
+            if (cdCommand) void copy(cdCommand);
           }}
         >
           <Terminal />
@@ -182,7 +172,7 @@ function BranchCopyMenu({ branch }: { branch: MissionBranchDto }) {
         <DropdownMenuItem
           disabled={!path}
           onClick={() => {
-            if (path) copy(path);
+            if (path) void copy(path);
           }}
         >
           <FolderOpen />

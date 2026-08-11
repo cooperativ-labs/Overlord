@@ -40,6 +40,7 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { getDesktopBridge } from '@/lib/desktop-chrome';
 import {
   ANY_ELIGIBLE_EXECUTION_TARGET_VALUE,
   executionTargetOptionLabel,
@@ -48,7 +49,6 @@ import {
   parseExecutionTargetSelectorValue,
   resolveExecutionTargetSelectorValue
 } from '@/lib/execution-target-selection';
-import { getDesktopBridge } from '@/lib/desktop-chrome';
 import { useCopyToClipboard } from '@/lib/hooks/use-copy-to-clipboard';
 import { writeLocalProjectMetadata } from '@/lib/project-metadata';
 import {

@@ -152,9 +152,7 @@ export function AuthScreen({ onAuthenticated }: AuthScreenProps) {
         if (!bridge?.openExternal) {
           throw new Error('Unable to open GitHub sign-in in your default browser.');
         }
-        const opened = await bridge.openExternal(
-          `${getAuthBaseUrl()}/api/auth/desktop/github`
-        );
+        const opened = await bridge.openExternal(`${getAuthBaseUrl()}/api/auth/desktop/github`);
         if (!opened) throw new Error('Unable to open GitHub sign-in in your default browser.');
         return;
       }

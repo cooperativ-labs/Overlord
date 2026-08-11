@@ -1,5 +1,4 @@
 import { Check, Copy } from 'lucide-react';
-import { useState } from 'react';
 
 import {
   Accordion,
@@ -9,6 +8,7 @@ import {
 } from '@/components/ui/accordion';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { useCopyToClipboard } from '@/lib/hooks/use-copy-to-clipboard';
 
 import {
   ATTACH_CONTEXT_FIELDS,
@@ -34,14 +34,12 @@ function VariableRow({
   variable: LaunchVariableDefinition;
   onInsert?: (token: string) => void;
 }) {
-  const [copied, setCopied] = useState(false);
+  const { copied, copy } = useCopyToClipboard({ resetMs: 1500 });
   const token = placeholderToken(variable.name);
 
   async function handleCopy() {
     try {
-      await navigator.clipboard.writeText(token);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1500);
+      await copy(token);
     } catch {
       // Clipboard can fail in non-secure contexts; still offer insert when wired.
     }

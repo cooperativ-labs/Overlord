@@ -1,8 +1,9 @@
 import { Check, CheckCircle2, ChevronDown, Copy, Loader2, MoreVertical, Play } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 
 import type { ExecutionRequestDto, ObjectiveDto } from '../../../shared/contract.ts';
 import { api } from '../../lib/api.ts';
+import { useCopyToClipboard } from '../../lib/hooks/use-copy-to-clipboard.ts';
 import { objectiveResourceConnection } from '../../lib/project-resources.ts';
 import {
   useLaunchObjective,
@@ -82,10 +83,10 @@ export function AgentLaunchButton({
   const resourcesQ = useProjectResources(objective.projectId);
   const executionTargetQ = useProjectExecutionTarget(objective.projectId);
   const [showActiveConfirm, setShowActiveConfirm] = useState(false);
-  const [copiedKind, setCopiedKind] = useState<'prompt' | 'cli' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [executionTargetId, setExecutionTargetId] = useState<string>('');
-  const copyResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { copied: promptCopied, copy: copyPromptText } = useCopyToClipboard();
+  const { copied: cliCopied, copy: copyCliText } = useCopyToClipboard();
 
   const primaryConnection = objectiveResourceConnection({
     resources: resourcesQ.data ?? [],
@@ -181,18 +182,11 @@ export function AgentLaunchButton({
     queueLaunch();
   }
 
-  async function copyToClipboard(text: string, kind: 'prompt' | 'cli') {
-    await navigator.clipboard.writeText(text);
-    setCopiedKind(kind);
-    if (copyResetRef.current) clearTimeout(copyResetRef.current);
-    copyResetRef.current = setTimeout(() => setCopiedKind(null), 2000);
-  }
-
   async function handleCopyPrompt() {
     setError(null);
     try {
       const { prompt } = await api.getObjectivePrompt(objective.id);
-      await copyToClipboard(prompt, 'prompt');
+      await copyPromptText(prompt);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to copy prompt');
     }
@@ -209,7 +203,7 @@ export function AgentLaunchButton({
         reasoningEffort: selection.reasoningEffort,
         executionTargetId: executionTargetId || null
       });
-      await copyToClipboard(command, 'cli');
+      await copyCliText(command);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to copy CLI command');
     }
@@ -383,11 +377,11 @@ export function AgentLaunchButton({
             </DropdownMenuItem>
             <DropdownMenuItem className="gap-2 text-xs" onClick={() => void handleCopyPrompt()}>
               <Copy className="h-3.5 w-3.5" />
-              <span>{copiedKind === 'prompt' ? 'Copied ✓' : 'Copy prompt'}</span>
+              <span>{promptCopied ? 'Copied ✓' : 'Copy prompt'}</span>
             </DropdownMenuItem>
             <DropdownMenuItem className="gap-2 text-xs" onClick={() => void handleCopyCliCommand()}>
               <Copy className="h-3.5 w-3.5" />
-              <span>{copiedKind === 'cli' ? 'Copied ✓' : 'Copy CLI command'}</span>
+              <span>{cliCopied ? 'Copied ✓' : 'Copy CLI command'}</span>
             </DropdownMenuItem>
             <div className="border-t px-2 py-2">
               <label

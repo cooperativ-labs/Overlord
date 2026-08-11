@@ -1,4 +1,5 @@
 import type { ProjectResourceDto } from '../../shared/contract.ts';
+
 import { getDesktopBridge } from './desktop-chrome.ts';
 
 export async function writeLocalProjectMetadata({

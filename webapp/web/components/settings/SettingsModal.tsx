@@ -34,8 +34,8 @@ import { UserProfilePage } from '@/components/settings/UserProfilePage';
 import { UserTokensPage } from '@/components/settings/UserTokensPage';
 import { WebhooksPage } from '@/components/settings/WebhooksPage';
 import { WorktreesPage } from '@/components/settings/WorktreesPage';
-import { useLocalTargetUnavailable } from '@/lib/local-target-client.ts';
 import { getDesktopChrome } from '@/lib/desktop-chrome';
+import { useLocalTargetUnavailable } from '@/lib/local-target-client.ts';
 import { useMeta, useProfile } from '@/lib/queries';
 
 type SettingsModalProps = {

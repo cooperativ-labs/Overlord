@@ -3,6 +3,7 @@ import { useState } from 'react';
 
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import { LoadingButton } from '@/components/ui/loading-button';
+import { useCopyToClipboard } from '@/lib/hooks/use-copy-to-clipboard';
 
 import { useAppBanners } from './AppBannerContext';
 import type { AppBannerType } from './types';
@@ -29,10 +30,33 @@ function notificationColor(type: AppBannerType) {
   }
 }
 
+function BannerCopyCommandButton({ command }: { command: string }) {
+  const { copied, copy } = useCopyToClipboard();
+
+  return (
+    <button
+      type="button"
+      onClick={() => void copy(command)}
+      className="inline-flex items-center gap-1 text-xs font-medium opacity-80 transition-opacity hover:opacity-100"
+    >
+      {copied ? (
+        <>
+          <Check className="h-3 w-3" />
+          Copied
+        </>
+      ) : (
+        <>
+          <Copy className="h-3 w-3" />
+          Copy
+        </>
+      )}
+    </button>
+  );
+}
+
 export function AppBannerStack() {
   const { notifications, dismissNotification } = useAppBanners();
   const [actionStates, setActionStates] = useState<Record<string, ButtonLoadingState>>({});
-  const [copiedIds, setCopiedIds] = useState<Record<string, boolean>>({});
 
   if (notifications.length === 0) return null;
 
@@ -79,29 +103,7 @@ export function AppBannerStack() {
                 <code className="rounded bg-black/5 px-1.5 py-0.5 font-mono text-[11px] dark:bg-white/10">
                   {notification.copyCommand}
                 </code>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    await navigator.clipboard.writeText(notification.copyCommand!);
-                    setCopiedIds(prev => ({ ...prev, [notification.id]: true }));
-                    window.setTimeout(() => {
-                      setCopiedIds(prev => ({ ...prev, [notification.id]: false }));
-                    }, 2000);
-                  }}
-                  className="inline-flex items-center gap-1 text-xs font-medium opacity-80 transition-opacity hover:opacity-100"
-                >
-                  {copiedIds[notification.id] ? (
-                    <>
-                      <Check className="h-3 w-3" />
-                      Copied
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="h-3 w-3" />
-                      Copy
-                    </>
-                  )}
-                </button>
+                <BannerCopyCommandButton command={notification.copyCommand} />
               </div>
             )}
           </div>

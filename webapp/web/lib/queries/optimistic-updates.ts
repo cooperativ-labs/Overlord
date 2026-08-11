@@ -1,6 +1,11 @@
-import type { MissionDetailDto, MissionDto, MyMissionsResponse, StatusType } from '../../../shared/contract.ts';
 import type { QueryClient } from '@tanstack/react-query';
 
+import type {
+  MissionDetailDto,
+  MissionDto,
+  MyMissionsResponse,
+  StatusType
+} from '../../../shared/contract.ts';
 import { api } from '../api.ts';
 import { keys } from '../query-keys.ts';
 
@@ -44,7 +49,11 @@ export function createReorderBoardColumnMutation(qc: QueryClient) {
       }
       return { previous };
     },
-    onError: (_err: unknown, vars: ReorderBoardColumnVars, context?: { previous?: MissionDto[] }) => {
+    onError: (
+      _err: unknown,
+      vars: ReorderBoardColumnVars,
+      context?: { previous?: MissionDto[] }
+    ) => {
       if (context?.previous) qc.setQueryData(keys.missions(vars.projectId), context.previous);
     },
     onSettled: (_data: unknown, _err: unknown, vars: ReorderBoardColumnVars) => {
@@ -75,13 +84,22 @@ export function createReorderMyMissionsMutation(qc: QueryClient) {
             const position = positionById.get(mission.id);
             return position === undefined
               ? mission
-              : { ...mission, statusId: vars.statusId, statusType: vars.statusType, myPosition: position };
+              : {
+                  ...mission,
+                  statusId: vars.statusId,
+                  statusType: vars.statusType,
+                  myPosition: position
+                };
           })
         });
       }
       return { previous };
     },
-    onError: (_err: unknown, _vars: ReorderMyMissionsVars, context?: { previous?: MyMissionsResponse }) => {
+    onError: (
+      _err: unknown,
+      _vars: ReorderMyMissionsVars,
+      context?: { previous?: MyMissionsResponse }
+    ) => {
       if (context?.previous) qc.setQueryData(keys.myMissions, context.previous);
     },
     onSettled: () => void qc.invalidateQueries({ queryKey: keys.myMissions })
@@ -103,21 +121,29 @@ export function createReorderFutureObjectivesMutation(qc: QueryClient) {
       if (previous) {
         const orderIndex = new Map(vars.orderedObjectiveIds.map((id, index) => [id, index]));
         const basePosition = Math.min(
-          ...previous.objectives.filter(objective => orderIndex.has(objective.id)).map(objective => objective.position)
+          ...previous.objectives
+            .filter(objective => orderIndex.has(objective.id))
+            .map(objective => objective.position)
         );
         qc.setQueryData(keys.mission(vars.missionId), {
           ...previous,
           objectives: previous.objectives
             .map(objective => {
               const index = orderIndex.get(objective.id);
-              return index === undefined ? objective : { ...objective, position: basePosition + index };
+              return index === undefined
+                ? objective
+                : { ...objective, position: basePosition + index };
             })
             .sort((a, b) => a.position - b.position)
         });
       }
       return { previous };
     },
-    onError: (_err: unknown, vars: ReorderFutureObjectivesVars, context?: { previous?: MissionDetailDto }) => {
+    onError: (
+      _err: unknown,
+      vars: ReorderFutureObjectivesVars,
+      context?: { previous?: MissionDetailDto }
+    ) => {
       if (context?.previous) qc.setQueryData(keys.mission(vars.missionId), context.previous);
     },
     onSettled: (_data: unknown, _err: unknown, vars: ReorderFutureObjectivesVars) =>

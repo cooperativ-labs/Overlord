@@ -31,6 +31,7 @@ import {
   SheetTitle
 } from '@/components/ui/sheet';
 import { Switch } from '@/components/ui/switch';
+import { useCopyToClipboard } from '@/lib/hooks/use-copy-to-clipboard';
 import {
   useCreateWebhookSubscription,
   useDeleteWebhookSubscription,
@@ -665,13 +666,11 @@ function WebhookDialog({
 }
 
 function CopyField({ label, value }: { label: string; value: string }) {
-  const [copied, setCopied] = useState(false);
+  const { copied, copy } = useCopyToClipboard();
 
   async function handleCopy() {
     try {
-      await navigator.clipboard.writeText(value);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      await copy(value);
     } catch {
       /* clipboard may be unavailable; the value stays visible to copy manually */
     }

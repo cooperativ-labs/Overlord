@@ -152913,7 +152913,7 @@ var hostedMcpToolDefinitions = [
   {
     name: "overlord_create_mission",
     title: "Create Overlord mission",
-    description: "Create a draft mission in projectId, or an account-owned inbox item when projectId is omitted. Hosted MCP never chooses a project implicitly.",
+    description: "Use this to create a draft mission in projectId, or an account-owned inbox item when projectId is omitted. Hosted MCP never chooses a project implicitly.",
     inputSchema: objectSchema(
       {
         projectId: stringProperty("Optional Overlord project id, slug, or name."),
@@ -152934,7 +152934,7 @@ var hostedMcpToolDefinitions = [
   {
     name: "overlord_create_inbox_item",
     title: "Create inbox item",
-    description: "Create a private, account-owned unassigned task capture.",
+    description: "Use this to create a private, account-owned unassigned task capture.",
     inputSchema: objectSchema(
       {
         title: stringProperty("Inbox item title."),

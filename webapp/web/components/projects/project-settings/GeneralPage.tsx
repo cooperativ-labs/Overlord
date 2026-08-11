@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import { LoadingButton } from '@/components/ui/loading-button';
 import { Textarea } from '@/components/ui/textarea';
+import { useCopyToClipboard } from '@/lib/hooks/use-copy-to-clipboard';
 import { useUpdateProject } from '@/lib/queries';
 
 import type { ProjectDto } from '../../../../shared/contract.ts';
@@ -34,7 +35,7 @@ export function GeneralPage({ open, project, onNavigateToIntegrations }: General
   const [nameError, setNameError] = useState<string | null>(null);
   const [descriptionError, setDescriptionError] = useState<string | null>(null);
   const [colorError, setColorError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const { copied, copy } = useCopyToClipboard();
 
   useEffect(() => {
     if (!open) return;
@@ -48,7 +49,6 @@ export function GeneralPage({ open, project, onNavigateToIntegrations }: General
     setNameError(null);
     setDescriptionError(null);
     setColorError(null);
-    setCopied(false);
   }, [open, project]);
 
   async function handleSaveName() {
@@ -102,9 +102,7 @@ export function GeneralPage({ open, project, onNavigateToIntegrations }: General
 
   async function handleCopyProjectId() {
     try {
-      await navigator.clipboard.writeText(project.id);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      await copy(project.id);
     } catch {
       /* clipboard unavailable */
     }

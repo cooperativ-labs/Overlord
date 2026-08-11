@@ -1,7 +1,7 @@
 import type { EntityChangeDto } from '../../shared/contract.ts';
 
-import { keys } from './query-keys.ts';
 import { invalidateNonEverhourQueries } from './query-invalidation.ts';
+import { keys } from './query-keys.ts';
 
 type QueryKey = readonly unknown[];
 
