@@ -68,9 +68,9 @@ Supported built-in connector names currently include `claude`, `codex`, `cursor`
 
 | Command | What it does |
 | --- | --- |
-| `ovld create "<objective>" [--objectives-json <json>] [--title <text>] [--project-id <id>] [--json]` | Create a draft mission. |
+| `ovld create "<objective>" [--objectives-json <json>] [--title <text>] [--project-id <id>] [--inbox] [--assigned-to <id>] [--json]` | Create a draft mission. Without `--project-id` and without a resolvable working-directory project, falls back to an account-owned inbox item; `--inbox` forces that fallback explicitly. |
 | `ovld inbox create --title <text> --objective <text> [--json]` | Create a private, account-owned unassigned task capture. |
-| `ovld prompt "<objective>" [--objectives-json <json>] [--title <text>] [--project-id <id>] [--agent <id>] [--json]` | Create a mission and queue execution. |
+| `ovld prompt "<objective>" [--objectives-json <json>] [--title <text>] [--project-id <id>] [--agent <id>] [--assigned-to <id>] [--json]` | Create a mission and queue execution. |
 | `ovld attach <mission-id> [agent] [--objective-id <id>] [--model <id>] [--thinking <level>] [--json]` | Queue an agent for an existing mission. |
 | `ovld execution --mission-id <id> [--objective-id <id>] [--agent <id>] [--model <id>] [--thinking <level>] [--json]` | Alias of `attach` that requires the mission flag. |
 | `ovld missions list [--query <text>] [--project-id <id>] [--limit <n>] [--json]` | List missions. |
