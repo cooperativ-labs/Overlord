@@ -19,6 +19,7 @@ export const SUPPORTED_PROTOCOL_SUBCOMMANDS = [
   'load-context',
   'prompt',
   'read-context',
+  'record-touched',
   'record-work',
   'resume-follow-up',
   'search-missions',
@@ -194,12 +195,16 @@ add-objectives:
 
 create:
   Purpose:
-    Create a draft mission without attaching.
+    Create a draft mission without attaching. Without --project-id and
+    without a resolvable working-directory project, falls back to an
+    account-owned inbox item instead of failing.
   Required:
     --objective "<text>" or --objectives-json / --objectives-file <path|->
   Optional:
     --title <text>
     --project-id <id>           Skips working-directory project resolution
+    --inbox                     Force an account-owned inbox item instead of a project mission
+    --assigned-to <id>          Workspace member to own the mission (meaningless on the inbox fallback)
 
 prompt:
   Purpose:
@@ -212,6 +217,7 @@ prompt:
     --agent <identifier>
     --model <identifier>
     --external-session-id <id>
+    --assigned-to <id>          Workspace member to own the mission
   Returns:
     New mission/session JSON plus SESSION_KEY on stderr when available.
 
@@ -228,6 +234,7 @@ record-work:
   Optional:
     --title <text>
     --project-id <id>
+    --assigned-to <id>          Workspace member to own the mission
     --artifacts-json / --artifacts-file <path|->
     --change-rationales-json / --change-rationales-file <path|->
     --changed-files-json / --changed-files-file <path|->
