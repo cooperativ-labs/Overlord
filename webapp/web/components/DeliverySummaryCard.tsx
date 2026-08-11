@@ -51,7 +51,9 @@ export function DeliveryPresentation({
   emphasized?: boolean;
 }) {
   const presentation = delivery.report.presentation;
-  const cardClass = emphasized ? `${DELIVERY_CARD_EMPHASIS_CLASS} grid gap-3 p-3` : 'grid gap-3';
+  const cardClass = emphasized
+    ? `${DELIVERY_CARD_EMPHASIS_CLASS} grid min-w-0 gap-3 p-3`
+    : 'grid min-w-0 gap-3';
 
   return (
     <div className={cardClass}>
@@ -64,16 +66,16 @@ export function DeliveryPresentation({
       {presentation.humanActions.length > 0 ? (
         <section
           aria-labelledby={`delivery-actions-${delivery.id}`}
-          className="rounded-md border border-sky-300 bg-sky-50 p-3 dark:border-sky-500/50 dark:bg-sky-500/10"
+          className="min-w-0 rounded-md border border-sky-300 bg-sky-50 p-3 dark:border-sky-500/50 dark:bg-sky-500/10"
         >
           <h4
             id={`delivery-actions-${delivery.id}`}
-            className="flex items-center gap-1.5 text-sm font-semibold text-sky-950 dark:text-sky-100"
+            className="flex items-center gap-1.5 wrap-anywhere text-sm font-semibold text-sky-950 dark:text-sky-100"
           >
             <ListChecks className="size-4" aria-hidden="true" />
             Follow-up actions
           </h4>
-          <ul className="mt-2 grid gap-2 text-sm text-sky-950 dark:text-sky-100">
+          <ul className="mt-2 grid min-w-0 gap-2 wrap-anywhere text-sm text-sky-950 dark:text-sky-100">
             {presentation.humanActions.map(action => (
               <li key={action.id}>
                 <span className="font-medium">{action.action}</span>
@@ -88,16 +90,16 @@ export function DeliveryPresentation({
       {presentation.tradeoffsMade.length > 0 ? (
         <section
           aria-labelledby={`delivery-tradeoffs-${delivery.id}`}
-          className="rounded-md border border-amber-300 bg-amber-50 p-3 dark:border-amber-500/50 dark:bg-amber-500/10"
+          className="min-w-0 rounded-md border border-amber-300 bg-amber-50 p-3 dark:border-amber-500/50 dark:bg-amber-500/10"
         >
           <h4
             id={`delivery-tradeoffs-${delivery.id}`}
-            className="flex items-center gap-1.5 text-sm font-semibold text-amber-950 dark:text-amber-100"
+            className="flex items-center gap-1.5 wrap-anywhere text-sm font-semibold text-amber-950 dark:text-amber-100"
           >
             <Scale className="size-4" aria-hidden="true" />
             Tradeoffs made
           </h4>
-          <ul className="mt-2 grid gap-3 text-sm text-amber-950 dark:text-amber-100">
+          <ul className="mt-2 grid min-w-0 gap-3 wrap-anywhere text-sm text-amber-950 dark:text-amber-100">
             {presentation.tradeoffsMade.map(tradeoff => (
               <li key={tradeoff.id}>
                 <span className="font-medium">{tradeoff.decision}</span>
@@ -120,7 +122,9 @@ export function DeliveryPresentation({
             Full delivery text
           </AccordionTrigger>
           <AccordionContent>
-            <p className="whitespace-pre-wrap text-sm text-(--color-ink-dim)">{summaryText}</p>
+            <p className="whitespace-pre-wrap wrap-anywhere text-sm text-(--color-ink-dim)">
+              {summaryText}
+            </p>
           </AccordionContent>
         </AccordionItem>
       </Accordion>
@@ -171,7 +175,7 @@ export function MissionDeliveryCard({
       >
         <div className="mb-3 flex flex-wrap items-center gap-2 border-b border-(--color-border) pb-2">
           <Package className="h-3.5 w-3.5 text-(--color-ink-dim)" aria-hidden="true" />
-          <span className="text-sm font-medium text-(--color-ink)">
+          <span className="min-w-0 wrap-anywhere text-sm font-medium text-(--color-ink)">
             {objectiveTitle ?? 'Delivery'}
           </span>
           <span className="text-[11px] text-(--color-ink-dim)">
@@ -202,7 +206,7 @@ export function MissionDeliveryCard({
             <Badge className="px-1.5 py-0 text-[10px] uppercase tracking-wide">Delivered</Badge>
             <span>{formatTimestamp(delivery.deliveredAt)}</span>
           </span>
-          <p className="line-clamp-2 text-sm text-(--color-ink-dim)">{preview}</p>
+          <p className="line-clamp-2 wrap-anywhere text-sm text-(--color-ink-dim)">{preview}</p>
         </span>
       </button>
     </article>

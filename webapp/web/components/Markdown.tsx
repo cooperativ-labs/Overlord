@@ -270,7 +270,7 @@ export function Markdown({ text }: { text: string }) {
   const blocks = parseBlocks(text);
 
   return (
-    <div className="grid gap-2 text-sm leading-relaxed text-(--color-ink)">
+    <div className="grid min-w-0 gap-2 text-sm leading-relaxed text-(--color-ink)">
       {blocks.map((block, i) => {
         const key = `b-${i}`;
         switch (block.type) {
@@ -282,7 +282,7 @@ export function Markdown({ text }: { text: string }) {
                   ? 'text-sm font-semibold'
                   : 'text-sm font-medium';
             return (
-              <div key={key} className={size}>
+              <div key={key} className={`wrap-anywhere ${size}`}>
                 {renderInline(block.text, key)}
               </div>
             );
@@ -298,7 +298,7 @@ export function Markdown({ text }: { text: string }) {
             );
           case 'ul':
             return (
-              <ul key={key} className="ml-4 list-disc space-y-0.5">
+              <ul key={key} className="ml-4 list-disc space-y-0.5 wrap-anywhere">
                 {block.items.map((item, j) => (
                   <li key={`${key}-${j}`}>{renderInline(item, `${key}-${j}`)}</li>
                 ))}
@@ -306,7 +306,7 @@ export function Markdown({ text }: { text: string }) {
             );
           case 'ol':
             return (
-              <ol key={key} className="ml-4 list-decimal space-y-0.5">
+              <ol key={key} className="ml-4 list-decimal space-y-0.5 wrap-anywhere">
                 {block.items.map((item, j) => (
                   <li key={`${key}-${j}`}>{renderInline(item, `${key}-${j}`)}</li>
                 ))}
@@ -316,7 +316,7 @@ export function Markdown({ text }: { text: string }) {
             return (
               <blockquote
                 key={key}
-                className="border-l-2 border-(--color-border) pl-3 italic text-(--color-ink-dim)"
+                className="wrap-anywhere border-l-2 border-(--color-border) pl-3 italic text-(--color-ink-dim)"
               >
                 {renderInline(block.text, key)}
               </blockquote>
