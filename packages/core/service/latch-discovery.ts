@@ -253,14 +253,9 @@ export function evaluateLatchCapabilities({
   };
 }
 
-/** Default `which`-based resolver for a Latch executable on PATH. */
-export function resolveLatchExecutablePath(executable: string): string | null {
-  const name = trimmed(executable) ?? DEFAULT_LATCH_EXECUTABLE;
-  if (path.isAbsolute(name) || name.includes('/') || name.includes('\\')) {
-    return existsSync(name) ? path.resolve(name) : null;
-  }
+function resolveLatchExecutableOnPath(executable: string): string | null {
   try {
-    const found = execFileSync('which', [name], {
+    const found = execFileSync('which', [executable], {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore']
     }).trim();
@@ -268,6 +263,48 @@ export function resolveLatchExecutablePath(executable: string): string | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * Resolve Latch's documented installation location when a GUI app or managed
+ * service did not inherit the interactive shell's PATH. This does not source a
+ * shell profile, avoiding arbitrary shell-startup side effects during a
+ * read-only settings probe.
+ */
+export function resolveLatchExecutablePathFromEnvironment({
+  executable,
+  homeDirectory = os.homedir(),
+  platform = process.platform,
+  resolveOnPath = resolveLatchExecutableOnPath,
+  fileExists = existsSync
+}: {
+  executable: string;
+  homeDirectory?: string;
+  platform?: NodeJS.Platform;
+  resolveOnPath?: (executable: string) => string | null;
+  fileExists?: (filePath: string) => boolean;
+}): string | null {
+  const name = trimmed(executable) ?? DEFAULT_LATCH_EXECUTABLE;
+  if (path.isAbsolute(name) || name.includes('/') || name.includes('\\')) {
+    return fileExists(name) ? path.resolve(name) : null;
+  }
+
+  const resolvedOnPath = resolveOnPath(name);
+  if (resolvedOnPath) return resolvedOnPath;
+
+  // `install-cli.sh` installs Latch here. Homebrew locations cover existing
+  // macOS installations whose PATH was inherited from Finder or launchd.
+  const fallbacks = [
+    path.join(homeDirectory, '.local', 'bin', name),
+    ...(platform === 'darwin' ? [`/opt/homebrew/bin/${name}`, `/usr/local/bin/${name}`] : [])
+  ];
+  const fallback = fallbacks.find(fileExists);
+  return fallback ? path.resolve(fallback) : null;
+}
+
+/** Default resolver for a Latch executable available to the current process. */
+export function resolveLatchExecutablePath(executable: string): string | null {
+  return resolveLatchExecutablePathFromEnvironment({ executable });
 }
 
 const defaultCommandRunner: LatchCommandRunner = ({ executable, argv }) => {

@@ -14,6 +14,7 @@ import {
   type LatchDiscoveryCacheEntry,
   parseLatchCapabilitiesReport,
   probeLatchCapabilities,
+  resolveLatchExecutablePathFromEnvironment,
   SUPPORTED_LATCH_PROTOCOL_VERSION
 } from './latch-discovery.ts';
 
@@ -201,6 +202,45 @@ describe('probeLatchCapabilities', () => {
     assert.equal(result.state, 'incompatible');
     if (result.state !== 'incompatible') return;
     assert.equal(result.missingCapability, 'capabilities');
+  });
+});
+
+describe('resolveLatchExecutablePathFromEnvironment', () => {
+  test('uses the documented standalone install location when PATH cannot resolve Latch', () => {
+    const executable = '/Users/jane/.local/bin/latch';
+    const result = resolveLatchExecutablePathFromEnvironment({
+      executable: 'latch',
+      homeDirectory: '/Users/jane',
+      platform: 'darwin',
+      resolveOnPath: () => null,
+      fileExists: filePath => filePath === executable
+    });
+
+    assert.equal(result, executable);
+  });
+
+  test('uses macOS Homebrew locations when the GUI or service PATH omits them', () => {
+    const executable = '/opt/homebrew/bin/latch';
+    const result = resolveLatchExecutablePathFromEnvironment({
+      executable: 'latch',
+      homeDirectory: '/Users/jane',
+      platform: 'darwin',
+      resolveOnPath: () => null,
+      fileExists: filePath => filePath === executable
+    });
+
+    assert.equal(result, executable);
+  });
+
+  test('does not replace an executable explicitly configured by absolute path', () => {
+    const executable = '/custom/bin/latch';
+    const result = resolveLatchExecutablePathFromEnvironment({
+      executable,
+      resolveOnPath: () => null,
+      fileExists: filePath => filePath === executable
+    });
+
+    assert.equal(result, executable);
   });
 });
 

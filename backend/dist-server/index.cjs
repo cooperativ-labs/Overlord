@@ -70512,13 +70512,9 @@ function evaluateLatchCapabilities({
     directSelectable: true
   };
 }
-function resolveLatchExecutablePath(executable) {
-  const name = trimmed2(executable) ?? DEFAULT_LATCH_EXECUTABLE;
-  if (import_node_path12.default.isAbsolute(name) || name.includes("/") || name.includes("\\")) {
-    return (0, import_node_fs10.existsSync)(name) ? import_node_path12.default.resolve(name) : null;
-  }
+function resolveLatchExecutableOnPath(executable) {
   try {
-    const found = (0, import_node_child_process3.execFileSync)("which", [name], {
+    const found = (0, import_node_child_process3.execFileSync)("which", [executable], {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"]
     }).trim();
@@ -70526,6 +70522,29 @@ function resolveLatchExecutablePath(executable) {
   } catch {
     return null;
   }
+}
+function resolveLatchExecutablePathFromEnvironment({
+  executable,
+  homeDirectory = import_node_os4.default.homedir(),
+  platform: platform4 = process.platform,
+  resolveOnPath = resolveLatchExecutableOnPath,
+  fileExists = import_node_fs10.existsSync
+}) {
+  const name = trimmed2(executable) ?? DEFAULT_LATCH_EXECUTABLE;
+  if (import_node_path12.default.isAbsolute(name) || name.includes("/") || name.includes("\\")) {
+    return fileExists(name) ? import_node_path12.default.resolve(name) : null;
+  }
+  const resolvedOnPath = resolveOnPath(name);
+  if (resolvedOnPath) return resolvedOnPath;
+  const fallbacks = [
+    import_node_path12.default.join(homeDirectory, ".local", "bin", name),
+    ...platform4 === "darwin" ? [`/opt/homebrew/bin/${name}`, `/usr/local/bin/${name}`] : []
+  ];
+  const fallback2 = fallbacks.find(fileExists);
+  return fallback2 ? import_node_path12.default.resolve(fallback2) : null;
+}
+function resolveLatchExecutablePath(executable) {
+  return resolveLatchExecutablePathFromEnvironment({ executable });
 }
 function notInstalledResult({
   executable,

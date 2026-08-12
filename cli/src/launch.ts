@@ -560,6 +560,7 @@ export async function launchAgent({
   const executable = snapshot?.executionProvider.executable ?? 'latch';
   let providerFallbackWarning: string | null = null;
   let useLatch = false;
+  let resolvedLatchExecutable = executable;
   // This inherited marker correlates the launch with an already-running Latch
   // PTY; it is not consulted for any Overlord authorization decision.
   const existingProviderSession =
@@ -611,6 +612,12 @@ export async function launchAgent({
         providerKind,
         latchSelectable: discovery.latchSelectable
       });
+      if (useLatch && discovery.state === 'found') {
+        // Discovery may have found Latch in its documented install directory
+        // after a macOS GUI/service PATH omitted it. Use that exact executable
+        // for create/open too, rather than resolving the bare name again.
+        resolvedLatchExecutable = discovery.resolvedPath;
+      }
       if (!useLatch) {
         providerFallbackWarning =
           discovery.state === 'not_installed'
@@ -624,7 +631,7 @@ export async function launchAgent({
 
   if (useLatch && plan.latchCommandString) {
     const created = createLatchSession({
-      executable,
+      executable: resolvedLatchExecutable,
       commandString: plan.latchCommandString,
       cwd: options.workingDirectory,
       env: plan.env,
@@ -639,7 +646,7 @@ export async function launchAgent({
     const openOnLaunch = snapshot?.viewer.openOnLaunch !== false;
     if (openOnLaunch) {
       viewerOpen = openLatchViewer({
-        executable,
+        executable: resolvedLatchExecutable,
         providerSessionId: created.providerSession.providerSessionId,
         viewerKind: snapshot?.viewer.kind ?? 'iterm'
       });
@@ -649,7 +656,7 @@ export async function launchAgent({
       plan: {
         ...plan,
         execution: {
-          command: executable,
+          command: resolvedLatchExecutable,
           args: ['create', '--manifest-file', '-', '--json'],
           useShell: false,
           terminal: snapshot?.viewer.launcher ?? null,
