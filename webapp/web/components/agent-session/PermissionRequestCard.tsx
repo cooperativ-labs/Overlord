@@ -8,6 +8,7 @@ import {
   AgentSessionCardShell,
   CardBadge,
   formatCountdown,
+  isAgentRequestConflict,
   isRequestAnswerable,
   RequestSummaryText,
   useWindowCountdown
@@ -58,6 +59,8 @@ export function PermissionRequestCard({
   );
   const windowClosed = remainingMs !== null && remainingMs <= 0;
   const busy = resolve.isPending || release.isPending;
+  const resolveConflict = resolve.isError && isAgentRequestConflict(resolve.error);
+  const showLostRace = lostRace || resolveConflict;
 
   // Adapter-supplied options win when present, minus anything persistent. With no options —
   // which is what every shipped connector produces today — fall back to the two decisions the
@@ -135,12 +138,12 @@ export function PermissionRequestCard({
         </div>
       ) : null}
 
-      {lostRace ? (
+      {showLostRace ? (
         <p className="text-[11px] text-(--color-ink-dim)">
           Someone answered this first. Your response was not recorded.
         </p>
       ) : null}
-      {resolve.isError ? (
+      {resolve.isError && !resolveConflict ? (
         <p className="text-[11px] text-red-600">{(resolve.error as Error).message}</p>
       ) : null}
       {release.isError ? (

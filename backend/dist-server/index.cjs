@@ -135026,8 +135026,8 @@ function assembleAgentInstructions({
     `# Overlord Agent Instructions`,
     `You are attached to mission **${mission.displayId}** via Overlord.`,
     ``,
-    `Mission ID: ${mission.displayId}`,
-    `Objective ID: ${objective.id}`,
+    `Mission ID: ${mission.displayId}  <- pass this to every \`ovld protocol ... --mission-id\` call`,
+    `Objective ID: ${objective.id}  <- informational only; never pass it as --mission-id`,
     `Objective: ${objectiveLabel}`,
     `Project: ${projectName}`,
     "",
@@ -138178,8 +138178,8 @@ async function getObjectivePrompt(objectiveId) {
     `## Task`,
     ``,
     `- **Title:** ${row.mission_title}`,
-    `- **Mission ID:** ${row.display_id}`,
-    `- **Objective ID:** ${row.id}`,
+    `- **Mission ID:** ${row.display_id} \u2014 the only id you pass to \`ovld protocol\` commands`,
+    `- **Objective ID:** ${row.id} \u2014 informational only; never pass it as \`--mission-id\``,
     ``,
     `### Objective`,
     ``,
@@ -156617,8 +156617,7 @@ async function acquireWaiterLease({
   const leaseExpiresAt = addSeconds(now2, leaseSeconds);
   const updated = await ctx.db.run(
     `UPDATE agent_requests
-        SET waiter_lease_id = ?, waiter_lease_expires_at = ?, updated_at = ?,
-            revision = revision + 1
+        SET waiter_lease_id = ?, waiter_lease_expires_at = ?, updated_at = ?
       WHERE id = ? AND workspace_id = ? AND status = 'open' AND deleted_at IS NULL
         AND (
           waiter_lease_id IS NULL
@@ -156743,8 +156742,7 @@ async function recordRequestApplication({
   const now2 = nowIso();
   await ctx.db.run(
     `UPDATE agent_requests
-        SET application_state = ?, application_observed_at = ?, updated_at = ?,
-            revision = revision + 1
+        SET application_state = ?, application_observed_at = ?, updated_at = ?
       WHERE id = ? AND workspace_id = ?`,
     [applicationState, now2, now2, requestId, ctx.workspace.id]
   );

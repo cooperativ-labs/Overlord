@@ -232,3 +232,28 @@ test('buildLaunchPlan preserves the execution directive when context uses a file
   assert.match(plan.prompt, /immediately execute its current objective/i);
   assert.match(plan.prompt, /Do not wait for more instructions/i);
 });
+
+test('buildLaunchPlan names the mission id concretely and keeps the execution request id out of the prompt', async () => {
+  const workingDirectory = mkdtempSync(path.join('/tmp', 'ovld-launch-ids-'));
+  const executionRequestId = '431f0a7c-1f2a-4c5e-9a1b-2f0d7c4e6b81';
+  const plan = await buildLaunchPlan({
+    runtime: runtime(),
+    options: {
+      agent: 'codex',
+      missionId: 'coo:11',
+      workingDirectory,
+      executionRequestId
+    }
+  });
+
+  const context = readFileSync(plan.contextFile, 'utf8');
+  // The execution request id is launch plumbing that reaches the agent through the
+  // environment. Printing it in the prompt made it the only UUID an agent could see,
+  // and agents passed it to `--mission-id` (coo:695).
+  assert.ok(!context.includes(executionRequestId));
+  assert.equal(plan.env.OVERLORD_EXECUTION_REQUEST_ID, executionRequestId);
+  // The attach command must carry the real mission id, not a `<id>` placeholder.
+  assert.ok(context.includes('Mission ID: coo:11'));
+  assert.ok(context.includes('ovld protocol attach --mission-id coo:11'));
+  assert.ok(!context.includes('--mission-id <id>'));
+});

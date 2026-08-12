@@ -212,6 +212,12 @@ async function loadMissionContext({
   const launchContext = [
     `# Overlord Mission: ${displayId}: ${title}`,
     '',
+    // The mission id is the ONLY identifier an agent ever needs to type. State it
+    // once, on its own line, in the exact form the attach command expects — a
+    // prompt that only shows the id inside a heading (or that mentions any other
+    // id at all) is what makes agents reach for the wrong value (coo:695).
+    `Mission ID: ${displayId}`,
+    '',
     '## Instructions',
     'Use the Overlord skill. Follow the required protocol workflow.',
     EXECUTION_DIRECTIVE,
@@ -241,7 +247,7 @@ async function loadMissionContext({
       artifact => `- ${asRecord(artifact).label ?? asRecord(artifact).type ?? 'artifact'}`
     ),
     '',
-    'Use `ovld protocol attach --mission-id <id>` before making changes, update during work, and ALWAYS deliver last.'
+    `Run \`ovld protocol attach --mission-id ${displayId}\` before making changes, update during work, and ALWAYS deliver last.`
   ].join('\n');
 
   return { displayId, title, launchContext };
@@ -354,9 +360,13 @@ export async function buildLaunchPlan({
     tmpDir,
     `mission-${context.displayId.replace(/[^a-zA-Z0-9_-]/g, '-')}.md`
   );
-  const launchContext = options.executionRequestId
-    ? `${context.launchContext}\nExecution request: ${options.executionRequestId}`
-    : context.launchContext;
+  // The execution request id is deliberately NOT written into the agent-facing
+  // context. It is launch plumbing: it reaches the agent as the
+  // `OVERLORD_EXECUTION_REQUEST_ID` env var, and `ovld protocol attach` picks it
+  // up from there (or recovers it from the launch script) without the agent ever
+  // naming it. Printing it beside "attach --mission-id" made it the only UUID in
+  // the prompt, and agents passed it as the mission id (coo:695).
+  const launchContext = context.launchContext;
   writeFileSync(contextFile, `${launchContext}\n`);
   const projectResources = await loadProjectResourcesForLaunch({
     runtime,

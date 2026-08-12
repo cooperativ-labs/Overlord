@@ -8,6 +8,7 @@ import {
   AgentSessionCardShell,
   CardBadge,
   formatCountdown,
+  isAgentRequestConflict,
   isRequestAnswerable,
   RequestSummaryText,
   useWindowCountdown
@@ -39,6 +40,8 @@ export function StructuredChoiceCard({
   const answerable = isRequestAnswerable(request, channel) && request.options.length > 0;
   const windowClosed = remainingMs !== null && remainingMs <= 0;
   const busy = resolve.isPending || release.isPending;
+  const resolveConflict = resolve.isError && isAgentRequestConflict(resolve.error);
+  const showLostRace = lostRace || resolveConflict;
 
   return (
     <AgentSessionCardShell
@@ -92,12 +95,12 @@ export function StructuredChoiceCard({
           This choice arrived without any options, so it can only be answered at the terminal.
         </p>
       ) : null}
-      {lostRace ? (
+      {showLostRace ? (
         <p className="text-[11px] text-(--color-ink-dim)">
           Someone answered this first. Your choice was not recorded.
         </p>
       ) : null}
-      {resolve.isError ? (
+      {resolve.isError && !resolveConflict ? (
         <p className="text-[11px] text-red-600">{(resolve.error as Error).message}</p>
       ) : null}
 

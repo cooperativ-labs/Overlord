@@ -28,6 +28,7 @@ import {
   acquireWaiterLease,
   createRequest,
   markRequestResolvedElsewhere,
+  recordRequestApplication,
   releaseExpiredRequests,
   releaseRequestToTerminal,
   resolveDecisionWindow,
@@ -292,6 +293,59 @@ describe('answerable requests', () => {
     );
     assert.equal(after?.status, 'released_to_terminal');
     assert.equal(after?.released_reason, 'timeout');
+
+    await db.close();
+  });
+
+  it('does not advance the resolution CAS token on waiter-lease renewal', async () => {
+    const { ctx, db, missionId, projectId } = await seedMission();
+    const { channel } = await createSessionChannel({ ctx, missionId, projectId });
+    const request = await createRequest({
+      ctx,
+      channel,
+      kind: 'permission',
+      summary: 'Run a shell command'
+    });
+
+    // The adapter renews roughly every 750ms for the whole life of the prompt. If those
+    // renewals moved `revision`, the card a human is looking at would be stale within a second
+    // and every remote Allow/Deny would lose the CAS.
+    const first = await acquireWaiterLease({ ctx, requestId: request.id });
+    let renewed = first;
+    for (let i = 0; i < 5; i += 1) {
+      renewed = await acquireWaiterLease({ ctx, requestId: request.id, leaseId: first.leaseId });
+    }
+    assert.equal(renewed.request.revision, request.revision);
+
+    // Application bookkeeping is likewise not a decision the human is deciding about.
+    await recordRequestApplication({
+      ctx,
+      requestId: request.id,
+      applicationState: 'emitted'
+    });
+
+    // A card that read the request when it was created can still answer it.
+    const resolved = await resolveRequest({
+      ctx,
+      requestId: request.id,
+      resolution: { decision: 'allow' },
+      expectedRevision: request.revision
+    });
+    assert.equal(resolved.resolved, true);
+    assert.equal(resolved.request.status, 'resolved');
+    // A real transition still advances the token, so a second click on the same stale card loses.
+    assert.equal(resolved.request.revision, request.revision + 1);
+
+    await assert.rejects(
+      () =>
+        resolveRequest({
+          ctx,
+          requestId: request.id,
+          resolution: { decision: 'deny' },
+          expectedRevision: request.revision
+        }),
+      /changed since it was read/i
+    );
 
     await db.close();
   });

@@ -8,6 +8,7 @@ import {
   AgentSessionCardShell,
   CardBadge,
   formatCountdown,
+  isAgentRequestConflict,
   isRequestAnswerable,
   RequestSummaryText,
   useWindowCountdown
@@ -40,6 +41,8 @@ export function RetryIntentCard({
   const answerable = isRequestAnswerable(request, channel);
   const windowClosed = remainingMs !== null && remainingMs <= 0;
   const busy = resolve.isPending || release.isPending;
+  const resolveConflict = resolve.isError && isAgentRequestConflict(resolve.error);
+  const showLostRace = lostRace || resolveConflict;
 
   const answer = (resolution: Record<string, unknown>) =>
     resolve.mutate(
@@ -106,12 +109,12 @@ export function RetryIntentCard({
         </div>
       ) : null}
 
-      {lostRace ? (
+      {showLostRace ? (
         <p className="text-[11px] text-(--color-ink-dim)">
           Someone answered this first. Your response was not recorded.
         </p>
       ) : null}
-      {resolve.isError ? (
+      {resolve.isError && !resolveConflict ? (
         <p className="text-[11px] text-red-600">{(resolve.error as Error).message}</p>
       ) : null}
 

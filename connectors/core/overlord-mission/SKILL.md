@@ -13,6 +13,8 @@ Connector adapters may add harness-specific commands, hooks, MCP tools, or launc
 
 Use this mode when the prompt already contains a mission ID or explicitly says the session was launched by Overlord.
 
+**`<mission_id>` is always the short display id** — `coo:695`, `1:899`: a workspace prefix, a colon, and a number. It is the only identifier you ever pass to a `ovld protocol` command. Any UUID you encounter (objective id, session id, execution request id, internal mission uuid) is context, never the value for `--mission-id`. If the only id you can find is a bare UUID, you are missing the mission id — re-read the prompt or run `ovld protocol search-missions` rather than guessing.
+
 1. Attach first with `ovld protocol attach --mission-id <mission_id>`.
 2. The attach response prints JSON to stdout containing `session.sessionKey`. The CLI also persists this key automatically so subsequent `ovld protocol` commands in the same working directory resolve it without `--session-key`. If auto-resolution fails, pass `--session-key <sessionKey>` explicitly on every subsequent call.
 3. Treat the Overlord mission prompt as authoritative for the objective, constraints, and delivery target. Begin executing the current objective immediately after attach; do not wait for more instructions or ask for confirmation. This differs from `connect` or `load-context`, which only retrieve mission context and never imply the agent should act.
@@ -415,4 +417,4 @@ Field shape, inline vs stdin piping, and `record-change-rationales` syntax are i
 - [reference/context.md](reference/context.md) — Shared state, attachments, and large artifact policy
 - [reference/shell-escaping.md](reference/shell-escaping.md) — Heredoc stdin piping for special characters in summaries and payloads
 
-<!-- version: 0.5.16 -->
+<!-- version: 0.5.17 -->

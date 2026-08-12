@@ -1,6 +1,7 @@
 import type { LucideIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
+import { ApiRequestError } from '../../lib/api.ts';
 import { Badge } from '../ui.tsx';
 
 // The gating and ordering rules are pure and unit-tested; they are re-exported here so a card
@@ -14,6 +15,18 @@ export { formatCountdown, isChannelLive, isRequestAnswerable } from '../../lib/m
  * must not differ in how they report whether they still own the decision. That part lives here
  * so a new card kind cannot accidentally ship without it.
  */
+
+/**
+ * Resolve CAS conflict (409 / `agent_request_conflict`): the card's revision lost to another
+ * answer or a terminal transition. Same user-facing outcome as `resolved: false` — show the
+ * lost-race copy, not the raw server error string.
+ */
+export function isAgentRequestConflict(error: unknown): boolean {
+  return (
+    error instanceof ApiRequestError &&
+    (error.code === 'agent_request_conflict' || error.status === 409)
+  );
+}
 
 export type CardTone = 'action' | 'question' | 'neutral' | 'alert';
 

@@ -520,6 +520,8 @@ export const useMissionAgentSessionInputs = (id: string) =>
 /**
  * Answer a request under revision CAS. A `resolved: false` response is not an error — it means
  * the decision was already made elsewhere, and the caller must show that instead of success.
+ * A 409 / `agent_request_conflict` is the same lost-race outcome when the card's revision was
+ * stale; cards should map it to the lost-race copy rather than the raw error string.
  */
 export function useResolveAgentRequest(missionId: string) {
   const qc = useQueryClient();

@@ -8,6 +8,7 @@ import {
   AgentSessionCardShell,
   CardBadge,
   formatCountdown,
+  isAgentRequestConflict,
   isRequestAnswerable,
   RequestSummaryText,
   useWindowCountdown
@@ -41,6 +42,8 @@ export function BlockingQuestionCard({
   const answerable = isRequestAnswerable(request, channel);
   const windowClosed = remainingMs !== null && remainingMs <= 0;
   const busy = resolve.isPending || release.isPending;
+  const resolveConflict = resolve.isError && isAgentRequestConflict(resolve.error);
+  const showLostRace = lostRace || resolveConflict;
   // `allowsFreeText` is false only when the harness genuinely cannot accept prose. When a
   // question carries no options at all, prose is the only possible answer.
   const acceptsText = request.allowsFreeText || request.options.length === 0;
@@ -123,12 +126,12 @@ export function BlockingQuestionCard({
         </div>
       ) : null}
 
-      {lostRace ? (
+      {showLostRace ? (
         <p className="text-[11px] text-(--color-ink-dim)">
           Someone answered this first. Your reply was not recorded.
         </p>
       ) : null}
-      {resolve.isError ? (
+      {resolve.isError && !resolveConflict ? (
         <p className="text-[11px] text-red-600">{(resolve.error as Error).message}</p>
       ) : null}
 

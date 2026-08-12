@@ -273,6 +273,13 @@ export async function createRequest({
  * a second process cannot renew a lease it does not hold. A stale waiter that wakes up after
  * its lease expired and the request was released simply fails to renew and defers, which is
  * exactly the behavior wanted: the terminal already owns the decision.
+ *
+ * This deliberately does not touch `revision`. That counter is the compare-and-set token a
+ * human card presents to `resolveRequest`, and the adapter renews this lease roughly every
+ * 750ms for the whole life of the prompt. Bumping it here made the counter advance several
+ * times per UI refresh, so every remote Allow/Deny lost the CAS and surfaced as a 409. A
+ * renewal by the holder changes nothing a decision-maker is deciding about, so it is not a
+ * revision.
  */
 export async function acquireWaiterLease({
   ctx,
@@ -289,8 +296,7 @@ export async function acquireWaiterLease({
   const leaseExpiresAt = addSeconds(now, leaseSeconds);
   const updated = await ctx.db.run(
     `UPDATE agent_requests
-        SET waiter_lease_id = ?, waiter_lease_expires_at = ?, updated_at = ?,
-            revision = revision + 1
+        SET waiter_lease_id = ?, waiter_lease_expires_at = ?, updated_at = ?
       WHERE id = ? AND workspace_id = ? AND status = 'open' AND deleted_at IS NULL
         AND (
           waiter_lease_id IS NULL
@@ -461,8 +467,7 @@ export async function recordRequestApplication({
   const now = nowIso();
   await ctx.db.run(
     `UPDATE agent_requests
-        SET application_state = ?, application_observed_at = ?, updated_at = ?,
-            revision = revision + 1
+        SET application_state = ?, application_observed_at = ?, updated_at = ?
       WHERE id = ? AND workspace_id = ?`,
     [applicationState, now, now, requestId, ctx.workspace.id]
   );
