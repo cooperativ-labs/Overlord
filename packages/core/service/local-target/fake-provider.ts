@@ -9,9 +9,13 @@ import type {
   BranchListResult,
   CapabilityResult,
   CurrentDiffResult,
+  DiscoverLatchInput,
+  DiscoverLatchResult,
   DoctorResult,
   GenerateCommitMessageInput,
   GenerateCommitMessageResult,
+  InspectLatchSessionInput,
+  InspectLatchSessionResult,
   LaunchAgentInput,
   LaunchAgentResult,
   ListBranchesInput,
@@ -19,6 +23,8 @@ import type {
   ListWorktreesResult,
   LocalTargetCapabilities,
   ObserveResourceInput,
+  OpenLatchSessionInput,
+  OpenLatchSessionResult,
   PerformBranchActionInput,
   PerformBranchActionResult,
   PrepareBranchInput,
@@ -30,6 +36,8 @@ import type {
   RemoveWorktreeInput,
   RepositoryTreeResult,
   ResourceObservation,
+  StopLatchSessionInput,
+  StopLatchSessionResult,
   TargetMetadata,
   WriteProjectMetadataInput,
   WriteProjectMetadataResult
@@ -165,6 +173,58 @@ export class FakeLocalTargetProvider implements LocalTargetCapabilities {
     this.#record('launchAgent', [input]);
     if (this.#handlers.launchAgent) return this.#handlers.launchAgent(input);
     return ok(this.target, { launched: true, sessionId: null });
+  }
+
+  async discoverLatch(input: DiscoverLatchInput): Promise<CapabilityResult<DiscoverLatchResult>> {
+    this.#record('discoverLatch', [input]);
+    if (this.#handlers.discoverLatch) return this.#handlers.discoverLatch(input);
+    // Default to "not installed": tests that care opt into a found Latch, and a
+    // fake that silently claimed Latch was available would hide provider bugs.
+    return ok(this.target, {
+      state: 'not_installed',
+      executable: input.executable?.trim() || 'latch',
+      installCommand: 'install latch',
+      checkedAt: '1970-01-01T00:00:00.000Z',
+      latchSelectable: false,
+      directSelectable: true
+    });
+  }
+
+  async inspectLatchSession(
+    input: InspectLatchSessionInput
+  ): Promise<CapabilityResult<InspectLatchSessionResult>> {
+    this.#record('inspectLatchSession', [input]);
+    if (this.#handlers.inspectLatchSession) return this.#handlers.inspectLatchSession(input);
+    return ok(this.target, {
+      providerSessionId: input.providerSessionId,
+      name: input.providerSessionId,
+      state: 'running',
+      exitCode: null,
+      inspectedAt: new Date(0).toISOString()
+    });
+  }
+
+  async openLatchSession(
+    input: OpenLatchSessionInput
+  ): Promise<CapabilityResult<OpenLatchSessionResult>> {
+    this.#record('openLatchSession', [input]);
+    if (this.#handlers.openLatchSession) return this.#handlers.openLatchSession(input);
+    return ok(this.target, {
+      providerSessionId: input.providerSessionId,
+      viewer: input.viewerKind,
+      opened: true
+    });
+  }
+
+  async stopLatchSession(
+    input: StopLatchSessionInput
+  ): Promise<CapabilityResult<StopLatchSessionResult>> {
+    this.#record('stopLatchSession', [input]);
+    if (this.#handlers.stopLatchSession) return this.#handlers.stopLatchSession(input);
+    return ok(this.target, {
+      providerSessionId: input.providerSessionId,
+      state: 'stopping'
+    });
   }
 
   async doctor(): Promise<CapabilityResult<DoctorResult>> {

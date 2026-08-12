@@ -246,6 +246,107 @@ export interface LaunchAgentResult {
   sessionId?: string | null;
 }
 
+/**
+ * Probe Latch on the execution target (coo:702). Read-only: it runs
+ * `latch capabilities --json` and never installs or upgrades anything. It must
+ * run on the device where the agent process will run, which is exactly what
+ * this capability boundary guarantees — a browser or hosted backend cannot
+ * answer it for a machine it is not.
+ */
+export interface DiscoverLatchInput {
+  /** Executable to probe; defaults to the provider's `latch`. */
+  executable?: string | null;
+  /**
+   * Execution target this probe is for, so a settings probe and a runner probe
+   * on the same device share one cache entry. Providers that already know their
+   * target ignore a mismatching value in favour of their own.
+   */
+  executionTargetId?: string | null;
+  /** Skip the per-target cache and re-probe. */
+  force?: boolean;
+}
+
+/** Capability flags reported by `latch capabilities --json`. */
+export interface LatchCapabilityFlagsPayload {
+  create: boolean;
+  openViewer: boolean;
+  localAttach: boolean;
+  cloudAttach: boolean;
+  selfUpdate: boolean;
+  extensions: string[];
+}
+
+/**
+ * Three distinguishable discovery states. `directSelectable` is always true —
+ * direct execution remains offerable no matter what Latch reports.
+ */
+export type DiscoverLatchResult =
+  | {
+      state: 'found';
+      executable: string;
+      resolvedPath: string;
+      protocolVersion: number;
+      productVersion: string;
+      capabilities: LatchCapabilityFlagsPayload;
+      checkedAt: string;
+      latchSelectable: boolean;
+      directSelectable: true;
+    }
+  | {
+      state: 'not_installed';
+      executable: string;
+      /** Standalone install command to present; Overlord never runs it. */
+      installCommand: string;
+      checkedAt: string;
+      latchSelectable: boolean;
+      directSelectable: true;
+    }
+  | {
+      state: 'incompatible';
+      executable: string;
+      resolvedPath: string | null;
+      protocolVersion: number | null;
+      productVersion: string | null;
+      /** Stable id of what is missing, e.g. `create` or `protocolVersion`. */
+      missingCapability: string;
+      detail: string;
+      checkedAt: string;
+      latchSelectable: boolean;
+      directSelectable: true;
+    };
+
+export interface LatchSessionInput {
+  providerSessionId: string;
+  executable?: string | null;
+}
+
+export type InspectLatchSessionInput = LatchSessionInput;
+
+export interface InspectLatchSessionResult {
+  providerSessionId: string;
+  name: string;
+  state: 'running' | 'exited' | 'stopping' | 'lost';
+  exitCode: number | null;
+  inspectedAt: string;
+}
+
+export interface OpenLatchSessionInput extends LatchSessionInput {
+  viewerKind: string;
+}
+
+export interface OpenLatchSessionResult {
+  providerSessionId: string;
+  viewer: string;
+  opened: boolean;
+}
+
+export type StopLatchSessionInput = LatchSessionInput;
+
+export interface StopLatchSessionResult {
+  providerSessionId: string;
+  state: 'running' | 'exited' | 'stopping' | 'lost';
+}
+
 export interface DoctorCheck {
   name: string;
   ok: boolean;
@@ -285,6 +386,12 @@ export interface LocalTargetCapabilities {
     input: GenerateCommitMessageInput
   ): Promise<CapabilityResult<GenerateCommitMessageResult>>;
   launchAgent(input: LaunchAgentInput): Promise<CapabilityResult<LaunchAgentResult>>;
+  discoverLatch(input: DiscoverLatchInput): Promise<CapabilityResult<DiscoverLatchResult>>;
+  inspectLatchSession(
+    input: InspectLatchSessionInput
+  ): Promise<CapabilityResult<InspectLatchSessionResult>>;
+  openLatchSession(input: OpenLatchSessionInput): Promise<CapabilityResult<OpenLatchSessionResult>>;
+  stopLatchSession(input: StopLatchSessionInput): Promise<CapabilityResult<StopLatchSessionResult>>;
   doctor(): Promise<CapabilityResult<DoctorResult>>;
 }
 

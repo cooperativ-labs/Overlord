@@ -30,6 +30,7 @@ import {
   updateAgentCatalog,
   updateAgentLaunchConfig,
   updateLaunchPreference,
+  updateLaunchSessionDefaults,
   updateTerminalProfile,
   updateWorktreeBranchAutomation
 } from './execution/launch.ts';
@@ -47,6 +48,7 @@ import {
   claimRunnerRequest,
   clearRunnerRequests,
   completeRunnerMutationRequest,
+  providerSessionFromLaunchedBody,
   recordBranchPrepared,
   runnerStatus,
   updateRunnerRequestStatus
@@ -1843,6 +1845,13 @@ app.patch(
   })
 );
 app.patch(
+  '/api/launch-settings/session-defaults',
+  handle(req => updateLaunchSessionDefaults(req.body), {
+    mutates: true,
+    requires: PERMISSIONS.LAUNCH_CONFIGURE
+  })
+);
+app.patch(
   '/api/launch-settings/worktree-branch-automation',
   handle(req => updateWorktreeBranchAutomation(req.body), {
     mutates: true,
@@ -1869,6 +1878,10 @@ app.patch(
 app.patch(
   '/api/workspaces/:id/launch-settings/terminal-profile',
   handle(req => updateTerminalProfile(req.body, req.params.id), { mutates: true })
+);
+app.patch(
+  '/api/workspaces/:id/launch-settings/session-defaults',
+  handle(req => updateLaunchSessionDefaults(req.body, req.params.id), { mutates: true })
 );
 app.patch(
   '/api/workspaces/:id/launch-settings/worktree-branch-automation',
@@ -1973,9 +1986,17 @@ app.post(
 );
 app.post(
   '/api/runner/requests/:id/launched',
-  handle(req => updateRunnerRequestStatus({ requestId: req.params.id, status: 'launched' }), {
-    mutates: true
-  })
+  handle(
+    req =>
+      updateRunnerRequestStatus({
+        requestId: req.params.id,
+        status: 'launched',
+        providerSession: providerSessionFromLaunchedBody(req.body)
+      }),
+    {
+      mutates: true
+    }
+  )
 );
 app.post(
   '/api/runner/requests/:id/failed',

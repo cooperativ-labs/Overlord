@@ -1,10 +1,22 @@
 import { type AgentLaunchFlagDto, agentLaunchFlagsToArgv } from '@overlord/contract';
+import {
+  existingLatchProviderSession,
+  shouldUseLatchProvider
+} from '@overlord/core/service/latch-launch';
+import type { LaunchSessionSnapshot } from '@overlord/core/service/terminal-profile-types';
 import { spawnSync } from 'node:child_process';
 import { chmodSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { writeChannelCredential } from './agent-session/channel.js';
 import { resolveAgentBinary } from './agent-binaries.js';
+import { discoverLatchOnThisDevice } from './latch-discovery.js';
+import {
+  createLatchSession,
+  type ExecutionProviderSession,
+  type LatchOpenResult,
+  openLatchViewer
+} from './latch-launch.js';
 import {
   buildPreLaunchVariables,
   substituteLaunchEnvVars,
@@ -13,6 +25,7 @@ import {
 import { ensureProjectTmpDir, pruneStaleProjectTmp } from './project-tmp.js';
 import type { CliRuntime } from './runtime.js';
 import {
+  composeAgentTerminalCommand,
   type LaunchExecution,
   resolveLaunchExecution,
   terminalLaunchScriptContent,
@@ -64,6 +77,15 @@ export type LaunchOptions = {
   terminalLaunchChord?: string | null;
   terminalLaunchBackground?: boolean;
   dryRun?: boolean;
+  /**
+   * Claim-time provider/viewer snapshot. When absent the launch resolves to
+   * direct (today's behavior). Never read live settings for a claimed request.
+   */
+  launchSession?: LaunchSessionSnapshot | null;
+  /** Mission title for Latch display metadata. */
+  missionTitle?: string | null;
+  /** Mission display id used as the Latch session name hint. */
+  missionDisplayId?: string | null;
 };
 
 type LaunchPlan = {
@@ -74,6 +96,21 @@ type LaunchPlan = {
   workingDirectory: string;
   execution: LaunchExecution;
   env: Record<string, string>;
+  /** Present when this plan will (or did) use Latch create-then-open. */
+  latchCommandString?: string | null;
+  launchSession?: LaunchSessionSnapshot | null;
+  missionTitle?: string | null;
+  missionDisplayId?: string | null;
+};
+
+export type LaunchAgentResult = {
+  plan: LaunchPlan;
+  status: number | null;
+  signal: NodeJS.Signals | null;
+  providerSession?: ExecutionProviderSession | null;
+  viewerOpen?: LatchOpenResult | null;
+  /** Non-fatal note when Latch was requested but unavailable — fell back to direct. */
+  providerFallbackWarning?: string | null;
 };
 
 type MissionContext = {
@@ -440,6 +477,15 @@ export async function buildLaunchPlan({
     launchMessage: `Attach to ovld mission ${context.displayId}, then immediately execute ${context.title}. Do not wait for more instructions.`
   });
 
+  const latchCommandString = composeAgentTerminalCommand({
+    command: command.command,
+    args: command.args,
+    workingDirectory: options.workingDirectory,
+    preCommand: options.preCommand,
+    extraEnv: exportedEnv,
+    preLaunchCommands
+  });
+
   const terminalScriptPath = options.terminalLauncher?.trim()
     ? launchScriptPath({
         tmpDir,
@@ -482,7 +528,11 @@ export async function buildLaunchPlan({
     contextFile,
     workingDirectory: options.workingDirectory,
     execution,
-    env: exportedEnv
+    env: exportedEnv,
+    latchCommandString,
+    launchSession: options.launchSession ?? null,
+    missionTitle: options.missionTitle ?? context.title,
+    missionDisplayId: options.missionDisplayId ?? context.displayId
   };
 }
 
@@ -492,7 +542,7 @@ export async function launchAgent({
 }: {
   runtime: CliRuntime;
   options: LaunchOptions;
-}): Promise<{ plan: LaunchPlan; status: number | null; signal: NodeJS.Signals | null }> {
+}): Promise<LaunchAgentResult> {
   const plan = await buildLaunchPlan({ runtime, options });
   if (options.dryRun) {
     return { plan, status: 0, signal: null };
@@ -503,6 +553,116 @@ export async function launchAgent({
     ...tmpEnvFor(options.workingDirectory),
     ...plan.env
   };
+
+  const snapshot = options.launchSession ?? plan.launchSession ?? null;
+
+  const providerKind = snapshot?.executionProvider.kind ?? 'direct';
+  const executable = snapshot?.executionProvider.executable ?? 'latch';
+  let providerFallbackWarning: string | null = null;
+  let useLatch = false;
+  // This inherited marker correlates the launch with an already-running Latch
+  // PTY; it is not consulted for any Overlord authorization decision.
+  const existingProviderSession =
+    providerKind === 'latch'
+      ? existingLatchProviderSession({
+          latchSessionId: process.env.LATCH_SESSION_ID,
+          executionTargetId: options.executionTargetId
+        })
+      : null;
+
+  if (existingProviderSession && plan.latchCommandString) {
+    const shell = process.env.SHELL?.trim() || '/bin/bash';
+    // Latch refuses nested `create` calls. Run the exact command string that
+    // would have gone in the manifest inline in the current Latch-owned PTY.
+    const result = spawnSync(shell, ['-lc', plan.latchCommandString], {
+      cwd: options.workingDirectory,
+      env,
+      stdio: 'inherit'
+    });
+    return {
+      plan: {
+        ...plan,
+        execution: {
+          command: shell,
+          args: ['-lc', plan.latchCommandString],
+          useShell: false,
+          terminal: null,
+          display: `Latch session ${existingProviderSession.providerSessionId} (inline) › ${plan.latchCommandString}`
+        }
+      },
+      status: result.status,
+      signal: result.signal,
+      providerSession: existingProviderSession,
+      viewerOpen: null,
+      providerFallbackWarning
+    };
+  }
+
+  if (providerKind === 'latch') {
+    if (!options.executionTargetId) {
+      providerFallbackWarning =
+        'Latch provider selected but no execution target id is available; falling back to direct launch.';
+    } else {
+      const discovery = discoverLatchOnThisDevice({
+        executionTargetId: options.executionTargetId,
+        executable
+      });
+      useLatch = shouldUseLatchProvider({
+        providerKind,
+        latchSelectable: discovery.latchSelectable
+      });
+      if (!useLatch) {
+        providerFallbackWarning =
+          discovery.state === 'not_installed'
+            ? `Latch is not installed on this execution target (${discovery.installCommand}); falling back to direct launch.`
+            : discovery.state === 'incompatible'
+              ? `Latch is incompatible (${discovery.missingCapability}: ${discovery.detail}); falling back to direct launch.`
+              : 'Latch is unavailable; falling back to direct launch.';
+      }
+    }
+  }
+
+  if (useLatch && plan.latchCommandString) {
+    const created = createLatchSession({
+      executable,
+      commandString: plan.latchCommandString,
+      cwd: options.workingDirectory,
+      env: plan.env,
+      title: plan.missionTitle,
+      name: plan.missionDisplayId,
+      commandLabel: options.agent,
+      externalRunId: options.executionRequestId,
+      executionTargetId: options.executionTargetId
+    });
+
+    let viewerOpen: LatchOpenResult | null = null;
+    const openOnLaunch = snapshot?.viewer.openOnLaunch !== false;
+    if (openOnLaunch) {
+      viewerOpen = openLatchViewer({
+        executable,
+        providerSessionId: created.providerSession.providerSessionId,
+        viewerKind: snapshot?.viewer.kind ?? 'iterm'
+      });
+    }
+
+    return {
+      plan: {
+        ...plan,
+        execution: {
+          command: executable,
+          args: ['create', '--manifest-file', '-', '--json'],
+          useShell: false,
+          terminal: snapshot?.viewer.launcher ?? null,
+          display: `latch create › ${plan.latchCommandString}`
+        }
+      },
+      status: 0,
+      signal: null,
+      providerSession: created.providerSession,
+      viewerOpen,
+      providerFallbackWarning
+    };
+  }
 
   const { execution } = plan;
   const result = execution.useShell
@@ -518,5 +678,12 @@ export async function launchAgent({
         stdio: 'inherit'
       });
 
-  return { plan, status: result.status, signal: result.signal };
+  return {
+    plan,
+    status: result.status,
+    signal: result.signal,
+    providerSession: null,
+    viewerOpen: null,
+    providerFallbackWarning
+  };
 }

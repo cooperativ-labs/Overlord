@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { resolveLaunchExecution, tmpEnvFor } from '../src/terminal-launcher.ts';
+import {
+  composeAgentTerminalCommand,
+  resolveLaunchExecution,
+  tmpEnvFor
+} from '../src/terminal-launcher.ts';
 
 const AGENT = {
   command: 'claude',
@@ -382,4 +386,17 @@ test('tmpEnvFor pins the TMPDIR family to the project .overlord/tmp', () => {
     TEMP: expected,
     OVERLORD_TMPDIR: expected
   });
+});
+
+test('composeAgentTerminalCommand matches the terminal inner command string S', () => {
+  const composed = composeAgentTerminalCommand({
+    ...AGENT,
+    preCommand: 'agp',
+    extraEnv: { MISSION_ID: 'coo:1' },
+    preLaunchCommands: ['echo ready']
+  });
+  assert.ok(composed.startsWith(`cd '${AGENT.workingDirectory}'`));
+  assert.ok(composed.includes(`export MISSION_ID='coo:1'`));
+  assert.ok(composed.includes('echo ready;'));
+  assert.ok(composed.includes(`agp 'claude'`));
 });

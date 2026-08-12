@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 
 import { AgentLaunchFooter } from '@/components/objectives/AgentLaunchFooter';
 import { HotkeyCaptureButton } from '@/components/settings/HotkeyCaptureButton';
+import { LatchDiscoveryStatus } from '@/components/settings/LatchDiscoveryStatus';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -22,12 +23,22 @@ import {
   EDITOR_SCHEME_OPTIONS,
   getEditorSchemeLabel
 } from '@/lib/helpers/editor-scheme';
+import { useLatchDiscovery, useRecheckLatchDiscovery } from '@/lib/latch-discovery-client';
+import {
+  effectiveOpenViewer as resolveOpenViewer,
+  effectiveProviderKind as resolveProviderKind,
+  latchBlockedReason as resolveLatchBlockedReason,
+  type ProviderChoice,
+  providerChoiceFromProfile,
+  sessionOverrideFields
+} from '@/lib/launch-session-form';
 import {
   useAgentCatalog,
   useLaunchSettings,
   useProfile,
   useRefreshAgentCatalog,
   useUpdateAgentLaunchConfig,
+  useUpdateLaunchSessionDefaults,
   useUpdateProfile,
   useUpdateTerminalProfile
 } from '@/lib/queries';
@@ -44,6 +55,13 @@ type IdePageProps = {
 
 const INLINE_LAUNCHER = '__inline__';
 const CUSTOM_LAUNCHER = '__custom__';
+/**
+ * coo:702: selecting this leaves the stored terminal choice untouched and only
+ * turns off viewer-open-on-launch, so toggling a window back on is lossless.
+ * Latch itself is deliberately *not* in the terminal list — the provider and the
+ * viewer are orthogonal and fail differently.
+ */
+const NO_VIEWER = '__no_viewer__';
 
 const TERMINAL_OPTIONS = [
   { label: 'Terminal', launcher: 'Terminal' },
@@ -82,13 +100,19 @@ function normalizeProfile({
   customLauncher,
   placement,
   chord,
-  background
+  background,
+  providerChoice,
+  latchExecutable,
+  openViewerOverride
 }: {
   launcherChoice: string;
   customLauncher: string;
   placement: TerminalProfileDto['placement'];
   chord: string;
   background: boolean;
+  providerChoice: ProviderChoice;
+  latchExecutable: string;
+  openViewerOverride: boolean | null;
 }): TerminalProfileDto {
   const launcher =
     launcherChoice === INLINE_LAUNCHER
@@ -103,7 +127,8 @@ function normalizeProfile({
     chord: launcher && placement === 'chord' ? chord.trim() || null : null,
     // The `chord` placement must foreground the app to deliver its keystroke, so
     // background mode only applies to window/tab launches.
-    background: Boolean(launcher) && resolvedPlacement !== 'chord' && background
+    background: Boolean(launcher) && resolvedPlacement !== 'chord' && background,
+    ...sessionOverrideFields({ providerChoice, latchExecutable, openViewerOverride })
   };
 }
 
@@ -119,6 +144,23 @@ export function IdePage({ open }: IdePageProps) {
   const refreshCatalog = useRefreshAgentCatalog();
   const updateAgentLaunchConfig = useUpdateAgentLaunchConfig();
   const updateTerminalProfile = useUpdateTerminalProfile();
+  const updateSessionDefaults = useUpdateLaunchSessionDefaults();
+  // Discovery runs on the execution target through the local-target boundary,
+  // never in the browser: only the device that would host the process can
+  // answer whether Latch works there.
+  const latchExecutableForProbe =
+    launchSettings.data?.terminalProfile.executionProvider?.executable ??
+    launchSettings.data?.launchSessionDefaults.executionProvider.executable ??
+    'latch';
+  const latchDiscovery = useLatchDiscovery({
+    executionTargetId: launchSettings.data?.executionTargetId ?? null,
+    executable: latchExecutableForProbe,
+    enabled: Boolean(launchSettings.data)
+  });
+  const recheckLatch = useRecheckLatchDiscovery({
+    executionTargetId: launchSettings.data?.executionTargetId ?? null,
+    executable: latchExecutableForProbe
+  });
 
   const [editorScheme, setEditorScheme] = useState(DEFAULT_EDITOR_SCHEME);
   const [savedScheme, setSavedScheme] = useState(DEFAULT_EDITOR_SCHEME);
@@ -130,9 +172,12 @@ export function IdePage({ open }: IdePageProps) {
   const [placement, setPlacement] = useState<TerminalProfileDto['placement']>('window');
   const [chord, setChord] = useState('');
   const [background, setBackground] = useState(false);
+  const [providerChoice, setProviderChoice] = useState<ProviderChoice>('inherit');
+  const [openViewerOverride, setOpenViewerOverride] = useState<boolean | null>(null);
   const [terminalError, setTerminalError] = useState<string | null>(null);
   const [agentError, setAgentError] = useState<string | null>(null);
   const [terminalButtonState, setTerminalButtonState] = useState<ButtonLoadingState>('default');
+  const [defaultsError, setDefaultsError] = useState<string | null>(null);
 
   useEffect(() => {
     const value = profile.data?.editorScheme ?? DEFAULT_EDITOR_SCHEME;
@@ -149,6 +194,8 @@ export function IdePage({ open }: IdePageProps) {
     setPlacement(next.placement);
     setChord(next.chord);
     setBackground(next.background);
+    setProviderChoice(providerChoiceFromProfile(activeProfile));
+    setOpenViewerOverride(activeProfile.openViewerOnLaunch ?? null);
   }, [launchSettings.data?.terminalProfile]);
 
   if (!open) return null;
@@ -167,19 +214,45 @@ export function IdePage({ open }: IdePageProps) {
   }
 
   const savedProfile = launchSettings.data?.terminalProfile ?? null;
+  const sessionDefaults = launchSettings.data?.launchSessionDefaults ?? null;
+  // The provider `executable` is never typed by the user — it exists so a future
+  // custom path stays lossless across toggles, so carry the stored value forward.
+  const latchExecutable =
+    savedProfile?.executionProvider?.executable ??
+    sessionDefaults?.executionProvider.executable ??
+    'latch';
   const draftProfile = normalizeProfile({
     launcherChoice,
     customLauncher,
     placement,
     chord,
-    background
+    background,
+    providerChoice,
+    latchExecutable,
+    openViewerOverride
   });
+  const savedProviderChoice = savedProfile ? providerChoiceFromProfile(savedProfile) : 'inherit';
+  const savedOpenViewerOverride = savedProfile?.openViewerOnLaunch ?? null;
   const terminalIsDirty =
     savedProfile !== null &&
     (savedProfile.launcher !== draftProfile.launcher ||
       savedProfile.placement !== draftProfile.placement ||
       savedProfile.chord !== draftProfile.chord ||
-      savedProfile.background !== draftProfile.background);
+      savedProfile.background !== draftProfile.background ||
+      savedProviderChoice !== providerChoice ||
+      savedOpenViewerOverride !== openViewerOverride);
+  const defaultProviderKind = sessionDefaults?.executionProvider.kind ?? 'direct';
+  const effectiveProviderKind = resolveProviderKind({
+    providerChoice,
+    defaults: sessionDefaults
+  });
+  const persistent = effectiveProviderKind === 'latch';
+  const effectiveOpenViewer = resolveOpenViewer({
+    openViewerOverride,
+    defaults: sessionDefaults
+  });
+  const discovery = latchDiscovery.data;
+  const latchBlockedReason = resolveLatchBlockedReason(discovery);
   const requiresCustomLauncher =
     launcherChoice === CUSTOM_LAUNCHER && draftProfile.launcher === null;
   const agents = [...(catalog.data?.agents ?? [])].sort((a, b) => a.label.localeCompare(b.label));
@@ -218,6 +291,19 @@ export function IdePage({ open }: IdePageProps) {
       setTerminalButtonState('error');
       setTerminalError(
         error instanceof Error ? error.message : 'Failed to save the terminal profile.'
+      );
+    }
+  }
+
+  async function handleSaveSessionDefault(kind: 'direct' | 'latch') {
+    setDefaultsError(null);
+    try {
+      await updateSessionDefaults.mutateAsync({
+        executionProvider: { kind, executable: latchExecutable }
+      });
+    } catch (error) {
+      setDefaultsError(
+        error instanceof Error ? error.message : 'Failed to save your session default.'
       );
     }
   }
@@ -321,21 +407,92 @@ export function IdePage({ open }: IdePageProps) {
 
       <div className="space-y-4 rounded-lg border p-4">
         <div className="space-y-1">
-          <h3 className="text-sm font-medium">Terminal launch</h3>
+          <h3 className="text-sm font-medium">Terminal sessions</h3>
           <p className="text-sm text-muted-foreground">
             Choose how agent runs open on this machine.
           </p>
         </div>
 
+        <div className="space-y-2">
+          <Label htmlFor="execution-target-session">Session</Label>
+          <Select
+            value={effectiveProviderKind}
+            onValueChange={value =>
+              setProviderChoice((value as 'direct' | 'latch' | null) ?? 'direct')
+            }
+          >
+            <SelectTrigger id="execution-target-session">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="direct">Direct — the window runs the agent</SelectItem>
+              <SelectItem value="latch" disabled={latchBlockedReason !== null}>
+                Persistent — Latch hosts the agent, the window just shows it
+              </SelectItem>
+            </SelectContent>
+          </Select>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <p className="text-xs text-muted-foreground">
+              {providerChoice === 'inherit'
+                ? `Following your default (${defaultProviderKind === 'latch' ? 'Persistent' : 'Direct'}).`
+                : `This machine overrides your default (${defaultProviderKind === 'latch' ? 'Persistent' : 'Direct'}).`}
+            </p>
+            {providerChoice === 'inherit' ? null : (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-6 px-2 text-xs"
+                onClick={() => setProviderChoice('inherit')}
+              >
+                Use my default
+              </Button>
+            )}
+          </div>
+          {latchBlockedReason ? (
+            <p className="text-xs text-muted-foreground">
+              {latchBlockedReason} Direct execution stays available.
+            </p>
+          ) : null}
+          <LatchDiscoveryStatus
+            discovery={discovery}
+            isLoading={latchDiscovery.isLoading}
+            deviceLabel={launchSettings.data?.deviceLabel ?? null}
+            onRecheck={() => void recheckLatch.mutateAsync().catch(() => undefined)}
+            recheckPending={recheckLatch.isPending}
+          />
+          {persistent && savedProfile?.executionProvider?.kind === 'latch' && latchBlockedReason ? (
+            <p className="text-xs text-destructive">
+              This machine is set to persistent sessions but Latch is unusable here, so runs launch
+              directly until that is fixed.
+            </p>
+          ) : null}
+        </div>
+
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
-            <Label htmlFor="execution-target-launcher">Terminal</Label>
+            <Label htmlFor="execution-target-launcher">
+              {persistent ? 'Show it in' : 'Open in'}
+            </Label>
             <Select
-              value={launcherChoice}
-              onValueChange={value => setLauncherChoice(value ?? INLINE_LAUNCHER)}
+              value={persistent && !effectiveOpenViewer ? NO_VIEWER : launcherChoice}
+              onValueChange={value => {
+                if (value === NO_VIEWER) {
+                  setOpenViewerOverride(false);
+                  return;
+                }
+                setLauncherChoice(value ?? INLINE_LAUNCHER);
+                // Picking a terminal implies wanting a window; the stored
+                // launcher itself is never touched by the provider toggle.
+                if (!effectiveOpenViewer) setOpenViewerOverride(true);
+              }}
             >
               <SelectTrigger id="execution-target-launcher">
-                <SelectValue>{getTerminalLauncherLabel(launcherChoice)}</SelectValue>
+                <SelectValue>
+                  {persistent && !effectiveOpenViewer
+                    ? "Don't open a window automatically"
+                    : getTerminalLauncherLabel(launcherChoice)}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {TERMINAL_OPTIONS.map(option => (
@@ -343,8 +500,16 @@ export function IdePage({ open }: IdePageProps) {
                     {option.label}
                   </SelectItem>
                 ))}
+                {persistent ? (
+                  <SelectItem value={NO_VIEWER}>Don&apos;t open a window automatically</SelectItem>
+                ) : null}
               </SelectContent>
             </Select>
+            <p className="text-xs text-muted-foreground">
+              {persistent
+                ? 'Shows the session that Latch is already hosting. Closing the window leaves the agent running.'
+                : 'Launches the agent in this terminal.'}
+            </p>
           </div>
 
           <div className="space-y-2">
@@ -417,6 +582,27 @@ export function IdePage({ open }: IdePageProps) {
             />
           </div>
         ) : null}
+
+        <div className="space-y-2 rounded-md border border-dashed p-3">
+          <Label htmlFor="launch-session-default">Default for new machines</Label>
+          <Select
+            value={defaultProviderKind}
+            onValueChange={value => void handleSaveSessionDefault(value as 'direct' | 'latch')}
+          >
+            <SelectTrigger id="launch-session-default" className="max-w-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="direct">Direct</SelectItem>
+              <SelectItem value="latch">Persistent (Latch)</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            Applies to every execution target that has not set its own Session above. Saved as soon
+            as you change it.
+          </p>
+          {defaultsError ? <p className="text-xs text-destructive">{defaultsError}</p> : null}
+        </div>
 
         <div className="flex flex-wrap items-center gap-3">
           <LoadingButton

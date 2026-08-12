@@ -41,6 +41,17 @@ manual refresh. The settings surface lets you configure per-user local
 execution-target launch defaults (terminal profile plus per-agent flags and
 pre-commands) and source-specific defaults under Project settings → Resources.
 
+Terminal & IDE settings carry one **Session** choice per execution target —
+`Direct` (the window runs the agent) or `Persistent` (Latch hosts the agent and
+the window just shows it) — followed by the unchanged terminal picker, whose
+label reads *Open in* or *Show it in* accordingly. The two are orthogonal:
+Latch is never an entry in the terminal list, and the stored terminal choice is
+untouched by toggling the provider. Latch availability is probed on the
+execution target itself through the local-target `discoverLatch` capability and
+rendered inline (version and path, the standalone install command when missing,
+or the missing capability when incompatible); direct execution stays selectable
+in every state, and Overlord never installs or upgrades Latch.
+
 ### AI title summarization
 
 Mission and objective titles are derived from instruction text via the
@@ -128,6 +139,7 @@ camelCase per the [REST API Boundary](../database/docs/09-database-schema-contra
 | `GET /api/launch-settings` | The acting user's local execution-target launch defaults |
 | `PATCH /api/launch-settings/agents/:agentKey` | Persist per-agent pre-command / flags to `user_execution_target_preferences.agent_configs_json` |
 | `PATCH /api/launch-settings/terminal-profile` | Persist the local terminal launcher profile to `user_execution_target_preferences.terminal_profile_json` |
+| `PATCH /api/launch-settings/session-defaults` | Persist the user-level execution-provider / viewer default new execution targets inherit |
 | `PATCH /api/projects/:id/resources/:resourceId/sources/:sourceId` | Replace per-agent pre-command / flag defaults on one project resource source |
 | `GET/POST /api/projects`, `GET/PATCH /api/projects/:id` | Projects (PATCH covers rename / describe / archive) |
 | `GET /api/workspace/statuses` | Workspace card statuses (board columns, shared across projects) |

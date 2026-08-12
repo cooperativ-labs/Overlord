@@ -7,16 +7,20 @@ import { observeMissionBranchGit } from './branch-observe-git.ts';
 import { fail, ok } from './result.ts';
 import type {
   CapabilityResult,
+  DiscoverLatchInput,
   GenerateCommitMessageInput,
+  InspectLatchSessionInput,
   ListBranchesInput,
   ListWorktreesInput,
   LocalTargetCapabilities,
   ObserveResourceInput,
+  OpenLatchSessionInput,
   PerformBranchActionInput,
   PurgeMergedWorktreesInput,
   ReadCurrentDiffInput,
   ReadRepositoryTreeInput,
   RemoveWorktreeInput,
+  StopLatchSessionInput,
   WriteProjectMetadataInput
 } from './types.ts';
 
@@ -40,7 +44,11 @@ export type LocalTargetBridgeCall =
   | { capability: 'removeWorktree'; input: RemoveWorktreeInput }
   | { capability: 'purgeMergedWorktrees'; input: PurgeMergedWorktreesInput }
   | { capability: 'generateCommitMessageFromLocalDiff'; input: GenerateCommitMessageInput }
-  | { capability: 'writeProjectMetadata'; input: WriteProjectMetadataInput };
+  | { capability: 'writeProjectMetadata'; input: WriteProjectMetadataInput }
+  | { capability: 'discoverLatch'; input: DiscoverLatchInput }
+  | { capability: 'inspectLatchSession'; input: InspectLatchSessionInput }
+  | { capability: 'openLatchSession'; input: OpenLatchSessionInput }
+  | { capability: 'stopLatchSession'; input: StopLatchSessionInput };
 
 /** Capability names exposed on the unified desktop bridge. */
 export type LocalTargetBridgeCapability = LocalTargetBridgeCall['capability'];
@@ -77,6 +85,14 @@ export async function invokeLocalTargetCapability({
       return provider.purgeMergedWorktrees(call.input);
     case 'generateCommitMessageFromLocalDiff':
       return provider.generateCommitMessageFromLocalDiff(call.input);
+    case 'discoverLatch':
+      return provider.discoverLatch(call.input);
+    case 'inspectLatchSession':
+      return provider.inspectLatchSession(call.input);
+    case 'openLatchSession':
+      return provider.openLatchSession(call.input);
+    case 'stopLatchSession':
+      return provider.stopLatchSession(call.input);
     case 'writeProjectMetadata':
       return provider.writeProjectMetadata(call.input);
     default:

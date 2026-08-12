@@ -18,7 +18,14 @@ import {
   isBackendHostFingerprint,
   isBrowserDevicePlatform
 } from './execution-targets.js';
+import { launchSessionDefaultsFromProfileMetadata } from './profiles.js';
 import { findPrimaryProjectResource } from './projects.js';
+import {
+  DEFAULT_LAUNCH_SESSION_DEFAULTS,
+  parseTerminalProfileJson,
+  type ResolvedLaunchSession,
+  resolveLaunchSession
+} from './terminal-profile-types.js';
 import { newId, nowIso } from './util.js';
 
 /** `project_user_preferences.preferences_json` key for WS-C target selection. */
@@ -770,6 +777,62 @@ export async function resolveClaimLaunchConfig({
     objectiveResourceKey: objective?.resource_key ?? null
   });
   return resolved.config;
+}
+
+/**
+ * Resolve the effective execution provider and viewer for the acting user on one
+ * execution target: the target's own override when it has one, otherwise the
+ * user-level default. Mirrors {@link readAgentConfigsForExecutionTarget} — launch
+ * settings are per-user *and* per-machine, so both keys must match.
+ *
+ * Never throws: a caller with no actor, no preference row, or no target resolves
+ * to direct execution with the default terminal choice, because direct execution
+ * must remain available in every state.
+ */
+export async function resolveLaunchSessionForExecutionTarget({
+  ctx,
+  executionTargetId
+}: {
+  ctx: ServiceContext;
+  executionTargetId: string | null;
+}): Promise<ResolvedLaunchSession> {
+  const targetId = executionTargetId?.trim() || null;
+  if (!targetId || !ctx.actorWorkspaceUserId) {
+    return resolveLaunchSession({ profile: null, defaults: DEFAULT_LAUNCH_SESSION_DEFAULTS });
+  }
+
+  const row = (await ctx.db.get(
+    `SELECT uetp.terminal_profile_json AS terminal_profile_json,
+            p.metadata_json AS profile_metadata_json
+       FROM execution_targets et
+       JOIN devices d
+         ON d.id = et.device_id
+        AND d.workspace_id = et.workspace_id
+        AND d.deleted_at IS NULL
+       JOIN workspace_users wu
+         ON wu.id = ?
+        AND wu.workspace_id = et.workspace_id
+        AND wu.deleted_at IS NULL
+       JOIN profiles p ON p.id = wu.profile_id
+       LEFT JOIN user_execution_target_preferences uetp
+         ON uetp.profile_id = wu.profile_id
+        AND uetp.target_type = et.type
+        AND uetp.target_fingerprint = d.fingerprint
+        AND uetp.deleted_at IS NULL
+      WHERE et.id = ?
+        AND et.workspace_id = ?
+        AND et.deleted_at IS NULL`,
+    [ctx.actorWorkspaceUserId, targetId, ctx.workspace.id]
+  )) as { terminal_profile_json: string | null; profile_metadata_json: string } | undefined;
+
+  if (!row) {
+    return resolveLaunchSession({ profile: null, defaults: DEFAULT_LAUNCH_SESSION_DEFAULTS });
+  }
+
+  return resolveLaunchSession({
+    profile: row.terminal_profile_json ? parseTerminalProfileJson(row.terminal_profile_json) : null,
+    defaults: launchSessionDefaultsFromProfileMetadata(row.profile_metadata_json)
+  });
 }
 
 export async function readAgentConfigsForExecutionTarget({

@@ -11,8 +11,16 @@ import {
   type RunnerRegistrationInput
 } from './execution-target-runners.js';
 import type { ClientDeviceIdentity } from './execution-targets.js';
+import { type ExecutionProviderSession, mergeProviderSessionIntoMetadata } from './latch-launch.js';
 import { LOCAL_TARGET_MUTATION_REQUESTED_SOURCE } from './local-target-mutations.ts';
+import { resolveLaunchSessionForExecutionTarget } from './project-execution-target.js';
 import { resolveObjectiveWorkingDirectory } from './projects.js';
+import {
+  LAUNCH_SESSION_METADATA_KEY,
+  type LaunchSessionSnapshot,
+  launchSessionSnapshotFromMetadata,
+  toLaunchSessionSnapshot
+} from './terminal-profile-types.js';
 import { newId, nowIso } from './util.js';
 
 export const ACTIVE_EXECUTION_REQUEST_STATUSES = ['queued', 'claimed', 'launching'] as const;
@@ -38,6 +46,12 @@ export type ExecutionRequestSummary = {
   requestedReasoningEffort: string | null;
   launchFlags: Record<string, unknown>;
   metadata: Record<string, unknown>;
+  /**
+   * Execution provider + viewer frozen at claim time, so a later settings change
+   * cannot retroactively change what this run did. `null` for a request that was
+   * claimed before snapshots existed, or not yet claimed — resolve normally then.
+   */
+  launchSession: LaunchSessionSnapshot | null;
   requestedSource: string;
   status: string;
   claimedByDeviceId: string | null;
@@ -89,6 +103,7 @@ function rowToSummary(row: {
   created_at: string;
   updated_at: string;
 }): ExecutionRequestSummary {
+  const metadata = parseJsonObject(row.metadata_json);
   return {
     id: row.id,
     workspaceId: row.workspace_id,
@@ -103,7 +118,8 @@ function rowToSummary(row: {
     requestedModel: row.requested_model,
     requestedReasoningEffort: row.requested_reasoning_effort,
     launchFlags: parseJsonObject(row.launch_flags_json),
-    metadata: parseJsonObject(row.metadata_json),
+    metadata,
+    launchSession: launchSessionSnapshotFromMetadata(metadata),
     requestedSource: row.requested_source,
     status: row.status,
     claimedByDeviceId: row.claimed_by_device_id,
@@ -585,7 +601,8 @@ export async function claimNextExecutionRequest({
     const candidate = (await txCtx.db.get(
       `SELECT er.id, er.workspace_id, er.project_id, er.mission_id, er.objective_id,
                 er.execution_target_id, er.status, er.revision, er.launch_flags_json,
-                er.launched_session_id, er.resolved_working_directory, o.resource_key
+                er.launched_session_id, er.resolved_working_directory, er.metadata_json,
+                o.resource_key
            FROM execution_requests er
            JOIN objectives o ON o.id = er.objective_id
           WHERE ${conditions.join(' AND ')}
@@ -595,6 +612,7 @@ export async function claimNextExecutionRequest({
     )) as
       | (ExecutionRequestStateRow & {
           resolved_working_directory: string | null;
+          metadata_json: string;
           resource_key: string | null;
         })
       | undefined;
@@ -627,9 +645,31 @@ export async function claimNextExecutionRequest({
     const now = nowIso();
     const expires = new Date(Date.now() + claimTtlMs).toISOString();
     const revision = candidate.revision + 1;
+
+    // Freeze the execution provider and viewer this run will use. Resolving here
+    // rather than at spawn time means a settings change made while the agent is
+    // running can never retroactively change what the run did — and the mission
+    // panel can report the provider for a historical run truthfully. Best-effort:
+    // an unreadable preference must never fail a claim, it just leaves the
+    // snapshot absent, which callers treat as "resolve normally" (direct).
+    let metadataJson = candidate.metadata_json;
+    try {
+      const session = await resolveLaunchSessionForExecutionTarget({
+        ctx: txCtx,
+        executionTargetId: candidate.execution_target_id ?? target.executionTargetId
+      });
+      metadataJson = JSON.stringify({
+        ...parseJsonObject(candidate.metadata_json),
+        [LAUNCH_SESSION_METADATA_KEY]: toLaunchSessionSnapshot(session, now)
+      });
+    } catch {
+      // Keep the request's existing metadata; the launch resolves direct.
+    }
+
     const updated = await txCtx.db.run(
       `UPDATE execution_requests
             SET status = 'claimed',
+                metadata_json = ?,
                 claimed_by_device_id = ?,
                 claimed_by_execution_target_id = ?,
                 claimed_by_runner_registration_id = ?,
@@ -642,6 +682,7 @@ export async function claimNextExecutionRequest({
                 revision = ?
           WHERE id = ? AND status = 'queued' AND revision = ?`,
       [
+        metadataJson,
         target.deviceId,
         target.executionTargetId,
         registration?.id ?? null,
@@ -664,6 +705,7 @@ export async function claimNextExecutionRequest({
       revision,
       changedFields: [
         'status',
+        ...(metadataJson === candidate.metadata_json ? [] : (['metadata_json'] as const)),
         'claimed_by_device_id',
         'claimed_by_execution_target_id',
         ...(registration ? (['claimed_by_runner_registration_id'] as const) : []),
@@ -730,10 +772,12 @@ export async function markExecutionLaunching({
 
 export async function markExecutionLaunched({
   ctx,
-  requestId
+  requestId,
+  providerSession
 }: {
   ctx: ServiceContext;
   requestId: string;
+  providerSession?: ExecutionProviderSession | null;
 }): Promise<ExecutionRequestSummary> {
   return await ctx.db.transaction(async tx => {
     const txCtx = { ...ctx, db: tx };
@@ -741,15 +785,41 @@ export async function markExecutionLaunched({
     assertTransition({ row, allowedFrom: ['launching'], to: 'launched' });
     const now = nowIso();
     const revision = row.revision + 1;
-    const updated = await txCtx.db.run(
-      `UPDATE execution_requests
-            SET status = 'launched',
-                launch_completed_at = ?,
-                updated_at = ?,
-                revision = ?
-          WHERE id = ? AND status = 'launching' AND revision = ?`,
-      [now, now, revision, requestId, row.revision]
-    );
+
+    let metadataJson: string | null = null;
+    const changedFields: string[] = ['status', 'launch_completed_at'];
+    if (providerSession) {
+      const existing = (await txCtx.db.get<{ metadata_json: string }>(
+        `SELECT metadata_json FROM execution_requests WHERE id = ? AND deleted_at IS NULL`,
+        [requestId]
+      )) as { metadata_json: string } | undefined;
+      metadataJson = mergeProviderSessionIntoMetadata({
+        metadataJson: existing?.metadata_json,
+        providerSession
+      });
+      changedFields.push('metadata_json');
+    }
+
+    const updated = metadataJson
+      ? await txCtx.db.run(
+          `UPDATE execution_requests
+                SET status = 'launched',
+                    launch_completed_at = ?,
+                    metadata_json = ?,
+                    updated_at = ?,
+                    revision = ?
+              WHERE id = ? AND status = 'launching' AND revision = ?`,
+          [now, metadataJson, now, revision, requestId, row.revision]
+        )
+      : await txCtx.db.run(
+          `UPDATE execution_requests
+                SET status = 'launched',
+                    launch_completed_at = ?,
+                    updated_at = ?,
+                    revision = ?
+              WHERE id = ? AND status = 'launching' AND revision = ?`,
+          [now, now, revision, requestId, row.revision]
+        );
     if (updated.changes === 0) {
       throw new ServiceError(
         'Execution request changed while marking launch complete',
@@ -761,12 +831,25 @@ export async function markExecutionLaunched({
       ctx: txCtx,
       row,
       revision,
-      changedFields: ['status', 'launch_completed_at']
+      changedFields
     });
     await appendExecutionRequestEvent({
       ctx: txCtx,
       row,
-      summary: 'Runner opened the agent launch command.'
+      summary: providerSession
+        ? `Runner opened the agent launch command (Latch session ${providerSession.providerSessionId}).`
+        : 'Runner opened the agent launch command.',
+      ...(providerSession
+        ? {
+            payload: {
+              providerSession: {
+                provider: providerSession.provider,
+                providerSessionId: providerSession.providerSessionId,
+                lastObservedState: providerSession.lastObservedState
+              }
+            }
+          }
+        : {})
     });
     return await getExecutionRequest({ ctx: txCtx, id: requestId });
   });

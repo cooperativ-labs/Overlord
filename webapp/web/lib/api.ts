@@ -98,6 +98,7 @@ import type {
   UpdateArtifactBody,
   UpdateInboxItemBody,
   UpdateLaunchPreferenceBody,
+  UpdateLaunchSessionDefaultsBody,
   UpdateMissionBody,
   UpdateNotificationPreferencesBody,
   UpdateObjectiveBody,
@@ -669,6 +670,20 @@ export const api = {
       workspaceId
         ? `/api/workspaces/${workspaceId}/launch-settings/terminal-profile`
         : '/api/launch-settings/terminal-profile',
+      body
+    ),
+  // The user-level provider/viewer default a new execution target inherits. It is
+  // stored on the profile, not the target, so this works on a machine that has
+  // not declared one.
+  updateLaunchSessionDefaults: (
+    body: UpdateLaunchSessionDefaultsBody,
+    workspaceId?: string | null
+  ) =>
+    request<LaunchSettingsDto>(
+      'PATCH',
+      workspaceId
+        ? `/api/workspaces/${workspaceId}/launch-settings/session-defaults`
+        : '/api/launch-settings/session-defaults',
       body
     ),
   updateWorktreeBranchAutomation: (

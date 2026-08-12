@@ -8,19 +8,23 @@
 import { fail } from './result.ts';
 import type {
   CapabilityFailure,
+  DiscoverLatchInput,
   GenerateCommitMessageInput,
+  InspectLatchSessionInput,
   LaunchAgentInput,
   ListBranchesInput,
   ListWorktreesInput,
   LocalTargetCapabilities,
   LocalTargetErrorCode,
   ObserveResourceInput,
+  OpenLatchSessionInput,
   PerformBranchActionInput,
   PrepareBranchInput,
   PurgeMergedWorktreesInput,
   ReadCurrentDiffInput,
   ReadRepositoryTreeInput,
   RemoveWorktreeInput,
+  StopLatchSessionInput,
   TargetMetadata,
   WriteProjectMetadataInput
 } from './types.ts';
@@ -146,6 +150,18 @@ export class UnavailableProvider implements LocalTargetCapabilities {
     return this.#fail();
   }
   launchAgent(_input: LaunchAgentInput) {
+    return this.#fail();
+  }
+  discoverLatch(_input: DiscoverLatchInput) {
+    return this.#fail();
+  }
+  inspectLatchSession(_input: InspectLatchSessionInput) {
+    return this.#fail();
+  }
+  openLatchSession(_input: OpenLatchSessionInput) {
+    return this.#fail();
+  }
+  stopLatchSession(_input: StopLatchSessionInput) {
     return this.#fail();
   }
   doctor() {

@@ -19,6 +19,10 @@ import {
 } from '../../packages/core/service/execution-requests.ts';
 import type { RunnerRegistrationInput } from '../../packages/core/service/execution-target-runners.ts';
 import { NO_EXECUTION_TARGET_REGISTERED } from '../../packages/core/service/execution-targets.ts';
+import {
+  type ExecutionProviderSession,
+  parseExecutionProviderSession
+} from '../../packages/core/service/latch-launch.ts';
 import type { CapabilityResult } from '../../packages/core/service/local-target/types.ts';
 import { completeLocalTargetMutationRequest } from '../../packages/core/service/local-target-mutations.ts';
 import { resolveClaimLaunchConfig } from '../../packages/core/service/project-execution-target.ts';
@@ -349,18 +353,20 @@ async function claimProjectLaunchSettings(
 export async function updateRunnerRequestStatus({
   requestId,
   status,
-  error
+  error,
+  providerSession
 }: {
   requestId: string;
   status: 'launching' | 'launched' | 'failed';
   error?: string | null;
+  providerSession?: ExecutionProviderSession | null;
 }): Promise<Record<string, unknown>> {
   const ctx = await requestRunnerContext(requestId);
   const request =
     status === 'launching'
       ? await markExecutionLaunching({ ctx, requestId })
       : status === 'launched'
-        ? await markExecutionLaunched({ ctx, requestId })
+        ? await markExecutionLaunched({ ctx, requestId, providerSession })
         : await markExecutionFailed({ ctx, requestId, error: error ?? 'Launch failed' });
 
   // The `launching` transition is where the session channel is prepared, because it is the
@@ -376,6 +382,12 @@ export async function updateRunnerRequestStatus({
     return { ...serviceSummaryToDto(request), sessionChannel: bootstrap };
   }
   return serviceSummaryToDto(request);
+}
+
+/** Normalize the additive `providerSession` body on POST …/launched. */
+export function providerSessionFromLaunchedBody(body: unknown): ExecutionProviderSession | null {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return null;
+  return parseExecutionProviderSession((body as { providerSession?: unknown }).providerSession);
 }
 
 /**

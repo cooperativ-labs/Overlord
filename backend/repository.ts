@@ -137,6 +137,7 @@ import {
   dequeueObjective,
   LAUNCHABLE_STATES,
   listMissionExecutionRequests,
+  listMissionTerminalSessions,
   readWorktreeBranchAutomationEnabled
 } from './execution/launch.ts';
 import {
@@ -4082,11 +4083,13 @@ export async function getMissionDetail(missionRef: string): Promise<MissionDetai
   const objectives = await listObjectives(row.id);
   const statuses = await selectWorkspaceStatusesForWorkspace(row.workspace_id);
   const executionRequests = await listMissionExecutionRequests(row.id);
+  const terminalSessions = await listMissionTerminalSessions(row.id);
   return {
     ...mission,
     objectives,
     statuses,
     executionRequests,
+    terminalSessions,
     branch: await missionBranchDto(row),
     createdFrom: await missionCreatedFromDto(row)
   };

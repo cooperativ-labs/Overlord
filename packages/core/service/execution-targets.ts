@@ -6,8 +6,13 @@ import type { ServiceContext } from './context.js';
 import type { ClientDeviceIdentity } from './device-identity.js';
 import { callerDeviceFingerprint, softDeleteOrphanDevices } from './devices.js';
 import { ServiceError } from './errors.js';
+import { launchSessionDefaultsFromProfileMetadata, mergeProfileMetadataJson } from './profiles.js';
 import {
+  DEFAULT_LAUNCH_SESSION_DEFAULTS,
   DEFAULT_TERMINAL_PROFILE,
+  type ExecutionProvider,
+  type LaunchSessionDefaults,
+  normalizeExecutionProvider,
   parseTerminalProfileJson,
   serializeTerminalProfile,
   type TerminalProfile
@@ -748,4 +753,95 @@ export async function updateTerminalProfile({
   });
 
   return { ...target, terminalProfile: profile };
+}
+
+/**
+ * The acting user's launch-session default. Read from the profile rather than a
+ * target preference because it is deliberately machine-independent: it is what a
+ * *new* execution target inherits, and what a target that never overrode the
+ * provider continues to follow.
+ */
+export async function readActorLaunchSessionDefaults({
+  ctx
+}: {
+  ctx: ServiceContext;
+}): Promise<LaunchSessionDefaults> {
+  const profileId = await actorProfileId(ctx);
+  if (!profileId) return { ...DEFAULT_LAUNCH_SESSION_DEFAULTS };
+  const row = (await ctx.db.get(`SELECT metadata_json FROM profiles WHERE id = ?`, [profileId])) as
+    | { metadata_json: string }
+    | undefined;
+  return row
+    ? launchSessionDefaultsFromProfileMetadata(row.metadata_json)
+    : { ...DEFAULT_LAUNCH_SESSION_DEFAULTS };
+}
+
+/**
+ * Store the acting user's launch-session default. Omitted fields keep their
+ * stored value so setting the provider never silently rewrites the viewer
+ * preference (and vice versa).
+ */
+export async function updateActorLaunchSessionDefaults({
+  ctx,
+  executionProvider,
+  openViewerOnLaunch
+}: {
+  ctx: ServiceContext;
+  executionProvider?: ExecutionProvider | null;
+  openViewerOnLaunch?: boolean | null;
+}): Promise<LaunchSessionDefaults> {
+  requireActor(ctx);
+  const profileId = await actorProfileId(ctx);
+  if (!profileId) {
+    throw new ServiceError(
+      'No active profile to store launch session defaults for',
+      'no_profile',
+      409
+    );
+  }
+  const row = (await ctx.db.get(`SELECT metadata_json, revision FROM profiles WHERE id = ?`, [
+    profileId
+  ])) as { metadata_json: string; revision: number } | undefined;
+  if (!row) {
+    throw new ServiceError(
+      'No active profile to store launch session defaults for',
+      'no_profile',
+      409
+    );
+  }
+
+  const current = launchSessionDefaultsFromProfileMetadata(row.metadata_json);
+  const next: LaunchSessionDefaults = {
+    executionProvider:
+      executionProvider === undefined
+        ? current.executionProvider
+        : (normalizeExecutionProvider(executionProvider) ?? {
+            ...DEFAULT_LAUNCH_SESSION_DEFAULTS.executionProvider
+          }),
+    openViewerOnLaunch:
+      openViewerOnLaunch === undefined || openViewerOnLaunch === null
+        ? current.openViewerOnLaunch
+        : openViewerOnLaunch
+  };
+
+  const revision = row.revision + 1;
+  await ctx.db.run(
+    `UPDATE profiles SET metadata_json = ?, updated_at = ?, revision = ? WHERE id = ?`,
+    [
+      mergeProfileMetadataJson({ metadataJson: row.metadata_json, launchSessionDefaults: next }),
+      nowIso(),
+      revision,
+      profileId
+    ]
+  );
+  await recordChange({
+    ctx,
+    entityType: 'profile',
+    entityId: profileId,
+    operation: 'update',
+    entityRevision: revision,
+    changedFields: ['metadata_json']
+  });
+
+  return next;
 }

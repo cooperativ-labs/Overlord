@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { parsePreLaunchLines } from '@/components/projects/project-settings/launch-settings-form';
 import {
@@ -11,6 +11,11 @@ import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import { LoadingButton } from '@/components/ui/loading-button';
 import { Textarea } from '@/components/ui/textarea';
 import { useProject, useUpdateProject } from '@/lib/queries';
+
+import {
+  detectLatchInvocation,
+  latchInvocationWarning
+} from '../../../../../packages/core/service/latch-invocation.ts';
 
 type LaunchPageProps = {
   open: boolean;
@@ -32,6 +37,14 @@ export function LaunchPage({ open, projectId }: LaunchPageProps) {
   const [envVarsError, setEnvVarsError] = useState<string | null>(null);
   const [insertTarget, setInsertTarget] = useState<'preLaunch' | 'envVars'>('envVars');
   const preLaunchRef = useRef<HTMLTextAreaElement | null>(null);
+
+  // coo:702: a `latch` command typed here is left exactly as written; it is
+  // warned about because the session it starts has no id Overlord can open,
+  // inspect, or stop — the per-target Session setting is the supported path.
+  const latchWarning = useMemo(() => {
+    const match = detectLatchInvocation(preLaunch);
+    return match ? latchInvocationWarning(match) : null;
+  }, [preLaunch]);
 
   const preLaunchDirty =
     parsePreLaunchLines(preLaunch).join('\n') !==
@@ -114,6 +127,7 @@ export function LaunchPage({ open, projectId }: LaunchPageProps) {
             onClick={handleSavePreLaunch}
           />
         </div>
+        {latchWarning ? <p className="text-xs text-amber-600">{latchWarning}</p> : null}
         {preLaunchError ? <p className="text-xs text-destructive">{preLaunchError}</p> : null}
       </div>
 

@@ -131,7 +131,14 @@ function terminalInnerCommand({
   return `cd ${shellQuote(workingDirectory)} && ${exports}; ${invocation}`;
 }
 
-export function terminalLaunchScriptContent({
+/**
+ * The composed terminal command string S — cd, env exports, pre-launch lines,
+ * optional pre-command wrapper, and the agent invocation. Latch create runs
+ * this exact string through `$SHELL -lc` so quoting / `&&` / multi-line
+ * pre-launch match today's iTerm/Terminal behavior; command resolution itself
+ * does not change.
+ */
+export function composeAgentTerminalCommand({
   command,
   args,
   workingDirectory,
@@ -147,7 +154,32 @@ export function terminalLaunchScriptContent({
   preLaunchCommands?: string[] | null;
 }): string {
   const agentCommand = agentShellCommand({ command, args, preCommand });
-  return `#!/usr/bin/env bash\n${terminalInnerCommand({ workingDirectory, agentCommand, extraEnv, preLaunchCommands })}\n`;
+  return terminalInnerCommand({ workingDirectory, agentCommand, extraEnv, preLaunchCommands });
+}
+
+export function terminalLaunchScriptContent({
+  command,
+  args,
+  workingDirectory,
+  preCommand,
+  extraEnv = {},
+  preLaunchCommands
+}: {
+  command: string;
+  args: string[];
+  workingDirectory: string;
+  preCommand?: string | null;
+  extraEnv?: Record<string, string>;
+  preLaunchCommands?: string[] | null;
+}): string {
+  return `#!/usr/bin/env bash\n${composeAgentTerminalCommand({
+    command,
+    args,
+    workingDirectory,
+    preCommand,
+    extraEnv,
+    preLaunchCommands
+  })}\n`;
 }
 
 function terminalScriptCommand(scriptPath: string): string {

@@ -754,6 +754,8 @@ export interface MissionDetailDto extends MissionDto {
   statuses: WorkspaceStatusDto[];
   /** Active (queued/claimed/launching) execution requests for this mission's objectives. */
   executionRequests: ExecutionRequestDto[];
+  /** Persistent terminal sessions are independent from mission and agent-session state. */
+  terminalSessions: TerminalSessionDto[];
   /** Read-only branch/worktree metadata derived from `missions.active_branch`. */
   branch: MissionBranchDto | null;
   /** What the authoring agent was working on when it filed this mission. */
@@ -1275,6 +1277,60 @@ export interface TerminalProfileDto {
    * its keystroke.
    */
   background: boolean;
+  /**
+   * Per-target override of which process host runs the agent. `null`/omitted
+   * inherits {@link LaunchSessionDefaultsDto}. Orthogonal to `launcher`: Latch
+   * creates the session, the launcher still presents it.
+   */
+  executionProvider?: ExecutionProviderDto | null;
+  /**
+   * Per-target override of whether a viewer opens when a run starts. `null`/
+   * omitted inherits the user default. The viewer *kind* is `launcher` itself —
+   * it is never stored twice, so toggling the provider is lossless.
+   */
+  openViewerOnLaunch?: boolean | null;
+}
+
+/** Which process host runs the agent: today's direct spawn, or a Latch session. */
+export interface ExecutionProviderDto {
+  kind: 'direct' | 'latch';
+  /** Latch CLI to invoke; kept while `direct` so toggling back is lossless. */
+  executable: string;
+}
+
+/** Normalized viewer identifier derived from the stored `launcher`. */
+export type TerminalViewerKindDto = 'iterm' | 'terminal' | 'inline' | 'custom';
+
+/** Whether an effective value came from this target or the user-level default. */
+export type LaunchSessionSourceDto = 'target' | 'user_default';
+
+/** The user-level default new execution targets inherit until they override it. */
+export interface LaunchSessionDefaultsDto {
+  executionProvider: ExecutionProviderDto;
+  openViewerOnLaunch: boolean;
+}
+
+/** The effective provider + viewer for the acting user on this execution target. */
+export interface ResolvedLaunchSessionDto {
+  version: 1;
+  executionProvider: ExecutionProviderDto;
+  viewer: {
+    kind: TerminalViewerKindDto;
+    /** The stored terminal choice itself, so callers never re-derive it. */
+    launcher: string | null;
+    openOnLaunch: boolean;
+  };
+  executionProviderSource: LaunchSessionSourceDto;
+  viewerOpenSource: LaunchSessionSourceDto;
+}
+
+/**
+ * The resolved session frozen onto an execution request at claim time, so a later
+ * settings change cannot retroactively change what a run did. Absent on requests
+ * claimed before snapshots existed — callers resolve normally in that case.
+ */
+export interface LaunchSessionSnapshotDto extends ResolvedLaunchSessionDto {
+  resolvedAt: string;
 }
 
 export interface LaunchSettingsDto {
@@ -1290,11 +1346,124 @@ export interface LaunchSettingsDto {
   agentConfigs: Record<string, AgentLaunchConfigDto>;
   /** Per-user terminal profile for this machine's execution target. */
   terminalProfile: TerminalProfileDto;
+  /** The acting user's default provider/viewer, inherited by targets that never override. */
+  launchSessionDefaults: LaunchSessionDefaultsDto;
+  /**
+   * The effective provider/viewer for this machine, with the origin of each value.
+   * `null` when the calling machine has no declared execution target.
+   */
+  resolvedLaunchSession: ResolvedLaunchSessionDto | null;
   /** When true, runner/direct launches prepare a per-mission branch and worktree before spawn. */
   worktreeBranchAutomationEnabled: boolean;
 }
 
 export type UpdateTerminalProfileBody = TerminalProfileDto;
+
+/**
+ * Update the user-level session default. Omitted fields keep their stored value,
+ * so a caller may set the provider without restating the viewer preference.
+ */
+export interface UpdateLaunchSessionDefaultsBody {
+  executionProvider?: ExecutionProviderDto | null;
+  openViewerOnLaunch?: boolean | null;
+}
+
+/**
+ * Result of probing `latch capabilities --json` on the execution target
+ * (coo:702). Three distinguishable states; direct remains selectable in all.
+ * Never carries credentials, socket tokens, or attachment grants.
+ */
+export type LatchDiscoveryStateDto = 'found' | 'not_installed' | 'incompatible';
+
+export interface LatchCapabilityFlagsDto {
+  create: boolean;
+  openViewer: boolean;
+  localAttach: boolean;
+  cloudAttach: boolean;
+  selfUpdate: boolean;
+  extensions: string[];
+}
+
+export interface LatchDiscoveryFoundDto {
+  state: 'found';
+  executable: string;
+  resolvedPath: string;
+  protocolVersion: number;
+  productVersion: string;
+  capabilities: LatchCapabilityFlagsDto;
+  checkedAt: string;
+  latchSelectable: true;
+  directSelectable: true;
+}
+
+export interface LatchDiscoveryNotInstalledDto {
+  state: 'not_installed';
+  executable: string;
+  /** Standalone CLI install command for the user to run; never auto-executed. */
+  installCommand: string;
+  checkedAt: string;
+  latchSelectable: false;
+  directSelectable: true;
+}
+
+export interface LatchDiscoveryIncompatibleDto {
+  state: 'incompatible';
+  executable: string;
+  resolvedPath: string | null;
+  protocolVersion: number | null;
+  productVersion: string | null;
+  /** Stable id of what is missing, e.g. `create` or `protocolVersion`. */
+  missingCapability: string;
+  detail: string;
+  checkedAt: string;
+  latchSelectable: false;
+  directSelectable: true;
+}
+
+export type LatchDiscoveryDto =
+  | LatchDiscoveryFoundDto
+  | LatchDiscoveryNotInstalledDto
+  | LatchDiscoveryIncompatibleDto;
+
+/**
+ * External terminal-session mapping for a Latch (or future) provider (coo:702).
+ * Stored on `execution_requests.metadata_json.providerSession`. The provider
+ * session id is correlation only — never a credential and never overloaded onto
+ * `launched_session_id` / harness-native resume ids.
+ */
+export interface ExecutionProviderSessionDto {
+  provider: 'latch';
+  providerSessionId: string;
+  sessionName: string | null;
+  executionTargetId: string | null;
+  /** Filled when protocol attach binds an agent session; null at create time. */
+  agentSessionId: string | null;
+  createdAt: string;
+  /** Last observed Latch session state, e.g. running / exited / stopping / lost. */
+  lastObservedState: string;
+}
+
+export type TerminalSessionStateDto = 'running' | 'exited' | 'stopping' | 'lost';
+
+export interface TerminalSessionDto {
+  executionRequestId: string;
+  objectiveId: string;
+  provider: 'latch';
+  providerSessionId: string;
+  sessionName: string;
+  executionTargetId: string | null;
+  deviceLabel: string | null;
+  agentSessionId: string | null;
+  executable: string;
+  viewerKind: string;
+  createdAt: string;
+  lastObservedState: TerminalSessionStateDto;
+}
+
+/** Additive body for `POST /api/runner/requests/:id/launched`. */
+export interface RunnerLaunchedBody {
+  providerSession?: ExecutionProviderSessionDto | null;
+}
 
 export interface UpdateWorktreeBranchAutomationBody {
   enabled: boolean;

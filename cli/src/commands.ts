@@ -11,6 +11,7 @@ import {
   executeLocalTargetMutation,
   parseMutationFromMetadata
 } from '@overlord/core/service/local-target-mutation-runner';
+import { launchSessionSnapshotFromMetadata } from '@overlord/core/service/terminal-profile-types';
 import { existsSync, readFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -1860,16 +1861,33 @@ async function runRunnerCommand({
             typeof sessionChannel.token === 'string' ? sessionChannel.token : undefined,
           sessionChannelLaunchKind:
             typeof sessionChannel.launchKind === 'string' ? sessionChannel.launchKind : undefined,
+          launchSession: launchSessionSnapshotFromMetadata(asRecord(requestRecord.metadata)),
           ...terminal,
           dryRun
         }
       });
+      if (result.providerFallbackWarning) {
+        console.error(`[overlord] ${result.providerFallbackWarning}`);
+      }
+      if (result.viewerOpen && result.viewerOpen.ok === false) {
+        console.error(`[overlord] ${result.viewerOpen.warning}`);
+      }
       if (result.status && result.status !== 0) {
         throw new CliError({ message: `Launch command exited with status ${result.status}` });
       }
-      await runtime.backend.post({ path: `/api/runner/requests/${requestId}/launched` });
+      await runtime.backend.post({
+        path: `/api/runner/requests/${requestId}/launched`,
+        body: result.providerSession ? { providerSession: result.providerSession } : {}
+      });
       if (json || dryRun) {
-        printJson({ request, plan: result.plan, status: result.status });
+        printJson({
+          request,
+          plan: result.plan,
+          status: result.status,
+          providerSession: result.providerSession ?? null,
+          viewerOpen: result.viewerOpen ?? null,
+          providerFallbackWarning: result.providerFallbackWarning ?? null
+        });
       } else {
         console.log(`Launched ${requestedAgent} for ${requestRecord.missionId}`);
       }

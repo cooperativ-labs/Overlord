@@ -20,7 +20,12 @@ import { type Permission, PERMISSIONS } from '@overlord/auth';
 import { formatOvldLaunchCommand, normalizeAgentLaunchFlags } from '@overlord/contract';
 import type { ServiceContext } from '@overlord/core/service/context';
 import {
+  DEFAULT_LAUNCH_SESSION_DEFAULTS,
   DEFAULT_TERMINAL_PROFILE,
+  type LaunchSessionDefaults,
+  launchSessionSnapshotFromMetadata,
+  normalizeExecutionProvider,
+  resolveLaunchSession,
   type TerminalProfile
 } from '@overlord/core/service/terminal-profile-types';
 import type { DatabaseClient } from '@overlord/database';
@@ -36,9 +41,12 @@ import {
 import {
   findActingDeviceTarget,
   type LocalExecutionTarget,
+  readActorLaunchSessionDefaults,
   requireActingDeviceTarget,
+  updateActorLaunchSessionDefaults,
   updateTerminalProfile as persistTerminalProfile
 } from '../../packages/core/service/execution-targets.ts';
+import { providerSessionFromMetadata } from '../../packages/core/service/latch-launch.ts';
 import {
   LOCAL_TARGET_MUTATION_REQUESTED_SOURCE,
   parseLocalTargetMutation
@@ -58,13 +66,16 @@ import type {
   ExecutionRequestStatus,
   LaunchObjectiveBody,
   LaunchPreferenceDto,
+  LaunchSessionDefaultsDto,
   LaunchSettingsDto,
   ObjectiveLaunchCommandDto,
   ObjectivePromptDto,
   TerminalProfileDto,
+  TerminalSessionDto,
   UpdateAgentCatalogBody,
   UpdateAgentLaunchConfigBody,
   UpdateLaunchPreferenceBody,
+  UpdateLaunchSessionDefaultsBody,
   UpdateTerminalProfileBody,
   UpdateWorktreeBranchAutomationBody
 } from '../../webapp/shared/contract.ts';
@@ -72,7 +83,6 @@ import {
   buildWebappServiceContext,
   buildWebappServiceContextForWorkspace,
   findActiveMembershipId,
-  getActorWorkspaceUserId,
   newId,
   nowIso,
   recordChange,
@@ -204,22 +214,33 @@ export async function readWorktreeBranchAutomationEnabled(
 async function launchSettingsDto({
   target,
   workspaceId,
+  ctx,
   agentConfigs = target?.agentConfigs ?? {},
   terminalProfile = target?.terminalProfile ?? toTerminalProfileDto(DEFAULT_TERMINAL_PROFILE),
+  launchSessionDefaults,
   client = requireDatabaseClient()
 }: {
   /** `null` when the acting machine has no declared execution target (contract v38). */
   target: LocalLaunchTarget | null;
   workspaceId: string;
+  ctx: ServiceContext;
   agentConfigs?: Record<string, AgentLaunchConfigDto>;
   terminalProfile?: TerminalProfileDto;
+  launchSessionDefaults?: LaunchSessionDefaults;
   client?: DatabaseClient;
 }): Promise<LaunchSettingsDto> {
+  const defaults = launchSessionDefaults ?? (await readActorLaunchSessionDefaults({ ctx }));
   return {
     executionTargetId: target?.executionTargetId ?? null,
     deviceLabel: target?.deviceLabel ?? null,
     agentConfigs,
     terminalProfile,
+    launchSessionDefaults: toLaunchSessionDefaultsDto(defaults),
+    // Resolved from the same stored profile the DTO carries, so a client never has
+    // to re-implement the target-override-then-user-default precedence itself.
+    resolvedLaunchSession: target
+      ? resolveLaunchSession({ profile: fromTerminalProfileDto(terminalProfile), defaults })
+      : null,
     worktreeBranchAutomationEnabled: await readWorktreeBranchAutomationEnabled(client, workspaceId)
   };
 }
@@ -437,7 +458,69 @@ function toTerminalProfileDto(profile: TerminalProfile): TerminalProfileDto {
     launcher: profile.launcher ?? null,
     placement: profile.placement ?? 'window',
     chord: profile.chord ?? null,
-    background: profile.background ?? false
+    background: profile.background ?? false,
+    // `null` (not omitted) so a client can tell "inherits the user default" from
+    // "this field predates the provider setting" — both read as direct today.
+    executionProvider: profile.executionProvider ?? null,
+    openViewerOnLaunch: profile.openViewerOnLaunch ?? null
+  };
+}
+
+/** DTO → stored profile. Absent provider/viewer fields stay absent (inherit). */
+function fromTerminalProfileDto(dto: TerminalProfileDto): TerminalProfile {
+  return {
+    launcher: dto.launcher ?? null,
+    placement: dto.placement ?? 'window',
+    chord: dto.chord ?? null,
+    background: dto.background ?? false,
+    ...(dto.executionProvider ? { executionProvider: dto.executionProvider } : {}),
+    ...(typeof dto.openViewerOnLaunch === 'boolean'
+      ? { openViewerOnLaunch: dto.openViewerOnLaunch }
+      : {})
+  };
+}
+
+/**
+ * Map an inbound terminal-profile body onto the stored profile. The provider and
+ * viewer-on-launch fields are tri-state: omitted keeps the stored override, `null`
+ * clears it back to inheriting the user default, and a value sets the override.
+ * The terminal choice itself (`launcher`) is untouched by either, which is what
+ * makes toggling the provider lossless.
+ */
+function terminalProfileFromBody(
+  body: UpdateTerminalProfileBody,
+  current: TerminalProfile
+): TerminalProfile {
+  const profile: TerminalProfile = {
+    launcher: body.launcher ?? null,
+    placement: body.placement ?? 'window',
+    chord: body.placement === 'chord' ? (body.chord ?? null) : null,
+    background: body.background ?? false
+  };
+
+  const provider =
+    body.executionProvider === undefined
+      ? current.executionProvider
+      : body.executionProvider === null
+        ? undefined
+        : (normalizeExecutionProvider(body.executionProvider) ?? undefined);
+  if (provider) profile.executionProvider = provider;
+
+  const openViewer =
+    body.openViewerOnLaunch === undefined
+      ? current.openViewerOnLaunch
+      : body.openViewerOnLaunch === null
+        ? undefined
+        : body.openViewerOnLaunch;
+  if (typeof openViewer === 'boolean') profile.openViewerOnLaunch = openViewer;
+
+  return profile;
+}
+
+function toLaunchSessionDefaultsDto(defaults: LaunchSessionDefaults): LaunchSessionDefaultsDto {
+  return {
+    executionProvider: { ...defaults.executionProvider },
+    openViewerOnLaunch: defaults.openViewerOnLaunch
   };
 }
 
@@ -513,7 +596,7 @@ export async function getLaunchSettings(workspaceId?: string): Promise<LaunchSet
   const client = requireDatabaseClient();
   const scope = await resolveLaunchSettingsScope(workspaceId, PERMISSIONS.LAUNCH_READ, client);
   const target = await findLocalLaunchTarget(client, scope.ctx);
-  return launchSettingsDto({ target, workspaceId: scope.workspaceId, client });
+  return launchSettingsDto({ target, workspaceId: scope.workspaceId, ctx: scope.ctx, client });
 }
 
 /** Persist the acting user's launch mechanics (pre-command/flags) for one agent. */
@@ -553,6 +636,7 @@ export async function updateAgentLaunchConfig(
     return launchSettingsDto({
       target,
       workspaceId: scope.workspaceId,
+      ctx: scope.ctx,
       agentConfigs: configs,
       client: tx
     });
@@ -566,14 +650,16 @@ export async function updateTerminalProfile(
 ): Promise<LaunchSettingsDto> {
   return requireDatabaseClient().transaction(async tx => {
     const scope = await resolveLaunchSettingsScope(workspaceId, PERMISSIONS.LAUNCH_CONFIGURE, tx);
+    // Read the stored profile without requiring a target: `persistTerminalProfile`
+    // stays the call that reports a machine with no declared execution target, so
+    // the no-target error path is unchanged.
+    const current = await findLocalLaunchTarget(tx, scope.ctx);
     const saved = await persistTerminalProfile({
       ctx: scope.ctx,
-      profile: {
-        launcher: body.launcher ?? null,
-        placement: body.placement ?? 'window',
-        chord: body.placement === 'chord' ? (body.chord ?? null) : null,
-        background: body.background ?? false
-      }
+      profile: terminalProfileFromBody(
+        body,
+        current ? fromTerminalProfileDto(current.terminalProfile) : DEFAULT_TERMINAL_PROFILE
+      )
     });
     const target = await requireLocalLaunchTarget(tx, scope.ctx);
     return launchSettingsDto({
@@ -583,7 +669,42 @@ export async function updateTerminalProfile(
         deviceLabel: saved.deviceLabel
       },
       workspaceId: scope.workspaceId,
+      ctx: scope.ctx,
       terminalProfile: toTerminalProfileDto(saved.terminalProfile),
+      client: tx
+    });
+  });
+}
+
+/**
+ * Persist the acting user's default execution provider and viewer-on-launch.
+ * This is the value a *new* execution target inherits and that any target which
+ * never set its own provider follows; a target override always wins.
+ */
+export async function updateLaunchSessionDefaults(
+  body: UpdateLaunchSessionDefaultsBody,
+  workspaceId?: string
+): Promise<LaunchSettingsDto> {
+  return requireDatabaseClient().transaction(async tx => {
+    const scope = await resolveLaunchSettingsScope(workspaceId, PERMISSIONS.LAUNCH_CONFIGURE, tx);
+    const defaults = await updateActorLaunchSessionDefaults({
+      ctx: scope.ctx,
+      executionProvider:
+        body.executionProvider === undefined
+          ? undefined
+          : body.executionProvider === null
+            ? DEFAULT_LAUNCH_SESSION_DEFAULTS.executionProvider
+            : normalizeExecutionProvider(body.executionProvider),
+      openViewerOnLaunch: body.openViewerOnLaunch
+    });
+    // Reading the target here never declares one: the user default is stored on
+    // the profile, so a machine with no execution target may still set it.
+    const target = await findLocalLaunchTarget(tx, scope.ctx);
+    return launchSettingsDto({
+      target,
+      workspaceId: scope.workspaceId,
+      ctx: scope.ctx,
+      launchSessionDefaults: defaults,
       client: tx
     });
   });
@@ -601,7 +722,12 @@ export async function updateWorktreeBranchAutomation(
     // Workspace-level setting: the target is only echoed back in the DTO, so this
     // reads the acting machine's target rather than declaring one.
     const target = await findLocalLaunchTarget(tx, scope.ctx);
-    return launchSettingsDto({ target, workspaceId: scope.workspaceId, client: tx });
+    return launchSettingsDto({
+      target,
+      workspaceId: scope.workspaceId,
+      ctx: scope.ctx,
+      client: tx
+    });
   });
 }
 
@@ -815,6 +941,66 @@ export async function listMissionExecutionRequests(
     [missionId, ...ACTIVE_EXECUTION_REQUEST_STATUSES]
   );
   return rows.map(toExecutionRequestDto);
+}
+
+type TerminalSessionRow = {
+  execution_request_id: string;
+  objective_id: string;
+  metadata_json: string;
+  target_label: string | null;
+  device_label: string | null;
+};
+
+function terminalSessionState(value: string): TerminalSessionDto['lastObservedState'] {
+  switch (value) {
+    case 'exited':
+      return 'exited';
+    case 'stopping':
+      return 'stopping';
+    case 'lost':
+      return 'lost';
+    default:
+      return 'running';
+  }
+}
+
+/** Every persistent terminal mapped to a mission, including completed objectives. */
+export async function listMissionTerminalSessions(
+  missionId: string
+): Promise<TerminalSessionDto[]> {
+  const rows = await requireDatabaseClient().all<TerminalSessionRow>(
+    `SELECT er.id AS execution_request_id, er.objective_id, er.metadata_json,
+            et.label AS target_label, d.label AS device_label
+       FROM execution_requests er
+       LEFT JOIN execution_targets et
+         ON et.id = COALESCE(er.claimed_by_execution_target_id, er.execution_target_id)
+       LEFT JOIN devices d ON d.id = et.device_id
+      WHERE er.mission_id = ? AND er.deleted_at IS NULL
+      ORDER BY er.created_at DESC`,
+    [missionId]
+  );
+  return rows.flatMap(row => {
+    const metadata = parseMetadataJson(row.metadata_json);
+    const providerSession = providerSessionFromMetadata(metadata);
+    if (!providerSession) return [];
+    const snapshot = launchSessionSnapshotFromMetadata(metadata);
+    return [
+      {
+        executionRequestId: row.execution_request_id,
+        objectiveId: row.objective_id,
+        provider: 'latch',
+        providerSessionId: providerSession.providerSessionId,
+        sessionName: providerSession.sessionName ?? providerSession.providerSessionId,
+        executionTargetId: providerSession.executionTargetId,
+        deviceLabel: row.device_label ?? row.target_label,
+        agentSessionId: providerSession.agentSessionId,
+        executable: snapshot?.executionProvider.executable ?? 'latch',
+        viewerKind: snapshot?.viewer.kind ?? 'iterm',
+        createdAt: providerSession.createdAt,
+        lastObservedState: terminalSessionState(providerSession.lastObservedState)
+      }
+    ];
+  });
 }
 
 interface LaunchObjectiveRow {

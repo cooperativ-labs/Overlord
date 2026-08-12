@@ -38,6 +38,7 @@ import { MissionSessionInputsSection } from './MissionSessionInputsSection.tsx';
 import { MissionSharedStateFooter } from './MissionSharedStateFooter.tsx';
 import { MissionStatusSelect } from './MissionStatusSelect.tsx';
 import { MissionTagSelect } from './MissionTagSelect.tsx';
+import { TerminalSessionsSection } from './TerminalSessionsSection.tsx';
 import { Button, Spinner } from './ui.tsx';
 
 /** Generates the mission title from its primary objective via the Automations Layer summarizer. */
@@ -316,6 +317,10 @@ export function MissionPanel({
           <MissionNotes missionId={mission.id} notes={mission.notes} />
           <Separator />
           <div className="flex flex-col gap-6 mt-8">
+            <TerminalSessionsSection
+              workspaceId={mission.workspaceId}
+              sessions={mission.terminalSessions}
+            />
             <div className="space-y-3">
               <h2 className="text-xs font-semibold uppercase tracking-wide text-(--color-ink-dim)">
                 Artifacts

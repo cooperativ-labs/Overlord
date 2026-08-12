@@ -13,6 +13,12 @@ import {
   readRepositoryTree as readGitRepositoryTree,
   RepositoryReadError
 } from '../../repository/git-tree.ts';
+import {
+  defaultLatchDiscoveryCachePath,
+  discoverLatchForExecutionTarget
+} from '../latch-discovery.ts';
+import { inspectLatchSession, openLatchSession, stopLatchSession } from '../latch-session.ts';
+import { DEFAULT_LATCH_EXECUTABLE } from '../terminal-profile-types.ts';
 
 import { performBranchActionGit } from './branch-actions-git.ts';
 import { normalizeBranchRef } from './branch-status-git.ts';
@@ -24,12 +30,16 @@ import { fail, ok } from './result.ts';
 import type {
   CapabilityFailure,
   CapabilityResult,
+  DiscoverLatchInput,
+  DiscoverLatchResult,
   GenerateCommitMessageInput,
+  InspectLatchSessionInput,
   LaunchAgentInput,
   ListBranchesInput,
   ListWorktreesInput,
   LocalTargetCapabilities,
   ObserveResourceInput,
+  OpenLatchSessionInput,
   PerformBranchActionInput,
   PrepareBranchInput,
   PurgeMergedWorktreesInput,
@@ -37,6 +47,7 @@ import type {
   ReadRepositoryTreeInput,
   RemoveWorktreeInput,
   ResourceObservation,
+  StopLatchSessionInput,
   TargetMetadata,
   WriteProjectMetadataInput,
   WriteProjectMetadataResult
@@ -223,6 +234,72 @@ export class InProcessProvider implements LocalTargetCapabilities {
       'CAPABILITY_NOT_IMPLEMENTED',
       'Agent launch is owned by the CLI runner (`ovld runner` / `ovld launch`).'
     );
+  }
+
+  // ---- routed (coo:702) ------------------------------------------------
+
+  /**
+   * Read-only Latch probe on this machine. In-process is the transport that can
+   * honestly answer it: the provider only exists here when the caller device is
+   * the execution target, so the probe runs where the agent process would run.
+   */
+  async discoverLatch(input: DiscoverLatchInput) {
+    const executable = input.executable?.trim() || DEFAULT_LATCH_EXECUTABLE;
+    try {
+      const result = discoverLatchForExecutionTarget({
+        // A resolved provider carries the target id; the desktop bridge and dev
+        // proxy do not, so they pass the caller's id to share one cache entry
+        // with the runner probe on the same device.
+        executionTargetId:
+          this.target.executionTargetId ?? (input.executionTargetId?.trim() || 'local'),
+        executable,
+        cacheFilePath: defaultLatchDiscoveryCachePath(),
+        force: input.force === true
+      });
+      return ok(this.target, result as DiscoverLatchResult);
+    } catch (error) {
+      return fail(
+        this.target,
+        'TARGET_OPERATION_FAILED',
+        error instanceof Error ? error.message : 'Latch discovery failed on this device.'
+      );
+    }
+  }
+
+  async inspectLatchSession(input: InspectLatchSessionInput) {
+    try {
+      return ok(this.target, inspectLatchSession(input));
+    } catch (error) {
+      return fail(
+        this.target,
+        'TARGET_OPERATION_FAILED',
+        error instanceof Error ? error.message : 'Could not inspect the Latch session.'
+      );
+    }
+  }
+
+  async openLatchSession(input: OpenLatchSessionInput) {
+    try {
+      return ok(this.target, openLatchSession(input));
+    } catch (error) {
+      return fail(
+        this.target,
+        'TARGET_OPERATION_FAILED',
+        error instanceof Error ? error.message : 'Could not open the Latch session.'
+      );
+    }
+  }
+
+  async stopLatchSession(input: StopLatchSessionInput) {
+    try {
+      return ok(this.target, stopLatchSession(input));
+    } catch (error) {
+      return fail(
+        this.target,
+        'TARGET_OPERATION_FAILED',
+        error instanceof Error ? error.message : 'Could not stop the Latch session.'
+      );
+    }
   }
 
   async doctor() {

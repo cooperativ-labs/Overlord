@@ -12,8 +12,14 @@ const { bootstrapIntegrationTestDb } = await import('./test-helpers.ts');
 const { db } = await bootstrapIntegrationTestDb({
   sqlitePath: path.join(tempDir, 'webapp.sqlite')
 });
-const { createProject, createProjectResource, createMission, createObjective, updateObjective } =
-  await import('./repository.ts');
+const {
+  createProject,
+  createProjectResource,
+  createMission,
+  createObjective,
+  getMissionDetail,
+  updateObjective
+} = await import('./repository.ts');
 const { launchObjective, getAgentCatalog, updateAgentCatalog } =
   await import('./execution/launch.ts');
 
@@ -71,6 +77,63 @@ test('launching an objective twice while a request is active returns the same re
     )
     .get(objectiveId) as { n: number };
   assert.equal(serviceClearEvents.n, 0);
+});
+
+test('mission detail projects Latch terminal sessions independently of active requests', async () => {
+  const project = await createProject({ name: 'Terminal Session Projection' });
+  await createProjectResource(project.id, {
+    directoryPath: createIsolatedCheckout('overlord-terminal-session-resource-'),
+    executionTargetId: null,
+    isPrimary: true
+  });
+  const mission = await createMission({
+    projectId: project.id,
+    firstObjective: 'Keep the shell after delivery'
+  });
+  const request = await launchObjective(mission.objectives[0]!.id, { agent: 'codex' });
+  db.prepare(
+    `UPDATE execution_requests
+        SET status = 'launched', metadata_json = ?
+      WHERE id = ?`
+  ).run(
+    JSON.stringify({
+      launchSession: {
+        version: 1,
+        executionProvider: { kind: 'latch', executable: '/opt/latch' },
+        viewer: { kind: 'iterm', openOnLaunch: true },
+        resolvedAt: '2026-08-12T15:00:00.000Z'
+      },
+      providerSession: {
+        provider: 'latch',
+        providerSessionId: 'ses_projection',
+        sessionName: 'keep-the-shell',
+        executionTargetId: null,
+        agentSessionId: null,
+        createdAt: '2026-08-12T15:00:00.000Z',
+        lastObservedState: 'running'
+      }
+    }),
+    request.id
+  );
+
+  const detail = await getMissionDetail(mission.id);
+  assert.equal(detail.executionRequests.length, 0);
+  assert.deepEqual(detail.terminalSessions, [
+    {
+      executionRequestId: request.id,
+      objectiveId: mission.objectives[0]!.id,
+      provider: 'latch',
+      providerSessionId: 'ses_projection',
+      sessionName: 'keep-the-shell',
+      executionTargetId: null,
+      deviceLabel: null,
+      agentSessionId: null,
+      executable: '/opt/latch',
+      viewerKind: 'iterm',
+      createdAt: '2026-08-12T15:00:00.000Z',
+      lastObservedState: 'running'
+    }
+  ]);
 });
 
 test('parking an active objective to submitted clears its queue and allows launching a sibling', async () => {

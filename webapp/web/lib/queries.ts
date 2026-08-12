@@ -53,6 +53,7 @@ import type {
   UpdateArtifactBody,
   UpdateInboxItemBody,
   UpdateLaunchPreferenceBody,
+  UpdateLaunchSessionDefaultsBody,
   UpdateMissionBody,
   UpdateObjectiveBody,
   UpdateOrganizationBody,
@@ -1623,6 +1624,20 @@ export function useUpdateTerminalProfile(workspaceId?: string | null) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: UpdateTerminalProfileBody) => api.updateTerminalProfile(body, workspaceId),
+    onSuccess: data => qc.setQueryData(keys.launchSettings(workspaceId), data)
+  });
+}
+
+/**
+ * The user-level session default (coo:702). Stored on the profile rather than a
+ * target, so this succeeds on a machine that has not declared an execution
+ * target — targets that never override it follow this value.
+ */
+export function useUpdateLaunchSessionDefaults(workspaceId?: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: UpdateLaunchSessionDefaultsBody) =>
+      api.updateLaunchSessionDefaults(body, workspaceId),
     onSuccess: data => qc.setQueryData(keys.launchSettings(workspaceId), data)
   });
 }

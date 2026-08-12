@@ -4,7 +4,7 @@
 # IMPORTANT: Update this file and CONTRACT.md together when adding components or surfaces.
 # Increment contractVersion when any stable interface changes.
 
-contractVersion: '67'
+contractVersion: '73'
 
 components:
   protocol:
@@ -140,8 +140,11 @@ components:
       - 'runner-instance identity and heartbeat: a stable runnerInstanceId plus a native/adopted relation to the execution target it serves, published on every claim so the backend reports honest local liveness'
       - 'persistent runner service: ovld runner supervise delegates to the same claim-and-launch path as ovld runner once; Postgres runners reconnect queue long-polls immediately after an empty wake/25s timeout while SQLite retains an adaptive polling fallback; ovld runner service <install|start|stop|restart|status|uninstall> manages an OS-level user service (macOS launchd io.overlord.runner, Linux systemd --user overlord-runner.service); local diagnostic state in ~/.ovld/runner-service.json; owner-only service files; Windows deferred'
       - 'execution target selection logic'
-      - 'runner queue REST operations used by ovld runner: GET /api/runner/status, POST /api/runner/claim, POST /api/runner/clear, POST /api/runner/requests/:id/launching, POST /api/runner/requests/:id/launched, POST /api/runner/requests/:id/failed'
+      - 'runner queue REST operations used by ovld runner: GET /api/runner/status, POST /api/runner/claim, POST /api/runner/clear, POST /api/runner/requests/:id/launching, POST /api/runner/requests/:id/launched (additive optional providerSession body), POST /api/runner/requests/:id/failed'
       - 'branch-preparation acknowledgement through POST /api/missions/:id/branch-prepared'
+      - 'Latch capability discovery on the execution target: run read-only `latch capabilities --json` where the process will run, expose found/not_installed/incompatible states, cache per target with cheap revalidation, never install or upgrade Latch as a side effect'
+      - 'Latch launch path: when claim-time launchSession selects latch and the launch environment contains LATCH_SESSION_ID, run the same terminal command string S inline in that existing PTY via $SHELL -lc, record the opaque id as providerSession, and never call latch create or open; the marker is correlation only and grants no authority. Otherwise, when discovery is found, replace only the final spawn with latch create --manifest-file - --json using S via $SHELL -lc, record providerSession on execution_requests.metadata_json, then best-effort latch open; viewer failure must not fail the request; direct launch unchanged when provider is direct or Latch unavailable'
+      - 'Latch terminal-session lifecycle capabilities on the execution target: inspectLatchSession, openLatchSession, and stopLatchSession invoke the public Latch CLI with argv on the mapped device; inspect state is running/exited/stopping/lost while reachability remains a separate capability-result/client condition; stop is explicit and never coupled to objective delivery or completion'
     dependsOn:
       - database
       - connector
@@ -159,6 +162,7 @@ components:
       - 'project resource-source launch defaults via PATCH /api/projects/:id/resources/:resourceId/sources/:sourceId, preserving the materialization fields in descriptor_json while replacing per-agent launchDefaults'
       - 'request/response DTO shapes (camelCase, derived from logical schema)'
       - 'creation-provenance projection: MissionDto/ObjectiveDto carry non-optional createdByKind (human fallback in the mapper), createdByAgent, and createdByWorkspaceUserId; MissionDetailDto alone carries createdFrom (sessionId, missionId, missionDisplayId, agentIdentifier, or null) via a LEFT JOIN that tolerates a missing session and is never paid per board row'
+      - 'terminal-session projection: MissionDetailDto.terminalSessions additively returns bounded Latch provider-session mappings from all mission execution requests, with target/device label, stored name, claim-time executable/viewer, and last observed state; it never exposes launch material, terminal output, credentials, socket tokens, or attachment grants'
       - 'profile-owned inbox routes: authenticated GET/POST /api/inbox, GET/PATCH/DELETE /api/inbox/:id, and POST /api/inbox/:id/promote; profile isolation returns 404, promotion requires mission:create on the destination project and atomically creates its normal mission then consumes the capture; inbox writes are intentionally outside workspace realtime'
       - 'delivery read projection: GET /api/missions/:id/deliveries returns normalized DeliveryDto records and delivery mission events expose an additive deliveryId without raw payload JSON'
       - 'admin-only workspace objective CSV export (GET /api/workspaces/:id/objectives.csv) as a text/csv attachment'
@@ -426,7 +430,7 @@ interactionSurfaces:
     to: rest
     transport: http-json
     rules:
-      - 'Runner queue endpoints are GET /api/runner/status, POST /api/runner/claim, POST /api/runner/clear, POST /api/runner/requests/:id/launching, POST /api/runner/requests/:id/launched, POST /api/runner/requests/:id/failed, and POST /api/missions/:id/branch-prepared'
+      - 'Runner queue endpoints are GET /api/runner/status, POST /api/runner/claim, POST /api/runner/clear, POST /api/runner/requests/:id/launching, POST /api/runner/requests/:id/launched (additive optional providerSession body persisted onto metadata_json.providerSession; never overloads launched_session_id), POST /api/runner/requests/:id/failed, and POST /api/missions/:id/branch-prepared'
       - 'Backend claim endpoint must perform atomic compare-and-set on execution_requests'
       - 'Postgres claim waits use a dedicated non-pooled LISTEN connection for at most 25 seconds after an empty initial claim; queue notifications are wake hints only, followed by the same scoped authorized atomic claim. The additive response longPoll flag is true for this capability; SQLite responds immediately with longPoll false.'
       - 'Backend claim must set claimed_by_device_id, claimed_by_execution_target_id when known, claimed_by_runner_registration_id when the claim registered a runner instance, and claim_expires_at'

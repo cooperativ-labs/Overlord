@@ -10,6 +10,10 @@ import {
 } from 'react';
 
 import {
+  detectLatchInvocation,
+  latchInvocationWarning
+} from '../../../../packages/core/service/latch-invocation.ts';
+import {
   type AgentLaunchConfigDto,
   type AgentLaunchFlagDto,
   agentLaunchFlagKey,
@@ -161,6 +165,11 @@ export function AgentLaunchFooter({
     [activeSuggestionIndex, addFlag, applySuggestion, isSuggestionOpen, suggestions]
   );
 
+  const latchWarning = useMemo(() => {
+    const match = detectLatchInvocation(preCommand);
+    return match ? latchInvocationWarning(match) : null;
+  }, [preCommand]);
+
   return (
     <div className="mt-1 flex flex-col gap-1 border-t pt-3" data-agent-key={agentKey}>
       <div className="flex flex-row gap-3">
@@ -184,6 +193,9 @@ export function AgentLaunchFooter({
             }}
             className="w-full rounded border bg-background px-2 py-1 font-mono text-xs focus:outline-none focus:ring-2 focus:ring-ring"
           />
+          {/* coo:702: warn, never rewrite — a hand-rolled `latch` here produces a
+              session Overlord has no id for. The Session setting is the path that does. */}
+          {latchWarning ? <p className="text-[10px] text-amber-600">{latchWarning}</p> : null}
         </div>
 
         {/* Flags — 2/3 */}
