@@ -69,3 +69,36 @@ test('stops only after an explicit lifecycle call', () => {
     state: 'stopping'
   });
 });
+
+test('spawns Latch with a UTF-8 locale even when the parent has none', () => {
+  const localeEcho = path.join(tempDir, 'latch-locale');
+  writeFileSync(
+    localeEcho,
+    `#!/usr/bin/env node
+const id = process.argv[3];
+process.stdout.write(JSON.stringify({
+  id,
+  name: process.env.LC_CTYPE ?? '(unset)',
+  state: 'running',
+  exit: null
+}));
+`
+  );
+  chmodSync(localeEcho, 0o700);
+
+  const localeKeys = ['LC_ALL', 'LC_CTYPE', 'LANG'] as const;
+  const saved = localeKeys.map(key => [key, process.env[key]] as const);
+  for (const key of localeKeys) delete process.env[key];
+  try {
+    const result = inspectLatchSession({
+      executable: localeEcho,
+      providerSessionId: 'ses_locale'
+    });
+    assert.match(result.name, /utf-?8/i);
+  } finally {
+    for (const [key, value] of saved) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+});

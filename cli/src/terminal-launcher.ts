@@ -134,9 +134,9 @@ function terminalInnerCommand({
 /**
  * The composed terminal command string S — cd, env exports, pre-launch lines,
  * optional pre-command wrapper, and the agent invocation. Latch create runs
- * this exact string through `$SHELL -lc` so quoting / `&&` / multi-line
- * pre-launch match today's iTerm/Terminal behavior; command resolution itself
- * does not change.
+ * this exact string through `$SHELL -ilc` so quoting / `&&` / multi-line
+ * pre-launch *and* interactive startup files (`.zshrc`, nvm) match today's
+ * iTerm/Terminal behavior; command resolution itself does not change.
  */
 export function composeAgentTerminalCommand({
   command,

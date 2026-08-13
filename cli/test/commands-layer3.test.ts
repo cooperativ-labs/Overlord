@@ -6,6 +6,7 @@ import path from 'node:path';
 import test from 'node:test';
 
 import { runProtocolCommand } from '../src/commands.ts';
+import { CliError } from '../src/errors.ts';
 import type { CliRuntime } from '../src/runtime.ts';
 import {
   readChangedFiles,
@@ -211,4 +212,51 @@ test('ovld protocol changes prints classified paths without calling the backend'
       reason: `Changed by concurrent mission ${OTHER_MISSION_ID}; excluded from this delivery report.`
     }
   ]);
+});
+
+test('attach retries without execution-request-id when the recovered request is unlinkable', async () => {
+  const repo = makeRepo();
+  const requestIds: Array<string | undefined> = [];
+  const runtime = {
+    backend: {
+      baseUrl: 'http://example.test',
+      health: async () => ({ ok: true }),
+      get: async () => ({}),
+      post: async ({ body }: { body: unknown }) => {
+        const flags = (body as { flags?: Record<string, string> }).flags ?? {};
+        requestIds.push(flags['--execution-request-id']);
+        if (typeof flags['--execution-request-id'] === 'string') {
+          throw new CliError({
+            message:
+              'Cannot link execution request in cleared state to a session — (invalid_execution_request_transition)'
+          });
+        }
+        return {
+          sessionKey: 'sess_retry',
+          mission: { id: 'd83252d7-bac4-4001-9363-01dbec7a7a97', displayId: MISSION_ID }
+        };
+      },
+      patch: async () => {
+        throw new Error('unexpected PATCH');
+      },
+      delete: async () => {
+        throw new Error('unexpected DELETE');
+      }
+    },
+    close: () => {}
+  } satisfies CliRuntime;
+
+  const originalCwd = process.cwd();
+  process.chdir(repo);
+  try {
+    await runProtocolCommand({
+      runtime,
+      subcommand: 'attach',
+      args: ['--mission-id', MISSION_ID, '--execution-request-id', 'req-cleared']
+    });
+  } finally {
+    process.chdir(originalCwd);
+  }
+
+  assert.deepEqual(requestIds, ['req-cleared', undefined]);
 });

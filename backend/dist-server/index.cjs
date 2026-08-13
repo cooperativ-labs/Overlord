@@ -70244,6 +70244,32 @@ var init_git_tree = __esm({
   }
 });
 
+// ../packages/core/service/latch-environment.ts
+function isUtf8Locale(value) {
+  return typeof value === "string" && UTF8_LOCALE_PATTERN.test(value);
+}
+function latchChildEnvironment({
+  baseEnv = process.env,
+  platform: platform4 = process.platform
+} = {}) {
+  const effective = baseEnv.LC_ALL ?? baseEnv.LC_CTYPE ?? baseEnv.LANG;
+  if (isUtf8Locale(effective)) return { ...baseEnv };
+  const env3 = {
+    ...baseEnv,
+    // macOS ships the bare `UTF-8` locale; glibc systems ship `C.UTF-8`.
+    LC_CTYPE: platform4 === "darwin" ? "UTF-8" : "C.UTF-8"
+  };
+  if (env3.LC_ALL !== void 0 && !isUtf8Locale(env3.LC_ALL)) delete env3.LC_ALL;
+  return env3;
+}
+var UTF8_LOCALE_PATTERN;
+var init_latch_environment = __esm({
+  "../packages/core/service/latch-environment.ts"() {
+    "use strict";
+    UTF8_LOCALE_PATTERN = /utf-?8/i;
+  }
+});
+
 // ../packages/core/service/terminal-profile-types.ts
 function trimmed(value) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
@@ -70675,6 +70701,7 @@ var init_latch_discovery = __esm({
     import_node_fs10 = require("node:fs");
     import_node_os4 = __toESM(require("node:os"), 1);
     import_node_path12 = __toESM(require("node:path"), 1);
+    init_latch_environment();
     init_terminal_profile_types();
     SUPPORTED_LATCH_PROTOCOL_VERSION = 1;
     REQUIRED_LATCH_CAPABILITIES = ["create"];
@@ -70685,7 +70712,8 @@ var init_latch_discovery = __esm({
         const stdout = (0, import_node_child_process3.execFileSync)(executable, argv, {
           encoding: "utf8",
           stdio: ["ignore", "pipe", "pipe"],
-          timeout: 5e3
+          timeout: 5e3,
+          env: latchChildEnvironment()
         });
         return { status: 0, stdout: String(stdout), stderr: "" };
       } catch (error53) {
@@ -70819,7 +70847,8 @@ function runLatchJson({
     encoding: "utf8",
     shell: false,
     timeout: 1e4,
-    maxBuffer: 1024 * 1024
+    maxBuffer: 1024 * 1024,
+    env: latchChildEnvironment()
   });
   if (result.error) {
     throw new LatchSessionCommandError(result.error.message);
@@ -70905,6 +70934,7 @@ var init_latch_session = __esm({
   "../packages/core/service/latch-session.ts"() {
     "use strict";
     import_node_child_process4 = require("node:child_process");
+    init_latch_environment();
     init_latch_launch();
     LatchSessionCommandError = class extends Error {
       constructor(message2) {
@@ -71051,7 +71081,8 @@ async function collectLatchEvents({
   const bin = trimmed5(executable) ?? "latch";
   return new Promise((resolve, reject) => {
     const child = (0, import_node_child_process5.spawn)(bin, ["events", sessionId, "--json", "--from", String(fromCursor)], {
-      stdio: ["ignore", "pipe", "pipe"]
+      stdio: ["ignore", "pipe", "pipe"],
+      env: latchChildEnvironment()
     });
     let stdout = "";
     let stderr = "";
@@ -71102,7 +71133,7 @@ async function collectLatchEvents({
         finish({ ended: true, error: new LatchSessionCommandError(detail) });
         return;
       }
-      finish({ ended: signal == null && (code === 0 || code === null) });
+      finish({ ended: signal === null && (code === 0 || code === null) });
     });
   });
 }
@@ -71111,6 +71142,7 @@ var init_latch_events = __esm({
   "../packages/core/service/latch-events.ts"() {
     "use strict";
     import_node_child_process5 = require("node:child_process");
+    init_latch_environment();
     init_latch_session();
     HARNESS_EVENT_TYPES = /* @__PURE__ */ new Set([
       "user_message",
@@ -71145,7 +71177,8 @@ function probeLatchInteractionCapabilities({
   const help = (0, import_node_child_process6.spawnSync)(bin, ["send", "--help"], {
     encoding: "utf8",
     shell: false,
-    timeout: 5e3
+    timeout: 5e3,
+    env: latchChildEnvironment()
   });
   if (help.error || help.status !== 0) {
     const detail = (help.stderr || help.stdout || help.error?.message || "latch send is unavailable").trim().slice(0, 200);
@@ -71192,7 +71225,8 @@ function resolveLatchInput({
     encoding: "utf8",
     shell: false,
     timeout: 1e4,
-    maxBuffer: 1024 * 1024
+    maxBuffer: 1024 * 1024,
+    env: latchChildEnvironment()
   });
   if (result.error) throw new LatchSessionCommandError(result.error.message);
   if (result.status !== 0) {
@@ -71211,6 +71245,7 @@ var init_latch_send = __esm({
   "../packages/core/service/latch-send.ts"() {
     "use strict";
     import_node_child_process6 = require("node:child_process");
+    init_latch_environment();
     init_latch_session();
   }
 });
@@ -135693,11 +135728,7 @@ async function linkExecutionRequestToSession({
       return null;
     }
     if (!["launching", "launched"].includes(row.status)) {
-      throw new ServiceError(
-        `Cannot link execution request in ${row.status} state to a session`,
-        "invalid_execution_request_transition",
-        409
-      );
+      return null;
     }
     if (row.launched_session_id && row.launched_session_id !== sessionId) {
       throw new ServiceError(

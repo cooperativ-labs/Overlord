@@ -13,7 +13,7 @@ import {
   toExecutionProviderSession
 } from './latch-launch.ts';
 
-test('buildLatchCreateManifest runs S through a login shell and keeps overlord source', () => {
+test('buildLatchCreateManifest runs S through an interactive login shell and keeps overlord source', () => {
   const commandString =
     "cd '/tmp/proj' && export MISSION_ID='coo:1'; 'claude' '--dangerously-skip-permissions'";
   const manifest = buildLatchCreateManifest({
@@ -28,7 +28,7 @@ test('buildLatchCreateManifest runs S through a login shell and keeps overlord s
   });
 
   assert.equal(manifest.format_version, 1);
-  assert.deepEqual(manifest.launch.argv, ['/bin/zsh', '-lc', commandString]);
+  assert.deepEqual(manifest.launch.argv, ['/bin/zsh', '-ilc', commandString]);
   assert.equal(manifest.launch.cwd, '/tmp/proj');
   assert.equal(manifest.launch.env.MISSION_ID, 'coo:1');
   assert.equal(manifest.launch.inherit_env, true);

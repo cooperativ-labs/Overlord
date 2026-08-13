@@ -7,23 +7,40 @@ import { resolveActiveMissionForCwd } from './vcs-sessions.js';
 /**
  * Shared implementation behind `ovld protocol record-touched`.
  *
- * Any adapter's file-editing-tool hook (Claude's PostToolUse today; Codex/Cursor
- * once they grow one) can pipe its native hook JSON on stdin here instead of
- * reimplementing the touched-files log and rationale-note bookkeeping itself.
- * The only per-adapter assumption is the payload shape below (`tool_name`,
- * `tool_input.file_path` / `notebook_path` / `edits`, `cwd`, `transcript_path`),
- * which mirrors Claude Code's hook body; adapters with a different shape should
- * normalize to this shape before piping in.
+ * Any adapter's file-editing-tool hook can pipe its native hook JSON on stdin
+ * here instead of reimplementing the touched-files log and rationale-note
+ * bookkeeping itself.
+ *
+ * Claude Code's PostToolUse body has `cwd`. Cursor Agent CLI's postToolUse body
+ * does not: it sends `workspace_roots: [workspacePath]` and exports
+ * `CURSOR_PROJECT_DIR` / `CLAUDE_PROJECT_DIR` on the hook process. User-level
+ * Cursor hooks also run with cwd `~/.cursor`, so falling back to process.cwd()
+ * looks up the wrong session manifest and records nothing — which is why
+ * deliver kept warning that the touched-files hook "isn't logging" and falling
+ * back to baseline-only attribution.
  */
 
 type HookPayload = {
   tool_name?: unknown;
   tool_input?: unknown;
   cwd?: unknown;
+  workspace_roots?: unknown;
   transcript_path?: unknown;
 };
 
+const PROJECT_DIR_ENV_KEYS = [
+  'CURSOR_PROJECT_DIR',
+  'CLAUDE_PROJECT_DIR',
+  'CLAUDE_PROJECT_ROOT'
+] as const;
+
 type EditCandidate = { filePath: string; editCount: number };
+
+function firstNonEmptyString(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+}
 
 function collectCandidates(toolInput: Record<string, unknown>): EditCandidate[] {
   const counts = new Map<string, number>();
@@ -37,23 +54,60 @@ function collectCandidates(toolInput: Record<string, unknown>): EditCandidate[] 
   };
 
   bump(toolInput.file_path, 1);
+  bump(toolInput.filePath, 1);
+  bump(toolInput.path, 1);
   bump(toolInput.notebook_path, 1);
 
   const edits = toolInput.edits;
   if (Array.isArray(edits)) {
-    const topLevelPath = toolInput.file_path;
-    if (typeof topLevelPath === 'string' && topLevelPath.trim()) {
-      counts.set(topLevelPath.trim(), (counts.get(topLevelPath.trim()) ?? 0) - 1);
+    const topLevelPath =
+      firstNonEmptyString(toolInput.file_path) ??
+      firstNonEmptyString(toolInput.filePath) ??
+      firstNonEmptyString(toolInput.path);
+    if (topLevelPath) {
+      counts.set(topLevelPath, (counts.get(topLevelPath) ?? 0) - 1);
     }
     for (const edit of edits) {
       if (edit && typeof edit === 'object') {
-        const value = (edit as Record<string, unknown>).file_path ?? topLevelPath;
+        const record = edit as Record<string, unknown>;
+        const value = record.file_path ?? record.filePath ?? record.path ?? topLevelPath;
         bump(value, 1);
       }
     }
   }
 
   return order.map(filePath => ({ filePath, editCount: Math.max(counts.get(filePath) ?? 1, 1) }));
+}
+
+/**
+ * Resolve the project working directory the session manifest is keyed by.
+ * Must stay in sync with `attach`/`deliver` (`path.resolve(process.cwd())` in
+ * the agent checkout), not the hook process cwd.
+ */
+function resolveHookWorkingDirectory({
+  payload,
+  fallbackCwd,
+  env
+}: {
+  payload: HookPayload;
+  fallbackCwd: string;
+  env: NodeJS.ProcessEnv;
+}): string {
+  const fromCwd = firstNonEmptyString(payload.cwd);
+  if (fromCwd) return path.resolve(fromCwd);
+
+  const roots = payload.workspace_roots;
+  if (Array.isArray(roots)) {
+    const fromRoots = firstNonEmptyString(roots[0]);
+    if (fromRoots) return path.resolve(fromRoots);
+  }
+
+  for (const key of PROJECT_DIR_ENV_KEYS) {
+    const fromEnv = firstNonEmptyString(env[key]);
+    if (fromEnv) return path.resolve(fromEnv);
+  }
+
+  return path.resolve(fallbackCwd);
 }
 
 function compact(value: string | null | undefined, limit = 500): string | null {
@@ -136,11 +190,13 @@ export type RecordTouchedResult =
 export function recordTouchedFromPayload({
   rawPayload,
   missionOverride,
-  fallbackCwd
+  fallbackCwd,
+  env = process.env
 }: {
   rawPayload: string;
   missionOverride?: string;
   fallbackCwd: string;
+  env?: NodeJS.ProcessEnv;
 }): RecordTouchedResult {
   let payload: HookPayload;
   try {
@@ -159,9 +215,7 @@ export function recordTouchedFromPayload({
       ? payload.tool_name.trim()
       : 'file edit';
 
-  const cwd =
-    typeof payload.cwd === 'string' && payload.cwd.trim() ? payload.cwd.trim() : fallbackCwd;
-  const workingDirectory = path.resolve(cwd);
+  const workingDirectory = resolveHookWorkingDirectory({ payload, fallbackCwd, env });
 
   const trimmedOverride = missionOverride?.trim();
   let missionId: string;
@@ -171,7 +225,10 @@ export function recordTouchedFromPayload({
   } else {
     const resolved = resolveActiveMissionForCwd(workingDirectory);
     if (!resolved) {
-      return { recorded: false, reason: 'no active session manifest entry for this cwd' };
+      return {
+        recorded: false,
+        reason: `no active session manifest entry for this cwd (${workingDirectory})`
+      };
     }
     missionId = resolved.missionId;
     ambiguous = resolved.ambiguous;

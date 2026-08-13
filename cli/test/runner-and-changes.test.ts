@@ -424,6 +424,48 @@ test('attach links a launched execution request to the created session', async (
   await db.close();
 });
 
+test('attach still succeeds when the recovered execution request was already cleared', async () => {
+  const { db, ctx } = await createContext();
+  const project = await createProject({ ctx, name: 'Attach Cleared Request Test' });
+  const workingDirectory = createIsolatedCheckout('ovld-runner-');
+  await addProjectResource({
+    ctx,
+    projectId: project.id,
+    directoryPath: workingDirectory,
+    isPrimary: true
+  });
+  const { mission, objectives } = await createMissionWithObjectives({
+    ctx,
+    projectId: project.id,
+    objectives: [{ objective: 'Attach should survive a cleared request' }]
+  });
+  const request = await createExecutionRequest({
+    ctx,
+    missionId: mission.displayId,
+    objectiveId: objectives[0]?.id,
+    requestedAgent: 'cursor',
+    requestedSource: 'cli'
+  });
+  await claimNextExecutionRequest({ ctx });
+  await markExecutionLaunching({ ctx, requestId: request.id });
+  assert.equal((await clearExecutionRequests({ ctx, objectiveId: objectives[0]?.id })).cleared, 1);
+
+  const attached = await attachSession({
+    ctx,
+    missionId: mission.displayId,
+    agentIdentifier: 'cursor',
+    executionRequestId: request.id
+  });
+  assert.ok(attached.sessionKey);
+  const linked = (await ctx.db.get(
+    `SELECT launched_session_id FROM execution_requests WHERE id = ?`,
+    [request.id]
+  )) as { launched_session_id: string | null };
+  assert.equal(linked.launched_session_id, null);
+
+  await db.close();
+});
+
 test('runner does not claim a queued request for a soft-deleted objective', async () => {
   const { db, ctx } = await createContext();
   const project = await createProject({ ctx, name: 'Deleted Objective Test' });

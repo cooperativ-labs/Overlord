@@ -9,6 +9,7 @@
 import { spawn } from 'node:child_process';
 
 import type { HarnessEvent } from './latch-harness/generated.ts';
+import { latchChildEnvironment } from './latch-environment.ts';
 import { LatchSessionCommandError } from './latch-session.ts';
 
 const HARNESS_EVENT_TYPES = new Set([
@@ -213,7 +214,8 @@ export async function collectLatchEvents({
 
   return new Promise((resolve, reject) => {
     const child = spawn(bin, ['events', sessionId, '--json', '--from', String(fromCursor)], {
-      stdio: ['ignore', 'pipe', 'pipe']
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: latchChildEnvironment()
     });
     let stdout = '';
     let stderr = '';
@@ -268,7 +270,7 @@ export async function collectLatchEvents({
         finish({ ended: true, error: new LatchSessionCommandError(detail) });
         return;
       }
-      finish({ ended: signal == null && (code === 0 || code === null) });
+      finish({ ended: signal === null && (code === 0 || code === null) });
     });
   });
 }

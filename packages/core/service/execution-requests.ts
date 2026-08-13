@@ -1095,11 +1095,12 @@ export async function linkExecutionRequestToSession({
     }
 
     if (!['launching', 'launched'].includes(row.status)) {
-      throw new ServiceError(
-        `Cannot link execution request in ${row.status} state to a session`,
-        'invalid_execution_request_transition',
-        409
-      );
+      // Terminal states (cleared, failed, expired, ...): the agent process may
+      // already be running — agent-pod recovers the id from the launch script
+      // after the runner has cleared the request. Skip linking rather than
+      // failing attach, or PostToolUse never gets an active-session manifest
+      // and deliver falls back to baseline-only attribution.
+      return null;
     }
 
     if (row.launched_session_id && row.launched_session_id !== sessionId) {

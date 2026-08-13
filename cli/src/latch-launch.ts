@@ -6,6 +6,7 @@
  * is best-effort and must never fail the execution request.
  */
 
+import { latchChildEnvironment } from '@overlord/core/service/latch-environment';
 import {
   buildLatchCreateManifest,
   type ExecutionProviderSession,
@@ -53,7 +54,7 @@ function spawnLatchJson({
   const result = spawnSync(executable, args, {
     encoding: 'utf8',
     input: stdin,
-    env: process.env,
+    env: latchChildEnvironment(),
     maxBuffer: 2 * 1024 * 1024
   });
   return {

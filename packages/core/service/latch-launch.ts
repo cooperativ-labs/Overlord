@@ -82,7 +82,8 @@ function trimmed(value: unknown): string | null {
 /**
  * Build the Latch create manifest. `commandString` is the same terminal inner
  * command S Overlord already composes (including `cd`); it is run through a
- * login shell so quoting / `&&` / multi-line pre-launch match iTerm/Terminal.
+ * interactive login shell so quoting / `&&` / multi-line pre-launch *and*
+ * `.zshrc` PATH setup (nvm, `agp`, `ovld`) match iTerm/Terminal.
  */
 export function buildLatchCreateManifest({
   commandString,
@@ -124,7 +125,7 @@ export function buildLatchCreateManifest({
   return {
     format_version: LATCH_MANIFEST_FORMAT_VERSION,
     launch: {
-      argv: [shellPath, '-lc', commandString],
+      argv: [shellPath, '-ilc', commandString],
       cwd,
       env: cleanedEnv,
       inherit_env: true,

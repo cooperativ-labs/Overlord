@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process';
 
+import { latchChildEnvironment } from './latch-environment.ts';
 import { latchViewerFlagForKind } from './latch-launch.ts';
 
 export type LatchSessionState = 'running' | 'exited' | 'stopping' | 'lost';
@@ -60,7 +61,8 @@ function runLatchJson({
     encoding: 'utf8',
     shell: false,
     timeout: 10_000,
-    maxBuffer: 1024 * 1024
+    maxBuffer: 1024 * 1024,
+    env: latchChildEnvironment()
   });
   if (result.error) {
     throw new LatchSessionCommandError(result.error.message);

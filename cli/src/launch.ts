@@ -575,7 +575,7 @@ export async function launchAgent({
     const shell = process.env.SHELL?.trim() || '/bin/bash';
     // Latch refuses nested `create` calls. Run the exact command string that
     // would have gone in the manifest inline in the current Latch-owned PTY.
-    const result = spawnSync(shell, ['-lc', plan.latchCommandString], {
+    const result = spawnSync(shell, ['-ilc', plan.latchCommandString], {
       cwd: options.workingDirectory,
       env,
       stdio: 'inherit'
@@ -585,7 +585,7 @@ export async function launchAgent({
         ...plan,
         execution: {
           command: shell,
-          args: ['-lc', plan.latchCommandString],
+          args: ['-ilc', plan.latchCommandString],
           useShell: false,
           terminal: null,
           display: `Latch session ${existingProviderSession.providerSessionId} (inline) › ${plan.latchCommandString}`

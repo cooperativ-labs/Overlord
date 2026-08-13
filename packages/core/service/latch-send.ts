@@ -9,6 +9,7 @@
 import { spawnSync } from 'node:child_process';
 
 import type { InteractionCapabilities } from './latch-harness/generated.ts';
+import { latchChildEnvironment } from './latch-environment.ts';
 import { LatchSessionCommandError } from './latch-session.ts';
 
 function trimmed(value: unknown): string | null {
@@ -42,7 +43,8 @@ export function probeLatchInteractionCapabilities({
   const help = spawnSync(bin, ['send', '--help'], {
     encoding: 'utf8',
     shell: false,
-    timeout: 5_000
+    timeout: 5_000,
+    env: latchChildEnvironment()
   });
   if (help.error || help.status !== 0) {
     const detail = (
@@ -99,7 +101,8 @@ export function resolveLatchInput({
     encoding: 'utf8',
     shell: false,
     timeout: 10_000,
-    maxBuffer: 1024 * 1024
+    maxBuffer: 1024 * 1024,
+    env: latchChildEnvironment()
   });
   if (result.error) throw new LatchSessionCommandError(result.error.message);
   if (result.status !== 0) {

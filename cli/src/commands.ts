@@ -38,7 +38,7 @@ import {
   listAccessibleProjects,
   resolvePreferredExecutionTargetId
 } from './discover-project-local.js';
-import { CliError } from './errors.js';
+import { CliError, isUnlinkableExecutionRequestError } from './errors.js';
 import { launchAgent } from './launch.js';
 import { recoverLaunchBootstrapFromProjectTmp } from './launch-bootstrap.js';
 import { resolveNativeSessionId } from './native-session.js';
@@ -966,10 +966,31 @@ export async function runProtocolCommand({
       })
   };
 
-  const result = await runtime.backend.post<unknown>({
-    path: `/api/protocol/${encodeURIComponent(subcommand)}`,
-    body: protocolBody
-  });
+  const protocolPath = `/api/protocol/${encodeURIComponent(subcommand)}`;
+  let result: unknown;
+  try {
+    result = await runtime.backend.post<unknown>({
+      path: protocolPath,
+      body: protocolBody
+    });
+  } catch (error) {
+    // Agent-pod / `agp` recovers OVERLORD_EXECUTION_REQUEST_ID from the launch
+    // script. If the runner already cleared that request, attach would otherwise
+    // fail before writeActiveSession, and the touched-files hook would stay inert.
+    if (
+      subcommand === 'attach' &&
+      typeof flags['--execution-request-id'] === 'string' &&
+      isUnlinkableExecutionRequestError(error)
+    ) {
+      delete flags['--execution-request-id'];
+      result = await runtime.backend.post<unknown>({
+        path: protocolPath,
+        body: { ...protocolBody, flags }
+      });
+    } else {
+      throw error;
+    }
+  }
 
   // Record the dirty-file baseline once a work session begins, so deliver can
   // subtract pre-existing/concurrent changes from this run's reported delta.
@@ -1064,7 +1085,8 @@ export async function runProtocolCommand({
         `[overlord] warning: no touched-files log found at deliver for mission ${missionId} in ` +
         `${workingDirectory}, even though this connector installs a PostToolUse edit hook. Deliver is ` +
         `falling back to baseline-only attribution, which can misattribute concurrent sessions' edits. ` +
-        `Check ~/.ovld/logs/post-tool-use-hook.log for why the hook did not record any touched files.`;
+        `Check ~/.ovld/logs/cursor-post-tool-use-hook.log and ~/.ovld/logs/post-tool-use-hook.log ` +
+        `for why the hook did not record any touched files.`;
       console.error(warning);
       const sessionKeyForAlert =
         typeof flags['--session-key'] === 'string' ? flags['--session-key'] : undefined;

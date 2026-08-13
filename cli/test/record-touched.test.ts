@@ -110,6 +110,51 @@ test('recordTouchedFromPayload is a no-op when no active session manifest entry 
 
   assert.deepEqual(result, {
     recorded: false,
-    reason: 'no active session manifest entry for this cwd'
+    reason: `no active session manifest entry for this cwd (${path.resolve(repo)})`
   });
+});
+
+test('recordTouchedFromPayload uses Cursor workspace_roots when cwd is absent', () => {
+  const repo = makeRepo();
+  writeBaseline({ workingDirectory: repo, missionId: MISSION_ID, files: readChangedFiles(repo) });
+  writeActiveSession({ workingDirectory: repo, missionId: MISSION_ID, sessionKey: 'sess_ws' });
+
+  const edited = path.join(repo, 'cursor-write.ts');
+  writeFileSync(edited, 'export const edited = 1;\n');
+  const hookCwd = mkdtempSync(path.join(os.tmpdir(), 'ovld-cursor-hook-cwd-'));
+
+  const result = recordTouchedFromPayload({
+    rawPayload: JSON.stringify({
+      tool_name: 'Write',
+      tool_input: { path: edited },
+      workspace_roots: [repo],
+      conversation_id: 'conv_cursor'
+    }),
+    fallbackCwd: hookCwd,
+    env: {}
+  });
+
+  assert.deepEqual(result, { recorded: true, missionId: MISSION_ID, ambiguous: false, files: 1 });
+  assert.deepEqual(classified(repo), [{ filePath: 'cursor-write.ts', attribution: 'mine' }]);
+});
+
+test('recordTouchedFromPayload uses CURSOR_PROJECT_DIR when payload has no cwd or workspace_roots', () => {
+  const repo = makeRepo();
+  writeBaseline({ workingDirectory: repo, missionId: MISSION_ID, files: readChangedFiles(repo) });
+  writeActiveSession({ workingDirectory: repo, missionId: MISSION_ID, sessionKey: 'sess_env' });
+
+  writeFileSync(path.join(repo, 'env-generated.ts'), 'export const generated = 1;\n');
+  const hookCwd = mkdtempSync(path.join(os.tmpdir(), 'ovld-cursor-hook-cwd-'));
+
+  const result = recordTouchedFromPayload({
+    rawPayload: JSON.stringify({
+      tool_name: 'Shell',
+      tool_input: { command: 'node scripts/codegen.js' }
+    }),
+    fallbackCwd: hookCwd,
+    env: { CURSOR_PROJECT_DIR: repo }
+  });
+
+  assert.deepEqual(result, { recorded: true, missionId: MISSION_ID, ambiguous: false, files: 1 });
+  assert.deepEqual(classified(repo), [{ filePath: 'env-generated.ts', attribution: 'mine' }]);
 });

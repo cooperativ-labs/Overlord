@@ -16,6 +16,7 @@ import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'no
 import os from 'node:os';
 import path from 'node:path';
 
+import { latchChildEnvironment } from './latch-environment.ts';
 import { DEFAULT_LATCH_EXECUTABLE } from './terminal-profile-types.ts';
 
 /** Protocol version Overlord's Latch provider speaks today. */
@@ -312,7 +313,8 @@ const defaultCommandRunner: LatchCommandRunner = ({ executable, argv }) => {
     const stdout = execFileSync(executable, argv, {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
-      timeout: 5_000
+      timeout: 5_000,
+      env: latchChildEnvironment()
     });
     return { status: 0, stdout: String(stdout), stderr: '' };
   } catch (error) {
