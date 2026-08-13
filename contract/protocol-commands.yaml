@@ -407,7 +407,7 @@ authAndDiscovery:
     readOnly: true
 
   discoverProject:
-    description: 'Resolve project from CWD, explicit directory, or project identifier'
+    description: 'Resolve project from CWD, explicit directory, or project identifier. CWD resolution uses the isPrimary project in .overlord/project.json when the checkout is linked to more than one project; the additive linkedProjects array lists every linked project.'
     readOnly: true
 
   listOrganizations:

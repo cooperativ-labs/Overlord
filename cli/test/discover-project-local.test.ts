@@ -60,5 +60,7 @@ test('explicit remote project discovery uses the cross-workspace project route',
     projectId: 'project-b'
   });
   assert.equal(discovery.projectId, 'project-b');
+  assert.equal(discovery.linkedProjects.length, 1);
+  assert.equal(discovery.linkedProjects[0]?.projectId, 'project-b');
   assert.deepEqual(calls, ['/api/projects/project-b']);
 });

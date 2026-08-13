@@ -143,6 +143,7 @@ export function ProjectCreatorModal({ open, onOpenChange, workspaceId }: Project
           await writeLocalProjectMetadata({
             directoryPath: trimmedPrimaryResourcePath,
             projectId: created.id,
+            projectName: created.name,
             resource: primaryResource
           });
         }

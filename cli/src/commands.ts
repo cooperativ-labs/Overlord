@@ -4,7 +4,7 @@ import {
   parseAgentLaunchFlagText
 } from '@overlord/contract';
 import {
-  readProjectJsonLink,
+  readProjectJsonLinks,
   writeProjectJson
 } from '@overlord/core/service/local-target/project-metadata';
 import {
@@ -126,10 +126,12 @@ function resourceAccessModeBody(value: string | true | undefined): {
 function writeProjectJsonFromResource({
   directory,
   projectId,
+  projectName,
   resource
 }: {
   directory: string;
   projectId: string;
+  projectName?: string | null;
   resource: unknown;
 }): void {
   const record = asRecord(resource);
@@ -140,6 +142,7 @@ function writeProjectJsonFromResource({
   writeProjectJson({
     directoryPath: directory,
     projectId,
+    projectName,
     resourceId: record.id,
     resourceKey: typeof record.resourceKey === 'string' ? record.resourceKey : undefined,
     executionTargetId:
@@ -1148,7 +1151,13 @@ export async function runManagementCommand({
             isPrimary: true
           }
         });
-        writeProjectJsonFromResource({ directory, projectId, resource });
+        const createdName = asRecord(project).name;
+        writeProjectJsonFromResource({
+          directory,
+          projectId,
+          projectName: typeof createdName === 'string' ? createdName : null,
+          resource
+        });
       }
       if (json) printJson({ project });
       else
@@ -1163,10 +1172,7 @@ export async function runManagementCommand({
     }
     case 'add-cwd': {
       const directory = flagValue(parsed.flags, '--directory') ?? process.cwd();
-      const existingProjectJson = readProjectJsonLink(
-        path.join(directory, '.overlord', 'project.json')
-      );
-      const resourceKey = flagValue(parsed.flags, '--key') ?? existingProjectJson?.resourceKey;
+      const existingLinks = readProjectJsonLinks(path.join(directory, '.overlord', 'project.json'));
       let projectId = flagValue(parsed.flags, '--project-id');
       if (!projectId) {
         const allProjects = await listAccessibleProjects({ backend: runtime.backend });
@@ -1188,6 +1194,11 @@ export async function runManagementCommand({
         }
       }
       if (!projectId) throw new CliError({ message: 'No project selected.' });
+      const matchingLink = existingLinks.find(link => link.projectId === projectId);
+      const resourceKey =
+        flagValue(parsed.flags, '--key') ??
+        matchingLink?.resourceKey ??
+        existingLinks[0]?.resourceKey;
       const resource = await runtime.backend.post({
         path: `/api/projects/${encodeURIComponent(projectId)}/resources`,
         body: {

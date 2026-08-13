@@ -4,7 +4,7 @@
 # IMPORTANT: Update this file and CONTRACT.md together when adding components or surfaces.
 # Increment contractVersion when any stable interface changes.
 
-contractVersion: '73'
+contractVersion: '74'
 
 components:
   protocol:
@@ -75,7 +75,7 @@ components:
       - 'ovld config set: select a local loopback backend URL or hosted/cloud backend URL'
       - 'ovld auth login: first-run backend onboarding before authentication'
       - 'project linking and discovery from working directory, with a packaged-mode fallback to the OS app-data overlord.toml'
-      - 'configuration file locations: overlord.toml, .overlord/project.json (legacy resourceId plus additive resourceIdsByExecutionTarget map keyed by execution_targets.id, plus additive resourceKey for logical checkout identity); linking a read_write checkout idempotently maintains its agent no-edit instruction block and ignores only .overlord/tmp/ and .overlord/logs/'
+      - 'configuration file locations: overlord.toml, .overlord/project.json (legacy resourceId plus additive resourceIdsByExecutionTarget map keyed by execution_targets.id, plus additive resourceKey for logical checkout identity, plus additive projects array for every linked project with at most one isPrimary); linking a read_write checkout idempotently maintains its agent no-edit instruction block and ignores only .overlord/tmp/ and .overlord/logs/'
       - 'project resource registration commands: ovld add-cwd --key <resourceKey> upserts a target-scoped local_checkout source on the project-scoped identity; ovld add-url --url <git-url> upserts its project-global git source'
       - 'backend URL settings: backend_url and backend_mode (local/cloud)'
       - 'per-user terminal profiles on user_execution_target_preferences for opening launched agents in a terminal window'
@@ -129,7 +129,7 @@ components:
     referenceSpec: 'planning/feature-plans/04-runner-and-launch-execution.md'
     owns:
       - 'execution_requests queue claiming and launch'
-      - 'working directory resolution: explicit workingDirectory, objective resource_key on the claiming target, primary target resource, then cwd .overlord/project.json fallback'
+      - 'working directory resolution: explicit workingDirectory, objective resource_key on the claiming target, primary target resource, then cwd .overlord/project.json fallback (matching the mission project among any linked projects in that file)'
       - 'effective launch-config resolution shared by manual, auto-advance, and claim-time paths: objective override, selected project-resource source defaults, user execution-target defaults, workspace defaults, then empty'
       - 'per-mission branch/worktree preparation before local agent spawn when enabled'
       - 'same-mission branch/worktree reuse: an existing planned worktree on the expected mission branch may be reused even when dirty so sequential objectives can continue uncommitted work'

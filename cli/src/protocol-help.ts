@@ -132,7 +132,10 @@ discover-project:
     --project-id <id-or-name>   Resolve this project directly
     --directory <path>          Directory to match (default: current working directory)
   Returns:
-    Project JSON with id, name, and slug.
+    Project JSON with projectId, projectName, resourceId, resourcePath, isPrimary,
+    and additive linkedProjects (every project this checkout is linked to).
+    When the checkout is linked to more than one project, projectId is the
+    isPrimary entry — the project that most recently set this resource as primary.
 
 attach:
   Purpose:

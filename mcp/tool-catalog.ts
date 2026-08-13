@@ -46,7 +46,7 @@ export const hostedMcpToolDefinitions: ToolDefinition[] = [
     name: 'overlord_resolve_project',
     title: 'Resolve Overlord project',
     description:
-      'Use this when the user identifies an Overlord project by id, slug, name, or exposed repository metadata.',
+      'Use this when the user identifies an Overlord project by id, slug, name, or exposed repository metadata. When resolving from .overlord/project.json, the result is the isPrimary project if the checkout is linked to more than one project; linkedProjects lists every linked project.',
     inputSchema: objectSchema({
       projectId: stringProperty('Explicit Overlord project id, slug, or project name.'),
       directory: stringProperty(

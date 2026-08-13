@@ -104,15 +104,23 @@ export function registerIpc({
     if (!payload || typeof payload !== 'object') {
       throw new Error('Project metadata payload is required.');
     }
-    const { directoryPath, projectId, resourceId, resourceKey, executionTargetId, isPrimary } =
-      payload as {
-        directoryPath?: unknown;
-        projectId?: unknown;
-        resourceId?: unknown;
-        resourceKey?: unknown;
-        executionTargetId?: unknown;
-        isPrimary?: unknown;
-      };
+    const {
+      directoryPath,
+      projectId,
+      projectName,
+      resourceId,
+      resourceKey,
+      executionTargetId,
+      isPrimary
+    } = payload as {
+      directoryPath?: unknown;
+      projectId?: unknown;
+      projectName?: unknown;
+      resourceId?: unknown;
+      resourceKey?: unknown;
+      executionTargetId?: unknown;
+      isPrimary?: unknown;
+    };
     if (
       typeof directoryPath !== 'string' ||
       !path.isAbsolute(directoryPath) ||
@@ -121,6 +129,7 @@ export function registerIpc({
       typeof resourceId !== 'string' ||
       resourceId.length === 0 ||
       !(resourceKey === undefined || resourceKey === null || typeof resourceKey === 'string') ||
+      !(projectName === undefined || projectName === null || typeof projectName === 'string') ||
       !(
         executionTargetId === undefined ||
         executionTargetId === null ||
@@ -135,7 +144,15 @@ export function registerIpc({
 
     const result = await invokeDesktopLocalTarget({
       capability: 'writeProjectMetadata',
-      input: { directoryPath, projectId, resourceId, resourceKey, executionTargetId, isPrimary }
+      input: {
+        directoryPath,
+        projectId,
+        projectName,
+        resourceId,
+        resourceKey,
+        executionTargetId,
+        isPrimary
+      }
     });
     if (!result.ok) {
       throw new Error(result.message);

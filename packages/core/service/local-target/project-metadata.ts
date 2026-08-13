@@ -13,7 +13,7 @@ import path from 'node:path';
 
 import { nowIso } from '../util.js';
 
-export const PROJECT_JSON_VERSION = 2;
+export const PROJECT_JSON_VERSION = 3;
 
 const PROJECT_JSON_WARNING =
   'STRICTLY PROTECTED: This file is managed exclusively by Overlord. Agents and users must not edit, replace, stage, commit, or delete it. Re-link the resource with Overlord to change it.';
@@ -85,10 +85,9 @@ function protectProjectMetadata(directoryPath: string): void {
   ensureGitignore(checkoutPath);
 }
 
-export interface ProjectJsonContents {
-  _warning: string;
-  version: number;
+export interface ProjectJsonProjectEntry {
   projectId: string;
+  projectName?: string;
   resourceId: string;
   resourceKey?: string;
   resourceIdsByExecutionTarget?: Record<string, string>;
@@ -96,91 +95,206 @@ export interface ProjectJsonContents {
   linkedAt: string;
 }
 
+export interface ProjectJsonContents {
+  _warning: string;
+  version: number;
+  projectId: string;
+  projectName?: string;
+  resourceId: string;
+  resourceKey?: string;
+  resourceIdsByExecutionTarget?: Record<string, string>;
+  isPrimary: boolean;
+  linkedAt: string;
+  projects: ProjectJsonProjectEntry[];
+}
+
 export interface ReadProjectJsonOptions {
   preferredExecutionTargetId?: string | null;
+  preferredProjectId?: string | null;
 }
 
 export interface ProjectJsonLink {
   projectId: string;
+  projectName: string | null;
   resourceId: string;
   resourceKey: string | null;
   resourceIdsByExecutionTarget: Record<string, string>;
   isPrimary: boolean;
+  linkedAt: string;
+}
+
+function parseResourceIdsByExecutionTarget(value: unknown): Record<string, string> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  return Object.fromEntries(
+    Object.entries(value).filter(
+      (entry): entry is [string, string] =>
+        typeof entry[0] === 'string' &&
+        entry[0].trim().length > 0 &&
+        typeof entry[1] === 'string' &&
+        entry[1].trim().length > 0
+    )
+  );
+}
+
+function parseOptionalTrimmedString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+}
+
+function parseProjectEntry(value: unknown): ProjectJsonProjectEntry | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  if (typeof record.projectId !== 'string' || typeof record.resourceId !== 'string') return null;
+
+  const resourceKey = parseOptionalTrimmedString(record.resourceKey);
+  const projectName = parseOptionalTrimmedString(record.projectName);
+  const resourceIdsByExecutionTarget = parseResourceIdsByExecutionTarget(
+    record.resourceIdsByExecutionTarget
+  );
+
+  return {
+    projectId: record.projectId,
+    ...(projectName ? { projectName } : {}),
+    resourceId: record.resourceId,
+    ...(resourceKey ? { resourceKey } : {}),
+    ...(Object.keys(resourceIdsByExecutionTarget).length > 0
+      ? { resourceIdsByExecutionTarget }
+      : {}),
+    isPrimary: record.isPrimary === true,
+    linkedAt: typeof record.linkedAt === 'string' ? record.linkedAt : nowIso()
+  };
+}
+
+function latestLinkedAt(entries: ProjectJsonProjectEntry[]): ProjectJsonProjectEntry {
+  return [...entries].sort((left, right) => right.linkedAt.localeCompare(left.linkedAt))[0]!;
+}
+
+export function selectPrimaryProjectEntry(
+  projects: ProjectJsonProjectEntry[]
+): ProjectJsonProjectEntry | null {
+  if (projects.length === 0) return null;
+  const primaries = projects.filter(entry => entry.isPrimary);
+  if (primaries.length === 1) return primaries[0]!;
+  if (primaries.length > 1) return latestLinkedAt(primaries);
+  if (projects.length === 1) return projects[0]!;
+  return latestLinkedAt(projects);
 }
 
 function parseProjectJson(projectJsonPath: string): ProjectJsonContents | null {
   if (!existsSync(projectJsonPath)) return null;
-  const parsed = JSON.parse(readFileSync(projectJsonPath, 'utf8')) as {
-    _warning?: unknown;
-    version?: unknown;
-    projectId?: unknown;
-    resourceId?: unknown;
-    resourceKey?: unknown;
-    resourceIdsByExecutionTarget?: unknown;
-    isPrimary?: unknown;
-    linkedAt?: unknown;
-  };
-  if (typeof parsed.projectId !== 'string' || typeof parsed.resourceId !== 'string') return null;
+  const parsed = JSON.parse(readFileSync(projectJsonPath, 'utf8')) as Record<string, unknown>;
 
-  const resourceIdsByExecutionTarget =
-    parsed.resourceIdsByExecutionTarget &&
-    typeof parsed.resourceIdsByExecutionTarget === 'object' &&
-    !Array.isArray(parsed.resourceIdsByExecutionTarget)
-      ? Object.fromEntries(
-          Object.entries(parsed.resourceIdsByExecutionTarget).filter(
-            (entry): entry is [string, string] =>
-              typeof entry[0] === 'string' &&
-              entry[0].trim().length > 0 &&
-              typeof entry[1] === 'string' &&
-              entry[1].trim().length > 0
-          )
-        )
-      : {};
+  const fromArray = Array.isArray(parsed.projects)
+    ? parsed.projects
+        .map(entry => parseProjectEntry(entry))
+        .filter((entry): entry is ProjectJsonProjectEntry => entry !== null)
+    : [];
+  const fromTopLevel = parseProjectEntry(parsed);
+  const projects = fromArray.length > 0 ? fromArray : fromTopLevel ? [fromTopLevel] : [];
+  const primary = selectPrimaryProjectEntry(projects);
+  if (!primary) return null;
 
-  const resourceKey =
-    typeof parsed.resourceKey === 'string' && parsed.resourceKey.trim().length > 0
-      ? parsed.resourceKey.trim()
-      : undefined;
+  const resourceIdsByExecutionTarget = primary.resourceIdsByExecutionTarget ?? {};
 
   return {
     _warning: typeof parsed._warning === 'string' ? parsed._warning : PROJECT_JSON_WARNING,
     version: typeof parsed.version === 'number' ? parsed.version : 1,
-    projectId: parsed.projectId,
-    resourceId: parsed.resourceId,
-    ...(resourceKey ? { resourceKey } : {}),
+    projectId: primary.projectId,
+    ...(primary.projectName ? { projectName: primary.projectName } : {}),
+    resourceId: primary.resourceId,
+    ...(primary.resourceKey ? { resourceKey: primary.resourceKey } : {}),
     resourceIdsByExecutionTarget,
-    isPrimary: parsed.isPrimary === true,
-    linkedAt: typeof parsed.linkedAt === 'string' ? parsed.linkedAt : nowIso()
+    isPrimary: primary.isPrimary,
+    linkedAt: primary.linkedAt,
+    projects
   };
+}
+
+function toProjectJsonLink({
+  entry,
+  preferredExecutionTargetId
+}: {
+  entry: ProjectJsonProjectEntry;
+  preferredExecutionTargetId?: string | null;
+}): ProjectJsonLink {
+  const preferredResourceId =
+    preferredExecutionTargetId?.trim() &&
+    entry.resourceIdsByExecutionTarget?.[preferredExecutionTargetId.trim()];
+
+  return {
+    projectId: entry.projectId,
+    projectName: entry.projectName ?? null,
+    resourceId: preferredResourceId ?? entry.resourceId,
+    resourceKey: entry.resourceKey ?? null,
+    resourceIdsByExecutionTarget: entry.resourceIdsByExecutionTarget ?? {},
+    isPrimary: entry.isPrimary,
+    linkedAt: entry.linkedAt
+  };
+}
+
+export function readProjectJsonLinks(
+  projectJsonPath: string,
+  options: ReadProjectJsonOptions = {}
+): ProjectJsonLink[] {
+  const parsed = parseProjectJson(projectJsonPath);
+  if (!parsed) return [];
+  return parsed.projects.map(entry =>
+    toProjectJsonLink({
+      entry,
+      preferredExecutionTargetId: options.preferredExecutionTargetId
+    })
+  );
+}
+
+export function selectPrimaryProjectLink(links: ProjectJsonLink[]): ProjectJsonLink | null {
+  if (links.length === 0) return null;
+  const primaries = links.filter(link => link.isPrimary);
+  if (primaries.length === 1) return primaries[0]!;
+  if (primaries.length > 1) {
+    return [...primaries].sort((left, right) => right.linkedAt.localeCompare(left.linkedAt))[0]!;
+  }
+  if (links.length === 1) return links[0]!;
+  return [...links].sort((left, right) => right.linkedAt.localeCompare(left.linkedAt))[0]!;
 }
 
 export function readProjectJsonLink(
   projectJsonPath: string,
   options: ReadProjectJsonOptions = {}
 ): ProjectJsonLink | null {
-  const parsed = parseProjectJson(projectJsonPath);
-  if (!parsed) return null;
+  const links = readProjectJsonLinks(projectJsonPath, options);
+  const preferredProjectId = options.preferredProjectId?.trim() || null;
+  if (preferredProjectId) {
+    return links.find(link => link.projectId === preferredProjectId) ?? null;
+  }
+  return selectPrimaryProjectLink(links);
+}
 
-  const preferredExecutionTargetId = options.preferredExecutionTargetId?.trim() || null;
-  const preferredResourceId =
-    preferredExecutionTargetId && parsed.resourceIdsByExecutionTarget?.[preferredExecutionTargetId];
-
+function serializeProjectEntry(entry: ProjectJsonProjectEntry): ProjectJsonProjectEntry {
   return {
-    projectId: parsed.projectId,
-    resourceId: preferredResourceId ?? parsed.resourceId,
-    resourceKey: parsed.resourceKey ?? null,
-    resourceIdsByExecutionTarget: parsed.resourceIdsByExecutionTarget ?? {},
-    isPrimary: parsed.isPrimary
+    projectId: entry.projectId,
+    ...(entry.projectName ? { projectName: entry.projectName } : {}),
+    resourceId: entry.resourceId,
+    ...(entry.resourceKey ? { resourceKey: entry.resourceKey } : {}),
+    ...(entry.resourceIdsByExecutionTarget &&
+    Object.keys(entry.resourceIdsByExecutionTarget).length > 0
+      ? { resourceIdsByExecutionTarget: entry.resourceIdsByExecutionTarget }
+      : {}),
+    isPrimary: entry.isPrimary,
+    linkedAt: entry.linkedAt
   };
 }
 
 /**
  * Write `<directoryPath>/.overlord/project.json` (creating the `.overlord`
  * scratch dirs), returning the absolute path written.
+ *
+ * Linking a second project merges into `projects` rather than replacing the
+ * file. A write with `isPrimary: true` demotes every other entry so at most
+ * one project remains primary (the most recently promoted one).
  */
 export function writeProjectJson({
   directoryPath,
   projectId,
+  projectName,
   resourceId,
   resourceKey,
   executionTargetId,
@@ -188,6 +302,7 @@ export function writeProjectJson({
 }: {
   directoryPath: string;
   projectId: string;
+  projectName?: string | null;
   resourceId: string;
   resourceKey?: string | null;
   executionTargetId?: string | null;
@@ -200,27 +315,58 @@ export function writeProjectJson({
   protectProjectMetadata(directoryPath);
 
   const projectJsonPath = path.join(overlordDir, 'project.json');
-  const existing = readProjectJsonLink(projectJsonPath);
+  const existing = parseProjectJson(projectJsonPath);
+  const existingProjects = existing?.projects ?? [];
+  const existingEntry = existingProjects.find(entry => entry.projectId === projectId);
+
   const resourceIdsByExecutionTarget = {
-    ...(existing?.projectId === projectId ? existing.resourceIdsByExecutionTarget : {})
+    ...(existingEntry?.resourceIdsByExecutionTarget ?? {})
   };
   if (executionTargetId?.trim()) {
     resourceIdsByExecutionTarget[executionTargetId.trim()] = resourceId;
   }
+
+  const resolvedProjectName = parseOptionalTrimmedString(projectName) ?? existingEntry?.projectName;
+  const resolvedResourceKey = parseOptionalTrimmedString(resourceKey) ?? existingEntry?.resourceKey;
+
+  const nextEntry = serializeProjectEntry({
+    projectId,
+    ...(resolvedProjectName ? { projectName: resolvedProjectName } : {}),
+    resourceId,
+    ...(resolvedResourceKey ? { resourceKey: resolvedResourceKey } : {}),
+    ...(Object.keys(resourceIdsByExecutionTarget).length > 0
+      ? { resourceIdsByExecutionTarget }
+      : {}),
+    isPrimary,
+    linkedAt: nowIso()
+  });
+
+  const projects = [
+    ...existingProjects
+      .filter(entry => entry.projectId !== projectId)
+      .map(entry => (isPrimary ? serializeProjectEntry({ ...entry, isPrimary: false }) : entry)),
+    nextEntry
+  ];
+
+  const primary = selectPrimaryProjectEntry(projects) ?? nextEntry;
+  const primaryResourceIds = primary.resourceIdsByExecutionTarget ?? {};
+
   writeFileSync(
     projectJsonPath,
     `${JSON.stringify(
       {
         _warning: PROJECT_JSON_WARNING,
         version: PROJECT_JSON_VERSION,
-        projectId,
-        resourceId,
-        ...(resourceKey?.trim() ? { resourceKey: resourceKey.trim() } : {}),
-        ...(Object.keys(resourceIdsByExecutionTarget).length > 0
-          ? { resourceIdsByExecutionTarget }
+        projectId: primary.projectId,
+        ...(primary.projectName ? { projectName: primary.projectName } : {}),
+        resourceId: primary.resourceId,
+        ...(primary.resourceKey ? { resourceKey: primary.resourceKey } : {}),
+        ...(Object.keys(primaryResourceIds).length > 0
+          ? { resourceIdsByExecutionTarget: primaryResourceIds }
           : {}),
-        isPrimary,
-        linkedAt: nowIso()
+        isPrimary: primary.isPrimary,
+        linkedAt: primary.linkedAt,
+        projects
       } satisfies ProjectJsonContents,
       null,
       2

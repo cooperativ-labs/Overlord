@@ -124,14 +124,25 @@ test('ovld add-cwd writes local project metadata after resource creation', async
     resourceKey?: string;
     resourceIdsByExecutionTarget?: Record<string, string>;
     isPrimary: boolean;
+    projects?: Array<{
+      projectId: string;
+      resourceId: string;
+      resourceKey?: string;
+      resourceIdsByExecutionTarget?: Record<string, string>;
+      isPrimary: boolean;
+    }>;
   };
   assert.match(projectJson._warning, /managed exclusively by Overlord/i);
-  assert.equal(projectJson.version, 2);
+  assert.equal(projectJson.version, 3);
   assert.equal(projectJson.projectId, 'project-1');
   assert.equal(projectJson.resourceId, 'resource-1');
   assert.equal(projectJson.resourceKey, 'overlord');
   assert.deepEqual(projectJson.resourceIdsByExecutionTarget, { 'target-1': 'resource-1' });
   assert.equal(projectJson.isPrimary, true);
+  assert.equal(projectJson.projects?.length, 1);
+  assert.equal(projectJson.projects?.[0]?.projectId, 'project-1');
+  assert.equal(projectJson.projects?.[0]?.resourceId, 'resource-1');
+  assert.equal(projectJson.projects?.[0]?.isPrimary, true);
 });
 
 test('ovld add-cwd sends explicit resource key', async () => {
@@ -185,4 +196,77 @@ test('ovld add-cwd sends explicit resource key', async () => {
     readFileSync(path.join(directory, '.overlord', 'project.json'), 'utf8')
   ) as { resourceKey?: string };
   assert.equal(projectJson.resourceKey, 'mobile');
+});
+
+test('ovld add-cwd keeps an existing project link when attaching a second project', async () => {
+  const directory = createIsolatedCheckout('ovld-add-cwd-second-project-');
+  const runtime = {
+    backend: {
+      baseUrl: 'https://overlord.example.test',
+      health: async () => ({ ok: true }),
+      get: async () => [{ id: 'project-1', name: 'Project One', slug: 'project-one' }],
+      post: async ({ path, body }: { path: string; body?: unknown }) => {
+        const record = (body ?? {}) as { isPrimary?: boolean };
+        if (path.endsWith('/project-1/resources')) {
+          return {
+            id: 'resource-1',
+            projectId: 'project-1',
+            resourceKey: 'overlord',
+            executionTargetId: 'target-1',
+            path: directory,
+            isPrimary: true
+          };
+        }
+        return {
+          id: 'resource-2',
+          projectId: 'project-2',
+          resourceKey: 'shared',
+          executionTargetId: 'target-1',
+          path: directory,
+          isPrimary: record.isPrimary !== false
+        };
+      },
+      patch: async () => {
+        throw new Error('unexpected PATCH');
+      },
+      delete: async () => {
+        throw new Error('unexpected DELETE');
+      }
+    },
+    close: () => {}
+  } satisfies CliRuntime;
+
+  const originalLog = console.log;
+  console.log = () => {};
+  try {
+    await runManagementCommand({
+      runtime,
+      command: 'add-cwd',
+      rest: ['--directory', directory, '--project-id', 'project-1']
+    });
+    await runManagementCommand({
+      runtime,
+      command: 'add-cwd',
+      rest: ['--directory', directory, '--project-id', 'project-2', '--primary', 'false']
+    });
+  } finally {
+    console.log = originalLog;
+  }
+
+  const parsed = JSON.parse(
+    readFileSync(path.join(directory, '.overlord', 'project.json'), 'utf8')
+  ) as {
+    projectId: string;
+    isPrimary: boolean;
+    projects: Array<{ projectId: string; isPrimary: boolean }>;
+  };
+  assert.equal(parsed.projectId, 'project-1');
+  assert.equal(parsed.isPrimary, true);
+  assert.deepEqual(
+    parsed.projects.map(entry => ({ projectId: entry.projectId, isPrimary: entry.isPrimary })),
+    [
+      { projectId: 'project-1', isPrimary: true },
+      { projectId: 'project-2', isPrimary: false }
+    ]
+  );
 });

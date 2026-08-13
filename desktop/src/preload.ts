@@ -118,6 +118,7 @@ const api = {
   writeProjectMetadata: (payload: {
     directoryPath: string;
     projectId: string;
+    projectName?: string | null;
     resourceId: string;
     resourceKey?: string | null;
     executionTargetId?: string | null;

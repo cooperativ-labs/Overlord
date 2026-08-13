@@ -5,8 +5,9 @@ import path from 'node:path';
 import {
   deriveResourceStatus,
   isCoLocatedBackend,
-  readProjectJsonLink,
-  resolveBackendResourceProvider
+  readProjectJsonLinks,
+  resolveBackendResourceProvider,
+  selectPrimaryProjectLink
 } from './local-target/index.ts';
 import { recordChange } from './change-feed.js';
 import type { ServiceContext } from './context.js';
@@ -88,12 +89,21 @@ function backendResourceProvider(ctx: ServiceContext, executionTargetId: string 
   });
 }
 
+export type LinkedProjectDiscovery = {
+  projectId: string;
+  projectName: string;
+  resourceId: string | null;
+  resourceKey: string | null;
+  isPrimary: boolean;
+};
+
 export type ProjectDiscovery = {
   projectId: string;
   projectName: string;
   resourceId: string | null;
   resourcePath: string | null;
   isPrimary: boolean;
+  linkedProjects: LinkedProjectDiscovery[];
 };
 
 async function preferredExecutionTargetIdForDiscovery({
@@ -210,6 +220,21 @@ export async function getProject({
   };
 }
 
+async function tryGetProject({
+  ctx,
+  projectId
+}: {
+  ctx: ServiceContext;
+  projectId: string;
+}): Promise<ProjectSummary | null> {
+  try {
+    return await getProject({ ctx, projectId });
+  } catch (error) {
+    if (error instanceof ServiceError && error.code === 'project_not_found') return null;
+    throw error;
+  }
+}
+
 export async function listProjects({ ctx }: { ctx: ServiceContext }): Promise<ProjectSummary[]> {
   const rows = (await ctx.db.all(
     `SELECT id, slug, name, description, status, created_at, updated_at
@@ -318,10 +343,12 @@ export async function addProjectResource({
   // `.overlord/project.json` — they are navigable/readable context, not the
   // project's working checkout, so a reader walking up from a directory never
   // resolves this project from a read-only resource.
+  const project = await getProject({ ctx, projectId: resolvedProjectId });
   if (resolvedAccessMode === 'read_write') {
     await backendResourceProvider(ctx, executionTargetId).writeProjectMetadata({
       directoryPath: resolvedPath,
       projectId: resolvedProjectId,
+      projectName: project.name,
       resourceId: id,
       resourceKey: resolvedResourceKey,
       executionTargetId,
@@ -657,8 +684,9 @@ export async function resolveCwdProjectResource({
   while (true) {
     const projectJsonPath = path.join(current, '.overlord', 'project.json');
     try {
-      const raw = readProjectJsonLink(projectJsonPath, { preferredExecutionTargetId });
-      if (raw?.projectId === resolvedProjectId) {
+      const links = readProjectJsonLinks(projectJsonPath, { preferredExecutionTargetId });
+      const raw = links.find(link => link.projectId === resolvedProjectId);
+      if (raw) {
         const row = (await ctx.db.get(
           `SELECT pr.id, pr.project_id, prs.execution_target_id, pr.resource_key, prs.source_kind,
                   prs.descriptor_json, pr.label, pr.is_primary, pr.access_mode, pr.status
@@ -794,7 +822,16 @@ export async function discoverProject({
       projectName: project.name,
       resourceId: primary?.id ?? null,
       resourcePath: primary?.path ?? null,
-      isPrimary: primary?.isPrimary ?? false
+      isPrimary: primary?.isPrimary ?? false,
+      linkedProjects: [
+        {
+          projectId: project.id,
+          projectName: project.name,
+          resourceId: primary?.id ?? null,
+          resourceKey: primary?.resourceKey ?? null,
+          isPrimary: primary?.isPrimary ?? false
+        }
+      ]
     };
   }
 
@@ -805,27 +842,63 @@ export async function discoverProject({
   while (true) {
     const projectJsonPath = path.join(current, '.overlord', 'project.json');
     try {
-      const raw = readProjectJsonLink(projectJsonPath, { preferredExecutionTargetId });
-      if (raw) {
-        const project = await getProject({ ctx, projectId: raw.projectId });
-        const resource = (await ctx.db.get(
-          `SELECT pr.id, ${ctx.db.dialect === 'postgres' ? "prs.descriptor_json->>'path'" : "json_extract(prs.descriptor_json, '$.path')"} AS path, pr.is_primary
+      const links = readProjectJsonLinks(projectJsonPath, { preferredExecutionTargetId });
+      if (links.length > 0) {
+        const selectedLink = selectPrimaryProjectLink(links);
+        const orderedLinks = [
+          ...(selectedLink ? [selectedLink] : []),
+          ...links.filter(link => link.projectId !== selectedLink?.projectId)
+        ];
+
+        let chosenProject: ProjectSummary | null = null;
+        let chosenLink = selectedLink;
+        for (const link of orderedLinks) {
+          const project = await tryGetProject({ ctx, projectId: link.projectId });
+          if (project) {
+            chosenProject = project;
+            chosenLink = link;
+            break;
+          }
+        }
+
+        if (chosenProject && chosenLink) {
+          const resource = (await ctx.db.get(
+            `SELECT pr.id, ${ctx.db.dialect === 'postgres' ? "prs.descriptor_json->>'path'" : "json_extract(prs.descriptor_json, '$.path')"} AS path, pr.is_primary, pr.resource_key
              FROM project_resources pr
              LEFT JOIN project_resource_sources prs
                ON prs.resource_id = pr.id AND prs.deleted_at IS NULL AND prs.source_kind = 'local_checkout'
              WHERE pr.id = ? AND pr.project_id = ? AND pr.deleted_at IS NULL
              ORDER BY CASE WHEN prs.execution_target_id = ? THEN 0 WHEN prs.execution_target_id IS NULL THEN 1 ELSE 2 END
              LIMIT 1`,
-          [raw.resourceId, raw.projectId, preferredExecutionTargetId]
-        )) as { id: string; path: string; is_primary: boolean | number } | undefined;
+            [chosenLink.resourceId, chosenLink.projectId, preferredExecutionTargetId]
+          )) as
+            | { id: string; path: string; is_primary: boolean | number; resource_key: string }
+            | undefined;
 
-        return {
-          projectId: project.id,
-          projectName: project.name,
-          resourceId: resource?.id ?? raw.resourceId,
-          resourcePath: resource?.path ?? current,
-          isPrimary: resource ? isTruthyFlag(resource.is_primary) : raw.isPrimary
-        };
+          const linkedProjects: LinkedProjectDiscovery[] = [];
+          for (const link of links) {
+            const project =
+              link.projectId === chosenProject.id
+                ? chosenProject
+                : await tryGetProject({ ctx, projectId: link.projectId });
+            linkedProjects.push({
+              projectId: project?.id ?? link.projectId,
+              projectName: project?.name ?? link.projectName ?? link.projectId,
+              resourceId: link.resourceId,
+              resourceKey: link.resourceKey,
+              isPrimary: link.isPrimary
+            });
+          }
+
+          return {
+            projectId: chosenProject.id,
+            projectName: chosenProject.name,
+            resourceId: resource?.id ?? chosenLink.resourceId,
+            resourcePath: resource?.path ?? current,
+            isPrimary: resource ? isTruthyFlag(resource.is_primary) : chosenLink.isPrimary,
+            linkedProjects
+          };
+        }
       }
     } catch {
       // continue walking up

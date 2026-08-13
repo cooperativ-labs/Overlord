@@ -3,7 +3,13 @@ import path from 'node:path';
 import { describe, it } from 'node:test';
 
 import { ensureCallerDeviceTarget } from './execution-targets.js';
-import { addProjectResource, createProject, deriveProjectResourceKey } from './projects.js';
+import {
+  addProjectResource,
+  createProject,
+  deriveProjectResourceKey,
+  discoverProject,
+  resolveCwdProjectResource
+} from './projects.js';
 import { createIsolatedCheckout } from './test-checkout.ts';
 import { createSeededServiceContext } from './test-helpers.js';
 import { newId, nowIso } from './util.js';
@@ -172,6 +178,55 @@ describe('addProjectResource', () => {
       },
       { id: 'other-target-resource', execution_target_id: 'other-target', is_primary: 0 }
     ]);
+
+    await db.close();
+  });
+});
+
+describe('discoverProject multi-project checkout', () => {
+  it('resolves the isPrimary project and still finds a non-primary link by project id', async () => {
+    const { db, ctx } = await createSeededServiceContext({ source: 'cli' });
+    const directory = createIsolatedCheckout('ovld-multi-project-discover-');
+    const primaryProject = await createProject({ ctx, name: 'Primary Checkout Project' });
+    const secondaryProject = await createProject({ ctx, name: 'Secondary Checkout Project' });
+
+    await addProjectResource({
+      ctx,
+      projectId: primaryProject.id,
+      directoryPath: directory,
+      isPrimary: true,
+      accessMode: 'read_write'
+    });
+    await addProjectResource({
+      ctx,
+      projectId: secondaryProject.id,
+      directoryPath: directory,
+      isPrimary: false,
+      accessMode: 'read_write'
+    });
+
+    const discovered = await discoverProject({ ctx, workingDirectory: directory });
+    assert.equal(discovered.projectId, primaryProject.id);
+    assert.equal(discovered.isPrimary, true);
+    assert.equal(discovered.linkedProjects.length, 2);
+    assert.deepEqual(
+      discovered.linkedProjects.map(entry => ({
+        projectId: entry.projectId,
+        isPrimary: entry.isPrimary
+      })),
+      [
+        { projectId: primaryProject.id, isPrimary: true },
+        { projectId: secondaryProject.id, isPrimary: false }
+      ]
+    );
+
+    const secondaryCwd = await resolveCwdProjectResource({
+      ctx,
+      projectId: secondaryProject.id,
+      workingDirectory: directory
+    });
+    assert.ok(secondaryCwd);
+    assert.equal(secondaryCwd?.resource.projectId, secondaryProject.id);
 
     await db.close();
   });

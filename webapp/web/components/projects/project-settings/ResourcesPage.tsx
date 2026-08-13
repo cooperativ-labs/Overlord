@@ -1193,7 +1193,18 @@ export function ResourcesPage({ open, projectId }: ResourcesPageProps) {
     if (resource.isPrimary) return;
     setRowError(null);
     try {
-      await updateResource.mutateAsync({ resourceId: resource.id, body: { isPrimary: true } });
+      const updated = await updateResource.mutateAsync({
+        resourceId: resource.id,
+        body: { isPrimary: true }
+      });
+      if (updated.accessMode !== 'read' && updated.path.trim()) {
+        await writeLocalProjectMetadata({
+          directoryPath: updated.path,
+          projectId,
+          projectName: projectQ.data?.name,
+          resource: updated
+        });
+      }
     } catch (error) {
       setRowError(error instanceof Error ? error.message : 'Failed to update primary resource.');
     }

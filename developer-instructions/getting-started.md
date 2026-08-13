@@ -121,8 +121,11 @@ ovld add-cwd --primary true
 
 Overlord stores a `.overlord/project.json` file in the linked directory so
 future commands can resolve the project automatically. That file is local-only
-metadata and can now retain target-specific resource ids when the same checkout
-is linked on more than one execution target.
+metadata. It can retain target-specific resource ids when the same checkout is
+linked on more than one execution target, and it can list every project the
+checkout is linked to. When more than one project is present, cwd-based
+commands use the project with `isPrimary: true` (whichever project most
+recently set this resource as primary) unless you pass `--project-id`.
 
 ---
 

@@ -139,8 +139,15 @@ Requirements:
 
 Requirements:
 
-- Written into linked project directories.
-- Stores local project identifier, resource label, whether the directory is primary, and enough metadata for project discovery.
+- Written into linked `read_write` project directories.
+- Stores every project this checkout is linked to in an additive `projects` array.
+  Top-level `projectId` / `resourceId` / `isPrimary` are the primary-project
+  projection (the unique `projects[]` entry with `isPrimary: true`, or the most
+  recently linked entry when none is primary) so older readers keep working.
+- At most one project is `isPrimary: true` — whichever project most recently set
+  this resource as its primary. Linking as a non-primary resource does not steal
+  that flag. Agents associating missions from the checkout use that primary
+  project unless they pass an explicit `--project-id`.
 - Must remain tracked: linking never ignores `project.json` or the whole `.overlord/` directory.
 - Is exclusively managed by Overlord. Linking writes a marked no-edit rule to the checkout's `AGENTS.md` and `CLAUDE.md`.
 

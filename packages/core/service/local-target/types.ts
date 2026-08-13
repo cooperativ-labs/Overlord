@@ -91,6 +91,7 @@ export type CapabilityResult<T> = CapabilitySuccess<T> | CapabilityFailure;
 export interface WriteProjectMetadataInput {
   directoryPath: string;
   projectId: string;
+  projectName?: string | null;
   resourceId: string;
   resourceKey?: string | null;
   executionTargetId?: string | null;

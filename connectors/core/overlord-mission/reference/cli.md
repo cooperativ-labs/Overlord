@@ -246,12 +246,12 @@ When you need a project ID for a protocol command and the mission prompt did not
 
 1. `--project-id` if explicitly provided.
 2. Otherwise, let the CLI match the current working directory (the default behavior of `create`, `prompt`, `discover-project`).
-3. If working-directory resolution returns nothing, read `.overlord/project.json` from the cwd (or any ancestor you have access to) and pass its project id via `--project-id`.
+3. If working-directory resolution returns nothing, read `.overlord/project.json` from the cwd (or any ancestor you have access to). Use the project whose `projects[]` entry has `isPrimary: true` (also mirrored as the top-level `projectId`) and pass that id via `--project-id`. If no entry is primary, use the sole / top-level project. To associate missions with a different linked project, pass that project's id explicitly.
 
 **Over MCP (web agents and hosted tools, where the server cannot see the agent's cwd):**
 
 1. `projectId` (hosted MCP) or `project_id` (local shim) if explicitly provided or found in the mission/context.
-2. Read `.overlord/project.json` from the directory the user is accessing and pass its project id as `projectId` / `project_id`.
+2. Read `.overlord/project.json` from the directory the user is accessing. Prefer the `projects[]` entry with `isPrimary: true` (the top-level `projectId` is that same projection) and pass it as `projectId` / `project_id`. If the file has no `projects` array, use the top-level `projectId` (legacy single-project files).
 3. As a last resort, try `workingDirectory` / `working_directory` resolution. If a device fingerprint is available, include `deviceFingerprint` / `device_fingerprint`.
 
-If `.overlord/project.json` contains more than one project, show the user the project **names** from that file and ask which one to use before calling any protocol command — never silently pick one.
+A checkout may be linked to more than one project. Default mission association to the `isPrimary: true` project — that is whichever project most recently set this resource as primary. `ovld protocol discover-project` returns that project plus additive `linkedProjects`. Only ask the user which linked project to use when you need a different one than that default, or when no entry is primary and more than one project is listed.

@@ -22,7 +22,7 @@ For MVP, auth commands can be local no-ops or diagnostics, but command names sho
 Requirements:
 
 - `auth-status`: report local runtime readiness and whether an interactive local identity or `USER_TOKEN` is being used, without printing token secrets.
-- `discover-project`: resolve project from current working directory, explicit directory, or project identifier.
+- `discover-project`: resolve project from current working directory, explicit directory, or project identifier. When `.overlord/project.json` lists multiple projects, the result is the `isPrimary` project plus additive `linkedProjects`.
 - `list-organizations`: deferred until multi-user/multi-org support; can return the local instance workspace in MVP.
 
 `USER_TOKEN` authentication is a modular expansion feature. When enabled, protocol requests may authenticate with a user-owned token that initially confers all permissions of the creating user. Future token scopes should restrict that user's permissions rather than grant additional access.

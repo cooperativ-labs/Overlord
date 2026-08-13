@@ -107,7 +107,9 @@ Working directory resolution order:
 2. Objective `resource_key`, resolved to the active project resource row for the
    claiming execution target.
 3. Primary resource directory for the project on the local target.
-4. Current working directory if it contains matching `.overlord/project.json`.
+4. Current working directory if it contains matching `.overlord/project.json`
+   for the mission's project (a checkout may list more than one linked project;
+   the fallback matches that project id, not only the file's primary).
 5. Fail with an actionable error.
 
 Requirements:

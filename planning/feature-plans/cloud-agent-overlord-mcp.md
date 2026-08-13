@@ -262,10 +262,13 @@ Project resolution order:
    that resource's `.overlord/project.json` and pass its project id as
    `projectId`. Overlord already writes this file when a resource directory is
    registered, so it is the portable project identity source for repo-backed
-   work.
-3. If `.overlord/project.json` contains multiple project mappings, return an
-   ambiguity result with project names/ids and require the agent to ask the user;
-   never silently pick one.
+   work. When the file lists multiple projects, use the `projects[]` entry with
+   `isPrimary: true` (mirrored as the top-level `projectId`) — that is whichever
+   project most recently set this resource as primary. Pass a different id only
+   when the caller names another linked project.
+3. If `.overlord/project.json` lists multiple projects and none is `isPrimary`,
+   return an ambiguity result with project names/ids and require the agent to
+   ask the user; never silently pick among non-primary links.
 4. As a last resort, call a `resolve_project` / `discover_project` tool with a
    project name, slug, repository URL, or `workingDirectory` hint. Because the
    hosted backend cannot inspect the agent's filesystem, working-directory

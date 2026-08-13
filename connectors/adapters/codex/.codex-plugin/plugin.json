@@ -1,6 +1,6 @@
 {
   "name": "overlord",
-  "version": "0.3.22",
+  "version": "0.3.23",
   "description": "Chat-driven access to Overlord mission protocol workflows with hook-driven activity capture.",
   "author": {
     "name": "Cooperativ",
