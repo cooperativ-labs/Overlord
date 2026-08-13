@@ -25,6 +25,11 @@ const stringProperty = (description: string): Record<string, unknown> => ({
   description
 });
 
+const booleanProperty = (description: string): Record<string, unknown> => ({
+  type: 'boolean',
+  description
+});
+
 const protocolOutputSchema = (description: string): Record<string, unknown> => ({
   type: 'object',
   description,
@@ -112,6 +117,9 @@ export const hostedMcpToolDefinitions: ToolDefinition[] = [
         resourceKey: stringProperty('Optional logical project resource key for the objective.'),
         assignedTo: stringProperty(
           'Optional workspace member to own the mission (workspace_users.id, profile UUID, orgid:username, bare username, or email). Rejected when the member is not in the workspace; meaningless on the inbox fallback.'
+        ),
+        autoAdvance: booleanProperty(
+          'When true, Overlord queues the next objective for execution after this one is delivered. Defaults to false.'
         )
       },
       ['objective']
@@ -163,17 +171,38 @@ export const hostedMcpToolDefinitions: ToolDefinition[] = [
         missionId: stringProperty('Mission UUID or workspace display id.'),
         objectives: {
           type: 'array',
-          description: 'Objective objects with objective text and optional title/resourceKey.',
+          description:
+            'Objective objects with objective text and optional title, resourceKey, and autoAdvance.',
           items: objectSchema({
             objective: stringProperty('Objective text.'),
             title: stringProperty('Optional objective title.'),
-            resourceKey: stringProperty('Optional logical project resource key.')
+            resourceKey: stringProperty('Optional logical project resource key.'),
+            autoAdvance: booleanProperty(
+              'When true, Overlord queues the next objective for execution after this one is delivered. Defaults to false.'
+            )
           })
         }
       },
       ['missionId', 'objectives']
     ),
     outputSchema: protocolOutputSchema('The mission with the appended draft objectives.'),
+    annotations: writeAction
+  },
+  {
+    name: 'overlord_update_objective',
+    title: 'Update objective auto-advance',
+    description:
+      'Use this to turn auto-advance on or off for an existing objective so delivery can queue the next one.',
+    inputSchema: objectSchema(
+      {
+        objectiveId: stringProperty('Objective UUID.'),
+        autoAdvance: booleanProperty(
+          'When true, Overlord queues the next objective after this one is delivered. When false, delivery waits for approval.'
+        )
+      },
+      ['objectiveId', 'autoAdvance']
+    ),
+    outputSchema: protocolOutputSchema('The updated objective, including autoAdvance.'),
     annotations: writeAction
   },
   {

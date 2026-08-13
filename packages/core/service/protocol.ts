@@ -10,6 +10,7 @@ import { buildDeliveryReport, markDeliveryPresentationPending } from './delivery
 import { ServiceError } from './errors.js';
 import { createExecutionRequest, linkExecutionRequestToSession } from './execution-requests.js';
 import { findActingDeviceExecutionTargetId } from './execution-targets.js';
+import { bindProviderSessionAgentSession } from './latch-observation.js';
 import {
   enqueueLiveActivityRefreshForMission,
   enqueueLiveActivityStartForMission
@@ -584,13 +585,20 @@ export async function attachSession({
         [externalSessionId, nowIso(), existing.id]
       );
     }
-    await linkExecutionRequestToSession({
+    const linked = await linkExecutionRequestToSession({
       ctx,
       missionId: context.mission.id,
       objectiveId: existing.objective_id,
       sessionId: existing.id,
       executionRequestId: executionRequestId ?? null
     });
+    if (linked) {
+      await bindProviderSessionAgentSession({
+        ctx,
+        executionRequestId: linked.id,
+        agentSessionId: existing.id
+      });
+    }
     const refreshedObjective =
       (await listObjectives({ ctx, missionId: context.mission.id })).find(
         candidate => candidate.id === existing.objective_id
@@ -730,13 +738,20 @@ export async function attachSession({
       objectiveId: objective.id
     });
 
-    await linkExecutionRequestToSession({
+    const linked = await linkExecutionRequestToSession({
       ctx: txCtx,
       missionId: context.mission.id,
       objectiveId: objective.id,
       sessionId,
       executionRequestId: executionRequestId ?? null
     });
+    if (linked) {
+      await bindProviderSessionAgentSession({
+        ctx: txCtx,
+        executionRequestId: linked.id,
+        agentSessionId: sessionId
+      });
+    }
   });
 
   // Bind the prepared channel now that a session exists to bind it to. This is what turns the
@@ -2506,5 +2521,6 @@ export {
   discussObjective,
   listSharedContext,
   searchMissions,
+  updateObjective,
   writeSharedContext
 } from './missions.js';

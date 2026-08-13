@@ -50,6 +50,12 @@ function requiredString(args: Record<string, unknown>, name: string): string {
   return value;
 }
 
+function autoAdvanceFlags(args: Record<string, unknown>): Record<string, true> {
+  if (args.autoAdvance === true) return { '--auto-advance': true };
+  if (args.autoAdvance === false) return { '--no-auto-advance': true };
+  return {};
+}
+
 function protocolBody(flags: Record<string, string | boolean>): ProtocolRequestBody {
   return { flags };
 }
@@ -138,7 +144,8 @@ const toolHandlers: Record<string, ToolHandler> = {
           : {}),
         ...(optionalString(args, 'assignedTo')
           ? { '--assigned-to': requiredString(args, 'assignedTo') }
-          : {})
+          : {}),
+        ...autoAdvanceFlags(args)
       })
     ),
   overlord_create_inbox_item: args =>
@@ -165,9 +172,24 @@ const toolHandlers: Record<string, ToolHandler> = {
       throw new Error('objectives must be an array');
     }
     return runProtocolSubcommand('add-objectives', {
-      flags: { '--mission-id': requiredString(args, 'missionId'), '--objectives-file': true },
+      flags: {
+        '--mission-id': requiredString(args, 'missionId'),
+        '--objectives-file': true
+      },
       fileInputs: { '--objectives-file': JSON.stringify(args.objectives) }
     });
+  },
+  overlord_update_objective: args => {
+    if (typeof args.autoAdvance !== 'boolean') {
+      throw new Error('autoAdvance must be a boolean');
+    }
+    return runProtocolSubcommand(
+      'update-objective',
+      protocolBody({
+        '--objective-id': requiredString(args, 'objectiveId'),
+        ...autoAdvanceFlags(args)
+      })
+    );
   },
   overlord_attach_session: args =>
     runProtocolSubcommand(

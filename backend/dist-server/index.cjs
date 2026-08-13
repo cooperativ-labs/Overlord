@@ -9665,9 +9665,9 @@ var init_schemas = __esm({
       $ZodStringFormat.init(inst, def);
       inst._zod.check = (payload) => {
         try {
-          const trimmed7 = payload.value.trim();
+          const trimmed9 = payload.value.trim();
           if (!def.normalize && def.protocol?.source === httpProtocol.source) {
-            if (!/^https?:\/\//i.test(trimmed7)) {
+            if (!/^https?:\/\//i.test(trimmed9)) {
               payload.issues.push({
                 code: "invalid_format",
                 format: "url",
@@ -9679,7 +9679,7 @@ var init_schemas = __esm({
               return;
             }
           }
-          const url2 = new URL(trimmed7);
+          const url2 = new URL(trimmed9);
           if (def.hostname) {
             def.hostname.lastIndex = 0;
             if (!def.hostname.test(url2.hostname)) {
@@ -9711,7 +9711,7 @@ var init_schemas = __esm({
           if (def.normalize) {
             payload.value = url2.href;
           } else {
-            payload.value = trimmed7;
+            payload.value = trimmed9;
           }
           return;
         } catch (_) {
@@ -69922,8 +69922,8 @@ function integrateBranch(input) {
 }
 function commitBranch(input) {
   const { branchName, worktreePath } = input;
-  const trimmed7 = (input.message ?? "").trim();
-  if (!trimmed7) {
+  const trimmed9 = (input.message ?? "").trim();
+  if (!trimmed9) {
     return {
       ok: false,
       code: "BRANCH_COMMIT_MESSAGE_REQUIRED",
@@ -69962,7 +69962,7 @@ function commitBranch(input) {
       detail: staged.stderr || staged.stdout
     };
   }
-  const commit = runGitResult(worktreePath, ["commit", "-m", trimmed7]);
+  const commit = runGitResult(worktreePath, ["commit", "-m", trimmed9]);
   if (!commit.ok) {
     return {
       ok: false,
@@ -70725,7 +70725,31 @@ function providerSessionFromMetadata(metadata) {
     executionTargetId: trimmed3(cast.executionTargetId),
     agentSessionId: trimmed3(cast.agentSessionId),
     createdAt: trimmed3(cast.createdAt) ?? "",
-    lastObservedState: trimmed3(cast.lastObservedState) ?? "running"
+    lastObservedState: trimmed3(cast.lastObservedState) ?? "running",
+    observation: parseHarnessObservation(cast.observation)
+  };
+}
+function parseHarnessObservation(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const row = value;
+  const cursor = typeof row.cursor === "number" && Number.isFinite(row.cursor) ? row.cursor : null;
+  if (cursor === null || cursor < 0) return null;
+  const pendingRaw = row.pendingInput && typeof row.pendingInput === "object" && !Array.isArray(row.pendingInput) ? row.pendingInput : null;
+  const pendingKind = trimmed3(pendingRaw?.kind);
+  const pendingInput = pendingRaw && trimmed3(pendingRaw.requestId) && (pendingKind === "permission" || pendingKind === "question") && typeof pendingRaw.prompt === "string" ? {
+    requestId: trimmed3(pendingRaw.requestId),
+    kind: pendingKind === "question" ? "question" : "permission",
+    prompt: pendingRaw.prompt,
+    choices: Array.isArray(pendingRaw.choices) ? pendingRaw.choices.filter((choice) => typeof choice === "string") : [],
+    at: trimmed3(pendingRaw.at) ?? ""
+  } : null;
+  return {
+    cursor,
+    connectorEpoch: typeof row.connectorEpoch === "number" && Number.isFinite(row.connectorEpoch) ? row.connectorEpoch : null,
+    lastEventAt: trimmed3(row.lastEventAt),
+    turnCount: typeof row.turnCount === "number" && Number.isFinite(row.turnCount) ? row.turnCount : 0,
+    pendingInput,
+    unattached: row.unattached === true
   };
 }
 function mergeProviderSessionIntoMetadata({
@@ -70743,9 +70767,13 @@ function mergeProviderSessionIntoMetadata({
       parsed = {};
     }
   }
+  const existing = providerSessionFromMetadata(parsed);
   return JSON.stringify({
     ...parsed,
-    [PROVIDER_SESSION_METADATA_KEY]: providerSession
+    [PROVIDER_SESSION_METADATA_KEY]: {
+      ...providerSession,
+      observation: providerSession.observation ?? existing?.observation ?? null
+    }
   });
 }
 function latchViewerFlagForKind(kind) {
@@ -70887,10 +70915,310 @@ var init_latch_session = __esm({
   }
 });
 
+// ../packages/core/service/latch-events.ts
+function trimmed5(value) {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+function parseHarnessEvent(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const row = value;
+  const type = trimmed5(row.type);
+  const sessionId = trimmed5(row.sessionId);
+  const at = trimmed5(row.at);
+  const harnessVersion = trimmed5(row.harnessVersion);
+  const connectorEpoch = typeof row.connectorEpoch === "number" && Number.isFinite(row.connectorEpoch) ? row.connectorEpoch : null;
+  if (!type || !HARNESS_EVENT_TYPES.has(type) || !sessionId || !at || !harnessVersion) return null;
+  if (connectorEpoch === null || connectorEpoch < 1) return null;
+  const base = { sessionId, at, harnessVersion, connectorEpoch };
+  switch (type) {
+    case "user_message":
+    case "assistant_delta":
+    case "assistant_message": {
+      const text = trimmed5(row.text);
+      if (!text) return null;
+      return { ...base, type, text };
+    }
+    case "tool_started": {
+      const tool = trimmed5(row.tool);
+      if (!tool) return null;
+      return { ...base, type, tool, input: row.input };
+    }
+    case "tool_finished": {
+      const tool = trimmed5(row.tool);
+      if (!tool) return null;
+      return { ...base, type, tool, output: row.output };
+    }
+    case "awaiting_input": {
+      const requestId = trimmed5(row.requestId);
+      const kind = trimmed5(row.kind);
+      const prompt = typeof row.prompt === "string" ? row.prompt : null;
+      if (!requestId || kind !== "permission" && kind !== "question" || prompt === null) {
+        return null;
+      }
+      const choices = Array.isArray(row.choices) ? row.choices.filter((choice) => typeof choice === "string") : void 0;
+      return {
+        ...base,
+        type,
+        requestId,
+        kind,
+        prompt,
+        ...choices && choices.length > 0 ? { choices } : {}
+      };
+    }
+    case "status": {
+      const status = trimmed5(row.status);
+      if (!status) return null;
+      return { ...base, type, status };
+    }
+    default:
+      return null;
+  }
+}
+function parseHarnessEventNdjson(raw) {
+  const events = [];
+  for (const line2 of raw.split("\n")) {
+    const trimmedLine = line2.trim();
+    if (!trimmedLine) continue;
+    try {
+      const parsed = parseHarnessEvent(JSON.parse(trimmedLine));
+      if (parsed) events.push(parsed);
+    } catch {
+    }
+  }
+  return events;
+}
+function foldHarnessEvents({
+  events,
+  fromCursor,
+  attached
+}) {
+  let pendingInput = null;
+  let turnCount = 0;
+  let lastEventAt = null;
+  let connectorEpoch = null;
+  for (const event of events) {
+    lastEventAt = event.at;
+    connectorEpoch = event.connectorEpoch;
+    if (event.type === "user_message" || event.type === "assistant_message") {
+      turnCount += 1;
+    }
+    if (event.type === "awaiting_input") {
+      pendingInput = {
+        requestId: event.requestId,
+        kind: event.kind,
+        prompt: event.prompt,
+        choices: event.choices ?? [],
+        at: event.at
+      };
+      continue;
+    }
+    pendingInput = null;
+  }
+  return {
+    cursor: fromCursor + events.length,
+    connectorEpoch,
+    lastEventAt,
+    turnCount,
+    pendingInput,
+    unattached: turnCount > 0 && !attached
+  };
+}
+function mergeHarnessObservation({
+  previous,
+  incoming,
+  attached
+}) {
+  const turnCount = (previous?.turnCount ?? 0) + incoming.turnCount;
+  return {
+    cursor: incoming.cursor,
+    connectorEpoch: incoming.connectorEpoch ?? previous?.connectorEpoch ?? null,
+    lastEventAt: incoming.lastEventAt ?? previous?.lastEventAt ?? null,
+    turnCount,
+    pendingInput: incoming.pendingInput,
+    unattached: turnCount > 0 && !attached
+  };
+}
+async function collectLatchEvents({
+  executable = "latch",
+  providerSessionId,
+  from = 0,
+  idleMs = 250,
+  timeoutMs = 8e3
+}) {
+  const sessionId = trimmed5(providerSessionId);
+  if (!sessionId) throw new LatchSessionCommandError("A Latch session id is required.");
+  const fromCursor = Number.isFinite(from) && from > 0 ? Math.floor(from) : 0;
+  const bin = trimmed5(executable) ?? "latch";
+  return new Promise((resolve, reject) => {
+    const child = (0, import_node_child_process5.spawn)(bin, ["events", sessionId, "--json", "--from", String(fromCursor)], {
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+    let stdout = "";
+    let stderr = "";
+    let idleTimer = null;
+    let settled = false;
+    const finish = ({ ended, error: error53 }) => {
+      if (settled) return;
+      settled = true;
+      if (idleTimer) clearTimeout(idleTimer);
+      clearTimeout(timeoutTimer);
+      if (!child.killed) child.kill("SIGTERM");
+      if (error53) {
+        reject(error53);
+        return;
+      }
+      const events = parseHarnessEventNdjson(stdout);
+      resolve({
+        events,
+        from: fromCursor,
+        nextCursor: fromCursor + events.length,
+        ended
+      });
+    };
+    const bumpIdle = () => {
+      if (idleTimer) clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => finish({ ended: false }), idleMs);
+    };
+    const timeoutTimer = setTimeout(() => finish({ ended: false }), timeoutMs);
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk;
+      bumpIdle();
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk;
+    });
+    child.on("error", (error53) => {
+      finish({
+        ended: false,
+        error: new LatchSessionCommandError(error53.message)
+      });
+    });
+    child.on("close", (code, signal) => {
+      if (settled) return;
+      if (code && code !== 0 && parseHarnessEventNdjson(stdout).length === 0) {
+        const detail = stderr.trim().slice(0, 500) || `latch events exited ${code}`;
+        finish({ ended: true, error: new LatchSessionCommandError(detail) });
+        return;
+      }
+      finish({ ended: signal == null && (code === 0 || code === null) });
+    });
+  });
+}
+var import_node_child_process5, HARNESS_EVENT_TYPES;
+var init_latch_events = __esm({
+  "../packages/core/service/latch-events.ts"() {
+    "use strict";
+    import_node_child_process5 = require("node:child_process");
+    init_latch_session();
+    HARNESS_EVENT_TYPES = /* @__PURE__ */ new Set([
+      "user_message",
+      "assistant_delta",
+      "assistant_message",
+      "tool_started",
+      "tool_finished",
+      "awaiting_input",
+      "status"
+    ]);
+  }
+});
+
+// ../packages/core/service/latch-send.ts
+function trimmed6(value) {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+function probeLatchInteractionCapabilities({
+  executable = "latch",
+  providerSessionId
+}) {
+  const sessionId = trimmed6(providerSessionId);
+  const bin = trimmed6(executable) ?? "latch";
+  if (!sessionId) {
+    return {
+      sendMessage: false,
+      sendKeys: false,
+      resolve: false,
+      canSend: { ok: false, reason: "A Latch session id is required." }
+    };
+  }
+  const help = (0, import_node_child_process6.spawnSync)(bin, ["send", "--help"], {
+    encoding: "utf8",
+    shell: false,
+    timeout: 5e3
+  });
+  if (help.error || help.status !== 0) {
+    const detail = (help.stderr || help.stdout || help.error?.message || "latch send is unavailable").trim().slice(0, 200);
+    return {
+      sendMessage: false,
+      sendKeys: false,
+      resolve: false,
+      canSend: { ok: false, reason: detail || "latch send is not available on this Latch build." }
+    };
+  }
+  return {
+    sendMessage: /--message\b/.test(`${help.stdout}
+${help.stderr}`),
+    sendKeys: /--keys\b/.test(`${help.stdout}
+${help.stderr}`),
+    resolve: /--resolve\b/.test(`${help.stdout}
+${help.stderr}`),
+    canSend: { ok: true }
+  };
+}
+function resolveLatchInput({
+  executable = "latch",
+  providerSessionId,
+  requestId,
+  choice
+}) {
+  const sessionId = trimmed6(providerSessionId);
+  const id = trimmed6(requestId);
+  const selected = trimmed6(choice);
+  if (!sessionId) throw new LatchSessionCommandError("A Latch session id is required.");
+  if (!id) throw new LatchSessionCommandError("A request id is required.");
+  if (!selected) throw new LatchSessionCommandError("A resolve choice is required.");
+  const capabilities = probeLatchInteractionCapabilities({
+    executable,
+    providerSessionId: sessionId
+  });
+  if (!capabilities.resolve || !capabilities.canSend.ok) {
+    throw new LatchSessionCommandError(
+      capabilities.canSend.reason || "This Latch session cannot resolve a pending prompt."
+    );
+  }
+  const bin = trimmed6(executable) ?? "latch";
+  const result = (0, import_node_child_process6.spawnSync)(bin, ["send", sessionId, "--resolve", `${id}=${selected}`, "--json"], {
+    encoding: "utf8",
+    shell: false,
+    timeout: 1e4,
+    maxBuffer: 1024 * 1024
+  });
+  if (result.error) throw new LatchSessionCommandError(result.error.message);
+  if (result.status !== 0) {
+    const detail = (result.stderr || result.stdout || `exit ${result.status ?? "unknown"}`).trim().slice(0, 500);
+    throw new LatchSessionCommandError(detail || "latch send --resolve failed.");
+  }
+  return {
+    providerSessionId: sessionId,
+    requestId: id,
+    choice: selected,
+    resolved: true
+  };
+}
+var import_node_child_process6;
+var init_latch_send = __esm({
+  "../packages/core/service/latch-send.ts"() {
+    "use strict";
+    import_node_child_process6 = require("node:child_process");
+    init_latch_session();
+  }
+});
+
 // ../packages/core/service/local-target/doctor-checks.ts
 function commandOnPath(command, args) {
   try {
-    const detail = (0, import_node_child_process5.execFileSync)(command, args, {
+    const detail = (0, import_node_child_process7.execFileSync)(command, args, {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"]
     }).trim();
@@ -70902,11 +71230,11 @@ function commandOnPath(command, args) {
 function runLocalTargetDoctorChecks() {
   return [commandOnPath("git", ["--version"]), commandOnPath("node", ["--version"])];
 }
-var import_node_child_process5;
+var import_node_child_process7;
 var init_doctor_checks = __esm({
   "../packages/core/service/local-target/doctor-checks.ts"() {
     "use strict";
-    import_node_child_process5 = require("node:child_process");
+    import_node_child_process7 = require("node:child_process");
   }
 });
 
@@ -70948,7 +71276,7 @@ function ensureGitignore(checkoutPath) {
 }
 function resolveGitRoot(directoryPath) {
   try {
-    return (0, import_node_child_process6.execFileSync)("git", ["-C", directoryPath, "rev-parse", "--show-toplevel"], {
+    return (0, import_node_child_process8.execFileSync)("git", ["-C", directoryPath, "rev-parse", "--show-toplevel"], {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"]
     }).trim();
@@ -70962,43 +71290,119 @@ function protectProjectMetadata(directoryPath) {
   ensureAgentInstructions(checkoutPath);
   ensureGitignore(checkoutPath);
 }
+function parseResourceIdsByExecutionTarget(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return Object.fromEntries(
+    Object.entries(value).filter(
+      (entry) => typeof entry[0] === "string" && entry[0].trim().length > 0 && typeof entry[1] === "string" && entry[1].trim().length > 0
+    )
+  );
+}
+function parseOptionalTrimmedString(value) {
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : void 0;
+}
+function parseProjectEntry(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const record2 = value;
+  if (typeof record2.projectId !== "string" || typeof record2.resourceId !== "string") return null;
+  const resourceKey = parseOptionalTrimmedString(record2.resourceKey);
+  const projectName = parseOptionalTrimmedString(record2.projectName);
+  const resourceIdsByExecutionTarget = parseResourceIdsByExecutionTarget(
+    record2.resourceIdsByExecutionTarget
+  );
+  return {
+    projectId: record2.projectId,
+    ...projectName ? { projectName } : {},
+    resourceId: record2.resourceId,
+    ...resourceKey ? { resourceKey } : {},
+    ...Object.keys(resourceIdsByExecutionTarget).length > 0 ? { resourceIdsByExecutionTarget } : {},
+    isPrimary: record2.isPrimary === true,
+    linkedAt: typeof record2.linkedAt === "string" ? record2.linkedAt : nowIso()
+  };
+}
+function latestLinkedAt(entries) {
+  return [...entries].sort((left, right) => right.linkedAt.localeCompare(left.linkedAt))[0];
+}
+function selectPrimaryProjectEntry(projects) {
+  if (projects.length === 0) return null;
+  const primaries = projects.filter((entry) => entry.isPrimary);
+  if (primaries.length === 1) return primaries[0];
+  if (primaries.length > 1) return latestLinkedAt(primaries);
+  if (projects.length === 1) return projects[0];
+  return latestLinkedAt(projects);
+}
 function parseProjectJson(projectJsonPath) {
   if (!(0, import_node_fs11.existsSync)(projectJsonPath)) return null;
   const parsed = JSON.parse((0, import_node_fs11.readFileSync)(projectJsonPath, "utf8"));
-  if (typeof parsed.projectId !== "string" || typeof parsed.resourceId !== "string") return null;
-  const resourceIdsByExecutionTarget = parsed.resourceIdsByExecutionTarget && typeof parsed.resourceIdsByExecutionTarget === "object" && !Array.isArray(parsed.resourceIdsByExecutionTarget) ? Object.fromEntries(
-    Object.entries(parsed.resourceIdsByExecutionTarget).filter(
-      (entry) => typeof entry[0] === "string" && entry[0].trim().length > 0 && typeof entry[1] === "string" && entry[1].trim().length > 0
-    )
-  ) : {};
-  const resourceKey = typeof parsed.resourceKey === "string" && parsed.resourceKey.trim().length > 0 ? parsed.resourceKey.trim() : void 0;
+  const fromArray = Array.isArray(parsed.projects) ? parsed.projects.map((entry) => parseProjectEntry(entry)).filter((entry) => entry !== null) : [];
+  const fromTopLevel = parseProjectEntry(parsed);
+  const projects = fromArray.length > 0 ? fromArray : fromTopLevel ? [fromTopLevel] : [];
+  const primary = selectPrimaryProjectEntry(projects);
+  if (!primary) return null;
+  const resourceIdsByExecutionTarget = primary.resourceIdsByExecutionTarget ?? {};
   return {
     _warning: typeof parsed._warning === "string" ? parsed._warning : PROJECT_JSON_WARNING,
     version: typeof parsed.version === "number" ? parsed.version : 1,
-    projectId: parsed.projectId,
-    resourceId: parsed.resourceId,
-    ...resourceKey ? { resourceKey } : {},
+    projectId: primary.projectId,
+    ...primary.projectName ? { projectName: primary.projectName } : {},
+    resourceId: primary.resourceId,
+    ...primary.resourceKey ? { resourceKey: primary.resourceKey } : {},
     resourceIdsByExecutionTarget,
-    isPrimary: parsed.isPrimary === true,
-    linkedAt: typeof parsed.linkedAt === "string" ? parsed.linkedAt : nowIso()
+    isPrimary: primary.isPrimary,
+    linkedAt: primary.linkedAt,
+    projects
   };
 }
-function readProjectJsonLink(projectJsonPath, options = {}) {
-  const parsed = parseProjectJson(projectJsonPath);
-  if (!parsed) return null;
-  const preferredExecutionTargetId = options.preferredExecutionTargetId?.trim() || null;
-  const preferredResourceId = preferredExecutionTargetId && parsed.resourceIdsByExecutionTarget?.[preferredExecutionTargetId];
+function toProjectJsonLink({
+  entry,
+  preferredExecutionTargetId
+}) {
+  const preferredResourceId = preferredExecutionTargetId?.trim() && entry.resourceIdsByExecutionTarget?.[preferredExecutionTargetId.trim()];
   return {
-    projectId: parsed.projectId,
-    resourceId: preferredResourceId ?? parsed.resourceId,
-    resourceKey: parsed.resourceKey ?? null,
-    resourceIdsByExecutionTarget: parsed.resourceIdsByExecutionTarget ?? {},
-    isPrimary: parsed.isPrimary
+    projectId: entry.projectId,
+    projectName: entry.projectName ?? null,
+    resourceId: preferredResourceId ?? entry.resourceId,
+    resourceKey: entry.resourceKey ?? null,
+    resourceIdsByExecutionTarget: entry.resourceIdsByExecutionTarget ?? {},
+    isPrimary: entry.isPrimary,
+    linkedAt: entry.linkedAt
+  };
+}
+function readProjectJsonLinks(projectJsonPath, options = {}) {
+  const parsed = parseProjectJson(projectJsonPath);
+  if (!parsed) return [];
+  return parsed.projects.map(
+    (entry) => toProjectJsonLink({
+      entry,
+      preferredExecutionTargetId: options.preferredExecutionTargetId
+    })
+  );
+}
+function selectPrimaryProjectLink(links) {
+  if (links.length === 0) return null;
+  const primaries = links.filter((link) => link.isPrimary);
+  if (primaries.length === 1) return primaries[0];
+  if (primaries.length > 1) {
+    return [...primaries].sort((left, right) => right.linkedAt.localeCompare(left.linkedAt))[0];
+  }
+  if (links.length === 1) return links[0];
+  return [...links].sort((left, right) => right.linkedAt.localeCompare(left.linkedAt))[0];
+}
+function serializeProjectEntry(entry) {
+  return {
+    projectId: entry.projectId,
+    ...entry.projectName ? { projectName: entry.projectName } : {},
+    resourceId: entry.resourceId,
+    ...entry.resourceKey ? { resourceKey: entry.resourceKey } : {},
+    ...entry.resourceIdsByExecutionTarget && Object.keys(entry.resourceIdsByExecutionTarget).length > 0 ? { resourceIdsByExecutionTarget: entry.resourceIdsByExecutionTarget } : {},
+    isPrimary: entry.isPrimary,
+    linkedAt: entry.linkedAt
   };
 }
 function writeProjectJson({
   directoryPath,
   projectId,
+  projectName,
   resourceId,
   resourceKey,
   executionTargetId,
@@ -71010,25 +71414,46 @@ function writeProjectJson({
   (0, import_node_fs11.mkdirSync)(import_node_path13.default.join(overlordDir, "logs"), { recursive: true });
   protectProjectMetadata(directoryPath);
   const projectJsonPath = import_node_path13.default.join(overlordDir, "project.json");
-  const existing = readProjectJsonLink(projectJsonPath);
+  const existing = parseProjectJson(projectJsonPath);
+  const existingProjects = existing?.projects ?? [];
+  const existingEntry = existingProjects.find((entry) => entry.projectId === projectId);
   const resourceIdsByExecutionTarget = {
-    ...existing?.projectId === projectId ? existing.resourceIdsByExecutionTarget : {}
+    ...existingEntry?.resourceIdsByExecutionTarget ?? {}
   };
   if (executionTargetId?.trim()) {
     resourceIdsByExecutionTarget[executionTargetId.trim()] = resourceId;
   }
+  const resolvedProjectName = parseOptionalTrimmedString(projectName) ?? existingEntry?.projectName;
+  const resolvedResourceKey = parseOptionalTrimmedString(resourceKey) ?? existingEntry?.resourceKey;
+  const nextEntry = serializeProjectEntry({
+    projectId,
+    ...resolvedProjectName ? { projectName: resolvedProjectName } : {},
+    resourceId,
+    ...resolvedResourceKey ? { resourceKey: resolvedResourceKey } : {},
+    ...Object.keys(resourceIdsByExecutionTarget).length > 0 ? { resourceIdsByExecutionTarget } : {},
+    isPrimary,
+    linkedAt: nowIso()
+  });
+  const projects = [
+    ...existingProjects.filter((entry) => entry.projectId !== projectId).map((entry) => isPrimary ? serializeProjectEntry({ ...entry, isPrimary: false }) : entry),
+    nextEntry
+  ];
+  const primary = selectPrimaryProjectEntry(projects) ?? nextEntry;
+  const primaryResourceIds = primary.resourceIdsByExecutionTarget ?? {};
   (0, import_node_fs11.writeFileSync)(
     projectJsonPath,
     `${JSON.stringify(
       {
         _warning: PROJECT_JSON_WARNING,
         version: PROJECT_JSON_VERSION,
-        projectId,
-        resourceId,
-        ...resourceKey?.trim() ? { resourceKey: resourceKey.trim() } : {},
-        ...Object.keys(resourceIdsByExecutionTarget).length > 0 ? { resourceIdsByExecutionTarget } : {},
-        isPrimary,
-        linkedAt: nowIso()
+        projectId: primary.projectId,
+        ...primary.projectName ? { projectName: primary.projectName } : {},
+        resourceId: primary.resourceId,
+        ...primary.resourceKey ? { resourceKey: primary.resourceKey } : {},
+        ...Object.keys(primaryResourceIds).length > 0 ? { resourceIdsByExecutionTarget: primaryResourceIds } : {},
+        isPrimary: primary.isPrimary,
+        linkedAt: primary.linkedAt,
+        projects
       },
       null,
       2
@@ -71037,15 +71462,15 @@ function writeProjectJson({
   );
   return projectJsonPath;
 }
-var import_node_child_process6, import_node_fs11, import_node_path13, PROJECT_JSON_VERSION, PROJECT_JSON_WARNING, INSTRUCTION_BLOCK_START, INSTRUCTION_BLOCK_END, PROJECT_METADATA_INSTRUCTION;
+var import_node_child_process8, import_node_fs11, import_node_path13, PROJECT_JSON_VERSION, PROJECT_JSON_WARNING, INSTRUCTION_BLOCK_START, INSTRUCTION_BLOCK_END, PROJECT_METADATA_INSTRUCTION;
 var init_project_metadata = __esm({
   "../packages/core/service/local-target/project-metadata.ts"() {
     "use strict";
-    import_node_child_process6 = require("node:child_process");
+    import_node_child_process8 = require("node:child_process");
     import_node_fs11 = require("node:fs");
     import_node_path13 = __toESM(require("node:path"), 1);
     init_util3();
-    PROJECT_JSON_VERSION = 2;
+    PROJECT_JSON_VERSION = 3;
     PROJECT_JSON_WARNING = "STRICTLY PROTECTED: This file is managed exclusively by Overlord. Agents and users must not edit, replace, stage, commit, or delete it. Re-link the resource with Overlord to change it.";
     INSTRUCTION_BLOCK_START = "<!-- OVERLORD PROJECT METADATA PROTECTION: START -->";
     INSTRUCTION_BLOCK_END = "<!-- OVERLORD PROJECT METADATA PROTECTION: END -->";
@@ -71080,6 +71505,8 @@ var init_in_process_provider = __esm({
     import_node_fs12 = require("node:fs");
     init_git_tree();
     init_latch_discovery();
+    init_latch_events();
+    init_latch_send();
     init_latch_session();
     init_terminal_profile_types();
     init_branch_actions_git();
@@ -71305,6 +71732,47 @@ var init_in_process_provider = __esm({
           );
         }
       }
+      async collectLatchEvents(input) {
+        try {
+          const collected = await collectLatchEvents({
+            executable: input.executable,
+            providerSessionId: input.providerSessionId,
+            from: input.from
+          });
+          return ok2(this.target, {
+            providerSessionId: input.providerSessionId,
+            events: collected.events,
+            from: collected.from,
+            nextCursor: collected.nextCursor,
+            ended: collected.ended
+          });
+        } catch (error53) {
+          return fail(
+            this.target,
+            "TARGET_OPERATION_FAILED",
+            error53 instanceof Error ? error53.message : "Could not collect Latch harness events."
+          );
+        }
+      }
+      async resolveLatchInput(input) {
+        try {
+          return ok2(
+            this.target,
+            resolveLatchInput({
+              executable: input.executable,
+              providerSessionId: input.providerSessionId,
+              requestId: input.requestId,
+              choice: input.choice
+            })
+          );
+        } catch (error53) {
+          return fail(
+            this.target,
+            "TARGET_OPERATION_FAILED",
+            error53 instanceof Error ? error53.message : "Could not resolve the Latch prompt."
+          );
+        }
+      }
       async doctor() {
         return ok2(this.target, { checks: runLocalTargetDoctorChecks() });
       }
@@ -71396,6 +71864,12 @@ var init_registry = __esm({
       stopLatchSession(_input) {
         return this.#fail();
       }
+      collectLatchEvents(_input) {
+        return this.#fail();
+      }
+      resolveLatchInput(_input) {
+        return this.#fail();
+      }
       doctor() {
         return this.#fail();
       }
@@ -71455,6 +71929,10 @@ async function invokeLocalTargetCapability({
       return provider.openLatchSession(call.input);
     case "stopLatchSession":
       return provider.stopLatchSession(call.input);
+    case "collectLatchEvents":
+      return provider.collectLatchEvents(call.input);
+    case "resolveLatchInput":
+      return provider.resolveLatchInput(call.input);
     case "writeProjectMetadata":
       return provider.writeProjectMetadata(call.input);
     default:
@@ -71681,8 +72159,8 @@ function mergeProfileMetadataJson({
     else delete parsed.avatarUrl;
   }
   if (agentInstructions !== void 0) {
-    const trimmed7 = agentInstructions?.trim() ?? "";
-    if (trimmed7) parsed.agentInstructions = trimmed7;
+    const trimmed9 = agentInstructions?.trim() ?? "";
+    if (trimmed9) parsed.agentInstructions = trimmed9;
     else delete parsed.agentInstructions;
   }
   return JSON.stringify(parsed);
@@ -72387,6 +72865,17 @@ async function getProject({
     updatedAt: row.updated_at
   };
 }
+async function tryGetProject({
+  ctx,
+  projectId
+}) {
+  try {
+    return await getProject({ ctx, projectId });
+  } catch (error53) {
+    if (error53 instanceof ServiceError && error53.code === "project_not_found") return null;
+    throw error53;
+  }
+}
 async function listProjectResources({
   ctx,
   projectId
@@ -72607,8 +73096,9 @@ async function resolveCwdProjectResource({
   while (true) {
     const projectJsonPath = import_node_path14.default.join(current, ".overlord", "project.json");
     try {
-      const raw = readProjectJsonLink(projectJsonPath, { preferredExecutionTargetId });
-      if (raw?.projectId === resolvedProjectId) {
+      const links = readProjectJsonLinks(projectJsonPath, { preferredExecutionTargetId });
+      const raw = links.find((link) => link.projectId === resolvedProjectId);
+      if (raw) {
         const row = await ctx.db.get(
           `SELECT pr.id, pr.project_id, prs.execution_target_id, pr.resource_key, prs.source_kind,
                   prs.descriptor_json, pr.label, pr.is_primary, pr.access_mode, pr.status
@@ -72721,7 +73211,16 @@ async function discoverProject({
       projectName: project.name,
       resourceId: primary?.id ?? null,
       resourcePath: primary?.path ?? null,
-      isPrimary: primary?.isPrimary ?? false
+      isPrimary: primary?.isPrimary ?? false,
+      linkedProjects: [
+        {
+          projectId: project.id,
+          projectName: project.name,
+          resourceId: primary?.id ?? null,
+          resourceKey: primary?.resourceKey ?? null,
+          isPrimary: primary?.isPrimary ?? false
+        }
+      ]
     };
   }
   const cwd = import_node_path14.default.resolve(workingDirectory ?? process.cwd());
@@ -72730,26 +73229,54 @@ async function discoverProject({
   while (true) {
     const projectJsonPath = import_node_path14.default.join(current, ".overlord", "project.json");
     try {
-      const raw = readProjectJsonLink(projectJsonPath, { preferredExecutionTargetId });
-      if (raw) {
-        const project = await getProject({ ctx, projectId: raw.projectId });
-        const resource = await ctx.db.get(
-          `SELECT pr.id, ${ctx.db.dialect === "postgres" ? "prs.descriptor_json->>'path'" : "json_extract(prs.descriptor_json, '$.path')"} AS path, pr.is_primary
+      const links = readProjectJsonLinks(projectJsonPath, { preferredExecutionTargetId });
+      if (links.length > 0) {
+        const selectedLink = selectPrimaryProjectLink(links);
+        const orderedLinks = [
+          ...selectedLink ? [selectedLink] : [],
+          ...links.filter((link) => link.projectId !== selectedLink?.projectId)
+        ];
+        let chosenProject = null;
+        let chosenLink = selectedLink;
+        for (const link of orderedLinks) {
+          const project = await tryGetProject({ ctx, projectId: link.projectId });
+          if (project) {
+            chosenProject = project;
+            chosenLink = link;
+            break;
+          }
+        }
+        if (chosenProject && chosenLink) {
+          const resource = await ctx.db.get(
+            `SELECT pr.id, ${ctx.db.dialect === "postgres" ? "prs.descriptor_json->>'path'" : "json_extract(prs.descriptor_json, '$.path')"} AS path, pr.is_primary, pr.resource_key
              FROM project_resources pr
              LEFT JOIN project_resource_sources prs
                ON prs.resource_id = pr.id AND prs.deleted_at IS NULL AND prs.source_kind = 'local_checkout'
              WHERE pr.id = ? AND pr.project_id = ? AND pr.deleted_at IS NULL
              ORDER BY CASE WHEN prs.execution_target_id = ? THEN 0 WHEN prs.execution_target_id IS NULL THEN 1 ELSE 2 END
              LIMIT 1`,
-          [raw.resourceId, raw.projectId, preferredExecutionTargetId]
-        );
-        return {
-          projectId: project.id,
-          projectName: project.name,
-          resourceId: resource?.id ?? raw.resourceId,
-          resourcePath: resource?.path ?? current,
-          isPrimary: resource ? isTruthyFlag(resource.is_primary) : raw.isPrimary
-        };
+            [chosenLink.resourceId, chosenLink.projectId, preferredExecutionTargetId]
+          );
+          const linkedProjects = [];
+          for (const link of links) {
+            const project = link.projectId === chosenProject.id ? chosenProject : await tryGetProject({ ctx, projectId: link.projectId });
+            linkedProjects.push({
+              projectId: project?.id ?? link.projectId,
+              projectName: project?.name ?? link.projectName ?? link.projectId,
+              resourceId: link.resourceId,
+              resourceKey: link.resourceKey,
+              isPrimary: link.isPrimary
+            });
+          }
+          return {
+            projectId: chosenProject.id,
+            projectName: chosenProject.name,
+            resourceId: resource?.id ?? chosenLink.resourceId,
+            resourcePath: resource?.path ?? current,
+            isPrimary: resource ? isTruthyFlag(resource.is_primary) : chosenLink.isPrimary,
+            linkedProjects
+          };
+        }
       }
     } catch {
     }
@@ -73157,22 +73684,22 @@ var init_webhook_events = __esm({
 
 // ../packages/contract/dist/agent-launch-flags.js
 function parseAgentLaunchFlagText(text) {
-  const trimmed7 = text.trim();
-  if (!trimmed7)
+  const trimmed9 = text.trim();
+  if (!trimmed9)
     return null;
-  const eqIndex = trimmed7.indexOf("=");
-  if (eqIndex > 0 && trimmed7.startsWith("--")) {
-    const name = trimmed7.slice(0, eqIndex).trim();
-    const value = trimmed7.slice(eqIndex + 1).trim();
+  const eqIndex = trimmed9.indexOf("=");
+  if (eqIndex > 0 && trimmed9.startsWith("--")) {
+    const name = trimmed9.slice(0, eqIndex).trim();
+    const value = trimmed9.slice(eqIndex + 1).trim();
     return name ? { name, value: value.length > 0 ? value : null } : null;
   }
-  const spaceIndex = trimmed7.indexOf(" ");
-  if (spaceIndex > 0 && trimmed7.startsWith("--")) {
-    const name = trimmed7.slice(0, spaceIndex).trim();
-    const value = trimmed7.slice(spaceIndex + 1).trim();
+  const spaceIndex = trimmed9.indexOf(" ");
+  if (spaceIndex > 0 && trimmed9.startsWith("--")) {
+    const name = trimmed9.slice(0, spaceIndex).trim();
+    const value = trimmed9.slice(spaceIndex + 1).trim();
     return name ? { name, value: value.length > 0 ? value : null } : null;
   }
-  return { name: trimmed7 };
+  return { name: trimmed9 };
 }
 function normalizeAgentLaunchFlags(input) {
   if (!Array.isArray(input))
@@ -73355,7 +73882,7 @@ var init_dist6 = __esm({
 function isRunnerRelation(value) {
   return value === "native" || value === "adopted";
 }
-function trimmed5(value) {
+function trimmed7(value) {
   const text = value?.trim();
   return text && text.length > 0 ? text : null;
 }
@@ -73427,7 +73954,7 @@ async function resolveRunnerTarget({
   input,
   actingTarget
 }) {
-  const explicitId = trimmed5(input.executionTargetId);
+  const explicitId = trimmed7(input.executionTargetId);
   if (!explicitId) {
     const target = actingTarget ?? await resolveClaimingDeviceTarget({ ctx });
     await assertTargetEnabled({ ctx, executionTargetId: target.executionTargetId });
@@ -73477,8 +74004,8 @@ async function recordRunnerHeartbeat({
       [
         executionTargetId,
         relation,
-        trimmed5(label),
-        trimmed5(runnerVersion),
+        trimmed7(label),
+        trimmed7(runnerVersion),
         capabilitiesJson,
         supportedAgentsJson,
         health,
@@ -73501,8 +74028,8 @@ async function recordRunnerHeartbeat({
       executionTargetId,
       runnerInstanceId,
       relation,
-      label: trimmed5(label),
-      runnerVersion: trimmed5(runnerVersion),
+      label: trimmed7(label),
+      runnerVersion: trimmed7(runnerVersion),
       supportedAgents: supportedAgents ?? [],
       health,
       lastHeartbeatAt: now2,
@@ -73522,8 +74049,8 @@ async function recordRunnerHeartbeat({
       executionTargetId,
       runnerInstanceId,
       relation,
-      trimmed5(label),
-      trimmed5(runnerVersion),
+      trimmed7(label),
+      trimmed7(runnerVersion),
       capabilitiesJson,
       supportedAgentsJson,
       health,
@@ -73545,8 +74072,8 @@ async function recordRunnerHeartbeat({
     executionTargetId,
     runnerInstanceId,
     relation,
-    label: trimmed5(label),
-    runnerVersion: trimmed5(runnerVersion),
+    label: trimmed7(label),
+    runnerVersion: trimmed7(runnerVersion),
     supportedAgents: supportedAgents ?? [],
     health,
     lastHeartbeatAt: now2,
@@ -73689,8 +74216,8 @@ function readPreferenceRow(ctx, projectId) {
 function readStoredExecutionTargetId(preferences) {
   const stored = preferences[PROJECT_EXECUTION_TARGET_PREFERENCE_KEY];
   if (typeof stored !== "string") return null;
-  const trimmed7 = stored.trim();
-  return trimmed7.length > 0 ? trimmed7 : null;
+  const trimmed9 = stored.trim();
+  return trimmed9.length > 0 ? trimmed9 : null;
 }
 function isTargetReachable({
   lastSeenAt,
@@ -131949,11 +132476,11 @@ function normalizeInstructionText(value) {
   return (value ?? "").trim();
 }
 function deriveTitleFromInstructionText(instructionText) {
-  const trimmed7 = normalizeInstructionText(instructionText);
-  if (trimmed7.length <= 100) {
-    return trimmed7;
+  const trimmed9 = normalizeInstructionText(instructionText);
+  if (trimmed9.length <= 100) {
+    return trimmed9;
   }
-  return `${trimmed7.slice(0, 100)}\u2026`;
+  return `${trimmed9.slice(0, 100)}\u2026`;
 }
 
 // ../automations/dist/title-summarizer/tools/summarize-text.js
@@ -133403,8 +133930,8 @@ async function searchMissions({
   projectId,
   limit = 25
 }) {
-  const trimmed7 = query?.trim();
-  const match = trimmed7 ? buildMissionSearchMatch({ dialect: ctx.db.dialect, query: trimmed7 }) : null;
+  const trimmed9 = query?.trim();
+  const match = trimmed9 ? buildMissionSearchMatch({ dialect: ctx.db.dialect, query: trimmed9 }) : null;
   if (!match) {
     return await listMissions({
       ctx,
@@ -133483,6 +134010,7 @@ async function addObjectivesToMission({
           missionId: resolved.id,
           instructionText: item.objective,
           ...item.title !== void 0 ? { title: item.title } : {},
+          autoAdvance: item.autoAdvance ?? false,
           ...item.resourceKey !== void 0 ? { resourceKey: item.resourceKey } : {},
           state: "draft"
         })
@@ -133490,6 +134018,42 @@ async function addObjectivesToMission({
     }
   });
   return created;
+}
+async function updateObjective({
+  ctx,
+  objectiveId,
+  autoAdvance
+}) {
+  const existing = await ctx.db.get(
+    `SELECT id, mission_id, project_id, position, title, instruction_text, state,
+            auto_advance, resource_key, revision
+       FROM objectives
+       WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+    [objectiveId, ctx.workspace.id]
+  );
+  if (!existing) {
+    throw new ServiceError("Objective not found", "not_found", 404);
+  }
+  const now2 = nowIso();
+  const nextRevision = existing.revision + 1;
+  await ctx.db.run(
+    `UPDATE objectives
+        SET auto_advance = ?, updated_at = ?, revision = ?
+      WHERE id = ? AND workspace_id = ?`,
+    [bindBool(ctx.db.dialect, autoAdvance), now2, nextRevision, existing.id, ctx.workspace.id]
+  );
+  await recordChange({
+    ctx,
+    entityType: "objective",
+    entityId: existing.id,
+    operation: "update",
+    entityRevision: nextRevision,
+    projectId: existing.project_id,
+    missionId: existing.mission_id,
+    objectiveId: existing.id,
+    changedFields: ["auto_advance"]
+  });
+  return toObjectiveSummary({ ...existing, auto_advance: autoAdvance ? 1 : 0 });
 }
 async function discussObjective({
   ctx,
@@ -133815,17 +134379,11 @@ init_util3();
 
 // ../packages/core/service/agent-session/credential.ts
 var import_node_crypto7 = require("node:crypto");
-var SESSION_CHANNEL_TOKEN_PREFIX = "osc_";
 var SESSION_CHANNEL_TOKEN_HASH_ALGORITHM = "sha256";
 var SESSION_CHANNEL_LEASE_SECONDS = 180;
 var SESSION_CHANNEL_ABSOLUTE_LIFETIME_SECONDS = 60 * 60 * 24;
 function hashSessionChannelToken(rawToken) {
   return (0, import_node_crypto7.createHash)(SESSION_CHANNEL_TOKEN_HASH_ALGORITHM).update(rawToken).digest("hex");
-}
-function generateSessionChannelToken() {
-  const prefix = `${SESSION_CHANNEL_TOKEN_PREFIX}${(0, import_node_crypto7.randomBytes)(4).toString("hex")}`;
-  const secret = `${prefix}${(0, import_node_crypto7.randomBytes)(32).toString("base64url")}`;
-  return { secret, prefix, hash: hashSessionChannelToken(secret) };
 }
 function addSeconds(iso, seconds) {
   return new Date(new Date(iso).getTime() + seconds * 1e3).toISOString();
@@ -133865,89 +134423,17 @@ async function getChannel({
   if (!row) throw new ServiceError("Session channel not found", "channel_not_found", 404);
   return row;
 }
-async function createSessionChannel({
-  ctx,
-  missionId,
-  objectiveId = null,
-  projectId = null,
-  sessionId = null,
-  executionRequestId = null,
-  executionTargetId = null,
-  runnerRegistrationId = null,
-  agentIdentifier = null,
-  adapterKey = null,
-  adapterVersion = null,
-  launchKind = "unknown",
-  launchPromptId = null,
-  capabilities = {}
-}) {
-  const now2 = nowIso();
-  const channelId = newId();
-  const { secret, prefix, hash: hash2 } = generateSessionChannelToken();
-  const expiresAt = renewedExpiry({ now: now2, createdAt: now2 });
-  await ctx.db.transaction(async (tx) => {
-    const txCtx = { ...ctx, db: tx };
-    await tx.run(
-      `INSERT INTO agent_session_channels (
-           id, workspace_id, project_id, mission_id, objective_id, session_id,
-           execution_request_id, execution_target_id, runner_registration_id,
-           launch_kind, launch_prompt_id, agent_identifier, adapter_key, adapter_version,
-           capabilities_json, state,
-           credential_prefix, credential_hash, credential_algorithm, credential_expires_at,
-           lease_expires_at, created_by_workspace_user_id, created_at, updated_at, revision
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'preparing', ?, ?, 'sha256', ?, ?, ?, ?, ?, 1)`,
-      [
-        channelId,
-        ctx.workspace.id,
-        projectId,
-        missionId,
-        objectiveId,
-        sessionId,
-        executionRequestId,
-        executionTargetId,
-        runnerRegistrationId,
-        launchKind,
-        launchPromptId,
-        agentIdentifier,
-        adapterKey,
-        adapterVersion,
-        JSON.stringify(capabilities),
-        prefix,
-        hash2,
-        expiresAt,
-        expiresAt,
-        ctx.actorWorkspaceUserId,
-        now2,
-        now2
-      ]
-    );
-    await recordChange({
-      ctx: txCtx,
-      entityType: "agent_session_channel",
-      entityId: channelId,
-      operation: "insert",
-      entityRevision: 1,
-      projectId,
-      missionId,
-      objectiveId
-    });
-  });
-  return {
-    channel: await getChannel({ ctx, channelId }),
-    bootstrap: { channelId, token: secret, expiresAt, launchKind, launchPromptId }
-  };
-}
 async function authenticateChannelCredential({
   db,
   rawToken,
   now: now2 = nowIso()
 }) {
-  const trimmed7 = rawToken.trim();
-  if (!trimmed7) return null;
+  const trimmed9 = rawToken.trim();
+  if (!trimmed9) return null;
   const row = await db.get(
     `SELECT ${CHANNEL_COLUMNS} FROM agent_session_channels
        WHERE credential_hash = ? AND deleted_at IS NULL`,
-    [hashSessionChannelToken(trimmed7)]
+    [hashSessionChannelToken(trimmed9)]
   );
   if (!row) return null;
   if (row.credential_revoked_at !== null) return null;
@@ -135254,6 +135740,218 @@ async function linkExecutionRequestToSession({
 // ../packages/core/service/protocol.ts
 init_execution_targets();
 
+// ../packages/core/service/latch-observation.ts
+init_change_feed();
+init_errors4();
+init_latch_events();
+init_latch_launch();
+init_util3();
+function parseMetadata(raw) {
+  if (!raw?.trim()) return {};
+  try {
+    const value = JSON.parse(raw);
+    return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  } catch {
+    return {};
+  }
+}
+async function ingestLatchHarnessEvents({
+  ctx,
+  missionId,
+  executionRequestId,
+  providerSessionId,
+  events,
+  from = 0
+}) {
+  const sessionId = providerSessionId.trim();
+  if (!sessionId) {
+    throw new ServiceError("A Latch session id is required.", "validation_error");
+  }
+  const parsedEvents = events.map((event) => parseHarnessEvent(event)).filter((event) => event !== null);
+  const fromCursor = Number.isFinite(from) && from > 0 ? Math.floor(from) : 0;
+  return ctx.db.transaction(async (tx) => {
+    const txCtx = { ...ctx, db: tx };
+    const rows = await tx.all(
+      executionRequestId ? `SELECT id, workspace_id, project_id, mission_id, objective_id, launched_session_id,
+                  metadata_json, revision
+             FROM execution_requests
+            WHERE id = ? AND mission_id = ? AND workspace_id = ? AND deleted_at IS NULL` : `SELECT id, workspace_id, project_id, mission_id, objective_id, launched_session_id,
+                  metadata_json, revision
+             FROM execution_requests
+            WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL
+            ORDER BY updated_at DESC, created_at DESC`,
+      executionRequestId ? [executionRequestId, missionId, ctx.workspace.id] : [missionId, ctx.workspace.id]
+    );
+    const row = rows.find((candidate) => {
+      const mapped = providerSessionFromMetadata(parseMetadata(candidate.metadata_json));
+      return mapped?.providerSessionId === sessionId;
+    });
+    if (!row) {
+      throw new ServiceError("Latch session is not mapped to this mission", "not_found", 404);
+    }
+    const metadata = parseMetadata(row.metadata_json);
+    const providerSession = providerSessionFromMetadata(metadata);
+    if (!providerSession || providerSession.providerSessionId !== sessionId) {
+      throw new ServiceError("Latch session is not mapped to this mission", "not_found", 404);
+    }
+    const attached = Boolean(providerSession.agentSessionId || row.launched_session_id);
+    const previous = providerSession.observation ?? null;
+    const storedCursor = previous?.cursor ?? 0;
+    let observation;
+    if (fromCursor < storedCursor) {
+      observation = {
+        ...previous,
+        unattached: (previous?.turnCount ?? 0) > 0 && !attached
+      };
+    } else if (parsedEvents.length === 0) {
+      observation = {
+        cursor: storedCursor,
+        connectorEpoch: previous?.connectorEpoch ?? null,
+        lastEventAt: previous?.lastEventAt ?? null,
+        turnCount: previous?.turnCount ?? 0,
+        pendingInput: previous?.pendingInput ?? null,
+        unattached: (previous?.turnCount ?? 0) > 0 && !attached
+      };
+    } else {
+      observation = mergeHarnessObservation({
+        previous,
+        incoming: foldHarnessEvents({
+          events: parsedEvents,
+          fromCursor,
+          attached
+        }),
+        attached
+      });
+    }
+    const nextSession = {
+      ...providerSession,
+      observation
+    };
+    const now2 = nowIso();
+    const revision = row.revision + 1;
+    const metadataJson = mergeProviderSessionIntoMetadata({
+      metadataJson: row.metadata_json,
+      providerSession: nextSession
+    });
+    const updated = await tx.run(
+      `UPDATE execution_requests
+          SET metadata_json = ?, updated_at = ?, revision = ?
+        WHERE id = ? AND revision = ? AND deleted_at IS NULL`,
+      [metadataJson, now2, revision, row.id, row.revision]
+    );
+    if (updated.changes === 0) {
+      throw new ServiceError(
+        "Execution request changed while ingesting harness events",
+        "execution_request_conflict",
+        409
+      );
+    }
+    await recordChange({
+      ctx: txCtx,
+      entityType: "execution_request",
+      entityId: row.id,
+      operation: "update",
+      entityRevision: revision,
+      projectId: row.project_id,
+      missionId: row.mission_id,
+      objectiveId: row.objective_id,
+      changedFields: ["metadata_json"]
+    });
+    const previousRequestId = previous?.pendingInput?.requestId ?? null;
+    const nextRequestId = observation.pendingInput?.requestId ?? null;
+    let notified = false;
+    if (nextRequestId && nextRequestId !== previousRequestId) {
+      const emitted = await emitNotification({
+        db: tx,
+        workspaceId: row.workspace_id,
+        missionId: row.mission_id,
+        type: "agent_question",
+        objectiveId: row.objective_id,
+        now: now2
+      });
+      notified = emitted.emitted;
+    }
+    return {
+      providerSessionId: sessionId,
+      observation,
+      notified
+    };
+  });
+}
+async function bindProviderSessionAgentSession({
+  ctx,
+  executionRequestId,
+  agentSessionId
+}) {
+  const row = await ctx.db.get(
+    `SELECT metadata_json, revision FROM execution_requests
+      WHERE id = ? AND deleted_at IS NULL`,
+    [executionRequestId]
+  );
+  if (!row) return;
+  const providerSession = providerSessionFromMetadata(parseMetadata(row.metadata_json));
+  if (!providerSession) return;
+  if (providerSession.agentSessionId === agentSessionId) return;
+  const attachedObservation = providerSession.observation ? { ...providerSession.observation, unattached: false } : null;
+  const metadataJson = mergeProviderSessionIntoMetadata({
+    metadataJson: row.metadata_json,
+    providerSession: {
+      ...providerSession,
+      agentSessionId,
+      observation: attachedObservation
+    }
+  });
+  await ctx.db.run(
+    `UPDATE execution_requests SET metadata_json = ?, updated_at = ?, revision = revision + 1
+      WHERE id = ? AND deleted_at IS NULL`,
+    [metadataJson, nowIso(), executionRequestId]
+  );
+}
+async function clearLatchPendingInput({
+  ctx,
+  missionId,
+  providerSessionId,
+  requestId
+}) {
+  const rows = await ctx.db.all(
+    `SELECT id, metadata_json, launched_session_id, revision
+       FROM execution_requests
+      WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL
+      ORDER BY updated_at DESC, created_at DESC`,
+    [missionId, ctx.workspace.id]
+  );
+  const row = rows.find((candidate) => {
+    const mapped = providerSessionFromMetadata(parseMetadata(candidate.metadata_json));
+    return mapped?.providerSessionId === providerSessionId;
+  });
+  if (!row) return null;
+  const providerSession = providerSessionFromMetadata(parseMetadata(row.metadata_json));
+  if (!providerSession || providerSession.providerSessionId !== providerSessionId) return null;
+  const pending = providerSession.observation?.pendingInput;
+  if (!pending || pending.requestId !== requestId) {
+    return providerSession.observation ?? null;
+  }
+  const attached = Boolean(providerSession.agentSessionId || row.launched_session_id);
+  const observation = {
+    ...providerSession.observation,
+    pendingInput: null,
+    unattached: (providerSession.observation?.turnCount ?? 0) > 0 && !attached
+  };
+  await ctx.db.run(
+    `UPDATE execution_requests SET metadata_json = ?, updated_at = ?, revision = revision + 1
+      WHERE id = ? AND deleted_at IS NULL`,
+    [
+      mergeProviderSessionIntoMetadata({
+        metadataJson: row.metadata_json,
+        providerSession: { ...providerSession, observation }
+      }),
+      nowIso(),
+      row.id
+    ]
+  );
+  return observation;
+}
+
 // ../packages/core/service/live-activity-jobs.ts
 init_util3();
 var LIVE_ACTIVITY_DISPATCH_JOB_TYPE = "overlord.live_activity.dispatch.v1";
@@ -135671,33 +136369,33 @@ async function resolveWorkspaceMemberId({
   ctx,
   member: member2
 }) {
-  const trimmed7 = member2.trim();
-  if (!trimmed7) {
+  const trimmed9 = member2.trim();
+  if (!trimmed9) {
     throw new ServiceError(ASSIGNEE_NOT_MEMBER, "validation_error");
   }
   const byWorkspaceUserId = await ctx.db.get(
     `SELECT id FROM workspace_users
         WHERE id = ? AND workspace_id = ? AND status = 'active' AND deleted_at IS NULL`,
-    [trimmed7, ctx.workspace.id]
+    [trimmed9, ctx.workspace.id]
   );
   if (byWorkspaceUserId) return byWorkspaceUserId.id;
   const byProfileId = await ctx.db.get(
     `SELECT id FROM workspace_users
         WHERE profile_id = ? AND workspace_id = ? AND status = 'active' AND deleted_at IS NULL`,
-    [trimmed7, ctx.workspace.id]
+    [trimmed9, ctx.workspace.id]
   );
   if (byProfileId) return byProfileId.id;
-  const colon = trimmed7.indexOf(":");
+  const colon = trimmed9.indexOf(":");
   if (colon > 0) {
     const byMemberKey = await ctx.db.get(
       `SELECT id FROM workspace_users
           WHERE workspace_id = ? AND status = 'active' AND deleted_at IS NULL
             AND lower(member_key) = lower(?)`,
-      [ctx.workspace.id, trimmed7]
+      [ctx.workspace.id, trimmed9]
     );
     if (byMemberKey) return byMemberKey.id;
-    const left = trimmed7.slice(0, colon);
-    const username = trimmed7.slice(colon + 1).trim();
+    const left = trimmed9.slice(0, colon);
+    const username = trimmed9.slice(colon + 1).trim();
     if (username) {
       const byOrgAndHandle = await ctx.db.get(
         `SELECT wu.id
@@ -135719,7 +136417,7 @@ async function resolveWorkspaceMemberId({
        JOIN profiles p ON p.id = wu.profile_id AND p.deleted_at IS NULL
       WHERE wu.workspace_id = ? AND wu.status = 'active' AND wu.deleted_at IS NULL
         AND lower(p.handle) = lower(?)`,
-    [ctx.workspace.id, trimmed7]
+    [ctx.workspace.id, trimmed9]
   );
   if (byHandle) return byHandle.id;
   const byEmail = await ctx.db.get(
@@ -135728,7 +136426,7 @@ async function resolveWorkspaceMemberId({
        JOIN profiles p ON p.id = wu.profile_id AND p.deleted_at IS NULL
       WHERE wu.workspace_id = ? AND wu.status = 'active' AND wu.deleted_at IS NULL
         AND lower(p.email) = lower(?)`,
-    [ctx.workspace.id, trimmed7]
+    [ctx.workspace.id, trimmed9]
   );
   if (byEmail) return byEmail.id;
   throw new ServiceError(ASSIGNEE_NOT_MEMBER, "validation_error");
@@ -136121,13 +136819,20 @@ async function attachSession({
         [externalSessionId2, nowIso(), existing.id]
       );
     }
-    await linkExecutionRequestToSession({
+    const linked = await linkExecutionRequestToSession({
       ctx,
       missionId: context.mission.id,
       objectiveId: existing.objective_id,
       sessionId: existing.id,
       executionRequestId: executionRequestId ?? null
     });
+    if (linked) {
+      await bindProviderSessionAgentSession({
+        ctx,
+        executionRequestId: linked.id,
+        agentSessionId: existing.id
+      });
+    }
     const refreshedObjective2 = (await listObjectives({ ctx, missionId: context.mission.id })).find(
       (candidate) => candidate.id === existing.objective_id
     ) ?? context.objective;
@@ -136253,13 +136958,20 @@ async function attachSession({
       missionId: context.mission.id,
       objectiveId: objective.id
     });
-    await linkExecutionRequestToSession({
+    const linked = await linkExecutionRequestToSession({
       ctx: txCtx,
       missionId: context.mission.id,
       objectiveId: objective.id,
       sessionId,
       executionRequestId: executionRequestId ?? null
     });
+    if (linked) {
+      await bindProviderSessionAgentSession({
+        ctx: txCtx,
+        executionRequestId: linked.id,
+        agentSessionId: sessionId
+      });
+    }
   });
   const resolvedChannelId = sessionChannelId ?? await findBindableChannelForMission({
     ctx,
@@ -136798,8 +137510,8 @@ async function askQuestion({
   sessionKey,
   question
 }) {
-  const trimmed7 = question.trim();
-  if (!trimmed7) {
+  const trimmed9 = question.trim();
+  if (!trimmed9) {
     throw new ServiceError("Question is required", "validation_error");
   }
   const mission = await resolveMissionId(ctx, missionId);
@@ -136823,7 +137535,7 @@ async function askQuestion({
         mission.id,
         session.objective_id,
         session.id,
-        trimmed7,
+        trimmed9,
         ctx.source,
         ctx.actorWorkspaceUserId,
         now2
@@ -138292,11 +139004,11 @@ var DEFAULT_LAUNCH_SESSION_DEFAULTS2 = {
   openViewerOnLaunch: DEFAULT_OPEN_VIEWER_ON_LAUNCH2
 };
 var LAUNCH_SESSION_METADATA_KEY2 = "launchSession";
-function trimmed6(value) {
+function trimmed8(value) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 function viewerKindForLauncher2(launcher) {
-  const value = trimmed6(launcher);
+  const value = trimmed8(launcher);
   if (!value)
     return "inline";
   const lowered = value.toLowerCase();
@@ -138310,10 +139022,10 @@ function normalizeExecutionProvider2(value) {
   if (!value || typeof value !== "object" || Array.isArray(value))
     return null;
   const cast = value;
-  const kind = trimmed6(cast.kind)?.toLowerCase() === "latch" ? "latch" : "direct";
+  const kind = trimmed8(cast.kind)?.toLowerCase() === "latch" ? "latch" : "direct";
   return {
     kind,
-    executable: trimmed6(cast.executable) ?? DEFAULT_LATCH_EXECUTABLE2
+    executable: trimmed8(cast.executable) ?? DEFAULT_LATCH_EXECUTABLE2
   };
 }
 function resolveLaunchSession2({ profile, defaults: defaults2 = DEFAULT_LAUNCH_SESSION_DEFAULTS2 }) {
@@ -138342,21 +139054,21 @@ function launchSessionSnapshotFromMetadata2(metadata) {
   if (cast.version !== TERMINAL_PROFILE_VERSION2)
     return null;
   const viewer = cast.viewer && typeof cast.viewer === "object" && !Array.isArray(cast.viewer) ? cast.viewer : null;
-  const launcher = trimmed6(viewer?.launcher);
-  const source = (value) => trimmed6(value) === "target" ? "target" : "user_default";
+  const launcher = trimmed8(viewer?.launcher);
+  const source = (value) => trimmed8(value) === "target" ? "target" : "user_default";
   return {
     version: TERMINAL_PROFILE_VERSION2,
     executionProvider: normalizeExecutionProvider2(cast.executionProvider) ?? {
       ...DEFAULT_EXECUTION_PROVIDER2
     },
     viewer: {
-      kind: trimmed6(viewer?.kind) ? trimmed6(viewer?.kind) : viewerKindForLauncher2(launcher),
+      kind: trimmed8(viewer?.kind) ? trimmed8(viewer?.kind) : viewerKindForLauncher2(launcher),
       launcher,
       openOnLaunch: viewer?.openOnLaunch !== false
     },
     executionProviderSource: source(cast.executionProviderSource),
     viewerOpenSource: source(cast.viewerOpenSource),
-    resolvedAt: trimmed6(cast.resolvedAt) ?? ""
+    resolvedAt: trimmed8(cast.resolvedAt) ?? ""
   };
 }
 
@@ -138944,10 +139656,65 @@ async function listMissionTerminalSessions(missionId) {
         executable: snapshot?.executionProvider.executable ?? "latch",
         viewerKind: snapshot?.viewer.kind ?? "iterm",
         createdAt: providerSession.createdAt,
-        lastObservedState: terminalSessionState(providerSession.lastObservedState)
+        lastObservedState: terminalSessionState(providerSession.lastObservedState),
+        observation: providerSession.observation ? {
+          cursor: providerSession.observation.cursor,
+          lastEventAt: providerSession.observation.lastEventAt,
+          turnCount: providerSession.observation.turnCount,
+          pendingInput: providerSession.observation.pendingInput,
+          unattached: providerSession.observation.unattached
+        } : null
       }
     ];
   });
+}
+async function ingestMissionHarnessEvents(missionRef, body) {
+  const scope = await requireMissionPermission({
+    missionRef,
+    permission: PERMISSIONS.SESSION_READ
+  });
+  const ctx = await buildWebappServiceContextForWorkspace(
+    scope.workspaceId,
+    requireDatabaseClient(),
+    scope.workspaceUserId
+  );
+  const payload = body && typeof body === "object" && !Array.isArray(body) ? body : {};
+  const providerSessionId = typeof payload.providerSessionId === "string" ? payload.providerSessionId : "";
+  const executionRequestId = typeof payload.executionRequestId === "string" ? payload.executionRequestId : null;
+  const events = Array.isArray(payload.events) ? payload.events : [];
+  const from = typeof payload.from === "number" ? payload.from : 0;
+  return ingestLatchHarnessEvents({
+    ctx,
+    missionId: scope.missionId,
+    executionRequestId,
+    providerSessionId,
+    events,
+    from
+  });
+}
+async function resolveMissionLatchObservation(missionRef, body) {
+  const scope = await requireMissionPermission({
+    missionRef,
+    permission: PERMISSIONS.SESSION_ATTACH
+  });
+  const ctx = await buildWebappServiceContextForWorkspace(
+    scope.workspaceId,
+    requireDatabaseClient(),
+    scope.workspaceUserId
+  );
+  const payload = body && typeof body === "object" && !Array.isArray(body) ? body : {};
+  const providerSessionId = typeof payload.providerSessionId === "string" ? payload.providerSessionId : "";
+  const requestId = typeof payload.requestId === "string" ? payload.requestId : "";
+  if (!providerSessionId.trim() || !requestId.trim()) {
+    throw new ApiError(400, "providerSessionId and requestId are required");
+  }
+  const observation = await clearLatchPendingInput({
+    ctx,
+    missionId: scope.missionId,
+    providerSessionId,
+    requestId
+  });
+  return { observation };
 }
 var LAUNCHABLE_STATES = ["draft", "submitted", "launching"];
 var ACTIVE_SIBLING_OBJECTIVE_STATES = ["launching", "executing", "pending_delivery"];
@@ -139331,8 +140098,8 @@ var PUBLIC_BACKEND_URL_ENV_KEYS = [
   "OVERLORD_BACKEND_URL"
 ];
 function normalizeOriginUrl(value) {
-  const trimmed7 = value.trim().replace(/\/+$/, "");
-  const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed7) ? trimmed7 : `http://${trimmed7}`;
+  const trimmed9 = value.trim().replace(/\/+$/, "");
+  const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed9) ? trimmed9 : `http://${trimmed9}`;
   return new URL(withScheme).origin;
 }
 function readConfiguredPublicBackendUrls() {
@@ -140349,10 +141116,10 @@ async function updateOrganization(id, body) {
     const changed = [];
     let name = existing.name;
     if (body.name !== void 0) {
-      const trimmed7 = body.name.trim();
-      if (!trimmed7) throw new ApiError(400, "Organization name cannot be empty");
-      if (trimmed7 !== existing.name) changed.push("name");
-      name = trimmed7;
+      const trimmed9 = body.name.trim();
+      if (!trimmed9) throw new ApiError(400, "Organization name cannot be empty");
+      if (trimmed9 !== existing.name) changed.push("name");
+      name = trimmed9;
     }
     if (body.logoUrl !== void 0) {
       const logoUrl = body.logoUrl?.trim() || null;
@@ -140892,12 +141659,12 @@ async function resolveResourceExecutionTargetId(db, workspaceId, executionTarget
     }
   }
   if (executionTargetId === null) return null;
-  const trimmed7 = executionTargetId.trim();
-  if (!trimmed7) return null;
-  if (!await executionTargetBelongsToWorkspace(db, trimmed7, workspaceId)) {
+  const trimmed9 = executionTargetId.trim();
+  if (!trimmed9) return null;
+  if (!await executionTargetBelongsToWorkspace(db, trimmed9, workspaceId)) {
     throw new ApiError(404, "Execution target not found");
   }
-  return trimmed7;
+  return trimmed9;
 }
 async function getProjectResourceRow(db, projectId, resourceId, permission = PERMISSIONS.PROJECT_READ) {
   await getProject2(projectId, db, permission);
@@ -142015,8 +142782,8 @@ async function listProjectTags(projectId) {
 }
 function normalizeTagColor(color) {
   if (color === null || color === void 0) return null;
-  const trimmed7 = color.trim();
-  return trimmed7.length > 0 ? trimmed7 : null;
+  const trimmed9 = color.trim();
+  return trimmed9.length > 0 ? trimmed9 : null;
 }
 async function createProjectTag(projectId, body) {
   return requireDatabaseClient().transaction(async (tx) => {
@@ -142662,8 +143429,8 @@ async function getProjectRepository(projectId, executionTargetId, resourceKey = 
 }
 var hexColorPattern = /^#?[0-9a-fA-F]{6}$/;
 function normalizeHexColor(value) {
-  const trimmed7 = value.trim();
-  const withHash = trimmed7.startsWith("#") ? trimmed7 : `#${trimmed7}`;
+  const trimmed9 = value.trim();
+  const withHash = trimmed9.startsWith("#") ? trimmed9 : `#${trimmed9}`;
   return hexColorPattern.test(withHash) ? withHash.toLowerCase() : null;
 }
 async function createProject2(body) {
@@ -144265,12 +145032,12 @@ async function generateMissionTitle(missionRef) {
 }
 async function resolveAssignedWorkspaceUserId(db, workspaceId, value) {
   if (value === null || value === void 0) return null;
-  const trimmed7 = value.trim();
-  if (!trimmed7) return null;
+  const trimmed9 = value.trim();
+  if (!trimmed9) return null;
   const member2 = await db.get(
     `SELECT id FROM workspace_users
         WHERE id = ? AND workspace_id = ? AND status = 'active' AND deleted_at IS NULL`,
-    [trimmed7, workspaceId]
+    [trimmed9, workspaceId]
   );
   if (!member2) throw new ApiError(400, "Assignee is not a member of this workspace");
   return member2.id;
@@ -145746,7 +146513,7 @@ async function updateObjectiveTx(id, body) {
     };
   });
 }
-async function updateObjective(id, body) {
+async function updateObjective2(id, body) {
   const { objective, regenerateTitle } = await updateObjectiveTx(id, body);
   if (regenerateTitle) {
     scheduleObjectiveTitleGeneration({
@@ -145856,13 +146623,13 @@ function mergeProfileMetadataJson2({
   if (avatarUrl) parsed.avatarUrl = avatarUrl;
   else if (avatarUrl !== void 0) delete parsed.avatarUrl;
   if (agentInstructions !== void 0) {
-    const trimmed7 = agentInstructions?.trim() ?? "";
-    if (trimmed7) parsed.agentInstructions = trimmed7;
+    const trimmed9 = agentInstructions?.trim() ?? "";
+    if (trimmed9) parsed.agentInstructions = trimmed9;
     else delete parsed.agentInstructions;
   }
   if (editorScheme !== void 0) {
-    const trimmed7 = editorScheme?.trim() ?? "";
-    if (trimmed7) parsed.editorScheme = trimmed7;
+    const trimmed9 = editorScheme?.trim() ?? "";
+    if (trimmed9) parsed.editorScheme = trimmed9;
     else delete parsed.editorScheme;
   }
   return JSON.stringify(parsed);
@@ -146365,7 +147132,7 @@ init_dist();
 var import_node_crypto16 = require("node:crypto");
 
 // sql-studio/sql-studio.ts
-var import_node_child_process7 = require("node:child_process");
+var import_node_child_process9 = require("node:child_process");
 var import_node_fs17 = require("node:fs");
 var import_node_path27 = __toESM(require("node:path"), 1);
 function publicHost(host) {
@@ -146407,7 +147174,7 @@ function startSqlStudio(config4) {
     "sqlite",
     config4.databasePath
   ];
-  const launched = (0, import_node_child_process7.spawn)(binary2, args, {
+  const launched = (0, import_node_child_process9.spawn)(binary2, args, {
     stdio: ["ignore", "pipe", "pipe"]
   });
   let child = launched;
@@ -153306,6 +154073,32 @@ function boolFlag(body, name) {
   const value = flagsOf(body)[name];
   return value === true || value === "true";
 }
+function optionalBoolFlag({
+  body,
+  name,
+  negatedName
+}) {
+  if (boolFlag(body, negatedName)) return false;
+  const value = flagsOf(body)[name];
+  if (value === void 0) return void 0;
+  if (value === true || value === "true") return true;
+  if (value === false || value === "false") return false;
+  throw new ApiError(400, `${name} must be true or false`);
+}
+function optionalAutoAdvanceFlag(body) {
+  return optionalBoolFlag({
+    body,
+    name: "--auto-advance",
+    negatedName: "--no-auto-advance"
+  });
+}
+function withDefaultAutoAdvance(items, autoAdvance) {
+  if (autoAdvance === void 0) return items;
+  return items.map((item) => ({
+    ...item,
+    autoAdvance: item.autoAdvance ?? autoAdvance
+  }));
+}
 async function resolveSessionId(body) {
   const sessionKey = strFlag(body, "--session-key");
   if (!sessionKey) return null;
@@ -153427,19 +154220,23 @@ function objectiveText(body) {
 }
 function objectiveInputs(body) {
   const parsed = parseJsonInput(body, "--objectives-json", "--objectives-file") ?? null;
+  const autoAdvance = optionalAutoAdvanceFlag(body);
   if (parsed) {
     if (!Array.isArray(parsed)) {
       throw new ApiError(400, "objectives-json must be an array");
     }
-    return parsed;
+    return withDefaultAutoAdvance(parsed, autoAdvance);
   }
   const resourceKey = strFlag(body, "--resource");
-  return [
-    {
-      objective: objectiveText(body),
-      ...resourceKey ? { resourceKey } : {}
-    }
-  ];
+  return withDefaultAutoAdvance(
+    [
+      {
+        objective: objectiveText(body),
+        ...resourceKey ? { resourceKey } : {}
+      }
+    ],
+    autoAdvance
+  );
 }
 async function resolveParentlessWorkspace(body, selectionMessage) {
   const memberships = await callerWorkspaceMemberships();
@@ -153708,8 +154505,22 @@ var handlers = {
   "add-objectives": async (ctx, body) => addObjectivesToMission({
     ctx: await withAgentOrigin({ ctx, body }),
     missionId: requireFlag(body, "--mission-id"),
-    objectives: parseJsonInput(body, "--objectives-json", "--objectives-file") ?? []
+    objectives: withDefaultAutoAdvance(
+      parseJsonInput(body, "--objectives-json", "--objectives-file") ?? [],
+      optionalAutoAdvanceFlag(body)
+    )
   }),
+  "update-objective": async (ctx, body) => {
+    const autoAdvance = optionalAutoAdvanceFlag(body);
+    if (autoAdvance === void 0) {
+      throw new ApiError(400, "Provide --auto-advance or --no-auto-advance");
+    }
+    return updateObjective({
+      ctx,
+      objectiveId: requireFlag(body, "--objective-id"),
+      autoAdvance
+    });
+  },
   "record-work": async (ctx, body) => {
     const envelope = parseDeliveryPayloadEnvelope(body);
     const {
@@ -153873,6 +154684,7 @@ var SUBCOMMAND_PERMISSIONS = {
   "search-missions": PERMISSIONS.MISSION_READ,
   "discuss-objective": PERMISSIONS.OBJECTIVE_SUBMIT,
   "add-objectives": PERMISSIONS.OBJECTIVE_UPDATE,
+  "update-objective": PERMISSIONS.OBJECTIVE_UPDATE,
   "record-work": PERMISSIONS.MISSION_CREATE,
   "read-context": PERMISSIONS.MISSION_READ,
   "write-context": PERMISSIONS.MISSION_UPDATE,
@@ -153914,6 +154726,10 @@ var stringProperty = (description) => ({
   type: "string",
   description
 });
+var booleanProperty = (description) => ({
+  type: "boolean",
+  description
+});
 var protocolOutputSchema = (description) => ({
   type: "object",
   description,
@@ -153931,7 +154747,7 @@ var hostedMcpToolDefinitions = [
   {
     name: "overlord_resolve_project",
     title: "Resolve Overlord project",
-    description: "Use this when the user identifies an Overlord project by id, slug, name, or exposed repository metadata.",
+    description: "Use this when the user identifies an Overlord project by id, slug, name, or exposed repository metadata. When resolving from .overlord/project.json, the result is the isPrimary project if the checkout is linked to more than one project; linkedProjects lists every linked project.",
     inputSchema: objectSchema({
       projectId: stringProperty("Explicit Overlord project id, slug, or project name."),
       directory: stringProperty(
@@ -153991,6 +154807,9 @@ var hostedMcpToolDefinitions = [
         resourceKey: stringProperty("Optional logical project resource key for the objective."),
         assignedTo: stringProperty(
           "Optional workspace member to own the mission (workspace_users.id, profile UUID, orgid:username, bare username, or email). Rejected when the member is not in the workspace; meaningless on the inbox fallback."
+        ),
+        autoAdvance: booleanProperty(
+          "When true, Overlord queues the next objective for execution after this one is delivered. Defaults to false."
         )
       },
       ["objective"]
@@ -154040,17 +154859,36 @@ var hostedMcpToolDefinitions = [
         missionId: stringProperty("Mission UUID or workspace display id."),
         objectives: {
           type: "array",
-          description: "Objective objects with objective text and optional title/resourceKey.",
+          description: "Objective objects with objective text and optional title, resourceKey, and autoAdvance.",
           items: objectSchema({
             objective: stringProperty("Objective text."),
             title: stringProperty("Optional objective title."),
-            resourceKey: stringProperty("Optional logical project resource key.")
+            resourceKey: stringProperty("Optional logical project resource key."),
+            autoAdvance: booleanProperty(
+              "When true, Overlord queues the next objective for execution after this one is delivered. Defaults to false."
+            )
           })
         }
       },
       ["missionId", "objectives"]
     ),
     outputSchema: protocolOutputSchema("The mission with the appended draft objectives."),
+    annotations: writeAction
+  },
+  {
+    name: "overlord_update_objective",
+    title: "Update objective auto-advance",
+    description: "Use this to turn auto-advance on or off for an existing objective so delivery can queue the next one.",
+    inputSchema: objectSchema(
+      {
+        objectiveId: stringProperty("Objective UUID."),
+        autoAdvance: booleanProperty(
+          "When true, Overlord queues the next objective after this one is delivered. When false, delivery waits for approval."
+        )
+      },
+      ["objectiveId", "autoAdvance"]
+    ),
+    outputSchema: protocolOutputSchema("The updated objective, including autoAdvance."),
     annotations: writeAction
   },
   {
@@ -154349,6 +155187,11 @@ function requiredString(args, name) {
   if (!value) throw new Error(`Missing required argument: ${name}`);
   return value;
 }
+function autoAdvanceFlags(args) {
+  if (args.autoAdvance === true) return { "--auto-advance": true };
+  if (args.autoAdvance === false) return { "--no-auto-advance": true };
+  return {};
+}
 function protocolBody(flags) {
   return { flags };
 }
@@ -154404,7 +155247,8 @@ var toolHandlers = {
       "--objective": requiredString(args, "objective"),
       ...optionalString(args, "title") ? { "--title": requiredString(args, "title") } : {},
       ...optionalString(args, "resourceKey") ? { "--resource": requiredString(args, "resourceKey") } : {},
-      ...optionalString(args, "assignedTo") ? { "--assigned-to": requiredString(args, "assignedTo") } : {}
+      ...optionalString(args, "assignedTo") ? { "--assigned-to": requiredString(args, "assignedTo") } : {},
+      ...autoAdvanceFlags(args)
     })
   ),
   overlord_create_inbox_item: (args) => runProtocolSubcommand(
@@ -154427,9 +155271,24 @@ var toolHandlers = {
       throw new Error("objectives must be an array");
     }
     return runProtocolSubcommand("add-objectives", {
-      flags: { "--mission-id": requiredString(args, "missionId"), "--objectives-file": true },
+      flags: {
+        "--mission-id": requiredString(args, "missionId"),
+        "--objectives-file": true
+      },
       fileInputs: { "--objectives-file": JSON.stringify(args.objectives) }
     });
+  },
+  overlord_update_objective: (args) => {
+    if (typeof args.autoAdvance !== "boolean") {
+      throw new Error("autoAdvance must be a boolean");
+    }
+    return runProtocolSubcommand(
+      "update-objective",
+      protocolBody({
+        "--objective-id": requiredString(args, "objectiveId"),
+        ...autoAdvanceFlags(args)
+      })
+    );
   },
   overlord_attach_session: (args) => runProtocolSubcommand(
     "attach",
@@ -155056,8 +155915,8 @@ function runnerRegistrationFromBody(value) {
   const text = (key) => {
     const raw = body[key];
     if (typeof raw !== "string") return null;
-    const trimmed7 = raw.trim();
-    return trimmed7.length > 0 ? trimmed7 : null;
+    const trimmed9 = raw.trim();
+    return trimmed9.length > 0 ? trimmed9 : null;
   };
   const relation = text("runnerRelation");
   const capabilities = body.capabilities && typeof body.capabilities === "object" && !Array.isArray(body.capabilities) ? body.capabilities : null;
@@ -155309,48 +156168,32 @@ async function updateRunnerRequestStatus({
 }) {
   const ctx = await requestRunnerContext(requestId);
   const request = status === "launching" ? await markExecutionLaunching({ ctx, requestId }) : status === "launched" ? await markExecutionLaunched({ ctx, requestId, providerSession }) : await markExecutionFailed({ ctx, requestId, error: error53 ?? "Launch failed" });
-  if (status === "launching") {
-    const bootstrap = await prepareSessionChannelForRequest({ ctx, request });
-    return { ...serviceSummaryToDto(request), sessionChannel: bootstrap };
-  }
   return serviceSummaryToDto(request);
 }
 function providerSessionFromLaunchedBody(body) {
   if (!body || typeof body !== "object" || Array.isArray(body)) return null;
   return parseExecutionProviderSession(body.providerSession);
 }
-async function prepareSessionChannelForRequest({
-  ctx,
-  request
+async function ingestRunnerHarnessEvents({
+  requestId,
+  body
 }) {
-  try {
-    const existing = await ctx.db.get(
-      `SELECT id FROM agent_session_channels
-         WHERE execution_request_id = ? AND deleted_at IS NULL
-           AND state IN ('preparing', 'online', 'degraded')`,
-      [request.id]
-    );
-    if (existing) return null;
-    const { bootstrap } = await createSessionChannel({
-      ctx,
-      missionId: request.missionId,
-      objectiveId: request.objectiveId ?? null,
-      projectId: request.projectId ?? null,
-      executionRequestId: request.id,
-      executionTargetId: request.executionTargetId ?? null,
-      agentIdentifier: request.requestedAgent ?? null,
-      adapterKey: request.requestedAgent ?? null,
-      launchKind: "queued"
-    });
-    return {
-      channelId: bootstrap.channelId,
-      token: bootstrap.token,
-      expiresAt: bootstrap.expiresAt,
-      launchKind: bootstrap.launchKind
-    };
-  } catch {
-    return null;
-  }
+  const ctx = await requestRunnerContext(requestId);
+  const request = await getExecutionRequest({ ctx, id: requestId });
+  const payload = body && typeof body === "object" && !Array.isArray(body) ? body : {};
+  const mapped = providerSessionFromMetadata(request.metadata);
+  const providerSessionId = typeof payload.providerSessionId === "string" && payload.providerSessionId.trim() ? payload.providerSessionId.trim() : mapped?.providerSessionId ?? "";
+  const events = Array.isArray(payload.events) ? payload.events : [];
+  const from = typeof payload.from === "number" ? payload.from : 0;
+  const result = await ingestLatchHarnessEvents({
+    ctx,
+    missionId: request.missionId,
+    executionRequestId: request.id,
+    providerSessionId,
+    events,
+    from
+  });
+  return result;
 }
 async function completeRunnerMutationRequest({
   requestId,
@@ -157141,8 +157984,8 @@ function resolveAllowedBrowserOrigins({
   const extraOrigins = process.env.OVERLORD_WEB_ORIGINS?.trim();
   if (extraOrigins) {
     for (const origin of extraOrigins.split(",")) {
-      const trimmed7 = origin.trim();
-      if (trimmed7) origins.add(trimmed7);
+      const trimmed9 = origin.trim();
+      if (trimmed9) origins.add(trimmed9);
     }
   }
   return [...origins];
@@ -157199,9 +158042,9 @@ var MAX_EVENT_PAYLOAD_BYTES = 8 * 1024;
 var MAX_EVENT_IDENTIFIER_LENGTH = 200;
 function boundedText(value, max) {
   if (typeof value !== "string") return null;
-  const trimmed7 = value.trim();
-  if (trimmed7 === "") return null;
-  return trimmed7.length <= max ? trimmed7 : `${trimmed7.slice(0, max - 1)}\u2026`;
+  const trimmed9 = value.trim();
+  if (trimmed9 === "") return null;
+  return trimmed9.length <= max ? trimmed9 : `${trimmed9.slice(0, max - 1)}\u2026`;
 }
 function requiredIdentifier(value, field) {
   const bounded2 = boundedText(value, MAX_EVENT_IDENTIFIER_LENGTH);
@@ -157338,7 +158181,6 @@ function describeDeliveryOutcome({
 
 // ../packages/core/service/agent-session/inputs.ts
 var INPUT_LEASE_SECONDS = 60;
-var MAX_INPUT_BODY_LENGTH = 16e3;
 var INPUT_COLUMNS = `
   id, workspace_id, project_id, mission_id, objective_id, channel_id, session_id,
   kind, body, idempotency_key, created_by_workspace_user_id, status,
@@ -157377,83 +158219,6 @@ async function listSessionInputs({
     ...row,
     delivery_outcome: normalizeDeliveryOutcome(row.delivery_outcome)
   }));
-}
-async function enqueueSessionInput({
-  ctx,
-  channel,
-  kind,
-  body,
-  idempotencyKey = null
-}) {
-  if (!channel.session_id) {
-    throw new ServiceError(
-      "This channel has no attached session to address",
-      "input_session_required",
-      409
-    );
-  }
-  if (channel.state === "ended" || channel.state === "lost") {
-    throw new ServiceError(
-      "This session channel has ended; queued input would never be delivered",
-      "input_channel_not_live",
-      409
-    );
-  }
-  const trimmed7 = body.trim();
-  if (!trimmed7) throw new ServiceError("Input body is required", "invalid_input", 400);
-  if (trimmed7.length > MAX_INPUT_BODY_LENGTH) {
-    throw new ServiceError(
-      `Input body exceeds ${MAX_INPUT_BODY_LENGTH} characters`,
-      "input_too_large",
-      413
-    );
-  }
-  if (idempotencyKey) {
-    const existing = await ctx.db.get(
-      `SELECT ${INPUT_COLUMNS} FROM agent_session_inputs
-         WHERE session_id = ? AND idempotency_key = ? AND deleted_at IS NULL`,
-      [channel.session_id, idempotencyKey]
-    );
-    if (existing) return existing;
-  }
-  const now2 = nowIso();
-  const id = newId();
-  await ctx.db.transaction(async (tx) => {
-    const txCtx = { ...ctx, db: tx };
-    await tx.run(
-      `INSERT INTO agent_session_inputs (
-           id, workspace_id, project_id, mission_id, objective_id, channel_id, session_id,
-           kind, body, idempotency_key, created_by_workspace_user_id, status,
-           attempt_count, created_at, updated_at, revision
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', 0, ?, ?, 1)`,
-      [
-        id,
-        channel.workspace_id,
-        channel.project_id,
-        channel.mission_id,
-        channel.objective_id,
-        channel.id,
-        channel.session_id,
-        kind,
-        trimmed7,
-        idempotencyKey,
-        ctx.actorWorkspaceUserId,
-        now2,
-        now2
-      ]
-    );
-    await recordChange({
-      ctx: txCtx,
-      entityType: "agent_session_input",
-      entityId: id,
-      operation: "insert",
-      entityRevision: 1,
-      projectId: channel.project_id,
-      missionId: channel.mission_id,
-      objectiveId: channel.objective_id
-    });
-  });
-  return await getInput({ ctx, inputId: id });
 }
 async function leaseNextInput({
   ctx,
@@ -157542,19 +158307,6 @@ async function markInputFailed({
   );
   return { failed: updated.changes > 0 };
 }
-async function cancelSessionInput({
-  ctx,
-  inputId
-}) {
-  const now2 = nowIso();
-  const updated = await ctx.db.run(
-    `UPDATE agent_session_inputs
-        SET status = 'cancelled', updated_at = ?, revision = revision + 1
-      WHERE id = ? AND workspace_id = ? AND status = 'queued'`,
-    [now2, inputId, ctx.workspace.id]
-  );
-  return { cancelled: updated.changes > 0 };
-}
 
 // ../packages/core/service/agent-session/requests.ts
 init_change_feed();
@@ -157578,9 +158330,9 @@ var REQUEST_COLUMNS = `
   created_at, updated_at, revision
 `;
 function boundedSummary(value) {
-  const trimmed7 = value.trim();
-  if (!trimmed7) throw new ServiceError("Request summary is required", "invalid_request", 400);
-  return trimmed7.length <= MAX_REQUEST_SUMMARY_LENGTH ? trimmed7 : `${trimmed7.slice(0, MAX_REQUEST_SUMMARY_LENGTH - 1)}\u2026`;
+  const trimmed9 = value.trim();
+  if (!trimmed9) throw new ServiceError("Request summary is required", "invalid_request", 400);
+  return trimmed9.length <= MAX_REQUEST_SUMMARY_LENGTH ? trimmed9 : `${trimmed9.slice(0, MAX_REQUEST_SUMMARY_LENGTH - 1)}\u2026`;
 }
 function boundedOptions(options) {
   if (!options || options.length === 0) return "[]";
@@ -157758,56 +158510,6 @@ async function markRequestResolvedElsewhere({
       return { changed: false, request: result.request };
     }
   );
-}
-async function resolveRequest({
-  ctx,
-  requestId,
-  resolution,
-  expectedRevision: expectedRevision2
-}) {
-  const existing = await getRequest2({ ctx, requestId });
-  if (expectedRevision2 !== void 0 && expectedRevision2 !== existing.revision) {
-    throw new ServiceError("Request changed since it was read", "agent_request_conflict", 409);
-  }
-  if (!ctx.actorWorkspaceUserId) {
-    throw new ServiceError(
-      "A request resolution requires an identified human actor",
-      "resolver_required",
-      403
-    );
-  }
-  const now2 = nowIso();
-  const updated = await ctx.db.run(
-    `UPDATE agent_requests
-        SET status = 'resolved', resolution_json = ?, resolved_by_workspace_user_id = ?,
-            resolved_at = ?, waiter_lease_id = NULL, waiter_lease_expires_at = NULL,
-            updated_at = ?, revision = ?
-      WHERE id = ? AND status = 'open' AND revision = ?`,
-    [
-      JSON.stringify(resolution),
-      ctx.actorWorkspaceUserId,
-      now2,
-      now2,
-      existing.revision + 1,
-      requestId,
-      existing.revision
-    ]
-  );
-  if (updated.changes === 0) {
-    return { resolved: false, request: await getRequest2({ ctx, requestId }) };
-  }
-  await recordChange({
-    ctx,
-    entityType: "agent_request",
-    entityId: requestId,
-    operation: "update",
-    entityRevision: existing.revision + 1,
-    projectId: existing.project_id,
-    missionId: existing.mission_id,
-    objectiveId: existing.objective_id,
-    changedFields: ["status", "resolution_json", "resolved_by_workspace_user_id"]
-  });
-  return { resolved: true, request: await getRequest2({ ctx, requestId }) };
 }
 async function recordRequestApplication({
   ctx,
@@ -158235,6 +158937,7 @@ async function missionScopedRequests(client, missionRef) {
   const rows = await client.all(
     `SELECT ${REQUEST_COLUMNS_FOR_ROUTE} FROM agent_requests
       WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL
+        AND status <> 'open'
       ORDER BY created_at DESC LIMIT 200`,
     [mission.id, mission.workspace_id]
   );
@@ -158270,6 +158973,7 @@ function createAgentRequestHumanRouter() {
       const rows = await client.all(
         `SELECT ${REQUEST_COLUMNS_FOR_ROUTE} FROM agent_requests
           WHERE workspace_id IN (${placeholders}) AND deleted_at IS NULL
+            AND status <> 'open'
           ORDER BY created_at DESC LIMIT 200`,
         authorized.map((entry) => entry.workspaceId)
       );
@@ -158278,64 +158982,11 @@ function createAgentRequestHumanRouter() {
   );
   router2.post(
     "/:id/resolve",
-    handle2(async (req) => {
-      const client = requireDatabaseClient();
-      const row = await client.get(
-        `SELECT workspace_id FROM agent_requests WHERE id = ? AND deleted_at IS NULL`,
-        [req.params.id]
-      );
-      if (!row) throw new ServiceError("Request not found", "request_not_found", 404);
-      const workspaceUserId = await requireWorkspacePermission({
-        workspaceId: row.workspace_id,
-        permission: PERMISSIONS.SESSION_ATTACH,
-        db: client,
-        notFoundMessage: "Request not found"
-      });
-      const ctx = await buildWebappServiceContextForWorkspace(
-        row.workspace_id,
-        client,
-        workspaceUserId
-      );
-      const body = asRecord(req.body);
-      if (typeof body.expectedRevision !== "number") {
-        throw new ServiceError("expectedRevision is required", "agent_request_conflict", 409);
-      }
-      const result = await resolveRequest({
-        ctx,
-        requestId: req.params.id,
-        resolution: body.resolution ? asRecord(body.resolution) : {},
-        expectedRevision: body.expectedRevision
-      });
-      return { resolved: result.resolved, request: requestDto(result.request) };
-    })
+    handle2(async () => sessionControlsGone())
   );
   router2.post(
     "/:id/release",
-    handle2(async (req) => {
-      const client = requireDatabaseClient();
-      const row = await client.get(
-        `SELECT workspace_id FROM agent_requests WHERE id = ? AND deleted_at IS NULL`,
-        [req.params.id]
-      );
-      if (!row) throw new ServiceError("Request not found", "request_not_found", 404);
-      const workspaceUserId = await requireWorkspacePermission({
-        workspaceId: row.workspace_id,
-        permission: PERMISSIONS.SESSION_ATTACH,
-        db: client,
-        notFoundMessage: "Request not found"
-      });
-      const ctx = await buildWebappServiceContextForWorkspace(
-        row.workspace_id,
-        client,
-        workspaceUserId
-      );
-      const result = await releaseRequestToTerminal({
-        ctx,
-        requestId: req.params.id,
-        reason: "policy"
-      });
-      return { released: result.released, request: requestDto(result.request) };
-    })
+    handle2(async () => sessionControlsGone())
   );
   return router2;
 }
@@ -158393,7 +159044,9 @@ function createAgentSessionInputHumanRouter() {
         client,
         workspaceUserId
       );
-      const inputs = await listSessionInputs({ ctx, missionId: mission.id });
+      const inputs = (await listSessionInputs({ ctx, missionId: mission.id })).filter(
+        (input) => input.status !== "queued" && input.status !== "leased"
+      );
       const channel = await client.get(
         `SELECT id, state, agent_identifier, adapter_key, capabilities_json,
                 last_heartbeat_at, ended_at, end_reason
@@ -158424,67 +159077,11 @@ function createAgentSessionInputHumanRouter() {
   );
   router2.post(
     "/",
-    handle2(async (req) => {
-      const body = asRecord(req.body);
-      const channelId = optionalString2(body.channelId);
-      const text = optionalString2(body.body);
-      const kind = body.kind === "retry" || body.kind === "continue" || body.kind === "instruction" ? body.kind : "instruction";
-      if (!channelId || !text) {
-        throw new ServiceError("channelId and body are required", "invalid_input", 400);
-      }
-      const client = requireDatabaseClient();
-      const channelRow = await client.get(
-        `SELECT workspace_id FROM agent_session_channels WHERE id = ? AND deleted_at IS NULL`,
-        [channelId]
-      );
-      if (!channelRow)
-        throw new ServiceError("Session channel not found", "channel_not_found", 404);
-      const workspaceUserId = await requireWorkspacePermission({
-        workspaceId: channelRow.workspace_id,
-        permission: PERMISSIONS.SESSION_ATTACH,
-        db: client,
-        notFoundMessage: "Session channel not found"
-      });
-      const ctx = await buildWebappServiceContextForWorkspace(
-        channelRow.workspace_id,
-        client,
-        workspaceUserId
-      );
-      const channel = await getChannel({ ctx, channelId });
-      const input = await enqueueSessionInput({
-        ctx,
-        channel,
-        kind,
-        body: text,
-        idempotencyKey: optionalString2(body.idempotencyKey)
-      });
-      return { input: inputDto(input) };
-    })
+    handle2(async () => sessionControlsGone())
   );
   router2.post(
     "/:id/cancel",
-    handle2(async (req) => {
-      const client = requireDatabaseClient();
-      const row = await client.get(
-        `SELECT workspace_id FROM agent_session_inputs WHERE id = ? AND deleted_at IS NULL`,
-        [req.params.id]
-      );
-      if (!row) throw new ServiceError("Session input not found", "input_not_found", 404);
-      const workspaceUserId = await requireWorkspacePermission({
-        workspaceId: row.workspace_id,
-        permission: PERMISSIONS.SESSION_ATTACH,
-        db: client,
-        notFoundMessage: "Session input not found"
-      });
-      const ctx = await buildWebappServiceContextForWorkspace(
-        row.workspace_id,
-        client,
-        workspaceUserId
-      );
-      const result = await cancelSessionInput({ ctx, inputId: req.params.id });
-      const input = await getInput({ ctx, inputId: req.params.id });
-      return { cancelled: result.cancelled, input: inputDto(input) };
-    })
+    handle2(async () => sessionControlsGone())
   );
   return router2;
 }
@@ -158497,48 +159094,15 @@ var REQUEST_COLUMNS_FOR_ROUTE = `
   created_at, updated_at, revision
 `;
 var AGENT_SESSION_CHANNEL_ROUTE_PREFIX = "/api/agent-session-channels/v1";
-async function prepareMissionSessionChannel(missionRef, body) {
-  const payload = asRecord(body);
-  const client = requireDatabaseClient();
-  const memberships = await callerWorkspaceMemberships(client);
-  if (memberships.length === 0) {
-    throw new ServiceError("Mission not found", "mission_not_found", 404);
-  }
-  const placeholders = memberships.map(() => "?").join(", ");
-  const mission = await client.get(
-    `SELECT id, project_id, workspace_id FROM missions
-       WHERE (id = ? OR display_id = ?) AND deleted_at IS NULL
-         AND workspace_id IN (${placeholders})`,
-    [missionRef, missionRef, ...memberships.map((entry) => entry.workspaceId)]
+async function prepareMissionSessionChannel(_missionRef, _body) {
+  sessionControlsGone();
+}
+function sessionControlsGone() {
+  throw new ServiceError(
+    "There are no active session-input controls. Harness permission and question prompts are presented from Latch observation.",
+    "session_controls_gone",
+    410
   );
-  if (!mission) throw new ServiceError("Mission not found", "mission_not_found", 404);
-  const workspaceUserId = await requireWorkspacePermission({
-    workspaceId: mission.workspace_id,
-    permission: PERMISSIONS.SESSION_ATTACH,
-    db: client,
-    notFoundMessage: "Mission not found"
-  });
-  const ctx = await buildWebappServiceContextForWorkspace(
-    mission.workspace_id,
-    client,
-    workspaceUserId
-  );
-  const { bootstrap } = await createSessionChannel({
-    ctx,
-    missionId: mission.id,
-    projectId: mission.project_id,
-    objectiveId: optionalString2(payload.objectiveId),
-    executionTargetId: optionalString2(payload.executionTargetId),
-    agentIdentifier: optionalString2(payload.agent),
-    adapterKey: optionalString2(payload.agent),
-    launchKind: "manual"
-  });
-  return {
-    channelId: bootstrap.channelId,
-    token: bootstrap.token,
-    expiresAt: bootstrap.expiresAt,
-    launchKind: bootstrap.launchKind
-  };
 }
 
 // auth.ts
@@ -159123,9 +159687,9 @@ function deriveDeterministicActionCandidates({
 }
 function clampText(value, maxLength) {
   if (typeof value !== "string") return null;
-  const trimmed7 = value.trim();
-  if (!trimmed7) return null;
-  return trimmed7.length > maxLength ? trimmed7.slice(0, maxLength) : trimmed7;
+  const trimmed9 = value.trim();
+  if (!trimmed9) return null;
+  return trimmed9.length > maxLength ? trimmed9.slice(0, maxLength) : trimmed9;
 }
 function clampStringList(value, maxItems = DELIVERY_REPORT_LIMITS.maxItems) {
   if (!Array.isArray(value)) return [];
@@ -163777,6 +164341,14 @@ app.post(
   "/api/missions/:id/session-channel",
   handle3((req) => prepareMissionSessionChannel(req.params.id, req.body ?? {}), { mutates: true })
 );
+app.post(
+  "/api/missions/:id/terminal-sessions/harness-events",
+  handle3((req) => ingestMissionHarnessEvents(req.params.id, req.body ?? {}), { mutates: true })
+);
+app.post(
+  "/api/missions/:id/terminal-sessions/resolve-observation",
+  handle3((req) => resolveMissionLatchObservation(req.params.id, req.body ?? {}), { mutates: true })
+);
 app.use("/api/agent-requests", createAgentRequestHumanRouter());
 app.use("/api/agent-session-inputs", createAgentSessionInputHumanRouter());
 app.get(
@@ -163842,7 +164414,7 @@ app.post(
 );
 app.patch(
   "/api/objectives/:id",
-  handle3((req) => updateObjective(req.params.id, req.body), { mutates: true })
+  handle3((req) => updateObjective2(req.params.id, req.body), { mutates: true })
 );
 app.delete(
   "/api/objectives/:id",
@@ -164056,6 +164628,12 @@ app.post(
       mutates: true
     }
   )
+);
+app.post(
+  "/api/runner/requests/:id/harness-events",
+  handle3((req) => ingestRunnerHarnessEvents({ requestId: req.params.id, body: req.body ?? {} }), {
+    mutates: true
+  })
 );
 app.post(
   "/api/runner/requests/:id/failed",

@@ -1,13 +1,17 @@
 {
   "fixtureVersion": 1,
   "kind": "source-guard",
-  "description": "Migration parity guard. The normalized agent-session event registration is ADDITIVE: the legacy PostToolUse hook that feeds touched-file change attribution, and the legacy UserPromptSubmit hook that posts follow-up mission events, must both remain registered alongside it. Deleting either to 'clean up' would silently break delivery attribution or follow-up capture, and neither failure is visible until someone tries to deliver.",
+  "description": "Channel 1 protocol hooks remain registered. Mechanical agent-session observe/decide/inject is no longer a live Overlord path.",
   "path": "connectors/adapters/claude/hooks/hooks.json",
   "assert": {
     "mustContain": [
       "scripts/post-tool-use-hook.sh",
-      "scripts/user-prompt-submit-hook.sh",
-      "scripts/agent-session-event.sh"
+      "scripts/user-prompt-submit-hook.sh"
+    ],
+    "mustNotContain": [
+      "scripts/agent-session-event.sh",
+      "scripts/agent-session-request.sh",
+      "scripts/agent-session-inbox.sh"
     ]
   }
 }

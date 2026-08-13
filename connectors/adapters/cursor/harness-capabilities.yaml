@@ -54,14 +54,12 @@ capabilities:
     native: beforeSubmitPrompt
     fixtures: [fixtures/normalize-before-submit-prompt.json]
   observe.toolCall:
-    status: supported
+    status: not-implemented
     native: preToolUse
-    fixtures: [fixtures/normalize-pre-tool-use-shell.json]
+    trackedAs: latch-engine
     notes: >-
-      preToolUse carries both an observational and a decision registration, rendered as two
-      different action scripts (`event` and `request`). The observational one cannot allow,
-      deny, or delay a call — the action is fixed at install time, so neither registration can
-      become the other.
+      Mechanical preToolUse observation moved to Latch `events`. Native Cursor permission
+      prompts own approvals when Latch is absent.
   observe.toolResult:
     status: supported
     native: postToolUse
@@ -87,21 +85,21 @@ capabilities:
       detail — so this stays unbuilt until a real payload is recorded, rather than being
       claimed on an assumed field name.
   decide.shell:
-    status: supported
+    status: not-implemented
     native: beforeShellExecution
-    fixtures: [fixtures/permission-request.json, fixtures/decision-codec.json]
+    trackedAs: latch-engine
   decide.mcp:
-    status: supported
+    status: not-implemented
     native: beforeMCPExecution
-    fixtures: [fixtures/permission-request.json, fixtures/decision-codec.json]
+    trackedAs: latch-engine
   decide.fileWrite:
     status: not-implemented
     native: preToolUse
     trackedAs: agent-session-phase-2
   decide.anyTool:
-    status: supported
+    status: not-implemented
     native: preToolUse
-    fixtures: [fixtures/permission-request.json, fixtures/decision-codec.json]
+    trackedAs: latch-engine
   decide.universal:
     status: unsupported
     reason: >-
@@ -129,10 +127,9 @@ capabilities:
     native: stop
     fixtures:
       - fixtures/inject-followup-message.json
-      - fixtures/stop-calls-inbox.json
     notes: >-
-      `stop` returns `followup_message`, a first-class continuation channel. It can only ever
-      report Queued(turn-boundary), never Delivered, and the UI must say so.
+      `stop` returns `followup_message` for the protocol delivery reminder. Session-input
+      injection is no longer a live Overlord path.
   inject.nextTurn:
     status: supported
     native: stop

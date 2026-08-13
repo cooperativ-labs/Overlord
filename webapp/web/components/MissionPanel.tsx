@@ -34,7 +34,6 @@ import { MissionMemberSelect } from './MissionMemberSelect.tsx';
 import { MissionNotes } from './MissionNotes.tsx';
 import { MissionPanelHeader } from './MissionPanelHeader.tsx';
 import { MissionProjectSelect } from './MissionProjectSelect.tsx';
-import { MissionSessionInputsSection } from './MissionSessionInputsSection.tsx';
 import { MissionSharedStateFooter } from './MissionSharedStateFooter.tsx';
 import { MissionStatusSelect } from './MissionStatusSelect.tsx';
 import { MissionTagSelect } from './MissionTagSelect.tsx';
@@ -318,6 +317,7 @@ export function MissionPanel({
           <Separator />
           <div className="flex flex-col gap-6 mt-8">
             <TerminalSessionsSection
+              missionId={mission.id}
               workspaceId={mission.workspaceId}
               sessions={mission.terminalSessions}
             />
@@ -332,12 +332,6 @@ export function MissionPanel({
                 Deliveries
               </h2>
               <MissionDeliveriesSection missionId={mission.id} objectives={mission.objectives} />
-            </div>
-            <div className="space-y-3">
-              <h2 className="text-xs font-semibold uppercase tracking-wide text-(--color-ink-dim)">
-                Session instructions
-              </h2>
-              <MissionSessionInputsSection missionId={mission.id} />
             </div>
             <div className="space-y-3">
               <div className="flex items-center justify-between">

@@ -27,6 +27,7 @@ import {
   recordWork,
   resumeFollowUp,
   searchMissions,
+  updateObjective,
   updateSession,
   writeSharedContext
 } from '../packages/core/service/protocol.ts';
@@ -195,6 +196,46 @@ function strFlag(body: ProtocolRequestBody, name: string): string | undefined {
 function boolFlag(body: ProtocolRequestBody, name: string): boolean {
   const value = flagsOf(body)[name];
   return value === true || value === 'true';
+}
+
+/**
+ * Optional tri-state boolean from `--flag` / `--no-flag` / `--flag true|false`.
+ * `--no-flag` wins when both are present.
+ */
+function optionalBoolFlag({
+  body,
+  name,
+  negatedName
+}: {
+  body: ProtocolRequestBody;
+  name: string;
+  negatedName: string;
+}): boolean | undefined {
+  if (boolFlag(body, negatedName)) return false;
+  const value = flagsOf(body)[name];
+  if (value === undefined) return undefined;
+  if (value === true || value === 'true') return true;
+  if (value === false || value === 'false') return false;
+  throw new ApiError(400, `${name} must be true or false`);
+}
+
+function optionalAutoAdvanceFlag(body: ProtocolRequestBody): boolean | undefined {
+  return optionalBoolFlag({
+    body,
+    name: '--auto-advance',
+    negatedName: '--no-auto-advance'
+  });
+}
+
+function withDefaultAutoAdvance(
+  items: ObjectiveInput[],
+  autoAdvance: boolean | undefined
+): ObjectiveInput[] {
+  if (autoAdvance === undefined) return items;
+  return items.map(item => ({
+    ...item,
+    autoAdvance: item.autoAdvance ?? autoAdvance
+  }));
 }
 
 /**
@@ -396,19 +437,23 @@ type ObjectiveInput = {
 function objectiveInputs(body: ProtocolRequestBody): ObjectiveInput[] {
   const parsed =
     parseJsonInput<ObjectiveInput[]>(body, '--objectives-json', '--objectives-file') ?? null;
+  const autoAdvance = optionalAutoAdvanceFlag(body);
   if (parsed) {
     if (!Array.isArray(parsed)) {
       throw new ApiError(400, 'objectives-json must be an array');
     }
-    return parsed;
+    return withDefaultAutoAdvance(parsed, autoAdvance);
   }
   const resourceKey = strFlag(body, '--resource');
-  return [
-    {
-      objective: objectiveText(body),
-      ...(resourceKey ? { resourceKey } : {})
-    }
-  ];
+  return withDefaultAutoAdvance(
+    [
+      {
+        objective: objectiveText(body),
+        ...(resourceKey ? { resourceKey } : {})
+      }
+    ],
+    autoAdvance
+  );
 }
 
 type ArtifactInput = {
@@ -771,11 +816,23 @@ const handlers: Record<string, Handler> = {
     addObjectivesToMission({
       ctx: await withAgentOrigin({ ctx, body }),
       missionId: requireFlag(body, '--mission-id'),
-      objectives:
-        parseJsonInput<
-          Array<{ objective: string; title?: string | null; resourceKey?: string | null }>
-        >(body, '--objectives-json', '--objectives-file') ?? []
+      objectives: withDefaultAutoAdvance(
+        parseJsonInput<ObjectiveInput[]>(body, '--objectives-json', '--objectives-file') ?? [],
+        optionalAutoAdvanceFlag(body)
+      )
     }),
+
+  'update-objective': async (ctx, body) => {
+    const autoAdvance = optionalAutoAdvanceFlag(body);
+    if (autoAdvance === undefined) {
+      throw new ApiError(400, 'Provide --auto-advance or --no-auto-advance');
+    }
+    return updateObjective({
+      ctx,
+      objectiveId: requireFlag(body, '--objective-id'),
+      autoAdvance
+    });
+  },
 
   'record-work': async (ctx, body) => {
     const envelope = parseDeliveryPayloadEnvelope(body);
@@ -968,6 +1025,7 @@ const SUBCOMMAND_PERMISSIONS: Record<string, Permission | null> = {
   'search-missions': PERMISSIONS.MISSION_READ,
   'discuss-objective': PERMISSIONS.OBJECTIVE_SUBMIT,
   'add-objectives': PERMISSIONS.OBJECTIVE_UPDATE,
+  'update-objective': PERMISSIONS.OBJECTIVE_UPDATE,
   'record-work': PERMISSIONS.MISSION_CREATE,
   'read-context': PERMISSIONS.MISSION_READ,
   'write-context': PERMISSIONS.MISSION_UPDATE,

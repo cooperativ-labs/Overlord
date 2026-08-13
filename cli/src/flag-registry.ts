@@ -75,7 +75,16 @@ export const COMMAND_FLAGS: Record<string, readonly string[]> = {
   'add-cwd': ['--directory', '--key', '--project-id', '--primary', '--access'],
   'add-url': ['--url', '--project-id', '--key', '--primary', '--access'],
   'add-et': ['--name', '--workspace-id'],
-  create: ['--objectives-json', '--objective', '--prompt', '--project-id', '--title', '--resource'],
+  create: [
+    '--objectives-json',
+    '--objective',
+    '--prompt',
+    '--project-id',
+    '--title',
+    '--resource',
+    '--auto-advance',
+    '--no-auto-advance'
+  ],
   prompt: [
     '--objectives-json',
     '--objective',
@@ -83,7 +92,9 @@ export const COMMAND_FLAGS: Record<string, readonly string[]> = {
     '--project-id',
     '--title',
     '--resource',
-    '--agent'
+    '--agent',
+    '--auto-advance',
+    '--no-auto-advance'
   ],
   attach: ['--mission-id', '--agent', '--objective-id', '--model', '--thinking'],
   execution: ['--mission-id', '--agent', '--objective-id', '--model', '--thinking'],

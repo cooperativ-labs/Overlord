@@ -48,6 +48,10 @@ import {
 } from '../../packages/core/service/execution-targets.ts';
 import { providerSessionFromMetadata } from '../../packages/core/service/latch-launch.ts';
 import {
+  clearLatchPendingInput,
+  ingestLatchHarnessEvents
+} from '../../packages/core/service/latch-observation.ts';
+import {
   LOCAL_TARGET_MUTATION_REQUESTED_SOURCE,
   parseLocalTargetMutation
 } from '../../packages/core/service/local-target-mutations.ts';
@@ -92,7 +96,12 @@ import {
   WORKSPACE
 } from '../db.ts';
 import { ApiError } from '../errors.ts';
-import { actorCan, requireProjectPermission, requireWorkspacePermission } from '../rbac.ts';
+import {
+  actorCan,
+  requireMissionPermission,
+  requireProjectPermission,
+  requireWorkspacePermission
+} from '../rbac.ts';
 
 // ---- Instance default catalog ----------------------------------------------
 //
@@ -997,10 +1006,84 @@ export async function listMissionTerminalSessions(
         executable: snapshot?.executionProvider.executable ?? 'latch',
         viewerKind: snapshot?.viewer.kind ?? 'iterm',
         createdAt: providerSession.createdAt,
-        lastObservedState: terminalSessionState(providerSession.lastObservedState)
+        lastObservedState: terminalSessionState(providerSession.lastObservedState),
+        observation: providerSession.observation
+          ? {
+              cursor: providerSession.observation.cursor,
+              lastEventAt: providerSession.observation.lastEventAt,
+              turnCount: providerSession.observation.turnCount,
+              pendingInput: providerSession.observation.pendingInput,
+              unattached: providerSession.observation.unattached
+            }
+          : null
       }
     ];
   });
+}
+
+export async function ingestMissionHarnessEvents(
+  missionRef: string,
+  body: unknown
+): Promise<Record<string, unknown>> {
+  const scope = await requireMissionPermission({
+    missionRef,
+    permission: PERMISSIONS.SESSION_READ
+  });
+  const ctx = await buildWebappServiceContextForWorkspace(
+    scope.workspaceId,
+    requireDatabaseClient(),
+    scope.workspaceUserId
+  );
+  const payload =
+    body && typeof body === 'object' && !Array.isArray(body)
+      ? (body as Record<string, unknown>)
+      : {};
+  const providerSessionId =
+    typeof payload.providerSessionId === 'string' ? payload.providerSessionId : '';
+  const executionRequestId =
+    typeof payload.executionRequestId === 'string' ? payload.executionRequestId : null;
+  const events = Array.isArray(payload.events) ? payload.events : [];
+  const from = typeof payload.from === 'number' ? payload.from : 0;
+  return ingestLatchHarnessEvents({
+    ctx,
+    missionId: scope.missionId,
+    executionRequestId,
+    providerSessionId,
+    events,
+    from
+  });
+}
+
+export async function resolveMissionLatchObservation(
+  missionRef: string,
+  body: unknown
+): Promise<Record<string, unknown>> {
+  const scope = await requireMissionPermission({
+    missionRef,
+    permission: PERMISSIONS.SESSION_ATTACH
+  });
+  const ctx = await buildWebappServiceContextForWorkspace(
+    scope.workspaceId,
+    requireDatabaseClient(),
+    scope.workspaceUserId
+  );
+  const payload =
+    body && typeof body === 'object' && !Array.isArray(body)
+      ? (body as Record<string, unknown>)
+      : {};
+  const providerSessionId =
+    typeof payload.providerSessionId === 'string' ? payload.providerSessionId : '';
+  const requestId = typeof payload.requestId === 'string' ? payload.requestId : '';
+  if (!providerSessionId.trim() || !requestId.trim()) {
+    throw new ApiError(400, 'providerSessionId and requestId are required');
+  }
+  const observation = await clearLatchPendingInput({
+    ctx,
+    missionId: scope.missionId,
+    providerSessionId,
+    requestId
+  });
+  return { observation };
 }
 
 interface LaunchObjectiveRow {

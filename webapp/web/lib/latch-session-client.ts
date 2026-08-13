@@ -2,13 +2,17 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import type {
   CapabilityResult,
+  CollectLatchEventsResult,
   InspectLatchSessionResult,
   OpenLatchSessionResult,
+  ResolveLatchInputResult,
   StopLatchSessionResult
 } from '../../../packages/core/service/local-target/types.ts';
 import type { TerminalSessionDto } from '../../shared/contract.ts';
 
+import { api } from './api.ts';
 import { invokeLocalTarget, useLocalTargetCapabilityAvailable } from './local-target-client.ts';
+import { keys } from './query-keys.ts';
 
 export const latchSessionKey = (providerSessionId: string) =>
   ['latch-session', providerSessionId] as const;
@@ -84,6 +88,75 @@ export function useStopLatchSession(session: TerminalSessionDto) {
           inspectedAt: new Date().toISOString()
         })
       );
+    }
+  });
+}
+
+export function useLatchHarnessEventIngest({
+  session,
+  missionId,
+  enabled
+}: {
+  session: TerminalSessionDto;
+  missionId: string;
+  enabled: boolean;
+}) {
+  const qc = useQueryClient();
+  const localTargetAvailable = useLocalTargetCapabilityAvailable();
+  const from = session.observation?.cursor ?? 0;
+  return useQuery({
+    queryKey: ['latch-events', session.providerSessionId, from] as const,
+    queryFn: async () => {
+      const collected = await requireLocalTargetResult(
+        await invokeLocalTarget<CollectLatchEventsResult>({
+          capability: 'collectLatchEvents',
+          input: {
+            providerSessionId: session.providerSessionId,
+            executable: session.executable,
+            from
+          }
+        })
+      );
+      if (collected.events.length > 0) {
+        await api.ingestMissionHarnessEvents(missionId, {
+          providerSessionId: session.providerSessionId,
+          events: collected.events,
+          from: collected.from,
+          executionRequestId: session.executionRequestId
+        });
+        await qc.invalidateQueries({ queryKey: keys.mission(missionId) });
+      }
+      return collected;
+    },
+    enabled: enabled && localTargetAvailable,
+    refetchInterval: 10_000,
+    retry: false
+  });
+}
+
+export function useResolveLatchObservation(session: TerminalSessionDto, missionId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ requestId, choice }: { requestId: string; choice: string }) => {
+      const resolved = await requireLocalTargetResult(
+        await invokeLocalTarget<ResolveLatchInputResult>({
+          capability: 'resolveLatchInput',
+          input: {
+            providerSessionId: session.providerSessionId,
+            executable: session.executable,
+            requestId,
+            choice
+          }
+        })
+      );
+      await api.resolveMissionLatchObservation(missionId, {
+        providerSessionId: session.providerSessionId,
+        requestId
+      });
+      return resolved;
+    },
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: keys.mission(missionId) });
     }
   });
 }

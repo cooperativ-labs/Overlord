@@ -1,13 +1,10 @@
 {
   "fixtureVersion": 1,
   "kind": "source-guard",
-  "description": "Cursor stop hook prefers agent-session inbox for Queued(turn-boundary) followup_message when a channel is bound.",
+  "description": "Cursor stop hook reminds the agent to deliver over protocol. It does not inject session-input inbox messages.",
   "path": "connectors/adapters/cursor/hooks/overlord-stop.sh",
   "assert": {
-    "mustContain": [
-      "OVERLORD_SESSION_CHANNEL_ID",
-      "agent-session inbox --agent cursor",
-      "followup_message"
-    ]
+    "mustContain": ["ovld protocol hook-event", "followup_message"],
+    "mustNotContain": ["agent-session inbox"]
   }
 }

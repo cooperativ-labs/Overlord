@@ -11,11 +11,11 @@ connector:
   # `capabilities` and `hookTypes` are the DEPRECATED hook-named projection, retained for
   # one release. `harnessCapabilities` is the authoritative source.
   integrationShape: callback
-  capabilityTier: 3
+  capabilityTier: 1
   harnessCapabilities:
     path: connectors/adapters/codex/harness-capabilities.yaml
     schemaVersion: 1
-    digest: "4b318751579af39c81ea0c1ea7be718d66cda313622f1c5edb1cff5e3dfe8659"
+    digest: "e0d536667a5616d1a662c7225fc8ef439b5d7cdce1d6703e577190c9e5c6d9c5"
   capabilities:
     - followUpHook
     - permissionHook
@@ -32,9 +32,6 @@ connector:
   managedFiles:
     - "harness-capabilities.yaml"
     - "CAPABILITIES.md"
-    - "scripts/agent-session-event.sh"
-    - "scripts/agent-session-request.sh"
-    - "scripts/agent-session-inbox.sh"
     - ".codex-plugin/plugin.json"
     - ".codex-plugin/hooks.json"
     - ".mcp.json"

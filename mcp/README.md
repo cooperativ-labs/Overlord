@@ -62,6 +62,7 @@ The current tool catalog is mission-first:
 - `overlord_create_inbox_item`
 - `overlord_load_mission_context`
 - `overlord_add_objectives`
+- `overlord_update_objective` — turn auto-advance on or off for an existing objective
 - `overlord_attach_session`
 - `overlord_update_session`
 - `overlord_deliver_session`
@@ -81,6 +82,10 @@ The local connector MCP bridge scripts for Codex, Cursor, and Antigravity
 advertise the same canonical tool names and input contract shape. Backend tests
 compare those local `tools/list` responses against this hosted registry so a new
 hosted tool cannot be added without updating shipped connector shims.
+
+`overlord_create_mission` and `overlord_add_objectives` accept optional
+`autoAdvance` (boolean; default false) so delivery can queue the next objective.
+`overlord_update_objective` toggles that flag on an existing objective.
 
 Hosted MCP cannot observe an agent's local current working directory. Tools
 that create missions require explicit `projectId`; clients should call

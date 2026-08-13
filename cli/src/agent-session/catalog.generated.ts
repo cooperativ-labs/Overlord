@@ -281,8 +281,8 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
     "adapter": "claude",
     "codec": "claude",
     "integrationShape": "callback",
-    "capabilityTier": 3,
-    "descriptorDigest": "5c25dafa68e2f4d0862be4378f4b7a2506ace3a4fe6b806a0e392188604f20d8",
+    "capabilityTier": 1,
+    "descriptorDigest": "833a35cecb73aa9b34b40036eb6d3088dd729ca6be465d1ee228dae2c5a8269d",
     "descriptorSchemaVersion": 1,
     "harness": {
       "name": "Claude Code",
@@ -319,11 +319,11 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
         "trackedAs": "agent-session-phase-2"
       },
       "observe.toolResult": {
-        "status": "supported",
+        "status": "not-implemented",
         "native": "PostToolUse",
         "reason": null,
         "evidenceRef": null,
-        "trackedAs": null
+        "trackedAs": "latch-engine"
       },
       "observe.fileEdit": {
         "status": "supported",
@@ -333,46 +333,46 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
         "trackedAs": null
       },
       "observe.sessionLifecycle": {
-        "status": "supported",
+        "status": "not-implemented",
         "native": "SessionStart",
         "reason": null,
         "evidenceRef": null,
-        "trackedAs": null
+        "trackedAs": "latch-engine"
       },
       "decide.shell": {
-        "status": "supported",
+        "status": "not-implemented",
         "native": "PermissionRequest",
         "reason": null,
         "evidenceRef": null,
-        "trackedAs": null
+        "trackedAs": "latch-engine"
       },
       "decide.mcp": {
-        "status": "supported",
+        "status": "not-implemented",
         "native": "PermissionRequest",
         "reason": null,
         "evidenceRef": null,
-        "trackedAs": null
+        "trackedAs": "latch-engine"
       },
       "decide.fileWrite": {
-        "status": "supported",
+        "status": "not-implemented",
         "native": "PermissionRequest",
         "reason": null,
         "evidenceRef": null,
-        "trackedAs": null
+        "trackedAs": "latch-engine"
       },
       "decide.anyTool": {
         "status": "not-implemented",
         "native": "PreToolUse",
         "reason": null,
         "evidenceRef": null,
-        "trackedAs": "agent-session-phase-2"
+        "trackedAs": "latch-engine"
       },
       "decide.universal": {
-        "status": "supported",
+        "status": "not-implemented",
         "native": "PermissionRequest",
         "reason": null,
         "evidenceRef": null,
-        "trackedAs": null
+        "trackedAs": "latch-engine"
       },
       "answer.structuredQuestion": {
         "status": "unverified",
@@ -389,18 +389,18 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
         "trackedAs": "agent-session-standing-permissions"
       },
       "inject.midTurn": {
-        "status": "supported",
+        "status": "not-implemented",
         "native": "asyncRewake",
         "reason": null,
         "evidenceRef": null,
-        "trackedAs": null
+        "trackedAs": "latch-engine"
       },
       "inject.turnBoundary": {
-        "status": "supported",
+        "status": "not-implemented",
         "native": "Stop",
         "reason": null,
         "evidenceRef": null,
-        "trackedAs": null
+        "trackedAs": "latch-engine"
       },
       "inject.nextTurn": {
         "status": "not-implemented",
@@ -488,8 +488,8 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
     "adapter": "codex",
     "codec": "codex",
     "integrationShape": "callback",
-    "capabilityTier": 3,
-    "descriptorDigest": "4b318751579af39c81ea0c1ea7be718d66cda313622f1c5edb1cff5e3dfe8659",
+    "capabilityTier": 1,
+    "descriptorDigest": "e0d536667a5616d1a662c7225fc8ef439b5d7cdce1d6703e577190c9e5c6d9c5",
     "descriptorSchemaVersion": 1,
     "harness": {
       "name": "Codex CLI",
@@ -519,53 +519,53 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
         "trackedAs": null
       },
       "observe.toolCall": {
-        "status": "supported",
+        "status": "not-implemented",
         "native": "PreToolUse",
         "reason": null,
         "evidenceRef": null,
-        "trackedAs": null
+        "trackedAs": "latch-engine"
       },
       "observe.toolResult": {
-        "status": "supported",
+        "status": "not-implemented",
         "native": "PostToolUse",
         "reason": null,
         "evidenceRef": null,
-        "trackedAs": null
+        "trackedAs": "latch-engine"
       },
       "observe.fileEdit": {
-        "status": "supported",
+        "status": "not-implemented",
         "native": "PostToolUse",
         "reason": null,
         "evidenceRef": null,
-        "trackedAs": null
+        "trackedAs": "latch-engine"
       },
       "observe.sessionLifecycle": {
-        "status": "supported",
+        "status": "not-implemented",
         "native": "SessionStart",
         "reason": null,
         "evidenceRef": null,
-        "trackedAs": null
+        "trackedAs": "latch-engine"
       },
       "decide.shell": {
-        "status": "supported",
+        "status": "not-implemented",
         "native": "PermissionRequest",
         "reason": null,
         "evidenceRef": null,
-        "trackedAs": null
+        "trackedAs": "latch-engine"
       },
       "decide.mcp": {
-        "status": "supported",
+        "status": "not-implemented",
         "native": "PermissionRequest",
         "reason": null,
         "evidenceRef": null,
-        "trackedAs": null
+        "trackedAs": "latch-engine"
       },
       "decide.fileWrite": {
-        "status": "supported",
+        "status": "not-implemented",
         "native": "PermissionRequest",
         "reason": null,
         "evidenceRef": null,
-        "trackedAs": null
+        "trackedAs": "latch-engine"
       },
       "decide.anyTool": {
         "status": "not-implemented",
@@ -575,11 +575,11 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
         "trackedAs": "agent-session-phase-4"
       },
       "decide.universal": {
-        "status": "supported",
+        "status": "not-implemented",
         "native": "PermissionRequest",
         "reason": null,
         "evidenceRef": null,
-        "trackedAs": null
+        "trackedAs": "latch-engine"
       },
       "answer.structuredQuestion": {
         "status": "unverified",
@@ -603,11 +603,11 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
         "trackedAs": "taxonomy-7.2"
       },
       "inject.turnBoundary": {
-        "status": "supported",
+        "status": "not-implemented",
         "native": "Stop",
         "reason": null,
         "evidenceRef": null,
-        "trackedAs": null
+        "trackedAs": "latch-engine"
       },
       "inject.nextTurn": {
         "status": "not-implemented",
@@ -643,7 +643,7 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
       {
         "id": "shipped-permission-hook-inert",
         "severity": "high",
-        "summary": "The former PermissionRequest hook called a nonexistent protocol command in the background. The managed registration now invokes the fixed request runtime directly.",
+        "summary": "The former PermissionRequest hook called a nonexistent protocol command in the background. The connector no longer registers a PermissionRequest hook; the native prompt owns approvals when Latch is absent.",
         "verification": "verified",
         "mitigation": "implemented",
         "trackedAs": null
@@ -680,8 +680,8 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
     "adapter": "cursor",
     "codec": "cursor",
     "integrationShape": "callback",
-    "capabilityTier": 3,
-    "descriptorDigest": "f5cf848a2f9287bda3ddd2a4158ce8c05ce0fdadde32212c975062edf6f64ce8",
+    "capabilityTier": 1,
+    "descriptorDigest": "7085c25291f5c96cf3c7fb9c280281fa698b5c026e9859377ad8c53d1cd82537",
     "descriptorSchemaVersion": 1,
     "harness": {
       "name": "Cursor Agent CLI",
@@ -711,11 +711,11 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
         "trackedAs": null
       },
       "observe.toolCall": {
-        "status": "supported",
+        "status": "not-implemented",
         "native": "preToolUse",
         "reason": null,
         "evidenceRef": null,
-        "trackedAs": null
+        "trackedAs": "latch-engine"
       },
       "observe.toolResult": {
         "status": "supported",
@@ -739,18 +739,18 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
         "trackedAs": "agent-session-phase-1"
       },
       "decide.shell": {
-        "status": "supported",
+        "status": "not-implemented",
         "native": "beforeShellExecution",
         "reason": null,
         "evidenceRef": null,
-        "trackedAs": null
+        "trackedAs": "latch-engine"
       },
       "decide.mcp": {
-        "status": "supported",
+        "status": "not-implemented",
         "native": "beforeMCPExecution",
         "reason": null,
         "evidenceRef": null,
-        "trackedAs": null
+        "trackedAs": "latch-engine"
       },
       "decide.fileWrite": {
         "status": "not-implemented",
@@ -760,11 +760,11 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
         "trackedAs": "agent-session-phase-2"
       },
       "decide.anyTool": {
-        "status": "supported",
+        "status": "not-implemented",
         "native": "preToolUse",
         "reason": null,
         "evidenceRef": null,
-        "trackedAs": null
+        "trackedAs": "latch-engine"
       },
       "decide.universal": {
         "status": "unsupported",
@@ -1060,8 +1060,8 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
     "adapter": "pi",
     "codec": "pi",
     "integrationShape": "extension",
-    "capabilityTier": 3,
-    "descriptorDigest": "1b4966a98c4994645dd4a46a930f38864e8eec3922603d4c5f2117dcbadcab79",
+    "capabilityTier": 1,
+    "descriptorDigest": "d083b9610578e1af2e73b273d0661430213fbbe5ff24550e8f0815c284733ae1",
     "descriptorSchemaVersion": 1,
     "harness": {
       "name": "Pi Coding Agent",
@@ -1076,7 +1076,7 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
       "status": "supported"
     },
     "decisionHold": {
-      "status": "supported",
+      "status": "not-implemented",
       "timeoutField": null,
       "timeoutUnit": null,
       "defaultTimeoutSeconds": null,
@@ -1091,11 +1091,11 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
         "trackedAs": null
       },
       "observe.toolCall": {
-        "status": "supported",
+        "status": "not-implemented",
         "native": "tool_call",
         "reason": null,
         "evidenceRef": null,
-        "trackedAs": null
+        "trackedAs": "latch-engine"
       },
       "observe.toolResult": {
         "status": "not-implemented",
@@ -1112,46 +1112,46 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
         "trackedAs": "agent-session-phase-4"
       },
       "observe.sessionLifecycle": {
-        "status": "supported",
+        "status": "not-implemented",
         "native": "agent_start",
         "reason": null,
         "evidenceRef": null,
-        "trackedAs": null
+        "trackedAs": "latch-engine"
       },
       "decide.shell": {
-        "status": "supported",
+        "status": "not-implemented",
         "native": "tool_call",
         "reason": null,
         "evidenceRef": null,
-        "trackedAs": null
+        "trackedAs": "latch-engine"
       },
       "decide.mcp": {
-        "status": "supported",
+        "status": "not-implemented",
         "native": "tool_call",
         "reason": null,
         "evidenceRef": null,
-        "trackedAs": null
+        "trackedAs": "latch-engine"
       },
       "decide.fileWrite": {
-        "status": "supported",
+        "status": "not-implemented",
         "native": "tool_call",
         "reason": null,
         "evidenceRef": null,
-        "trackedAs": null
+        "trackedAs": "latch-engine"
       },
       "decide.anyTool": {
-        "status": "supported",
+        "status": "not-implemented",
         "native": "tool_call",
         "reason": null,
         "evidenceRef": null,
-        "trackedAs": null
+        "trackedAs": "latch-engine"
       },
       "decide.universal": {
-        "status": "supported",
+        "status": "not-implemented",
         "native": "tool_call",
         "reason": null,
         "evidenceRef": null,
-        "trackedAs": null
+        "trackedAs": "latch-engine"
       },
       "answer.structuredQuestion": {
         "status": "not-implemented",
@@ -1168,18 +1168,18 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
         "trackedAs": null
       },
       "inject.midTurn": {
-        "status": "supported",
+        "status": "not-implemented",
         "native": "sendUserMessage(deliverAs=steer)",
         "reason": null,
         "evidenceRef": null,
-        "trackedAs": null
+        "trackedAs": "latch-engine"
       },
       "inject.turnBoundary": {
-        "status": "supported",
+        "status": "not-implemented",
         "native": "sendUserMessage(deliverAs=followUp)",
         "reason": null,
         "evidenceRef": null,
-        "trackedAs": null
+        "trackedAs": "latch-engine"
       },
       "inject.nextTurn": {
         "status": "not-implemented",
@@ -1209,7 +1209,7 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
         "severity": "high",
         "summary": "Pi has no dialog to fall back to, so a timed-out or failed remote decision must ALLOW the tool. Every other adapter fails toward a human; this one fails toward execution. Remote decisions stay off by default and require a workspace-policy ceiling plus project opt-in whose consent text names the fail-open timeout.",
         "verification": "verified",
-        "mitigation": "implemented",
+        "mitigation": "accepted",
         "trackedAs": null
       },
       {
@@ -1217,7 +1217,7 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
         "severity": "medium",
         "summary": "A block becomes a tool refusal in the conversation and changes what the agent does next, so `block` must never be used as a \"please wait\" mechanism. The wait happens inside the async handler, before returning.",
         "verification": "verified",
-        "mitigation": "implemented",
+        "mitigation": "accepted",
         "trackedAs": null
       },
       {
@@ -1248,7 +1248,7 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
   }
 ];
 
-export const HARNESS_CATALOG_DIGEST = '7600395c3c63a383961856a0ff87105cfb2e019c2f5f7fa946c9d9109c90e8d9';
+export const HARNESS_CATALOG_DIGEST = '02e9a482ed735c5bfac6d8999818f6412362dd61260eed5c87aed9b1cd6cf545';
 
 export function findHarnessDescriptor(adapter: string): HarnessDescriptor | undefined {
   return HARNESS_DESCRIPTORS.find(entry => entry.adapter === adapter);

@@ -2,11 +2,11 @@
 
 # Codex CLI — Overlord agent-session capabilities
 
-**Adapter** `codex` · **Codec** `codex` · **Integration shape** `callback` · **Capability tier** 3 (Conversational)
+**Adapter** `codex` · **Codec** `codex` · **Integration shape** `callback` · **Capability tier** 1 (Observational)
 
 **Harness version verified** `0.147.0` · **range** `>=0.124.0` · **scheme** `semver`
 
-**Descriptor digest** `4b318751579af39c81ea0c1ea7be718d66cda313622f1c5edb1cff5e3dfe8659`
+**Descriptor digest** `e0d536667a5616d1a662c7225fc8ef439b5d7cdce1d6703e577190c9e5c6d9c5`
 
 > The tier is derived from passing fixtures, never authored. `unsupported` means the harness
 > cannot do it — do not attempt it. `not-implemented` means it is buildable and unbuilt: that is
@@ -45,28 +45,27 @@ Per-hook timeouts in seconds; the documentation gives a 600-second default. The 
 | Capability | Status | Native | Evidence |
 | --- | --- | --- | --- |
 | `observe.prompt` | ✅ supported | `UserPromptSubmit` | fixtures: `fixtures/normalize-user-prompt.json` |
-| `observe.toolCall` | ✅ supported | `PreToolUse` | fixtures: `fixtures/normalize-pre-tool-use.json` |
-| `observe.toolResult` | ✅ supported | `PostToolUse` | fixtures: `fixtures/normalize-post-tool-use.json` |
-| `observe.fileEdit` | ✅ supported | `PostToolUse` | fixtures: `fixtures/normalize-post-tool-use.json` |
-| `observe.sessionLifecycle` | ✅ supported | `SessionStart` | fixtures: `fixtures/normalize-session-start.json` |
-| `decide.shell` | ✅ supported | `PermissionRequest` | fixtures: `fixtures/permission-request.json`, `fixtures/decision-codec.json` |
-| `decide.mcp` | ✅ supported | `PermissionRequest` | fixtures: `fixtures/permission-request.json`, `fixtures/decision-codec.json` |
-| `decide.fileWrite` | ✅ supported | `PermissionRequest` | fixtures: `fixtures/permission-request.json`, `fixtures/decision-codec.json` |
+| `observe.toolCall` | 🚧 not-implemented | `PreToolUse` | tracked as `latch-engine` |
+| `observe.toolResult` | 🚧 not-implemented | `PostToolUse` | tracked as `latch-engine` |
+| `observe.fileEdit` | 🚧 not-implemented | `PostToolUse` | tracked as `latch-engine` |
+| `observe.sessionLifecycle` | 🚧 not-implemented | `SessionStart` | tracked as `latch-engine` |
+| `decide.shell` | 🚧 not-implemented | `PermissionRequest` | tracked as `latch-engine` |
+| `decide.mcp` | 🚧 not-implemented | `PermissionRequest` | tracked as `latch-engine` |
+| `decide.fileWrite` | 🚧 not-implemented | `PermissionRequest` | tracked as `latch-engine` |
 | `decide.anyTool` | 🚧 not-implemented | `PreToolUse` | tracked as `agent-session-phase-4` |
-| `decide.universal` | ✅ supported | `PermissionRequest` | fixtures: `fixtures/permission-request.json`, `fixtures/decision-codec.json` |
+| `decide.universal` | 🚧 not-implemented | `PermissionRequest` | tracked as `latch-engine` |
 | `answer.structuredQuestion` | ❓ unverified | `ToolRequestUserInput` | tracked as `taxonomy-7.2` |
 | `answer.persistentAllow` | ❓ unverified | — | tracked as `taxonomy-7.4` |
 | `inject.midTurn` | ❓ unverified | `ThreadInjectItems` | tracked as `taxonomy-7.2` |
-| `inject.turnBoundary` | ✅ supported | `Stop` | fixtures: `fixtures/agent-session-hooks.json` |
+| `inject.turnBoundary` | 🚧 not-implemented | `Stop` | tracked as `latch-engine` |
 | `inject.nextTurn` | 🚧 not-implemented | `Stop` | tracked as `agent-session-phase-4` |
 | `terminal.concurrentAnswer` | ⛔ unsupported | — | On the hook path the native prompt is drawn only after the callback returns, so the terminal cannot answer while Overlord holds the decision. (A future app-server integration could change this; it would be a different integrationShape.) (evidence: `connector-harness-taxonomy.md#12-the-axis-that-actually-matters`) |
 | `terminal.statusSurface` | ❓ unverified | — | tracked as `taxonomy-7.9` |
 
 ### Capability notes
 
-- **`observe.toolCall`** — PreToolUse fires for MCP tool calls, not only shell and patch tools. Re-verified against the installed 0.146.0 binary and the matching upstream tag: the upstream suite `hooks_mcp.rs` (under codex-rs/core/tests/suite) proves a PreToolUse hook can both deny and rewrite an MCP call before it executes, and the binary carries a distinct "Tool call blocked by PreToolUse hook: {}. Tool: {}" message alongside the shell-only one. `tool_name` is the full MCP identifier (`mcp__<server>__<tool>`) and the matcher matches that string, so a matcher written for a bare tool name will silently never fire.
-- **`observe.toolResult`** — Also covers MCP tool results, on the same 0.146.0 evidence as `observe.toolCall`. What PostToolUse cannot do is rewrite one: the binary rejects a returned `updatedMCPToolOutput` as unsupported. Observation of an MCP result is therefore reliable; mutation of it is not.
-- **`decide.universal`** — Codex PermissionRequest covers Bash, apply_patch/Edit/Write, and MCP tool names. The codec emits only documented allow/deny behavior and deliberately never emits reserved `updatedInput`, `updatedPermissions`, or `interrupt` fields.
+- **`observe.toolCall`** — Mechanical PreToolUse observation moved to Latch `events`.
+- **`decide.universal`** — Remote permission decisions moved to Latch `awaiting_input` / `latch send --resolve`.
 - **`answer.structuredQuestion`** — `codex app-server` exposes ToolRequestUserInput with per-option label/description and an autoResolutionMs — an ACP-shaped structured question in everything but name. It is unreachable until the single-subscriber question is settled.
 - **`inject.midTurn`** — ThreadInjectItems/TurnSteer exist on the experimental app-server surface only. The binary carries "expected exactly one client subscribed to the thread, found {}", so if the TUI is that one client Overlord cannot also subscribe and this path is closed.
 
@@ -81,7 +80,7 @@ Per-hook timeouts in seconds; the documentation gives a 600-second default. The 
 
 **`two-integration-surfaces-could-disagree`** — Hooks and `codex app-server` can both answer a permission. A session driven by both would race in a way no revision CAS can settle, so exactly one surface must be chosen and documented before either is built.
 
-**`shipped-permission-hook-inert`** — The former PermissionRequest hook called a nonexistent protocol command in the background. The managed registration now invokes the fixed request runtime directly.
+**`shipped-permission-hook-inert`** — The former PermissionRequest hook called a nonexistent protocol command in the background. The connector no longer registers a PermissionRequest hook; the native prompt owns approvals when Latch is absent.
 
 **`prompt-and-agent-hook-handlers-inert`** — Codex 0.146.0 accepts three hook handler types — `command`, `prompt`, and `agent` — but only `command` runs. Hook discovery parses `prompt` and `agent` and then skips them with a "not supported yet" warning, so a manifest that used either would install cleanly, list in `hooks`, and never execute. The connector must keep emitting `command` handlers only, and must not read the presence of these variants in the schema as availability. `command` is a shell command line run through `$SHELL -lc` (`/bin/sh` when SHELL is unset) — it is not restricted to Bash and not restricted to shell scripting, since the command may invoke any interpreter.
 

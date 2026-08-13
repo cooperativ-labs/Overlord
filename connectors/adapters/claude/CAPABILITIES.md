@@ -2,11 +2,11 @@
 
 # Claude Code — Overlord agent-session capabilities
 
-**Adapter** `claude` · **Codec** `claude` · **Integration shape** `callback` · **Capability tier** 3 (Conversational)
+**Adapter** `claude` · **Codec** `claude` · **Integration shape** `callback` · **Capability tier** 1 (Observational)
 
 **Harness version verified** `2.1.227` · **range** `>=2.1.0` · **scheme** `semver`
 
-**Descriptor digest** `5c25dafa68e2f4d0862be4378f4b7a2506ace3a4fe6b806a0e392188604f20d8`
+**Descriptor digest** `833a35cecb73aa9b34b40036eb6d3088dd729ca6be465d1ee228dae2c5a8269d`
 
 > The tier is derived from passing fixtures, never authored. `unsupported` means the harness
 > cannot do it — do not attempt it. `not-implemented` means it is buildable and unbuilt: that is
@@ -45,33 +45,34 @@ Per-command `timeout` in seconds with no documented ceiling. Omitting `decision`
 | --- | --- | --- | --- |
 | `observe.prompt` | ✅ supported | `UserPromptSubmit` | fixtures: `fixtures/normalize-user-prompt-submit.json` |
 | `observe.toolCall` | 🚧 not-implemented | `PreToolUse` | tracked as `agent-session-phase-2` |
-| `observe.toolResult` | ✅ supported | `PostToolUse` | fixtures: `fixtures/normalize-post-tool-use-shell.json`, `fixtures/agent-session-hook-unbound.json` |
+| `observe.toolResult` | 🚧 not-implemented | `PostToolUse` | tracked as `latch-engine` |
 | `observe.fileEdit` | ✅ supported | `PostToolUse` | fixtures: `fixtures/normalize-post-tool-use-write.json`, `fixtures/post-tool-use-parity.json` |
-| `observe.sessionLifecycle` | ✅ supported | `SessionStart` | fixtures: `fixtures/normalize-session-start.json` |
-| `decide.shell` | ✅ supported | `PermissionRequest` | fixtures: `fixtures/permission-request.json`, `fixtures/decision-codec.json` |
-| `decide.mcp` | ✅ supported | `PermissionRequest` | fixtures: `fixtures/permission-request.json`, `fixtures/decision-codec.json` |
-| `decide.fileWrite` | ✅ supported | `PermissionRequest` | fixtures: `fixtures/permission-request.json`, `fixtures/decision-codec.json` |
-| `decide.anyTool` | 🚧 not-implemented | `PreToolUse` | tracked as `agent-session-phase-2` |
-| `decide.universal` | ✅ supported | `PermissionRequest` | fixtures: `fixtures/permission-request.json`, `fixtures/decision-codec.json` |
+| `observe.sessionLifecycle` | 🚧 not-implemented | `SessionStart` | tracked as `latch-engine` |
+| `decide.shell` | 🚧 not-implemented | `PermissionRequest` | tracked as `latch-engine` |
+| `decide.mcp` | 🚧 not-implemented | `PermissionRequest` | tracked as `latch-engine` |
+| `decide.fileWrite` | 🚧 not-implemented | `PermissionRequest` | tracked as `latch-engine` |
+| `decide.anyTool` | 🚧 not-implemented | `PreToolUse` | tracked as `latch-engine` |
+| `decide.universal` | 🚧 not-implemented | `PermissionRequest` | tracked as `latch-engine` |
 | `answer.structuredQuestion` | ❓ unverified | `Elicitation` | tracked as `agent-session-verify-claude-elicitation` |
 | `answer.persistentAllow` | 🚧 not-implemented | `PermissionRequest.decision.updatedPermissions` | tracked as `agent-session-standing-permissions` |
-| `inject.midTurn` | ✅ supported | `asyncRewake` | fixtures: `fixtures/inject-async-rewake.json`, `fixtures/agent-session-inbox-unbound.json` |
-| `inject.turnBoundary` | ✅ supported | `Stop` | fixtures: `fixtures/inject-stop-block.json`, `fixtures/agent-session-inbox-unbound.json` |
+| `inject.midTurn` | 🚧 not-implemented | `asyncRewake` | tracked as `latch-engine` |
+| `inject.turnBoundary` | 🚧 not-implemented | `Stop` | tracked as `latch-engine` |
 | `inject.nextTurn` | 🚧 not-implemented | `Stop` | tracked as `agent-session-phase-4` |
 | `terminal.concurrentAnswer` | ⛔ unsupported | — | The native permission prompt is drawn only after the hook returns, so nobody can answer in the terminal while Overlord holds the decision. Holding is simultaneously the only way to answer remotely and the reason the terminal cannot participate. (evidence: `connector-harness-taxonomy.md#12-the-axis-that-actually-matters`) |
 | `terminal.statusSurface` | 🚧 not-implemented | `statusMessage` | tracked as `agent-session-phase-2` |
 
 ### Capability notes
 
-- **`observe.prompt`** — Two registrations now ride UserPromptSubmit: the legacy hook that posts `user_follow_up` mission events through the Connector → Protocol surface, and the normalized agent-session event this capability grades. Both stay installed until the normalized path has proven equivalent follow-up attribution; replacing a working capture with an unproven one is how a migration loses data quietly.
+- **`observe.prompt`** — Two registrations used to ride UserPromptSubmit. Mechanical agent-session observation moved to Latch `events`. This capability grades the protocol follow-up hook that posts `user_follow_up` mission events; that Channel 1 path stays installed.
 - **`observe.toolCall`** — Deliberately unregistered in Phase 1. PreToolUse is decision-capable: registering it for observation alone would put a script in front of every tool call for no benefit a PostToolUse registration does not already provide, while inheriting the blast radius of the decision path. It lands with the codecs that can actually use it.
-- **`observe.fileEdit`** — The shipped PostToolUse hook that records touched files into the per-session log used by `deliver` for change attribution is untouched and still registered. The normalized event is additive: `fixtures/post-tool-use-parity.json` guards both registrations being present, because the migration must not repair observation by regressing change attribution.
-- **`observe.sessionLifecycle`** — SessionStart only. There is no matching stop-class registration: continuing or observing a session a user believed had finished is a larger surprise than a missing row, and the Stop event is decision-capable in a way SessionStart is not.
-- **`decide.universal`** — Unlike Cursor, Claude has one event that covers every approval, so a single registration can reach every decision rather than a per-tool-class slice.
+- **`observe.toolResult`** — Mechanical tool-result observation moved to Latch `events`. The protocol PostToolUse hook still records touched files for delivery attribution.
+- **`observe.fileEdit`** — The shipped PostToolUse hook that records touched files into the per-session log used by `deliver` for change attribution remains registered. Mechanical agent-session observation is no longer a live Overlord path.
+- **`observe.sessionLifecycle`** — SessionStart observation moved to Latch `events`. There is no matching Overlord registration.
+- **`decide.universal`** — Remote permission decisions moved to Latch `awaiting_input` / `latch send --resolve`. The native Claude prompt owns approvals when Latch is absent.
 - **`answer.structuredQuestion`** — Elicitation/ElicitationResult hook events exist in the binary but their request and response shapes were not read. Write the fixture before relying on them.
 - **`answer.persistentAllow`** — Structurally available, deliberately unbuilt. A standing permission grant needs its own design, confirmation, audit language, and RBAC review before any remote surface offers it.
-- **`inject.midTurn`** — SessionStart and PostToolUse register `agent-session-inbox.sh` with `asyncRewake: true`. Exit code 2 wakes the model with stderr as a system reminder — that is Delivered.
-- **`inject.turnBoundary`** — Stop returns `decision: "block"` with the instruction as `reason`, which continues the turn with that text. The model receives it, so this path also reports Delivered.
+- **`inject.midTurn`** — Session-input injection moved off Overlord connectors. Latch PTY write is Phase 3.
+- **`inject.turnBoundary`** — Turn-boundary injection moved off Overlord connectors. The protocol Stop hook still reminds the agent to deliver when needed.
 - **`inject.nextTurn`** — No distinct next-turn-only path yet; turn-boundary Stop covers the portable fallback.
 - **`terminal.statusSurface`** — `statusMessage` is static install-time configuration with no per-request interpolation and no session-binding predicate, so it renders in unbound sessions too. It must be worded as an option, never as an instruction.
 

@@ -233,10 +233,13 @@ missionDiscovery:
       - --agent
       - --assigned-to
       - --session-key
+      - --auto-advance
+      - --no-auto-advance
     rules:
       - '--agent names the connector/agent identifier authoring the row and is recorded as creation provenance (missions.created_by_agent / objectives.created_by_agent); it does not select the agent that will run the work'
       - '--assigned-to resolves one workspace member by workspace_users.id, profile UUID, orgid:username, bare username, or email; an unresolvable member is rejected with the same "Assignee is not a member of this workspace" error REST uses and is never silently left unassigned'
       - '--session-key additionally attributes the created row to the calling agent session (created_by_session_id) and lets an omitted --assigned-to inherit the session mission assignee'
+      - '--auto-advance / --no-auto-advance set the default autoAdvance for created objectives; per-item autoAdvance in --objectives-json / --objectives-file wins when present; omitted defaults to false'
     sideEffects:
       - creates-mission-or-inbox-item
       - creates-objective-in-draft-state-when-project-resolved
@@ -247,8 +250,11 @@ missionDiscovery:
       - --agent
       - --assigned-to
       - --session-key
+      - --auto-advance
+      - --no-auto-advance
     rules:
       - '--agent, --assigned-to, and --session-key carry the same meaning and resolution rules as on create'
+      - '--auto-advance / --no-auto-advance and per-item autoAdvance follow the same rules as on create'
     sideEffects:
       - creates-mission
       - attaches-or-queues-execution
@@ -275,8 +281,26 @@ missionDiscovery:
 
   addObjectives:
     description: 'Append ordered objectives to an existing mission'
+    optionalFlags:
+      - --auto-advance
+      - --no-auto-advance
+    rules:
+      - 'Each --objectives-json / --objectives-file item may set autoAdvance; --auto-advance / --no-auto-advance supply the default when an item omits it; omitted defaults to false'
     sideEffects:
       - creates-objectives-in-draft-state
+
+  updateObjective:
+    description: 'Turn auto-advance on or off for an existing objective'
+    requiredFlags:
+      - --objective-id
+    optionalFlags:
+      - --auto-advance
+      - --no-auto-advance
+    rules:
+      - 'Exactly one of --auto-advance or --no-auto-advance is required'
+      - 'Does not require a session key'
+    sideEffects:
+      - updates-objective-auto-advance
 
   recordWork:
     description: 'Record already-completed chat work as a review mission without an attached session'

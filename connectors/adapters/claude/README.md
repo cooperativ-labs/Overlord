@@ -19,7 +19,7 @@ Claude Code plugin that exposes the Overlord local mission workflow to any Claud
 ### Requirements
 
 - Overlord CLI (`ovld`) on `PATH`. See the Overlord docs / Settings → Agents & MCP.
-- `MISSION_ID` is exported automatically when a Claude session is launched from Overlord; outside that launch, set it manually before calling the permission hook.
+- `MISSION_ID` is exported automatically when a Claude session is launched from Overlord.
 
 ### Install (recommended)
 
@@ -85,9 +85,9 @@ This connector is intentionally reviewable against the four connector layers in 
 
 - `skills/overlord-mission/SKILL.md` — Claude adapter template with a `<!-- @connector-core -->` marker; setup interpolates shared core content at install time.
 - `commands/*.md` — slash commands for session routing, objective discussion, mission creation, and work recording.
-- `hooks/hooks.json` + `scripts/*.sh` — mission follow-up and touched-file capture plus the
-  scoped `ovld agent-session` observe, decision, and injection paths. Decision failures emit no
-  native response, so Claude retains its normal permission behavior.
+- `hooks/hooks.json` + `scripts/*.sh` — Channel 1 mission follow-up (`UserPromptSubmit`),
+  touched-file capture (`PostToolUse`), and Stop delivery reminder. Mechanical harness
+  observation, permission, and injection are Latch's (`latch events` / PTY).
 - `userConfig` for `overlord_url` and `user_token`; the hook scripts use the `ovld protocol` CLI and pass the plugin's USER_TOKEN to that CLI as `Overlord_USER_TOKEN`.
 - `conformance-manifest.yaml` — connector conformance declaration for the Overlord contract.
 - `prompt-wrapper.md` — Claude launch context-file guidance.

@@ -8,6 +8,7 @@
 import { fail } from './result.ts';
 import type {
   CapabilityFailure,
+  CollectLatchEventsInput,
   DiscoverLatchInput,
   GenerateCommitMessageInput,
   InspectLatchSessionInput,
@@ -24,6 +25,7 @@ import type {
   ReadCurrentDiffInput,
   ReadRepositoryTreeInput,
   RemoveWorktreeInput,
+  ResolveLatchInputInput,
   StopLatchSessionInput,
   TargetMetadata,
   WriteProjectMetadataInput
@@ -162,6 +164,12 @@ export class UnavailableProvider implements LocalTargetCapabilities {
     return this.#fail();
   }
   stopLatchSession(_input: StopLatchSessionInput) {
+    return this.#fail();
+  }
+  collectLatchEvents(_input: CollectLatchEventsInput) {
+    return this.#fail();
+  }
+  resolveLatchInput(_input: ResolveLatchInputInput) {
     return this.#fail();
   }
   doctor() {

@@ -88,6 +88,35 @@ describe('Latch terminal-session lifecycle capabilities', () => {
     );
   });
 
+  it('dispatches collect and resolve through the same target provider', async () => {
+    const provider = new FakeLocalTargetProvider();
+    const collect = await invokeLocalTargetCapability({
+      provider,
+      call: {
+        capability: 'collectLatchEvents',
+        input: { providerSessionId: 'ses_1', executable: 'latch', from: 2 }
+      }
+    });
+    const resolve = await invokeLocalTargetCapability({
+      provider,
+      call: {
+        capability: 'resolveLatchInput',
+        input: {
+          providerSessionId: 'ses_1',
+          executable: 'latch',
+          requestId: 'permission-1',
+          choice: 'Allow once'
+        }
+      }
+    });
+    assert.equal(collect.ok, true);
+    assert.equal(resolve.ok, true);
+    assert.deepEqual(
+      provider.calls.slice(-2).map(call => call.capability),
+      ['collectLatchEvents', 'resolveLatchInput']
+    );
+  });
+
   it('keeps target reachability separate from the retained session state', async () => {
     const provider = new UnavailableProvider(
       { executionTargetId: 'et-2', deviceLabel: 'Remote', transport: 'runner_queue' },

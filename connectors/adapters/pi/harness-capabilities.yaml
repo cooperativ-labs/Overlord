@@ -29,18 +29,16 @@ binding:
   fixture: fixtures/agent-session-runtime.json
   notes: >-
     The extension runs in-process and can read the session id directly; the shipped extension
-    already writes it into the native-session cache. That cache is keyed by (cwd, mission,
-    agent) today — cwd may help LOCATE an existing binding but can never create one or
-    authorize an event. The channel credential is the authority.
+    writes it into the native-session cache. Channel 1 protocol follow-up does not require a
+    Latch session or an Agent Session Exchange channel.
 
 decisionHold:
-  status: supported
-  fixture: fixtures/agent-session-runtime.json
+  status: not-implemented
+  trackedAs: latch-engine
   maxTimeoutSeconds: null
   notes: >-
-    `tool_call` handlers are async, so a decision can be awaited without blocking any process
-    and there is no harness timeout ceiling. There is also no native prompt to release to:
-    a timed-out request must let the tool proceed.
+    Remote decision hold moved to Latch. Pi has no native prompt; Overlord no longer intercepts
+    tool calls.
 
 capabilities:
   observe.prompt:
@@ -48,12 +46,12 @@ capabilities:
     native: input
     fixtures: [fixtures/agent-session-runtime.json]
     notes: >-
-      The shipped extension already captures `input` and posts legacy follow-up activity
-      through the CLI. That is not the normalized agent-session event graded here.
+      The shipped extension captures `input` and posts follow-up activity through
+      `ovld protocol hook-event`. Mechanical agent-session observation is not a live path.
   observe.toolCall:
-    status: supported
+    status: not-implemented
     native: tool_call
-    fixtures: [fixtures/normalize-tool-call.json]
+    trackedAs: latch-engine
   observe.toolResult:
     status: not-implemented
     native: tool_result
@@ -63,33 +61,32 @@ capabilities:
     native: tool_execution_end
     trackedAs: agent-session-phase-4
   observe.sessionLifecycle:
-    status: supported
+    status: not-implemented
     native: agent_start
-    fixtures: [fixtures/agent-session-runtime.json]
+    trackedAs: latch-engine
   decide.shell:
-    status: supported
+    status: not-implemented
     native: tool_call
-    fixtures: [fixtures/agent-session-runtime.json, fixtures/decision-codec.json]
+    trackedAs: latch-engine
   decide.mcp:
-    status: supported
+    status: not-implemented
     native: tool_call
-    fixtures: [fixtures/agent-session-runtime.json, fixtures/decision-codec.json]
+    trackedAs: latch-engine
   decide.fileWrite:
-    status: supported
+    status: not-implemented
     native: tool_call
-    fixtures: [fixtures/agent-session-runtime.json, fixtures/decision-codec.json]
+    trackedAs: latch-engine
   decide.anyTool:
-    status: supported
+    status: not-implemented
     native: tool_call
-    fixtures: [fixtures/agent-session-runtime.json, fixtures/decision-codec.json]
+    trackedAs: latch-engine
   decide.universal:
-    status: supported
+    status: not-implemented
     native: tool_call
-    fixtures: [fixtures/agent-session-runtime.json, fixtures/decision-codec.json]
+    trackedAs: latch-engine
     notes: >-
-      One async handler covers every tool call, so coverage is genuinely universal — but the
-      only two outcomes are "return (the tool runs)" and "block with a reason (the model is
-      told it was refused)". There is no defer.
+      Remote tool-call decisions moved to Latch. Pi no longer intercepts tools on the Overlord
+      connector path.
   answer.structuredQuestion:
     status: not-implemented
     native: ctx.ui.select
@@ -102,16 +99,15 @@ capabilities:
       the harness, which is a different feature with its own audit and RBAC review.
     evidenceRef: connector-harness-taxonomy.md#52-what-is-verified
   inject.midTurn:
-    status: supported
+    status: not-implemented
     native: sendUserMessage(deliverAs=steer)
-    fixtures: [fixtures/inject-send-user-message.json]
+    trackedAs: latch-engine
     notes: >-
-      `steer` is genuine mid-turn injection. The extension claims via inbox, calls
-      sendUserMessage, then confirms — Delivered only after the harness accepts the message.
+      Session-input injection moved off the Overlord connector. Latch PTY write is Phase 3.
   inject.turnBoundary:
-    status: supported
+    status: not-implemented
     native: sendUserMessage(deliverAs=followUp)
-    fixtures: [fixtures/inject-send-user-message.json]
+    trackedAs: latch-engine
   inject.nextTurn:
     status: not-implemented
     native: sendMessage(deliverAs=nextTurn)
@@ -136,8 +132,7 @@ hazards:
       Remote decisions stay off by default and require a workspace-policy ceiling plus project
       opt-in whose consent text names the fail-open timeout.
     verification: verified
-    mitigation: implemented
-    fixture: fixtures/agent-session-runtime.json
+    mitigation: accepted
   - id: block-is-visible-to-the-model
     severity: medium
     summary: >-
@@ -145,8 +140,7 @@ hazards:
       so `block` must never be used as a "please wait" mechanism. The wait happens inside the
       async handler, before returning.
     verification: verified
-    mitigation: implemented
-    fixture: fixtures/agent-session-runtime.json
+    mitigation: accepted
   - id: in-process-blast-radius
     severity: high
     summary: >-

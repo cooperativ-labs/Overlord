@@ -11,11 +11,11 @@ connector:
   # `capabilities` and `hookTypes` are the DEPRECATED hook-named projection, retained for
   # one release. `harnessCapabilities` is the authoritative source.
   integrationShape: callback
-  capabilityTier: 3
+  capabilityTier: 1
   harnessCapabilities:
     path: connectors/adapters/cursor/harness-capabilities.yaml
     schemaVersion: 1
-    digest: "f5cf848a2f9287bda3ddd2a4158ce8c05ce0fdadde32212c975062edf6f64ce8"
+    digest: "7085c25291f5c96cf3c7fb9c280281fa698b5c026e9859377ad8c53d1cd82537"
   capabilities:
     - followUpHook
     - stopHook
@@ -44,10 +44,8 @@ connector:
     - "commands/record-work.md"
     - "commands/spawn.md"
     - "hooks/overlord-user-prompt-submit.sh"
-    - "hooks/overlord-permission-request.sh"
     - "hooks/overlord-post-tool-use.sh"
     - "hooks/overlord-stop.sh"
-    - "scripts/agent-session-event.sh"
     - "mcp.json"
     - "prompt-wrapper.md"
     - "rules/overlord-local.mdc"

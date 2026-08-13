@@ -4,7 +4,7 @@
 # IMPORTANT: Update this file and CONTRACT.md together when adding components or surfaces.
 # Increment contractVersion when any stable interface changes.
 
-contractVersion: '74'
+contractVersion: '76'
 
 components:
   protocol:
@@ -25,6 +25,7 @@ components:
       - 'in-place mission artifact updates via update-artifact (same editable fields and revision CAS as REST PATCH /api/missions/:id/artifacts/:artifactId; no session key required)'
       - 'mid-turn mission artifact creation via add-artifact (POST /api/protocol/add-artifact), which creates an artifact without a delivery using the same createArtifact service as REST POST /api/missions/:id/artifacts; optional session key stamps session/objective provenance when present'
       - 'account-owned inbox capture: protocol create --inbox explicitly creates a private profile-owned inbox item; ordinary non-executing create falls back to inbox only after explicit and discovered project resolution fail, while prompt and record-work remain project-required'
+      - 'objective auto-advance on create/prompt/add-objectives via per-item autoAdvance and --auto-advance/--no-auto-advance, plus update-objective to toggle auto-advance on an existing objective'
       - 'agent-facing mission lifecycle commands only; runner queue/device/project-resource management commands live on CLI/Runner/REST surfaces'
     dependsOn:
       - database
@@ -140,11 +141,12 @@ components:
       - 'runner-instance identity and heartbeat: a stable runnerInstanceId plus a native/adopted relation to the execution target it serves, published on every claim so the backend reports honest local liveness'
       - 'persistent runner service: ovld runner supervise delegates to the same claim-and-launch path as ovld runner once; Postgres runners reconnect queue long-polls immediately after an empty wake/25s timeout while SQLite retains an adaptive polling fallback; ovld runner service <install|start|stop|restart|status|uninstall> manages an OS-level user service (macOS launchd io.overlord.runner, Linux systemd --user overlord-runner.service); local diagnostic state in ~/.ovld/runner-service.json; owner-only service files; Windows deferred'
       - 'execution target selection logic'
-      - 'runner queue REST operations used by ovld runner: GET /api/runner/status, POST /api/runner/claim, POST /api/runner/clear, POST /api/runner/requests/:id/launching, POST /api/runner/requests/:id/launched (additive optional providerSession body), POST /api/runner/requests/:id/failed'
+      - 'runner queue REST operations used by ovld runner: GET /api/runner/status, POST /api/runner/claim, POST /api/runner/clear, POST /api/runner/requests/:id/launching, POST /api/runner/requests/:id/launched (additive optional providerSession body), POST /api/runner/requests/:id/failed, POST /api/runner/requests/:id/harness-events (additive Latch event ingest; presentation only)'
       - 'branch-preparation acknowledgement through POST /api/missions/:id/branch-prepared'
       - 'Latch capability discovery on the execution target: run read-only `latch capabilities --json` where the process will run, expose found/not_installed/incompatible states, cache per target with cheap revalidation, never install or upgrade Latch as a side effect'
       - 'Latch launch path: when claim-time launchSession selects latch and the launch environment contains LATCH_SESSION_ID, run the same terminal command string S inline in that existing PTY via $SHELL -lc, record the opaque id as providerSession, and never call latch create or open; the marker is correlation only and grants no authority. Otherwise, when discovery is found, replace only the final spawn with latch create --manifest-file - --json using S via $SHELL -lc, record providerSession on execution_requests.metadata_json, then best-effort latch open; viewer failure must not fail the request; direct launch unchanged when provider is direct or Latch unavailable'
-      - 'Latch terminal-session lifecycle capabilities on the execution target: inspectLatchSession, openLatchSession, and stopLatchSession invoke the public Latch CLI with argv on the mapped device; inspect state is running/exited/stopping/lost while reachability remains a separate capability-result/client condition; stop is explicit and never coupled to objective delivery or completion'
+      - 'Latch terminal-session lifecycle capabilities on the execution target: inspectLatchSession, openLatchSession, stopLatchSession, collectLatchEvents, and resolveLatchInput invoke the public Latch CLI with argv on the mapped device; inspect state is running/exited/stopping/lost while reachability remains a separate capability-result/client condition; stop is explicit and never coupled to objective delivery or completion; collectLatchEvents snapshots `latch events --json --from`; resolveLatchInput relays `latch send --resolve` when the binary advertises it'
+      - 'Launch does not mint Agent Session Exchange channels. Protocol attach is the binding declaration and does not require a Latch session or a session channel'
     dependsOn:
       - database
       - connector
@@ -162,7 +164,9 @@ components:
       - 'project resource-source launch defaults via PATCH /api/projects/:id/resources/:resourceId/sources/:sourceId, preserving the materialization fields in descriptor_json while replacing per-agent launchDefaults'
       - 'request/response DTO shapes (camelCase, derived from logical schema)'
       - 'creation-provenance projection: MissionDto/ObjectiveDto carry non-optional createdByKind (human fallback in the mapper), createdByAgent, and createdByWorkspaceUserId; MissionDetailDto alone carries createdFrom (sessionId, missionId, missionDisplayId, agentIdentifier, or null) via a LEFT JOIN that tolerates a missing session and is never paid per board row'
-      - 'terminal-session projection: MissionDetailDto.terminalSessions additively returns bounded Latch provider-session mappings from all mission execution requests, with target/device label, stored name, claim-time executable/viewer, and last observed state; it never exposes launch material, terminal output, credentials, socket tokens, or attachment grants'
+      - 'terminal-session projection: MissionDetailDto.terminalSessions additively returns bounded Latch provider-session mappings from all mission execution requests, with target/device label, stored name, claim-time executable/viewer, last observed state, and additive observation (cursor, turnCount, pending awaiting_input, unattached); it never exposes launch material, terminal output, credentials, socket tokens, or attachment grants'
+      - 'POST /api/missions/:id/terminal-sessions/harness-events ingests Latch NDJSON as presentation and may emit agent_question for a new awaiting_input; POST /api/missions/:id/terminal-sessions/resolve-observation clears a pending request id after a local-target latch send --resolve. Neither is a Latch dependency for protocol Channel 1'
+      - 'Agent Session Exchange human resolve/enqueue/release surfaces remain mounted for historical rows but return no active controls (410). Adapter channel routes are not used by new connector installs'
       - 'profile-owned inbox routes: authenticated GET/POST /api/inbox, GET/PATCH/DELETE /api/inbox/:id, and POST /api/inbox/:id/promote; profile isolation returns 404, promotion requires mission:create on the destination project and atomically creates its normal mission then consumes the capture; inbox writes are intentionally outside workspace realtime'
       - 'delivery read projection: GET /api/missions/:id/deliveries returns normalized DeliveryDto records and delivery mission events expose an additive deliveryId without raw payload JSON'
       - 'admin-only workspace objective CSV export (GET /api/workspaces/:id/objectives.csv) as a text/csv attachment'
@@ -314,6 +318,8 @@ components:
       - 'hosted overlord_update_artifact tool forwarding to Protocol update-artifact'
       - 'hosted overlord_add_artifact tool forwarding to Protocol add-artifact'
       - 'additive assignedTo input on overlord_create_mission, forwarded to the same service-layer member resolver as Protocol --assigned-to (workspace_users.id, profile UUID, orgid:username, bare username, or email); an unresolvable member is an error, never a silent fallback to unassigned'
+      - 'additive autoAdvance input on overlord_create_mission and overlord_add_objectives items, forwarded to Protocol create/add-objectives'
+      - 'hosted overlord_update_objective tool forwarding to Protocol update-objective'
     dependsOn:
       - auth
       - protocol
@@ -512,6 +518,7 @@ interactionSurfaces:
       - 'Hosted MCP delivery artifacts use the existing Protocol deliver artifact shape and lifecycle; MCP does not create artifact types or write artifact rows directly'
       - 'Hosted MCP mid-turn artifact creation uses overlord_add_artifact → Protocol add-artifact → the same createArtifact service as REST POST; MCP does not write artifact rows directly'
       - 'Hosted MCP artifact updates use overlord_update_artifact → Protocol update-artifact → the same updateArtifact service as REST PATCH; MCP does not write artifact rows directly'
+      - 'Hosted MCP objective auto-advance uses overlord_create_mission / overlord_add_objectives autoAdvance and overlord_update_objective → Protocol create/add-objectives/update-objective; MCP does not write objective rows directly'
       - 'Hosted MCP must not expose local filesystem/worktree inspection, runner queue claiming, execution target mutation, or branch-action tools'
       - 'MCP Apps widget resources use ui://overlord/* URIs, self-contained HTML, and associated tool structuredContent only; no third-party frames, secrets, or unrestricted network access'
 

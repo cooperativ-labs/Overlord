@@ -25,8 +25,10 @@ import {
   getLaunchSettings,
   getObjectiveLaunchCommand,
   getObjectivePrompt,
+  ingestMissionHarnessEvents,
   launchObjective,
   refreshAgentCatalog,
+  resolveMissionLatchObservation,
   updateAgentCatalog,
   updateAgentLaunchConfig,
   updateLaunchPreference,
@@ -48,6 +50,7 @@ import {
   claimRunnerRequest,
   clearRunnerRequests,
   completeRunnerMutationRequest,
+  ingestRunnerHarnessEvents,
   providerSessionFromLaunchedBody,
   recordBranchPrepared,
   runnerStatus,
@@ -1654,24 +1657,19 @@ app.patch(
   '/api/missions/:id/objectives/reorder',
   handle(req => reorderFutureObjectives(req.params.id, req.body), { mutates: true })
 );
-// Manual launch preparation.
-//
-// A queued launch gets its channel from the `launching` transition, where the backend is
-// already in the loop. `ovld launch` has no such moment, so it asks for one here — through
-// ordinary human authentication, gated on the same permission as attach, because preparing a
-// channel is the act of authorizing a future agent process to speak for this mission.
-//
-// This is deliberately a *human* route despite producing an adapter credential. The person
-// running `ovld launch` is who we are authorizing; the channel credential it mints is what the
-// launched process will hold. A channel credential can never call this route to mint another.
-// No route-level `requires`: like every other resource-scoped mission route, the handler
-// authorizes `session:attach` against the *mission's own* workspace. A route-level gate would
-// evaluate the caller's currently-active workspace, which is the wrong tenant whenever the
-// mission lives in a secondary one — rejecting legitimate callers and checking the wrong
-// membership for everyone else.
+// Historical session-channel mint. Launch no longer creates Agent Session Exchange
+// credentials; the route stays mounted so older CLIs receive 410 instead of minting.
 app.post(
   '/api/missions/:id/session-channel',
   handle(req => prepareMissionSessionChannel(req.params.id, req.body ?? {}), { mutates: true })
+);
+app.post(
+  '/api/missions/:id/terminal-sessions/harness-events',
+  handle(req => ingestMissionHarnessEvents(req.params.id, req.body ?? {}), { mutates: true })
+);
+app.post(
+  '/api/missions/:id/terminal-sessions/resolve-observation',
+  handle(req => resolveMissionLatchObservation(req.params.id, req.body ?? {}), { mutates: true })
 );
 app.use('/api/agent-requests', createAgentRequestHumanRouter());
 app.use('/api/agent-session-inputs', createAgentSessionInputHumanRouter());
@@ -1997,6 +1995,12 @@ app.post(
       mutates: true
     }
   )
+);
+app.post(
+  '/api/runner/requests/:id/harness-events',
+  handle(req => ingestRunnerHarnessEvents({ requestId: req.params.id, body: req.body ?? {} }), {
+    mutates: true
+  })
 );
 app.post(
   '/api/runner/requests/:id/failed',

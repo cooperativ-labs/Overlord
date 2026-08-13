@@ -194,7 +194,7 @@ test('agent-session event: malformed and oversize payloads are dropped silently'
  * registrations, delivery-time change attribution and follow-up capture both break, and neither
  * failure is visible until a delivery comes back empty.
  */
-test('agent-session event: the legacy Claude registrations survive alongside the new one', () => {
+test('Claude Channel 1 protocol registrations survive without agent-session observation', () => {
   const hooks = JSON.parse(
     readFileSync(path.join(repoRoot, 'connectors/adapters/claude/hooks/hooks.json'), 'utf8')
   ) as { hooks: Record<string, { hooks: { command: string }[] }[]> };
@@ -203,14 +203,18 @@ test('agent-session event: the legacy Claude registrations survive alongside the
     (hooks.hooks[event] ?? []).flatMap(entry => entry.hooks.map(hook => hook.command));
 
   assert.ok(commandsFor('PostToolUse').some(c => c.endsWith('/scripts/post-tool-use-hook.sh')));
-  assert.ok(commandsFor('PostToolUse').some(c => c.endsWith('/scripts/agent-session-event.sh')));
   assert.ok(
     commandsFor('UserPromptSubmit').some(c => c.endsWith('/scripts/user-prompt-submit-hook.sh'))
   );
-  assert.ok(
-    commandsFor('UserPromptSubmit').some(c => c.endsWith('/scripts/agent-session-event.sh'))
+  assert.equal(
+    commandsFor('PostToolUse').some(c => c.endsWith('/scripts/agent-session-event.sh')),
+    false
   );
-  assert.ok(commandsFor('SessionStart').some(c => c.endsWith('/scripts/agent-session-event.sh')));
+  assert.equal(
+    commandsFor('UserPromptSubmit').some(c => c.endsWith('/scripts/agent-session-event.sh')),
+    false
+  );
+  assert.equal(commandsFor('SessionStart').length, 0);
 });
 
 test('agent-session event: the rendered hook gates before it spawns', () => {

@@ -41,14 +41,15 @@ config set` opens the interactive backend selector; `ovld config set local
 Requirements:
 
 - `ovld create "<objective>"`: create a draft mission/objective from a prompt-like string.
-- `ovld create --objectives-json '[{"objective":"..."}]'`: create one mission with ordered objectives.
+- `ovld create --objectives-json '[{"objective":"...","autoAdvance":true}]'`: create one mission with ordered objectives. `--auto-advance` / `--no-auto-advance` set the default when an item omits `autoAdvance`.
 - `ovld inbox create --title "<title>" --objective "<objective>": create a private, account-owned unassigned capture; `ovld protocol create --inbox` is the protocol equivalent.
 - `ovld prompt "<objective>"`: create a mission and immediately queue or launch execution.
 - `ovld attach [missionId] [agent]`: search/select a mission and launch an agent interactively.
 - `ovld missions list [--status <csv>] [--project-id <id-or-name>] [--limit <n>]`: list missions.
 - `ovld mission context <missionId>`: print the assembled context for a mission without starting a session.
 - `ovld protocol search-missions --query "<text>" --status next-up,execute`: search missions.
-- `ovld protocol add-objectives --mission-id <id> --objectives-json '[...]'`: append objectives to an existing mission.
+- `ovld protocol add-objectives --mission-id <id> --objectives-json '[...]'`: append objectives to an existing mission. Each item may set `autoAdvance`.
+- `ovld protocol update-objective --objective-id <id> --auto-advance|--no-auto-advance`: turn auto-advance on or off for an existing objective.
 - `ovld protocol discuss-objective --mission-id <id>`: mark a draft objective submitted without attaching.
 - `ovld protocol record-work`: record work already completed in chat as a review mission without an active session.
 

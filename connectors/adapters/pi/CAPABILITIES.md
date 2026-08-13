@@ -2,11 +2,11 @@
 
 # Pi Coding Agent — Overlord agent-session capabilities
 
-**Adapter** `pi` · **Codec** `pi` · **Integration shape** `extension` · **Capability tier** 3 (Conversational)
+**Adapter** `pi` · **Codec** `pi` · **Integration shape** `extension` · **Capability tier** 1 (Observational)
 
 **Harness version verified** `0.83.0` · **range** `>=0.83.0 <0.84.0` · **scheme** `semver`
 
-**Descriptor digest** `1b4966a98c4994645dd4a46a930f38864e8eec3922603d4c5f2117dcbadcab79`
+**Descriptor digest** `d083b9610578e1af2e73b273d0661430213fbbe5ff24550e8f0815c284733ae1`
 
 > The tier is derived from passing fixtures, never authored. `unsupported` means the harness
 > cannot do it — do not attempt it. `not-implemented` means it is buildable and unbuilt: that is
@@ -22,7 +22,7 @@
 | Field | `ctx.sessionManager.getSessionId()` |
 | Evidence | fixtures: `fixtures/agent-session-runtime.json` |
 
-The extension runs in-process and can read the session id directly; the shipped extension already writes it into the native-session cache. That cache is keyed by (cwd, mission, agent) today — cwd may help LOCATE an existing binding but can never create one or authorize an event. The channel credential is the authority.
+The extension runs in-process and can read the session id directly; the shipped extension writes it into the native-session cache. Channel 1 protocol follow-up does not require a Latch session or an Agent Session Exchange channel.
 
 The native session id is a **correlation alias only**. Authorization and mission scope come
 from the verified channel/session credential; neither the working directory nor an unverified
@@ -32,46 +32,46 @@ native id is a binding authority.
 
 | Field | Value |
 | --- | --- |
-| Status | ✅ supported |
+| Status | 🚧 not-implemented |
 | Harness ceiling | none documented |
-| Evidence | fixtures: `fixtures/agent-session-runtime.json` |
+| Evidence | tracked as `latch-engine` |
 
-`tool_call` handlers are async, so a decision can be awaited without blocking any process and there is no harness timeout ceiling. There is also no native prompt to release to: a timed-out request must let the tool proceed.
+Remote decision hold moved to Latch. Pi has no native prompt; Overlord no longer intercepts tool calls.
 
 ## Capabilities
 
 | Capability | Status | Native | Evidence |
 | --- | --- | --- | --- |
 | `observe.prompt` | ✅ supported | `input` | fixtures: `fixtures/agent-session-runtime.json` |
-| `observe.toolCall` | ✅ supported | `tool_call` | fixtures: `fixtures/normalize-tool-call.json` |
+| `observe.toolCall` | 🚧 not-implemented | `tool_call` | tracked as `latch-engine` |
 | `observe.toolResult` | 🚧 not-implemented | `tool_result` | tracked as `agent-session-phase-4` |
 | `observe.fileEdit` | 🚧 not-implemented | `tool_execution_end` | tracked as `agent-session-phase-4` |
-| `observe.sessionLifecycle` | ✅ supported | `agent_start` | fixtures: `fixtures/agent-session-runtime.json` |
-| `decide.shell` | ✅ supported | `tool_call` | fixtures: `fixtures/agent-session-runtime.json`, `fixtures/decision-codec.json` |
-| `decide.mcp` | ✅ supported | `tool_call` | fixtures: `fixtures/agent-session-runtime.json`, `fixtures/decision-codec.json` |
-| `decide.fileWrite` | ✅ supported | `tool_call` | fixtures: `fixtures/agent-session-runtime.json`, `fixtures/decision-codec.json` |
-| `decide.anyTool` | ✅ supported | `tool_call` | fixtures: `fixtures/agent-session-runtime.json`, `fixtures/decision-codec.json` |
-| `decide.universal` | ✅ supported | `tool_call` | fixtures: `fixtures/agent-session-runtime.json`, `fixtures/decision-codec.json` |
+| `observe.sessionLifecycle` | 🚧 not-implemented | `agent_start` | tracked as `latch-engine` |
+| `decide.shell` | 🚧 not-implemented | `tool_call` | tracked as `latch-engine` |
+| `decide.mcp` | 🚧 not-implemented | `tool_call` | tracked as `latch-engine` |
+| `decide.fileWrite` | 🚧 not-implemented | `tool_call` | tracked as `latch-engine` |
+| `decide.anyTool` | 🚧 not-implemented | `tool_call` | tracked as `latch-engine` |
+| `decide.universal` | 🚧 not-implemented | `tool_call` | tracked as `latch-engine` |
 | `answer.structuredQuestion` | 🚧 not-implemented | `ctx.ui.select` | tracked as `agent-session-phase-4` |
 | `answer.persistentAllow` | ⛔ unsupported | — | Pi has no native permission model, so there is no standing allow rule for a reply to write. A persistent grant would have to be invented by Overlord rather than recorded in the harness, which is a different feature with its own audit and RBAC review. (evidence: `connector-harness-taxonomy.md#52-what-is-verified`) |
-| `inject.midTurn` | ✅ supported | `sendUserMessage(deliverAs=steer)` | fixtures: `fixtures/inject-send-user-message.json` |
-| `inject.turnBoundary` | ✅ supported | `sendUserMessage(deliverAs=followUp)` | fixtures: `fixtures/inject-send-user-message.json` |
+| `inject.midTurn` | 🚧 not-implemented | `sendUserMessage(deliverAs=steer)` | tracked as `latch-engine` |
+| `inject.turnBoundary` | 🚧 not-implemented | `sendUserMessage(deliverAs=followUp)` | tracked as `latch-engine` |
 | `inject.nextTurn` | 🚧 not-implemented | `sendMessage(deliverAs=nextTurn)` | tracked as `agent-session-phase-4` |
 | `terminal.concurrentAnswer` | ⛔ unsupported | — | There is no native permission prompt for a human to answer concurrently. This is not a timing limitation like the callback harnesses have; the surface does not exist. (evidence: `connector-harness-taxonomy.md#53-unique-challenges`) |
 | `terminal.statusSurface` | 🚧 not-implemented | `ctx.ui.notify` | tracked as `agent-session-phase-4` |
 
 ### Capability notes
 
-- **`observe.prompt`** — The shipped extension already captures `input` and posts legacy follow-up activity through the CLI. That is not the normalized agent-session event graded here.
-- **`decide.universal`** — One async handler covers every tool call, so coverage is genuinely universal — but the only two outcomes are "return (the tool runs)" and "block with a reason (the model is told it was refused)". There is no defer.
-- **`inject.midTurn`** — `steer` is genuine mid-turn injection. The extension claims via inbox, calls sendUserMessage, then confirms — Delivered only after the harness accepts the message.
+- **`observe.prompt`** — The shipped extension captures `input` and posts follow-up activity through `ovld protocol hook-event`. Mechanical agent-session observation is not a live path.
+- **`decide.universal`** — Remote tool-call decisions moved to Latch. Pi no longer intercepts tools on the Overlord connector path.
+- **`inject.midTurn`** — Session-input injection moved off the Overlord connector. Latch PTY write is Phase 3.
 
 ## Hazards
 
 | Hazard | Severity | Verification | Mitigation | Tracked as |
 | --- | --- | --- | --- | --- |
-| `no-native-floor-fails-open` | high | verified | implemented | fixture `fixtures/agent-session-runtime.json` |
-| `block-is-visible-to-the-model` | medium | verified | implemented | fixture `fixtures/agent-session-runtime.json` |
+| `no-native-floor-fails-open` | high | verified | accepted | — |
+| `block-is-visible-to-the-model` | medium | verified | accepted | — |
 | `in-process-blast-radius` | high | verified | implemented | fixture `fixtures/extension-holds-no-credentials.json` |
 | `typed-api-version-coupling` | medium | unverified | required | `taxonomy-7.10` |
 

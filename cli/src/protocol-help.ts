@@ -25,6 +25,7 @@ export const SUPPORTED_PROTOCOL_SUBCOMMANDS = [
   'search-missions',
   'update',
   'update-artifact',
+  'update-objective',
   'write-context'
 ] as const;
 
@@ -82,6 +83,7 @@ Subcommands:
   search-missions         Find missions by keyword, status, or project
   discuss-objective      Mark a draft objective as submitted (does not start execution)
   add-objectives         Append ordered objectives to an existing mission
+  update-objective       Set auto-advance on an existing objective
   create                 Create a draft mission without attaching
   prompt                 Create a mission and attach to it immediately
   record-work            Record completed-from-chat work as a review mission (no attach)
@@ -195,6 +197,21 @@ add-objectives:
   Required:
     --mission-id <id>
     --objectives-json <json> or --objectives-file <path|->
+  Optional:
+    --auto-advance / --no-auto-advance
+        Default auto-advance for items that omit "autoAdvance". Defaults to off.
+  Notes:
+    Each item is { "objective": "...", "title": "...", "autoAdvance": true|false,
+    "resourceKey": "..." }. Per-item autoAdvance wins over the flag.
+
+update-objective:
+  Purpose:
+    Turn auto-advance on or off for an existing objective.
+  Required:
+    --objective-id <id>
+    --auto-advance or --no-auto-advance
+  Returns:
+    The updated objective JSON, including autoAdvance.
 
 create:
   Purpose:
@@ -208,6 +225,9 @@ create:
     --project-id <id>           Skips working-directory project resolution
     --inbox                     Force an account-owned inbox item instead of a project mission
     --assigned-to <id>          Workspace member to own the mission (meaningless on the inbox fallback)
+    --auto-advance / --no-auto-advance
+        Queue the next objective after this one is delivered. Defaults to off.
+        Per-item override: "autoAdvance": true|false in --objectives-json items.
 
 prompt:
   Purpose:
@@ -221,6 +241,9 @@ prompt:
     --model <identifier>
     --external-session-id <id>
     --assigned-to <id>          Workspace member to own the mission
+    --auto-advance / --no-auto-advance
+        Queue the next objective after this one is delivered. Defaults to off.
+        Per-item override: "autoAdvance": true|false in --objectives-json items.
   Returns:
     New mission/session JSON plus SESSION_KEY on stderr when available.
 

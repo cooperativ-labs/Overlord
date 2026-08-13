@@ -1,20 +1,20 @@
 {
   "fixtureVersion": 1,
   "kind": "source-guard",
-  "description": "Codex uses one channel-scoped hook surface: normalized events, callback decisions, and Stop-boundary inbox delivery. The legacy follow-up hook remains additive.",
+  "description": "Codex Channel 1 keeps the protocol follow-up hook. Mechanical agent-session observe/decide/inject is no longer registered.",
   "path": "connectors/adapters/codex/.codex-plugin/hooks.json",
   "assert": {
-    "mustContain": [
+    "mustContain": ["user-prompt-submit-hook.sh"],
+    "mustNotContain": [
       "agent-session-event.sh",
       "agent-session-request.sh",
       "agent-session-inbox.sh",
+      "permission-hook.sh",
+      "\"PermissionRequest\"",
       "\"PreToolUse\"",
       "\"PostToolUse\"",
       "\"SessionStart\"",
-      "\"Stop\"",
-      "\"timeout\": 35",
-      "user-prompt-submit-hook.sh"
-    ],
-    "mustNotContain": ["permission-hook.sh"]
+      "\"Stop\""
+    ]
   }
 }

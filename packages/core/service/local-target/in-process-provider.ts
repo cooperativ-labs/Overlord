@@ -17,6 +17,8 @@ import {
   defaultLatchDiscoveryCachePath,
   discoverLatchForExecutionTarget
 } from '../latch-discovery.ts';
+import { collectLatchEvents } from '../latch-events.ts';
+import { resolveLatchInput } from '../latch-send.ts';
 import { inspectLatchSession, openLatchSession, stopLatchSession } from '../latch-session.ts';
 import { DEFAULT_LATCH_EXECUTABLE } from '../terminal-profile-types.ts';
 
@@ -30,6 +32,7 @@ import { fail, ok } from './result.ts';
 import type {
   CapabilityFailure,
   CapabilityResult,
+  CollectLatchEventsInput,
   DiscoverLatchInput,
   DiscoverLatchResult,
   GenerateCommitMessageInput,
@@ -46,6 +49,7 @@ import type {
   ReadCurrentDiffInput,
   ReadRepositoryTreeInput,
   RemoveWorktreeInput,
+  ResolveLatchInputInput,
   ResourceObservation,
   StopLatchSessionInput,
   TargetMetadata,
@@ -298,6 +302,49 @@ export class InProcessProvider implements LocalTargetCapabilities {
         this.target,
         'TARGET_OPERATION_FAILED',
         error instanceof Error ? error.message : 'Could not stop the Latch session.'
+      );
+    }
+  }
+
+  async collectLatchEvents(input: CollectLatchEventsInput) {
+    try {
+      const collected = await collectLatchEvents({
+        executable: input.executable,
+        providerSessionId: input.providerSessionId,
+        from: input.from
+      });
+      return ok(this.target, {
+        providerSessionId: input.providerSessionId,
+        events: collected.events,
+        from: collected.from,
+        nextCursor: collected.nextCursor,
+        ended: collected.ended
+      });
+    } catch (error) {
+      return fail(
+        this.target,
+        'TARGET_OPERATION_FAILED',
+        error instanceof Error ? error.message : 'Could not collect Latch harness events.'
+      );
+    }
+  }
+
+  async resolveLatchInput(input: ResolveLatchInputInput) {
+    try {
+      return ok(
+        this.target,
+        resolveLatchInput({
+          executable: input.executable,
+          providerSessionId: input.providerSessionId,
+          requestId: input.requestId,
+          choice: input.choice
+        })
+      );
+    } catch (error) {
+      return fail(
+        this.target,
+        'TARGET_OPERATION_FAILED',
+        error instanceof Error ? error.message : 'Could not resolve the Latch prompt.'
       );
     }
   }

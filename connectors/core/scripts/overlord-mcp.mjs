@@ -76,6 +76,10 @@ function stringProperty(description) {
   return { type: 'string', description };
 }
 
+function booleanProperty(description) {
+  return { type: 'boolean', description };
+}
+
 const tools = [
   {
     name: 'overlord_resolve_project',
@@ -133,6 +137,9 @@ const tools = [
         resourceKey: stringProperty('Optional logical project resource key for the objective.'),
         assignedTo: stringProperty(
           'Optional workspace member to own the mission (workspace_users.id, profile UUID, orgid:username, bare username, or email). Rejected when the member is not in the workspace; meaningless on the inbox fallback.'
+        ),
+        autoAdvance: booleanProperty(
+          'When true, Overlord queues the next objective for execution after this one is delivered. Defaults to false.'
         )
       },
       ['objective']
@@ -174,15 +181,34 @@ const tools = [
         missionId: stringProperty('Mission UUID or workspace display id.'),
         objectives: {
           type: 'array',
-          description: 'Objective objects with objective text and optional title/resourceKey.',
+          description:
+            'Objective objects with objective text and optional title, resourceKey, and autoAdvance.',
           items: objectSchema({
             objective: stringProperty('Objective text.'),
             title: stringProperty('Optional objective title.'),
-            resourceKey: stringProperty('Optional logical project resource key.')
+            resourceKey: stringProperty('Optional logical project resource key.'),
+            autoAdvance: booleanProperty(
+              'When true, Overlord queues the next objective for execution after this one is delivered. Defaults to false.'
+            )
           })
         }
       },
       ['missionId', 'objectives']
+    )
+  },
+  {
+    name: 'overlord_update_objective',
+    title: 'Update objective auto-advance',
+    description:
+      'Turn auto-advance on or off for an existing objective so delivery can queue the next one.',
+    inputSchema: objectSchema(
+      {
+        objectiveId: stringProperty('Objective UUID.'),
+        autoAdvance: booleanProperty(
+          'When true, Overlord queues the next objective after this one is delivered. When false, delivery waits for approval.'
+        )
+      },
+      ['objectiveId', 'autoAdvance']
     )
   },
   {
@@ -378,7 +404,9 @@ function callOverlordTool(name, args) {
         : {}),
       ...(optionalString(args, 'assignedTo')
         ? { 'assigned-to': requiredString(args, 'assignedTo') }
-        : {})
+        : {}),
+      ...(args.autoAdvance === true ? { 'auto-advance': true } : {}),
+      ...(args.autoAdvance === false ? { 'no-auto-advance': true } : {})
     });
   }
   if (name === 'overlord_create_inbox_item') {
@@ -401,6 +429,13 @@ function callOverlordTool(name, args) {
     return runProtocol('add-objectives', {
       'mission-id': requiredString(args, 'missionId'),
       'objectives-json': args.objectives
+    });
+  }
+  if (name === 'overlord_update_objective') {
+    if (typeof args.autoAdvance !== 'boolean') throw new Error('autoAdvance must be a boolean');
+    return runProtocol('update-objective', {
+      'objective-id': requiredString(args, 'objectiveId'),
+      ...(args.autoAdvance ? { 'auto-advance': true } : { 'no-auto-advance': true })
     });
   }
   if (name === 'overlord_attach_session') {
@@ -540,7 +575,7 @@ process.stdin.on('data', async chunk => {
         result: {
           protocolVersion: PROTOCOL_VERSION,
           capabilities: { tools: { listChanged: false } },
-          serverInfo: { name: 'overlord-__OVERLORD_ADAPTER_KEY__', version: '0.3.23' }
+          serverInfo: { name: 'overlord-__OVERLORD_ADAPTER_KEY__', version: '0.3.25' }
         }
       });
       continue;

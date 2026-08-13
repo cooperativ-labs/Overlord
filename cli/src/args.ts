@@ -51,6 +51,24 @@ export function flagBoolean(flags: Map<string, string | true>, name: string): bo
   return flags.has(name);
 }
 
+/** Optional tri-state boolean from `--flag` / `--no-flag` / `--flag true|false`. */
+export function flagOptionalBoolean({
+  flags,
+  name,
+  negatedName
+}: {
+  flags: Map<string, string | true>;
+  name: string;
+  negatedName?: string;
+}): boolean | undefined {
+  if (negatedName && flags.has(negatedName)) return false;
+  if (!flags.has(name)) return undefined;
+  const value = flags.get(name);
+  if (value === true || value === 'true') return true;
+  if (value === 'false') return false;
+  return true;
+}
+
 export function requireFlag(flags: Map<string, string | true>, name: string): string {
   const value = flagValue(flags, name);
   if (!value) {

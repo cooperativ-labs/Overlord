@@ -3,6 +3,7 @@ import {
   normalizeAgentLaunchFlags,
   parseAgentLaunchFlagText
 } from '@overlord/contract';
+import { collectLatchEvents } from '@overlord/core/service/latch-events';
 import {
   readProjectJsonLinks,
   writeProjectJson
@@ -23,6 +24,7 @@ import {
 } from './active-mission.js';
 import {
   flagBoolean,
+  flagOptionalBoolean,
   flagValue,
   parseArgs,
   rejectOversizedInlineJson,
@@ -1285,18 +1287,30 @@ export async function runManagementCommand({
         flagValue(parsed.flags, '--objective') ||
         flagValue(parsed.flags, '--prompt');
       const projectId = await discoverProjectId(runtime, flagValue(parsed.flags, '--project-id'));
-      const objectives = objectivesJson
+      const autoAdvance = flagOptionalBoolean({
+        flags: parsed.flags,
+        name: '--auto-advance',
+        negatedName: '--no-auto-advance'
+      });
+      const parsedObjectives = objectivesJson
         ? (JSON.parse(objectivesJson) as Array<{
             objective: string;
             title?: string | null;
             autoAdvance?: boolean;
             resourceKey?: string | null;
           }>)
+        : null;
+      const objectives = parsedObjectives
+        ? parsedObjectives.map(item => ({
+            ...item,
+            ...(item.autoAdvance === undefined && autoAdvance !== undefined ? { autoAdvance } : {})
+          }))
         : objective
           ? [
               {
                 objective,
                 title: flagValue(parsed.flags, '--title') ?? null,
+                ...(autoAdvance !== undefined ? { autoAdvance } : {}),
                 ...(flagValue(parsed.flags, '--resource')
                   ? { resourceKey: flagValue(parsed.flags, '--resource') }
                   : {})
@@ -1443,20 +1457,6 @@ export async function runManagementCommand({
         missionId,
         branchAutomation: prepared.branchAutomation
       });
-      // A manual launch has no `launching` transition to hang the channel off, so it asks for
-      // one explicitly. Best-effort: a backend that cannot prepare a channel must not stop an
-      // agent from starting — the session simply behaves as it did before agent-session
-      // existed. A dry run asks for nothing, because it must stay a pure description.
-      const manualChannel = dryRun
-        ? {}
-        : asRecord(
-            await scopedRuntime.backend
-              .post({
-                path: `/api/missions/${encodeURIComponent(missionId)}/session-channel`,
-                body: { agent, objectiveId: objectiveId ?? undefined }
-              })
-              .catch(() => ({}))
-          );
 
       const result = await launchAgent({
         runtime: scopedRuntime,
@@ -1464,11 +1464,6 @@ export async function runManagementCommand({
           agent,
           missionId,
           workingDirectory: prepared.workingDirectory,
-          sessionChannelId:
-            typeof manualChannel.channelId === 'string' ? manualChannel.channelId : undefined,
-          sessionChannelToken:
-            typeof manualChannel.token === 'string' ? manualChannel.token : undefined,
-          sessionChannelLaunchKind: 'manual',
           model: flagValue(parsed.flags, '--model'),
           thinking: flagValue(parsed.flags, '--thinking'),
           flags: repeatedLaunchFlags(rest, '--flag'),
@@ -1771,11 +1766,6 @@ async function runRunnerCommand({
       }
     }
     try {
-      // The `launching` response additively carries the session-channel bootstrap. It is the
-      // only time the raw channel credential is available: the backend stores just its hash, so
-      // if this response is dropped the channel simply stays unbound and the session behaves
-      // exactly as it did before agent-session existed.
-      //
       // This call must stay INSIDE the try: it is the claim-to-launch handoff, and a failure
       // here (transient network error, a 409 because the request was cleared under us, an
       // auth blip) used to escape before any reporting ran. The request then sat in `claimed`
@@ -1784,10 +1774,7 @@ async function runRunnerCommand({
       // work was never retried and the UI kept rendering "Queued" forever with nothing
       // anywhere saying why. Reporting the failure returns the objective to a launchable
       // state on the first poll instead of stranding it until someone clears the queue.
-      const launchingResponse = asRecord(
-        await runtime.backend.post({ path: `/api/runner/requests/${requestId}/launching` })
-      );
-      const sessionChannel = asRecord(launchingResponse.sessionChannel);
+      await runtime.backend.post({ path: `/api/runner/requests/${requestId}/launching` });
       const mutation = parseMutationFromMetadata(requestRecord.metadata);
       if (mutation) {
         const mutationResult = await executeLocalTargetMutation({ mutation });
@@ -1841,6 +1828,7 @@ async function runRunnerCommand({
         requestId,
         branchAutomation: prepared.branchAutomation
       });
+      const launchSession = launchSessionSnapshotFromMetadata(asRecord(requestRecord.metadata));
       const result = await launchAgent({
         runtime,
         options: {
@@ -1866,13 +1854,7 @@ async function runRunnerCommand({
           launchEnvVars: parseLaunchEnvVarsValue(requestRecord.launchEnvVars),
           executionRequestId: requestId,
           executionTargetId: executionTargetId || undefined,
-          sessionChannelId:
-            typeof sessionChannel.channelId === 'string' ? sessionChannel.channelId : undefined,
-          sessionChannelToken:
-            typeof sessionChannel.token === 'string' ? sessionChannel.token : undefined,
-          sessionChannelLaunchKind:
-            typeof sessionChannel.launchKind === 'string' ? sessionChannel.launchKind : undefined,
-          launchSession: launchSessionSnapshotFromMetadata(asRecord(requestRecord.metadata)),
+          launchSession,
           ...terminal,
           dryRun
         }
@@ -1890,6 +1872,17 @@ async function runRunnerCommand({
         path: `/api/runner/requests/${requestId}/launched`,
         body: result.providerSession ? { providerSession: result.providerSession } : {}
       });
+      if (result.providerSession && !dryRun) {
+        void postLatchHarnessEventsAfterLaunch({
+          backend: runtime.backend,
+          requestId,
+          providerSessionId: result.providerSession.providerSessionId,
+          executable:
+            launchSession?.executionProvider.kind === 'latch'
+              ? launchSession.executionProvider.executable
+              : undefined
+        });
+      }
       if (json || dryRun) {
         printJson({
           request,
@@ -2119,4 +2112,35 @@ async function runRunnerServiceCommand({
     message:
       'Usage: ovld runner service <install|start|stop|restart|status|uninstall> [--no-start] [--json]'
   });
+}
+
+async function postLatchHarnessEventsAfterLaunch({
+  backend,
+  requestId,
+  providerSessionId,
+  executable
+}: {
+  backend: CliRuntime['backend'];
+  requestId: string;
+  providerSessionId: string;
+  executable?: string | null;
+}): Promise<void> {
+  try {
+    const collected = await collectLatchEvents({
+      executable,
+      providerSessionId,
+      from: 0
+    });
+    if (collected.events.length === 0) return;
+    await backend.post({
+      path: `/api/runner/requests/${requestId}/harness-events`,
+      body: {
+        providerSessionId,
+        events: collected.events,
+        from: collected.from
+      }
+    });
+  } catch {
+    // Presentation ingest must not fail a successful launch.
+  }
 }

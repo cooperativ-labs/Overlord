@@ -1,15 +1,9 @@
 {
   "fixtureVersion": 1,
   "kind": "source-guard",
-  "description": "Pi extension drains the inbox through ovld, calls sendUserMessage, and confirms emission only afterwards.",
+  "description": "Pi no longer drains an Overlord session inbox. Latch PTY write is Phase 3.",
   "path": "connectors/adapters/pi/extensions/overlord.ts",
   "assert": {
-    "mustContain": [
-      "agent-session",
-      "inbox",
-      "sendUserMessage",
-      "--confirm",
-      "deliverAs"
-    ]
+    "mustNotContain": ["agent-session", "inbox", "sendUserMessage", "--confirm"]
   }
 }

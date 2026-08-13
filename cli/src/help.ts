@@ -58,7 +58,7 @@ Execution targets:
                                                  (announce this machine as an execution target)
 
 Missions:
-  ${primaryCommand} create "<objective>" [--objectives-json '[...]'] [--json]
+  ${primaryCommand} create "<objective>" [--objectives-json '[...]'] [--auto-advance|--no-auto-advance] [--json]
   ${primaryCommand} inbox create --title "<title>" --objective "<objective>" [--json]
   ${primaryCommand} prompt "<objective>" [--json]
   ${primaryCommand} attach <missionId> [agent] [--json]

@@ -20,17 +20,6 @@ if ! command -v ovld >/dev/null 2>&1; then
   exit 0
 fi
 
-# Channel-bound inject path. The scope gate inside inbox exits quietly when unbound.
-if [ -n "${OVERLORD_SESSION_CHANNEL_ID:-}" ]; then
-  INBOX_OUT=$(printf '%s' "$BODY" | ovld agent-session inbox --agent cursor --payload-file - 2>/dev/null)
-  INBOX_EXIT=$?
-  if [ "$INBOX_EXIT" -eq 0 ] && [ -n "$INBOX_OUT" ]; then
-    # followup_message JSON from inbox — Queued(turn-boundary), never Delivered.
-    printf '%s' "$INBOX_OUT"
-    exit 0
-  fi
-fi
-
 if [ -z "${MISSION_ID:-}" ]; then
   log_hook "no launch mission id, skipping delivery check"
   printf '{}'

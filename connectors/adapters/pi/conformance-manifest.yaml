@@ -11,11 +11,11 @@ connector:
   # `capabilities` and `hookTypes` are the DEPRECATED hook-named projection, retained for
   # one release. `harnessCapabilities` is the authoritative source.
   integrationShape: extension
-  capabilityTier: 3
+  capabilityTier: 1
   harnessCapabilities:
     path: connectors/adapters/pi/harness-capabilities.yaml
     schemaVersion: 1
-    digest: "1b4966a98c4994645dd4a46a930f38864e8eec3922603d4c5f2117dcbadcab79"
+    digest: "d083b9610578e1af2e73b273d0661430213fbbe5ff24550e8f0815c284733ae1"
   capabilities:
     - followUpHook
     - nativeResume

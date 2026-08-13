@@ -8,6 +8,8 @@ import { ok } from './result.ts';
 import type {
   BranchListResult,
   CapabilityResult,
+  CollectLatchEventsInput,
+  CollectLatchEventsResult,
   CurrentDiffResult,
   DiscoverLatchInput,
   DiscoverLatchResult,
@@ -35,6 +37,8 @@ import type {
   ReadRepositoryTreeInput,
   RemoveWorktreeInput,
   RepositoryTreeResult,
+  ResolveLatchInputInput,
+  ResolveLatchInputResult,
   ResourceObservation,
   StopLatchSessionInput,
   StopLatchSessionResult,
@@ -224,6 +228,33 @@ export class FakeLocalTargetProvider implements LocalTargetCapabilities {
     return ok(this.target, {
       providerSessionId: input.providerSessionId,
       state: 'stopping'
+    });
+  }
+
+  async collectLatchEvents(
+    input: CollectLatchEventsInput
+  ): Promise<CapabilityResult<CollectLatchEventsResult>> {
+    this.#record('collectLatchEvents', [input]);
+    if (this.#handlers.collectLatchEvents) return this.#handlers.collectLatchEvents(input);
+    return ok(this.target, {
+      providerSessionId: input.providerSessionId,
+      events: [],
+      from: input.from ?? 0,
+      nextCursor: input.from ?? 0,
+      ended: false
+    });
+  }
+
+  async resolveLatchInput(
+    input: ResolveLatchInputInput
+  ): Promise<CapabilityResult<ResolveLatchInputResult>> {
+    this.#record('resolveLatchInput', [input]);
+    if (this.#handlers.resolveLatchInput) return this.#handlers.resolveLatchInput(input);
+    return ok(this.target, {
+      providerSessionId: input.providerSessionId,
+      requestId: input.requestId,
+      choice: input.choice,
+      resolved: true
     });
   }
 

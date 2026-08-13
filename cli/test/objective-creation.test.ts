@@ -1,6 +1,7 @@
 import {
   addObjectivesToMission,
-  createMissionWithObjectives
+  createMissionWithObjectives,
+  updateObjective
 } from '@overlord/core/service/missions';
 import { createProject } from '@overlord/core/service/projects';
 import assert from 'node:assert/strict';
@@ -73,6 +74,56 @@ test('adding objectives to a mission without a draft creates exactly one draft',
     added.map(objective => objective.state),
     ['draft', 'future']
   );
+
+  await db.close();
+});
+
+test('adding objectives persists autoAdvance when requested', async () => {
+  const { db, ctx } = await createSeededCliContext();
+  const project = await createProject({ ctx, name: 'Add Objectives Auto Advance' });
+  const { mission } = await createMissionWithObjectives({
+    ctx,
+    projectId: project.id,
+    objectives: [{ objective: 'Existing draft' }]
+  });
+
+  const added = await addObjectivesToMission({
+    ctx,
+    missionId: mission.id,
+    objectives: [
+      { objective: 'Auto-advance follow-up', autoAdvance: true },
+      { objective: 'Manual follow-up' }
+    ]
+  });
+
+  assert.equal(added[0]?.autoAdvance, true);
+  assert.equal(added[1]?.autoAdvance, false);
+
+  await db.close();
+});
+
+test('updateObjective toggles autoAdvance on an existing objective', async () => {
+  const { db, ctx } = await createSeededCliContext();
+  const project = await createProject({ ctx, name: 'Update Objective Auto Advance' });
+  const { objectives } = await createMissionWithObjectives({
+    ctx,
+    projectId: project.id,
+    objectives: [{ objective: 'Existing draft' }]
+  });
+
+  const updated = await updateObjective({
+    ctx,
+    objectiveId: objectives[0]!.id,
+    autoAdvance: true
+  });
+  assert.equal(updated.autoAdvance, true);
+
+  const disabled = await updateObjective({
+    ctx,
+    objectiveId: objectives[0]!.id,
+    autoAdvance: false
+  });
+  assert.equal(disabled.autoAdvance, false);
 
   await db.close();
 });

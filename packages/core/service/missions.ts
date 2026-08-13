@@ -898,7 +898,12 @@ export async function addObjectivesToMission({
 }: {
   ctx: ServiceContext;
   missionId: string;
-  objectives: Array<{ objective: string; title?: string | null; resourceKey?: string | null }>;
+  objectives: Array<{
+    objective: string;
+    title?: string | null;
+    autoAdvance?: boolean;
+    resourceKey?: string | null;
+  }>;
 }): Promise<ObjectiveSummary[]> {
   if (objectives.length === 0) {
     throw new ServiceError('At least one objective is required', 'validation_error');
@@ -916,6 +921,7 @@ export async function addObjectivesToMission({
           missionId: resolved.id,
           instructionText: item.objective,
           ...(item.title !== undefined ? { title: item.title } : {}),
+          autoAdvance: item.autoAdvance ?? false,
           ...(item.resourceKey !== undefined ? { resourceKey: item.resourceKey } : {}),
           state: 'draft'
         })
@@ -923,6 +929,63 @@ export async function addObjectivesToMission({
     }
   });
   return created;
+}
+
+export async function updateObjective({
+  ctx,
+  objectiveId,
+  autoAdvance
+}: {
+  ctx: ServiceContext;
+  objectiveId: string;
+  autoAdvance: boolean;
+}): Promise<ObjectiveSummary> {
+  const existing = (await ctx.db.get(
+    `SELECT id, mission_id, project_id, position, title, instruction_text, state,
+            auto_advance, resource_key, revision
+       FROM objectives
+       WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+    [objectiveId, ctx.workspace.id]
+  )) as
+    | {
+        id: string;
+        mission_id: string;
+        project_id: string;
+        position: number;
+        title: string | null;
+        instruction_text: string;
+        state: string;
+        auto_advance: number;
+        resource_key: string | null;
+        revision: number;
+      }
+    | undefined;
+  if (!existing) {
+    throw new ServiceError('Objective not found', 'not_found', 404);
+  }
+
+  const now = nowIso();
+  const nextRevision = existing.revision + 1;
+  await ctx.db.run(
+    `UPDATE objectives
+        SET auto_advance = ?, updated_at = ?, revision = ?
+      WHERE id = ? AND workspace_id = ?`,
+    [bindBool(ctx.db.dialect, autoAdvance), now, nextRevision, existing.id, ctx.workspace.id]
+  );
+
+  await recordChange({
+    ctx,
+    entityType: 'objective',
+    entityId: existing.id,
+    operation: 'update',
+    entityRevision: nextRevision,
+    projectId: existing.project_id,
+    missionId: existing.mission_id,
+    objectiveId: existing.id,
+    changedFields: ['auto_advance']
+  });
+
+  return toObjectiveSummary({ ...existing, auto_advance: autoAdvance ? 1 : 0 });
 }
 
 export async function discussObjective({

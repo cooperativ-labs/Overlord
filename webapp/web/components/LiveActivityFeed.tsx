@@ -19,11 +19,6 @@ import type { MissionEventDto, MissionEventType } from '../../shared/contract.ts
 import { groupMissionFeedItems, resolveFollowUpPresentation } from '../lib/mission-feed.ts';
 import { useMissionEvents } from '../lib/queries.ts';
 
-import {
-  AgentSessionFeedCard,
-  useAgentSessionFeed
-} from './agent-session/AgentSessionActivity.tsx';
-import { SessionChannelHealthCard } from './agent-session/SessionChannelHealthCard.tsx';
 import { Markdown } from './Markdown.tsx';
 import { Badge, Spinner } from './ui.tsx';
 
@@ -352,20 +347,14 @@ function ExecutionStatusSection({
 }
 
 /**
- * Realtime feed of a mission's workflow history (`mission_events`) interleaved
- * with the Agent Session Module's action cards. Both queries are invalidated by
- * the global SSE change feed, so a permission raised by the agent or an update
- * written by the CLI in another process streams into the panel without a manual
- * refresh.
+ * Realtime feed of a mission's workflow history (`mission_events`).
  *
- * The order the panel reads in is Artifacts → Deliveries → updates and
- * interactive requests → status changes. This component owns the last two: the
- * mid-feed timeline (newest-first) and the collapsed Execution status section
- * anchored beneath it. Delivery events render under Artifacts instead.
+ * Harness permission and question prompts are presented on the terminal-session
+ * card from Latch observation, not as session-input controls in this feed.
+ * Delivery events render under Artifacts instead.
  */
 export function LiveActivityFeed({ missionId }: { missionId: string }) {
   const eventsQ = useMissionEvents(missionId);
-  const agentSession = useAgentSessionFeed(missionId);
 
   if (eventsQ.isLoading) {
     return (
@@ -384,27 +373,18 @@ export function LiveActivityFeed({ missionId }: { missionId: string }) {
   }
 
   const events = eventsQ.data ?? [];
-  const { midFeed, executionStatus } = groupMissionFeedItems(events, agentSession.items);
+  const { midFeed, executionStatus } = groupMissionFeedItems(events, []);
 
-  if (midFeed.length === 0 && executionStatus.length === 0 && !agentSession.channel) {
+  if (midFeed.length === 0 && executionStatus.length === 0) {
     return <p className="text-sm italic text-(--color-ink-dim)">No activity yet.</p>;
   }
 
   return (
     <div className="grid min-w-0 gap-3">
-      {/* Channel health is current state, not history, so it sits above the timeline. */}
-      <SessionChannelHealthCard channel={agentSession.channel} />
       {midFeed.map(item =>
-        item.kind === 'agent_session' ? (
-          <AgentSessionFeedCard
-            key={item.id}
-            item={item.item}
-            missionId={missionId}
-            channel={agentSession.channel}
-          />
-        ) : (
+        item.kind === 'event' ? (
           <ActivityEntry key={item.id} event={item.event} missionId={missionId} />
-        )
+        ) : null
       )}
       {executionStatus.length > 0 ? (
         <ExecutionStatusSection events={executionStatus} missionId={missionId} />

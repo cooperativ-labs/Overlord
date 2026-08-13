@@ -1445,6 +1445,22 @@ export interface ExecutionProviderSessionDto {
 
 export type TerminalSessionStateDto = 'running' | 'exited' | 'stopping' | 'lost';
 
+export interface LatchPendingInputDto {
+  requestId: string;
+  kind: 'permission' | 'question';
+  prompt: string;
+  choices: string[];
+  at: string;
+}
+
+export interface LatchHarnessObservationDto {
+  cursor: number;
+  lastEventAt: string | null;
+  turnCount: number;
+  pendingInput: LatchPendingInputDto | null;
+  unattached: boolean;
+}
+
 export interface TerminalSessionDto {
   executionRequestId: string;
   objectiveId: string;
@@ -1458,6 +1474,7 @@ export interface TerminalSessionDto {
   viewerKind: string;
   createdAt: string;
   lastObservedState: TerminalSessionStateDto;
+  observation: LatchHarnessObservationDto | null;
 }
 
 /** Additive body for `POST /api/runner/requests/:id/launched`. */

@@ -52,58 +52,45 @@ capabilities:
     native: UserPromptSubmit
     fixtures: [fixtures/normalize-user-prompt.json]
   observe.toolCall:
-    status: supported
+    status: not-implemented
     native: PreToolUse
-    fixtures: [fixtures/normalize-pre-tool-use.json]
+    trackedAs: latch-engine
     notes: >-
-      PreToolUse fires for MCP tool calls, not only shell and patch tools. Re-verified against
-      the installed 0.146.0 binary and the matching upstream tag: the upstream suite
-      `hooks_mcp.rs` (under codex-rs/core/tests/suite) proves a PreToolUse hook can both deny
-      and rewrite an MCP call before it executes, and the binary carries a distinct
-      "Tool call blocked by PreToolUse hook: {}.
-      Tool: {}" message alongside the shell-only one. `tool_name` is the full MCP identifier
-      (`mcp__<server>__<tool>`) and the matcher matches that string, so a matcher written for a
-      bare tool name will silently never fire.
+      Mechanical PreToolUse observation moved to Latch `events`.
   observe.toolResult:
-    status: supported
+    status: not-implemented
     native: PostToolUse
-    fixtures: [fixtures/normalize-post-tool-use.json]
-    notes: >-
-      Also covers MCP tool results, on the same 0.146.0 evidence as `observe.toolCall`. What
-      PostToolUse cannot do is rewrite one: the binary rejects a returned `updatedMCPToolOutput`
-      as unsupported. Observation of an MCP result is therefore reliable; mutation of it is not.
+    trackedAs: latch-engine
   observe.fileEdit:
-    status: supported
+    status: not-implemented
     native: PostToolUse
-    fixtures: [fixtures/normalize-post-tool-use.json]
+    trackedAs: latch-engine
   observe.sessionLifecycle:
-    status: supported
+    status: not-implemented
     native: SessionStart
-    fixtures: [fixtures/normalize-session-start.json]
+    trackedAs: latch-engine
   decide.shell:
-    status: supported
+    status: not-implemented
     native: PermissionRequest
-    fixtures: [fixtures/permission-request.json, fixtures/decision-codec.json]
+    trackedAs: latch-engine
   decide.mcp:
-    status: supported
+    status: not-implemented
     native: PermissionRequest
-    fixtures: [fixtures/permission-request.json, fixtures/decision-codec.json]
+    trackedAs: latch-engine
   decide.fileWrite:
-    status: supported
+    status: not-implemented
     native: PermissionRequest
-    fixtures: [fixtures/permission-request.json, fixtures/decision-codec.json]
+    trackedAs: latch-engine
   decide.anyTool:
     status: not-implemented
     native: PreToolUse
     trackedAs: agent-session-phase-4
   decide.universal:
-    status: supported
+    status: not-implemented
     native: PermissionRequest
-    fixtures: [fixtures/permission-request.json, fixtures/decision-codec.json]
+    trackedAs: latch-engine
     notes: >-
-      Codex PermissionRequest covers Bash, apply_patch/Edit/Write, and MCP tool names. The
-      codec emits only documented allow/deny behavior and deliberately never emits reserved
-      `updatedInput`, `updatedPermissions`, or `interrupt` fields.
+      Remote permission decisions moved to Latch `awaiting_input` / `latch send --resolve`.
   answer.structuredQuestion:
     status: unverified
     native: ToolRequestUserInput
@@ -124,9 +111,9 @@ capabilities:
       binary carries "expected exactly one client subscribed to the thread, found {}", so if
       the TUI is that one client Overlord cannot also subscribe and this path is closed.
   inject.turnBoundary:
-    status: supported
+    status: not-implemented
     native: Stop
-    fixtures: [fixtures/agent-session-hooks.json]
+    trackedAs: latch-engine
   inject.nextTurn:
     status: not-implemented
     native: Stop
@@ -156,7 +143,8 @@ hazards:
     severity: high
     summary: >-
       The former PermissionRequest hook called a nonexistent protocol command in the
-      background. The managed registration now invokes the fixed request runtime directly.
+      background. The connector no longer registers a PermissionRequest hook; the native
+      prompt owns approvals when Latch is absent.
     verification: verified
     mitigation: implemented
     fixture: fixtures/agent-session-hooks.json

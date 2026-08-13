@@ -180,20 +180,17 @@ test('cursor setup merges lifecycle hooks and permission rules', () => {
       )
     );
     assert.ok(
-      hooks.hooks.beforeShellExecution.some((entry: { command: string }) =>
-        entry.command.includes('overlord-permission-request')
-      )
-    );
-    assert.ok(
       hooks.hooks.beforeShellExecution.some(
         (entry: { command: string }) => entry.command === 'user-owned-shell-hook.sh'
       )
     );
-    assert.ok(
-      hooks.hooks.beforeMCPExecution.some((entry: { command: string }) =>
+    assert.equal(
+      hooks.hooks.beforeShellExecution.some((entry: { command: string }) =>
         entry.command.includes('overlord-permission-request')
-      )
+      ),
+      false
     );
+    assert.equal(hooks.hooks.beforeMCPExecution, undefined);
     assert.ok(
       hooks.hooks.postToolUse.some(
         (entry: { command: string; matcher: string }) =>
@@ -207,19 +204,16 @@ test('cursor setup merges lifecycle hooks and permission rules', () => {
       )
     );
 
-    // Agent-session observation rides its own registration on each of the three events the
-    // Cursor event codec declares, alongside — never instead of — the legacy protocol hooks,
-    // which speak a different CLI surface.
     for (const event of ['beforeSubmitPrompt', 'preToolUse', 'postToolUse']) {
-      assert.ok(
-        hooks.hooks[event].some((entry: { command: string }) =>
+      const entries = hooks.hooks[event] ?? [];
+      assert.equal(
+        entries.some((entry: { command: string }) =>
           entry.command.endsWith('/scripts/agent-session-event.sh')
         ),
-        `${event} is missing the agent-session event registration`
+        false,
+        `${event} must not register agent-session observation`
       );
     }
-    // sessionStart is deliberately unregistered: no recorded payload establishes its field
-    // names, so the codec declares no rule for it and a registration would only cost a spawn.
     assert.equal(hooks.hooks.sessionStart, undefined);
 
     const settings = JSON.parse(readFileSync(path.join(home, '.cursor', 'settings.json'), 'utf8'));
@@ -229,14 +223,7 @@ test('cursor setup merges lifecycle hooks and permission rules', () => {
     const hooksAfterSecondSetup = JSON.parse(
       readFileSync(path.join(home, '.cursor', 'hooks.json'), 'utf8')
     );
-    for (const event of [
-      'beforeSubmitPrompt',
-      'beforeShellExecution',
-      'beforeMCPExecution',
-      'preToolUse',
-      'postToolUse',
-      'stop'
-    ]) {
+    for (const event of ['beforeSubmitPrompt', 'beforeShellExecution', 'postToolUse', 'stop']) {
       assert.equal(hooksAfterSecondSetup.hooks[event].length, hooks.hooks[event].length, event);
     }
 
@@ -295,15 +282,11 @@ test('codex setup merges marketplace and rules without corrupting managed hook c
         command.includes('user-prompt-submit-hook.sh')
       )
     );
-    assert.ok(
-      commandsFor('UserPromptSubmit').some(command => command.includes('agent-session-event.sh'))
+    assert.equal(
+      commandsFor('UserPromptSubmit').some(command => command.includes('agent-session-event.sh')),
+      false
     );
-    assert.ok(
-      commandsFor('PermissionRequest').some(command => command.includes('agent-session-request.sh'))
-    );
-    assert.ok(
-      !commandsFor('PermissionRequest').some(command => command.includes('permission-hook.sh'))
-    );
+    assert.equal(commandsFor('PermissionRequest').length, 0);
 
     inspectAndAssertHealthy(home, 'codex');
   } finally {

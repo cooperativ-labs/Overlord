@@ -40,6 +40,8 @@ test('ovld protocol help prints agent lifecycle reference without a backend', as
   assert.match(result.stdout, /Agent workflow \(required\)/);
   assert.match(result.stdout, /resume-follow-up/);
   assert.match(result.stdout, /auth-status/);
+  assert.match(result.stdout, /--auto-advance/);
+  assert.match(result.stdout, /update-objective/);
   assert.doesNotMatch(result.stdout, /pending-missions/);
   assert.doesNotMatch(result.stdout, /claim-execution/);
 });

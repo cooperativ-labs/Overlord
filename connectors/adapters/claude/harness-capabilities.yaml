@@ -50,11 +50,9 @@ capabilities:
     native: UserPromptSubmit
     fixtures: [fixtures/normalize-user-prompt-submit.json]
     notes: >-
-      Two registrations now ride UserPromptSubmit: the legacy hook that posts `user_follow_up`
-      mission events through the Connector → Protocol surface, and the normalized agent-session
-      event this capability grades. Both stay installed until the normalized path has proven
-      equivalent follow-up attribution; replacing a working capture with an unproven one is how
-      a migration loses data quietly.
+      Two registrations used to ride UserPromptSubmit. Mechanical agent-session observation
+      moved to Latch `events`. This capability grades the protocol follow-up hook that posts
+      `user_follow_up` mission events; that Channel 1 path stays installed.
   observe.toolCall:
     status: not-implemented
     native: PreToolUse
@@ -65,11 +63,12 @@ capabilities:
       PostToolUse registration does not already provide, while inheriting the blast radius of
       the decision path. It lands with the codecs that can actually use it.
   observe.toolResult:
-    status: supported
+    status: not-implemented
     native: PostToolUse
-    fixtures:
-      - fixtures/normalize-post-tool-use-shell.json
-      - fixtures/agent-session-hook-unbound.json
+    trackedAs: latch-engine
+    notes: >-
+      Mechanical tool-result observation moved to Latch `events`. The protocol PostToolUse
+      hook still records touched files for delivery attribution.
   observe.fileEdit:
     status: supported
     native: PostToolUse
@@ -78,40 +77,38 @@ capabilities:
       - fixtures/post-tool-use-parity.json
     notes: >-
       The shipped PostToolUse hook that records touched files into the per-session log used by
-      `deliver` for change attribution is untouched and still registered. The normalized event
-      is additive: `fixtures/post-tool-use-parity.json` guards both registrations being present,
-      because the migration must not repair observation by regressing change attribution.
+      `deliver` for change attribution remains registered. Mechanical agent-session observation
+      is no longer a live Overlord path.
   observe.sessionLifecycle:
-    status: supported
+    status: not-implemented
     native: SessionStart
-    fixtures: [fixtures/normalize-session-start.json]
+    trackedAs: latch-engine
     notes: >-
-      SessionStart only. There is no matching stop-class registration: continuing or observing a
-      session a user believed had finished is a larger surprise than a missing row, and the Stop
-      event is decision-capable in a way SessionStart is not.
+      SessionStart observation moved to Latch `events`. There is no matching Overlord
+      registration.
   decide.shell:
-    status: supported
+    status: not-implemented
     native: PermissionRequest
-    fixtures: [fixtures/permission-request.json, fixtures/decision-codec.json]
+    trackedAs: latch-engine
   decide.mcp:
-    status: supported
+    status: not-implemented
     native: PermissionRequest
-    fixtures: [fixtures/permission-request.json, fixtures/decision-codec.json]
+    trackedAs: latch-engine
   decide.fileWrite:
-    status: supported
+    status: not-implemented
     native: PermissionRequest
-    fixtures: [fixtures/permission-request.json, fixtures/decision-codec.json]
+    trackedAs: latch-engine
   decide.anyTool:
     status: not-implemented
     native: PreToolUse
-    trackedAs: agent-session-phase-2
+    trackedAs: latch-engine
   decide.universal:
-    status: supported
+    status: not-implemented
     native: PermissionRequest
-    fixtures: [fixtures/permission-request.json, fixtures/decision-codec.json]
+    trackedAs: latch-engine
     notes: >-
-      Unlike Cursor, Claude has one event that covers every approval, so a single
-      registration can reach every decision rather than a per-tool-class slice.
+      Remote permission decisions moved to Latch `awaiting_input` / `latch send --resolve`.
+      The native Claude prompt owns approvals when Latch is absent.
   answer.structuredQuestion:
     status: unverified
     native: Elicitation
@@ -127,23 +124,18 @@ capabilities:
       Structurally available, deliberately unbuilt. A standing permission grant needs its own
       design, confirmation, audit language, and RBAC review before any remote surface offers it.
   inject.midTurn:
-    status: supported
+    status: not-implemented
     native: asyncRewake
-    fixtures:
-      - fixtures/inject-async-rewake.json
-      - fixtures/agent-session-inbox-unbound.json
+    trackedAs: latch-engine
     notes: >-
-      SessionStart and PostToolUse register `agent-session-inbox.sh` with `asyncRewake: true`.
-      Exit code 2 wakes the model with stderr as a system reminder — that is Delivered.
+      Session-input injection moved off Overlord connectors. Latch PTY write is Phase 3.
   inject.turnBoundary:
-    status: supported
+    status: not-implemented
     native: Stop
-    fixtures:
-      - fixtures/inject-stop-block.json
-      - fixtures/agent-session-inbox-unbound.json
+    trackedAs: latch-engine
     notes: >-
-      Stop returns `decision: "block"` with the instruction as `reason`, which continues the
-      turn with that text. The model receives it, so this path also reports Delivered.
+      Turn-boundary injection moved off Overlord connectors. The protocol Stop hook still
+      reminds the agent to deliver when needed.
   inject.nextTurn:
     status: not-implemented
     native: Stop

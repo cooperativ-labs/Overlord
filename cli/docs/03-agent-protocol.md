@@ -35,12 +35,18 @@ Requirements:
   explicitly creates an account-owned unassigned capture; ordinary non-executing
   create uses that fallback only after explicit and discovered project resolution
   fail. `prompt` and `record-work` still require a resolved project.
+  `--auto-advance` / `--no-auto-advance` set whether delivery queues the next
+  objective (default off). `--objectives-json` items may set per-objective
+  `autoAdvance`.
 - `prompt`: create a mission and attach or queue execution immediately.
 - `load-context`: read mission context without creating a session.
 - `connect`: create a lightweight session key without full context.
 - `search-missions`: search by query, status, project, creator, and update dates.
 - `discuss-objective`: mark a draft objective submitted.
-- `add-objectives`: append ordered objectives to a mission.
+- `add-objectives`: append ordered objectives to a mission. Same `autoAdvance`
+  JSON field and `--auto-advance` / `--no-auto-advance` default as create.
+- `update-objective`: turn auto-advance on or off for an existing objective
+  (`--objective-id` plus `--auto-advance` or `--no-auto-advance`).
 - `record-work`: record already-completed chat work as a review mission with completed objective and delivery record.
 
 ### Session Lifecycle

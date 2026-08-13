@@ -6,12 +6,9 @@ import {
   type AgentSessionChannelRow,
   appendSessionEvent,
   authenticateChannelCredential,
-  cancelSessionInput,
   createRequest,
-  createSessionChannel,
   describeDeliveryOutcome,
   endChannel,
-  enqueueSessionInput,
   getChannel,
   getInput,
   getRequest,
@@ -23,8 +20,7 @@ import {
   markInputFailed,
   markRequestResolvedElsewhere,
   recordRequestApplication,
-  releaseRequestToTerminal,
-  resolveRequest
+  releaseRequestToTerminal
 } from '../packages/core/service/agent-session/index.ts';
 import type { ServiceContext } from '../packages/core/service/context.ts';
 import { ServiceError } from '../packages/core/service/errors.ts';
@@ -587,6 +583,7 @@ async function missionScopedRequests(
   const rows = await client.all<Awaited<ReturnType<typeof getRequest>>>(
     `SELECT ${REQUEST_COLUMNS_FOR_ROUTE} FROM agent_requests
       WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL
+        AND status <> 'open'
       ORDER BY created_at DESC LIMIT 200`,
     [mission.id, mission.workspace_id]
   );
@@ -630,6 +627,7 @@ export function createAgentRequestHumanRouter(): Router {
       const rows = await client.all<Awaited<ReturnType<typeof getRequest>>>(
         `SELECT ${REQUEST_COLUMNS_FOR_ROUTE} FROM agent_requests
           WHERE workspace_id IN (${placeholders}) AND deleted_at IS NULL
+            AND status <> 'open'
           ORDER BY created_at DESC LIMIT 200`,
         authorized.map(entry => entry.workspaceId)
       );
@@ -639,36 +637,7 @@ export function createAgentRequestHumanRouter(): Router {
 
   router.post(
     '/:id/resolve',
-    handle(async req => {
-      const client = requireDatabaseClient();
-      const row = await client.get<{ workspace_id: string }>(
-        `SELECT workspace_id FROM agent_requests WHERE id = ? AND deleted_at IS NULL`,
-        [req.params.id]
-      );
-      if (!row) throw new ServiceError('Request not found', 'request_not_found', 404);
-      const workspaceUserId = await requireWorkspacePermission({
-        workspaceId: row.workspace_id,
-        permission: PERMISSIONS.SESSION_ATTACH,
-        db: client,
-        notFoundMessage: 'Request not found'
-      });
-      const ctx = await buildWebappServiceContextForWorkspace(
-        row.workspace_id,
-        client,
-        workspaceUserId
-      );
-      const body = asRecord(req.body);
-      if (typeof body.expectedRevision !== 'number') {
-        throw new ServiceError('expectedRevision is required', 'agent_request_conflict', 409);
-      }
-      const result = await resolveRequest({
-        ctx,
-        requestId: req.params.id,
-        resolution: body.resolution ? asRecord(body.resolution) : {},
-        expectedRevision: body.expectedRevision
-      });
-      return { resolved: result.resolved, request: requestDto(result.request) };
-    })
+    handle(async () => sessionControlsGone())
   );
 
   /**
@@ -682,31 +651,7 @@ export function createAgentRequestHumanRouter(): Router {
    */
   router.post(
     '/:id/release',
-    handle(async req => {
-      const client = requireDatabaseClient();
-      const row = await client.get<{ workspace_id: string }>(
-        `SELECT workspace_id FROM agent_requests WHERE id = ? AND deleted_at IS NULL`,
-        [req.params.id]
-      );
-      if (!row) throw new ServiceError('Request not found', 'request_not_found', 404);
-      const workspaceUserId = await requireWorkspacePermission({
-        workspaceId: row.workspace_id,
-        permission: PERMISSIONS.SESSION_ATTACH,
-        db: client,
-        notFoundMessage: 'Request not found'
-      });
-      const ctx = await buildWebappServiceContextForWorkspace(
-        row.workspace_id,
-        client,
-        workspaceUserId
-      );
-      const result = await releaseRequestToTerminal({
-        ctx,
-        requestId: req.params.id,
-        reason: 'policy'
-      });
-      return { released: result.released, request: requestDto(result.request) };
-    })
+    handle(async () => sessionControlsGone())
   );
   return router;
 }
@@ -774,7 +719,9 @@ export function createAgentSessionInputHumanRouter(): Router {
         client,
         workspaceUserId
       );
-      const inputs = await listSessionInputs({ ctx, missionId: mission.id });
+      const inputs = (await listSessionInputs({ ctx, missionId: mission.id })).filter(
+        input => input.status !== 'queued' && input.status !== 'leased'
+      );
       // The most recent channel, live or not. A client gates its controls on this snapshot,
       // so it needs to see an `ended`/`lost` channel too — a UI that only ever hears about
       // live channels has no way to stop offering controls once the session is gone.
@@ -823,71 +770,12 @@ export function createAgentSessionInputHumanRouter(): Router {
 
   router.post(
     '/',
-    handle(async req => {
-      const body = asRecord(req.body);
-      const channelId = optionalString(body.channelId);
-      const text = optionalString(body.body);
-      const kind =
-        body.kind === 'retry' || body.kind === 'continue' || body.kind === 'instruction'
-          ? body.kind
-          : 'instruction';
-      if (!channelId || !text) {
-        throw new ServiceError('channelId and body are required', 'invalid_input', 400);
-      }
-      const client = requireDatabaseClient();
-      const channelRow = await client.get<{ workspace_id: string }>(
-        `SELECT workspace_id FROM agent_session_channels WHERE id = ? AND deleted_at IS NULL`,
-        [channelId]
-      );
-      if (!channelRow)
-        throw new ServiceError('Session channel not found', 'channel_not_found', 404);
-      const workspaceUserId = await requireWorkspacePermission({
-        workspaceId: channelRow.workspace_id,
-        permission: PERMISSIONS.SESSION_ATTACH,
-        db: client,
-        notFoundMessage: 'Session channel not found'
-      });
-      const ctx = await buildWebappServiceContextForWorkspace(
-        channelRow.workspace_id,
-        client,
-        workspaceUserId
-      );
-      const channel = await getChannel({ ctx, channelId });
-      const input = await enqueueSessionInput({
-        ctx,
-        channel,
-        kind,
-        body: text,
-        idempotencyKey: optionalString(body.idempotencyKey)
-      });
-      return { input: inputDto(input) };
-    })
+    handle(async () => sessionControlsGone())
   );
 
   router.post(
     '/:id/cancel',
-    handle(async req => {
-      const client = requireDatabaseClient();
-      const row = await client.get<{ workspace_id: string }>(
-        `SELECT workspace_id FROM agent_session_inputs WHERE id = ? AND deleted_at IS NULL`,
-        [req.params.id]
-      );
-      if (!row) throw new ServiceError('Session input not found', 'input_not_found', 404);
-      const workspaceUserId = await requireWorkspacePermission({
-        workspaceId: row.workspace_id,
-        permission: PERMISSIONS.SESSION_ATTACH,
-        db: client,
-        notFoundMessage: 'Session input not found'
-      });
-      const ctx = await buildWebappServiceContextForWorkspace(
-        row.workspace_id,
-        client,
-        workspaceUserId
-      );
-      const result = await cancelSessionInput({ ctx, inputId: req.params.id });
-      const input = await getInput({ ctx, inputId: req.params.id });
-      return { cancelled: result.cancelled, input: inputDto(input) };
-    })
+    handle(async () => sessionControlsGone())
   );
 
   return router;
@@ -907,66 +795,20 @@ export const AGENT_SESSION_CHANNEL_ROUTE_PREFIX = '/api/agent-session-channels/v
 /**
  * Prepare a session channel for a manual `ovld launch`.
  *
- * The queued path gets its channel at the `launching` transition, where the backend already
- * has the request in hand. A manual launch has no equivalent moment, so the CLI asks for one
- * explicitly — and it asks over ordinary human authentication, because the thing being
- * authorized is the *person* starting an agent for this mission, not the agent itself.
- *
- * The raw credential is returned exactly once, in this response. It is not readable back
- * afterwards: the channel row stores only its hash.
+ * Launch no longer mints Agent Session Exchange credentials. The route stays so
+ * older CLIs receive 410 instead of creating a live control surface.
  */
 export async function prepareMissionSessionChannel(
-  missionRef: string,
-  body: unknown
+  _missionRef: string,
+  _body: unknown
 ): Promise<Record<string, unknown>> {
-  const payload = asRecord(body);
-  const client = requireDatabaseClient();
+  sessionControlsGone();
+}
 
-  // Resolve the mission inside the caller's *own* memberships rather than whichever workspace
-  // they currently have active. A mission can live in a secondary workspace, and preparing its
-  // channel under the active workspace's actor would attribute the channel — and every
-  // `entity_changes` row it writes — to the wrong tenant.
-  const memberships = await callerWorkspaceMemberships(client);
-  if (memberships.length === 0) {
-    throw new ServiceError('Mission not found', 'mission_not_found', 404);
-  }
-  const placeholders = memberships.map(() => '?').join(', ');
-  const mission = await client.get<{ id: string; project_id: string; workspace_id: string }>(
-    `SELECT id, project_id, workspace_id FROM missions
-       WHERE (id = ? OR display_id = ?) AND deleted_at IS NULL
-         AND workspace_id IN (${placeholders})`,
-    [missionRef, missionRef, ...memberships.map(entry => entry.workspaceId)]
+function sessionControlsGone(): never {
+  throw new ServiceError(
+    'There are no active session-input controls. Harness permission and question prompts are presented from Latch observation.',
+    'session_controls_gone',
+    410
   );
-  if (!mission) throw new ServiceError('Mission not found', 'mission_not_found', 404);
-
-  // Authorize against the mission's *own* workspace. The route-level `requires` gate evaluates
-  // the caller's active workspace, which is the wrong tenant whenever the mission lives in a
-  // secondary one — so the real check is here, where the owning workspace is known.
-  const workspaceUserId = await requireWorkspacePermission({
-    workspaceId: mission.workspace_id,
-    permission: PERMISSIONS.SESSION_ATTACH,
-    db: client,
-    notFoundMessage: 'Mission not found'
-  });
-  const ctx = await buildWebappServiceContextForWorkspace(
-    mission.workspace_id,
-    client,
-    workspaceUserId
-  );
-  const { bootstrap } = await createSessionChannel({
-    ctx,
-    missionId: mission.id,
-    projectId: mission.project_id,
-    objectiveId: optionalString(payload.objectiveId),
-    executionTargetId: optionalString(payload.executionTargetId),
-    agentIdentifier: optionalString(payload.agent),
-    adapterKey: optionalString(payload.agent),
-    launchKind: 'manual'
-  });
-  return {
-    channelId: bootstrap.channelId,
-    token: bootstrap.token,
-    expiresAt: bootstrap.expiresAt,
-    launchKind: bootstrap.launchKind
-  };
 }

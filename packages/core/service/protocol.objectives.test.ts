@@ -337,4 +337,23 @@ describe('protocol objective creation', () => {
 
     await db.close();
   });
+
+  it('persists autoAdvance from create payloads', async () => {
+    const { db, ctx } = await createSeededServiceContext({ source: 'protocol' });
+    const project = await createProject({ ctx, name: 'Protocol Auto Advance Create' });
+
+    const result = await protocolCreate({
+      ctx,
+      projectId: project.id,
+      objectives: [
+        { objective: 'First protocol objective', autoAdvance: true },
+        { objective: 'Second protocol objective', autoAdvance: false }
+      ]
+    });
+
+    assert.equal(result.objectives[0]?.autoAdvance, true);
+    assert.equal(result.objectives[1]?.autoAdvance, false);
+
+    await db.close();
+  });
 });

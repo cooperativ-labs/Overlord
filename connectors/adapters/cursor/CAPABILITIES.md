@@ -2,11 +2,11 @@
 
 # Cursor Agent CLI — Overlord agent-session capabilities
 
-**Adapter** `cursor` · **Codec** `cursor` · **Integration shape** `callback` · **Capability tier** 3 (Conversational)
+**Adapter** `cursor` · **Codec** `cursor` · **Integration shape** `callback` · **Capability tier** 1 (Observational)
 
 **Harness version verified** `2026.08.04-aaa8809` · **range** `>=2026.07.01` · **scheme** `calendar`
 
-**Descriptor digest** `f5cf848a2f9287bda3ddd2a4158ce8c05ce0fdadde32212c975062edf6f64ce8`
+**Descriptor digest** `7085c25291f5c96cf3c7fb9c280281fa698b5c026e9859377ad8c53d1cd82537`
 
 > The tier is derived from passing fixtures, never authored. `unsupported` means the harness
 > cannot do it — do not attempt it. `not-implemented` means it is buildable and unbuilt: that is
@@ -46,29 +46,29 @@ The 60-second per-script default is an order of magnitude below any window sized
 | Capability | Status | Native | Evidence |
 | --- | --- | --- | --- |
 | `observe.prompt` | ✅ supported | `beforeSubmitPrompt` | fixtures: `fixtures/normalize-before-submit-prompt.json` |
-| `observe.toolCall` | ✅ supported | `preToolUse` | fixtures: `fixtures/normalize-pre-tool-use-shell.json` |
+| `observe.toolCall` | 🚧 not-implemented | `preToolUse` | tracked as `latch-engine` |
 | `observe.toolResult` | ✅ supported | `postToolUse` | fixtures: `fixtures/normalize-post-tool-use-write.json` |
 | `observe.fileEdit` | ✅ supported | `postToolUse` | fixtures: `fixtures/normalize-post-tool-use-write.json` |
 | `observe.sessionLifecycle` | 🚧 not-implemented | `sessionStart` | tracked as `agent-session-phase-1` |
-| `decide.shell` | ✅ supported | `beforeShellExecution` | fixtures: `fixtures/permission-request.json`, `fixtures/decision-codec.json` |
-| `decide.mcp` | ✅ supported | `beforeMCPExecution` | fixtures: `fixtures/permission-request.json`, `fixtures/decision-codec.json` |
+| `decide.shell` | 🚧 not-implemented | `beforeShellExecution` | tracked as `latch-engine` |
+| `decide.mcp` | 🚧 not-implemented | `beforeMCPExecution` | tracked as `latch-engine` |
 | `decide.fileWrite` | 🚧 not-implemented | `preToolUse` | tracked as `agent-session-phase-2` |
-| `decide.anyTool` | ✅ supported | `preToolUse` | fixtures: `fixtures/permission-request.json`, `fixtures/decision-codec.json` |
+| `decide.anyTool` | 🚧 not-implemented | `preToolUse` | tracked as `latch-engine` |
 | `decide.universal` | ⛔ unsupported | — | There is no single event covering every approval. Cursor's own Claude-compatibility map resolves `PermissionRequest` to null and lists it as unsupported; coverage is per tool class (shell, MCP, file read, generic pre-tool), so some approvals will never reach Overlord and the UI must not imply otherwise. (evidence: `connector-harness-taxonomy.md#42-what-is-verified`) |
 | `answer.structuredQuestion` | ⛔ unsupported | — | No hook step returns a structured question with options; the decision surfaces return only allow/deny/ask plus free-text user/agent messages. (evidence: `connector-harness-taxonomy.md#42-what-is-verified`) |
 | `answer.persistentAllow` | ⛔ unsupported | — | Hook responses are per-call; there is no "always" reply that persists a rule. (evidence: `connector-harness-taxonomy.md#42-what-is-verified`) |
 | `inject.midTurn` | ⛔ unsupported | — | No mechanism exists to insert a message into a running turn. (evidence: `connector-harness-taxonomy.md#43-unique-challenges`) |
-| `inject.turnBoundary` | ✅ supported | `stop` | fixtures: `fixtures/inject-followup-message.json`, `fixtures/stop-calls-inbox.json` |
+| `inject.turnBoundary` | ✅ supported | `stop` | fixtures: `fixtures/inject-followup-message.json` |
 | `inject.nextTurn` | ✅ supported | `stop` | fixtures: `fixtures/inject-followup-message.json` |
 | `terminal.concurrentAnswer` | ⛔ unsupported | — | The native prompt is drawn only after the hook returns, so nobody can answer locally while Overlord holds the decision. (evidence: `connector-harness-taxonomy.md#12-the-axis-that-actually-matters`) |
 | `terminal.statusSurface` | ❓ unverified | — | tracked as `taxonomy-7.9` |
 
 ### Capability notes
 
-- **`observe.toolCall`** — preToolUse carries both an observational and a decision registration, rendered as two different action scripts (`event` and `request`). The observational one cannot allow, deny, or delay a call — the action is fixed at install time, so neither registration can become the other.
+- **`observe.toolCall`** — Mechanical preToolUse observation moved to Latch `events`. Native Cursor permission prompts own approvals when Latch is absent.
 - **`observe.fileEdit`** — Carried on postToolUse rather than on Cursor's dedicated `afterFileEdit`, for the same reason Claude carries it on PostToolUse: one registration then covers every mutation, including the ones a shell command makes, and the split into `file.edited` happens where the normalized tool name is already known. `afterFileEdit` remains available if a future need appears for edit-level granularity the tool-level event cannot express.
 - **`observe.sessionLifecycle`** — Cursor fires the event, but no shipped code in this repo has ever read one of its payloads, so the field carrying the equivalent of Claude's `source` is unknown. A codec rule on a guessed path would not fail loudly — an unresolved path yields a card with no detail — so this stays unbuilt until a real payload is recorded, rather than being claimed on an assumed field name.
-- **`inject.turnBoundary`** — `stop` returns `followup_message`, a first-class continuation channel. It can only ever report Queued(turn-boundary), never Delivered, and the UI must say so.
+- **`inject.turnBoundary`** — `stop` returns `followup_message` for the protocol delivery reminder. Session-input injection is no longer a live Overlord path.
 - **`inject.nextTurn`** — Cursor's followup_message is scheduled for the next turn; the same path covers turn-boundary and next-turn naming.
 - **`terminal.statusSurface`** — Whether Cursor exposes an in-TUI status surface equivalent to Claude's statusMessage was not established.
 
