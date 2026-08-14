@@ -1,6 +1,6 @@
 {
-  "_warning": "This file is managed by Overlord and is regenerated automatically when this folder is linked as a project resource. DO NOT EDIT IT MANUALLY.",
-  "version": 2,
+  "_warning": "STRICTLY PROTECTED: This file is managed exclusively by Overlord. Agents and users must not edit, replace, stage, commit, or delete it. Re-link the resource with Overlord to change it.",
+  "version": 3,
   "projectId": "49763405-008f-4267-89e4-c57f5a234c91",
   "resourceId": "d8e2a2c6-5d33-44df-a967-c729f8cb792b",
   "resourceKey": "overlord",
@@ -8,5 +8,27 @@
     "f0cf8c12-4eee-4262-ad9f-68cd56b23982": "767b74b5-7e51-446b-9daa-73721c8c3382"
   },
   "isPrimary": true,
-  "linkedAt": "2026-07-29T09:14:04.021Z"
+  "linkedAt": "2026-07-29T09:14:04.021Z",
+  "projects": [
+    {
+      "projectId": "49763405-008f-4267-89e4-c57f5a234c91",
+      "resourceId": "d8e2a2c6-5d33-44df-a967-c729f8cb792b",
+      "resourceKey": "overlord",
+      "resourceIdsByExecutionTarget": {
+        "f0cf8c12-4eee-4262-ad9f-68cd56b23982": "767b74b5-7e51-446b-9daa-73721c8c3382"
+      },
+      "isPrimary": true,
+      "linkedAt": "2026-07-29T09:14:04.021Z"
+    },
+    {
+      "projectId": "677bf8c4-a45e-44e0-a84a-da1f8ca84a94",
+      "resourceId": "38eb7bbe-6f7e-4343-b5ad-df16fc077ff8",
+      "resourceKey": "overlord",
+      "resourceIdsByExecutionTarget": {
+        "cf857924-0eb4-447d-b999-307c1411f094": "38eb7bbe-6f7e-4343-b5ad-df16fc077ff8"
+      },
+      "isPrimary": false,
+      "linkedAt": "2026-08-13T22:43:16.249Z"
+    }
+  ]
 }
