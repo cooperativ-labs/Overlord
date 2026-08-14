@@ -130,8 +130,12 @@ test('mission detail projects Latch terminal sessions independently of active re
       agentSessionId: null,
       executable: '/opt/latch',
       viewerKind: 'iterm',
+      // This snapshot predates `openAs`, and a run that froze no shape opened a
+      // window — so the projection must say `window`, never guess `tab`.
+      viewerOpenAs: 'window',
       createdAt: '2026-08-12T15:00:00.000Z',
-      lastObservedState: 'running'
+      lastObservedState: 'running',
+      observation: null
     }
   ]);
 });

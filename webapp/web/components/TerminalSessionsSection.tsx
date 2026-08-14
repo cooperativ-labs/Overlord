@@ -101,7 +101,7 @@ function TerminalSessionCard({
       </div>
 
       {unattached ? (
-        <div className="mt-3 flex gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-200">
+        <div className="mt-3 flex gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-800 dark:text-amber-200">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           <p>
             This Latch session has produced turns, but the agent has not attached to the mission.

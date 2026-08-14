@@ -3,8 +3,12 @@ import test from 'node:test';
 
 import {
   buildLatchCreateManifest,
+  buildLatchOpenArgs,
+  compareLatchProductVersions,
   existingLatchProviderSession,
+  LATCH_OPEN_AS_MIN_PRODUCT_VERSION,
   latchAttachCommand,
+  latchSupportsOpenAs,
   latchViewerFlagForKind,
   mergeProviderSessionIntoMetadata,
   parseLatchCreateReport,
@@ -141,5 +145,62 @@ test('latchAttachCommand is the recovery path when open fails', () => {
   assert.equal(
     latchAttachCommand({ executable: '/opt/latch', providerSessionId: 'ses_01J' }),
     '/opt/latch attach ses_01J'
+  );
+});
+
+test('compareLatchProductVersions orders dotted-numeric Latch versions', () => {
+  assert.ok(compareLatchProductVersions('0.2608140931.0', '0.2608140801.0') > 0);
+  assert.ok(compareLatchProductVersions('0.2608140801.0', '0.2608140931.0') < 0);
+  assert.equal(compareLatchProductVersions('0.2608140931.0', '0.2608140931.0'), 0);
+  // A short version is not silently "greater"; missing segments read as 0.
+  assert.ok(compareLatchProductVersions('0.2608140931', '0.2608140931.0') === 0);
+});
+
+test('latchSupportsOpenAs gates the flag on the build that introduced it', () => {
+  assert.equal(latchSupportsOpenAs(LATCH_OPEN_AS_MIN_PRODUCT_VERSION), true);
+  assert.equal(latchSupportsOpenAs('0.2608150000.0'), true);
+  assert.equal(latchSupportsOpenAs('0.2608140801.0'), false);
+  // Unknown / unreadable versions must answer false: omitting `--as` opens a
+  // window, which is what an older Latch would have done anyway.
+  assert.equal(latchSupportsOpenAs(null), false);
+  assert.equal(latchSupportsOpenAs(''), false);
+  assert.equal(latchSupportsOpenAs('not-a-version'), false);
+});
+
+test('buildLatchOpenArgs sends --as only when the CLI understands it', () => {
+  assert.deepEqual(
+    buildLatchOpenArgs({
+      providerSessionId: 'ses_01J',
+      viewer: 'iterm',
+      openAs: 'tab',
+      productVersion: LATCH_OPEN_AS_MIN_PRODUCT_VERSION
+    }),
+    ['open', 'ses_01J', '--with', 'iterm', '--as', 'tab', '--json']
+  );
+  assert.deepEqual(
+    buildLatchOpenArgs({
+      providerSessionId: 'ses_01J',
+      viewer: 'iterm',
+      openAs: 'tab',
+      productVersion: '0.2608140801.0'
+    }),
+    ['open', 'ses_01J', '--with', 'iterm', '--json']
+  );
+  assert.deepEqual(buildLatchOpenArgs({ providerSessionId: 'ses_01J', viewer: 'iterm' }), [
+    'open',
+    'ses_01J',
+    '--with',
+    'iterm',
+    '--json'
+  ]);
+  // An unrecognized shape resolves to `window` rather than reaching the CLI.
+  assert.deepEqual(
+    buildLatchOpenArgs({
+      providerSessionId: 'ses_01J',
+      viewer: 'iterm',
+      openAs: 'chord',
+      productVersion: LATCH_OPEN_AS_MIN_PRODUCT_VERSION
+    }),
+    ['open', 'ses_01J', '--with', 'iterm', '--as', 'window', '--json']
   );
 });

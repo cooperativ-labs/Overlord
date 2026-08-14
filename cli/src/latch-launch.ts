@@ -9,16 +9,24 @@
 import { latchChildEnvironment } from '@overlord/core/service/latch-environment';
 import {
   buildLatchCreateManifest,
+  buildLatchOpenArgs,
   type ExecutionProviderSession,
   latchAttachCommand,
   type LatchCreateReport,
   type LatchLaunchManifest,
+  latchSupportsOpenAs,
   latchViewerFlagForKind,
   parseLatchCreateReport,
   toExecutionProviderSession
 } from '@overlord/core/service/latch-launch';
-import type { TerminalViewerKind } from '@overlord/core/service/terminal-profile-types';
-import { DEFAULT_LATCH_EXECUTABLE } from '@overlord/core/service/terminal-profile-types';
+import type {
+  TerminalViewerKind,
+  ViewerOpenAs
+} from '@overlord/core/service/terminal-profile-types';
+import {
+  DEFAULT_LATCH_EXECUTABLE,
+  parseViewerOpenAs
+} from '@overlord/core/service/terminal-profile-types';
 import { spawnSync } from 'node:child_process';
 
 export {
@@ -39,7 +47,12 @@ export type LatchCreateResult = {
 };
 
 export type LatchOpenResult =
-  | { ok: true; viewer: string }
+  | {
+      ok: true;
+      viewer: string;
+      /** Shape actually requested; null when this Latch build predates `--as`. */
+      openAs: ViewerOpenAs | null;
+    }
   | { ok: false; warning: string; attachCommand: string };
 
 function spawnLatchJson({
@@ -133,11 +146,25 @@ export function createLatchSession({
 export function openLatchViewer({
   executable = DEFAULT_LATCH_EXECUTABLE,
   providerSessionId,
-  viewerKind
+  viewerKind,
+  openAs,
+  productVersion
 }: {
   executable?: string;
   providerSessionId: string;
   viewerKind: TerminalViewerKind | string | null | undefined;
+  /**
+   * Overlord's window-or-tab preference, from the launch snapshot. Sent
+   * explicitly rather than left to Latch's stored `open.behavior`, so the
+   * setting the user sees in Overlord is the one that decides.
+   */
+  openAs?: ViewerOpenAs | string | null;
+  /**
+   * `productVersion` from the discovery probe this launch already ran. `--as`
+   * is only sent to a build that has it — clap rejects unknown flags, so an
+   * ungated flag would fail the open outright against an older Latch.
+   */
+  productVersion?: string | null;
 }): LatchOpenResult {
   const viewer = latchViewerFlagForKind(viewerKind);
   const attachCommand = latchAttachCommand({ executable, providerSessionId });
@@ -148,9 +175,10 @@ export function openLatchViewer({
       attachCommand
     };
   }
+  const sendsOpenAs = Boolean(openAs) && latchSupportsOpenAs(productVersion);
   const result = spawnLatchJson({
     executable,
-    args: ['open', providerSessionId, '--with', viewer, '--json']
+    args: buildLatchOpenArgs({ providerSessionId, viewer, openAs, productVersion })
   });
   if (result.status !== 0) {
     const detail = (result.stderr || result.stdout || `exit ${result.status ?? 'null'}`).trim();
@@ -160,5 +188,5 @@ export function openLatchViewer({
       attachCommand
     };
   }
-  return { ok: true, viewer };
+  return { ok: true, viewer, openAs: sendsOpenAs ? parseViewerOpenAs(openAs) : null };
 }

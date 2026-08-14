@@ -50,7 +50,7 @@ describe('stored terminal profile', () => {
       kind: 'latch',
       executable: '/opt/homebrew/bin/latch'
     });
-    assert.deepEqual(stored.viewer, { kind: 'iterm', openOnLaunch: true });
+    assert.deepEqual(stored.viewer, { kind: 'iterm', openAs: 'window', openOnLaunch: true });
     assert.deepEqual(parseTerminalProfileJson(JSON.stringify(stored)), profile);
   });
 
@@ -204,5 +204,63 @@ describe('execution request snapshot', () => {
     assert.equal(launchSessionSnapshotFromMetadata(null), null);
     assert.equal(launchSessionSnapshotFromMetadata({ launchSession: 'nonsense' }), null);
     assert.equal(launchSessionSnapshotFromMetadata({ launchSession: { version: 99 } }), null);
+  });
+});
+
+describe('window-or-tab preference reaching a delegated viewer', () => {
+  test('the resolved viewer projects the profile placement, not a second setting', () => {
+    const profile = (placement: TerminalProfile['placement']): TerminalProfile => ({
+      launcher: 'iTerm2',
+      placement,
+      chord: placement === 'chord' ? 'cmd d' : null,
+      background: false,
+      executionProvider: { kind: 'latch', executable: 'latch' }
+    });
+
+    assert.equal(resolveLaunchSession({ profile: profile('tab') }).viewer.openAs, 'tab');
+    assert.equal(resolveLaunchSession({ profile: profile('window') }).viewer.openAs, 'window');
+    // Latch cannot send a split-pane keystroke, so `chord` degrades to a window
+    // rather than failing the open of a session that is already running.
+    assert.equal(resolveLaunchSession({ profile: profile('chord') }).viewer.openAs, 'window');
+  });
+
+  test('the claim-time snapshot carries the shape through to the open', () => {
+    const claimed = toLaunchSessionSnapshot(
+      resolveLaunchSession({
+        profile: {
+          launcher: 'iTerm2',
+          placement: 'tab',
+          chord: null,
+          executionProvider: { kind: 'latch', executable: 'latch' }
+        }
+      }),
+      '2026-08-14T00:00:00.000Z'
+    );
+    const read = launchSessionSnapshotFromMetadata({ [LAUNCH_SESSION_METADATA_KEY]: claimed });
+    assert.equal(read?.viewer.openAs, 'tab');
+  });
+
+  test('a snapshot frozen before the shape existed reads as window', () => {
+    const read = launchSessionSnapshotFromMetadata({
+      [LAUNCH_SESSION_METADATA_KEY]: {
+        version: 1,
+        executionProvider: { kind: 'latch', executable: 'latch' },
+        viewer: { kind: 'iterm', launcher: 'iTerm2', openOnLaunch: true },
+        resolvedAt: '2026-08-12T00:00:00.000Z'
+      }
+    });
+    assert.equal(read?.viewer.openAs, 'window');
+  });
+
+  test('a document carrying only the viewer block recovers its placement', () => {
+    const parsed = parseTerminalProfileJson(
+      JSON.stringify({
+        version: 1,
+        executionProvider: { kind: 'latch', executable: 'latch' },
+        viewer: { kind: 'iterm', openAs: 'tab', openOnLaunch: true }
+      })
+    );
+    assert.equal(parsed.placement, 'tab');
+    assert.equal(parsed.launcher, 'iTerm2');
   });
 });

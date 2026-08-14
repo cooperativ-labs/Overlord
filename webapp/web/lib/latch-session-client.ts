@@ -57,7 +57,10 @@ export function useOpenLatchSession(session: TerminalSessionDto) {
           input: {
             providerSessionId: session.providerSessionId,
             executable: session.executable,
-            viewerKind: session.viewerKind
+            viewerKind: session.viewerKind,
+            // The same window-or-tab preference the launch used, so re-opening
+            // a session does not silently change its shape.
+            openAs: session.viewerOpenAs ?? 'window'
           }
         })
       )

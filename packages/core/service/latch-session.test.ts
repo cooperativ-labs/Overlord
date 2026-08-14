@@ -19,11 +19,26 @@ if (command === 'inspect') {
     state: 'running',
     exit: null
   }));
+} else if (command === 'capabilities') {
+  process.stdout.write(JSON.stringify({
+    protocolVersion: 1,
+    productVersion: process.env.FAKE_LATCH_VERSION ?? '0.2608140931.0',
+    capabilities: {
+      create: true,
+      openViewer: true,
+      localAttach: true,
+      cloudAttach: false,
+      selfUpdate: true,
+      extensions: []
+    }
+  }));
 } else if (command === 'open') {
+  const asIndex = args.indexOf('--as');
   process.stdout.write(JSON.stringify({
     id,
     viewer: args[args.indexOf('--with') + 1],
-    opened: true
+    opened: true,
+    behavior: asIndex === -1 ? undefined : args[asIndex + 1]
   }));
 } else if (command === 'stop') {
   process.stdout.write(JSON.stringify({ id, state: 'stopping' }));
@@ -55,8 +70,39 @@ test('opens the stored viewer separately from the session process', () => {
   assert.deepEqual(result, {
     providerSessionId: 'ses_test',
     viewer: 'iterm',
-    opened: true
+    opened: true,
+    behavior: null
   });
+});
+
+test('sends the requested window-or-tab shape to a Latch that supports it', () => {
+  const result = openLatchSession({
+    executable: fakeLatch,
+    providerSessionId: 'ses_test',
+    viewerKind: 'iterm',
+    openAs: 'tab'
+  });
+  assert.equal(result.behavior, 'tab');
+});
+
+test('omits the shape flag for a Latch build that predates it', () => {
+  const saved = process.env.FAKE_LATCH_VERSION;
+  // clap rejects unknown flags, so an ungated `--as` would fail the open
+  // outright; omitting it degrades to a new window instead.
+  process.env.FAKE_LATCH_VERSION = '0.2608140801.0';
+  try {
+    const result = openLatchSession({
+      executable: fakeLatch,
+      providerSessionId: 'ses_test',
+      viewerKind: 'iterm',
+      openAs: 'tab'
+    });
+    assert.equal(result.opened, true);
+    assert.equal(result.behavior, null);
+  } finally {
+    if (saved === undefined) delete process.env.FAKE_LATCH_VERSION;
+    else process.env.FAKE_LATCH_VERSION = saved;
+  }
 });
 
 test('stops only after an explicit lifecycle call', () => {

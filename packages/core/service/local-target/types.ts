@@ -333,12 +333,21 @@ export interface InspectLatchSessionResult {
 
 export interface OpenLatchSessionInput extends LatchSessionInput {
   viewerKind: string;
+  /**
+   * Overlord's window-or-tab preference for this session. Optional so a caller
+   * that has not resolved one keeps today's behavior (a new window); when
+   * present it is sent to Latch explicitly rather than deferring to Latch's own
+   * stored default.
+   */
+  openAs?: 'window' | 'tab' | null;
 }
 
 export interface OpenLatchSessionResult {
   providerSessionId: string;
   viewer: string;
   opened: boolean;
+  /** Shape Latch reports it used; null when the CLI predates `latch open --as`. */
+  behavior?: 'window' | 'tab' | null;
 }
 
 export type StopLatchSessionInput = LatchSessionInput;

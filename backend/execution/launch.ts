@@ -113,7 +113,13 @@ import {
 interface StoredCatalogAgent {
   label: string;
   availableByDefault: boolean;
-  models: Array<{ id: string; displayName: string; reasoningOptions: string[] }>;
+  models: Array<{
+    id: string;
+    displayName: string;
+    reasoningOptions: string[];
+    /** Absent means offered; `false` keeps the model stored but out of pickers. */
+    enabled?: boolean;
+  }>;
   defaultModel: string | null;
   defaultReasoningEffort: string | null;
   reasoningLabel: string;
@@ -292,7 +298,8 @@ function toCatalogDto(stored: StoredCatalog): AgentCatalogDto {
     models: (agent.models ?? []).map(m => ({
       id: m.id,
       displayName: m.displayName ?? m.id,
-      reasoningOptions: Array.isArray(m.reasoningOptions) ? m.reasoningOptions : []
+      reasoningOptions: Array.isArray(m.reasoningOptions) ? m.reasoningOptions : [],
+      enabled: m.enabled !== false
     })),
     defaultModel: agent.defaultModel ?? null,
     defaultReasoningEffort: agent.defaultReasoningEffort ?? null,
@@ -386,7 +393,10 @@ function storedCatalogFromBody(body: UpdateAgentCatalogBody): StoredCatalog {
           ? model.reasoningOptions
               .map(option => (typeof option === 'string' ? option.trim() : ''))
               .filter(option => option.length > 0)
-          : []
+          : [],
+        // Round-trip the offer flag: dropping it here silently reverted every
+        // "Offer" checkbox the settings page saved.
+        enabled: model.enabled !== false
       };
     });
 
@@ -1005,6 +1015,7 @@ export async function listMissionTerminalSessions(
         agentSessionId: providerSession.agentSessionId,
         executable: snapshot?.executionProvider.executable ?? 'latch',
         viewerKind: snapshot?.viewer.kind ?? 'iterm',
+        viewerOpenAs: snapshot?.viewer.openAs ?? 'window',
         createdAt: providerSession.createdAt,
         lastObservedState: terminalSessionState(providerSession.lastObservedState),
         observation: providerSession.observation

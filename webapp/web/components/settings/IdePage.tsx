@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { AgentLaunchFooter } from '@/components/objectives/AgentLaunchFooter';
 import { HotkeyCaptureButton } from '@/components/settings/HotkeyCaptureButton';
@@ -6,8 +6,6 @@ import { LatchDiscoveryStatus } from '@/components/settings/LatchDiscoveryStatus
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import type { ButtonLoadingState } from '@/components/ui/loading-button';
-import { LoadingButton } from '@/components/ui/loading-button';
 import {
   Select,
   SelectContent,
@@ -163,8 +161,6 @@ export function IdePage({ open }: IdePageProps) {
   });
 
   const [editorScheme, setEditorScheme] = useState(DEFAULT_EDITOR_SCHEME);
-  const [savedScheme, setSavedScheme] = useState(DEFAULT_EDITOR_SCHEME);
-  const [schemeSaveState, setSchemeSaveState] = useState<ButtonLoadingState>('default');
   const [schemeError, setSchemeError] = useState<string | null>(null);
 
   const [launcherChoice, setLauncherChoice] = useState<string>('Terminal');
@@ -176,13 +172,12 @@ export function IdePage({ open }: IdePageProps) {
   const [openViewerOverride, setOpenViewerOverride] = useState<boolean | null>(null);
   const [terminalError, setTerminalError] = useState<string | null>(null);
   const [agentError, setAgentError] = useState<string | null>(null);
-  const [terminalButtonState, setTerminalButtonState] = useState<ButtonLoadingState>('default');
+  // coo:719: the terminal profile has no save button — it persists on change.
+  const [terminalSaving, setTerminalSaving] = useState(false);
   const [defaultsError, setDefaultsError] = useState<string | null>(null);
 
   useEffect(() => {
-    const value = profile.data?.editorScheme ?? DEFAULT_EDITOR_SCHEME;
-    setEditorScheme(value);
-    setSavedScheme(value);
+    setEditorScheme(profile.data?.editorScheme ?? DEFAULT_EDITOR_SCHEME);
   }, [profile.data?.editorScheme]);
 
   useEffect(() => {
@@ -197,21 +192,6 @@ export function IdePage({ open }: IdePageProps) {
     setProviderChoice(providerChoiceFromProfile(activeProfile));
     setOpenViewerOverride(activeProfile.openViewerOnLaunch ?? null);
   }, [launchSettings.data?.terminalProfile]);
-
-  if (!open) return null;
-
-  if (profile.isLoading && !profile.data) {
-    return <p className="text-sm text-muted-foreground">Loading terminal &amp; IDE settings…</p>;
-  }
-
-  if (profile.isError || !profile.data) {
-    return (
-      <p className="text-sm text-destructive">
-        {(profile.error as Error | undefined)?.message ??
-          'Terminal &amp; IDE settings are unavailable right now.'}
-      </p>
-    );
-  }
 
   const savedProfile = launchSettings.data?.terminalProfile ?? null;
   const sessionDefaults = launchSettings.data?.launchSessionDefaults ?? null;
@@ -241,6 +221,58 @@ export function IdePage({ open }: IdePageProps) {
       savedProfile.background !== draftProfile.background ||
       savedProviderChoice !== providerChoice ||
       savedOpenViewerOverride !== openViewerOverride);
+  const requiresCustomLauncher =
+    launcherChoice === CUSTOM_LAUNCHER && draftProfile.launcher === null;
+  // Contract v39: launch settings are stored per execution target, and configuring
+  // them is not an onboarding act. Without a declared target there is nothing to
+  // store them against, so say that instead of offering controls that 409.
+  const hasExecutionTarget = Boolean(launchSettings.data?.executionTargetId);
+
+  // coo:719: autosave the terminal profile instead of making the user find a save
+  // button. Everything here is a select/switch except the custom launcher field,
+  // so a short debounce keeps typing from firing a write per keystroke. The ref
+  // holds the latest draft and mutation so the timer effect only re-arms when the
+  // draft's *content* changes, not on every render.
+  const terminalDraftKey = JSON.stringify(draftProfile);
+  const terminalAutosaveReady = hasExecutionTarget && terminalIsDirty && !requiresCustomLauncher;
+  const latestTerminalSave = useRef({ draftProfile, updateTerminalProfile });
+  useEffect(() => {
+    latestTerminalSave.current = { draftProfile, updateTerminalProfile };
+  });
+
+  useEffect(() => {
+    if (!terminalAutosaveReady) return;
+    const timer = setTimeout(() => {
+      const { draftProfile: pending, updateTerminalProfile: mutation } = latestTerminalSave.current;
+      setTerminalSaving(true);
+      setTerminalError(null);
+      mutation
+        .mutateAsync(pending)
+        .catch((error: unknown) => {
+          setTerminalError(
+            error instanceof Error ? error.message : 'Failed to save the terminal profile.'
+          );
+        })
+        .finally(() => setTerminalSaving(false));
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [terminalAutosaveReady, terminalDraftKey]);
+
+  if (!open) return null;
+
+  if (profile.isLoading && !profile.data) {
+    return <p className="text-sm text-muted-foreground">Loading terminal &amp; IDE settings…</p>;
+  }
+
+  if (profile.isError || !profile.data) {
+    return (
+      <p className="text-sm text-destructive">
+        {(profile.error as Error | undefined)?.message ??
+          'Terminal &amp; IDE settings are unavailable right now.'}
+      </p>
+    );
+  }
+
   const defaultProviderKind = sessionDefaults?.executionProvider.kind ?? 'direct';
   const effectiveProviderKind = resolveProviderKind({
     providerChoice,
@@ -253,45 +285,19 @@ export function IdePage({ open }: IdePageProps) {
   });
   const discovery = latchDiscovery.data;
   const latchBlockedReason = resolveLatchBlockedReason(discovery);
-  const requiresCustomLauncher =
-    launcherChoice === CUSTOM_LAUNCHER && draftProfile.launcher === null;
   const agents = [...(catalog.data?.agents ?? [])].sort((a, b) => a.label.localeCompare(b.label));
-  // Contract v39: launch settings are stored per execution target, and configuring
-  // them is not an onboarding act. Without a declared target there is nothing to
-  // store them against, so say that instead of offering controls that 409.
-  const hasExecutionTarget = Boolean(launchSettings.data?.executionTargetId);
 
-  async function handleSaveScheme() {
-    if (editorScheme === savedScheme) return;
-    setSchemeSaveState('loading');
+  // coo:719: the IDE preference is a single select, so it saves on change; the
+  // optimistic local value keeps the control responsive while the write lands.
+  async function handleSchemeChange(value: string) {
+    const next = value || DEFAULT_EDITOR_SCHEME;
+    setEditorScheme(next);
     setSchemeError(null);
     try {
-      await updateProfile.mutateAsync({ editorScheme });
-      setSavedScheme(editorScheme);
-      setSchemeSaveState('success');
+      await updateProfile.mutateAsync({ editorScheme: next });
     } catch (err) {
-      setSchemeSaveState('error');
+      setEditorScheme(profile.data?.editorScheme ?? DEFAULT_EDITOR_SCHEME);
       setSchemeError(err instanceof Error ? err.message : 'Failed to save your IDE preference.');
-    }
-  }
-
-  async function saveTerminalProfile() {
-    if (requiresCustomLauncher) {
-      setTerminalButtonState('error');
-      setTerminalError('Enter a launcher command or choose one of the built-in terminals.');
-      return;
-    }
-    setTerminalButtonState('loading');
-    setTerminalError(null);
-    try {
-      await updateTerminalProfile.mutateAsync(draftProfile);
-      setTerminalButtonState('success');
-      setTimeout(() => setTerminalButtonState('default'), 1600);
-    } catch (error) {
-      setTerminalButtonState('error');
-      setTerminalError(
-        error instanceof Error ? error.message : 'Failed to save the terminal profile.'
-      );
     }
   }
 
@@ -370,7 +376,7 @@ export function IdePage({ open }: IdePageProps) {
         <Label htmlFor="editor-scheme-select">Preferred IDE</Label>
         <Select
           value={editorScheme}
-          onValueChange={value => setEditorScheme(value ?? DEFAULT_EDITOR_SCHEME)}
+          onValueChange={value => void handleSchemeChange(value ?? DEFAULT_EDITOR_SCHEME)}
         >
           <SelectTrigger id="editor-scheme-select">
             <SelectValue placeholder="Select an IDE">
@@ -386,23 +392,10 @@ export function IdePage({ open }: IdePageProps) {
           </SelectContent>
         </Select>
         <p className="text-xs text-muted-foreground">
-          File links will open in {getEditorSchemeLabel(editorScheme)}.
+          File links will open in {getEditorSchemeLabel(editorScheme)}. Saved as soon as you change
+          it.
         </p>
         {schemeError ? <p className="text-sm text-destructive">{schemeError}</p> : null}
-        <div className="flex justify-end">
-          <LoadingButton
-            buttonState={schemeSaveState}
-            setButtonState={setSchemeSaveState}
-            text="Save IDE"
-            loadingText="Saving…"
-            successText="Saved"
-            errorText="Retry"
-            reset
-            variant="outline"
-            onClick={handleSaveScheme}
-            disabled={editorScheme === savedScheme}
-          />
-        </div>
       </div>
 
       <div className="space-y-4 rounded-lg border p-4">
@@ -605,21 +598,16 @@ export function IdePage({ open }: IdePageProps) {
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <LoadingButton
-            buttonState={terminalButtonState}
-            text="Save terminal profile"
-            loadingText="Saving…"
-            successText="Saved"
-            errorText="Save failed"
-            onClick={saveTerminalProfile}
-            disabled={!hasExecutionTarget || (!terminalIsDirty && !requiresCustomLauncher)}
-          />
           <p className="text-xs text-muted-foreground">
             {!hasExecutionTarget
               ? NO_EXECUTION_TARGET_HINT
-              : draftProfile.launcher === null
-                ? 'No launcher configured: runs stay inline in the current terminal.'
-                : 'Saved changes apply to future launches from the web app and CLI.'}
+              : requiresCustomLauncher
+                ? 'Enter a launcher command or choose one of the built-in terminals — nothing is saved until you do.'
+                : terminalSaving
+                  ? 'Saving…'
+                  : draftProfile.launcher === null
+                    ? 'Saved automatically. No launcher configured: runs stay inline in the current terminal.'
+                    : 'Saved automatically. Changes apply to future launches from the web app and CLI.'}
           </p>
         </div>
         {terminalError ? <p className="text-sm text-destructive">{terminalError}</p> : null}

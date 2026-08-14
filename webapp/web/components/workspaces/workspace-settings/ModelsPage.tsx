@@ -15,7 +15,7 @@ import {
   verticalListSortingStrategy
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical, Plus, Trash2 } from 'lucide-react';
+import { Check, GripVertical, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
 import { AgentIcon } from '@/components/objectives/AgentIcon';
@@ -77,6 +77,10 @@ function SortableModelRow({
   model,
   onChange,
   onDelete,
+  onSave,
+  dirty,
+  isNew,
+  saving,
   disabled
 }: {
   agentKey: string;
@@ -84,6 +88,12 @@ function SortableModelRow({
   model: DraftAgent['models'][number];
   onChange: (next: DraftAgent['models'][number]) => void;
   onDelete: () => void;
+  onSave: () => void;
+  /** This row differs from what the workspace catalog has stored (coo:719). */
+  dirty: boolean;
+  /** Never saved, so it keeps its delete control — nothing else can remove it. */
+  isNew: boolean;
+  saving: boolean;
   disabled: boolean;
 }) {
   const {
@@ -152,18 +162,35 @@ function SortableModelRow({
           }
         />
       </td>
-      <td className="px-3 py-2 text-right">
-        <Button
-          type="button"
-          size="icon"
-          variant="ghost"
-          className="size-7 text-destructive hover:text-destructive"
-          disabled={disabled}
-          onClick={onDelete}
-          aria-label={`Delete ${model.displayName} from ${agentKey}`}
-        >
-          <Trash2 className="size-4" />
-        </Button>
+      <td className="px-3 py-2">
+        <div className="flex items-center justify-end gap-1">
+          {dirty ? (
+            <Button
+              type="button"
+              size="sm"
+              className="h-7 px-2"
+              disabled={disabled || saving}
+              onClick={onSave}
+              aria-label={`Save ${model.displayName} for ${agentKey}`}
+            >
+              <Check className="mr-1 size-3.5" />
+              {saving ? 'Saving…' : 'Save'}
+            </Button>
+          ) : null}
+          {!dirty || isNew ? (
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="size-7 text-destructive hover:text-destructive"
+              disabled={disabled}
+              onClick={onDelete}
+              aria-label={`Delete ${model.displayName} from ${agentKey}`}
+            >
+              <Trash2 className="size-4" />
+            </Button>
+          ) : null}
+        </div>
       </td>
     </tr>
   );
@@ -171,11 +198,20 @@ function SortableModelRow({
 
 function AgentModelsSection({
   agent,
+  savedAgent,
   onChange,
+  onSaveModels,
+  savingModels,
+  saveModelsError,
   disabled
 }: {
   agent: DraftAgent;
+  /** The stored counterpart, used to decide which rows are dirty (coo:719). */
+  savedAgent: DraftAgent | null;
   onChange: (next: DraftAgent) => void;
+  onSaveModels: () => void;
+  savingModels: boolean;
+  saveModelsError: string | null;
   disabled: boolean;
 }) {
   const [modelOrder, setModelOrder] = useState(() => agent.models.map(() => createModelRowKey()));
@@ -203,6 +239,25 @@ function AgentModelsSection({
         Boolean(entry)
       );
   }, [agent.models, modelOrder]);
+
+  // A row is dirty when the model stored at its current position differs from
+  // the draft — which also catches reorders, since order is what the position
+  // encodes.
+  const dirtyRows = useMemo(() => {
+    // An added or removed row changes the list itself, so every remaining row
+    // offers to save it — saving is per-agent-list, not per-field.
+    const lengthChanged = (savedAgent?.models.length ?? -1) !== agent.models.length;
+    return agent.models.map((model, index) => {
+      const saved = savedAgent?.models[index];
+      if (!saved || lengthChanged) return true;
+      return (
+        saved.id !== model.id ||
+        saved.displayName !== model.displayName ||
+        (saved.enabled ?? true) !== (model.enabled ?? true) ||
+        saved.reasoningOptions.join('\u0000') !== model.reasoningOptions.join('\u0000')
+      );
+    });
+  }, [agent.models, savedAgent]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -319,7 +374,7 @@ function AgentModelsSection({
                 <th className="px-3 py-2 font-medium">Model id</th>
                 <th className="px-3 py-2 font-medium">Display name</th>
                 <th className="px-3 py-2 font-medium">Reasoning options</th>
-                <th className="px-3 py-2 text-right font-medium">Remove</th>
+                <th className="px-3 py-2 text-right font-medium">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -330,6 +385,10 @@ function AgentModelsSection({
                     rowKey={rowKey}
                     agentKey={agent.key}
                     model={model}
+                    dirty={dirtyRows[index] ?? false}
+                    isNew={index >= (savedAgent?.models.length ?? 0)}
+                    saving={savingModels}
+                    onSave={onSaveModels}
                     disabled={disabled}
                     onChange={next => {
                       updateModels(
@@ -348,16 +407,25 @@ function AgentModelsSection({
         </DndContext>
       </div>
 
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        disabled={disabled}
-        onClick={handleAddModel}
-      >
-        <Plus className="mr-1 size-4" />
-        Add model
-      </Button>
+      <div className="flex flex-wrap items-center gap-3">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={disabled}
+          onClick={handleAddModel}
+        >
+          <Plus className="mr-1 size-4" />
+          Add model
+        </Button>
+        {saveModelsError ? (
+          <p className="text-xs text-destructive">{saveModelsError}</p>
+        ) : dirtyRows.some(Boolean) ? (
+          <p className="text-xs text-muted-foreground">
+            Save a changed row to apply this model list immediately.
+          </p>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -379,6 +447,9 @@ export function ModelsPage({ open, workspaceId }: ModelsPageProps) {
   const [jsonError, setJsonError] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<ButtonLoadingState>('default');
   const [saveError, setSaveError] = useState<string | null>(null);
+  /** Agent key whose model list is mid-save from a row-level Save (coo:719). */
+  const [savingModelsFor, setSavingModelsFor] = useState<string | null>(null);
+  const [modelsErrors, setModelsErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (!open || !catalog.data) return;
@@ -389,6 +460,7 @@ export function ModelsPage({ open, workspaceId }: ModelsPageProps) {
     setJsonError(null);
     setSaveError(null);
     setSaveState('default');
+    setModelsErrors({});
   }, [open, catalog.data]);
 
   const isDirty = !catalogsEqual(draftAgents, savedAgents);
@@ -424,6 +496,63 @@ export function ModelsPage({ open, workspaceId }: ModelsPageProps) {
     } catch (error) {
       setSaveState('error');
       setSaveError(error instanceof Error ? error.message : 'Failed to save model catalog.');
+    }
+  }
+
+  /**
+   * Persist just one agent's model list. The API replaces the whole catalog, so
+   * the payload is the *saved* catalog with only this agent's models swapped in
+   * — an unsaved label or reasoning heading elsewhere on the page stays a draft
+   * and keeps needing the catalog-level save.
+   */
+  async function handleSaveAgentModels(agentKey: string) {
+    const draftAgent = draftAgents.find(entry => entry.key === agentKey);
+    if (!draftAgent) return;
+    setSavingModelsFor(agentKey);
+    setModelsErrors(previous =>
+      Object.fromEntries(Object.entries(previous).filter(([key]) => key !== agentKey))
+    );
+    const modelIds = new Set(draftAgent.models.map(model => model.id));
+    const payload = savedAgents.map(saved => {
+      if (saved.key !== agentKey) return saved;
+      // `defaultModel` must reference a live model id, so fall back to the
+      // draft's choice (then to none) when a rename orphaned the stored one.
+      const defaultModel =
+        saved.defaultModel && modelIds.has(saved.defaultModel)
+          ? saved.defaultModel
+          : draftAgent.defaultModel && modelIds.has(draftAgent.defaultModel)
+            ? draftAgent.defaultModel
+            : null;
+      return { ...saved, models: draftAgent.models, defaultModel };
+    });
+    try {
+      const updated = await updateCatalog.mutateAsync({ agents: payload });
+      const next = cloneCatalogAgents(updated);
+      setSavedAgents(next);
+      // Adopt the server's normalised models (trimmed ids, dropped blanks) so
+      // the rows settle clean, without touching other in-flight draft edits.
+      const savedAgentModels = next.find(entry => entry.key === agentKey);
+      if (savedAgentModels) {
+        setDraftAgents(previous =>
+          previous.map(entry =>
+            entry.key === agentKey
+              ? {
+                  ...entry,
+                  models: savedAgentModels.models,
+                  defaultModel: savedAgentModels.defaultModel
+                }
+              : entry
+          )
+        );
+      }
+    } catch (error) {
+      setModelsErrors(previous => ({
+        ...previous,
+        [agentKey]:
+          error instanceof Error ? error.message : 'Failed to save this agent\u2019s models.'
+      }));
+    } finally {
+      setSavingModelsFor(null);
     }
   }
 
@@ -466,6 +595,10 @@ export function ModelsPage({ open, workspaceId }: ModelsPageProps) {
           {index > 0 ? <Separator /> : null}
           <AgentModelsSection
             agent={agent}
+            savedAgent={savedAgents.find(saved => saved.key === agent.key) ?? null}
+            onSaveModels={() => void handleSaveAgentModels(agent.key)}
+            savingModels={savingModelsFor === agent.key}
+            saveModelsError={modelsErrors[agent.key] ?? null}
             disabled={updateCatalog.isPending}
             onChange={next =>
               setDraftAgents(previous =>

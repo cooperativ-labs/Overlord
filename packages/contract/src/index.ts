@@ -1472,6 +1472,12 @@ export interface TerminalSessionDto {
   agentSessionId: string | null;
   executable: string;
   viewerKind: string;
+  /**
+   * Window-or-tab shape this session's launch resolved, frozen at claim time.
+   * Re-opening the session later uses the same shape the launch did. Absent on
+   * a session claimed before the field existed, which means `window`.
+   */
+  viewerOpenAs?: 'window' | 'tab';
   createdAt: string;
   lastObservedState: TerminalSessionStateDto;
   observation: LatchHarnessObservationDto | null;

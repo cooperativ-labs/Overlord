@@ -1,7 +1,9 @@
 import { spawnSync } from 'node:child_process';
 
 import { latchChildEnvironment } from './latch-environment.ts';
-import { latchViewerFlagForKind } from './latch-launch.ts';
+import { buildLatchOpenArgs, latchViewerFlagForKind } from './latch-launch.ts';
+import type { ViewerOpenAs } from './terminal-profile-types.ts';
+import { parseViewerOpenAs } from './terminal-profile-types.ts';
 
 export type LatchSessionState = 'running' | 'exited' | 'stopping' | 'lost';
 
@@ -17,6 +19,11 @@ export type LatchSessionOpenResult = {
   providerSessionId: string;
   viewer: string;
   opened: boolean;
+  /**
+   * The shape Latch reports it actually used. Null when this Latch build
+   * predates `--as` and therefore reports nothing — which always means a window.
+   */
+  behavior: ViewerOpenAs | null;
 };
 
 export type LatchSessionStopResult = {
@@ -112,14 +119,34 @@ export function inspectLatchSession({
   };
 }
 
+/**
+ * Read the Latch product version so `--as` is only sent to a build that has it.
+ * Best-effort: any failure answers null, which omits the flag and opens a
+ * window rather than failing an open for a session that is already running.
+ */
+function readLatchProductVersion(executable: string): string | null {
+  try {
+    return trimmed(runLatchJson({ executable, args: ['capabilities', '--json'] }).productVersion);
+  } catch {
+    return null;
+  }
+}
+
 export function openLatchSession({
   executable = 'latch',
   providerSessionId,
-  viewerKind
+  viewerKind,
+  openAs
 }: {
   executable?: string | null;
   providerSessionId: string;
   viewerKind: string;
+  /**
+   * Overlord's own window-or-tab preference. Sent explicitly whenever the CLI
+   * supports it so Latch's stored `open.behavior` default can never silently
+   * disagree with the setting the user sees in Overlord.
+   */
+  openAs?: ViewerOpenAs | string | null;
 }): LatchSessionOpenResult {
   const sessionId = trimmed(providerSessionId);
   if (!sessionId) throw new LatchSessionCommandError('A Latch session id is required.');
@@ -127,9 +154,15 @@ export function openLatchSession({
   if (!viewer) {
     throw new LatchSessionCommandError(`Latch cannot open the configured viewer "${viewerKind}".`);
   }
+  const exe = trimmed(executable) ?? 'latch';
   const report = runLatchJson({
-    executable: trimmed(executable) ?? 'latch',
-    args: ['open', sessionId, '--with', viewer, '--json']
+    executable: exe,
+    args: buildLatchOpenArgs({
+      providerSessionId: sessionId,
+      viewer,
+      openAs,
+      productVersion: openAs ? readLatchProductVersion(exe) : null
+    })
   });
   if (report.opened !== true) {
     throw new LatchSessionCommandError(`Latch did not open the ${viewer} viewer.`);
@@ -137,7 +170,8 @@ export function openLatchSession({
   return {
     providerSessionId: trimmed(report.id) ?? sessionId,
     viewer: trimmed(report.viewer) ?? viewer,
-    opened: true
+    opened: true,
+    behavior: trimmed(report.behavior) ? parseViewerOpenAs(report.behavior) : null
   };
 }
 

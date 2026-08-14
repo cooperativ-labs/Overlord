@@ -7,7 +7,8 @@
  */
 
 import type { LatchHarnessObservation, LatchPendingInput } from './latch-events.ts';
-import type { TerminalViewerKind } from './terminal-profile-types.ts';
+import type { TerminalViewerKind, ViewerOpenAs } from './terminal-profile-types.ts';
+import { parseViewerOpenAs } from './terminal-profile-types.ts';
 
 /** Latch launch-manifest schema version Overlord speaks today. */
 export const LATCH_MANIFEST_FORMAT_VERSION = 1;
@@ -336,6 +337,78 @@ export function latchViewerFlagForKind(
     default:
       return null;
   }
+}
+
+/**
+ * First Latch product version whose `latch open` accepts `--as window|tab`.
+ *
+ * This is a version gate rather than a capability flag because `latch
+ * capabilities` does not advertise individual flags, and clap rejects an
+ * unknown argument outright — sending `--as` to an older CLI would fail the
+ * open entirely instead of degrading to a new window.
+ */
+export const LATCH_OPEN_AS_MIN_PRODUCT_VERSION = '0.2608140931.0';
+
+/**
+ * Compare two dotted-numeric Latch product versions (`0.2608140931.0`).
+ * Returns <0, 0, or >0. Non-numeric or missing segments compare as 0, so a
+ * version string Overlord cannot read never falsely satisfies a minimum.
+ */
+export function compareLatchProductVersions(a: string, b: string): number {
+  const parts = (value: string) =>
+    value
+      .trim()
+      .split('.')
+      .map(segment => {
+        const parsed = Number.parseInt(segment, 10);
+        return Number.isFinite(parsed) ? parsed : 0;
+      });
+  const left = parts(a);
+  const right = parts(b);
+  const length = Math.max(left.length, right.length);
+  for (let index = 0; index < length; index += 1) {
+    const diff = (left[index] ?? 0) - (right[index] ?? 0);
+    if (diff !== 0) return diff;
+  }
+  return 0;
+}
+
+/**
+ * Whether this Latch build understands `latch open --as`. Unknown / unparseable
+ * versions answer `false`: omitting the flag opens a window, which is the same
+ * thing an older Latch would have done anyway.
+ */
+export function latchSupportsOpenAs(productVersion: string | null | undefined): boolean {
+  const version = trimmed(productVersion);
+  if (!version) return false;
+  return compareLatchProductVersions(version, LATCH_OPEN_AS_MIN_PRODUCT_VERSION) >= 0;
+}
+
+/**
+ * Build the argv for `latch open`.
+ *
+ * `--as` is sent explicitly whenever the CLI supports it, never left to Latch's
+ * own stored `open.behavior` default: Overlord holds this preference itself, and
+ * two independent defaults that disagree give the user no way to tell which one
+ * won.
+ */
+export function buildLatchOpenArgs({
+  providerSessionId,
+  viewer,
+  openAs,
+  productVersion
+}: {
+  providerSessionId: string;
+  viewer: string;
+  openAs?: ViewerOpenAs | string | null;
+  productVersion?: string | null;
+}): string[] {
+  const args = ['open', providerSessionId, '--with', viewer];
+  if (openAs && latchSupportsOpenAs(productVersion)) {
+    args.push('--as', parseViewerOpenAs(openAs));
+  }
+  args.push('--json');
+  return args;
 }
 
 /** Attach command a human can run when viewer open fails or is skipped. */

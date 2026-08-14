@@ -70271,6 +70271,12 @@ var init_latch_environment = __esm({
 });
 
 // ../packages/core/service/terminal-profile-types.ts
+function viewerOpenAsForPlacement(placement) {
+  return typeof placement === "string" && placement.trim().toLowerCase() === "tab" ? "tab" : DEFAULT_VIEWER_OPEN_AS;
+}
+function parseViewerOpenAs(value) {
+  return typeof value === "string" && value.trim().toLowerCase() === "tab" ? "tab" : DEFAULT_VIEWER_OPEN_AS;
+}
 function trimmed(value) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
@@ -70310,9 +70316,9 @@ function parseTerminalProfileJson(json2) {
   try {
     const parsed = JSON.parse(json2);
     const hasLauncher = Object.prototype.hasOwnProperty.call(parsed, "launcher");
-    const placementRaw = typeof parsed.placement === "string" ? parsed.placement.trim() : DEFAULT_TERMINAL_PROFILE.placement;
-    const placement = placementRaw === "tab" ? "tab" : placementRaw === "chord" ? "chord" : "window";
     const viewer = parsed.viewer && typeof parsed.viewer === "object" && !Array.isArray(parsed.viewer) ? parsed.viewer : null;
+    const placementRaw = typeof parsed.placement === "string" ? parsed.placement.trim() : typeof viewer?.openAs === "string" ? parseViewerOpenAs(viewer.openAs) : DEFAULT_TERMINAL_PROFILE.placement;
+    const placement = placementRaw === "tab" ? "tab" : placementRaw === "chord" ? "chord" : "window";
     const viewerLauncher = hasLauncher ? void 0 : launcherForViewerKind(viewer?.kind);
     const profile = {
       launcher: typeof parsed.launcher === "string" && parsed.launcher.trim() ? parsed.launcher.trim() : hasLauncher ? null : viewerLauncher !== void 0 ? viewerLauncher : DEFAULT_TERMINAL_PROFILE.launcher,
@@ -70342,6 +70348,7 @@ function serializeTerminalProfile(profile) {
     if (provider) document2.executionProvider = provider;
     document2.viewer = {
       kind: viewerKindForLauncher(profile.launcher),
+      openAs: viewerOpenAsForPlacement(profile.placement),
       ...openOnLaunch === void 0 ? {} : { openOnLaunch }
     };
   }
@@ -70387,7 +70394,8 @@ function resolveLaunchSession({
     viewer: {
       kind: viewerKindForLauncher(launcher),
       launcher: launcher ?? null,
-      openOnLaunch: openOnLaunch ?? defaults2.openViewerOnLaunch !== false
+      openOnLaunch: openOnLaunch ?? defaults2.openViewerOnLaunch !== false,
+      openAs: viewerOpenAsForPlacement(profile?.placement ?? DEFAULT_TERMINAL_PROFILE.placement)
     },
     executionProviderSource: provider ? "target" : "user_default",
     viewerOpenSource: openOnLaunch === null ? "user_default" : "target"
@@ -70412,17 +70420,21 @@ function launchSessionSnapshotFromMetadata(metadata) {
     viewer: {
       kind: trimmed(viewer?.kind) ? trimmed(viewer?.kind) : viewerKindForLauncher(launcher),
       launcher,
-      openOnLaunch: viewer?.openOnLaunch !== false
+      openOnLaunch: viewer?.openOnLaunch !== false,
+      // A snapshot frozen before `openAs` existed carries none; `window` is what
+      // those runs actually did, so the absent case must not become `tab`.
+      openAs: parseViewerOpenAs(viewer?.openAs)
     },
     executionProviderSource: source(cast.executionProviderSource),
     viewerOpenSource: source(cast.viewerOpenSource),
     resolvedAt: trimmed(cast.resolvedAt) ?? ""
   };
 }
-var TERMINAL_PROFILE_VERSION, DEFAULT_LATCH_EXECUTABLE, DEFAULT_EXECUTION_PROVIDER, DEFAULT_OPEN_VIEWER_ON_LAUNCH, DEFAULT_TERMINAL_PROFILE, DEFAULT_LAUNCH_SESSION_DEFAULTS, LAUNCH_SESSION_METADATA_KEY;
+var DEFAULT_VIEWER_OPEN_AS, TERMINAL_PROFILE_VERSION, DEFAULT_LATCH_EXECUTABLE, DEFAULT_EXECUTION_PROVIDER, DEFAULT_OPEN_VIEWER_ON_LAUNCH, DEFAULT_TERMINAL_PROFILE, DEFAULT_LAUNCH_SESSION_DEFAULTS, LAUNCH_SESSION_METADATA_KEY;
 var init_terminal_profile_types = __esm({
   "../packages/core/service/terminal-profile-types.ts"() {
     "use strict";
+    DEFAULT_VIEWER_OPEN_AS = "window";
     TERMINAL_PROFILE_VERSION = 1;
     DEFAULT_LATCH_EXECUTABLE = "latch";
     DEFAULT_EXECUTION_PROVIDER = {
@@ -70813,11 +70825,45 @@ function latchViewerFlagForKind(kind) {
       return null;
   }
 }
-var PROVIDER_SESSION_METADATA_KEY;
+function compareLatchProductVersions(a5, b5) {
+  const parts = (value) => value.trim().split(".").map((segment) => {
+    const parsed = Number.parseInt(segment, 10);
+    return Number.isFinite(parsed) ? parsed : 0;
+  });
+  const left = parts(a5);
+  const right = parts(b5);
+  const length = Math.max(left.length, right.length);
+  for (let index = 0; index < length; index += 1) {
+    const diff = (left[index] ?? 0) - (right[index] ?? 0);
+    if (diff !== 0) return diff;
+  }
+  return 0;
+}
+function latchSupportsOpenAs(productVersion) {
+  const version4 = trimmed3(productVersion);
+  if (!version4) return false;
+  return compareLatchProductVersions(version4, LATCH_OPEN_AS_MIN_PRODUCT_VERSION) >= 0;
+}
+function buildLatchOpenArgs({
+  providerSessionId,
+  viewer,
+  openAs,
+  productVersion
+}) {
+  const args = ["open", providerSessionId, "--with", viewer];
+  if (openAs && latchSupportsOpenAs(productVersion)) {
+    args.push("--as", parseViewerOpenAs(openAs));
+  }
+  args.push("--json");
+  return args;
+}
+var PROVIDER_SESSION_METADATA_KEY, LATCH_OPEN_AS_MIN_PRODUCT_VERSION;
 var init_latch_launch = __esm({
   "../packages/core/service/latch-launch.ts"() {
     "use strict";
+    init_terminal_profile_types();
     PROVIDER_SESSION_METADATA_KEY = "providerSession";
+    LATCH_OPEN_AS_MIN_PRODUCT_VERSION = "0.2608140931.0";
   }
 });
 
@@ -70888,10 +70934,18 @@ function inspectLatchSession({
     inspectedAt: (/* @__PURE__ */ new Date()).toISOString()
   };
 }
+function readLatchProductVersion(executable) {
+  try {
+    return trimmed4(runLatchJson({ executable, args: ["capabilities", "--json"] }).productVersion);
+  } catch {
+    return null;
+  }
+}
 function openLatchSession({
   executable = "latch",
   providerSessionId,
-  viewerKind
+  viewerKind,
+  openAs
 }) {
   const sessionId = trimmed4(providerSessionId);
   if (!sessionId) throw new LatchSessionCommandError("A Latch session id is required.");
@@ -70899,9 +70953,15 @@ function openLatchSession({
   if (!viewer) {
     throw new LatchSessionCommandError(`Latch cannot open the configured viewer "${viewerKind}".`);
   }
+  const exe = trimmed4(executable) ?? "latch";
   const report = runLatchJson({
-    executable: trimmed4(executable) ?? "latch",
-    args: ["open", sessionId, "--with", viewer, "--json"]
+    executable: exe,
+    args: buildLatchOpenArgs({
+      providerSessionId: sessionId,
+      viewer,
+      openAs,
+      productVersion: openAs ? readLatchProductVersion(exe) : null
+    })
   });
   if (report.opened !== true) {
     throw new LatchSessionCommandError(`Latch did not open the ${viewer} viewer.`);
@@ -70909,7 +70969,8 @@ function openLatchSession({
   return {
     providerSessionId: trimmed4(report.id) ?? sessionId,
     viewer: trimmed4(report.viewer) ?? viewer,
-    opened: true
+    opened: true,
+    behavior: trimmed4(report.behavior) ? parseViewerOpenAs(report.behavior) : null
   };
 }
 function stopLatchSession({
@@ -70936,6 +70997,7 @@ var init_latch_session = __esm({
     import_node_child_process4 = require("node:child_process");
     init_latch_environment();
     init_latch_launch();
+    init_terminal_profile_types();
     LatchSessionCommandError = class extends Error {
       constructor(message2) {
         super(message2);
@@ -139017,6 +139079,13 @@ async function generateMissionTitleNow(params) {
 init_dist6();
 
 // ../packages/core/dist/service/terminal-profile-types.js
+var DEFAULT_VIEWER_OPEN_AS2 = "window";
+function viewerOpenAsForPlacement2(placement) {
+  return typeof placement === "string" && placement.trim().toLowerCase() === "tab" ? "tab" : DEFAULT_VIEWER_OPEN_AS2;
+}
+function parseViewerOpenAs2(value) {
+  return typeof value === "string" && value.trim().toLowerCase() === "tab" ? "tab" : DEFAULT_VIEWER_OPEN_AS2;
+}
 var TERMINAL_PROFILE_VERSION2 = 1;
 var DEFAULT_LATCH_EXECUTABLE2 = "latch";
 var DEFAULT_EXECUTION_PROVIDER2 = {
@@ -139071,7 +139140,8 @@ function resolveLaunchSession2({ profile, defaults: defaults2 = DEFAULT_LAUNCH_S
     viewer: {
       kind: viewerKindForLauncher2(launcher),
       launcher: launcher ?? null,
-      openOnLaunch: openOnLaunch ?? defaults2.openViewerOnLaunch !== false
+      openOnLaunch: openOnLaunch ?? defaults2.openViewerOnLaunch !== false,
+      openAs: viewerOpenAsForPlacement2(profile?.placement ?? DEFAULT_TERMINAL_PROFILE2.placement)
     },
     executionProviderSource: provider ? "target" : "user_default",
     viewerOpenSource: openOnLaunch === null ? "user_default" : "target"
@@ -139095,7 +139165,10 @@ function launchSessionSnapshotFromMetadata2(metadata) {
     viewer: {
       kind: trimmed8(viewer?.kind) ? trimmed8(viewer?.kind) : viewerKindForLauncher2(launcher),
       launcher,
-      openOnLaunch: viewer?.openOnLaunch !== false
+      openOnLaunch: viewer?.openOnLaunch !== false,
+      // A snapshot frozen before `openAs` existed carries none; `window` is what
+      // those runs actually did, so the absent case must not become `tab`.
+      openAs: parseViewerOpenAs2(viewer?.openAs)
     },
     executionProviderSource: source(cast.executionProviderSource),
     viewerOpenSource: source(cast.viewerOpenSource),
@@ -139207,7 +139280,8 @@ function toCatalogDto(stored) {
     models: (agent.models ?? []).map((m3) => ({
       id: m3.id,
       displayName: m3.displayName ?? m3.id,
-      reasoningOptions: Array.isArray(m3.reasoningOptions) ? m3.reasoningOptions : []
+      reasoningOptions: Array.isArray(m3.reasoningOptions) ? m3.reasoningOptions : [],
+      enabled: m3.enabled !== false
     })),
     defaultModel: agent.defaultModel ?? null,
     defaultReasoningEffort: agent.defaultReasoningEffort ?? null,
@@ -139281,7 +139355,10 @@ function storedCatalogFromBody(body) {
       return {
         id,
         displayName: model.displayName?.trim() || id,
-        reasoningOptions: Array.isArray(model.reasoningOptions) ? model.reasoningOptions.map((option) => typeof option === "string" ? option.trim() : "").filter((option) => option.length > 0) : []
+        reasoningOptions: Array.isArray(model.reasoningOptions) ? model.reasoningOptions.map((option) => typeof option === "string" ? option.trim() : "").filter((option) => option.length > 0) : [],
+        // Round-trip the offer flag: dropping it here silently reverted every
+        // "Offer" checkbox the settings page saved.
+        enabled: model.enabled !== false
       };
     });
     if (agent.defaultModel !== null && agent.defaultModel !== void 0 && !modelIds.has(agent.defaultModel)) {
@@ -139686,6 +139763,7 @@ async function listMissionTerminalSessions(missionId) {
         agentSessionId: providerSession.agentSessionId,
         executable: snapshot?.executionProvider.executable ?? "latch",
         viewerKind: snapshot?.viewer.kind ?? "iterm",
+        viewerOpenAs: snapshot?.viewer.openAs ?? "window",
         createdAt: providerSession.createdAt,
         lastObservedState: terminalSessionState(providerSession.lastObservedState),
         observation: providerSession.observation ? {

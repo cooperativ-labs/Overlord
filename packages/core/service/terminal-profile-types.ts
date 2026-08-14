@@ -1,6 +1,36 @@
 export type TerminalLaunchPlacement = 'window' | 'tab' | 'chord';
 
 /**
+ * The window-or-tab shape a viewer is asked to open in.
+ *
+ * This is a projection of {@link TerminalLaunchPlacement}, never a second
+ * stored preference: `placement` remains the single terminal-shape choice a
+ * user makes, and this narrows it to the two shapes a delegated viewer open
+ * (`latch open --as`) can express. `chord` has no delegated equivalent — Latch
+ * cannot send a split-pane keystroke — so it resolves to `window` rather than
+ * failing an open for a session that is already running.
+ */
+export type ViewerOpenAs = 'window' | 'tab';
+
+export const DEFAULT_VIEWER_OPEN_AS: ViewerOpenAs = 'window';
+
+/** Narrow a stored placement to the shape a delegated viewer open can request. */
+export function viewerOpenAsForPlacement(
+  placement: TerminalLaunchPlacement | string | null | undefined
+): ViewerOpenAs {
+  return typeof placement === 'string' && placement.trim().toLowerCase() === 'tab'
+    ? 'tab'
+    : DEFAULT_VIEWER_OPEN_AS;
+}
+
+/** Parse a stored/wire `openAs` value; anything unrecognized degrades to `window`. */
+export function parseViewerOpenAs(value: unknown): ViewerOpenAs {
+  return typeof value === 'string' && value.trim().toLowerCase() === 'tab'
+    ? 'tab'
+    : DEFAULT_VIEWER_OPEN_AS;
+}
+
+/**
  * Which process host actually runs the agent.
  *
  * `direct` is today's behavior — the terminal application (or the runner's own
@@ -101,6 +131,12 @@ export type ResolvedLaunchSession = {
     /** The stored terminal choice itself, so callers never re-derive it. */
     launcher: string | null;
     openOnLaunch: boolean;
+    /**
+     * Window-or-tab shape, projected from the profile's `placement`. Carried
+     * here so a delegated open (Latch) uses the same preference a direct
+     * terminal launch does, instead of the viewer's own separate default.
+     */
+    openAs: ViewerOpenAs;
   };
   executionProviderSource: LaunchSessionSource;
   viewerOpenSource: LaunchSessionSource;
@@ -178,17 +214,23 @@ export function parseTerminalProfileJson(json: string | null | undefined): Termi
       viewer?: unknown;
     };
     const hasLauncher = Object.prototype.hasOwnProperty.call(parsed, 'launcher');
-    const placementRaw =
-      typeof parsed.placement === 'string'
-        ? parsed.placement.trim()
-        : DEFAULT_TERMINAL_PROFILE.placement;
-    const placement: TerminalLaunchPlacement =
-      placementRaw === 'tab' ? 'tab' : placementRaw === 'chord' ? 'chord' : 'window';
 
     const viewer =
       parsed.viewer && typeof parsed.viewer === 'object' && !Array.isArray(parsed.viewer)
-        ? (parsed.viewer as { kind?: unknown; openOnLaunch?: unknown })
+        ? (parsed.viewer as { kind?: unknown; openAs?: unknown; openOnLaunch?: unknown })
         : null;
+
+    // `placement` is authoritative; `viewer.openAs` is a derived projection that
+    // is only consulted for a document carrying no placement at all — the same
+    // rule `viewer.kind` follows against `launcher` below.
+    const placementRaw =
+      typeof parsed.placement === 'string'
+        ? parsed.placement.trim()
+        : typeof viewer?.openAs === 'string'
+          ? parseViewerOpenAs(viewer.openAs)
+          : DEFAULT_TERMINAL_PROFILE.placement;
+    const placement: TerminalLaunchPlacement =
+      placementRaw === 'tab' ? 'tab' : placementRaw === 'chord' ? 'chord' : 'window';
     // `launcher` is authoritative; `viewer.kind` is a derived projection that is
     // only consulted for a document that carries no launcher at all.
     const viewerLauncher = hasLauncher ? undefined : launcherForViewerKind(viewer?.kind);
@@ -241,8 +283,12 @@ export function serializeTerminalProfile(profile: TerminalProfile): string {
   if (provider || openOnLaunch !== undefined) {
     document.version = TERMINAL_PROFILE_VERSION;
     if (provider) document.executionProvider = provider;
+    // `openAs` mirrors `placement` into the viewer block, which is the shape a
+    // delegated viewer (Latch) reads: `{"kind": "iterm", "openAs": "tab"}`.
+    // `placement` above stays authoritative; this is a projection of it.
     document.viewer = {
       kind: viewerKindForLauncher(profile.launcher),
+      openAs: viewerOpenAsForPlacement(profile.placement),
       ...(openOnLaunch === undefined ? {} : { openOnLaunch })
     };
   }
@@ -315,7 +361,8 @@ export function resolveLaunchSession({
     viewer: {
       kind: viewerKindForLauncher(launcher),
       launcher: launcher ?? null,
-      openOnLaunch: openOnLaunch ?? defaults.openViewerOnLaunch !== false
+      openOnLaunch: openOnLaunch ?? defaults.openViewerOnLaunch !== false,
+      openAs: viewerOpenAsForPlacement(profile?.placement ?? DEFAULT_TERMINAL_PROFILE.placement)
     },
     executionProviderSource: provider ? 'target' : 'user_default',
     viewerOpenSource: openOnLaunch === null ? 'user_default' : 'target'
@@ -351,7 +398,12 @@ export function launchSessionSnapshotFromMetadata(
   if (cast.version !== TERMINAL_PROFILE_VERSION) return null;
   const viewer =
     cast.viewer && typeof cast.viewer === 'object' && !Array.isArray(cast.viewer)
-      ? (cast.viewer as { kind?: unknown; launcher?: unknown; openOnLaunch?: unknown })
+      ? (cast.viewer as {
+          kind?: unknown;
+          launcher?: unknown;
+          openOnLaunch?: unknown;
+          openAs?: unknown;
+        })
       : null;
   const launcher = trimmed(viewer?.launcher);
   const source = (value: unknown): LaunchSessionSource =>
@@ -367,7 +419,10 @@ export function launchSessionSnapshotFromMetadata(
         ? (trimmed(viewer?.kind) as TerminalViewerKind)
         : viewerKindForLauncher(launcher),
       launcher,
-      openOnLaunch: viewer?.openOnLaunch !== false
+      openOnLaunch: viewer?.openOnLaunch !== false,
+      // A snapshot frozen before `openAs` existed carries none; `window` is what
+      // those runs actually did, so the absent case must not become `tab`.
+      openAs: parseViewerOpenAs(viewer?.openAs)
     },
     executionProviderSource: source(cast.executionProviderSource),
     viewerOpenSource: source(cast.viewerOpenSource),

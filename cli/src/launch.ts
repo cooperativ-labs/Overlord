@@ -561,6 +561,9 @@ export async function launchAgent({
   let providerFallbackWarning: string | null = null;
   let useLatch = false;
   let resolvedLatchExecutable = executable;
+  // Captured from the discovery probe below so the viewer open can gate `--as`
+  // on the CLI version without spawning a second `latch capabilities`.
+  let latchProductVersion: string | null = null;
   // This inherited marker correlates the launch with an already-running Latch
   // PTY; it is not consulted for any Overlord authorization decision.
   const existingProviderSession =
@@ -617,6 +620,7 @@ export async function launchAgent({
         // after a macOS GUI/service PATH omitted it. Use that exact executable
         // for create/open too, rather than resolving the bare name again.
         resolvedLatchExecutable = discovery.resolvedPath;
+        latchProductVersion = discovery.productVersion;
       }
       if (!useLatch) {
         providerFallbackWarning =
@@ -648,7 +652,9 @@ export async function launchAgent({
       viewerOpen = openLatchViewer({
         executable: resolvedLatchExecutable,
         providerSessionId: created.providerSession.providerSessionId,
-        viewerKind: snapshot?.viewer.kind ?? 'iterm'
+        viewerKind: snapshot?.viewer.kind ?? 'iterm',
+        openAs: snapshot?.viewer.openAs ?? null,
+        productVersion: latchProductVersion
       });
     }
 
