@@ -30,6 +30,17 @@ export const ACTIVE_EXECUTION_REQUEST_STATUSES = ['queued', 'claimed', 'launchin
 const LAUNCHABLE_OBJECTIVE_STATES = ['draft', 'submitted', 'launching'] as const;
 const CLAIM_TTL_MS = 15 * 60 * 1000;
 const LAUNCH_ATTACH_TTL_MS = 15 * 60 * 1000;
+// How long a request may sit in `launching` before expiry reclaims it. The window
+// between `POST …/launching` and `POST …/launched` covers worktree preparation and
+// opening the terminal, which on a cold, large repository with pre-launch commands
+// can plausibly run for a few minutes — so this must be well above that, or a slow
+// but healthy launch would be expired underneath itself. It must also be short
+// enough that a runner killed mid-launch (the app bundle replaced under it, a
+// reboot) does not strand the objective: while the row sits in `launching` it is
+// still active, so every later Run click returns that same stranded row and every
+// sibling objective on the mission is refused. Ten minutes is the compromise: a
+// generous multiple of a realistic slow launch, and a bounded wait for the user.
+const LAUNCH_START_TTL_MS = 10 * 60 * 1000;
 
 export type ExecutionRequestSummary = {
   id: string;
@@ -782,6 +793,30 @@ export async function markExecutionLaunched({
   return await ctx.db.transaction(async tx => {
     const txCtx = { ...ctx, db: tx };
     const row = await getExecutionRequestStateRow({ ctx: txCtx, requestId });
+    if (row.status === 'expired') {
+      // A launch slower than the launch TTL is expired underneath itself: the runner
+      // is alive and did open the agent, but the row moved to `expired` while it was
+      // still working. Reporting `launched` then arrives against a terminal row. That
+      // is not a runner error — treat it as tolerated and record why, rather than
+      // raising a 409 the runner would turn into a spurious launch failure. The row
+      // is deliberately left `expired` (never re-launched, never re-queued): the
+      // objective is launchable again, and the agent that did start attaches through
+      // the session link, which already skips terminal requests.
+      const expiredFromLaunching = (await txCtx.db.get(
+        `SELECT launch_started_at, launch_completed_at
+           FROM execution_requests
+          WHERE id = ? AND deleted_at IS NULL`,
+        [requestId]
+      )) as { launch_started_at: string | null; launch_completed_at: string | null } | undefined;
+      if (expiredFromLaunching?.launch_started_at && !expiredFromLaunching.launch_completed_at) {
+        await appendExecutionRequestEvent({
+          ctx: txCtx,
+          row,
+          summary: 'Runner reported a completed launch after the request had already expired.'
+        });
+        return await getExecutionRequest({ ctx: txCtx, id: requestId });
+      }
+    }
     assertTransition({ row, allowedFrom: ['launching'], to: 'launched' });
     const now = nowIso();
     const revision = row.revision + 1;
@@ -982,15 +1017,20 @@ export async function clearExecutionRequests({
 export async function expireStaleExecutionRequests({
   ctx,
   now = nowIso(),
-  launchAttachTtlMs = LAUNCH_ATTACH_TTL_MS
+  launchAttachTtlMs = LAUNCH_ATTACH_TTL_MS,
+  launchStartTtlMs = LAUNCH_START_TTL_MS
 }: {
   ctx: ServiceContext;
   now?: string;
   launchAttachTtlMs?: number;
+  launchStartTtlMs?: number;
 }): Promise<{ expired: number }> {
   return await ctx.db.transaction(async tx => {
     const txCtx = { ...ctx, db: tx };
-    const attachCutoff = new Date(Date.now() - launchAttachTtlMs).toISOString();
+    const nowMs = Date.parse(now);
+    const baseMs = Number.isNaN(nowMs) ? Date.now() : nowMs;
+    const attachCutoff = new Date(baseMs - launchAttachTtlMs).toISOString();
+    const launchCutoff = new Date(baseMs - launchStartTtlMs).toISOString();
     const rows = (await txCtx.db.all(
       `SELECT er.id, er.workspace_id, er.project_id, er.mission_id, er.objective_id,
                 er.execution_target_id, er.status, er.revision, er.launch_flags_json,
@@ -1005,8 +1045,19 @@ export async function expireStaleExecutionRequests({
               (er.status = 'launched' AND er.launched_session_id IS NULL
                 AND er.launch_completed_at IS NOT NULL AND er.launch_completed_at < ?
                 AND o.state IN (${LAUNCHABLE_OBJECTIVE_STATES.map(() => '?').join(', ')}))
+              OR
+              (er.status = 'launching'
+                AND er.launch_started_at IS NOT NULL AND er.launch_started_at < ?
+                AND o.state IN (${LAUNCHABLE_OBJECTIVE_STATES.map(() => '?').join(', ')}))
             )`,
-      [ctx.workspace.id, now, attachCutoff, ...LAUNCHABLE_OBJECTIVE_STATES]
+      [
+        ctx.workspace.id,
+        now,
+        attachCutoff,
+        ...LAUNCHABLE_OBJECTIVE_STATES,
+        launchCutoff,
+        ...LAUNCHABLE_OBJECTIVE_STATES
+      ]
     )) as ExecutionRequestStateRow[];
 
     for (const row of rows) {
@@ -1014,7 +1065,9 @@ export async function expireStaleExecutionRequests({
       const message =
         row.status === 'claimed'
           ? 'Execution request expired before launch started.'
-          : 'Execution request expired before the launched agent attached.';
+          : row.status === 'launching'
+            ? 'Execution request expired before the runner reported a completed launch.'
+            : 'Execution request expired before the launched agent attached.';
       await txCtx.db.run(
         `UPDATE execution_requests
               SET status = 'expired',

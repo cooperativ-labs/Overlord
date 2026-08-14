@@ -3,20 +3,28 @@
 // A host-managed supervisor around the existing one-shot claim-and-launch path.
 // The CLI owns install/start/stop/status/uninstall of an OS-level user service
 // (macOS launchd LaunchAgent, Linux `systemd --user` unit) whose only job is to
-// run `ovld runner supervise` — the adaptive long-running loop that delegates
+// run `ovld runner supervise` — the long-running loop that delegates
 // each poll to the same code used by `ovld runner once`.
 //
-// This module keeps all pure, testable logic — adaptive interval selection,
+// This module keeps all pure, testable logic — fallback interval jitter,
 // service-file rendering, and local state I/O — separate from the thin process
 // exec wiring so the behavior can be unit-tested without touching the host OS.
 
 import { execFile } from 'node:child_process';
-import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync
+} from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 
-import { resolveGlobalDataDir } from './config.js';
+import { isLoopbackBackendUrl, resolveGlobalDataDir } from './config.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -34,32 +42,111 @@ function writeServiceFile(filePath: string, contents: string): void {
 // ---- Constants --------------------------------------------------------------
 
 export const RUNNER_SERVICE_STATE_FILENAME = 'runner-service.json';
-/**
- * Desktop-focus signal file. Written by the Overlord desktop app (a separate
- * process) whenever its main window gains focus, and read by the supervisor loop
- * each poll. Kept in its own file — not merged into `runner-service.json` — so
- * the desktop and the supervisor never clobber each other's read-modify-write.
- */
-export const RUNNER_FOCUS_STATE_FILENAME = 'runner-focus.json';
 /** macOS launchd LaunchAgent label. */
 export const LAUNCHD_LABEL = 'io.overlord.runner';
 /** Linux systemd --user unit name (without the `.service` suffix). */
 export const SYSTEMD_UNIT_NAME = 'overlord-runner';
 
-/** Fast cadence used while a job launched recently or the desktop app is active. */
-export const FAST_POLL_INTERVAL_MS = 3000;
-/** Slow cadence used after a long idle stretch. */
-export const SLOW_POLL_INTERVAL_MS = 5000;
-/** Idle window (2h) after which a launched job no longer keeps polling fast. */
-export const IDLE_BACKOFF_MS = 2 * 60 * 60 * 1000;
+// ---- Supervisor executable identity ----------------------------------------
+
 /**
- * Recency window (30m) for the desktop-focus signal: while the Overlord desktop
- * app has been focused within this window, poll at the fast cadence so a job the
- * user is about to queue is picked up quickly. Shorter than the post-launch job
- * window because focus is a "user is here right now" signal, not "work is in
- * flight".
+ * A small, process-local fingerprint for the executable files that keep a
+ * runner supervisor alive. Replacing an application bundle ordinarily changes
+ * the inode; an in-place package update is still caught by its modification
+ * time. Nothing here is persisted because it describes this process's launch,
+ * not service diagnostic state.
  */
-export const DESKTOP_FOCUS_WINDOW_MS = 30 * 60 * 1000;
+export interface RunnerExecutableFileIdentity {
+  dev: number;
+  ino: number;
+  mtimeMs: number;
+}
+
+export interface RunnerSupervisorIdentity {
+  program: RunnerExecutableFileIdentity | null | undefined;
+  entryScript: RunnerExecutableFileIdentity | null | undefined;
+}
+
+type StatFile = (filePath: string) => Pick<RunnerExecutableFileIdentity, 'dev' | 'ino' | 'mtimeMs'>;
+
+/**
+ * Resolve the script Node/Electron-as-Node was asked to execute. The normal
+ * `ovld runner supervise` path always has one; retain `null` for embedders that
+ * deliberately start Node without a script.
+ */
+export function resolveRunnerEntryScript(argv: string[] = process.argv): string | null {
+  return argv[1] ? path.resolve(argv[1]) : null;
+}
+
+/**
+ * Read one file identity without letting a transient inspection failure break a
+ * healthy supervisor. `null` specifically means the file is gone; `undefined`
+ * is any other stat failure and is deliberately ignored by restart decisions.
+ */
+export function readRunnerExecutableFileIdentity(
+  filePath: string,
+  stat: StatFile = statSync
+): RunnerExecutableFileIdentity | null | undefined {
+  try {
+    const metadata = stat(filePath);
+    return { dev: metadata.dev, ino: metadata.ino, mtimeMs: metadata.mtimeMs };
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === 'ENOENT' ? null : undefined;
+  }
+}
+
+/** Capture the process program and entry-script fingerprints at one instant. */
+export function captureRunnerSupervisorIdentity({
+  execPath = process.execPath,
+  entryScript = resolveRunnerEntryScript(),
+  stat = statSync
+}: {
+  execPath?: string;
+  entryScript?: string | null;
+  stat?: StatFile;
+} = {}): RunnerSupervisorIdentity {
+  return {
+    program: readRunnerExecutableFileIdentity(execPath, stat),
+    entryScript: entryScript ? readRunnerExecutableFileIdentity(entryScript, stat) : undefined
+  };
+}
+
+function executableIdentityChanged(
+  initial: RunnerExecutableFileIdentity | null | undefined,
+  current: RunnerExecutableFileIdentity | null | undefined
+): boolean {
+  // A missing executable is decisive even when the initial inspection was
+  // unavailable: this process cannot safely continue after its launch source is
+  // removed. Other stat errors remain intentionally non-fatal.
+  if (current === null) return true;
+  if (!initial || !current) return false;
+  return (
+    initial.dev !== current.dev ||
+    initial.ino !== current.ino ||
+    initial.mtimeMs !== current.mtimeMs
+  );
+}
+
+/**
+ * Whether the supervisor should exit cleanly so its OS service manager can
+ * restart it from the installed build. This pure comparison keeps all file I/O
+ * and process wiring outside tests.
+ */
+export function shouldRestartRunnerSupervisor({
+  initial,
+  current
+}: {
+  initial: RunnerSupervisorIdentity;
+  current: RunnerSupervisorIdentity;
+}): boolean {
+  return (
+    executableIdentityChanged(initial.program, current.program) ||
+    executableIdentityChanged(initial.entryScript, current.entryScript)
+  );
+}
+
+/** Portable fallback cadence for SQLite, which has no queue notification. */
+export const FALLBACK_POLL_INTERVAL_MS = 5000;
 
 export type RunnerServiceKind = 'launchd' | 'systemd';
 
@@ -132,76 +219,6 @@ export function patchRunnerServiceState(
   return next;
 }
 
-// ---- Desktop focus signal ---------------------------------------------------
-
-export interface DesktopFocusState {
-  /** ISO timestamp of the most recent time the desktop app window was focused. */
-  lastFocusedAt: string | null;
-}
-
-export function runnerFocusStatePath(dataDir: string = resolveGlobalDataDir()): string {
-  return path.join(dataDir, RUNNER_FOCUS_STATE_FILENAME);
-}
-
-/**
- * Read the desktop-focus signal. Like the service state, a missing or corrupt
- * file is treated as "no signal" rather than an error — the supervisor must
- * never fail a poll because the desktop app has not written this file yet.
- */
-export function readDesktopFocusState(dataDir: string = resolveGlobalDataDir()): DesktopFocusState {
-  const filePath = runnerFocusStatePath(dataDir);
-  if (!existsSync(filePath)) return { lastFocusedAt: null };
-  try {
-    const parsed = JSON.parse(readFileSync(filePath, 'utf8')) as Partial<DesktopFocusState>;
-    return { lastFocusedAt: parsed.lastFocusedAt ?? null };
-  } catch {
-    return { lastFocusedAt: null };
-  }
-}
-
-/**
- * Record that the desktop app window is focused now. Called by the desktop shell
- * on focus events (and available to the CLI for tests). Best-effort: the write
- * is throttleable by the caller, and the file is owner-agnostic (no secrets).
- */
-export function writeDesktopFocusState(
-  state: DesktopFocusState,
-  dataDir: string = resolveGlobalDataDir()
-): void {
-  mkdirSync(dataDir, { recursive: true });
-  writeFileSync(runnerFocusStatePath(dataDir), `${JSON.stringify(state, null, 2)}\n`, 'utf8');
-}
-
-// ---- Adaptive polling -------------------------------------------------------
-
-/** Whether `timestamp` parses and falls within `windowMs` before `now`. */
-function withinWindow(timestamp: string | null, now: number, windowMs: number): boolean {
-  if (!timestamp) return false;
-  const ms = Date.parse(timestamp);
-  if (Number.isNaN(ms)) return false;
-  return now - ms <= windowMs;
-}
-
-/**
- * Base poll interval from two "recent activity" signals: fast while a job
- * launched within the job window (`IDLE_BACKOFF_MS`) OR the desktop app was
- * focused within the focus window (`DESKTOP_FOCUS_WINDOW_MS`); slow otherwise.
- * Pure and deterministic so the cadence is unit-testable.
- */
-export function selectBasePollIntervalMs({
-  lastLaunchedAt,
-  lastDesktopFocusAt = null,
-  now
-}: {
-  lastLaunchedAt: string | null;
-  lastDesktopFocusAt?: string | null;
-  now: number;
-}): number {
-  const jobActive = withinWindow(lastLaunchedAt, now, IDLE_BACKOFF_MS);
-  const focusActive = withinWindow(lastDesktopFocusAt, now, DESKTOP_FOCUS_WINDOW_MS);
-  return jobActive || focusActive ? FAST_POLL_INTERVAL_MS : SLOW_POLL_INTERVAL_MS;
-}
-
 /**
  * Add ~10% jitter so many local runners polling a shared backend do not wake in
  * lockstep. `random` is injectable for deterministic tests.
@@ -209,22 +226,6 @@ export function selectBasePollIntervalMs({
 export function applyPollJitter(intervalMs: number, random: () => number = Math.random): number {
   const spread = intervalMs * 0.1;
   return Math.round(intervalMs + (random() * 2 - 1) * spread);
-}
-
-/**
- * The `lastError` to persist after a poll. It reflects the outcome of the most
- * recent poll: a failed poll records its error, a successful poll clears it.
- *
- * This must NOT fall back to the previously stored error on success. Doing so
- * makes the error sticky — e.g. an "authentication required" failure from before
- * the user logged in would never clear, so the desktop runner status box keeps
- * reading `serviceError` and showing "Runner error" long after the runner is
- * authenticated and polling cleanly. Surfacing the latest poll's result keeps a
- * genuine persistent failure visible (it re-throws every poll) while letting a
- * recovered runner self-heal on its next successful poll.
- */
-export function nextRunnerLastError(pollError: string | null): string | null {
-  return pollError;
 }
 
 // ---- Service invocation resolution -----------------------------------------
@@ -311,32 +312,12 @@ export function resolveOvldInvocation(
 }
 
 /**
- * Describe which code-signing identity macOS will attribute the installed
- * service to, based on the recorded exec program. Terminal installs that predate
- * app-binary resolution still run the plain `node` binary and register under
- * "Node.js Foundation"; reinstalling from a machine with the desktop app present
- * re-registers them under "Overlord". A no-op on non-macOS hosts.
- */
-export function describeServicePublisher({
-  execProgram,
-  platform = process.platform
-}: {
-  execProgram: string | null;
-  platform?: NodeJS.Platform;
-}): { publisher: 'overlord' | 'node' | 'unknown'; needsReinstallForOverlord: boolean } {
-  if (platform !== 'darwin' || !execProgram) {
-    return { publisher: 'unknown', needsReinstallForOverlord: false };
-  }
-  if (execProgram.includes('.app/Contents/MacOS/')) {
-    return { publisher: 'overlord', needsReinstallForOverlord: false };
-  }
-  return { publisher: 'node', needsReinstallForOverlord: true };
-}
-
-/**
  * Environment snapshot injected into the service definition. Persistent services
- * do not source interactive shell startup files, so the backend URL, Overlord
- * home, and a minimal PATH must be captured explicitly at install time.
+ * do not source interactive shell startup files, so the Overlord home and a
+ * minimal PATH must be captured explicitly at install time. Remote backend URLs
+ * are also captured because the service cannot infer them locally. A loopback
+ * URL is deliberately omitted: Desktop may select a different local port on its
+ * next boot, and the supervisor must follow the current `overlord.toml` value.
  */
 export function buildRunnerServiceEnv({
   backendUrl,
@@ -348,9 +329,9 @@ export function buildRunnerServiceEnv({
   runAsElectronNode?: boolean;
 }): Record<string, string> {
   const env: Record<string, string> = {
-    OVERLORD_BACKEND_URL: backendUrl,
     PATH: process.env.PATH?.trim() || '/usr/local/bin:/usr/bin:/bin'
   };
+  if (!isLoopbackBackendUrl(backendUrl)) env.OVERLORD_BACKEND_URL = backendUrl;
   const home = overlordHome?.trim() || process.env.OVLD_HOME?.trim();
   if (home) env.OVLD_HOME = path.resolve(home);
   const token = process.env.OVERLORD_USER_TOKEN?.trim() || process.env.OVLD_USER_TOKEN?.trim();
@@ -494,12 +475,99 @@ async function runCommand(program: string, args: string[]): Promise<{ stdout: st
   return { stdout: stdout.toString() };
 }
 
-class LaunchdManager implements RunnerServiceManager {
+/**
+ * A single `launchctl` invocation. `tolerateFailure` marks the steps whose
+ * failure is an expected state rather than an error — booting out a label that
+ * is not loaded, or bootstrapping one that already is.
+ */
+export interface LaunchctlStep {
+  args: string[];
+  tolerateFailure: boolean;
+}
+
+export type LaunchctlRunner = (args: string[]) => Promise<{ stdout: string }>;
+
+function launchdDomainTarget(uid: string | number): string {
+  return `gui/${uid}`;
+}
+
+function launchdServiceTarget(uid: string | number): string {
+  return `${launchdDomainTarget(uid)}/${LAUNCHD_LABEL}`;
+}
+
+/**
+ * Commands that take the agent out of launchd entirely. `bootout` removes the
+ * registered job definition, which is the part that matters: `kickstart -k`
+ * only restarts launchd's already-registered IN-MEMORY definition and never
+ * re-reads the plist, so a rewritten plist would otherwise be ignored.
+ */
+export function planLaunchdUnloadCommands(opts: { uid: string | number }): LaunchctlStep[] {
+  return [{ args: ['bootout', launchdServiceTarget(opts.uid)], tolerateFailure: true }];
+}
+
+/**
+ * Commands that register and start the agent from the plist on disk.
+ *
+ * `enable` first because the legacy `launchctl unload -w` this code used to
+ * issue marks the label disabled persistently, and a disabled label is not
+ * started by `bootstrap`. `bootstrap` tolerates failure so a start against an
+ * already-loaded label is not an error; the following `kickstart` is strict, so
+ * a genuinely broken definition still surfaces (nothing to kick, no service).
+ * `kickstart` is deliberately used without `-k` here: it starts the job if it is
+ * not running and is a no-op if it is, so `start` never kills a healthy
+ * supervisor mid-launch.
+ */
+export function planLaunchdLoadCommands(opts: {
+  uid: string | number;
+  plistPath: string;
+}): LaunchctlStep[] {
+  const service = launchdServiceTarget(opts.uid);
+  return [
+    { args: ['enable', service], tolerateFailure: true },
+    {
+      args: ['bootstrap', launchdDomainTarget(opts.uid), opts.plistPath],
+      tolerateFailure: true
+    },
+    { args: ['kickstart', service], tolerateFailure: false }
+  ];
+}
+
+export class LaunchdManager implements RunnerServiceManager {
   readonly kind = 'launchd' as const;
   readonly identifier = LAUNCHD_LABEL;
 
+  private readonly exec: LaunchctlRunner;
+
+  constructor(exec?: LaunchctlRunner) {
+    this.exec = exec ?? (args => runCommand('launchctl', args));
+  }
+
   unitPath(): string {
     return path.join(launchAgentsDir(), `${LAUNCHD_LABEL}.plist`);
+  }
+
+  private uid(): string | number {
+    return process.getuid?.() ?? '';
+  }
+
+  private async runSteps(steps: LaunchctlStep[]): Promise<void> {
+    for (const step of steps) {
+      try {
+        await this.exec(step.args);
+      } catch (error) {
+        if (!step.tolerateFailure) throw error;
+      }
+    }
+  }
+
+  /** True when launchd still has the label registered, whatever its run state. */
+  private async isLoaded(): Promise<boolean> {
+    try {
+      await this.exec(['list', LAUNCHD_LABEL]);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   render(opts: { invocation: RunnerServiceInvocation; env: Record<string, string> }): string {
@@ -518,41 +586,37 @@ class LaunchdManager implements RunnerServiceManager {
   }): Promise<void> {
     mkdirSync(launchAgentsDir(), { recursive: true });
     mkdirSync(path.join(resolveGlobalDataDir(), 'logs'), { recursive: true });
+    // Boot the old definition out BEFORE writing, so an install over a loaded
+    // label cannot leave launchd running the previous ProgramArguments and
+    // EnvironmentVariables — the failure that made a desktop uninstall +
+    // reinstall a no-op after an app update.
+    await this.runSteps(planLaunchdUnloadCommands({ uid: this.uid() }));
     writeServiceFile(this.unitPath(), this.render(opts));
     if (opts.autoStart) await this.start();
   }
 
   async start(): Promise<void> {
-    // `load -w` is idempotent and enables the agent; ignore an already-loaded error.
-    try {
-      await runCommand('launchctl', ['load', '-w', this.unitPath()]);
-    } catch {
-      await runCommand('launchctl', [
-        'kickstart',
-        '-k',
-        `gui/${process.getuid?.() ?? ''}/${LAUNCHD_LABEL}`
-      ]);
-    }
+    await this.runSteps(planLaunchdLoadCommands({ uid: this.uid(), plistPath: this.unitPath() }));
   }
 
   async stop(): Promise<void> {
-    await runCommand('launchctl', ['unload', '-w', this.unitPath()]);
+    await this.runSteps(planLaunchdUnloadCommands({ uid: this.uid() }));
   }
 
   async restart(): Promise<void> {
-    try {
-      await this.stop();
-    } catch {
-      // May not be loaded yet; proceed to start.
-    }
+    await this.stop();
     await this.start();
   }
 
   async uninstall(): Promise<void> {
-    try {
-      await this.stop();
-    } catch {
-      // Not loaded; still remove the plist below.
+    await this.runSteps(planLaunchdUnloadCommands({ uid: this.uid() }));
+    // Deleting the plist while the label stays registered is the worst outcome:
+    // the old definition keeps running and the only file that could correct it
+    // is gone. Keep the plist in that case and say so.
+    if (await this.isLoaded()) {
+      throw new Error(
+        `launchctl still reports ${LAUNCHD_LABEL} as loaded after bootout; left ${this.unitPath()} in place so the service can be repaired with \`ovld runner service restart\`.`
+      );
     }
     if (existsSync(this.unitPath())) rmSync(this.unitPath());
   }
@@ -560,7 +624,7 @@ class LaunchdManager implements RunnerServiceManager {
   async status(): Promise<RunnerServiceRunState> {
     const installed = existsSync(this.unitPath());
     try {
-      const { stdout } = await runCommand('launchctl', ['list']);
+      const { stdout } = await this.exec(['list']);
       const line = stdout.split('\n').find(row => row.includes(LAUNCHD_LABEL));
       if (!line) return { installed, running: installed ? 'stopped' : 'unknown' };
       // launchctl list columns: PID  Status  Label. A numeric PID => running.

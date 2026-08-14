@@ -121,6 +121,44 @@ test('createBackendClient preserves stored credentials and guides re-login on 40
   }
 });
 
+test('createBackendClient explains when stored credentials target a different backend URL', async () => {
+  const home = mkdtempSync(path.join(tmpdir(), 'overlord-backend-client-url-mismatch-'));
+  const previousHome = process.env.OVLD_HOME;
+  const previousEnv = isolateBackendClientEnv();
+  process.env.OVLD_HOME = home;
+  writeStoredAuthCredentials({
+    type: 'session_bearer',
+    token: 'session-token',
+    backendUrl: 'http://127.0.0.1:4311'
+  });
+
+  const originalFetch = globalThis.fetch;
+  let fetchCalled = false;
+  globalThis.fetch = (async () => {
+    fetchCalled = true;
+    return new Response();
+  }) as typeof fetch;
+
+  try {
+    await assert.rejects(
+      () => createBackendClient().get('/api/runner/claim'),
+      (error: unknown) => {
+        assert.ok(error instanceof CliError);
+        assert.match(error.message, /Saved credentials are for http:\/\/127\.0\.0\.1:4311/i);
+        assert.match(error.message, /configured for http:\/\/127\.0\.0\.1:4310/i);
+        assert.match(error.message, /ovld auth login/i);
+        return true;
+      }
+    );
+    assert.equal(fetchCalled, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+    restoreBackendClientEnv(previousEnv);
+    if (previousHome === undefined) delete process.env.OVLD_HOME;
+    else process.env.OVLD_HOME = previousHome;
+  }
+});
+
 test('createBackendClient sends local device identity headers', async () => {
   const home = mkdtempSync(path.join(tmpdir(), 'overlord-backend-client-device-'));
   const previousHome = process.env.OVLD_HOME;

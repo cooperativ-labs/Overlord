@@ -52,14 +52,13 @@ import { runnerRegistrationPayload } from './runner-identity.js';
 import {
   applyPollJitter,
   buildRunnerServiceEnv,
-  describeServicePublisher,
-  nextRunnerLastError,
+  captureRunnerSupervisorIdentity,
+  FALLBACK_POLL_INTERVAL_MS,
   patchRunnerServiceState,
-  readDesktopFocusState,
   readRunnerServiceState,
   resolveOvldInvocation,
   resolveServiceManager,
-  selectBasePollIntervalMs,
+  shouldRestartRunnerSupervisor,
   writeRunnerServiceState
 } from './runner-service.js';
 import type { CliRuntime } from './runtime.js';
@@ -1702,6 +1701,208 @@ function isNoExecutionTargetRegisteredError(error: unknown): boolean {
   return message.includes('(no_execution_target_registered)');
 }
 
+export async function runRunnerOnce({
+  runtime,
+  parsed,
+  json
+}: {
+  runtime: CliRuntime;
+  parsed: ReturnType<typeof parseArgs>;
+  json: boolean;
+}): Promise<{ launched: boolean; longPoll: boolean }> {
+  let claim: unknown;
+  try {
+    claim = await runtime.backend.post<unknown>({
+      path: '/api/runner/claim',
+      body: {
+        projectId: flagValue(parsed.flags, '--project-id'),
+        ...clientDeviceIdentity(),
+        // Contract v40: the claim poll doubles as this runner instance's
+        // heartbeat, so local target liveness reflects a runner that can
+        // actually take work rather than any CLI traffic from the machine.
+        ...runnerRegistrationPayload()
+      }
+    });
+  } catch (error) {
+    // Contract v39: starting a runner never declares an execution target. A
+    // machine nobody declared is unconfigured, not a new target, so say so and
+    // stop instead of polling forever against work it can never claim.
+    if (isNoExecutionTargetRegisteredError(error)) {
+      throw new CliError({
+        message: `${error instanceof Error ? error.message : String(error)}\nThe runner will not register a target for you — declare this machine first, then start it again.`
+      });
+    }
+    throw error;
+  }
+  const request = asRecord(claim).request;
+  const longPoll = asRecord(claim).longPoll === true;
+  if (!request) return { launched: false, longPoll };
+  const requestRecord = asRecord(request);
+  const requestId = String(requestRecord.id);
+  const projectId = String(requestRecord.projectId ?? '');
+  const executionTargetId =
+    typeof requestRecord.executionTargetId === 'string'
+      ? requestRecord.executionTargetId.trim()
+      : '';
+  if (projectId && executionTargetId) {
+    try {
+      await reportRunnerResourceObservations({
+        backend: runtime.backend,
+        projectId,
+        executionTargetId
+      });
+    } catch {
+      // Observation writeback is best-effort; launch should still proceed.
+    }
+  }
+  try {
+    // This call must stay INSIDE the try: it is the claim-to-launch handoff, and a failure
+    // here (transient network error, a 409 because the request was cleared under us, an
+    // auth blip) used to escape before any reporting ran. The request then sat in `claimed`
+    // with no `failed` event and no `last_error`, the claim query only ever reconsiders
+    // `queued` rows, and an expired claim moves to the terminal `expired` status — so the
+    // work was never retried and the UI kept rendering "Queued" forever with nothing
+    // anywhere saying why. Reporting the failure returns the objective to a launchable
+    // state on the first poll instead of stranding it until someone clears the queue.
+    await runtime.backend.post({ path: `/api/runner/requests/${requestId}/launching` });
+    const mutation = parseMutationFromMetadata(requestRecord.metadata);
+    if (mutation) {
+      const mutationResult = await executeLocalTargetMutation({ mutation });
+      if (!mutationResult.ok) {
+        await runtime.backend.post({
+          path: `/api/runner/requests/${requestId}/failed`,
+          body: { error: mutationResult.message }
+        });
+        throw new CliError({ message: mutationResult.message });
+      }
+      await runtime.backend.post({
+        path: `/api/runner/requests/${requestId}/completed`,
+        body: { mutationResult }
+      });
+      if (json) printJson({ request, mutationResult });
+      else console.log(`Completed ${mutation.kind} for ${requestRecord.missionId}`);
+      return { launched: true, longPoll };
+    }
+
+    // The execution request's agent is decided upstream from the objective row,
+    // so a missing value is an invariant violation — never silently substitute a
+    // default agent, which would launch work as the wrong tool. Fail the request
+    // up front (the catch below reports it) so the cause surfaces instead of being
+    // masked, and so no branch/terminal work is done for a request that can't run.
+    const requestedAgent =
+      typeof requestRecord.requestedAgent === 'string' ? requestRecord.requestedAgent.trim() : '';
+    if (!requestedAgent) {
+      throw new CliError({
+        message: `Execution request ${requestId} has no agent; the objective must specify one before it can be launched.`
+      });
+    }
+    const launchConfig = asRecord(requestRecord.launchConfig);
+    const terminal = await resolveTerminalLaunchSettings({ runtime, flags: parsed.flags });
+    const missionId = String(requestRecord.missionId);
+    const dryRun = flagBoolean(parsed.flags, '--dry-run');
+    const prepared = await prepareMissionBranch({
+      runtime,
+      options: {
+        missionId,
+        workingDirectory: String(requestRecord.workingDirectory ?? process.cwd()),
+        objectiveId: String(requestRecord.objectiveId ?? ''),
+        workspaceAutomationEnabled: await readWorktreeBranchAutomationEnabled(runtime),
+        dryRun,
+        overrideBranch: flagValue(parsed.flags, '--branch'),
+        noWorktree: flagBoolean(parsed.flags, '--no-worktree')
+      }
+    });
+    await recordBranchPrepared({
+      runtime,
+      missionId,
+      requestId,
+      branchAutomation: prepared.branchAutomation
+    });
+    const launchSession = launchSessionSnapshotFromMetadata(asRecord(requestRecord.metadata));
+    const result = await launchAgent({
+      runtime,
+      options: {
+        agent: requestedAgent,
+        missionId,
+        workingDirectory: prepared.workingDirectory,
+        model:
+          typeof requestRecord.requestedModel === 'string'
+            ? requestRecord.requestedModel
+            : undefined,
+        thinking:
+          typeof requestRecord.requestedReasoningEffort === 'string'
+            ? requestRecord.requestedReasoningEffort
+            : undefined,
+        flags: normalizeAgentLaunchFlags(launchConfig.flags),
+        preCommand:
+          typeof launchConfig.preCommand === 'string' ? launchConfig.preCommand : undefined,
+        preLaunchCommands: Array.isArray(requestRecord.preLaunchCommands)
+          ? requestRecord.preLaunchCommands.filter(
+              (value): value is string => typeof value === 'string'
+            )
+          : undefined,
+        launchEnvVars: parseLaunchEnvVarsValue(requestRecord.launchEnvVars),
+        executionRequestId: requestId,
+        executionTargetId: executionTargetId || undefined,
+        launchSession,
+        ...terminal,
+        dryRun
+      }
+    });
+    if (result.providerFallbackWarning) {
+      console.error(`[overlord] ${result.providerFallbackWarning}`);
+    }
+    if (result.viewerOpen && result.viewerOpen.ok === false) {
+      console.error(`[overlord] ${result.viewerOpen.warning}`);
+    }
+    if (result.status && result.status !== 0) {
+      throw new CliError({ message: `Launch command exited with status ${result.status}` });
+    }
+    await runtime.backend.post({
+      path: `/api/runner/requests/${requestId}/launched`,
+      body: result.providerSession ? { providerSession: result.providerSession } : {}
+    });
+    if (result.providerSession && !dryRun) {
+      void postLatchHarnessEventsAfterLaunch({
+        backend: runtime.backend,
+        requestId,
+        providerSessionId: result.providerSession.providerSessionId,
+        executable:
+          launchSession?.executionProvider.kind === 'latch'
+            ? launchSession.executionProvider.executable
+            : undefined
+      });
+    }
+    if (json || dryRun) {
+      printJson({
+        request,
+        plan: result.plan,
+        status: result.status,
+        providerSession: result.providerSession ?? null,
+        viewerOpen: result.viewerOpen ?? null,
+        providerFallbackWarning: result.providerFallbackWarning ?? null
+      });
+    } else {
+      console.log(`Launched ${requestedAgent} for ${requestRecord.missionId}`);
+    }
+    return { launched: true, longPoll };
+  } catch (error) {
+    // Best-effort: the report is how the backend learns this claim died, but a
+    // failure to report must never replace the real error with "could not reach
+    // the backend" or a 409 from a request that is already terminal — that is
+    // what the supervisor writes to `runner-service.json` and shows the user.
+    try {
+      await runtime.backend.post({
+        path: `/api/runner/requests/${requestId}/failed`,
+        body: { error: error instanceof Error ? error.message : String(error) }
+      });
+    } catch {
+      // Reporting failed too; surface the original cause below.
+    }
+    throw error;
+  }
+}
+
 async function runRunnerCommand({
   runtime,
   parsed,
@@ -1741,199 +1942,7 @@ async function runRunnerCommand({
     });
   }
 
-  const runOnce = async (): Promise<{ launched: boolean; longPoll: boolean }> => {
-    let claim: unknown;
-    try {
-      claim = await runtime.backend.post<unknown>({
-        path: '/api/runner/claim',
-        body: {
-          projectId: flagValue(parsed.flags, '--project-id'),
-          ...clientDeviceIdentity(),
-          // Contract v40: the claim poll doubles as this runner instance's
-          // heartbeat, so local target liveness reflects a runner that can
-          // actually take work rather than any CLI traffic from the machine.
-          ...runnerRegistrationPayload()
-        }
-      });
-    } catch (error) {
-      // Contract v39: starting a runner never declares an execution target. A
-      // machine nobody declared is unconfigured, not a new target, so say so and
-      // stop instead of polling forever against work it can never claim.
-      if (isNoExecutionTargetRegisteredError(error)) {
-        throw new CliError({
-          message: `${error instanceof Error ? error.message : String(error)}\nThe runner will not register a target for you — declare this machine first, then start it again.`
-        });
-      }
-      throw error;
-    }
-    const request = asRecord(claim).request;
-    const longPoll = asRecord(claim).longPoll === true;
-    if (!request) return { launched: false, longPoll };
-    const requestRecord = asRecord(request);
-    const requestId = String(requestRecord.id);
-    const projectId = String(requestRecord.projectId ?? '');
-    const executionTargetId =
-      typeof requestRecord.executionTargetId === 'string'
-        ? requestRecord.executionTargetId.trim()
-        : '';
-    if (projectId && executionTargetId) {
-      try {
-        await reportRunnerResourceObservations({
-          backend: runtime.backend,
-          projectId,
-          executionTargetId
-        });
-      } catch {
-        // Observation writeback is best-effort; launch should still proceed.
-      }
-    }
-    try {
-      // This call must stay INSIDE the try: it is the claim-to-launch handoff, and a failure
-      // here (transient network error, a 409 because the request was cleared under us, an
-      // auth blip) used to escape before any reporting ran. The request then sat in `claimed`
-      // with no `failed` event and no `last_error`, the claim query only ever reconsiders
-      // `queued` rows, and an expired claim moves to the terminal `expired` status — so the
-      // work was never retried and the UI kept rendering "Queued" forever with nothing
-      // anywhere saying why. Reporting the failure returns the objective to a launchable
-      // state on the first poll instead of stranding it until someone clears the queue.
-      await runtime.backend.post({ path: `/api/runner/requests/${requestId}/launching` });
-      const mutation = parseMutationFromMetadata(requestRecord.metadata);
-      if (mutation) {
-        const mutationResult = await executeLocalTargetMutation({ mutation });
-        if (!mutationResult.ok) {
-          await runtime.backend.post({
-            path: `/api/runner/requests/${requestId}/failed`,
-            body: { error: mutationResult.message }
-          });
-          throw new CliError({ message: mutationResult.message });
-        }
-        await runtime.backend.post({
-          path: `/api/runner/requests/${requestId}/completed`,
-          body: { mutationResult }
-        });
-        if (json) printJson({ request, mutationResult });
-        else console.log(`Completed ${mutation.kind} for ${requestRecord.missionId}`);
-        return { launched: true, longPoll };
-      }
-
-      // The execution request's agent is decided upstream from the objective row,
-      // so a missing value is an invariant violation — never silently substitute a
-      // default agent, which would launch work as the wrong tool. Fail the request
-      // up front (the catch below reports it) so the cause surfaces instead of being
-      // masked, and so no branch/terminal work is done for a request that can't run.
-      const requestedAgent =
-        typeof requestRecord.requestedAgent === 'string' ? requestRecord.requestedAgent.trim() : '';
-      if (!requestedAgent) {
-        throw new CliError({
-          message: `Execution request ${requestId} has no agent; the objective must specify one before it can be launched.`
-        });
-      }
-      const launchConfig = asRecord(requestRecord.launchConfig);
-      const terminal = await resolveTerminalLaunchSettings({ runtime, flags: parsed.flags });
-      const missionId = String(requestRecord.missionId);
-      const dryRun = flagBoolean(parsed.flags, '--dry-run');
-      const prepared = await prepareMissionBranch({
-        runtime,
-        options: {
-          missionId,
-          workingDirectory: String(requestRecord.workingDirectory ?? process.cwd()),
-          objectiveId: String(requestRecord.objectiveId ?? ''),
-          workspaceAutomationEnabled: await readWorktreeBranchAutomationEnabled(runtime),
-          dryRun,
-          overrideBranch: flagValue(parsed.flags, '--branch'),
-          noWorktree: flagBoolean(parsed.flags, '--no-worktree')
-        }
-      });
-      await recordBranchPrepared({
-        runtime,
-        missionId,
-        requestId,
-        branchAutomation: prepared.branchAutomation
-      });
-      const launchSession = launchSessionSnapshotFromMetadata(asRecord(requestRecord.metadata));
-      const result = await launchAgent({
-        runtime,
-        options: {
-          agent: requestedAgent,
-          missionId,
-          workingDirectory: prepared.workingDirectory,
-          model:
-            typeof requestRecord.requestedModel === 'string'
-              ? requestRecord.requestedModel
-              : undefined,
-          thinking:
-            typeof requestRecord.requestedReasoningEffort === 'string'
-              ? requestRecord.requestedReasoningEffort
-              : undefined,
-          flags: normalizeAgentLaunchFlags(launchConfig.flags),
-          preCommand:
-            typeof launchConfig.preCommand === 'string' ? launchConfig.preCommand : undefined,
-          preLaunchCommands: Array.isArray(requestRecord.preLaunchCommands)
-            ? requestRecord.preLaunchCommands.filter(
-                (value): value is string => typeof value === 'string'
-              )
-            : undefined,
-          launchEnvVars: parseLaunchEnvVarsValue(requestRecord.launchEnvVars),
-          executionRequestId: requestId,
-          executionTargetId: executionTargetId || undefined,
-          launchSession,
-          ...terminal,
-          dryRun
-        }
-      });
-      if (result.providerFallbackWarning) {
-        console.error(`[overlord] ${result.providerFallbackWarning}`);
-      }
-      if (result.viewerOpen && result.viewerOpen.ok === false) {
-        console.error(`[overlord] ${result.viewerOpen.warning}`);
-      }
-      if (result.status && result.status !== 0) {
-        throw new CliError({ message: `Launch command exited with status ${result.status}` });
-      }
-      await runtime.backend.post({
-        path: `/api/runner/requests/${requestId}/launched`,
-        body: result.providerSession ? { providerSession: result.providerSession } : {}
-      });
-      if (result.providerSession && !dryRun) {
-        void postLatchHarnessEventsAfterLaunch({
-          backend: runtime.backend,
-          requestId,
-          providerSessionId: result.providerSession.providerSessionId,
-          executable:
-            launchSession?.executionProvider.kind === 'latch'
-              ? launchSession.executionProvider.executable
-              : undefined
-        });
-      }
-      if (json || dryRun) {
-        printJson({
-          request,
-          plan: result.plan,
-          status: result.status,
-          providerSession: result.providerSession ?? null,
-          viewerOpen: result.viewerOpen ?? null,
-          providerFallbackWarning: result.providerFallbackWarning ?? null
-        });
-      } else {
-        console.log(`Launched ${requestedAgent} for ${requestRecord.missionId}`);
-      }
-      return { launched: true, longPoll };
-    } catch (error) {
-      // Best-effort: the report is how the backend learns this claim died, but a
-      // failure to report must never replace the real error with "could not reach
-      // the backend" or a 409 from a request that is already terminal — that is
-      // what the supervisor writes to `runner-service.json` and shows the user.
-      try {
-        await runtime.backend.post({
-          path: `/api/runner/requests/${requestId}/failed`,
-          body: { error: error instanceof Error ? error.message : String(error) }
-        });
-      } catch {
-        // Reporting failed too; surface the original cause below.
-      }
-      throw error;
-    }
-  };
+  const runOnce = () => runRunnerOnce({ runtime, parsed, json });
 
   if (sub === 'once') {
     const result = await runOnce();
@@ -1961,10 +1970,9 @@ async function runRunnerCommand({
 
 /**
  * The persistent-runner supervisor loop behind `ovld runner supervise`. It owns
- * only the long-lived loop and adaptive polling; each poll delegates to the same
+ * only the long-lived loop and fallback polling; each poll delegates to the same
  * one-shot claim-and-launch closure used by `ovld runner once`, so claim,
- * worktree, terminal, and launch behavior are never duplicated. Backoff uses the
- * "last launched job" clock (see planning/feature-plans/persistent-runner-cli.md).
+ * worktree, terminal, and launch behavior are never duplicated.
  */
 async function runRunnerSupervisor({
   runOnce,
@@ -1973,8 +1981,23 @@ async function runRunnerSupervisor({
   runOnce: () => Promise<{ launched: boolean; longPoll: boolean }>;
   json: boolean;
 }): Promise<void> {
-  if (!json) console.log('Runner supervisor started. Adaptive polling for execution requests.');
+  if (!json) console.log('Runner supervisor started. Polling for execution requests.');
+  const initialExecutableIdentity = captureRunnerSupervisorIdentity();
   for (;;) {
+    if (
+      shouldRestartRunnerSupervisor({
+        initial: initialExecutableIdentity,
+        current: captureRunnerSupervisorIdentity()
+      })
+    ) {
+      // launchd KeepAlive and systemd Restart both respawn a clean exit. A
+      // non-zero exit would be reported as a crash instead of an intentional
+      // handoff to the newly installed program.
+      console.error(
+        'Runner supervisor executable was replaced or removed; exiting cleanly so the service manager restarts the installed build.'
+      );
+      process.exit(0);
+    }
     const now = new Date();
     let result = { launched: false, longPoll: false };
     let lastError: string | null = null;
@@ -1985,29 +2008,27 @@ async function runRunnerSupervisor({
       // failure: retrying cannot fix it, so surface it and exit non-zero.
       if (isNoExecutionTargetRegisteredError(error)) throw error;
       lastError = error instanceof Error ? error.message : String(error);
+      // The persistent service has no interactive terminal. Mirror the exact
+      // diagnostic persisted below to stderr so launchd/systemd captures it in
+      // the durable service error log as well.
+      console.error(`[overlord] Runner poll failed: ${lastError}`);
     }
     const state = readRunnerServiceState();
-    // The desktop app writes its last-focus timestamp to a separate file; read it
-    // each poll so the cadence tracks "user is actively in the app right now".
-    const focus = readDesktopFocusState();
-    const base = selectBasePollIntervalMs({
-      lastLaunchedAt: result.launched ? now.toISOString() : state.lastLaunchedAt,
-      lastDesktopFocusAt: focus.lastFocusedAt,
-      now: now.getTime()
-    });
     patchRunnerServiceState({
       lastHeartbeatAt: now.toISOString(),
       lastClaimedAt: result.launched ? now.toISOString() : state.lastClaimedAt,
       lastLaunchedAt: result.launched ? now.toISOString() : state.lastLaunchedAt,
-      // Reflect the latest poll's outcome so a resolved failure (e.g. an auth
-      // error from before the user logged in) clears instead of sticking.
-      lastError: nextRunnerLastError(lastError),
-      currentPollIntervalMs: base
+      // Reflect the latest poll's outcome rather than falling back to the stored
+      // value. A successful poll must clear a resolved failure (for example, an
+      // auth error from before login) instead of leaving the desktop status box
+      // stuck on "Runner error"; persistent failures recur on every poll.
+      lastError,
+      currentPollIntervalMs: FALLBACK_POLL_INTERVAL_MS
     });
     // Postgres holds idle claims for the bounded long-poll; sleeping here would
     // reintroduce the egress-heavy polling gap after every timeout/wake.
     if (!result.longPoll) {
-      await new Promise(resolve => setTimeout(resolve, applyPollJitter(base)));
+      await new Promise(resolve => setTimeout(resolve, applyPollJitter(FALLBACK_POLL_INTERVAL_MS)));
     }
   }
 }
@@ -2036,11 +2057,14 @@ async function runRunnerServiceCommand({
   if (action === 'status') {
     const runState = await manager.status();
     const state = readRunnerServiceState();
-    const { publisher, needsReinstallForOverlord } = describeServicePublisher({
-      execProgram: state.execProgram
-    });
+    const publisher =
+      process.platform !== 'darwin' || !state.execProgram
+        ? 'unknown'
+        : state.execProgram.includes('.app/Contents/MacOS/')
+          ? 'overlord'
+          : 'node';
     const reinstallHint =
-      runState.installed && needsReinstallForOverlord
+      runState.installed && publisher === 'node'
         ? 'This service is registered under "Node.js Foundation" because it runs the plain node binary. Reinstall it from the Overlord desktop app (or with the desktop app present) to re-register it under "Overlord".'
         : null;
     const payload = {

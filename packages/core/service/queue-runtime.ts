@@ -17,6 +17,7 @@ import { nowIso } from './util.js';
 
 const DEFAULT_CLAIM_TTL_MS = 15 * 60 * 1000;
 const DEFAULT_LAUNCH_ATTACH_TTL_MS = 15 * 60 * 1000;
+const DEFAULT_LAUNCH_START_TTL_MS = 10 * 60 * 1000;
 
 export interface ClaimedExecutionRequest {
   id: string;
@@ -110,19 +111,24 @@ export async function claimNextQueuedRequest(
 
 export interface RecoveredExecutionRequest {
   id: string;
-  previousStatus: 'claimed' | 'launched';
+  previousStatus: 'claimed' | 'launching' | 'launched';
   revision: number;
 }
 
 /**
  * Recover stale execution requests so a crashed or vanished runner never strands
- * a queued objective. Two cases, matching `expireStaleExecutionRequests`:
+ * a queued objective. Three cases, matching `expireStaleExecutionRequests`:
  *
  * - `claimed` past its `claim_expires_at` (the runner never started launching);
+ * - `launching` past the launch TTL (the runner died between reporting
+ *   `launching` and reporting `launched`, e.g. its program was replaced under it);
  * - `launched` whose agent never attached (`launched_session_id IS NULL`) within
  *   the attach TTL.
  *
- * Both transition to `expired` under a revision guard inside one transaction.
+ * All transition to `expired` under a revision guard inside one transaction. None
+ * are re-queued: a runner that died mid-launch may already have spawned an agent
+ * the backend cannot see, so expiry plus the runner's own failure report is what
+ * preserves launch-at-most-once.
  */
 export async function recoverStaleExecutionRequests(
   client: DatabaseClient,
@@ -130,25 +136,41 @@ export async function recoverStaleExecutionRequests(
     workspaceId: string;
     now?: string;
     launchAttachTtlMs?: number;
+    launchStartTtlMs?: number;
   }
 ): Promise<RecoveredExecutionRequest[]> {
   const { workspaceId } = options;
   const now = options.now ?? nowIso();
   const attachTtlMs = options.launchAttachTtlMs ?? DEFAULT_LAUNCH_ATTACH_TTL_MS;
+  const launchTtlMs = options.launchStartTtlMs ?? DEFAULT_LAUNCH_START_TTL_MS;
   const attachCutoff = new Date(Date.parse(now) - attachTtlMs).toISOString();
+  const launchCutoff = new Date(Date.parse(now) - launchTtlMs).toISOString();
 
   return client.transaction(async tx => {
-    const stale = await tx.all<{ id: string; status: 'claimed' | 'launched'; revision: number }>(
+    const stale = await tx.all<{
+      id: string;
+      status: 'claimed' | 'launching' | 'launched';
+      revision: number;
+    }>(
       `SELECT id, status, revision FROM execution_requests
         WHERE workspace_id = ?
           AND deleted_at IS NULL
           AND (
             (status = 'claimed' AND claim_expires_at IS NOT NULL AND claim_expires_at < ?)
             OR
+            (status = 'launching'
+              AND launch_started_at IS NOT NULL AND launch_started_at < ?
+              AND EXISTS (
+                SELECT 1 FROM objectives o
+                 WHERE o.id = execution_requests.objective_id
+                   AND o.deleted_at IS NULL
+                   AND o.state IN ('draft', 'submitted', 'launching')
+              ))
+            OR
             (status = 'launched' AND launched_session_id IS NULL
               AND launch_completed_at IS NOT NULL AND launch_completed_at < ?)
           )`,
-      [workspaceId, now, attachCutoff]
+      [workspaceId, now, launchCutoff, attachCutoff]
     );
 
     const recovered: RecoveredExecutionRequest[] = [];
@@ -157,7 +179,9 @@ export async function recoverStaleExecutionRequests(
       const message =
         row.status === 'claimed'
           ? 'Execution request expired before launch started.'
-          : 'Execution request expired before the launched agent attached.';
+          : row.status === 'launching'
+            ? 'Execution request expired before the runner reported a completed launch.'
+            : 'Execution request expired before the launched agent attached.';
       const updated = await tx.run(
         `UPDATE execution_requests
             SET status = 'expired',

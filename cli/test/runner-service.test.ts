@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -7,114 +7,112 @@ import test from 'node:test';
 import {
   applyPollJitter,
   buildRunnerServiceEnv,
-  describeServicePublisher,
-  DESKTOP_FOCUS_WINDOW_MS,
+  captureRunnerSupervisorIdentity,
   emptyRunnerServiceState,
-  FAST_POLL_INTERVAL_MS,
-  IDLE_BACKOFF_MS,
+  FALLBACK_POLL_INTERVAL_MS,
   LAUNCHD_LABEL,
-  nextRunnerLastError,
+  LaunchdManager,
   patchRunnerServiceState,
-  readDesktopFocusState,
+  planLaunchdLoadCommands,
+  planLaunchdUnloadCommands,
+  readRunnerExecutableFileIdentity,
   readRunnerServiceState,
   renderLaunchdPlist,
   renderSystemdUnit,
   resolveOverlordAppInvocation,
   resolveOvldInvocation,
+  resolveRunnerEntryScript,
   resolveServiceManager,
-  selectBasePollIntervalMs,
-  SLOW_POLL_INTERVAL_MS,
-  writeDesktopFocusState,
+  shouldRestartRunnerSupervisor,
   writeRunnerServiceState
 } from '../src/runner-service.ts';
 
-test('selectBasePollIntervalMs is fast within the job window and slow afterwards', () => {
-  const now = Date.parse('2026-07-09T12:00:00.000Z');
-  assert.equal(selectBasePollIntervalMs({ lastLaunchedAt: null, now }), SLOW_POLL_INTERVAL_MS);
+test('runner supervisor identity detects replaced or removed executable files', () => {
+  const initial = {
+    program: { dev: 1, ino: 10, mtimeMs: 100 },
+    entryScript: { dev: 1, ino: 11, mtimeMs: 100 }
+  };
+  assert.equal(shouldRestartRunnerSupervisor({ initial, current: initial }), false);
   assert.equal(
-    selectBasePollIntervalMs({ lastLaunchedAt: new Date(now - 1000).toISOString(), now }),
-    FAST_POLL_INTERVAL_MS
-  );
-  assert.equal(
-    selectBasePollIntervalMs({
-      lastLaunchedAt: new Date(now - (IDLE_BACKOFF_MS - 1000)).toISOString(),
-      now
+    shouldRestartRunnerSupervisor({
+      initial,
+      current: { ...initial, program: { ...initial.program, ino: 12 } }
     }),
-    FAST_POLL_INTERVAL_MS
+    true
   );
   assert.equal(
-    selectBasePollIntervalMs({
-      lastLaunchedAt: new Date(now - (IDLE_BACKOFF_MS + 1000)).toISOString(),
-      now
+    shouldRestartRunnerSupervisor({
+      initial,
+      current: { ...initial, entryScript: { ...initial.entryScript, mtimeMs: 101 } }
     }),
-    SLOW_POLL_INTERVAL_MS
+    true
   );
   assert.equal(
-    selectBasePollIntervalMs({ lastLaunchedAt: 'not-a-date', now }),
-    SLOW_POLL_INTERVAL_MS
+    shouldRestartRunnerSupervisor({ initial, current: { ...initial, entryScript: null } }),
+    true
   );
 });
 
-test('selectBasePollIntervalMs goes fast when the desktop app was focused recently', () => {
-  const now = Date.parse('2026-07-09T12:00:00.000Z');
-  // Recent focus alone (no recent job) is enough to poll fast.
+test('runner supervisor identity ignores transient stat failures', () => {
+  const initial = {
+    program: { dev: 1, ino: 10, mtimeMs: 100 },
+    entryScript: { dev: 1, ino: 11, mtimeMs: 100 }
+  };
   assert.equal(
-    selectBasePollIntervalMs({
-      lastLaunchedAt: null,
-      lastDesktopFocusAt: new Date(now - 1000).toISOString(),
-      now
+    shouldRestartRunnerSupervisor({
+      initial,
+      current: { program: undefined, entryScript: undefined }
     }),
-    FAST_POLL_INTERVAL_MS
+    false
   );
   assert.equal(
-    selectBasePollIntervalMs({
-      lastLaunchedAt: null,
-      lastDesktopFocusAt: new Date(now - (DESKTOP_FOCUS_WINDOW_MS - 1000)).toISOString(),
-      now
+    shouldRestartRunnerSupervisor({
+      initial: { program: undefined, entryScript: undefined },
+      current: initial
     }),
-    FAST_POLL_INTERVAL_MS
-  );
-  // Focus older than the 30m window no longer keeps it fast.
-  assert.equal(
-    selectBasePollIntervalMs({
-      lastLaunchedAt: null,
-      lastDesktopFocusAt: new Date(now - (DESKTOP_FOCUS_WINDOW_MS + 1000)).toISOString(),
-      now
-    }),
-    SLOW_POLL_INTERVAL_MS
-  );
-  // A malformed focus timestamp is ignored (treated as no signal).
-  assert.equal(
-    selectBasePollIntervalMs({ lastLaunchedAt: null, lastDesktopFocusAt: 'nope', now }),
-    SLOW_POLL_INTERVAL_MS
+    false
   );
 });
 
-test('desktop focus state round-trips through disk and defaults cleanly', () => {
-  const dir = mkdtempSync(path.join(os.tmpdir(), 'ovld-focus-'));
-  try {
-    // A missing file reads as "no signal" rather than throwing.
-    assert.deepEqual(readDesktopFocusState(dir), { lastFocusedAt: null });
-    const stamp = '2026-07-09T12:00:00.000Z';
-    writeDesktopFocusState({ lastFocusedAt: stamp }, dir);
-    assert.deepEqual(readDesktopFocusState(dir), { lastFocusedAt: stamp });
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
+test('runner supervisor identity resolves the entry script and records stat fields', () => {
+  assert.equal(
+    resolveRunnerEntryScript(['node', 'cli/bin/ovld.mjs']),
+    path.resolve('cli/bin/ovld.mjs')
+  );
+  assert.equal(resolveRunnerEntryScript(['node']), null);
+  const identity = captureRunnerSupervisorIdentity({
+    execPath: '/program',
+    entryScript: '/entry',
+    stat: filePath =>
+      filePath === '/program' ? { dev: 1, ino: 2, mtimeMs: 3 } : { dev: 4, ino: 5, mtimeMs: 6 }
+  });
+  assert.deepEqual(identity, {
+    program: { dev: 1, ino: 2, mtimeMs: 3 },
+    entryScript: { dev: 4, ino: 5, mtimeMs: 6 }
+  });
 });
 
-test('nextRunnerLastError reflects the latest poll, clearing a resolved error', () => {
-  // A failing poll records its error...
-  assert.equal(nextRunnerLastError('authentication required'), 'authentication required');
-  // ...and a subsequent successful poll clears it instead of leaving it sticky,
-  // so the runner status box stops reading a stale auth error after login.
-  assert.equal(nextRunnerLastError(null), null);
+test('runner executable identity distinguishes removal from transient stat errors', () => {
+  const missing = Object.assign(new Error('gone'), { code: 'ENOENT' });
+  const inaccessible = Object.assign(new Error('permission denied'), { code: 'EACCES' });
+  assert.equal(
+    readRunnerExecutableFileIdentity('/gone', () => {
+      throw missing;
+    }),
+    null
+  );
+  assert.equal(
+    readRunnerExecutableFileIdentity('/inaccessible', () => {
+      throw inaccessible;
+    }),
+    undefined
+  );
 });
 
 test('applyPollJitter stays within +/-10 percent of the base interval', () => {
   for (const random of [() => 0, () => 1, () => 0.5, () => 0.25]) {
-    const jittered = applyPollJitter(3000, random);
-    assert.ok(jittered >= 2700 && jittered <= 3300, `jittered=${jittered} out of range`);
+    const jittered = applyPollJitter(FALLBACK_POLL_INTERVAL_MS, random);
+    assert.ok(jittered >= 4500 && jittered <= 5500, `jittered=${jittered} out of range`);
   }
 });
 
@@ -179,28 +177,6 @@ test('resolveOvldInvocation keeps the Electron binary when the installer runs as
   }
 });
 
-test('describeServicePublisher flags node-attributed macOS services for reinstall', () => {
-  assert.deepEqual(
-    describeServicePublisher({ execProgram: '/usr/local/bin/node', platform: 'darwin' }),
-    { publisher: 'node', needsReinstallForOverlord: true }
-  );
-  assert.deepEqual(
-    describeServicePublisher({
-      execProgram: '/Applications/Overlord.app/Contents/MacOS/Overlord',
-      platform: 'darwin'
-    }),
-    { publisher: 'overlord', needsReinstallForOverlord: false }
-  );
-  assert.deepEqual(describeServicePublisher({ execProgram: null, platform: 'darwin' }), {
-    publisher: 'unknown',
-    needsReinstallForOverlord: false
-  });
-  assert.deepEqual(describeServicePublisher({ execProgram: '/usr/bin/node', platform: 'linux' }), {
-    publisher: 'unknown',
-    needsReinstallForOverlord: false
-  });
-});
-
 test('buildRunnerServiceEnv forwards ELECTRON_RUN_AS_NODE for app-binary invocations', () => {
   const prior = process.env.ELECTRON_RUN_AS_NODE;
   try {
@@ -216,9 +192,15 @@ test('buildRunnerServiceEnv forwards ELECTRON_RUN_AS_NODE for app-binary invocat
   }
 });
 
-test('buildRunnerServiceEnv captures the backend URL and a non-empty PATH', () => {
+test('buildRunnerServiceEnv captures a remote backend URL and a non-empty PATH', () => {
   const env = buildRunnerServiceEnv({ backendUrl: 'https://api.example.test' });
   assert.equal(env.OVERLORD_BACKEND_URL, 'https://api.example.test');
+  assert.ok(env.PATH && env.PATH.length > 0);
+});
+
+test('buildRunnerServiceEnv follows overlord.toml instead of pinning a loopback backend URL', () => {
+  const env = buildRunnerServiceEnv({ backendUrl: 'http://127.0.0.1:4310' });
+  assert.equal(env.OVERLORD_BACKEND_URL, undefined);
   assert.ok(env.PATH && env.PATH.length > 0);
 });
 
@@ -290,4 +272,150 @@ test('runner service state round-trips and merges via patch', () => {
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('planLaunchdUnloadCommands boots the label out and tolerates a not-loaded label', () => {
+  const steps = planLaunchdUnloadCommands({ uid: 501 });
+  assert.deepEqual(
+    steps.map(step => step.args),
+    [['bootout', `gui/501/${LAUNCHD_LABEL}`]]
+  );
+  assert.equal(steps[0].tolerateFailure, true);
+});
+
+test('planLaunchdLoadCommands re-reads the plist from disk instead of kickstarting in memory', () => {
+  const steps = planLaunchdLoadCommands({
+    uid: 501,
+    plistPath: '/plists/io.overlord.runner.plist'
+  });
+  assert.deepEqual(
+    steps.map(step => step.args),
+    [
+      ['enable', `gui/501/${LAUNCHD_LABEL}`],
+      ['bootstrap', 'gui/501', '/plists/io.overlord.runner.plist'],
+      ['kickstart', `gui/501/${LAUNCHD_LABEL}`]
+    ]
+  );
+  // `bootstrap` may legitimately fail when the label is already loaded, but the
+  // trailing `kickstart` must surface a genuinely broken definition.
+  assert.deepEqual(
+    steps.map(step => step.tolerateFailure),
+    [true, true, false]
+  );
+  // `kickstart -k` would restart launchd's in-memory definition and ignore the
+  // freshly written plist, which is exactly the bug this sequence replaces.
+  assert.ok(!steps.some(step => step.args.includes('-k')));
+});
+
+function recordingLaunchd(behavior: (args: string[]) => void = () => {}): {
+  manager: LaunchdManager;
+  calls: string[][];
+} {
+  const calls: string[][] = [];
+  const manager = new LaunchdManager(async args => {
+    calls.push(args);
+    behavior(args);
+    return { stdout: '' };
+  });
+  return { manager, calls };
+}
+
+test('launchd install boots out an already-loaded label before writing and loading the plist', async () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'ovld-launchd-install-'));
+  const priorHome = process.env.HOME;
+  const priorDataDir = process.env.OVLD_HOME;
+  try {
+    process.env.HOME = dir;
+    process.env.OVLD_HOME = path.join(dir, '.ovld');
+    const { manager, calls } = recordingLaunchd();
+    await manager.install({
+      invocation: { program: '/node', args: ['/cli.js', 'runner', 'supervise'] },
+      env: { OVERLORD_BACKEND_URL: 'https://api.example.test' },
+      autoStart: true
+    });
+    const verbs = calls.map(args => args[0]);
+    assert.equal(verbs[0], 'bootout', 'install must unload the old definition first');
+    assert.deepEqual(verbs, ['bootout', 'enable', 'bootstrap', 'kickstart']);
+    // The plist the load step points at is the one install just wrote.
+    const bootstrapCall = calls.find(args => args[0] === 'bootstrap');
+    assert.equal(bootstrapCall?.[2], manager.unitPath());
+    assert.ok(existsSync(manager.unitPath()));
+    assert.ok(readFileSync(manager.unitPath(), 'utf8').includes('supervise'));
+  } finally {
+    if (priorHome === undefined) delete process.env.HOME;
+    else process.env.HOME = priorHome;
+    if (priorDataDir === undefined) delete process.env.OVLD_HOME;
+    else process.env.OVLD_HOME = priorDataDir;
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('launchd install and uninstall stay idempotent when the label is not loaded', async () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'ovld-launchd-idempotent-'));
+  const priorHome = process.env.HOME;
+  const priorDataDir = process.env.OVLD_HOME;
+  try {
+    process.env.HOME = dir;
+    process.env.OVLD_HOME = path.join(dir, '.ovld');
+    // `bootout` and `list` both fail for a label launchd does not know about.
+    const { manager, calls } = recordingLaunchd(args => {
+      if (args[0] === 'bootout' || args[0] === 'list') throw new Error('No such process');
+    });
+    await manager.install({
+      invocation: { program: '/node', args: ['/cli.js', 'runner', 'supervise'] },
+      env: {},
+      autoStart: false
+    });
+    assert.deepEqual(
+      calls.map(args => args[0]),
+      ['bootout'],
+      'autoStart false must not start the service'
+    );
+    assert.ok(existsSync(manager.unitPath()));
+    await manager.uninstall();
+    assert.ok(!existsSync(manager.unitPath()), 'a not-loaded label must still uninstall cleanly');
+  } finally {
+    if (priorHome === undefined) delete process.env.HOME;
+    else process.env.HOME = priorHome;
+    if (priorDataDir === undefined) delete process.env.OVLD_HOME;
+    else process.env.OVLD_HOME = priorDataDir;
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('launchd uninstall keeps the plist when the label is still registered', async () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'ovld-launchd-uninstall-'));
+  const priorHome = process.env.HOME;
+  const priorDataDir = process.env.OVLD_HOME;
+  try {
+    process.env.HOME = dir;
+    process.env.OVLD_HOME = path.join(dir, '.ovld');
+    // bootout fails and `launchctl list <label>` still resolves: launchd kept
+    // the old definition, so deleting the plist would strand it forever.
+    const { manager } = recordingLaunchd(args => {
+      if (args[0] === 'bootout') throw new Error('Boot-out failed: 5: Input/output error');
+    });
+    await manager.install({
+      invocation: { program: '/node', args: ['/cli.js', 'runner', 'supervise'] },
+      env: {},
+      autoStart: false
+    });
+    await assert.rejects(() => manager.uninstall(), /still reports .* as loaded/);
+    assert.ok(existsSync(manager.unitPath()), 'the plist must survive a failed unload');
+  } finally {
+    if (priorHome === undefined) delete process.env.HOME;
+    else process.env.HOME = priorHome;
+    if (priorDataDir === undefined) delete process.env.OVLD_HOME;
+    else process.env.OVLD_HOME = priorDataDir;
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('launchd restart forces a full unload and reload from disk', async () => {
+  const { manager, calls } = recordingLaunchd();
+  await manager.restart();
+  assert.deepEqual(
+    calls.map(args => args[0]),
+    ['bootout', 'enable', 'bootstrap', 'kickstart']
+  );
 });

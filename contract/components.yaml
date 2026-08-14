@@ -4,7 +4,7 @@
 # IMPORTANT: Update this file and CONTRACT.md together when adding components or surfaces.
 # Increment contractVersion when any stable interface changes.
 
-contractVersion: '77'
+contractVersion: '79'
 
 components:
   protocol:
@@ -139,7 +139,8 @@ components:
       - 'deterministic branch/worktree planning algorithm (cli/src/branch-planning.ts), co-owned with the service layer and pinned to contract/branch-planning-vectors.json'
       - 'ovld runner commands'
       - 'runner-instance identity and heartbeat: a stable runnerInstanceId plus a native/adopted relation to the execution target it serves, published on every claim so the backend reports honest local liveness'
-      - 'persistent runner service: ovld runner supervise delegates to the same claim-and-launch path as ovld runner once; Postgres runners reconnect queue long-polls immediately after an empty wake/25s timeout while SQLite retains an adaptive polling fallback; ovld runner service <install|start|stop|restart|status|uninstall> manages an OS-level user service (macOS launchd io.overlord.runner, Linux systemd --user overlord-runner.service); local diagnostic state in ~/.ovld/runner-service.json; owner-only service files; Windows deferred'
+      - 'persistent runner service: ovld runner supervise delegates to the same claim-and-launch path as ovld runner once; Postgres runners reconnect queue long-polls immediately after an empty wake/25s timeout while SQLite uses one jittered 5-second fallback; ovld runner service <install|start|stop|restart|status|uninstall> manages an OS-level user service (macOS launchd io.overlord.runner, Linux systemd --user overlord-runner.service); local diagnostic state in ~/.ovld/runner-service.json keeps currentPollIntervalMs; service files capture remote backend URLs but omit loopback URLs so Local follows overlord.toml; owner-only service files; Windows deferred'
+      - 'supervisor self-restart on program replacement: ovld runner supervise records the identity of its own program (process.execPath) and resolved entry script at startup, re-checks it every poll, and exits 0 when either changes or disappears so launchd/systemd respawns it from the newly installed build; exit 0 is required because non-zero reads as a crash, the check is cheap and non-fatal (any error other than the file being gone must not kill a healthy supervisor), and the recorded identity is process-local with no new runner-service.json field. The Desktop Shell does not orchestrate runner-service lifecycle around an app update; the trigger is program identity, so desktop auto-update, a manual bundle replace, and a package-manager CLI upgrade are covered identically'
       - 'execution target selection logic'
       - 'runner queue REST operations used by ovld runner: GET /api/runner/status, POST /api/runner/claim, POST /api/runner/clear, POST /api/runner/requests/:id/launching, POST /api/runner/requests/:id/launched (additive optional providerSession body), POST /api/runner/requests/:id/failed, POST /api/runner/requests/:id/harness-events (additive Latch event ingest; presentation only)'
       - 'branch-preparation acknowledgement through POST /api/missions/:id/branch-prepared'
@@ -445,7 +446,8 @@ interactionSurfaces:
       - 'Several runner instances may serve one local target (host runner plus adopting containers); claim competition stays target-level and no request field selects a runner instance'
       - 'Local target reachability derives from a recent healthy/degraded runner registration; devices.last_seen_at is honored only for a target that has never had a runner registration (upgrade compatibility)'
       - 'Backend state transitions must append mission_events and entity_changes in the same transaction'
-      - 'Allowed transitions are queued → claimed → launching → launched|failed; active requests may be cleared; stale claims and launched-without-attach requests may move to expired; other terminal statuses are sinks unless a new request is explicitly queued'
+      - 'Allowed transitions are queued → claimed → launching → launched|failed; active requests may be cleared; stale claims, launched-without-attach requests, and a launching request whose runner never reported launched within the launch TTL (measured from execution_requests.launch_started_at) may move to expired; other terminal statuses are sinks unless a new request is explicitly queued'
+      - 'Expiry never re-queues: a runner that died mid-launch may already have spawned an agent the backend cannot see, so expiring the row plus the runner-reported failure is what preserves launch-at-most-once. POST /api/runner/requests/:id/launched must tolerate the conflict raised when a very slow launch was expired underneath itself'
       - 'Protocol attach links execution_requests.launched_session_id when launch context supplies an execution request id'
       - 'Runner launches agents locally after a successful claim'
       - 'Runner reports launching/launched/failed state back through backend endpoints'

@@ -275,20 +275,27 @@ service that runs the supervisor loop in the background.
   one-shot claim-and-launch implementation used by `ovld runner once` — claim,
   resource resolution, branch/worktree preparation, and terminal launch behavior
   are never duplicated.
+- **Self-restart after replacement**: at startup the supervisor fingerprints its
+  own executable and resolved entry script, then checks them before every poll.
+  If either changes or disappears, it logs the handoff and exits `0`; launchd or
+  systemd then restarts the newly installed build. The fingerprints stay in
+  process memory, and transient inspection errors never stop a healthy runner.
 - **Hosted long-polling**: against Postgres, an idle claim waits for a queue
   notification for up to 25 seconds and the runner immediately reconnects after
   an empty timeout or wake. The wait uses a dedicated backend listener, never a
   pooled query connection, and every wake re-runs the normal authorized atomic
-  claim. SQLite retains the adaptive 3s/5s fallback cadence keyed on the last
-  launched job, with jitter, because it has no cross-process queue notification.
+  claim. SQLite retains a jittered 5-second fallback cadence because it has no
+  cross-process queue notification.
 - **Host integration**: macOS uses a user `launchd` LaunchAgent
   (`~/Library/LaunchAgents/io.overlord.runner.plist`); Linux uses a
   `systemd --user` unit (`~/.config/systemd/user/overlord-runner.service`).
   Windows is deferred; use `ovld runner start` there. The installed service
   invokes the resolved `ovld` executable with an explicit environment snapshot
-  (`OVERLORD_BACKEND_URL`, `OVLD_HOME` when set, the user token when present, and
-  a minimal `PATH`) because persistent services do not source interactive shell
-  startup files.
+  (a non-loopback `OVERLORD_BACKEND_URL`, `OVLD_HOME` when set, the user token
+  when present, and a minimal `PATH`) because persistent services do not source
+  interactive shell startup files. Loopback URLs are intentionally not captured:
+  the supervisor follows the current `overlord.toml` URL after Desktop selects
+  its local port at boot.
 - **Local state**: `~/.ovld/runner-service.json` records the installed service
   kind/identifier, resolved exec path, backend URL, last heartbeat/claim/launch
   timestamps, last error, and current poll interval. This is local diagnostic

@@ -334,6 +334,117 @@ test('launched requests expire when no agent attaches before the deadline', asyn
   await db.close();
 });
 
+test('a launching request whose runner never reported launched expires', async () => {
+  const { db, ctx } = await createContext();
+  const project = await createProject({ ctx, name: 'Runner Launching Expiry Test' });
+  const workingDirectory = createIsolatedCheckout('ovld-runner-');
+  await addProjectResource({
+    ctx,
+    projectId: project.id,
+    directoryPath: workingDirectory,
+    isPrimary: true
+  });
+  const { mission, objectives } = await createMissionWithObjectives({
+    ctx,
+    projectId: project.id,
+    objectives: [{ objective: 'Expire a stalled launching request' }]
+  });
+  const request = await createExecutionRequest({
+    ctx,
+    missionId: mission.displayId,
+    objectiveId: objectives[0]?.id,
+    requestedAgent: 'codex',
+    requestedSource: 'cli'
+  });
+  const claimed = await claimNextExecutionRequest({ ctx });
+  assert.equal(claimed?.id, request.id);
+  await markExecutionLaunching({ ctx, requestId: request.id });
+
+  // A fresh launching request must survive: a slow but healthy launch (worktree
+  // preparation plus opening the terminal) is exactly what the TTL protects.
+  assert.equal((await expireStaleExecutionRequests({ ctx })).expired, 0);
+
+  // The runner died between reporting `launching` and reporting `launched` — for
+  // example its app bundle was replaced under it by an update.
+  await ctx.db.run(`UPDATE execution_requests SET launch_started_at = ? WHERE id = ?`, [
+    '2000-01-01T00:00:00.000Z',
+    request.id
+  ]);
+
+  assert.equal((await expireStaleExecutionRequests({ ctx })).expired, 1);
+  const expired = (await ctx.db.get(
+    `SELECT status, last_error FROM execution_requests WHERE id = ?`,
+    [request.id]
+  )) as { status: string; last_error: string };
+  assert.equal(expired.status, 'expired');
+  assert.match(expired.last_error, /expired before the runner reported a completed launch/);
+
+  // Expiry never re-queues, and the objective is free for a new Run.
+  const active = await listExecutionRequests({ ctx });
+  assert.equal(active.length, 0);
+
+  await db.close();
+});
+
+test('marking launched tolerates a request expired underneath a very slow launch', async () => {
+  const { db, ctx } = await createContext();
+  const project = await createProject({ ctx, name: 'Runner Slow Launch Test' });
+  const workingDirectory = createIsolatedCheckout('ovld-runner-');
+  await addProjectResource({
+    ctx,
+    projectId: project.id,
+    directoryPath: workingDirectory,
+    isPrimary: true
+  });
+  const { mission, objectives } = await createMissionWithObjectives({
+    ctx,
+    projectId: project.id,
+    objectives: [{ objective: 'Tolerate launched-after-expiry' }]
+  });
+  const request = await createExecutionRequest({
+    ctx,
+    missionId: mission.displayId,
+    objectiveId: objectives[0]?.id,
+    requestedAgent: 'codex',
+    requestedSource: 'cli'
+  });
+  await claimNextExecutionRequest({ ctx });
+  await markExecutionLaunching({ ctx, requestId: request.id });
+  await ctx.db.run(`UPDATE execution_requests SET launch_started_at = ? WHERE id = ?`, [
+    '2000-01-01T00:00:00.000Z',
+    request.id
+  ]);
+  assert.equal((await expireStaleExecutionRequests({ ctx })).expired, 1);
+
+  // The runner was slow, not dead: it finishes and reports `launched` against a row
+  // that expired underneath it. That must not raise a conflict the runner would turn
+  // into a spurious launch failure, and it must not resurrect the request.
+  const reported = await markExecutionLaunched({ ctx, requestId: request.id });
+  assert.equal(reported.status, 'expired');
+
+  const toleratedEvent = await ctx.db.get(
+    `SELECT id FROM mission_events
+        WHERE mission_id = ? AND objective_id = ?
+          AND summary = 'Runner reported a completed launch after the request had already expired.'`,
+    [mission.id, objectives[0]?.id]
+  );
+  assert.ok(toleratedEvent, 'the tolerated late launch report should be recorded');
+
+  // The tolerance is specific to a launch that expired before completion. An
+  // expired launched-without-attach row also has launch_started_at, but it has a
+  // completion timestamp and must remain a terminal-state conflict.
+  await ctx.db.run(`UPDATE execution_requests SET launch_completed_at = ? WHERE id = ?`, [
+    '2000-01-01T00:01:00.000Z',
+    request.id
+  ]);
+  await assert.rejects(
+    () => markExecutionLaunched({ ctx, requestId: request.id }),
+    /Illegal execution request transition/
+  );
+
+  await db.close();
+});
+
 test('a launched request linked to a session is not expired', async () => {
   const { db, ctx } = await createContext();
   const project = await createProject({ ctx, name: 'Runner Launch Linked Test' });

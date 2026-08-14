@@ -36,24 +36,30 @@ function normalizeBaseUrl(value: string): string {
 function resolveAuthHeaders({ baseUrl }: { baseUrl: string }): {
   headers: Record<string, string>;
   fromStored: boolean;
+  storedCredentialBackendUrl: string | null;
 } {
   const fromEnv =
     process.env.OVERLORD_USER_TOKEN?.trim() ||
     process.env.OVLD_USER_TOKEN?.trim() ||
     process.env.USER_TOKEN?.trim();
   if (fromEnv) {
-    return { headers: { Authorization: `Bearer ${fromEnv}` }, fromStored: false };
+    return {
+      headers: { Authorization: `Bearer ${fromEnv}` },
+      fromStored: false,
+      storedCredentialBackendUrl: null
+    };
   }
 
   const stored = readStoredAuthCredentials();
-  if (!stored) return { headers: {}, fromStored: false };
+  if (!stored) return { headers: {}, fromStored: false, storedCredentialBackendUrl: null };
   if (normalizeBaseUrl(stored.backendUrl) !== normalizeBaseUrl(baseUrl)) {
-    return { headers: {}, fromStored: false };
+    return { headers: {}, fromStored: false, storedCredentialBackendUrl: stored.backendUrl };
   }
 
   return {
     headers: { Authorization: `Bearer ${stored.token}` },
-    fromStored: true
+    fromStored: true,
+    storedCredentialBackendUrl: null
   };
 }
 
@@ -152,6 +158,13 @@ export function createBackendClient(): BackendClient {
   }): Promise<T> {
     const url = `${baseUrl}${path.startsWith('/') ? path : `/${path}`}`;
     const auth = resolveAuthHeaders({ baseUrl });
+    if (auth.storedCredentialBackendUrl) {
+      throw new CliError({
+        message:
+          `Saved credentials are for ${normalizeBaseUrl(auth.storedCredentialBackendUrl)}, but this CLI is configured for ${baseUrl}.\n` +
+          'The backend URL may have changed. Run `ovld auth login` to sign in to the current backend.'
+      });
+    }
     let response: Response;
     try {
       response = await fetch(url, {

@@ -135003,6 +135003,7 @@ var ACTIVE_EXECUTION_REQUEST_STATUSES = ["queued", "claimed", "launching"];
 var LAUNCHABLE_OBJECTIVE_STATES2 = ["draft", "submitted", "launching"];
 var CLAIM_TTL_MS = 15 * 60 * 1e3;
 var LAUNCH_ATTACH_TTL_MS = 15 * 60 * 1e3;
+var LAUNCH_START_TTL_MS = 10 * 60 * 1e3;
 function parseJsonObject(raw) {
   const parsed = JSON.parse(raw);
   return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
@@ -135521,6 +135522,22 @@ async function markExecutionLaunched({
   return await ctx.db.transaction(async (tx) => {
     const txCtx = { ...ctx, db: tx };
     const row = await getExecutionRequestStateRow({ ctx: txCtx, requestId });
+    if (row.status === "expired") {
+      const expiredFromLaunching = await txCtx.db.get(
+        `SELECT launch_started_at, launch_completed_at
+           FROM execution_requests
+          WHERE id = ? AND deleted_at IS NULL`,
+        [requestId]
+      );
+      if (expiredFromLaunching?.launch_started_at && !expiredFromLaunching.launch_completed_at) {
+        await appendExecutionRequestEvent({
+          ctx: txCtx,
+          row,
+          summary: "Runner reported a completed launch after the request had already expired."
+        });
+        return await getExecutionRequest({ ctx: txCtx, id: requestId });
+      }
+    }
     assertTransition({ row, allowedFrom: ["launching"], to: "launched" });
     const now2 = nowIso();
     const revision = row.revision + 1;
@@ -135697,11 +135714,15 @@ async function clearExecutionRequests({
 async function expireStaleExecutionRequests({
   ctx,
   now: now2 = nowIso(),
-  launchAttachTtlMs = LAUNCH_ATTACH_TTL_MS
+  launchAttachTtlMs = LAUNCH_ATTACH_TTL_MS,
+  launchStartTtlMs = LAUNCH_START_TTL_MS
 }) {
   return await ctx.db.transaction(async (tx) => {
     const txCtx = { ...ctx, db: tx };
-    const attachCutoff = new Date(Date.now() - launchAttachTtlMs).toISOString();
+    const nowMs = Date.parse(now2);
+    const baseMs = Number.isNaN(nowMs) ? Date.now() : nowMs;
+    const attachCutoff = new Date(baseMs - launchAttachTtlMs).toISOString();
+    const launchCutoff = new Date(baseMs - launchStartTtlMs).toISOString();
     const rows = await txCtx.db.all(
       `SELECT er.id, er.workspace_id, er.project_id, er.mission_id, er.objective_id,
                 er.execution_target_id, er.status, er.revision, er.launch_flags_json,
@@ -135716,12 +135737,23 @@ async function expireStaleExecutionRequests({
               (er.status = 'launched' AND er.launched_session_id IS NULL
                 AND er.launch_completed_at IS NOT NULL AND er.launch_completed_at < ?
                 AND o.state IN (${LAUNCHABLE_OBJECTIVE_STATES2.map(() => "?").join(", ")}))
+              OR
+              (er.status = 'launching'
+                AND er.launch_started_at IS NOT NULL AND er.launch_started_at < ?
+                AND o.state IN (${LAUNCHABLE_OBJECTIVE_STATES2.map(() => "?").join(", ")}))
             )`,
-      [ctx.workspace.id, now2, attachCutoff, ...LAUNCHABLE_OBJECTIVE_STATES2]
+      [
+        ctx.workspace.id,
+        now2,
+        attachCutoff,
+        ...LAUNCHABLE_OBJECTIVE_STATES2,
+        launchCutoff,
+        ...LAUNCHABLE_OBJECTIVE_STATES2
+      ]
     );
     for (const row of rows) {
       const revision = row.revision + 1;
-      const message2 = row.status === "claimed" ? "Execution request expired before launch started." : "Execution request expired before the launched agent attached.";
+      const message2 = row.status === "claimed" ? "Execution request expired before launch started." : row.status === "launching" ? "Execution request expired before the runner reported a completed launch." : "Execution request expired before the launched agent attached.";
       await txCtx.db.run(
         `UPDATE execution_requests
               SET status = 'expired',
