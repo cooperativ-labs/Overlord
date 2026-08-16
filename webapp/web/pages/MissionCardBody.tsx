@@ -64,6 +64,10 @@ export function MissionCardBody({
             <div className="flex min-w-0 items-center gap-1.5">
               <ProjectColorDot color={projectColor} name={projectName} />
               <span className="truncate text-[11px] text-muted-foreground">{projectName}</span>
+              <MissionOriginMark
+                createdByKind={mission.createdByKind}
+                createdByAgent={mission.createdByAgent}
+              />
             </div>
             <div className="flex min-w-0 max-w-[55%] shrink items-center justify-end gap-2">
               <MissionDueDateBadge dueDatetime={mission.dueDatetime} />
@@ -91,10 +95,6 @@ export function MissionCardBody({
                   </TooltipContent>
                 </Tooltip>
               ) : null}
-              <MissionOriginMark
-                createdByKind={mission.createdByKind}
-                createdByAgent={mission.createdByAgent}
-              />
               <MissionAssigneeSummary assignee={assignee} />
             </div>
           </div>

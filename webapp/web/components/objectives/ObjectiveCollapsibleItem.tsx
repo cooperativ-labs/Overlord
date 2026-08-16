@@ -8,8 +8,7 @@ import {
   FolderOpen,
   GitBranch,
   Loader2,
-  Paperclip,
-  Sparkles
+  Paperclip
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -28,6 +27,7 @@ import {
 } from '../../lib/queries.ts';
 import { cn } from '../../lib/utils.ts';
 import { InlineEditField } from '../InlineEditField.tsx';
+import { OriginSparklesIcon } from '../OriginSparklesIcon.tsx';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible.tsx';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip.tsx';
 
@@ -152,7 +152,7 @@ export function ObjectiveCollapsibleItem({
                       <TooltipTrigger
                         render={
                           <span className="inline-flex shrink-0" aria-label={originLabel}>
-                            <Sparkles className="h-3 w-3 text-muted-foreground/70" aria-hidden />
+                            <OriginSparklesIcon />
                           </span>
                         }
                       />

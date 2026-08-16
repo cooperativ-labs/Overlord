@@ -1,10 +1,11 @@
 import { Link } from '@tanstack/react-router';
-import { ArrowRightToLine, EllipsisVertical, Sparkles } from 'lucide-react';
+import { ArrowRightToLine, EllipsisVertical } from 'lucide-react';
 
 import { CopyMissionIdentifierButton } from '@/components/CopyMissionIdentifierButton';
 import { DeleteMissionButton } from '@/components/DeleteMissionButton';
 import { MissionTimerPopover } from '@/components/everhour/MissionTimerPopover';
 import { MissionBranchControl } from '@/components/MissionBranchControl';
+import { OriginSparklesIcon } from '@/components/OriginSparklesIcon.tsx';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -50,7 +51,7 @@ function MissionOriginLine({ mission }: { mission: MissionDetailDto }) {
 
   return (
     <div className="flex min-w-0 items-center gap-1.5 border-b border-[var(--color-border)] px-4 py-1.5 text-[11px] text-muted-foreground">
-      <Sparkles className="h-3 w-3 shrink-0 text-muted-foreground/70" aria-hidden />
+      <OriginSparklesIcon />
       <span className="truncate">
         Created by <span className="text-foreground/80">{author}</span>
         {createdFrom ? (

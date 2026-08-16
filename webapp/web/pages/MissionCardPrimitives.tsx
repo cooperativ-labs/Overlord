@@ -1,5 +1,6 @@
-import { Check, Sparkles } from 'lucide-react';
+import { Check } from 'lucide-react';
 
+import { OriginSparklesIcon } from '@/components/OriginSparklesIcon.tsx';
 import { formatDueDatetimeLabel } from '@/components/scheduling/schedule-utils.ts';
 import { AuthenticatedAvatarImage, Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -202,7 +203,9 @@ export function MissionAssigneeAvatar({
 
 /**
  * The one mark that means "an agent authored this row", shared by every card
- * surface so board, list, and calendar can never drift apart.
+ * surface so board, list, and calendar can never drift apart. The glyph is a
+ * filled blue-purple sparkle so it reads at a glance; on the kanban card it
+ * sits immediately right of the project name.
  *
  * Deliberately generic: `AgentIcon` already means *which agent runs this*, and
  * a card that showed a brand mark for both claims would put two different
@@ -227,7 +230,7 @@ export function MissionOriginMark({
 
   const mark = (
     <span className="inline-flex shrink-0" aria-label={label}>
-      <Sparkles className="h-3 w-3 text-muted-foreground/70" aria-hidden />
+      <OriginSparklesIcon />
     </span>
   );
 
