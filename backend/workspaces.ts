@@ -32,7 +32,11 @@ import {
 import { invitationEmailSenderFromEnv, inviteAcceptUrl } from './email-invitation.ts';
 import { ApiError } from './errors.ts';
 import { deleteOrganizationIfEmpty } from './organizations.ts';
-import { actorIsAdmin, isOrganizationAdmin, listOrganizationAdminProfileIds } from './rbac.ts';
+import {
+  actorIsAdmin,
+  canViewOrganizationSettings,
+  listOrganizationAdminProfileIds
+} from './rbac.ts';
 import {
   readSqlStudioEnabled,
   sqlStudioEnabledFromSettingsJson,
@@ -370,17 +374,17 @@ async function seedOrganizationStorageBucket({
 }
 
 /**
- * Create a workspace under an existing organization. Org-admin gated (Q3):
- * only an admin of every constituent workspace may add another. Every
- * *current* org admin is auto-granted ADMIN in the new workspace (joining
- * them to it if needed) so the org-admin invariant survives creation.
+ * Create a workspace under an existing organization. A workspace admin in
+ * that organization may create one and becomes its ADMIN. Every *current* org
+ * admin is also auto-granted ADMIN in the new workspace (joining them to it
+ * if needed) so the org-admin invariant survives creation.
  */
 export async function createWorkspace(body: CreateWorkspaceBody): Promise<WorkspaceDto> {
   const creatorProfileId = await resolveCurrentProfileId();
   const organizationId = (body.organizationId ?? '').trim();
   if (!organizationId) throw new ApiError(400, 'organizationId is required');
-  if (!(await isOrganizationAdmin(creatorProfileId, organizationId))) {
-    throw new ApiError(403, 'Organization admin required');
+  if (!(await canViewOrganizationSettings(creatorProfileId, organizationId))) {
+    throw new ApiError(403, 'Workspace admin access to the organization required');
   }
 
   const workspaceId = await requireDatabaseClient().transaction(async tx => {

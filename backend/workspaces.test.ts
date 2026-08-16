@@ -136,21 +136,75 @@ test('createWorkspace uniquifies max-length slug collisions without looping', as
   assert.equal(second.slug.length, 48);
 });
 
-test('createWorkspace rejects a caller who is not an admin of the organization', async () => {
+test('createWorkspace lets an organization workspace admin create a workspace and rejects outsiders', async () => {
   const now = new Date().toISOString();
   db.prepare(
     `INSERT INTO "user" ("id", "name", "email", "emailVerified", "image", "createdAt", "updatedAt")
      VALUES (?, ?, ?, 1, NULL, ?, ?)`
-  ).run('non-org-admin-user', 'non-org-admin-user', 'non-org-admin@overlord.local', now, now);
+  ).run(
+    'partial-org-admin-user',
+    'partial-org-admin-user',
+    'partial-org-admin@overlord.local',
+    now,
+    now
+  );
+  db.prepare(
+    `INSERT INTO workspace_users
+       (id, workspace_id, profile_id, member_key, status, metadata_json,
+        created_at, updated_at, revision)
+     VALUES (?, ?, ?, ?, 'active', '{}', ?, ?, 1)`
+  ).run(
+    'partial-org-admin-workspace-user',
+    'local-workspace',
+    'partial-org-admin-user',
+    'auth:partial-org-admin-user',
+    now,
+    now
+  );
+  db.prepare(
+    `INSERT INTO role_assignments
+       (id, workspace_id, workspace_user_id, role_key, resource_type, resource_id,
+        assigned_by_workspace_user_id, created_at, updated_at, revision)
+     VALUES (?, ?, ?, 'ADMIN', '', '', ?, ?, ?, 1)`
+  ).run(
+    'partial-org-admin-role',
+    'local-workspace',
+    'partial-org-admin-workspace-user',
+    'partial-org-admin-workspace-user',
+    now,
+    now
+  );
 
   await withRequestContextAsync(async () => {
-    setActiveProfileId('non-org-admin-user');
+    setActiveProfileId('partial-org-admin-user');
+    setActiveWorkspaceContext(null);
+    setActiveWorkspaceUser(null);
+
+    const created = await createWorkspace({
+      organizationId: DEFAULT_TEST_ORGANIZATION_ID,
+      name: 'Partial Admin Workspace'
+    });
+    const creatorMembership = await resolveActorForWorkspace(created.id);
+    assert.ok(creatorMembership);
+    assert.deepEqual(
+      await loadActorRoles({ workspaceId: created.id, workspaceUserId: creatorMembership }),
+      ['ADMIN']
+    );
+  });
+
+  db.prepare(
+    `INSERT INTO "user" ("id", "name", "email", "emailVerified", "image", "createdAt", "updatedAt")
+     VALUES (?, ?, ?, 1, NULL, ?, ?)`
+  ).run('non-org-member-user', 'non-org-member-user', 'non-org-member@overlord.local', now, now);
+
+  await withRequestContextAsync(async () => {
+    setActiveProfileId('non-org-member-user');
     setActiveWorkspaceContext(null);
     setActiveWorkspaceUser(null);
 
     await assert.rejects(
       createWorkspace({ organizationId: DEFAULT_TEST_ORGANIZATION_ID, name: 'Should Not Exist' }),
-      /Organization admin required/
+      /Workspace admin access to the organization required/
     );
   });
 });

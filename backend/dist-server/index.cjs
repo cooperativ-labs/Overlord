@@ -138568,6 +138568,13 @@ async function isOrganizationAdmin(profileId, organizationId, client = requireDa
   }
   return true;
 }
+async function canViewOrganizationSettings(profileId, organizationId, client = requireDatabaseClient()) {
+  const workspaceIds = await liveOrganizationWorkspaceIds(organizationId, client);
+  for (const workspaceId of workspaceIds) {
+    if (await profileIsWorkspaceAdmin(profileId, workspaceId, client)) return true;
+  }
+  return false;
+}
 async function listOrganizationAdminProfileIds(organizationId, client = requireDatabaseClient()) {
   const rows = await client.all(
     `SELECT wu.profile_id
@@ -153284,8 +153291,8 @@ async function createWorkspace(body) {
   const creatorProfileId = await resolveCurrentProfileId();
   const organizationId = (body.organizationId ?? "").trim();
   if (!organizationId) throw new ApiError(400, "organizationId is required");
-  if (!await isOrganizationAdmin(creatorProfileId, organizationId)) {
-    throw new ApiError(403, "Organization admin required");
+  if (!await canViewOrganizationSettings(creatorProfileId, organizationId)) {
+    throw new ApiError(403, "Workspace admin access to the organization required");
   }
   const workspaceId = await requireDatabaseClient().transaction(async (tx) => {
     const name = (body.name ?? "").trim();

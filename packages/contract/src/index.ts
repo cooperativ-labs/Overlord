@@ -162,7 +162,7 @@ export interface WorkspaceDto {
 }
 
 export interface CreateWorkspaceBody {
-  /** The containing organization. Creation is org-admin gated. */
+  /** The containing organization. Creation requires admin access to one of its workspaces. */
   organizationId: string;
   name: string;
   /** Optional slug; derived from the name (and uniquified within the organization) when omitted. */
