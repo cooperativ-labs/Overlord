@@ -1,4 +1,5 @@
 import type { DatabaseClient } from '@overlord/database';
+import { formatObjectiveDisplayId } from '@overlord/database';
 import { createHash } from 'node:crypto';
 
 import { enqueueLiveActivityDispatchJob } from '../packages/core/service/live-activity-jobs.ts';
@@ -6,10 +7,14 @@ import { newId, nowIso } from '../packages/core/service/util.ts';
 
 import { requireDatabaseClient, resolveActiveProfileId } from './db.ts';
 import { ApiError } from './errors.ts';
+import { bounded, presentationTitle } from './text-presentation.ts';
+
+// Re-exported so existing importers (push notifications, tests) keep one source
+// for bounded APNs text while the helpers themselves stay free of database imports.
+export { bounded, presentationTitle };
 
 const MAX_RUNNING = 2;
 const COMPLETION_HOLD_MS = 30 * 60 * 1000;
-const TITLE_MAX_LENGTH = 80;
 const START_TOKEN_MAX_LENGTH = 512;
 const BUNDLE_ID_MAX_LENGTH = 255;
 const ACTIVITY_TYPE_MAX_LENGTH = 128;
@@ -19,12 +24,25 @@ const APP_VERSION_MAX_LENGTH = 64;
 export const LIVE_ACTIVITY_ATTRIBUTES_TYPE = 'OverlordActivityAttributes';
 export const LIVE_ACTIVITY_ACCOUNT_LABEL = 'My Missions';
 
+/**
+ * One live row of the account activity. Objective-first (coo:756 §9.4): `title`
+ * and `displayId` name the **objective** whenever the row has one, so two runs
+ * of the same mission are distinguishable on the Lock Screen. `id` stays the
+ * mission id because it is the activity's navigation target, and the mission's
+ * own identity is carried alongside as secondary context — older app builds that
+ * only read `title`/`displayId` therefore pick up objective text with no
+ * ActivityKit attribute change.
+ */
 export type LiveActivityMissionSnapshot = {
   id: string;
   title: string;
   displayId: string;
   projectName: string;
   projectColorHex: string;
+  /** The objective this row is about, or `null` for a mission-grain row. */
+  objectiveId: string | null;
+  missionDisplayId: string;
+  missionTitle: string;
 };
 
 export type LiveActivityContentState = {
@@ -61,26 +79,17 @@ type SnapshotRow = {
   status_type: string;
 };
 
-/**
- * Shared with the standard push dispatcher (coo:444): these two functions are the
- * only path by which user-authored text reaches any APNs payload, so both push
- * surfaces bound and strip through exactly one implementation.
- */
-export function bounded(value: string, max: number): string {
-  return value.length <= max ? value : `${value.slice(0, max - 1)}…`;
-}
-
-export function presentationTitle(value: string): string {
-  return bounded(
-    value
-      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-      .replace(/[*_`]/g, '')
-      .replace(/^[#>\-+*]\s+/gm, '')
-      .replace(/\s+/g, ' ')
-      .trim(),
-    TITLE_MAX_LENGTH
-  );
-}
+/** A running objective plus the mission context it is displayed under. */
+type RunningObjectiveRow = {
+  objective_id: string;
+  objective_title: string | null;
+  display_key: string;
+  mission_id: string;
+  mission_title: string;
+  mission_display_id: string;
+  project_name: string;
+  project_settings_json: string;
+};
 
 function projectColor(settingsJson: string): string {
   try {
@@ -103,7 +112,63 @@ function toSnapshot(row: SnapshotRow): LiveActivityMissionSnapshot {
     title: presentationTitle(row.title),
     displayId: row.display_id,
     projectName: bounded(row.project_name.trim() || 'Project', 40),
-    projectColorHex: projectColor(row.project_settings_json)
+    projectColorHex: projectColor(row.project_settings_json),
+    objectiveId: null,
+    missionDisplayId: row.display_id,
+    missionTitle: presentationTitle(row.title)
+  };
+}
+
+function toRunningSnapshot(row: RunningObjectiveRow): LiveActivityMissionSnapshot {
+  const missionTitle = presentationTitle(row.mission_title);
+  // An objective with no title of its own still gets its own display id; the
+  // mission title is the closest human label available for it.
+  const objectiveTitle = row.objective_title ? presentationTitle(row.objective_title) : '';
+  return {
+    id: row.mission_id,
+    title: objectiveTitle || missionTitle,
+    displayId: formatObjectiveDisplayId({
+      missionDisplayId: row.mission_display_id,
+      displayKey: row.display_key
+    }),
+    projectName: bounded(row.project_name.trim() || 'Project', 40),
+    projectColorHex: projectColor(row.project_settings_json),
+    objectiveId: row.objective_id,
+    missionDisplayId: row.mission_display_id,
+    missionTitle
+  };
+}
+
+/**
+ * The completion row names the objective that just finished, when one can be
+ * identified, so the "just finished" line reads in the same grain as the running
+ * rows. A mission that completed with no completed objective (status moved by
+ * hand) keeps the mission-grain snapshot.
+ */
+async function toCompletionSnapshot(
+  db: DatabaseClient,
+  row: SnapshotRow
+): Promise<LiveActivityMissionSnapshot> {
+  const objective = await db.get<{
+    id: string;
+    title: string | null;
+    display_key: string;
+  }>(
+    `SELECT id, title, display_key FROM objectives
+      WHERE mission_id = ? AND deleted_at IS NULL AND state = 'complete'
+      ORDER BY updated_at DESC, id ASC LIMIT 1`,
+    [row.id]
+  );
+  const mission = toSnapshot(row);
+  if (!objective) return mission;
+  return {
+    ...mission,
+    title: (objective.title ? presentationTitle(objective.title) : '') || mission.missionTitle,
+    displayId: formatObjectiveDisplayId({
+      missionDisplayId: row.display_id,
+      displayKey: objective.display_key
+    }),
+    objectiveId: objective.id
   };
 }
 
@@ -321,7 +386,24 @@ export async function buildLiveActivityContentState(
       ORDER BY m.updated_at DESC, m.id ASC`,
     [profileId]
   );
-  const running = rows.filter(row => asBool(row.has_executing_objective)).slice(0, MAX_RUNNING);
+  // Running rows are one per **executing objective**, not one per mission: the
+  // cap of two is about how much work is on screen, and two objectives of one
+  // mission are two different things happening.
+  const runningRows = await db.all<RunningObjectiveRow>(
+    `SELECT o.id AS objective_id, o.title AS objective_title, o.display_key,
+            m.id AS mission_id, m.title AS mission_title, m.display_id AS mission_display_id,
+            p.name AS project_name, p.settings_json AS project_settings_json
+       FROM objectives o
+       JOIN missions m ON m.id = o.mission_id AND m.deleted_at IS NULL
+       JOIN projects p ON p.id = m.project_id AND p.deleted_at IS NULL
+       JOIN workspace_users wu ON wu.id = m.assigned_workspace_user_id
+       JOIN workspaces w ON w.id = m.workspace_id AND w.deleted_at IS NULL
+      WHERE o.deleted_at IS NULL AND o.state = 'executing'
+        AND wu.profile_id = ? AND wu.status = 'active' AND wu.deleted_at IS NULL
+      ORDER BY o.updated_at DESC, o.id ASC`,
+    [profileId]
+  );
+  const running = runningRows.slice(0, MAX_RUNNING);
   const completion = rows.find(row => {
     if (asBool(row.has_executing_objective)) return false;
     if (!asBool(row.has_completed_objective) && row.status_type !== 'complete') return false;
@@ -330,8 +412,8 @@ export async function buildLiveActivityContentState(
   });
   if (running.length === 0 && !completion) return null;
   return {
-    running: running.map(toSnapshot),
-    recentCompletion: completion ? toSnapshot(completion) : null,
+    running: running.map(toRunningSnapshot),
+    recentCompletion: completion ? await toCompletionSnapshot(db, completion) : null,
     updatedAt: Math.floor(now.getTime() / 1000)
   };
 }

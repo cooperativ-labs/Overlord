@@ -303,8 +303,12 @@ test('builds a bounded, allowlisted payload snapshot', async () => {
     'category',
     'deepLink',
     'missionId',
+    'objectiveDisplayId',
+    'objectiveId',
     'title'
   ]);
+  assert.equal(presentation.objectiveId, null, 'a mission-scoped push names no objective');
+  assert.equal(presentation.objectiveDisplayId, null);
 
   const foreign = await buildPushNotificationPresentation({
     db: requireDatabaseClient(),
@@ -313,6 +317,61 @@ test('builds a bounded, allowlisted payload snapshot', async () => {
     category: 'mission_awaiting_review'
   });
   assert.equal(foreign, null, 'a profile that is not the assignee never gets a snapshot');
+});
+
+test('an objective-scoped push leads with the objective display id and title', async () => {
+  const project = await createProject({ name: 'Objective Push', color: '#123456' });
+  const mission = await createMission({
+    projectId: project.id,
+    title: 'Objective-centric execution',
+    firstObjective: 'Do not leak this instruction text'
+  });
+  const objective = db
+    .prepare(`SELECT id, display_key FROM objectives WHERE mission_id = ?`)
+    .get(mission.id) as { id: string; display_key: string };
+  db.prepare(`UPDATE objectives SET title = ? WHERE id = ?`).run(
+    'Phase C: Activity surfaces',
+    objective.id
+  );
+  console.log(
+    'DEBUG rows',
+    db.prepare(`SELECT id, title, display_key FROM objectives WHERE mission_id = ?`).all(mission.id)
+  );
+  console.log(
+    'DEBUG client',
+    await requireDatabaseClient().get(
+      `SELECT id, title, display_key FROM objectives WHERE id = ? AND mission_id = ?`,
+      [objective.id, mission.id]
+    )
+  );
+  console.log(
+    'DEBUG mission',
+    db.prepare(`SELECT title, display_id FROM missions WHERE id = ?`).get(mission.id)
+  );
+
+  const presentation = await buildPushNotificationPresentation({
+    db: requireDatabaseClient(),
+    profileId: 'operator-user',
+    missionId: mission.id,
+    objectiveId: objective.id,
+    category: 'agent_question'
+  });
+  assert.ok(presentation);
+  assert.equal(presentation.objectiveId, objective.id);
+  assert.equal(
+    presentation.objectiveDisplayId,
+    `${mission.displayId}.${objective.display_key}`,
+    'the push names the objective by its stable display id'
+  );
+  assert.equal(
+    presentation.body,
+    `${mission.displayId}.${objective.display_key}: Phase C: Activity surfaces needs your input`
+  );
+  assert.doesNotMatch(
+    JSON.stringify(presentation),
+    /Do not leak this instruction text/,
+    'objective instruction text is never part of a payload'
+  );
 });
 
 test('APNs badge counts unread notifications, not missions in review', async () => {

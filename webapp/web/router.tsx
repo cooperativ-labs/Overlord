@@ -126,6 +126,13 @@ const inboxRoute = createRoute({
   component: lazyRouteComponent(() => import('./pages/InboxPage.tsx'), 'InboxPage')
 });
 
+/** Nested panel route so an Inbox feed card can open a mission in place. */
+const inboxMissionPanelRoute = createRoute({
+  getParentRoute: () => inboxRoute,
+  path: 'missions/$missionId',
+  component: lazyRouteComponent(() => import('./pages/InboxPage.tsx'), 'InboxMissionPanelRoute')
+});
+
 const myMissionsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/user',
@@ -174,7 +181,7 @@ export const routeTree = rootRoute.addChildren([
   acceptInviteRoute,
   oauthApproveRoute,
   indexRoute,
-  inboxRoute,
+  inboxRoute.addChildren([inboxMissionPanelRoute]),
   projectsRoute,
   workspaceLegacyRedirectRoute,
   workspaceMissionLegacyRedirectRoute,

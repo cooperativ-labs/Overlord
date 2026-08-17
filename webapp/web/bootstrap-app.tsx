@@ -34,7 +34,13 @@ function DesktopDeepLinkNavigation() {
     const onNavigate = getDesktopBridge()?.onNavigate;
     if (!onNavigate) return;
     return onNavigate(route => {
-      const match = /^\/user\/missions\/([A-Za-z0-9:_-]{1,64})$/.exec(route);
+      // An objective deep link (`?objective=coo:756.k7xm`) still opens the
+      // mission panel — the objective is the thing being pointed at, the
+      // mission is the surface that shows it.
+      const match =
+        /^\/user\/missions\/([A-Za-z0-9:_-]{1,64})(?:\?objective=[A-Za-z0-9:._-]{1,80})?$/.exec(
+          route
+        );
       if (!match) return;
       void router.navigate({ to: '/user/missions/$missionId', params: { missionId: match[1] } });
     });

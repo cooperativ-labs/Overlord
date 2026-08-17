@@ -2050,6 +2050,103 @@ export interface MyMissionsResponse {
   missions: MyMissionDto[];
 }
 
+// ---- Inbox activity feed (coo:757, contract v84) --------------------------
+//
+// One bounded, time-descending projection of objective-level activity across
+// every workspace the caller actively belongs to in the active organization —
+// the same membership rule the My Missions aggregate uses. Open vocabulary:
+// a client that does not recognize a `kind` renders nothing for that item
+// rather than failing, so adding a kind stays additive.
+
+export type ActivityFeedItemKind = 'objective_run' | 'delivery' | 'blocking_question';
+
+/** Chrome every feed card shares: where the item happened and what it belongs to. */
+export interface ActivityFeedItemBaseDto {
+  /**
+   * Stable, kind-prefixed identity (`run:<objectiveId>`, `delivery:<deliveryId>`,
+   * `ask:<eventId>`). Distinct sources can share an underlying row id, so the
+   * prefix is what makes the merged list safely keyable.
+   */
+  id: string;
+  kind: ActivityFeedItemKind | string;
+  /** Sort key. The merged feed is ordered by this, descending. */
+  occurredAt: string;
+  workspaceId: string;
+  workspaceName: string;
+  projectId: string;
+  projectName: string;
+  /** Hex accent color of the project, when configured. */
+  projectColor: string | null;
+  missionId: string;
+  missionDisplayId: string;
+  missionTitle: string;
+  objectiveId: string | null;
+  /** `{mission.displayId}.{objective.displayKey}` when the item names an objective. */
+  objectiveDisplayId: string | null;
+}
+
+/** One objective queued behind a running one because it is set to auto-advance. */
+export interface ActivityFeedQueuedObjectiveDto {
+  objectiveId: string;
+  displayId: string;
+  title: string | null;
+  position: number;
+  assignedAgent: string | null;
+}
+
+/** An objective that is launching or executing right now. */
+export interface ActivityFeedRunItemDto extends ActivityFeedItemBaseDto {
+  kind: 'objective_run';
+  state: 'launching' | 'executing';
+  objectiveTitle: string | null;
+  /** Server-truncated instruction preview. Never the full prompt body. */
+  instructionPreview: string;
+  agentIdentifier: string | null;
+  modelIdentifier: string | null;
+  branch: string | null;
+  resourceKey: string | null;
+  /** Session start, or the execution request's creation while still launching. */
+  startedAt: string | null;
+  /** Newest mission-event summary for this objective, truncated. */
+  latestEventSummary: string | null;
+  latestEventAt: string | null;
+  /**
+   * The contiguous run of auto-advance objectives after this one. Truncated at
+   * the first objective that is not set to auto-advance — that one will not run
+   * unattended, so listing what follows it would overstate what happens next.
+   */
+  upcoming: ActivityFeedQueuedObjectiveDto[];
+}
+
+/** A recent delivery, carrying the same normalized record the mission delivery read returns. */
+export interface ActivityFeedDeliveryItemDto extends ActivityFeedItemBaseDto {
+  kind: 'delivery';
+  objectiveTitle: string | null;
+  delivery: DeliveryDto;
+}
+
+/** An `ask` mission event the operator has not yet seen; the agent is blocked on it. */
+export interface ActivityFeedQuestionItemDto extends ActivityFeedItemBaseDto {
+  kind: 'blocking_question';
+  eventId: string;
+  question: string;
+  agentIdentifier: string | null;
+  askedAt: string;
+}
+
+export type ActivityFeedItemDto =
+  | ActivityFeedRunItemDto
+  | ActivityFeedDeliveryItemDto
+  | ActivityFeedQuestionItemDto;
+
+export interface ActivityFeedDto {
+  items: ActivityFeedItemDto[];
+  /** Server clock, so elapsed-time rendering does not drift with a skewed client. */
+  generatedAt: string;
+  /** Per-kind totals *before* truncation, so the UI can be honest about caps. */
+  counts: Record<string, number>;
+}
+
 /**
  * Persist a personal reorder of one My Missions status column. `orderedMissionIds`
  * lists every mission assigned to the operator that should occupy `statusId`,

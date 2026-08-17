@@ -79,7 +79,10 @@ function missionWorkflowKeys(change: EntityChangeDto): QueryKey[] | null {
   const queryKeys: QueryKey[] = [
     keys.mission(missionId),
     keys.missions(projectId),
-    keys.myMissions
+    keys.myMissions,
+    // Objective state, session, and execution-request rows all flow through here,
+    // and each of them can change what the Inbox activity feed shows.
+    keys.activityFeed
   ];
 
   if (hasBranchField(change)) {
@@ -108,12 +111,14 @@ function routeChange(change: EntityChangeDto): QueryKey[] | null {
     case 'mission_event': {
       const missionId = missionIdFor(change);
       if (!missionId) return null;
-      return [keys.missionEvents(missionId), keys.missionDeliveries(missionId)];
+      // A new `ask` event is a feed item, and any event can be the "latest" line
+      // on an executing objective's card.
+      return [keys.missionEvents(missionId), keys.missionDeliveries(missionId), keys.activityFeed];
     }
     case 'delivery': {
       const missionId = missionIdFor(change);
       if (!missionId) return null;
-      return [keys.missionDeliveries(missionId)];
+      return [keys.missionDeliveries(missionId), keys.activityFeed];
     }
     case 'agent_session':
     case 'execution_request': {

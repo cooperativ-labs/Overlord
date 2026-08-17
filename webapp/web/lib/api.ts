@@ -21,6 +21,7 @@ import type { LocalTargetBridgeCall } from '../../../packages/core/service/local
 import type { CapabilityResult } from '../../../packages/core/service/local-target/types.ts';
 import type {
   AcceptWorkspaceInvitationBody,
+  ActivityFeedDto,
   AddOrganizationAdminBody,
   AgentCatalogDto,
   AgentRequestDto,
@@ -519,6 +520,7 @@ export const api = {
   createMission: (body: CreateMissionBody) =>
     request<MissionDetailDto>('POST', '/api/missions', body),
   listInboxItems: () => request<InboxItemDto[]>('GET', '/api/inbox'),
+  getActivityFeed: () => request<ActivityFeedDto>('GET', '/api/activity-feed'),
   createInboxItem: (body: CreateInboxItemBody) => request<InboxItemDto>('POST', '/api/inbox', body),
   updateInboxItem: (id: string, body: UpdateInboxItemBody) =>
     request<InboxItemDto>('PATCH', `/api/inbox/${id}`, body),

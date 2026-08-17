@@ -35,7 +35,7 @@ export function deliveryOneSentenceSummary(delivery: DeliveryDto): string {
   return match?.[0]?.trim() || plain.slice(0, 200);
 }
 
-function formatTimestamp(iso: string): string {
+export function formatDeliveryTimestamp(iso: string): string {
   const date = new Date(iso);
   return Number.isNaN(date.getTime()) ? iso : date.toLocaleString();
 }
@@ -136,26 +136,28 @@ export function DeliveryPresentation({
  * Delivery card for the Artifacts section: objective title, one-sentence preview,
  * and click-to-expand full structured delivery summary.
  */
-export function MissionDeliveryCard({
-  delivery,
-  objectiveTitle
-}: {
-  delivery: DeliveryDto;
-  objectiveTitle: string | null;
-}) {
+/**
+ * Collapse-on-outside-click/Escape for an expanded delivery card. Shared so the
+ * mission panel and the Inbox activity feed dismiss the same way; a divergence
+ * here reads to the operator as two different components.
+ */
+export function useCollapseOnDismiss(
+  expanded: boolean,
+  collapse: () => void
+): React.RefObject<HTMLDivElement | null> {
   const cardRef = useRef<HTMLDivElement>(null);
-  const [expanded, setExpanded] = useState(false);
-  const preview = deliveryOneSentenceSummary(delivery);
+  // Held in a ref so an inline `() => setExpanded(false)` at the call site does not
+  // rebind the document listeners on every render while the card is open.
+  const collapseRef = useRef(collapse);
+  collapseRef.current = collapse;
 
   useEffect(() => {
     if (!expanded) return;
     const onPointerDown = (e: MouseEvent | TouchEvent) => {
-      if (cardRef.current && !cardRef.current.contains(e.target as Node)) {
-        setExpanded(false);
-      }
+      if (cardRef.current && !cardRef.current.contains(e.target as Node)) collapseRef.current();
     };
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setExpanded(false);
+      if (e.key === 'Escape') collapseRef.current();
     };
     document.addEventListener('mousedown', onPointerDown);
     document.addEventListener('touchstart', onPointerDown);
@@ -166,6 +168,20 @@ export function MissionDeliveryCard({
       document.removeEventListener('keydown', onKeyDown);
     };
   }, [expanded]);
+
+  return cardRef;
+}
+
+export function MissionDeliveryCard({
+  delivery,
+  objectiveTitle
+}: {
+  delivery: DeliveryDto;
+  objectiveTitle: string | null;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const preview = deliveryOneSentenceSummary(delivery);
+  const cardRef = useCollapseOnDismiss(expanded, () => setExpanded(false));
 
   if (expanded) {
     return (
@@ -179,7 +195,7 @@ export function MissionDeliveryCard({
             {objectiveTitle ?? 'Delivery'}
           </span>
           <span className="text-[11px] text-(--color-ink-dim)">
-            {formatTimestamp(delivery.deliveredAt)}
+            {formatDeliveryTimestamp(delivery.deliveredAt)}
           </span>
         </div>
         <DeliveryPresentation delivery={delivery} summaryText={delivery.summary} />
@@ -204,7 +220,7 @@ export function MissionDeliveryCard({
           </span>
           <span className="flex flex-wrap items-center gap-2 text-[11px] text-(--color-ink-dim)">
             <Badge className="px-1.5 py-0 text-[10px] uppercase tracking-wide">Delivered</Badge>
-            <span>{formatTimestamp(delivery.deliveredAt)}</span>
+            <span>{formatDeliveryTimestamp(delivery.deliveredAt)}</span>
           </span>
           <p className="line-clamp-2 wrap-anywhere text-sm text-(--color-ink-dim)">{preview}</p>
         </span>

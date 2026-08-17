@@ -70,6 +70,7 @@ import {
   initSqlStudioManager,
   syncSqlStudioForWorkspace
 } from './sql-studio/sql-studio-manager.ts';
+import { listActivityFeed } from './activity-feed.ts';
 import {
   AGENT_SESSION_CHANNEL_ROUTE_PREFIX,
   createAgentRequestHumanRouter,
@@ -1316,6 +1317,15 @@ app.patch(
     mutates: true,
     requires: PERMISSIONS.MISSION_UPDATE
   })
+);
+
+// ---- Inbox activity feed (cross-workspace) --------------------------------
+// One bounded read for the Inbox feed. Per-workspace authorization happens
+// inside `listActivityFeed`; this gate is the ordinary active-workspace check
+// every mission read carries.
+app.get(
+  '/api/activity-feed',
+  handle(() => listActivityFeed(), { requires: PERMISSIONS.MISSION_READ })
 );
 
 // ---- Mobile Live Activities ---------------------------------------------

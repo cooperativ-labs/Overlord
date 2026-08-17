@@ -2,7 +2,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, Check, Copy, ExternalLink, Loader2, Monitor, Octagon } from 'lucide-react';
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 
-import type { TerminalSessionDto } from '../../shared/contract.ts';
+import type { ObjectiveDto, TerminalSessionDto } from '../../shared/contract.ts';
 import { useCopyToClipboard } from '../lib/hooks/use-copy-to-clipboard.ts';
 import {
   forgetAbsentLatchSession,
@@ -41,6 +41,23 @@ function viewerLabel(kind: string): string {
 
 function sessionRowKey(session: TerminalSessionDto): string {
   return `${session.executionRequestId}:${session.providerSessionId}`;
+}
+
+/**
+ * How a Latch session identifies itself in the panel.
+ *
+ * A session is an execution of one **objective** (coo:756 §9.2), so the card
+ * leads with the objective's display id and title rather than the mission's.
+ * Sessions launched before objective-scoped Latch names — or whose objective has
+ * since been deleted — fall back to the recorded Latch session name.
+ */
+function objectiveLabelFor(
+  session: TerminalSessionDto,
+  objectives: readonly ObjectiveDto[]
+): { displayId: string; title: string } | null {
+  const objective = objectives.find(candidate => candidate.id === session.objectiveId);
+  if (!objective?.displayId) return null;
+  return { displayId: objective.displayId, title: objective.title?.trim() || 'Untitled objective' };
 }
 
 /**
@@ -195,12 +212,15 @@ function EndSessionButton({
 function TerminalSessionCard({
   missionId,
   session,
+  objectiveLabel,
   localExecutionTargetId,
   onAbsent,
   footer
 }: {
   missionId: string;
   session: TerminalSessionDto;
+  /** Objective this session is executing, when it is still resolvable. */
+  objectiveLabel: { displayId: string; title: string } | null;
   localExecutionTargetId: string | null;
   onAbsent?: (providerSessionId: string) => void;
   /** Rendered inside the card, below its own controls (the other-sessions accordion). */
@@ -229,10 +249,20 @@ function TerminalSessionCard({
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <Monitor className="h-4 w-4 shrink-0 text-muted-foreground" />
-            <p className="truncate text-sm font-medium">{name}</p>
+            {objectiveLabel ? (
+              <p className="truncate text-sm font-medium">
+                <span className="font-mono text-xs text-muted-foreground">
+                  {objectiveLabel.displayId}
+                </span>{' '}
+                {objectiveLabel.title}
+              </p>
+            ) : (
+              <p className="truncate text-sm font-medium">{name}</p>
+            )}
           </div>
-          <p className="mt-1 text-xs text-muted-foreground">
+          <p className="mt-1 truncate text-xs text-muted-foreground">
             Latch · {session.deviceLabel ?? 'Unknown device'}
+            {objectiveLabel ? ` · ${name}` : ''}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-1.5 text-xs capitalize text-muted-foreground">
@@ -329,11 +359,13 @@ function TerminalSessionCard({
 function OtherSessionRow({
   missionId,
   session,
+  objectiveLabel,
   localExecutionTargetId,
   onAbsent
 }: {
   missionId: string;
   session: TerminalSessionDto;
+  objectiveLabel: { displayId: string; title: string } | null;
   localExecutionTargetId: string | null;
   onAbsent?: (providerSessionId: string) => void;
 }) {
@@ -352,7 +384,18 @@ function OtherSessionRow({
     <div className="flex items-center gap-2 rounded-md border border-border/60 bg-muted/30 px-2 py-1.5">
       <span className={cn('h-2 w-2 shrink-0 rounded-full', stateTone[state])} />
       <div className="min-w-0 flex-1">
-        <p className="truncate text-xs font-medium">{name}</p>
+        <p className="truncate text-xs font-medium">
+          {objectiveLabel ? (
+            <>
+              <span className="font-mono text-[10px] text-muted-foreground">
+                {objectiveLabel.displayId}
+              </span>{' '}
+              {objectiveLabel.title}
+            </>
+          ) : (
+            name
+          )}
+        </p>
         <p className="truncate text-[11px] capitalize text-muted-foreground">
           {state} · {session.deviceLabel ?? 'Unknown device'}
         </p>
@@ -392,11 +435,14 @@ export function TerminalSessionsSection({
   missionId,
   workspaceId,
   sessions,
+  objectives,
   currentObjectiveId
 }: {
   missionId: string;
   workspaceId: string;
   sessions: TerminalSessionDto[];
+  /** The mission's objectives, used to label each session with what it is running. */
+  objectives: ObjectiveDto[];
   /** The objective whose Latch session is the one worth showing in full. */
   currentObjectiveId: string | null;
 }) {
@@ -438,6 +484,7 @@ export function TerminalSessionsSection({
       <TerminalSessionCard
         missionId={missionId}
         session={current}
+        objectiveLabel={objectiveLabelFor(current, objectives)}
         localExecutionTargetId={localExecutionTargetId}
         onAbsent={onAbsent}
         footer={
@@ -468,6 +515,7 @@ export function TerminalSessionsSection({
                         key={sessionRowKey(session)}
                         missionId={missionId}
                         session={session}
+                        objectiveLabel={objectiveLabelFor(session, objectives)}
                         localExecutionTargetId={localExecutionTargetId}
                         onAbsent={onAbsent}
                       />

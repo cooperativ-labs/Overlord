@@ -38,6 +38,8 @@ type DeviceTokenRow = {
 type JobTarget = {
   profileId: string;
   missionId: string;
+  /** Objective the event was raised for; absent on older queued jobs. */
+  objectiveId: string | null;
   category: PushNotificationCategory;
 };
 
@@ -50,6 +52,7 @@ function parseJob(payloadJson: string): JobTarget | null {
     return {
       profileId: payload.profileId,
       missionId: payload.missionId,
+      objectiveId: typeof payload.objectiveId === 'string' ? payload.objectiveId : null,
       category: payload.category
     };
   } catch {
@@ -84,6 +87,8 @@ function apnsBody(
       aps,
       data: {
         missionId: presentation.missionId,
+        objectiveId: presentation.objectiveId,
+        objectiveDisplayId: presentation.objectiveDisplayId,
         category: presentation.category,
         deepLink: presentation.deepLink
       }
@@ -134,12 +139,14 @@ export async function deliverStandardPush({
   db,
   profileId,
   missionId,
+  objectiveId = null,
   category,
   mode
 }: {
   db: DatabaseClient;
   profileId: string;
   missionId: string;
+  objectiveId?: string | null;
   category: PushNotificationCategory;
   mode: 'alert' | 'silent';
 }): Promise<void> {
@@ -153,6 +160,7 @@ export async function deliverStandardPush({
     db,
     profileId,
     missionId,
+    objectiveId,
     category
   });
   if (!presentation) {
@@ -161,9 +169,10 @@ export async function deliverStandardPush({
     return;
   }
   const { body } = apnsBody(presentation, mode);
-  // One collapse id per (mission, category): a rapid re-delivery replaces the
-  // previous banner instead of stacking, and distinct categories never merge.
-  const collapseId = `${category}:${missionId}`.slice(0, 64);
+  // One collapse id per (objective, category) — falling back to the mission for
+  // mission-scoped events. Keying on the mission alone would let two runs of the
+  // same mission replace each other's banners once they identify objectives.
+  const collapseId = `${category}:${presentation.objectiveId ?? missionId}`.slice(0, 64);
   const config = apnsConfig();
   for (const token of tokens) {
     if (!config) continue; // Local development stays functional without APNs credentials.
@@ -210,6 +219,7 @@ class PushNotificationDispatcher extends WorkerJobPoller {
         db,
         profileId: target.profileId,
         missionId: target.missionId,
+        objectiveId: target.objectiveId,
         category: target.category,
         mode
       });

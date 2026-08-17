@@ -62,7 +62,7 @@ let cliUpdater: CliUpdater | null = null;
 let shuttingDown = false;
 let relaunchAfterQuit = false;
 const pendingOAuthCallbackUrls: string[] = [];
-const pendingMissionIds: string[] = [];
+const pendingMissionRoutes: string[] = [];
 
 process.env.OVERLORD_DESKTOP_VERSION = app.getVersion();
 registerOAuthProtocol();
@@ -173,9 +173,15 @@ function queueDeepLink(url: string | undefined): void {
     void consumePendingOAuthCallbacks();
     return;
   }
-  const missionId = parseMissionDeepLink(url);
-  if (!missionId) return;
-  pendingMissionIds.push(missionId);
+  const target = parseMissionDeepLink(url);
+  if (!target) return;
+  // The objective travels as a search param on the mission route: the panel is
+  // still the mission, with the named objective as the thing to focus.
+  pendingMissionRoutes.push(
+    target.objectiveDisplayId
+      ? `/user/missions/${target.missionId}?objective=${target.objectiveDisplayId}`
+      : `/user/missions/${target.missionId}`
+  );
   if (backendController) showOrCreateMainWindow();
   void consumePendingMissionDeepLinks();
 }
@@ -223,9 +229,9 @@ async function consumePendingMissionDeepLinks(): Promise<void> {
   const active = resolveActiveBackend({ shellOrigin });
   if (!mainWindow.webContents.getURL().startsWith(active.shellOrigin)) return;
 
-  while (pendingMissionIds.length > 0) {
-    const missionId = pendingMissionIds.shift();
-    if (missionId) mainWindow.webContents.send('overlord:navigate', `/user/missions/${missionId}`);
+  while (pendingMissionRoutes.length > 0) {
+    const route = pendingMissionRoutes.shift();
+    if (route) mainWindow.webContents.send('overlord:navigate', route);
   }
 }
 

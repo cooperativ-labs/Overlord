@@ -11,7 +11,7 @@ import { nowIso } from '../packages/core/service/util.ts';
 
 import { requireDatabaseClient, resolveActiveProfileId } from './db.ts';
 import { ApiError } from './errors.ts';
-import { presentationTitle } from './live-activities.ts';
+import { notificationBody, notificationSubject } from './notification-presentation.ts';
 
 type NotificationRow = {
   id: string;
@@ -27,6 +27,8 @@ type NotificationRow = {
   project_id: string;
   mission_title: string;
   display_id: string;
+  objective_display_key: string | null;
+  objective_title: string | null;
 };
 
 function isNotificationType(value: string): value is NotificationType {
@@ -49,7 +51,15 @@ function toNotificationDto(row: NotificationRow): NotificationDto {
     // recomputed from the current mission on every REST read, just as APNs
     // presentation is recomputed at dispatch time.
     presentation: {
-      body: `${row.display_id}: ${presentationTitle(row.mission_title) || 'Untitled mission'} ${NOTIFICATION_CATALOG[row.type].verb}`
+      body: notificationBody(
+        notificationSubject({
+          missionDisplayId: row.display_id,
+          missionTitle: row.mission_title,
+          objectiveDisplayKey: row.objective_display_key,
+          objectiveTitle: row.objective_title
+        }),
+        NOTIFICATION_CATALOG[row.type].verb
+      )
     }
   };
 }
@@ -68,9 +78,10 @@ async function ownedNotificationRow(
   const row = await db.get<NotificationRow>(
     `SELECT n.id, n.workspace_id, n.recipient_profile_id, n.type, n.mission_id, n.objective_id,
             n.created_at, n.read_at, n.revision, n.deleted_at, m.project_id, m.title AS mission_title,
-            m.display_id
+            m.display_id, o.display_key AS objective_display_key, o.title AS objective_title
        FROM notifications n
        JOIN missions m ON m.id = n.mission_id
+       LEFT JOIN objectives o ON o.id = n.objective_id AND o.deleted_at IS NULL
       WHERE n.id = ? AND n.recipient_profile_id = ? AND n.deleted_at IS NULL`,
     [id, profileId]
   );
@@ -92,9 +103,10 @@ export async function listNotifications(): Promise<NotificationDto[]> {
   const rows = await db.all<NotificationRow>(
     `SELECT n.id, n.workspace_id, n.recipient_profile_id, n.type, n.mission_id, n.objective_id,
             n.created_at, n.read_at, n.revision, n.deleted_at, m.project_id, m.title AS mission_title,
-            m.display_id
+            m.display_id, o.display_key AS objective_display_key, o.title AS objective_title
        FROM notifications n
        JOIN missions m ON m.id = n.mission_id
+       LEFT JOIN objectives o ON o.id = n.objective_id AND o.deleted_at IS NULL
       WHERE n.recipient_profile_id = ? AND n.deleted_at IS NULL
       ORDER BY n.created_at DESC, n.id DESC`,
     [profileId]

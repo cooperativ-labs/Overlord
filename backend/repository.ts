@@ -229,7 +229,7 @@ function readProjectStringSetting(settingsJson: string, key: string): string | n
   }
 }
 
-function readProjectColor(settingsJson: string): string | null {
+export function readProjectColor(settingsJson: string): string | null {
   return readProjectStringSetting(settingsJson, PROJECT_COLOR_SETTINGS_KEY);
 }
 
@@ -4189,7 +4189,7 @@ function deliveryIdFromEventPayload(payloadJson: string | null): string | null {
   }
 }
 
-function deliveryReportFromPayload(
+export function deliveryReportFromPayload(
   payloadJson: string | null,
   summary: string
 ): DeliveryReportPayloadV1 {

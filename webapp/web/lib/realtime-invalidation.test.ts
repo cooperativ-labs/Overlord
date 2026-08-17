@@ -46,6 +46,7 @@ test('routes mission branch changes to mission, lists, my missions, branch, and 
     ['mission', 'mission-1'],
     ['project', 'project-1', 'missions'],
     ['workspace', 'my-missions'],
+    ['activity-feed'],
     ['mission', 'mission-1', 'branches'],
     ['worktrees']
   ]);
@@ -79,7 +80,8 @@ test('deduplicates workflow invalidations across objective, request, and session
   assert.deepEqual(calls, [
     ['mission', 'mission-1'],
     ['project', 'project-1', 'missions'],
-    ['workspace', 'my-missions']
+    ['workspace', 'my-missions'],
+    ['activity-feed']
   ]);
 });
 
@@ -114,6 +116,7 @@ test('routes mission events, deliveries, attachments, and shared context to scop
   assert.deepEqual(calls, [
     ['mission', 'mission-1', 'events'],
     ['mission', 'mission-1', 'deliveries'],
+    ['activity-feed'],
     ['objective', 'objective-1', 'attachments'],
     ['mission', 'mission-1', 'context']
   ]);

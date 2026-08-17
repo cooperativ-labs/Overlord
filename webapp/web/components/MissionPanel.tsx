@@ -122,6 +122,11 @@ function DisconnectActivityButton({ mission }: { mission: MissionDetailDto }) {
   const [open, setOpen] = useState(false);
 
   const executingObjective = mission.objectives.find(o => o.state === 'executing');
+  // Disconnect acts on one objective, so the confirmation names that objective
+  // rather than talking about "the mission" (coo:756 §9.2).
+  const objectiveLabel = executingObjective
+    ? [executingObjective.displayId, executingObjective.title?.trim()].filter(Boolean).join(' — ')
+    : '';
 
   const handleDisconnect = async () => {
     if (!executingObjective) return;
@@ -144,11 +149,11 @@ function DisconnectActivityButton({ mission }: { mission: MissionDetailDto }) {
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Disconnect mission activity?</DialogTitle>
+          <DialogTitle>Disconnect this objective?</DialogTitle>
           <DialogDescription>
-            Disconnecting will move the current objective back to the queue. This may prevent any
-            objective currently running against this Mission from reporting progress back to
-            Overlord.
+            {executingObjective
+              ? `Disconnecting moves ${objectiveLabel} back to the queue. Any agent currently running it may no longer be able to report progress back to Overlord.`
+              : 'Disconnecting moves the running objective back to the queue. Any agent currently running it may no longer be able to report progress back to Overlord.'}
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
@@ -321,6 +326,7 @@ export function MissionPanel({
               missionId={mission.id}
               workspaceId={mission.workspaceId}
               sessions={mission.terminalSessions}
+              objectives={mission.objectives}
               currentObjectiveId={
                 deriveObjectiveLifecycleView(mission.objectives).activeObjective?.id ?? null
               }

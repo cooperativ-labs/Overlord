@@ -20,7 +20,8 @@ import { newId, nowIso } from '../packages/core/service/util.ts';
 
 import { requireDatabaseClient, resolveActiveProfileId } from './db.ts';
 import { ApiError } from './errors.ts';
-import { bounded, presentationTitle } from './live-activities.ts';
+import { bounded } from './live-activities.ts';
+import { notificationBody, notificationSubject } from './notification-presentation.ts';
 
 const DEVICE_TOKEN_MAX_LENGTH = 512;
 const BUNDLE_ID_MAX_LENGTH = 255;
@@ -47,6 +48,10 @@ export type PushNotificationPresentation = {
   body: string;
   badge: number;
   missionId: string;
+  /** The objective this push is about, when the enqueuing event knew one. */
+  objectiveId: string | null;
+  /** `coo:756.k7xm`, or `null` on mission-scoped pushes. */
+  objectiveDisplayId: string | null;
   category: PushNotificationCategory;
   deepLink: string;
 };
@@ -317,6 +322,12 @@ type MissionPresentationRow = {
   project_name: string;
 };
 
+type ObjectivePresentationRow = {
+  id: string;
+  display_key: string;
+  title: string | null;
+};
+
 /**
  * Recomputes the payload snapshot from the database at delivery time.
  *
@@ -332,11 +343,14 @@ export async function buildPushNotificationPresentation({
   db,
   profileId,
   missionId,
+  objectiveId = null,
   category
 }: {
   db: DatabaseClient;
   profileId: string;
   missionId: string;
+  /** Objective the notification was raised for; makes the body objective-first. */
+  objectiveId?: string | null;
   category: PushNotificationCategory;
 }): Promise<PushNotificationPresentation | null> {
   const mission = await db.get<MissionPresentationRow>(
@@ -362,12 +376,28 @@ export async function buildPushNotificationPresentation({
     [profileId]
   );
 
-  const title = presentationTitle(mission.title) || 'Untitled mission';
+  // Objective titles are code-adjacent labels, bounded and markdown-stripped by
+  // the same helper as mission titles; objective instruction text is never read.
+  const objective = objectiveId
+    ? ((await db.get<ObjectivePresentationRow>(
+        `SELECT id, display_key, title FROM objectives
+          WHERE id = ? AND mission_id = ? AND deleted_at IS NULL`,
+        [objectiveId, mission.id]
+      )) ?? null)
+    : null;
+  const subject = notificationSubject({
+    missionDisplayId: mission.display_id,
+    missionTitle: mission.title,
+    objectiveDisplayKey: objective?.display_key ?? null,
+    objectiveTitle: objective?.title ?? null
+  });
   return {
     title: bounded(mission.project_name.trim() || 'Project', PROJECT_NAME_MAX_LENGTH),
-    body: `${mission.display_id}: ${title} ${CATEGORY_VERBS[category]}`,
+    body: notificationBody(subject, CATEGORY_VERBS[category]),
     badge: Number(badgeRow?.count ?? 0),
     missionId: mission.id,
+    objectiveId: objective?.id ?? null,
+    objectiveDisplayId: subject.objectiveDisplayId,
     category,
     deepLink: `overlord://missions/${mission.id}`
   };

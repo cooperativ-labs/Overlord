@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+@font-face { font-family: 'Space Grotesk Variable'; src: url('fonts/SpaceGrotesk-Variable.woff2') format('woff2'); font-weight: 300 700; font-display: swap; }
+@font-face { font-family: 'IBM Plex Mono'; src: url('fonts/IBMPlexMono-Regular.woff2') format('woff2'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'IBM Plex Mono'; src: url('fonts/IBMPlexMono-Medium.woff2') format('woff2'); font-weight: 500; font-display: swap; }
+html, body { height: 100%; margin: 0; overflow: hidden; }
+body { font-family: 'Space Grotesk Variable', ui-sans-serif, system-ui, sans-serif; -webkit-font-smoothing: antialiased; background: oklch(0.99 0.002 106.423); color: oklch(0.147 0.004 49.25); }
+a { color: oklch(0.216 0.006 56.043); text-decoration: none; }
+a:hover { color: oklch(0.147 0.004 49.25); text-decoration: underline; }
+@keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+@keyframes feedIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes pulseDot { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+</style>
+</helmet>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><symbol id="i-inbox" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-6l-2 3h-4l-2-3H2"></path><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path></symbol><symbol id="i-kanban" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 5v11"></path><path d="M12 5v6"></path><path d="M18 5v14"></path></symbol><symbol id="i-settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></symbol><symbol id="i-radio" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"></path><path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"></path><circle cx="12" cy="12" r="2"></circle><path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"></path><path d="M19.1 4.9C23 8.8 23 15.1 19.1 19"></path></symbol><symbol id="i-chevron-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></symbol><symbol id="i-chevrons-up-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 15 5 5 5-5"></path><path d="m7 9 5-5 5 5"></path></symbol><symbol id="i-panel-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"></rect><path d="M9 3v18"></path></symbol><symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"></path><path d="M21 3v5h-5"></path><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"></path><path d="M8 16H3v5"></path></symbol><symbol id="i-ticket-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"></path><path d="M9 12h6"></path><path d="M12 9v6"></path></symbol><symbol id="i-bell" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.268 21a2 2 0 0 0 3.464 0"></path><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"></path></symbol><symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></symbol><symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"></path><path d="M12 5v14"></path></symbol><symbol id="i-loader" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"></path></symbol><symbol id="i-play" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 3 20 12 6 21 6 3"></polygon></symbol><symbol id="i-arrow-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 7-7 7 7"></path><path d="M12 19V5"></path></symbol><symbol id="i-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path><path d="M10 11v6"></path><path d="M14 11v6"></path></symbol><symbol id="i-fast-forward" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 19 22 12 13 5 13 19"></polygon><polygon points="2 19 11 12 2 5 2 19"></polygon></symbol><symbol id="i-package" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7.5 4.27 9 5.15"></path><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"></path><path d="m3.3 7 8.7 5 8.7-5"></path><path d="M12 22V12"></path></symbol><symbol id="i-folder-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 14 1.45-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.55 6a2 2 0 0 1-1.94 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"></path></symbol><symbol id="i-git-branch" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3v12"></path><circle cx="18" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><path d="M18 9a9 9 0 0 1-9 9"></path></symbol><symbol id="i-check-circle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.801 10A10 10 0 1 1 17 3.335"></path><path d="m9 11 3 3L22 4"></path></symbol><symbol id="i-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></symbol><symbol id="i-help" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><path d="M12 17h.01"></path></symbol><symbol id="i-rocket" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91 0z"></path><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"></path><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"></path><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"></path></symbol><symbol id="i-terminal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m4 17 6-6-6-6"></path><path d="M12 19h8"></path></symbol><symbol id="i-file-diff" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"></path><path d="M14 2v4a2 2 0 0 0 2 2h4"></path><path d="M12 12v6"></path><path d="M9 15h6"></path></symbol><symbol id="i-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M12 6v6l4 2"></path></symbol><symbol id="i-filter" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M7 12h10"></path><path d="M10 18h4"></path></symbol><symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></symbol><symbol id="i-list-checks" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 17 2 2 4-4"></path><path d="m3 7 2 2 4-4"></path><path d="M13 6h8"></path><path d="M13 12h8"></path><path d="M13 18h8"></path></symbol><symbol id="i-scale" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"></path><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"></path><path d="M7 21h10"></path><path d="M12 3v18"></path><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"></path></symbol></svg>
+
+<div style="display:flex;height:100vh;width:100%;overflow:hidden;background:oklch(0.99 0.002 106.423);color:oklch(0.147 0.004 49.25);font-size:14px">
+
+  <aside style="width:256px;flex:none;display:flex;flex-direction:column;background:oklch(0.985 0.001 106.423);border-right:1px solid oklch(0.918 0.003 100)">
+    <div style="padding:8px">
+      <button type="button" style="display:flex;width:100%;align-items:center;gap:8px;padding:8px;border:none;border-radius:10px;background:transparent;text-align:left;cursor:pointer;color:inherit;font-family:inherit" style-hover="background:oklch(0.942 0.002 103)">
+        <span style="display:flex;width:32px;height:32px;flex:none;align-items:center;justify-content:center;overflow:hidden;border-radius:8px;background:oklch(0.216 0.006 56.043)"><img src="assets/256.png" alt="" style="width:100%;height:100%;object-fit:cover"></span>
+        <span style="display:grid;flex:1;min-width:0;line-height:1.2">
+          <span style="font-size:14px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Cooperativ Labs</span>
+          <span style="font-size:12px;color:oklch(0.553 0.013 58.071)">Organization</span>
+        </span>
+        <svg style="width:16px;height:16px;flex:none;color:oklch(0.553 0.013 58.071)"><use href="#i-chevrons-up-down"></use></svg>
+      </button>
+    </div>
+
+    <div style="flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:4px;padding:0 8px 8px">
+      <div style="padding:8px 8px 4px;font-size:12px;font-weight:500;color:oklch(0.553 0.013 58.071)">Organization</div>
+      <a href="#" style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;background:oklch(0.942 0.002 103);font-size:14px;font-weight:500;color:oklch(0.147 0.004 49.25);text-decoration:none">
+        <svg style="width:16px;height:16px;flex:none"><use href="#i-inbox"></use></svg><span>Inbox (3)</span>
+      </a>
+      <a href="#" style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;font-size:14px;color:oklch(0.147 0.004 49.25);text-decoration:none" style-hover="background:oklch(0.942 0.002 103)">
+        <svg style="width:16px;height:16px;flex:none"><use href="#i-kanban"></use></svg><span>My Missions</span>
+      </a>
+
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:4px;padding:12px 8px 2px">
+        <div style="display:flex;min-width:0;flex:1;align-items:center;gap:4px">
+          <svg style="width:16px;height:16px;flex:none;color:oklch(0.553 0.013 58.071)"><use href="#i-chevron-down"></use></svg>
+          <span style="font-size:12px;font-weight:500;color:oklch(0.553 0.013 58.071);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Core Platform</span>
+        </div>
+        <div style="display:flex;flex:none;align-items:center;gap:2px;color:oklch(0.553 0.013 58.071)">
+          <svg style="width:14px;height:14px"><use href="#i-settings"></use></svg>
+          <svg style="width:14px;height:14px"><use href="#i-plus"></use></svg>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <a href="#" style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;font-size:14px;font-weight:500;color:oklch(0.147 0.004 49.25 / 0.8);text-decoration:none" style-hover="background:oklch(0.942 0.002 103)"><span style="width:8px;height:8px;flex:none;border-radius:9999px;background:#e0632f;box-shadow:0 0 0 1px oklch(0.918 0.003 100)"></span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">overlord-core</span></a>
+        <a href="#" style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;font-size:14px;font-weight:500;color:oklch(0.147 0.004 49.25 / 0.8);text-decoration:none" style-hover="background:oklch(0.942 0.002 103)"><span style="width:8px;height:8px;flex:none;border-radius:9999px;background:#2f8fe0;box-shadow:0 0 0 1px oklch(0.918 0.003 100)"></span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">webapp</span></a>
+        <a href="#" style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;font-size:14px;font-weight:500;color:oklch(0.147 0.004 49.25 / 0.8);text-decoration:none" style-hover="background:oklch(0.942 0.002 103)"><span style="width:8px;height:8px;flex:none;border-radius:9999px;background:#7c5ce0;box-shadow:0 0 0 1px oklch(0.918 0.003 100)"></span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">remote-agent</span></a>
+      </div>
+
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:4px;padding:12px 8px 2px">
+        <div style="display:flex;min-width:0;flex:1;align-items:center;gap:4px">
+          <svg style="width:16px;height:16px;flex:none;color:oklch(0.553 0.013 58.071)"><use href="#i-chevron-down"></use></svg>
+          <span style="font-size:12px;font-weight:500;color:oklch(0.553 0.013 58.071);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Growth</span>
+        </div>
+        <div style="display:flex;flex:none;align-items:center;gap:2px;color:oklch(0.553 0.013 58.071)">
+          <svg style="width:14px;height:14px"><use href="#i-settings"></use></svg>
+          <svg style="width:14px;height:14px"><use href="#i-plus"></use></svg>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <a href="#" style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;font-size:14px;font-weight:500;color:oklch(0.147 0.004 49.25 / 0.8);text-decoration:none" style-hover="background:oklch(0.942 0.002 103)"><span style="width:8px;height:8px;flex:none;border-radius:9999px;background:#2fb08a;box-shadow:0 0 0 1px oklch(0.918 0.003 100)"></span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">marketing-site</span></a>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:4px;padding:8px">
+      <button type="button" style="display:flex;align-items:center;gap:8px;padding:6px 8px;border:none;border-radius:8px;background:transparent;font-family:inherit;font-size:14px;color:oklch(0.147 0.004 49.25);cursor:pointer" style-hover="background:oklch(0.942 0.002 103)">
+        <svg style="width:16px;height:16px;flex:none"><use href="#i-settings"></use></svg><span>Settings</span>
+      </button>
+      <button type="button" style="display:flex;align-items:center;gap:8px;padding:6px 8px;border:none;border-radius:8px;background:transparent;font-family:inherit;font-size:14px;color:oklch(0.553 0.013 58.071);cursor:pointer" style-hover="background:oklch(0.942 0.002 103)">
+        <span style="position:relative;display:flex;width:16px;height:16px;flex:none;align-items:center;justify-content:center">
+          <svg style="width:16px;height:16px"><use href="#i-radio"></use></svg>
+          <span style="position:absolute;top:-2px;right:-2px;width:8px;height:8px;border-radius:9999px;background:#10b981;animation:pulseDot 2s ease-in-out infinite"></span>
+        </span>
+        <span style="flex:1;text-align:left">Runner active</span>
+        <span style="border-radius:9999px;background:rgba(16,185,129,0.15);padding:0 6px;font-size:12px;font-weight:500;color:#059669">2</span>
+      </button>
+      <div style="height:1px;background:oklch(0.918 0.003 100);margin:4px 0"></div>
+      <button type="button" style="display:flex;align-items:center;gap:8px;padding:8px;border:none;border-radius:10px;background:transparent;text-align:left;cursor:pointer;color:inherit;font-family:inherit" style-hover="background:oklch(0.942 0.002 103)">
+        <span style="display:flex;width:32px;height:32px;flex:none;align-items:center;justify-content:center;border-radius:8px;background:oklch(0.97 0.001 106.424);font-size:12px;font-weight:500">JR</span>
+        <span style="display:grid;flex:1;min-width:0;line-height:1.2">
+          <span style="font-size:14px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Jesse Rice</span>
+          <span style="font-size:12px;color:oklch(0.553 0.013 58.071);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">jesse@cooperativ.io</span>
+        </span>
+        <svg style="width:16px;height:16px;flex:none;color:oklch(0.553 0.013 58.071)"><use href="#i-chevrons-up-down"></use></svg>
+      </button>
+    </div>
+  </aside>
+
+  <div style="display:flex;min-width:0;flex:1;flex-direction:column;overflow:hidden">
+    <header style="display:flex;height:44px;flex:none;align-items:center;justify-content:space-between;gap:8px;border-bottom:1px solid oklch(0.923 0.003 48.717);background:oklch(0.985 0.001 106.423);padding:4px 16px">
+      <div style="display:flex;flex:none;align-items:center;gap:4px;color:oklch(0.147 0.004 49.25)">
+        <button type="button" style="display:flex;width:28px;height:28px;align-items:center;justify-content:center;border:none;border-radius:8px;background:transparent;color:inherit;cursor:pointer" style-hover="background:oklch(0.97 0.001 106.424)"><svg style="width:16px;height:16px"><use href="#i-panel-left"></use></svg></button>
+        <button type="button" style="display:flex;width:28px;height:28px;align-items:center;justify-content:center;border:none;border-radius:8px;background:transparent;color:inherit;cursor:pointer" style-hover="background:oklch(0.97 0.001 106.424)"><svg style="width:16px;height:16px"><use href="#i-refresh"></use></svg></button>
+      </div>
+      <div style="display:flex;min-width:0;flex:1;justify-content:center;padding:0 8px">
+        <div style="position:relative;width:100%;min-width:0;max-width:576px">
+          <svg style="position:absolute;left:10px;top:50%;transform:translateY(-50%);width:14px;height:14px;color:oklch(0.553 0.013 58.071)"><use href="#i-search"></use></svg>
+          <input type="text" placeholder="Search missions…" style="width:100%;height:32px;box-sizing:border-box;border:1px solid oklch(0.923 0.003 48.717);border-radius:8px;background:oklch(0.99 0.002 106.423);padding:0 44px 0 30px;font-family:inherit;font-size:14px;color:oklch(0.147 0.004 49.25);outline:none">
+          <span style="position:absolute;right:8px;top:50%;transform:translateY(-50%);font-family:'IBM Plex Mono',monospace;font-size:11px;color:oklch(0.709 0.01 56.259)">⌘F</span>
+        </div>
+      </div>
+      <div style="display:flex;flex:none;align-items:center;gap:8px">
+        <button type="button" style="position:relative;display:flex;width:28px;height:28px;align-items:center;justify-content:center;border:none;border-radius:8px;background:transparent;color:oklch(0.147 0.004 49.25);cursor:pointer" style-hover="background:oklch(0.97 0.001 106.424)">
+          <svg style="width:16px;height:16px"><use href="#i-bell"></use></svg>
+          <span style="position:absolute;top:3px;right:4px;width:6px;height:6px;border-radius:9999px;background:#e0632f"></span>
+        </button>
+        <button type="button" style="display:inline-flex;height:32px;align-items:center;gap:6px;border:none;border-radius:10px;background:oklch(0.216 0.006 56.043);padding:0 10px;font-family:inherit;font-size:14px;font-weight:500;color:oklch(0.985 0.001 106.423);cursor:pointer" style-hover="background:oklch(0.216 0.006 56.043 / 0.8)">
+          <svg style="width:16px;height:16px"><use href="#i-ticket-plus"></use></svg><span>New Mission</span>
+        </button>
+      </div>
+    </header>
+
+    <div style="display:flex;min-height:0;min-width:0;flex:1;overflow-x:auto;overflow-y:hidden">
+
+      <section style="flex:0 1 440px;min-width:340px;display:flex;flex-direction:column;border-right:1px solid oklch(0.923 0.003 48.717);min-height:0">
+        <div style="flex:none;padding:20px 24px 12px">
+          <p style="margin:0 0 6px;font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:0.24em;color:oklch(0.709 0.01 56.259)">Unallocated · 3</p>
+          <h1 style="margin:0;font-size:20px;font-weight:600;letter-spacing:-0.02em">Inbox</h1>
+          <p style="margin:6px 0 0;font-size:13px;line-height:1.5;color:oklch(0.553 0.013 58.071);text-wrap:pretty">Unassigned tasks stay private until you assign a project. After you assign one, keep working here — the card stays until you leave Inbox.</p>
+        </div>
+        <div style="flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:16px;padding:4px 24px 24px">
+
+          <article style="display:flex;flex-direction:column;gap:4px">
+            <div style="width:100%;overflow:hidden;border:1px solid oklch(0.553 0.013 58.071 / 0.2);border-radius:14px;background:oklch(0.99 0.002 106.423)">
+              <div style="padding:16px;font-size:14px;line-height:1.6;min-height:96px">Cache the agent catalog per workspace so the launch popover stops refetching on every objective open.</div>
+              <div style="display:flex;flex-wrap:nowrap;align-items:center;justify-content:space-between;gap:8px;border-top:1px solid oklch(0.923 0.003 48.717 / 0.6);padding:8px 12px">
+                <div style="display:flex;min-width:0;align-items:center;gap:6px">
+                  <button type="button" style="display:inline-flex;height:32px;align-items:center;gap:6px;border:1px solid oklch(0.923 0.003 48.717);border-radius:8px;background:oklch(0.99 0.002 106.423);padding:0 8px;font-family:inherit;font-size:12px;color:oklch(0.553 0.013 58.071);box-shadow:0 1px 2px rgba(0,0,0,0.05);cursor:pointer" style-hover="background:oklch(0.97 0.001 106.424)">
+                    <span style="width:12px;height:12px;flex:none;border-radius:4px;border:1px solid oklch(0.553 0.013 58.071)"></span>
+                    <span>No project</span>
+                    <svg style="width:12px;height:12px;flex:none"><use href="#i-chevron-down"></use></svg>
+                  </button>
+                </div>
+                <div style="display:flex;flex:none;align-items:center;gap:6px">
+                  <button type="button" style="display:inline-flex;height:32px;width:32px;align-items:center;justify-content:center;border:none;border-radius:10px;background:oklch(0.97 0.001 106.424);color:oklch(0.553 0.013 58.071);cursor:pointer" style-hover="background:oklch(0.94 0.002 106)"><svg style="width:14px;height:14px"><use href="#i-trash"></use></svg></button>
+                  <button type="button" style="display:inline-flex;height:32px;align-items:center;gap:6px;border:none;border-radius:10px;background:oklch(0.97 0.001 106.424);padding:0 12px;font-family:inherit;font-size:12px;font-weight:500;color:oklch(0.216 0.006 56.043);cursor:pointer" style-hover="background:oklch(0.94 0.002 106)"><svg style="width:14px;height:14px"><use href="#i-arrow-up"></use></svg><span>Save</span></button>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <article style="display:flex;flex-direction:column;gap:4px">
+            <div style="width:100%;overflow:hidden;border:1px solid oklch(0.553 0.013 58.071 / 0.2);border-radius:14px;background:oklch(0.99 0.002 106.423)">
+              <div style="padding:16px;font-size:14px;line-height:1.6;min-height:96px">Audit every `/api/inbox` handler for the missing workspace scope check before the hosted edition ships.</div>
+              <div style="display:flex;flex-wrap:nowrap;align-items:center;justify-content:space-between;gap:8px;border-top:1px solid oklch(0.923 0.003 48.717 / 0.6);padding:8px 12px">
+                <div style="display:flex;min-width:0;align-items:center;gap:6px">
+                  <button type="button" style="display:inline-flex;height:32px;align-items:center;gap:6px;border:1px solid oklch(0.923 0.003 48.717);border-radius:8px;background:oklch(0.99 0.002 106.423);padding:0 8px;font-family:inherit;font-size:12px;color:oklch(0.553 0.013 58.071);box-shadow:0 1px 2px rgba(0,0,0,0.05);cursor:pointer" style-hover="background:oklch(0.97 0.001 106.424)">
+                    <span style="width:12px;height:12px;flex:none;border-radius:4px;border:1px solid #e0632f;background:#e0632f"></span>
+                    <span style="color:oklch(0.147 0.004 49.25)">overlord-core</span>
+                    <svg style="width:12px;height:12px;flex:none"><use href="#i-chevron-down"></use></svg>
+                  </button>
+                  <button type="button" style="display:inline-flex;height:32px;align-items:center;gap:4px;border:1px solid oklch(0.923 0.003 48.717);border-radius:8px;background:oklch(0.99 0.002 106.423);padding:0 8px;font-family:inherit;font-size:12px;color:oklch(0.147 0.004 49.25);box-shadow:0 1px 2px rgba(0,0,0,0.05);cursor:pointer" style-hover="background:oklch(0.97 0.001 106.424)"><svg style="width:14px;height:14px;flex:none"><use href="#i-folder-open"></use></svg><span>backend</span><svg style="width:12px;height:12px;flex:none"><use href="#i-chevron-down"></use></svg></button>
+                </div>
+                <div style="display:flex;flex:none;align-items:center;gap:6px">
+                  <button type="button" style="display:inline-flex;height:32px;align-items:center;gap:4px;border:1px solid oklch(0.923 0.003 48.717);border-radius:8px;background:oklch(0.99 0.002 106.423);padding:0 8px;font-family:inherit;font-size:12px;color:oklch(0.147 0.004 49.25);box-shadow:0 1px 2px rgba(0,0,0,0.05);cursor:pointer" style-hover="background:oklch(0.97 0.001 106.424)"><img src="assets/icons/claude-code.svg" alt="" style="width:14px;height:14px;flex:none"><span>Sonnet 4.5</span><svg style="width:12px;height:12px;flex:none"><use href="#i-chevron-down"></use></svg></button>
+                  <button type="button" style="display:inline-flex;height:32px;align-items:center;gap:6px;border:none;border-radius:10px;background:oklch(0.97 0.001 106.424);padding:0 12px;font-family:inherit;font-size:12px;font-weight:500;color:oklch(0.216 0.006 56.043);cursor:pointer" style-hover="background:oklch(0.94 0.002 106)"><svg style="width:14px;height:14px"><use href="#i-arrow-up"></use></svg><span>Save</span></button>
+                  <button type="button" style="display:inline-flex;height:32px;align-items:center;gap:6px;border:none;border-radius:10px;background:oklch(0.216 0.006 56.043);padding:0 12px;font-family:inherit;font-size:12px;font-weight:500;color:oklch(0.985 0.001 106.423);cursor:pointer" style-hover="background:oklch(0.216 0.006 56.043 / 0.8)"><svg style="width:14px;height:14px"><use href="#i-play"></use></svg><span>Run</span></button>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <article style="display:flex;flex-direction:column;gap:4px">
+            <div style="width:100%;overflow:hidden;border:1px solid oklch(0.553 0.013 58.071 / 0.2);border-radius:14px;background:oklch(0.99 0.002 106.423)">
+              <div style="padding:16px;font-size:14px;line-height:1.6;min-height:96px">Draft the CLI release notes for ovld 0.9 — attach agent flags, Latch session provider, and the new inbox promote flow.</div>
+              <div style="display:flex;flex-wrap:nowrap;align-items:center;justify-content:space-between;gap:8px;border-top:1px solid oklch(0.923 0.003 48.717 / 0.6);padding:8px 12px">
+                <div style="display:flex;min-width:0;align-items:center;gap:6px">
+                  <button type="button" style="display:inline-flex;height:32px;align-items:center;gap:6px;border:1px solid oklch(0.923 0.003 48.717);border-radius:8px;background:oklch(0.99 0.002 106.423);padding:0 8px;font-family:inherit;font-size:12px;color:oklch(0.553 0.013 58.071);box-shadow:0 1px 2px rgba(0,0,0,0.05);cursor:pointer" style-hover="background:oklch(0.97 0.001 106.424)">
+                    <span style="width:12px;height:12px;flex:none;border-radius:4px;border:1px solid oklch(0.553 0.013 58.071)"></span>
+                    <span>No project</span>
+                    <svg style="width:12px;height:12px;flex:none"><use href="#i-chevron-down"></use></svg>
+                  </button>
+                </div>
+                <div style="display:flex;flex:none;align-items:center;gap:6px">
+                  <button type="button" style="display:inline-flex;height:32px;width:32px;align-items:center;justify-content:center;border:none;border-radius:10px;background:oklch(0.97 0.001 106.424);color:oklch(0.553 0.013 58.071);cursor:pointer" style-hover="background:oklch(0.94 0.002 106)"><svg style="width:14px;height:14px"><use href="#i-trash"></use></svg></button>
+                  <button type="button" style="display:inline-flex;height:32px;align-items:center;gap:6px;border:none;border-radius:10px;background:oklch(0.97 0.001 106.424);padding:0 12px;font-family:inherit;font-size:12px;font-weight:500;color:oklch(0.216 0.006 56.043);cursor:pointer" style-hover="background:oklch(0.94 0.002 106)"><svg style="width:14px;height:14px"><use href="#i-arrow-up"></use></svg><span>Save</span></button>
+                </div>
+              </div>
+            </div>
+          </article>
+
+        </div>
+      </section>
+
+      <section style="display:flex;flex:1 0 560px;min-width:560px;flex-direction:column;min-height:0">
+        <div style="flex:none;border-bottom:1px solid oklch(0.923 0.003 48.717);padding:20px 28px 12px">
+          <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px">
+            <div>
+              <p style="margin:0 0 6px;font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:0.24em;color:oklch(0.709 0.01 56.259)">Objective activity</p>
+              <h2 style="margin:0;font-size:20px;font-weight:600;letter-spacing:-0.02em">Live feed</h2>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:oklch(0.553 0.013 58.071)">
+                <span style="width:6px;height:6px;border-radius:9999px;background:#10b981;animation:pulseDot 2s ease-in-out infinite"></span>
+                <span>{{ liveLabel }}</span>
+              </span>
+            </div>
+          </div>
+
+          <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding-top:14px">
+            <button type="button" onClick="{{ cycleWorkspace }}" style="display:inline-flex;height:30px;align-items:center;gap:6px;border:1px solid oklch(0.923 0.003 48.717);border-radius:8px;background:oklch(0.99 0.002 106.423);padding:0 8px;font-family:inherit;font-size:12px;color:oklch(0.147 0.004 49.25);box-shadow:0 1px 2px rgba(0,0,0,0.05);cursor:pointer" style-hover="background:oklch(0.97 0.001 106.424)">
+              <svg style="width:14px;height:14px;flex:none;color:oklch(0.553 0.013 58.071)"><use href="#i-filter"></use></svg>
+              <span>{{ workspaceLabel }}</span>
+              <svg style="width:12px;height:12px;flex:none"><use href="#i-chevron-down"></use></svg>
+            </button>
+            <button type="button" onClick="{{ cycleProject }}" style="display:inline-flex;height:30px;align-items:center;gap:6px;border:1px solid oklch(0.923 0.003 48.717);border-radius:8px;background:oklch(0.99 0.002 106.423);padding:0 8px;font-family:inherit;font-size:12px;color:oklch(0.147 0.004 49.25);box-shadow:0 1px 2px rgba(0,0,0,0.05);cursor:pointer" style-hover="background:oklch(0.97 0.001 106.424)">
+              <span style="width:10px;height:10px;flex:none;border-radius:4px;border:1px solid oklch(0.553 0.013 58.071);background:{{ projectFilterColor }}"></span>
+              <span>{{ projectLabel }}</span>
+              <svg style="width:12px;height:12px;flex:none"><use href="#i-chevron-down"></use></svg>
+            </button>
+            <span style="width:1px;height:20px;background:oklch(0.923 0.003 48.717);margin:0 2px"></span>
+            <sc-for list="{{ kindChips }}" as="chip" hint-placeholder-count="4">
+              <button type="button" onClick="{{ chip.toggle }}" style="display:inline-flex;height:30px;align-items:center;gap:6px;border-radius:9999px;padding:0 12px;font-family:inherit;font-size:12px;font-weight:500;cursor:pointer;border:1px solid {{ chip.borderColor }};background:{{ chip.bg }};color:{{ chip.fg }}">
+                <svg style="width:13px;height:13px;flex:none"><use href="{{ chip.icon }}"></use></svg>
+                <span>{{ chip.label }}</span>
+                <span style="font-family:'IBM Plex Mono',monospace;opacity:0.7">{{ chip.count }}</span>
+              </button>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="flex:1;min-height:0;overflow-y:auto;padding:20px 28px 40px">
+          <div style="display:flex;flex-direction:column;gap:14px;max-width:820px">
+            <sc-for list="{{ items }}" as="item" hint-placeholder-count="4">
+              <div style="animation:{{ item.anim }}">
+
+                <sc-if value="{{ item.isExecuting }}" hint-placeholder-val="{{ false }}">
+                  <article style="position:relative;overflow:hidden;border:1px solid oklch(0.923 0.003 48.717);border-radius:14px;background:oklch(0.99 0.002 106.423);box-shadow:0 1px 2px rgba(0,0,0,0.05)">
+                    <div style="pointer-events:none;position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(16,185,129,0.16),transparent);background-size:200% 100%;animation:shimmer 3s linear infinite"></div>
+                    <div style="position:relative;padding:14px 16px 12px">
+                      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                        <span style="display:inline-flex;align-items:center;gap:6px;border-radius:9999px;background:rgba(59,130,246,0.15);box-shadow:inset 0 0 0 1px rgba(96,165,250,0.3);padding:2px 9px;font-size:11px;font-weight:500;color:#1d4ed8">
+                          <svg style="width:12px;height:12px;animation:spin 1s linear infinite"><use href="#i-loader"></use></svg>
+                          <span>executing</span>
+                        </span>
+                        <span style="display:inline-flex;align-items:center;gap:5px;font-size:12px;color:oklch(0.553 0.013 58.071)">
+                          <span style="width:9px;height:9px;border-radius:4px;background:{{ item.projectColor }}"></span>
+                          <span>{{ item.projectName }}</span>
+                        </span>
+                        <span style="color:oklch(0.709 0.01 56.259)">·</span>
+                        <a href="#" style="font-size:12px;color:oklch(0.553 0.013 58.071)">{{ item.missionTitle }}</a>
+                        <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:oklch(0.709 0.01 56.259)">{{ item.objectiveDisplayId }}</span>
+                        <span style="margin-left:auto;display:inline-flex;align-items:center;gap:5px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:oklch(0.553 0.013 58.071)">
+                          <svg style="width:12px;height:12px"><use href="#i-clock"></use></svg>
+                          <span>{{ item.elapsed }}</span>
+                        </span>
+                      </div>
+                      <h3 style="margin:10px 0 0;font-size:15px;font-weight:500;letter-spacing:-0.01em;line-height:1.35;text-wrap:pretty">{{ item.title }}</h3>
+                      <p style="margin:6px 0 0;font-size:13px;line-height:1.5;color:oklch(0.553 0.013 58.071);text-wrap:pretty">{{ item.latest }}</p>
+                      <div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding-top:12px">
+                        <span style="display:inline-flex;height:26px;align-items:center;gap:5px;border:1px solid oklch(0.923 0.003 48.717);border-radius:8px;background:oklch(0.99 0.002 106.423);padding:0 8px;font-size:11px">
+                          <img src="{{ item.agentIcon }}" alt="" style="width:13px;height:13px">
+                          <span>{{ item.agentLabel }}</span>
+                        </span>
+                        <span style="display:inline-flex;height:26px;align-items:center;gap:5px;border:1px solid oklch(0.923 0.003 48.717);border-radius:8px;background:oklch(0.99 0.002 106.423);padding:0 8px;font-size:11px">
+                          <svg style="width:13px;height:13px;color:oklch(0.553 0.013 58.071)"><use href="#i-folder-open"></use></svg>
+                          <span>{{ item.resource }}</span>
+                        </span>
+                        <span style="display:inline-flex;height:26px;align-items:center;gap:5px;border:1px solid oklch(0.923 0.003 48.717);border-radius:8px;background:oklch(0.99 0.002 106.423);padding:0 8px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:oklch(0.553 0.013 58.071)">
+                          <svg style="width:13px;height:13px"><use href="#i-git-branch"></use></svg>
+                          <span>{{ item.branch }}</span>
+                        </span>
+                        <span style="margin-left:auto;display:inline-flex;align-items:center;gap:10px">
+                          <a href="#" style="display:inline-flex;align-items:center;gap:5px;font-size:12px;color:oklch(0.553 0.013 58.071)"><svg style="width:13px;height:13px"><use href="#i-terminal"></use></svg><span>Open terminal</span></a>
+                        </span>
+                      </div>
+                    </div>
+                    <sc-if value="{{ item.hasQueue }}" hint-placeholder-val="{{ false }}">
+                      <footer style="position:relative;border-top:1px solid oklch(0.923 0.003 48.717);background:oklch(0.97 0.001 106.424 / 0.6);padding:10px 16px 12px">
+                        <div style="display:flex;align-items:center;gap:6px;color:oklch(0.553 0.013 58.071)">
+                          <svg style="width:13px;height:13px;flex:none"><use href="#i-fast-forward"></use></svg>
+                          <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:0.22em">{{ item.queueLabel }}</span>
+                        </div>
+                        <ol style="margin:8px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px">
+                          <sc-for list="{{ item.queue }}" as="next" hint-placeholder-count="2">
+                            <li style="display:flex;align-items:center;gap:8px;min-width:0">
+                              <span style="display:inline-flex;width:18px;height:18px;flex:none;align-items:center;justify-content:center;border-radius:6px;background:oklch(0.923 0.003 48.717);font-family:'IBM Plex Mono',monospace;font-size:10px;color:oklch(0.553 0.013 58.071)">{{ next.step }}</span>
+                              <span style="font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:oklch(0.147 0.004 49.25 / 0.85)">{{ next.title }}</span>
+                              <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:oklch(0.709 0.01 56.259);flex:none">{{ next.displayId }}</span>
+                              <span style="display:inline-flex;flex:none;align-items:center;gap:4px;margin-left:auto;font-size:11px;color:oklch(0.553 0.013 58.071)">
+                                <img src="{{ next.agentIcon }}" alt="" style="width:12px;height:12px">
+                                <span>{{ next.agentLabel }}</span>
+                              </span>
+                            </li>
+                          </sc-for>
+                        </ol>
+                      </footer>
+                    </sc-if>
+                  </article>
+                </sc-if>
+
+                <sc-if value="{{ item.isDelivery }}" hint-placeholder-val="{{ false }}">
+                  <article style="overflow:hidden;border:1px solid oklch(0.923 0.003 48.717);border-radius:14px;background:oklch(0.99 0.002 106.423);box-shadow:0 1px 2px rgba(0,0,0,0.05)">
+                    <div style="padding:14px 16px 12px">
+                      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                        <span style="display:inline-flex;align-items:center;gap:6px;border-radius:9999px;background:rgba(16,185,129,0.15);box-shadow:inset 0 0 0 1px rgba(52,211,153,0.3);padding:2px 9px;font-size:11px;font-weight:500;color:#047857">
+                          <svg style="width:12px;height:12px"><use href="#i-package"></use></svg>
+                          <span>delivered</span>
+                        </span>
+                        <span style="display:inline-flex;align-items:center;gap:5px;font-size:12px;color:oklch(0.553 0.013 58.071)">
+                          <span style="width:9px;height:9px;border-radius:4px;background:{{ item.projectColor }}"></span>
+                          <span>{{ item.projectName }}</span>
+                        </span>
+                        <span style="color:oklch(0.709 0.01 56.259)">·</span>
+                        <a href="#" style="font-size:12px;color:oklch(0.553 0.013 58.071)">{{ item.missionTitle }}</a>
+                        <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:oklch(0.709 0.01 56.259)">{{ item.objectiveDisplayId }}</span>
+                        <span style="margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:11px;color:oklch(0.553 0.013 58.071)">{{ item.rel }}</span>
+                      </div>
+                      <h3 style="margin:10px 0 0;font-size:15px;font-weight:500;letter-spacing:-0.01em;line-height:1.35;text-wrap:pretty">{{ item.title }}</h3>
+                      <p style="margin:6px 0 0;font-size:13px;line-height:1.55;color:oklch(0.553 0.013 58.071);text-wrap:pretty">{{ item.summary }}</p>
+                      <div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding-top:12px">
+                        <span style="display:inline-flex;height:26px;align-items:center;gap:5px;border:1px solid oklch(0.923 0.003 48.717);border-radius:8px;background:oklch(0.99 0.002 106.423);padding:0 8px;font-size:11px">
+                          <svg style="width:13px;height:13px;color:oklch(0.553 0.013 58.071)"><use href="#i-file-diff"></use></svg>
+                          <span>{{ item.filesLabel }}</span>
+                          <span style="font-family:'IBM Plex Mono',monospace;color:#047857">{{ item.plus }}</span>
+                          <span style="font-family:'IBM Plex Mono',monospace;color:#b91c1c">{{ item.minus }}</span>
+                        </span>
+                        <span style="display:inline-flex;height:26px;align-items:center;gap:5px;border:1px solid oklch(0.923 0.003 48.717);border-radius:8px;background:oklch(0.99 0.002 106.423);padding:0 8px;font-size:11px">
+                          <img src="{{ item.agentIcon }}" alt="" style="width:13px;height:13px">
+                          <span>{{ item.agentLabel }}</span>
+                        </span>
+                        <button type="button" onClick="{{ item.toggle }}" style="margin-left:auto;display:inline-flex;height:26px;align-items:center;gap:5px;border:none;border-radius:8px;background:transparent;padding:0 6px;font-family:inherit;font-size:12px;font-weight:500;color:oklch(0.216 0.006 56.043);cursor:pointer" style-hover="background:oklch(0.97 0.001 106.424)">
+                          <span>{{ item.toggleLabel }}</span>
+                          <svg style="width:13px;height:13px;transform:{{ item.chevron }}"><use href="#i-chevron-down"></use></svg>
+                        </button>
+                      </div>
+                    </div>
+                    <sc-if value="{{ item.expanded }}" hint-placeholder-val="{{ false }}">
+                      <div style="border-top:1px solid oklch(0.923 0.003 48.717);background:oklch(0.97 0.001 106.424 / 0.5);padding:14px 16px 16px;display:flex;flex-direction:column;gap:12px">
+                        <p style="margin:0;font-size:13px;line-height:1.6;color:oklch(0.147 0.004 49.25 / 0.9);text-wrap:pretty">{{ item.detail }}</p>
+                        <section style="border:1px solid #7dd3fc;border-radius:8px;background:#f0f9ff;padding:12px">
+                          <h4 style="margin:0;display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:#082f49"><svg style="width:14px;height:14px"><use href="#i-list-checks"></use></svg><span>Follow-up actions</span></h4>
+                          <ul style="margin:8px 0 0;padding-left:16px;display:flex;flex-direction:column;gap:6px;font-size:13px;color:#082f49">
+                            <sc-for list="{{ item.actions }}" as="action" hint-placeholder-count="2">
+                              <li><span style="font-weight:500">{{ action.action }}</span><span style="display:block;color:#075985">{{ action.reason }}</span></li>
+                            </sc-for>
+                          </ul>
+                        </section>
+                        <section style="border:1px solid #fcd34d;border-radius:8px;background:#fffbeb;padding:12px">
+                          <h4 style="margin:0;display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:#451a03"><svg style="width:14px;height:14px"><use href="#i-scale"></use></svg><span>Tradeoffs made</span></h4>
+                          <ul style="margin:8px 0 0;padding-left:16px;display:flex;flex-direction:column;gap:6px;font-size:13px;color:#451a03">
+                            <sc-for list="{{ item.tradeoffs }}" as="tradeoff" hint-placeholder-count="1">
+                              <li><span style="font-weight:500">{{ tradeoff.decision }}</span><span style="display:block;color:#92400e">{{ tradeoff.rationale }}</span></li>
+                            </sc-for>
+                          </ul>
+                        </section>
+                        <ul style="margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:4px">
+                          <sc-for list="{{ item.files }}" as="file" hint-placeholder-count="3">
+                            <li style="display:flex;align-items:center;gap:8px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:oklch(0.553 0.013 58.071)">
+                              <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ file.path }}</span>
+                              <span style="margin-left:auto;color:#047857">{{ file.plus }}</span>
+                              <span style="color:#b91c1c">{{ file.minus }}</span>
+                            </li>
+                          </sc-for>
+                        </ul>
+                      </div>
+                    </sc-if>
+                  </article>
+                </sc-if>
+
+                <sc-if value="{{ item.isAsk }}" hint-placeholder-val="{{ false }}">
+                  <article style="border:1px solid rgba(245,158,11,0.5);border-radius:14px;background:rgba(254,243,199,0.5);padding:14px 16px">
+                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                      <span style="display:inline-flex;align-items:center;gap:6px;border-radius:9999px;background:rgba(245,158,11,0.18);box-shadow:inset 0 0 0 1px rgba(245,158,11,0.35);padding:2px 9px;font-size:11px;font-weight:500;color:#92400e">
+                        <svg style="width:12px;height:12px"><use href="#i-help"></use></svg>
+                        <span>blocking question</span>
+                      </span>
+                      <span style="display:inline-flex;align-items:center;gap:5px;font-size:12px;color:oklch(0.553 0.013 58.071)">
+                        <span style="width:9px;height:9px;border-radius:4px;background:{{ item.projectColor }}"></span>
+                        <span>{{ item.projectName }}</span>
+                      </span>
+                      <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:oklch(0.709 0.01 56.259)">{{ item.objectiveDisplayId }}</span>
+                      <span style="margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:11px;color:oklch(0.553 0.013 58.071)">{{ item.rel }}</span>
+                    </div>
+                    <p style="margin:10px 0 0;font-size:14px;line-height:1.5;color:#451a03;text-wrap:pretty">{{ item.question }}</p>
+                    <div style="display:flex;align-items:center;gap:8px;padding-top:12px">
+                      <span style="display:inline-flex;height:26px;align-items:center;gap:5px;border:1px solid rgba(245,158,11,0.4);border-radius:8px;background:rgba(255,255,255,0.6);padding:0 8px;font-size:11px">
+                        <img src="{{ item.agentIcon }}" alt="" style="width:13px;height:13px">
+                        <span>{{ item.agentLabel }}</span>
+                      </span>
+                      <span style="font-size:12px;color:#92400e">{{ item.blockedLabel }}</span>
+                      <button type="button" style="margin-left:auto;display:inline-flex;height:28px;align-items:center;gap:6px;border:none;border-radius:9px;background:oklch(0.216 0.006 56.043);padding:0 12px;font-family:inherit;font-size:12px;font-weight:500;color:oklch(0.985 0.001 106.423);cursor:pointer" style-hover="background:oklch(0.216 0.006 56.043 / 0.85)">Answer</button>
+                    </div>
+                  </article>
+                </sc-if>
+
+                <sc-if value="{{ item.isLaunch }}" hint-placeholder-val="{{ false }}">
+                  <article style="display:flex;align-items:center;gap:10px;border:1px solid oklch(0.923 0.003 48.717);border-radius:12px;background:oklch(0.99 0.002 106.423);padding:10px 14px">
+                    <svg style="width:14px;height:14px;flex:none;color:oklch(0.553 0.013 58.071)"><use href="#i-rocket"></use></svg>
+                    <span style="font-size:13px;color:oklch(0.553 0.013 58.071)">Launch requested</span>
+                    <span style="font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0">{{ item.title }}</span>
+                    <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:oklch(0.709 0.01 56.259);flex:none">{{ item.objectiveDisplayId }}</span>
+                    <span style="display:inline-flex;flex:none;align-items:center;gap:5px;font-size:11px;color:oklch(0.553 0.013 58.071)">
+                      <span style="width:9px;height:9px;border-radius:4px;background:{{ item.projectColor }}"></span>
+                      <span>{{ item.projectName }}</span>
+                      <img src="{{ item.agentIcon }}" alt="" style="width:13px;height:13px;margin-left:4px">
+                      <span>{{ item.agentLabel }}</span>
+                    </span>
+                    <span style="margin-left:auto;flex:none;font-family:'IBM Plex Mono',monospace;font-size:11px;color:oklch(0.553 0.013 58.071)">{{ item.rel }}</span>
+                  </article>
+                </sc-if>
+
+              </div>
+            </sc-for>
+
+            <sc-if value="{{ isEmpty }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex;flex-direction:column;align-items:center;gap:8px;border:1px dashed oklch(0.923 0.003 48.717);border-radius:12px;padding:48px 24px;text-align:center">
+                <p style="margin:0;font-size:14px;font-weight:500">Nothing matches these filters</p>
+                <p style="margin:0;max-width:360px;font-size:12px;color:oklch(0.553 0.013 58.071)">Turn a filter back on to see deliveries and executing objectives again.</p>
+              </div>
+            </sc-if>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;showAutoAdvanceFooter&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Feed&quot;},&quot;feedDensity&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;comfortable&quot;,&quot;compact&quot;],&quot;default&quot;:&quot;comfortable&quot;,&quot;tsType&quot;:&quot;'comfortable' | 'compact'&quot;,&quot;section&quot;:&quot;Feed&quot;},&quot;liveDemo&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Feed&quot;}}">
+const AGENTS = {
+  claude: { label: 'Claude Code · Sonnet 4.5', icon: 'assets/icons/claude-code.svg', short: 'Claude Code' },
+  codex: { label: 'Codex · gpt-5.2', icon: 'assets/icons/codex.svg', short: 'Codex' },
+  cursor: { label: 'Cursor · composer-2', icon: 'assets/icons/cursor.svg', short: 'Cursor' },
+  gemini: { label: 'Gemini · 3 Pro', icon: 'assets/icons/gemini.svg', short: 'Gemini' },
+  opencode: { label: 'OpenCode · qwen3-coder', icon: 'assets/icons/opencode.svg', short: 'OpenCode' }
+};
+
+const PROJECTS = {
+  'overlord-core': { color: '#e0632f', workspace: 'Core Platform' },
+  webapp: { color: '#2f8fe0', workspace: 'Core Platform' },
+  'remote-agent': { color: '#7c5ce0', workspace: 'Core Platform' },
+  'marketing-site': { color: '#2fb08a', workspace: 'Growth' }
+};
+
+const KIND_META = {
+  executing: { label: 'Executing', icon: '#i-loader' },
+  delivery: { label: 'Deliveries', icon: '#i-package' },
+  ask: { label: 'Questions', icon: '#i-help' }
+};
+
+/** Launch requests are the leading edge of execution — one filter covers both. */
+function filterKeyFor(kind) {
+  return kind === 'launch' ? 'executing' : kind;
+}
+
+const SEED = [
+  {
+    id: 'e1', kind: 'executing', minutes: 4, project: 'overlord-core', agent: 'claude',
+    missionTitle: 'Realtime feed hardening', missionDisplayId: 'coo-412', objectiveDisplayId: 'coo-412.2',
+    title: 'Replay entity_changes on reconnect instead of invalidating the whole cache',
+    latest: 'Wired the catch-up read; now backfilling changedFields so the SPA can keep targeted invalidations.',
+    resource: 'backend', branch: 'coo-412/replay-changes',
+    queue: [
+      { title: 'Add SSE reconnect conformance test', displayId: 'coo-412.3', agent: 'claude' },
+      { title: 'Document the replay contract in backend/AGENTS.md', displayId: 'coo-412.4', agent: 'codex' }
+    ]
+  },
+  {
+    id: 'd1', kind: 'delivery', minutes: 11, project: 'webapp', agent: 'codex',
+    missionTitle: 'Inbox capture polish', missionDisplayId: 'coo-397', objectiveDisplayId: 'coo-397.5',
+    title: 'Keep promoted inbox cards mounted for the visit',
+    summary: 'Promoting an inbox item now seeds the mission cache and leaves the card in place, so assigning a project unlocks agent and run controls without navigation.',
+    detail: 'Promotion writes the mission into the query cache before the inbox list invalidates, so the sticky card renders from cache instead of remounting empty. The unassigned and promoted variants now share one shell, and the assigned banner links straight to the mission panel.',
+    files: 5, plus: 214, minus: 63,
+    actions: [
+      { action: 'Verify promote-then-run against a project with two resources', reason: 'Resource inheritance is only covered by unit tests today.' },
+      { action: 'Decide whether leaving Inbox should keep or drop promoted cards', reason: 'Current behaviour drops them on route change.' }
+    ],
+    tradeoffs: [
+      { decision: 'Seeded the mission cache instead of refetching', rationale: 'Avoids a visible empty state, at the cost of one stale render if the server rewrites the title.' }
+    ],
+    fileList: [
+      { path: 'web/components/InboxMissionCard.tsx', plus: '+148', minus: '-41' },
+      { path: 'web/pages/InboxPage.tsx', plus: '+37', minus: '-12' },
+      { path: 'web/lib/queries.ts', plus: '+29', minus: '-10' }
+    ]
+  },
+  {
+    id: 'a1', kind: 'ask', minutes: 18, project: 'remote-agent', agent: 'gemini',
+    objectiveDisplayId: 'coo-405.1', missionTitle: 'SSH deployment path',
+    question: 'The personal-server target has two candidate working directories (~/srv/overlord and /opt/overlord). Which one should the runner treat as primary before I write the systemd unit?',
+    blocked: 12
+  },
+  {
+    id: 'e2', kind: 'executing', minutes: 26, project: 'marketing-site', agent: 'cursor',
+    missionTitle: 'ovld.ai changelog surface', missionDisplayId: 'coo-388', objectiveDisplayId: 'coo-388.3',
+    title: 'Render the public changelog from the release markdown',
+    latest: 'Markdown pipeline is up; matching the changelog-body type scale against the marketing email template.',
+    resource: 'marketing-site', branch: 'coo-388/changelog',
+    queue: [
+      { title: 'Add OG image generation per release', displayId: 'coo-388.4', agent: 'cursor' }
+    ]
+  },
+  {
+    id: 'l1', kind: 'launch', minutes: 34, project: 'overlord-core', agent: 'opencode',
+    objectiveDisplayId: 'coo-410.1', title: 'Probe Latch availability through discoverLatch on every local target'
+  },
+  {
+    id: 'd2', kind: 'delivery', minutes: 52, project: 'overlord-core', agent: 'claude',
+    missionTitle: 'Workspace status vocabulary', missionDisplayId: 'coo-371', objectiveDisplayId: 'coo-371.4',
+    title: 'Move board columns onto workspace statuses',
+    summary: 'Board columns now read from GET /api/workspace/statuses, so reordering a status reorders every project board in the workspace at once.',
+    detail: 'The reorder endpoint writes positions in one transaction and appends a single entity_changes row, which keeps the SSE delta small enough that the board applies it without a refetch. Soft-deleted statuses stay resolvable so historical missions keep their label.',
+    files: 9, plus: 431, minus: 188,
+    actions: [
+      { action: 'Backfill positions for workspaces created before this change', reason: 'Older rows share position 0 and sort by insertion order.' }
+    ],
+    tradeoffs: [
+      { decision: 'Soft-delete rather than remove statuses', rationale: 'Keeps historical mission labels intact; costs one extra filter on every read.' }
+    ],
+    fileList: [
+      { path: 'backend/repository.ts', plus: '+186', minus: '-92' },
+      { path: 'web/pages/BoardColumn.tsx', plus: '+121', minus: '-54' },
+      { path: 'web/components/settings/StatusesPage.tsx', plus: '+124', minus: '-42' }
+    ]
+  },
+  {
+    id: 'd3', kind: 'delivery', minutes: 96, project: 'webapp', agent: 'gemini',
+    missionTitle: 'Launch settings surface', missionDisplayId: 'coo-364', objectiveDisplayId: 'coo-364.7',
+    title: 'Split session provider from the terminal picker',
+    summary: 'Terminal and IDE settings now carry one Session choice per execution target — Direct or Persistent — leaving the stored terminal choice untouched when the provider flips.',
+    detail: 'Latch never appears as a terminal entry; availability is probed on the execution target itself and rendered inline with version and path, or the standalone install command when missing. Direct execution stays selectable in every state.',
+    files: 4, plus: 173, minus: 55,
+    actions: [
+      { action: 'Confirm the install hint copy with the CLI docs', reason: 'Overlord never installs or upgrades Latch itself.' }
+    ],
+    tradeoffs: [
+      { decision: 'Probe on render rather than caching per target', rationale: 'Always current, at the cost of one extra capability call when the panel opens.' }
+    ],
+    fileList: [
+      { path: 'web/components/settings/IdePage.tsx', plus: '+96', minus: '-28' },
+      { path: 'web/components/settings/LatchDiscoveryStatus.tsx', plus: '+77', minus: '-27' }
+    ]
+  }
+];
+
+const INCOMING = {
+  id: 'd0', kind: 'delivery', minutes: 0, project: 'remote-agent', agent: 'codex',
+  missionTitle: 'SSH deployment path', missionDisplayId: 'coo-405', objectiveDisplayId: 'coo-405.2',
+  title: 'Generate the systemd unit for the remote runner',
+  summary: 'The remote agent now ships a generated unit file plus a health probe, so a personal-server deployment survives reboots without a manual enable step.',
+  detail: 'The unit is written from the resolved working directory and OVLD_HOME, with a restart backoff that matches the runner queue timeout. A dry-run flag prints the unit instead of installing it.',
+  files: 3, plus: 128, minus: 12,
+  actions: [{ action: 'Review the restart backoff against the queue timeout', reason: 'Both default to 30s today.' }],
+  tradeoffs: [{ decision: 'Generated the unit instead of shipping a static file', rationale: 'Adapts to any OVLD_HOME, but the unit must be regenerated when paths change.' }],
+  fileList: [
+    { path: 'apps/remote-agent/src/systemd.ts', plus: '+94', minus: '-4' },
+    { path: 'apps/remote-agent/README.md', plus: '+34', minus: '-8' }
+  ]
+};
+
+const WORKSPACES = ['All workspaces', 'Core Platform', 'Growth'];
+
+class Component extends DCLogic {
+  state = {
+    workspaceIndex: 0,
+    projectIndex: 0,
+    kinds: { executing: true, delivery: true, ask: true },
+    expanded: {},
+    extra: [],
+    tick: 0
+  };
+
+  componentDidMount() {
+    this.clock = setInterval(() => this.setState(s => ({ tick: s.tick + 1 })), 30000);
+    if (this.props.liveDemo ?? true) {
+      this.arrival = setTimeout(() => this.setState({ extra: [INCOMING] }), 6500);
+    }
+  }
+
+  componentWillUnmount() {
+    clearInterval(this.clock);
+    clearTimeout(this.arrival);
+  }
+
+  rel(minutes) {
+    if (minutes < 1) return 'just now';
+    if (minutes < 60) return minutes + 'm ago';
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return hours + 'h ago';
+    return Math.floor(hours / 24) + 'd ago';
+  }
+
+  elapsed(minutes) {
+    if (minutes < 60) return minutes + 'm';
+    return Math.floor(minutes / 60) + 'h ' + (minutes % 60) + 'm';
+  }
+
+  projectOptions() {
+    const workspace = WORKSPACES[this.state.workspaceIndex];
+    const names = Object.keys(PROJECTS).filter(
+      name => workspace === 'All workspaces' || PROJECTS[name].workspace === workspace
+    );
+    return ['All projects', ...names];
+  }
+
+  scopeFiltered(list) {
+    const workspace = WORKSPACES[this.state.workspaceIndex];
+    const options = this.projectOptions();
+    const project = options[Math.min(this.state.projectIndex, options.length - 1)];
+    return list.filter(entry => {
+      const meta = PROJECTS[entry.project];
+      if (workspace !== 'All workspaces' && meta.workspace !== workspace) return false;
+      if (project !== 'All projects' && entry.project !== project) return false;
+      return true;
+    });
+  }
+
+  renderVals() {
+    const showFooter = this.props.showAutoAdvanceFooter ?? true;
+    const dense = (this.props.feedDensity ?? 'comfortable') === 'compact';
+    const all = [...this.state.extra, ...SEED];
+    const inScope = this.scopeFiltered(all);
+    const visible = inScope.filter(entry => this.state.kinds[filterKeyFor(entry.kind)]);
+
+    const options = this.projectOptions();
+    const projectLabel = options[Math.min(this.state.projectIndex, options.length - 1)];
+
+    const kindChips = Object.keys(KIND_META).map(kind => {
+      const on = this.state.kinds[kind];
+      return {
+        label: KIND_META[kind].label,
+        icon: KIND_META[kind].icon,
+        count: inScope.filter(entry => filterKeyFor(entry.kind) === kind).length,
+        bg: on ? 'oklch(0.216 0.006 56.043)' : 'oklch(0.99 0.002 106.423)',
+        fg: on ? 'oklch(0.985 0.001 106.423)' : 'oklch(0.553 0.013 58.071)',
+        borderColor: on ? 'oklch(0.216 0.006 56.043)' : 'oklch(0.923 0.003 48.717)',
+        toggle: () =>
+          this.setState(s => ({ kinds: { ...s.kinds, [kind]: !s.kinds[kind] } }))
+      };
+    });
+
+    const items = visible.map(entry => {
+      const agent = AGENTS[entry.agent];
+      const project = PROJECTS[entry.project];
+      const base = {
+        id: entry.id,
+        isExecuting: entry.kind === 'executing',
+        isDelivery: entry.kind === 'delivery',
+        isAsk: entry.kind === 'ask',
+        isLaunch: entry.kind === 'launch',
+        anim: entry.id === INCOMING.id ? 'feedIn 420ms ease-out' : 'none',
+        projectName: entry.project,
+        projectColor: project.color,
+        agentIcon: agent.icon,
+        agentLabel: entry.kind === 'executing' || entry.kind === 'delivery' ? agent.label : agent.short,
+        missionTitle: entry.missionTitle,
+        missionDisplayId: entry.missionDisplayId,
+        objectiveDisplayId: entry.objectiveDisplayId,
+        title: entry.title,
+        rel: this.rel(entry.minutes)
+      };
+
+      if (entry.kind === 'executing') {
+        const queue = showFooter ? entry.queue : [];
+        return {
+          ...base,
+          latest: dense ? '' : entry.latest,
+          resource: entry.resource,
+          branch: entry.branch,
+          elapsed: this.elapsed(entry.minutes),
+          hasQueue: queue.length > 0,
+          queueLabel:
+            'Auto-advance queue · ' + queue.length + (queue.length === 1 ? ' queued' : ' queued'),
+          queue: queue.map((next, index) => ({
+            step: String(index + 1).padStart(2, '0'),
+            title: next.title,
+            displayId: next.displayId,
+            agentIcon: AGENTS[next.agent].icon,
+            agentLabel: AGENTS[next.agent].short
+          }))
+        };
+      }
+
+      if (entry.kind === 'delivery') {
+        const expanded = Boolean(this.state.expanded[entry.id]);
+        return {
+          ...base,
+          summary: entry.summary,
+          detail: entry.detail,
+          filesLabel: entry.files + (entry.files === 1 ? ' file' : ' files'),
+          plus: '+' + entry.plus,
+          minus: '−' + entry.minus,
+          expanded,
+          toggleLabel: expanded ? 'Less' : 'Details',
+          chevron: expanded ? 'rotate(180deg)' : 'none',
+          actions: entry.actions,
+          tradeoffs: entry.tradeoffs,
+          files: entry.fileList,
+          toggle: () =>
+            this.setState(s => ({ expanded: { ...s.expanded, [entry.id]: !s.expanded[entry.id] } }))
+        };
+      }
+
+      if (entry.kind === 'ask') {
+        return {
+          ...base,
+          question: entry.question,
+          blockedLabel: 'Blocked for ' + this.elapsed(entry.blocked)
+        };
+      }
+
+      return base;
+    });
+
+    return {
+      items,
+      kindChips,
+      isEmpty: items.length === 0,
+      workspaceLabel: WORKSPACES[this.state.workspaceIndex],
+      projectLabel,
+      projectFilterColor:
+        projectLabel === 'All projects' ? 'transparent' : PROJECTS[projectLabel].color,
+      liveLabel: 'Live · ' + inScope.length + ' events',
+      cycleWorkspace: () =>
+        this.setState(s => ({
+          workspaceIndex: (s.workspaceIndex + 1) % WORKSPACES.length,
+          projectIndex: 0
+        })),
+      cycleProject: () =>
+        this.setState(s => ({ projectIndex: (s.projectIndex + 1) % this.projectOptions().length }))
+    };
+  }
+}
+
+</script>
+</body>
+</html>

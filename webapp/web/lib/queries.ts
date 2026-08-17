@@ -14,6 +14,7 @@ import {
 
 import type {
   AcceptWorkspaceInvitationBody,
+  ActivityFeedDto,
   AddOrganizationAdminBody,
   BranchActionBody,
   CreateInboxItemBody,
@@ -1159,6 +1160,18 @@ export function useCreateMission() {
 
 export function useInboxItems() {
   return useQuery<InboxItemDto[]>({ queryKey: keys.inbox, queryFn: api.listInboxItems });
+}
+
+/**
+ * Cross-workspace objective activity for the Inbox feed. Freshness comes from the
+ * realtime change link invalidating `keys.activityFeed`, not from polling — the
+ * `refetchOnWindowFocus` default is the only fallback for a dropped stream.
+ */
+export function useActivityFeed() {
+  return useQuery<ActivityFeedDto>({
+    queryKey: keys.activityFeed,
+    queryFn: api.getActivityFeed
+  });
 }
 
 export function useCreateInboxItem() {

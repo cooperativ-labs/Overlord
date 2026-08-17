@@ -1,5 +1,5 @@
 import type { DeliveryReportPayloadV1 } from '@overlord/contract';
-import { bindBool } from '@overlord/database';
+import { bindBool, formatObjectiveDisplayId } from '@overlord/database';
 
 import type { ServiceContext } from './context.js';
 import { readDeliveryReport } from './delivery-report.js';
@@ -136,7 +136,14 @@ export interface WebhookEnvelope {
     priority?: string | null;
     createdAt?: string;
   };
-  objective?: { id: string; position?: number; title?: string | null; state?: string };
+  objective?: {
+    id: string;
+    /** `coo:756.k7xm` — the objective's stable public id (full mode only). */
+    displayId?: string;
+    position?: number;
+    title?: string | null;
+    state?: string;
+  };
   session?: { id: string; agentIdentifier?: string; modelIdentifier?: string | null };
   delivery?: {
     id: string;
@@ -266,12 +273,20 @@ export async function buildWebhookEnvelope(
 
   if (entity.objectiveId) {
     const objective = (await ctx.db.get(
-      `SELECT id, position, title, state FROM objectives WHERE id = ? AND workspace_id = ?`,
+      `SELECT id, position, title, state, display_key FROM objectives WHERE id = ? AND workspace_id = ?`,
       [entity.objectiveId, ctx.workspace.id]
-    )) as { id: string; position: number; title: string | null; state: string } | undefined;
+    )) as
+      | { id: string; position: number; title: string | null; state: string; display_key: string }
+      | undefined;
     if (objective) {
       envelope.objective = {
         id: objective.id,
+        // Consumers should key off `displayId` rather than `position`: position
+        // changes when objectives are reordered, the display id never does.
+        displayId: formatObjectiveDisplayId({
+          missionDisplayId: mission.display_id,
+          displayKey: objective.display_key
+        }),
         position: objective.position,
         title: objective.title,
         state: objective.state
