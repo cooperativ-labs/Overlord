@@ -1,6 +1,12 @@
-import { type BrowserWindow, session } from 'electron';
+import { session } from 'electron';
 
 import { activeBackendForRenderer, syncOverlordTomlForProfile } from './backend-config.js';
+import {
+  activateBackendProfile,
+  type BackendActivation,
+  type BackendLifecycleEffects,
+  shutdownBackendProfile
+} from './backend-lifecycle.js';
 import {
   type ActiveBackend,
   addBackendProfile,
@@ -16,14 +22,15 @@ import {
   toPublicProfile
 } from './backend-profiles.js';
 import { clearSessionToken, getSessionToken, setSessionToken } from './backend-token-store.js';
-import { hydrateLocalDesktopSessionFromCliAuth } from './cli-auth-sync.js';
 import {
   findFreePort,
+  isServerRunning,
   startServer,
   stopServer,
   waitForHealth,
   waitForRemoteHealth
 } from './server.js';
+import { store } from './settings-store.js';
 import { startStaticServer, stopStaticServer } from './static-server.js';
 
 export type BackendRuntimeState = {
@@ -33,77 +40,118 @@ export type BackendRuntimeState = {
 
 export type BackendRuntimeController = {
   getState: () => BackendRuntimeState;
-  reloadForProfile: (profileId: string) => Promise<void>;
+  /**
+   * Persist the selected profile, reap every process the current profile owns,
+   * and relaunch the app so the new profile boots from a clean slate.
+   */
+  switchToProfile: (profileId: string) => Promise<void>;
 };
 
+/**
+ * Backend profiles are switched across an **app restart boundary** rather than
+ * by hot-swapping runtimes inside a live process. Local mode owns a forked
+ * web/REST server, a SQLite runtime, and a loopback origin; Remote mode owns
+ * none of them. Tearing all of it down and booting once into the chosen profile
+ * is the only cheap way to guarantee that a Remote session can never retain the
+ * embedded backend, and that returning to Local starts exactly one.
+ */
 export function createBackendRuntimeController({
-  host,
-  preferredPort,
-  devConnect,
-  devUrl,
-  recreateWindow
+  getShellOrigin,
+  relaunchApp,
+  onBeforeSwitch
 }: {
-  host: string;
-  preferredPort: number;
-  devConnect: boolean;
-  devUrl: string;
-  recreateWindow: (args: {
-    shellOrigin: string;
-    active: ActiveBackend;
-  }) => Promise<BrowserWindow | null>;
+  getShellOrigin: () => string;
+  relaunchApp: () => void;
+  onBeforeSwitch?: (active: ActiveBackend) => void;
 }): BackendRuntimeController {
-  let shellOrigin = devConnect ? new URL(devUrl).origin : `http://${host}:${preferredPort}`;
-  let active = resolveActiveBackend({ shellOrigin });
-
-  async function bootServersForActiveProfile(): Promise<boolean> {
-    active = resolveActiveBackend({ shellOrigin });
-    const profile = getBackendProfile(active.id) ?? getBackendProfile(LOCAL_BACKEND_PROFILE_ID)!;
-    syncOverlordTomlForProfile({ profile, shellOrigin: active.shellOrigin });
-
-    if (active.mode === 'local') {
-      if (!devConnect) {
-        stopStaticServer();
-        startServer({ host, port: portOf(active.shellOrigin) });
-        return waitForHealth({ host, port: portOf(active.shellOrigin) });
-      }
-      return waitForHealth({ host: hostOf(active.shellOrigin), port: portOf(active.shellOrigin) });
-    }
-
-    stopServer();
-    if (!devConnect) {
-      startStaticServer({ host, port: portOf(active.shellOrigin) });
-    }
-    return waitForRemoteHealth({ backendUrl: active.apiBaseUrl });
-  }
-
   return {
-    getState: () => ({ shellOrigin, active }),
-    reloadForProfile: async profileId => {
+    getState: () => {
+      const shellOrigin = getShellOrigin();
+      return { shellOrigin, active: resolveActiveBackend({ shellOrigin }) };
+    },
+    switchToProfile: async profileId => {
+      const shellOrigin = getShellOrigin();
+      const previous = resolveActiveBackend({ shellOrigin });
+      if (!getBackendProfile(profileId)) {
+        throw new Error(`Unknown backend profile: ${profileId}`);
+      }
+      onBeforeSwitch?.(previous);
+
+      // Persist the target first so the relaunched process boots into it even
+      // if teardown is interrupted. The handoff marker lets the next boot know
+      // this profile was just chosen by the user, so a failure to reach it is
+      // treated as a failed switch (auth cleared, Local offered) rather than as
+      // a transient failure of an already-established profile.
       setActiveBackendProfileId(profileId);
-      if (!devConnect && profileId === LOCAL_BACKEND_PROFILE_ID) {
-        shellOrigin = `http://${host}:${await findFreePort(preferredPort, host)}`;
-      }
-      active = resolveActiveBackend({ shellOrigin });
-      const healthy = await bootServersForActiveProfile();
-      if (!healthy) {
-        await clearDesktopAuthForProfile(active.id);
-        if (!devConnect && active.mode === 'local') {
-          const profile =
-            getBackendProfile(active.id) ?? getBackendProfile(LOCAL_BACKEND_PROFILE_ID)!;
-          stopServer();
-          shellOrigin = `http://${host}:${await findFreePort(preferredPort, host)}`;
-          active = resolveActiveBackend({ shellOrigin });
-          syncOverlordTomlForProfile({ profile, shellOrigin: active.shellOrigin });
-          startStaticServer({ host, port: portOf(active.shellOrigin) });
-        }
-        await recreateWindow({ shellOrigin, active });
-        return;
-      }
-      if (active.mode === 'local') {
-        hydrateLocalDesktopSessionFromCliAuth({ backendUrl: active.apiBaseUrl });
-      }
-      await recreateWindow({ shellOrigin, active });
+      markPendingProfileSwitch(profileId);
+      await shutdownBackendProfile(
+        createBackendLifecycleEffects({ profileId: previous.id, shellOrigin })
+      );
+      relaunchApp();
     }
+  };
+}
+
+/**
+ * Bind the pure lifecycle policy to the shell's real effects. `stopBackend`
+ * resolves only once the embedded server process has actually exited.
+ */
+export function createBackendLifecycleEffects({
+  profileId,
+  shellOrigin
+}: {
+  profileId: string;
+  shellOrigin: string;
+}): BackendLifecycleEffects {
+  return {
+    startBackend: ({ host: bindHost, port }) => startServer({ host: bindHost, port }),
+    stopBackend: () => stopServer(),
+    isBackendRunning: () => isServerRunning(),
+    startShellStaticServer: ({ host: bindHost, port }) =>
+      startStaticServer({ host: bindHost, port }),
+    stopShellStaticServer: () => stopStaticServer(),
+    waitForLocalHealth: ({ host: pingHost, port }) => waitForHealth({ host: pingHost, port }),
+    waitForRemoteHealth: ({ backendUrl }) => waitForRemoteHealth({ backendUrl }),
+    syncProfileConfig: () => {
+      const profile = getBackendProfile(profileId) ?? getBackendProfile(LOCAL_BACKEND_PROFILE_ID)!;
+      syncOverlordTomlForProfile({ profile, shellOrigin });
+    }
+  };
+}
+
+const PENDING_SWITCH_KEY = 'pendingBackendProfileSwitch';
+
+function markPendingProfileSwitch(profileId: string): void {
+  store.set(PENDING_SWITCH_KEY, profileId);
+}
+
+/**
+ * Read and clear the "the user just switched to this profile" marker written
+ * before the relaunch. Returns the profile id when this boot is the first one
+ * after a switch.
+ */
+export function consumePendingProfileSwitch(): string | null {
+  const pending = store.get(PENDING_SWITCH_KEY, null);
+  if (typeof pending !== 'string' || !pending) return null;
+  store.delete(PENDING_SWITCH_KEY);
+  return pending;
+}
+
+export function activationForBackend({
+  active,
+  host,
+  devConnect
+}: {
+  active: ActiveBackend;
+  host: string;
+  devConnect: boolean;
+}): BackendActivation {
+  return {
+    mode: active.mode,
+    shellOrigin: active.shellOrigin,
+    apiBaseUrl: active.apiBaseUrl,
+    host,
+    devConnect
   };
 }
 
@@ -137,7 +185,7 @@ export function switchActiveBackend({
   id: string;
   controller: BackendRuntimeController;
 }): Promise<void> {
-  return controller.reloadForProfile(id);
+  return controller.switchToProfile(id);
 }
 
 export function readSessionTokenForProfile(profileId: string): string | null {
@@ -162,16 +210,7 @@ export function activeProfilePartition(): string {
   return sessionPartitionForProfile(getActiveBackendProfileId());
 }
 
-function hostOf(origin: string): string {
-  return new URL(origin).hostname;
-}
-
-function portOf(origin: string): number {
-  const { port } = new URL(origin);
-  return port ? Number(port) : 80;
-}
-
-async function clearDesktopAuthForProfile(profileId: string): Promise<void> {
+export async function clearDesktopAuthForProfile(profileId: string): Promise<void> {
   clearSessionToken(profileId);
   await session.fromPartition(sessionPartitionForProfile(profileId)).clearStorageData({
     storages: ['cookies', 'localstorage', 'indexdb']
@@ -193,36 +232,6 @@ export async function resolveInitialShellOrigin({
   return `http://${host}:${await findFreePort(preferredPort, host)}`;
 }
 
-export { bootServersForProfile };
-
-async function bootServersForProfile({
-  active,
-  host,
-  devConnect
-}: {
-  active: ActiveBackend;
-  host: string;
-  devConnect: boolean;
-}): Promise<boolean> {
-  const profile = getBackendProfile(active.id) ?? getBackendProfile(LOCAL_BACKEND_PROFILE_ID)!;
-  syncOverlordTomlForProfile({ profile, shellOrigin: active.shellOrigin });
-
-  if (active.mode === 'local') {
-    if (!devConnect) {
-      stopStaticServer();
-      startServer({ host, port: portOf(active.shellOrigin) });
-      return waitForHealth({ host, port: portOf(active.shellOrigin) });
-    }
-    return waitForHealth({ host: hostOf(active.shellOrigin), port: portOf(active.shellOrigin) });
-  }
-
-  stopServer();
-  if (!devConnect) {
-    startStaticServer({ host, port: portOf(active.shellOrigin) });
-  }
-  return waitForRemoteHealth({ backendUrl: active.apiBaseUrl });
-}
-
 export async function bootActiveBackend({
   shellOrigin,
   host,
@@ -233,11 +242,16 @@ export async function bootActiveBackend({
   devConnect: boolean;
 }): Promise<{ active: ActiveBackend; healthy: boolean }> {
   const active = resolveActiveBackend({ shellOrigin });
-  const healthy = await bootServersForProfile({ active, host, devConnect });
+  const { healthy } = await activateBackendProfile(
+    activationForBackend({ active, host, devConnect }),
+    createBackendLifecycleEffects({ profileId: active.id, shellOrigin })
+  );
   return { active, healthy };
 }
 
-export function stopAllBackendServers(): void {
-  stopServer();
-  stopStaticServer();
+/** Reap every local process this shell supervises. Awaited before quitting. */
+export function stopAllBackendServers({ shellOrigin }: { shellOrigin: string }): Promise<void> {
+  return shutdownBackendProfile(
+    createBackendLifecycleEffects({ profileId: getActiveBackendProfileId(), shellOrigin })
+  );
 }

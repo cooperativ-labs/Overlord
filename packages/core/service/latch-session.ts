@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process';
 
+import { latchBinaryMissingMessage, resolveLatchBinaryPath } from './latch-binary.ts';
 import { latchChildEnvironment } from './latch-environment.ts';
 import { buildLatchOpenArgs, latchViewerFlagForKind } from './latch-launch.ts';
 import type { ViewerOpenAs } from './terminal-profile-types.ts';
@@ -64,7 +65,9 @@ function runLatchJson({
   executable: string;
   args: string[];
 }): Record<string, unknown> {
-  const result = spawnSync(executable, args, {
+  const binary = resolveLatchBinaryPath(executable);
+  if (!binary) throw new LatchSessionCommandError(latchBinaryMissingMessage(executable));
+  const result = spawnSync(binary, args, {
     encoding: 'utf8',
     shell: false,
     timeout: 10_000,

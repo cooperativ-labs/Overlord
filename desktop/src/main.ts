@@ -10,10 +10,17 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { resolveActiveBackend, sessionPartitionForProfile } from './backend-profiles.js';
+import {
+  LOCAL_BACKEND_PROFILE_ID,
+  resolveActiveBackend,
+  sessionPartitionForProfile,
+  setActiveBackendProfileId
+} from './backend-profiles.js';
 import {
   type BackendRuntimeController,
   bootActiveBackend,
+  clearDesktopAuthForProfile,
+  consumePendingProfileSwitch,
   createBackendRuntimeController,
   resolveInitialShellOrigin,
   stopAllBackendServers,
@@ -26,6 +33,7 @@ import {
 import { CliUpdater } from './cli-updater.js';
 import { registerIpc } from './ipc.js';
 import { parseDesktopOAuthHandoffUrl, parseMissionDeepLink } from './oauth-handoff.js';
+import { recordProcessInventory } from './process-inventory.js';
 import {
   hideQuickTaskWindow,
   initQuickTaskWindow,
@@ -51,6 +59,8 @@ let shellOrigin = `http://${HOST}:${PREFERRED_PORT}`;
 let backendController: BackendRuntimeController | null = null;
 let updater: DesktopUpdater | null = null;
 let cliUpdater: CliUpdater | null = null;
+let shuttingDown = false;
+let relaunchAfterQuit = false;
 const pendingOAuthCallbackUrls: string[] = [];
 const pendingMissionIds: string[] = [];
 
@@ -89,14 +99,10 @@ async function boot(): Promise<void> {
   });
 
   backendController = createBackendRuntimeController({
-    host: HOST,
-    preferredPort: PREFERRED_PORT,
-    devConnect: DEV_CONNECT,
-    devUrl: DEV_URL,
-    recreateWindow: async ({ shellOrigin: nextShellOrigin, active }) => {
-      shellOrigin = nextShellOrigin;
-      configureSessionPolicy(active);
-      return openMainWindow({ reloadExisting: true });
+    getShellOrigin: () => shellOrigin,
+    relaunchApp: () => quitApp({ relaunch: true }),
+    onBeforeSwitch: active => {
+      recordProcessInventory({ tag: 'before-profile-switch', backendMode: active.mode });
     }
   });
 
@@ -115,35 +121,27 @@ async function boot(): Promise<void> {
     getBackendController: () => backendController
   });
 
+  const switchedToProfileId = consumePendingProfileSwitch();
   const { active, healthy } = await bootActiveBackend({
     shellOrigin,
     host: HOST,
     devConnect: DEV_CONNECT
   });
   configureSessionPolicy(active);
+  recordProcessInventory({
+    tag: healthy ? 'after-boot' : 'after-failed-boot',
+    backendMode: active.mode
+  });
   if (active.mode === 'local') {
     hydrateLocalDesktopSessionFromCliAuth({ backendUrl: active.apiBaseUrl });
   }
 
   if (!healthy) {
-    const { response } = await dialog.showMessageBox({
-      type: 'error',
-      title: 'Overlord',
-      message: 'Overlord could not start',
-      detail: startupFailureMessage(active),
-      buttons: ['Retry', 'Quit'],
-      defaultId: 0,
-      cancelId: 1
-    });
-    if (response === 0) {
-      await boot();
-      return;
-    }
-    app.quit();
+    await handleStartupFailure({ active, wasJustSwitchedTo: switchedToProfileId === active.id });
     return;
   }
 
-  await openMainWindow({ reloadExisting: false });
+  await openMainWindow();
   await consumePendingOAuthCallbacks();
   await consumePendingMissionDeepLinks();
   initQuickTaskWindow({
@@ -233,7 +231,7 @@ async function consumePendingMissionDeepLinks(): Promise<void> {
 
 function showOrCreateMainWindow(): void {
   if (!mainWindow || mainWindow.isDestroyed()) {
-    void openMainWindow({ reloadExisting: false });
+    void openMainWindow();
     return;
   }
 
@@ -251,18 +249,14 @@ function configureSessionPolicy(active: ReturnType<typeof resolveActiveBackend>)
   });
 }
 
-async function openMainWindow({
-  reloadExisting
-}: {
-  reloadExisting: boolean;
-}): Promise<BrowserWindow | null> {
+/**
+ * The window is only ever created for the profile this process booted into —
+ * a profile change relaunches the app rather than re-pointing a live window at
+ * a different backend.
+ */
+async function openMainWindow(): Promise<BrowserWindow | null> {
   const active = resolveActiveBackend({ shellOrigin });
   const partition = sessionPartitionForProfile(active.id);
-
-  if (reloadExisting && mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.destroy();
-    mainWindow = null;
-  }
 
   mainWindow = createWindow({ preloadPath: PRELOAD, partition });
   guardNavigation(mainWindow, active.shellOrigin);
@@ -280,6 +274,60 @@ async function openMainWindow({
     partition: sessionPartitionForProfile(active.id)
   });
   return mainWindow;
+}
+
+/**
+ * A profile that cannot be reached never leaves a half-started runtime behind:
+ * every recovery path reaps the supervised processes and boots the app once
+ * more from scratch, instead of re-entering `boot()` in a process that already
+ * owns servers, IPC handlers, and updater timers.
+ */
+async function handleStartupFailure({
+  active,
+  wasJustSwitchedTo
+}: {
+  active: ReturnType<typeof resolveActiveBackend>;
+  wasJustSwitchedTo: boolean;
+}): Promise<void> {
+  const canFallBackToLocal = active.id !== LOCAL_BACKEND_PROFILE_ID;
+  if (wasJustSwitchedTo && active.mode === 'remote') {
+    // Preserves the previous switch-failure behaviour: a backend we could not
+    // reach right after the user selected it drops that profile's stored
+    // session so the next attempt starts from a clean login.
+    await clearDesktopAuthForProfile(active.id);
+  }
+
+  const buttons = canFallBackToLocal ? ['Retry', 'Switch to Local', 'Quit'] : ['Retry', 'Quit'];
+  const { response } = await dialog.showMessageBox({
+    type: 'error',
+    title: 'Overlord',
+    message: 'Overlord could not start',
+    detail: startupFailureMessage(active),
+    buttons,
+    defaultId: 0,
+    cancelId: buttons.length - 1
+  });
+
+  if (response === 0) {
+    quitApp({ relaunch: true });
+    return;
+  }
+  if (canFallBackToLocal && response === 1) {
+    setActiveBackendProfileId(LOCAL_BACKEND_PROFILE_ID);
+    quitApp({ relaunch: true });
+    return;
+  }
+  quitApp({ relaunch: false });
+}
+
+/**
+ * Single exit path. Quitting always reaps the supervised backend first, so no
+ * embedded server, SQLite runtime, or utility process outlives the app — and a
+ * relaunch (profile switch or startup retry) starts from zero of them.
+ */
+function quitApp({ relaunch }: { relaunch: boolean }): void {
+  relaunchAfterQuit = relaunchAfterQuit || relaunch;
+  app.quit();
 }
 
 function startupFailureMessage(active: ReturnType<typeof resolveActiveBackend>): string {
@@ -392,12 +440,30 @@ function tomlString(value: string): string {
   return JSON.stringify(value);
 }
 
-app.on('before-quit', () => {
+app.on('before-quit', event => {
   updater?.stopAutomaticChecks();
   cliUpdater?.stopAutomaticChecks();
   unregisterQuickTaskHotkey();
   hideQuickTaskWindow();
-  stopAllBackendServers();
+  if (shuttingDown) return;
+
+  // Reaping the embedded backend is asynchronous, so hold the quit until the
+  // process has actually exited rather than firing a kill and racing teardown.
+  shuttingDown = true;
+  event.preventDefault();
+  void (async () => {
+    try {
+      recordProcessInventory({
+        tag: 'before-quit',
+        backendMode: resolveActiveBackend({ shellOrigin }).mode
+      });
+      await stopAllBackendServers({ shellOrigin });
+    } catch (error) {
+      process.stderr.write(`[desktop] shutdown cleanup failed: ${describe(error)}\n`);
+    }
+    if (relaunchAfterQuit) app.relaunch();
+    app.exit(0);
+  })();
 });
 
 app.on('window-all-closed', () => {

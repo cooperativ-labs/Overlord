@@ -1,3 +1,4 @@
+import { deriveObjectiveLifecycleView } from '@overlord/automations/objective-manager';
 import { useNavigate } from '@tanstack/react-router';
 import { ArrowRightToLine, Loader2, Sparkles, Unplug } from 'lucide-react';
 import { useRef, useState } from 'react';
@@ -320,6 +321,9 @@ export function MissionPanel({
               missionId={mission.id}
               workspaceId={mission.workspaceId}
               sessions={mission.terminalSessions}
+              currentObjectiveId={
+                deriveObjectiveLifecycleView(mission.objectives).activeObjective?.id ?? null
+              }
             />
             <div className="space-y-3">
               <h2 className="text-xs font-semibold uppercase tracking-wide text-(--color-ink-dim)">

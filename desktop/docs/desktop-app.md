@@ -60,15 +60,32 @@ stays out of the way.
 1. On `app.whenReady`, claim a free loopback port (starting at `web_port`,
    default 4310).
 2. Show a splash window (`splash.html`).
-3. Fork the bundled server (`backend/dist-server/index.cjs`) inside an Electron
-   **`utilityProcess`** with `OVERLORD_WEB_HOST`/`OVERLORD_WEB_PORT`/
-   `OVERLORD_WEBAPP_DIST` set and SQL Studio disabled.
+3. Activate the **active backend profile** (`activateBackendProfile` in
+   `backend-lifecycle.ts` — the single decision point for which local processes
+   a profile may run):
+   - **Local:** reap any prior backend, then fork the bundled server
+     (`backend/dist-server/index.cjs`) inside an Electron **`utilityProcess`**
+     with `OVERLORD_WEB_HOST`/`OVERLORD_WEB_PORT`/`OVERLORD_WEBAPP_DIST` set and
+     SQL Studio disabled. Exactly one backend process exists afterwards.
+   - **Remote:** reap any prior backend and **never fork one**; serve the
+     bundled SPA shell from the in-process static server and health-check the
+     hosted backend over HTTPS. Activation fails loudly if a backend is somehow
+     still running, so a Remote session can never retain the local Node/REST
+     backend or its SQLite runtime.
 4. Poll `GET /api/health` until ready (30s budget), then load
-   `http://<host>:<port>/`. On failure, show a Retry/Quit dialog.
-5. On `before-quit`, stop the server. Closing the main window leaves the shell
-   running when its hidden Quick Task window is present; activating the app or
-   launching it again restores or recreates the main window. Quitting the app
-   stops the server.
+   `http://<host>:<port>/`. On failure, show a Retry / (Switch to Local) / Quit
+   dialog; every recovery path relaunches the app rather than re-entering boot
+   in a process that already owns servers and IPC handlers.
+5. On `before-quit`, the quit is held until the backend process has actually
+   exited (SIGTERM, escalating to SIGKILL) — a kill is never fired into a race
+   with teardown. Closing the main window leaves the shell running when its
+   hidden Quick Task window is present; activating the app or launching it again
+   restores or recreates the main window. Quitting the app stops the server.
+
+`server.ts` supervises the backend through `backend-process.ts`, which
+guarantees at most one live process, binds each `exit` listener to its own
+child (a late exit from a replaced process can never orphan the current one),
+and makes `stopServer()` resolve only once the process is reaped.
 
 The server is the **same bundle** `ovld serve` runs. Using a `utilityProcess`
 (rather than a separate Node binary) means a single runtime is shipped, signed,
@@ -137,8 +154,16 @@ and the preload notification carry no credentials, OAuth ticket, or other payloa
 ### Backend profiles and CLI auth
 
 The shell can switch between a **local** embedded backend and one or more
-**remote** cloud backends (Settings → Backend). Switching reloads the app and
-uses a separate Electron session partition per profile.
+**remote** cloud backends (Settings → Backend). Each profile uses a separate
+Electron session partition.
+
+**Switching restarts the app.** Local mode owns a forked web/REST server, a
+SQLite runtime, and a loopback origin; Remote mode owns none of them. Rather
+than hot-swapping the two runtimes in a live process, `switchToProfile`
+persists the chosen profile, reaps every process the outgoing profile owns, and
+relaunches — so the incoming profile always boots from zero supervised
+processes. A profile that cannot be reached on that first boot after a switch
+clears its stored session and offers a fall-back to Local.
 
 - **Local profile:** signing in mirrors the session bearer into
   `~/.ovld/auth.json` so the CLI can reuse the same credentials. On startup (or
@@ -166,6 +191,26 @@ loading `/quick-task` on the loopback origin. The SPA route renders
 selection, optional attachments, and Enter / Cmd+Enter submit semantics. Window
 position and hotkey preference persist in the shell's `settings.json` under the
 app user-data directory.
+
+## 6.0 Process diagnostics
+
+Every Electron child is named `Overlord Helper` on macOS, so identifying which
+one is the embedded backend needs more than Activity Monitor.
+
+- **From inside the app:** `process-inventory.ts` records `app.getAppMetrics()`
+  (pid, process type, `serviceName` — the backend's is `overlord-server` — and
+  working-set size) at boot, before a profile switch, and before quit. Snapshots
+  are printed to stderr and appended as JSON lines to
+  `<userData>/diagnostics/process-inventory.jsonl`, so a before/after comparison
+  survives the relaunch a profile switch performs.
+- **From outside:** `node desktop/scripts/desktop-process-report.mjs` reads the
+  real command lines out of `ps`, classifies each process (main / renderer / gpu
+  / utility / **embedded-backend**), and reports RSS per process plus a count of
+  embedded backends. `--json`, `--label <name> --out <file>` and
+  `--ps-file <capture>` make before/after measurements repeatable.
+
+A Remote profile is conformant when both report **zero** embedded backend
+processes.
 
 ## 6. Updates
 

@@ -9,6 +9,7 @@
 import { spawn } from 'node:child_process';
 
 import type { HarnessEvent } from './latch-harness/generated.ts';
+import { latchBinaryMissingMessage, resolveLatchBinaryPath } from './latch-binary.ts';
 import { latchChildEnvironment } from './latch-environment.ts';
 import { LatchSessionCommandError } from './latch-session.ts';
 
@@ -210,7 +211,8 @@ export async function collectLatchEvents({
   const sessionId = trimmed(providerSessionId);
   if (!sessionId) throw new LatchSessionCommandError('A Latch session id is required.');
   const fromCursor = Number.isFinite(from) && from > 0 ? Math.floor(from) : 0;
-  const bin = trimmed(executable) ?? 'latch';
+  const bin = resolveLatchBinaryPath(executable);
+  if (!bin) throw new LatchSessionCommandError(latchBinaryMissingMessage(executable));
 
   return new Promise((resolve, reject) => {
     const child = spawn(bin, ['events', sessionId, '--json', '--from', String(fromCursor)], {

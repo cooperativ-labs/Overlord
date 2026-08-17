@@ -9,6 +9,7 @@
 import { spawnSync } from 'node:child_process';
 
 import type { InteractionCapabilities } from './latch-harness/generated.ts';
+import { latchBinaryMissingMessage, resolveLatchBinaryPath } from './latch-binary.ts';
 import { latchChildEnvironment } from './latch-environment.ts';
 import { LatchSessionCommandError } from './latch-session.ts';
 
@@ -31,13 +32,21 @@ export function probeLatchInteractionCapabilities({
   providerSessionId: string;
 }): InteractionCapabilities {
   const sessionId = trimmed(providerSessionId);
-  const bin = trimmed(executable) ?? 'latch';
+  const bin = resolveLatchBinaryPath(executable);
   if (!sessionId) {
     return {
       sendMessage: false,
       sendKeys: false,
       resolve: false,
       canSend: { ok: false, reason: 'A Latch session id is required.' }
+    };
+  }
+  if (!bin) {
+    return {
+      sendMessage: false,
+      sendKeys: false,
+      resolve: false,
+      canSend: { ok: false, reason: latchBinaryMissingMessage(executable) }
     };
   }
   const help = spawnSync(bin, ['send', '--help'], {
@@ -96,7 +105,8 @@ export function resolveLatchInput({
       capabilities.canSend.reason || 'This Latch session cannot resolve a pending prompt.'
     );
   }
-  const bin = trimmed(executable) ?? 'latch';
+  const bin = resolveLatchBinaryPath(executable);
+  if (!bin) throw new LatchSessionCommandError(latchBinaryMissingMessage(executable));
   const result = spawnSync(bin, ['send', sessionId, '--resolve', `${id}=${selected}`, '--json'], {
     encoding: 'utf8',
     shell: false,

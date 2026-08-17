@@ -2,6 +2,7 @@ import { type UtilityProcess, utilityProcess } from 'electron';
 import http from 'node:http';
 import net from 'node:net';
 
+import { createProcessSupervisor } from './backend-process.js';
 import { serverBundlePath, webappDistPath } from './paths.js';
 
 /**
@@ -16,18 +17,25 @@ import { serverBundlePath, webappDistPath } from './paths.js';
  * OVERLORD_SQLITE_PATH in the environment to override (e.g. for an isolated
  * app-data database).
  */
-let child: UtilityProcess | null = null;
-
 export interface ServerOptions {
   host: string;
   port: number;
 }
 
-export function startServer({ host, port }: ServerOptions): void {
-  if (child) return;
-  const entry = serverBundlePath();
+/**
+ * Fork parameters for the next `startServer()` call. The supervisor owns the
+ * "is one already running?" decision, so the options travel through here rather
+ * than through the fork callback's arguments.
+ */
+let pendingOptions: ServerOptions | null = null;
 
-  child = utilityProcess.fork(entry, [], {
+const supervisor = createProcessSupervisor<UtilityProcess>({
+  fork: () => forkServer(pendingOptions!),
+  onEvent: message => process.stderr.write(`[server] ${message}\n`)
+});
+
+function forkServer({ host, port }: ServerOptions): UtilityProcess {
+  const child = utilityProcess.fork(serverBundlePath(), [], {
     serviceName: 'overlord-server',
     stdio: 'pipe',
     env: {
@@ -43,16 +51,33 @@ export function startServer({ host, port }: ServerOptions): void {
 
   child.stdout?.on('data', chunk => process.stdout.write(`[server] ${chunk}`));
   child.stderr?.on('data', chunk => process.stderr.write(`[server] ${chunk}`));
-  child.on('exit', code => {
-    process.stderr.write(`[server] exited with code ${code}\n`);
-    child = null;
-  });
+  return child;
 }
 
-export function stopServer(): void {
-  if (!child) return;
-  child.kill();
-  child = null;
+/**
+ * Fork the embedded web/REST server. Only ever called for a **Local** backend
+ * profile — see `backend-lifecycle.ts`, which is the single decision point for
+ * whether a profile is allowed to run it at all.
+ */
+export function startServer(options: ServerOptions): void {
+  pendingOptions = options;
+  supervisor.start();
+}
+
+/**
+ * Terminate the embedded server and wait until it has actually exited, so no
+ * backend process survives a profile transition or app shutdown.
+ */
+export function stopServer(): Promise<void> {
+  return supervisor.stop();
+}
+
+export function isServerRunning(): boolean {
+  return supervisor.isRunning();
+}
+
+export function serverProcessPid(): number | null {
+  return supervisor.pid();
 }
 
 /** Poll `GET /api/health` until the server answers `{ ok: true }` or we time out. */

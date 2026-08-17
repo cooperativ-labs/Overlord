@@ -9665,9 +9665,9 @@ var init_schemas = __esm({
       $ZodStringFormat.init(inst, def);
       inst._zod.check = (payload) => {
         try {
-          const trimmed9 = payload.value.trim();
+          const trimmed10 = payload.value.trim();
           if (!def.normalize && def.protocol?.source === httpProtocol.source) {
-            if (!/^https?:\/\//i.test(trimmed9)) {
+            if (!/^https?:\/\//i.test(trimmed10)) {
               payload.issues.push({
                 code: "invalid_format",
                 format: "url",
@@ -9679,7 +9679,7 @@ var init_schemas = __esm({
               return;
             }
           }
-          const url2 = new URL(trimmed9);
+          const url2 = new URL(trimmed10);
           if (def.hostname) {
             def.hostname.lastIndex = 0;
             if (!def.hostname.test(url2.hostname)) {
@@ -9711,7 +9711,7 @@ var init_schemas = __esm({
           if (def.normalize) {
             payload.value = url2.href;
           } else {
-            payload.value = trimmed9;
+            payload.value = trimmed10;
           }
           return;
         } catch (_) {
@@ -66478,7 +66478,7 @@ var require_application = __commonJS({
     };
     app2.del = deprecate2.function(app2.delete, "app.del: Use app.delete instead");
     app2.render = function render2(name, options, callback) {
-      var cache7 = this.cache;
+      var cache8 = this.cache;
       var done = callback;
       var engines = this.engines;
       var opts = options;
@@ -66497,7 +66497,7 @@ var require_application = __commonJS({
         renderOptions.cache = this.enabled("view cache");
       }
       if (renderOptions.cache) {
-        view = cache7[name];
+        view = cache8[name];
       }
       if (!view) {
         var View2 = this.get("view");
@@ -66513,7 +66513,7 @@ var require_application = __commonJS({
           return done(err);
         }
         if (renderOptions.cache) {
-          cache7[name] = view;
+          cache8[name] = view;
         }
       }
       tryRender(view, renderOptions, done);
@@ -69922,8 +69922,8 @@ function integrateBranch(input) {
 }
 function commitBranch(input) {
   const { branchName, worktreePath } = input;
-  const trimmed9 = (input.message ?? "").trim();
-  if (!trimmed9) {
+  const trimmed10 = (input.message ?? "").trim();
+  if (!trimmed10) {
     return {
       ok: false,
       code: "BRANCH_COMMIT_MESSAGE_REQUIRED",
@@ -69962,7 +69962,7 @@ function commitBranch(input) {
       detail: staged.stderr || staged.stdout
     };
   }
-  const commit = runGitResult(worktreePath, ["commit", "-m", trimmed9]);
+  const commit = runGitResult(worktreePath, ["commit", "-m", trimmed10]);
   if (!commit.ok) {
     return {
       ok: false,
@@ -70673,10 +70673,10 @@ function readLatchDiscoveryCacheFile(filePath) {
 }
 function writeLatchDiscoveryCacheFile({
   filePath,
-  cache: cache7
+  cache: cache8
 }) {
   (0, import_node_fs10.mkdirSync)(import_node_path12.default.dirname(filePath), { recursive: true });
-  (0, import_node_fs10.writeFileSync)(filePath, `${JSON.stringify(cache7, null, 2)}
+  (0, import_node_fs10.writeFileSync)(filePath, `${JSON.stringify(cache8, null, 2)}
 `, { mode: 384 });
 }
 function discoverLatchForExecutionTarget({
@@ -70690,19 +70690,19 @@ function discoverLatchForExecutionTarget({
 }) {
   const exe = trimmed2(executable) ?? DEFAULT_LATCH_EXECUTABLE;
   const key = latchDiscoveryCacheKey({ executionTargetId, executable: exe });
-  const cache7 = readLatchDiscoveryCacheFile(cacheFilePath);
-  const existing = cache7.entries[key];
+  const cache8 = readLatchDiscoveryCacheFile(cacheFilePath);
+  const existing = cache8.entries[key];
   if (!force && existing && isLatchDiscoveryCacheFresh({ entry: existing, resolvePath })) {
     return { ...existing.result, checkedAt: existing.result.checkedAt, directSelectable: true };
   }
   const result = probeLatchCapabilities({ executable: exe, resolvePath, runCommand, now: now2 });
   const binaryMtimeMs = result.state === "not_installed" ? null : readBinaryMtimeMs(result.resolvedPath);
-  cache7.entries[key] = {
+  cache8.entries[key] = {
     result,
     binaryMtimeMs,
     cachedAt: result.checkedAt
   };
-  writeLatchDiscoveryCacheFile({ filePath: cacheFilePath, cache: cache7 });
+  writeLatchDiscoveryCacheFile({ filePath: cacheFilePath, cache: cache8 });
   return result;
 }
 var import_node_child_process3, import_node_fs10, import_node_os4, import_node_path12, SUPPORTED_LATCH_PROTOCOL_VERSION, REQUIRED_LATCH_CAPABILITIES, LATCH_STANDALONE_INSTALL_COMMAND, LATCH_DISCOVERY_CACHE_FILENAME, defaultCommandRunner;
@@ -70743,8 +70743,38 @@ var init_latch_discovery = __esm({
   }
 });
 
-// ../packages/core/service/latch-launch.ts
+// ../packages/core/service/latch-binary.ts
 function trimmed3(value) {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+function resolveLatchBinaryPath(executable, resolve = resolveLatchExecutablePath) {
+  const name = trimmed3(executable) ?? DEFAULT_LATCH_EXECUTABLE;
+  const cached3 = cache3.get(name);
+  if (cached3) {
+    if ((0, import_node_fs11.existsSync)(cached3)) return cached3;
+    cache3.delete(name);
+  }
+  const resolved = resolve(name);
+  if (resolved) cache3.set(name, resolved);
+  return resolved;
+}
+function latchBinaryMissingMessage(executable) {
+  const name = trimmed3(executable) ?? DEFAULT_LATCH_EXECUTABLE;
+  return `Latch executable "${name}" was not found on this device (checked PATH, ~/.local/bin, and the Homebrew prefixes).`;
+}
+var import_node_fs11, cache3;
+var init_latch_binary = __esm({
+  "../packages/core/service/latch-binary.ts"() {
+    "use strict";
+    import_node_fs11 = require("node:fs");
+    init_latch_discovery();
+    init_terminal_profile_types();
+    cache3 = /* @__PURE__ */ new Map();
+  }
+});
+
+// ../packages/core/service/latch-launch.ts
+function trimmed4(value) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 function parseExecutionProviderSession(value) {
@@ -70755,17 +70785,17 @@ function providerSessionFromMetadata(metadata) {
   const raw = metadata?.[PROVIDER_SESSION_METADATA_KEY];
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const cast = raw;
-  if (trimmed3(cast.provider)?.toLowerCase() !== "latch") return null;
-  const providerSessionId = trimmed3(cast.providerSessionId);
+  if (trimmed4(cast.provider)?.toLowerCase() !== "latch") return null;
+  const providerSessionId = trimmed4(cast.providerSessionId);
   if (!providerSessionId) return null;
   return {
     provider: "latch",
     providerSessionId,
-    sessionName: trimmed3(cast.sessionName),
-    executionTargetId: trimmed3(cast.executionTargetId),
-    agentSessionId: trimmed3(cast.agentSessionId),
-    createdAt: trimmed3(cast.createdAt) ?? "",
-    lastObservedState: trimmed3(cast.lastObservedState) ?? "running",
+    sessionName: trimmed4(cast.sessionName),
+    executionTargetId: trimmed4(cast.executionTargetId),
+    agentSessionId: trimmed4(cast.agentSessionId),
+    createdAt: trimmed4(cast.createdAt) ?? "",
+    lastObservedState: trimmed4(cast.lastObservedState) ?? "running",
     observation: parseHarnessObservation(cast.observation)
   };
 }
@@ -70775,18 +70805,18 @@ function parseHarnessObservation(value) {
   const cursor = typeof row.cursor === "number" && Number.isFinite(row.cursor) ? row.cursor : null;
   if (cursor === null || cursor < 0) return null;
   const pendingRaw = row.pendingInput && typeof row.pendingInput === "object" && !Array.isArray(row.pendingInput) ? row.pendingInput : null;
-  const pendingKind = trimmed3(pendingRaw?.kind);
-  const pendingInput = pendingRaw && trimmed3(pendingRaw.requestId) && (pendingKind === "permission" || pendingKind === "question") && typeof pendingRaw.prompt === "string" ? {
-    requestId: trimmed3(pendingRaw.requestId),
+  const pendingKind = trimmed4(pendingRaw?.kind);
+  const pendingInput = pendingRaw && trimmed4(pendingRaw.requestId) && (pendingKind === "permission" || pendingKind === "question") && typeof pendingRaw.prompt === "string" ? {
+    requestId: trimmed4(pendingRaw.requestId),
     kind: pendingKind === "question" ? "question" : "permission",
     prompt: pendingRaw.prompt,
     choices: Array.isArray(pendingRaw.choices) ? pendingRaw.choices.filter((choice) => typeof choice === "string") : [],
-    at: trimmed3(pendingRaw.at) ?? ""
+    at: trimmed4(pendingRaw.at) ?? ""
   } : null;
   return {
     cursor,
     connectorEpoch: typeof row.connectorEpoch === "number" && Number.isFinite(row.connectorEpoch) ? row.connectorEpoch : null,
-    lastEventAt: trimmed3(row.lastEventAt),
+    lastEventAt: trimmed4(row.lastEventAt),
     turnCount: typeof row.turnCount === "number" && Number.isFinite(row.turnCount) ? row.turnCount : 0,
     pendingInput,
     unattached: row.unattached === true
@@ -70817,7 +70847,7 @@ function mergeProviderSessionIntoMetadata({
   });
 }
 function latchViewerFlagForKind(kind) {
-  switch (trimmed3(kind)?.toLowerCase()) {
+  switch (trimmed4(kind)?.toLowerCase()) {
     case "iterm":
     case "iterm2":
       return "iterm";
@@ -70840,7 +70870,7 @@ function compareLatchProductVersions(a5, b5) {
   return 0;
 }
 function latchSupportsOpenAs(productVersion) {
-  const version4 = trimmed3(productVersion);
+  const version4 = trimmed4(productVersion);
   if (!version4) return false;
   return compareLatchProductVersions(version4, LATCH_OPEN_AS_MIN_PRODUCT_VERSION) >= 0;
 }
@@ -70868,11 +70898,11 @@ var init_latch_launch = __esm({
 });
 
 // ../packages/core/service/latch-session.ts
-function trimmed4(value) {
+function trimmed5(value) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 function parseState2(value) {
-  switch (trimmed4(value)) {
+  switch (trimmed5(value)) {
     case "running":
       return "running";
     case "exited":
@@ -70889,7 +70919,9 @@ function runLatchJson({
   executable,
   args
 }) {
-  const result = (0, import_node_child_process4.spawnSync)(executable, args, {
+  const binary2 = resolveLatchBinaryPath(executable);
+  if (!binary2) throw new LatchSessionCommandError(latchBinaryMissingMessage(executable));
+  const result = (0, import_node_child_process4.spawnSync)(binary2, args, {
     encoding: "utf8",
     shell: false,
     timeout: 1e4,
@@ -70917,18 +70949,18 @@ function inspectLatchSession({
   executable = "latch",
   providerSessionId
 }) {
-  const sessionId = trimmed4(providerSessionId);
+  const sessionId = trimmed5(providerSessionId);
   if (!sessionId) throw new LatchSessionCommandError("A Latch session id is required.");
   const report = runLatchJson({
-    executable: trimmed4(executable) ?? "latch",
+    executable: trimmed5(executable) ?? "latch",
     args: ["inspect", sessionId, "--json"]
   });
   const state2 = parseState2(report.state);
   if (!state2) throw new LatchSessionCommandError("Latch returned an unsupported session state.");
   const exit = report.exit && typeof report.exit === "object" && !Array.isArray(report.exit) ? report.exit : null;
   return {
-    providerSessionId: trimmed4(report.id) ?? sessionId,
-    name: trimmed4(report.name) ?? sessionId,
+    providerSessionId: trimmed5(report.id) ?? sessionId,
+    name: trimmed5(report.name) ?? sessionId,
     state: state2,
     exitCode: typeof exit?.code === "number" && Number.isFinite(exit.code) ? exit.code : null,
     inspectedAt: (/* @__PURE__ */ new Date()).toISOString()
@@ -70936,7 +70968,7 @@ function inspectLatchSession({
 }
 function readLatchProductVersion(executable) {
   try {
-    return trimmed4(runLatchJson({ executable, args: ["capabilities", "--json"] }).productVersion);
+    return trimmed5(runLatchJson({ executable, args: ["capabilities", "--json"] }).productVersion);
   } catch {
     return null;
   }
@@ -70947,13 +70979,13 @@ function openLatchSession({
   viewerKind,
   openAs
 }) {
-  const sessionId = trimmed4(providerSessionId);
+  const sessionId = trimmed5(providerSessionId);
   if (!sessionId) throw new LatchSessionCommandError("A Latch session id is required.");
   const viewer = latchViewerFlagForKind(viewerKind);
   if (!viewer) {
     throw new LatchSessionCommandError(`Latch cannot open the configured viewer "${viewerKind}".`);
   }
-  const exe = trimmed4(executable) ?? "latch";
+  const exe = trimmed5(executable) ?? "latch";
   const report = runLatchJson({
     executable: exe,
     args: buildLatchOpenArgs({
@@ -70967,26 +70999,26 @@ function openLatchSession({
     throw new LatchSessionCommandError(`Latch did not open the ${viewer} viewer.`);
   }
   return {
-    providerSessionId: trimmed4(report.id) ?? sessionId,
-    viewer: trimmed4(report.viewer) ?? viewer,
+    providerSessionId: trimmed5(report.id) ?? sessionId,
+    viewer: trimmed5(report.viewer) ?? viewer,
     opened: true,
-    behavior: trimmed4(report.behavior) ? parseViewerOpenAs(report.behavior) : null
+    behavior: trimmed5(report.behavior) ? parseViewerOpenAs(report.behavior) : null
   };
 }
 function stopLatchSession({
   executable = "latch",
   providerSessionId
 }) {
-  const sessionId = trimmed4(providerSessionId);
+  const sessionId = trimmed5(providerSessionId);
   if (!sessionId) throw new LatchSessionCommandError("A Latch session id is required.");
   const report = runLatchJson({
-    executable: trimmed4(executable) ?? "latch",
+    executable: trimmed5(executable) ?? "latch",
     args: ["stop", sessionId, "--json"]
   });
   const state2 = parseState2(report.state);
   if (!state2) throw new LatchSessionCommandError("Latch returned an unsupported session state.");
   return {
-    providerSessionId: trimmed4(report.id) ?? sessionId,
+    providerSessionId: trimmed5(report.id) ?? sessionId,
     state: state2
   };
 }
@@ -70995,6 +71027,7 @@ var init_latch_session = __esm({
   "../packages/core/service/latch-session.ts"() {
     "use strict";
     import_node_child_process4 = require("node:child_process");
+    init_latch_binary();
     init_latch_environment();
     init_latch_launch();
     init_terminal_profile_types();
@@ -71008,16 +71041,16 @@ var init_latch_session = __esm({
 });
 
 // ../packages/core/service/latch-events.ts
-function trimmed5(value) {
+function trimmed6(value) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 function parseHarnessEvent(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const row = value;
-  const type = trimmed5(row.type);
-  const sessionId = trimmed5(row.sessionId);
-  const at = trimmed5(row.at);
-  const harnessVersion = trimmed5(row.harnessVersion);
+  const type = trimmed6(row.type);
+  const sessionId = trimmed6(row.sessionId);
+  const at = trimmed6(row.at);
+  const harnessVersion = trimmed6(row.harnessVersion);
   const connectorEpoch = typeof row.connectorEpoch === "number" && Number.isFinite(row.connectorEpoch) ? row.connectorEpoch : null;
   if (!type || !HARNESS_EVENT_TYPES.has(type) || !sessionId || !at || !harnessVersion) return null;
   if (connectorEpoch === null || connectorEpoch < 1) return null;
@@ -71026,23 +71059,23 @@ function parseHarnessEvent(value) {
     case "user_message":
     case "assistant_delta":
     case "assistant_message": {
-      const text = trimmed5(row.text);
+      const text = trimmed6(row.text);
       if (!text) return null;
       return { ...base, type, text };
     }
     case "tool_started": {
-      const tool = trimmed5(row.tool);
+      const tool = trimmed6(row.tool);
       if (!tool) return null;
       return { ...base, type, tool, input: row.input };
     }
     case "tool_finished": {
-      const tool = trimmed5(row.tool);
+      const tool = trimmed6(row.tool);
       if (!tool) return null;
       return { ...base, type, tool, output: row.output };
     }
     case "awaiting_input": {
-      const requestId = trimmed5(row.requestId);
-      const kind = trimmed5(row.kind);
+      const requestId = trimmed6(row.requestId);
+      const kind = trimmed6(row.kind);
       const prompt = typeof row.prompt === "string" ? row.prompt : null;
       if (!requestId || kind !== "permission" && kind !== "question" || prompt === null) {
         return null;
@@ -71058,7 +71091,7 @@ function parseHarnessEvent(value) {
       };
     }
     case "status": {
-      const status = trimmed5(row.status);
+      const status = trimmed6(row.status);
       if (!status) return null;
       return { ...base, type, status };
     }
@@ -71137,10 +71170,11 @@ async function collectLatchEvents({
   idleMs = 250,
   timeoutMs = 8e3
 }) {
-  const sessionId = trimmed5(providerSessionId);
+  const sessionId = trimmed6(providerSessionId);
   if (!sessionId) throw new LatchSessionCommandError("A Latch session id is required.");
   const fromCursor = Number.isFinite(from) && from > 0 ? Math.floor(from) : 0;
-  const bin = trimmed5(executable) ?? "latch";
+  const bin = resolveLatchBinaryPath(executable);
+  if (!bin) throw new LatchSessionCommandError(latchBinaryMissingMessage(executable));
   return new Promise((resolve, reject) => {
     const child = (0, import_node_child_process5.spawn)(bin, ["events", sessionId, "--json", "--from", String(fromCursor)], {
       stdio: ["ignore", "pipe", "pipe"],
@@ -71204,6 +71238,7 @@ var init_latch_events = __esm({
   "../packages/core/service/latch-events.ts"() {
     "use strict";
     import_node_child_process5 = require("node:child_process");
+    init_latch_binary();
     init_latch_environment();
     init_latch_session();
     HARNESS_EVENT_TYPES = /* @__PURE__ */ new Set([
@@ -71219,21 +71254,29 @@ var init_latch_events = __esm({
 });
 
 // ../packages/core/service/latch-send.ts
-function trimmed6(value) {
+function trimmed7(value) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 function probeLatchInteractionCapabilities({
   executable = "latch",
   providerSessionId
 }) {
-  const sessionId = trimmed6(providerSessionId);
-  const bin = trimmed6(executable) ?? "latch";
+  const sessionId = trimmed7(providerSessionId);
+  const bin = resolveLatchBinaryPath(executable);
   if (!sessionId) {
     return {
       sendMessage: false,
       sendKeys: false,
       resolve: false,
       canSend: { ok: false, reason: "A Latch session id is required." }
+    };
+  }
+  if (!bin) {
+    return {
+      sendMessage: false,
+      sendKeys: false,
+      resolve: false,
+      canSend: { ok: false, reason: latchBinaryMissingMessage(executable) }
     };
   }
   const help = (0, import_node_child_process6.spawnSync)(bin, ["send", "--help"], {
@@ -71267,9 +71310,9 @@ function resolveLatchInput({
   requestId,
   choice
 }) {
-  const sessionId = trimmed6(providerSessionId);
-  const id = trimmed6(requestId);
-  const selected = trimmed6(choice);
+  const sessionId = trimmed7(providerSessionId);
+  const id = trimmed7(requestId);
+  const selected = trimmed7(choice);
   if (!sessionId) throw new LatchSessionCommandError("A Latch session id is required.");
   if (!id) throw new LatchSessionCommandError("A request id is required.");
   if (!selected) throw new LatchSessionCommandError("A resolve choice is required.");
@@ -71282,7 +71325,8 @@ function resolveLatchInput({
       capabilities.canSend.reason || "This Latch session cannot resolve a pending prompt."
     );
   }
-  const bin = trimmed6(executable) ?? "latch";
+  const bin = resolveLatchBinaryPath(executable);
+  if (!bin) throw new LatchSessionCommandError(latchBinaryMissingMessage(executable));
   const result = (0, import_node_child_process6.spawnSync)(bin, ["send", sessionId, "--resolve", `${id}=${selected}`, "--json"], {
     encoding: "utf8",
     shell: false,
@@ -71307,6 +71351,7 @@ var init_latch_send = __esm({
   "../packages/core/service/latch-send.ts"() {
     "use strict";
     import_node_child_process6 = require("node:child_process");
+    init_latch_binary();
     init_latch_environment();
     init_latch_session();
   }
@@ -71337,8 +71382,8 @@ var init_doctor_checks = __esm({
 
 // ../packages/core/service/local-target/project-metadata.ts
 function writeIfChanged(filePath, content) {
-  if (!(0, import_node_fs11.existsSync)(filePath) || (0, import_node_fs11.readFileSync)(filePath, "utf8") !== content) {
-    (0, import_node_fs11.writeFileSync)(filePath, content);
+  if (!(0, import_node_fs12.existsSync)(filePath) || (0, import_node_fs12.readFileSync)(filePath, "utf8") !== content) {
+    (0, import_node_fs12.writeFileSync)(filePath, content);
   }
 }
 function replaceManagedBlock(content, block) {
@@ -71353,13 +71398,13 @@ function replaceManagedBlock(content, block) {
 function ensureAgentInstructions(checkoutPath) {
   for (const filename of ["AGENTS.md", "CLAUDE.md"]) {
     const instructionPath = import_node_path13.default.join(checkoutPath, filename);
-    const existing = (0, import_node_fs11.existsSync)(instructionPath) ? (0, import_node_fs11.readFileSync)(instructionPath, "utf8") : "";
+    const existing = (0, import_node_fs12.existsSync)(instructionPath) ? (0, import_node_fs12.readFileSync)(instructionPath, "utf8") : "";
     writeIfChanged(instructionPath, replaceManagedBlock(existing, PROJECT_METADATA_INSTRUCTION));
   }
 }
 function ensureGitignore(checkoutPath) {
   const gitignorePath = import_node_path13.default.join(checkoutPath, ".gitignore");
-  const existing = (0, import_node_fs11.existsSync)(gitignorePath) ? (0, import_node_fs11.readFileSync)(gitignorePath, "utf8") : "";
+  const existing = (0, import_node_fs12.existsSync)(gitignorePath) ? (0, import_node_fs12.readFileSync)(gitignorePath, "utf8") : "";
   const existingPatterns = new Set(
     existing.split(/\r?\n/).map((line2) => line2.trim().replace(/^\//, "")).filter(Boolean)
   );
@@ -71368,7 +71413,7 @@ function ensureGitignore(checkoutPath) {
   );
   if (additions.length === 0) return;
   const separator = existing.length === 0 || existing.endsWith("\n") ? "" : "\n";
-  (0, import_node_fs11.writeFileSync)(gitignorePath, `${existing}${separator}${additions.join("\n")}
+  (0, import_node_fs12.writeFileSync)(gitignorePath, `${existing}${separator}${additions.join("\n")}
 `);
 }
 function resolveGitRoot(directoryPath) {
@@ -71429,8 +71474,8 @@ function selectPrimaryProjectEntry(projects) {
   return latestLinkedAt(projects);
 }
 function parseProjectJson(projectJsonPath) {
-  if (!(0, import_node_fs11.existsSync)(projectJsonPath)) return null;
-  const parsed = JSON.parse((0, import_node_fs11.readFileSync)(projectJsonPath, "utf8"));
+  if (!(0, import_node_fs12.existsSync)(projectJsonPath)) return null;
+  const parsed = JSON.parse((0, import_node_fs12.readFileSync)(projectJsonPath, "utf8"));
   const fromArray = Array.isArray(parsed.projects) ? parsed.projects.map((entry) => parseProjectEntry(entry)).filter((entry) => entry !== null) : [];
   const fromTopLevel = parseProjectEntry(parsed);
   const projects = fromArray.length > 0 ? fromArray : fromTopLevel ? [fromTopLevel] : [];
@@ -71506,9 +71551,9 @@ function writeProjectJson({
   isPrimary
 }) {
   const overlordDir = import_node_path13.default.join(directoryPath, ".overlord");
-  (0, import_node_fs11.mkdirSync)(overlordDir, { recursive: true });
-  (0, import_node_fs11.mkdirSync)(import_node_path13.default.join(overlordDir, "tmp"), { recursive: true });
-  (0, import_node_fs11.mkdirSync)(import_node_path13.default.join(overlordDir, "logs"), { recursive: true });
+  (0, import_node_fs12.mkdirSync)(overlordDir, { recursive: true });
+  (0, import_node_fs12.mkdirSync)(import_node_path13.default.join(overlordDir, "tmp"), { recursive: true });
+  (0, import_node_fs12.mkdirSync)(import_node_path13.default.join(overlordDir, "logs"), { recursive: true });
   protectProjectMetadata(directoryPath);
   const projectJsonPath = import_node_path13.default.join(overlordDir, "project.json");
   const existing = parseProjectJson(projectJsonPath);
@@ -71537,7 +71582,7 @@ function writeProjectJson({
   ];
   const primary = selectPrimaryProjectEntry(projects) ?? nextEntry;
   const primaryResourceIds = primary.resourceIdsByExecutionTarget ?? {};
-  (0, import_node_fs11.writeFileSync)(
+  (0, import_node_fs12.writeFileSync)(
     projectJsonPath,
     `${JSON.stringify(
       {
@@ -71559,12 +71604,12 @@ function writeProjectJson({
   );
   return projectJsonPath;
 }
-var import_node_child_process8, import_node_fs11, import_node_path13, PROJECT_JSON_VERSION, PROJECT_JSON_WARNING, INSTRUCTION_BLOCK_START, INSTRUCTION_BLOCK_END, PROJECT_METADATA_INSTRUCTION;
+var import_node_child_process8, import_node_fs12, import_node_path13, PROJECT_JSON_VERSION, PROJECT_JSON_WARNING, INSTRUCTION_BLOCK_START, INSTRUCTION_BLOCK_END, PROJECT_METADATA_INSTRUCTION;
 var init_project_metadata = __esm({
   "../packages/core/service/local-target/project-metadata.ts"() {
     "use strict";
     import_node_child_process8 = require("node:child_process");
-    import_node_fs11 = require("node:fs");
+    import_node_fs12 = require("node:fs");
     import_node_path13 = __toESM(require("node:path"), 1);
     init_util3();
     PROJECT_JSON_VERSION = 3;
@@ -71595,11 +71640,11 @@ var init_result = __esm({
 });
 
 // ../packages/core/service/local-target/in-process-provider.ts
-var import_node_fs12, InProcessProvider;
+var import_node_fs13, InProcessProvider;
 var init_in_process_provider = __esm({
   "../packages/core/service/local-target/in-process-provider.ts"() {
     "use strict";
-    import_node_fs12 = require("node:fs");
+    import_node_fs13 = require("node:fs");
     init_git_tree();
     init_latch_discovery();
     init_latch_events();
@@ -71628,7 +71673,7 @@ var init_in_process_provider = __esm({
        */
       async observeResource(input) {
         const observedAt = (/* @__PURE__ */ new Date()).toISOString();
-        const state2 = (0, import_node_fs12.existsSync)(input.path) ? "available" : "missing";
+        const state2 = (0, import_node_fs13.existsSync)(input.path) ? "available" : "missing";
         return ok2(this.target, { state: state2, observedAt });
       }
       /**
@@ -72256,8 +72301,8 @@ function mergeProfileMetadataJson({
     else delete parsed.avatarUrl;
   }
   if (agentInstructions !== void 0) {
-    const trimmed9 = agentInstructions?.trim() ?? "";
-    if (trimmed9) parsed.agentInstructions = trimmed9;
+    const trimmed10 = agentInstructions?.trim() ?? "";
+    if (trimmed10) parsed.agentInstructions = trimmed10;
     else delete parsed.agentInstructions;
   }
   return JSON.stringify(parsed);
@@ -73231,7 +73276,7 @@ async function resolveObjectiveWorkingDirectory({
 }) {
   if (explicitWorkingDirectory?.trim()) {
     const resolved = import_node_path14.default.resolve(explicitWorkingDirectory);
-    if (ctx.db.dialect === "sqlite" && !(0, import_node_fs13.existsSync)(resolved)) {
+    if (ctx.db.dialect === "sqlite" && !(0, import_node_fs14.existsSync)(resolved)) {
       throw new ServiceError(
         `Working directory does not exist: ${resolved}`,
         "working_directory_missing"
@@ -73387,12 +73432,12 @@ async function discoverProject({
     404
   );
 }
-var import_node_fs13, import_node_path14, PRIMARY_RESOURCE_REPAIR_HINT;
+var import_node_fs14, import_node_path14, PRIMARY_RESOURCE_REPAIR_HINT;
 var init_projects = __esm({
   "../packages/core/service/projects.ts"() {
     "use strict";
     init_dist();
-    import_node_fs13 = require("node:fs");
+    import_node_fs14 = require("node:fs");
     import_node_path14 = __toESM(require("node:path"), 1);
     init_local_target();
     init_change_feed();
@@ -73781,22 +73826,22 @@ var init_webhook_events = __esm({
 
 // ../packages/contract/dist/agent-launch-flags.js
 function parseAgentLaunchFlagText(text) {
-  const trimmed9 = text.trim();
-  if (!trimmed9)
+  const trimmed10 = text.trim();
+  if (!trimmed10)
     return null;
-  const eqIndex = trimmed9.indexOf("=");
-  if (eqIndex > 0 && trimmed9.startsWith("--")) {
-    const name = trimmed9.slice(0, eqIndex).trim();
-    const value = trimmed9.slice(eqIndex + 1).trim();
+  const eqIndex = trimmed10.indexOf("=");
+  if (eqIndex > 0 && trimmed10.startsWith("--")) {
+    const name = trimmed10.slice(0, eqIndex).trim();
+    const value = trimmed10.slice(eqIndex + 1).trim();
     return name ? { name, value: value.length > 0 ? value : null } : null;
   }
-  const spaceIndex = trimmed9.indexOf(" ");
-  if (spaceIndex > 0 && trimmed9.startsWith("--")) {
-    const name = trimmed9.slice(0, spaceIndex).trim();
-    const value = trimmed9.slice(spaceIndex + 1).trim();
+  const spaceIndex = trimmed10.indexOf(" ");
+  if (spaceIndex > 0 && trimmed10.startsWith("--")) {
+    const name = trimmed10.slice(0, spaceIndex).trim();
+    const value = trimmed10.slice(spaceIndex + 1).trim();
     return name ? { name, value: value.length > 0 ? value : null } : null;
   }
-  return { name: trimmed9 };
+  return { name: trimmed10 };
 }
 function normalizeAgentLaunchFlags(input) {
   if (!Array.isArray(input))
@@ -73979,7 +74024,7 @@ var init_dist6 = __esm({
 function isRunnerRelation(value) {
   return value === "native" || value === "adopted";
 }
-function trimmed7(value) {
+function trimmed8(value) {
   const text = value?.trim();
   return text && text.length > 0 ? text : null;
 }
@@ -74051,7 +74096,7 @@ async function resolveRunnerTarget({
   input,
   actingTarget
 }) {
-  const explicitId = trimmed7(input.executionTargetId);
+  const explicitId = trimmed8(input.executionTargetId);
   if (!explicitId) {
     const target = actingTarget ?? await resolveClaimingDeviceTarget({ ctx });
     await assertTargetEnabled({ ctx, executionTargetId: target.executionTargetId });
@@ -74101,8 +74146,8 @@ async function recordRunnerHeartbeat({
       [
         executionTargetId,
         relation,
-        trimmed7(label),
-        trimmed7(runnerVersion),
+        trimmed8(label),
+        trimmed8(runnerVersion),
         capabilitiesJson,
         supportedAgentsJson,
         health,
@@ -74125,8 +74170,8 @@ async function recordRunnerHeartbeat({
       executionTargetId,
       runnerInstanceId,
       relation,
-      label: trimmed7(label),
-      runnerVersion: trimmed7(runnerVersion),
+      label: trimmed8(label),
+      runnerVersion: trimmed8(runnerVersion),
       supportedAgents: supportedAgents ?? [],
       health,
       lastHeartbeatAt: now2,
@@ -74146,8 +74191,8 @@ async function recordRunnerHeartbeat({
       executionTargetId,
       runnerInstanceId,
       relation,
-      trimmed7(label),
-      trimmed7(runnerVersion),
+      trimmed8(label),
+      trimmed8(runnerVersion),
       capabilitiesJson,
       supportedAgentsJson,
       health,
@@ -74169,8 +74214,8 @@ async function recordRunnerHeartbeat({
     executionTargetId,
     runnerInstanceId,
     relation,
-    label: trimmed7(label),
-    runnerVersion: trimmed7(runnerVersion),
+    label: trimmed8(label),
+    runnerVersion: trimmed8(runnerVersion),
     supportedAgents: supportedAgents ?? [],
     health,
     lastHeartbeatAt: now2,
@@ -74313,8 +74358,8 @@ function readPreferenceRow(ctx, projectId) {
 function readStoredExecutionTargetId(preferences) {
   const stored = preferences[PROJECT_EXECUTION_TARGET_PREFERENCE_KEY];
   if (typeof stored !== "string") return null;
-  const trimmed9 = stored.trim();
-  return trimmed9.length > 0 ? trimmed9 : null;
+  const trimmed10 = stored.trim();
+  return trimmed10.length > 0 ? trimmed10 : null;
 }
 function isTargetReachable({
   lastSeenAt,
@@ -79231,10 +79276,10 @@ var init_hex_encoding = __esm({
 });
 
 // ../node_modules/@smithy/core/dist-es/submodules/serde/util-body-length/calculateBodyLength.js
-var import_node_fs14, calculateBodyLength;
+var import_node_fs15, calculateBodyLength;
 var init_calculateBodyLength = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/serde/util-body-length/calculateBodyLength.js"() {
-    import_node_fs14 = require("node:fs");
+    import_node_fs15 = require("node:fs");
     calculateBodyLength = (body) => {
       if (!body) {
         return 0;
@@ -79247,11 +79292,11 @@ var init_calculateBodyLength = __esm({
         return body.size;
       } else if (typeof body.start === "number" && typeof body.end === "number") {
         return body.end + 1 - body.start;
-      } else if (body instanceof import_node_fs14.ReadStream) {
+      } else if (body instanceof import_node_fs15.ReadStream) {
         if (body.path != null) {
-          return (0, import_node_fs14.lstatSync)(body.path).size;
+          return (0, import_node_fs15.lstatSync)(body.path).size;
         } else if (typeof body.fd === "number") {
-          return (0, import_node_fs14.fstatSync)(body.fd).size;
+          return (0, import_node_fs15.fstatSync)(body.fd).size;
         }
       }
       throw new Error(`Body Length computation failed for ${body}`);
@@ -90789,31 +90834,31 @@ var init_S3ExpressIdentityProviderImpl = __esm({
       createSessionFn;
       cache;
       static REFRESH_WINDOW_MS = 6e4;
-      constructor(createSessionFn, cache7 = new S3ExpressIdentityCache()) {
+      constructor(createSessionFn, cache8 = new S3ExpressIdentityCache()) {
         this.createSessionFn = createSessionFn;
-        this.cache = cache7;
+        this.cache = cache8;
       }
       async getS3ExpressIdentity(awsIdentity, identityProperties) {
         const key = identityProperties.Bucket;
-        const { cache: cache7 } = this;
-        const entry = cache7.get(key);
+        const { cache: cache8 } = this;
+        const entry = cache8.get(key);
         if (entry) {
           return entry.identity.then((identity) => {
             const isExpired = (identity.expiration?.getTime() ?? 0) < Date.now();
             if (isExpired) {
-              return cache7.set(key, new S3ExpressIdentityCacheEntry(this.getIdentity(key))).identity;
+              return cache8.set(key, new S3ExpressIdentityCacheEntry(this.getIdentity(key))).identity;
             }
             const isExpiringSoon = (identity.expiration?.getTime() ?? 0) < Date.now() + _S3ExpressIdentityProviderImpl.REFRESH_WINDOW_MS;
             if (isExpiringSoon && !entry.isRefreshing) {
               entry.isRefreshing = true;
               this.getIdentity(key).then((id) => {
-                cache7.set(key, new S3ExpressIdentityCacheEntry(Promise.resolve(id)));
+                cache8.set(key, new S3ExpressIdentityCacheEntry(Promise.resolve(id)));
               });
             }
             return identity;
           });
         }
-        return cache7.set(key, new S3ExpressIdentityCacheEntry(this.getIdentity(key))).identity;
+        return cache8.set(key, new S3ExpressIdentityCacheEntry(this.getIdentity(key))).identity;
       }
       async getIdentity(key) {
         await this.cache.purgeExpired().catch((error53) => {
@@ -97035,7 +97080,7 @@ var require_endpointResolver = __commonJS({
     var { awsEndpointFunctions: awsEndpointFunctions2 } = (init_client4(), __toCommonJS(client_exports2));
     var { customEndpointFunctions: customEndpointFunctions2, decideEndpoint: decideEndpoint2, EndpointCache: EndpointCache2 } = (init_endpoints(), __toCommonJS(endpoints_exports));
     var { bdd: bdd5 } = require_bdd();
-    var cache7 = new EndpointCache2({
+    var cache8 = new EndpointCache2({
       size: 50,
       params: [
         "Accelerate",
@@ -97055,7 +97100,7 @@ var require_endpointResolver = __commonJS({
       ]
     });
     exports2.defaultEndpointResolver = (endpointParams, context = {}) => {
-      return cache7.get(endpointParams, () => decideEndpoint2(bdd5, {
+      return cache8.get(endpointParams, () => decideEndpoint2(bdd5, {
         endpointParams,
         logger: context.logger
       }));
@@ -105057,18 +105102,18 @@ var init_bdd = __esm({
 });
 
 // ../node_modules/@aws-sdk/nested-clients/dist-es/submodules/sso-oidc/endpoint/endpointResolver.js
-var cache3, defaultEndpointResolver;
+var cache4, defaultEndpointResolver;
 var init_endpointResolver = __esm({
   "../node_modules/@aws-sdk/nested-clients/dist-es/submodules/sso-oidc/endpoint/endpointResolver.js"() {
     init_client4();
     init_endpoints();
     init_bdd();
-    cache3 = new EndpointCache({
+    cache4 = new EndpointCache({
       size: 50,
       params: ["Endpoint", "Region", "UseDualStack", "UseFIPS"]
     });
     defaultEndpointResolver = (endpointParams, context = {}) => {
-      return cache3.get(endpointParams, () => decideEndpoint(bdd, {
+      return cache4.get(endpointParams, () => decideEndpoint(bdd, {
         endpointParams,
         logger: context.logger
       }));
@@ -106107,18 +106152,18 @@ var init_bdd2 = __esm({
 });
 
 // ../node_modules/@aws-sdk/nested-clients/dist-es/submodules/sso/endpoint/endpointResolver.js
-var cache4, defaultEndpointResolver2;
+var cache5, defaultEndpointResolver2;
 var init_endpointResolver2 = __esm({
   "../node_modules/@aws-sdk/nested-clients/dist-es/submodules/sso/endpoint/endpointResolver.js"() {
     init_client4();
     init_endpoints();
     init_bdd2();
-    cache4 = new EndpointCache({
+    cache5 = new EndpointCache({
       size: 50,
       params: ["Endpoint", "Region", "UseDualStack", "UseFIPS"]
     });
     defaultEndpointResolver2 = (endpointParams, context = {}) => {
-      return cache4.get(endpointParams, () => decideEndpoint(bdd2, {
+      return cache5.get(endpointParams, () => decideEndpoint(bdd2, {
         endpointParams,
         logger: context.logger
       }));
@@ -107052,18 +107097,18 @@ var init_bdd3 = __esm({
 });
 
 // ../node_modules/@aws-sdk/nested-clients/dist-es/submodules/signin/endpoint/endpointResolver.js
-var cache5, defaultEndpointResolver3;
+var cache6, defaultEndpointResolver3;
 var init_endpointResolver3 = __esm({
   "../node_modules/@aws-sdk/nested-clients/dist-es/submodules/signin/endpoint/endpointResolver.js"() {
     init_client4();
     init_endpoints();
     init_bdd3();
-    cache5 = new EndpointCache({
+    cache6 = new EndpointCache({
       size: 50,
       params: ["Endpoint", "IsControlPlane", "Region", "UseDualStack", "UseFIPS"]
     });
     defaultEndpointResolver3 = (endpointParams, context = {}) => {
-      return cache5.get(endpointParams, () => decideEndpoint(bdd3, {
+      return cache6.get(endpointParams, () => decideEndpoint(bdd3, {
         endpointParams,
         logger: context.logger
       }));
@@ -108061,18 +108106,18 @@ var init_bdd4 = __esm({
 });
 
 // ../node_modules/@aws-sdk/nested-clients/dist-es/submodules/sts/endpoint/endpointResolver.js
-var cache6, defaultEndpointResolver4;
+var cache7, defaultEndpointResolver4;
 var init_endpointResolver4 = __esm({
   "../node_modules/@aws-sdk/nested-clients/dist-es/submodules/sts/endpoint/endpointResolver.js"() {
     init_client4();
     init_endpoints();
     init_bdd4();
-    cache6 = new EndpointCache({
+    cache7 = new EndpointCache({
       size: 50,
       params: ["Endpoint", "Region", "UseDualStack", "UseFIPS", "UseGlobalEndpoint"]
     });
     defaultEndpointResolver4 = (endpointParams, context = {}) => {
-      return cache6.get(endpointParams, () => decideEndpoint(bdd4, {
+      return cache7.get(endpointParams, () => decideEndpoint(bdd4, {
         endpointParams,
         logger: context.logger
       }));
@@ -109654,17 +109699,17 @@ var init_HashCalculator = __esm({
 });
 
 // ../node_modules/@smithy/core/dist-es/submodules/checksum/hash-stream-node/fileStreamHasher.js
-var import_node_fs15, fileStreamHasher, isReadStream;
+var import_node_fs16, fileStreamHasher, isReadStream;
 var init_fileStreamHasher = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/checksum/hash-stream-node/fileStreamHasher.js"() {
-    import_node_fs15 = require("node:fs");
+    import_node_fs16 = require("node:fs");
     init_HashCalculator();
     fileStreamHasher = (hashCtor, fileStream) => new Promise((resolve, reject) => {
       if (!isReadStream(fileStream)) {
         reject(new Error("Unable to calculate hash for non-file streams."));
         return;
       }
-      const fileStreamTee = (0, import_node_fs15.createReadStream)(fileStream.path, {
+      const fileStreamTee = (0, import_node_fs16.createReadStream)(fileStream.path, {
         start: fileStream.start,
         end: fileStream.end
       });
@@ -117056,8 +117101,8 @@ var LocalJWKSet = class {
     return importWithAlgCache(this.#cached, jwk, alg2);
   }
 };
-async function importWithAlgCache(cache7, jwk, alg2) {
-  const cached3 = cache7.get(jwk) || cache7.set(jwk, {}).get(jwk);
+async function importWithAlgCache(cache8, jwk, alg2) {
+  const cached3 = cache8.get(jwk) || cache8.set(jwk, {}).get(jwk);
   if (cached3[alg2] === void 0) {
     const key = await importJWK({ ...jwk, ext: true }, alg2);
     if (key instanceof Uint8Array || key.type !== "public") {
@@ -132573,11 +132618,11 @@ function normalizeInstructionText(value) {
   return (value ?? "").trim();
 }
 function deriveTitleFromInstructionText(instructionText) {
-  const trimmed9 = normalizeInstructionText(instructionText);
-  if (trimmed9.length <= 100) {
-    return trimmed9;
+  const trimmed10 = normalizeInstructionText(instructionText);
+  if (trimmed10.length <= 100) {
+    return trimmed10;
   }
-  return `${trimmed9.slice(0, 100)}\u2026`;
+  return `${trimmed10.slice(0, 100)}\u2026`;
 }
 
 // ../automations/dist/title-summarizer/tools/summarize-text.js
@@ -133473,7 +133518,7 @@ function fromNodeHeaders(nodeHeaders) {
 // index.ts
 var import_cors = __toESM(require_lib3(), 1);
 var import_express4 = __toESM(require_express2(), 1);
-var import_node_fs19 = require("node:fs");
+var import_node_fs20 = require("node:fs");
 var import_node_path31 = __toESM(require("node:path"), 1);
 var import_node_url8 = require("node:url");
 init_config();
@@ -134027,8 +134072,8 @@ async function searchMissions({
   projectId,
   limit = 25
 }) {
-  const trimmed9 = query?.trim();
-  const match = trimmed9 ? buildMissionSearchMatch({ dialect: ctx.db.dialect, query: trimmed9 }) : null;
+  const trimmed10 = query?.trim();
+  const match = trimmed10 ? buildMissionSearchMatch({ dialect: ctx.db.dialect, query: trimmed10 }) : null;
   if (!match) {
     return await listMissions({
       ctx,
@@ -134525,12 +134570,12 @@ async function authenticateChannelCredential({
   rawToken,
   now: now2 = nowIso()
 }) {
-  const trimmed9 = rawToken.trim();
-  if (!trimmed9) return null;
+  const trimmed10 = rawToken.trim();
+  if (!trimmed10) return null;
   const row = await db.get(
     `SELECT ${CHANNEL_COLUMNS} FROM agent_session_channels
        WHERE credential_hash = ? AND deleted_at IS NULL`,
-    [hashSessionChannelToken(trimmed9)]
+    [hashSessionChannelToken(trimmed10)]
   );
   if (!row) return null;
   if (row.credential_revoked_at !== null) return null;
@@ -136494,33 +136539,33 @@ async function resolveWorkspaceMemberId({
   ctx,
   member: member2
 }) {
-  const trimmed9 = member2.trim();
-  if (!trimmed9) {
+  const trimmed10 = member2.trim();
+  if (!trimmed10) {
     throw new ServiceError(ASSIGNEE_NOT_MEMBER, "validation_error");
   }
   const byWorkspaceUserId = await ctx.db.get(
     `SELECT id FROM workspace_users
         WHERE id = ? AND workspace_id = ? AND status = 'active' AND deleted_at IS NULL`,
-    [trimmed9, ctx.workspace.id]
+    [trimmed10, ctx.workspace.id]
   );
   if (byWorkspaceUserId) return byWorkspaceUserId.id;
   const byProfileId = await ctx.db.get(
     `SELECT id FROM workspace_users
         WHERE profile_id = ? AND workspace_id = ? AND status = 'active' AND deleted_at IS NULL`,
-    [trimmed9, ctx.workspace.id]
+    [trimmed10, ctx.workspace.id]
   );
   if (byProfileId) return byProfileId.id;
-  const colon = trimmed9.indexOf(":");
+  const colon = trimmed10.indexOf(":");
   if (colon > 0) {
     const byMemberKey = await ctx.db.get(
       `SELECT id FROM workspace_users
           WHERE workspace_id = ? AND status = 'active' AND deleted_at IS NULL
             AND lower(member_key) = lower(?)`,
-      [ctx.workspace.id, trimmed9]
+      [ctx.workspace.id, trimmed10]
     );
     if (byMemberKey) return byMemberKey.id;
-    const left = trimmed9.slice(0, colon);
-    const username = trimmed9.slice(colon + 1).trim();
+    const left = trimmed10.slice(0, colon);
+    const username = trimmed10.slice(colon + 1).trim();
     if (username) {
       const byOrgAndHandle = await ctx.db.get(
         `SELECT wu.id
@@ -136542,7 +136587,7 @@ async function resolveWorkspaceMemberId({
        JOIN profiles p ON p.id = wu.profile_id AND p.deleted_at IS NULL
       WHERE wu.workspace_id = ? AND wu.status = 'active' AND wu.deleted_at IS NULL
         AND lower(p.handle) = lower(?)`,
-    [ctx.workspace.id, trimmed9]
+    [ctx.workspace.id, trimmed10]
   );
   if (byHandle) return byHandle.id;
   const byEmail = await ctx.db.get(
@@ -136551,7 +136596,7 @@ async function resolveWorkspaceMemberId({
        JOIN profiles p ON p.id = wu.profile_id AND p.deleted_at IS NULL
       WHERE wu.workspace_id = ? AND wu.status = 'active' AND wu.deleted_at IS NULL
         AND lower(p.email) = lower(?)`,
-    [ctx.workspace.id, trimmed9]
+    [ctx.workspace.id, trimmed10]
   );
   if (byEmail) return byEmail.id;
   throw new ServiceError(ASSIGNEE_NOT_MEMBER, "validation_error");
@@ -137635,8 +137680,8 @@ async function askQuestion({
   sessionKey,
   question
 }) {
-  const trimmed9 = question.trim();
-  if (!trimmed9) {
+  const trimmed10 = question.trim();
+  if (!trimmed10) {
     throw new ServiceError("Question is required", "validation_error");
   }
   const mission = await resolveMissionId(ctx, missionId);
@@ -137660,7 +137705,7 @@ async function askQuestion({
         mission.id,
         session.objective_id,
         session.id,
-        trimmed9,
+        trimmed10,
         ctx.source,
         ctx.actorWorkspaceUserId,
         now2
@@ -139143,11 +139188,11 @@ var DEFAULT_LAUNCH_SESSION_DEFAULTS2 = {
   openViewerOnLaunch: DEFAULT_OPEN_VIEWER_ON_LAUNCH2
 };
 var LAUNCH_SESSION_METADATA_KEY2 = "launchSession";
-function trimmed8(value) {
+function trimmed9(value) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 function viewerKindForLauncher2(launcher) {
-  const value = trimmed8(launcher);
+  const value = trimmed9(launcher);
   if (!value)
     return "inline";
   const lowered = value.toLowerCase();
@@ -139161,10 +139206,10 @@ function normalizeExecutionProvider2(value) {
   if (!value || typeof value !== "object" || Array.isArray(value))
     return null;
   const cast = value;
-  const kind = trimmed8(cast.kind)?.toLowerCase() === "latch" ? "latch" : "direct";
+  const kind = trimmed9(cast.kind)?.toLowerCase() === "latch" ? "latch" : "direct";
   return {
     kind,
-    executable: trimmed8(cast.executable) ?? DEFAULT_LATCH_EXECUTABLE2
+    executable: trimmed9(cast.executable) ?? DEFAULT_LATCH_EXECUTABLE2
   };
 }
 function resolveLaunchSession2({ profile, defaults: defaults2 = DEFAULT_LAUNCH_SESSION_DEFAULTS2 }) {
@@ -139194,15 +139239,15 @@ function launchSessionSnapshotFromMetadata2(metadata) {
   if (cast.version !== TERMINAL_PROFILE_VERSION2)
     return null;
   const viewer = cast.viewer && typeof cast.viewer === "object" && !Array.isArray(cast.viewer) ? cast.viewer : null;
-  const launcher = trimmed8(viewer?.launcher);
-  const source = (value) => trimmed8(value) === "target" ? "target" : "user_default";
+  const launcher = trimmed9(viewer?.launcher);
+  const source = (value) => trimmed9(value) === "target" ? "target" : "user_default";
   return {
     version: TERMINAL_PROFILE_VERSION2,
     executionProvider: normalizeExecutionProvider2(cast.executionProvider) ?? {
       ...DEFAULT_EXECUTION_PROVIDER2
     },
     viewer: {
-      kind: trimmed8(viewer?.kind) ? trimmed8(viewer?.kind) : viewerKindForLauncher2(launcher),
+      kind: trimmed9(viewer?.kind) ? trimmed9(viewer?.kind) : viewerKindForLauncher2(launcher),
       launcher,
       openOnLaunch: viewer?.openOnLaunch !== false,
       // A snapshot frozen before `openAs` existed carries none; `window` is what
@@ -139211,7 +139256,7 @@ function launchSessionSnapshotFromMetadata2(metadata) {
     },
     executionProviderSource: source(cast.executionProviderSource),
     viewerOpenSource: source(cast.viewerOpenSource),
-    resolvedAt: trimmed8(cast.resolvedAt) ?? ""
+    resolvedAt: trimmed9(cast.resolvedAt) ?? ""
   };
 }
 
@@ -140246,8 +140291,8 @@ var PUBLIC_BACKEND_URL_ENV_KEYS = [
   "OVERLORD_BACKEND_URL"
 ];
 function normalizeOriginUrl(value) {
-  const trimmed9 = value.trim().replace(/\/+$/, "");
-  const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed9) ? trimmed9 : `http://${trimmed9}`;
+  const trimmed10 = value.trim().replace(/\/+$/, "");
+  const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed10) ? trimmed10 : `http://${trimmed10}`;
   return new URL(withScheme).origin;
 }
 function readConfiguredPublicBackendUrls() {
@@ -140950,7 +140995,7 @@ init_errors5();
 // storage-backends.ts
 var import_client_s3 = __toESM(require_dist_cjs21(), 1);
 var import_s3_request_presigner = __toESM(require_dist_cjs22(), 1);
-var import_node_fs16 = require("node:fs");
+var import_node_fs17 = require("node:fs");
 var import_node_path24 = __toESM(require("node:path"), 1);
 init_errors5();
 var DEFAULT_PRESIGN_TTL_SECONDS = 300;
@@ -141010,15 +141055,15 @@ function createLocalFsBackend({
   const root5 = import_node_path24.default.isAbsolute(bucket.local_path) ? bucket.local_path : import_node_path24.default.resolve(repoRoot4, bucket.local_path);
   return {
     async put({ key, bytes }) {
-      if (!(0, import_node_fs16.existsSync)(root5)) (0, import_node_fs16.mkdirSync)(root5, { recursive: true });
+      if (!(0, import_node_fs17.existsSync)(root5)) (0, import_node_fs17.mkdirSync)(root5, { recursive: true });
       const absolutePath = import_node_path24.default.join(root5, key);
-      (0, import_node_fs16.mkdirSync)(import_node_path24.default.dirname(absolutePath), { recursive: true });
-      (0, import_node_fs16.writeFileSync)(absolutePath, bytes);
+      (0, import_node_fs17.mkdirSync)(import_node_path24.default.dirname(absolutePath), { recursive: true });
+      (0, import_node_fs17.writeFileSync)(absolutePath, bytes);
     },
     async getStream({ key }) {
       const absolutePath = import_node_path24.default.join(root5, key);
-      if (!(0, import_node_fs16.existsSync)(absolutePath)) throw new ApiError(404, "File not found");
-      return (0, import_node_fs16.createReadStream)(absolutePath);
+      if (!(0, import_node_fs17.existsSync)(absolutePath)) throw new ApiError(404, "File not found");
+      return (0, import_node_fs17.createReadStream)(absolutePath);
     }
   };
 }
@@ -141264,10 +141309,10 @@ async function updateOrganization(id, body) {
     const changed = [];
     let name = existing.name;
     if (body.name !== void 0) {
-      const trimmed9 = body.name.trim();
-      if (!trimmed9) throw new ApiError(400, "Organization name cannot be empty");
-      if (trimmed9 !== existing.name) changed.push("name");
-      name = trimmed9;
+      const trimmed10 = body.name.trim();
+      if (!trimmed10) throw new ApiError(400, "Organization name cannot be empty");
+      if (trimmed10 !== existing.name) changed.push("name");
+      name = trimmed10;
     }
     if (body.logoUrl !== void 0) {
       const logoUrl = body.logoUrl?.trim() || null;
@@ -141807,12 +141852,12 @@ async function resolveResourceExecutionTargetId(db, workspaceId, executionTarget
     }
   }
   if (executionTargetId === null) return null;
-  const trimmed9 = executionTargetId.trim();
-  if (!trimmed9) return null;
-  if (!await executionTargetBelongsToWorkspace(db, trimmed9, workspaceId)) {
+  const trimmed10 = executionTargetId.trim();
+  if (!trimmed10) return null;
+  if (!await executionTargetBelongsToWorkspace(db, trimmed10, workspaceId)) {
     throw new ApiError(404, "Execution target not found");
   }
-  return trimmed9;
+  return trimmed10;
 }
 async function getProjectResourceRow(db, projectId, resourceId, permission = PERMISSIONS.PROJECT_READ) {
   await getProject2(projectId, db, permission);
@@ -142930,8 +142975,8 @@ async function listProjectTags(projectId) {
 }
 function normalizeTagColor(color) {
   if (color === null || color === void 0) return null;
-  const trimmed9 = color.trim();
-  return trimmed9.length > 0 ? trimmed9 : null;
+  const trimmed10 = color.trim();
+  return trimmed10.length > 0 ? trimmed10 : null;
 }
 async function createProjectTag(projectId, body) {
   return requireDatabaseClient().transaction(async (tx) => {
@@ -143577,8 +143622,8 @@ async function getProjectRepository(projectId, executionTargetId, resourceKey = 
 }
 var hexColorPattern = /^#?[0-9a-fA-F]{6}$/;
 function normalizeHexColor(value) {
-  const trimmed9 = value.trim();
-  const withHash = trimmed9.startsWith("#") ? trimmed9 : `#${trimmed9}`;
+  const trimmed10 = value.trim();
+  const withHash = trimmed10.startsWith("#") ? trimmed10 : `#${trimmed10}`;
   return hexColorPattern.test(withHash) ? withHash.toLowerCase() : null;
 }
 async function createProject2(body) {
@@ -145180,12 +145225,12 @@ async function generateMissionTitle(missionRef) {
 }
 async function resolveAssignedWorkspaceUserId(db, workspaceId, value) {
   if (value === null || value === void 0) return null;
-  const trimmed9 = value.trim();
-  if (!trimmed9) return null;
+  const trimmed10 = value.trim();
+  if (!trimmed10) return null;
   const member2 = await db.get(
     `SELECT id FROM workspace_users
         WHERE id = ? AND workspace_id = ? AND status = 'active' AND deleted_at IS NULL`,
-    [trimmed9, workspaceId]
+    [trimmed10, workspaceId]
   );
   if (!member2) throw new ApiError(400, "Assignee is not a member of this workspace");
   return member2.id;
@@ -146771,13 +146816,13 @@ function mergeProfileMetadataJson2({
   if (avatarUrl) parsed.avatarUrl = avatarUrl;
   else if (avatarUrl !== void 0) delete parsed.avatarUrl;
   if (agentInstructions !== void 0) {
-    const trimmed9 = agentInstructions?.trim() ?? "";
-    if (trimmed9) parsed.agentInstructions = trimmed9;
+    const trimmed10 = agentInstructions?.trim() ?? "";
+    if (trimmed10) parsed.agentInstructions = trimmed10;
     else delete parsed.agentInstructions;
   }
   if (editorScheme !== void 0) {
-    const trimmed9 = editorScheme?.trim() ?? "";
-    if (trimmed9) parsed.editorScheme = trimmed9;
+    const trimmed10 = editorScheme?.trim() ?? "";
+    if (trimmed10) parsed.editorScheme = trimmed10;
     else delete parsed.editorScheme;
   }
   return JSON.stringify(parsed);
@@ -147281,7 +147326,7 @@ var import_node_crypto16 = require("node:crypto");
 
 // sql-studio/sql-studio.ts
 var import_node_child_process9 = require("node:child_process");
-var import_node_fs17 = require("node:fs");
+var import_node_fs18 = require("node:fs");
 var import_node_path27 = __toESM(require("node:path"), 1);
 function publicHost(host) {
   return host === "0.0.0.0" ? "127.0.0.1" : host;
@@ -147296,10 +147341,10 @@ function sqlStudioUrl({
 }
 function resolveBinary(binary2) {
   if (import_node_path27.default.isAbsolute(binary2)) {
-    return (0, import_node_fs17.existsSync)(binary2) ? binary2 : null;
+    return (0, import_node_fs18.existsSync)(binary2) ? binary2 : null;
   }
   if (binary2.includes("/")) {
-    return (0, import_node_fs17.existsSync)(binary2) ? binary2 : null;
+    return (0, import_node_fs18.existsSync)(binary2) ? binary2 : null;
   }
   return binary2;
 }
@@ -156063,8 +156108,8 @@ function runnerRegistrationFromBody(value) {
   const text = (key) => {
     const raw = body[key];
     if (typeof raw !== "string") return null;
-    const trimmed9 = raw.trim();
-    return trimmed9.length > 0 ? trimmed9 : null;
+    const trimmed10 = raw.trim();
+    return trimmed10.length > 0 ? trimmed10 : null;
   };
   const relation = text("runnerRelation");
   const capabilities = body.capabilities && typeof body.capabilities === "object" && !Array.isArray(body.capabilities) ? body.capabilities : null;
@@ -158132,8 +158177,8 @@ function resolveAllowedBrowserOrigins({
   const extraOrigins = process.env.OVERLORD_WEB_ORIGINS?.trim();
   if (extraOrigins) {
     for (const origin of extraOrigins.split(",")) {
-      const trimmed9 = origin.trim();
-      if (trimmed9) origins.add(trimmed9);
+      const trimmed10 = origin.trim();
+      if (trimmed10) origins.add(trimmed10);
     }
   }
   return [...origins];
@@ -158190,9 +158235,9 @@ var MAX_EVENT_PAYLOAD_BYTES = 8 * 1024;
 var MAX_EVENT_IDENTIFIER_LENGTH = 200;
 function boundedText(value, max) {
   if (typeof value !== "string") return null;
-  const trimmed9 = value.trim();
-  if (trimmed9 === "") return null;
-  return trimmed9.length <= max ? trimmed9 : `${trimmed9.slice(0, max - 1)}\u2026`;
+  const trimmed10 = value.trim();
+  if (trimmed10 === "") return null;
+  return trimmed10.length <= max ? trimmed10 : `${trimmed10.slice(0, max - 1)}\u2026`;
 }
 function requiredIdentifier(value, field) {
   const bounded2 = boundedText(value, MAX_EVENT_IDENTIFIER_LENGTH);
@@ -158478,9 +158523,9 @@ var REQUEST_COLUMNS = `
   created_at, updated_at, revision
 `;
 function boundedSummary(value) {
-  const trimmed9 = value.trim();
-  if (!trimmed9) throw new ServiceError("Request summary is required", "invalid_request", 400);
-  return trimmed9.length <= MAX_REQUEST_SUMMARY_LENGTH ? trimmed9 : `${trimmed9.slice(0, MAX_REQUEST_SUMMARY_LENGTH - 1)}\u2026`;
+  const trimmed10 = value.trim();
+  if (!trimmed10) throw new ServiceError("Request summary is required", "invalid_request", 400);
+  return trimmed10.length <= MAX_REQUEST_SUMMARY_LENGTH ? trimmed10 : `${trimmed10.slice(0, MAX_REQUEST_SUMMARY_LENGTH - 1)}\u2026`;
 }
 function boundedOptions(options) {
   if (!options || options.length === 0) return "[]";
@@ -159835,9 +159880,9 @@ function deriveDeterministicActionCandidates({
 }
 function clampText(value, maxLength) {
   if (typeof value !== "string") return null;
-  const trimmed9 = value.trim();
-  if (!trimmed9) return null;
-  return trimmed9.length > maxLength ? trimmed9.slice(0, maxLength) : trimmed9;
+  const trimmed10 = value.trim();
+  if (!trimmed10) return null;
+  return trimmed10.length > maxLength ? trimmed10.slice(0, maxLength) : trimmed10;
 }
 function clampStringList(value, maxItems = DELIVERY_REPORT_LIMITS.maxItems) {
   if (!Array.isArray(value)) return [];
@@ -162022,7 +162067,7 @@ async function handleOAuthRevoke(req, res) {
 
 // storage.ts
 var import_node_crypto22 = require("node:crypto");
-var import_node_fs18 = require("node:fs");
+var import_node_fs19 = require("node:fs");
 var import_node_path30 = __toESM(require("node:path"), 1);
 var import_node_url7 = require("node:url");
 init_db();
@@ -162502,7 +162547,7 @@ async function finalizeStoredObject({
     }
     const root5 = import_node_path30.default.isAbsolute(bucket.local_path) ? bucket.local_path : import_node_path30.default.resolve(repoRoot3, bucket.local_path);
     const absolutePath = import_node_path30.default.join(root5, storageKey);
-    if (!(0, import_node_fs18.existsSync)(absolutePath)) throw new ApiError(404, "File not found");
+    if (!(0, import_node_fs19.existsSync)(absolutePath)) throw new ApiError(404, "File not found");
     return { absolutePath, contentType, filename, forceDownload };
   }
   return {
@@ -164841,7 +164886,7 @@ app.post(
     requires: PERMISSIONS.PROJECT_UPDATE
   })
 );
-if (resolveServeSpa({ dialect: DATABASE_DIALECT }) && (0, import_node_fs19.existsSync)(distDir)) {
+if (resolveServeSpa({ dialect: DATABASE_DIALECT }) && (0, import_node_fs20.existsSync)(distDir)) {
   app.use(import_express4.default.static(distDir));
   app.get("*", (req, res, next) => {
     if (req.path.startsWith("/api/")) return next();
