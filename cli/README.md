@@ -59,9 +59,11 @@ install through first delivered mission.
 
 The npm package ships command parsing, config/auth onboarding, connector setup,
 an HTTP backend client, and the local runner/agent launcher. Production builds
-bundle the shared `@overlord/core` runtime into `dist/index.js`, so the tarball
-does not depend on other Overlord packages at install time. It still does **not**
-ship SQLite, `better-sqlite3`, migrations, or the service-layer database runtime.
+bundle the shared `@overlord/core` runtime (and any JS it pulls from other
+workspace packages, such as display-id helpers in `@overlord/database`) into
+`dist/index.js`, so the tarball does not depend on other Overlord packages at
+install time. It still does **not** ship SQLite, `better-sqlite3`, migrations,
+or a local database runtime.
 
 ```mermaid
 flowchart LR

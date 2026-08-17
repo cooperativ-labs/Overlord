@@ -94,7 +94,9 @@ rather than cross-folder relative imports:
   PostgreSQL from the `overlord.toml` `database_url` admin setting or the
   `DATABASE_URL` environment variable so auth and the service layer never disagree.
 
-The published `overlord-cli` CLI does not bundle this package. It talks to a
+The published `overlord-cli` CLI does not ship this package, SQLite, or
+migrations. Production CLI builds inline any pure-JS helpers the client graph
+actually imports (for example objective display-id parsing). It still talks to a
 configured backend URL; local/cloud backend packages own database adapters and
 migrations.
 
