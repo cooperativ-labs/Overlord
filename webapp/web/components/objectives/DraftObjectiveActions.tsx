@@ -1,6 +1,7 @@
-import { Check, FastForward, Loader2, MoreVertical, PauseCircle, Trash2 } from 'lucide-react';
+import { Check, Copy, FastForward, Loader2, MoreVertical, PauseCircle, Trash2 } from 'lucide-react';
 
 import type { ObjectiveDto, ObjectiveState } from '../../../shared/contract.ts';
+import { useCopyToClipboard } from '../../lib/hooks/use-copy-to-clipboard.ts';
 import { useDeleteObjective, useUpdateObjective } from '../../lib/queries.ts';
 import { cn } from '../../lib/utils.ts';
 import { OBJECTIVE_STATE_LABEL } from '../ui.tsx';
@@ -33,6 +34,7 @@ type DraftObjectiveActionsProps = {
 export function DraftObjectiveActions({ objective }: DraftObjectiveActionsProps) {
   const update = useUpdateObjective();
   const remove = useDeleteObjective();
+  const { copied, copy } = useCopyToClipboard();
 
   const canToggleAutoAdvance = AUTO_ADVANCE_TOGGLE_STATES.includes(objective.state);
   const autoAdvancePending =
@@ -62,6 +64,21 @@ export function DraftObjectiveActions({ objective }: DraftObjectiveActionsProps)
             </DropdownMenuItem>
           ))}
           <DropdownMenuSeparator />
+          {objective.displayId ? (
+            <DropdownMenuItem
+              className="gap-2 text-xs"
+              onClick={() => {
+                void copy(objective.displayId);
+              }}
+            >
+              {copied ? (
+                <Check className="h-3.5 w-3.5 text-green-600" />
+              ) : (
+                <Copy className="h-3.5 w-3.5" />
+              )}
+              <span>Copy {objective.displayId}</span>
+            </DropdownMenuItem>
+          ) : null}
           <DropdownMenuItem
             className="gap-2 text-xs text-red-600 focus:text-red-600"
             onClick={() => {

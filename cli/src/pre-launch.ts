@@ -122,6 +122,7 @@ export function buildPreLaunchVariables({
     // Optional Overlord env keys default to empty so documented placeholders
     // resolve rather than remaining as literal `{VAR}` tokens.
     OVERLORD_EXECUTION_REQUEST_ID: '',
+    OVERLORD_OBJECTIVE_ID: '',
     OVERLORD_PROJECT_RESOURCES: '',
     ...launchEnv,
     OVERLORD_PROJECT_RESOURCES_PATHS: resourcePathsValue,

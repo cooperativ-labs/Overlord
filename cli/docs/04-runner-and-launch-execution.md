@@ -15,8 +15,9 @@ The same pipeline should power manual run and auto-advance:
 5. The runner prepares the mission branch/worktree when worktree branch automation is enabled.
 6. The runner launches the requested agent locally from the prepared directory.
 7. The runner marks the terminal/launch command open as successful or failed.
-8. The launched agent attaches to the mission, and attach links the session back
-   to the execution request when the launch context carries the request id.
+8. The launched agent attaches to the **objective**, and attach links the session back
+   to the execution request when the launch context carries the request id or
+   `--objective-id` / `OVERLORD_OBJECTIVE_ID`.
 
 ## Execution Requests
 

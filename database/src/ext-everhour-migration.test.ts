@@ -20,6 +20,10 @@ import {
 } from './index.js';
 import { resolveAppliedMigrationSqlite } from './migration-ledger.js';
 import {
+  finalizeObjectivesDisplayKeySqlite,
+  isObjectivesDisplayKeyMigration
+} from './objective-display-key-migration-runtime.js';
+import {
   finalizeProjectResourcesResourceKeySqlite,
   isProjectResourcesResourceKeyMigration
 } from './project-resources-resource-key-migration-runtime.js';
@@ -81,6 +85,9 @@ function applySqliteMigrationFile(
   }
   if (isProjectResourcesResourceKeyMigration({ version, component })) {
     finalizeProjectResourcesResourceKeySqlite(db);
+  }
+  if (isObjectivesDisplayKeyMigration({ version, component })) {
+    finalizeObjectivesDisplayKeySqlite(db);
   }
 
   const createdLedger = Boolean(

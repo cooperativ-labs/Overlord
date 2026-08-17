@@ -46,8 +46,14 @@ only attach when the user explicitly says to execute.
 ## Attach
 
 ```bash
-ovld protocol attach --mission-id coo:312
+ovld protocol attach --mission-id coo:312 --objective-id coo:312.k7xm
 ```
+
+`--mission-id` is required. Pass `--objective-id` (UUID or display id such as
+`coo:312.k7xm`) when you already know which objective to execute — attach will
+not rediscover another one. Runner launches export `OVERLORD_OBJECTIVE_ID` and
+the CLI forwards it automatically. Mission-only attach still selects the current
+active objective.
 
 The response prints JSON containing `session.sessionKey`. The CLI also persists
 that key for the working directory, so later `ovld protocol` commands resolve it

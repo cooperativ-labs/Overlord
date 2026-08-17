@@ -632,6 +632,166 @@ var init_migration_ledger = __esm({
   }
 });
 
+// ../database/dist/objective-display-key.js
+function generateObjectiveDisplayKey({ length = OBJECTIVE_DISPLAY_KEY_LENGTH, bytes = import_node_crypto.randomBytes } = {}) {
+  const alphabet = OBJECTIVE_DISPLAY_KEY_ALPHABET;
+  const raw = bytes(length);
+  let key = "";
+  for (let index = 0; index < length; index += 1) {
+    key += alphabet[(raw[index] ?? 0) % alphabet.length];
+  }
+  return key;
+}
+function formatObjectiveDisplayId({ missionDisplayId, displayKey }) {
+  return `${missionDisplayId}${OBJECTIVE_DISPLAY_ID_SEPARATOR}${displayKey}`;
+}
+function parseObjectiveRef(ref) {
+  const trimmed10 = ref.trim();
+  if (trimmed10.length === 0)
+    return { kind: "unknown", ref: trimmed10 };
+  if (UUID_RE.test(trimmed10))
+    return { kind: "uuid", id: trimmed10.toLowerCase() };
+  const display = DISPLAY_ID_RE.exec(trimmed10);
+  if (display) {
+    return {
+      kind: "display_id",
+      missionDisplayId: `${display[1]}:${display[2]}`,
+      displayKey: display[3].toLowerCase()
+    };
+  }
+  if (WRONG_SEPARATOR_COLON_RE.test(trimmed10)) {
+    return { kind: "wrong_separator", separator: ":", ref: trimmed10 };
+  }
+  if (WRONG_SEPARATOR_PIPE_RE.test(trimmed10)) {
+    return { kind: "wrong_separator", separator: "|", ref: trimmed10 };
+  }
+  if (WRONG_SEPARATOR_HYPHEN_RE.test(trimmed10)) {
+    return { kind: "wrong_separator", separator: "-", ref: trimmed10 };
+  }
+  if (MISSION_DISPLAY_ID_RE.test(trimmed10)) {
+    return { kind: "mission_id", missionDisplayId: trimmed10 };
+  }
+  if (BARE_KEY_RE.test(trimmed10)) {
+    return { kind: "display_key", displayKey: trimmed10.toLowerCase() };
+  }
+  return { kind: "unknown", ref: trimmed10 };
+}
+var import_node_crypto, OBJECTIVE_DISPLAY_KEY_ALPHABET, OBJECTIVE_DISPLAY_KEY_LENGTH, OBJECTIVE_DISPLAY_ID_SEPARATOR, UUID_RE, KEY_BODY, DISPLAY_ID_RE, MISSION_DISPLAY_ID_RE, WRONG_SEPARATOR_COLON_RE, WRONG_SEPARATOR_PIPE_RE, WRONG_SEPARATOR_HYPHEN_RE, BARE_KEY_RE;
+var init_objective_display_key = __esm({
+  "../database/dist/objective-display-key.js"() {
+    "use strict";
+    import_node_crypto = require("node:crypto");
+    OBJECTIVE_DISPLAY_KEY_ALPHABET = "0123456789abcdefghjkmnpqrstvwxyz";
+    OBJECTIVE_DISPLAY_KEY_LENGTH = 4;
+    OBJECTIVE_DISPLAY_ID_SEPARATOR = ".";
+    UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    KEY_BODY = "[0-9a-hjkmnp-tv-z]{4,5}";
+    DISPLAY_ID_RE = new RegExp(`^(.+):(\\d+)\\.(${KEY_BODY})$`, "i");
+    MISSION_DISPLAY_ID_RE = /^([a-z0-9-]+):(\d+)$/i;
+    WRONG_SEPARATOR_COLON_RE = new RegExp(`^(.+):(\\d+):(${KEY_BODY})$`, "i");
+    WRONG_SEPARATOR_PIPE_RE = new RegExp(`^(.+):(\\d+)\\|(${KEY_BODY})$`, "i");
+    WRONG_SEPARATOR_HYPHEN_RE = new RegExp(`^(.+):(\\d+)-(${KEY_BODY})$`, "i");
+    BARE_KEY_RE = new RegExp(`^${KEY_BODY}$`, "i");
+  }
+});
+
+// ../database/dist/objective-display-key-migration-runtime.js
+function isObjectivesDisplayKeyMigration(migration) {
+  return migration.version === OBJECTIVES_DISPLAY_KEY_MIGRATION_VERSION && migration.component === "core";
+}
+function isBlankKey(value) {
+  return !value || value.trim().length === 0;
+}
+function allocateKey(used) {
+  for (const length of [4, 5]) {
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const key = generateObjectiveDisplayKey({ length });
+      if (!used.has(key)) {
+        used.add(key);
+        return key;
+      }
+    }
+  }
+  throw new Error("Could not allocate an objective display key during backfill");
+}
+function objectivesHasDisplayKeyColumn(db) {
+  const columns = db.prepare(`PRAGMA table_info(objectives)`).all();
+  return columns.some((column) => column.name === "display_key");
+}
+function finalizeObjectivesDisplayKeySqlite(db) {
+  if (!objectivesHasDisplayKeyColumn(db))
+    return;
+  const rows = db.prepare(`SELECT id, mission_id, display_key
+         FROM objectives
+        ORDER BY created_at ASC, id ASC`).all();
+  const usedByMission = /* @__PURE__ */ new Map();
+  for (const row of rows) {
+    const key = row.display_key?.trim().toLowerCase();
+    if (!key)
+      continue;
+    const used = usedByMission.get(row.mission_id) ?? /* @__PURE__ */ new Set();
+    used.add(key);
+    usedByMission.set(row.mission_id, used);
+  }
+  const update = db.prepare(`UPDATE objectives SET display_key = ? WHERE id = ?`);
+  for (const row of rows) {
+    if (!isBlankKey(row.display_key))
+      continue;
+    const used = usedByMission.get(row.mission_id) ?? /* @__PURE__ */ new Set();
+    const key = allocateKey(used);
+    usedByMission.set(row.mission_id, used);
+    update.run(key, row.id);
+  }
+  db.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_objectives_mission_display_key
+      ON objectives (mission_id, display_key)
+      WHERE deleted_at IS NULL
+  `);
+}
+async function finalizeObjectivesDisplayKeyPostgres(client) {
+  const column = await client.get(`SELECT column_name AS present
+       FROM information_schema.columns
+      WHERE table_schema = current_schema()
+        AND table_name = 'objectives'
+        AND column_name = 'display_key'`);
+  if (!column?.present)
+    return;
+  const rows = await client.all(`SELECT id, mission_id, display_key
+       FROM objectives
+      ORDER BY created_at ASC, id ASC`);
+  const usedByMission = /* @__PURE__ */ new Map();
+  for (const row of rows) {
+    const key = row.display_key?.trim().toLowerCase();
+    if (!key)
+      continue;
+    const used = usedByMission.get(row.mission_id) ?? /* @__PURE__ */ new Set();
+    used.add(key);
+    usedByMission.set(row.mission_id, used);
+  }
+  for (const row of rows) {
+    if (!isBlankKey(row.display_key))
+      continue;
+    const used = usedByMission.get(row.mission_id) ?? /* @__PURE__ */ new Set();
+    const key = allocateKey(used);
+    usedByMission.set(row.mission_id, used);
+    await client.run(`UPDATE objectives SET display_key = ? WHERE id = ?`, [key, row.id]);
+  }
+  await client.exec(`ALTER TABLE objectives ALTER COLUMN display_key SET NOT NULL`);
+  await client.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_objectives_mission_display_key
+      ON objectives (mission_id, display_key)
+      WHERE deleted_at IS NULL
+  `);
+}
+var OBJECTIVES_DISPLAY_KEY_MIGRATION_VERSION;
+var init_objective_display_key_migration_runtime = __esm({
+  "../database/dist/objective-display-key-migration-runtime.js"() {
+    "use strict";
+    init_objective_display_key();
+    OBJECTIVES_DISPLAY_KEY_MIGRATION_VERSION = "20260817104735";
+  }
+});
+
 // ../database/dist/project-resources-resource-key-migration-runtime.js
 function isProjectResourcesResourceKeyMigration(migration) {
   return migration.version === PROJECT_RESOURCES_RESOURCE_KEY_MIGRATION_VERSION && migration.component === "core";
@@ -695,7 +855,7 @@ function migrationsDir() {
   return import_node_path5.default.resolve(import_node_path5.default.dirname((0, import_node_url2.fileURLToPath)(__overlord_import_meta_url)), "..", "sqlite", "migrations");
 }
 function checksum(sql2) {
-  return (0, import_node_crypto.createHash)("sha256").update(sql2).digest("hex");
+  return (0, import_node_crypto2.createHash)("sha256").update(sql2).digest("hex");
 }
 function migrationComponent(fileName) {
   const match = fileName.match(/^\d+_ext_([a-z0-9_]+)_/);
@@ -724,6 +884,9 @@ function applyMigration(db, migration) {
   }
   if (isProjectResourcesResourceKeyMigration(migration)) {
     finalizeProjectResourcesResourceKeySqlite(db);
+  }
+  if (isObjectivesDisplayKeyMigration(migration)) {
+    finalizeObjectivesDisplayKeySqlite(db);
   }
   db.prepare(`INSERT INTO schema_migrations (version, adapter, component, contract_version, checksum, applied_at)
      VALUES (?, 'sqlite', ?, ?, ?, ?)`).run(migration.version, migration.component, CONTRACT_VERSION, migration.checksum, (/* @__PURE__ */ new Date()).toISOString());
@@ -788,11 +951,11 @@ function fixupLocalStoragePaths(db, databasePath2) {
     update.run(import_node_path5.default.join(storageDir, bucket.bucket_key), now2, bucket.id);
   }
 }
-var import_node_crypto, import_node_fs, import_node_path5, import_node_url2, MIGRATION_FILE_PATTERN;
+var import_node_crypto2, import_node_fs, import_node_path5, import_node_url2, MIGRATION_FILE_PATTERN;
 var init_connection = __esm({
   "../database/dist/connection.js"() {
     "use strict";
-    import_node_crypto = require("node:crypto");
+    import_node_crypto2 = require("node:crypto");
     import_node_fs = require("node:fs");
     import_node_path5 = __toESM(require("node:path"), 1);
     import_node_url2 = require("node:url");
@@ -801,6 +964,7 @@ var init_connection = __esm({
     init_ext_everhour_migration_runtime();
     init_local_paths();
     init_migration_ledger();
+    init_objective_display_key_migration_runtime();
     init_project_resources_resource_key_migration_runtime();
     MIGRATION_FILE_PATTERN = /^\d+_[a-z0-9_]+\.sql$/;
   }
@@ -1980,7 +2144,7 @@ var require_utils2 = __commonJS({
     var nodeCrypto = require("crypto");
     module2.exports = {
       postgresMd5PasswordHash,
-      randomBytes: randomBytes11,
+      randomBytes: randomBytes12,
       deriveKey: deriveKey3,
       sha256: sha2562,
       hashByName,
@@ -1990,7 +2154,7 @@ var require_utils2 = __commonJS({
     var webCrypto = nodeCrypto.webcrypto || globalThis.crypto;
     var subtleCrypto = webCrypto.subtle;
     var textEncoder2 = new TextEncoder();
-    function randomBytes11(length) {
+    function randomBytes12(length) {
       return webCrypto.getRandomValues(Buffer.alloc(length));
     }
     async function md5(string4) {
@@ -6300,7 +6464,7 @@ function postgresMigrationsDir() {
   return import_node_path6.default.resolve(import_node_path6.default.dirname((0, import_node_url3.fileURLToPath)(__overlord_import_meta_url)), "..", "postgres", "migrations");
 }
 function checksum2(sql2) {
-  return (0, import_node_crypto2.createHash)("sha256").update(sql2).digest("hex");
+  return (0, import_node_crypto3.createHash)("sha256").update(sql2).digest("hex");
 }
 function migrationComponent2(fileName) {
   const match = fileName.match(/^\d+_ext_([a-z0-9_]+)_/);
@@ -6345,6 +6509,9 @@ async function migratePostgres(client) {
       if (isExtEverhourPersistenceMigration(migration)) {
         await finalizeExtEverhourMissionLinksPostgres(client);
       }
+      if (isObjectivesDisplayKeyMigration(migration)) {
+        await finalizeObjectivesDisplayKeyPostgres(client);
+      }
       if (!await schemaMigrationsExists(client)) {
         pending.push(migration);
         continue;
@@ -6366,20 +6533,24 @@ async function migratePostgres(client) {
     if (isExtEverhourPersistenceMigration(migration)) {
       await finalizeExtEverhourMissionLinksPostgres(client);
     }
+    if (isObjectivesDisplayKeyMigration(migration)) {
+      await finalizeObjectivesDisplayKeyPostgres(client);
+    }
     await recordMigration(client, migration);
   }
 }
-var import_node_crypto2, import_node_fs2, import_node_path6, import_node_url3, MIGRATION_FILE_PATTERN2;
+var import_node_crypto3, import_node_fs2, import_node_path6, import_node_url3, MIGRATION_FILE_PATTERN2;
 var init_migrate_postgres = __esm({
   "../database/dist/migrate-postgres.js"() {
     "use strict";
-    import_node_crypto2 = require("node:crypto");
+    import_node_crypto3 = require("node:crypto");
     import_node_fs2 = require("node:fs");
     import_node_path6 = __toESM(require("node:path"), 1);
     import_node_url3 = require("node:url");
     init_constants();
     init_ext_everhour_migration_runtime();
     init_migration_ledger();
+    init_objective_display_key_migration_runtime();
     MIGRATION_FILE_PATTERN2 = /^\d+_[a-z0-9_]+\.sql$/;
   }
 });
@@ -6462,6 +6633,7 @@ var init_dist = __esm({
     init_constants();
     init_local_paths();
     init_migrate_postgres();
+    init_objective_display_key();
     init_storage_seed();
   }
 });
@@ -69520,7 +69692,7 @@ function nowIso() {
   return (/* @__PURE__ */ new Date()).toISOString();
 }
 function newId() {
-  return (0, import_node_crypto5.randomUUID)();
+  return (0, import_node_crypto6.randomUUID)();
 }
 function slugify3(input) {
   const base = input.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48);
@@ -69532,19 +69704,19 @@ function initialTitleFromInstruction(instruction) {
   return `${firstLine.slice(0, 77)}...`;
 }
 function generateSessionKey() {
-  const rawKey = SESSION_KEY_PREFIX + (0, import_node_crypto5.randomBytes)(24).toString("base64url");
+  const rawKey = SESSION_KEY_PREFIX + (0, import_node_crypto6.randomBytes)(24).toString("base64url");
   const prefix = rawKey.slice(0, SESSION_KEY_PREFIX.length + 8);
-  const hash2 = (0, import_node_crypto5.createHash)("sha256").update(rawKey).digest("hex");
+  const hash2 = (0, import_node_crypto6.createHash)("sha256").update(rawKey).digest("hex");
   return { rawKey, prefix, hash: hash2 };
 }
 function hashSessionKey(rawKey) {
-  return (0, import_node_crypto5.createHash)("sha256").update(rawKey).digest("hex");
+  return (0, import_node_crypto6.createHash)("sha256").update(rawKey).digest("hex");
 }
-var import_node_crypto5, SESSION_KEY_PREFIX;
+var import_node_crypto6, SESSION_KEY_PREFIX;
 var init_util3 = __esm({
   "../packages/core/service/util.ts"() {
     "use strict";
-    import_node_crypto5 = require("node:crypto");
+    import_node_crypto6 = require("node:crypto");
     SESSION_KEY_PREFIX = "sess_";
   }
 });
@@ -69669,9 +69841,148 @@ async function resolveProjectId(ctx, projectRef) {
   if (byName) return byName.id;
   throw new ServiceError(`Project not found: ${projectRef}`, "project_not_found", 404);
 }
+function wrongSeparatorMessage(separator) {
+  const example = separator === ":" ? "coo:756:k7xm" : separator === "|" ? "coo:756|k7xm" : "coo:756-k7xm";
+  return `Objective display ids use a dot separator (coo:756.k7xm), not '${separator}' (${example}).`;
+}
+function missionIdAsObjectiveMessage(missionDisplayId) {
+  return `${missionDisplayId} is a mission id. Pass a full objective display id (${missionDisplayId}.k7xm) or launch the mission.`;
+}
+async function resolveObjectiveRef({
+  ctx,
+  ref,
+  missionId,
+  uuidWorkspaceScoped = true
+}) {
+  const parsed = parseObjectiveRef(ref);
+  if (parsed.kind === "wrong_separator") {
+    throw new ServiceError(wrongSeparatorMessage(parsed.separator), "invalid_objective_ref", 400);
+  }
+  if (parsed.kind === "mission_id") {
+    throw new ServiceError(
+      missionIdAsObjectiveMessage(parsed.missionDisplayId),
+      "invalid_objective_ref",
+      400
+    );
+  }
+  if (parsed.kind === "unknown") {
+    throw new ServiceError(`Objective not found: ${ref}`, "objective_not_found", 404);
+  }
+  let scopedMissionId;
+  if (missionId) {
+    scopedMissionId = (await resolveMissionId(ctx, missionId)).id;
+  }
+  if (parsed.kind === "display_key") {
+    if (!scopedMissionId) {
+      throw new ServiceError(
+        "Pass a full objective display id (coo:756.k7xm), not a bare key.",
+        "invalid_objective_ref",
+        400
+      );
+    }
+    return loadObjectiveByKey({
+      ctx,
+      missionId: scopedMissionId,
+      displayKey: parsed.displayKey,
+      ref
+    });
+  }
+  if (parsed.kind === "uuid") {
+    const byId = await ctx.db.get(
+      uuidWorkspaceScoped ? `SELECT o.id, o.mission_id, o.project_id, o.workspace_id, o.display_key,
+                  m.display_id AS mission_display_id
+             FROM objectives o
+             JOIN missions m ON m.id = o.mission_id
+            WHERE o.id = ? AND o.workspace_id = ? AND o.deleted_at IS NULL` : `SELECT o.id, o.mission_id, o.project_id, o.workspace_id, o.display_key,
+                  m.display_id AS mission_display_id
+             FROM objectives o
+             JOIN missions m ON m.id = o.mission_id
+            WHERE o.id = ? AND o.deleted_at IS NULL`,
+      uuidWorkspaceScoped ? [parsed.id, ctx.workspace.id] : [parsed.id]
+    );
+    if (!byId) {
+      throw new ServiceError(`Objective not found: ${ref}`, "objective_not_found", 404);
+    }
+    if (scopedMissionId && byId.mission_id !== scopedMissionId) {
+      throw new ServiceError(
+        `Objective ${ref} does not belong to the given mission`,
+        "invalid_objective_ref",
+        400
+      );
+    }
+    return {
+      id: byId.id,
+      displayKey: byId.display_key,
+      displayId: formatObjectiveDisplayId({
+        missionDisplayId: byId.mission_display_id,
+        displayKey: byId.display_key
+      }),
+      missionId: byId.mission_id,
+      projectId: byId.project_id,
+      workspaceId: byId.workspace_id
+    };
+  }
+  const mission = await ctx.db.get(
+    `SELECT id, display_id, project_id FROM missions
+       WHERE display_id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+    [parsed.missionDisplayId, ctx.workspace.id]
+  );
+  if (!mission) {
+    throw new ServiceError(`Objective not found: ${ref}`, "objective_not_found", 404);
+  }
+  if (scopedMissionId && mission.id !== scopedMissionId) {
+    throw new ServiceError(
+      `Objective ${ref} does not belong to the given mission`,
+      "invalid_objective_ref",
+      400
+    );
+  }
+  return loadObjectiveByKey({
+    ctx,
+    missionId: mission.id,
+    displayKey: parsed.displayKey,
+    ref,
+    missionDisplayId: mission.display_id,
+    projectId: mission.project_id
+  });
+}
+async function loadObjectiveByKey({
+  ctx,
+  missionId,
+  displayKey,
+  ref,
+  missionDisplayId,
+  projectId
+}) {
+  const row = await ctx.db.get(
+    `SELECT o.id, o.mission_id, o.project_id, o.workspace_id, o.display_key,
+            m.display_id AS mission_display_id
+       FROM objectives o
+       JOIN missions m ON m.id = o.mission_id
+      WHERE o.mission_id = ? AND o.workspace_id = ? AND o.display_key = ?
+        AND o.deleted_at IS NULL`,
+    [missionId, ctx.workspace.id, displayKey]
+  );
+  if (!row) {
+    throw new ServiceError(`Objective not found: ${ref}`, "objective_not_found", 404);
+  }
+  const resolvedDisplayId = missionDisplayId ?? row.mission_display_id;
+  return {
+    id: row.id,
+    displayKey: row.display_key,
+    displayId: formatObjectiveDisplayId({
+      missionDisplayId: resolvedDisplayId,
+      displayKey: row.display_key
+    }),
+    missionId: row.mission_id,
+    projectId: projectId ?? row.project_id,
+    workspaceId: row.workspace_id
+  };
+}
 var init_context = __esm({
   "../packages/core/service/context.ts"() {
     "use strict";
+    init_dist();
     init_errors4();
   }
 });
@@ -70846,6 +71157,23 @@ function mergeProviderSessionIntoMetadata({
     }
   });
 }
+function stripProviderSessionFromMetadata({
+  metadataJson
+}) {
+  let parsed = {};
+  if (metadataJson?.trim()) {
+    try {
+      const value = JSON.parse(metadataJson);
+      if (value && typeof value === "object" && !Array.isArray(value)) {
+        parsed = { ...value };
+      }
+    } catch {
+      parsed = {};
+    }
+  }
+  delete parsed[PROVIDER_SESSION_METADATA_KEY];
+  return JSON.stringify(parsed);
+}
 function latchViewerFlagForKind(kind) {
   switch (trimmed4(kind)?.toLowerCase()) {
     case "iterm":
@@ -70897,7 +71225,22 @@ var init_latch_launch = __esm({
   }
 });
 
+// ../packages/core/service/latch-session-absent.ts
+function isLatchSessionAbsentMessage(text) {
+  const normalized = text.replace(/\r/g, "").trim();
+  return /(?:error:\s*)?no session(?: named)? `[^`]+`/i.test(normalized);
+}
+var init_latch_session_absent = __esm({
+  "../packages/core/service/latch-session-absent.ts"() {
+    "use strict";
+  }
+});
+
 // ../packages/core/service/latch-session.ts
+function latchSessionCommandError(detail) {
+  const message2 = detail || "Latch command failed.";
+  return isLatchSessionAbsentMessage(message2) ? new LatchSessionAbsentError(message2) : new LatchSessionCommandError(message2);
+}
 function trimmed5(value) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
@@ -70933,7 +71276,7 @@ function runLatchJson({
   }
   if (result.status !== 0) {
     const detail = (result.stderr || result.stdout || `exit ${result.status ?? "unknown"}`).trim().slice(0, 500);
-    throw new LatchSessionCommandError(detail || "Latch command failed.");
+    throw latchSessionCommandError(detail);
   }
   try {
     const parsed = JSON.parse(result.stdout);
@@ -71022,7 +71365,7 @@ function stopLatchSession({
     state: state2
   };
 }
-var import_node_child_process4, LatchSessionCommandError;
+var import_node_child_process4, LatchSessionCommandError, LatchSessionAbsentError;
 var init_latch_session = __esm({
   "../packages/core/service/latch-session.ts"() {
     "use strict";
@@ -71030,11 +71373,19 @@ var init_latch_session = __esm({
     init_latch_binary();
     init_latch_environment();
     init_latch_launch();
+    init_latch_session_absent();
     init_terminal_profile_types();
+    init_latch_session_absent();
     LatchSessionCommandError = class extends Error {
       constructor(message2) {
         super(message2);
         this.name = "LatchSessionCommandError";
+      }
+    };
+    LatchSessionAbsentError = class extends LatchSessionCommandError {
+      constructor(message2) {
+        super(message2);
+        this.name = "LatchSessionAbsentError";
       }
     };
   }
@@ -71226,7 +71577,7 @@ async function collectLatchEvents({
       if (settled) return;
       if (code && code !== 0 && parseHarnessEventNdjson(stdout).length === 0) {
         const detail = stderr.trim().slice(0, 500) || `latch events exited ${code}`;
-        finish({ ended: true, error: new LatchSessionCommandError(detail) });
+        finish({ ended: true, error: latchSessionCommandError(detail) });
         return;
       }
       finish({ ended: signal === null && (code === 0 || code === null) });
@@ -71640,6 +71991,18 @@ var init_result = __esm({
 });
 
 // ../packages/core/service/local-target/in-process-provider.ts
+function failLatchCommand({
+  target,
+  error: error53,
+  fallback: fallback2
+}) {
+  const message2 = error53 instanceof Error ? error53.message : fallback2;
+  return fail(
+    target,
+    error53 instanceof LatchSessionAbsentError ? "LATCH_SESSION_ABSENT" : "TARGET_OPERATION_FAILED",
+    message2
+  );
+}
 var import_node_fs13, InProcessProvider;
 var init_in_process_provider = __esm({
   "../packages/core/service/local-target/in-process-provider.ts"() {
@@ -71845,33 +72208,33 @@ var init_in_process_provider = __esm({
         try {
           return ok2(this.target, inspectLatchSession(input));
         } catch (error53) {
-          return fail(
-            this.target,
-            "TARGET_OPERATION_FAILED",
-            error53 instanceof Error ? error53.message : "Could not inspect the Latch session."
-          );
+          return failLatchCommand({
+            target: this.target,
+            error: error53,
+            fallback: "Could not inspect the Latch session."
+          });
         }
       }
       async openLatchSession(input) {
         try {
           return ok2(this.target, openLatchSession(input));
         } catch (error53) {
-          return fail(
-            this.target,
-            "TARGET_OPERATION_FAILED",
-            error53 instanceof Error ? error53.message : "Could not open the Latch session."
-          );
+          return failLatchCommand({
+            target: this.target,
+            error: error53,
+            fallback: "Could not open the Latch session."
+          });
         }
       }
       async stopLatchSession(input) {
         try {
           return ok2(this.target, stopLatchSession(input));
         } catch (error53) {
-          return fail(
-            this.target,
-            "TARGET_OPERATION_FAILED",
-            error53 instanceof Error ? error53.message : "Could not stop the Latch session."
-          );
+          return failLatchCommand({
+            target: this.target,
+            error: error53,
+            fallback: "Could not stop the Latch session."
+          });
         }
       }
       async collectLatchEvents(input) {
@@ -71889,11 +72252,11 @@ var init_in_process_provider = __esm({
             ended: collected.ended
           });
         } catch (error53) {
-          return fail(
-            this.target,
-            "TARGET_OPERATION_FAILED",
-            error53 instanceof Error ? error53.message : "Could not collect Latch harness events."
-          );
+          return failLatchCommand({
+            target: this.target,
+            error: error53,
+            fallback: "Could not collect Latch harness events."
+          });
         }
       }
       async resolveLatchInput(input) {
@@ -71908,11 +72271,11 @@ var init_in_process_provider = __esm({
             })
           );
         } catch (error53) {
-          return fail(
-            this.target,
-            "TARGET_OPERATION_FAILED",
-            error53 instanceof Error ? error53.message : "Could not resolve the Latch prompt."
-          );
+          return failLatchCommand({
+            target: this.target,
+            error: error53,
+            fallback: "Could not resolve the Latch prompt."
+          });
         }
       }
       async doctor() {
@@ -72178,7 +72541,7 @@ var init_local_target = __esm({
 
 // ../packages/core/service/devices.ts
 function deviceFingerprint() {
-  return (0, import_node_crypto6.createHash)("sha256").update(`${(0, import_node_os5.hostname)()}:${(0, import_node_os5.platform)()}`).digest("hex").slice(0, 32);
+  return (0, import_node_crypto7.createHash)("sha256").update(`${(0, import_node_os5.hostname)()}:${(0, import_node_os5.platform)()}`).digest("hex").slice(0, 32);
 }
 function callerDeviceFingerprint() {
   return deviceFingerprint();
@@ -72254,11 +72617,11 @@ async function softDeleteDeviceIfOrphaned({
   });
   return true;
 }
-var import_node_crypto6, import_node_os5;
+var import_node_crypto7, import_node_os5;
 var init_devices = __esm({
   "../packages/core/service/devices.ts"() {
     "use strict";
-    import_node_crypto6 = require("node:crypto");
+    import_node_crypto7 = require("node:crypto");
     import_node_os5 = require("node:os");
     init_change_feed();
     init_util3();
@@ -73924,6 +74287,12 @@ var init_launch_variables = __esm({
         availableAt: ["plan_build", "terminal_env"]
       },
       {
+        name: "OVERLORD_OBJECTIVE_ID",
+        description: "Objective display id for the launch (e.g. coo:359.k7xm). Used to pin protocol attach.",
+        example: "coo:359.k7xm",
+        availableAt: ["plan_build", "terminal_env"]
+      },
+      {
         name: "OVERLORD_BACKEND_URL",
         description: "Backend URL the agent CLI/MCP should call for this launch.",
         example: "http://127.0.0.1:4310",
@@ -75353,7 +75722,7 @@ function nowIso2() {
   return (/* @__PURE__ */ new Date()).toISOString();
 }
 function newId2() {
-  return (0, import_node_crypto9.randomUUID)();
+  return (0, import_node_crypto10.randomUUID)();
 }
 async function oldestWorkspaceRowFromClient(client) {
   return client.get(
@@ -75638,13 +76007,13 @@ async function currentMaxSeq(client = requireDatabaseClient()) {
   );
   return row?.seq ?? 0;
 }
-var import_node_async_hooks2, import_node_crypto9, import_node_path15, databasePath, adapter, sqliteDb, DATABASE_DIALECT, databaseClient, databaseInitPromise, DATABASE_PATH, defaultWorkspace, ACTOR_WORKSPACE_USER_ID, requestContextStorage, WORKSPACE, loadWorkspaceRow, ACTIVE_TOKEN_SCOPES, ACTIVE_TOKEN_ID;
+var import_node_async_hooks2, import_node_crypto10, import_node_path15, databasePath, adapter, sqliteDb, DATABASE_DIALECT, databaseClient, databaseInitPromise, DATABASE_PATH, defaultWorkspace, ACTOR_WORKSPACE_USER_ID, requestContextStorage, WORKSPACE, loadWorkspaceRow, ACTIVE_TOKEN_SCOPES, ACTIVE_TOKEN_ID;
 var init_db = __esm({
   "db.ts"() {
     "use strict";
     init_dist();
     import_node_async_hooks2 = require("node:async_hooks");
-    import_node_crypto9 = require("node:crypto");
+    import_node_crypto10 = require("node:crypto");
     import_node_path15 = __toESM(require("node:path"), 1);
     init_config();
     init_env2();
@@ -79634,14 +80003,14 @@ var init_getProfileName = __esm({
 });
 
 // ../node_modules/@smithy/core/dist-es/submodules/config/shared-ini-file-loader/getSSOTokenFilepath.js
-var import_node_crypto11, import_node_path18, getSSOTokenFilepath;
+var import_node_crypto12, import_node_path18, getSSOTokenFilepath;
 var init_getSSOTokenFilepath = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/config/shared-ini-file-loader/getSSOTokenFilepath.js"() {
-    import_node_crypto11 = require("node:crypto");
+    import_node_crypto12 = require("node:crypto");
     import_node_path18 = require("node:path");
     init_getHomeDir();
     getSSOTokenFilepath = (id) => {
-      const hasher = (0, import_node_crypto11.createHash)("sha1");
+      const hasher = (0, import_node_crypto12.createHash)("sha1");
       const cacheName = hasher.update(id).digest("hex");
       return (0, import_node_path18.join)(getHomeDir(), ".aws", "sso", "cache", `${cacheName}.json`);
     };
@@ -81812,10 +82181,10 @@ function castSourceData(toCast, encoding) {
   }
   return fromArrayBuffer(toCast);
 }
-var import_node_crypto12, Hash;
+var import_node_crypto13, Hash;
 var init_hash_node = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/serde/hash-node/hash-node.js"() {
-    import_node_crypto12 = require("node:crypto");
+    import_node_crypto13 = require("node:crypto");
     init_buffer_from();
     init_toUint8Array();
     Hash = class {
@@ -81834,7 +82203,7 @@ var init_hash_node = __esm({
         return Promise.resolve(this.hash.digest());
       }
       reset() {
-        this.hash = this.secret ? (0, import_node_crypto12.createHmac)(this.algorithmIdentifier, castSourceData(this.secret)) : (0, import_node_crypto12.createHash)(this.algorithmIdentifier);
+        this.hash = this.secret ? (0, import_node_crypto13.createHmac)(this.algorithmIdentifier, castSourceData(this.secret)) : (0, import_node_crypto13.createHash)(this.algorithmIdentifier);
       }
     };
   }
@@ -82728,10 +83097,10 @@ __export(serde_exports, {
   toUtf8: () => toUtf8,
   v4: () => v4
 });
-var import_node_crypto13, Uint8ArrayBlobAdapter, _getRandomValues, v4, generateIdempotencyToken;
+var import_node_crypto14, Uint8ArrayBlobAdapter, _getRandomValues, v4, generateIdempotencyToken;
 var init_serde = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/serde/index.js"() {
-    import_node_crypto13 = require("node:crypto");
+    import_node_crypto14 = require("node:crypto");
     init_fromBase64();
     init_toBase64();
     init_Uint8ArrayBlobAdapter();
@@ -82768,7 +83137,7 @@ var init_serde = __esm({
     init_stream_collector();
     Uint8ArrayBlobAdapter = class extends bindUint8ArrayBlobAdapter(toUtf8, fromUtf8, toBase64, fromBase64) {
     };
-    _getRandomValues = import_node_crypto13.getRandomValues;
+    _getRandomValues = import_node_crypto14.getRandomValues;
     v4 = bindV4(_getRandomValues);
     generateIdempotencyToken = v4;
   }
@@ -109855,7 +110224,7 @@ var init_Md5Js = __esm({
 function buildNativeClass() {
   return class Md5Node {
     digestLength = 16;
-    hash = (0, import_node_crypto14.createHash)("md5");
+    hash = (0, import_node_crypto15.createHash)("md5");
     update(data) {
       this.hash.update(toUint8Array(data));
     }
@@ -109864,19 +110233,19 @@ function buildNativeClass() {
       return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
     }
     reset() {
-      this.hash = (0, import_node_crypto14.createHash)("md5");
+      this.hash = (0, import_node_crypto15.createHash)("md5");
     }
   };
 }
-var import_node_crypto14, hasNativeCrypto, Md5Node;
+var import_node_crypto15, hasNativeCrypto, Md5Node;
 var init_Md5Node = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/checksum/md5/Md5Node.js"() {
-    import_node_crypto14 = require("node:crypto");
+    import_node_crypto15 = require("node:crypto");
     init_serde();
     init_Md5Js();
     hasNativeCrypto = (() => {
       try {
-        (0, import_node_crypto14.createHash)("md5");
+        (0, import_node_crypto15.createHash)("md5");
         return true;
       } catch {
         return false;
@@ -110220,7 +110589,7 @@ function buildNativeClass3() {
       this.finished = false;
     }
     createHash() {
-      return this.secret ? (0, import_node_crypto15.createHmac)("sha256", toBuffer(this.secret)) : (0, import_node_crypto15.createHash)("sha256");
+      return this.secret ? (0, import_node_crypto16.createHmac)("sha256", toBuffer(this.secret)) : (0, import_node_crypto16.createHash)("sha256");
     }
   };
 }
@@ -110233,14 +110602,14 @@ function toBuffer(data) {
   }
   return Buffer.from(data);
 }
-var import_node_crypto15, hasNativeCrypto2, Sha256Node;
+var import_node_crypto16, hasNativeCrypto2, Sha256Node;
 var init_Sha256Node = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/checksum/sha256/Sha256Node.js"() {
-    import_node_crypto15 = require("node:crypto");
+    import_node_crypto16 = require("node:crypto");
     init_Sha256Js();
     hasNativeCrypto2 = (() => {
       try {
-        (0, import_node_crypto15.createHash)("sha256");
+        (0, import_node_crypto16.createHash)("sha256");
         return true;
       } catch {
         return false;
@@ -117497,7 +117866,7 @@ function constantTimeEqual(a5, b5) {
 }
 
 // ../node_modules/@better-auth/utils/dist/password.node.mjs
-var import_node_crypto3 = require("node:crypto");
+var import_node_crypto4 = require("node:crypto");
 var config = {
   N: 16384,
   r: 16,
@@ -117506,7 +117875,7 @@ var config = {
 };
 function generateKey(password, salt) {
   return new Promise((resolve, reject) => {
-    (0, import_node_crypto3.scrypt)(
+    (0, import_node_crypto4.scrypt)(
       password.normalize("NFKC"),
       salt,
       config.dkLen,
@@ -117526,7 +117895,7 @@ function generateKey(password, salt) {
   });
 }
 async function hashPassword(password) {
-  const salt = (0, import_node_crypto3.randomBytes)(16).toString("hex");
+  const salt = (0, import_node_crypto4.randomBytes)(16).toString("hex");
   const key = await generateKey(password, salt);
   return `${salt}:${key.toString("hex")}`;
 }
@@ -117891,14 +118260,14 @@ function isAligned32(bytes) {
 function copyBytes(bytes) {
   return Uint8Array.from(abytes2(bytes));
 }
-function randomBytes2(bytesLength = 32) {
+function randomBytes3(bytesLength = 32) {
   anumber2(bytesLength);
   const cr = typeof globalThis === "object" ? globalThis.crypto : null;
   if (typeof cr?.getRandomValues !== "function")
     throw new Error("crypto.getRandomValues must be defined");
   return cr.getRandomValues(new Uint8Array(bytesLength));
 }
-function managedNonce(fn, randomBytes_ = randomBytes2) {
+function managedNonce(fn, randomBytes_ = randomBytes3) {
   const { nonceLength } = fn;
   anumber2(nonceLength);
   const addNonce = (nonce, ciphertext, plaintext) => {
@@ -132072,7 +132441,7 @@ async function execute(db, sql2, params = []) {
 }
 
 // ../auth/dist/auth/token.js
-var import_node_crypto4 = require("node:crypto");
+var import_node_crypto5 = require("node:crypto");
 var USER_TOKEN_PREFIX = "out_";
 var USER_TOKEN_HASH_ALGORITHM = "sha256";
 var DEFAULT_USER_TOKEN_TTL_DAYS = 90;
@@ -132085,11 +132454,11 @@ function normalizeTimestamp(value) {
   return value instanceof Date ? value.toISOString() : value;
 }
 function hashUserTokenSecret(rawToken) {
-  return (0, import_node_crypto4.createHash)(USER_TOKEN_HASH_ALGORITHM).update(rawToken).digest("hex");
+  return (0, import_node_crypto5.createHash)(USER_TOKEN_HASH_ALGORITHM).update(rawToken).digest("hex");
 }
 function generateUserTokenSecret() {
-  const prefix = `${USER_TOKEN_PREFIX}${(0, import_node_crypto4.randomBytes)(4).toString("hex")}`;
-  const secret = `${prefix}${(0, import_node_crypto4.randomBytes)(24).toString("hex")}`;
+  const prefix = `${USER_TOKEN_PREFIX}${(0, import_node_crypto5.randomBytes)(4).toString("hex")}`;
+  const secret = `${prefix}${(0, import_node_crypto5.randomBytes)(24).toString("hex")}`;
   return { secret, prefix, hash: hashUserTokenSecret(secret) };
 }
 async function listActiveTokenScopeGrants(db, tokenId) {
@@ -133577,6 +133946,34 @@ function missionSearchWorkspaceParams({
   return dialect === "postgres" ? [match, workspaceId] : [workspaceId, match];
 }
 
+// ../packages/core/service/objective-display-id.ts
+init_dist();
+init_errors4();
+init_dist();
+var ALLOCATE_ATTEMPTS = 8;
+async function allocateObjectiveDisplayKey({
+  db,
+  missionId,
+  generate = generateObjectiveDisplayKey
+}) {
+  for (const length of [OBJECTIVE_DISPLAY_KEY_LENGTH, OBJECTIVE_DISPLAY_KEY_LENGTH + 1]) {
+    for (let attempt = 0; attempt < ALLOCATE_ATTEMPTS; attempt += 1) {
+      const key = generate({ length });
+      const existing = await db.get(
+        `SELECT id FROM objectives
+           WHERE mission_id = ? AND display_key = ? AND deleted_at IS NULL`,
+        [missionId, key]
+      );
+      if (!existing) return key;
+    }
+  }
+  throw new ServiceError(
+    "Could not allocate an objective display key",
+    "display_key_exhausted",
+    500
+  );
+}
+
 // ../packages/core/service/missions.ts
 init_projects();
 init_util3();
@@ -133694,9 +134091,12 @@ async function listObjectives({
 }) {
   const resolved = await resolveMissionId(ctx, missionId);
   const rows = await ctx.db.all(
-    `SELECT id, mission_id, project_id, position, title, instruction_text, state, auto_advance,
-            resource_key
-       FROM objectives WHERE mission_id = ? AND deleted_at IS NULL ORDER BY position ASC`,
+    `SELECT o.id, o.mission_id, o.project_id, o.position, o.title, o.instruction_text, o.state,
+            o.auto_advance, o.resource_key, o.display_key, m.display_id AS mission_display_id
+       FROM objectives o
+       JOIN missions m ON m.id = o.mission_id
+      WHERE o.mission_id = ? AND o.deleted_at IS NULL
+      ORDER BY o.position ASC`,
     [resolved.id]
   );
   return rows.map(toObjectiveSummary);
@@ -133704,6 +134104,11 @@ async function listObjectives({
 function toObjectiveSummary(row) {
   return {
     id: row.id,
+    displayKey: row.display_key,
+    displayId: formatObjectiveDisplayId({
+      missionDisplayId: row.mission_display_id,
+      displayKey: row.display_key
+    }),
     missionId: row.mission_id,
     projectId: row.project_id,
     position: row.position,
@@ -133784,14 +134189,15 @@ async function insertObjective({
   const resolvedModel = explicitAgent ? null : launchSelection.model;
   const resolvedReasoningEffort = explicitAgent ? null : launchSelection.reasoningEffort;
   const origin = resolveOrigin(ctx);
+  const displayKey = await allocateObjectiveDisplayKey({ db: ctx.db, missionId: mission.id });
   await ctx.db.run(
     `INSERT INTO objectives
          (id, workspace_id, project_id, mission_id, position, title, instruction_text, state,
           assigned_agent, model, reasoning_effort, agent_flags_json, auto_advance,
-          execution_metadata_json, resource_key, created_by_workspace_user_id,
+          execution_metadata_json, resource_key, display_key, created_by_workspace_user_id,
           created_by_kind, created_by_agent, created_by_session_id,
           created_at, updated_at, revision)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}', ?, '{}', ?, ?, ?, ?, ?, ?, ?, 1)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}', ?, '{}', ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
     [
       id,
       ctx.workspace.id,
@@ -133806,6 +134212,7 @@ async function insertObjective({
       resolvedReasoningEffort,
       bindBool(ctx.db.dialect, autoAdvance),
       normalizedResourceKey,
+      displayKey,
       ctx.actorWorkspaceUserId,
       origin.kind,
       origin.agent,
@@ -133833,7 +134240,9 @@ async function insertObjective({
     instruction_text: instruction,
     state: resolvedState,
     auto_advance: autoAdvance ? 1 : 0,
-    resource_key: normalizedResourceKey
+    resource_key: normalizedResourceKey,
+    display_key: displayKey,
+    mission_display_id: mission.displayId
   });
 }
 async function ensureNextDraftObjective({
@@ -134166,12 +134575,15 @@ async function updateObjective({
   objectiveId,
   autoAdvance
 }) {
+  const resolved = await resolveObjectiveRef({ ctx, ref: objectiveId });
   const existing = await ctx.db.get(
-    `SELECT id, mission_id, project_id, position, title, instruction_text, state,
-            auto_advance, resource_key, revision
-       FROM objectives
-       WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-    [objectiveId, ctx.workspace.id]
+    `SELECT o.id, o.mission_id, o.project_id, o.position, o.title, o.instruction_text, o.state,
+            o.auto_advance, o.resource_key, o.display_key, o.revision,
+            m.display_id AS mission_display_id
+       FROM objectives o
+       JOIN missions m ON m.id = o.mission_id
+      WHERE o.id = ? AND o.workspace_id = ? AND o.deleted_at IS NULL`,
+    [resolved.id, ctx.workspace.id]
   );
   if (!existing) {
     throw new ServiceError("Objective not found", "not_found", 404);
@@ -134512,7 +134924,7 @@ init_projects();
 
 // ../packages/core/service/protocol.ts
 init_dist();
-var import_node_crypto8 = require("node:crypto");
+var import_node_crypto9 = require("node:crypto");
 
 // ../packages/core/service/agent-session/channels.ts
 init_change_feed();
@@ -134520,12 +134932,12 @@ init_errors4();
 init_util3();
 
 // ../packages/core/service/agent-session/credential.ts
-var import_node_crypto7 = require("node:crypto");
+var import_node_crypto8 = require("node:crypto");
 var SESSION_CHANNEL_TOKEN_HASH_ALGORITHM = "sha256";
 var SESSION_CHANNEL_LEASE_SECONDS = 180;
 var SESSION_CHANNEL_ABSOLUTE_LIFETIME_SECONDS = 60 * 60 * 24;
 function hashSessionChannelToken(rawToken) {
-  return (0, import_node_crypto7.createHash)(SESSION_CHANNEL_TOKEN_HASH_ALGORITHM).update(rawToken).digest("hex");
+  return (0, import_node_crypto8.createHash)(SESSION_CHANNEL_TOKEN_HASH_ALGORITHM).update(rawToken).digest("hex");
 }
 function addSeconds(iso, seconds) {
   return new Date(new Date(iso).getTime() + seconds * 1e3).toISOString();
@@ -134819,13 +135231,15 @@ async function findBindableChannelForMission({
   if (objectiveId) {
     const byObjective = await ctx.db.get(
       `SELECT id FROM agent_session_channels
-         WHERE workspace_id = ? AND mission_id = ? AND objective_id = ?
+         WHERE workspace_id = ? AND mission_id = ?
+           AND (objective_id = ? OR objective_id IS NULL)
            AND session_id IS NULL AND deleted_at IS NULL
            AND state IN ('preparing', 'online', 'degraded')
-         ORDER BY created_at DESC LIMIT 1`,
-      [ctx.workspace.id, missionId, objectiveId]
+         ORDER BY CASE WHEN objective_id = ? THEN 0 ELSE 1 END, created_at DESC
+         LIMIT 1`,
+      [ctx.workspace.id, missionId, objectiveId, objectiveId]
     );
-    if (byObjective?.id) return byObjective.id;
+    return byObjective?.id ?? null;
   }
   const byMission = await ctx.db.get(
     `SELECT id FROM agent_session_channels
@@ -136121,6 +136535,66 @@ async function clearLatchPendingInput({
   );
   return observation;
 }
+async function forgetLatchProviderSession({
+  ctx,
+  missionId,
+  executionRequestId,
+  providerSessionId
+}) {
+  const sessionId = providerSessionId.trim();
+  if (!sessionId) {
+    throw new ServiceError("A Latch session id is required.", "validation_error");
+  }
+  return ctx.db.transaction(async (tx) => {
+    const txCtx = { ...ctx, db: tx };
+    const rows = await tx.all(
+      executionRequestId ? `SELECT id, project_id, mission_id, objective_id, metadata_json, revision
+             FROM execution_requests
+            WHERE id = ? AND mission_id = ? AND workspace_id = ? AND deleted_at IS NULL` : `SELECT id, project_id, mission_id, objective_id, metadata_json, revision
+             FROM execution_requests
+            WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL
+            ORDER BY updated_at DESC, created_at DESC`,
+      executionRequestId ? [executionRequestId, missionId, ctx.workspace.id] : [missionId, ctx.workspace.id]
+    );
+    const row = rows.find((candidate) => {
+      const mapped = providerSessionFromMetadata(parseMetadata(candidate.metadata_json));
+      return mapped?.providerSessionId === sessionId;
+    });
+    if (!row) {
+      return { forgotten: false, executionRequestId: executionRequestId ?? null };
+    }
+    const metadataJson = stripProviderSessionFromMetadata({
+      metadataJson: row.metadata_json
+    });
+    const now2 = nowIso();
+    const revision = row.revision + 1;
+    const updated = await tx.run(
+      `UPDATE execution_requests
+          SET metadata_json = ?, updated_at = ?, revision = ?
+        WHERE id = ? AND revision = ? AND deleted_at IS NULL`,
+      [metadataJson, now2, revision, row.id, row.revision]
+    );
+    if (updated.changes === 0) {
+      throw new ServiceError(
+        "Execution request changed while forgetting the Latch session",
+        "execution_request_conflict",
+        409
+      );
+    }
+    await recordChange({
+      ctx: txCtx,
+      entityType: "execution_request",
+      entityId: row.id,
+      operation: "update",
+      entityRevision: revision,
+      projectId: row.project_id,
+      missionId: row.mission_id,
+      objectiveId: row.objective_id,
+      changedFields: ["metadata_json"]
+    });
+    return { forgotten: true, executionRequestId: row.id };
+  });
+}
 
 // ../packages/core/service/live-activity-jobs.ts
 init_util3();
@@ -136669,6 +137143,53 @@ function resolveActiveObjective(objectives) {
   }
   return active;
 }
+async function resolvePinnedAttachObjective({
+  ctx,
+  missionId,
+  objectives,
+  objectiveId,
+  executionRequestId
+}) {
+  const explicit = objectiveId?.trim();
+  if (explicit) {
+    const resolved = await resolveObjectiveRef({ ctx, ref: explicit, missionId });
+    const match = objectives.find((candidate) => candidate.id === resolved.id);
+    if (!match) {
+      throw new ServiceError(
+        `Objective ${explicit} does not belong to this mission`,
+        "invalid_objective_ref",
+        400
+      );
+    }
+    return match;
+  }
+  const requestId = executionRequestId?.trim();
+  if (requestId) {
+    const row = await ctx.db.get(
+      `SELECT objective_id, mission_id
+         FROM execution_requests
+        WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+      [requestId, ctx.workspace.id]
+    );
+    if (!row || row.mission_id !== missionId) {
+      throw new ServiceError(
+        "Execution request does not match this mission/objective",
+        "execution_request_mismatch",
+        409
+      );
+    }
+    const match = objectives.find((candidate) => candidate.id === row.objective_id);
+    if (!match) {
+      throw new ServiceError(
+        "Execution request does not match this mission/objective",
+        "execution_request_mismatch",
+        409
+      );
+    }
+    return match;
+  }
+  return resolveActiveObjective(objectives);
+}
 async function getSessionByKeyMaybeEnded(ctx, sessionKey, options = {}) {
   const hash2 = hashSessionKey(sessionKey);
   const endedFilter = options.includeEnded ? "" : "AND ended_at IS NULL";
@@ -136771,7 +137292,7 @@ function assembleAgentInstructions({
     `You are attached to mission **${mission.displayId}** via Overlord.`,
     ``,
     `Mission ID: ${mission.displayId}  <- pass this to every \`ovld protocol ... --mission-id\` call`,
-    `Objective ID: ${objective.id}  <- informational only; never pass it as --mission-id`,
+    `Objective ID: ${objective.displayId}  <- pass as --objective-id on attach; never as --mission-id`,
     `Objective: ${objectiveLabel}`,
     `Project: ${projectName}`,
     "",
@@ -136959,11 +137480,19 @@ async function attachSession({
   externalSessionId: externalSessionId2,
   executionRequestId,
   executionTargetId = null,
-  sessionChannelId = null
+  sessionChannelId = null,
+  objectiveId = null
 }) {
   const mission = await getMissionSummary({ ctx, missionId });
   const objectives = await listObjectives({ ctx, missionId: mission.id });
-  const objective = resolveActiveObjective(objectives);
+  const pinned = Boolean(objectiveId?.trim() || executionRequestId?.trim());
+  const objective = await resolvePinnedAttachObjective({
+    ctx,
+    missionId: mission.id,
+    objectives,
+    objectiveId,
+    executionRequestId
+  });
   const resolvedTargetId = await resolveProtocolExecutionTargetId({
     ctx,
     executionTargetId,
@@ -136981,6 +137510,13 @@ async function attachSession({
     const existing = await getSessionByKey(ctx, existingSessionKey);
     if (existing.mission_id !== context.mission.id) {
       throw new ServiceError("Session key belongs to a different mission", "invalid_session", 401);
+    }
+    if (pinned && existing.objective_id !== objective.id) {
+      throw new ServiceError(
+        "Session key belongs to a different objective",
+        "session_objective_mismatch",
+        409
+      );
     }
     if (externalSessionId2 !== void 0) {
       await ctx.db.run(
@@ -137215,7 +137751,7 @@ async function connectSession({
   };
 }
 function promptHash(prompt) {
-  return (0, import_node_crypto8.createHash)("sha256").update(prompt).digest("hex");
+  return (0, import_node_crypto9.createHash)("sha256").update(prompt).digest("hex");
 }
 function objectiveFromSession(objectives, session) {
   if (!session) return void 0;
@@ -137351,7 +137887,8 @@ async function resumeFollowUp({
   const trimmedSummary = summary?.trim() || "Beginning follow-up work.";
   const mission = await getMissionSummary({ ctx, missionId });
   const objectives = await listObjectives({ ctx, missionId: mission.id });
-  const selectedObjective = objectiveId ? objectives.find((objective) => objective.id === objectiveId) : latestCompletedObjective(objectives);
+  const resolvedObjectiveId = objectiveId ? (await resolveObjectiveRef({ ctx, ref: objectiveId, missionId: mission.id })).id : null;
+  const selectedObjective = resolvedObjectiveId ? objectives.find((objective) => objective.id === resolvedObjectiveId) : latestCompletedObjective(objectives);
   if (!selectedObjective) {
     throw new ServiceError(
       "No completed objective found for follow-up",
@@ -139261,6 +139798,7 @@ function launchSessionSnapshotFromMetadata2(metadata) {
 }
 
 // execution/launch.ts
+init_dist();
 init_agent_catalog();
 init_config();
 init_execution_targets();
@@ -139270,6 +139808,29 @@ init_project_execution_target();
 init_projects();
 init_db();
 init_errors5();
+
+// objective-ref.ts
+init_context();
+init_errors4();
+init_db();
+init_errors5();
+async function resolveObjectiveIdForRest({
+  ref,
+  db,
+  uuidWorkspaceScoped = false
+}) {
+  const ctx = await buildWebappServiceContextForWorkspace(getActiveWorkspaceId(), db);
+  try {
+    return await resolveObjectiveRef({ ctx, ref, uuidWorkspaceScoped });
+  } catch (error53) {
+    if (error53 instanceof ServiceError) {
+      throw new ApiError(error53.status, error53.message, void 0, error53.code);
+    }
+    throw error53;
+  }
+}
+
+// execution/launch.ts
 var AGENT_CATALOG_SETTINGS_KEY = "agentCatalog";
 var WORKTREE_BRANCH_AUTOMATION_SETTINGS_KEY = "worktreeBranchAutomationEnabled";
 function instanceAgentCatalog() {
@@ -139909,6 +140470,29 @@ async function resolveMissionLatchObservation(missionRef, body) {
   });
   return { observation };
 }
+async function forgetMissionLatchSession(missionRef, body) {
+  const scope = await requireMissionPermission({
+    missionRef,
+    permission: PERMISSIONS.SESSION_READ
+  });
+  const ctx = await buildWebappServiceContextForWorkspace(
+    scope.workspaceId,
+    requireDatabaseClient(),
+    scope.workspaceUserId
+  );
+  const payload = body && typeof body === "object" && !Array.isArray(body) ? body : {};
+  const providerSessionId = typeof payload.providerSessionId === "string" ? payload.providerSessionId : "";
+  const executionRequestId = typeof payload.executionRequestId === "string" ? payload.executionRequestId : null;
+  if (!providerSessionId.trim()) {
+    throw new ApiError(400, "providerSessionId is required");
+  }
+  return forgetLatchProviderSession({
+    ctx,
+    missionId: scope.missionId,
+    executionRequestId,
+    providerSessionId
+  });
+}
 var LAUNCHABLE_STATES = ["draft", "submitted", "launching"];
 var ACTIVE_SIBLING_OBJECTIVE_STATES = ["launching", "executing", "pending_delivery"];
 async function dequeueObjective({
@@ -139988,10 +140572,11 @@ async function dequeueObjective({
   }
   return { clearedRequests: cleared, endedSessions: openSessions.length };
 }
-async function launchObjective(objectiveId, body) {
+async function launchObjective(objectiveRef, body) {
   return requireDatabaseClient().transaction(async (tx) => {
     const agentKey = (body.agent ?? "").trim();
     if (!agentKey) throw new ApiError(400, "agent is required");
+    const { id: objectiveId } = await resolveObjectiveIdForRest({ ref: objectiveRef, db: tx });
     const objective = await tx.get(
       `SELECT id, workspace_id, project_id, mission_id, title, instruction_text, state,
                 assigned_agent, model, reasoning_effort, launch_config_json, resource_key, revision
@@ -140177,10 +140762,11 @@ async function launchObjective(objectiveId, body) {
     return executionSummaryToDto(request);
   });
 }
-async function getObjectivePrompt(objectiveId) {
+async function getObjectivePrompt(objectiveRef) {
   const db = requireDatabaseClient();
+  const { id: objectiveId } = await resolveObjectiveIdForRest({ ref: objectiveRef, db });
   const row = await db.get(
-    `SELECT o.id, o.mission_id, o.title, o.instruction_text, o.workspace_id,
+    `SELECT o.id, o.mission_id, o.title, o.instruction_text, o.workspace_id, o.display_key,
               t.display_id, t.title AS mission_title
          FROM objectives o
          JOIN missions t ON t.id = o.mission_id
@@ -140205,8 +140791,8 @@ async function getObjectivePrompt(objectiveId) {
     `## Task`,
     ``,
     `- **Title:** ${row.mission_title}`,
-    `- **Mission ID:** ${row.display_id} \u2014 the only id you pass to \`ovld protocol\` commands`,
-    `- **Objective ID:** ${row.id} \u2014 informational only; never pass it as \`--mission-id\``,
+    `- **Mission ID:** ${row.display_id} \u2014 pass this as \`--mission-id\``,
+    `- **Objective ID:** ${formatObjectiveDisplayId({ missionDisplayId: row.display_id, displayKey: row.display_key })} \u2014 pass this as \`--objective-id\`; never as \`--mission-id\``,
     ``,
     `### Objective`,
     ``,
@@ -140214,23 +140800,24 @@ async function getObjectivePrompt(objectiveId) {
     ``,
     `## Overlord Protocol`,
     ``,
-    `Attach to this mission before doing anything else, then post updates while you`,
+    `Attach to this objective before doing anything else, then post updates while you`,
     `work and deliver a summary when you finish:`,
     ``,
     // Markdown code fences use backticks, which leave a shell with an unmatched
     // command substitution when a copied prompt is pasted into a terminal.
     // Indentation preserves a clearly copyable command without shell syntax.
-    `    ovld protocol attach --mission-id ${row.display_id}`
+    `    ovld protocol attach --mission-id ${row.display_id} --objective-id ${formatObjectiveDisplayId({ missionDisplayId: row.display_id, displayKey: row.display_key })}`
   ].join("\n");
   return { objectiveId: row.id, missionId: row.mission_id, prompt };
 }
-async function getObjectiveLaunchCommand(objectiveId, query) {
+async function getObjectiveLaunchCommand(objectiveRef, query) {
   const agentKey = (query.agent ?? "").trim();
   if (!agentKey) throw new ApiError(400, "agent is required");
   const db = requireDatabaseClient();
+  const { id: objectiveId } = await resolveObjectiveIdForRest({ ref: objectiveRef, db });
   const row = await db.get(
     `SELECT o.id, o.mission_id, o.project_id, o.launch_config_json, o.resource_key,
-              o.workspace_id, t.display_id
+              o.workspace_id, o.display_key, t.display_id
          FROM objectives o
          JOIN missions t ON t.id = o.mission_id
         WHERE o.id = ? AND o.deleted_at IS NULL`,
@@ -140267,7 +140854,10 @@ async function getObjectiveLaunchCommand(objectiveId, query) {
   const command = formatOvldLaunchCommand({
     agent: agentKey,
     missionDisplayId: row.display_id,
-    objectiveId: row.id,
+    objectiveId: formatObjectiveDisplayId({
+      missionDisplayId: row.display_id,
+      displayKey: row.display_key
+    }),
     model: query.model,
     thinking: query.reasoningEffort,
     preCommand: resolved.config.preCommand,
@@ -140280,7 +140870,7 @@ async function getObjectiveLaunchCommand(objectiveId, query) {
 init_local_target_mutation_queue();
 
 // ext/github/user-oauth.ts
-var import_node_crypto10 = require("node:crypto");
+var import_node_crypto11 = require("node:crypto");
 init_db();
 init_errors5();
 
@@ -140357,8 +140947,8 @@ function tokenAad(profileId, kind) {
   return Buffer.from(`overlord:github-user-oauth:v1:${profileId}:${kind}`, "utf8");
 }
 function encryptToken(token, profileId, kind, key) {
-  const nonce = (0, import_node_crypto10.randomBytes)(12);
-  const cipher = (0, import_node_crypto10.createCipheriv)("aes-256-gcm", key, nonce);
+  const nonce = (0, import_node_crypto11.randomBytes)(12);
+  const cipher = (0, import_node_crypto11.createCipheriv)("aes-256-gcm", key, nonce);
   cipher.setAAD(tokenAad(profileId, kind));
   const ciphertext = Buffer.concat([cipher.update(token, "utf8"), cipher.final()]);
   const tag2 = cipher.getAuthTag();
@@ -140370,7 +140960,7 @@ function decryptToken(envelope, profileId, kind, key) {
     throw new ApiError(503, "The stored GitHub connection cannot be decrypted.");
   }
   try {
-    const decipher = (0, import_node_crypto10.createDecipheriv)("aes-256-gcm", key, Buffer.from(nonceText, "base64url"));
+    const decipher = (0, import_node_crypto11.createDecipheriv)("aes-256-gcm", key, Buffer.from(nonceText, "base64url"));
     decipher.setAAD(tokenAad(profileId, kind));
     decipher.setAuthTag(Buffer.from(tagText, "base64url"));
     return Buffer.concat([
@@ -140432,7 +141022,7 @@ async function getGitHubUserConnection() {
   return connectionDto(await readConnection(client, profileId));
 }
 function stateHash(state2) {
-  return (0, import_node_crypto10.createHash)("sha256").update(state2).digest("hex");
+  return (0, import_node_crypto11.createHash)("sha256").update(state2).digest("hex");
 }
 function validatedReturnUrl(value, allowedBrowserOrigins2) {
   if (value === void 0 || value === null || value === "") return null;
@@ -140455,7 +141045,7 @@ async function beginGitHubUserAuthorization(body, allowedBrowserOrigins2) {
   const config4 = requireUserOAuthConfig();
   const client = requireDatabaseClient();
   const profileId = await activeProfileId(client);
-  const state2 = (0, import_node_crypto10.randomBytes)(32).toString("base64url");
+  const state2 = (0, import_node_crypto11.randomBytes)(32).toString("base64url");
   const now2 = nowIso2();
   const expiresAt = new Date(Date.now() + OAUTH_STATE_TTL_MS).toISOString();
   const returnUrl = validatedReturnUrl(body.returnTo, allowedBrowserOrigins2);
@@ -142543,6 +143133,11 @@ function toObjectiveDto(r5) {
     externalSessionId: r5.external_session_id ?? null,
     branch: r5.branch ?? null,
     resourceKey: r5.resource_key?.trim() || null,
+    displayKey: r5.display_key,
+    displayId: formatObjectiveDisplayId({
+      missionDisplayId: r5.mission_display_id ?? "",
+      displayKey: r5.display_key
+    }),
     createdByKind: toCreatedByKind(r5.created_by_kind),
     createdByAgent: r5.created_by_agent ?? null,
     createdByWorkspaceUserId: r5.created_by_workspace_user_id ?? null,
@@ -144129,7 +144724,7 @@ async function getObjectivesByMission(missionIds, db = requireDatabaseClient()) 
   if (missionIds.length === 0) return byMission;
   const placeholders = missionIds.map(() => "?").join(", ");
   const rows = await db.all(
-    `SELECT o.*,
+    `SELECT o.*, m.display_id AS mission_display_id,
          (
            SELECT s.external_session_id
              FROM agent_sessions s
@@ -144138,6 +144733,7 @@ async function getObjectivesByMission(missionIds, db = requireDatabaseClient()) 
             LIMIT 1
          ) AS external_session_id
          FROM objectives o
+         JOIN missions m ON m.id = o.mission_id
         WHERE o.mission_id IN (${placeholders}) AND o.deleted_at IS NULL
         ORDER BY o.mission_id ASC, o.position ASC`,
     missionIds
@@ -146193,7 +146789,7 @@ async function listObjectives2(missionId, db = requireDatabaseClient()) {
     db
   });
   const rows = await db.all(
-    `SELECT o.*,
+    `SELECT o.*, m.display_id AS mission_display_id,
          (
            SELECT s.external_session_id
              FROM agent_sessions s
@@ -146202,6 +146798,7 @@ async function listObjectives2(missionId, db = requireDatabaseClient()) {
             LIMIT 1
          ) AS external_session_id
          FROM objectives o
+         JOIN missions m ON m.id = o.mission_id
         WHERE o.mission_id = ? AND o.deleted_at IS NULL
         ORDER BY o.position ASC`,
     [missionId]
@@ -146343,7 +146940,13 @@ async function insertObjective2(db, ctx, body) {
     ...body.assignedAgent !== void 0 ? { assignedAgent: body.assignedAgent } : {},
     ...body.resourceKey !== void 0 ? { resourceKey: body.resourceKey } : {}
   });
-  const row = await db.get(`SELECT * FROM objectives WHERE id = ?`, [created.id]);
+  const row = await db.get(
+    `SELECT o.*, m.display_id AS mission_display_id
+       FROM objectives o
+       JOIN missions m ON m.id = o.mission_id
+      WHERE o.id = ?`,
+    [created.id]
+  );
   return toObjectiveDto(row);
 }
 function createObjectiveTx(body) {
@@ -146439,28 +147042,35 @@ async function requireObjectivePermission({
   permission,
   db = requireDatabaseClient()
 }) {
-  const row = await db.get(
-    `SELECT workspace_id FROM objectives WHERE id = ? AND deleted_at IS NULL`,
-    [objectiveId]
-  );
-  if (!row) throw new ApiError(404, "Objective not found");
+  const resolved = await resolveObjectiveIdForRest({ ref: objectiveId, db });
   const workspaceUserId = await requireWorkspacePermission({
-    workspaceId: row.workspace_id,
+    workspaceId: resolved.workspaceId,
     permission,
     db,
     notFoundMessage: "Objective not found"
   });
-  return { workspaceId: row.workspace_id, workspaceUserId };
+  return {
+    workspaceId: resolved.workspaceId,
+    workspaceUserId,
+    objectiveId: resolved.id
+  };
 }
-async function updateObjectiveTx(id, body) {
+async function updateObjectiveTx(idRef, body) {
   return requireDatabaseClient().transaction(async (tx) => {
-    const { workspaceId, workspaceUserId } = await requireObjectivePermission({
-      objectiveId: id,
+    const {
+      workspaceId,
+      workspaceUserId,
+      objectiveId: id
+    } = await requireObjectivePermission({
+      objectiveId: idRef,
       permission: PERMISSIONS.OBJECTIVE_UPDATE,
       db: tx
     });
     const existing = await tx.get(
-      `SELECT * FROM objectives WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+      `SELECT o.*, m.display_id AS mission_display_id
+         FROM objectives o
+         JOIN missions m ON m.id = o.mission_id
+        WHERE o.id = ? AND o.workspace_id = ? AND o.deleted_at IS NULL`,
       [id, workspaceId]
     );
     if (!existing) throw new ApiError(404, "Objective not found");
@@ -146698,7 +147308,13 @@ async function updateObjectiveTx(id, body) {
         tx
       });
     }
-    const row = await tx.get(`SELECT * FROM objectives WHERE id = ?`, [id]);
+    const row = await tx.get(
+      `SELECT o.*, m.display_id AS mission_display_id
+         FROM objectives o
+         JOIN missions m ON m.id = o.mission_id
+        WHERE o.id = ?`,
+      [id]
+    );
     const objective = toObjectiveDto(row);
     return {
       objective,
@@ -146718,15 +147334,22 @@ async function updateObjective2(id, body) {
   }
   return objective;
 }
-async function deleteObjective(id) {
+async function deleteObjective(idRef) {
   await requireDatabaseClient().transaction(async (tx) => {
-    const { workspaceId, workspaceUserId } = await requireObjectivePermission({
-      objectiveId: id,
+    const {
+      workspaceId,
+      workspaceUserId,
+      objectiveId: id
+    } = await requireObjectivePermission({
+      objectiveId: idRef,
       permission: PERMISSIONS.OBJECTIVE_UPDATE,
       db: tx
     });
     const existing = await tx.get(
-      `SELECT * FROM objectives WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+      `SELECT o.*, m.display_id AS mission_display_id
+         FROM objectives o
+         JOIN missions m ON m.id = o.mission_id
+        WHERE o.id = ? AND o.workspace_id = ? AND o.deleted_at IS NULL`,
       [id, workspaceId]
     );
     if (!existing) throw new ApiError(404, "Objective not found");
@@ -147322,7 +147945,7 @@ async function revokeUserTokenSecret(rawToken) {
 
 // workspaces.ts
 init_dist();
-var import_node_crypto16 = require("node:crypto");
+var import_node_crypto17 = require("node:crypto");
 
 // sql-studio/sql-studio.ts
 var import_node_child_process9 = require("node:child_process");
@@ -153735,9 +154358,9 @@ var INVITATION_HASH_ALGORITHM = "sha256";
 var INVITATION_TTL_DAYS = 14;
 var WORKSPACE_ROLE_KEYS = /* @__PURE__ */ new Set(["ADMIN", "MANAGER", "MEMBER"]);
 function generateInvitationSecret() {
-  const prefix = `${INVITATION_TOKEN_SCHEME}_${(0, import_node_crypto16.randomBytes)(4).toString("hex")}`;
-  const secret = `${prefix}${(0, import_node_crypto16.randomBytes)(24).toString("hex")}`;
-  const hash2 = (0, import_node_crypto16.createHash)(INVITATION_HASH_ALGORITHM).update(secret).digest("hex");
+  const prefix = `${INVITATION_TOKEN_SCHEME}_${(0, import_node_crypto17.randomBytes)(4).toString("hex")}`;
+  const secret = `${prefix}${(0, import_node_crypto17.randomBytes)(24).toString("hex")}`;
+  const hash2 = (0, import_node_crypto17.createHash)(INVITATION_HASH_ALGORITHM).update(secret).digest("hex");
   return { secret, prefix, hash: hash2 };
 }
 var INVITATION_COLUMNS = "id, workspace_id, email, role_key, token_prefix, status, invited_by_workspace_user_id, expires_at, created_at, revision";
@@ -153901,7 +154524,7 @@ async function acceptWorkspaceInvitation(body) {
   if (!rawToken) throw new ApiError(400, "Invitation token is required");
   const profileId = getActiveProfileId();
   if (!profileId) throw new ApiError(401, "Authentication required");
-  const tokenHash = (0, import_node_crypto16.createHash)(INVITATION_HASH_ALGORITHM).update(rawToken).digest("hex");
+  const tokenHash = (0, import_node_crypto17.createHash)(INVITATION_HASH_ALGORITHM).update(rawToken).digest("hex");
   const client = requireDatabaseClient();
   const outcome = await client.transaction(async (tx) => {
     const invitation = await tx.get(
@@ -154529,7 +155152,8 @@ var handlers = {
     executionTargetId: strFlag(body, "--execution-target-id") ?? null,
     // The channel id only. Its credential never travels in a protocol flag — it reaches the
     // backend solely as an Authorization header on the adapter route family.
-    sessionChannelId: strFlag(body, "--session-channel-id") ?? null
+    sessionChannelId: strFlag(body, "--session-channel-id") ?? null,
+    objectiveId: strFlag(body, "--objective-id") ?? null
   }),
   update: (ctx, body) => updateSession2({
     ctx,
@@ -155087,10 +155711,13 @@ var hostedMcpToolDefinitions = [
   {
     name: "overlord_attach_session",
     title: "Attach to mission",
-    description: "Use this only after the user asks the connected agent to begin work on a mission. It opens an MCP-hosted session for later updates and delivery.",
+    description: "Use this only after the user asks the connected agent to begin work on a mission. It opens an MCP-hosted session for later updates and delivery. Pass objectiveId when the caller already knows which objective to execute so attach does not rediscover another one.",
     inputSchema: objectSchema(
       {
         missionId: stringProperty("Mission UUID or workspace display id."),
+        objectiveId: stringProperty(
+          "Optional objective UUID or display id (e.g. coo:756.k7xm). Pins attach to that objective."
+        ),
         agent: stringProperty("Agent identifier. Defaults to hosted-mcp."),
         model: stringProperty("Optional model identifier."),
         executionTargetId: stringProperty(
@@ -155488,6 +156115,7 @@ var toolHandlers = {
     protocolBody({
       "--mission-id": requiredString(args, "missionId"),
       "--agent": optionalString(args, "agent") ?? "hosted-mcp",
+      ...optionalString(args, "objectiveId") ? { "--objective-id": requiredString(args, "objectiveId") } : {},
       ...optionalString(args, "model") ? { "--model": requiredString(args, "model") } : {},
       ...optionalString(args, "executionTargetId") ? { "--execution-target-id": requiredString(args, "executionTargetId") } : {}
     })
@@ -157615,7 +158243,7 @@ function createEverhourExtensionRouter(handle4) {
 var import_express2 = __toESM(require_express2(), 1);
 
 // ext/github/service.ts
-var import_node_crypto17 = require("node:crypto");
+var import_node_crypto18 = require("node:crypto");
 init_db();
 init_errors5();
 var GITHUB_API2 = "https://api.github.com";
@@ -157646,7 +158274,7 @@ function appJwt(config4) {
     JSON.stringify({ iat: now2 - 60, exp: now2 + 9 * 60, iss: config4.appId })
   );
   const signingInput = `${encodedHeader}.${encodedPayload}`;
-  const signer = (0, import_node_crypto17.createSign)("RSA-SHA256");
+  const signer = (0, import_node_crypto18.createSign)("RSA-SHA256");
   signer.update(signingInput);
   signer.end();
   return `${signingInput}.${signer.sign(config4.privateKey, "base64url")}`;
@@ -157685,16 +158313,16 @@ async function githubFetch(path25, token, init2 = {}) {
 }
 function signedInstallState(workspaceId, privateKey) {
   const payload = base64url3(JSON.stringify({ workspaceId, expiresAt: Date.now() + STATE_TTL_MS }));
-  const mac3 = (0, import_node_crypto17.createHmac)("sha256", privateKey).update(payload).digest("base64url");
+  const mac3 = (0, import_node_crypto18.createHmac)("sha256", privateKey).update(payload).digest("base64url");
   return `${payload}.${mac3}`;
 }
 function verifyInstallState(value, workspaceId, privateKey) {
   const [payload, suppliedMac, ...extra] = value?.split(".") ?? [];
   if (!payload || !suppliedMac || extra.length)
     throw new ApiError(400, "Invalid GitHub installation state.");
-  const expectedMac = (0, import_node_crypto17.createHmac)("sha256", privateKey).update(payload).digest("base64url");
+  const expectedMac = (0, import_node_crypto18.createHmac)("sha256", privateKey).update(payload).digest("base64url");
   const sameLength = suppliedMac.length === expectedMac.length;
-  if (!sameLength || !(0, import_node_crypto17.timingSafeEqual)(Buffer.from(suppliedMac), Buffer.from(expectedMac))) {
+  if (!sameLength || !(0, import_node_crypto18.timingSafeEqual)(Buffer.from(suppliedMac), Buffer.from(expectedMac))) {
     throw new ApiError(400, "Invalid GitHub installation state.");
   }
   let decoded;
@@ -160366,7 +160994,7 @@ function boundComposeText(value, maxChars) {
 var deliveryComposeWorker = new DeliveryComposeWorker();
 
 // desktop-oauth-handoff.ts
-var import_node_crypto18 = require("node:crypto");
+var import_node_crypto19 = require("node:crypto");
 var HANDOFF_TTL_MS = 6e4;
 var TICKET_PATTERN = /^[A-Za-z0-9_-]{32,128}$/;
 var handoffs = /* @__PURE__ */ new Map();
@@ -160377,7 +161005,7 @@ function discardExpiredHandoffs(now2 = Date.now()) {
 }
 function createOAuthHandoff(sessionToken, audience) {
   discardExpiredHandoffs();
-  const ticket = (0, import_node_crypto18.randomBytes)(32).toString("base64url");
+  const ticket = (0, import_node_crypto19.randomBytes)(32).toString("base64url");
   handoffs.set(ticket, { audience, sessionToken, expiresAt: Date.now() + HANDOFF_TTL_MS });
   return ticket;
 }
@@ -160426,7 +161054,7 @@ init_env_profile();
 init_errors5();
 
 // live-activities.ts
-var import_node_crypto19 = require("node:crypto");
+var import_node_crypto20 = require("node:crypto");
 init_util3();
 init_db();
 init_errors5();
@@ -160658,7 +161286,7 @@ async function buildLiveActivityContentState(db, profileId, now2 = /* @__PURE__ 
   };
 }
 function liveActivityContentHash(state2) {
-  return (0, import_node_crypto19.createHash)("sha256").update(
+  return (0, import_node_crypto20.createHash)("sha256").update(
     JSON.stringify(
       state2 && {
         running: state2.running,
@@ -160672,7 +161300,7 @@ function liveActivityContentHash(state2) {
 init_util3();
 
 // apns-client.ts
-var import_node_crypto20 = require("node:crypto");
+var import_node_crypto21 = require("node:crypto");
 var import_node_http2 = __toESM(require("node:http2"), 1);
 var SANDBOX_HOST = "https://api.sandbox.push.apple.com";
 var PRODUCTION_HOST = "https://api.push.apple.com";
@@ -160701,7 +161329,7 @@ function apnsJwt(config4) {
   const signingInput = `${b64url(JSON.stringify({ alg: "ES256", kid: config4.keyId }))}.${b64url(
     JSON.stringify({ iss: config4.teamId, iat: now2 })
   )}`;
-  const signer = (0, import_node_crypto20.createSign)("SHA256");
+  const signer = (0, import_node_crypto21.createSign)("SHA256");
   signer.update(signingInput);
   signer.end();
   const signature = signer.sign({ key: config4.privateKey, dsaEncoding: "ieee-p1363" });
@@ -161724,7 +162352,7 @@ async function dismissNotification(id, body) {
 }
 
 // oauth.ts
-var import_node_crypto21 = require("node:crypto");
+var import_node_crypto22 = require("node:crypto");
 init_db();
 init_errors5();
 var CLIENT_ID_PREFIX = "ovlc_";
@@ -161760,12 +162388,12 @@ function oauthSigningSecret() {
   return process.env.OVERLORD_OAUTH_SIGNING_SECRET?.trim() || process.env.BETTER_AUTH_SECRET?.trim() || "overlord-local-oauth-development-secret";
 }
 function signPayload(payload) {
-  return (0, import_node_crypto21.createHmac)("sha256", oauthSigningSecret()).update(payload).digest("base64url");
+  return (0, import_node_crypto22.createHmac)("sha256", oauthSigningSecret()).update(payload).digest("base64url");
 }
 function fixedTimeEqual(a5, b5) {
   const left = Buffer.from(a5);
   const right = Buffer.from(b5);
-  return left.length === right.length && (0, import_node_crypto21.timingSafeEqual)(left, right);
+  return left.length === right.length && (0, import_node_crypto22.timingSafeEqual)(left, right);
 }
 function jsonError(res, status, error53, description) {
   res.status(status).json({ error: error53, error_description: description });
@@ -162002,7 +162630,7 @@ async function handleOAuthApprove(req, res) {
     scope: "mission_lifecycle",
     expiresAt: new Date(Date.now() + USER_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1e3).toISOString()
   });
-  const code = `${AUTH_CODE_PREFIX}${(0, import_node_crypto21.randomBytes)(32).toString("base64url")}`;
+  const code = `${AUTH_CODE_PREFIX}${(0, import_node_crypto22.randomBytes)(32).toString("base64url")}`;
   authorizationCodes.set(code, {
     clientId: parsed.clientId,
     redirectUri: parsed.redirectUri,
@@ -162046,7 +162674,7 @@ async function handleOAuthToken(req, res) {
     jsonError(res, 400, "invalid_target", "OAuth resource does not match the authorization code.");
     return;
   }
-  const challenge = (0, import_node_crypto21.createHash)("sha256").update(codeVerifier).digest("base64url");
+  const challenge = (0, import_node_crypto22.createHash)("sha256").update(codeVerifier).digest("base64url");
   if (!codeVerifier || challenge !== entry.codeChallenge) {
     await revokeOrphanedAccessToken(entry.accessToken);
     jsonError(res, 400, "invalid_grant", "PKCE verification failed.");
@@ -162066,7 +162694,7 @@ async function handleOAuthRevoke(req, res) {
 }
 
 // storage.ts
-var import_node_crypto22 = require("node:crypto");
+var import_node_crypto23 = require("node:crypto");
 var import_node_fs19 = require("node:fs");
 var import_node_path30 = __toESM(require("node:path"), 1);
 var import_node_url7 = require("node:url");
@@ -162150,7 +162778,7 @@ async function writeImageObject(bucket, input, storageKeyFor) {
     storageKey,
     sizeBytes: input.bytes.length,
     contentType,
-    checksum: (0, import_node_crypto22.createHash)("sha256").update(input.bytes).digest("hex"),
+    checksum: (0, import_node_crypto23.createHash)("sha256").update(input.bytes).digest("hex"),
     publicUrl: publicUrlFor(bucket.bucket_key, storageKey)
   };
 }
@@ -162312,11 +162940,12 @@ async function uploadOrganizationImage(input) {
   };
 }
 var ATTACHMENTS_BUCKET_KEY = "attachments";
-async function resolveObjectiveScope(objectiveId, client = requireDatabaseClient(), permission = PERMISSIONS.ATTACHMENT_READ) {
+async function resolveObjectiveScope(objectiveRef, client = requireDatabaseClient(), permission = PERMISSIONS.ATTACHMENT_READ) {
+  const resolved = await resolveObjectiveIdForRest({ ref: objectiveRef, db: client });
   const row = await client.get(
-    `SELECT workspace_id, project_id, mission_id FROM objectives
+    `SELECT id, workspace_id, project_id, mission_id FROM objectives
       WHERE id = ? AND deleted_at IS NULL`,
-    [objectiveId]
+    [resolved.id]
   );
   if (!row) throw new ApiError(404, "Objective not found");
   await requireWorkspacePermission({
@@ -162381,7 +163010,7 @@ async function uploadObjectiveAttachment(input) {
     contentType: contentType ?? "application/octet-stream"
   });
   const filename = input.filename.trim() || `attachment${import_node_path30.default.extname(storageKey)}`;
-  const checksum3 = (0, import_node_crypto22.createHash)("sha256").update(input.bytes).digest("hex");
+  const checksum3 = (0, import_node_crypto23.createHash)("sha256").update(input.bytes).digest("hex");
   return requireDatabaseClient().transaction(async (tx) => {
     await tx.run(
       `INSERT INTO attachments (
@@ -162398,7 +163027,7 @@ async function uploadObjectiveAttachment(input) {
         scope.workspace_id,
         scope.project_id,
         scope.mission_id,
-        input.objectiveId,
+        scope.id,
         bucket.id,
         storageKey,
         filename,
@@ -162418,7 +163047,7 @@ async function uploadObjectiveAttachment(input) {
         entityRevision: 1,
         projectId: scope.project_id,
         missionId: scope.mission_id,
-        objectiveId: input.objectiveId,
+        objectiveId: scope.id,
         workspaceId: scope.workspace_id
       },
       tx
@@ -162428,7 +163057,7 @@ async function uploadObjectiveAttachment(input) {
       workspace_id: scope.workspace_id,
       project_id: scope.project_id,
       mission_id: scope.mission_id,
-      objective_id: input.objectiveId,
+      objective_id: scope.id,
       storage_key: storageKey,
       filename,
       content_type: contentType,
@@ -162444,7 +163073,7 @@ async function listObjectiveAttachments(objectiveId) {
     `SELECT ${ATTACHMENT_COLUMNS} FROM attachments
       WHERE objective_id = ? AND workspace_id = ? AND deleted_at IS NULL
       ORDER BY created_at ASC`,
-    [objectiveId, scope.workspace_id]
+    [scope.id, scope.workspace_id]
   );
   return rows.map(toObjectiveAttachmentDto);
 }
@@ -162458,7 +163087,7 @@ async function deleteObjectiveAttachment(objectiveId, attachmentId) {
          JOIN storage_buckets b ON b.id = a.storage_bucket_id
         WHERE a.id = ? AND a.objective_id = ? AND a.workspace_id = ?
           AND a.deleted_at IS NULL AND b.deleted_at IS NULL`,
-      [attachmentId, objectiveId, scope.workspace_id]
+      [attachmentId, scope.id, scope.workspace_id]
     );
     if (!row) throw new ApiError(404, "Attachment not found");
     const now2 = nowIso2();
@@ -162477,7 +163106,7 @@ async function deleteObjectiveAttachment(objectiveId, attachmentId) {
         entityRevision: row.revision + 1,
         projectId: scope.project_id,
         missionId: scope.mission_id,
-        objectiveId,
+        objectiveId: scope.id,
         workspaceId: scope.workspace_id
       },
       tx
@@ -162486,7 +163115,7 @@ async function deleteObjectiveAttachment(objectiveId, attachmentId) {
       `SELECT ${ATTACHMENT_COLUMNS} FROM attachments
         WHERE objective_id = ? AND workspace_id = ? AND deleted_at IS NULL
         ORDER BY created_at ASC`,
-      [objectiveId, scope.workspace_id]
+      [scope.id, scope.workspace_id]
     );
     return {
       remaining: rows.map(toObjectiveAttachmentDto),
@@ -162636,14 +163265,14 @@ init_webhook_events();
 init_db();
 
 // webhook-security.ts
-var import_node_crypto23 = require("node:crypto");
+var import_node_crypto24 = require("node:crypto");
 var import_promises5 = __toESM(require("node:dns/promises"), 1);
 var import_node_net = require("node:net");
 init_db();
 init_errors5();
 function signWebhookPayload(secret, rawBody) {
   const timestamp = Math.floor(Date.now() / 1e3);
-  const signature = (0, import_node_crypto23.createHmac)("sha256", secret).update(`${timestamp}.${rawBody}`).digest("hex");
+  const signature = (0, import_node_crypto24.createHmac)("sha256", secret).update(`${timestamp}.${rawBody}`).digest("hex");
   return { header: `t=${timestamp},v1=${signature}`, timestamp };
 }
 function internalHostPatterns() {
@@ -162970,7 +163599,7 @@ var webhookDispatcher = new WebhookDispatcher();
 
 // webhooks.ts
 init_dist();
-var import_node_crypto24 = require("node:crypto");
+var import_node_crypto25 = require("node:crypto");
 init_webhook_events();
 init_db();
 init_errors5();
@@ -163006,7 +163635,7 @@ function toSubscriptionDto(row) {
   };
 }
 function generateWebhookSecret() {
-  return { secret: `${WEBHOOK_SECRET_SCHEME}_${(0, import_node_crypto24.randomBytes)(24).toString("hex")}` };
+  return { secret: `${WEBHOOK_SECRET_SCHEME}_${(0, import_node_crypto25.randomBytes)(24).toString("hex")}` };
 }
 function normalizeEventTypes(input) {
   if (!Array.isArray(input) || input.length === 0) {
@@ -164541,6 +165170,10 @@ app.post(
 app.post(
   "/api/missions/:id/terminal-sessions/resolve-observation",
   handle3((req) => resolveMissionLatchObservation(req.params.id, req.body ?? {}), { mutates: true })
+);
+app.post(
+  "/api/missions/:id/terminal-sessions/forget",
+  handle3((req) => forgetMissionLatchSession(req.params.id, req.body ?? {}), { mutates: true })
 );
 app.use("/api/agent-requests", createAgentRequestHumanRouter());
 app.use("/api/agent-session-inputs", createAgentSessionInputHumanRouter());

@@ -1,9 +1,12 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, Check, Copy, ExternalLink, Loader2, Monitor, Octagon } from 'lucide-react';
-import { type ReactNode, useMemo, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 
 import type { TerminalSessionDto } from '../../shared/contract.ts';
 import { useCopyToClipboard } from '../lib/hooks/use-copy-to-clipboard.ts';
 import {
+  forgetAbsentLatchSession,
+  isLatchSessionAbsentError,
   useLatchHarnessEventIngest,
   useLatchSessionInspection,
   useOpenLatchSession,
@@ -54,20 +57,41 @@ function sessionRowKey(session: TerminalSessionDto): string {
 function useLatchSessionTracking({
   session,
   missionId,
-  localExecutionTargetId
+  localExecutionTargetId,
+  onAbsent
 }: {
   session: TerminalSessionDto;
   missionId: string;
   localExecutionTargetId: string | null;
+  onAbsent?: (providerSessionId: string) => void;
 }) {
+  const queryClient = useQueryClient();
   const onThisDevice =
     Boolean(localExecutionTargetId) && session.executionTargetId === localExecutionTargetId;
   const inspection = useLatchSessionInspection({ session, enabled: onThisDevice });
   const events = useLatchHarnessEventIngest({ session, missionId, enabled: onThisDevice });
+  const absent =
+    isLatchSessionAbsentError(inspection.error) || isLatchSessionAbsentError(events.error);
+
+  useEffect(() => {
+    if (!absent) return;
+    onAbsent?.(session.providerSessionId);
+    void forgetAbsentLatchSession({ missionId, session, queryClient });
+  }, [
+    absent,
+    missionId,
+    onAbsent,
+    queryClient,
+    session,
+    session.executionRequestId,
+    session.providerSessionId
+  ]);
+
   return {
     onThisDevice,
     inspection,
     events,
+    absent,
     state: inspection.data?.state ?? session.lastObservedState,
     name: inspection.data?.name ?? session.sessionName,
     reachable: onThisDevice && inspection.isSuccess,
@@ -82,13 +106,15 @@ function useLatchSessionTracking({
 function LatchSessionTracker({
   session,
   missionId,
-  localExecutionTargetId
+  localExecutionTargetId,
+  onAbsent
 }: {
   session: TerminalSessionDto;
   missionId: string;
   localExecutionTargetId: string | null;
+  onAbsent?: (providerSessionId: string) => void;
 }) {
-  useLatchSessionTracking({ session, missionId, localExecutionTargetId });
+  useLatchSessionTracking({ session, missionId, localExecutionTargetId, onAbsent });
   return null;
 }
 
@@ -170,19 +196,22 @@ function TerminalSessionCard({
   missionId,
   session,
   localExecutionTargetId,
+  onAbsent,
   footer
 }: {
   missionId: string;
   session: TerminalSessionDto;
   localExecutionTargetId: string | null;
+  onAbsent?: (providerSessionId: string) => void;
   /** Rendered inside the card, below its own controls (the other-sessions accordion). */
   footer?: ReactNode;
 }) {
   const { copied, copy } = useCopyToClipboard();
-  const { inspection, events, state, name, reachable, checking } = useLatchSessionTracking({
+  const { inspection, events, absent, state, name, reachable, checking } = useLatchSessionTracking({
     session,
     missionId,
-    localExecutionTargetId
+    localExecutionTargetId,
+    onAbsent
   });
   const openSession = useOpenLatchSession(session);
   const resolveObservation = useResolveLatchObservation(session, missionId);
@@ -191,6 +220,8 @@ function TerminalSessionCard({
   const canStop = reachable && state === 'running';
   const pending = session.observation?.pendingInput ?? null;
   const unattached = session.observation?.unattached === true;
+
+  if (absent) return null;
 
   return (
     <div className="rounded-lg border border-border bg-background p-3">
@@ -298,19 +329,24 @@ function TerminalSessionCard({
 function OtherSessionRow({
   missionId,
   session,
-  localExecutionTargetId
+  localExecutionTargetId,
+  onAbsent
 }: {
   missionId: string;
   session: TerminalSessionDto;
   localExecutionTargetId: string | null;
+  onAbsent?: (providerSessionId: string) => void;
 }) {
-  const { state, name, reachable } = useLatchSessionTracking({
+  const { state, name, reachable, absent } = useLatchSessionTracking({
     session,
     missionId,
-    localExecutionTargetId
+    localExecutionTargetId,
+    onAbsent
   });
   const openSession = useOpenLatchSession(session);
   const viewer = viewerLabel(session.viewerKind);
+
+  if (absent) return null;
 
   return (
     <div className="flex items-center gap-2 rounded-md border border-border/60 bg-muted/30 px-2 py-1.5">
@@ -366,10 +402,24 @@ export function TerminalSessionsSection({
 }) {
   const launchSettings = useLaunchSettings(workspaceId);
   const localExecutionTargetId = launchSettings.data?.executionTargetId ?? null;
+  const [absentIds, setAbsentIds] = useState<ReadonlySet<string>>(() => new Set());
+  const onAbsent = useCallback((providerSessionId: string) => {
+    setAbsentIds(current => {
+      if (current.has(providerSessionId)) return current;
+      const next = new Set(current);
+      next.add(providerSessionId);
+      return next;
+    });
+  }, []);
+
+  const visibleSessions = useMemo(
+    () => sessions.filter(session => !absentIds.has(session.providerSessionId)),
+    [absentIds, sessions]
+  );
 
   const { current, others, runningOtherCount } = useMemo(
-    () => selectLatchSessionDisplay(sessions, currentObjectiveId),
-    [sessions, currentObjectiveId]
+    () => selectLatchSessionDisplay(visibleSessions, currentObjectiveId),
+    [visibleSessions, currentObjectiveId]
   );
 
   if (!current) return null;
@@ -389,6 +439,7 @@ export function TerminalSessionsSection({
         missionId={missionId}
         session={current}
         localExecutionTargetId={localExecutionTargetId}
+        onAbsent={onAbsent}
         footer={
           others.length > 0 ? (
             <Accordion className="mt-3 border-t border-border pt-1">
@@ -418,6 +469,7 @@ export function TerminalSessionsSection({
                         missionId={missionId}
                         session={session}
                         localExecutionTargetId={localExecutionTargetId}
+                        onAbsent={onAbsent}
                       />
                     ))}
                   </div>
@@ -440,6 +492,7 @@ export function TerminalSessionsSection({
             missionId={missionId}
             session={session}
             localExecutionTargetId={localExecutionTargetId}
+            onAbsent={onAbsent}
           />
         ))}
     </section>

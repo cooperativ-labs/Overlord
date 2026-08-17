@@ -3,7 +3,7 @@
 ## Attach
 
 ```bash
-ovld protocol attach --mission-id $MISSION_ID
+ovld protocol attach --mission-id $MISSION_ID [--objective-id $OVERLORD_OBJECTIVE_ID]
 ```
 
 In a git workspace, `attach` records a VCS baseline (changed file paths from local `git status`) so delivery can compute the run-attributable delta automatically.

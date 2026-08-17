@@ -80,6 +80,22 @@ function trimmed(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
+/** Latch display identity for an objective-scoped session. */
+export function formatObjectiveLatchDisplay({
+  objectiveDisplayId,
+  objectiveTitle
+}: {
+  objectiveDisplayId: string;
+  objectiveTitle?: string | null;
+}): { name: string; title: string } {
+  const name = objectiveDisplayId.trim();
+  const titlePart = objectiveTitle?.trim() || '';
+  return {
+    name,
+    title: titlePart ? `${name} — ${titlePart}` : name
+  };
+}
+
 /**
  * Build the Latch create manifest. `commandString` is the same terminal inner
  * command S Overlord already composes (including `cd`); it is run through a
@@ -321,6 +337,32 @@ export function mergeProviderSessionIntoMetadata({
       observation: providerSession.observation ?? existing?.observation ?? null
     }
   });
+}
+
+/**
+ * Drop the Latch provider-session mapping while leaving the rest of the
+ * execution-request metadata (claim-time launchSession snapshot, etc.) intact.
+ * Used when Latch has already reclaimed the session; Overlord does not keep a
+ * tombstone card.
+ */
+export function stripProviderSessionFromMetadata({
+  metadataJson
+}: {
+  metadataJson: string | null | undefined;
+}): string {
+  let parsed: Record<string, unknown> = {};
+  if (metadataJson?.trim()) {
+    try {
+      const value = JSON.parse(metadataJson) as unknown;
+      if (value && typeof value === 'object' && !Array.isArray(value)) {
+        parsed = { ...(value as Record<string, unknown>) };
+      }
+    } catch {
+      parsed = {};
+    }
+  }
+  delete parsed[PROVIDER_SESSION_METADATA_KEY];
+  return JSON.stringify(parsed);
 }
 
 /**

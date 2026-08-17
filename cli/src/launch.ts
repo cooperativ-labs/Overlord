@@ -1,6 +1,7 @@
 import { type AgentLaunchFlagDto, agentLaunchFlagsToArgv } from '@overlord/contract';
 import {
   existingLatchProviderSession,
+  formatObjectiveLatchDisplay,
   shouldUseLatchProvider
 } from '@overlord/core/service/latch-launch';
 import type { LaunchSessionSnapshot } from '@overlord/core/service/terminal-profile-types';
@@ -57,6 +58,8 @@ export type LaunchOptions = {
   launchEnvVars?: Record<string, string> | null;
   executionRequestId?: string | null;
   executionTargetId?: string | null;
+  /** UUID or display id of the objective this launch should pin to. */
+  objectiveId?: string | null;
   /**
    * The session channel prepared for this launch. Only the **id** is exported into the launch
    * environment; the credential is staged in the owner-only global credential cache by
@@ -101,6 +104,8 @@ type LaunchPlan = {
   launchSession?: LaunchSessionSnapshot | null;
   missionTitle?: string | null;
   missionDisplayId?: string | null;
+  objectiveDisplayId?: string | null;
+  objectiveTitle?: string | null;
 };
 
 export type LaunchAgentResult = {
@@ -117,11 +122,14 @@ type MissionContext = {
   displayId: string;
   title: string;
   launchContext: string;
+  objectiveDisplayId: string | null;
+  objectiveTitle: string | null;
 };
 
 function overlordLaunchEnv({
   backendUrl,
   missionId,
+  objectiveId,
   executionRequestId,
   sessionChannelId,
   sessionChannelLaunchKind,
@@ -129,6 +137,7 @@ function overlordLaunchEnv({
 }: {
   backendUrl: string;
   missionId: string;
+  objectiveId?: string | null;
   executionRequestId?: string | null;
   sessionChannelId?: string | null;
   sessionChannelLaunchKind?: string | null;
@@ -138,6 +147,7 @@ function overlordLaunchEnv({
     MISSION_ID: missionId,
     OVERLORD_MISSION_ID: missionId,
     OVERLORD_BACKEND_URL: backendUrl,
+    ...(objectiveId ? { OVERLORD_OBJECTIVE_ID: objectiveId } : {}),
     ...(executionRequestId ? { OVERLORD_EXECUTION_REQUEST_ID: executionRequestId } : {}),
     // The id, never the token. Everything in this map may be written into the terminal launch
     // script under `<checkout>/.overlord/tmp`, so nothing secret may enter it.
@@ -200,12 +210,49 @@ function objectiveInstruction(objective: Record<string, unknown>): string {
   return typeof instruction === 'string' ? instruction.trim() : '';
 }
 
+function objectiveDisplayRef(objective: Record<string, unknown>): string | null {
+  const displayId = objective.displayId;
+  return typeof displayId === 'string' && displayId.trim() ? displayId.trim() : null;
+}
+
+function objectiveTitleText(objective: Record<string, unknown>): string | null {
+  const title = objective.title;
+  if (typeof title === 'string' && title.trim()) return title.trim();
+  const instruction = objectiveInstruction(objective);
+  if (!instruction) return null;
+  return instruction.length > 80 ? `${instruction.slice(0, 77).trimEnd()}…` : instruction;
+}
+
+/** Match server `resolveActiveObjective` when the caller did not pin an objective. */
+function pickLaunchObjective(
+  objectives: Record<string, unknown>[],
+  objectiveId?: string | null
+): Record<string, unknown> | undefined {
+  const pin = objectiveId?.trim();
+  if (pin) {
+    return objectives.find(
+      objective =>
+        objective.id === pin || objective.displayId === pin || objective.displayKey === pin
+    );
+  }
+  return (
+    objectives.find(objective => objective.state === 'executing') ??
+    objectives.find(objective => objective.state === 'launching') ??
+    objectives.find(objective => objective.state === 'pending_delivery') ??
+    objectives.find(objective => objective.state === 'draft') ??
+    objectives.find(objective => objective.state !== 'complete') ??
+    objectives[0]
+  );
+}
+
 async function loadMissionContext({
   runtime,
-  missionId
+  missionId,
+  objectiveId
 }: {
   runtime: CliRuntime;
   missionId: string;
+  objectiveId?: string | null;
 }): Promise<MissionContext> {
   const mission = asRecord(
     await runtime.backend.get(`/api/missions/${encodeURIComponent(missionId)}`)
@@ -221,9 +268,12 @@ async function loadMissionContext({
   // Blank objectives are the empty slots the UI keeps ready for the user to type
   // the next objective into. They are not planned work, so they must never reach
   // the agent — an untyped slot reads as a real objective awaiting approval.
-  const objectives = (
-    Array.isArray(mission.objectives) ? mission.objectives.map(asRecord) : []
-  ).filter(objective => objectiveInstruction(objective).length > 0);
+  const allObjectives = Array.isArray(mission.objectives) ? mission.objectives.map(asRecord) : [];
+  const objectives = allObjectives.filter(objective => objectiveInstruction(objective).length > 0);
+  const selected =
+    pickLaunchObjective(allObjectives, objectiveId) ?? pickLaunchObjective(objectives);
+  const objectiveDisplayId = selected ? objectiveDisplayRef(selected) : null;
+  const selectedTitle = selected ? objectiveTitleText(selected) : null;
 
   // Attachments are stored per objective and are not part of the mission detail
   // payload, so fetch them for each objective. Surfacing them in the launch
@@ -231,39 +281,41 @@ async function loadMissionContext({
   // (otherwise it only ever sees them if it parses the raw attach JSON).
   const attachmentLines: string[] = [];
   await Promise.all(
-    objectives.map(async (objective, index) => {
-      const objectiveId = objective.id;
-      if (typeof objectiveId !== 'string' || objectiveId.length === 0) return;
+    objectives.map(async objective => {
+      const id = objective.id;
+      if (typeof id !== 'string' || id.length === 0) return;
       const attachments = await runtime.backend
-        .get<unknown[]>(`/api/objectives/${encodeURIComponent(objectiveId)}/attachments`)
+        .get<unknown[]>(`/api/objectives/${encodeURIComponent(id)}/attachments`)
         .catch(() => []);
+      const label = objectiveDisplayRef(objective) ?? 'objective';
       for (const attachment of attachments) {
         const record = asRecord(attachment);
         const filename = String(record.filename ?? 'attachment');
         const contentType = record.contentType ? ` (${String(record.contentType)})` : '';
-        attachmentLines.push(`- [objective ${index + 1}] ${filename}${contentType}`);
+        attachmentLines.push(`- [${label}] ${filename}${contentType}`);
       }
     })
   );
 
+  const attachCommand = objectiveDisplayId
+    ? `ovld protocol attach --mission-id ${displayId} --objective-id ${objectiveDisplayId}`
+    : `ovld protocol attach --mission-id ${displayId}`;
+
   const launchContext = [
     `# Overlord Mission: ${displayId}: ${title}`,
     '',
-    // The mission id is the ONLY identifier an agent ever needs to type. State it
-    // once, on its own line, in the exact form the attach command expects — a
-    // prompt that only shows the id inside a heading (or that mentions any other
-    // id at all) is what makes agents reach for the wrong value (coo:695).
     `Mission ID: ${displayId}`,
+    ...(objectiveDisplayId ? [`Objective ID: ${objectiveDisplayId}`] : []),
     '',
     '## Instructions',
     'Use the Overlord skill. Follow the required protocol workflow.',
     EXECUTION_DIRECTIVE,
     '',
     '## Objectives',
-    ...objectives.map(
-      (objective, index) =>
-        `${index + 1}. [${objective.state ?? 'unknown'}] ${objectiveInstruction(objective)}`
-    ),
+    ...objectives.map(objective => {
+      const ref = objectiveDisplayRef(objective) ?? 'objective';
+      return `- ${ref} [${objective.state ?? 'unknown'}] ${objectiveInstruction(objective)}`;
+    }),
     '',
     ...(attachmentLines.length > 0
       ? [
@@ -284,10 +336,16 @@ async function loadMissionContext({
       artifact => `- ${asRecord(artifact).label ?? asRecord(artifact).type ?? 'artifact'}`
     ),
     '',
-    `Run \`ovld protocol attach --mission-id ${displayId}\` before making changes, update during work, and ALWAYS deliver last.`
+    `Run \`${attachCommand}\` before making changes, update during work, and ALWAYS deliver last.`
   ].join('\n');
 
-  return { displayId, title, launchContext };
+  return {
+    displayId,
+    title,
+    launchContext,
+    objectiveDisplayId,
+    objectiveTitle: selectedTitle
+  };
 }
 
 async function loadProjectResourcesForLaunch({
@@ -390,13 +448,17 @@ export async function buildLaunchPlan({
   runtime: CliRuntime;
   options: LaunchOptions;
 }): Promise<LaunchPlan> {
-  const context = await loadMissionContext({ runtime, missionId: options.missionId });
+  const context = await loadMissionContext({
+    runtime,
+    missionId: options.missionId,
+    objectiveId: options.objectiveId
+  });
   pruneStaleProjectTmp({ workingDirectory: options.workingDirectory, create: true });
   const tmpDir = ensureProjectTmpDir(options.workingDirectory);
-  const contextFile = path.join(
-    tmpDir,
-    `mission-${context.displayId.replace(/[^a-zA-Z0-9_-]/g, '-')}.md`
-  );
+  const contextFileStem = context.objectiveDisplayId
+    ? `objective-${context.objectiveDisplayId.replace(/[^a-zA-Z0-9_-]/g, '-')}`
+    : `mission-${context.displayId.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+  const contextFile = path.join(tmpDir, `${contextFileStem}.md`);
   // The execution request id is deliberately NOT written into the agent-facing
   // context. It is launch plumbing: it reaches the agent as the
   // `OVERLORD_EXECUTION_REQUEST_ID` env var, and `ovld protocol attach` picks it
@@ -423,6 +485,7 @@ export async function buildLaunchPlan({
   const launchEnv = overlordLaunchEnv({
     backendUrl: runtime.backend.baseUrl,
     missionId: context.displayId,
+    objectiveId: context.objectiveDisplayId,
     executionRequestId: options.executionRequestId,
     sessionChannelId: options.sessionChannelId,
     sessionChannelLaunchKind: options.sessionChannelLaunchKind,
@@ -464,7 +527,7 @@ export async function buildLaunchPlan({
 
   const prompt =
     launchContext.length > 4000
-      ? `Read the Overlord context file at ${contextFile}, attach to mission ${context.displayId}, then immediately execute its current objective. Do not wait for more instructions.`
+      ? `Read the Overlord context file at ${contextFile}, attach to mission ${context.displayId}${context.objectiveDisplayId ? ` --objective-id ${context.objectiveDisplayId}` : ''}, then immediately execute its current objective. Do not wait for more instructions.`
       : launchContext;
 
   const command = buildAgentCommand({
@@ -474,7 +537,7 @@ export async function buildLaunchPlan({
     flags: options.flags,
     prompt,
     contextFile,
-    launchMessage: `Attach to ovld mission ${context.displayId}, then immediately execute ${context.title}. Do not wait for more instructions.`
+    launchMessage: `Attach to ovld mission ${context.displayId}${context.objectiveDisplayId ? ` objective ${context.objectiveDisplayId}` : ''}, then immediately execute ${context.objectiveTitle ?? context.title}. Do not wait for more instructions.`
   });
 
   const latchCommandString = composeAgentTerminalCommand({
@@ -532,7 +595,9 @@ export async function buildLaunchPlan({
     latchCommandString,
     launchSession: options.launchSession ?? null,
     missionTitle: options.missionTitle ?? context.title,
-    missionDisplayId: options.missionDisplayId ?? context.displayId
+    missionDisplayId: options.missionDisplayId ?? context.displayId,
+    objectiveDisplayId: context.objectiveDisplayId,
+    objectiveTitle: context.objectiveTitle
   };
 }
 
@@ -634,13 +699,17 @@ export async function launchAgent({
   }
 
   if (useLatch && plan.latchCommandString) {
+    const latchDisplay = formatObjectiveLatchDisplay({
+      objectiveDisplayId: plan.objectiveDisplayId ?? plan.missionDisplayId ?? options.missionId,
+      objectiveTitle: plan.objectiveTitle ?? plan.missionTitle
+    });
     const created = createLatchSession({
       executable: resolvedLatchExecutable,
       commandString: plan.latchCommandString,
       cwd: options.workingDirectory,
       env: plan.env,
-      title: plan.missionTitle,
-      name: plan.missionDisplayId,
+      title: latchDisplay.title,
+      name: latchDisplay.name,
       commandLabel: options.agent,
       externalRunId: options.executionRequestId,
       executionTargetId: options.executionTargetId

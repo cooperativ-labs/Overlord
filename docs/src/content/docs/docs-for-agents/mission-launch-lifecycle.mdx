@@ -65,7 +65,7 @@ ground from the system's point of view, plus everything before and after.
      artifacts, and any objective attachments, and assembles a markdown
      briefing — including an explicit directive to start the objective
      immediately and only stop to ask a question when genuinely blocked. This
-     is written to a temp file (`.overlord/tmp/mission-<id>.md`) that gets
+     is written to a temp file (`.overlord/tmp/objective-<mission>-<key>.md`) that gets
      passed to the agent as its system-prompt file.
    - **Project resources.** The runner calls the protocol's `load-context`
      endpoint to resolve every logical resource linked to the project for this
@@ -80,8 +80,9 @@ ground from the system's point of view, plus everything before and after.
      | Variable                                      | Contents                                                                                                                                                                                                       |
      | --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
      | `MISSION_ID` / `OVERLORD_MISSION_ID`          | The mission being worked.                                                                                                                                                                                      |
+     | `OVERLORD_OBJECTIVE_ID`                       | Objective display id (e.g. `coo:756.k7xm`). Forwarded on `attach` as `--objective-id` so the session cannot rediscover a different objective.                                                                  |
      | `OVERLORD_BACKEND_URL`                        | Which backend the agent's CLI/MCP calls should hit.                                                                                                                                                            |
-     | `OVERLORD_EXECUTION_REQUEST_ID`               | Set when the launch is execution-request-driven; forwarded on `attach` so the resulting session links back to this exact request.                                                                              |
+     | `OVERLORD_EXECUTION_REQUEST_ID`               | Set when the launch is execution-request-driven; forwarded on `attach` so the resulting session links back to this exact request. If `--objective-id` is omitted, this id also pins the objective.               |
      | `OVERLORD_WORKING_DIRECTORY`                  | Absolute path the agent terminal cds into.                                                                                                                                                                     |
      | `OVERLORD_CONTEXT_FILE`                       | Absolute path of the markdown briefing under `.overlord/tmp/`.                                                                                                                                                 |
      | `OVERLORD_TMPDIR` / `TMPDIR` / `TMP` / `TEMP` | Project-scoped scratch directory.                                                                                                                                                                              |
@@ -107,13 +108,17 @@ ground from the system's point of view, plus everything before and after.
 
 6. ### The agent attaches
 
-   The freshly launched agent runs `ovld protocol attach` (directly, or via the
-   MCP `overlord_attach_session` tool, which shells to the same command).
-   Attaching is itself the transactional go-ahead to start work: the backend
-   sets the objective to `executing`, ensures the next draft objective exists,
-   moves the mission into execute phase, opens an `agent_sessions` row, and —
-   if `OVERLORD_EXECUTION_REQUEST_ID` was forwarded — links that session back
-   to the execution request from step 2.
+   The freshly launched agent runs `ovld protocol attach --mission-id … --objective-id …`
+   (directly, or via the MCP `overlord_attach_session` tool, which shells to the same
+   command). The CLI also forwards `OVERLORD_OBJECTIVE_ID` and
+   `OVERLORD_EXECUTION_REQUEST_ID` from the launch environment. Attaching is itself
+   the transactional go-ahead to start work: the backend pins the named objective
+   (or the execution request's objective, or today's active-objective picker if
+   neither pin is present), sets it to `executing`, ensures the next draft
+   objective exists, moves the mission into execute phase, opens an
+   `agent_sessions` row, and — if `OVERLORD_EXECUTION_REQUEST_ID` was forwarded —
+   links that session back to the execution request from step 2. Latch session
+   name/title use the objective display id (`coo:756.k7xm — title`).
 
    The attach response is the full context payload described in
    [The agent protocol](/docs-for-agents/agent-protocol/#attach): the current

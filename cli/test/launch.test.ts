@@ -8,7 +8,16 @@ import type { CliRuntime } from '../src/runtime.ts';
 
 function runtime({
   title = 'Prompt Capture',
-  objectives = [{ id: 'objective-uuid', state: 'executing', instructionText: 'Ship it' }]
+  objectives = [
+    {
+      id: 'objective-uuid',
+      state: 'executing',
+      instructionText: 'Ship it',
+      displayId: 'coo:11.k7xm',
+      displayKey: 'k7xm',
+      title: 'Ship it'
+    }
+  ]
 }: {
   title?: string;
   objectives?: Array<Record<string, unknown>>;
@@ -68,6 +77,7 @@ test('buildLaunchPlan exports mission context for terminal prompt hooks', async 
   assert.equal(plan.env.OVERLORD_MISSION_ID, 'coo:11');
   assert.equal(plan.env.OVERLORD_BACKEND_URL, 'http://127.0.0.1:4310');
   assert.equal(plan.env.OVERLORD_EXECUTION_REQUEST_ID, 'request-123');
+  assert.equal(plan.env.OVERLORD_OBJECTIVE_ID, 'coo:11.k7xm');
   assert.match(plan.prompt, /immediately execute the current objective/i);
   assert.match(plan.prompt, /Do not wait for more instructions/i);
 
@@ -108,7 +118,7 @@ test('buildLaunchPlan omits blank objective slots from the prompt objective list
     }
   });
 
-  assert.match(plan.prompt, /1\. \[executing\] Ship it/);
+  assert.match(plan.prompt, /- objective \[executing\] Ship it/);
   // Blank slots exist only so the user can type a next objective; the agent
   // must not see them as objectives awaiting approval.
   assert.ok(!plan.prompt.includes('[draft]'));
@@ -212,7 +222,7 @@ test('buildLaunchPlan passes PI model and thinking separately with a context fil
     'high',
     '--approve',
     `@${plan.contextFile}`,
-    'Attach to ovld mission coo:11, then immediately execute Prompt Capture. Do not wait for more instructions.'
+    'Attach to ovld mission coo:11 objective coo:11.k7xm, then immediately execute Ship it. Do not wait for more instructions.'
   ]);
   assert.ok(readFileSync(plan.contextFile, 'utf8').includes('# Overlord Mission: coo:11'));
 });
@@ -254,6 +264,13 @@ test('buildLaunchPlan names the mission id concretely and keeps the execution re
   assert.equal(plan.env.OVERLORD_EXECUTION_REQUEST_ID, executionRequestId);
   // The attach command must carry the real mission id, not a `<id>` placeholder.
   assert.ok(context.includes('Mission ID: coo:11'));
-  assert.ok(context.includes('ovld protocol attach --mission-id coo:11'));
+  assert.ok(context.includes('Objective ID: coo:11.k7xm'));
+  assert.ok(
+    context.includes('ovld protocol attach --mission-id coo:11 --objective-id coo:11.k7xm')
+  );
   assert.ok(!context.includes('--mission-id <id>'));
+  assert.ok(plan.contextFile.endsWith('objective-coo-11-k7xm.md'));
+  assert.equal(plan.env.OVERLORD_OBJECTIVE_ID, 'coo:11.k7xm');
+  assert.equal(plan.objectiveDisplayId, 'coo:11.k7xm');
+  assert.equal(plan.objectiveTitle, 'Ship it');
 });

@@ -13,9 +13,9 @@ Connector adapters may add harness-specific commands, hooks, MCP tools, or launc
 
 Use this mode when the prompt already contains a mission ID or explicitly says the session was launched by Overlord.
 
-**`<mission_id>` is always the short display id** — `coo:695`, `1:899`: a workspace prefix, a colon, and a number. It is the only identifier you ever pass to a `ovld protocol` command. Any UUID you encounter (objective id, session id, execution request id, internal mission uuid) is context, never the value for `--mission-id`. If the only id you can find is a bare UUID, you are missing the mission id — re-read the prompt or run `ovld protocol search-missions` rather than guessing.
+**`<mission_id>` is always the short display id** — `coo:695`, `1:899`: a workspace prefix, a colon, and a number. Pass it as `--mission-id`. **`<objective_id>`** is the objective display id (`coo:695.k7xm`) or UUID; pass it as `--objective-id` when you know which objective to execute. Never pass an objective id as `--mission-id`. If the prompt includes `OVERLORD_OBJECTIVE_ID` or an Objective ID line, include `--objective-id` on attach. If the only id you can find is a bare UUID with no mission display id, re-read the prompt or run `ovld protocol search-missions` rather than guessing.
 
-1. Attach first with `ovld protocol attach --mission-id <mission_id>`.
+1. Attach first with `ovld protocol attach --mission-id <mission_id> [--objective-id <objective_id>]`.
 2. The attach response prints JSON to stdout containing `session.sessionKey`. The CLI also persists this key automatically so subsequent `ovld protocol` commands in the same working directory resolve it without `--session-key`. If auto-resolution fails, pass `--session-key <sessionKey>` explicitly on every subsequent call.
 3. Treat the Overlord mission prompt as authoritative for the objective, constraints, and delivery target. Begin executing the current objective immediately after attach; do not wait for more instructions or ask for confirmation. This differs from `connect` or `load-context`, which only retrieve mission context and never imply the agent should act.
 4. Post updates while working: `ovld protocol update --session-key <sessionKey> --mission-id <mission_id> --summary "..." --phase execute`.

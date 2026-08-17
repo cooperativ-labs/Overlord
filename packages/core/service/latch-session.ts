@@ -3,6 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { latchBinaryMissingMessage, resolveLatchBinaryPath } from './latch-binary.ts';
 import { latchChildEnvironment } from './latch-environment.ts';
 import { buildLatchOpenArgs, latchViewerFlagForKind } from './latch-launch.ts';
+import { isLatchSessionAbsentMessage } from './latch-session-absent.ts';
 import type { ViewerOpenAs } from './terminal-profile-types.ts';
 import { parseViewerOpenAs } from './terminal-profile-types.ts';
 
@@ -37,6 +38,27 @@ export class LatchSessionCommandError extends Error {
     super(message);
     this.name = 'LatchSessionCommandError';
   }
+}
+
+/**
+ * Latch has no metadata for this session (prune/remove). Distinct from a
+ * generic command failure so the mission panel can hide the card instead of
+ * showing Latch's raw "no session" error as a reachability problem.
+ */
+export class LatchSessionAbsentError extends LatchSessionCommandError {
+  constructor(message: string) {
+    super(message);
+    this.name = 'LatchSessionAbsentError';
+  }
+}
+
+export { isLatchSessionAbsentMessage } from './latch-session-absent.ts';
+
+export function latchSessionCommandError(detail: string): LatchSessionCommandError {
+  const message = detail || 'Latch command failed.';
+  return isLatchSessionAbsentMessage(message)
+    ? new LatchSessionAbsentError(message)
+    : new LatchSessionCommandError(message);
 }
 
 function trimmed(value: unknown): string | null {
@@ -81,7 +103,7 @@ function runLatchJson({
     const detail = (result.stderr || result.stdout || `exit ${result.status ?? 'unknown'}`)
       .trim()
       .slice(0, 500);
-    throw new LatchSessionCommandError(detail || 'Latch command failed.');
+    throw latchSessionCommandError(detail);
   }
   try {
     const parsed = JSON.parse(result.stdout) as unknown;

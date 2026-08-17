@@ -14,6 +14,10 @@ import {
   pruneObsoleteMigrationLedgerPostgres,
   resolveAppliedMigrationPostgres
 } from './migration-ledger.js';
+import {
+  finalizeObjectivesDisplayKeyPostgres,
+  isObjectivesDisplayKeyMigration
+} from './objective-display-key-migration-runtime.js';
 
 const MIGRATION_FILE_PATTERN = /^\d+_[a-z0-9_]+\.sql$/;
 
@@ -107,6 +111,9 @@ export async function migratePostgres(client: DatabaseClient): Promise<void> {
       if (isExtEverhourPersistenceMigration(migration)) {
         await finalizeExtEverhourMissionLinksPostgres(client);
       }
+      if (isObjectivesDisplayKeyMigration(migration)) {
+        await finalizeObjectivesDisplayKeyPostgres(client);
+      }
       if (!(await schemaMigrationsExists(client))) {
         pending.push(migration);
         continue;
@@ -132,6 +139,9 @@ export async function migratePostgres(client: DatabaseClient): Promise<void> {
     await client.exec(migration.sql);
     if (isExtEverhourPersistenceMigration(migration)) {
       await finalizeExtEverhourMissionLinksPostgres(client);
+    }
+    if (isObjectivesDisplayKeyMigration(migration)) {
+      await finalizeObjectivesDisplayKeyPostgres(client);
     }
     await recordMigration(client, migration);
   }

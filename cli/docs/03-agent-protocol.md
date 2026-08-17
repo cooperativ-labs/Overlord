@@ -53,7 +53,7 @@ Requirements:
 
 Requirements:
 
-- `attach`: start the working session and return full context.
+- `attach`: start the working session and return full context. Optional `--objective-id` (UUID or `{mission.display_id}.{display_key}`) pins the session to that objective. When `--objective-id` or `--execution-request-id` is present, attach must not rediscover another objective from mission state. `--mission-id` remains required.
 - `update`: post progress, discussion/decision events, optional change rationales, and follow-up execution transitions.
 - `heartbeat`: update liveness and transient telemetry without creating a mission event.
 - `ask`: post a blocking question and stop work.
@@ -106,9 +106,11 @@ ask when blocked, and deliver. They should not claim queue work through
 attribution with `external-session-id`. When the flag is omitted, the CLI may
 auto-detect known agent session IDs from harness environment variables or
 connector hook caches and store the result in `agent_sessions.external_session_id`.
-Runner-launched agents may also carry `OVERLORD_EXECUTION_REQUEST_ID`; the CLI
-forwards it as `--execution-request-id` during `attach` so the backend can link
-`execution_requests.launched_session_id` to the created session.
+Runner-launched agents may also carry `OVERLORD_EXECUTION_REQUEST_ID` and
+`OVERLORD_OBJECTIVE_ID`; the CLI forwards them as `--execution-request-id` and
+`--objective-id` during `attach` so the backend pins that objective and can link
+`execution_requests.launched_session_id` to the created session. When either pin
+is present, attach must not rediscover another objective from mission state.
 `attach` and `load-context` also accept optional `executionTargetId`; the CLI
 uses it when it knows the local execution target so context assembly can resolve
 project resource paths for that target. This is additive and may be omitted.

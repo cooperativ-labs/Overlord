@@ -16,6 +16,10 @@ import {
   resolveAppliedMigrationSqlite
 } from './migration-ledger.js';
 import {
+  finalizeObjectivesDisplayKeySqlite,
+  isObjectivesDisplayKeyMigration
+} from './objective-display-key-migration-runtime.js';
+import {
   finalizeProjectResourcesResourceKeySqlite,
   isProjectResourcesResourceKeyMigration
 } from './project-resources-resource-key-migration-runtime.js';
@@ -83,6 +87,9 @@ function applyMigration(
   }
   if (isProjectResourcesResourceKeyMigration(migration)) {
     finalizeProjectResourcesResourceKeySqlite(db);
+  }
+  if (isObjectivesDisplayKeyMigration(migration)) {
+    finalizeObjectivesDisplayKeySqlite(db);
   }
   db.prepare(
     `INSERT INTO schema_migrations (version, adapter, component, contract_version, checksum, applied_at)

@@ -16,6 +16,7 @@ import { projectTmpDir } from './project-tmp.js';
 export type RecoveredLaunchBootstrap = {
   sessionChannelId: string | null;
   executionRequestId: string | null;
+  objectiveId: string | null;
   sourcePath: string | null;
 };
 
@@ -23,6 +24,8 @@ const EXPORT_CHANNEL_ID_RE =
   /(?:^|[;\s])export\s+OVERLORD_SESSION_CHANNEL_ID=(?:'([^']+)'|"([^"]+)"|([^\s;]+))/m;
 const EXPORT_EXECUTION_REQUEST_ID_RE =
   /(?:^|[;\s])export\s+OVERLORD_EXECUTION_REQUEST_ID=(?:'([^']+)'|"([^"]+)"|([^\s;]+))/m;
+const EXPORT_OBJECTIVE_ID_RE =
+  /(?:^|[;\s])export\s+OVERLORD_OBJECTIVE_ID=(?:'([^']+)'|"([^"]+)"|([^\s;]+))/m;
 
 function firstCapture(match: RegExpMatchArray | null): string | null {
   if (!match) return null;
@@ -48,6 +51,7 @@ export function recoverLaunchBootstrapFromProjectTmp({
   const empty: RecoveredLaunchBootstrap = {
     sessionChannelId: null,
     executionRequestId: null,
+    objectiveId: null,
     sourcePath: null
   };
   const trimmedMission = missionId.trim();
@@ -87,6 +91,7 @@ export function recoverLaunchBootstrapFromProjectTmp({
   return {
     sessionChannelId: firstCapture(contents.match(EXPORT_CHANNEL_ID_RE)),
     executionRequestId: firstCapture(contents.match(EXPORT_EXECUTION_REQUEST_ID_RE)),
+    objectiveId: firstCapture(contents.match(EXPORT_OBJECTIVE_ID_RE)),
     sourcePath: newest.path
   };
 }

@@ -58,6 +58,13 @@ export const LAUNCH_VARIABLES: readonly LaunchVariableDefinition[] = [
     availableAt: ['plan_build', 'terminal_env']
   },
   {
+    name: 'OVERLORD_OBJECTIVE_ID',
+    description:
+      'Objective display id for the launch (e.g. coo:359.k7xm). Used to pin protocol attach.',
+    example: 'coo:359.k7xm',
+    availableAt: ['plan_build', 'terminal_env']
+  },
+  {
     name: 'OVERLORD_BACKEND_URL',
     description: 'Backend URL the agent CLI/MCP should call for this launch.',
     example: 'http://127.0.0.1:4310',

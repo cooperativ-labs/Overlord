@@ -64,7 +64,7 @@ Project discovery:
   projects with \`${primaryCommand} create-project --name "<name>"\`.
 
 Agent workflow (required):
-  1. Attach first with \`${primaryCommand} protocol attach --mission-id <id>\`.
+  1. Attach first with \`${primaryCommand} protocol attach --mission-id <id> [--objective-id <id>]\`.
   2. Post progress with \`${primaryCommand} protocol update\` or liveness with
      \`${primaryCommand} protocol heartbeat\`.
   3. Ask blocking questions with \`${primaryCommand} protocol ask\` and stop work.
@@ -111,6 +111,7 @@ Runner queue (management commands, not protocol):
 Environment fallback:
   --session-key  <- SESSION_KEY printed on stderr after attach/connect/prompt/resume-follow-up
   --mission-id    <- mission display id (e.g. coo:8) or UUID
+  --objective-id  <- OVERLORD_OBJECTIVE_ID (objective display id, e.g. coo:8.k7xm)
   backend URL    <- overlord.toml backend_url, OVERLORD_BACKEND_URL, or dev OVERLORD_BACKEND_URL_DEV
   auth token     <- OVERLORD_USER_TOKEN, OVLD_USER_TOKEN, or USER_TOKEN
 
@@ -149,6 +150,7 @@ attach:
     --agent <identifier>
     --model <identifier>
     --execution-request-id <id> Link this attach to a runner execution request
+    --objective-id <id>         Pin attach to this objective (UUID or coo:756.k7xm)
     --external-session-id <id>  Native agent thread/session id for resume
   Returns:
     Full JSON including session.sessionKey, mission, history, artifacts, sharedState,

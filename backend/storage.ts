@@ -39,6 +39,7 @@ import {
   WORKSPACE
 } from './db.ts';
 import { ApiError } from './errors.ts';
+import { resolveObjectiveIdForRest } from './objective-ref.ts';
 import { getActiveOrganizationIdOrNull } from './organizations.ts';
 import { isOrganizationAdmin, requireWorkspacePermission } from './rbac.ts';
 import { createStorageBackend, readStorageReadSettings } from './storage-backends.ts';
@@ -385,6 +386,7 @@ export async function uploadOrganizationImage(input: UploadImageInput): Promise<
 const ATTACHMENTS_BUCKET_KEY = 'attachments';
 
 interface ObjectiveScopeRow {
+  id: string;
   workspace_id: string;
   project_id: string;
   mission_id: string;
@@ -398,14 +400,15 @@ interface ObjectiveScopeRow {
  * enclosing `transaction()` call already holds and deadlock.
  */
 async function resolveObjectiveScope(
-  objectiveId: string,
+  objectiveRef: string,
   client: DatabaseClient = requireDatabaseClient(),
   permission: Permission = PERMISSIONS.ATTACHMENT_READ
 ): Promise<ObjectiveScopeRow> {
+  const resolved = await resolveObjectiveIdForRest({ ref: objectiveRef, db: client });
   const row = await client.get<ObjectiveScopeRow>(
-    `SELECT workspace_id, project_id, mission_id FROM objectives
+    `SELECT id, workspace_id, project_id, mission_id FROM objectives
       WHERE id = ? AND deleted_at IS NULL`,
-    [objectiveId]
+    [resolved.id]
   );
   if (!row) throw new ApiError(404, 'Objective not found');
   await requireWorkspacePermission({
@@ -524,7 +527,7 @@ export async function uploadObjectiveAttachment(
         scope.workspace_id,
         scope.project_id,
         scope.mission_id,
-        input.objectiveId,
+        scope.id,
         bucket.id,
         storageKey,
         filename,
@@ -545,7 +548,7 @@ export async function uploadObjectiveAttachment(
         entityRevision: 1,
         projectId: scope.project_id,
         missionId: scope.mission_id,
-        objectiveId: input.objectiveId,
+        objectiveId: scope.id,
         workspaceId: scope.workspace_id
       },
       tx
@@ -556,7 +559,7 @@ export async function uploadObjectiveAttachment(
       workspace_id: scope.workspace_id,
       project_id: scope.project_id,
       mission_id: scope.mission_id,
-      objective_id: input.objectiveId,
+      objective_id: scope.id,
       storage_key: storageKey,
       filename,
       content_type: contentType,
@@ -576,7 +579,7 @@ export async function listObjectiveAttachments(
     `SELECT ${ATTACHMENT_COLUMNS} FROM attachments
       WHERE objective_id = ? AND workspace_id = ? AND deleted_at IS NULL
       ORDER BY created_at ASC`,
-    [objectiveId, scope.workspace_id]
+    [scope.id, scope.workspace_id]
   );
   return rows.map(toObjectiveAttachmentDto);
 }
@@ -609,7 +612,7 @@ export async function deleteObjectiveAttachment(
          JOIN storage_buckets b ON b.id = a.storage_bucket_id
         WHERE a.id = ? AND a.objective_id = ? AND a.workspace_id = ?
           AND a.deleted_at IS NULL AND b.deleted_at IS NULL`,
-      [attachmentId, objectiveId, scope.workspace_id]
+      [attachmentId, scope.id, scope.workspace_id]
     );
     if (!row) throw new ApiError(404, 'Attachment not found');
 
@@ -630,7 +633,7 @@ export async function deleteObjectiveAttachment(
         entityRevision: row.revision + 1,
         projectId: scope.project_id,
         missionId: scope.mission_id,
-        objectiveId,
+        objectiveId: scope.id,
         workspaceId: scope.workspace_id
       },
       tx
@@ -640,7 +643,7 @@ export async function deleteObjectiveAttachment(
       `SELECT ${ATTACHMENT_COLUMNS} FROM attachments
         WHERE objective_id = ? AND workspace_id = ? AND deleted_at IS NULL
         ORDER BY created_at ASC`,
-      [objectiveId, scope.workspace_id]
+      [scope.id, scope.workspace_id]
     );
     return {
       remaining: rows.map(toObjectiveAttachmentDto),

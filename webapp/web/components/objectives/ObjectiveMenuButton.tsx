@@ -21,6 +21,7 @@ import {
 
 type ObjectiveMenuButtonProps = {
   objectiveId: string;
+  displayId?: string;
   state: ObjectiveState;
   onEditTitle?: () => void;
   /**
@@ -41,6 +42,7 @@ type ObjectiveMenuButtonProps = {
  */
 export function ObjectiveMenuButton({
   objectiveId,
+  displayId,
   state,
   onEditTitle,
   resumeCommand = null
@@ -64,7 +66,7 @@ export function ObjectiveMenuButton({
   }
 
   async function handleCopyId() {
-    await copy(objectiveId);
+    await copy(displayId || objectiveId);
   }
 
   async function handleCopyResume() {
@@ -114,7 +116,7 @@ export function ObjectiveMenuButton({
           ) : (
             <Copy className="h-3.5 w-3.5" />
           )}
-          Copy objective ID
+          Copy {displayId || 'objective ID'}
         </DropdownMenuItem>
         {resumeCommand ? (
           <DropdownMenuItem className="gap-2 text-xs" onClick={handleCopyResume}>

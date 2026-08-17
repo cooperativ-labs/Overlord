@@ -44,7 +44,7 @@ Requirements:
 - `ovld create --objectives-json '[{"objective":"...","autoAdvance":true}]'`: create one mission with ordered objectives. `--auto-advance` / `--no-auto-advance` set the default when an item omits `autoAdvance`.
 - `ovld inbox create --title "<title>" --objective "<objective>": create a private, account-owned unassigned capture; `ovld protocol create --inbox` is the protocol equivalent.
 - `ovld prompt "<objective>"`: create a mission and immediately queue or launch execution.
-- `ovld attach [missionId] [agent]`: search/select a mission and launch an agent interactively.
+- `ovld attach [missionId] [agent]`: search/select a mission and queue an agent. Optional `--objective-id` pins the queued objective; without it, the CLI picks a launchable objective (`submitted`, then `launching`, then `draft`) rather than always using position 0.
 - `ovld missions list [--status <csv>] [--project-id <id-or-name>] [--limit <n>]`: list missions.
 - `ovld mission context <missionId>`: print the assembled context for a mission without starting a session.
 - `ovld protocol search-missions --query "<text>" --status next-up,execute`: search missions.

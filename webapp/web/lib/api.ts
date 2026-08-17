@@ -578,6 +578,15 @@ export const api = {
       `/api/missions/${missionId}/terminal-sessions/resolve-observation`,
       body
     ),
+  forgetMissionLatchSession: (
+    missionId: string,
+    body: { providerSessionId: string; executionRequestId?: string | null }
+  ) =>
+    request<{ forgotten: boolean; executionRequestId: string | null }>(
+      'POST',
+      `/api/missions/${missionId}/terminal-sessions/forget`,
+      body
+    ),
   listMissionDeliveries: (id: string) =>
     request<DeliveryDto[]>('GET', `/api/missions/${id}/deliveries`),
   listMissionArtifacts: (id: string) =>

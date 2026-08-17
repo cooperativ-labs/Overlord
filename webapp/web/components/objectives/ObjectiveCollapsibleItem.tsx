@@ -147,6 +147,11 @@ export function ObjectiveCollapsibleItem({
                   >
                     {objective.title ?? `Objective ${index + 1}`}
                   </p>
+                  {objective.displayId ? (
+                    <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
+                      {objective.displayId}
+                    </span>
+                  ) : null}
                   {originLabel ? (
                     <Tooltip>
                       <TooltipTrigger
@@ -233,6 +238,7 @@ export function ObjectiveCollapsibleItem({
           ) : null}
           <ObjectiveMenuButton
             objectiveId={objective.id}
+            displayId={objective.displayId}
             state={objective.state}
             resumeCommand={resumeCommand}
           />

@@ -1,8 +1,13 @@
-import { bindBool, OBJECTIVE_STATES } from '@overlord/database';
+import { bindBool, formatObjectiveDisplayId, OBJECTIVE_STATES } from '@overlord/database';
 
 import { recordChange } from './change-feed.js';
 import type { ServiceContext } from './context.js';
-import { resolveMissionId, resolveOrigin, resolveProjectId } from './context.js';
+import {
+  resolveMissionId,
+  resolveObjectiveRef,
+  resolveOrigin,
+  resolveProjectId
+} from './context.js';
 import { ServiceError } from './errors.js';
 import {
   buildMissionSearchMatch,
@@ -12,12 +17,15 @@ import {
   missionSearchMissionIdColumn,
   missionSearchWorkspaceParams
 } from './mission-search-sql.js';
+import { allocateObjectiveDisplayKey } from './objective-display-id.js';
 import { assertProjectResourceKeyExists } from './projects.js';
 import { initialTitleFromInstruction, newId, nowIso } from './util.js';
 import { enqueueWebhookEvent } from './webhook-events.js';
 
 export type ObjectiveSummary = {
   id: string;
+  displayKey: string;
+  displayId: string;
   missionId: string;
   projectId: string;
   position: number;
@@ -245,9 +253,12 @@ export async function listObjectives({
 }): Promise<ObjectiveSummary[]> {
   const resolved = await resolveMissionId(ctx, missionId);
   const rows = (await ctx.db.all(
-    `SELECT id, mission_id, project_id, position, title, instruction_text, state, auto_advance,
-            resource_key
-       FROM objectives WHERE mission_id = ? AND deleted_at IS NULL ORDER BY position ASC`,
+    `SELECT o.id, o.mission_id, o.project_id, o.position, o.title, o.instruction_text, o.state,
+            o.auto_advance, o.resource_key, o.display_key, m.display_id AS mission_display_id
+       FROM objectives o
+       JOIN missions m ON m.id = o.mission_id
+      WHERE o.mission_id = ? AND o.deleted_at IS NULL
+      ORDER BY o.position ASC`,
     [resolved.id]
   )) as Array<{
     id: string;
@@ -259,6 +270,8 @@ export async function listObjectives({
     state: string;
     auto_advance: number;
     resource_key: string | null;
+    display_key: string;
+    mission_display_id: string;
   }>;
 
   return rows.map(toObjectiveSummary);
@@ -274,9 +287,16 @@ function toObjectiveSummary(row: {
   state: string;
   auto_advance: number;
   resource_key: string | null;
+  display_key: string;
+  mission_display_id: string;
 }): ObjectiveSummary {
   return {
     id: row.id,
+    displayKey: row.display_key,
+    displayId: formatObjectiveDisplayId({
+      missionDisplayId: row.mission_display_id,
+      displayKey: row.display_key
+    }),
     missionId: row.mission_id,
     projectId: row.project_id,
     position: row.position,
@@ -394,15 +414,16 @@ export async function insertObjective({
   const resolvedModel = explicitAgent ? null : launchSelection.model;
   const resolvedReasoningEffort = explicitAgent ? null : launchSelection.reasoningEffort;
   const origin = resolveOrigin(ctx);
+  const displayKey = await allocateObjectiveDisplayKey({ db: ctx.db, missionId: mission.id });
 
   await ctx.db.run(
     `INSERT INTO objectives
          (id, workspace_id, project_id, mission_id, position, title, instruction_text, state,
           assigned_agent, model, reasoning_effort, agent_flags_json, auto_advance,
-          execution_metadata_json, resource_key, created_by_workspace_user_id,
+          execution_metadata_json, resource_key, display_key, created_by_workspace_user_id,
           created_by_kind, created_by_agent, created_by_session_id,
           created_at, updated_at, revision)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}', ?, '{}', ?, ?, ?, ?, ?, ?, ?, 1)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}', ?, '{}', ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
     [
       id,
       ctx.workspace.id,
@@ -417,6 +438,7 @@ export async function insertObjective({
       resolvedReasoningEffort,
       bindBool(ctx.db.dialect, autoAdvance),
       normalizedResourceKey,
+      displayKey,
       ctx.actorWorkspaceUserId,
       origin.kind,
       origin.agent,
@@ -446,7 +468,9 @@ export async function insertObjective({
     instruction_text: instruction,
     state: resolvedState,
     auto_advance: autoAdvance ? 1 : 0,
-    resource_key: normalizedResourceKey
+    resource_key: normalizedResourceKey,
+    display_key: displayKey,
+    mission_display_id: mission.displayId
   });
 }
 
@@ -940,12 +964,15 @@ export async function updateObjective({
   objectiveId: string;
   autoAdvance: boolean;
 }): Promise<ObjectiveSummary> {
+  const resolved = await resolveObjectiveRef({ ctx, ref: objectiveId });
   const existing = (await ctx.db.get(
-    `SELECT id, mission_id, project_id, position, title, instruction_text, state,
-            auto_advance, resource_key, revision
-       FROM objectives
-       WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-    [objectiveId, ctx.workspace.id]
+    `SELECT o.id, o.mission_id, o.project_id, o.position, o.title, o.instruction_text, o.state,
+            o.auto_advance, o.resource_key, o.display_key, o.revision,
+            m.display_id AS mission_display_id
+       FROM objectives o
+       JOIN missions m ON m.id = o.mission_id
+      WHERE o.id = ? AND o.workspace_id = ? AND o.deleted_at IS NULL`,
+    [resolved.id, ctx.workspace.id]
   )) as
     | {
         id: string;
@@ -957,7 +984,9 @@ export async function updateObjective({
         state: string;
         auto_advance: number;
         resource_key: string | null;
+        display_key: string;
         revision: number;
+        mission_display_id: string;
       }
     | undefined;
   if (!existing) {

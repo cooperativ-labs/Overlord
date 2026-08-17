@@ -11,7 +11,7 @@ import { spawn } from 'node:child_process';
 import type { HarnessEvent } from './latch-harness/generated.ts';
 import { latchBinaryMissingMessage, resolveLatchBinaryPath } from './latch-binary.ts';
 import { latchChildEnvironment } from './latch-environment.ts';
-import { LatchSessionCommandError } from './latch-session.ts';
+import { LatchSessionCommandError, latchSessionCommandError } from './latch-session.ts';
 
 const HARNESS_EVENT_TYPES = new Set([
   'user_message',
@@ -269,7 +269,7 @@ export async function collectLatchEvents({
       if (settled) return;
       if (code && code !== 0 && parseHarnessEventNdjson(stdout).length === 0) {
         const detail = stderr.trim().slice(0, 500) || `latch events exited ${code}`;
-        finish({ ended: true, error: new LatchSessionCommandError(detail) });
+        finish({ ended: true, error: latchSessionCommandError(detail) });
         return;
       }
       finish({ ended: signal === null && (code === 0 || code === null) });

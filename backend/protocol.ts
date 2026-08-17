@@ -618,7 +618,8 @@ const handlers: Record<string, Handler> = {
       executionTargetId: strFlag(body, '--execution-target-id') ?? null,
       // The channel id only. Its credential never travels in a protocol flag — it reaches the
       // backend solely as an Authorization header on the adapter route family.
-      sessionChannelId: strFlag(body, '--session-channel-id') ?? null
+      sessionChannelId: strFlag(body, '--session-channel-id') ?? null,
+      objectiveId: strFlag(body, '--objective-id') ?? null
     }),
 
   update: (ctx, body) =>

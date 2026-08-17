@@ -55,6 +55,15 @@ export {
 } from './local-paths.js';
 export { listPostgresMigrationFiles, migratePostgres } from './migrate-postgres.js';
 export {
+  formatObjectiveDisplayId,
+  generateObjectiveDisplayKey,
+  OBJECTIVE_DISPLAY_ID_SEPARATOR,
+  OBJECTIVE_DISPLAY_KEY_ALPHABET,
+  OBJECTIVE_DISPLAY_KEY_LENGTH,
+  type ParsedObjectiveRef,
+  parseObjectiveRef
+} from './objective-display-key.js';
+export {
   applyHostedS3StorageBackend,
   type HostedS3SeedResult,
   resolveHostedS3SettingsFromEnv,

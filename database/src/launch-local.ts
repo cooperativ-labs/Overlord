@@ -15,6 +15,10 @@ import {
   resolveAppliedMigrationSqlite
 } from './migration-ledger.js';
 import {
+  finalizeObjectivesDisplayKeySqlite,
+  isObjectivesDisplayKeyMigration
+} from './objective-display-key-migration-runtime.js';
+import {
   finalizeProjectResourcesResourceKeySqlite,
   isProjectResourcesResourceKeyMigration
 } from './project-resources-resource-key-migration-runtime.js';
@@ -108,6 +112,9 @@ function applyMigration(db: DatabaseInstance, migration: Migration): 'applied' |
   }
   if (isProjectResourcesResourceKeyMigration(migration)) {
     finalizeProjectResourcesResourceKeySqlite(db);
+  }
+  if (isObjectivesDisplayKeyMigration(migration)) {
+    finalizeObjectivesDisplayKeySqlite(db);
   }
   recordMigration(db, migration);
 
@@ -251,6 +258,9 @@ function applyMigrationWithPendingRecords(
   }
   if (isProjectResourcesResourceKeyMigration(migration)) {
     finalizeProjectResourcesResourceKeySqlite(db);
+  }
+  if (isObjectivesDisplayKeyMigration(migration)) {
+    finalizeObjectivesDisplayKeySqlite(db);
   }
   if (!hasSchemaMigrationsTable(db)) {
     pendingMigrationRecords.push(migration);

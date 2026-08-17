@@ -16,6 +16,7 @@ const {
   createMission,
   createProject,
   createObjective,
+  getMissionDetail,
   listMissions,
   reorderFutureObjectives,
   updateObjective
@@ -24,7 +25,35 @@ const { getObjectiveLaunchCommand, getObjectivePrompt, updateLaunchPreference } 
   await import('./execution/launch.ts');
 const { ApiError } = await import('./errors.ts');
 
+const OBJECTIVE_DISPLAY_ID_RE = /^[a-z0-9-]+:\d+\.[0-9a-hjkmnp-tv-z]{4}$/;
+
 // Operator is seeded by bootstrapIntegrationTestDb.
+
+test('mission detail includes computed objective display ids', async () => {
+  const project = await createProject({ name: 'Objective Display Ids' });
+  const mission = await createMission({
+    projectId: project.id,
+    firstObjective: 'Ship display ids'
+  });
+  const created = mission.objectives[0]!;
+  assert.match(created.displayKey, /^[0-9a-hjkmnp-tv-z]{4}$/);
+  assert.equal(created.displayId, `${mission.displayId}.${created.displayKey}`);
+  assert.match(created.displayId, OBJECTIVE_DISPLAY_ID_RE);
+
+  const detail = await getMissionDetail(mission.id);
+  assert.equal(detail.objectives[0]!.displayId, created.displayId);
+
+  const byDisplayId = await updateObjective(created.displayId, { autoAdvance: true });
+  assert.equal(byDisplayId.id, created.id);
+  assert.equal(byDisplayId.displayId, created.displayId);
+  assert.equal(byDisplayId.autoAdvance, true);
+
+  await assert.rejects(
+    () => updateObjective(mission.displayId, { autoAdvance: false }),
+    (error: unknown) =>
+      error instanceof ApiError && error.status === 400 && error.code === 'invalid_objective_ref'
+  );
+});
 
 test('realtime change DTOs include safely parsed changed fields', () => {
   assert.deepEqual(parseChangedFields('["state","completed_at"]'), ['state', 'completed_at']);
@@ -138,6 +167,8 @@ test('copyable objective prompts avoid shell-unbalanced Markdown fences', async 
 
   assert.doesNotMatch(prompt.prompt, /```/);
   assert.match(prompt.prompt, /\n {4}ovld protocol attach --mission-id /);
+  assert.match(prompt.prompt, /--objective-id /);
+  assert.doesNotMatch(prompt.prompt, /informational only/);
 });
 
 test('copyable launch commands include agent, mission, and resolved launch mechanics', async () => {
@@ -164,7 +195,7 @@ test('copyable launch commands include agent, mission, and resolved launch mecha
 
   assert.equal(
     launchCommand.command,
-    `ovld launch cursor --mission-id ${mission.displayId} --objective-id ${objectiveId} --model gpt-5.6-terra --thinking high --pre-command agp --flag '--sandbox workspace-write'`
+    `ovld launch cursor --mission-id ${mission.displayId} --objective-id ${mission.objectives[0]!.displayId} --model gpt-5.6-terra --thinking high --pre-command agp --flag '--sandbox workspace-write'`
   );
 });
 

@@ -28,7 +28,7 @@ import {
   resolveLaunchSession,
   type TerminalProfile
 } from '@overlord/core/service/terminal-profile-types';
-import type { DatabaseClient } from '@overlord/database';
+import { type DatabaseClient, formatObjectiveDisplayId } from '@overlord/database';
 
 import { resolveInstanceAgentCatalog } from '../../cli/src/agent-catalog.ts';
 import { loadConfig } from '../../cli/src/config.ts';
@@ -49,6 +49,7 @@ import {
 import { providerSessionFromMetadata } from '../../packages/core/service/latch-launch.ts';
 import {
   clearLatchPendingInput,
+  forgetLatchProviderSession,
   ingestLatchHarnessEvents
 } from '../../packages/core/service/latch-observation.ts';
 import {
@@ -96,6 +97,7 @@ import {
   WORKSPACE
 } from '../db.ts';
 import { ApiError } from '../errors.ts';
+import { resolveObjectiveIdForRest } from '../objective-ref.ts';
 import {
   actorCan,
   requireMissionPermission,
@@ -1097,6 +1099,38 @@ export async function resolveMissionLatchObservation(
   return { observation };
 }
 
+export async function forgetMissionLatchSession(
+  missionRef: string,
+  body: unknown
+): Promise<Record<string, unknown>> {
+  const scope = await requireMissionPermission({
+    missionRef,
+    permission: PERMISSIONS.SESSION_READ
+  });
+  const ctx = await buildWebappServiceContextForWorkspace(
+    scope.workspaceId,
+    requireDatabaseClient(),
+    scope.workspaceUserId
+  );
+  const payload =
+    body && typeof body === 'object' && !Array.isArray(body)
+      ? (body as Record<string, unknown>)
+      : {};
+  const providerSessionId =
+    typeof payload.providerSessionId === 'string' ? payload.providerSessionId : '';
+  const executionRequestId =
+    typeof payload.executionRequestId === 'string' ? payload.executionRequestId : null;
+  if (!providerSessionId.trim()) {
+    throw new ApiError(400, 'providerSessionId is required');
+  }
+  return forgetLatchProviderSession({
+    ctx,
+    missionId: scope.missionId,
+    executionRequestId,
+    providerSessionId
+  });
+}
+
 interface LaunchObjectiveRow {
   id: string;
   workspace_id: string;
@@ -1233,12 +1267,14 @@ export async function dequeueObjective({
  * `mission_events` / `entity_changes` records in one transaction.
  */
 export async function launchObjective(
-  objectiveId: string,
+  objectiveRef: string,
   body: LaunchObjectiveBody
 ): Promise<ExecutionRequestDto> {
   return requireDatabaseClient().transaction(async tx => {
     const agentKey = (body.agent ?? '').trim();
     if (!agentKey) throw new ApiError(400, 'agent is required');
+
+    const { id: objectiveId } = await resolveObjectiveIdForRest({ ref: objectiveRef, db: tx });
 
     const objective = await tx.get<LaunchObjectiveRow>(
       `SELECT id, workspace_id, project_id, mission_id, title, instruction_text, state,
@@ -1458,8 +1494,9 @@ export async function launchObjective(
  * Mirrors the shape of the context `ovld launch` hands to agents: the
  * objective, mission identity, and the protocol attach instruction.
  */
-export async function getObjectivePrompt(objectiveId: string): Promise<ObjectivePromptDto> {
+export async function getObjectivePrompt(objectiveRef: string): Promise<ObjectivePromptDto> {
   const db = requireDatabaseClient();
+  const { id: objectiveId } = await resolveObjectiveIdForRest({ ref: objectiveRef, db });
   // `objectives.id` is a globally-unique UUID, so this resolves independent of
   // the caller's active workspace (coo:135) — the objective's own workspace,
   // not necessarily the request's active one, since the caller may be viewing
@@ -1471,10 +1508,11 @@ export async function getObjectivePrompt(objectiveId: string): Promise<Objective
     title: string | null;
     instruction_text: string;
     display_id: string;
+    display_key: string;
     mission_title: string;
     workspace_id: string;
   }>(
-    `SELECT o.id, o.mission_id, o.title, o.instruction_text, o.workspace_id,
+    `SELECT o.id, o.mission_id, o.title, o.instruction_text, o.workspace_id, o.display_key,
               t.display_id, t.title AS mission_title
          FROM objectives o
          JOIN missions t ON t.id = o.mission_id
@@ -1506,8 +1544,8 @@ export async function getObjectivePrompt(objectiveId: string): Promise<Objective
     `## Task`,
     ``,
     `- **Title:** ${row.mission_title}`,
-    `- **Mission ID:** ${row.display_id} — the only id you pass to \`ovld protocol\` commands`,
-    `- **Objective ID:** ${row.id} — informational only; never pass it as \`--mission-id\``,
+    `- **Mission ID:** ${row.display_id} — pass this as \`--mission-id\``,
+    `- **Objective ID:** ${formatObjectiveDisplayId({ missionDisplayId: row.display_id, displayKey: row.display_key })} — pass this as \`--objective-id\`; never as \`--mission-id\``,
     ``,
     `### Objective`,
     ``,
@@ -1515,13 +1553,13 @@ export async function getObjectivePrompt(objectiveId: string): Promise<Objective
     ``,
     `## Overlord Protocol`,
     ``,
-    `Attach to this mission before doing anything else, then post updates while you`,
+    `Attach to this objective before doing anything else, then post updates while you`,
     `work and deliver a summary when you finish:`,
     ``,
     // Markdown code fences use backticks, which leave a shell with an unmatched
     // command substitution when a copied prompt is pasted into a terminal.
     // Indentation preserves a clearly copyable command without shell syntax.
-    `    ovld protocol attach --mission-id ${row.display_id}`
+    `    ovld protocol attach --mission-id ${row.display_id} --objective-id ${formatObjectiveDisplayId({ missionDisplayId: row.display_id, displayKey: row.display_key })}`
   ].join('\n');
 
   return { objectiveId: row.id, missionId: row.mission_id, prompt };
@@ -1540,13 +1578,14 @@ export type ObjectiveLaunchCommandQuery = {
  * `launchObjective`.
  */
 export async function getObjectiveLaunchCommand(
-  objectiveId: string,
+  objectiveRef: string,
   query: ObjectiveLaunchCommandQuery
 ): Promise<ObjectiveLaunchCommandDto> {
   const agentKey = (query.agent ?? '').trim();
   if (!agentKey) throw new ApiError(400, 'agent is required');
 
   const db = requireDatabaseClient();
+  const { id: objectiveId } = await resolveObjectiveIdForRest({ ref: objectiveRef, db });
   const row = await db.get<{
     id: string;
     mission_id: string;
@@ -1555,9 +1594,10 @@ export async function getObjectiveLaunchCommand(
     resource_key: string | null;
     workspace_id: string;
     display_id: string;
+    display_key: string;
   }>(
     `SELECT o.id, o.mission_id, o.project_id, o.launch_config_json, o.resource_key,
-              o.workspace_id, t.display_id
+              o.workspace_id, o.display_key, t.display_id
          FROM objectives o
          JOIN missions t ON t.id = o.mission_id
         WHERE o.id = ? AND o.deleted_at IS NULL`,
@@ -1602,7 +1642,10 @@ export async function getObjectiveLaunchCommand(
   const command = formatOvldLaunchCommand({
     agent: agentKey,
     missionDisplayId: row.display_id,
-    objectiveId: row.id,
+    objectiveId: formatObjectiveDisplayId({
+      missionDisplayId: row.display_id,
+      displayKey: row.display_key
+    }),
     model: query.model,
     thinking: query.reasoningEffort,
     preCommand: resolved.config.preCommand,

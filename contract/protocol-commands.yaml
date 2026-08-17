@@ -60,8 +60,14 @@ sessionLifecycle:
       # Authorization header on /api/agent-session-channels/v1/*. The CLI fills this from
       # OVERLORD_SESSION_CHANNEL_ID automatically when the launch path exported one.
       - --session-channel-id
+      # Pins attach to this objective (UUID or {mission.display_id}.{display_key}).
+      # When this flag or --execution-request-id is present, attach must not rediscover
+      # another objective from mission state. --mission-id remains required.
+      - --objective-id
     returnsSessionKey: true
     responseShape: attach-response-v3
+    rules:
+      - 'When --objective-id or --execution-request-id is present, attach pins to that objective and must not rediscover via mission state'
     clientCapture:
       - 'The client CLI records a VCS baseline (changed file paths from git status) for the working directory so deliver can compute the run-attributable changed-file delta. VCS is read on the client only; best-effort and skipped outside a git repo.'
     sideEffects:

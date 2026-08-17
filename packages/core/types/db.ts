@@ -819,6 +819,7 @@ export interface Objectives {
   created_by_session_id: string | null;
   created_by_workspace_user_id: string | null;
   deleted_at: string | null;
+  display_key: string;
   execution_metadata_json: Generated<string>;
   id: string | null;
   instruction_text: string | null;

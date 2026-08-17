@@ -8,7 +8,7 @@ import {
   mergeProviderSessionIntoMetadata,
   providerSessionFromMetadata
 } from './latch-launch.ts';
-import { ingestLatchHarnessEvents } from './latch-observation.ts';
+import { forgetLatchProviderSession, ingestLatchHarnessEvents } from './latch-observation.ts';
 import { createProject } from './projects.ts';
 import { attachSession, protocolCreate } from './protocol.ts';
 import { createIsolatedCheckout } from './test-checkout.ts';
@@ -169,6 +169,67 @@ describe('Latch harness observation ingest', () => {
     });
     assert.ok(attached.sessionKey.startsWith('sess_'));
     assert.equal(attached.session.state, 'executing');
+    await db.close();
+  });
+
+  it('forgets a pruned Latch mapping without deleting the execution request', async () => {
+    const { ctx, db } = await createSeededServiceContext({ source: 'protocol' });
+    const project = await createProject({ ctx, name: 'Forget session', slug: 'forget-session' });
+    const created = await protocolCreate({
+      ctx,
+      projectId: project.id,
+      assignedTo: 'operator-workspace-user',
+      objectives: [{ objective: 'Prune the mapping' }]
+    });
+    const request = await createExecutionRequest({
+      ctx,
+      missionId: created.mission.id,
+      requestedAgent: 'claude',
+      requestedSource: 'test',
+      workingDirectory: createIsolatedCheckout('ovld-latch-forget-')
+    });
+    const providerSession: ExecutionProviderSession = {
+      provider: 'latch',
+      providerSessionId: 'ses_gone',
+      sessionName: 'watch',
+      executionTargetId: null,
+      agentSessionId: null,
+      createdAt: '2026-08-13T10:00:00.000Z',
+      lastObservedState: 'running'
+    };
+    await db.run(`UPDATE execution_requests SET metadata_json = ? WHERE id = ?`, [
+      mergeProviderSessionIntoMetadata({
+        metadataJson: JSON.stringify({ launchSession: { version: 1 } }),
+        providerSession
+      }),
+      request.id
+    ]);
+
+    const forgotten = await forgetLatchProviderSession({
+      ctx,
+      missionId: created.mission.id,
+      executionRequestId: request.id,
+      providerSessionId: 'ses_gone'
+    });
+    assert.equal(forgotten.forgotten, true);
+    assert.equal(forgotten.executionRequestId, request.id);
+
+    const row = await db.get<{ metadata_json: string; deleted_at: string | null }>(
+      `SELECT metadata_json, deleted_at FROM execution_requests WHERE id = ?`,
+      [request.id]
+    );
+    const parsed = JSON.parse(row!.metadata_json) as Record<string, unknown>;
+    assert.deepEqual(parsed.launchSession, { version: 1 });
+    assert.equal(providerSessionFromMetadata(parsed), null);
+    assert.equal(row!.deleted_at, null);
+
+    const again = await forgetLatchProviderSession({
+      ctx,
+      missionId: created.mission.id,
+      executionRequestId: request.id,
+      providerSessionId: 'ses_gone'
+    });
+    assert.equal(again.forgotten, false);
     await db.close();
   });
 });

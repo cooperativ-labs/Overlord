@@ -6,6 +6,7 @@ import {
   buildLatchOpenArgs,
   compareLatchProductVersions,
   existingLatchProviderSession,
+  formatObjectiveLatchDisplay,
   LATCH_OPEN_AS_MIN_PRODUCT_VERSION,
   latchAttachCommand,
   latchSupportsOpenAs,
@@ -14,6 +15,7 @@ import {
   parseLatchCreateReport,
   providerSessionFromMetadata,
   shouldUseLatchProvider,
+  stripProviderSessionFromMetadata,
   toExecutionProviderSession
 } from './latch-launch.ts';
 
@@ -37,6 +39,7 @@ test('buildLatchCreateManifest runs S through an interactive login shell and kee
   assert.equal(manifest.launch.env.MISSION_ID, 'coo:1');
   assert.equal(manifest.launch.inherit_env, true);
   assert.equal(manifest.display.title, 'Authentication refactor');
+  assert.equal(manifest.display.name, 'coo-1');
   assert.equal(manifest.display.command_label, 'claude');
   assert.deepEqual(manifest.display.source, {
     kind: 'overlord',
@@ -44,6 +47,30 @@ test('buildLatchCreateManifest runs S through an interactive login shell and kee
   });
   // Secrets must live in the body, never as argv fragments beyond the shell wrapper.
   assert.equal(manifest.launch.argv.length, 3);
+});
+
+test('formatObjectiveLatchDisplay uses objective display id as name and title prefix', () => {
+  assert.deepEqual(
+    formatObjectiveLatchDisplay({
+      objectiveDisplayId: 'coo:756.k7xm',
+      objectiveTitle: 'Pin execution identity'
+    }),
+    { name: 'coo:756.k7xm', title: 'coo:756.k7xm — Pin execution identity' }
+  );
+  assert.deepEqual(formatObjectiveLatchDisplay({ objectiveDisplayId: 'coo:756.k7xm' }), {
+    name: 'coo:756.k7xm',
+    title: 'coo:756.k7xm'
+  });
+  const firstRun = formatObjectiveLatchDisplay({
+    objectiveDisplayId: 'coo:756.k7xm',
+    objectiveTitle: 'Pin execution identity'
+  });
+  const secondRun = formatObjectiveLatchDisplay({
+    objectiveDisplayId: 'coo:756.m2np',
+    objectiveTitle: 'Pin execution identity'
+  });
+  assert.notEqual(firstRun.name, secondRun.name);
+  assert.notEqual(firstRun.title, secondRun.title);
 });
 
 test('parseLatchCreateReport accepts a well-formed create --json document', () => {
@@ -114,7 +141,8 @@ test('providerSession metadata round-trips', () => {
     executionTargetId: 'target-1',
     agentSessionId: null,
     createdAt: '2026-08-12T14:00:00.000Z',
-    lastObservedState: 'running'
+    lastObservedState: 'running',
+    observation: null
   };
   const merged = mergeProviderSessionIntoMetadata({
     metadataJson: JSON.stringify({ launchSession: { version: 1 } }),
@@ -123,6 +151,29 @@ test('providerSession metadata round-trips', () => {
   const parsed = JSON.parse(merged) as Record<string, unknown>;
   assert.ok(parsed.launchSession);
   assert.deepEqual(providerSessionFromMetadata(parsed), mapping);
+});
+
+test('stripProviderSessionFromMetadata drops only the Latch mapping', () => {
+  const mapping = {
+    provider: 'latch' as const,
+    providerSessionId: 'ses_gone',
+    sessionName: 'mission-session',
+    executionTargetId: 'target-1',
+    agentSessionId: null,
+    createdAt: '2026-08-12T14:00:00.000Z',
+    lastObservedState: 'running'
+  };
+  const merged = mergeProviderSessionIntoMetadata({
+    metadataJson: JSON.stringify({ launchSession: { version: 1 } }),
+    providerSession: mapping
+  });
+  const stripped = JSON.parse(stripProviderSessionFromMetadata({ metadataJson: merged })) as Record<
+    string,
+    unknown
+  >;
+  assert.deepEqual(stripped.launchSession, { version: 1 });
+  assert.equal('providerSession' in stripped, false);
+  assert.equal(providerSessionFromMetadata(stripped), null);
 });
 
 test('shouldUseLatchProvider requires both latch kind and selectable discovery', () => {

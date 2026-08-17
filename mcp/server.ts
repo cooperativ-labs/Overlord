@@ -197,6 +197,9 @@ const toolHandlers: Record<string, ToolHandler> = {
       protocolBody({
         '--mission-id': requiredString(args, 'missionId'),
         '--agent': optionalString(args, 'agent') ?? 'hosted-mcp',
+        ...(optionalString(args, 'objectiveId')
+          ? { '--objective-id': requiredString(args, 'objectiveId') }
+          : {}),
         ...(optionalString(args, 'model') ? { '--model': requiredString(args, 'model') } : {}),
         ...(optionalString(args, 'executionTargetId')
           ? { '--execution-target-id': requiredString(args, 'executionTargetId') }

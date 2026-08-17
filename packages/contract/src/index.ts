@@ -633,6 +633,17 @@ export interface ObjectiveDto {
   /** Native harness session/resume ID from the objective's latest agent session, when captured. */
   externalSessionId: string | null;
   /**
+   * Stable per-mission key; combined with the parent mission display id as
+   * `{mission.displayId}.{displayKey}` (e.g. `coo:756.k7xm`). Never encodes
+   * `position`. Persisted on `objectives.display_key`.
+   */
+  displayKey: string;
+  /**
+   * Computed public id `{mission.displayId}.{displayKey}`. Not stored as its
+   * own column — follows the parent mission display id at read time.
+   */
+  displayId: string;
+  /**
    * The branch this objective actually ran on, recorded by the runner at
    * branch-prepared time. `null` until the objective has been launched with a
    * prepared branch (or when worktree/branch automation is disabled).

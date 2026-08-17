@@ -163,7 +163,12 @@ async function runBindCommand({
   // the same alias the connectors' prompt hooks already maintain, and it is what lets a later
   // `ovld doctor` say which harness conversation this checkout is running.
   if (missionId) {
-    writeNativeSessionId({ agent, missionId, externalSessionId: nativeSessionId });
+    writeNativeSessionId({
+      agent,
+      missionId,
+      externalSessionId: nativeSessionId,
+      objectiveId: process.env.OVERLORD_OBJECTIVE_ID
+    });
   }
 
   const scope = resolveAgentSessionScope({ agent, missionId, env: process.env });

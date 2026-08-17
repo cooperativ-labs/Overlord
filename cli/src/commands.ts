@@ -620,7 +620,7 @@ async function recordBranchPrepared({
   });
 }
 
-function firstObjectiveId(mission: unknown): string | undefined {
+export function firstObjectiveId(mission: unknown): string | undefined {
   const objectives = asRecord(mission).objectives;
   if (!Array.isArray(objectives)) return undefined;
   const first = objectives[0];
@@ -628,17 +628,32 @@ function firstObjectiveId(mission: unknown): string | undefined {
   return typeof id === 'string' ? id : undefined;
 }
 
-/** Prefer the objective that would be launched next (matches server launchable states). */
-function launchableObjectiveId(mission: unknown): string | undefined {
+/** Match server `resolveActiveObjective` for local spawn / mission-launch. */
+export function resolveActiveObjectiveId(mission: unknown): string | undefined {
   const objectives = asRecord(mission).objectives;
   if (!Array.isArray(objectives)) return undefined;
-  const launchableStates = ['executing', 'submitted', 'launching', 'draft'];
+  const states = ['executing', 'launching', 'pending_delivery', 'draft'];
+  for (const state of states) {
+    const match = objectives.find(objective => asRecord(objective).state === state);
+    const id = asRecord(match).id;
+    if (typeof id === 'string') return id;
+  }
+  const next = objectives.find(objective => asRecord(objective).state !== 'complete');
+  const id = asRecord(next).id;
+  return typeof id === 'string' ? id : undefined;
+}
+
+/** Objectives the queue will accept (`launchObjective` LAUNCHABLE_STATES). */
+export function queueableObjectiveId(mission: unknown): string | undefined {
+  const objectives = asRecord(mission).objectives;
+  if (!Array.isArray(objectives)) return undefined;
+  const launchableStates = ['submitted', 'launching', 'draft'];
   for (const state of launchableStates) {
     const match = objectives.find(objective => asRecord(objective).state === state);
     const id = asRecord(match).id;
     if (typeof id === 'string') return id;
   }
-  return firstObjectiveId(mission);
+  return undefined;
 }
 
 /** The agent already assigned to an objective on a fetched mission payload, if any. */
@@ -787,6 +802,13 @@ export async function runProtocolCommand({
   ) {
     flags['--execution-request-id'] = process.env.OVERLORD_EXECUTION_REQUEST_ID;
   }
+  if (
+    subcommand === 'attach' &&
+    typeof flags['--objective-id'] !== 'string' &&
+    process.env.OVERLORD_OBJECTIVE_ID
+  ) {
+    flags['--objective-id'] = process.env.OVERLORD_OBJECTIVE_ID;
+  }
   // The launch path prepared a session channel and exported its id. Attach is what binds that
   // channel to the session it was prepared for, so carry the id through automatically —
   // requiring the agent to pass a flag it never saw would mean the binding silently never
@@ -802,12 +824,14 @@ export async function runProtocolCommand({
   if (subcommand === 'attach') {
     const needsChannelId = typeof flags['--session-channel-id'] !== 'string';
     const needsExecutionRequestId = typeof flags['--execution-request-id'] !== 'string';
+    const needsObjectiveId = typeof flags['--objective-id'] !== 'string';
     if (needsChannelId && process.env.OVERLORD_SESSION_CHANNEL_ID) {
       flags['--session-channel-id'] = process.env.OVERLORD_SESSION_CHANNEL_ID;
     }
     if (
       (needsChannelId && typeof flags['--session-channel-id'] !== 'string') ||
-      (needsExecutionRequestId && typeof flags['--execution-request-id'] !== 'string')
+      (needsExecutionRequestId && typeof flags['--execution-request-id'] !== 'string') ||
+      (needsObjectiveId && typeof flags['--objective-id'] !== 'string')
     ) {
       const missionHint =
         (typeof missionId === 'string' && missionId.trim() ? missionId.trim() : null) ??
@@ -824,6 +848,9 @@ export async function runProtocolCommand({
         }
         if (needsExecutionRequestId && recovered.executionRequestId) {
           flags['--execution-request-id'] = recovered.executionRequestId;
+        }
+        if (needsObjectiveId && recovered.objectiveId) {
+          flags['--objective-id'] = recovered.objectiveId;
         }
       }
     }
@@ -898,7 +925,11 @@ export async function runProtocolCommand({
     missionId &&
     (typeof flags['--session-key'] !== 'string' || flags['--session-key'].trim() === '')
   ) {
-    const cached = readCachedSessionKey({ missionId, workingDirectory });
+    const cached = readCachedSessionKey({
+      missionId,
+      workingDirectory,
+      objectiveId: flagValue(parsed.flags, '--objective-id') ?? process.env.OVERLORD_OBJECTIVE_ID
+    });
     if (cached) flags['--session-key'] = cached;
   }
 
@@ -961,7 +992,8 @@ export async function runProtocolCommand({
         explicit: undefined,
         agent: flagValue(parsed.flags, '--agent') ?? 'unknown',
         missionId: flagValue(parsed.flags, '--mission-id') ?? 'unknown',
-        workingDirectory
+        workingDirectory,
+        objectiveId: flagValue(parsed.flags, '--objective-id') ?? process.env.OVERLORD_OBJECTIVE_ID
       })
   };
 
@@ -1009,7 +1041,19 @@ export async function runProtocolCommand({
     // Persist the freshly minted key so subsequent commands in other shells for
     // this (workingDir, mission) can auto-resolve it without --session-key.
     if (missionId) {
-      writeCachedSessionKey({ missionId, workingDirectory, sessionKey: resultRecord.sessionKey });
+      const attachedObjective = asRecord(resultRecord.objective);
+      const attachedObjectiveId =
+        (typeof attachedObjective.displayId === 'string' && attachedObjective.displayId.trim()) ||
+        (typeof attachedObjective.id === 'string' && attachedObjective.id.trim()) ||
+        flagValue(parsed.flags, '--objective-id') ||
+        process.env.OVERLORD_OBJECTIVE_ID ||
+        null;
+      writeCachedSessionKey({
+        missionId,
+        workingDirectory,
+        sessionKey: resultRecord.sessionKey,
+        objectiveId: attachedObjectiveId
+      });
       // Also record this mission as "active in this cwd" so an edit hook that
       // never sees MISSION_ID in its own environment (e.g. agent-pod sessions)
       // can still resolve which mission's touched log to append to.
@@ -1388,7 +1432,8 @@ export async function runManagementCommand({
       const mission = await runtime.backend.get<unknown>(
         `/api/missions/${encodeURIComponent(missionId)}`
       );
-      const objectiveId = flagValue(parsed.flags, '--objective-id') ?? firstObjectiveId(mission);
+      const objectiveId =
+        flagValue(parsed.flags, '--objective-id') ?? queueableObjectiveId(mission);
       if (!objectiveId)
         throw new CliError({ message: `No launchable objective found for ${missionId}` });
       // Honor an explicit agent; otherwise reuse the agent already stored on the
@@ -1438,7 +1483,7 @@ export async function runManagementCommand({
         flags: parsed.flags
       });
       const objectiveId =
-        flagValue(parsed.flags, '--objective-id') ?? launchableObjectiveId(mission);
+        flagValue(parsed.flags, '--objective-id') ?? resolveActiveObjectiveId(mission);
       const executionTargetId = await resolvePreferredExecutionTargetId({
         backend: scopedRuntime.backend
       });
@@ -1492,6 +1537,7 @@ export async function runManagementCommand({
           preLaunchCommands: preLaunchCommands.length > 0 ? preLaunchCommands : undefined,
           launchEnvVars: Object.keys(launchEnvVars).length > 0 ? launchEnvVars : undefined,
           executionTargetId: executionTargetId ?? undefined,
+          objectiveId: objectiveId ?? undefined,
           ...terminal,
           dryRun
         }
@@ -1844,6 +1890,8 @@ export async function runRunnerOnce({
         launchEnvVars: parseLaunchEnvVarsValue(requestRecord.launchEnvVars),
         executionRequestId: requestId,
         executionTargetId: executionTargetId || undefined,
+        objectiveId:
+          typeof requestRecord.objectiveId === 'string' ? requestRecord.objectiveId : undefined,
         launchSession,
         ...terminal,
         dryRun

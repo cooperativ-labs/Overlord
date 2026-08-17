@@ -7,33 +7,29 @@ import { resolveGlobalDataDir } from './config.js';
 // Client-side cache of the protocol session key returned by `attach`. Every Bash
 // tool call is a fresh shell, so a key captured at attach is otherwise gone by the
 // next `ovld protocol` command unless the agent threads it through manually. The
-// cache is scoped strictly to (resolve(workingDirectory), missionId) — the same
-// keying `native-session.ts` uses for `externalSessionId` — so a key can never
-// leak across working directories or missions.
+// cache is scoped to (resolve(workingDirectory), missionId, objectiveId) so two
+// sequential objectives on the same mission cannot reuse each other's key.
+// Reads fall back to the pre-Phase-B (cwd, missionId) path once.
 
 function sessionKeyCachePath({
   missionId,
-  workingDirectory
+  workingDirectory,
+  objectiveId
 }: {
   missionId: string;
   workingDirectory: string;
+  objectiveId?: string | null;
 }): string {
-  const key = createHash('sha256')
-    .update(`${path.resolve(workingDirectory)}\0${missionId}`)
-    .digest('hex');
+  const resolved = path.resolve(workingDirectory);
+  const material = objectiveId?.trim()
+    ? `${resolved}\0${missionId}\0${objectiveId.trim()}`
+    : `${resolved}\0${missionId}`;
+  const key = createHash('sha256').update(material).digest('hex');
   return path.join(resolveGlobalDataDir(), 'protocol-session-keys', key);
 }
 
-/** Cached session key for this (workingDir, mission), or undefined when absent. */
-export function readCachedSessionKey({
-  missionId,
-  workingDirectory
-}: {
-  missionId: string;
-  workingDirectory: string;
-}): string | undefined {
+function readSessionKeyFile(filePath: string): string | undefined {
   try {
-    const filePath = sessionKeyCachePath({ missionId, workingDirectory });
     if (!existsSync(filePath)) return undefined;
     const raw = JSON.parse(readFileSync(filePath, 'utf8')) as { sessionKey?: unknown };
     return typeof raw.sessionKey === 'string' && raw.sessionKey.trim()
@@ -44,26 +40,63 @@ export function readCachedSessionKey({
   }
 }
 
+/** Cached session key for this (workingDir, mission[, objective]), or undefined when absent. */
+export function readCachedSessionKey({
+  missionId,
+  workingDirectory,
+  objectiveId
+}: {
+  missionId: string;
+  workingDirectory: string;
+  objectiveId?: string | null;
+}): string | undefined {
+  if (objectiveId?.trim()) {
+    const keyed = readSessionKeyFile(
+      sessionKeyCachePath({ missionId, workingDirectory, objectiveId })
+    );
+    if (keyed) return keyed;
+  }
+  return readSessionKeyFile(sessionKeyCachePath({ missionId, workingDirectory }));
+}
+
+function writeSessionKeyFile({
+  filePath,
+  sessionKey
+}: {
+  filePath: string;
+  sessionKey: string;
+}): void {
+  mkdirSync(path.dirname(filePath), { recursive: true });
+  writeFileSync(filePath, JSON.stringify({ sessionKey, updatedAt: new Date().toISOString() }), {
+    mode: 0o600
+  });
+}
+
 /** Persist the session key returned by attach/resume-follow-up for later reuse. */
 export function writeCachedSessionKey({
   missionId,
   workingDirectory,
-  sessionKey
+  sessionKey,
+  objectiveId
 }: {
   missionId: string;
   workingDirectory: string;
   sessionKey: string;
+  objectiveId?: string | null;
 }): void {
   try {
     const trimmed = sessionKey.trim();
     if (!trimmed) return;
-    const filePath = sessionKeyCachePath({ missionId, workingDirectory });
-    mkdirSync(path.dirname(filePath), { recursive: true });
-    writeFileSync(
-      filePath,
-      JSON.stringify({ sessionKey: trimmed, updatedAt: new Date().toISOString() }),
-      { mode: 0o600 }
-    );
+    writeSessionKeyFile({
+      filePath: sessionKeyCachePath({ missionId, workingDirectory }),
+      sessionKey: trimmed
+    });
+    if (objectiveId?.trim()) {
+      writeSessionKeyFile({
+        filePath: sessionKeyCachePath({ missionId, workingDirectory, objectiveId }),
+        sessionKey: trimmed
+      });
+    }
   } catch {
     // Best-effort: a failed write just means the agent must pass --session-key
     // explicitly, the same as before this cache existed.
@@ -73,14 +106,21 @@ export function writeCachedSessionKey({
 /** Drop the cached key once the session ends so a stale key can't be reused. */
 export function clearCachedSessionKey({
   missionId,
-  workingDirectory
+  workingDirectory,
+  objectiveId
 }: {
   missionId: string;
   workingDirectory: string;
+  objectiveId?: string | null;
 }): void {
   try {
-    const filePath = sessionKeyCachePath({ missionId, workingDirectory });
-    if (existsSync(filePath)) rmSync(filePath);
+    const files = [sessionKeyCachePath({ missionId, workingDirectory })];
+    if (objectiveId?.trim()) {
+      files.push(sessionKeyCachePath({ missionId, workingDirectory, objectiveId }));
+    }
+    for (const filePath of files) {
+      if (existsSync(filePath)) rmSync(filePath);
+    }
   } catch {
     // Best-effort: a stale key at worst fails a downstream call with an invalid
     // session error, which the agent already handles by re-attaching.

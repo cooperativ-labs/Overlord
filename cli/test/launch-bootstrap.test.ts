@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import { recoverLaunchBootstrapFromProjectTmp } from '../dist/launch-bootstrap.js';
+import { recoverLaunchBootstrapFromProjectTmp } from '../src/launch-bootstrap.ts';
 
 function withTempCheckout<T>(fn: (root: string) => T): T {
   const root = mkdtempSync(path.join(os.tmpdir(), 'ovld-launch-bootstrap-'));
@@ -35,7 +35,7 @@ function writeLaunchScript({
     filePath,
     [
       '#!/usr/bin/env bash',
-      `cd '${root}' && export MISSION_ID='${missionId}'; export OVERLORD_MISSION_ID='${missionId}'; export OVERLORD_EXECUTION_REQUEST_ID='${requestId}'; export OVERLORD_SESSION_CHANNEL_ID='${channelId}'; export OVERLORD_SESSION_LAUNCH_KIND='queued'; agent --prompt 'hi'`
+      `cd '${root}' && export MISSION_ID='${missionId}'; export OVERLORD_MISSION_ID='${missionId}'; export OVERLORD_OBJECTIVE_ID='${missionId}.k7xm'; export OVERLORD_EXECUTION_REQUEST_ID='${requestId}'; export OVERLORD_SESSION_CHANNEL_ID='${channelId}'; export OVERLORD_SESSION_LAUNCH_KIND='queued'; agent --prompt 'hi'`
     ].join('\n'),
     { mode: 0o700 }
   );
@@ -70,6 +70,7 @@ test('recoverLaunchBootstrapFromProjectTmp reads channel and execution ids from 
     });
     assert.equal(recovered.sessionChannelId, 'channel-new');
     assert.equal(recovered.executionRequestId, 'req-new');
+    assert.equal(recovered.objectiveId, 'coo:589.k7xm');
     assert.ok(recovered.sourcePath?.includes('req-new'));
   });
 });
@@ -84,14 +85,14 @@ test('recoverLaunchBootstrapFromProjectTmp ignores other missions and missing tm
     });
     assert.deepEqual(
       recoverLaunchBootstrapFromProjectTmp({ workingDirectory: root, missionId: 'coo:589' }),
-      { sessionChannelId: null, executionRequestId: null, sourcePath: null }
+      { sessionChannelId: null, executionRequestId: null, objectiveId: null, sourcePath: null }
     );
     assert.deepEqual(
       recoverLaunchBootstrapFromProjectTmp({
         workingDirectory: path.join(root, 'missing'),
         missionId: 'coo:1'
       }),
-      { sessionChannelId: null, executionRequestId: null, sourcePath: null }
+      { sessionChannelId: null, executionRequestId: null, objectiveId: null, sourcePath: null }
     );
   });
 });

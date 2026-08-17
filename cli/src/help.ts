@@ -84,7 +84,7 @@ Agents:
   connect, load-context, update, heartbeat, ask, deliver.
 
 Protocol (JSON output by default):
-  ${primaryCommand} protocol attach --mission-id <id>
+  ${primaryCommand} protocol attach --mission-id <id> [--objective-id <id>]
   ${primaryCommand} protocol update --mission-id <id> --session-key <key> --summary "..."
   ${primaryCommand} protocol heartbeat --mission-id <id> --session-key <key>
   ${primaryCommand} protocol ask --mission-id <id> --session-key <key> --question "..."

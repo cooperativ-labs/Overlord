@@ -37,6 +37,12 @@ export type LocalTargetErrorCode =
   | 'CAPABILITY_NOT_IMPLEMENTED'
   /** Generic capability failure with no more specific code. */
   | 'TARGET_OPERATION_FAILED'
+  /**
+   * Latch has no metadata for this session id (pruned or removed). The device
+   * is reachable and the CLI ran; the session is gone. Distinct from
+   * reachability / `TARGET_OPERATION_FAILED`.
+   */
+  | 'LATCH_SESSION_ABSENT'
   | 'UNKNOWN';
 
 /**

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import type { ServiceContext } from '../context.js';
+import { insertObjective, listObjectives } from '../missions.js';
 import { createProject } from '../projects.js';
 import { attachSession, protocolCreate } from '../protocol.js';
 import { createSeededServiceContext } from '../test-helpers.js';
@@ -206,6 +207,36 @@ describe('channel binding at attach', () => {
     assert.equal(bound?.session_id, attached.session.id);
     assert.equal(bound?.state, 'online');
     assert.equal(await findBindableChannelForMission({ ctx, missionId }), null);
+
+    await db.close();
+  });
+
+  it('does not bind a channel owned by a different objective', async () => {
+    const { ctx, db, missionId, projectId } = await seedMission();
+    const objectives = await listObjectives({ ctx, missionId });
+    const first = objectives[0]!;
+    const second = await insertObjective({
+      ctx,
+      missionId,
+      instructionText: 'Other objective'
+    });
+
+    const { channel } = await createSessionChannel({
+      ctx,
+      missionId,
+      projectId,
+      objectiveId: first.id,
+      launchKind: 'queued'
+    });
+
+    assert.equal(
+      await findBindableChannelForMission({ ctx, missionId, objectiveId: second.id }),
+      null
+    );
+    assert.equal(
+      await findBindableChannelForMission({ ctx, missionId, objectiveId: first.id }),
+      channel.id
+    );
 
     await db.close();
   });

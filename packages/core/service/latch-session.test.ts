@@ -4,7 +4,15 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test, { after } from 'node:test';
 
-import { inspectLatchSession, openLatchSession, stopLatchSession } from './latch-session.ts';
+import { InProcessProvider } from './local-target/in-process-provider.ts';
+import {
+  inspectLatchSession,
+  isLatchSessionAbsentMessage,
+  LatchSessionAbsentError,
+  LatchSessionCommandError,
+  openLatchSession,
+  stopLatchSession
+} from './latch-session.ts';
 
 const tempDir = mkdtempSync(path.join(tmpdir(), 'overlord-latch-session-'));
 const fakeLatch = path.join(tempDir, 'latch');
@@ -147,4 +155,74 @@ process.stdout.write(JSON.stringify({
       else process.env[key] = value;
     }
   }
+});
+
+test('inspect treats Latch no-session as absence, not a generic failure', async () => {
+  const missing = path.join(tempDir, 'latch-missing');
+  writeFileSync(
+    missing,
+    [
+      '#!/usr/bin/env node',
+      'process.stderr.write("Error: no session `ses_gone`\\n");',
+      'process.exit(1);'
+    ].join('\n')
+  );
+  chmodSync(missing, 0o700);
+
+  assert.throws(
+    () => inspectLatchSession({ executable: missing, providerSessionId: 'ses_gone' }),
+    (error: unknown) => {
+      assert.ok(error instanceof LatchSessionAbsentError);
+      assert.match(error.message, /no session `ses_gone`/);
+      return true;
+    }
+  );
+
+  const mapped = await new InProcessProvider({
+    executionTargetId: 't1',
+    deviceLabel: 'Laptop',
+    transport: 'in_process'
+  }).inspectLatchSession({
+    executable: missing,
+    providerSessionId: 'ses_gone'
+  });
+  assert.equal(mapped.ok, false);
+  if (!mapped.ok) {
+    assert.equal(mapped.code, 'LATCH_SESSION_ABSENT');
+  }
+});
+
+test('inspect keeps unrelated Latch failures as command errors', () => {
+  const broken = path.join(tempDir, 'latch-broken');
+  writeFileSync(
+    broken,
+    [
+      '#!/usr/bin/env node',
+      'process.stderr.write("tmux is not running\\n");',
+      'process.exit(1);'
+    ].join('\n')
+  );
+  chmodSync(broken, 0o700);
+
+  assert.throws(
+    () => inspectLatchSession({ executable: broken, providerSessionId: 'ses_alive' }),
+    (error: unknown) => {
+      assert.equal(error instanceof LatchSessionAbsentError, false);
+      assert.ok(error instanceof LatchSessionCommandError);
+      assert.match(error.message, /tmux is not running/);
+      return true;
+    }
+  );
+});
+
+test('isLatchSessionAbsentMessage recognizes Latch lookup errors', () => {
+  assert.equal(isLatchSessionAbsentMessage('Error: no session `ses_1`'), true);
+  assert.equal(isLatchSessionAbsentMessage('no session `ses_1`'), true);
+  assert.equal(isLatchSessionAbsentMessage('Error: no session named `agent`'), true);
+  assert.equal(isLatchSessionAbsentMessage('tmux is not running'), false);
+  assert.equal(isLatchSessionAbsentMessage('no sessions'), false);
+  assert.equal(
+    isLatchSessionAbsentMessage('session ses_1 is not available in the Latch server'),
+    false
+  );
 });

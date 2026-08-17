@@ -214,10 +214,14 @@ const tools = [
   {
     name: 'overlord_attach_session',
     title: 'Attach to mission',
-    description: 'Attach an MCP-hosted agent session to a mission before update/ask/deliver.',
+    description:
+      'Attach an MCP-hosted agent session to a mission before update/ask/deliver. Pass objectiveId when the caller already knows which objective to execute.',
     inputSchema: objectSchema(
       {
         missionId: stringProperty('Mission UUID or workspace display id.'),
+        objectiveId: stringProperty(
+          'Optional objective UUID or display id (e.g. coo:756.k7xm). Pins attach to that objective.'
+        ),
         agent: stringProperty(`Agent identifier. Defaults to ${DEFAULT_AGENT}.`),
         model: stringProperty('Optional model identifier.'),
         executionTargetId: stringProperty(
@@ -442,6 +446,9 @@ function callOverlordTool(name, args) {
     return runProtocol('attach', {
       'mission-id': requiredString(args, 'missionId'),
       agent: optionalString(args, 'agent') ?? DEFAULT_AGENT,
+      ...(optionalString(args, 'objectiveId')
+        ? { 'objective-id': requiredString(args, 'objectiveId') }
+        : {}),
       ...(optionalString(args, 'model') ? { model: requiredString(args, 'model') } : {}),
       ...(optionalString(args, 'executionTargetId')
         ? { 'execution-target-id': requiredString(args, 'executionTargetId') }
@@ -575,7 +582,7 @@ process.stdin.on('data', async chunk => {
         result: {
           protocolVersion: PROTOCOL_VERSION,
           capabilities: { tools: { listChanged: false } },
-          serverInfo: { name: 'overlord-__OVERLORD_ADAPTER_KEY__', version: '0.3.25' }
+          serverInfo: { name: 'overlord-__OVERLORD_ADAPTER_KEY__', version: '0.3.26' }
         }
       });
       continue;

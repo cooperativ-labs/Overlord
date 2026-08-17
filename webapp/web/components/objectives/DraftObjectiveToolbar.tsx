@@ -66,6 +66,11 @@ export function DraftObjectiveToolbar({
 
   return (
     <div className="flex shrink-0 flex-nowrap items-center gap-2">
+      {objective.displayId ? (
+        <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
+          {objective.displayId}
+        </span>
+      ) : null}
       <DraftObjectiveActions objective={objective} />
 
       <ObjectiveResourcePicker

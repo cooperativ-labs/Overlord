@@ -4,7 +4,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 
-import { runManagementCommand } from '../src/commands.ts';
+import { queueableObjectiveId, runManagementCommand } from '../src/commands.ts';
 import type { CliRuntime } from '../src/runtime.ts';
 
 test('ovld create sends objectives-json as one REST array payload', async () => {
@@ -268,5 +268,31 @@ test('ovld add-cwd keeps an existing project link when attaching a second projec
       { projectId: 'project-1', isPrimary: true },
       { projectId: 'project-2', isPrimary: false }
     ]
+  );
+});
+
+test('queueableObjectiveId prefers submitted then launching then draft, never a complete first row', () => {
+  const mission = {
+    objectives: [
+      { id: 'complete-0', state: 'complete' },
+      { id: 'draft-1', state: 'draft' },
+      { id: 'submitted-2', state: 'submitted' }
+    ]
+  };
+  assert.equal(queueableObjectiveId(mission), 'submitted-2');
+  assert.equal(
+    queueableObjectiveId({
+      objectives: [
+        { id: 'complete-0', state: 'complete' },
+        { id: 'draft-1', state: 'draft' }
+      ]
+    }),
+    'draft-1'
+  );
+  assert.equal(
+    queueableObjectiveId({
+      objectives: [{ id: 'complete-0', state: 'complete' }]
+    }),
+    undefined
   );
 });

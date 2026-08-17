@@ -1,9 +1,12 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { type QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
+import { isLatchSessionAbsentMessage } from '../../../packages/core/service/latch-session-absent.ts';
 import type {
+  CapabilityFailure,
   CapabilityResult,
   CollectLatchEventsResult,
   InspectLatchSessionResult,
+  LocalTargetErrorCode,
   OpenLatchSessionResult,
   ResolveLatchInputResult,
   StopLatchSessionResult
@@ -17,9 +20,65 @@ import { keys } from './query-keys.ts';
 export const latchSessionKey = (providerSessionId: string) =>
   ['latch-session', providerSessionId] as const;
 
+export class LocalTargetCapabilityError extends Error {
+  readonly code: LocalTargetErrorCode;
+
+  constructor(result: CapabilityFailure) {
+    super(result.message);
+    this.name = 'LocalTargetCapabilityError';
+    this.code = result.code;
+  }
+}
+
+export function isLatchSessionAbsentError(error: unknown): boolean {
+  if (error instanceof LocalTargetCapabilityError && error.code === 'LATCH_SESSION_ABSENT') {
+    return true;
+  }
+  return error instanceof Error && isLatchSessionAbsentMessage(error.message);
+}
+
 async function requireLocalTargetResult<T>(result: CapabilityResult<T>): Promise<T> {
   if (result.ok) return result.value;
-  throw new Error(result.message);
+  throw new LocalTargetCapabilityError(result);
+}
+
+const forgettingLatchSessions = new Set<string>();
+
+function forgetLatchSessionKey({
+  missionId,
+  providerSessionId
+}: {
+  missionId: string;
+  providerSessionId: string;
+}): string {
+  return `${missionId}:${providerSessionId}`;
+}
+
+/** Drop the stored mapping after Latch reports the session gone. Idempotent. */
+export async function forgetAbsentLatchSession({
+  missionId,
+  session,
+  queryClient
+}: {
+  missionId: string;
+  session: TerminalSessionDto;
+  queryClient: QueryClient;
+}): Promise<void> {
+  const key = forgetLatchSessionKey({
+    missionId,
+    providerSessionId: session.providerSessionId
+  });
+  if (forgettingLatchSessions.has(key)) return;
+  forgettingLatchSessions.add(key);
+  try {
+    await api.forgetMissionLatchSession(missionId, {
+      providerSessionId: session.providerSessionId,
+      executionRequestId: session.executionRequestId
+    });
+    await queryClient.invalidateQueries({ queryKey: keys.mission(missionId) });
+  } catch {
+    forgettingLatchSessions.delete(key);
+  }
 }
 
 export function useLatchSessionInspection({

@@ -209,10 +209,13 @@ export const hostedMcpToolDefinitions: ToolDefinition[] = [
     name: 'overlord_attach_session',
     title: 'Attach to mission',
     description:
-      'Use this only after the user asks the connected agent to begin work on a mission. It opens an MCP-hosted session for later updates and delivery.',
+      'Use this only after the user asks the connected agent to begin work on a mission. It opens an MCP-hosted session for later updates and delivery. Pass objectiveId when the caller already knows which objective to execute so attach does not rediscover another one.',
     inputSchema: objectSchema(
       {
         missionId: stringProperty('Mission UUID or workspace display id.'),
+        objectiveId: stringProperty(
+          'Optional objective UUID or display id (e.g. coo:756.k7xm). Pins attach to that objective.'
+        ),
         agent: stringProperty('Agent identifier. Defaults to hosted-mcp.'),
         model: stringProperty('Optional model identifier.'),
         executionTargetId: stringProperty(

@@ -19,7 +19,12 @@ import {
 } from '../latch-discovery.ts';
 import { collectLatchEvents } from '../latch-events.ts';
 import { resolveLatchInput } from '../latch-send.ts';
-import { inspectLatchSession, openLatchSession, stopLatchSession } from '../latch-session.ts';
+import {
+  inspectLatchSession,
+  LatchSessionAbsentError,
+  openLatchSession,
+  stopLatchSession
+} from '../latch-session.ts';
 import { DEFAULT_LATCH_EXECUTABLE } from '../terminal-profile-types.ts';
 
 import { performBranchActionGit } from './branch-actions-git.ts';
@@ -61,6 +66,23 @@ import {
   purgeManagedWorktrees,
   removeManagedWorktree
 } from './worktree-git.ts';
+
+function failLatchCommand({
+  target,
+  error,
+  fallback
+}: {
+  target: TargetMetadata;
+  error: unknown;
+  fallback: string;
+}): CapabilityFailure {
+  const message = error instanceof Error ? error.message : fallback;
+  return fail(
+    target,
+    error instanceof LatchSessionAbsentError ? 'LATCH_SESSION_ABSENT' : 'TARGET_OPERATION_FAILED',
+    message
+  );
+}
 
 export class InProcessProvider implements LocalTargetCapabilities {
   constructor(readonly target: TargetMetadata) {}
@@ -274,11 +296,11 @@ export class InProcessProvider implements LocalTargetCapabilities {
     try {
       return ok(this.target, inspectLatchSession(input));
     } catch (error) {
-      return fail(
-        this.target,
-        'TARGET_OPERATION_FAILED',
-        error instanceof Error ? error.message : 'Could not inspect the Latch session.'
-      );
+      return failLatchCommand({
+        target: this.target,
+        error,
+        fallback: 'Could not inspect the Latch session.'
+      });
     }
   }
 
@@ -286,11 +308,11 @@ export class InProcessProvider implements LocalTargetCapabilities {
     try {
       return ok(this.target, openLatchSession(input));
     } catch (error) {
-      return fail(
-        this.target,
-        'TARGET_OPERATION_FAILED',
-        error instanceof Error ? error.message : 'Could not open the Latch session.'
-      );
+      return failLatchCommand({
+        target: this.target,
+        error,
+        fallback: 'Could not open the Latch session.'
+      });
     }
   }
 
@@ -298,11 +320,11 @@ export class InProcessProvider implements LocalTargetCapabilities {
     try {
       return ok(this.target, stopLatchSession(input));
     } catch (error) {
-      return fail(
-        this.target,
-        'TARGET_OPERATION_FAILED',
-        error instanceof Error ? error.message : 'Could not stop the Latch session.'
-      );
+      return failLatchCommand({
+        target: this.target,
+        error,
+        fallback: 'Could not stop the Latch session.'
+      });
     }
   }
 
@@ -321,11 +343,11 @@ export class InProcessProvider implements LocalTargetCapabilities {
         ended: collected.ended
       });
     } catch (error) {
-      return fail(
-        this.target,
-        'TARGET_OPERATION_FAILED',
-        error instanceof Error ? error.message : 'Could not collect Latch harness events.'
-      );
+      return failLatchCommand({
+        target: this.target,
+        error,
+        fallback: 'Could not collect Latch harness events.'
+      });
     }
   }
 
@@ -341,11 +363,11 @@ export class InProcessProvider implements LocalTargetCapabilities {
         })
       );
     } catch (error) {
-      return fail(
-        this.target,
-        'TARGET_OPERATION_FAILED',
-        error instanceof Error ? error.message : 'Could not resolve the Latch prompt.'
-      );
+      return failLatchCommand({
+        target: this.target,
+        error,
+        fallback: 'Could not resolve the Latch prompt.'
+      });
     }
   }
 

@@ -20,6 +20,7 @@ import { postMissionBranchObservations } from './branching/mission-branch-observ
 import { postExecutionTargetObservations } from './branching/target-resource-observations.ts';
 import { getExecutionTargetMigrationDiagnostics } from './execution/execution-target-migration.ts';
 import {
+  forgetMissionLatchSession,
   getAgentCatalog,
   getLaunchPreference,
   getLaunchSettings,
@@ -1670,6 +1671,10 @@ app.post(
 app.post(
   '/api/missions/:id/terminal-sessions/resolve-observation',
   handle(req => resolveMissionLatchObservation(req.params.id, req.body ?? {}), { mutates: true })
+);
+app.post(
+  '/api/missions/:id/terminal-sessions/forget',
+  handle(req => forgetMissionLatchSession(req.params.id, req.body ?? {}), { mutates: true })
 );
 app.use('/api/agent-requests', createAgentRequestHumanRouter());
 app.use('/api/agent-session-inputs', createAgentSessionInputHumanRouter());

@@ -10,34 +10,48 @@ const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 function sessionCachePath({
   agent,
   missionId,
-  workingDirectory
+  workingDirectory,
+  objectiveId
 }: {
   agent: string;
   missionId: string;
   workingDirectory: string;
+  objectiveId?: string | null;
 }): string {
-  const key = createHash('sha256')
-    .update(`${path.resolve(workingDirectory)}\0${missionId}\0${agent}`)
-    .digest('hex');
+  const resolved = path.resolve(workingDirectory);
+  const material = objectiveId?.trim()
+    ? `${resolved}\0${missionId}\0${agent}\0${objectiveId.trim()}`
+    : `${resolved}\0${missionId}\0${agent}`;
+  const key = createHash('sha256').update(material).digest('hex');
   return path.join(resolveGlobalDataDir(), 'native-sessions', key);
 }
 
 function readCachedNativeSessionId({
   agent,
   missionId,
-  workingDirectory
+  workingDirectory,
+  objectiveId
 }: {
   agent: string;
   missionId: string;
   workingDirectory: string;
+  objectiveId?: string | null;
 }): string | undefined {
   try {
-    const filePath = sessionCachePath({ agent, missionId, workingDirectory });
-    if (!existsSync(filePath)) return undefined;
-    const raw = JSON.parse(readFileSync(filePath, 'utf8')) as { externalSessionId?: unknown };
-    return typeof raw.externalSessionId === 'string' && raw.externalSessionId.trim()
-      ? raw.externalSessionId.trim()
-      : undefined;
+    const paths = objectiveId?.trim()
+      ? [
+          sessionCachePath({ agent, missionId, workingDirectory, objectiveId }),
+          sessionCachePath({ agent, missionId, workingDirectory })
+        ]
+      : [sessionCachePath({ agent, missionId, workingDirectory })];
+    for (const filePath of paths) {
+      if (!existsSync(filePath)) continue;
+      const raw = JSON.parse(readFileSync(filePath, 'utf8')) as { externalSessionId?: unknown };
+      if (typeof raw.externalSessionId === 'string' && raw.externalSessionId.trim()) {
+        return raw.externalSessionId.trim();
+      }
+    }
+    return undefined;
   } catch {
     return undefined;
   }
@@ -59,24 +73,42 @@ export function writeNativeSessionId({
   agent,
   missionId,
   externalSessionId,
-  workingDirectory = process.cwd()
+  workingDirectory = process.cwd(),
+  objectiveId
 }: {
   agent: string;
   missionId: string;
   externalSessionId: string;
   workingDirectory?: string;
+  objectiveId?: string | null;
 }): void {
-  const filePath = sessionCachePath({
+  const payload = JSON.stringify({
     agent: agent.toLowerCase(),
     missionId,
-    workingDirectory
+    ...(objectiveId?.trim() ? { objectiveId: objectiveId.trim() } : {}),
+    externalSessionId
   });
-  mkdirSync(path.dirname(filePath), { recursive: true });
-  writeFileSync(
-    filePath,
-    JSON.stringify({ agent: agent.toLowerCase(), missionId, externalSessionId }),
-    'utf8'
+  const write = (filePath: string) => {
+    mkdirSync(path.dirname(filePath), { recursive: true });
+    writeFileSync(filePath, payload, 'utf8');
+  };
+  write(
+    sessionCachePath({
+      agent: agent.toLowerCase(),
+      missionId,
+      workingDirectory
+    })
   );
+  if (objectiveId?.trim()) {
+    write(
+      sessionCachePath({
+        agent: agent.toLowerCase(),
+        missionId,
+        workingDirectory,
+        objectiveId
+      })
+    );
+  }
 }
 
 function detectCodexSessionIdFromDisk(workingDirectory: string): string | undefined {
@@ -140,13 +172,15 @@ export function resolveNativeSessionId({
   agent,
   missionId,
   workingDirectory = process.cwd(),
-  env = process.env
+  env = process.env,
+  objectiveId
 }: {
   explicit?: string;
   agent: string;
   missionId: string;
   workingDirectory?: string;
   env?: NodeJS.ProcessEnv;
+  objectiveId?: string | null;
 }): string | null | undefined {
   if (explicit !== undefined) {
     const trimmed = explicit.trim();
@@ -154,22 +188,20 @@ export function resolveNativeSessionId({
   }
 
   const normalizedAgent = agent.toLowerCase();
+  const cached = readCachedNativeSessionId({
+    agent: normalizedAgent,
+    missionId,
+    workingDirectory,
+    objectiveId: objectiveId ?? env.OVERLORD_OBJECTIVE_ID
+  });
   if (normalizedAgent === 'codex') {
     return (
       env.CODEX_THREAD_ID?.trim() ||
       env.CODEX_SESSION_ID?.trim() ||
-      readCachedNativeSessionId({ agent: 'codex', missionId, workingDirectory }) ||
+      cached ||
       detectCodexSessionIdFromDisk(workingDirectory)
     );
   }
 
-  if (normalizedAgent === 'claude') {
-    return readCachedNativeSessionId({ agent: 'claude', missionId, workingDirectory });
-  }
-
-  if (normalizedAgent === 'cursor') {
-    return readCachedNativeSessionId({ agent: 'cursor', missionId, workingDirectory });
-  }
-
-  return readCachedNativeSessionId({ agent: normalizedAgent, missionId, workingDirectory });
+  return cached;
 }

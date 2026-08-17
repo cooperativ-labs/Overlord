@@ -153,9 +153,10 @@ async function seedGraph(client: DatabaseClient): Promise<{
   );
   await client.run(
     `INSERT INTO objectives
-       (id, workspace_id, project_id, mission_id, position, title, state, created_at, updated_at)
-     VALUES (?, ?, ?, ?, 0, ?, 'draft', ?, ?)`,
-    [objectiveId, WORKSPACE_ID, projectId, missionId, 'Conformance Objective', now, now]
+       (id, workspace_id, project_id, mission_id, position, title, state, display_key,
+        created_at, updated_at)
+     VALUES (?, ?, ?, ?, 0, ?, 'draft', ?, ?, ?)`,
+    [objectiveId, WORKSPACE_ID, projectId, missionId, 'Conformance Objective', 'k7xm', now, now]
   );
   await client.run(
     `INSERT INTO devices (id, workspace_id, fingerprint, label, status, created_at, updated_at)
@@ -846,14 +847,16 @@ for (const adapter of adapters) {
         const now = ISO();
         await client.run(
           `INSERT INTO objectives
-             (id, workspace_id, project_id, mission_id, position, title, state, created_at, updated_at)
-           VALUES (?, ?, ?, ?, 1, ?, 'draft', ?, ?)`,
+             (id, workspace_id, project_id, mission_id, position, title, state, display_key,
+              created_at, updated_at)
+           VALUES (?, ?, ?, ?, 1, ?, 'draft', ?, ?, ?)`,
           [
             secondObjectiveId,
             WORKSPACE_ID,
             graph.projectId,
             graph.missionId,
             'Second Objective',
+            'n4w2',
             now,
             now
           ]

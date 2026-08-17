@@ -19,6 +19,7 @@ For behavioral specs and acceptance criteria, see the other docs in this folder.
 | `OVERLORD_USER_TOKEN`, `OVLD_USER_TOKEN`, `USER_TOKEN` | Backend auth (checked in that order) |
 | `OVERLORD_BACKEND_URL`, `OVERLORD_BACKEND_URL_DEV` | Backend URL resolution |
 | `OVERLORD_EXECUTION_REQUEST_ID` | `protocol attach` (links to runner request) |
+| `OVERLORD_OBJECTIVE_ID` | `protocol attach` (pins to this objective display id) |
 | `OVERLORD_DEVICE_FINGERPRINT` | Optional stable execution-target identity. When set (e.g. by AgentPod for a host environment), every process/container reuses that target instead of deriving a new fingerprint from the ephemeral hostname |
 | `OVERLORD_DEVICE_LABEL` | Optional override for this machine's execution-target display name (defaults to hostname). Does not change the fingerprint unless `OVERLORD_DEVICE_FINGERPRINT` is also set |
 | `SESSION_KEY` | Protocol commands that require `--session-key` (also cached per working directory + mission) |
@@ -236,7 +237,7 @@ File-backed payloads: any `-*-json` flag has a paired `-*-file <path>` flag (use
 | `auth-status` | Machine-readable auth and backend readiness | — | — |
 | `discover-project` | Resolve project from working directory or explicit id | — | `--project-id <id-or-name>`, `--directory <path>` |
 | `list-organizations` | Legacy name predating the organizations hierarchy; returns only the caller's current workspace context, not organization data | — | — |
-| `attach` | Start a mission session; returns full working context | `--mission-id <id>` | `--session-key <key>`, `--agent <id>`, `--model <id>`, `--execution-request-id <id>`, `--external-session-id <id>` |
+| `attach` | Start a mission session; returns full working context | `--mission-id <id>` | `--session-key <key>`, `--agent <id>`, `--model <id>`, `--execution-request-id <id>`, `--objective-id <id>`, `--external-session-id <id>` |
 | `connect` | Lightweight session (session key only) | `--mission-id <id>` | `--agent <id>`, `--external-session-id <id>` |
 | `load-context` | Read mission context without creating a session | `--mission-id <id>` | — |
 | `search-missions` | Find missions by keyword, status, or project | — | `--query <text>`, `--status <csv>`, `--project-id <id>`, `--limit <n>` (default: 25) |

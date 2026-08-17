@@ -76,6 +76,45 @@ test('cache keys on the resolved working directory', () => {
   });
 });
 
+test('session key cache scopes per objective and falls back to mission-only', () => {
+  withTempHome(() => {
+    writeCachedSessionKey({
+      missionId: 'coo:1',
+      workingDirectory: '/repo/one',
+      objectiveId: 'coo:1.aaaa',
+      sessionKey: 'sess_a'
+    });
+    writeCachedSessionKey({
+      missionId: 'coo:1',
+      workingDirectory: '/repo/one',
+      objectiveId: 'coo:1.bbbb',
+      sessionKey: 'sess_b'
+    });
+
+    assert.equal(
+      readCachedSessionKey({
+        missionId: 'coo:1',
+        workingDirectory: '/repo/one',
+        objectiveId: 'coo:1.aaaa'
+      }),
+      'sess_a'
+    );
+    assert.equal(
+      readCachedSessionKey({
+        missionId: 'coo:1',
+        workingDirectory: '/repo/one',
+        objectiveId: 'coo:1.bbbb'
+      }),
+      'sess_b'
+    );
+    // Mission-only read is the last write (serial fallback for update/deliver).
+    assert.equal(
+      readCachedSessionKey({ missionId: 'coo:1', workingDirectory: '/repo/one' }),
+      'sess_b'
+    );
+  });
+});
+
 test('blank session keys are never persisted', () => {
   withTempHome(() => {
     const args = { missionId: 'coo:9', workingDirectory: '/repo/blank' };

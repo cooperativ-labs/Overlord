@@ -14,6 +14,7 @@ import type { CreatedGitHubRepositoryDto } from '@overlord/contract/ext/github';
 import {
   bindBool,
   type DatabaseClient,
+  formatObjectiveDisplayId,
   OBJECTIVE_STATES,
   type ObjectiveState
 } from '@overlord/database';
@@ -162,6 +163,7 @@ import {
   resolveActiveProfileId
 } from './db.ts';
 import { ApiError } from './errors.ts';
+import { resolveObjectiveIdForRest } from './objective-ref.ts';
 import { getActiveOrganizationIdOrNull } from './organizations.ts';
 import {
   actorCan,
@@ -602,6 +604,8 @@ interface ObjectiveRow {
   revision: number;
   branch: string | null;
   external_session_id?: string | null;
+  display_key: string;
+  mission_display_id?: string;
   created_by_kind: string | null;
   created_by_agent: string | null;
   created_by_workspace_user_id: string | null;
@@ -1734,6 +1738,11 @@ function toObjectiveDto(r: ObjectiveRow): ObjectiveDto {
     externalSessionId: r.external_session_id ?? null,
     branch: r.branch ?? null,
     resourceKey: r.resource_key?.trim() || null,
+    displayKey: r.display_key,
+    displayId: formatObjectiveDisplayId({
+      missionDisplayId: r.mission_display_id ?? '',
+      displayKey: r.display_key
+    }),
     createdByKind: toCreatedByKind(r.created_by_kind),
     createdByAgent: r.created_by_agent ?? null,
     createdByWorkspaceUserId: r.created_by_workspace_user_id ?? null,
@@ -3701,7 +3710,7 @@ async function getObjectivesByMission(
   if (missionIds.length === 0) return byMission;
   const placeholders = missionIds.map(() => '?').join(', ');
   const rows = (await db.all(
-    `SELECT o.*,
+    `SELECT o.*, m.display_id AS mission_display_id,
          (
            SELECT s.external_session_id
              FROM agent_sessions s
@@ -3710,6 +3719,7 @@ async function getObjectivesByMission(
             LIMIT 1
          ) AS external_session_id
          FROM objectives o
+         JOIN missions m ON m.id = o.mission_id
         WHERE o.mission_id IN (${placeholders}) AND o.deleted_at IS NULL
         ORDER BY o.mission_id ASC, o.position ASC`,
     missionIds
@@ -6472,7 +6482,7 @@ export async function listObjectives(
     db
   });
   const rows = (await db.all(
-    `SELECT o.*,
+    `SELECT o.*, m.display_id AS mission_display_id,
          (
            SELECT s.external_session_id
              FROM agent_sessions s
@@ -6481,6 +6491,7 @@ export async function listObjectives(
             LIMIT 1
          ) AS external_session_id
          FROM objectives o
+         JOIN missions m ON m.id = o.mission_id
         WHERE o.mission_id = ? AND o.deleted_at IS NULL
         ORDER BY o.position ASC`,
     [missionId]
@@ -6693,7 +6704,13 @@ async function insertObjective(
     ...(body.resourceKey !== undefined ? { resourceKey: body.resourceKey } : {})
   });
 
-  const row = (await db.get(`SELECT * FROM objectives WHERE id = ?`, [created.id])) as ObjectiveRow;
+  const row = (await db.get(
+    `SELECT o.*, m.display_id AS mission_display_id
+       FROM objectives o
+       JOIN missions m ON m.id = o.mission_id
+      WHERE o.id = ?`,
+    [created.id]
+  )) as ObjectiveRow;
   return toObjectiveDto(row);
 }
 
@@ -6822,8 +6839,8 @@ async function ensureDraftSlotAfterObjectiveLeavesQueue(
 
 /**
  * Resolves an objective to its owning workspace and checks permission there
- * (coo:135), mirroring `requireMissionPermission`. `id` is a globally-unique
- * UUID, so the lookup is unscoped by the caller's active workspace.
+ * (coo:135). UUIDs are globally unique and unscoped by the caller's active
+ * workspace; display ids (`coo:756.k7xm`) resolve in the active workspace.
  */
 async function requireObjectivePermission({
   objectiveId,
@@ -6833,33 +6850,40 @@ async function requireObjectivePermission({
   objectiveId: string;
   permission: Permission;
   db?: DatabaseClient;
-}): Promise<{ workspaceId: string; workspaceUserId: string }> {
-  const row = (await db.get(
-    `SELECT workspace_id FROM objectives WHERE id = ? AND deleted_at IS NULL`,
-    [objectiveId]
-  )) as { workspace_id: string } | undefined;
-  if (!row) throw new ApiError(404, 'Objective not found');
+}): Promise<{ workspaceId: string; workspaceUserId: string; objectiveId: string }> {
+  const resolved = await resolveObjectiveIdForRest({ ref: objectiveId, db });
   const workspaceUserId = await requireWorkspacePermission({
-    workspaceId: row.workspace_id,
+    workspaceId: resolved.workspaceId,
     permission,
     db,
     notFoundMessage: 'Objective not found'
   });
-  return { workspaceId: row.workspace_id, workspaceUserId };
+  return {
+    workspaceId: resolved.workspaceId,
+    workspaceUserId,
+    objectiveId: resolved.id
+  };
 }
 
 async function updateObjectiveTx(
-  id: string,
+  idRef: string,
   body: UpdateObjectiveBody
 ): Promise<{ objective: ObjectiveDto; regenerateTitle: boolean }> {
   return requireDatabaseClient().transaction(async tx => {
-    const { workspaceId, workspaceUserId } = await requireObjectivePermission({
-      objectiveId: id,
+    const {
+      workspaceId,
+      workspaceUserId,
+      objectiveId: id
+    } = await requireObjectivePermission({
+      objectiveId: idRef,
       permission: PERMISSIONS.OBJECTIVE_UPDATE,
       db: tx
     });
     const existing = (await tx.get(
-      `SELECT * FROM objectives WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+      `SELECT o.*, m.display_id AS mission_display_id
+         FROM objectives o
+         JOIN missions m ON m.id = o.mission_id
+        WHERE o.id = ? AND o.workspace_id = ? AND o.deleted_at IS NULL`,
       [id, workspaceId]
     )) as ObjectiveRow | undefined;
     if (!existing) throw new ApiError(404, 'Objective not found');
@@ -7135,7 +7159,13 @@ async function updateObjectiveTx(
       });
     }
 
-    const row = (await tx.get(`SELECT * FROM objectives WHERE id = ?`, [id])) as ObjectiveRow;
+    const row = (await tx.get(
+      `SELECT o.*, m.display_id AS mission_display_id
+         FROM objectives o
+         JOIN missions m ON m.id = o.mission_id
+        WHERE o.id = ?`,
+      [id]
+    )) as ObjectiveRow;
     const objective = toObjectiveDto(row);
 
     return {
@@ -7163,15 +7193,22 @@ export async function updateObjective(
   return objective;
 }
 
-export async function deleteObjective(id: string): Promise<void> {
+export async function deleteObjective(idRef: string): Promise<void> {
   await requireDatabaseClient().transaction(async tx => {
-    const { workspaceId, workspaceUserId } = await requireObjectivePermission({
-      objectiveId: id,
+    const {
+      workspaceId,
+      workspaceUserId,
+      objectiveId: id
+    } = await requireObjectivePermission({
+      objectiveId: idRef,
       permission: PERMISSIONS.OBJECTIVE_UPDATE,
       db: tx
     });
     const existing = (await tx.get(
-      `SELECT * FROM objectives WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+      `SELECT o.*, m.display_id AS mission_display_id
+         FROM objectives o
+         JOIN missions m ON m.id = o.mission_id
+        WHERE o.id = ? AND o.workspace_id = ? AND o.deleted_at IS NULL`,
       [id, workspaceId]
     )) as ObjectiveRow | undefined;
     if (!existing) throw new ApiError(404, 'Objective not found');

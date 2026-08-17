@@ -5,7 +5,7 @@ import { bindChannelToSession, findBindableChannelForMission } from './agent-ses
 import { emitNotification } from './notifications/notifications.js';
 import { recordChange } from './change-feed.js';
 import type { ServiceContext } from './context.js';
-import { resolveMissionId, resolveProjectId } from './context.js';
+import { resolveMissionId, resolveObjectiveRef, resolveProjectId } from './context.js';
 import { buildDeliveryReport, markDeliveryPresentationPending } from './delivery-report.js';
 import { ServiceError } from './errors.js';
 import { createExecutionRequest, linkExecutionRequestToSession } from './execution-requests.js';
@@ -131,6 +131,71 @@ function resolveActiveObjective(objectives: ObjectiveSummary[]): ObjectiveSummar
     throw new ServiceError('No active objective found on mission', 'no_active_objective', 409);
   }
   return active;
+}
+
+/**
+ * Pin attach to a known objective before falling back to mission-state rediscovery.
+ *
+ * 1. Explicit `--objective-id` (UUID or display id) that belongs to this mission.
+ * 2. Else the execution request's `objective_id`.
+ * 3. Else today's `resolveActiveObjective`.
+ *
+ * When (1) or (2) is present, do not fall through to (3).
+ */
+async function resolvePinnedAttachObjective({
+  ctx,
+  missionId,
+  objectives,
+  objectiveId,
+  executionRequestId
+}: {
+  ctx: ServiceContext;
+  missionId: string;
+  objectives: ObjectiveSummary[];
+  objectiveId?: string | null;
+  executionRequestId?: string | null;
+}): Promise<ObjectiveSummary> {
+  const explicit = objectiveId?.trim();
+  if (explicit) {
+    const resolved = await resolveObjectiveRef({ ctx, ref: explicit, missionId });
+    const match = objectives.find(candidate => candidate.id === resolved.id);
+    if (!match) {
+      throw new ServiceError(
+        `Objective ${explicit} does not belong to this mission`,
+        'invalid_objective_ref',
+        400
+      );
+    }
+    return match;
+  }
+
+  const requestId = executionRequestId?.trim();
+  if (requestId) {
+    const row = (await ctx.db.get(
+      `SELECT objective_id, mission_id
+         FROM execution_requests
+        WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+      [requestId, ctx.workspace.id]
+    )) as { objective_id: string; mission_id: string } | undefined;
+    if (!row || row.mission_id !== missionId) {
+      throw new ServiceError(
+        'Execution request does not match this mission/objective',
+        'execution_request_mismatch',
+        409
+      );
+    }
+    const match = objectives.find(candidate => candidate.id === row.objective_id);
+    if (!match) {
+      throw new ServiceError(
+        'Execution request does not match this mission/objective',
+        'execution_request_mismatch',
+        409
+      );
+    }
+    return match;
+  }
+
+  return resolveActiveObjective(objectives);
 }
 
 async function getSessionByKeyMaybeEnded(
@@ -292,7 +357,7 @@ function assembleAgentInstructions({
     `You are attached to mission **${mission.displayId}** via Overlord.`,
     ``,
     `Mission ID: ${mission.displayId}  <- pass this to every \`ovld protocol ... --mission-id\` call`,
-    `Objective ID: ${objective.id}  <- informational only; never pass it as --mission-id`,
+    `Objective ID: ${objective.displayId}  <- pass as --objective-id on attach; never as --mission-id`,
     `Objective: ${objectiveLabel}`,
     `Project: ${projectName}`,
     '',
@@ -533,7 +598,8 @@ export async function attachSession({
   externalSessionId,
   executionRequestId,
   executionTargetId = null,
-  sessionChannelId = null
+  sessionChannelId = null,
+  objectiveId = null
 }: {
   ctx: ServiceContext;
   missionId: string;
@@ -555,10 +621,19 @@ export async function attachSession({
    * achieves nothing.
    */
   sessionChannelId?: string | null;
+  /** UUID or `{mission.display_id}.{display_key}`. Pins attach; skips rediscovery. */
+  objectiveId?: string | null;
 }): Promise<AttachResponse & { sessionKey: string }> {
   const mission = await getMissionSummary({ ctx, missionId });
   const objectives = await listObjectives({ ctx, missionId: mission.id });
-  const objective = resolveActiveObjective(objectives);
+  const pinned = Boolean(objectiveId?.trim() || executionRequestId?.trim());
+  const objective = await resolvePinnedAttachObjective({
+    ctx,
+    missionId: mission.id,
+    objectives,
+    objectiveId,
+    executionRequestId
+  });
   const resolvedTargetId = await resolveProtocolExecutionTargetId({
     ctx,
     executionTargetId,
@@ -577,6 +652,13 @@ export async function attachSession({
     const existing = await getSessionByKey(ctx, existingSessionKey);
     if (existing.mission_id !== context.mission.id) {
       throw new ServiceError('Session key belongs to a different mission', 'invalid_session', 401);
+    }
+    if (pinned && existing.objective_id !== objective.id) {
+      throw new ServiceError(
+        'Session key belongs to a different objective',
+        'session_objective_mismatch',
+        409
+      );
     }
     if (externalSessionId !== undefined) {
       await ctx.db.run(
@@ -1033,8 +1115,11 @@ export async function resumeFollowUp({
   const trimmedSummary = summary?.trim() || 'Beginning follow-up work.';
   const mission = await getMissionSummary({ ctx, missionId });
   const objectives = await listObjectives({ ctx, missionId: mission.id });
-  const selectedObjective = objectiveId
-    ? objectives.find(objective => objective.id === objectiveId)
+  const resolvedObjectiveId = objectiveId
+    ? (await resolveObjectiveRef({ ctx, ref: objectiveId, missionId: mission.id })).id
+    : null;
+  const selectedObjective = resolvedObjectiveId
+    ? objectives.find(objective => objective.id === resolvedObjectiveId)
     : latestCompletedObjective(objectives);
 
   if (!selectedObjective) {
