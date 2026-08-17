@@ -74063,12 +74063,18 @@ async function buildWebhookEnvelope(ctx, {
   };
   if (entity.objectiveId) {
     const objective = await ctx.db.get(
-      `SELECT id, position, title, state FROM objectives WHERE id = ? AND workspace_id = ?`,
+      `SELECT id, position, title, state, display_key FROM objectives WHERE id = ? AND workspace_id = ?`,
       [entity.objectiveId, ctx.workspace.id]
     );
     if (objective) {
       envelope.objective = {
         id: objective.id,
+        // Consumers should key off `displayId` rather than `position`: position
+        // changes when objectives are reordered, the display id never does.
+        displayId: formatObjectiveDisplayId({
+          missionDisplayId: mission.display_id,
+          displayKey: objective.display_key
+        }),
         position: objective.position,
         title: objective.title,
         state: objective.state
@@ -74647,12 +74653,12 @@ async function readRunnerLiveness({
   const liveness = /* @__PURE__ */ new Map();
   const unique = [...new Set(executionTargetIds.filter((id) => id))];
   if (unique.length === 0) return liveness;
-  const placeholders = unique.map(() => "?").join(", ");
+  const placeholders2 = unique.map(() => "?").join(", ");
   const rows = await ctx.db.all(
     `SELECT execution_target_id, relation, health, last_heartbeat_at
        FROM execution_target_runner_registrations
       WHERE workspace_id = ? AND deleted_at IS NULL
-        AND execution_target_id IN (${placeholders})`,
+        AND execution_target_id IN (${placeholders2})`,
     [ctx.workspace.id, ...unique]
   );
   for (const row of rows) {
@@ -75248,14 +75254,14 @@ async function deleteWorkspaceExecutionTarget({
   if (!target) {
     throw new ServiceError("Execution target not found", "not_found", 404);
   }
-  const placeholders = ACTIVE_QUEUE_STATUSES.map(() => "?").join(", ");
+  const placeholders2 = ACTIVE_QUEUE_STATUSES.map(() => "?").join(", ");
   const activeQueue = await ctx.db.get(
     `SELECT COUNT(*) AS count
        FROM execution_requests
       WHERE workspace_id = ?
         AND deleted_at IS NULL
         AND (execution_target_id = ? OR claimed_by_execution_target_id = ?)
-        AND status IN (${placeholders})`,
+        AND status IN (${placeholders2})`,
     [ctx.workspace.id, id, id, ...ACTIVE_QUEUE_STATUSES]
   );
   if (Number(activeQueue?.count ?? 0) > 0) {
@@ -134454,8 +134460,8 @@ async function listMissions({
     params.push(await resolveProjectId(ctx, projectId));
   }
   if (statusTypes && statusTypes.length > 0) {
-    const placeholders = statusTypes.map(() => "?").join(", ");
-    sql2 += ` AND t.status_type IN (${placeholders})`;
+    const placeholders2 = statusTypes.map(() => "?").join(", ");
+    sql2 += ` AND t.status_type IN (${placeholders2})`;
     params.push(...statusTypes);
   }
   sql2 += " ORDER BY t.updated_at DESC LIMIT ?";
@@ -134510,8 +134516,8 @@ async function searchMissions({
     params.push(await resolveProjectId(ctx, projectId));
   }
   if (statusTypes && statusTypes.length > 0) {
-    const placeholders = statusTypes.map(() => "?").join(", ");
-    sql2 += ` AND t.status_type IN (${placeholders})`;
+    const placeholders2 = statusTypes.map(() => "?").join(", ");
+    sql2 += ` AND t.status_type IN (${placeholders2})`;
     params.push(...statusTypes);
   }
   const rows = await ctx.db.all(sql2, params);
@@ -136836,13 +136842,13 @@ async function loadTargetResourceObservations({
 }) {
   const byResource = /* @__PURE__ */ new Map();
   if (resourceIds.length === 0) return byResource;
-  const placeholders = resourceIds.map(() => "?").join(", ");
+  const placeholders2 = resourceIds.map(() => "?").join(", ");
   const rows = await ctx.db.all(
     `SELECT execution_target_id, resource_id, state, git_root, branch, git_commit,
             observed_at, updated_at
        FROM target_resource_observations
       WHERE workspace_id = ?
-        AND resource_id IN (${placeholders})`,
+        AND resource_id IN (${placeholders2})`,
     [ctx.workspace.id, ...resourceIds]
   );
   for (const row of rows) {
@@ -139357,7 +139363,7 @@ async function loadMissionBranchObservationsForMissions({
 }) {
   const byMission = /* @__PURE__ */ new Map();
   if (!executionTargetId || missionIds.length === 0) return byMission;
-  const placeholders = missionIds.map(() => "?").join(", ");
+  const placeholders2 = missionIds.map(() => "?").join(", ");
   const normalizedKey = resourceKey?.trim() || null;
   const params = [ctx.workspace.id, executionTargetId, ...missionIds];
   const resourceFilter = normalizedKey ? "AND resource_key = ?" : "";
@@ -139369,7 +139375,7 @@ async function loadMissionBranchObservationsForMissions({
        FROM mission_branch_observations
       WHERE workspace_id = ?
         AND execution_target_id = ?
-        AND mission_id IN (${placeholders})
+        AND mission_id IN (${placeholders2})
         ${resourceFilter}`,
     params
   );
@@ -141957,11 +141963,11 @@ function toOrganizationAdminDto(row) {
 async function loadOrganizationAdmins(organizationId, client) {
   const profileIds = await listOrganizationAdminProfileIds(organizationId, client);
   if (profileIds.length === 0) return [];
-  const placeholders = profileIds.map(() => "?").join(", ");
+  const placeholders2 = profileIds.map(() => "?").join(", ");
   const rows = await client.all(
     `SELECT id AS user_id, display_name, handle, email, metadata_json
        FROM profiles
-      WHERE id IN (${placeholders}) AND deleted_at IS NULL
+      WHERE id IN (${placeholders2}) AND deleted_at IS NULL
       ORDER BY display_name ASC`,
     profileIds
   );
@@ -143076,12 +143082,12 @@ async function getMissionTags(missionId) {
 async function getTagsByMission(missionIds) {
   const byMission = /* @__PURE__ */ new Map();
   if (missionIds.length === 0) return byMission;
-  const placeholders = missionIds.map(() => "?").join(", ");
+  const placeholders2 = missionIds.map(() => "?").join(", ");
   const rows = await requireDatabaseClient().all(
     `SELECT tt.mission_id, pt.id, pt.workspace_id, pt.project_id, pt.label, pt.color, pt.active, pt.revision
          FROM mission_tags tt
          JOIN project_tags pt ON pt.id = tt.tag_id AND pt.deleted_at IS NULL
-        WHERE tt.mission_id IN (${placeholders})
+        WHERE tt.mission_id IN (${placeholders2})
         ORDER BY ${orderByLabelAsc("pt.label")}`,
     missionIds
   );
@@ -144722,7 +144728,7 @@ ${missionHasUnseenReturnedToExecuteSql},
 async function getObjectivesByMission(missionIds, db = requireDatabaseClient()) {
   const byMission = /* @__PURE__ */ new Map();
   if (missionIds.length === 0) return byMission;
-  const placeholders = missionIds.map(() => "?").join(", ");
+  const placeholders2 = missionIds.map(() => "?").join(", ");
   const rows = await db.all(
     `SELECT o.*, m.display_id AS mission_display_id,
          (
@@ -144734,7 +144740,7 @@ async function getObjectivesByMission(missionIds, db = requireDatabaseClient()) 
          ) AS external_session_id
          FROM objectives o
          JOIN missions m ON m.id = o.mission_id
-        WHERE o.mission_id IN (${placeholders}) AND o.deleted_at IS NULL
+        WHERE o.mission_id IN (${placeholders2}) AND o.deleted_at IS NULL
         ORDER BY o.mission_id ASC, o.position ASC`,
     missionIds
   );
@@ -145612,9 +145618,9 @@ async function syncMissionTags(db, {
     await db.run(`DELETE FROM mission_tags WHERE mission_id = ?`, [missionId]);
     return;
   }
-  const placeholders = unique.map(() => "?").join(", ");
+  const placeholders2 = unique.map(() => "?").join(", ");
   await db.run(
-    `DELETE FROM mission_tags WHERE mission_id = ? AND tag_id NOT IN (${placeholders})`,
+    `DELETE FROM mission_tags WHERE mission_id = ? AND tag_id NOT IN (${placeholders2})`,
     [missionId, ...unique]
   );
   for (const tagId of unique) {
@@ -154801,13 +154807,13 @@ async function protocolWorkspaceId(body) {
   const scopes = await callerWorkspaceMemberships();
   if (scopes.length === 0) return null;
   const workspaceIds = scopes.map((scope) => scope.workspaceId);
-  const placeholders = workspaceIds.map(() => "?").join(", ");
+  const placeholders2 = workspaceIds.map(() => "?").join(", ");
   const db = serviceDatabaseClient();
   const executionRequestId = strFlag(body, "--execution-request-id");
   if (executionRequestId) {
     const request = await db.get(
       `SELECT workspace_id FROM execution_requests
-        WHERE id = ? AND deleted_at IS NULL AND workspace_id IN (${placeholders})`,
+        WHERE id = ? AND deleted_at IS NULL AND workspace_id IN (${placeholders2})`,
       [executionRequestId, ...workspaceIds]
     );
     if (request) return request.workspace_id;
@@ -154816,7 +154822,7 @@ async function protocolWorkspaceId(body) {
   if (sessionKey) {
     const session = await db.get(
       `SELECT workspace_id FROM agent_sessions
-        WHERE session_key_hash = ? AND deleted_at IS NULL AND workspace_id IN (${placeholders})`,
+        WHERE session_key_hash = ? AND deleted_at IS NULL AND workspace_id IN (${placeholders2})`,
       [hashSessionKey(sessionKey), ...workspaceIds]
     );
     if (session) return session.workspace_id;
@@ -154825,13 +154831,13 @@ async function protocolWorkspaceId(body) {
   if (missionRef) {
     const byId = await db.get(
       `SELECT workspace_id FROM missions
-        WHERE id = ? AND deleted_at IS NULL AND workspace_id IN (${placeholders})`,
+        WHERE id = ? AND deleted_at IS NULL AND workspace_id IN (${placeholders2})`,
       [missionRef, ...workspaceIds]
     );
     if (byId) return byId.workspace_id;
     const byDisplay = await db.all(
       `SELECT workspace_id FROM missions
-        WHERE display_id = ? AND deleted_at IS NULL AND workspace_id IN (${placeholders})`,
+        WHERE display_id = ? AND deleted_at IS NULL AND workspace_id IN (${placeholders2})`,
       [missionRef, ...workspaceIds]
     );
     if (byDisplay.length > 1) {
@@ -154843,14 +154849,14 @@ async function protocolWorkspaceId(body) {
   if (!projectRef) return null;
   const projectById = await db.get(
     `SELECT workspace_id FROM projects
-      WHERE id = ? AND deleted_at IS NULL AND workspace_id IN (${placeholders})`,
+      WHERE id = ? AND deleted_at IS NULL AND workspace_id IN (${placeholders2})`,
     [projectRef, ...workspaceIds]
   );
   if (projectById) return projectById.workspace_id;
   const projects = await db.all(
     `SELECT workspace_id FROM projects
       WHERE (slug = ? OR lower(name) = lower(?))
-        AND deleted_at IS NULL AND workspace_id IN (${placeholders})`,
+        AND deleted_at IS NULL AND workspace_id IN (${placeholders2})`,
     [projectRef, projectRef, ...workspaceIds]
   );
   if (projects.length > 1) {
@@ -156447,13 +156453,13 @@ async function countQueuedRequestsForTargets({
   executionTargetIds
 }) {
   if (executionTargetIds.length === 0) return 0;
-  const placeholders = executionTargetIds.map(() => "?").join(", ");
+  const placeholders2 = executionTargetIds.map(() => "?").join(", ");
   const row = await ctx.db.get(
     `SELECT COUNT(*) AS count
        FROM execution_requests
       WHERE workspace_id = ?
         AND deleted_at IS NULL
-        AND execution_target_id IN (${placeholders})
+        AND execution_target_id IN (${placeholders2})
         AND status IN (${STALE_QUEUE_STATUSES.map(() => "?").join(", ")})`,
     [ctx.workspace.id, ...executionTargetIds, ...STALE_QUEUE_STATUSES]
   );
@@ -157229,12 +157235,12 @@ async function recordBranchPrepared({
 }) {
   const scopes = await callerWorkspaceMemberships();
   if (scopes.length === 0) throw new ApiError(404, "Mission not found");
-  const placeholders = scopes.map(() => "?").join(", ");
+  const placeholders2 = scopes.map(() => "?").join(", ");
   const mission = await requireDatabaseClient().get(
     `SELECT workspace_id FROM missions
       WHERE (id = ? OR display_id = ?)
         AND deleted_at IS NULL
-        AND workspace_id IN (${placeholders})`,
+        AND workspace_id IN (${placeholders2})`,
     [missionId, missionId, ...scopes.map((scope) => scope.workspaceId)]
   );
   if (!mission) throw new ApiError(404, "Mission not found");
@@ -158851,6 +158857,289 @@ function resolveServeSpa({
   return dialect === "sqlite";
 }
 
+// activity-feed.ts
+init_dist();
+init_db();
+var RUN_LIMIT = 25;
+var DELIVERY_LIMIT = 7;
+var QUESTION_LIMIT = 10;
+var FEED_LIMIT = 40;
+var INSTRUCTION_PREVIEW_CHARS = 400;
+var EVENT_SUMMARY_CHARS = 240;
+function truncate(value, max) {
+  const text = (value ?? "").trim();
+  if (text.length <= max) return text;
+  return `${text.slice(0, max - 1).trimEnd()}\u2026`;
+}
+function placeholders(count) {
+  return new Array(count).fill("?").join(", ");
+}
+function baseFields(row) {
+  return {
+    workspaceId: row.workspace_id,
+    workspaceName: row.workspace_name,
+    projectId: row.project_id,
+    projectName: row.project_name,
+    projectColor: readProjectColor(row.project_settings_json),
+    missionId: row.mission_id,
+    missionDisplayId: row.mission_display_id,
+    missionTitle: row.mission_title
+  };
+}
+function objectiveDisplayId(missionDisplayId, displayKey) {
+  if (!displayKey) return null;
+  return formatObjectiveDisplayId({ missionDisplayId, displayKey });
+}
+async function readableWorkspaceIds() {
+  const memberships = await callerMembershipsInActiveOrganization();
+  const readable = [];
+  for (const membership of memberships) {
+    try {
+      await requireWorkspacePermission({
+        workspaceId: membership.workspaceId,
+        permission: PERMISSIONS.MISSION_READ,
+        notFoundMessage: "Workspace not found"
+      });
+      readable.push(membership.workspaceId);
+    } catch {
+    }
+  }
+  return readable;
+}
+var CONTEXT_JOIN = `
+       JOIN missions m ON m.id = o.mission_id AND m.deleted_at IS NULL
+       JOIN projects p ON p.id = o.project_id AND p.deleted_at IS NULL
+       JOIN workspaces w ON w.id = o.workspace_id AND w.deleted_at IS NULL`;
+var CONTEXT_COLUMNS = `
+            o.workspace_id, w.name AS workspace_name,
+            o.project_id, p.name AS project_name, p.settings_json AS project_settings_json,
+            o.mission_id, m.display_id AS mission_display_id, m.title AS mission_title`;
+async function loadRuns(workspaceIds) {
+  return await requireDatabaseClient().all(
+    `SELECT ${CONTEXT_COLUMNS},
+            o.id AS objective_id, o.display_key AS objective_display_key,
+            o.title AS objective_title, o.instruction_text, o.state, o.position,
+            o.branch, o.resource_key, o.assigned_agent, o.model,
+            o.updated_at AS objective_updated_at,
+            (SELECT s.agent_identifier FROM agent_sessions s
+              WHERE s.objective_id = o.id AND s.deleted_at IS NULL
+              ORDER BY s.started_at DESC, s.id DESC LIMIT 1) AS session_agent_identifier,
+            (SELECT s.model_identifier FROM agent_sessions s
+              WHERE s.objective_id = o.id AND s.deleted_at IS NULL
+              ORDER BY s.started_at DESC, s.id DESC LIMIT 1) AS session_model_identifier,
+            (SELECT s.started_at FROM agent_sessions s
+              WHERE s.objective_id = o.id AND s.deleted_at IS NULL
+              ORDER BY s.started_at DESC, s.id DESC LIMIT 1) AS session_started_at,
+            (SELECT r.created_at FROM execution_requests r
+              WHERE r.objective_id = o.id AND r.deleted_at IS NULL
+              ORDER BY r.created_at DESC, r.id DESC LIMIT 1) AS request_created_at
+       FROM objectives o${CONTEXT_JOIN}
+      WHERE o.deleted_at IS NULL
+        AND o.state IN ('launching', 'executing')
+        AND o.workspace_id IN (${placeholders(workspaceIds.length)})
+      ORDER BY o.updated_at DESC, o.id ASC
+      LIMIT ?`,
+    [...workspaceIds, RUN_LIMIT]
+  );
+}
+async function loadQueued(runs) {
+  const missionIds = [...new Set(runs.map((run) => run.mission_id))];
+  if (missionIds.length === 0) return /* @__PURE__ */ new Map();
+  const rows = await requireDatabaseClient().all(
+    `SELECT o.mission_id, m.display_id AS mission_display_id, o.id AS objective_id,
+            o.display_key, o.title, o.position, o.assigned_agent, o.auto_advance
+       FROM objectives o
+       JOIN missions m ON m.id = o.mission_id AND m.deleted_at IS NULL
+      WHERE o.deleted_at IS NULL
+        AND o.state IN ('future', 'draft', 'submitted')
+        AND o.mission_id IN (${placeholders(missionIds.length)})
+      ORDER BY o.mission_id ASC, o.position ASC`,
+    missionIds
+  );
+  const byMission = /* @__PURE__ */ new Map();
+  for (const row of rows) {
+    const list2 = byMission.get(row.mission_id) ?? [];
+    list2.push(row);
+    byMission.set(row.mission_id, list2);
+  }
+  return byMission;
+}
+async function loadLatestEvents(runs) {
+  const objectiveIds = runs.map((run) => run.objective_id);
+  if (objectiveIds.length === 0) return /* @__PURE__ */ new Map();
+  const rows = await requireDatabaseClient().all(
+    `SELECT e.objective_id, e.summary, e.created_at
+       FROM mission_events e
+      WHERE e.objective_id IN (${placeholders(objectiveIds.length)})
+        AND e.created_at = (SELECT MAX(x.created_at) FROM mission_events x
+                             WHERE x.objective_id = e.objective_id)`,
+    objectiveIds
+  );
+  const byObjective = /* @__PURE__ */ new Map();
+  for (const row of rows) {
+    const existing = byObjective.get(row.objective_id);
+    if (!existing || row.created_at > existing.created_at) byObjective.set(row.objective_id, row);
+  }
+  return byObjective;
+}
+async function loadDeliveries(workspaceIds) {
+  return await requireDatabaseClient().all(
+    `SELECT ${CONTEXT_COLUMNS},
+            d.id AS delivery_id, d.objective_id, o.display_key AS objective_display_key,
+            o.title AS objective_title, d.session_id, d.summary, d.verification_summary,
+            d.follow_up_notes, d.payload_json, d.delivered_at,
+            s.agent_identifier, s.model_identifier
+       FROM deliveries d
+       JOIN objectives o ON o.id = d.objective_id AND o.deleted_at IS NULL${CONTEXT_JOIN}
+       LEFT JOIN agent_sessions s ON s.id = d.session_id AND s.deleted_at IS NULL
+      WHERE d.deleted_at IS NULL
+        AND d.workspace_id IN (${placeholders(workspaceIds.length)})
+      ORDER BY d.delivered_at DESC, d.id DESC
+      LIMIT ?`,
+    [...workspaceIds, DELIVERY_LIMIT]
+  );
+}
+var QUESTION_CONTEXT_COLUMNS = CONTEXT_COLUMNS.replace(/\bo\./g, "e.");
+async function loadQuestions(workspaceIds) {
+  return await requireDatabaseClient().all(
+    `SELECT ${QUESTION_CONTEXT_COLUMNS},
+            e.id AS event_id, e.objective_id, o.display_key AS objective_display_key,
+            e.summary, e.created_at, s.agent_identifier
+       FROM mission_events e
+       LEFT JOIN objectives o ON o.id = e.objective_id AND o.deleted_at IS NULL
+       JOIN missions m ON m.id = e.mission_id AND m.deleted_at IS NULL
+       JOIN projects p ON p.id = e.project_id AND p.deleted_at IS NULL
+       JOIN workspaces w ON w.id = e.workspace_id AND w.deleted_at IS NULL
+       LEFT JOIN agent_sessions s ON s.id = e.session_id AND s.deleted_at IS NULL
+      WHERE e.type = 'ask'
+        AND e.workspace_id IN (${placeholders(workspaceIds.length)})
+        AND (
+          NOT EXISTS (SELECT 1 FROM mission_status_seen mss
+                       WHERE mss.mission_id = e.mission_id
+                         AND mss.status_id = 'blocking_question')
+          OR e.created_at > (SELECT mss.seen_at FROM mission_status_seen mss
+                              WHERE mss.mission_id = e.mission_id
+                                AND mss.status_id = 'blocking_question')
+        )
+      ORDER BY e.created_at DESC, e.id DESC
+      LIMIT ?`,
+    [...workspaceIds, QUESTION_LIMIT]
+  );
+}
+function toRunItem(row, queued, latest) {
+  const upcoming = [];
+  for (const candidate of queued ?? []) {
+    if (candidate.position <= row.position) continue;
+    if (candidate.auto_advance !== 1) break;
+    upcoming.push({
+      objectiveId: candidate.objective_id,
+      displayId: objectiveDisplayId(candidate.mission_display_id, candidate.display_key) ?? candidate.objective_id,
+      title: candidate.title,
+      position: candidate.position,
+      assignedAgent: candidate.assigned_agent
+    });
+  }
+  return {
+    id: `run:${row.objective_id}`,
+    kind: "objective_run",
+    occurredAt: latest?.created_at ?? row.objective_updated_at,
+    ...baseFields(row),
+    objectiveId: row.objective_id,
+    objectiveDisplayId: objectiveDisplayId(row.mission_display_id, row.objective_display_key),
+    state: row.state === "launching" ? "launching" : "executing",
+    objectiveTitle: row.objective_title,
+    instructionPreview: truncate(row.instruction_text, INSTRUCTION_PREVIEW_CHARS),
+    agentIdentifier: row.session_agent_identifier ?? row.assigned_agent,
+    modelIdentifier: row.session_model_identifier ?? row.model,
+    branch: row.branch,
+    resourceKey: row.resource_key?.trim() || null,
+    startedAt: row.session_started_at ?? row.request_created_at,
+    latestEventSummary: latest ? truncate(latest.summary, EVENT_SUMMARY_CHARS) : null,
+    latestEventAt: latest?.created_at ?? null,
+    upcoming
+  };
+}
+function toDeliveryItem(row) {
+  return {
+    id: `delivery:${row.delivery_id}`,
+    kind: "delivery",
+    occurredAt: row.delivered_at,
+    ...baseFields(row),
+    objectiveId: row.objective_id,
+    objectiveDisplayId: objectiveDisplayId(row.mission_display_id, row.objective_display_key),
+    objectiveTitle: row.objective_title,
+    delivery: {
+      id: row.delivery_id,
+      missionId: row.mission_id,
+      objectiveId: row.objective_id,
+      sessionId: row.session_id,
+      summary: row.summary,
+      verificationSummary: row.verification_summary,
+      followUpNotes: row.follow_up_notes,
+      report: deliveryReportFromPayload(row.payload_json, row.summary),
+      deliveredAt: row.delivered_at,
+      agentIdentifier: row.agent_identifier,
+      modelIdentifier: row.model_identifier
+    }
+  };
+}
+function toQuestionItem(row) {
+  return {
+    id: `ask:${row.event_id}`,
+    kind: "blocking_question",
+    occurredAt: row.created_at,
+    ...baseFields(row),
+    objectiveId: row.objective_id,
+    objectiveDisplayId: objectiveDisplayId(row.mission_display_id, row.objective_display_key),
+    eventId: row.event_id,
+    question: truncate(row.summary, EVENT_SUMMARY_CHARS * 2),
+    agentIdentifier: row.agent_identifier,
+    askedAt: row.created_at
+  };
+}
+async function listActivityFeed() {
+  const generatedAt = (/* @__PURE__ */ new Date()).toISOString();
+  const workspaceIds = await readableWorkspaceIds();
+  if (workspaceIds.length === 0) {
+    return {
+      items: [],
+      generatedAt,
+      counts: { objective_run: 0, delivery: 0, blocking_question: 0 }
+    };
+  }
+  const [runs, deliveries, questions] = await Promise.all([
+    loadRuns(workspaceIds),
+    loadDeliveries(workspaceIds),
+    loadQuestions(workspaceIds)
+  ]);
+  const [queuedByMission, latestByObjective] = await Promise.all([
+    loadQueued(runs),
+    loadLatestEvents(runs)
+  ]);
+  const items = [
+    ...runs.map(
+      (row) => toRunItem(row, queuedByMission.get(row.mission_id), latestByObjective.get(row.objective_id))
+    ),
+    ...deliveries.map(toDeliveryItem),
+    ...questions.map(toQuestionItem)
+  ];
+  items.sort((a5, b5) => {
+    if (a5.occurredAt === b5.occurredAt) return a5.id < b5.id ? 1 : -1;
+    return a5.occurredAt < b5.occurredAt ? 1 : -1;
+  });
+  return {
+    items: items.slice(0, FEED_LIMIT),
+    generatedAt,
+    // Pre-truncation totals, so the client can say "7 of 12" instead of implying
+    // the list is everything there is.
+    counts: {
+      objective_run: runs.length,
+      delivery: deliveries.length,
+      blocking_question: questions.length
+    }
+  };
+}
+
 // agent-session-routes.ts
 var import_express3 = __toESM(require_express2(), 1);
 
@@ -159741,11 +160030,11 @@ async function missionScopedRequests(client, missionRef) {
   const memberships = await callerWorkspaceMemberships(client);
   if (memberships.length === 0)
     throw new ServiceError("Mission not found", "mission_not_found", 404);
-  const placeholders = memberships.map(() => "?").join(", ");
+  const placeholders2 = memberships.map(() => "?").join(", ");
   const mission = await client.get(
     `SELECT id, workspace_id FROM missions
        WHERE (id = ? OR display_id = ?) AND deleted_at IS NULL
-         AND workspace_id IN (${placeholders})`,
+         AND workspace_id IN (${placeholders2})`,
     [missionRef, missionRef, ...memberships.map((entry) => entry.workspaceId)]
   );
   if (!mission) throw new ServiceError("Mission not found", "mission_not_found", 404);
@@ -159790,10 +160079,10 @@ function createAgentRequestHumanRouter() {
         }
       }
       if (authorized.length === 0) return { requests: [] };
-      const placeholders = authorized.map(() => "?").join(", ");
+      const placeholders2 = authorized.map(() => "?").join(", ");
       const rows = await client.all(
         `SELECT ${REQUEST_COLUMNS_FOR_ROUTE} FROM agent_requests
-          WHERE workspace_id IN (${placeholders}) AND deleted_at IS NULL
+          WHERE workspace_id IN (${placeholders2}) AND deleted_at IS NULL
             AND status <> 'open'
           ORDER BY created_at DESC LIMIT 200`,
         authorized.map((entry) => entry.workspaceId)
@@ -159846,11 +160135,11 @@ function createAgentSessionInputHumanRouter() {
       const client = requireDatabaseClient();
       const memberships = await callerWorkspaceMemberships(client);
       if (memberships.length === 0) return { inputs: [] };
-      const placeholders = memberships.map(() => "?").join(", ");
+      const placeholders2 = memberships.map(() => "?").join(", ");
       const mission = await client.get(
         `SELECT id, workspace_id FROM missions
            WHERE (id = ? OR display_id = ?) AND deleted_at IS NULL
-             AND workspace_id IN (${placeholders})`,
+             AND workspace_id IN (${placeholders2})`,
         [missionId, missionId, ...memberships.map((entry) => entry.workspaceId)]
       );
       if (!mission) throw new ServiceError("Mission not found", "mission_not_found", 404);
@@ -161054,19 +161343,14 @@ init_env_profile();
 init_errors5();
 
 // live-activities.ts
+init_dist();
 var import_node_crypto20 = require("node:crypto");
 init_util3();
 init_db();
 init_errors5();
-var MAX_RUNNING = 2;
-var COMPLETION_HOLD_MS = 30 * 60 * 1e3;
+
+// text-presentation.ts
 var TITLE_MAX_LENGTH = 80;
-var START_TOKEN_MAX_LENGTH = 512;
-var BUNDLE_ID_MAX_LENGTH = 255;
-var ACTIVITY_TYPE_MAX_LENGTH = 128;
-var APP_VERSION_MAX_LENGTH = 64;
-var LIVE_ACTIVITY_ATTRIBUTES_TYPE = "OverlordActivityAttributes";
-var LIVE_ACTIVITY_ACCOUNT_LABEL = "My Missions";
 function bounded(value, max) {
   return value.length <= max ? value : `${value.slice(0, max - 1)}\u2026`;
 }
@@ -161076,6 +161360,16 @@ function presentationTitle(value) {
     TITLE_MAX_LENGTH
   );
 }
+
+// live-activities.ts
+var MAX_RUNNING = 2;
+var COMPLETION_HOLD_MS = 30 * 60 * 1e3;
+var START_TOKEN_MAX_LENGTH = 512;
+var BUNDLE_ID_MAX_LENGTH = 255;
+var ACTIVITY_TYPE_MAX_LENGTH = 128;
+var APP_VERSION_MAX_LENGTH = 64;
+var LIVE_ACTIVITY_ATTRIBUTES_TYPE = "OverlordActivityAttributes";
+var LIVE_ACTIVITY_ACCOUNT_LABEL = "My Missions";
 function projectColor(settingsJson) {
   try {
     const value = JSON.parse(settingsJson);
@@ -161095,7 +161389,46 @@ function toSnapshot(row) {
     title: presentationTitle(row.title),
     displayId: row.display_id,
     projectName: bounded(row.project_name.trim() || "Project", 40),
-    projectColorHex: projectColor(row.project_settings_json)
+    projectColorHex: projectColor(row.project_settings_json),
+    objectiveId: null,
+    missionDisplayId: row.display_id,
+    missionTitle: presentationTitle(row.title)
+  };
+}
+function toRunningSnapshot(row) {
+  const missionTitle = presentationTitle(row.mission_title);
+  const objectiveTitle = row.objective_title ? presentationTitle(row.objective_title) : "";
+  return {
+    id: row.mission_id,
+    title: objectiveTitle || missionTitle,
+    displayId: formatObjectiveDisplayId({
+      missionDisplayId: row.mission_display_id,
+      displayKey: row.display_key
+    }),
+    projectName: bounded(row.project_name.trim() || "Project", 40),
+    projectColorHex: projectColor(row.project_settings_json),
+    objectiveId: row.objective_id,
+    missionDisplayId: row.mission_display_id,
+    missionTitle
+  };
+}
+async function toCompletionSnapshot(db, row) {
+  const objective = await db.get(
+    `SELECT id, title, display_key FROM objectives
+      WHERE mission_id = ? AND deleted_at IS NULL AND state = 'complete'
+      ORDER BY updated_at DESC, id ASC LIMIT 1`,
+    [row.id]
+  );
+  const mission = toSnapshot(row);
+  if (!objective) return mission;
+  return {
+    ...mission,
+    title: (objective.title ? presentationTitle(objective.title) : "") || mission.missionTitle,
+    displayId: formatObjectiveDisplayId({
+      missionDisplayId: row.display_id,
+      displayKey: objective.display_key
+    }),
+    objectiveId: objective.id
   };
 }
 function requiredString2(value, field, max) {
@@ -161271,7 +161604,21 @@ async function buildLiveActivityContentState(db, profileId, now2 = /* @__PURE__ 
       ORDER BY m.updated_at DESC, m.id ASC`,
     [profileId]
   );
-  const running = rows.filter((row) => asBool(row.has_executing_objective)).slice(0, MAX_RUNNING);
+  const runningRows = await db.all(
+    `SELECT o.id AS objective_id, o.title AS objective_title, o.display_key,
+            m.id AS mission_id, m.title AS mission_title, m.display_id AS mission_display_id,
+            p.name AS project_name, p.settings_json AS project_settings_json
+       FROM objectives o
+       JOIN missions m ON m.id = o.mission_id AND m.deleted_at IS NULL
+       JOIN projects p ON p.id = m.project_id AND p.deleted_at IS NULL
+       JOIN workspace_users wu ON wu.id = m.assigned_workspace_user_id
+       JOIN workspaces w ON w.id = m.workspace_id AND w.deleted_at IS NULL
+      WHERE o.deleted_at IS NULL AND o.state = 'executing'
+        AND wu.profile_id = ? AND wu.status = 'active' AND wu.deleted_at IS NULL
+      ORDER BY o.updated_at DESC, o.id ASC`,
+    [profileId]
+  );
+  const running = runningRows.slice(0, MAX_RUNNING);
   const completion = rows.find((row) => {
     if (asBool(row.has_executing_objective)) return false;
     if (!asBool(row.has_completed_objective) && row.status_type !== "complete") return false;
@@ -161280,8 +161627,8 @@ async function buildLiveActivityContentState(db, profileId, now2 = /* @__PURE__ 
   });
   if (running.length === 0 && !completion) return null;
   return {
-    running: running.map(toSnapshot),
-    recentCompletion: completion ? toSnapshot(completion) : null,
+    running: running.map(toRunningSnapshot),
+    recentCompletion: completion ? await toCompletionSnapshot(db, completion) : null,
     updatedAt: Math.floor(now2.getTime() / 1e3)
   };
 }
@@ -161780,6 +162127,31 @@ init_db();
 init_util3();
 init_db();
 init_errors5();
+
+// notification-presentation.ts
+init_dist();
+function notificationSubject({
+  missionDisplayId,
+  missionTitle,
+  objectiveDisplayKey,
+  objectiveTitle
+}) {
+  const mission = presentationTitle(missionTitle) || "Untitled mission";
+  const objectiveId = objectiveDisplayKey ? formatObjectiveDisplayId({ missionDisplayId, displayKey: objectiveDisplayKey }) : null;
+  const objective = objectiveTitle ? presentationTitle(objectiveTitle) : "";
+  return {
+    displayId: objectiveId ?? missionDisplayId,
+    title: objectiveId ? objective || mission : mission,
+    missionDisplayId,
+    missionTitle: mission,
+    objectiveDisplayId: objectiveId
+  };
+}
+function notificationBody(subject, verb) {
+  return `${subject.displayId}: ${subject.title} ${verb}`;
+}
+
+// push-notifications.ts
 var DEVICE_TOKEN_MAX_LENGTH = 512;
 var BUNDLE_ID_MAX_LENGTH2 = 255;
 var APP_VERSION_MAX_LENGTH2 = 64;
@@ -161973,6 +162345,7 @@ async function buildPushNotificationPresentation({
   db,
   profileId,
   missionId,
+  objectiveId = null,
   category
 }) {
   const mission = await db.get(
@@ -161993,12 +162366,24 @@ async function buildPushNotificationPresentation({
         AND read_at IS NULL`,
     [profileId]
   );
-  const title = presentationTitle(mission.title) || "Untitled mission";
+  const objective = objectiveId ? await db.get(
+    `SELECT id, display_key, title FROM objectives
+          WHERE id = ? AND mission_id = ? AND deleted_at IS NULL`,
+    [objectiveId, mission.id]
+  ) ?? null : null;
+  const subject = notificationSubject({
+    missionDisplayId: mission.display_id,
+    missionTitle: mission.title,
+    objectiveDisplayKey: objective?.display_key ?? null,
+    objectiveTitle: objective?.title ?? null
+  });
   return {
     title: bounded(mission.project_name.trim() || "Project", PROJECT_NAME_MAX_LENGTH),
-    body: `${mission.display_id}: ${title} ${CATEGORY_VERBS[category]}`,
+    body: notificationBody(subject, CATEGORY_VERBS[category]),
     badge: Number(badgeRow?.count ?? 0),
     missionId: mission.id,
+    objectiveId: objective?.id ?? null,
+    objectiveDisplayId: subject.objectiveDisplayId,
     category,
     deepLink: `overlord://missions/${mission.id}`
   };
@@ -162015,6 +162400,7 @@ function parseJob(payloadJson) {
     return {
       profileId: payload.profileId,
       missionId: payload.missionId,
+      objectiveId: typeof payload.objectiveId === "string" ? payload.objectiveId : null,
       category: payload.category
     };
   } catch {
@@ -162037,6 +162423,8 @@ function apnsBody(presentation, mode) {
       aps,
       data: {
         missionId: presentation.missionId,
+        objectiveId: presentation.objectiveId,
+        objectiveDisplayId: presentation.objectiveDisplayId,
         category: presentation.category,
         deepLink: presentation.deepLink
       }
@@ -162074,6 +162462,7 @@ async function deliverStandardPush({
   db,
   profileId,
   missionId,
+  objectiveId = null,
   category,
   mode
 }) {
@@ -162087,13 +162476,14 @@ async function deliverStandardPush({
     db,
     profileId,
     missionId,
+    objectiveId,
     category
   });
   if (!presentation) {
     return;
   }
   const { body } = apnsBody(presentation, mode);
-  const collapseId = `${category}:${missionId}`.slice(0, 64);
+  const collapseId = `${category}:${presentation.objectiveId ?? missionId}`.slice(0, 64);
   const config4 = apnsConfig();
   for (const token of tokens) {
     if (!config4) continue;
@@ -162136,6 +162526,7 @@ var PushNotificationDispatcher = class extends WorkerJobPoller {
         db,
         profileId: target.profileId,
         missionId: target.missionId,
+        objectiveId: target.objectiveId,
         category: target.category,
         mode
       });
@@ -162247,7 +162638,15 @@ function toNotificationDto(row) {
     // recomputed from the current mission on every REST read, just as APNs
     // presentation is recomputed at dispatch time.
     presentation: {
-      body: `${row.display_id}: ${presentationTitle(row.mission_title) || "Untitled mission"} ${NOTIFICATION_CATALOG[row.type].verb}`
+      body: notificationBody(
+        notificationSubject({
+          missionDisplayId: row.display_id,
+          missionTitle: row.mission_title,
+          objectiveDisplayKey: row.objective_display_key,
+          objectiveTitle: row.objective_title
+        }),
+        NOTIFICATION_CATALOG[row.type].verb
+      )
     }
   };
 }
@@ -162260,9 +162659,10 @@ async function ownedNotificationRow(db, profileId, id) {
   const row = await db.get(
     `SELECT n.id, n.workspace_id, n.recipient_profile_id, n.type, n.mission_id, n.objective_id,
             n.created_at, n.read_at, n.revision, n.deleted_at, m.project_id, m.title AS mission_title,
-            m.display_id
+            m.display_id, o.display_key AS objective_display_key, o.title AS objective_title
        FROM notifications n
        JOIN missions m ON m.id = n.mission_id
+       LEFT JOIN objectives o ON o.id = n.objective_id AND o.deleted_at IS NULL
       WHERE n.id = ? AND n.recipient_profile_id = ? AND n.deleted_at IS NULL`,
     [id, profileId]
   );
@@ -162282,9 +162682,10 @@ async function listNotifications() {
   const rows = await db.all(
     `SELECT n.id, n.workspace_id, n.recipient_profile_id, n.type, n.mission_id, n.objective_id,
             n.created_at, n.read_at, n.revision, n.deleted_at, m.project_id, m.title AS mission_title,
-            m.display_id
+            m.display_id, o.display_key AS objective_display_key, o.title AS objective_title
        FROM notifications n
        JOIN missions m ON m.id = n.mission_id
+       LEFT JOIN objectives o ON o.id = n.objective_id AND o.deleted_at IS NULL
       WHERE n.recipient_profile_id = ? AND n.deleted_at IS NULL
       ORDER BY n.created_at DESC, n.id DESC`,
     [profileId]
@@ -164864,6 +165265,10 @@ app.patch(
     mutates: true,
     requires: PERMISSIONS.MISSION_UPDATE
   })
+);
+app.get(
+  "/api/activity-feed",
+  handle3(() => listActivityFeed(), { requires: PERMISSIONS.MISSION_READ })
 );
 app.put(
   "/api/mobile/live-activities/:activityId/push-token",
