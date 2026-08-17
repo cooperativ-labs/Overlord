@@ -20,13 +20,14 @@ import {
   objectiveHasInstructionText
 } from '@overlord/automations/objective-manager';
 import { GripVertical } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 
 import type {
   ExecutionRequestDto,
   MissionDetailDto,
   ObjectiveDto
 } from '../../../shared/contract.ts';
+import { objectiveMatchesFocus } from '../../lib/mission-panel-search.ts';
 import { useReorderFutureObjectives } from '../../lib/queries.ts';
 import { cn } from '../../lib/utils.ts';
 import { Button } from '../ui.tsx';
@@ -45,11 +46,13 @@ import { ObjectiveCollapsibleItem } from './ObjectiveCollapsibleItem.tsx';
 function SortableFutureObjective({
   objective,
   siblings,
-  executionRequests
+  executionRequests,
+  focusObjectiveRef
 }: {
   objective: ObjectiveDto;
   siblings: ObjectiveDto[];
   executionRequests: ExecutionRequestDto[];
+  focusObjectiveRef: string | undefined;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: objective.id
@@ -71,12 +74,47 @@ function SortableFutureObjective({
         <GripVertical className="h-4 w-4" />
       </button>
       <div className="min-w-0 flex-1">
-        <DraftObjective
-          objective={objective}
-          siblings={siblings}
-          executionRequests={executionRequests}
-        />
+        <ObjectiveFocusAnchor objective={objective} focusRef={focusObjectiveRef}>
+          <DraftObjective
+            objective={objective}
+            siblings={siblings}
+            executionRequests={executionRequests}
+          />
+        </ObjectiveFocusAnchor>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Scrolls the named objective into view and rings it when a deep link or feed
+ * card opened this panel with `?objective=`.
+ */
+function ObjectiveFocusAnchor({
+  objective,
+  focusRef,
+  children
+}: {
+  objective: ObjectiveDto;
+  focusRef: string | undefined;
+  children: ReactNode;
+}) {
+  const focused = objectiveMatchesFocus({ objective, focusRef });
+  const nodeRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!focused) return;
+    nodeRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [focused, objective.id]);
+
+  return (
+    <div
+      ref={nodeRef}
+      id={objective.displayId ? `objective-${objective.displayId}` : undefined}
+      data-objective-ref={objective.displayId ?? objective.id}
+      className={focused ? 'rounded-xl ring-2 ring-ring/60' : undefined}
+    >
+      {children}
     </div>
   );
 }
@@ -97,7 +135,14 @@ function SortableFutureObjective({
  * client-side and only persists an objective once it has instruction text, so
  * "Add objective" and the next-up slot never create empty work.
  */
-export function MissionObjectivesSection({ mission }: { mission: MissionDetailDto }) {
+export function MissionObjectivesSection({
+  mission,
+  focusObjectiveRef
+}: {
+  mission: MissionDetailDto;
+  /** Display id or UUID from `?objective=`, when a live surface named one. */
+  focusObjectiveRef?: string;
+}) {
   const reorder = useReorderFutureObjectives();
   /** Whether the user asked for an extra (queued) composer via "+ Add objective". */
   const [extraSlotRequested, setExtraSlotRequested] = useState(false);
@@ -179,19 +224,34 @@ export function MissionObjectivesSection({ mission }: { mission: MissionDetailDt
       {executedObjectives.length > 0 ? (
         <div className="space-y-2 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-1)]">
           {executedObjectives.map((objective, index) => (
-            <ObjectiveCollapsibleItem key={objective.id} objective={objective} index={index} />
+            <ObjectiveFocusAnchor
+              key={objective.id}
+              objective={objective}
+              focusRef={focusObjectiveRef}
+            >
+              <ObjectiveCollapsibleItem
+                objective={objective}
+                index={index}
+                defaultOpen={objectiveMatchesFocus({ objective, focusRef: focusObjectiveRef })}
+              />
+            </ObjectiveFocusAnchor>
           ))}
         </div>
       ) : null}
 
       <div className="space-y-3">
         {editableObjectives.map(objective => (
-          <DraftObjective
+          <ObjectiveFocusAnchor
             key={objective.id}
             objective={objective}
-            siblings={objectives}
-            executionRequests={mission.executionRequests}
-          />
+            focusRef={focusObjectiveRef}
+          >
+            <DraftObjective
+              objective={objective}
+              siblings={objectives}
+              executionRequests={mission.executionRequests}
+            />
+          </ObjectiveFocusAnchor>
         ))}
 
         {showNextUpGhost ? (
@@ -221,6 +281,7 @@ export function MissionObjectivesSection({ mission }: { mission: MissionDetailDt
                     objective={objective}
                     siblings={objectives}
                     executionRequests={mission.executionRequests}
+                    focusObjectiveRef={focusObjectiveRef}
                   />
                 ))}
               </div>

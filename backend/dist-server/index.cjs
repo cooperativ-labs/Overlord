@@ -162385,7 +162385,7 @@ async function buildPushNotificationPresentation({
     objectiveId: objective?.id ?? null,
     objectiveDisplayId: subject.objectiveDisplayId,
     category,
-    deepLink: `overlord://missions/${mission.id}`
+    deepLink: subject.objectiveDisplayId ? `overlord://objectives/${subject.objectiveDisplayId}` : `overlord://missions/${mission.id}`
   };
 }
 

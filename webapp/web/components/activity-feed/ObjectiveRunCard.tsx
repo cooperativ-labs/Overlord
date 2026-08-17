@@ -19,7 +19,7 @@ export function ObjectiveRunCard({
 }: {
   item: ActivityFeedRunItemDto;
   nowIso: string;
-  onOpenMission: (missionId: string) => void;
+  onOpenMission: (args: { missionId: string; objectiveDisplayId?: string | null }) => void;
 }) {
   const launching = item.state === 'launching';
   const elapsed = elapsedLabel(item.startedAt, nowIso);
@@ -29,7 +29,12 @@ export function ObjectiveRunCard({
     <article className="overflow-hidden rounded-xl border border-(--color-border) bg-(--color-surface-1)">
       <button
         type="button"
-        onClick={() => onOpenMission(item.missionId)}
+        onClick={() =>
+          onOpenMission({
+            missionId: item.missionId,
+            objectiveDisplayId: item.objectiveDisplayId
+          })
+        }
         className="flex w-full flex-col gap-2 p-3 text-left transition-colors hover:bg-(--color-surface-2)"
       >
         <ActivityFeedCardMeta

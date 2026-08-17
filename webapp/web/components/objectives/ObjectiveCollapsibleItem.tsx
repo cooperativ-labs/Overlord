@@ -10,7 +10,7 @@ import {
   Loader2,
   Paperclip
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import type { ObjectiveDto } from '../../../shared/contract.ts';
 import { getAgentIcon } from '../../lib/helpers/agent-icons.ts';
@@ -47,14 +47,19 @@ import { ObjectiveMenuButton } from './ObjectiveMenuButton.tsx';
  */
 export function ObjectiveCollapsibleItem({
   objective,
-  index
+  index,
+  defaultOpen = false
 }: {
   objective: ObjectiveDto;
   index: number;
+  defaultOpen?: boolean;
 }) {
   const update = useUpdateObjective();
   const { copied, copy } = useCopyToClipboard();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
+  useEffect(() => {
+    if (defaultOpen) setOpen(true);
+  }, [defaultOpen]);
   // Display labels come from the objective's own workspace's catalog (coo:324).
   const projectQuery = useProject(objective.projectId);
   const catalogQuery = useAgentCatalog(projectQuery.data?.workspaceId);

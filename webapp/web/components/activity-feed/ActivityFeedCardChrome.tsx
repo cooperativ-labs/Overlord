@@ -49,8 +49,9 @@ export function KindBadge({
 }
 
 /**
- * The context line every feed card shares: project, mission, objective display id.
- * Written once so the three card kinds cannot drift in how they identify their work.
+ * The context line every feed card shares: project, then the objective display
+ * id as the live identity, then the parent mission as secondary context
+ * (coo:756 §9.1 — activity surfaces are objective-first).
  */
 export function ActivityFeedCardMeta({
   item,
@@ -65,13 +66,16 @@ export function ActivityFeedCardMeta({
         <ProjectDot color={item.projectColor} />
         <span className="truncate">{item.projectName}</span>
       </span>
-      <span aria-hidden="true">·</span>
-      <span className="min-w-0 truncate font-medium text-(--color-ink)">{item.missionTitle}</span>
       {item.objectiveDisplayId ? (
-        <span className="font-mono text-[10px] text-(--color-ink-dim)">
-          {item.objectiveDisplayId}
-        </span>
+        <>
+          <span aria-hidden="true">·</span>
+          <span className="font-mono text-[11px] font-medium text-(--color-ink)">
+            {item.objectiveDisplayId}
+          </span>
+        </>
       ) : null}
+      <span aria-hidden="true">·</span>
+      <span className="min-w-0 truncate">{item.missionTitle}</span>
       {trailing}
     </div>
   );

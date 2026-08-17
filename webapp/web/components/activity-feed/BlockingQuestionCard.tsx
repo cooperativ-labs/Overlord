@@ -20,7 +20,7 @@ export function BlockingQuestionCard({
 }: {
   item: ActivityFeedQuestionItemDto;
   nowIso: string;
-  onOpenMission: (missionId: string) => void;
+  onOpenMission: (args: { missionId: string; objectiveDisplayId?: string | null }) => void;
 }) {
   const agentKey = item.agentIdentifier;
 
@@ -47,7 +47,16 @@ export function BlockingQuestionCard({
           </span>
         ) : null}
         <span>Blocked until answered</span>
-        <Button type="button" className="ml-auto" onClick={() => onOpenMission(item.missionId)}>
+        <Button
+          type="button"
+          className="ml-auto"
+          onClick={() =>
+            onOpenMission({
+              missionId: item.missionId,
+              objectiveDisplayId: item.objectiveDisplayId
+            })
+          }
+        >
           Answer
         </Button>
       </div>

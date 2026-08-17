@@ -10,6 +10,7 @@ import { ThemeProvider } from './components/theme-provider.tsx';
 import { TooltipProvider } from './components/ui/tooltip.tsx';
 import { applyDesktopChromeDocumentAttributes, getDesktopBridge } from './lib/desktop-chrome.ts';
 import { syncDesktopNativeTheme } from './lib/desktop-native-theme.ts';
+import { parseDesktopMissionShellRoute } from './lib/mission-panel-search.ts';
 import { RealtimeProvider } from './lib/realtime.tsx';
 import { router } from './router.tsx';
 
@@ -36,13 +37,16 @@ function DesktopDeepLinkNavigation() {
     return onNavigate(route => {
       // An objective deep link (`?objective=coo:756.k7xm`) still opens the
       // mission panel — the objective is the thing being pointed at, the
-      // mission is the surface that shows it.
-      const match =
-        /^\/user\/missions\/([A-Za-z0-9:_-]{1,64})(?:\?objective=[A-Za-z0-9:._-]{1,80})?$/.exec(
-          route
-        );
-      if (!match) return;
-      void router.navigate({ to: '/user/missions/$missionId', params: { missionId: match[1] } });
+      // mission is the surface that shows it. The query must survive this
+      // navigate; dropping it made every objective URL land on the mission
+      // with no focus target.
+      const target = parseDesktopMissionShellRoute(route);
+      if (!target) return;
+      void router.navigate({
+        to: '/user/missions/$missionId',
+        params: { missionId: target.missionId },
+        search: target.objectiveDisplayId ? { objective: target.objectiveDisplayId } : {}
+      });
     });
   }, []);
   return null;

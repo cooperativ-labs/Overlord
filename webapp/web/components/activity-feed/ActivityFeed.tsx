@@ -53,7 +53,11 @@ function LiveIndicator() {
  * can read. Freshness rides the existing realtime change link — this component
  * never polls.
  */
-export function ActivityFeed({ onOpenMission }: { onOpenMission: (missionId: string) => void }) {
+export function ActivityFeed({
+  onOpenMission
+}: {
+  onOpenMission: (args: { missionId: string; objectiveDisplayId?: string | null }) => void;
+}) {
   const feed = useActivityFeed();
   const [enabledKinds, setEnabledKinds] = useState<Set<string>>(() => new Set(FEED_KINDS));
   const [projectId, setProjectId] = useState<string | null>(null);

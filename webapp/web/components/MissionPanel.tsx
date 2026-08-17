@@ -1,9 +1,10 @@
 import { deriveObjectiveLifecycleView } from '@overlord/automations/objective-manager';
-import { useNavigate } from '@tanstack/react-router';
+import { useNavigate, useRouterState } from '@tanstack/react-router';
 import { ArrowRightToLine, Loader2, Sparkles, Unplug } from 'lucide-react';
 import { useRef, useState } from 'react';
 
 import type { MissionDetailDto } from '../../shared/contract.ts';
+import { objectiveSearchFromLocation } from '../lib/mission-panel-search.ts';
 import {
   useGenerateMissionTitle,
   useMission,
@@ -224,6 +225,9 @@ export function MissionPanel({
   onProjectChanged?: (nextProjectId: string) => void;
 }) {
   const navigate = useNavigate();
+  const focusObjectiveRef = useRouterState({
+    select: state => objectiveSearchFromLocation(state.location.search)
+  });
   const missionQ = useMission(missionId, { refetchBranchState: true });
   const [isScrolling, setIsScrolling] = useState(false);
   const scrollIdleTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -313,7 +317,7 @@ export function MissionPanel({
         {/* Card section — primary work surface: objectives */}
         <section className="border-b border-(--color-border) bg-(--color-surface-1) pb-5 pt-2">
           <div className="flex flex-col gap-3 px-5 ">
-            <MissionObjectivesSection mission={mission} />
+            <MissionObjectivesSection mission={mission} focusObjectiveRef={focusObjectiveRef} />
           </div>
         </section>
 

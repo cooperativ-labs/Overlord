@@ -66,6 +66,7 @@ describe('delivery webhook envelopes', () => {
         mode: 'full'
       });
       assert.equal(full.delivery?.report?.schemaVersion, 1);
+      assert.equal(full.objective?.displayId, objectives[0]?.displayId);
       assert.equal(full.delivery?.report?.presentation.status, 'pending');
       assert.equal(full.delivery?.report?.agentReport.humanActions[0]?.source, 'agent');
       assert.equal(full.delivery?.report?.agentReport.tradeoffsMade[0]?.source, 'agent');
@@ -78,6 +79,7 @@ describe('delivery webhook envelopes', () => {
         mode: 'thin'
       });
       assert.deepEqual(thin.delivery, { id: delivered.deliveryId });
+      assert.deepEqual(thin.objective, { id: objectives[0]?.id });
     } finally {
       await db.close();
     }

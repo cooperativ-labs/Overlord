@@ -85,8 +85,12 @@ export function InboxPage() {
         <UnallocatedColumn />
         <ProjectWorkspaceErrorBoundary region="activity feed">
           <ActivityFeed
-            onOpenMission={missionId =>
-              void navigate({ to: '/inbox/missions/$missionId', params: { missionId } })
+            onOpenMission={({ missionId, objectiveDisplayId }) =>
+              void navigate({
+                to: '/inbox/missions/$missionId',
+                params: { missionId },
+                search: objectiveDisplayId ? { objective: objectiveDisplayId } : {}
+              })
             }
           />
         </ProjectWorkspaceErrorBoundary>

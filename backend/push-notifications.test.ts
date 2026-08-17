@@ -12,7 +12,8 @@ const { db } = await bootstrapIntegrationTestDb({
 
 const { requireDatabaseClient, setActiveProfileId, withRequestContextAsync } =
   await import('./db.ts');
-const { createMission, createProject, updateMission } = await import('./repository.ts');
+const { createMission, createObjective, createProject, updateMission } =
+  await import('./repository.ts');
 const {
   buildPushNotificationPresentation,
   getNotificationPreferences,
@@ -324,30 +325,16 @@ test('an objective-scoped push leads with the objective display id and title', a
   const mission = await createMission({
     projectId: project.id,
     title: 'Objective-centric execution',
-    firstObjective: 'Do not leak this instruction text'
+    firstObjective: 'Placeholder'
   });
-  const objective = db
-    .prepare(`SELECT id, display_key FROM objectives WHERE mission_id = ?`)
-    .get(mission.id) as { id: string; display_key: string };
-  db.prepare(`UPDATE objectives SET title = ? WHERE id = ?`).run(
-    'Phase C: Activity surfaces',
-    objective.id
-  );
-  console.log(
-    'DEBUG rows',
-    db.prepare(`SELECT id, title, display_key FROM objectives WHERE mission_id = ?`).all(mission.id)
-  );
-  console.log(
-    'DEBUG client',
-    await requireDatabaseClient().get(
-      `SELECT id, title, display_key FROM objectives WHERE id = ? AND mission_id = ?`,
-      [objective.id, mission.id]
-    )
-  );
-  console.log(
-    'DEBUG mission',
-    db.prepare(`SELECT title, display_id FROM missions WHERE id = ?`).get(mission.id)
-  );
+  // An explicit title skips the async title generator, which would otherwise
+  // race this test and rewrite the label back to the instruction text.
+  const objective = await createObjective({
+    missionId: mission.id,
+    title: 'Phase C: Activity surfaces',
+    instructionText: 'Do not leak this instruction text',
+    state: 'future'
+  });
 
   const presentation = await buildPushNotificationPresentation({
     db: requireDatabaseClient(),
@@ -360,12 +347,16 @@ test('an objective-scoped push leads with the objective display id and title', a
   assert.equal(presentation.objectiveId, objective.id);
   assert.equal(
     presentation.objectiveDisplayId,
-    `${mission.displayId}.${objective.display_key}`,
+    `${mission.displayId}.${objective.displayKey}`,
     'the push names the objective by its stable display id'
   );
   assert.equal(
     presentation.body,
-    `${mission.displayId}.${objective.display_key}: Phase C: Activity surfaces needs your input`
+    `${mission.displayId}.${objective.displayKey}: Phase C: Activity surfaces needs your input`
+  );
+  assert.equal(
+    presentation.deepLink,
+    `overlord://objectives/${mission.displayId}.${objective.displayKey}`
   );
   assert.doesNotMatch(
     JSON.stringify(presentation),
@@ -389,9 +380,9 @@ test('APNs badge counts unread notifications, not missions in review', async () 
       title: `Review queue ${index}`,
       firstObjective: 'Work'
     });
-    await updateMission(extra.id, { statusType: 'review' });
+    db.prepare(`UPDATE missions SET status_type = 'review' WHERE id = ?`).run(extra.id);
   }
-  await updateMission(mission.id, { statusType: 'review' });
+  db.prepare(`UPDATE missions SET status_type = 'review' WHERE id = ?`).run(mission.id);
 
   db.prepare(`DELETE FROM notifications`).run();
   const now = '2026-08-09T10:00:00.000Z';
@@ -425,11 +416,13 @@ test('APNs badge counts unread notifications, not missions in review', async () 
 test('alert and silent payloads carry only the allowlisted APNs fields', () => {
   const presentation = {
     title: 'Overlord',
-    body: 'coo:1: Ship it is ready for review',
+    body: 'coo:1.k7xm: Ship it is ready for review',
     badge: 3,
     missionId: 'mission-1',
+    objectiveId: 'objective-1',
+    objectiveDisplayId: 'coo:1.k7xm',
     category: 'mission_awaiting_review' as const,
-    deepLink: 'overlord://missions/mission-1'
+    deepLink: 'overlord://objectives/coo:1.k7xm'
   };
 
   const alert = JSON.parse(__testables.apnsBody(presentation, 'alert').body) as {
@@ -442,8 +435,10 @@ test('alert and silent payloads carry only the allowlisted APNs fields', () => {
   assert.equal(alert.aps['thread-id'], 'mission-1');
   assert.deepEqual(alert.data, {
     missionId: 'mission-1',
+    objectiveId: 'objective-1',
+    objectiveDisplayId: 'coo:1.k7xm',
     category: 'mission_awaiting_review',
-    deepLink: 'overlord://missions/mission-1'
+    deepLink: 'overlord://objectives/coo:1.k7xm'
   });
 
   const silent = JSON.parse(__testables.apnsBody(presentation, 'silent').body) as {

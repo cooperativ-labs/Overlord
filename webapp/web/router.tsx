@@ -14,6 +14,7 @@ import { NavHeader } from './components/nav-header.tsx';
 import { ProjectCreatorModal } from './components/projects/ProjectCreatorModal.tsx';
 import { OrganizationOnboardingScreen } from './components/setup/OrganizationOnboardingScreen.tsx';
 import { SidebarInset, SidebarProvider } from './components/ui/sidebar.tsx';
+import { parseMissionPanelSearch } from './lib/mission-panel-search.ts';
 import { useMeta, useProjects, useWorkspaceMyMissions } from './lib/queries.ts';
 import { shouldShowOnboarding, shouldShowOnboardingSetup } from './lib/router-gates.ts';
 
@@ -130,6 +131,7 @@ const inboxRoute = createRoute({
 const inboxMissionPanelRoute = createRoute({
   getParentRoute: () => inboxRoute,
   path: 'missions/$missionId',
+  validateSearch: parseMissionPanelSearch,
   component: lazyRouteComponent(() => import('./pages/InboxPage.tsx'), 'InboxMissionPanelRoute')
 });
 
@@ -158,6 +160,7 @@ const workspaceMissionLegacyRedirectRoute = createRoute({
 const myMissionsPanelRoute = createRoute({
   getParentRoute: () => myMissionsRoute,
   path: 'missions/$missionId',
+  validateSearch: parseMissionPanelSearch,
   component: lazyRouteComponent(
     () => import('./pages/MyMissionsShell.tsx'),
     'WorkspaceMissionPanelRoute'
@@ -173,6 +176,7 @@ const boardRoute = createRoute({
 const missionRoute = createRoute({
   getParentRoute: () => boardRoute,
   path: 'missions/$missionId',
+  validateSearch: parseMissionPanelSearch,
   component: lazyRouteComponent(() => import('./pages/MissionPage.tsx'), 'MissionPanelRoute')
 });
 

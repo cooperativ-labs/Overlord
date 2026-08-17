@@ -10,7 +10,7 @@ await bootstrapIntegrationTestDb({ sqlitePath: path.join(tempDir, 'live-activiti
 
 const { db, requireDatabaseClient, setActiveProfileId, withRequestContextAsync } =
   await import('./db.ts');
-const { createMission, createProject } = await import('./repository.ts');
+const { createMission, createObjective, createProject } = await import('./repository.ts');
 const {
   buildLiveActivityContentState,
   liveActivityContentHash,
@@ -98,8 +98,8 @@ test('builds a bounded account snapshot and hashes only visible content', async 
     firstObjective: '**Run** [this](https://example.com)'
   });
   const objective = db
-    .prepare(`SELECT id FROM objectives WHERE mission_id = ?`)
-    .get(mission.id) as { id: string };
+    .prepare(`SELECT id, display_key FROM objectives WHERE mission_id = ?`)
+    .get(mission.id) as { id: string; display_key: string };
   db.prepare(`UPDATE objectives SET state = 'executing', updated_at = ? WHERE id = ?`).run(
     new Date().toISOString(),
     objective.id
@@ -108,6 +108,14 @@ test('builds a bounded account snapshot and hashes only visible content', async 
   const state = await buildLiveActivityContentState(requireDatabaseClient(), 'operator-user');
   assert.equal(state?.running.length, 1);
   assert.equal(state?.running[0]?.title, 'Run this');
+  assert.equal(
+    state?.running[0]?.id,
+    mission.id,
+    'id stays the mission id for ActivityKit navigation'
+  );
+  assert.equal(state?.running[0]?.objectiveId, objective.id);
+  assert.equal(state?.running[0]?.missionDisplayId, mission.displayId);
+  assert.equal(state?.running[0]?.displayId, `${mission.displayId}.${objective.display_key}`);
   assert.equal(state?.running[0]?.projectColorHex, '#22aa44');
   assert.equal(typeof state?.updatedAt, 'number');
   assert.ok(Number.isInteger(state?.updatedAt));
@@ -116,6 +124,52 @@ test('builds a bounded account snapshot and hashes only visible content', async 
     liveActivityContentHash(state),
     liveActivityContentHash(state && { ...state, updatedAt: 4_102_444_800 })
   );
+});
+
+test('running snapshots are one row per executing objective, capped at two', async () => {
+  db.prepare(
+    `UPDATE objectives SET state = 'complete' WHERE deleted_at IS NULL AND state = 'executing'`
+  ).run();
+  const project = await createProject({ name: 'Two Objectives', color: '#111111' });
+  const firstMission = await createMission({
+    projectId: project.id,
+    title: 'Shared context',
+    firstObjective: 'Objective A'
+  });
+  const first = firstMission.objectives[0]!;
+  const second = await createObjective({
+    missionId: firstMission.id,
+    title: 'Objective B',
+    instructionText: 'Second running objective',
+    state: 'future'
+  });
+  const otherMission = await createMission({
+    projectId: project.id,
+    title: 'Other mission',
+    firstObjective: 'Objective C'
+  });
+  const third = otherMission.objectives[0]!;
+  for (const [objectiveId, updatedAt] of [
+    [third.id, '2026-08-17T12:00:03.000Z'],
+    [second.id, '2026-08-17T12:00:02.000Z'],
+    [first.id, '2026-08-17T12:00:01.000Z']
+  ] as const) {
+    db.prepare(`UPDATE objectives SET state = 'executing', updated_at = ? WHERE id = ?`).run(
+      updatedAt,
+      objectiveId
+    );
+  }
+
+  const state = await buildLiveActivityContentState(requireDatabaseClient(), 'operator-user');
+  assert.equal(state?.running.length, 2, 'account cap is two running objectives, not two missions');
+  assert.deepEqual(
+    state?.running.map(row => row.objectiveId),
+    [third.id, second.id]
+  );
+  assert.equal(state?.running[0]?.displayId, `${otherMission.displayId}.${third.displayKey}`);
+  assert.equal(state?.running[1]?.displayId, `${firstMission.displayId}.${second.displayKey}`);
+  assert.equal(state?.running[1]?.id, firstMission.id);
+  assert.equal(state?.running[1]?.title, 'Objective B');
 });
 
 test('the dispatcher claims and completes a live-activity job without APNs credentials', async () => {

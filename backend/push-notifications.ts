@@ -332,7 +332,8 @@ type ObjectivePresentationRow = {
  * Recomputes the payload snapshot from the database at delivery time.
  *
  * This is an allowlist by construction: project name, sanitized mission title,
- * display id, badge count, mission id, category, and deep link. Objective
+ * display id, badge count, mission id, optional objective identity, category,
+ * and deep link. Objective
  * instructions, agent prompts, delivery summaries, question text, file paths and
  * `mission_events.payload_json` are deliberately never read here — APNs sees
  * payload contents in transit, so anything not needed to decide whether to open
@@ -399,6 +400,8 @@ export async function buildPushNotificationPresentation({
     objectiveId: objective?.id ?? null,
     objectiveDisplayId: subject.objectiveDisplayId,
     category,
-    deepLink: `overlord://missions/${mission.id}`
+    deepLink: subject.objectiveDisplayId
+      ? `overlord://objectives/${subject.objectiveDisplayId}`
+      : `overlord://missions/${mission.id}`
   };
 }

@@ -193,9 +193,12 @@ test('the start payload carries the ActivityKit start event, attributes, and bou
           {
             id: 'mission-1',
             title: 'Run the thing',
-            displayId: 'coo:1',
+            displayId: 'coo:1.k7xm',
             projectName: 'Start Job Project',
-            projectColorHex: '#2563eb'
+            projectColorHex: '#2563eb',
+            objectiveId: 'objective-1',
+            missionDisplayId: 'coo:1',
+            missionTitle: 'Parent mission'
           }
         ],
         recentCompletion: null,

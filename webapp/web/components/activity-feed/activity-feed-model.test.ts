@@ -107,7 +107,10 @@ test('kind chips drop items whose kind is switched off', () => {
 });
 
 test('an unknown kind is dropped rather than rendered blank', () => {
-  const unknown = { ...base({ id: 'weather:1', kind: 'weather_report' }) } as ActivityFeedItemDto;
+  const unknown = {
+    ...base({ id: 'weather:1' }),
+    kind: 'weather_report'
+  } as unknown as ActivityFeedItemDto;
 
   const visible = filterFeedItems([runItem(), unknown], {
     kinds: new Set(['objective_run', 'weather_report']),
