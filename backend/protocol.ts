@@ -6,7 +6,7 @@ import {
   type UpdateObjectiveBody
 } from '@overlord/contract';
 
-import type { ServiceContext } from '../packages/core/service/context.ts';
+import { resolveObjectiveRef, type ServiceContext } from '../packages/core/service/context.ts';
 import { ServiceError } from '../packages/core/service/errors.ts';
 import { listAttachments } from '../packages/core/service/missions.ts';
 import { registerActingExecutionTarget } from '../packages/core/service/project-execution-target.ts';
@@ -389,6 +389,27 @@ function missionRefFlag(body: ProtocolRequestBody): string {
 function objectiveRefFlag(body: ProtocolRequestBody): string | null {
   const value = strFlag(body, '--objective-id');
   return value !== undefined && value.trim() !== '' ? value.trim() : null;
+}
+
+/** Validate the mission/objective pair even when a command uses the objective only as scope. */
+async function validateObjectiveAddressing({
+  ctx,
+  body,
+  subcommand
+}: {
+  ctx: ServiceContext;
+  body: ProtocolRequestBody;
+  subcommand: string;
+}): Promise<void> {
+  // update-objective is addressed by an objective alone and deliberately has
+  // no mission scope to validate against.
+  if (subcommand === 'update-objective') return;
+  const objectiveRef = objectiveRefFlag(body);
+  if (!objectiveRef) return;
+  const missionRef =
+    strFlag(body, '--mission-id') ?? missionDisplayIdFromObjectiveRef(objectiveRef);
+  if (!missionRef) return;
+  await resolveObjectiveRef({ ctx, ref: objectiveRef, missionId: missionRef });
 }
 
 /** Parse a JSON flag supplied inline (`--x-json`) or via stdin (`--x-file`). */
@@ -1158,5 +1179,7 @@ export async function runProtocolSubcommand(
     );
   }
   const requiredPermission = SUBCOMMAND_PERMISSIONS[subcommand] ?? null;
-  return handler(await buildProtocolContext(body, requiredPermission), body);
+  const ctx = await buildProtocolContext(body, requiredPermission);
+  await validateObjectiveAddressing({ ctx, body, subcommand });
+  return handler(ctx, body);
 }

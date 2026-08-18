@@ -106,18 +106,26 @@ export async function getInput({
 export async function listSessionInputs({
   ctx,
   missionId,
+  objectiveId = null,
   limit = 50
 }: {
   ctx: ServiceContext;
   missionId: string;
+  objectiveId?: string | null;
   limit?: number;
 }): Promise<AgentSessionInputRow[]> {
   const rows = await ctx.db.all<AgentSessionInputRow>(
     `SELECT ${INPUT_COLUMNS} FROM agent_session_inputs
        WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL
+         ${objectiveId ? 'AND objective_id = ?' : ''}
        ORDER BY created_at DESC
        LIMIT ?`,
-    [missionId, ctx.workspace.id, Math.min(200, Math.max(1, limit))]
+    [
+      missionId,
+      ctx.workspace.id,
+      ...(objectiveId ? [objectiveId] : []),
+      Math.min(200, Math.max(1, limit))
+    ]
   );
   return rows.map(row => ({
     ...row,

@@ -1,4 +1,5 @@
 import { PERMISSIONS } from '@overlord/auth';
+import { missionDisplayIdFromObjectiveRef } from '@overlord/contract';
 import express, { type NextFunction, type Request, type Response, Router } from 'express';
 
 import {
@@ -27,7 +28,7 @@ import {
   type ReleaseReason,
   releaseRequestToTerminal
 } from '../packages/core/service/agent-session/index.ts';
-import type { ServiceContext } from '../packages/core/service/context.ts';
+import { resolveObjectiveRef, type ServiceContext } from '../packages/core/service/context.ts';
 import { ServiceError } from '../packages/core/service/errors.ts';
 import { asRecord } from '../packages/core/service/execution-requests.ts';
 
@@ -563,7 +564,8 @@ function requestDto(request: Awaited<ReturnType<typeof getRequest>>): Record<str
  */
 async function missionScopedRequests(
   client: ReturnType<typeof requireDatabaseClient>,
-  missionRef: string
+  missionRef: string,
+  objectiveRef: string | null = null
 ): Promise<Record<string, unknown>[]> {
   const memberships = await callerWorkspaceMemberships(client);
   if (memberships.length === 0)
@@ -576,18 +578,27 @@ async function missionScopedRequests(
     [missionRef, missionRef, ...memberships.map(entry => entry.workspaceId)]
   );
   if (!mission) throw new ServiceError('Mission not found', 'mission_not_found', 404);
-  await requireWorkspacePermission({
+  const workspaceUserId = await requireWorkspacePermission({
     workspaceId: mission.workspace_id,
     permission: PERMISSIONS.SESSION_READ,
     db: client,
     notFoundMessage: 'Mission not found'
   });
+  const ctx = await buildWebappServiceContextForWorkspace(
+    mission.workspace_id,
+    client,
+    workspaceUserId
+  );
+  const objective = objectiveRef
+    ? await resolveObjectiveRef({ ctx, ref: objectiveRef, missionId: mission.id })
+    : null;
   const rows = await client.all<Awaited<ReturnType<typeof getRequest>>>(
     `SELECT ${REQUEST_COLUMNS_FOR_ROUTE} FROM agent_requests
       WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL
+        ${objective ? 'AND objective_id = ?' : ''}
         AND status <> 'open'
       ORDER BY created_at DESC LIMIT 200`,
-    [mission.id, mission.workspace_id]
+    [mission.id, mission.workspace_id, ...(objective ? [objective.id] : [])]
   );
   return rows.map(requestDto);
 }
@@ -601,13 +612,23 @@ export function createAgentRequestHumanRouter(): Router {
     '/',
     handle(async req => {
       const client = requireDatabaseClient();
-      const missionRef = typeof req.query.missionId === 'string' ? req.query.missionId : null;
+      const objectiveRef = typeof req.query.objectiveId === 'string' ? req.query.objectiveId : null;
+      const missionRef =
+        (typeof req.query.missionId === 'string' ? req.query.missionId : null) ??
+        missionDisplayIdFromObjectiveRef(objectiveRef);
       // A mission-scoped read resolves the mission inside the caller's own memberships and
       // authorizes against the mission's *own* workspace, the same way every other
       // resource-scoped mission route does. The unfiltered inbox below is a different query
       // with a different authorization shape, so the two do not share a code path.
       if (missionRef) {
-        return { requests: await missionScopedRequests(client, missionRef) };
+        return { requests: await missionScopedRequests(client, missionRef, objectiveRef) };
+      }
+      if (objectiveRef) {
+        throw new ServiceError(
+          'missionId is required when objectiveId is an objective UUID',
+          'invalid_input',
+          400
+        );
       }
       const memberships = await callerWorkspaceMemberships(client);
       const authorized: { workspaceId: string; workspaceUserId: string }[] = [];
@@ -697,8 +718,19 @@ export function createAgentSessionInputHumanRouter(): Router {
   router.get(
     '/',
     handle(async req => {
-      const missionId = typeof req.query.missionId === 'string' ? req.query.missionId : null;
-      if (!missionId) throw new ServiceError('missionId is required', 'invalid_input', 400);
+      const objectiveRef = typeof req.query.objectiveId === 'string' ? req.query.objectiveId : null;
+      const missionId =
+        (typeof req.query.missionId === 'string' ? req.query.missionId : null) ??
+        missionDisplayIdFromObjectiveRef(objectiveRef);
+      if (!missionId) {
+        throw new ServiceError(
+          objectiveRef
+            ? 'missionId is required when objectiveId is an objective UUID'
+            : 'missionId or an objective display id is required',
+          'invalid_input',
+          400
+        );
+      }
       const client = requireDatabaseClient();
       const memberships = await callerWorkspaceMemberships(client);
       if (memberships.length === 0) return { inputs: [] };
@@ -721,9 +753,16 @@ export function createAgentSessionInputHumanRouter(): Router {
         client,
         workspaceUserId
       );
-      const inputs = (await listSessionInputs({ ctx, missionId: mission.id })).filter(
-        input => input.status !== 'queued' && input.status !== 'leased'
-      );
+      const objective = objectiveRef
+        ? await resolveObjectiveRef({ ctx, ref: objectiveRef, missionId: mission.id })
+        : null;
+      const inputs = (
+        await listSessionInputs({
+          ctx,
+          missionId: mission.id,
+          objectiveId: objective?.id ?? null
+        })
+      ).filter(input => input.status !== 'queued' && input.status !== 'leased');
       // The most recent channel, live or not. A client gates its controls on this snapshot,
       // so it needs to see an `ended`/`lost` channel too — a UI that only ever hears about
       // live channels has no way to stop offering controls once the session is gone.
@@ -741,8 +780,9 @@ export function createAgentSessionInputHumanRouter(): Router {
                 last_heartbeat_at, ended_at, end_reason
            FROM agent_session_channels
            WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL
+             ${objective ? 'AND objective_id = ?' : ''}
            ORDER BY created_at DESC LIMIT 1`,
-        [mission.id, mission.workspace_id]
+        [mission.id, mission.workspace_id, ...(objective ? [objective.id] : [])]
       );
       const isLive =
         channel !== undefined &&

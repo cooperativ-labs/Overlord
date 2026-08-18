@@ -1,5 +1,5 @@
-contractVersion: "91"
+contractVersion: '92'
 componentType: mcp-server
 componentKey: overlord
-label: "Overlord Hosted MCP Server"
-description: "OAuth-protected, mission-first MCP server for hosted ChatGPT Apps and other MCP clients."
+label: 'Overlord Hosted MCP Server'
+description: 'OAuth-protected, mission-first MCP server for hosted ChatGPT Apps and other MCP clients.'

@@ -116,7 +116,7 @@ export const COMMAND_FLAGS: Record<string, readonly string[]> = {
     '--no-start'
   ],
   missions: ['--status', '--query', '--project-id', '--limit'],
-  requests: ['--revision', '--decision', '--text'],
+  requests: ['--mission-id', '--objective-id', '--revision', '--decision', '--text'],
   inputs: ['--mission-id', '--objective-id', '--channel-id', '--body', '--kind'],
   mission: [],
   changes: ['--mission-id', '--objective-id']

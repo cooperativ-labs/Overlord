@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { resolveGlobalDataDir } from './config.js';
@@ -8,8 +8,9 @@ import { resolveGlobalDataDir } from './config.js';
 // tool call is a fresh shell, so a key captured at attach is otherwise gone by the
 // next `ovld protocol` command unless the agent threads it through manually. The
 // cache is scoped to (resolve(workingDirectory), missionId, objectiveId) so two
-// sequential objectives on the same mission cannot reuse each other's key.
-// Reads fall back to the pre-Phase-B (cwd, missionId) path once.
+// objectives on the same mission cannot reuse each other's key. Mission-only
+// reads retain the serial compatibility cache, but an objective-specific miss
+// must never fall back to a sibling's mission-wide key.
 
 function sessionKeyCachePath({
   missionId,
@@ -51,10 +52,7 @@ export function readCachedSessionKey({
   objectiveId?: string | null;
 }): string | undefined {
   if (objectiveId?.trim()) {
-    const keyed = readSessionKeyFile(
-      sessionKeyCachePath({ missionId, workingDirectory, objectiveId })
-    );
-    if (keyed) return keyed;
+    return readSessionKeyFile(sessionKeyCachePath({ missionId, workingDirectory, objectiveId }));
   }
   return readSessionKeyFile(sessionKeyCachePath({ missionId, workingDirectory }));
 }
@@ -107,16 +105,31 @@ export function writeCachedSessionKey({
 export function clearCachedSessionKey({
   missionId,
   workingDirectory,
-  objectiveId
+  objectiveId,
+  sessionKey
 }: {
   missionId: string;
   workingDirectory: string;
   objectiveId?: string | null;
+  /** When supplied, remove every UUID/display-id alias that stores this exact key. */
+  sessionKey?: string | null;
 }): void {
   try {
-    const files = [sessionKeyCachePath({ missionId, workingDirectory })];
-    if (objectiveId?.trim()) {
-      files.push(sessionKeyCachePath({ missionId, workingDirectory, objectiveId }));
+    const files = new Set<string>();
+    const trimmedSessionKey = sessionKey?.trim();
+    if (trimmedSessionKey) {
+      const cacheDir = path.join(resolveGlobalDataDir(), 'protocol-session-keys');
+      if (existsSync(cacheDir)) {
+        for (const name of readdirSync(cacheDir)) {
+          const filePath = path.join(cacheDir, name);
+          if (readSessionKeyFile(filePath) === trimmedSessionKey) files.add(filePath);
+        }
+      }
+    } else {
+      files.add(sessionKeyCachePath({ missionId, workingDirectory }));
+      if (objectiveId?.trim()) {
+        files.add(sessionKeyCachePath({ missionId, workingDirectory, objectiveId }));
+      }
     }
     for (const filePath of files) {
       if (existsSync(filePath)) rmSync(filePath);

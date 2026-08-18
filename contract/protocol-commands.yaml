@@ -63,9 +63,9 @@ requestEnvelope:
 sessionLifecycle:
   attach:
     description: 'Start a working session; return full structured mission context plus agent instructions'
-    requiredFlags:
-      - --mission-id
+    requiredFlags: []
     optionalFlags:
+      - --mission-id
       - --session-key
       - --execution-request-id
       - --execution-target-id
@@ -76,7 +76,7 @@ sessionLifecycle:
       - --session-channel-id
       # Pins attach to this objective (UUID or {mission.display_id}.{display_key}).
       # When this flag or --execution-request-id is present, attach must not rediscover
-      # another objective from mission state. --mission-id remains required.
+      # another objective from mission state. A display id supplies --mission-id.
       - --objective-id
     returnsSessionKey: true
     responseShape: attach-response-v3
@@ -91,10 +91,11 @@ sessionLifecycle:
 
   update:
     description: 'Post progress event; optionally record changed files and rationales'
-    requiredFlags:
-      - --mission-id
+    requiredFlags: []
     requiresSessionKey: true
     optionalFlags:
+      - --mission-id
+      - --objective-id
       - --summary
       - --summary-file
       - --phase
@@ -132,8 +133,9 @@ sessionLifecycle:
     description: 'Record connector lifecycle events such as UserPromptSubmit without requiring a live agent session'
     requiredFlags:
       - --hook-type
-      - --mission-id
     optionalFlags:
+      - --mission-id
+      - --objective-id
       - --session-key
       - --external-session-id
       - --prompt
@@ -149,9 +151,9 @@ sessionLifecycle:
 
   resumeFollowUp:
     description: 'Explicitly reopen a completed objective for post-delivery implementation follow-up'
-    requiredFlags:
-      - --mission-id
+    requiredFlags: []
     optionalFlags:
+      - --mission-id
       - --objective-id
       - --agent
       - --model
@@ -168,10 +170,11 @@ sessionLifecycle:
 
   heartbeat:
     description: 'Update session liveness without creating a mission event'
-    requiredFlags:
-      - --mission-id
+    requiredFlags: []
     requiresSessionKey: true
     optionalFlags:
+      - --mission-id
+      - --objective-id
       - --phase
       - --percent
       - --note
@@ -181,9 +184,11 @@ sessionLifecycle:
 
   ask:
     description: 'Post a single blocking question and stop work'
-    requiredFlags:
-      - --mission-id
+    requiredFlags: []
     requiresSessionKey: true
+    optionalFlags:
+      - --mission-id
+      - --objective-id
     questionInput:
       flag: --question
       fileAlternative: --question-file
@@ -195,13 +200,14 @@ sessionLifecycle:
 
   deliver:
     description: 'Final delivery — mark objective complete and move mission to review'
-    requiredFlags:
-      - --mission-id
+    requiredFlags: []
     requiresSessionKey: true
     summaryInput:
       flag: --summary
       fileAlternative: --summary-file
     optionalFlags:
+      - --mission-id
+      - --objective-id
       - --artifacts
       - --change-rationales-json
       - --change-rationales-file
@@ -283,6 +289,7 @@ missionDiscovery:
     description: 'Read mission context without creating a session'
     readOnly: true
     optionalFlags:
+      - --mission-id
       - --execution-target-id
       # Returns context for this objective instead of rediscovering the mission's
       # active one. Required to read context on a mission running two objectives
@@ -296,6 +303,7 @@ missionDiscovery:
   connect:
     description: 'Create a lightweight session key without full context assembly'
     optionalFlags:
+      - --mission-id
       - --objective-id
       - --agent
       - --external-session-id
@@ -311,6 +319,7 @@ missionDiscovery:
   discussObjective:
     description: 'Mark a draft objective submitted (signals in active discussion)'
     optionalFlags:
+      - --mission-id
       - --objective-id
     rules:
       - 'When --objective-id is present, that objective is submitted; it must belong to the mission and must be in draft state'
@@ -321,6 +330,8 @@ missionDiscovery:
   addObjectives:
     description: 'Append ordered objectives to an existing mission'
     optionalFlags:
+      - --mission-id
+      - --objective-id
       - --auto-advance
       - --no-auto-advance
     rules:
@@ -365,10 +376,10 @@ artifacts:
       artifacts; agents may publish plans, notes, URLs, and similar records
       mid-session and revise them later with update-artifact.
     requiredFlags:
-      - --mission-id
       - --type
       - --label
     optionalFlags:
+      - --mission-id
       - --session-key
       - --objective-id
       - --content-text
@@ -391,10 +402,11 @@ artifacts:
       and/or externalUrl in place (same rules as REST PATCH
       /api/missions/:id/artifacts/:artifactId). Does not require a session key.
     requiredFlags:
-      - --mission-id
       - --artifact-id
       - --expected-revision
     optionalFlags:
+      - --mission-id
+      - --objective-id
       - --label
       - --content-text
       - --content-text-file
@@ -412,14 +424,21 @@ artifacts:
 sharedContext:
   readContext:
     readOnly: true
+    optionalFlags:
+      - --mission-id
+      - --objective-id
 
   writeContext:
+    optionalFlags:
+      - --mission-id
+      - --objective-id
     sideEffects:
       - upserts-shared-context-entry-by-mission-and-key
 
   attachmentList:
     readOnly: true
     optionalFlags:
+      - --mission-id
       - --objective-id
     rules:
       - "Without --objective-id the listing spans every objective on the mission; with it, only that objective's attachments are returned"
@@ -435,6 +454,7 @@ sharedContext:
   attachmentDownloadUrl:
     readOnly: true
     optionalFlags:
+      - --mission-id
       - --objective-id
 
   attachmentUploadFile:

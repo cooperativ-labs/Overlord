@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import { runProtocolCommand } from '../src/commands.ts';
+import { runManagementCommand, runProtocolCommand } from '../src/commands.ts';
 import type { CliRuntime } from '../src/runtime.ts';
 
 type PostedBody = { flags: Record<string, string | boolean> };
@@ -171,5 +171,43 @@ test('ovld protocol changes accepts an objective display id in place of the miss
       () => runProtocolCommand({ runtime, subcommand: 'changes', args: [] }),
       /--mission-id/
     );
+  });
+});
+
+test('management request and input reads preserve objective scope in REST queries', async () => {
+  await withIsolatedEnv(async () => {
+    const paths: string[] = [];
+    const { runtime: baseRuntime } = capturingRuntime();
+    const runtime = {
+      ...baseRuntime,
+      backend: {
+        ...baseRuntime.backend,
+        get: async (requestPath: string) => {
+          paths.push(requestPath);
+          return requestPath.startsWith('/api/agent-requests') ? { requests: [] } : { inputs: [] };
+        }
+      }
+    } satisfies CliRuntime;
+    const originalLog = console.log;
+    console.log = () => {};
+    try {
+      await runManagementCommand({
+        runtime,
+        command: 'requests',
+        rest: ['--objective-id', 'coo:756.k7xm']
+      });
+      await runManagementCommand({
+        runtime,
+        command: 'inputs',
+        rest: ['list', '--objective-id', 'coo:756.k7xm']
+      });
+    } finally {
+      console.log = originalLog;
+    }
+
+    assert.deepEqual(paths, [
+      '/api/agent-requests?missionId=coo%3A756&objectiveId=coo%3A756.k7xm',
+      '/api/agent-session-inputs?missionId=coo%3A756&objectiveId=coo%3A756.k7xm'
+    ]);
   });
 });

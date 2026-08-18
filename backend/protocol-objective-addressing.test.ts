@@ -57,6 +57,23 @@ test('an explicit --mission-id still wins over the derived one', async () => {
   assert.equal(context.objective.id, objective.id);
 });
 
+test('an explicit mission cannot be paired with an objective from another mission', async () => {
+  const first = await missionFixture('First mission');
+  const second = await missionFixture('Second mission');
+
+  await assert.rejects(
+    runProtocolSubcommand('add-objectives', {
+      flags: {
+        '--mission-id': first.missionDisplayId,
+        '--objective-id': second.objective.displayId,
+        '--objectives-json': JSON.stringify([{ objective: 'Must not be appended' }])
+      }
+    }),
+    (error: unknown) =>
+      error instanceof Error && error.message.includes('does not belong to the given mission')
+  );
+});
+
 test('an objective UUID cannot stand in for a mission id', async () => {
   const { objective } = await missionFixture('UUID needs a mission');
 

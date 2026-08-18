@@ -76,7 +76,7 @@ test('cache keys on the resolved working directory', () => {
   });
 });
 
-test('session key cache scopes per objective and falls back to mission-only', () => {
+test('session key cache scopes per objective without falling back across siblings', () => {
   withTempHome(() => {
     writeCachedSessionKey({
       missionId: 'coo:1',
@@ -107,7 +107,15 @@ test('session key cache scopes per objective and falls back to mission-only', ()
       }),
       'sess_b'
     );
-    // Mission-only read is the last write (serial fallback for update/deliver).
+    assert.equal(
+      readCachedSessionKey({
+        missionId: 'coo:1',
+        workingDirectory: '/repo/one',
+        objectiveId: 'coo:1.cccc'
+      }),
+      undefined
+    );
+    // A caller that did not name an objective retains the serial compatibility cache.
     assert.equal(
       readCachedSessionKey({ missionId: 'coo:1', workingDirectory: '/repo/one' }),
       'sess_b'
@@ -120,5 +128,36 @@ test('blank session keys are never persisted', () => {
     const args = { missionId: 'coo:9', workingDirectory: '/repo/blank' };
     writeCachedSessionKey({ ...args, sessionKey: '   ' });
     assert.equal(readCachedSessionKey(args), undefined);
+  });
+});
+
+test('clearing by session key removes every objective alias but preserves sibling sessions', () => {
+  withTempHome(() => {
+    const common = { missionId: 'coo:1', workingDirectory: '/repo/parallel' };
+    for (const objectiveId of ['coo:1.aaaa', '11111111-1111-4111-8111-111111111111']) {
+      writeCachedSessionKey({
+        ...common,
+        objectiveId,
+        sessionKey: 'sess_aliases'
+      });
+    }
+    writeCachedSessionKey({
+      ...common,
+      objectiveId: 'coo:1.bbbb',
+      sessionKey: 'sess_sibling'
+    });
+
+    clearCachedSessionKey({ ...common, sessionKey: 'sess_aliases' });
+
+    assert.equal(readCachedSessionKey({ ...common, objectiveId: 'coo:1.aaaa' }), undefined);
+    assert.equal(
+      readCachedSessionKey({
+        ...common,
+        objectiveId: '11111111-1111-4111-8111-111111111111'
+      }),
+      undefined
+    );
+    assert.equal(readCachedSessionKey({ ...common, objectiveId: 'coo:1.bbbb' }), 'sess_sibling');
+    assert.equal(readCachedSessionKey(common), 'sess_sibling');
   });
 });

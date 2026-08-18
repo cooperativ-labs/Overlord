@@ -69906,105 +69906,6 @@ var init_errors4 = __esm({
   }
 });
 
-// ../packages/core/service/util.ts
-function nowIso() {
-  return (/* @__PURE__ */ new Date()).toISOString();
-}
-function newId() {
-  return (0, import_node_crypto6.randomUUID)();
-}
-function slugify3(input) {
-  const base = input.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48);
-  return base.length > 0 ? base : "project";
-}
-function initialTitleFromInstruction(instruction) {
-  const firstLine = instruction.split("\n")[0]?.trim() ?? instruction.trim();
-  if (firstLine.length <= 80) return firstLine;
-  return `${firstLine.slice(0, 77)}...`;
-}
-function generateSessionKey() {
-  const rawKey = SESSION_KEY_PREFIX + (0, import_node_crypto6.randomBytes)(24).toString("base64url");
-  const prefix = rawKey.slice(0, SESSION_KEY_PREFIX.length + 8);
-  const hash2 = (0, import_node_crypto6.createHash)("sha256").update(rawKey).digest("hex");
-  return { rawKey, prefix, hash: hash2 };
-}
-function hashSessionKey(rawKey) {
-  return (0, import_node_crypto6.createHash)("sha256").update(rawKey).digest("hex");
-}
-var import_node_crypto6, SESSION_KEY_PREFIX;
-var init_util3 = __esm({
-  "../packages/core/service/util.ts"() {
-    "use strict";
-    import_node_crypto6 = require("node:crypto");
-    SESSION_KEY_PREFIX = "sess_";
-  }
-});
-
-// ../packages/core/service/change-feed.ts
-async function insertEntityChange(client, fields) {
-  await client.run(
-    `INSERT INTO entity_changes (
-         id, workspace_id, project_id, mission_id, objective_id,
-         entity_type, entity_id, operation, entity_revision,
-         changed_fields_json, actor_workspace_user_id, actor_token_id, source, occurred_at
-       ) VALUES (
-         ?, ?, ?, ?, ?,
-         ?, ?, ?, ?,
-         ?, ?, ?, ?, ?
-       )`,
-    [
-      newId(),
-      fields.workspaceId,
-      fields.projectId ?? null,
-      fields.missionId ?? null,
-      fields.objectiveId ?? null,
-      fields.entityType,
-      fields.entityId,
-      fields.operation,
-      fields.entityRevision ?? null,
-      JSON.stringify(fields.changedFields ?? []),
-      fields.actorWorkspaceUserId,
-      fields.actorTokenId ?? null,
-      fields.source,
-      nowIso()
-    ]
-  );
-}
-async function recordChange({
-  ctx,
-  entityType,
-  entityId,
-  operation: operation2,
-  entityRevision,
-  projectId,
-  missionId,
-  objectiveId,
-  changedFields
-}) {
-  await insertEntityChange(ctx.db, {
-    workspaceId: ctx.workspace.id,
-    projectId,
-    missionId,
-    objectiveId,
-    entityType,
-    entityId,
-    operation: operation2,
-    entityRevision,
-    changedFields,
-    actorWorkspaceUserId: ctx.actorWorkspaceUserId,
-    // The protocol/service path does not attribute changes to a token; the REST
-    // layer passes the authenticating token through on the context.
-    actorTokenId: ctx.actorTokenId ?? null,
-    source: ctx.source
-  });
-}
-var init_change_feed = __esm({
-  "../packages/core/service/change-feed.ts"() {
-    "use strict";
-    init_util3();
-  }
-});
-
 // ../packages/core/service/context.ts
 function resolveOrigin(ctx) {
   if (ctx.origin) {
@@ -70203,6 +70104,105 @@ var init_context = __esm({
     "use strict";
     init_dist2();
     init_errors4();
+  }
+});
+
+// ../packages/core/service/util.ts
+function nowIso() {
+  return (/* @__PURE__ */ new Date()).toISOString();
+}
+function newId() {
+  return (0, import_node_crypto6.randomUUID)();
+}
+function slugify3(input) {
+  const base = input.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48);
+  return base.length > 0 ? base : "project";
+}
+function initialTitleFromInstruction(instruction) {
+  const firstLine = instruction.split("\n")[0]?.trim() ?? instruction.trim();
+  if (firstLine.length <= 80) return firstLine;
+  return `${firstLine.slice(0, 77)}...`;
+}
+function generateSessionKey() {
+  const rawKey = SESSION_KEY_PREFIX + (0, import_node_crypto6.randomBytes)(24).toString("base64url");
+  const prefix = rawKey.slice(0, SESSION_KEY_PREFIX.length + 8);
+  const hash2 = (0, import_node_crypto6.createHash)("sha256").update(rawKey).digest("hex");
+  return { rawKey, prefix, hash: hash2 };
+}
+function hashSessionKey(rawKey) {
+  return (0, import_node_crypto6.createHash)("sha256").update(rawKey).digest("hex");
+}
+var import_node_crypto6, SESSION_KEY_PREFIX;
+var init_util3 = __esm({
+  "../packages/core/service/util.ts"() {
+    "use strict";
+    import_node_crypto6 = require("node:crypto");
+    SESSION_KEY_PREFIX = "sess_";
+  }
+});
+
+// ../packages/core/service/change-feed.ts
+async function insertEntityChange(client, fields) {
+  await client.run(
+    `INSERT INTO entity_changes (
+         id, workspace_id, project_id, mission_id, objective_id,
+         entity_type, entity_id, operation, entity_revision,
+         changed_fields_json, actor_workspace_user_id, actor_token_id, source, occurred_at
+       ) VALUES (
+         ?, ?, ?, ?, ?,
+         ?, ?, ?, ?,
+         ?, ?, ?, ?, ?
+       )`,
+    [
+      newId(),
+      fields.workspaceId,
+      fields.projectId ?? null,
+      fields.missionId ?? null,
+      fields.objectiveId ?? null,
+      fields.entityType,
+      fields.entityId,
+      fields.operation,
+      fields.entityRevision ?? null,
+      JSON.stringify(fields.changedFields ?? []),
+      fields.actorWorkspaceUserId,
+      fields.actorTokenId ?? null,
+      fields.source,
+      nowIso()
+    ]
+  );
+}
+async function recordChange({
+  ctx,
+  entityType,
+  entityId,
+  operation: operation2,
+  entityRevision,
+  projectId,
+  missionId,
+  objectiveId,
+  changedFields
+}) {
+  await insertEntityChange(ctx.db, {
+    workspaceId: ctx.workspace.id,
+    projectId,
+    missionId,
+    objectiveId,
+    entityType,
+    entityId,
+    operation: operation2,
+    entityRevision,
+    changedFields,
+    actorWorkspaceUserId: ctx.actorWorkspaceUserId,
+    // The protocol/service path does not attribute changes to a token; the REST
+    // layer passes the authenticating token through on the context.
+    actorTokenId: ctx.actorTokenId ?? null,
+    source: ctx.source
+  });
+}
+var init_change_feed = __esm({
+  "../packages/core/service/change-feed.ts"() {
+    "use strict";
+    init_util3();
   }
 });
 
@@ -133952,6 +133952,7 @@ init_dist();
 
 // protocol.ts
 init_dist();
+init_context();
 init_errors4();
 
 // ../packages/core/service/missions.ts
@@ -155676,6 +155677,18 @@ function objectiveRefFlag(body) {
   const value = strFlag(body, "--objective-id");
   return value !== void 0 && value.trim() !== "" ? value.trim() : null;
 }
+async function validateObjectiveAddressing({
+  ctx,
+  body,
+  subcommand
+}) {
+  if (subcommand === "update-objective") return;
+  const objectiveRef = objectiveRefFlag(body);
+  if (!objectiveRef) return;
+  const missionRef = strFlag(body, "--mission-id") ?? missionDisplayIdFromObjectiveRef(objectiveRef);
+  if (!missionRef) return;
+  await resolveObjectiveRef({ ctx, ref: objectiveRef, missionId: missionRef });
+}
 function parseJsonInput(body, jsonFlag, fileFlag) {
   const raw = resolveInput(body, jsonFlag, fileFlag);
   if (raw === void 0 || raw.trim() === "") return void 0;
@@ -156261,7 +156274,9 @@ async function runProtocolSubcommand(subcommand, body) {
     );
   }
   const requiredPermission = SUBCOMMAND_PERMISSIONS[subcommand] ?? null;
-  return handler(await buildProtocolContext(body, requiredPermission), body);
+  const ctx = await buildProtocolContext(body, requiredPermission);
+  await validateObjectiveAddressing({ ctx, body, subcommand });
+  return handler(ctx, body);
 }
 
 // ../mcp/tool-catalog.ts
@@ -156873,9 +156888,7 @@ var toolHandlers = {
     }
     return runProtocolSubcommand("add-objectives", {
       flags: {
-        // add-objectives appends to the mission, so an objectiveId here only
-        // names which mission — it is deliberately not forwarded as a pin.
-        "--mission-id": missionScopeFlags(args)["--mission-id"],
+        ...missionScopeFlags(args),
         "--objectives-file": true
       },
       fileInputs: { "--objectives-file": JSON.stringify(args.objectives) }
@@ -156974,9 +156987,7 @@ var toolHandlers = {
     }
     return runProtocolSubcommand("update-artifact", {
       flags: {
-        // The artifact is addressed by its own id; objectiveId only supplies
-        // the mission scope, so it is not forwarded to the update.
-        "--mission-id": missionScopeFlags(args)["--mission-id"],
+        ...missionScopeFlags(args),
         "--artifact-id": requiredString(args, "artifactId"),
         "--expected-revision": String(Math.trunc(args.expectedRevision)),
         ...hasLabel ? { "--label": args.label } : {},
@@ -159651,6 +159662,7 @@ async function listActivityFeed() {
 }
 
 // agent-session-routes.ts
+init_dist();
 var import_express3 = __toESM(require_express2(), 1);
 
 // ../packages/core/service/agent-session/events.ts
@@ -159826,14 +159838,21 @@ async function getInput({
 async function listSessionInputs({
   ctx,
   missionId,
+  objectiveId = null,
   limit = 50
 }) {
   const rows = await ctx.db.all(
     `SELECT ${INPUT_COLUMNS} FROM agent_session_inputs
        WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL
+         ${objectiveId ? "AND objective_id = ?" : ""}
        ORDER BY created_at DESC
        LIMIT ?`,
-    [missionId, ctx.workspace.id, Math.min(200, Math.max(1, limit))]
+    [
+      missionId,
+      ctx.workspace.id,
+      ...objectiveId ? [objectiveId] : [],
+      Math.min(200, Math.max(1, limit))
+    ]
   );
   return rows.map((row) => ({
     ...row,
@@ -160155,6 +160174,7 @@ async function recordRequestApplication({
 }
 
 // agent-session-routes.ts
+init_context();
 init_errors4();
 init_db();
 var MAX_ADAPTER_BODY_BYTES = 64 * 1024;
@@ -160546,7 +160566,7 @@ function requestDto(request) {
     createdAt: request.created_at
   };
 }
-async function missionScopedRequests(client, missionRef) {
+async function missionScopedRequests(client, missionRef, objectiveRef = null) {
   const memberships = await callerWorkspaceMemberships(client);
   if (memberships.length === 0)
     throw new ServiceError("Mission not found", "mission_not_found", 404);
@@ -160558,18 +160578,25 @@ async function missionScopedRequests(client, missionRef) {
     [missionRef, missionRef, ...memberships.map((entry) => entry.workspaceId)]
   );
   if (!mission) throw new ServiceError("Mission not found", "mission_not_found", 404);
-  await requireWorkspacePermission({
+  const workspaceUserId = await requireWorkspacePermission({
     workspaceId: mission.workspace_id,
     permission: PERMISSIONS.SESSION_READ,
     db: client,
     notFoundMessage: "Mission not found"
   });
+  const ctx = await buildWebappServiceContextForWorkspace(
+    mission.workspace_id,
+    client,
+    workspaceUserId
+  );
+  const objective = objectiveRef ? await resolveObjectiveRef({ ctx, ref: objectiveRef, missionId: mission.id }) : null;
   const rows = await client.all(
     `SELECT ${REQUEST_COLUMNS_FOR_ROUTE} FROM agent_requests
       WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL
+        ${objective ? "AND objective_id = ?" : ""}
         AND status <> 'open'
       ORDER BY created_at DESC LIMIT 200`,
-    [mission.id, mission.workspace_id]
+    [mission.id, mission.workspace_id, ...objective ? [objective.id] : []]
   );
   return rows.map(requestDto);
 }
@@ -160580,9 +160607,17 @@ function createAgentRequestHumanRouter() {
     "/",
     handle2(async (req) => {
       const client = requireDatabaseClient();
-      const missionRef = typeof req.query.missionId === "string" ? req.query.missionId : null;
+      const objectiveRef = typeof req.query.objectiveId === "string" ? req.query.objectiveId : null;
+      const missionRef = (typeof req.query.missionId === "string" ? req.query.missionId : null) ?? missionDisplayIdFromObjectiveRef(objectiveRef);
       if (missionRef) {
-        return { requests: await missionScopedRequests(client, missionRef) };
+        return { requests: await missionScopedRequests(client, missionRef, objectiveRef) };
+      }
+      if (objectiveRef) {
+        throw new ServiceError(
+          "missionId is required when objectiveId is an objective UUID",
+          "invalid_input",
+          400
+        );
       }
       const memberships = await callerWorkspaceMemberships(client);
       const authorized = [];
@@ -160650,8 +160685,15 @@ function createAgentSessionInputHumanRouter() {
   router2.get(
     "/",
     handle2(async (req) => {
-      const missionId = typeof req.query.missionId === "string" ? req.query.missionId : null;
-      if (!missionId) throw new ServiceError("missionId is required", "invalid_input", 400);
+      const objectiveRef = typeof req.query.objectiveId === "string" ? req.query.objectiveId : null;
+      const missionId = (typeof req.query.missionId === "string" ? req.query.missionId : null) ?? missionDisplayIdFromObjectiveRef(objectiveRef);
+      if (!missionId) {
+        throw new ServiceError(
+          objectiveRef ? "missionId is required when objectiveId is an objective UUID" : "missionId or an objective display id is required",
+          "invalid_input",
+          400
+        );
+      }
       const client = requireDatabaseClient();
       const memberships = await callerWorkspaceMemberships(client);
       if (memberships.length === 0) return { inputs: [] };
@@ -160674,16 +160716,20 @@ function createAgentSessionInputHumanRouter() {
         client,
         workspaceUserId
       );
-      const inputs = (await listSessionInputs({ ctx, missionId: mission.id })).filter(
-        (input) => input.status !== "queued" && input.status !== "leased"
-      );
+      const objective = objectiveRef ? await resolveObjectiveRef({ ctx, ref: objectiveRef, missionId: mission.id }) : null;
+      const inputs = (await listSessionInputs({
+        ctx,
+        missionId: mission.id,
+        objectiveId: objective?.id ?? null
+      })).filter((input) => input.status !== "queued" && input.status !== "leased");
       const channel = await client.get(
         `SELECT id, state, agent_identifier, adapter_key, capabilities_json,
                 last_heartbeat_at, ended_at, end_reason
            FROM agent_session_channels
            WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL
+             ${objective ? "AND objective_id = ?" : ""}
            ORDER BY created_at DESC LIMIT 1`,
-        [mission.id, mission.workspace_id]
+        [mission.id, mission.workspace_id, ...objective ? [objective.id] : []]
       );
       const isLive = channel !== void 0 && channel !== null && ["preparing", "online", "degraded"].includes(channel.state);
       return {

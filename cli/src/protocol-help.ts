@@ -39,7 +39,8 @@ export function printProtocolHelp({ primaryCommand }: { primaryCommand: string }
 Use this for mission lifecycle work from an agent runtime: create a standalone
 draft with \`${primaryCommand} protocol create\`, create-and-attach with
 \`${primaryCommand} protocol prompt\`, or attach to an existing mission with
-\`${primaryCommand} protocol attach --mission-id <mission_id>\`.
+\`${primaryCommand} protocol attach --mission-id <mission_id>\` or
+\`${primaryCommand} protocol attach --objective-id <mission_id.objective_key>\`.
 
 Backend and auth:
   Configure the REST backend before protocol calls:
@@ -64,7 +65,8 @@ Project discovery:
   projects with \`${primaryCommand} create-project --name "<name>"\`.
 
 Agent workflow (required):
-  1. Attach first with \`${primaryCommand} protocol attach --mission-id <id> [--objective-id <id>]\`.
+  1. Attach first with \`${primaryCommand} protocol attach --mission-id <id>\` or a full
+     objective display id via \`--objective-id <id>\`.
   2. Post progress with \`${primaryCommand} protocol update\` or liveness with
      \`${primaryCommand} protocol heartbeat\`.
   3. Ask blocking questions with \`${primaryCommand} protocol ask\` and stop work.

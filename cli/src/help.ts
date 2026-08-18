@@ -64,8 +64,11 @@ Missions:
   ${primaryCommand} attach <missionId> [agent] [--json]
   ${primaryCommand} missions list [--status <csv>] [--project-id <id>] [--json]
   ${primaryCommand} mission context|events|deliveries|artifacts|rationales <missionId> [--json]
-  ${primaryCommand} requests [--json]             List open and recent agent decisions
+  ${primaryCommand} requests [--mission-id <id>] [--objective-id <id>] [--json]
+                                               List open and recent agent decisions
   ${primaryCommand} requests resolve <id> --revision <n> --decision allow|deny|ask [--text <text>]
+  ${primaryCommand} inputs list [--mission-id <id>] [--objective-id <id>] [--json]
+                                               List instructions for one mission or objective
 
 Launch and runner:
   ${primaryCommand} launch <agent> --mission-id <missionId> [--branch <name>] [--no-worktree] [--dry-run] [--json]
@@ -84,8 +87,8 @@ Agents:
   connect, load-context, update, heartbeat, ask, deliver.
 
 Protocol (JSON output by default):
-  ${primaryCommand} protocol attach --mission-id <id> [--objective-id <id>]
-  ${primaryCommand} protocol update --mission-id <id> --session-key <key> --summary "..."
+  ${primaryCommand} protocol attach --mission-id <id> | --objective-id <display-id>
+  ${primaryCommand} protocol update --objective-id <display-id> --session-key <key> --summary "..."
   ${primaryCommand} protocol heartbeat --mission-id <id> --session-key <key>
   ${primaryCommand} protocol ask --mission-id <id> --session-key <key> --question "..."
   ${primaryCommand} protocol deliver --mission-id <id> --session-key <key> --summary "..."

@@ -13,8 +13,12 @@ process.env.BETTER_AUTH_URL = 'http://127.0.0.1:4319';
 const dbModule = await import('./db.ts');
 const client = await dbModule.initDatabase();
 
-const { createAgentSessionChannelRouter, AGENT_SESSION_CHANNEL_ROUTE_PREFIX } =
-  await import('./agent-session-routes.ts');
+const {
+  createAgentRequestHumanRouter,
+  createAgentSessionChannelRouter,
+  createAgentSessionInputHumanRouter,
+  AGENT_SESSION_CHANNEL_ROUTE_PREFIX
+} = await import('./agent-session-routes.ts');
 const { createSessionChannel } = await import('../packages/core/service/agent-session/channels.ts');
 const { createProject } = await import('../packages/core/service/projects.ts');
 const { protocolCreate } = await import('../packages/core/service/protocol.ts');
@@ -36,10 +40,16 @@ let server: ReturnType<express.Express['listen']>;
 let channelToken = '';
 let channelId = '';
 let otherToken = '';
+let fixtureMissionId = '';
+let fixtureObjectiveId = '';
+let fixtureObjectiveDisplayId = '';
+let fixtureProjectId = '';
 
 before(async () => {
   const app = express();
   app.use(AGENT_SESSION_CHANNEL_ROUTE_PREFIX, createAgentSessionChannelRouter());
+  app.use('/api/agent-requests', createAgentRequestHumanRouter());
+  app.use('/api/agent-session-inputs', createAgentSessionInputHumanRouter());
   // Everything else demands a human. A channel credential must never reach it.
   app.use('/api', (_req, res) => res.status(401).json({ error: 'Authentication required' }));
 
@@ -51,6 +61,7 @@ before(async () => {
   baseUrl = `http://127.0.0.1:${port}`;
 
   await seedServiceOperator({ db: client });
+  await dbModule.setActiveWorkspace('local-workspace');
   const ctx = await createServiceContext({ db: client, source: 'protocol' });
   const project = await createProject({ ctx, name: 'Routes', slug: 'routes' });
   const mission = await protocolCreate({
@@ -58,6 +69,10 @@ before(async () => {
     projectId: project.id,
     objectives: [{ objective: 'Route test' }]
   });
+  fixtureMissionId = mission.mission.id;
+  fixtureObjectiveId = mission.objectives[0]!.id;
+  fixtureObjectiveDisplayId = mission.objectives[0]!.displayId;
+  fixtureProjectId = project.id;
 
   const prepared = await createSessionChannel({
     ctx,
@@ -75,6 +90,134 @@ before(async () => {
     adapterKey: 'claude'
   });
   otherToken = second.bootstrap.token;
+});
+
+describe('human objective scoping', () => {
+  it('returns request rows only for the addressed objective', async () => {
+    const { insertObjective } = await import('../packages/core/service/missions.ts');
+    const { createRequest, releaseRequestToTerminal } =
+      await import('../packages/core/service/agent-session/requests.ts');
+    const ctx = await createServiceContext({ db: client, source: 'protocol' });
+    const sibling = await insertObjective({
+      ctx,
+      missionId: fixtureMissionId,
+      instructionText: 'Sibling route scope',
+      state: 'future'
+    });
+    const firstChannel = await createSessionChannel({
+      ctx,
+      missionId: fixtureMissionId,
+      objectiveId: fixtureObjectiveId,
+      projectId: fixtureProjectId
+    });
+    const siblingChannel = await createSessionChannel({
+      ctx,
+      missionId: fixtureMissionId,
+      objectiveId: sibling.id,
+      projectId: fixtureProjectId
+    });
+    const first = await createRequest({
+      ctx,
+      channel: firstChannel.channel,
+      kind: 'permission',
+      summary: 'First objective request'
+    });
+    const other = await createRequest({
+      ctx,
+      channel: siblingChannel.channel,
+      kind: 'permission',
+      summary: 'Sibling objective request'
+    });
+    await releaseRequestToTerminal({ ctx, requestId: first.id, reason: 'local_activity' });
+    await releaseRequestToTerminal({ ctx, requestId: other.id, reason: 'local_activity' });
+
+    const response = await fetch(
+      `${baseUrl}/api/agent-requests?objectiveId=${encodeURIComponent(fixtureObjectiveDisplayId)}`
+    );
+    const responseText = await response.text();
+    assert.equal(response.status, 200, responseText);
+    const body = JSON.parse(responseText) as { requests: Array<{ id: string }> };
+    assert.deepEqual(
+      body.requests.map(request => request.id),
+      [first.id]
+    );
+  });
+
+  it('returns input rows and the channel only for the addressed objective', async () => {
+    const { listObjectives } = await import('../packages/core/service/missions.ts');
+    const { enqueueSessionInput } =
+      await import('../packages/core/service/agent-session/inputs.ts');
+    const { attachSession } = await import('../packages/core/service/protocol.ts');
+    const ctx = await createServiceContext({ db: client, source: 'protocol' });
+    const objectives = await listObjectives({ ctx, missionId: fixtureMissionId });
+    const sibling = objectives.find(objective => objective.id !== fixtureObjectiveId);
+    assert.ok(sibling);
+    const firstChannel = await createSessionChannel({
+      ctx,
+      missionId: fixtureMissionId,
+      objectiveId: fixtureObjectiveId,
+      projectId: fixtureProjectId
+    });
+    const siblingChannel = await createSessionChannel({
+      ctx,
+      missionId: fixtureMissionId,
+      objectiveId: sibling.id,
+      projectId: fixtureProjectId
+    });
+    const attached = await attachSession({
+      ctx,
+      missionId: fixtureMissionId,
+      objectiveId: fixtureObjectiveId,
+      sessionChannelId: firstChannel.channel.id
+    });
+    const firstInput = await enqueueSessionInput({
+      ctx,
+      channel: {
+        ...firstChannel.channel,
+        session_id: attached.session.id,
+        state: 'online'
+      },
+      kind: 'instruction',
+      body: 'First objective input'
+    });
+    await client.run(`UPDATE agent_session_inputs SET status = 'emitted' WHERE id = ?`, [
+      firstInput.id
+    ]);
+    await client.run(
+      `INSERT INTO agent_session_inputs (
+         id, workspace_id, project_id, mission_id, objective_id, channel_id, session_id,
+         kind, body, idempotency_key, created_by_workspace_user_id, status,
+         attempt_count, created_at, updated_at, revision
+       ) SELECT ?, workspace_id, project_id, mission_id, ?, ?, session_id,
+                kind, ?, NULL, created_by_workspace_user_id, 'emitted',
+                0, created_at, updated_at, 1
+           FROM agent_session_inputs WHERE id = ?`,
+      [
+        'sibling-input',
+        sibling.id,
+        siblingChannel.channel.id,
+        'Sibling objective input',
+        firstInput.id
+      ]
+    );
+
+    const response = await fetch(
+      `${baseUrl}/api/agent-session-inputs?objectiveId=${encodeURIComponent(
+        fixtureObjectiveDisplayId
+      )}`
+    );
+    const responseText = await response.text();
+    assert.equal(response.status, 200, responseText);
+    const body = JSON.parse(responseText) as {
+      inputs: Array<{ id: string }>;
+      liveChannel: { id: string } | null;
+    };
+    assert.deepEqual(
+      body.inputs.map(input => input.id),
+      [firstInput.id]
+    );
+    assert.equal(body.liveChannel?.id, firstChannel.channel.id);
+  });
 });
 
 after(async () => {

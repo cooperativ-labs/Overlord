@@ -199,9 +199,7 @@ const toolHandlers: Record<string, ToolHandler> = {
     }
     return runProtocolSubcommand('add-objectives', {
       flags: {
-        // add-objectives appends to the mission, so an objectiveId here only
-        // names which mission — it is deliberately not forwarded as a pin.
-        '--mission-id': missionScopeFlags(args)['--mission-id']!,
+        ...missionScopeFlags(args),
         '--objectives-file': true
       },
       fileInputs: { '--objectives-file': JSON.stringify(args.objectives) }
@@ -328,9 +326,7 @@ const toolHandlers: Record<string, ToolHandler> = {
     }
     return runProtocolSubcommand('update-artifact', {
       flags: {
-        // The artifact is addressed by its own id; objectiveId only supplies
-        // the mission scope, so it is not forwarded to the update.
-        '--mission-id': missionScopeFlags(args)['--mission-id']!,
+        ...missionScopeFlags(args),
         '--artifact-id': requiredString(args, 'artifactId'),
         '--expected-revision': String(Math.trunc(args.expectedRevision)),
         ...(hasLabel ? { '--label': args.label as string } : {}),

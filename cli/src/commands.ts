@@ -1136,12 +1136,32 @@ export async function runProtocolCommand({
         (typeof resultRecord.objectiveId === 'string' && resultRecord.objectiveId.trim()) ||
         objectiveRef ||
         null;
-      writeCachedSessionKey({
-        missionId,
-        workingDirectory,
-        sessionKey: resultRecord.sessionKey,
-        objectiveId: attachedObjectiveId
-      });
+      const objectiveAliases = new Set(
+        [
+          attachedObjectiveId,
+          typeof attachedObjective.id === 'string' ? attachedObjective.id.trim() : null,
+          typeof attachedObjective.displayId === 'string'
+            ? attachedObjective.displayId.trim()
+            : null,
+          objectiveRef ?? null
+        ].filter((value): value is string => Boolean(value))
+      );
+      if (objectiveAliases.size === 0) {
+        writeCachedSessionKey({
+          missionId,
+          workingDirectory,
+          sessionKey: resultRecord.sessionKey
+        });
+      } else {
+        for (const objectiveAlias of objectiveAliases) {
+          writeCachedSessionKey({
+            missionId,
+            workingDirectory,
+            sessionKey: resultRecord.sessionKey,
+            objectiveId: objectiveAlias
+          });
+        }
+      }
       // Also record this mission as "active in this cwd" so an edit hook that
       // never sees MISSION_ID in its own environment (e.g. agent-pod sessions)
       // can still resolve which mission's touched log to append to.
@@ -1184,7 +1204,12 @@ export async function runProtocolCommand({
   // The session ends at deliver: drop the cached key so it can't bind to a later
   // session for the same working dir + mission.
   if (subcommand === 'deliver' && missionId) {
-    clearCachedSessionKey({ missionId, workingDirectory });
+    clearCachedSessionKey({
+      missionId,
+      workingDirectory,
+      objectiveId: objectiveRef,
+      sessionKey: typeof flags['--session-key'] === 'string' ? flags['--session-key'] : null
+    });
     removeActiveSession({ workingDirectory, missionId });
     clearActiveMissionPointer(workingDirectory);
 
@@ -1692,7 +1717,16 @@ export async function runManagementCommand({
     case 'requests': {
       const sub = parsed.positional[0];
       if (!sub) {
-        const result = await runtime.backend.get<{ requests: unknown[] }>('/api/agent-requests');
+        const objectiveRef = flagValue(parsed.flags, '--objective-id');
+        const missionId =
+          flagValue(parsed.flags, '--mission-id') ?? missionDisplayIdFromObjectiveRef(objectiveRef);
+        const params = new URLSearchParams();
+        if (missionId) params.set('missionId', missionId);
+        if (objectiveRef) params.set('objectiveId', objectiveRef);
+        const query = params.size > 0 ? `?${params.toString()}` : '';
+        const result = await runtime.backend.get<{ requests: unknown[] }>(
+          `/api/agent-requests${query}`
+        );
         if (json) printJson(result);
         else {
           for (const item of result.requests) {
@@ -1756,8 +1790,11 @@ export async function runManagementCommand({
               'Usage: ovld inputs list --mission-id <id> [--json] | ovld inputs send --channel-id <id> --body <text> [--json]'
           });
         }
+        const objectiveRef = flagValue(parsed.flags, '--objective-id');
+        const params = new URLSearchParams({ missionId });
+        if (objectiveRef) params.set('objectiveId', objectiveRef);
         const result = await runtime.backend.get<{ inputs: unknown[] }>(
-          `/api/agent-session-inputs?missionId=${encodeURIComponent(missionId)}`
+          `/api/agent-session-inputs?${params.toString()}`
         );
         if (json) printJson(result);
         else {
