@@ -439,7 +439,7 @@ test('marking launched tolerates a request expired underneath a very slow launch
   ]);
   await assert.rejects(
     () => markExecutionLaunched({ ctx, requestId: request.id }),
-    /Illegal execution request transition/
+    /Cannot transition execution request .+ from expired to launched/
   );
 
   await db.close();
