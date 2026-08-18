@@ -196,3 +196,182 @@ describe('adapter route operations', () => {
     assert.equal(stolen.status, 404);
   });
 });
+
+describe('adapter closed-vocabulary boundaries', () => {
+  async function postAdapter({
+    pathname,
+    body,
+    token = channelToken
+  }: {
+    pathname: string;
+    body: unknown;
+    token?: string;
+  }): Promise<Response> {
+    return fetch(adapterUrl(pathname), {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${token}`,
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    });
+  }
+
+  async function createOpenRequest(kind: string): Promise<string> {
+    const created = await postAdapter({
+      pathname: '/requests',
+      body: { kind, summary: 'Vocabulary check' }
+    });
+    assert.equal(created.status, 200);
+    const body = (await created.json()) as { requestId: string };
+    return body.requestId;
+  }
+
+  it('accepts the last AgentRequestKind and rejects the first invalid kind', async () => {
+    const { AGENT_REQUEST_KINDS } = await import('../packages/core/service/agent-session/index.ts');
+    const lastValid = AGENT_REQUEST_KINDS[AGENT_REQUEST_KINDS.length - 1];
+    const valid = await postAdapter({
+      pathname: '/requests',
+      body: { kind: lastValid, summary: 'Last kind' }
+    });
+    assert.equal(valid.status, 200);
+
+    const invalid = await postAdapter({
+      pathname: '/requests',
+      body: { kind: 'comment', summary: 'Not a kind' }
+    });
+    assert.equal(invalid.status, 400);
+    assert.deepEqual(await invalid.json(), {
+      error: 'Unknown request kind',
+      code: 'invalid_request'
+    });
+  });
+
+  it('accepts the last adapter release reason and falls back when channel_ended is sent', async () => {
+    const { RELEASE_REASONS } = await import('../packages/core/service/agent-session/index.ts');
+    const adapterReasons = RELEASE_REASONS.filter(reason => reason !== 'channel_ended');
+    const lastValid = adapterReasons[adapterReasons.length - 1];
+
+    const validId = await createOpenRequest('permission');
+    const valid = await postAdapter({
+      pathname: `/requests/${validId}/release`,
+      body: { reason: lastValid }
+    });
+    assert.equal(valid.status, 200);
+    const validRow = await client.get<{ released_reason: string | null }>(
+      `SELECT released_reason FROM agent_requests WHERE id = ?`,
+      [validId]
+    );
+    assert.equal(validRow?.released_reason, lastValid);
+
+    const invalidId = await createOpenRequest('permission');
+    const invalid = await postAdapter({
+      pathname: `/requests/${invalidId}/release`,
+      body: { reason: 'channel_ended' }
+    });
+    assert.equal(invalid.status, 200);
+    const invalidRow = await client.get<{ released_reason: string | null }>(
+      `SELECT released_reason FROM agent_requests WHERE id = ?`,
+      [invalidId]
+    );
+    assert.equal(invalidRow?.released_reason, 'timeout');
+  });
+
+  it('accepts the last application state and falls back on the first invalid value', async () => {
+    const { APPLICATION_STATES } = await import('../packages/core/service/agent-session/index.ts');
+    const lastValid = APPLICATION_STATES[APPLICATION_STATES.length - 1];
+
+    const validId = await createOpenRequest('choice');
+    const valid = await postAdapter({
+      pathname: `/requests/${validId}/application`,
+      body: { applicationState: lastValid }
+    });
+    assert.equal(valid.status, 200);
+    const validRow = await client.get<{ application_state: string }>(
+      `SELECT application_state FROM agent_requests WHERE id = ?`,
+      [validId]
+    );
+    assert.equal(validRow?.application_state, lastValid);
+
+    const invalidId = await createOpenRequest('choice');
+    const invalid = await postAdapter({
+      pathname: `/requests/${invalidId}/application`,
+      body: { applicationState: 'pending' }
+    });
+    assert.equal(invalid.status, 200);
+    const invalidRow = await client.get<{ application_state: string }>(
+      `SELECT application_state FROM agent_requests WHERE id = ?`,
+      [invalidId]
+    );
+    assert.equal(invalidRow?.application_state, 'unknown');
+  });
+
+  it('accepts the last delivery outcome and stores null for the first invalid value', async () => {
+    const { createServiceContext } = await import('../packages/core/service/context.ts');
+    const { createSessionChannel } =
+      await import('../packages/core/service/agent-session/channels.ts');
+    const { enqueueSessionInput } =
+      await import('../packages/core/service/agent-session/inputs.ts');
+    const { DELIVERY_OUTCOMES } = await import('../packages/core/service/agent-session/index.ts');
+    const { attachSession } = await import('../packages/core/service/protocol.ts');
+
+    const ctx = await createServiceContext({ db: client, source: 'protocol' });
+    const existing = await client.get<{ mission_id: string; project_id: string }>(
+      `SELECT mission_id, project_id FROM agent_session_channels WHERE id = ?`,
+      [channelId]
+    );
+    assert.ok(existing);
+
+    const lastValid = DELIVERY_OUTCOMES[DELIVERY_OUTCOMES.length - 1];
+    const cases = [
+      { outcome: lastValid, expected: lastValid },
+      { outcome: 'queued', expected: null }
+    ];
+
+    for (const testCase of cases) {
+      const prepared = await createSessionChannel({
+        ctx,
+        missionId: existing.mission_id,
+        projectId: existing.project_id,
+        adapterKey: 'claude'
+      });
+      const attached = await attachSession({
+        ctx,
+        missionId: existing.mission_id,
+        agentIdentifier: 'claude-code',
+        sessionChannelId: prepared.channel.id
+      });
+      await enqueueSessionInput({
+        ctx,
+        channel: { ...prepared.channel, session_id: attached.session.id, state: 'online' },
+        kind: 'instruction',
+        body: `Delivery ${testCase.outcome}`
+      });
+      const claimed = await postAdapter({
+        pathname: '/inputs/claim',
+        body: {},
+        token: prepared.bootstrap.token
+      });
+      assert.equal(claimed.status, 200);
+      const claimedBody = (await claimed.json()) as {
+        input: { id: string; leaseId: string } | null;
+      };
+      assert.ok(claimedBody.input);
+
+      const emitted = await postAdapter({
+        pathname: `/inputs/${claimedBody.input.id}/emitted`,
+        body: {
+          leaseId: claimedBody.input.leaseId,
+          deliveryOutcome: testCase.outcome
+        },
+        token: prepared.bootstrap.token
+      });
+      assert.equal(emitted.status, 200);
+      const row = await client.get<{ delivery_outcome: string | null }>(
+        `SELECT delivery_outcome FROM agent_session_inputs WHERE id = ?`,
+        [claimedBody.input.id]
+      );
+      assert.equal(row?.delivery_outcome, testCase.expected);
+    }
+  });
+});

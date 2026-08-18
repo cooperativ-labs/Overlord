@@ -7,7 +7,7 @@ import { DELIVERY_OUTCOMES, type DeliveryOutcome, describeDeliveryOutcome } from
 import type { AgentSessionChannelRow } from './channels.js';
 import { addSeconds } from './credential.js';
 
-export { type DeliveryOutcome, describeDeliveryOutcome };
+export { DELIVERY_OUTCOMES, type DeliveryOutcome, describeDeliveryOutcome };
 
 /**
  * Inbound session instructions — a durable queue from Overlord to one live session.

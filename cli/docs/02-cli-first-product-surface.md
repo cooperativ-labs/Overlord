@@ -50,6 +50,7 @@ Requirements:
 - `ovld protocol search-missions --query "<text>" --status next-up,execute`: search missions.
 - `ovld protocol add-objectives --mission-id <id> --objectives-json '[...]'`: append objectives to an existing mission. Each item may set `autoAdvance`.
 - `ovld protocol update-objective --objective-id <id> --auto-advance|--no-auto-advance`: turn auto-advance on or off for an existing objective.
+- `ovld protocol update-objective --objective-id <id> --instruction-text <text>|--instruction-text-file <path|->`: edit instruction text on a draft or future objective.
 - `ovld protocol discuss-objective --mission-id <id>`: mark a draft objective submitted without attaching.
 - `ovld protocol record-work`: record work already completed in chat as a review mission without an active session.
 

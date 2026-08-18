@@ -9,7 +9,8 @@ await bootstrapIntegrationTestDb({
   sqlitePath: path.join(tempDir, 'webapp.sqlite')
 });
 
-const { createProject } = await import('./repository.ts');
+const { createProject, updateObjective } = await import('./repository.ts');
+const { ApiError } = await import('./errors.ts');
 const { runProtocolSubcommand } = await import('./protocol.ts');
 
 type CreatedMission = {
@@ -81,4 +82,50 @@ test('protocol update-objective toggles auto-advance', async () => {
     }
   })) as { id: string; autoAdvance: boolean };
   assert.equal(disabled.autoAdvance, false);
+});
+
+test('protocol update-objective edits instruction text on draft and future objectives', async () => {
+  const project = await createProject({ name: `Instruction update ${Date.now()}` });
+  const created = (await runProtocolSubcommand('create', {
+    flags: {
+      '--project-id': project.id,
+      '--objectives-json': JSON.stringify([
+        { objective: 'Draft slot' },
+        { objective: 'Future slot' }
+      ])
+    }
+  })) as CreatedMission;
+
+  const draftId = created.objectives[0]?.id;
+  const futureId = created.objectives[1]?.id;
+  assert.ok(draftId);
+  assert.ok(futureId);
+
+  const draftUpdated = (await runProtocolSubcommand('update-objective', {
+    flags: {
+      '--objective-id': draftId,
+      '--instruction-text': 'Revised draft instructions'
+    }
+  })) as { instructionText: string };
+  assert.equal(draftUpdated.instructionText, 'Revised draft instructions');
+
+  const futureUpdated = (await runProtocolSubcommand('update-objective', {
+    flags: {
+      '--objective-id': futureId,
+      '--instruction-text': 'Revised future instructions'
+    }
+  })) as { instructionText: string };
+  assert.equal(futureUpdated.instructionText, 'Revised future instructions');
+
+  await updateObjective(draftId, { state: 'submitted' });
+  await assert.rejects(
+    () =>
+      runProtocolSubcommand('update-objective', {
+        flags: {
+          '--objective-id': draftId,
+          '--instruction-text': 'Too late'
+        }
+      }),
+    (error: unknown) => error instanceof ApiError && error.status === 400
+  );
 });

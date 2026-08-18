@@ -129,8 +129,9 @@ function MissionPanelHeaderBar({ mission, projectId, onClose }: MissionPanelHead
               Allow parallel objectives
             </DropdownMenuCheckboxItem>
             <p className="px-2 pb-1.5 text-[11px] leading-snug text-muted-foreground">
-              Off by default. When on, Run can start a second objective that uses a different
-              project resource. Same-resource pairs stay serial.
+              Off by default. When on, Run can start a second objective while another is still
+              running. Two objectives on the same repository each get their own branch and worktree;
+              without worktrees they share the mission's checkout.
             </p>
             <div className="flex items-center justify-between gap-2 px-2 py-1.5 text-sm">
               <span>Delete mission</span>

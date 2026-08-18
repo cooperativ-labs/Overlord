@@ -131,9 +131,12 @@ enforce them and the adapter conformance suite must test that enforcement.
 2. **At most one `executing` _or_ `pending_delivery` objective per mission, unless
    `missions.allow_parallel_objectives` is true.** The default remains serial so
    auto-advance races cannot leave two objectives active on the same checkout.
-   When the flag is on, two active objectives are allowed only if their effective
-   `resource_key`s differ (null inherits the project's primary resource). Same-resource
-   pairs stay serial until per-objective worktrees exist (Phase E).
+   When the flag is on, several active objectives are allowed on any resource,
+   including the same one. Checkout safety moves to the Runner Layer: a mission that
+   uses worktrees puts a concurrently launched same-resource objective on its own
+   branch (`<mission branch>-<objectives.display_key>`) in its own worktree, and a
+   mission that runs without worktrees has one checkout that both objectives share
+   deliberately — file attribution then comes from each session's touched-file log.
 3. **Unique per-mission positions.** `position` is an integer, unique per mission,
    0-based.
 4. **Auto-assigned position on insert.** When a caller omits `position`, the system

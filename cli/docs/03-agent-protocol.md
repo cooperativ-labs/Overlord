@@ -45,7 +45,7 @@ Requirements:
 - `discuss-objective`: mark a draft objective submitted.
 - `add-objectives`: append ordered objectives to a mission. Same `autoAdvance`
   JSON field and `--auto-advance` / `--no-auto-advance` default as create.
-- `update-objective`: turn auto-advance on or off for an existing objective
+- `update-objective`: turn auto-advance on or off and/or edit instruction text on draft/future objectives
   (`--objective-id` plus `--auto-advance` or `--no-auto-advance`).
 - `record-work`: record already-completed chat work as a review mission with completed objective and delivery record.
 

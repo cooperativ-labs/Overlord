@@ -27,6 +27,8 @@ import {
 const RUN_LIMIT = 25;
 const DELIVERY_LIMIT = 7;
 const QUESTION_LIMIT = 10;
+/** Inbox live feed only surfaces recent asks; older unseen questions stay on the mission. */
+const QUESTION_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000;
 const FEED_LIMIT = 40;
 const INSTRUCTION_PREVIEW_CHARS = 400;
 const EVENT_SUMMARY_CHARS = 240;
@@ -303,9 +305,11 @@ const QUESTION_CONTEXT_COLUMNS = CONTEXT_COLUMNS.replace(/\bo\./g, 'e.');
  * Blocking questions the operator has not acknowledged yet. `mission_events` has no
  * answered-state of its own, so the existing `blocking_question` seen-marker — the
  * same predicate that drives the mission card indicator — is the only honest signal
- * for "still waiting on a person".
+ * for "still waiting on a person". The feed further limits to asks from the past
+ * three days so stale blockers do not crowd the inbox (coo:757.rqtb).
  */
 async function loadQuestions(workspaceIds: string[]): Promise<QuestionRow[]> {
+  const askedAfter = new Date(Date.now() - QUESTION_MAX_AGE_MS).toISOString();
   return (await requireDatabaseClient().all(
     `SELECT ${QUESTION_CONTEXT_COLUMNS}, ${OBJECTIVE_PROVENANCE_COLUMNS},
             e.id AS event_id, e.objective_id, o.display_key AS objective_display_key,
@@ -318,6 +322,7 @@ async function loadQuestions(workspaceIds: string[]): Promise<QuestionRow[]> {
        LEFT JOIN agent_sessions s ON s.id = e.session_id AND s.deleted_at IS NULL
       WHERE e.type = 'ask'
         AND e.workspace_id IN (${placeholders(workspaceIds.length)})
+        AND e.created_at >= ?
         AND (
           NOT EXISTS (SELECT 1 FROM mission_status_seen mss
                        WHERE mss.mission_id = e.mission_id
@@ -328,7 +333,7 @@ async function loadQuestions(workspaceIds: string[]): Promise<QuestionRow[]> {
         )
       ORDER BY e.created_at DESC, e.id DESC
       LIMIT ?`,
-    [...workspaceIds, QUESTION_LIMIT]
+    [...workspaceIds, askedAfter, QUESTION_LIMIT]
   )) as QuestionRow[];
 }
 

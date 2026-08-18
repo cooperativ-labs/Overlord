@@ -198,17 +198,20 @@ const tools = [
   },
   {
     name: 'overlord_update_objective',
-    title: 'Update objective auto-advance',
+    title: 'Update objective',
     description:
-      'Turn auto-advance on or off for an existing objective so delivery can queue the next one.',
+      'Turn auto-advance on or off and/or edit instruction text on a draft or future objective.',
     inputSchema: objectSchema(
       {
-        objectiveId: stringProperty('Objective UUID.'),
+        objectiveId: stringProperty('Objective UUID or display id.'),
         autoAdvance: booleanProperty(
           'When true, Overlord queues the next objective after this one is delivered. When false, delivery waits for approval.'
+        ),
+        instructionText: stringProperty(
+          'Replacement instruction text. Allowed only when the objective is in draft or future state; blank clears the text in those states.'
         )
       },
-      ['objectiveId', 'autoAdvance']
+      ['objectiveId']
     )
   },
   {
@@ -436,10 +439,15 @@ function callOverlordTool(name, args) {
     });
   }
   if (name === 'overlord_update_objective') {
-    if (typeof args.autoAdvance !== 'boolean') throw new Error('autoAdvance must be a boolean');
+    const hasAutoAdvance = typeof args.autoAdvance === 'boolean';
+    const hasInstructionText = typeof args.instructionText === 'string';
+    if (!hasAutoAdvance && !hasInstructionText) {
+      throw new Error('Provide autoAdvance and/or instructionText');
+    }
     return runProtocol('update-objective', {
       'objective-id': requiredString(args, 'objectiveId'),
-      ...(args.autoAdvance ? { 'auto-advance': true } : { 'no-auto-advance': true })
+      ...(hasAutoAdvance ? (args.autoAdvance ? { 'auto-advance': true } : { 'no-auto-advance': true }) : {}),
+      ...(hasInstructionText ? { 'instruction-text': requiredString(args, 'instructionText') } : {})
     });
   }
   if (name === 'overlord_attach_session') {

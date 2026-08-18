@@ -1,10 +1,4 @@
-import {
-  canonicalObjectiveResourceKey,
-  DEFAULT_PRIMARY_RESOURCE_KEY,
-  PARALLEL_BLOCKING_OBJECTIVE_STATES,
-  siblingBlocksParallelLaunch
-} from '@overlord/automations';
-import { bindBool } from '@overlord/database';
+import { PARALLEL_BLOCKING_OBJECTIVE_STATES } from '@overlord/automations';
 
 import type { ServiceContext } from './context.js';
 import { ACTIVE_EXECUTION_REQUEST_STATUSES } from './execution-requests.js';
@@ -28,22 +22,6 @@ export async function missionAllowsParallelObjectives({
   return isTruthyFlag(row?.allow_parallel_objectives);
 }
 
-export async function primaryResourceKeyForProject({
-  ctx,
-  projectId
-}: {
-  ctx: ServiceContext;
-  projectId: string;
-}): Promise<string> {
-  const row = (await ctx.db.get(
-    `SELECT resource_key FROM project_resources
-      WHERE project_id = ? AND workspace_id = ? AND deleted_at IS NULL AND is_primary = ?
-      LIMIT 1`,
-    [projectId, ctx.workspace.id, bindBool(ctx.db.dialect, true)]
-  )) as { resource_key: string | null } | undefined;
-  return row?.resource_key?.trim() || DEFAULT_PRIMARY_RESOURCE_KEY;
-}
-
 export async function countActiveMissionObjectives({
   ctx,
   missionId
@@ -62,56 +40,46 @@ export async function countActiveMissionObjectives({
 
 /**
  * Sibling that would 409 a launch of `objectiveId`. Flag off: any active
- * sibling. Flag on: only a sibling whose effective resource_key matches.
+ * sibling (or any objective holding an active execution request). Flag on:
+ * none — concurrent objectives on the same resource are separated by the Runner
+ * Layer's per-objective branch/worktree isolation, or share the mission's single
+ * checkout when the mission runs without worktrees.
  */
 export async function findConflictingActiveSibling({
   ctx,
   missionId,
-  projectId,
   objectiveId,
-  resourceKey,
   allowParallelObjectives
 }: {
   ctx: ServiceContext;
   missionId: string;
-  projectId: string;
+  /** Accepted for call-site symmetry with the launch path; no longer read. */
+  projectId?: string;
   objectiveId: string;
-  resourceKey: string | null | undefined;
+  /** Accepted for call-site symmetry with the launch path; no longer read. */
+  resourceKey?: string | null;
   allowParallelObjectives: boolean;
 }): Promise<{ id: string } | null> {
-  const primaryResourceKey = allowParallelObjectives
-    ? await primaryResourceKeyForProject({ ctx, projectId })
-    : DEFAULT_PRIMARY_RESOURCE_KEY;
-  const candidateKey = canonicalObjectiveResourceKey(resourceKey, primaryResourceKey);
+  if (allowParallelObjectives) return null;
 
-  const siblings = (await ctx.db.all(
-    `SELECT id, resource_key FROM objectives
+  const sibling = (await ctx.db.get(
+    `SELECT id FROM objectives
       WHERE mission_id = ? AND workspace_id = ? AND id <> ? AND deleted_at IS NULL
-        AND state IN (${PARALLEL_BLOCKING_OBJECTIVE_STATES.map(() => '?').join(', ')})`,
+        AND state IN (${PARALLEL_BLOCKING_OBJECTIVE_STATES.map(() => '?').join(', ')})
+      LIMIT 1`,
     [missionId, ctx.workspace.id, objectiveId, ...PARALLEL_BLOCKING_OBJECTIVE_STATES]
-  )) as Array<{ id: string; resource_key: string | null }>;
+  )) as { id: string } | undefined;
+  if (sibling) return { id: sibling.id };
 
-  for (const sibling of siblings) {
-    if (
-      siblingBlocksParallelLaunch({
-        allowParallelObjectives,
-        candidateResourceKey: candidateKey,
-        siblingResourceKey: sibling.resource_key,
-        primaryResourceKey
-      })
-    ) {
-      return { id: sibling.id };
-    }
-  }
-
-  const requestSiblings = (await ctx.db.all(
-    `SELECT o.id, o.resource_key
+  const requestSibling = (await ctx.db.get(
+    `SELECT o.id
        FROM execution_requests er
        JOIN objectives o ON o.id = er.objective_id AND o.deleted_at IS NULL
       WHERE er.mission_id = ? AND er.workspace_id = ? AND er.objective_id <> ?
         AND er.deleted_at IS NULL
         AND er.status IN (${ACTIVE_EXECUTION_REQUEST_STATUSES.map(() => '?').join(', ')})
-        AND o.state IN (${PARALLEL_BLOCKING_OBJECTIVE_STATES.map(() => '?').join(', ')})`,
+        AND o.state IN (${PARALLEL_BLOCKING_OBJECTIVE_STATES.map(() => '?').join(', ')})
+      LIMIT 1`,
     [
       missionId,
       ctx.workspace.id,
@@ -119,20 +87,6 @@ export async function findConflictingActiveSibling({
       ...ACTIVE_EXECUTION_REQUEST_STATUSES,
       ...PARALLEL_BLOCKING_OBJECTIVE_STATES
     ]
-  )) as Array<{ id: string; resource_key: string | null }>;
-
-  for (const sibling of requestSiblings) {
-    if (
-      siblingBlocksParallelLaunch({
-        allowParallelObjectives,
-        candidateResourceKey: candidateKey,
-        siblingResourceKey: sibling.resource_key,
-        primaryResourceKey
-      })
-    ) {
-      return { id: sibling.id };
-    }
-  }
-
-  return null;
+  )) as { id: string } | undefined;
+  return requestSibling ? { id: requestSibling.id } : null;
 }

@@ -201,6 +201,169 @@ test('prepareMissionBranch reuses a dirty same-mission worktree', async () => {
   }
 });
 
+test('prepareMissionBranch isolates a concurrent objective into its own worktree', async () => {
+  const repo = initRepo('ovld-prep-parallel-');
+  const worktreeRoot = mkdtempSync(path.join(os.tmpdir(), 'ovld-prep-parallel-wt-'));
+  process.env.OVERLORD_WORKTREE_ROOT = worktreeRoot;
+  try {
+    const objectives = [
+      { id: 'obj-a', displayKey: 'k7xm', state: 'draft', resourceKey: null },
+      { id: 'obj-b', displayKey: 'q4t9', state: 'draft', resourceKey: null }
+    ];
+    const mission = {
+      title: 'Parallel objectives',
+      sequence: 21,
+      projectId: 'p1',
+      project: { slug: 'demo' },
+      allowParallelObjectives: true,
+      objectives,
+      branch: { baseBranch: 'main', willPrepareBranch: true, willUseWorktree: true }
+    };
+
+    const first = await prepareMissionBranch({
+      runtime: runtimeForMission(mission),
+      options: {
+        missionId: 'coo:21',
+        workingDirectory: repo,
+        objectiveId: 'obj-a',
+        workspaceAutomationEnabled: false
+      }
+    });
+    assert.ok(first.branchAutomation);
+    assert.equal(first.branchAutomation.branchName, 'parallel-objectives-21');
+    assert.equal(
+      first.branchAutomation.isolated,
+      false,
+      'the first objective owns the mission branch'
+    );
+    writeFileSync(path.join(first.workingDirectory, 'a.txt'), 'objective A work\n');
+
+    // Objective A is now live on the mission branch, so B must not be dropped into
+    // A's dirty checkout: it gets its own branch (suffixed with B's display key)
+    // cut from the mission branch, in its own worktree.
+    const second = await prepareMissionBranch({
+      runtime: runtimeForMission({
+        ...mission,
+        objectives: [{ ...objectives[0]!, state: 'executing' }, objectives[1]!],
+        branch: {
+          ...mission.branch,
+          name: first.branchAutomation.branchName,
+          status: 'created'
+        }
+      }),
+      options: {
+        missionId: 'coo:21',
+        workingDirectory: repo,
+        objectiveId: 'obj-b',
+        workspaceAutomationEnabled: false
+      }
+    });
+
+    assert.equal(second.branchAutomation?.branchName, 'parallel-objectives-21-q4t9');
+    assert.equal(second.branchAutomation?.isolated, true);
+    assert.notEqual(second.workingDirectory, first.workingDirectory);
+    assert.equal(
+      git(second.workingDirectory, ['status', '--porcelain']),
+      '',
+      "objective A's uncommitted work is not visible in B's worktree"
+    );
+    assert.ok(
+      git(first.workingDirectory, ['status', '--porcelain']).includes('a.txt'),
+      "objective A's worktree is untouched"
+    );
+
+    // Relaunching B lands back in B's own worktree rather than cutting another one.
+    const relaunch = await prepareMissionBranch({
+      runtime: runtimeForMission({
+        ...mission,
+        objectives: [{ ...objectives[0]!, state: 'executing' }, objectives[1]!],
+        branch: {
+          ...mission.branch,
+          name: first.branchAutomation.branchName,
+          status: 'created'
+        }
+      }),
+      options: {
+        missionId: 'coo:21',
+        workingDirectory: repo,
+        objectiveId: 'obj-b',
+        workspaceAutomationEnabled: false
+      }
+    });
+    assert.equal(relaunch.workingDirectory, second.workingDirectory);
+  } finally {
+    delete process.env.OVERLORD_WORKTREE_ROOT;
+  }
+});
+
+test('prepareMissionBranch shares one checkout for concurrent objectives without worktrees', async () => {
+  const repo = initRepo('ovld-prep-parallel-shared-');
+  const objectives = [
+    { id: 'obj-a', displayKey: 'k7xm', state: 'executing', resourceKey: null },
+    { id: 'obj-b', displayKey: 'q4t9', state: 'draft', resourceKey: null }
+  ];
+  const result = await prepareMissionBranch({
+    runtime: runtimeForMission({
+      title: 'Shared checkout',
+      sequence: 22,
+      projectId: 'p1',
+      project: { slug: 'demo' },
+      allowParallelObjectives: true,
+      objectives,
+      branch: {
+        baseBranch: 'main',
+        willPrepareBranch: true,
+        willUseWorktree: false
+      }
+    }),
+    options: {
+      missionId: 'coo:22',
+      workingDirectory: repo,
+      objectiveId: 'obj-b',
+      workspaceAutomationEnabled: false
+    }
+  });
+
+  assert.equal(result.workingDirectory, canonicalPath(repo));
+  assert.equal(result.branchAutomation?.branchName, 'shared-checkout-22');
+  assert.equal(result.branchAutomation?.isolated, false);
+});
+
+test('prepareMissionBranch keeps one worktree for a sibling on a different resource', async () => {
+  const repo = initRepo('ovld-prep-parallel-other-resource-');
+  const worktreeRoot = mkdtempSync(path.join(os.tmpdir(), 'ovld-prep-parallel-other-wt-'));
+  process.env.OVERLORD_WORKTREE_ROOT = worktreeRoot;
+  try {
+    const result = await prepareMissionBranch({
+      runtime: runtimeForMission({
+        title: 'Cross repo mission',
+        sequence: 23,
+        projectId: 'p1',
+        project: { slug: 'demo' },
+        allowParallelObjectives: true,
+        objectives: [
+          { id: 'obj-a', displayKey: 'k7xm', state: 'executing', resourceKey: 'mobile' },
+          { id: 'obj-b', displayKey: 'q4t9', state: 'draft', resourceKey: 'primary' }
+        ],
+        branch: { baseBranch: 'main', willPrepareBranch: true, willUseWorktree: true }
+      }),
+      options: {
+        missionId: 'coo:23',
+        workingDirectory: repo,
+        objectiveId: 'obj-b',
+        resourceKey: 'primary',
+        workspaceAutomationEnabled: false
+      }
+    });
+
+    // The live sibling is in another repository; nothing to isolate from here.
+    assert.equal(result.branchAutomation?.branchName, 'cross-repo-mission-23');
+    assert.equal(result.branchAutomation?.isolated, false);
+  } finally {
+    delete process.env.OVERLORD_WORKTREE_ROOT;
+  }
+});
+
 test('prepareMissionBranch falls back to the primary checkout branch as base', async () => {
   const repo = initRepo('ovld-prep-current-base-');
   const worktreeRoot = mkdtempSync(path.join(os.tmpdir(), 'ovld-prep-current-base-wt-'));

@@ -160,13 +160,50 @@ checked out on the expected mission branch. A dirty reused worktree is allowed s
 later objectives in the same mission can continue uncommitted work on the same
 branch.
 
+### Parallel objectives on one resource
+
+A mission with `allowParallelObjectives` on may have two objectives executing at
+once, including on the same project resource. Sharing one dirty worktree between
+two agents is not an option, so in worktree mode the runner **isolates** the
+second launch: when a sibling objective on the same effective `resource_key` is
+already `launching` / `executing` / `pending_delivery`, it plans
+
+```text
+<branch it would otherwise have shared>-<objective display key>
+```
+
+for example `automate-worktree-branching-16-k7xm`, cut from that shared branch,
+in its own worktree under the same resource-scoped path. This is the same move
+the planner already makes when a mission's branch has been merged and the next
+objective needs a fresh one — a second workspace rather than a shared checkout.
+
+The suffix is the objective's stable display key (`objectives.display_key`, the
+`k7xm` in `coo:756.k7xm`), so the decision needs no coordination: two objectives
+launched in the same instant plan different branches, and relaunching one returns
+it to its own worktree instead of cutting another. Once that isolated branch has
+been merged it cycles numerically like any other (`…-k7xm-2`).
+
+Isolation is deliberately narrow:
+
+- **Worktree mode only.** A mission running branch-only (or with no branch
+  automation) has exactly one checkout; concurrent objectives share it by design,
+  and delivery attributes files through each session's touched-file log rather
+  than through the checkout.
+- **No explicit pin.** `--branch` and the mission's pinned `overrideBranch` are
+  human instructions and win; two objectives pinned to one branch share it.
+- **Same resource only.** A sibling running in another repository is prepared in
+  that repository and never triggers isolation here.
+
 After preparation, the runner records `POST /api/missions/:id/branch-prepared`,
 which writes the resolved branch to the `missions.active_branch` column (the
 source of truth), records a human-readable audit entry under an allowed
 `mission_events` type (no dedicated `branch_prepared` event type exists — the
 event vocabulary is a closed enum), and stamps
 `execution_requests.launch_flags_json.branchAutomation` for queued runner
-requests.
+requests. An isolated branch is reported with `branchAutomation.isolated: true`:
+it is recorded on `objectives.branch` and audited, but it never moves
+`missions.active_branch` or the mission-level branch observation, so the mission
+keeps pointing at the shared branch a later sequential objective should continue.
 
 ## Launch Command Requirements
 

@@ -45,7 +45,20 @@ export const REMOTE_WINDOW_AWAY_SECONDS = 30 * 60;
 export const MAX_REQUEST_SUMMARY_LENGTH = 2000;
 export const MAX_REQUEST_OPTIONS = 12;
 
-export type AgentRequestKind = 'question' | 'permission' | 'choice' | 'retry';
+export const AGENT_REQUEST_KINDS = ['question', 'permission', 'choice', 'retry'] as const;
+export type AgentRequestKind = (typeof AGENT_REQUEST_KINDS)[number];
+
+export const RELEASE_REASONS = [
+  'timeout',
+  'local_activity',
+  'policy',
+  'interrupt',
+  'channel_ended'
+] as const;
+export type ReleaseReason = (typeof RELEASE_REASONS)[number];
+
+export const APPLICATION_STATES = ['emitted', 'applied', 'not_applied', 'unknown'] as const;
+export type ApplicationState = (typeof APPLICATION_STATES)[number];
 
 export type AgentRequestStatus =
   | 'open'
@@ -331,7 +344,7 @@ export async function releaseRequestToTerminal({
 }: {
   ctx: ServiceContext;
   requestId: string;
-  reason: 'timeout' | 'local_activity' | 'policy' | 'interrupt' | 'channel_ended';
+  reason: ReleaseReason;
 }): Promise<{ released: boolean; request: AgentRequestRow }> {
   const now = nowIso();
   const existing = await getRequest({ ctx, requestId });
@@ -462,7 +475,7 @@ export async function recordRequestApplication({
 }: {
   ctx: ServiceContext;
   requestId: string;
-  applicationState: 'emitted' | 'applied' | 'not_applied' | 'unknown';
+  applicationState: ApplicationState;
 }): Promise<void> {
   const now = nowIso();
   await ctx.db.run(

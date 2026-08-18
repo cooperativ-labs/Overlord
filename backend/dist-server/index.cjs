@@ -80015,14 +80015,14 @@ var init_getProfileName = __esm({
 });
 
 // ../node_modules/@smithy/core/dist-es/submodules/config/shared-ini-file-loader/getSSOTokenFilepath.js
-var import_node_crypto12, import_node_path18, getSSOTokenFilepath;
+var import_node_crypto13, import_node_path18, getSSOTokenFilepath;
 var init_getSSOTokenFilepath = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/config/shared-ini-file-loader/getSSOTokenFilepath.js"() {
-    import_node_crypto12 = require("node:crypto");
+    import_node_crypto13 = require("node:crypto");
     import_node_path18 = require("node:path");
     init_getHomeDir();
     getSSOTokenFilepath = (id) => {
-      const hasher = (0, import_node_crypto12.createHash)("sha1");
+      const hasher = (0, import_node_crypto13.createHash)("sha1");
       const cacheName = hasher.update(id).digest("hex");
       return (0, import_node_path18.join)(getHomeDir(), ".aws", "sso", "cache", `${cacheName}.json`);
     };
@@ -82193,10 +82193,10 @@ function castSourceData(toCast, encoding) {
   }
   return fromArrayBuffer(toCast);
 }
-var import_node_crypto13, Hash;
+var import_node_crypto14, Hash;
 var init_hash_node = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/serde/hash-node/hash-node.js"() {
-    import_node_crypto13 = require("node:crypto");
+    import_node_crypto14 = require("node:crypto");
     init_buffer_from();
     init_toUint8Array();
     Hash = class {
@@ -82215,7 +82215,7 @@ var init_hash_node = __esm({
         return Promise.resolve(this.hash.digest());
       }
       reset() {
-        this.hash = this.secret ? (0, import_node_crypto13.createHmac)(this.algorithmIdentifier, castSourceData(this.secret)) : (0, import_node_crypto13.createHash)(this.algorithmIdentifier);
+        this.hash = this.secret ? (0, import_node_crypto14.createHmac)(this.algorithmIdentifier, castSourceData(this.secret)) : (0, import_node_crypto14.createHash)(this.algorithmIdentifier);
       }
     };
   }
@@ -83109,10 +83109,10 @@ __export(serde_exports, {
   toUtf8: () => toUtf8,
   v4: () => v4
 });
-var import_node_crypto14, Uint8ArrayBlobAdapter, _getRandomValues, v4, generateIdempotencyToken;
+var import_node_crypto15, Uint8ArrayBlobAdapter, _getRandomValues, v4, generateIdempotencyToken;
 var init_serde = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/serde/index.js"() {
-    import_node_crypto14 = require("node:crypto");
+    import_node_crypto15 = require("node:crypto");
     init_fromBase64();
     init_toBase64();
     init_Uint8ArrayBlobAdapter();
@@ -83149,7 +83149,7 @@ var init_serde = __esm({
     init_stream_collector();
     Uint8ArrayBlobAdapter = class extends bindUint8ArrayBlobAdapter(toUtf8, fromUtf8, toBase64, fromBase64) {
     };
-    _getRandomValues = import_node_crypto14.getRandomValues;
+    _getRandomValues = import_node_crypto15.getRandomValues;
     v4 = bindV4(_getRandomValues);
     generateIdempotencyToken = v4;
   }
@@ -110236,7 +110236,7 @@ var init_Md5Js = __esm({
 function buildNativeClass() {
   return class Md5Node {
     digestLength = 16;
-    hash = (0, import_node_crypto15.createHash)("md5");
+    hash = (0, import_node_crypto16.createHash)("md5");
     update(data) {
       this.hash.update(toUint8Array(data));
     }
@@ -110245,19 +110245,19 @@ function buildNativeClass() {
       return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
     }
     reset() {
-      this.hash = (0, import_node_crypto15.createHash)("md5");
+      this.hash = (0, import_node_crypto16.createHash)("md5");
     }
   };
 }
-var import_node_crypto15, hasNativeCrypto, Md5Node;
+var import_node_crypto16, hasNativeCrypto, Md5Node;
 var init_Md5Node = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/checksum/md5/Md5Node.js"() {
-    import_node_crypto15 = require("node:crypto");
+    import_node_crypto16 = require("node:crypto");
     init_serde();
     init_Md5Js();
     hasNativeCrypto = (() => {
       try {
-        (0, import_node_crypto15.createHash)("md5");
+        (0, import_node_crypto16.createHash)("md5");
         return true;
       } catch {
         return false;
@@ -110601,7 +110601,7 @@ function buildNativeClass3() {
       this.finished = false;
     }
     createHash() {
-      return this.secret ? (0, import_node_crypto16.createHmac)("sha256", toBuffer(this.secret)) : (0, import_node_crypto16.createHash)("sha256");
+      return this.secret ? (0, import_node_crypto17.createHmac)("sha256", toBuffer(this.secret)) : (0, import_node_crypto17.createHash)("sha256");
     }
   };
 }
@@ -110614,14 +110614,14 @@ function toBuffer(data) {
   }
   return Buffer.from(data);
 }
-var import_node_crypto16, hasNativeCrypto2, Sha256Node;
+var import_node_crypto17, hasNativeCrypto2, Sha256Node;
 var init_Sha256Node = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/checksum/sha256/Sha256Node.js"() {
-    import_node_crypto16 = require("node:crypto");
+    import_node_crypto17 = require("node:crypto");
     init_Sha256Js();
     hasNativeCrypto2 = (() => {
       try {
-        (0, import_node_crypto16.createHash)("sha256");
+        (0, import_node_crypto17.createHash)("sha256");
         return true;
       } catch {
         return false;
@@ -132819,23 +132819,6 @@ var composeDeliveryTool = {
 };
 
 // ../automations/dist/objective-manager/rules.js
-var DEFAULT_PRIMARY_RESOURCE_KEY = "primary";
-function canonicalObjectiveResourceKey(resourceKey, primaryResourceKey2 = DEFAULT_PRIMARY_RESOURCE_KEY) {
-  const trimmed10 = resourceKey?.trim();
-  return trimmed10 && trimmed10.length > 0 ? trimmed10 : primaryResourceKey2;
-}
-function objectiveResourcesConflict({ left, right, primaryResourceKey: primaryResourceKey2 = DEFAULT_PRIMARY_RESOURCE_KEY }) {
-  return canonicalObjectiveResourceKey(left, primaryResourceKey2) === canonicalObjectiveResourceKey(right, primaryResourceKey2);
-}
-function siblingBlocksParallelLaunch({ allowParallelObjectives, candidateResourceKey, siblingResourceKey, primaryResourceKey: primaryResourceKey2 = DEFAULT_PRIMARY_RESOURCE_KEY }) {
-  if (!allowParallelObjectives)
-    return true;
-  return objectiveResourcesConflict({
-    left: candidateResourceKey,
-    right: siblingResourceKey,
-    primaryResourceKey: primaryResourceKey2
-  });
-}
 var EDITABLE_NEXT_UP_OBJECTIVE_STATES = [
   "draft",
   "submitted",
@@ -132892,7 +132875,6 @@ function sortObjectivesByLifecycleOrder(objectives) {
 function validateObjectiveLifecycle(objectives, options = {}) {
   const ordered = sortObjectivesByLifecycleOrder(objectives);
   const violations = [];
-  const primaryResourceKey2 = options.primaryResourceKey ?? DEFAULT_PRIMARY_RESOURCE_KEY;
   const allowParallel = options.allowParallelObjectives === true;
   const drafts = ordered.filter((o3) => o3.state === "draft");
   if (drafts.length > 1) {
@@ -132903,11 +132885,7 @@ function validateObjectiveLifecycle(objectives, options = {}) {
     });
   }
   const active = ordered.filter(isActiveObjective);
-  const conflictingActive = allowParallel ? active.filter((candidate, index) => active.some((other, otherIndex) => otherIndex !== index && objectiveResourcesConflict({
-    left: candidate.resourceKey,
-    right: other.resourceKey,
-    primaryResourceKey: primaryResourceKey2
-  }))) : active;
+  const conflictingActive = allowParallel ? [] : active;
   const uniqueConflicting = [...new Map(conflictingActive.map((item) => [item.id, item])).values()];
   if (uniqueConflicting.length > 1) {
     violations.push({
@@ -134621,45 +134599,6 @@ async function addObjectivesToMission({
   });
   return created;
 }
-async function updateObjective({
-  ctx,
-  objectiveId,
-  autoAdvance
-}) {
-  const resolved = await resolveObjectiveRef({ ctx, ref: objectiveId });
-  const existing = await ctx.db.get(
-    `SELECT o.id, o.mission_id, o.project_id, o.position, o.title, o.instruction_text, o.state,
-            o.auto_advance, o.resource_key, o.display_key, o.revision,
-            m.display_id AS mission_display_id
-       FROM objectives o
-       JOIN missions m ON m.id = o.mission_id
-      WHERE o.id = ? AND o.workspace_id = ? AND o.deleted_at IS NULL`,
-    [resolved.id, ctx.workspace.id]
-  );
-  if (!existing) {
-    throw new ServiceError("Objective not found", "not_found", 404);
-  }
-  const now2 = nowIso();
-  const nextRevision = existing.revision + 1;
-  await ctx.db.run(
-    `UPDATE objectives
-        SET auto_advance = ?, updated_at = ?, revision = ?
-      WHERE id = ? AND workspace_id = ?`,
-    [bindBool(ctx.db.dialect, autoAdvance), now2, nextRevision, existing.id, ctx.workspace.id]
-  );
-  await recordChange({
-    ctx,
-    entityType: "objective",
-    entityId: existing.id,
-    operation: "update",
-    entityRevision: nextRevision,
-    projectId: existing.project_id,
-    missionId: existing.mission_id,
-    objectiveId: existing.id,
-    changedFields: ["auto_advance"]
-  });
-  return toObjectiveSummary({ ...existing, auto_advance: autoAdvance ? 1 : 0 });
-}
 async function discussObjective({
   ctx,
   missionId
@@ -134748,8 +134687,8 @@ async function writeSharedContext({
   const now2 = nowIso();
   const existing = await ctx.db.get(
     `SELECT id, revision FROM shared_context_entries
-       WHERE mission_id = ? AND key = ? AND deleted_at IS NULL`,
-    [resolved.id, trimmedKey]
+       WHERE mission_id = ? AND workspace_id = ? AND key = ? AND deleted_at IS NULL`,
+    [resolved.id, ctx.workspace.id, trimmedKey]
   );
   const isJson = typeof value === "object" && value !== null;
   const valueKind = isJson ? "json" : "string";
@@ -134763,8 +134702,8 @@ async function writeSharedContext({
     await ctx.db.run(
       `UPDATE shared_context_entries
          SET value_kind = ?, value_text = ?, value_json = ?, updated_at = ?, revision = ?
-         WHERE id = ?`,
-      [valueKind, valueText, valueJson, now2, revision, entryId]
+         WHERE id = ? AND workspace_id = ?`,
+      [valueKind, valueText, valueJson, now2, revision, entryId, ctx.workspace.id]
     );
   } else {
     entryId = newId();
@@ -134806,6 +134745,63 @@ async function writeSharedContext({
     updatedAt: now2,
     revision
   };
+}
+var CORE_ARTIFACT_TYPES = /* @__PURE__ */ new Set([
+  "test_results",
+  "next_steps",
+  "note",
+  "url",
+  "decision",
+  "migration"
+]);
+async function insertArtifactRow({
+  ctx,
+  workspaceId,
+  projectId,
+  missionId,
+  objectiveId,
+  sessionId,
+  deliveryId,
+  type,
+  label,
+  contentText,
+  externalUrl,
+  createdByWorkspaceUserId,
+  now: now2
+}) {
+  const trimmedType = type.trim();
+  if (!CORE_ARTIFACT_TYPES.has(trimmedType) && !trimmedType.includes(".")) {
+    throw new ServiceError(
+      `Artifact type must be one of ${[...CORE_ARTIFACT_TYPES].join(", ")} or a namespaced extension value`,
+      "validation_error"
+    );
+  }
+  const id = newId();
+  const createdAt = now2 ?? nowIso();
+  await ctx.db.run(
+    `INSERT INTO artifacts
+       (id, workspace_id, project_id, mission_id, objective_id, session_id, delivery_id,
+        type, label, content_text, external_url, created_by_workspace_user_id,
+        created_at, updated_at, revision)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+    [
+      id,
+      workspaceId,
+      projectId,
+      missionId,
+      objectiveId,
+      sessionId,
+      deliveryId,
+      trimmedType,
+      label,
+      contentText,
+      externalUrl,
+      createdByWorkspaceUserId ?? ctx.actorWorkspaceUserId ?? null,
+      createdAt,
+      createdAt
+    ]
+  );
+  return { id };
 }
 async function listArtifacts({
   ctx,
@@ -135514,9 +135510,18 @@ var LAUNCHABLE_OBJECTIVE_STATES2 = ["draft", "submitted", "launching"];
 var CLAIM_TTL_MS = 15 * 60 * 1e3;
 var LAUNCH_ATTACH_TTL_MS = 15 * 60 * 1e3;
 var LAUNCH_START_TTL_MS = 10 * 60 * 1e3;
+function asRecord(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+function parseMetadataJson(json2) {
+  try {
+    return asRecord(JSON.parse(json2));
+  } catch {
+    return {};
+  }
+}
 function parseJsonObject(raw) {
-  const parsed = JSON.parse(raw);
-  return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  return asRecord(JSON.parse(raw));
 }
 function rowToSummary(row) {
   const metadata = parseJsonObject(row.metadata_json);
@@ -136710,7 +136715,6 @@ async function enqueueLiveActivityStartForMission({
 }
 
 // ../packages/core/service/objective-parallelism.ts
-init_dist();
 function isTruthyFlag3(value) {
   return value === true || value === 1;
 }
@@ -136724,18 +136728,6 @@ async function missionAllowsParallelObjectives({
     [missionId, ctx.workspace.id]
   );
   return isTruthyFlag3(row?.allow_parallel_objectives);
-}
-async function primaryResourceKeyForProject({
-  ctx,
-  projectId
-}) {
-  const row = await ctx.db.get(
-    `SELECT resource_key FROM project_resources
-      WHERE project_id = ? AND workspace_id = ? AND deleted_at IS NULL AND is_primary = ?
-      LIMIT 1`,
-    [projectId, ctx.workspace.id, bindBool(ctx.db.dialect, true)]
-  );
-  return row?.resource_key?.trim() || DEFAULT_PRIMARY_RESOURCE_KEY;
 }
 async function countActiveMissionObjectives({
   ctx,
@@ -136752,37 +136744,27 @@ async function countActiveMissionObjectives({
 async function findConflictingActiveSibling({
   ctx,
   missionId,
-  projectId,
   objectiveId,
-  resourceKey,
   allowParallelObjectives
 }) {
-  const primaryResourceKey2 = allowParallelObjectives ? await primaryResourceKeyForProject({ ctx, projectId }) : DEFAULT_PRIMARY_RESOURCE_KEY;
-  const candidateKey = canonicalObjectiveResourceKey(resourceKey, primaryResourceKey2);
-  const siblings = await ctx.db.all(
-    `SELECT id, resource_key FROM objectives
+  if (allowParallelObjectives) return null;
+  const sibling = await ctx.db.get(
+    `SELECT id FROM objectives
       WHERE mission_id = ? AND workspace_id = ? AND id <> ? AND deleted_at IS NULL
-        AND state IN (${PARALLEL_BLOCKING_OBJECTIVE_STATES.map(() => "?").join(", ")})`,
+        AND state IN (${PARALLEL_BLOCKING_OBJECTIVE_STATES.map(() => "?").join(", ")})
+      LIMIT 1`,
     [missionId, ctx.workspace.id, objectiveId, ...PARALLEL_BLOCKING_OBJECTIVE_STATES]
   );
-  for (const sibling of siblings) {
-    if (siblingBlocksParallelLaunch({
-      allowParallelObjectives,
-      candidateResourceKey: candidateKey,
-      siblingResourceKey: sibling.resource_key,
-      primaryResourceKey: primaryResourceKey2
-    })) {
-      return { id: sibling.id };
-    }
-  }
-  const requestSiblings = await ctx.db.all(
-    `SELECT o.id, o.resource_key
+  if (sibling) return { id: sibling.id };
+  const requestSibling = await ctx.db.get(
+    `SELECT o.id
        FROM execution_requests er
        JOIN objectives o ON o.id = er.objective_id AND o.deleted_at IS NULL
       WHERE er.mission_id = ? AND er.workspace_id = ? AND er.objective_id <> ?
         AND er.deleted_at IS NULL
         AND er.status IN (${ACTIVE_EXECUTION_REQUEST_STATUSES.map(() => "?").join(", ")})
-        AND o.state IN (${PARALLEL_BLOCKING_OBJECTIVE_STATES.map(() => "?").join(", ")})`,
+        AND o.state IN (${PARALLEL_BLOCKING_OBJECTIVE_STATES.map(() => "?").join(", ")})
+      LIMIT 1`,
     [
       missionId,
       ctx.workspace.id,
@@ -136791,17 +136773,7 @@ async function findConflictingActiveSibling({
       ...PARALLEL_BLOCKING_OBJECTIVE_STATES
     ]
   );
-  for (const sibling of requestSiblings) {
-    if (siblingBlocksParallelLaunch({
-      allowParallelObjectives,
-      candidateResourceKey: candidateKey,
-      siblingResourceKey: sibling.resource_key,
-      primaryResourceKey: primaryResourceKey2
-    })) {
-      return { id: sibling.id };
-    }
-  }
-  return null;
+  return requestSibling ? { id: requestSibling.id } : null;
 }
 
 // ../packages/core/service/protocol.ts
@@ -138638,27 +138610,20 @@ async function deliverSession({
       ]
     );
     for (const artifact of artifacts) {
-      await txCtx.db.run(
-        `INSERT INTO artifacts
-             (id, workspace_id, project_id, mission_id, objective_id, session_id, delivery_id,
-              type, label, content_text, external_url, created_at, updated_at, revision)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
-        [
-          newId(),
-          ctx.workspace.id,
-          mission.projectId,
-          mission.id,
-          session.objective_id,
-          session.id,
-          deliveryId,
-          artifact.type,
-          artifact.label,
-          artifact.content ?? null,
-          artifact.url ?? null,
-          now2,
-          now2
-        ]
-      );
+      await insertArtifactRow({
+        ctx: txCtx,
+        workspaceId: ctx.workspace.id,
+        projectId: mission.projectId,
+        missionId: mission.id,
+        objectiveId: session.objective_id,
+        sessionId: session.id,
+        deliveryId,
+        type: artifact.type,
+        label: artifact.label,
+        contentText: artifact.content ?? null,
+        externalUrl: artifact.url ?? null,
+        now: now2
+      });
     }
     for (const rationale of normalizedRationales) {
       const changedFileId = changedFileIdByPath.get(rationale.filePath) ?? null;
@@ -139075,26 +139040,20 @@ async function recordWork({
       ]
     );
     for (const artifact of artifacts) {
-      await txCtx.db.run(
-        `INSERT INTO artifacts
-             (id, workspace_id, project_id, mission_id, objective_id, delivery_id,
-              type, label, content_text, external_url, created_at, updated_at, revision)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
-        [
-          newId(),
-          ctx.workspace.id,
-          resolvedProjectId,
-          created.mission.id,
-          objectiveId,
-          deliveryId,
-          artifact.type,
-          artifact.label,
-          artifact.content ?? null,
-          artifact.url ?? null,
-          now2,
-          now2
-        ]
-      );
+      await insertArtifactRow({
+        ctx: txCtx,
+        workspaceId: ctx.workspace.id,
+        projectId: resolvedProjectId,
+        missionId: created.mission.id,
+        objectiveId,
+        sessionId: null,
+        deliveryId,
+        type: artifact.type,
+        label: artifact.label,
+        contentText: artifact.content ?? null,
+        externalUrl: artifact.url ?? null,
+        now: now2
+      });
     }
     const normalizedRationales = normalizeChangeRationales(changeRationales);
     for (const rationale of normalizedRationales) {
@@ -139209,6 +139168,27 @@ function authStatus({ ctx }) {
 init_util3();
 init_db();
 init_errors5();
+
+// objective-ref.ts
+init_context();
+init_errors4();
+init_db();
+init_errors5();
+async function resolveObjectiveIdForRest({
+  ref,
+  db,
+  uuidWorkspaceScoped = false
+}) {
+  const ctx = await buildWebappServiceContextForWorkspace(getActiveWorkspaceId(), db);
+  try {
+    return await resolveObjectiveRef({ ctx, ref, uuidWorkspaceScoped });
+  } catch (error53) {
+    if (error53 instanceof ServiceError) {
+      throw new ApiError(error53.status, error53.message, void 0, error53.code);
+    }
+    throw error53;
+  }
+}
 
 // rbac.ts
 init_db();
@@ -139884,9 +139864,6 @@ async function generateMissionTitleNow(params) {
   return title;
 }
 
-// execution/launch.ts
-init_dist6();
-
 // ../packages/core/dist/service/terminal-profile-types.js
 var DEFAULT_VIEWER_OPEN_AS2 = "window";
 function viewerOpenAsForPlacement2(placement) {
@@ -139985,40 +139962,148 @@ function launchSessionSnapshotFromMetadata2(metadata) {
   };
 }
 
+// execution/latch-sessions.ts
+init_latch_launch();
+init_db();
+init_errors5();
+function terminalSessionState(value) {
+  switch (value) {
+    case "exited":
+      return "exited";
+    case "stopping":
+      return "stopping";
+    case "lost":
+      return "lost";
+    default:
+      return "running";
+  }
+}
+async function listMissionTerminalSessions(missionId) {
+  const rows = await requireDatabaseClient().all(
+    `SELECT er.id AS execution_request_id, er.objective_id, er.metadata_json,
+            et.label AS target_label, d.label AS device_label
+       FROM execution_requests er
+       LEFT JOIN execution_targets et
+         ON et.id = COALESCE(er.claimed_by_execution_target_id, er.execution_target_id)
+       LEFT JOIN devices d ON d.id = et.device_id
+      WHERE er.mission_id = ? AND er.deleted_at IS NULL
+      ORDER BY er.created_at DESC`,
+    [missionId]
+  );
+  return rows.flatMap((row) => {
+    const metadata = parseMetadataJson(row.metadata_json);
+    const providerSession = providerSessionFromMetadata(metadata);
+    if (!providerSession) return [];
+    const snapshot = launchSessionSnapshotFromMetadata2(metadata);
+    return [
+      {
+        executionRequestId: row.execution_request_id,
+        objectiveId: row.objective_id,
+        provider: "latch",
+        providerSessionId: providerSession.providerSessionId,
+        sessionName: providerSession.sessionName ?? providerSession.providerSessionId,
+        executionTargetId: providerSession.executionTargetId,
+        deviceLabel: row.device_label ?? row.target_label,
+        agentSessionId: providerSession.agentSessionId,
+        executable: snapshot?.executionProvider.executable ?? "latch",
+        viewerKind: snapshot?.viewer.kind ?? "iterm",
+        viewerOpenAs: snapshot?.viewer.openAs ?? "window",
+        createdAt: providerSession.createdAt,
+        lastObservedState: terminalSessionState(providerSession.lastObservedState),
+        observation: providerSession.observation ? {
+          cursor: providerSession.observation.cursor,
+          lastEventAt: providerSession.observation.lastEventAt,
+          turnCount: providerSession.observation.turnCount,
+          pendingInput: providerSession.observation.pendingInput,
+          unattached: providerSession.observation.unattached
+        } : null
+      }
+    ];
+  });
+}
+async function ingestMissionHarnessEvents(missionRef, body) {
+  const scope = await requireMissionPermission({
+    missionRef,
+    permission: PERMISSIONS.SESSION_READ
+  });
+  const ctx = await buildWebappServiceContextForWorkspace(
+    scope.workspaceId,
+    requireDatabaseClient(),
+    scope.workspaceUserId
+  );
+  const payload = asRecord(body);
+  const providerSessionId = typeof payload.providerSessionId === "string" ? payload.providerSessionId : "";
+  const executionRequestId = typeof payload.executionRequestId === "string" ? payload.executionRequestId : null;
+  const events = Array.isArray(payload.events) ? payload.events : [];
+  const from = typeof payload.from === "number" ? payload.from : 0;
+  return ingestLatchHarnessEvents({
+    ctx,
+    missionId: scope.missionId,
+    executionRequestId,
+    providerSessionId,
+    events,
+    from
+  });
+}
+async function resolveMissionLatchObservation(missionRef, body) {
+  const scope = await requireMissionPermission({
+    missionRef,
+    permission: PERMISSIONS.SESSION_ATTACH
+  });
+  const ctx = await buildWebappServiceContextForWorkspace(
+    scope.workspaceId,
+    requireDatabaseClient(),
+    scope.workspaceUserId
+  );
+  const payload = asRecord(body);
+  const providerSessionId = typeof payload.providerSessionId === "string" ? payload.providerSessionId : "";
+  const requestId = typeof payload.requestId === "string" ? payload.requestId : "";
+  if (!providerSessionId.trim() || !requestId.trim()) {
+    throw new ApiError(400, "providerSessionId and requestId are required");
+  }
+  const observation = await clearLatchPendingInput({
+    ctx,
+    missionId: scope.missionId,
+    providerSessionId,
+    requestId
+  });
+  return { observation };
+}
+async function forgetMissionLatchSession(missionRef, body) {
+  const scope = await requireMissionPermission({
+    missionRef,
+    permission: PERMISSIONS.SESSION_READ
+  });
+  const ctx = await buildWebappServiceContextForWorkspace(
+    scope.workspaceId,
+    requireDatabaseClient(),
+    scope.workspaceUserId
+  );
+  const payload = asRecord(body);
+  const providerSessionId = typeof payload.providerSessionId === "string" ? payload.providerSessionId : "";
+  const executionRequestId = typeof payload.executionRequestId === "string" ? payload.executionRequestId : null;
+  if (!providerSessionId.trim()) {
+    throw new ApiError(400, "providerSessionId is required");
+  }
+  return forgetLatchProviderSession({
+    ctx,
+    missionId: scope.missionId,
+    executionRequestId,
+    providerSessionId
+  });
+}
+
 // execution/launch.ts
+init_dist6();
 init_dist();
 init_agent_catalog();
 init_config();
 init_execution_targets();
-init_latch_launch();
 init_local_target_mutations();
 init_project_execution_target();
 init_projects();
 init_db();
 init_errors5();
-
-// objective-ref.ts
-init_context();
-init_errors4();
-init_db();
-init_errors5();
-async function resolveObjectiveIdForRest({
-  ref,
-  db,
-  uuidWorkspaceScoped = false
-}) {
-  const ctx = await buildWebappServiceContextForWorkspace(getActiveWorkspaceId(), db);
-  try {
-    return await resolveObjectiveRef({ ctx, ref, uuidWorkspaceScoped });
-  } catch (error53) {
-    if (error53 instanceof ServiceError) {
-      throw new ApiError(error53.status, error53.message, void 0, error53.code);
-    }
-    throw error53;
-  }
-}
-
-// execution/launch.ts
 var AGENT_CATALOG_SETTINGS_KEY = "agentCatalog";
 var WORKTREE_BRANCH_AUTOMATION_SETTINGS_KEY = "worktreeBranchAutomationEnabled";
 function instanceAgentCatalog() {
@@ -140471,14 +140556,6 @@ async function updateLaunchPreference(projectId, body) {
     return next;
   });
 }
-function parseMetadataJson(json2) {
-  try {
-    const parsed = JSON.parse(json2);
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
-  } catch {
-    return {};
-  }
-}
 function parseLaunchConfig(json2) {
   try {
     const parsed = JSON.parse(json2);
@@ -140554,132 +140631,6 @@ async function listMissionExecutionRequests(missionId) {
     [missionId, ...ACTIVE_EXECUTION_REQUEST_STATUSES]
   );
   return rows.map(toExecutionRequestDto);
-}
-function terminalSessionState(value) {
-  switch (value) {
-    case "exited":
-      return "exited";
-    case "stopping":
-      return "stopping";
-    case "lost":
-      return "lost";
-    default:
-      return "running";
-  }
-}
-async function listMissionTerminalSessions(missionId) {
-  const rows = await requireDatabaseClient().all(
-    `SELECT er.id AS execution_request_id, er.objective_id, er.metadata_json,
-            et.label AS target_label, d.label AS device_label
-       FROM execution_requests er
-       LEFT JOIN execution_targets et
-         ON et.id = COALESCE(er.claimed_by_execution_target_id, er.execution_target_id)
-       LEFT JOIN devices d ON d.id = et.device_id
-      WHERE er.mission_id = ? AND er.deleted_at IS NULL
-      ORDER BY er.created_at DESC`,
-    [missionId]
-  );
-  return rows.flatMap((row) => {
-    const metadata = parseMetadataJson(row.metadata_json);
-    const providerSession = providerSessionFromMetadata(metadata);
-    if (!providerSession) return [];
-    const snapshot = launchSessionSnapshotFromMetadata2(metadata);
-    return [
-      {
-        executionRequestId: row.execution_request_id,
-        objectiveId: row.objective_id,
-        provider: "latch",
-        providerSessionId: providerSession.providerSessionId,
-        sessionName: providerSession.sessionName ?? providerSession.providerSessionId,
-        executionTargetId: providerSession.executionTargetId,
-        deviceLabel: row.device_label ?? row.target_label,
-        agentSessionId: providerSession.agentSessionId,
-        executable: snapshot?.executionProvider.executable ?? "latch",
-        viewerKind: snapshot?.viewer.kind ?? "iterm",
-        viewerOpenAs: snapshot?.viewer.openAs ?? "window",
-        createdAt: providerSession.createdAt,
-        lastObservedState: terminalSessionState(providerSession.lastObservedState),
-        observation: providerSession.observation ? {
-          cursor: providerSession.observation.cursor,
-          lastEventAt: providerSession.observation.lastEventAt,
-          turnCount: providerSession.observation.turnCount,
-          pendingInput: providerSession.observation.pendingInput,
-          unattached: providerSession.observation.unattached
-        } : null
-      }
-    ];
-  });
-}
-async function ingestMissionHarnessEvents(missionRef, body) {
-  const scope = await requireMissionPermission({
-    missionRef,
-    permission: PERMISSIONS.SESSION_READ
-  });
-  const ctx = await buildWebappServiceContextForWorkspace(
-    scope.workspaceId,
-    requireDatabaseClient(),
-    scope.workspaceUserId
-  );
-  const payload = body && typeof body === "object" && !Array.isArray(body) ? body : {};
-  const providerSessionId = typeof payload.providerSessionId === "string" ? payload.providerSessionId : "";
-  const executionRequestId = typeof payload.executionRequestId === "string" ? payload.executionRequestId : null;
-  const events = Array.isArray(payload.events) ? payload.events : [];
-  const from = typeof payload.from === "number" ? payload.from : 0;
-  return ingestLatchHarnessEvents({
-    ctx,
-    missionId: scope.missionId,
-    executionRequestId,
-    providerSessionId,
-    events,
-    from
-  });
-}
-async function resolveMissionLatchObservation(missionRef, body) {
-  const scope = await requireMissionPermission({
-    missionRef,
-    permission: PERMISSIONS.SESSION_ATTACH
-  });
-  const ctx = await buildWebappServiceContextForWorkspace(
-    scope.workspaceId,
-    requireDatabaseClient(),
-    scope.workspaceUserId
-  );
-  const payload = body && typeof body === "object" && !Array.isArray(body) ? body : {};
-  const providerSessionId = typeof payload.providerSessionId === "string" ? payload.providerSessionId : "";
-  const requestId = typeof payload.requestId === "string" ? payload.requestId : "";
-  if (!providerSessionId.trim() || !requestId.trim()) {
-    throw new ApiError(400, "providerSessionId and requestId are required");
-  }
-  const observation = await clearLatchPendingInput({
-    ctx,
-    missionId: scope.missionId,
-    providerSessionId,
-    requestId
-  });
-  return { observation };
-}
-async function forgetMissionLatchSession(missionRef, body) {
-  const scope = await requireMissionPermission({
-    missionRef,
-    permission: PERMISSIONS.SESSION_READ
-  });
-  const ctx = await buildWebappServiceContextForWorkspace(
-    scope.workspaceId,
-    requireDatabaseClient(),
-    scope.workspaceUserId
-  );
-  const payload = body && typeof body === "object" && !Array.isArray(body) ? body : {};
-  const providerSessionId = typeof payload.providerSessionId === "string" ? payload.providerSessionId : "";
-  const executionRequestId = typeof payload.executionRequestId === "string" ? payload.executionRequestId : null;
-  if (!providerSessionId.trim()) {
-    throw new ApiError(400, "providerSessionId is required");
-  }
-  return forgetLatchProviderSession({
-    ctx,
-    missionId: scope.missionId,
-    executionRequestId,
-    providerSessionId
-  });
 }
 var LAUNCHABLE_STATES = ["draft", "submitted", "launching"];
 async function dequeueObjective({
@@ -141039,8 +140990,567 @@ async function getObjectiveLaunchCommand(objectiveRef, query) {
 // repository.ts
 init_local_target_mutation_queue();
 
-// ext/github/user-oauth.ts
+// ext/github/service.ts
 var import_node_crypto11 = require("node:crypto");
+init_db();
+init_errors5();
+var GITHUB_API = "https://api.github.com";
+var STATE_TTL_MS = 10 * 60 * 1e3;
+function githubAppConfig() {
+  const appId = process.env.GITHUB_APP_ID?.trim();
+  const privateKey = process.env.GITHUB_APP_PRIVATE_KEY?.replace(/\\n/g, "\n").trim();
+  const slug = process.env.GITHUB_APP_SLUG?.trim();
+  return appId && privateKey && slug ? { appId, privateKey, slug } : null;
+}
+function requireGitHubAppConfig() {
+  const config4 = githubAppConfig();
+  if (!config4) {
+    throw new ApiError(
+      400,
+      "GitHub App is not configured. Set GITHUB_APP_ID, GITHUB_APP_PRIVATE_KEY, and GITHUB_APP_SLUG."
+    );
+  }
+  return config4;
+}
+function base64url3(value) {
+  return Buffer.from(value).toString("base64url");
+}
+function appJwt(config4) {
+  const now2 = Math.floor(Date.now() / 1e3);
+  const encodedHeader = base64url3(JSON.stringify({ alg: "RS256", typ: "JWT" }));
+  const encodedPayload = base64url3(
+    JSON.stringify({ iat: now2 - 60, exp: now2 + 9 * 60, iss: config4.appId })
+  );
+  const signingInput = `${encodedHeader}.${encodedPayload}`;
+  const signer = (0, import_node_crypto11.createSign)("RSA-SHA256");
+  signer.update(signingInput);
+  signer.end();
+  return `${signingInput}.${signer.sign(config4.privateKey, "base64url")}`;
+}
+async function githubFetch(path25, token, init2 = {}) {
+  let response;
+  try {
+    response = await fetch(`${GITHUB_API}${path25}`, {
+      method: init2.method ?? "GET",
+      headers: {
+        Accept: "application/vnd.github+json",
+        Authorization: `Bearer ${token}`,
+        "X-GitHub-Api-Version": "2022-11-28",
+        ...init2.body === void 0 ? {} : { "Content-Type": "application/json" }
+      },
+      body: init2.body === void 0 ? void 0 : JSON.stringify(init2.body)
+    });
+  } catch (error53) {
+    throw new ApiError(502, `Could not reach GitHub: ${error53.message}`);
+  }
+  if (!response.ok) {
+    const text = await response.text();
+    let detail = text;
+    try {
+      detail = JSON.parse(text).message ?? text;
+    } catch {
+    }
+    const status = response.status >= 400 && response.status < 500 ? response.status : 502;
+    throw new ApiError(
+      status,
+      `GitHub API error (${response.status}): ${detail || response.statusText}`
+    );
+  }
+  if (response.status === 204) return null;
+  return await response.json();
+}
+function signedInstallState(workspaceId, privateKey) {
+  const payload = base64url3(JSON.stringify({ workspaceId, expiresAt: Date.now() + STATE_TTL_MS }));
+  const mac3 = (0, import_node_crypto11.createHmac)("sha256", privateKey).update(payload).digest("base64url");
+  return `${payload}.${mac3}`;
+}
+function verifyInstallState(value, workspaceId, privateKey) {
+  const [payload, suppliedMac, ...extra] = value?.split(".") ?? [];
+  if (!payload || !suppliedMac || extra.length)
+    throw new ApiError(400, "Invalid GitHub installation state.");
+  const expectedMac = (0, import_node_crypto11.createHmac)("sha256", privateKey).update(payload).digest("base64url");
+  const sameLength = suppliedMac.length === expectedMac.length;
+  if (!sameLength || !(0, import_node_crypto11.timingSafeEqual)(Buffer.from(suppliedMac), Buffer.from(expectedMac))) {
+    throw new ApiError(400, "Invalid GitHub installation state.");
+  }
+  let decoded;
+  try {
+    decoded = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+  } catch {
+    throw new ApiError(400, "Invalid GitHub installation state.");
+  }
+  if (decoded.workspaceId !== workspaceId || typeof decoded.expiresAt !== "number" || decoded.expiresAt < Date.now()) {
+    throw new ApiError(400, "GitHub installation state has expired. Start installation again.");
+  }
+}
+async function readInstallation(client = requireDatabaseClient(), workspaceId = WORKSPACE.id) {
+  return await client.get(
+    `SELECT id, github_installation_id, github_account_login, github_account_type, permissions_json, revision
+         FROM ext_github_installations
+        WHERE workspace_id = ? AND deleted_at IS NULL`,
+    [workspaceId]
+  ) ?? null;
+}
+async function requireInstallationToken(workspaceId = WORKSPACE.id) {
+  const installation = await readInstallation(void 0, workspaceId);
+  if (!installation)
+    throw new ApiError(400, "Install the GitHub App in Settings \u2192 Integrations first.");
+  const config4 = requireGitHubAppConfig();
+  const result = await githubFetch(
+    `/app/installations/${encodeURIComponent(installation.github_installation_id)}/access_tokens`,
+    appJwt(config4),
+    { method: "POST" }
+  );
+  if (!result.token) throw new ApiError(502, "GitHub did not return an installation access token.");
+  return result.token;
+}
+async function assertProject(projectId, client = requireDatabaseClient()) {
+  const project = await client.get(
+    `SELECT workspace_id FROM projects WHERE id = ? AND deleted_at IS NULL`,
+    [projectId]
+  );
+  if (!project) throw new ApiError(404, "Project not found.");
+  return project.workspace_id;
+}
+async function readProjectLink(projectId, workspaceId, client = requireDatabaseClient()) {
+  return await client.get(
+    `SELECT id, github_repo_id, full_name, default_branch, revision
+         FROM ext_github_project_links
+        WHERE workspace_id = ? AND project_id = ? AND deleted_at IS NULL`,
+    [workspaceId, projectId]
+  ) ?? null;
+}
+function repoDto(row) {
+  return {
+    id: row.github_repo_id,
+    fullName: row.full_name,
+    defaultBranch: row.default_branch,
+    private: false
+  };
+}
+async function getGitHubIntegration() {
+  const installation = await readInstallation();
+  return {
+    configured: githubAppConfig() !== null,
+    connected: installation !== null,
+    accountLogin: installation?.github_account_login ?? null,
+    accountType: installation?.github_account_type ?? null
+  };
+}
+function beginGitHubInstall() {
+  const config4 = requireGitHubAppConfig();
+  const state2 = signedInstallState(WORKSPACE.id, config4.privateKey);
+  return {
+    installUrl: `https://github.com/apps/${encodeURIComponent(config4.slug)}/installations/new?state=${encodeURIComponent(state2)}`
+  };
+}
+async function completeGitHubInstall(input) {
+  const config4 = requireGitHubAppConfig();
+  verifyInstallState(input.state, WORKSPACE.id, config4.privateKey);
+  if (!/^\d+$/.test(input.installationId))
+    throw new ApiError(400, "GitHub installation id is invalid.");
+  const upstream = await githubFetch(`/app/installations/${input.installationId}`, appJwt(config4));
+  const accountLogin = upstream.account?.login?.trim();
+  if (!accountLogin) throw new ApiError(502, "GitHub installation has no account login.");
+  await requireDatabaseClient().transaction(async (tx) => {
+    const existing = await readInstallation(tx);
+    const now2 = nowIso2();
+    if (existing) {
+      const revision = existing.revision + 1;
+      await tx.run(
+        `UPDATE ext_github_installations
+            SET github_installation_id = ?, github_account_login = ?, github_account_type = ?, permissions_json = ?, updated_at = ?, revision = ?
+          WHERE id = ? AND revision = ?`,
+        [
+          input.installationId,
+          accountLogin,
+          upstream.account?.type ?? null,
+          JSON.stringify(upstream.permissions ?? {}),
+          now2,
+          revision,
+          existing.id,
+          existing.revision
+        ]
+      );
+      await recordChange2(
+        {
+          entityType: "github:installation",
+          entityId: existing.id,
+          operation: "update",
+          entityRevision: revision,
+          changedFields: ["connected", "accountLogin"],
+          workspaceId: WORKSPACE.id
+        },
+        tx
+      );
+    } else {
+      const id = newId2();
+      await tx.run(
+        `INSERT INTO ext_github_installations (id, workspace_id, github_installation_id, github_account_login, github_account_type, permissions_json, created_at, updated_at, revision)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+        [
+          id,
+          WORKSPACE.id,
+          input.installationId,
+          accountLogin,
+          upstream.account?.type ?? null,
+          JSON.stringify(upstream.permissions ?? {}),
+          now2,
+          now2
+        ]
+      );
+      await recordChange2(
+        {
+          entityType: "github:installation",
+          entityId: id,
+          operation: "insert",
+          entityRevision: 1,
+          changedFields: ["connected", "accountLogin"],
+          workspaceId: WORKSPACE.id
+        },
+        tx
+      );
+    }
+  });
+  return getGitHubIntegration();
+}
+async function disconnectGitHub() {
+  await requireDatabaseClient().transaction(async (tx) => {
+    const installation = await readInstallation(tx);
+    if (!installation) return;
+    const now2 = nowIso2();
+    const revision = installation.revision + 1;
+    await tx.run(
+      `UPDATE ext_github_installations SET deleted_at = ?, updated_at = ?, revision = ? WHERE id = ? AND revision = ?`,
+      [now2, now2, revision, installation.id, installation.revision]
+    );
+    await tx.run(
+      `UPDATE ext_github_project_links SET deleted_at = ?, updated_at = ?, revision = revision + 1 WHERE workspace_id = ? AND deleted_at IS NULL`,
+      [now2, now2, WORKSPACE.id]
+    );
+    await recordChange2(
+      {
+        entityType: "github:installation",
+        entityId: installation.id,
+        operation: "delete",
+        entityRevision: revision,
+        changedFields: ["connected"],
+        workspaceId: WORKSPACE.id
+      },
+      tx
+    );
+  });
+  return getGitHubIntegration();
+}
+async function listGitHubRepos(query) {
+  const token = await requireInstallationToken();
+  const data = await githubFetch("/installation/repositories?per_page=100", token);
+  const needle = query?.trim().toLowerCase();
+  return (data.repositories ?? []).filter((repo) => !needle || repo.full_name.toLowerCase().includes(needle)).map((repo) => ({
+    id: String(repo.id),
+    fullName: repo.full_name,
+    defaultBranch: repo.default_branch ?? "main",
+    private: Boolean(repo.private)
+  }));
+}
+async function getProjectGitHubLink(projectId) {
+  const workspaceId = await assertProject(projectId);
+  const link = await readProjectLink(projectId, workspaceId);
+  return { projectId, repo: link ? repoDto(link) : null };
+}
+async function linkProjectGitHub(projectId, body) {
+  const workspaceId = await assertProject(projectId);
+  const fullName = body.repoFullName?.trim() ?? "";
+  if (!fullName) {
+    const existing = await readProjectLink(projectId, workspaceId);
+    if (existing) {
+      const now2 = nowIso2();
+      await requireDatabaseClient().run(
+        `UPDATE ext_github_project_links SET deleted_at = ?, updated_at = ?, revision = ? WHERE id = ? AND revision = ?`,
+        [now2, now2, existing.revision + 1, existing.id, existing.revision]
+      );
+    }
+    return { projectId, repo: null };
+  }
+  if (!/^[^/\s]+\/[^/\s]+$/.test(fullName))
+    throw new ApiError(400, "Repository must be written as owner/name.");
+  const token = await requireInstallationToken(workspaceId);
+  const repo = await githubFetch(`/repos/${fullName.split("/").map(encodeURIComponent).join("/")}`, token);
+  const next = {
+    id: String(repo.id),
+    fullName: repo.full_name,
+    defaultBranch: repo.default_branch ?? "main",
+    private: Boolean(repo.private)
+  };
+  await requireDatabaseClient().transaction(async (tx) => {
+    const existing = await readProjectLink(projectId, workspaceId, tx);
+    const now2 = nowIso2();
+    if (existing) {
+      await tx.run(
+        `UPDATE ext_github_project_links SET github_repo_id = ?, full_name = ?, default_branch = ?, metadata_json = ?, deleted_at = NULL, updated_at = ?, revision = ? WHERE id = ? AND revision = ?`,
+        [
+          next.id,
+          next.fullName,
+          next.defaultBranch,
+          JSON.stringify({ private: next.private }),
+          now2,
+          existing.revision + 1,
+          existing.id,
+          existing.revision
+        ]
+      );
+      await recordChange2(
+        {
+          entityType: "github:project_link",
+          entityId: existing.id,
+          operation: "update",
+          entityRevision: existing.revision + 1,
+          projectId,
+          changedFields: ["repo"],
+          workspaceId
+        },
+        tx
+      );
+    } else {
+      const id = newId2();
+      await tx.run(
+        `INSERT INTO ext_github_project_links (id, workspace_id, project_id, github_repo_id, full_name, default_branch, metadata_json, created_at, updated_at, revision) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+        [
+          id,
+          workspaceId,
+          projectId,
+          next.id,
+          next.fullName,
+          next.defaultBranch,
+          JSON.stringify({ private: next.private }),
+          now2,
+          now2
+        ]
+      );
+      await recordChange2(
+        {
+          entityType: "github:project_link",
+          entityId: id,
+          operation: "insert",
+          entityRevision: 1,
+          projectId,
+          changedFields: ["repo"],
+          workspaceId
+        },
+        tx
+      );
+    }
+  });
+  return { projectId, repo: next };
+}
+async function readPullRequest(missionId, workspaceId, client = requireDatabaseClient()) {
+  return await client.get(
+    `SELECT id, github_pull_number, html_url, state, head_branch, base_branch, revision FROM ext_github_mission_pull_requests WHERE workspace_id = ? AND mission_id = ? AND deleted_at IS NULL`,
+    [workspaceId, missionId]
+  ) ?? null;
+}
+function pullRequestDto(row) {
+  return {
+    number: row.github_pull_number,
+    url: row.html_url,
+    state: row.state,
+    headBranch: row.head_branch,
+    baseBranch: row.base_branch
+  };
+}
+async function getMissionGitHubPullRequest(missionId) {
+  const mission = await requireDatabaseClient().get(
+    `SELECT workspace_id FROM missions WHERE id = ? AND deleted_at IS NULL`,
+    [missionId]
+  );
+  if (!mission) throw new ApiError(404, "Mission not found.");
+  const row = await readPullRequest(missionId, mission.workspace_id);
+  return row ? pullRequestDto(row) : null;
+}
+var PROJECT_INITIALIZATION_SELECT = `SELECT id, project_id, mission_id, github_owner_login, provisioning_status,
+              github_repo_id, full_name, default_branch, clone_url, failure_message, revision`;
+async function readProjectInitialization(tx, profileId, idempotencyKey) {
+  return await tx.get(
+    `${PROJECT_INITIALIZATION_SELECT}
+         FROM ext_github_project_initializations
+        WHERE profile_id = ? AND idempotency_key = ? AND deleted_at IS NULL`,
+    [profileId, idempotencyKey]
+  ) ?? null;
+}
+async function readProjectInitializationById(tx, id) {
+  return await tx.get(
+    `${PROJECT_INITIALIZATION_SELECT}
+         FROM ext_github_project_initializations WHERE id = ? AND deleted_at IS NULL`,
+    [id]
+  ) ?? null;
+}
+async function createProjectInitialization(tx, input) {
+  await tx.run(
+    `INSERT INTO ext_github_project_initializations
+        (id, profile_id, workspace_id, project_id, mission_id, idempotency_key, github_owner_login,
+         provisioning_status, created_at, updated_at, revision)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+    [
+      input.id,
+      input.profileId,
+      input.workspaceId,
+      input.projectId,
+      input.missionId,
+      input.idempotencyKey,
+      input.ownerLogin,
+      input.status,
+      input.now,
+      input.now
+    ]
+  );
+  return {
+    id: input.id,
+    project_id: input.projectId,
+    mission_id: input.missionId,
+    github_owner_login: input.ownerLogin,
+    provisioning_status: input.status,
+    github_repo_id: null,
+    full_name: null,
+    default_branch: null,
+    clone_url: null,
+    failure_message: null,
+    revision: 1
+  };
+}
+async function recordProvisioningFailure(tx, input) {
+  await tx.run(
+    `UPDATE ext_github_project_initializations
+            SET provisioning_status = 'failed', failure_message = ?, updated_at = ?, revision = revision + 1
+          WHERE id = ? AND provisioning_status <> 'succeeded' AND deleted_at IS NULL`,
+    [input.message.slice(0, 500), input.now, input.id]
+  );
+}
+async function recordProvisioningSuccess(tx, input) {
+  await tx.run(
+    `UPDATE ext_github_project_initializations SET provisioning_status = 'succeeded', github_repo_id = ?,
+          full_name = ?, default_branch = ?, clone_url = ?, failure_message = NULL, updated_at = ?, revision = revision + 1
+        WHERE id = ?`,
+    [
+      input.repo.id,
+      input.repo.fullName,
+      input.repo.defaultBranch,
+      input.repo.cloneUrl,
+      input.now,
+      input.id
+    ]
+  );
+  return await readProjectInitializationById(tx, input.id);
+}
+async function recordPrivateRepositoryLink(tx, input) {
+  const existingLink = await tx.get(
+    `SELECT id FROM ext_github_project_links WHERE project_id = ? AND deleted_at IS NULL`,
+    [input.project.id]
+  );
+  if (existingLink) return;
+  const linkId = newId2();
+  await tx.run(
+    `INSERT INTO ext_github_project_links
+          (id, workspace_id, project_id, github_repo_id, full_name, default_branch, metadata_json, created_at, updated_at, revision)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+    [
+      linkId,
+      input.project.workspaceId,
+      input.project.id,
+      input.repo.id,
+      input.repo.fullName,
+      input.repo.defaultBranch,
+      JSON.stringify({ private: true, source: "user_oauth" }),
+      input.now,
+      input.now
+    ]
+  );
+  await recordChange2(
+    {
+      entityType: "github:project_link",
+      entityId: linkId,
+      operation: "insert",
+      entityRevision: 1,
+      projectId: input.project.id,
+      changedFields: ["repo"],
+      workspaceId: input.project.workspaceId
+    },
+    tx
+  );
+}
+async function createMissionGitHubPullRequest(missionId, body) {
+  const mission = await requireDatabaseClient().get(
+    `SELECT id, workspace_id, project_id, title, active_branch FROM missions WHERE id = ? AND deleted_at IS NULL`,
+    [missionId]
+  );
+  if (!mission) throw new ApiError(404, "Mission not found.");
+  const existing = await readPullRequest(missionId, mission.workspace_id);
+  if (existing) return pullRequestDto(existing);
+  if (!mission.active_branch?.trim())
+    throw new ApiError(409, "Publish the mission branch before opening a pull request.");
+  const link = await readProjectLink(mission.project_id, mission.workspace_id);
+  if (!link)
+    throw new ApiError(400, "Link this project to a GitHub repository in project settings first.");
+  const token = await requireInstallationToken(mission.workspace_id);
+  const pr = await githubFetch(
+    `/repos/${link.full_name.split("/").map(encodeURIComponent).join("/")}/pulls`,
+    token,
+    {
+      method: "POST",
+      body: {
+        title: body.title?.trim() || mission.title,
+        body: body.body?.trim() || void 0,
+        draft: Boolean(body.draft),
+        head: mission.active_branch,
+        base: link.default_branch
+      }
+    }
+  );
+  const now2 = nowIso2();
+  const id = newId2();
+  await requireDatabaseClient().transaction(async (tx) => {
+    const concurrent = await readPullRequest(missionId, mission.workspace_id, tx);
+    if (concurrent) return;
+    await tx.run(
+      `INSERT INTO ext_github_mission_pull_requests (id, workspace_id, project_id, mission_id, github_pull_number, html_url, state, head_branch, base_branch, created_at, updated_at, revision) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+      [
+        id,
+        mission.workspace_id,
+        mission.project_id,
+        missionId,
+        pr.number,
+        pr.html_url,
+        pr.state,
+        mission.active_branch,
+        link.default_branch,
+        now2,
+        now2
+      ]
+    );
+    await recordChange2(
+      {
+        entityType: "github:mission_pull_request",
+        entityId: id,
+        operation: "insert",
+        entityRevision: 1,
+        projectId: mission.project_id,
+        missionId,
+        changedFields: ["pullRequest"],
+        workspaceId: mission.workspace_id
+      },
+      tx
+    );
+  });
+  return {
+    number: pr.number,
+    url: pr.html_url,
+    state: pr.state,
+    headBranch: mission.active_branch,
+    baseBranch: link.default_branch
+  };
+}
+
+// ext/github/user-oauth.ts
+var import_node_crypto12 = require("node:crypto");
 init_db();
 init_errors5();
 
@@ -141080,7 +141590,7 @@ function resolveAuthBaseUrl() {
 }
 
 // ext/github/user-oauth.ts
-var GITHUB_API = "https://api.github.com";
+var GITHUB_API2 = "https://api.github.com";
 var GITHUB_AUTHORIZE_URL = "https://github.com/login/oauth/authorize";
 var GITHUB_ACCESS_TOKEN_URL = "https://github.com/login/oauth/access_token";
 var USER_OAUTH_SCOPES = ["repo", "read:org"];
@@ -141117,8 +141627,8 @@ function tokenAad(profileId, kind) {
   return Buffer.from(`overlord:github-user-oauth:v1:${profileId}:${kind}`, "utf8");
 }
 function encryptToken(token, profileId, kind, key) {
-  const nonce = (0, import_node_crypto11.randomBytes)(12);
-  const cipher = (0, import_node_crypto11.createCipheriv)("aes-256-gcm", key, nonce);
+  const nonce = (0, import_node_crypto12.randomBytes)(12);
+  const cipher = (0, import_node_crypto12.createCipheriv)("aes-256-gcm", key, nonce);
   cipher.setAAD(tokenAad(profileId, kind));
   const ciphertext = Buffer.concat([cipher.update(token, "utf8"), cipher.final()]);
   const tag2 = cipher.getAuthTag();
@@ -141130,7 +141640,7 @@ function decryptToken(envelope, profileId, kind, key) {
     throw new ApiError(503, "The stored GitHub connection cannot be decrypted.");
   }
   try {
-    const decipher = (0, import_node_crypto11.createDecipheriv)("aes-256-gcm", key, Buffer.from(nonceText, "base64url"));
+    const decipher = (0, import_node_crypto12.createDecipheriv)("aes-256-gcm", key, Buffer.from(nonceText, "base64url"));
     decipher.setAAD(tokenAad(profileId, kind));
     decipher.setAuthTag(Buffer.from(tagText, "base64url"));
     return Buffer.concat([
@@ -141192,7 +141702,7 @@ async function getGitHubUserConnection() {
   return connectionDto(await readConnection(client, profileId));
 }
 function stateHash(state2) {
-  return (0, import_node_crypto11.createHash)("sha256").update(state2).digest("hex");
+  return (0, import_node_crypto12.createHash)("sha256").update(state2).digest("hex");
 }
 function validatedReturnUrl(value, allowedBrowserOrigins2) {
   if (value === void 0 || value === null || value === "") return null;
@@ -141215,7 +141725,7 @@ async function beginGitHubUserAuthorization(body, allowedBrowserOrigins2) {
   const config4 = requireUserOAuthConfig();
   const client = requireDatabaseClient();
   const profileId = await activeProfileId(client);
-  const state2 = (0, import_node_crypto11.randomBytes)(32).toString("base64url");
+  const state2 = (0, import_node_crypto12.randomBytes)(32).toString("base64url");
   const now2 = nowIso2();
   const expiresAt = new Date(Date.now() + OAUTH_STATE_TTL_MS).toISOString();
   const returnUrl = validatedReturnUrl(body.returnTo, allowedBrowserOrigins2);
@@ -141324,8 +141834,8 @@ async function exchangeOAuthToken(input) {
   };
 }
 async function githubUserFetchUrl(url2, token, init2 = {}) {
-  const target = new URL(url2, GITHUB_API);
-  if (target.origin !== GITHUB_API)
+  const target = new URL(url2, GITHUB_API2);
+  if (target.origin !== GITHUB_API2)
     throw new ApiError(502, "GitHub returned an invalid page link.");
   let response;
   try {
@@ -141363,7 +141873,7 @@ async function githubUserFetchAll(path25, token) {
   let nextUrl = path25;
   const visited = /* @__PURE__ */ new Set();
   while (nextUrl) {
-    const canonical = new URL(nextUrl, GITHUB_API).toString();
+    const canonical = new URL(nextUrl, GITHUB_API2).toString();
     if (visited.has(canonical)) throw new ApiError(502, "GitHub returned a repeated page link.");
     visited.add(canonical);
     const page = await githubUserFetchUrl(
@@ -141594,7 +142104,7 @@ async function createPrivateGitHubRepository({
 }
 async function revokeUpstreamToken(token, config4) {
   try {
-    await fetch(`${GITHUB_API}/applications/${encodeURIComponent(config4.clientId)}/token`, {
+    await fetch(`${GITHUB_API2}/applications/${encodeURIComponent(config4.clientId)}/token`, {
       method: "DELETE",
       headers: {
         Accept: "application/vnd.github+json",
@@ -141704,7 +142214,7 @@ function withWorktreeFields(input, branch) {
     cycle: Number.isFinite(cycleMatch) && cycleMatch > 1 ? cycleMatch : 1
   };
 }
-function planMissionBranch(input) {
+function planSharedMissionBranch(input) {
   const baseBranch = canonicalMissionBranch(input.mission);
   const allRefs = refSet([...input.refs.local, ...input.refs.remote]);
   const mergedRefs = refSet(input.refs.merged);
@@ -141733,6 +142243,46 @@ function planMissionBranch(input) {
     candidate = `${baseBranch}-${cycle}`;
   }
   return { action: "new_cycle", ...withWorktreeFields(input, candidate), from: input.base };
+}
+function isolationParent(sharedBranch, allRefs, base) {
+  return allRefs.has(sharedBranch) ? sharedBranch : base;
+}
+function isolateDecision(input, shared) {
+  const key = sanitizeBranchName(input.isolation?.objectiveKey ?? "", "");
+  if (!key) return shared;
+  const allRefs = refSet([...input.refs.local, ...input.refs.remote]);
+  const mergedRefs = refSet(input.refs.merged);
+  const checkedOutRefs = refSet(input.refs.checkedOut ?? []);
+  const isolatedBase = sanitizeBranchName(`${shared.branch}-${key}`, shared.branch);
+  if (isolatedBase === shared.branch) return shared;
+  if (!allRefs.has(isolatedBase)) {
+    return {
+      action: "create",
+      ...withWorktreeFields(input, isolatedBase),
+      cycle: 1,
+      from: isolationParent(shared.branch, allRefs, input.base)
+    };
+  }
+  if (!mergedRefs.has(isolatedBase)) {
+    return { action: "reuse", ...withWorktreeFields(input, isolatedBase), cycle: 1 };
+  }
+  let cycle = Math.max(2, highestExistingCycle(isolatedBase, allRefs) + 1);
+  let candidate = `${isolatedBase}-${cycle}`;
+  while (allRefs.has(candidate) || checkedOutRefs.has(candidate) || mergedRefs.has(candidate)) {
+    cycle += 1;
+    candidate = `${isolatedBase}-${cycle}`;
+  }
+  return {
+    action: "new_cycle",
+    ...withWorktreeFields(input, candidate),
+    cycle,
+    from: isolationParent(shared.branch, allRefs, input.base)
+  };
+}
+function planMissionBranch(input) {
+  const shared = planSharedMissionBranch(input);
+  if (!input.isolation || input.overrideBranch) return shared;
+  return isolateDecision(input, shared);
 }
 function previewMissionBranch(input) {
   return planMissionBranch({
@@ -144481,15 +145031,6 @@ function initializationProvisioning(row, resource) {
     error: row.failure_message
   };
 }
-async function readProjectInitialization(db, profileId, idempotencyKey) {
-  return await db.get(
-    `SELECT id, project_id, mission_id, github_owner_login, provisioning_status,
-              github_repo_id, full_name, default_branch, clone_url, failure_message, revision
-         FROM ext_github_project_initializations
-        WHERE profile_id = ? AND idempotency_key = ? AND deleted_at IS NULL`,
-    [profileId, idempotencyKey]
-  ) ?? null;
-}
 async function initializeProject(body) {
   const db = requireDatabaseClient();
   const workspaceId = body.workspaceId?.trim();
@@ -144557,37 +145098,17 @@ async function initializeProject(body) {
     );
     const id = newId2();
     const status = wantsRepository ? "pending" : "not_requested";
-    await tx.run(
-      `INSERT INTO ext_github_project_initializations
-        (id, profile_id, workspace_id, project_id, mission_id, idempotency_key, github_owner_login,
-         provisioning_status, created_at, updated_at, revision)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
-      [
-        id,
-        profileId,
-        workspaceId,
-        projectId,
-        mission2.missionId,
-        idempotencyKey,
-        ownerLogin,
-        status,
-        now2,
-        now2
-      ]
-    );
-    return {
+    return createProjectInitialization(tx, {
       id,
-      project_id: projectId,
-      mission_id: mission2.missionId,
-      github_owner_login: ownerLogin,
-      provisioning_status: status,
-      github_repo_id: null,
-      full_name: null,
-      default_branch: null,
-      clone_url: null,
-      failure_message: null,
-      revision: 1
-    };
+      profileId,
+      workspaceId,
+      projectId,
+      missionId: mission2.missionId,
+      idempotencyKey,
+      ownerLogin,
+      status,
+      now: now2
+    });
   });
   if (initialization.provisioning_status !== "not_requested" && initialization.provisioning_status !== "succeeded") {
     try {
@@ -144599,12 +145120,11 @@ async function initializeProject(body) {
     } catch (error53) {
       const message2 = error53 instanceof ApiError ? error53.message : "GitHub repository provisioning failed.";
       const now2 = nowIso2();
-      await db.run(
-        `UPDATE ext_github_project_initializations
-            SET provisioning_status = 'failed', failure_message = ?, updated_at = ?, revision = revision + 1
-          WHERE id = ? AND provisioning_status <> 'succeeded' AND deleted_at IS NULL`,
-        [message2.slice(0, 500), now2, initialization.id]
-      );
+      await recordProvisioningFailure(db, {
+        id: initialization.id,
+        message: message2,
+        now: now2
+      });
       initialization = await readProjectInitialization(db, profileId, idempotencyKey);
     }
   }
@@ -144626,50 +145146,11 @@ async function persistInitializedRepository({
   repo
 }) {
   return db.transaction(async (tx) => {
-    const current = await tx.get(
-      `SELECT id, project_id, mission_id, github_owner_login, provisioning_status,
-              github_repo_id, full_name, default_branch, clone_url, failure_message, revision
-         FROM ext_github_project_initializations WHERE id = ? AND deleted_at IS NULL`,
-      [initialization.id]
-    );
+    const current = await readProjectInitializationById(tx, initialization.id);
     if (current.provisioning_status === "succeeded") return current;
     const project = await getProject2(current.project_id, tx, PERMISSIONS.PROJECT_READ);
     const now2 = nowIso2();
-    const existingLink = await tx.get(
-      `SELECT id FROM ext_github_project_links WHERE project_id = ? AND deleted_at IS NULL`,
-      [project.id]
-    );
-    if (!existingLink) {
-      const linkId = newId2();
-      await tx.run(
-        `INSERT INTO ext_github_project_links
-          (id, workspace_id, project_id, github_repo_id, full_name, default_branch, metadata_json, created_at, updated_at, revision)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
-        [
-          linkId,
-          project.workspaceId,
-          project.id,
-          repo.id,
-          repo.fullName,
-          repo.defaultBranch,
-          JSON.stringify({ private: true, source: "user_oauth" }),
-          now2,
-          now2
-        ]
-      );
-      await recordChange2(
-        {
-          entityType: "github:project_link",
-          entityId: linkId,
-          operation: "insert",
-          entityRevision: 1,
-          projectId: project.id,
-          changedFields: ["repo"],
-          workspaceId: project.workspaceId
-        },
-        tx
-      );
-    }
+    await recordPrivateRepositoryLink(tx, { project, repo, now: now2 });
     await insertProjectResource(
       tx,
       project,
@@ -144681,18 +145162,7 @@ async function persistInitializedRepository({
       },
       "GitHub clone URL is required"
     );
-    await tx.run(
-      `UPDATE ext_github_project_initializations SET provisioning_status = 'succeeded', github_repo_id = ?,
-          full_name = ?, default_branch = ?, clone_url = ?, failure_message = NULL, updated_at = ?, revision = revision + 1
-        WHERE id = ?`,
-      [repo.id, repo.fullName, repo.defaultBranch, repo.cloneUrl, now2, current.id]
-    );
-    return await tx.get(
-      `SELECT id, project_id, mission_id, github_owner_login, provisioning_status,
-              github_repo_id, full_name, default_branch, clone_url, failure_message, revision
-         FROM ext_github_project_initializations WHERE id = ?`,
-      [current.id]
-    );
+    return recordProvisioningSuccess(tx, { id: current.id, repo, now: now2 });
   });
 }
 async function updateProject(id, body) {
@@ -145378,84 +145848,28 @@ async function upsertMissionSharedContext(missionRef, body) {
   if (body.value === void 0) {
     throw new ApiError(400, "Shared context value is required");
   }
-  const isJson = typeof body.value === "object" && body.value !== null;
-  const valueKind = isJson ? "json" : "string";
-  const valueText = isJson ? null : String(body.value);
-  const valueJson = isJson ? JSON.stringify(body.value) : null;
   return requireDatabaseClient().transaction(async (tx) => {
     const mission = await getMissionRow(missionRef, tx, PERMISSIONS.MISSION_UPDATE);
-    const now2 = nowIso2();
-    const existing = await tx.get(
-      `SELECT id, revision FROM shared_context_entries
-        WHERE mission_id = ? AND workspace_id = ? AND key = ? AND deleted_at IS NULL`,
-      [mission.id, mission.workspace_id, key]
+    const ctx = await buildWebappServiceContextForWorkspace(
+      mission.workspace_id,
+      tx,
+      getActorWorkspaceUserId()
     );
-    let entryId;
-    let revision;
-    let operation2;
-    if (existing) {
-      entryId = existing.id;
-      revision = existing.revision + 1;
-      operation2 = "update";
-      await tx.run(
-        `UPDATE shared_context_entries
-            SET value_kind = ?, value_text = ?, value_json = ?, updated_at = ?, revision = ?
-          WHERE id = ? AND workspace_id = ?`,
-        [valueKind, valueText, valueJson, now2, revision, entryId, mission.workspace_id]
-      );
-    } else {
-      entryId = newId2();
-      revision = 1;
-      operation2 = "insert";
-      await tx.run(
-        `INSERT INTO shared_context_entries
-             (id, workspace_id, mission_id, key, value_kind, value_text, value_json,
-              created_by_workspace_user_id, created_at, updated_at, revision)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
-        [
-          entryId,
-          mission.workspace_id,
-          mission.id,
-          key,
-          valueKind,
-          valueText,
-          valueJson,
-          getActorWorkspaceUserId(),
-          now2,
-          now2
-        ]
-      );
-    }
-    await recordChange2(
-      {
-        entityType: "shared_context_entry",
-        entityId: entryId,
-        operation: operation2,
-        entityRevision: revision,
-        workspaceId: mission.workspace_id,
-        projectId: mission.project_id,
-        missionId: mission.id,
-        changedFields: ["key", "value_kind", "value_text", "value_json"]
-      },
-      tx
-    );
+    const written = await writeSharedContext({
+      ctx,
+      missionId: mission.id,
+      key,
+      value: body.value
+    });
     const row = await tx.get(
       `SELECT id, mission_id, key, value_kind, value_text, value_json, updated_at, revision
          FROM shared_context_entries
         WHERE id = ? AND workspace_id = ?`,
-      [entryId, mission.workspace_id]
+      [written.id, mission.workspace_id]
     );
     return toSharedContextEntryDto(row);
   });
 }
-var CORE_ARTIFACT_TYPES = /* @__PURE__ */ new Set([
-  "test_results",
-  "next_steps",
-  "note",
-  "url",
-  "decision",
-  "migration"
-]);
 function normalizeExternalUrl(value) {
   if (value === void 0 || value === null) return null;
   if (typeof value !== "string") {
@@ -145480,12 +145894,6 @@ async function createArtifact(missionRef, body) {
   const type = typeof body.type === "string" ? body.type.trim() : "";
   if (!type) {
     throw new ApiError(400, "Artifact type is required");
-  }
-  if (!CORE_ARTIFACT_TYPES.has(type) && !type.includes(".")) {
-    throw new ApiError(
-      400,
-      `Artifact type must be one of ${[...CORE_ARTIFACT_TYPES].join(", ")} or a namespaced extension value`
-    );
   }
   const label = typeof body.label === "string" ? body.label.trim() : "";
   if (!label) {
@@ -145543,31 +145951,35 @@ async function createArtifact(missionRef, body) {
       }
       if (!objectiveId) objectiveId = session.objective_id;
     }
-    const id = newId2();
     const now2 = nowIso2();
-    const actorId = getActorWorkspaceUserId();
-    await tx.run(
-      `INSERT INTO artifacts
-         (id, workspace_id, project_id, mission_id, objective_id, session_id, delivery_id,
-          type, label, content_text, external_url, created_by_workspace_user_id,
-          created_at, updated_at, revision)
-       VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, 1)`,
-      [
-        id,
-        mission.workspace_id,
-        mission.project_id,
-        mission.id,
+    const ctx = await buildWebappServiceContextForWorkspace(
+      mission.workspace_id,
+      tx,
+      getActorWorkspaceUserId()
+    );
+    let id;
+    try {
+      ({ id } = await insertArtifactRow({
+        ctx,
+        workspaceId: mission.workspace_id,
+        projectId: mission.project_id,
+        missionId: mission.id,
         objectiveId,
         sessionId,
+        deliveryId: null,
         type,
         label,
         contentText,
         externalUrl,
-        actorId,
-        now2,
-        now2
-      ]
-    );
+        createdByWorkspaceUserId: getActorWorkspaceUserId(),
+        now: now2
+      }));
+    } catch (error53) {
+      if (error53 instanceof ServiceError) {
+        throw new ApiError(error53.status, error53.message, void 0, error53.code);
+      }
+      throw error53;
+    }
     const created = await tx.get(
       `SELECT id, workspace_id, project_id, mission_id, objective_id, session_id, delivery_id,
               type, label, content_text, content_json, external_url, created_at, updated_at, revision
@@ -148125,7 +148537,7 @@ async function revokeUserTokenSecret(rawToken) {
 
 // workspaces.ts
 init_dist();
-var import_node_crypto17 = require("node:crypto");
+var import_node_crypto18 = require("node:crypto");
 
 // sql-studio/sql-studio.ts
 var import_node_child_process9 = require("node:child_process");
@@ -154538,9 +154950,9 @@ var INVITATION_HASH_ALGORITHM = "sha256";
 var INVITATION_TTL_DAYS = 14;
 var WORKSPACE_ROLE_KEYS = /* @__PURE__ */ new Set(["ADMIN", "MANAGER", "MEMBER"]);
 function generateInvitationSecret() {
-  const prefix = `${INVITATION_TOKEN_SCHEME}_${(0, import_node_crypto17.randomBytes)(4).toString("hex")}`;
-  const secret = `${prefix}${(0, import_node_crypto17.randomBytes)(24).toString("hex")}`;
-  const hash2 = (0, import_node_crypto17.createHash)(INVITATION_HASH_ALGORITHM).update(secret).digest("hex");
+  const prefix = `${INVITATION_TOKEN_SCHEME}_${(0, import_node_crypto18.randomBytes)(4).toString("hex")}`;
+  const secret = `${prefix}${(0, import_node_crypto18.randomBytes)(24).toString("hex")}`;
+  const hash2 = (0, import_node_crypto18.createHash)(INVITATION_HASH_ALGORITHM).update(secret).digest("hex");
   return { secret, prefix, hash: hash2 };
 }
 var INVITATION_COLUMNS = "id, workspace_id, email, role_key, token_prefix, status, invited_by_workspace_user_id, expires_at, created_at, revision";
@@ -154704,7 +155116,7 @@ async function acceptWorkspaceInvitation(body) {
   if (!rawToken) throw new ApiError(400, "Invitation token is required");
   const profileId = getActiveProfileId();
   if (!profileId) throw new ApiError(401, "Authentication required");
-  const tokenHash = (0, import_node_crypto17.createHash)(INVITATION_HASH_ALGORITHM).update(rawToken).digest("hex");
+  const tokenHash = (0, import_node_crypto18.createHash)(INVITATION_HASH_ALGORITHM).update(rawToken).digest("hex");
   const client = requireDatabaseClient();
   const outcome = await client.transaction(async (tx) => {
     const invitation = await tx.get(
@@ -155121,6 +155533,24 @@ async function withAgentOrigin({
 function hasFlag(body, name) {
   return name in flagsOf(body);
 }
+async function assertInstructionEditableOnProtocolSurface(objectiveRef) {
+  const db = requireDatabaseClient();
+  const resolved = await resolveObjectiveIdForRest({ ref: objectiveRef, db });
+  const row = await db.get(
+    `SELECT state FROM objectives
+      WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+    [resolved.id, resolved.workspaceId]
+  );
+  if (!row) {
+    throw new ApiError(404, "Objective not found");
+  }
+  if (row.state !== "draft" && row.state !== "future") {
+    throw new ApiError(
+      400,
+      "Objective instruction text can only be edited in draft or future state"
+    );
+  }
+}
 function fileInput(body, fileFlag) {
   const perFlag = body.fileInputs?.[fileFlag];
   if (typeof perFlag === "string") return perFlag;
@@ -155507,16 +155937,24 @@ var handlers = {
       optionalAutoAdvanceFlag(body)
     )
   }),
-  "update-objective": async (ctx, body) => {
+  "update-objective": async (_ctx, body) => {
+    const objectiveId = requireFlag(body, "--objective-id");
+    const update = {};
     const autoAdvance = optionalAutoAdvanceFlag(body);
-    if (autoAdvance === void 0) {
-      throw new ApiError(400, "Provide --auto-advance or --no-auto-advance");
+    if (autoAdvance !== void 0) {
+      update.autoAdvance = autoAdvance;
     }
-    return updateObjective({
-      ctx,
-      objectiveId: requireFlag(body, "--objective-id"),
-      autoAdvance
-    });
+    if (hasFlag(body, "--instruction-text") || hasFlag(body, "--instruction-text-file")) {
+      await assertInstructionEditableOnProtocolSurface(objectiveId);
+      update.instructionText = resolveInput(body, "--instruction-text", "--instruction-text-file") ?? "";
+    }
+    if (autoAdvance === void 0 && update.instructionText === void 0) {
+      throw new ApiError(
+        400,
+        "Provide at least one of --auto-advance/--no-auto-advance or --instruction-text/--instruction-text-file"
+      );
+    }
+    return updateObjective2(objectiveId, update);
   },
   "record-work": async (ctx, body) => {
     const envelope = parseDeliveryPayloadEnvelope(body);
@@ -155874,18 +156312,23 @@ var hostedMcpToolDefinitions = [
   },
   {
     name: "overlord_update_objective",
-    title: "Update objective auto-advance",
-    description: "Use this to turn auto-advance on or off for an existing objective so delivery can queue the next one.",
+    title: "Update objective",
+    description: "Use this to turn auto-advance on or off and/or edit instruction text on a draft or future objective.",
     inputSchema: objectSchema(
       {
-        objectiveId: stringProperty("Objective UUID."),
+        objectiveId: stringProperty("Objective UUID or display id."),
         autoAdvance: booleanProperty(
           "When true, Overlord queues the next objective after this one is delivered. When false, delivery waits for approval."
+        ),
+        instructionText: stringProperty(
+          "Replacement instruction text. Allowed only when the objective is in draft or future state; blank clears the text in those states."
         )
       },
-      ["objectiveId", "autoAdvance"]
+      ["objectiveId"]
     ),
-    outputSchema: protocolOutputSchema("The updated objective, including autoAdvance."),
+    outputSchema: protocolOutputSchema(
+      "The updated objective, including autoAdvance and instructionText."
+    ),
     annotations: writeAction
   },
   {
@@ -156279,14 +156722,17 @@ var toolHandlers = {
     });
   },
   overlord_update_objective: (args) => {
-    if (typeof args.autoAdvance !== "boolean") {
-      throw new Error("autoAdvance must be a boolean");
+    const hasAutoAdvance = typeof args.autoAdvance === "boolean";
+    const hasInstructionText = typeof args.instructionText === "string";
+    if (!hasAutoAdvance && !hasInstructionText) {
+      throw new Error("Provide autoAdvance and/or instructionText");
     }
     return runProtocolSubcommand(
       "update-objective",
       protocolBody({
         "--objective-id": requiredString(args, "objectiveId"),
-        ...autoAdvanceFlags(args)
+        ...hasAutoAdvance ? autoAdvanceFlags(args) : {},
+        ...hasInstructionText ? { "--instruction-text": requiredString(args, "instructionText") } : {}
       })
     );
   },
@@ -157181,7 +157627,7 @@ async function ingestRunnerHarnessEvents({
 }) {
   const ctx = await requestRunnerContext(requestId);
   const request = await getExecutionRequest({ ctx, id: requestId });
-  const payload = body && typeof body === "object" && !Array.isArray(body) ? body : {};
+  const payload = asRecord(body);
   const mapped = providerSessionFromMetadata(request.metadata);
   const providerSessionId = typeof payload.providerSessionId === "string" && payload.providerSessionId.trim() ? payload.providerSessionId.trim() : mapped?.providerSessionId ?? "";
   const events = Array.isArray(payload.events) ? payload.events : [];
@@ -157229,13 +157675,14 @@ function requireBranchPayload(value) {
   const resourceKey = typeof body.resourceKey === "string" ? body.resourceKey.trim() : "";
   const action = body.action;
   const cycle = typeof body.cycle === "number" && Number.isFinite(body.cycle) ? body.cycle : 1;
+  const isolated = body.isolated === true;
   if (!branchName || !baseBranch || !worktreePath || !resourceKey) {
     throw new ApiError(400, "branchName, baseBranch, worktreePath, and resourceKey are required");
   }
   if (action !== "create" && action !== "reuse" && action !== "new_cycle") {
     throw new ApiError(400, "Invalid branch preparation action");
   }
-  return { branchName, baseBranch, worktreePath, resourceKey, action, cycle };
+  return { branchName, baseBranch, worktreePath, resourceKey, action, cycle, isolated };
 }
 async function resolveBranchResourceKey({
   tx,
@@ -157332,39 +157779,41 @@ async function recordBranchPreparedTx(tx, {
       );
     }
   }
-  const missionRevision = mission.revision + 1;
-  await tx.run(
-    `UPDATE missions
-        SET active_branch = ?, branch_override = NULL,
-            updated_at = ?, revision = ?
-      WHERE id = ?`,
-    [branch.branchName, now2, missionRevision, mission.id]
-  );
-  await recordChange2(
-    {
-      workspaceId,
-      entityType: "mission",
-      entityId: mission.id,
-      operation: "update",
-      entityRevision: missionRevision,
-      projectId: mission.project_id,
-      missionId: mission.id,
-      objectiveId,
-      changedFields: ["active_branch", "branch_override"]
-    },
-    tx
-  );
+  if (!branch.isolated) {
+    const missionRevision = mission.revision + 1;
+    await tx.run(
+      `UPDATE missions
+          SET active_branch = ?, branch_override = NULL,
+              updated_at = ?, revision = ?
+        WHERE id = ?`,
+      [branch.branchName, now2, missionRevision, mission.id]
+    );
+    await recordChange2(
+      {
+        workspaceId,
+        entityType: "mission",
+        entityId: mission.id,
+        operation: "update",
+        entityRevision: missionRevision,
+        projectId: mission.project_id,
+        missionId: mission.id,
+        objectiveId,
+        changedFields: ["active_branch", "branch_override"]
+      },
+      tx
+    );
+  }
   await recordRunnerBranchEvent(tx, {
     workspaceId,
     projectId: mission.project_id,
     missionId: mission.id,
     objectiveId,
-    summary: `Prepared branch ${branch.branchName} in worktree ${branch.worktreePath}.`,
+    summary: branch.isolated ? `Prepared isolated objective branch ${branch.branchName} in worktree ${branch.worktreePath}.` : `Prepared branch ${branch.branchName} in worktree ${branch.worktreePath}.`,
     payload: branch,
     now: now2
   });
   const executionTargetId = requestRow?.claimed_by_execution_target_id?.trim() || requestRow?.execution_target_id?.trim() || null;
-  if (executionTargetId) {
+  if (executionTargetId && !branch.isolated) {
     const resourceKey = await resolveBranchResourceKey({ tx, branch, requestRow });
     const existing = await tx.get(
       `SELECT id FROM mission_branch_observations
@@ -157640,7 +158089,7 @@ async function clearEverhourApiKey() {
   await clearEverhourConnection();
   return { connected: false, accountName: null };
 }
-async function readProjectLink(projectId, workspaceId, client = requireDatabaseClient()) {
+async function readProjectLink2(projectId, workspaceId, client = requireDatabaseClient()) {
   const row = await client.get(
     `SELECT id, project_id, everhour_project_id, everhour_project_name,
             everhour_section_id, everhour_general_task_id, revision
@@ -157661,7 +158110,7 @@ async function assertProjectExists(projectId, client = requireDatabaseClient()) 
 async function clearProjectLink(projectId) {
   await requireDatabaseClient().transaction(async (tx) => {
     const workspaceId = await assertProjectExists(projectId, tx);
-    const existing = await readProjectLink(projectId, workspaceId, tx);
+    const existing = await readProjectLink2(projectId, workspaceId, tx);
     if (!existing) return;
     const now2 = nowIso2();
     const revision = existing.revision + 1;
@@ -157687,7 +158136,7 @@ async function clearProjectLink(projectId) {
 }
 async function getProjectEverhourLink(projectId) {
   const workspaceId = await assertProjectExists(projectId);
-  const link = await readProjectLink(projectId, workspaceId);
+  const link = await readProjectLink2(projectId, workspaceId);
   return {
     projectId,
     everhourProjectId: link?.everhour_project_id ?? null,
@@ -157697,7 +158146,7 @@ async function getProjectEverhourLink(projectId) {
 async function writeProjectLink(projectId, everhourProjectId, everhourProjectName, everhourSectionId) {
   await requireDatabaseClient().transaction(async (tx) => {
     const workspaceId = await assertProjectExists(projectId, tx);
-    const existing = await readProjectLink(projectId, workspaceId, tx);
+    const existing = await readProjectLink2(projectId, workspaceId, tx);
     const now2 = nowIso2();
     if (existing) {
       const revision = existing.revision + 1;
@@ -157770,7 +158219,7 @@ async function writeProjectLink(projectId, everhourProjectId, everhourProjectNam
 async function writeProjectGeneralTaskId(projectId, taskId) {
   await requireDatabaseClient().transaction(async (tx) => {
     const workspaceId = await assertProjectExists(projectId, tx);
-    const existing = await readProjectLink(projectId, workspaceId, tx);
+    const existing = await readProjectLink2(projectId, workspaceId, tx);
     if (!existing) {
       throw new ApiError(
         400,
@@ -157865,7 +158314,7 @@ async function getMissionRow2(missionId) {
 }
 async function getProjectEverhour(projectId) {
   const workspaceId = await assertProjectExists(projectId);
-  const link = await readProjectLink(projectId, workspaceId);
+  const link = await readProjectLink2(projectId, workspaceId);
   if (!link) return { everhourProjectId: null, sectionId: null };
   return {
     everhourProjectId: link.everhour_project_id,
@@ -157874,7 +158323,7 @@ async function getProjectEverhour(projectId) {
 }
 async function listProjectEverhourTaskIds(projectId, client = requireDatabaseClient(), workspaceId) {
   const taskIds = /* @__PURE__ */ new Set();
-  const link = await readProjectLink(projectId, workspaceId, client);
+  const link = await readProjectLink2(projectId, workspaceId, client);
   if (link?.everhour_general_task_id) {
     taskIds.add(link.everhour_general_task_id);
   }
@@ -158017,7 +158466,7 @@ async function findProjectTaskByName({
 }
 async function ensureProjectGeneralTask(apiKey, projectId) {
   const workspaceId = await assertProjectExists(projectId);
-  const link = await readProjectLink(projectId, workspaceId);
+  const link = await readProjectLink2(projectId, workspaceId);
   if (!link?.everhour_project_id) {
     throw new ApiError(
       400,
@@ -158144,7 +158593,7 @@ async function stopMissionTimer(missionId) {
 async function getProjectEverhourState(projectId) {
   const workspaceId = await assertProjectExists(projectId);
   const apiKey = await readEverhourApiKey(workspaceId);
-  const link = await readProjectLink(projectId, workspaceId);
+  const link = await readProjectLink2(projectId, workspaceId);
   const taskId = link?.everhour_general_task_id ?? null;
   const base = {
     connected: Boolean(apiKey),
@@ -158421,457 +158870,6 @@ function createEverhourExtensionRouter(handle4) {
 
 // ext/github/routes.ts
 var import_express2 = __toESM(require_express2(), 1);
-
-// ext/github/service.ts
-var import_node_crypto18 = require("node:crypto");
-init_db();
-init_errors5();
-var GITHUB_API2 = "https://api.github.com";
-var STATE_TTL_MS = 10 * 60 * 1e3;
-function githubAppConfig() {
-  const appId = process.env.GITHUB_APP_ID?.trim();
-  const privateKey = process.env.GITHUB_APP_PRIVATE_KEY?.replace(/\\n/g, "\n").trim();
-  const slug = process.env.GITHUB_APP_SLUG?.trim();
-  return appId && privateKey && slug ? { appId, privateKey, slug } : null;
-}
-function requireGitHubAppConfig() {
-  const config4 = githubAppConfig();
-  if (!config4) {
-    throw new ApiError(
-      400,
-      "GitHub App is not configured. Set GITHUB_APP_ID, GITHUB_APP_PRIVATE_KEY, and GITHUB_APP_SLUG."
-    );
-  }
-  return config4;
-}
-function base64url3(value) {
-  return Buffer.from(value).toString("base64url");
-}
-function appJwt(config4) {
-  const now2 = Math.floor(Date.now() / 1e3);
-  const encodedHeader = base64url3(JSON.stringify({ alg: "RS256", typ: "JWT" }));
-  const encodedPayload = base64url3(
-    JSON.stringify({ iat: now2 - 60, exp: now2 + 9 * 60, iss: config4.appId })
-  );
-  const signingInput = `${encodedHeader}.${encodedPayload}`;
-  const signer = (0, import_node_crypto18.createSign)("RSA-SHA256");
-  signer.update(signingInput);
-  signer.end();
-  return `${signingInput}.${signer.sign(config4.privateKey, "base64url")}`;
-}
-async function githubFetch(path25, token, init2 = {}) {
-  let response;
-  try {
-    response = await fetch(`${GITHUB_API2}${path25}`, {
-      method: init2.method ?? "GET",
-      headers: {
-        Accept: "application/vnd.github+json",
-        Authorization: `Bearer ${token}`,
-        "X-GitHub-Api-Version": "2022-11-28",
-        ...init2.body === void 0 ? {} : { "Content-Type": "application/json" }
-      },
-      body: init2.body === void 0 ? void 0 : JSON.stringify(init2.body)
-    });
-  } catch (error53) {
-    throw new ApiError(502, `Could not reach GitHub: ${error53.message}`);
-  }
-  if (!response.ok) {
-    const text = await response.text();
-    let detail = text;
-    try {
-      detail = JSON.parse(text).message ?? text;
-    } catch {
-    }
-    const status = response.status >= 400 && response.status < 500 ? response.status : 502;
-    throw new ApiError(
-      status,
-      `GitHub API error (${response.status}): ${detail || response.statusText}`
-    );
-  }
-  if (response.status === 204) return null;
-  return await response.json();
-}
-function signedInstallState(workspaceId, privateKey) {
-  const payload = base64url3(JSON.stringify({ workspaceId, expiresAt: Date.now() + STATE_TTL_MS }));
-  const mac3 = (0, import_node_crypto18.createHmac)("sha256", privateKey).update(payload).digest("base64url");
-  return `${payload}.${mac3}`;
-}
-function verifyInstallState(value, workspaceId, privateKey) {
-  const [payload, suppliedMac, ...extra] = value?.split(".") ?? [];
-  if (!payload || !suppliedMac || extra.length)
-    throw new ApiError(400, "Invalid GitHub installation state.");
-  const expectedMac = (0, import_node_crypto18.createHmac)("sha256", privateKey).update(payload).digest("base64url");
-  const sameLength = suppliedMac.length === expectedMac.length;
-  if (!sameLength || !(0, import_node_crypto18.timingSafeEqual)(Buffer.from(suppliedMac), Buffer.from(expectedMac))) {
-    throw new ApiError(400, "Invalid GitHub installation state.");
-  }
-  let decoded;
-  try {
-    decoded = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
-  } catch {
-    throw new ApiError(400, "Invalid GitHub installation state.");
-  }
-  if (decoded.workspaceId !== workspaceId || typeof decoded.expiresAt !== "number" || decoded.expiresAt < Date.now()) {
-    throw new ApiError(400, "GitHub installation state has expired. Start installation again.");
-  }
-}
-async function readInstallation(client = requireDatabaseClient(), workspaceId = WORKSPACE.id) {
-  return await client.get(
-    `SELECT id, github_installation_id, github_account_login, github_account_type, permissions_json, revision
-         FROM ext_github_installations
-        WHERE workspace_id = ? AND deleted_at IS NULL`,
-    [workspaceId]
-  ) ?? null;
-}
-async function requireInstallationToken(workspaceId = WORKSPACE.id) {
-  const installation = await readInstallation(void 0, workspaceId);
-  if (!installation)
-    throw new ApiError(400, "Install the GitHub App in Settings \u2192 Integrations first.");
-  const config4 = requireGitHubAppConfig();
-  const result = await githubFetch(
-    `/app/installations/${encodeURIComponent(installation.github_installation_id)}/access_tokens`,
-    appJwt(config4),
-    { method: "POST" }
-  );
-  if (!result.token) throw new ApiError(502, "GitHub did not return an installation access token.");
-  return result.token;
-}
-async function assertProject(projectId, client = requireDatabaseClient()) {
-  const project = await client.get(
-    `SELECT workspace_id FROM projects WHERE id = ? AND deleted_at IS NULL`,
-    [projectId]
-  );
-  if (!project) throw new ApiError(404, "Project not found.");
-  return project.workspace_id;
-}
-async function readProjectLink2(projectId, workspaceId, client = requireDatabaseClient()) {
-  return await client.get(
-    `SELECT id, github_repo_id, full_name, default_branch, revision
-         FROM ext_github_project_links
-        WHERE workspace_id = ? AND project_id = ? AND deleted_at IS NULL`,
-    [workspaceId, projectId]
-  ) ?? null;
-}
-function repoDto(row) {
-  return {
-    id: row.github_repo_id,
-    fullName: row.full_name,
-    defaultBranch: row.default_branch,
-    private: false
-  };
-}
-async function getGitHubIntegration() {
-  const installation = await readInstallation();
-  return {
-    configured: githubAppConfig() !== null,
-    connected: installation !== null,
-    accountLogin: installation?.github_account_login ?? null,
-    accountType: installation?.github_account_type ?? null
-  };
-}
-function beginGitHubInstall() {
-  const config4 = requireGitHubAppConfig();
-  const state2 = signedInstallState(WORKSPACE.id, config4.privateKey);
-  return {
-    installUrl: `https://github.com/apps/${encodeURIComponent(config4.slug)}/installations/new?state=${encodeURIComponent(state2)}`
-  };
-}
-async function completeGitHubInstall(input) {
-  const config4 = requireGitHubAppConfig();
-  verifyInstallState(input.state, WORKSPACE.id, config4.privateKey);
-  if (!/^\d+$/.test(input.installationId))
-    throw new ApiError(400, "GitHub installation id is invalid.");
-  const upstream = await githubFetch(`/app/installations/${input.installationId}`, appJwt(config4));
-  const accountLogin = upstream.account?.login?.trim();
-  if (!accountLogin) throw new ApiError(502, "GitHub installation has no account login.");
-  await requireDatabaseClient().transaction(async (tx) => {
-    const existing = await readInstallation(tx);
-    const now2 = nowIso2();
-    if (existing) {
-      const revision = existing.revision + 1;
-      await tx.run(
-        `UPDATE ext_github_installations
-            SET github_installation_id = ?, github_account_login = ?, github_account_type = ?, permissions_json = ?, updated_at = ?, revision = ?
-          WHERE id = ? AND revision = ?`,
-        [
-          input.installationId,
-          accountLogin,
-          upstream.account?.type ?? null,
-          JSON.stringify(upstream.permissions ?? {}),
-          now2,
-          revision,
-          existing.id,
-          existing.revision
-        ]
-      );
-      await recordChange2(
-        {
-          entityType: "github:installation",
-          entityId: existing.id,
-          operation: "update",
-          entityRevision: revision,
-          changedFields: ["connected", "accountLogin"],
-          workspaceId: WORKSPACE.id
-        },
-        tx
-      );
-    } else {
-      const id = newId2();
-      await tx.run(
-        `INSERT INTO ext_github_installations (id, workspace_id, github_installation_id, github_account_login, github_account_type, permissions_json, created_at, updated_at, revision)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`,
-        [
-          id,
-          WORKSPACE.id,
-          input.installationId,
-          accountLogin,
-          upstream.account?.type ?? null,
-          JSON.stringify(upstream.permissions ?? {}),
-          now2,
-          now2
-        ]
-      );
-      await recordChange2(
-        {
-          entityType: "github:installation",
-          entityId: id,
-          operation: "insert",
-          entityRevision: 1,
-          changedFields: ["connected", "accountLogin"],
-          workspaceId: WORKSPACE.id
-        },
-        tx
-      );
-    }
-  });
-  return getGitHubIntegration();
-}
-async function disconnectGitHub() {
-  await requireDatabaseClient().transaction(async (tx) => {
-    const installation = await readInstallation(tx);
-    if (!installation) return;
-    const now2 = nowIso2();
-    const revision = installation.revision + 1;
-    await tx.run(
-      `UPDATE ext_github_installations SET deleted_at = ?, updated_at = ?, revision = ? WHERE id = ? AND revision = ?`,
-      [now2, now2, revision, installation.id, installation.revision]
-    );
-    await tx.run(
-      `UPDATE ext_github_project_links SET deleted_at = ?, updated_at = ?, revision = revision + 1 WHERE workspace_id = ? AND deleted_at IS NULL`,
-      [now2, now2, WORKSPACE.id]
-    );
-    await recordChange2(
-      {
-        entityType: "github:installation",
-        entityId: installation.id,
-        operation: "delete",
-        entityRevision: revision,
-        changedFields: ["connected"],
-        workspaceId: WORKSPACE.id
-      },
-      tx
-    );
-  });
-  return getGitHubIntegration();
-}
-async function listGitHubRepos(query) {
-  const token = await requireInstallationToken();
-  const data = await githubFetch("/installation/repositories?per_page=100", token);
-  const needle = query?.trim().toLowerCase();
-  return (data.repositories ?? []).filter((repo) => !needle || repo.full_name.toLowerCase().includes(needle)).map((repo) => ({
-    id: String(repo.id),
-    fullName: repo.full_name,
-    defaultBranch: repo.default_branch ?? "main",
-    private: Boolean(repo.private)
-  }));
-}
-async function getProjectGitHubLink(projectId) {
-  const workspaceId = await assertProject(projectId);
-  const link = await readProjectLink2(projectId, workspaceId);
-  return { projectId, repo: link ? repoDto(link) : null };
-}
-async function linkProjectGitHub(projectId, body) {
-  const workspaceId = await assertProject(projectId);
-  const fullName = body.repoFullName?.trim() ?? "";
-  if (!fullName) {
-    const existing = await readProjectLink2(projectId, workspaceId);
-    if (existing) {
-      const now2 = nowIso2();
-      await requireDatabaseClient().run(
-        `UPDATE ext_github_project_links SET deleted_at = ?, updated_at = ?, revision = ? WHERE id = ? AND revision = ?`,
-        [now2, now2, existing.revision + 1, existing.id, existing.revision]
-      );
-    }
-    return { projectId, repo: null };
-  }
-  if (!/^[^/\s]+\/[^/\s]+$/.test(fullName))
-    throw new ApiError(400, "Repository must be written as owner/name.");
-  const token = await requireInstallationToken(workspaceId);
-  const repo = await githubFetch(`/repos/${fullName.split("/").map(encodeURIComponent).join("/")}`, token);
-  const next = {
-    id: String(repo.id),
-    fullName: repo.full_name,
-    defaultBranch: repo.default_branch ?? "main",
-    private: Boolean(repo.private)
-  };
-  await requireDatabaseClient().transaction(async (tx) => {
-    const existing = await readProjectLink2(projectId, workspaceId, tx);
-    const now2 = nowIso2();
-    if (existing) {
-      await tx.run(
-        `UPDATE ext_github_project_links SET github_repo_id = ?, full_name = ?, default_branch = ?, metadata_json = ?, deleted_at = NULL, updated_at = ?, revision = ? WHERE id = ? AND revision = ?`,
-        [
-          next.id,
-          next.fullName,
-          next.defaultBranch,
-          JSON.stringify({ private: next.private }),
-          now2,
-          existing.revision + 1,
-          existing.id,
-          existing.revision
-        ]
-      );
-      await recordChange2(
-        {
-          entityType: "github:project_link",
-          entityId: existing.id,
-          operation: "update",
-          entityRevision: existing.revision + 1,
-          projectId,
-          changedFields: ["repo"],
-          workspaceId
-        },
-        tx
-      );
-    } else {
-      const id = newId2();
-      await tx.run(
-        `INSERT INTO ext_github_project_links (id, workspace_id, project_id, github_repo_id, full_name, default_branch, metadata_json, created_at, updated_at, revision) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
-        [
-          id,
-          workspaceId,
-          projectId,
-          next.id,
-          next.fullName,
-          next.defaultBranch,
-          JSON.stringify({ private: next.private }),
-          now2,
-          now2
-        ]
-      );
-      await recordChange2(
-        {
-          entityType: "github:project_link",
-          entityId: id,
-          operation: "insert",
-          entityRevision: 1,
-          projectId,
-          changedFields: ["repo"],
-          workspaceId
-        },
-        tx
-      );
-    }
-  });
-  return { projectId, repo: next };
-}
-async function readPullRequest(missionId, workspaceId, client = requireDatabaseClient()) {
-  return await client.get(
-    `SELECT id, github_pull_number, html_url, state, head_branch, base_branch, revision FROM ext_github_mission_pull_requests WHERE workspace_id = ? AND mission_id = ? AND deleted_at IS NULL`,
-    [workspaceId, missionId]
-  ) ?? null;
-}
-function pullRequestDto(row) {
-  return {
-    number: row.github_pull_number,
-    url: row.html_url,
-    state: row.state,
-    headBranch: row.head_branch,
-    baseBranch: row.base_branch
-  };
-}
-async function getMissionGitHubPullRequest(missionId) {
-  const mission = await requireDatabaseClient().get(
-    `SELECT workspace_id FROM missions WHERE id = ? AND deleted_at IS NULL`,
-    [missionId]
-  );
-  if (!mission) throw new ApiError(404, "Mission not found.");
-  const row = await readPullRequest(missionId, mission.workspace_id);
-  return row ? pullRequestDto(row) : null;
-}
-async function createMissionGitHubPullRequest(missionId, body) {
-  const mission = await requireDatabaseClient().get(
-    `SELECT id, workspace_id, project_id, title, active_branch FROM missions WHERE id = ? AND deleted_at IS NULL`,
-    [missionId]
-  );
-  if (!mission) throw new ApiError(404, "Mission not found.");
-  const existing = await readPullRequest(missionId, mission.workspace_id);
-  if (existing) return pullRequestDto(existing);
-  if (!mission.active_branch?.trim())
-    throw new ApiError(409, "Publish the mission branch before opening a pull request.");
-  const link = await readProjectLink2(mission.project_id, mission.workspace_id);
-  if (!link)
-    throw new ApiError(400, "Link this project to a GitHub repository in project settings first.");
-  const token = await requireInstallationToken(mission.workspace_id);
-  const pr = await githubFetch(
-    `/repos/${link.full_name.split("/").map(encodeURIComponent).join("/")}/pulls`,
-    token,
-    {
-      method: "POST",
-      body: {
-        title: body.title?.trim() || mission.title,
-        body: body.body?.trim() || void 0,
-        draft: Boolean(body.draft),
-        head: mission.active_branch,
-        base: link.default_branch
-      }
-    }
-  );
-  const now2 = nowIso2();
-  const id = newId2();
-  await requireDatabaseClient().transaction(async (tx) => {
-    const concurrent = await readPullRequest(missionId, mission.workspace_id, tx);
-    if (concurrent) return;
-    await tx.run(
-      `INSERT INTO ext_github_mission_pull_requests (id, workspace_id, project_id, mission_id, github_pull_number, html_url, state, head_branch, base_branch, created_at, updated_at, revision) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
-      [
-        id,
-        mission.workspace_id,
-        mission.project_id,
-        missionId,
-        pr.number,
-        pr.html_url,
-        pr.state,
-        mission.active_branch,
-        link.default_branch,
-        now2,
-        now2
-      ]
-    );
-    await recordChange2(
-      {
-        entityType: "github:mission_pull_request",
-        entityId: id,
-        operation: "insert",
-        entityRevision: 1,
-        projectId: mission.project_id,
-        missionId,
-        changedFields: ["pullRequest"],
-        workspaceId: mission.workspace_id
-      },
-      tx
-    );
-  });
-  return {
-    number: pr.number,
-    url: pr.html_url,
-    state: pr.state,
-    headBranch: mission.active_branch,
-    baseBranch: link.default_branch
-  };
-}
-
-// ext/github/routes.ts
 function createGitHubExtensionRouter(handle4, options = {}) {
   const router2 = (0, import_express2.Router)();
   router2.get(
@@ -159037,6 +159035,7 @@ init_db();
 var RUN_LIMIT = 25;
 var DELIVERY_LIMIT = 7;
 var QUESTION_LIMIT = 10;
+var QUESTION_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1e3;
 var FEED_LIMIT = 40;
 var INSTRUCTION_PREVIEW_CHARS = 400;
 var EVENT_SUMMARY_CHARS = 240;
@@ -159190,6 +159189,7 @@ async function loadDeliveries(workspaceIds) {
 }
 var QUESTION_CONTEXT_COLUMNS = CONTEXT_COLUMNS.replace(/\bo\./g, "e.");
 async function loadQuestions(workspaceIds) {
+  const askedAfter = new Date(Date.now() - QUESTION_MAX_AGE_MS).toISOString();
   return await requireDatabaseClient().all(
     `SELECT ${QUESTION_CONTEXT_COLUMNS}, ${OBJECTIVE_PROVENANCE_COLUMNS},
             e.id AS event_id, e.objective_id, o.display_key AS objective_display_key,
@@ -159202,6 +159202,7 @@ async function loadQuestions(workspaceIds) {
        LEFT JOIN agent_sessions s ON s.id = e.session_id AND s.deleted_at IS NULL
       WHERE e.type = 'ask'
         AND e.workspace_id IN (${placeholders(workspaceIds.length)})
+        AND e.created_at >= ?
         AND (
           NOT EXISTS (SELECT 1 FROM mission_status_seen mss
                        WHERE mss.mission_id = e.mission_id
@@ -159212,7 +159213,7 @@ async function loadQuestions(workspaceIds) {
         )
       ORDER BY e.created_at DESC, e.id DESC
       LIMIT ?`,
-    [...workspaceIds, QUESTION_LIMIT]
+    [...workspaceIds, askedAfter, QUESTION_LIMIT]
   );
 }
 function toRunItem(row, queued, latest) {
@@ -159620,6 +159621,15 @@ var WAITER_LEASE_SECONDS = 20;
 var REMOTE_WINDOW_AWAY_SECONDS = 30 * 60;
 var MAX_REQUEST_SUMMARY_LENGTH = 2e3;
 var MAX_REQUEST_OPTIONS = 12;
+var AGENT_REQUEST_KINDS = ["question", "permission", "choice", "retry"];
+var RELEASE_REASONS = [
+  "timeout",
+  "local_activity",
+  "policy",
+  "interrupt",
+  "channel_ended"
+];
+var APPLICATION_STATES = ["emitted", "applied", "not_applied", "unknown"];
 var REQUEST_COLUMNS = `
   id, workspace_id, project_id, mission_id, objective_id, channel_id, session_id,
   kind, native_request_id, native_call_id, summary, details_json, options_json,
@@ -159891,12 +159901,15 @@ function handle2(fn) {
     })();
   };
 }
-function asRecord(value) {
-  return value && typeof value === "object" ? value : {};
-}
 function optionalString2(value) {
   return typeof value === "string" && value.trim() !== "" ? value.trim() : null;
 }
+function isAllowedValue(value, allowed2) {
+  return allowed2.includes(value);
+}
+var ADAPTER_RELEASE_REASONS = RELEASE_REASONS.filter(
+  (reason) => reason !== "channel_ended"
+);
 function createAgentSessionChannelRouter() {
   const router2 = (0, import_express3.Router)();
   router2.use(import_express3.default.json({ limit: MAX_ADAPTER_BODY_BYTES }));
@@ -159981,7 +159994,7 @@ function createAgentSessionChannelRouter() {
       const { ctx, channel } = channelScope(req);
       const body = asRecord(req.body);
       const kind = String(body.kind ?? "question");
-      if (kind !== "question" && kind !== "permission" && kind !== "choice" && kind !== "retry") {
+      if (!isAllowedValue(kind, AGENT_REQUEST_KINDS)) {
         throw new ServiceError("Unknown request kind", "invalid_request", 400);
       }
       const request = await createRequest({
@@ -160055,11 +160068,10 @@ function createAgentSessionChannelRouter() {
         throw new ServiceError("Request not found", "request_not_found", 404);
       }
       const reason = String(body.reason ?? "timeout");
-      const allowed2 = ["timeout", "local_activity", "policy", "interrupt"];
       const result = await releaseRequestToTerminal({
         ctx,
         requestId: req.params.id,
-        reason: allowed2.includes(reason) ? reason : "timeout"
+        reason: isAllowedValue(reason, ADAPTER_RELEASE_REASONS) ? reason : "timeout"
       });
       return {
         released: result.released,
@@ -160081,11 +160093,10 @@ function createAgentSessionChannelRouter() {
         throw new ServiceError("Request not found", "request_not_found", 404);
       }
       const state2 = String(body.applicationState ?? "unknown");
-      const allowed2 = ["emitted", "applied", "not_applied", "unknown"];
       await recordRequestApplication({
         ctx,
         requestId: req.params.id,
-        applicationState: allowed2.includes(state2) ? state2 : "unknown"
+        applicationState: isAllowedValue(state2, APPLICATION_STATES) ? state2 : "unknown"
       });
       return { ok: true };
     })
@@ -160142,7 +160153,7 @@ function createAgentSessionChannelRouter() {
         ctx,
         inputId: req.params.id,
         leaseId,
-        deliveryOutcome: deliveryOutcome === "delivered" || deliveryOutcome === "queued_turn_boundary" || deliveryOutcome === "queued_next_turn" || deliveryOutcome === "unsupported" ? deliveryOutcome : null
+        deliveryOutcome: deliveryOutcome && isAllowedValue(deliveryOutcome, DELIVERY_OUTCOMES) ? deliveryOutcome : null
       });
     })
   );

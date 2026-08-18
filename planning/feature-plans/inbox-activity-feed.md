@@ -159,6 +159,7 @@ property of the membership list rather than of any per-row check.
    (extracted to a shared helper so the two projections cannot drift).
 6. **Blocking questions** — `mission_events.type = 'ask'`, joined to
    `mission_status_seen` with the existing `'blocking_question'` unseen predicate,
+   further limited to `created_at` within the past 3 days (rolling 72h window),
    `ORDER BY created_at DESC LIMIT 10`.
 
 Merged, sorted by `occurredAt DESC`, `LIMIT 40`. `payload_json` is never exposed;

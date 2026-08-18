@@ -19,6 +19,28 @@ export type BranchDecisionInput = {
   refs: { local: string[]; remote: string[]; merged: string[]; checkedOut?: string[] };
   worktreeRoot: string;
   overrideBranch?: string | null;
+  /**
+   * Set when this launch must not share a checkout with a sibling objective of
+   * the same mission that is already running on the same project resource
+   * (opt-in parallel objectives, `missions.allow_parallel_objectives`). The
+   * planner then cuts a per-objective branch — `<mission branch>-<objectiveKey>`
+   * — off the branch it would otherwise have reused, so each concurrent
+   * objective gets its own worktree instead of a shared dirty checkout.
+   * `null`/absent keeps the classic one-branch-per-mission behavior, and an
+   * explicit `overrideBranch` always wins over isolation.
+   */
+  isolation?: BranchIsolation | null;
+};
+
+/**
+ * Per-objective checkout isolation. `objectiveKey` is the objective's stable
+ * display key (`objectives.display_key`, the `k7xm` in `coo:756.k7xm`), which
+ * never encodes ordering and never changes when objectives are reordered — so
+ * an isolated branch is idempotent across relaunches of the same objective and
+ * two simultaneous launches can never plan the same branch.
+ */
+export type BranchIsolation = {
+  objectiveKey: string;
 };
 
 export type BranchDecision =
@@ -156,7 +178,7 @@ function withWorktreeFields(input: BranchDecisionInput, branch: string) {
   };
 }
 
-export function planMissionBranch(input: BranchDecisionInput): BranchDecision {
+function planSharedMissionBranch(input: BranchDecisionInput): BranchDecision {
   const baseBranch = canonicalMissionBranch(input.mission);
   const allRefs = refSet([...input.refs.local, ...input.refs.remote]);
   const mergedRefs = refSet(input.refs.merged);
@@ -195,6 +217,63 @@ export function planMissionBranch(input: BranchDecisionInput): BranchDecision {
     candidate = `${baseBranch}-${cycle}`;
   }
   return { action: 'new_cycle', ...withWorktreeFields(input, candidate), from: input.base };
+}
+
+// The branch an isolated objective is cut from: the mission branch it would
+// otherwise have shared, when that branch already exists, and the mission's base
+// otherwise (two objectives launched before either prepared the mission branch).
+function isolationParent(sharedBranch: string, allRefs: Set<string>, base: string): string {
+  return allRefs.has(sharedBranch) ? sharedBranch : base;
+}
+
+// Derives the per-objective branch for a launch that may not share `shared.branch`
+// with a concurrently running sibling. Reuses the objective's own isolated branch
+// when it already exists and is unmerged (a relaunch of the same objective lands
+// back in its own worktree), and cycles it exactly like a mission branch once it
+// has been merged.
+function isolateDecision(input: BranchDecisionInput, shared: BranchDecision): BranchDecision {
+  const key = sanitizeBranchName(input.isolation?.objectiveKey ?? '', '');
+  if (!key) return shared;
+
+  const allRefs = refSet([...input.refs.local, ...input.refs.remote]);
+  const mergedRefs = refSet(input.refs.merged);
+  const checkedOutRefs = refSet(input.refs.checkedOut ?? []);
+  const isolatedBase = sanitizeBranchName(`${shared.branch}-${key}`, shared.branch);
+  if (isolatedBase === shared.branch) return shared;
+
+  if (!allRefs.has(isolatedBase)) {
+    return {
+      action: 'create',
+      ...withWorktreeFields(input, isolatedBase),
+      cycle: 1,
+      from: isolationParent(shared.branch, allRefs, input.base)
+    };
+  }
+
+  if (!mergedRefs.has(isolatedBase)) {
+    return { action: 'reuse', ...withWorktreeFields(input, isolatedBase), cycle: 1 };
+  }
+
+  let cycle = Math.max(2, highestExistingCycle(isolatedBase, allRefs) + 1);
+  let candidate = `${isolatedBase}-${cycle}`;
+  while (allRefs.has(candidate) || checkedOutRefs.has(candidate) || mergedRefs.has(candidate)) {
+    cycle += 1;
+    candidate = `${isolatedBase}-${cycle}`;
+  }
+  return {
+    action: 'new_cycle',
+    ...withWorktreeFields(input, candidate),
+    cycle,
+    from: isolationParent(shared.branch, allRefs, input.base)
+  };
+}
+
+export function planMissionBranch(input: BranchDecisionInput): BranchDecision {
+  const shared = planSharedMissionBranch(input);
+  // An explicitly pinned branch is a human instruction; it opts out of isolation
+  // and two objectives pinned to one branch deliberately share its checkout.
+  if (!input.isolation || input.overrideBranch) return shared;
+  return isolateDecision(input, shared);
 }
 
 export function previewMissionBranch(input: MissionBranchPreviewInput): BranchDecision {

@@ -25,10 +25,12 @@ import {
  */
 export function DeliveryFeedCard({
   item,
-  nowIso
+  nowIso,
+  onOpenMission
 }: {
   item: ActivityFeedDeliveryItemDto;
   nowIso: string;
+  onOpenMission: (args: { missionId: string; objectiveDisplayId?: string | null }) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const cardRef = useCollapseOnDismiss(expanded, () => setExpanded(false));
@@ -52,6 +54,12 @@ export function DeliveryFeedCard({
         <ActivityFeedCardMeta
           item={item}
           trailing={<span>{relativeTime(item.occurredAt, nowIso)}</span>}
+          onMissionOpen={() =>
+            onOpenMission({
+              missionId: item.missionId,
+              objectiveDisplayId: item.objectiveDisplayId
+            })
+          }
         />
 
         <div className="flex min-w-0 items-center gap-2">

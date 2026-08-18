@@ -805,9 +805,44 @@ Can overlap B. Do not block B on App Store Live Activity attribute changes — i
 
 **Exit:** documented, off by default.
 
-### Phase E — Same-resource parallelism (optional, later)
+### Phase E — Same-resource parallelism — **implemented**
 
-Per-objective worktrees or explicit “share dirty checkout” (almost certainly a bad default). Revisit `canonicalMissionBranch` / `active_branch`. Out of scope until D has a user.
+**Goal:** two objectives on the **same** `resource_key` may execute at once when `missions.allow_parallel_objectives` is true, without corrupting one checkout.
+
+**Decision (per the mission's user note):** the answer differs by worktree mode, and both cases are allowed.
+
+| Mission worktree mode | Two concurrent objectives on one resource |
+| --- | --- |
+| Worktrees **off** (branch-only or no automation) | Share the one checkout. There is nothing else to share; file attribution already comes from each session's touched-file log, and `ovld protocol changes` already classifies another session's dirty paths as `claimed`. |
+| Worktrees **on** | Spawn a second workspace — exactly what already happens when a mission's worktree has been merged and the next objective needs a fresh one. |
+
+**Isolated branch naming.** `<the branch the launch would otherwise have shared>-<objectives.display_key>`, e.g. `automate-worktree-branching-16-k7xm`, cut from the shared branch, in its own worktree at the usual resource-scoped path. The suffix is the objective's Phase A display key rather than a cycle counter on purpose:
+
+- deterministic per objective, so two simultaneous launches cannot plan the same branch without coordinating;
+- idempotent, so relaunching an objective returns it to its own worktree instead of cutting a new one;
+- traceable — the branch names the objective (`coo:756.k7xm` ↔ `…-16-k7xm`).
+
+Once an isolated branch is merged it cycles numerically like any other (`…-k7xm-2`).
+
+**What was changed**
+
+- `planMissionBranch` (both copies + `contract/branch-planning-vectors.json`, contract v89) gained an optional `isolation: { objectiveKey }` input. Isolation is applied after the normal decision and is skipped entirely when an `overrideBranch` is pinned.
+- `prepareMissionBranch` resolves isolation: worktree mode **and** `allowParallelObjectives` **and** a known objective id with a display key **and** a sibling in `launching`/`executing`/`pending_delivery` on the same canonical `resource_key` (the project's primary key is fetched to canonicalize a null key, falling back to `primary`). It reports `branchAutomation.isolated`.
+- `POST /api/missions/:id/branch-prepared` accepts `isolated`. An isolated branch is written to `objectives.branch` and audited as a mission event, but does **not** move `missions.active_branch` and does **not** upsert the mission-level `mission_branch_observations` row — those stay mission-grain so a later sequential objective continues the mission's branch rather than a sibling's isolated cycle, and the mission panel keeps showing mission-level git state.
+- `siblingBlocksParallelLaunch` reduces to `!allowParallelObjectives`; `validateObjectiveLifecycle` no longer reports `multiple_active_objectives` when the flag is on; `findConflictingActiveSibling` returns null immediately when the flag is on. The mission-panel Run popover follows automatically (it calls the same rule).
+
+**Boundaries that did *not* need to move**
+
+- Latch names/titles, session-key and native-session caches, and the active-execution pointer are objective-scoped from Phase B, and two isolated objectives have different working directories anyway.
+- Unpinned attach with two actives still 409s `ambiguous_active_objective` (Phase D).
+- Session-channel bind already refuses a mission-wide fallback when an objective id is known (Phase D).
+
+**Known limits**
+
+- A mission-level branch **action** (commit / merge-with-parent / publish) still operates on `missions.active_branch` and the mission's worktree; an isolated objective branch has to be merged from its own worktree. Surfacing per-objective branch actions is follow-up work.
+- Two objectives sharing one checkout (worktrees off) can still edit the same file; nothing serializes their writes. That is the user's explicit choice for that mode.
+
+**Exit:** two same-resource objectives run concurrently under the flag without clobbering a shared worktree. Default remains serial.
 
 ### Suggested first implementation objective after this plan
 

@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, statSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { type BranchDecision, planMissionBranch } from './branch-planning.js';
+import { type BranchDecision, type BranchIsolation, planMissionBranch } from './branch-planning.js';
 import type { CliRuntime } from './runtime.js';
 
 export type BranchPreparationOptions = {
@@ -39,6 +39,14 @@ export type BranchAutomationPayload = {
   resourceKey: string;
   action: BranchDecision['action'];
   cycle: number;
+  /**
+   * True when this branch belongs to one objective running in parallel with a
+   * sibling on the same resource, rather than to the mission as a whole. The
+   * backend records it on `objectives.branch` but leaves `missions.active_branch`
+   * (and the mission-level branch observation) pointing at the shared mission
+   * branch.
+   */
+  isolated?: boolean;
 };
 
 export type MissionShape = {
@@ -48,7 +56,13 @@ export type MissionShape = {
   projectId?: unknown;
   projectSlug?: unknown;
   project?: { slug?: unknown };
-  objectives?: Array<{ id?: unknown; resourceKey?: unknown }>;
+  allowParallelObjectives?: unknown;
+  objectives?: Array<{
+    id?: unknown;
+    resourceKey?: unknown;
+    state?: unknown;
+    displayKey?: unknown;
+  }>;
   branch?: {
     name?: unknown;
     status?: unknown;
@@ -394,6 +408,93 @@ function resolveLaunchResourceKey({
   return deriveProjectResourceKey({ directoryPath: options.workingDirectory });
 }
 
+// Objective states that hold the sibling-execution slot. Mirrors
+// `PARALLEL_BLOCKING_OBJECTIVE_STATES` in the Automations Layer's objective
+// lifecycle rules; the Runner Layer reads them off the mission DTO rather than
+// importing the automations package.
+const PARALLEL_BLOCKING_OBJECTIVE_STATES = ['launching', 'executing', 'pending_delivery'];
+
+const DEFAULT_PRIMARY_RESOURCE_KEY = 'primary';
+
+function readString(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+// The project's primary `resource_key`, used to compare an objective that
+// declares no resource against a sibling that names one. Best-effort: an older
+// or restricted backend falls back to the contract's `primary` default, which is
+// also what the service layer's sibling check uses.
+async function resolveProjectPrimaryResourceKey({
+  runtime,
+  mission
+}: {
+  runtime: CliRuntime;
+  mission: MissionShape;
+}): Promise<string> {
+  const projectId = readString(mission.projectId);
+  if (!projectId) return DEFAULT_PRIMARY_RESOURCE_KEY;
+  try {
+    const resources = (await runtime.backend.get(
+      `/api/projects/${encodeURIComponent(projectId)}/resources`
+    )) as Array<{ resourceKey?: unknown; isPrimary?: unknown }> | null;
+    if (!Array.isArray(resources)) return DEFAULT_PRIMARY_RESOURCE_KEY;
+    const primary = resources.find(resource => resource?.isPrimary === true);
+    return readString(primary?.resourceKey) || DEFAULT_PRIMARY_RESOURCE_KEY;
+  } catch {
+    return DEFAULT_PRIMARY_RESOURCE_KEY;
+  }
+}
+
+/**
+ * Whether this launch must get its own checkout instead of sharing the mission's.
+ *
+ * Isolation applies only in worktree mode: with worktrees off, the mission works
+ * in one checkout by construction and two concurrent objectives deliberately
+ * share it (delivery attributes files through the per-session touched-file log,
+ * not through the checkout). In worktree mode a shared dirty checkout would let
+ * two agents clobber each other, so a concurrently launched objective gets its
+ * own branch and worktree — the same thing that happens when a mission's branch
+ * has already been merged and the next objective needs a fresh one.
+ *
+ * The suffix is the objective's stable display key, so the decision is
+ * deterministic per objective: two objectives launched in the same instant plan
+ * different branches without coordinating, and relaunching one lands it back in
+ * its own worktree.
+ */
+export async function resolveBranchIsolation({
+  runtime,
+  mission,
+  options,
+  useWorktree
+}: {
+  runtime: CliRuntime;
+  mission: MissionShape;
+  options: BranchPreparationOptions;
+  useWorktree: boolean;
+}): Promise<BranchIsolation | null> {
+  if (!useWorktree) return null;
+  if (mission.allowParallelObjectives !== true) return null;
+  const objectiveId = readString(options.objectiveId);
+  if (!objectiveId) return null;
+
+  const objectives = Array.isArray(mission.objectives) ? mission.objectives : [];
+  const self = objectives.find(candidate => readString(candidate.id) === objectiveId);
+  const objectiveKey = readString(self?.displayKey);
+  if (!self || !objectiveKey) return null;
+
+  const primaryResourceKey = await resolveProjectPrimaryResourceKey({ runtime, mission });
+  const canonical = (value: unknown): string => readString(value) || primaryResourceKey;
+  const selfResourceKey = canonical(self.resourceKey);
+
+  const hasLiveSibling = objectives.some(
+    candidate =>
+      readString(candidate.id) !== objectiveId &&
+      PARALLEL_BLOCKING_OBJECTIVE_STATES.includes(readString(candidate.state)) &&
+      canonical(candidate.resourceKey) === selfResourceKey
+  );
+  return hasLiveSibling ? { objectiveKey } : null;
+}
+
 export async function prepareMissionBranch({
   runtime,
   options
@@ -432,6 +533,7 @@ export async function prepareMissionBranch({
   const overrideBranch = overrideFlag || missionOverrideBranch(mission);
   const projectSlug = await resolveMissionProjectSlug({ runtime, mission });
   const resourceKey = resolveLaunchResourceKey({ mission, options });
+  const isolation = await resolveBranchIsolation({ runtime, mission, options, useWorktree });
   const decision = planMissionBranch({
     mission: {
       title: typeof mission.title === 'string' ? mission.title : 'mission',
@@ -443,8 +545,12 @@ export async function prepareMissionBranch({
     base,
     refs,
     worktreeRoot: resolveWorktreeRoot(),
-    overrideBranch
+    overrideBranch,
+    isolation
   });
+  // An explicit branch pin beats isolation inside the planner, so a pinned launch
+  // is never reported as isolated even when a sibling is running.
+  const isolated = Boolean(isolation) && !overrideBranch;
 
   if (useWorktree) {
     ensureWorktree(gitRoot, decision);
@@ -456,7 +562,8 @@ export async function prepareMissionBranch({
         worktreePath: decision.worktreePath,
         resourceKey,
         action: decision.action,
-        cycle: decision.cycle
+        cycle: decision.cycle,
+        isolated
       }
     };
   }
@@ -473,7 +580,8 @@ export async function prepareMissionBranch({
       worktreePath: gitRoot,
       resourceKey,
       action: decision.action,
-      cycle: decision.cycle
+      cycle: decision.cycle,
+      isolated: false
     }
   };
 }

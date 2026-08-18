@@ -813,4 +813,58 @@ describe('deliverSession mechanical change capture', () => {
 
     await db.close();
   });
+
+  it('rejects an invalid artifact type with a clean validation error', async () => {
+    const { db, ctx } = await setup();
+    const { mission } = await submittedMission(ctx, 'Invalid Artifact Type');
+    const attached = await attachSession({ ctx, missionId: mission.displayId });
+
+    await assert.rejects(
+      () =>
+        deliverSession({
+          ctx,
+          missionId: mission.displayId,
+          sessionKey: attached.sessionKey,
+          summary: 'Deliver with a bad artifact type.',
+          artifacts: [{ type: 'not_a_real_type', label: 'Bad', content: 'nope' }]
+        }),
+      (error: unknown) =>
+        error instanceof ServiceError &&
+        error.status === 400 &&
+        error.code === 'validation_error' &&
+        error.message.includes('Artifact type must be')
+    );
+
+    await db.close();
+  });
+
+  it('inserts a valid delivery artifact through the shared writer', async () => {
+    const { db, ctx } = await setup();
+    const { mission } = await submittedMission(ctx, 'Valid Artifact Type');
+    const attached = await attachSession({ ctx, missionId: mission.displayId });
+
+    await deliverSession({
+      ctx,
+      missionId: mission.displayId,
+      sessionKey: attached.sessionKey,
+      summary: 'Deliver with a note artifact.',
+      artifacts: [{ type: 'note', label: 'Ship notes', content: 'Done.' }]
+    });
+
+    const row = (await db.get(
+      `SELECT type, label, content_text, delivery_id FROM artifacts WHERE mission_id = ?`,
+      [mission.id]
+    )) as {
+      type: string;
+      label: string;
+      content_text: string | null;
+      delivery_id: string | null;
+    };
+    assert.equal(row.type, 'note');
+    assert.equal(row.label, 'Ship notes');
+    assert.equal(row.content_text, 'Done.');
+    assert.ok(row.delivery_id);
+
+    await db.close();
+  });
 });

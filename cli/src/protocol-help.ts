@@ -83,7 +83,7 @@ Subcommands:
   search-missions         Find missions by keyword, status, or project
   discuss-objective      Mark a draft objective as submitted (does not start execution)
   add-objectives         Append ordered objectives to an existing mission
-  update-objective       Set auto-advance on an existing objective
+  update-objective       Set auto-advance and/or instruction text on an objective
   create                 Create a draft mission without attaching
   prompt                 Create a mission and attach to it immediately
   record-work            Record completed-from-chat work as a review mission (no attach)
@@ -208,12 +208,17 @@ add-objectives:
 
 update-objective:
   Purpose:
-    Turn auto-advance on or off for an existing objective.
+    Turn auto-advance on or off and/or edit instruction text on an existing objective.
   Required:
     --objective-id <id>
-    --auto-advance or --no-auto-advance
+    At least one of:
+      --auto-advance or --no-auto-advance
+      --instruction-text <text> or --instruction-text-file <path|->
+  Rules:
+    Instruction text may be edited only when the objective is in draft or future state.
+    Blank instruction text is allowed in those states.
   Returns:
-    The updated objective JSON, including autoAdvance.
+    The updated objective JSON, including autoAdvance and instructionText.
 
 create:
   Purpose:

@@ -21,6 +21,7 @@ import {
   createMissionWithObjectives,
   ensureNextDraftObjective,
   getMissionSummary,
+  insertArtifactRow,
   listArtifacts,
   listAttachments,
   listMissionEvents,
@@ -1949,27 +1950,20 @@ export async function deliverSession({
     );
 
     for (const artifact of artifacts) {
-      await txCtx.db.run(
-        `INSERT INTO artifacts
-             (id, workspace_id, project_id, mission_id, objective_id, session_id, delivery_id,
-              type, label, content_text, external_url, created_at, updated_at, revision)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
-        [
-          newId(),
-          ctx.workspace.id,
-          mission.projectId,
-          mission.id,
-          session.objective_id,
-          session.id,
-          deliveryId,
-          artifact.type,
-          artifact.label,
-          artifact.content ?? null,
-          artifact.url ?? null,
-          now,
-          now
-        ]
-      );
+      await insertArtifactRow({
+        ctx: txCtx,
+        workspaceId: ctx.workspace.id,
+        projectId: mission.projectId,
+        missionId: mission.id,
+        objectiveId: session.objective_id,
+        sessionId: session.id,
+        deliveryId,
+        type: artifact.type,
+        label: artifact.label,
+        contentText: artifact.content ?? null,
+        externalUrl: artifact.url ?? null,
+        now
+      });
     }
 
     for (const rationale of normalizedRationales) {
@@ -2499,26 +2493,20 @@ export async function recordWork({
     );
 
     for (const artifact of artifacts) {
-      await txCtx.db.run(
-        `INSERT INTO artifacts
-             (id, workspace_id, project_id, mission_id, objective_id, delivery_id,
-              type, label, content_text, external_url, created_at, updated_at, revision)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
-        [
-          newId(),
-          ctx.workspace.id,
-          resolvedProjectId,
-          created.mission.id,
-          objectiveId,
-          deliveryId,
-          artifact.type,
-          artifact.label,
-          artifact.content ?? null,
-          artifact.url ?? null,
-          now,
-          now
-        ]
-      );
+      await insertArtifactRow({
+        ctx: txCtx,
+        workspaceId: ctx.workspace.id,
+        projectId: resolvedProjectId,
+        missionId: created.mission.id,
+        objectiveId,
+        sessionId: null,
+        deliveryId,
+        type: artifact.type,
+        label: artifact.label,
+        contentText: artifact.content ?? null,
+        externalUrl: artifact.url ?? null,
+        now
+      });
     }
 
     const normalizedRationales = normalizeChangeRationales(changeRationales);

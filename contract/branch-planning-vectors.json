@@ -1,5 +1,5 @@
 {
-  "_comment": "Golden conformance vectors for Overlord's deterministic per-mission branch/worktree planning algorithm. Both the Runner Layer (cli/src/branch-planning.ts) and the service layer (backend/branch-planning.ts) keep their own copy of the algorithm; cli/test/branch-planning.test.ts and backend/branch-planning.test.ts both assert against these vectors so the two copies cannot drift. worktreePath values use POSIX separators (path.join on the supported macOS/Linux platforms). Contract version 1 makes resourceKey part of every worktree path: <worktreeRoot>/<projectSlug>/<resourceKey>/<branchLeaf>. Any change to the algorithm MUST regenerate this fixture and bump the contract version (see CONTRACT.md 'Shared Deterministic Algorithms').",
+  "_comment": "Golden conformance vectors for Overlord's deterministic per-mission branch/worktree planning algorithm. Both the Runner Layer (cli/src/branch-planning.ts) and the service layer (backend/branch-planning.ts) keep their own copy of the algorithm; cli/test/branch-planning.test.ts and backend/branch-planning.test.ts both assert against these vectors so the two copies cannot drift. worktreePath values use POSIX separators (path.join on the supported macOS/Linux platforms). Contract version 1 makes resourceKey part of every worktree path: <worktreeRoot>/<projectSlug>/<resourceKey>/<branchLeaf>. Contract version 89 adds the optional `isolation` input: when a sibling objective of the same mission is already running on the same project resource (opt-in parallel objectives), the planner cuts a per-objective branch `<mission branch>-<objectiveKey>` off the branch it would otherwise have shared, so each concurrent objective gets its own worktree. An explicit overrideBranch opts out. Any change to the algorithm MUST regenerate this fixture and bump the contract version (see CONTRACT.md 'Shared Deterministic Algorithms').",
   "worktreeRoot": "/tmp/ovld-worktrees",
   "slugifyBranchTitle": [
     {
@@ -158,6 +158,125 @@
         "baseBranch": "main",
         "cycle": 1,
         "from": "main"
+      }
+    },
+    {
+      "name": "isolates a concurrent objective onto its own branch cut from the mission branch",
+      "input": {
+        "mission": { "title": "Automate worktree branching", "sequence": 16 },
+        "project": { "slug": "coo" },
+        "resourceKey": "overlord",
+        "base": "main",
+        "worktreeRoot": "/tmp/ovld-worktrees",
+        "recordedBranch": "automate-worktree-branching-16",
+        "refs": { "local": ["main", "automate-worktree-branching-16"], "remote": [], "merged": [], "checkedOut": ["automate-worktree-branching-16"] },
+        "isolation": { "objectiveKey": "k7xm" }
+      },
+      "expected": {
+        "action": "create",
+        "branch": "automate-worktree-branching-16-k7xm",
+        "worktreePath": "/tmp/ovld-worktrees/coo/overlord/automate-worktree-branching-16-k7xm",
+        "baseBranch": "main",
+        "cycle": 1,
+        "from": "automate-worktree-branching-16"
+      }
+    },
+    {
+      "name": "reuses the objective's own isolated branch when it already exists unmerged",
+      "input": {
+        "mission": { "title": "Automate worktree branching", "sequence": 16 },
+        "project": { "slug": "coo" },
+        "resourceKey": "overlord",
+        "base": "main",
+        "worktreeRoot": "/tmp/ovld-worktrees",
+        "recordedBranch": "automate-worktree-branching-16",
+        "refs": {
+          "local": ["main", "automate-worktree-branching-16", "automate-worktree-branching-16-k7xm"],
+          "remote": [],
+          "merged": [],
+          "checkedOut": ["automate-worktree-branching-16", "automate-worktree-branching-16-k7xm"]
+        },
+        "isolation": { "objectiveKey": "k7xm" }
+      },
+      "expected": {
+        "action": "reuse",
+        "branch": "automate-worktree-branching-16-k7xm",
+        "worktreePath": "/tmp/ovld-worktrees/coo/overlord/automate-worktree-branching-16-k7xm",
+        "baseBranch": "main",
+        "cycle": 1
+      }
+    },
+    {
+      "name": "cycles an isolated branch that has already merged",
+      "input": {
+        "mission": { "title": "Automate worktree branching", "sequence": 16 },
+        "project": { "slug": "coo" },
+        "resourceKey": "overlord",
+        "base": "main",
+        "worktreeRoot": "/tmp/ovld-worktrees",
+        "recordedBranch": "automate-worktree-branching-16",
+        "refs": {
+          "local": ["main", "automate-worktree-branching-16", "automate-worktree-branching-16-k7xm"],
+          "remote": [],
+          "merged": ["automate-worktree-branching-16-k7xm"],
+          "checkedOut": ["automate-worktree-branching-16"]
+        },
+        "isolation": { "objectiveKey": "k7xm" }
+      },
+      "expected": {
+        "action": "new_cycle",
+        "branch": "automate-worktree-branching-16-k7xm-2",
+        "worktreePath": "/tmp/ovld-worktrees/coo/overlord/automate-worktree-branching-16-k7xm-2",
+        "baseBranch": "main",
+        "cycle": 2,
+        "from": "automate-worktree-branching-16"
+      }
+    },
+    {
+      "name": "cuts an isolated branch from the base when the mission branch does not exist yet",
+      "input": {
+        "mission": { "title": "Automate worktree branching", "sequence": 16 },
+        "project": { "slug": "coo" },
+        "resourceKey": "overlord",
+        "base": "main",
+        "worktreeRoot": "/tmp/ovld-worktrees",
+        "recordedBranch": null,
+        "refs": { "local": ["main"], "remote": [], "merged": [], "checkedOut": ["main"] },
+        "isolation": { "objectiveKey": "q4t9" }
+      },
+      "expected": {
+        "action": "create",
+        "branch": "automate-worktree-branching-16-q4t9",
+        "worktreePath": "/tmp/ovld-worktrees/coo/overlord/automate-worktree-branching-16-q4t9",
+        "baseBranch": "main",
+        "cycle": 1,
+        "from": "main"
+      }
+    },
+    {
+      "name": "an explicit override branch opts out of isolation",
+      "input": {
+        "mission": { "title": "Automate worktree branching", "sequence": 16 },
+        "project": { "slug": "coo" },
+        "resourceKey": "overlord",
+        "base": "main",
+        "worktreeRoot": "/tmp/ovld-worktrees",
+        "recordedBranch": "automate-worktree-branching-16",
+        "overrideBranch": "hotfix",
+        "refs": {
+          "local": ["main", "automate-worktree-branching-16", "hotfix"],
+          "remote": [],
+          "merged": [],
+          "checkedOut": ["automate-worktree-branching-16"]
+        },
+        "isolation": { "objectiveKey": "k7xm" }
+      },
+      "expected": {
+        "action": "reuse",
+        "branch": "hotfix",
+        "worktreePath": "/tmp/ovld-worktrees/coo/overlord/hotfix",
+        "baseBranch": "main",
+        "cycle": 1
       }
     }
   ]

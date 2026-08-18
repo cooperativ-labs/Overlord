@@ -296,17 +296,21 @@ missionDiscovery:
       - creates-objectives-in-draft-state
 
   updateObjective:
-    description: 'Turn auto-advance on or off for an existing objective'
+    description: 'Update auto-advance and/or instruction text on an existing objective'
     requiredFlags:
       - --objective-id
     optionalFlags:
       - --auto-advance
       - --no-auto-advance
+      - --instruction-text
+      - --instruction-text-file
     rules:
-      - 'Exactly one of --auto-advance or --no-auto-advance is required'
+      - 'At least one of --auto-advance/--no-auto-advance or --instruction-text/--instruction-text-file is required'
+      - 'Instruction text may be edited only when the objective is in draft or future state'
       - 'Does not require a session key'
     sideEffects:
       - updates-objective-auto-advance
+      - updates-objective-instruction-text
 
   recordWork:
     description: 'Record already-completed chat work as a review mission without an attached session'

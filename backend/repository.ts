@@ -48,7 +48,9 @@ import {
 import {
   assignMissionTags as assignMissionTagsOnCreate,
   createMissionWithObjectives,
-  insertObjective as createObjectiveOnMission
+  insertArtifactRow,
+  insertObjective as createObjectiveOnMission,
+  writeSharedContext
 } from '../packages/core/service/missions.ts';
 import { emitNotification } from '../packages/core/service/notifications/notifications.ts';
 import { resolveProjectExecutionTargetForLaunch } from '../packages/core/service/project-execution-target.ts';
@@ -134,11 +136,11 @@ import {
   scheduleMissionTitleGeneration,
   scheduleObjectiveTitleGeneration
 } from './automation/title-automation.ts';
+import { listMissionTerminalSessions } from './execution/latch-sessions.ts';
 import {
   dequeueObjective,
   LAUNCHABLE_STATES,
   listMissionExecutionRequests,
-  listMissionTerminalSessions,
   readWorktreeBranchAutomationEnabled
 } from './execution/launch.ts';
 import {
@@ -146,6 +148,15 @@ import {
   resolveMutationAnchorMissionId,
   resolveRemoteMutationTarget
 } from './execution/local-target-mutation-queue.ts';
+import {
+  createProjectInitialization,
+  type ProjectInitializationRow,
+  readProjectInitialization,
+  readProjectInitializationById,
+  recordPrivateRepositoryLink,
+  recordProvisioningFailure,
+  recordProvisioningSuccess
+} from './ext/github/service.ts';
 import { createPrivateGitHubRepository } from './ext/github/user-oauth.ts';
 import { missionWorktreePath, previewMissionBranch } from './branch-planning.ts';
 import {
@@ -3183,20 +3194,6 @@ export async function createProject(body: CreateProjectBody): Promise<ProjectDto
   });
 }
 
-type ProjectInitializationRow = {
-  id: string;
-  project_id: string;
-  mission_id: string;
-  github_owner_login: string | null;
-  provisioning_status: 'not_requested' | 'pending' | 'failed' | 'succeeded';
-  github_repo_id: string | null;
-  full_name: string | null;
-  default_branch: string | null;
-  clone_url: string | null;
-  failure_message: string | null;
-  revision: number;
-};
-
 function initializationProvisioning(
   row: ProjectInitializationRow,
   resource: ProjectResourceDto | null
@@ -3219,22 +3216,6 @@ function initializationProvisioning(
     resource,
     error: row.failure_message
   };
-}
-
-async function readProjectInitialization(
-  db: DatabaseClient,
-  profileId: string,
-  idempotencyKey: string
-): Promise<ProjectInitializationRow | null> {
-  return (
-    (await db.get<ProjectInitializationRow>(
-      `SELECT id, project_id, mission_id, github_owner_login, provisioning_status,
-              github_repo_id, full_name, default_branch, clone_url, failure_message, revision
-         FROM ext_github_project_initializations
-        WHERE profile_id = ? AND idempotency_key = ? AND deleted_at IS NULL`,
-      [profileId, idempotencyKey]
-    )) ?? null
-  );
 }
 
 /**
@@ -3312,37 +3293,17 @@ export async function initializeProject(
     );
     const id = newId();
     const status = wantsRepository ? 'pending' : 'not_requested';
-    await tx.run(
-      `INSERT INTO ext_github_project_initializations
-        (id, profile_id, workspace_id, project_id, mission_id, idempotency_key, github_owner_login,
-         provisioning_status, created_at, updated_at, revision)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
-      [
-        id,
-        profileId,
-        workspaceId,
-        projectId,
-        mission.missionId,
-        idempotencyKey,
-        ownerLogin,
-        status,
-        now,
-        now
-      ]
-    );
-    return {
+    return createProjectInitialization(tx, {
       id,
-      project_id: projectId,
-      mission_id: mission.missionId,
-      github_owner_login: ownerLogin,
-      provisioning_status: status,
-      github_repo_id: null,
-      full_name: null,
-      default_branch: null,
-      clone_url: null,
-      failure_message: null,
-      revision: 1
-    } satisfies ProjectInitializationRow;
+      profileId,
+      workspaceId,
+      projectId,
+      missionId: mission.missionId,
+      idempotencyKey,
+      ownerLogin,
+      status,
+      now
+    });
   });
 
   if (
@@ -3359,12 +3320,11 @@ export async function initializeProject(
       const message =
         error instanceof ApiError ? error.message : 'GitHub repository provisioning failed.';
       const now = nowIso();
-      await db.run(
-        `UPDATE ext_github_project_initializations
-            SET provisioning_status = 'failed', failure_message = ?, updated_at = ?, revision = revision + 1
-          WHERE id = ? AND provisioning_status <> 'succeeded' AND deleted_at IS NULL`,
-        [message.slice(0, 500), now, initialization.id]
-      );
+      await recordProvisioningFailure(db, {
+        id: initialization.id,
+        message,
+        now
+      });
       initialization = (await readProjectInitialization(db, profileId, idempotencyKey))!;
     }
   }
@@ -3394,50 +3354,11 @@ async function persistInitializedRepository({
   repo: CreatedGitHubRepositoryDto;
 }): Promise<ProjectInitializationRow> {
   return db.transaction(async tx => {
-    const current = (await tx.get<ProjectInitializationRow>(
-      `SELECT id, project_id, mission_id, github_owner_login, provisioning_status,
-              github_repo_id, full_name, default_branch, clone_url, failure_message, revision
-         FROM ext_github_project_initializations WHERE id = ? AND deleted_at IS NULL`,
-      [initialization.id]
-    ))!;
+    const current = (await readProjectInitializationById(tx, initialization.id))!;
     if (current.provisioning_status === 'succeeded') return current;
     const project = await getProject(current.project_id, tx, PERMISSIONS.PROJECT_READ);
     const now = nowIso();
-    const existingLink = await tx.get<{ id: string }>(
-      `SELECT id FROM ext_github_project_links WHERE project_id = ? AND deleted_at IS NULL`,
-      [project.id]
-    );
-    if (!existingLink) {
-      const linkId = newId();
-      await tx.run(
-        `INSERT INTO ext_github_project_links
-          (id, workspace_id, project_id, github_repo_id, full_name, default_branch, metadata_json, created_at, updated_at, revision)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
-        [
-          linkId,
-          project.workspaceId,
-          project.id,
-          repo.id,
-          repo.fullName,
-          repo.defaultBranch,
-          JSON.stringify({ private: true, source: 'user_oauth' }),
-          now,
-          now
-        ]
-      );
-      await recordChange(
-        {
-          entityType: 'github:project_link',
-          entityId: linkId,
-          operation: 'insert',
-          entityRevision: 1,
-          projectId: project.id,
-          changedFields: ['repo'],
-          workspaceId: project.workspaceId
-        },
-        tx
-      );
-    }
+    await recordPrivateRepositoryLink(tx, { project, repo, now });
     await insertProjectResource(
       tx,
       project,
@@ -3449,18 +3370,7 @@ async function persistInitializedRepository({
       },
       'GitHub clone URL is required'
     );
-    await tx.run(
-      `UPDATE ext_github_project_initializations SET provisioning_status = 'succeeded', github_repo_id = ?,
-          full_name = ?, default_branch = ?, clone_url = ?, failure_message = NULL, updated_at = ?, revision = revision + 1
-        WHERE id = ?`,
-      [repo.id, repo.fullName, repo.defaultBranch, repo.cloneUrl, now, current.id]
-    );
-    return (await tx.get<ProjectInitializationRow>(
-      `SELECT id, project_id, mission_id, github_owner_login, provisioning_status,
-              github_repo_id, full_name, default_branch, clone_url, failure_message, revision
-         FROM ext_github_project_initializations WHERE id = ?`,
-      [current.id]
-    ))!;
+    return recordProvisioningSuccess(tx, { id: current.id, repo, now });
   });
 }
 
@@ -4427,91 +4337,30 @@ export async function upsertMissionSharedContext(
     throw new ApiError(400, 'Shared context value is required');
   }
 
-  const isJson = typeof body.value === 'object' && body.value !== null;
-  const valueKind = isJson ? 'json' : 'string';
-  const valueText = isJson ? null : String(body.value);
-  const valueJson = isJson ? JSON.stringify(body.value) : null;
-
   return requireDatabaseClient().transaction(async tx => {
     const mission = await getMissionRow(missionRef, tx, PERMISSIONS.MISSION_UPDATE);
-    const now = nowIso();
-    const existing = (await tx.get(
-      `SELECT id, revision FROM shared_context_entries
-        WHERE mission_id = ? AND workspace_id = ? AND key = ? AND deleted_at IS NULL`,
-      [mission.id, mission.workspace_id, key]
-    )) as { id: string; revision: number } | undefined;
-
-    let entryId: string;
-    let revision: number;
-    let operation: 'insert' | 'update';
-
-    if (existing) {
-      entryId = existing.id;
-      revision = existing.revision + 1;
-      operation = 'update';
-      await tx.run(
-        `UPDATE shared_context_entries
-            SET value_kind = ?, value_text = ?, value_json = ?, updated_at = ?, revision = ?
-          WHERE id = ? AND workspace_id = ?`,
-        [valueKind, valueText, valueJson, now, revision, entryId, mission.workspace_id]
-      );
-    } else {
-      entryId = newId();
-      revision = 1;
-      operation = 'insert';
-      await tx.run(
-        `INSERT INTO shared_context_entries
-             (id, workspace_id, mission_id, key, value_kind, value_text, value_json,
-              created_by_workspace_user_id, created_at, updated_at, revision)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
-        [
-          entryId,
-          mission.workspace_id,
-          mission.id,
-          key,
-          valueKind,
-          valueText,
-          valueJson,
-          getActorWorkspaceUserId(),
-          now,
-          now
-        ]
-      );
-    }
-
-    await recordChange(
-      {
-        entityType: 'shared_context_entry',
-        entityId: entryId,
-        operation,
-        entityRevision: revision,
-        workspaceId: mission.workspace_id,
-        projectId: mission.project_id,
-        missionId: mission.id,
-        changedFields: ['key', 'value_kind', 'value_text', 'value_json']
-      },
-      tx
+    const ctx = await buildWebappServiceContextForWorkspace(
+      mission.workspace_id,
+      tx,
+      getActorWorkspaceUserId()
     );
+    const written = await writeSharedContext({
+      ctx,
+      missionId: mission.id,
+      key,
+      value: body.value
+    });
 
     const row = (await tx.get(
       `SELECT id, mission_id, key, value_kind, value_text, value_json, updated_at, revision
          FROM shared_context_entries
         WHERE id = ? AND workspace_id = ?`,
-      [entryId, mission.workspace_id]
+      [written.id, mission.workspace_id]
     )) as SharedContextRow;
 
     return toSharedContextEntryDto(row);
   });
 }
-
-const CORE_ARTIFACT_TYPES = new Set([
-  'test_results',
-  'next_steps',
-  'note',
-  'url',
-  'decision',
-  'migration'
-]);
 
 function normalizeExternalUrl(value: string | null | undefined): string | null {
   if (value === undefined || value === null) return null;
@@ -4543,15 +4392,6 @@ export async function createArtifact(
   const type = typeof body.type === 'string' ? body.type.trim() : '';
   if (!type) {
     throw new ApiError(400, 'Artifact type is required');
-  }
-  // Core CHECK currently enumerates the six built-in types; namespaced extension
-  // values are accepted here and rejected by the DB if the deployment has not
-  // widened the constraint.
-  if (!CORE_ARTIFACT_TYPES.has(type) && !type.includes('.')) {
-    throw new ApiError(
-      400,
-      `Artifact type must be one of ${[...CORE_ARTIFACT_TYPES].join(', ')} or a namespaced extension value`
-    );
   }
 
   const label = typeof body.label === 'string' ? body.label.trim() : '';
@@ -4620,31 +4460,35 @@ export async function createArtifact(
       if (!objectiveId) objectiveId = session.objective_id;
     }
 
-    const id = newId();
     const now = nowIso();
-    const actorId = getActorWorkspaceUserId();
-    await tx.run(
-      `INSERT INTO artifacts
-         (id, workspace_id, project_id, mission_id, objective_id, session_id, delivery_id,
-          type, label, content_text, external_url, created_by_workspace_user_id,
-          created_at, updated_at, revision)
-       VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, 1)`,
-      [
-        id,
-        mission.workspace_id,
-        mission.project_id,
-        mission.id,
+    const ctx = await buildWebappServiceContextForWorkspace(
+      mission.workspace_id,
+      tx,
+      getActorWorkspaceUserId()
+    );
+    let id: string;
+    try {
+      ({ id } = await insertArtifactRow({
+        ctx,
+        workspaceId: mission.workspace_id,
+        projectId: mission.project_id,
+        missionId: mission.id,
         objectiveId,
         sessionId,
+        deliveryId: null,
         type,
         label,
         contentText,
         externalUrl,
-        actorId,
-        now,
+        createdByWorkspaceUserId: getActorWorkspaceUserId(),
         now
-      ]
-    );
+      }));
+    } catch (error) {
+      if (error instanceof ServiceError) {
+        throw new ApiError(error.status, error.message, undefined, error.code);
+      }
+      throw error;
+    }
 
     const created = (await tx.get(
       `SELECT id, workspace_id, project_id, mission_id, objective_id, session_id, delivery_id,

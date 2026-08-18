@@ -208,7 +208,7 @@ test('an unseen blocking question surfaces and a seen one drops out', async () =
   const project = await createProject({ name: 'AF Ask' });
   const mission = await createMission({ projectId: project.id, firstObjective: 'Ask' });
   const objective = mission.objectives[0]!;
-  const askedAt = '2026-08-15T00:00:00.000Z';
+  const askedAt = nowIso();
   const eventId = seedAskEvent({
     workspaceId: mission.workspaceId,
     projectId: project.id,
@@ -232,6 +232,41 @@ test('an unseen blocking question surfaces and a seen one drops out', async () =
   assert.ok(
     !after.items.some(entry => entry.id === `ask:${eventId}`),
     'an acknowledged question leaves the feed'
+  );
+});
+
+test('blocking questions older than three days stay out of the feed', async () => {
+  const project = await createProject({ name: 'AF Ask Aged' });
+  const mission = await createMission({ projectId: project.id, firstObjective: 'Old ask' });
+  const objective = mission.objectives[0]!;
+  const fourDaysAgo = new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString();
+  const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
+
+  const agedId = seedAskEvent({
+    workspaceId: mission.workspaceId,
+    projectId: project.id,
+    missionId: mission.id,
+    objectiveId: objective.id,
+    summary: 'Stale question from last week?',
+    createdAt: fourDaysAgo
+  });
+  const recentId = seedAskEvent({
+    workspaceId: mission.workspaceId,
+    projectId: project.id,
+    missionId: mission.id,
+    objectiveId: objective.id,
+    summary: 'Still waiting on this one?',
+    createdAt: twoDaysAgo
+  });
+
+  const feed = await listActivityFeed();
+  assert.ok(
+    !feed.items.some(entry => entry.id === `ask:${agedId}`),
+    'asks older than three days are excluded'
+  );
+  assert.ok(
+    feed.items.some(entry => entry.id === `ask:${recentId}`),
+    'asks within three days still surface'
   );
 });
 

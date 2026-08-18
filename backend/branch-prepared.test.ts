@@ -50,4 +50,55 @@ describe('branch preparation recording', () => {
     assert.ok(events.some(event => event.summary.includes('Prepared branch')));
     assert.ok(!events.some(event => event.type === 'branch_prepared'));
   });
+
+  it('leaves the mission branch alone when an objective prepares an isolated branch', async () => {
+    const dir = mkdtempSync(path.join('/tmp', 'ovld-branch-prepared-isolated-'));
+    const { bootstrapIntegrationTestDb } = await import('./test-helpers.ts');
+    await bootstrapIntegrationTestDb({ sqlitePath: path.join(dir, 'Overlord.sqlite') });
+
+    const { createProject, createMission, getMissionDetail, listMissionEvents } =
+      await import('./repository.ts');
+    const { recordBranchPrepared } = await import('./execution/runner.ts');
+
+    const project = await createProject({ name: 'Isolated Branch Prepared Test' });
+    const mission = await createMission({
+      projectId: project.id,
+      firstObjective: 'Prepare a branch'
+    });
+
+    await recordBranchPrepared({
+      missionId: mission.displayId,
+      payload: {
+        branchName: 'prepare-a-branch-1',
+        baseBranch: 'main',
+        worktreePath: '/tmp/.ovld/worktrees/isolated/prepare-a-branch-1',
+        resourceKey: 'primary-repo',
+        action: 'create',
+        cycle: 1
+      }
+    });
+
+    // A parallel sibling's per-objective branch is that objective's checkout; the
+    // mission keeps pointing at the shared branch so the next sequential objective
+    // continues the mission's work rather than the sibling's isolated cycle.
+    await recordBranchPrepared({
+      missionId: mission.displayId,
+      payload: {
+        branchName: 'prepare-a-branch-1-q4t9',
+        baseBranch: 'main',
+        worktreePath: '/tmp/.ovld/worktrees/isolated/prepare-a-branch-1-q4t9',
+        resourceKey: 'primary-repo',
+        action: 'create',
+        cycle: 1,
+        isolated: true
+      }
+    });
+
+    assert.equal((await getMissionDetail(mission.id)).branch?.name, 'prepare-a-branch-1');
+    const events = await listMissionEvents(mission.displayId);
+    assert.ok(
+      events.some(event => event.summary.includes('Prepared isolated objective branch')),
+      'the isolated preparation is still audited'
+    );
+  });
 });

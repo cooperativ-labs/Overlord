@@ -1,5 +1,9 @@
 import { type Permission, PERMISSIONS } from '@overlord/auth';
-import type { CreateArtifactBody, UpdateArtifactBody } from '@overlord/contract';
+import type {
+  CreateArtifactBody,
+  UpdateArtifactBody,
+  UpdateObjectiveBody
+} from '@overlord/contract';
 
 import type { ServiceContext } from '../packages/core/service/context.ts';
 import { ServiceError } from '../packages/core/service/errors.ts';
@@ -27,7 +31,6 @@ import {
   recordWork,
   resumeFollowUp,
   searchMissions,
-  updateObjective,
   updateSession,
   writeSharedContext
 } from '../packages/core/service/protocol.ts';
@@ -36,16 +39,19 @@ import { hashSessionKey } from '../packages/core/service/util.ts';
 import {
   buildWebappServiceContextForWorkspace,
   getActorWorkspaceUserId,
+  requireDatabaseClient,
   serviceDatabaseClient,
   WORKSPACE
 } from './db.ts';
 import { ApiError } from './errors.ts';
+import { resolveObjectiveIdForRest } from './objective-ref.ts';
 import { requirePermission, requireWorkspacePermission } from './rbac.ts';
 import {
   callerWorkspaceMemberships,
   createArtifact,
   createInboxItem,
-  updateArtifact
+  updateArtifact,
+  updateObjective as updateObjectiveRecord
 } from './repository.ts';
 import { listWorkspaces } from './workspaces.ts';
 
@@ -274,6 +280,26 @@ async function withAgentOrigin({
 /** True when the flag appears at all, regardless of value. */
 function hasFlag(body: ProtocolRequestBody, name: string): boolean {
   return name in flagsOf(body);
+}
+
+/** Agent protocol surfaces may edit instruction text only on queued objectives. */
+async function assertInstructionEditableOnProtocolSurface(objectiveRef: string): Promise<void> {
+  const db = requireDatabaseClient();
+  const resolved = await resolveObjectiveIdForRest({ ref: objectiveRef, db });
+  const row = (await db.get(
+    `SELECT state FROM objectives
+      WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+    [resolved.id, resolved.workspaceId]
+  )) as { state: string } | undefined;
+  if (!row) {
+    throw new ApiError(404, 'Objective not found');
+  }
+  if (row.state !== 'draft' && row.state !== 'future') {
+    throw new ApiError(
+      400,
+      'Objective instruction text can only be edited in draft or future state'
+    );
+  }
 }
 
 /**
@@ -823,16 +849,25 @@ const handlers: Record<string, Handler> = {
       )
     }),
 
-  'update-objective': async (ctx, body) => {
+  'update-objective': async (_ctx, body) => {
+    const objectiveId = requireFlag(body, '--objective-id');
+    const update: UpdateObjectiveBody = {};
     const autoAdvance = optionalAutoAdvanceFlag(body);
-    if (autoAdvance === undefined) {
-      throw new ApiError(400, 'Provide --auto-advance or --no-auto-advance');
+    if (autoAdvance !== undefined) {
+      update.autoAdvance = autoAdvance;
     }
-    return updateObjective({
-      ctx,
-      objectiveId: requireFlag(body, '--objective-id'),
-      autoAdvance
-    });
+    if (hasFlag(body, '--instruction-text') || hasFlag(body, '--instruction-text-file')) {
+      await assertInstructionEditableOnProtocolSurface(objectiveId);
+      update.instructionText =
+        resolveInput(body, '--instruction-text', '--instruction-text-file') ?? '';
+    }
+    if (autoAdvance === undefined && update.instructionText === undefined) {
+      throw new ApiError(
+        400,
+        'Provide at least one of --auto-advance/--no-auto-advance or --instruction-text/--instruction-text-file'
+      );
+    }
+    return updateObjectiveRecord(objectiveId, update);
   },
 
   'record-work': async (ctx, body) => {

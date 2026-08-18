@@ -21,15 +21,17 @@ import { postExecutionTargetObservations } from './branching/target-resource-obs
 import { getExecutionTargetMigrationDiagnostics } from './execution/execution-target-migration.ts';
 import {
   forgetMissionLatchSession,
+  ingestMissionHarnessEvents,
+  resolveMissionLatchObservation
+} from './execution/latch-sessions.ts';
+import {
   getAgentCatalog,
   getLaunchPreference,
   getLaunchSettings,
   getObjectiveLaunchCommand,
   getObjectivePrompt,
-  ingestMissionHarnessEvents,
   launchObjective,
   refreshAgentCatalog,
-  resolveMissionLatchObservation,
   updateAgentCatalog,
   updateAgentLaunchConfig,
   updateLaunchPreference,

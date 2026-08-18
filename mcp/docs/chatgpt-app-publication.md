@@ -33,7 +33,7 @@ ChatGPT web/mobile smoke test.
 | `overlord_load_mission_context` | Shows one mission's objectives, history, artifacts, and shared context. | Read-only |
 | `overlord_create_mission` | Creates a draft mission in an explicit project. | Write; no implicit project selection |
 | `overlord_add_objectives` | Adds draft objectives to a mission. | Write |
-| `overlord_update_objective` | Turns auto-advance on or off for an existing objective. | Write |
+| `overlord_update_objective` | Turns auto-advance on or off and/or edits instruction text on draft/future objectives. | Write |
 | `overlord_attach_session` | Begins requested mission work. | Write |
 | `overlord_update_session` | Posts requested mission progress or a decision. | Write |
 | `overlord_deliver_session` | Delivers requested completed work. | Write |

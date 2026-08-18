@@ -62,7 +62,7 @@ The current tool catalog is mission-first:
 - `overlord_create_inbox_item`
 - `overlord_load_mission_context`
 - `overlord_add_objectives`
-- `overlord_update_objective` — turn auto-advance on or off for an existing objective
+- `overlord_update_objective` — turn auto-advance on or off and/or edit instruction text on draft/future objectives
 - `overlord_attach_session`
 - `overlord_update_session`
 - `overlord_deliver_session`

@@ -1153,8 +1153,8 @@ export async function writeSharedContext({
   const now = nowIso();
   const existing = (await ctx.db.get(
     `SELECT id, revision FROM shared_context_entries
-       WHERE mission_id = ? AND key = ? AND deleted_at IS NULL`,
-    [resolved.id, trimmedKey]
+       WHERE mission_id = ? AND workspace_id = ? AND key = ? AND deleted_at IS NULL`,
+    [resolved.id, ctx.workspace.id, trimmedKey]
   )) as { id: string; revision: number } | undefined;
 
   const isJson = typeof value === 'object' && value !== null;
@@ -1171,8 +1171,8 @@ export async function writeSharedContext({
     await ctx.db.run(
       `UPDATE shared_context_entries
          SET value_kind = ?, value_text = ?, value_json = ?, updated_at = ?, revision = ?
-         WHERE id = ?`,
-      [valueKind, valueText, valueJson, now, revision, entryId]
+         WHERE id = ? AND workspace_id = ?`,
+      [valueKind, valueText, valueJson, now, revision, entryId, ctx.workspace.id]
     );
   } else {
     entryId = newId();
@@ -1216,6 +1216,83 @@ export async function writeSharedContext({
     updatedAt: now,
     revision
   };
+}
+
+export const CORE_ARTIFACT_TYPES = new Set([
+  'test_results',
+  'next_steps',
+  'note',
+  'url',
+  'decision',
+  'migration'
+]);
+
+export async function insertArtifactRow({
+  ctx,
+  workspaceId,
+  projectId,
+  missionId,
+  objectiveId,
+  sessionId,
+  deliveryId,
+  type,
+  label,
+  contentText,
+  externalUrl,
+  createdByWorkspaceUserId,
+  now
+}: {
+  ctx: ServiceContext;
+  workspaceId: string;
+  projectId: string;
+  missionId: string;
+  objectiveId: string | null;
+  sessionId: string | null;
+  deliveryId: string | null;
+  type: string;
+  label: string;
+  contentText: string | null;
+  externalUrl: string | null;
+  createdByWorkspaceUserId?: string | null;
+  now?: string;
+}): Promise<{ id: string }> {
+  const trimmedType = type.trim();
+  // Core CHECK currently enumerates the six built-in types; namespaced extension
+  // values are accepted here and rejected by the DB if the deployment has not
+  // widened the constraint.
+  if (!CORE_ARTIFACT_TYPES.has(trimmedType) && !trimmedType.includes('.')) {
+    throw new ServiceError(
+      `Artifact type must be one of ${[...CORE_ARTIFACT_TYPES].join(', ')} or a namespaced extension value`,
+      'validation_error'
+    );
+  }
+
+  const id = newId();
+  const createdAt = now ?? nowIso();
+  await ctx.db.run(
+    `INSERT INTO artifacts
+       (id, workspace_id, project_id, mission_id, objective_id, session_id, delivery_id,
+        type, label, content_text, external_url, created_by_workspace_user_id,
+        created_at, updated_at, revision)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+    [
+      id,
+      workspaceId,
+      projectId,
+      missionId,
+      objectiveId,
+      sessionId,
+      deliveryId,
+      trimmedType,
+      label,
+      contentText,
+      externalUrl,
+      createdByWorkspaceUserId ?? ctx.actorWorkspaceUserId ?? null,
+      createdAt,
+      createdAt
+    ]
+  );
+  return { id };
 }
 
 export async function listArtifacts({

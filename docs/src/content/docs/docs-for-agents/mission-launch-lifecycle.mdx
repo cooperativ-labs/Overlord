@@ -28,9 +28,9 @@ ground from the system's point of view, plus everything before and after.
    - Confirms the objective is in a launchable state (`draft`, `submitted`, or
      `launching`). By default no other objective on the same mission may already
      be active — only one objective per mission runs at a time. When the mission
-     has `allowParallelObjectives` on, a second objective may queue if it uses a
-     **different** `resource_key` than every active sibling. Same-resource pairs
-     still 409.
+     has `allowParallelObjectives` on, a second objective may queue whatever its
+     `resource_key`: two objectives on the **same** checkout are separated later,
+     at branch preparation, rather than being refused here.
    - Resolves the **execution target**: which of the project's linked
      resources (repos/checkouts) this objective runs against, and confirms
      that resource is actually connected on some runner.
@@ -58,6 +58,16 @@ ground from the system's point of view, plus everything before and after.
    If worktree/branch automation is on for the project, the runner prepares a
    branch or worktree for the objective before starting the agent, then
    records the prepared branch back to the mission (`active_branch`).
+
+   When the mission allows parallel objectives and a sibling on the same
+   resource is already running, the runner does **not** drop this objective into
+   the sibling's dirty checkout. It cuts a per-objective branch —
+   `<mission branch>-<objective display key>`, e.g.
+   `objective-centric-execution-756-k7xm` — off the branch it would otherwise
+   have shared and adds a second worktree for it, exactly as it would for a
+   mission whose branch has already been merged. That branch is recorded on the
+   objective and leaves the mission's `active_branch` alone. Missions that run
+   without worktrees have one checkout, and concurrent objectives share it.
 
 5. ### The runner builds and sends the launch payload
 

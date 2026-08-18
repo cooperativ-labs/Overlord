@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import { listChangedFilesForReview } from './changes.js';
+import { ServiceError } from './errors.js';
 import { createProject } from './projects.js';
 import { recordWork } from './protocol.js';
 import { createSeededServiceContext } from './test-helpers.js';
@@ -105,6 +106,52 @@ describe('recordWork (record completed chat work as a review mission)', () => {
     )) as { status: string } | undefined;
     assert.ok(job, 'a compose job was enqueued for the record-work delivery');
     assert.equal(job?.status, 'queued');
+
+    await db.close();
+  });
+
+  it('rejects an invalid artifact type with a clean validation error', async () => {
+    const { db, ctx } = await setup();
+    const project = await createProject({ ctx, name: 'Record Invalid Artifact' });
+
+    await assert.rejects(
+      () =>
+        recordWork({
+          ctx,
+          projectId: project.id,
+          objective: 'Record with a bad artifact.',
+          summary: 'Tried to record it.',
+          artifacts: [{ type: 'not_a_real_type', label: 'Bad', content: 'nope' }]
+        }),
+      (error: unknown) =>
+        error instanceof ServiceError &&
+        error.status === 400 &&
+        error.code === 'validation_error' &&
+        error.message.includes('Artifact type must be')
+    );
+
+    await db.close();
+  });
+
+  it('inserts a valid artifact through the shared writer', async () => {
+    const { db, ctx } = await setup();
+    const project = await createProject({ ctx, name: 'Record Valid Artifact' });
+
+    const { mission } = await recordWork({
+      ctx,
+      projectId: project.id,
+      objective: 'Record with a note.',
+      summary: 'Recorded it.',
+      artifacts: [{ type: 'next_steps', label: 'Follow-up', content: 'Ship the docs.' }]
+    });
+
+    const row = (await db.get(
+      `SELECT type, label, content_text FROM artifacts WHERE mission_id = ?`,
+      [mission.id]
+    )) as { type: string; label: string; content_text: string | null };
+    assert.equal(row.type, 'next_steps');
+    assert.equal(row.label, 'Follow-up');
+    assert.equal(row.content_text, 'Ship the docs.');
 
     await db.close();
   });

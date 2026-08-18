@@ -102,7 +102,7 @@ test('attach reuses the agent already stored on the objective', async () => {
       get: async () => ({
         id: 'mission-1',
         displayId: 'local:1',
-        objectives: [{ id: 'obj-1', assignedAgent: 'claude' }]
+        objectives: [{ id: 'obj-1', state: 'draft', assignedAgent: 'claude' }]
       }),
       post: async ({ path, body }: { path: string; body?: unknown }) => {
         posts.push({ path, body });
@@ -131,7 +131,7 @@ test('attach honors an explicit agent over the stored one', async () => {
       get: async () => ({
         id: 'mission-1',
         displayId: 'local:1',
-        objectives: [{ id: 'obj-1', assignedAgent: 'claude' }]
+        objectives: [{ id: 'obj-1', state: 'draft', assignedAgent: 'claude' }]
       }),
       post: async ({ path, body }: { path: string; body?: unknown }) => {
         posts.push({ path, body });

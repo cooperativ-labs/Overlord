@@ -56,9 +56,10 @@ Requirements:
 - The default human-readable mission sequence is workspace-scoped. If project-scoped sequences are introduced later, treat that as a schema migration rather than a config-only change.
 - Fields should cover title, objective summary, status, priority, project, constraints, human-only notes (never sent to agents), output format, creator, timestamps, and execution target intent.
 - Missions contain ordered objectives. By default at most one objective executes
-  at a time. A mission may opt in to parallel execution across different
-  `resource_key`s (`allowParallelObjectives`); same-resource parallel remains
-  forbidden.
+  at a time. A mission may opt in to parallel execution (`allowParallelObjectives`)
+  on different `resource_key`s or the same one; a same-resource pair gets a
+  per-objective branch and worktree when the mission uses worktrees, and shares the
+  mission's single checkout when it does not.
 - Missions retain activity history, delivery records, artifacts, attachments, shared context, and change rationales.
 - A mission can be agent-executable or human-only.
 - Mission content is persistent and should be treated as shared project memory.

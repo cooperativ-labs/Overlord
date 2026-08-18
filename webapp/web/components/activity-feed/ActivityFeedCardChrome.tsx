@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { MouseEvent, ReactNode } from 'react';
 
 import type { ActivityFeedItemDto, CreatedByKind } from '../../../shared/contract.ts';
 import { normalizeAgentKey } from '../../lib/helpers/agent-icons.ts';
@@ -56,13 +56,24 @@ export function KindBadge({
  * id as the live identity, then the parent mission as secondary context
  * (coo:756 §9.1 — activity surfaces are objective-first).
  */
+const missionLinkClass =
+  'min-w-0 truncate rounded-sm text-left transition-colors hover:text-(--color-ink) hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--color-border)';
+
 export function ActivityFeedCardMeta({
   item,
-  trailing
+  trailing,
+  onMissionOpen
 }: {
   item: ActivityFeedItemDto;
   trailing?: ReactNode;
+  /** When set, mission display id and title open the mission panel (delivery cards). */
+  onMissionOpen?: (event: MouseEvent<HTMLButtonElement>) => void;
 }) {
+  const openMission = (event: MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+    onMissionOpen?.(event);
+  };
+
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-(--color-ink-dim)">
       <span className="inline-flex min-w-0 items-center gap-1.5">
@@ -78,7 +89,23 @@ export function ActivityFeedCardMeta({
         </>
       ) : null}
       <span aria-hidden="true">·</span>
-      <span className="min-w-0 truncate">{item.missionTitle}</span>
+      {onMissionOpen ? (
+        <>
+          <button
+            type="button"
+            onClick={openMission}
+            className={cn(missionLinkClass, 'font-mono font-medium text-(--color-ink)')}
+          >
+            {item.missionDisplayId}
+          </button>
+          <span aria-hidden="true">·</span>
+          <button type="button" onClick={openMission} className={missionLinkClass}>
+            {item.missionTitle}
+          </button>
+        </>
+      ) : (
+        <span className="min-w-0 truncate">{item.missionTitle}</span>
+      )}
       {trailing}
     </div>
   );

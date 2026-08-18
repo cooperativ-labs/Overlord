@@ -80,11 +80,22 @@ export type ClaimedExecutionRequest = ExecutionRequestSummary & {
   workingDirectory: string;
 };
 
-function parseJsonObject(raw: string): Record<string, unknown> {
-  const parsed = JSON.parse(raw) as unknown;
-  return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
-    ? (parsed as Record<string, unknown>)
+export function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
     : {};
+}
+
+export function parseMetadataJson(json: string): Record<string, unknown> {
+  try {
+    return asRecord(JSON.parse(json) as unknown);
+  } catch {
+    return {};
+  }
+}
+
+function parseJsonObject(raw: string): Record<string, unknown> {
+  return asRecord(JSON.parse(raw) as unknown);
 }
 
 function rowToSummary(row: {

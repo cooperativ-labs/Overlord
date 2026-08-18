@@ -345,7 +345,11 @@ test('queues two objectives on different resources when parallel is opted in', a
   assert.equal(queued.n, 2);
 });
 
-test('still rejects same-resource sibling launch when parallel is opted in', async () => {
+test('queues a same-resource sibling launch when parallel is opted in', async () => {
+  // Phase E: same-resource concurrency is allowed. The Runner Layer keeps the two
+  // apart with a per-objective branch/worktree (worktree mode) or shares the
+  // mission's single checkout deliberately (worktrees off) — the control plane no
+  // longer serializes them.
   const project = await createProject({ name: 'Parallel Same Resource Launch' });
   await createProjectResource(project.id, {
     directoryPath: createIsolatedCheckout('overlord-launch-parallel-same-'),
@@ -356,6 +360,35 @@ test('still rejects same-resource sibling launch when parallel is opted in', asy
     firstObjective: 'First on primary'
   });
   await updateMission(mission.id, { allowParallelObjectives: true });
+  const first = await launchObjective(mission.objectives[0]!.id, { agent: 'codex' });
+
+  const second = await createObjective({
+    missionId: mission.id,
+    instructionText: 'Also on primary'
+  });
+  const secondRequest = await launchObjective(second.id, { agent: 'codex' });
+
+  assert.notEqual(secondRequest.id, first.id);
+  assert.equal(secondRequest.objectiveId, second.id);
+  const queued = db
+    .prepare(
+      `SELECT COUNT(*) AS n FROM execution_requests
+        WHERE mission_id = ? AND status = 'queued' AND deleted_at IS NULL`
+    )
+    .get(mission.id) as { n: number };
+  assert.equal(queued.n, 2);
+});
+
+test('still rejects a same-resource sibling launch while parallel is off', async () => {
+  const project = await createProject({ name: 'Serial Same Resource Launch' });
+  await createProjectResource(project.id, {
+    directoryPath: createIsolatedCheckout('overlord-launch-serial-same-'),
+    isPrimary: true
+  });
+  const mission = await createMission({
+    projectId: project.id,
+    firstObjective: 'First on primary'
+  });
   await launchObjective(mission.objectives[0]!.id, { agent: 'codex' });
 
   const second = await createObjective({

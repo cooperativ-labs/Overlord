@@ -61,25 +61,27 @@ export function objectiveResourcesConflict({
 
 /**
  * Whether an already-active sibling should block launching this candidate.
- * Flag off → always block. Flag on → block only when the checkouts match.
+ * Flag off → always block. Flag on → never block.
+ *
+ * Same-resource pairs used to be blocked here because two objectives would have
+ * shared one dirty checkout. They no longer are: the Runner Layer isolates a
+ * concurrently launched objective onto its own branch and worktree when the
+ * mission uses worktrees, and a mission that runs without worktrees has exactly
+ * one checkout by construction and deliberately shares it (file attribution comes
+ * from each session's touched-file log, not from the checkout). The resource keys
+ * are still accepted so call sites read explicitly, and
+ * `objectiveResourcesConflict` still answers "same checkout?" for the callers
+ * that need it.
  */
 export function siblingBlocksParallelLaunch({
-  allowParallelObjectives,
-  candidateResourceKey,
-  siblingResourceKey,
-  primaryResourceKey = DEFAULT_PRIMARY_RESOURCE_KEY
+  allowParallelObjectives
 }: {
   allowParallelObjectives: boolean;
-  candidateResourceKey: string | null | undefined;
-  siblingResourceKey: string | null | undefined;
+  candidateResourceKey?: string | null;
+  siblingResourceKey?: string | null;
   primaryResourceKey?: string;
 }): boolean {
-  if (!allowParallelObjectives) return true;
-  return objectiveResourcesConflict({
-    left: candidateResourceKey,
-    right: siblingResourceKey,
-    primaryResourceKey
-  });
+  return !allowParallelObjectives;
 }
 
 export type ObjectiveLifecycleViolation = {
@@ -257,7 +259,6 @@ export function validateObjectiveLifecycle(
 ): ObjectiveLifecycleViolation[] {
   const ordered = sortObjectivesByLifecycleOrder(objectives);
   const violations: ObjectiveLifecycleViolation[] = [];
-  const primaryResourceKey = options.primaryResourceKey ?? DEFAULT_PRIMARY_RESOURCE_KEY;
   const allowParallel = options.allowParallelObjectives === true;
 
   const drafts = ordered.filter(o => o.state === 'draft');
@@ -270,19 +271,10 @@ export function validateObjectiveLifecycle(
   }
 
   const active = ordered.filter(isActiveObjective);
-  const conflictingActive = allowParallel
-    ? active.filter((candidate, index) =>
-        active.some(
-          (other, otherIndex) =>
-            otherIndex !== index &&
-            objectiveResourcesConflict({
-              left: candidate.resourceKey,
-              right: other.resourceKey,
-              primaryResourceKey
-            })
-        )
-      )
-    : active;
+  // With parallel objectives opted in, several actives are legal on any resource:
+  // same-resource pairs are separated by per-objective worktree isolation (or run
+  // in the mission's single shared checkout when worktrees are off).
+  const conflictingActive = allowParallel ? [] : active;
   const uniqueConflicting = [...new Map(conflictingActive.map(item => [item.id, item])).values()];
   if (uniqueConflicting.length > 1) {
     violations.push({

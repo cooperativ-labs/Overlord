@@ -3,10 +3,13 @@ import express, { type NextFunction, type Request, type Response, Router } from 
 
 import {
   acquireWaiterLease,
+  AGENT_REQUEST_KINDS,
   type AgentSessionChannelRow,
   appendSessionEvent,
+  APPLICATION_STATES,
   authenticateChannelCredential,
   createRequest,
+  DELIVERY_OUTCOMES,
   describeDeliveryOutcome,
   endChannel,
   getChannel,
@@ -20,10 +23,13 @@ import {
   markInputFailed,
   markRequestResolvedElsewhere,
   recordRequestApplication,
+  RELEASE_REASONS,
+  type ReleaseReason,
   releaseRequestToTerminal
 } from '../packages/core/service/agent-session/index.ts';
 import type { ServiceContext } from '../packages/core/service/context.ts';
 import { ServiceError } from '../packages/core/service/errors.ts';
+import { asRecord } from '../packages/core/service/execution-requests.ts';
 
 import { buildWebappServiceContextForWorkspace, requireDatabaseClient } from './db.ts';
 import { requireWorkspacePermission } from './rbac.ts';
@@ -160,13 +166,18 @@ function handle(
   };
 }
 
-function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
-}
-
 function optionalString(value: unknown): string | null {
   return typeof value === 'string' && value.trim() !== '' ? value.trim() : null;
 }
+
+function isAllowedValue<T extends string>(value: string, allowed: readonly T[]): value is T {
+  return (allowed as readonly string[]).includes(value);
+}
+
+/** Adapters may not send `channel_ended`; that reason is produced internally when a channel ends. */
+const ADAPTER_RELEASE_REASONS = RELEASE_REASONS.filter(
+  (reason): reason is Exclude<ReleaseReason, 'channel_ended'> => reason !== 'channel_ended'
+);
 
 export function createAgentSessionChannelRouter(): Router {
   const router = Router();
@@ -271,7 +282,7 @@ export function createAgentSessionChannelRouter(): Router {
       const { ctx, channel } = channelScope(req);
       const body = asRecord(req.body);
       const kind = String(body.kind ?? 'question');
-      if (kind !== 'question' && kind !== 'permission' && kind !== 'choice' && kind !== 'retry') {
+      if (!isAllowedValue(kind, AGENT_REQUEST_KINDS)) {
         throw new ServiceError('Unknown request kind', 'invalid_request', 400);
       }
       const request = await createRequest({
@@ -360,13 +371,10 @@ export function createAgentSessionChannelRouter(): Router {
         throw new ServiceError('Request not found', 'request_not_found', 404);
       }
       const reason = String(body.reason ?? 'timeout');
-      const allowed = ['timeout', 'local_activity', 'policy', 'interrupt'] as const;
       const result = await releaseRequestToTerminal({
         ctx,
         requestId: req.params.id,
-        reason: (allowed as readonly string[]).includes(reason)
-          ? (reason as (typeof allowed)[number])
-          : 'timeout'
+        reason: isAllowedValue(reason, ADAPTER_RELEASE_REASONS) ? reason : 'timeout'
       });
       // A failed release means a human resolved first. The adapter re-reads and emits their
       // decision instead — never a contradictory one.
@@ -393,13 +401,10 @@ export function createAgentSessionChannelRouter(): Router {
         throw new ServiceError('Request not found', 'request_not_found', 404);
       }
       const state = String(body.applicationState ?? 'unknown');
-      const allowed = ['emitted', 'applied', 'not_applied', 'unknown'] as const;
       await recordRequestApplication({
         ctx,
         requestId: req.params.id,
-        applicationState: (allowed as readonly string[]).includes(state)
-          ? (state as (typeof allowed)[number])
-          : 'unknown'
+        applicationState: isAllowedValue(state, APPLICATION_STATES) ? state : 'unknown'
       });
       return { ok: true };
     })
@@ -460,10 +465,7 @@ export function createAgentSessionChannelRouter(): Router {
         inputId: req.params.id,
         leaseId,
         deliveryOutcome:
-          deliveryOutcome === 'delivered' ||
-          deliveryOutcome === 'queued_turn_boundary' ||
-          deliveryOutcome === 'queued_next_turn' ||
-          deliveryOutcome === 'unsupported'
+          deliveryOutcome && isAllowedValue(deliveryOutcome, DELIVERY_OUTCOMES)
             ? deliveryOutcome
             : null
       });

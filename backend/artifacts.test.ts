@@ -174,6 +174,26 @@ test('rejects creating an artifact without content', async () => {
   );
 });
 
+test('rejects creating an artifact with an unknown type', async () => {
+  const project = await createProject({ name: `Create invalid type ${Date.now()}` });
+  const mission = await createMission({
+    projectId: project.id,
+    firstObjective: 'Need a valid type'
+  });
+
+  await assert.rejects(
+    createArtifact(mission.id, {
+      type: 'not_a_real_type',
+      label: 'Bad',
+      contentText: 'nope'
+    }),
+    (error: unknown) =>
+      error instanceof ApiError &&
+      error.status === 400 &&
+      error.message.includes('Artifact type must be')
+  );
+});
+
 test('protocol add-artifact creates an artifact without a delivery', async () => {
   const project = await createProject({ name: `Protocol add ${Date.now()}` });
   const mission = await createMission({

@@ -6,6 +6,7 @@ import {
   deriveObjectiveLifecycleView,
   manageObjectiveLifecycle,
   type ObjectiveLifecycleObjective,
+  objectiveResourcesConflict,
   planEnsureDraftSlot,
   shouldDiscardEmptiedObjective,
   siblingBlocksParallelLaunch,
@@ -223,7 +224,10 @@ describe('objective lifecycle rules', () => {
     );
   });
 
-  it('still reports multiple_active_objectives for same-resource pairs when parallel is on', () => {
+  it('allows two active objectives on the same resource when parallel is opted in', () => {
+    // Phase E: same-resource concurrency is legal. The Runner Layer gives each
+    // objective its own branch/worktree when the mission uses worktrees, and a
+    // worktree-less mission has one checkout that both deliberately share.
     const violations = validateObjectiveLifecycle(
       [
         objective({ id: 'a', position: 0, state: 'executing', resourceKey: null }),
@@ -231,6 +235,17 @@ describe('objective lifecycle rules', () => {
       ],
       { allowParallelObjectives: true, primaryResourceKey: 'primary' }
     );
+    assert.equal(
+      violations.some(violation => violation.code === 'multiple_active_objectives'),
+      false
+    );
+  });
+
+  it('still reports multiple_active_objectives when parallel is off', () => {
+    const violations = validateObjectiveLifecycle([
+      objective({ id: 'a', position: 0, state: 'executing', resourceKey: 'docs' }),
+      objective({ id: 'b', position: 1, state: 'pending_delivery', resourceKey: 'primary' })
+    ]);
     assert.deepEqual(
       violations
         .filter(violation => violation.code === 'multiple_active_objectives')
@@ -239,7 +254,7 @@ describe('objective lifecycle rules', () => {
     );
   });
 
-  it('blocks parallel launch on the same effective resource and allows different ones', () => {
+  it('blocks a sibling launch only while parallel objectives are off', () => {
     assert.equal(
       siblingBlocksParallelLaunch({
         allowParallelObjectives: false,
@@ -256,6 +271,7 @@ describe('objective lifecycle rules', () => {
       }),
       false
     );
+    // Same effective resource, flag on: allowed since Phase E.
     assert.equal(
       siblingBlocksParallelLaunch({
         allowParallelObjectives: true,
@@ -263,7 +279,22 @@ describe('objective lifecycle rules', () => {
         siblingResourceKey: 'overlord',
         primaryResourceKey: 'overlord'
       }),
+      false
+    );
+  });
+
+  it('objectiveResourcesConflict still answers "same checkout?" for isolation callers', () => {
+    assert.equal(
+      objectiveResourcesConflict({ left: null, right: 'overlord', primaryResourceKey: 'overlord' }),
       true
+    );
+    assert.equal(
+      objectiveResourcesConflict({
+        left: 'docs',
+        right: 'overlord',
+        primaryResourceKey: 'overlord'
+      }),
+      false
     );
   });
 });

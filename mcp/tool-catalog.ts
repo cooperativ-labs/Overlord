@@ -190,19 +190,24 @@ export const hostedMcpToolDefinitions: ToolDefinition[] = [
   },
   {
     name: 'overlord_update_objective',
-    title: 'Update objective auto-advance',
+    title: 'Update objective',
     description:
-      'Use this to turn auto-advance on or off for an existing objective so delivery can queue the next one.',
+      'Use this to turn auto-advance on or off and/or edit instruction text on a draft or future objective.',
     inputSchema: objectSchema(
       {
-        objectiveId: stringProperty('Objective UUID.'),
+        objectiveId: stringProperty('Objective UUID or display id.'),
         autoAdvance: booleanProperty(
           'When true, Overlord queues the next objective after this one is delivered. When false, delivery waits for approval.'
+        ),
+        instructionText: stringProperty(
+          'Replacement instruction text. Allowed only when the objective is in draft or future state; blank clears the text in those states.'
         )
       },
-      ['objectiveId', 'autoAdvance']
+      ['objectiveId']
     ),
-    outputSchema: protocolOutputSchema('The updated objective, including autoAdvance.'),
+    outputSchema: protocolOutputSchema(
+      'The updated objective, including autoAdvance and instructionText.'
+    ),
     annotations: writeAction
   },
   {

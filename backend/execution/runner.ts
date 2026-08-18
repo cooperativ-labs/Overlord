@@ -5,6 +5,7 @@ import type { DatabaseClient } from '@overlord/database';
 import type { ServiceContext } from '../../packages/core/service/context.ts';
 import { ServiceError } from '../../packages/core/service/errors.ts';
 import {
+  asRecord,
   claimNextExecutionRequest,
   clearExecutionRequests,
   type ExecutionRequestSummary,
@@ -159,6 +160,13 @@ type BranchPreparedPayload = {
   resourceKey: string;
   action: 'create' | 'reuse' | 'new_cycle';
   cycle: number;
+  /**
+   * The branch belongs to one objective running in parallel with a sibling on the
+   * same resource, not to the mission as a whole. It is recorded on the objective
+   * and in the runner branch event, but it must not move `missions.active_branch`
+   * or the mission-level branch observation off the shared mission branch.
+   */
+  isolated: boolean;
 };
 
 const EXECUTION_REQUEST_COLUMNS = `
@@ -388,10 +396,7 @@ export async function ingestRunnerHarnessEvents({
 }): Promise<Record<string, unknown>> {
   const ctx = await requestRunnerContext(requestId);
   const request = await getExecutionRequest({ ctx, id: requestId });
-  const payload =
-    body && typeof body === 'object' && !Array.isArray(body)
-      ? (body as Record<string, unknown>)
-      : {};
+  const payload = asRecord(body);
   const mapped = providerSessionFromMetadata(request.metadata);
   const providerSessionId =
     typeof payload.providerSessionId === 'string' && payload.providerSessionId.trim()
@@ -460,13 +465,14 @@ function requireBranchPayload(value: unknown): BranchPreparedPayload {
   const resourceKey = typeof body.resourceKey === 'string' ? body.resourceKey.trim() : '';
   const action = body.action;
   const cycle = typeof body.cycle === 'number' && Number.isFinite(body.cycle) ? body.cycle : 1;
+  const isolated = body.isolated === true;
   if (!branchName || !baseBranch || !worktreePath || !resourceKey) {
     throw new ApiError(400, 'branchName, baseBranch, worktreePath, and resourceKey are required');
   }
   if (action !== 'create' && action !== 'reuse' && action !== 'new_cycle') {
     throw new ApiError(400, 'Invalid branch preparation action');
   }
-  return { branchName, baseBranch, worktreePath, resourceKey, action, cycle };
+  return { branchName, baseBranch, worktreePath, resourceKey, action, cycle, isolated };
 }
 
 async function resolveBranchResourceKey({
@@ -581,35 +587,44 @@ async function recordBranchPreparedTx(
     }
   }
 
-  const missionRevision = mission.revision + 1;
-  await tx.run(
-    `UPDATE missions
-        SET active_branch = ?, branch_override = NULL,
-            updated_at = ?, revision = ?
-      WHERE id = ?`,
-    [branch.branchName, now, missionRevision, mission.id]
-  );
-  await recordChange(
-    {
-      workspaceId,
-      entityType: 'mission',
-      entityId: mission.id,
-      operation: 'update',
-      entityRevision: missionRevision,
-      projectId: mission.project_id,
-      missionId: mission.id,
-      objectiveId,
-      changedFields: ['active_branch', 'branch_override']
-    },
-    tx
-  );
+  // A per-objective isolated branch is that objective's checkout, not the
+  // mission's. `missions.active_branch` (and the mission-level branch
+  // observation below) must keep pointing at the shared mission branch so a later
+  // sequential objective still continues the mission's work instead of a sibling's
+  // isolated cycle, and so the mission panel keeps showing mission-level git state.
+  if (!branch.isolated) {
+    const missionRevision = mission.revision + 1;
+    await tx.run(
+      `UPDATE missions
+          SET active_branch = ?, branch_override = NULL,
+              updated_at = ?, revision = ?
+        WHERE id = ?`,
+      [branch.branchName, now, missionRevision, mission.id]
+    );
+    await recordChange(
+      {
+        workspaceId,
+        entityType: 'mission',
+        entityId: mission.id,
+        operation: 'update',
+        entityRevision: missionRevision,
+        projectId: mission.project_id,
+        missionId: mission.id,
+        objectiveId,
+        changedFields: ['active_branch', 'branch_override']
+      },
+      tx
+    );
+  }
 
   await recordRunnerBranchEvent(tx, {
     workspaceId,
     projectId: mission.project_id,
     missionId: mission.id,
     objectiveId,
-    summary: `Prepared branch ${branch.branchName} in worktree ${branch.worktreePath}.`,
+    summary: branch.isolated
+      ? `Prepared isolated objective branch ${branch.branchName} in worktree ${branch.worktreePath}.`
+      : `Prepared branch ${branch.branchName} in worktree ${branch.worktreePath}.`,
     payload: branch as unknown as Record<string, unknown>,
     now
   });
@@ -618,7 +633,7 @@ async function recordBranchPreparedTx(
     requestRow?.claimed_by_execution_target_id?.trim() ||
     requestRow?.execution_target_id?.trim() ||
     null;
-  if (executionTargetId) {
+  if (executionTargetId && !branch.isolated) {
     const resourceKey = await resolveBranchResourceKey({ tx, branch, requestRow });
     const existing = await tx.get<{ id: string }>(
       `SELECT id FROM mission_branch_observations

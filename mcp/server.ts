@@ -180,14 +180,19 @@ const toolHandlers: Record<string, ToolHandler> = {
     });
   },
   overlord_update_objective: args => {
-    if (typeof args.autoAdvance !== 'boolean') {
-      throw new Error('autoAdvance must be a boolean');
+    const hasAutoAdvance = typeof args.autoAdvance === 'boolean';
+    const hasInstructionText = typeof args.instructionText === 'string';
+    if (!hasAutoAdvance && !hasInstructionText) {
+      throw new Error('Provide autoAdvance and/or instructionText');
     }
     return runProtocolSubcommand(
       'update-objective',
       protocolBody({
         '--objective-id': requiredString(args, 'objectiveId'),
-        ...autoAdvanceFlags(args)
+        ...(hasAutoAdvance ? autoAdvanceFlags(args) : {}),
+        ...(hasInstructionText
+          ? { '--instruction-text': requiredString(args, 'instructionText') }
+          : {})
       })
     );
   },

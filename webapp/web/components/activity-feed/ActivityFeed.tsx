@@ -224,7 +224,14 @@ export function ActivityFeed({
                 );
               }
               if (isDeliveryItem(item)) {
-                return <DeliveryFeedCard key={item.id} item={item} nowIso={nowIso} />;
+                return (
+                  <DeliveryFeedCard
+                    key={item.id}
+                    item={item}
+                    nowIso={nowIso}
+                    onOpenMission={onOpenMission}
+                  />
+                );
               }
               return null;
             })
