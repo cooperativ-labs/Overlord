@@ -2,7 +2,6 @@ import { ChevronDown, Package } from 'lucide-react';
 import { useState } from 'react';
 
 import type { ActivityFeedDeliveryItemDto } from '../../../shared/contract.ts';
-import { agentDisplayName } from '../../lib/helpers/agent-icons.ts';
 import { cn } from '../../lib/utils.ts';
 import {
   deliveryOneSentenceSummary,
@@ -10,10 +9,14 @@ import {
   formatDeliveryTimestamp,
   useCollapseOnDismiss
 } from '../DeliverySummaryCard.tsx';
-import { AgentIcon } from '../objectives/AgentIcon.tsx';
 
 import { relativeTime } from './activity-feed-model.ts';
-import { ActivityFeedCardMeta, KindBadge } from './ActivityFeedCardChrome.tsx';
+import {
+  ActivityFeedAgentLine,
+  ActivityFeedCardMeta,
+  ActivityFeedOriginCorner,
+  KindBadge
+} from './ActivityFeedCardChrome.tsx';
 
 /**
  * A recent delivery in the feed. Expanding renders `DeliveryPresentation` — the
@@ -30,18 +33,21 @@ export function DeliveryFeedCard({
   const [expanded, setExpanded] = useState(false);
   const cardRef = useCollapseOnDismiss(expanded, () => setExpanded(false));
   const preview = deliveryOneSentenceSummary(item.delivery);
-  const agentKey = item.delivery.agentIdentifier;
 
   return (
     <article
       ref={cardRef}
-      className="overflow-hidden rounded-xl border border-(--color-border) bg-(--color-surface-1)"
+      className="relative shrink-0 overflow-hidden rounded-xl border border-(--color-border) bg-(--color-surface-1)"
     >
+      <ActivityFeedOriginCorner
+        createdByKind={item.createdByKind}
+        createdByAgent={item.createdByAgent}
+      />
       <button
         type="button"
         onClick={() => setExpanded(current => !current)}
         aria-expanded={expanded}
-        className="flex w-full flex-col gap-2 p-3 text-left transition-colors hover:bg-(--color-surface-2)"
+        className="flex w-full flex-col gap-2 p-3 pr-8 text-left transition-colors hover:bg-(--color-surface-2)"
       >
         <ActivityFeedCardMeta
           item={item}
@@ -64,12 +70,10 @@ export function DeliveryFeedCard({
         )}
 
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-(--color-ink-dim)">
-          {agentKey ? (
-            <span className="inline-flex items-center gap-1.5">
-              <AgentIcon agentKey={agentKey} size={12} />
-              <span>{agentDisplayName(agentKey)}</span>
-            </span>
-          ) : null}
+          <ActivityFeedAgentLine
+            agentKey={item.delivery.agentIdentifier}
+            modelIdentifier={item.delivery.modelIdentifier}
+          />
           <span>{formatDeliveryTimestamp(item.delivery.deliveredAt)}</span>
           <span className="ml-auto inline-flex items-center gap-1 text-(--color-ink)">
             {expanded ? 'Collapse' : 'Expand'}

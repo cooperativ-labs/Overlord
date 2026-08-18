@@ -31,6 +31,8 @@ function base(overrides: Partial<ActivityFeedItemDto> = {}) {
     missionTitle: 'Display objective events',
     objectiveId: 'objective-1',
     objectiveDisplayId: 'coo:757.hegz',
+    createdByKind: 'human' as const,
+    createdByAgent: null,
     ...overrides
   };
 }

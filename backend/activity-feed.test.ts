@@ -271,3 +271,81 @@ test('the feed reads through workspace membership, not through the rows themselv
     'restoring the membership restores visibility'
   );
 });
+
+function seedAgentSession({
+  workspaceId,
+  projectId,
+  missionId,
+  objectiveId,
+  agentIdentifier,
+  modelIdentifier,
+  startedAt
+}: {
+  workspaceId: string;
+  projectId: string;
+  missionId: string;
+  objectiveId: string;
+  agentIdentifier: string;
+  modelIdentifier: string | null;
+  startedAt: string;
+}): string {
+  const id = newId('session');
+  db.prepare(
+    `INSERT INTO agent_sessions
+       (id, workspace_id, project_id, mission_id, objective_id, session_key_hash,
+        session_key_prefix, agent_identifier, model_identifier, connection_method,
+        phase, delivery_state, started_at, created_at, updated_at, revision, metadata_json)
+     VALUES (?, ?, ?, ?, ?, 'hash', 'sess_', ?, ?, 'cli', 'execute', 'not_delivered',
+             ?, ?, ?, 1, '{}')`
+  ).run(
+    id,
+    workspaceId,
+    projectId,
+    missionId,
+    objectiveId,
+    agentIdentifier,
+    modelIdentifier,
+    startedAt,
+    startedAt,
+    startedAt
+  );
+  return id;
+}
+
+test('session agent sentinel unknown falls back to the objective assigned agent', async () => {
+  const project = await createProject({ name: 'AF Unknown Agent' });
+  const mission = await createMission({ projectId: project.id, firstObjective: 'Run' });
+  const objective = mission.objectives[0]!;
+  await updateObjective(objective.id, { state: 'executing', assignedAgent: 'cursor' });
+  seedAgentSession({
+    workspaceId: mission.workspaceId,
+    projectId: project.id,
+    missionId: mission.id,
+    objectiveId: objective.id,
+    agentIdentifier: 'unknown',
+    modelIdentifier: 'cursor-grok-4.6',
+    startedAt: '2026-08-18T05:00:00.000Z'
+  });
+
+  const feed = await listActivityFeed();
+  const item = feed.items.find(entry => entry.id === `run:${objective.id}`);
+  assert.ok(item && item.kind === 'objective_run');
+  assert.equal(item.agentIdentifier, 'cursor');
+  assert.equal(item.modelIdentifier, 'cursor-grok-4.6');
+});
+
+test('feed items expose objective creation provenance', async () => {
+  const project = await createProject({ name: 'AF Provenance' });
+  const mission = await createMission({ projectId: project.id, firstObjective: 'Authored' });
+  const objective = mission.objectives[0]!;
+  await updateObjective(objective.id, { state: 'executing' });
+  db.prepare(
+    `UPDATE objectives SET created_by_kind = 'agent', created_by_agent = 'cursor' WHERE id = ?`
+  ).run(objective.id);
+
+  const feed = await listActivityFeed();
+  const item = feed.items.find(entry => entry.id === `run:${objective.id}`);
+  assert.ok(item && item.kind === 'objective_run');
+  assert.equal(item.createdByKind, 'agent');
+  assert.equal(item.createdByAgent, 'cursor');
+});

@@ -62,8 +62,11 @@ let quickTaskPreloadPath: string | null = null;
 let quickTaskBlurHideTimer: ReturnType<typeof setTimeout> | null = null;
 let barAnchorScreenY: number | null = null;
 let suppressMovedReset = false;
+let quickWindowAwaitingFirstPaint = false;
+let quickWindowShowRequested = false;
 
 const QUICK_TASK_BLUR_HIDE_MS = 180;
+const QUICK_TASK_FIRST_PAINT_TIMEOUT_MS = 3_000;
 
 function isReservedAccelerator(accel: string): boolean {
   return accel.trim().length === 0;
@@ -96,6 +99,7 @@ function getQuickTaskUrl(): string {
 
 function ensureWindow(preloadPath: string): BrowserWindow {
   if (quickWindow && !quickWindow.isDestroyed()) return quickWindow;
+  quickWindowAwaitingFirstPaint = true;
 
   const initial =
     getValidatedSavedPosition(WINDOW_WIDTH, INITIAL_WINDOW_HEIGHT) ??
@@ -139,6 +143,20 @@ function ensureWindow(preloadPath: string): BrowserWindow {
 
   quickWindow.loadURL(getQuickTaskUrl());
 
+  // The window is now built on first open rather than at boot, so its very
+  // first show would otherwise be a transparent frameless rectangle while the
+  // SPA boots. Hold the show until the renderer has something to paint, with a
+  // timeout so a slow or failed load still surfaces a window the user can see.
+  quickWindow.once('ready-to-show', () => {
+    quickWindowAwaitingFirstPaint = false;
+    if (quickWindowShowRequested) revealQuickTaskWindow();
+  });
+  setTimeout(() => {
+    if (!quickWindowAwaitingFirstPaint) return;
+    quickWindowAwaitingFirstPaint = false;
+    if (quickWindowShowRequested) revealQuickTaskWindow();
+  }, QUICK_TASK_FIRST_PAINT_TIMEOUT_MS);
+
   quickWindow.on('blur', () => {
     const win = quickWindow;
     if (!win || win.isDestroyed() || !win.isVisible()) return;
@@ -176,6 +194,8 @@ function ensureWindow(preloadPath: string): BrowserWindow {
       clearTimeout(quickTaskBlurHideTimer);
       quickTaskBlurHideTimer = null;
     }
+    quickWindowAwaitingFirstPaint = false;
+    quickWindowShowRequested = false;
     quickWindow = null;
   });
 
@@ -199,20 +219,37 @@ function showQuickTaskWindow(preloadPath: string): void {
   if (window.webContents.getURL() !== getQuickTaskUrl()) {
     window.loadURL(getQuickTaskUrl());
   }
+
+  quickWindowShowRequested = true;
+  if (quickWindowAwaitingFirstPaint) return;
+  revealQuickTaskWindow();
+}
+
+function revealQuickTaskWindow(): void {
+  const window = quickWindow;
+  if (!window || window.isDestroyed()) return;
+  quickWindowShowRequested = false;
   window.show();
   window.focus();
   window.webContents.send('overlord:quick-task-shown');
 }
 
 export function hideQuickTaskWindow(): void {
+  // Also cancels a show that is still waiting on the first paint, so a hide
+  // issued during the initial load cannot be undone by the paint arriving.
+  quickWindowShowRequested = false;
   if (quickWindow && !quickWindow.isDestroyed() && quickWindow.isVisible()) {
     quickWindow.hide();
   }
 }
 
 export function toggleQuickTaskWindow(preloadPath: string): void {
-  if (quickWindow && !quickWindow.isDestroyed() && quickWindow.isVisible()) {
-    quickWindow.hide();
+  if (
+    quickWindow &&
+    !quickWindow.isDestroyed() &&
+    (quickWindow.isVisible() || quickWindowShowRequested)
+  ) {
+    hideQuickTaskWindow();
     return;
   }
   showQuickTaskWindow(preloadPath);
@@ -375,6 +412,17 @@ export function unregisterQuickTaskHotkey(): void {
   }
 }
 
+/**
+ * Arm the quick-task hotkey without paying for the window.
+ *
+ * The quick-task surface is the full SPA served at `/quick-task`, so
+ * constructing its BrowserWindow eagerly at boot started a second permanent
+ * renderer process that mounted the whole app shell — `AuthGate`, its React
+ * Query cache, and a second always-on realtime SSE connection — for a feature
+ * most launches never invoke. The window is now built the first time the user
+ * actually opens it (hotkey, or a caller asking for it); the hotkey itself is
+ * cheap and stays registered from boot so the first press still works.
+ */
 export function initQuickTaskWindow({
   appOrigin,
   preloadPath,
@@ -387,8 +435,12 @@ export function initQuickTaskWindow({
   baseUrl = appOrigin;
   quickTaskPartition = partition;
   quickTaskPreloadPath = preloadPath;
-  ensureWindow(preloadPath);
   registerQuickTaskHotkey({ preloadPath });
+}
+
+/** True once the quick-task renderer has been created for this profile. */
+export function isQuickTaskWindowCreated(): boolean {
+  return quickWindow !== null && !quickWindow.isDestroyed();
 }
 
 /**
@@ -414,11 +466,9 @@ export function setQuickTaskBackend({
     const wasVisible = quickWindow.isVisible();
     quickWindow.destroy();
     quickWindow = null;
-    if (wasVisible) {
-      showQuickTaskWindow(quickTaskPreloadPath);
-    } else {
-      ensureWindow(quickTaskPreloadPath);
-    }
+    // Only rebuild eagerly when the window was on screen; an invisible one is
+    // recreated lazily on the next open, under the new partition.
+    if (wasVisible) showQuickTaskWindow(quickTaskPreloadPath);
     return;
   }
 

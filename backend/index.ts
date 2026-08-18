@@ -105,7 +105,7 @@ import {
   desktopOAuthCallbackUrl
 } from './desktop-oauth-handoff.ts';
 import { ENV_PROFILE } from './env-profile.ts';
-import { apiErrorFromDatabaseError } from './errors.ts';
+import { apiErrorFromBodyParser, apiErrorFromDatabaseError } from './errors.ts';
 import {
   registerLiveActivityPushToken,
   registerLiveActivityStartToken,
@@ -481,6 +481,8 @@ app.get('/api/auth/callback/github/repository', async (req, res, next) => {
 app.all('/api/auth/*', authNodeHandler);
 
 const jsonBody = express.json();
+/** Latch event snapshots routinely exceed Express's 100 KiB default. */
+const harnessEventsJsonBody = express.json({ limit: '1mb' });
 const urlEncodedBody = express.urlencoded({ extended: false });
 function isRawUploadRequest(req: Request): boolean {
   if (req.method !== 'POST') return false;
@@ -488,8 +490,17 @@ function isRawUploadRequest(req: Request): boolean {
   return /^\/api\/objectives\/[^/]+\/attachments$/.test(req.path);
 }
 
+function isHarnessEventsRequest(req: Request): boolean {
+  if (req.method !== 'POST') return false;
+  return (
+    req.path.endsWith('/terminal-sessions/harness-events') ||
+    /^\/api\/runner\/requests\/[^/]+\/harness-events$/.test(req.path)
+  );
+}
+
 app.use((req, res, next) => {
   if (isRawUploadRequest(req)) return next();
+  if (isHarnessEventsRequest(req)) return harnessEventsJsonBody(req, res, next);
   return jsonBody(req, res, next);
 });
 
@@ -2113,6 +2124,14 @@ app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
       error: err.message,
       code: err.code,
       ...(err.details !== undefined ? { details: err.details } : {})
+    });
+    return;
+  }
+  const bodyParserError = apiErrorFromBodyParser(err);
+  if (bodyParserError) {
+    res.status(bodyParserError.status).json({
+      error: bodyParserError.message,
+      code: bodyParserError.code
     });
     return;
   }

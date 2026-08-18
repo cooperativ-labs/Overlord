@@ -33,7 +33,7 @@ import {
 import { CliUpdater } from './cli-updater.js';
 import { registerIpc } from './ipc.js';
 import { parseDesktopOAuthHandoffUrl, parseMissionDeepLink } from './oauth-handoff.js';
-import { recordProcessInventory } from './process-inventory.js';
+import { recordProcessInventory, startProcessInventorySampling } from './process-inventory.js';
 import {
   hideQuickTaskWindow,
   initQuickTaskWindow,
@@ -60,6 +60,7 @@ let backendController: BackendRuntimeController | null = null;
 let updater: DesktopUpdater | null = null;
 let cliUpdater: CliUpdater | null = null;
 let shuttingDown = false;
+let stopProcessInventorySampling: (() => void) | null = null;
 let relaunchAfterQuit = false;
 const pendingOAuthCallbackUrls: string[] = [];
 const pendingMissionRoutes: string[] = [];
@@ -151,6 +152,9 @@ async function boot(): Promise<void> {
   });
   updater.startAutomaticChecks();
   cliUpdater.startAutomaticChecks();
+  stopProcessInventorySampling = startProcessInventorySampling({
+    getBackendMode: () => resolveActiveBackend({ shellOrigin }).mode
+  });
 
   app.on('activate', () => {
     showOrCreateMainWindow();
@@ -451,6 +455,8 @@ app.on('before-quit', event => {
   cliUpdater?.stopAutomaticChecks();
   unregisterQuickTaskHotkey();
   hideQuickTaskWindow();
+  stopProcessInventorySampling?.();
+  stopProcessInventorySampling = null;
   if (shuttingDown) return;
 
   // Reaping the embedded backend is asynchronous, so hold the quit until the

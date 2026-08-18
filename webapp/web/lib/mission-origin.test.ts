@@ -58,6 +58,8 @@ test('normalizeAgentKey folds connector identifiers onto their icon key', () => 
   assert.equal(normalizeAgentKey('codex'), 'codex');
   assert.equal(normalizeAgentKey(null), null);
   assert.equal(normalizeAgentKey('   '), null);
+  // Protocol's missing-agent sentinel must not render as a label or icon key.
+  assert.equal(normalizeAgentKey('unknown'), null);
 });
 
 test('agentDisplayName prefers naming an unmapped connector over anonymizing it', () => {

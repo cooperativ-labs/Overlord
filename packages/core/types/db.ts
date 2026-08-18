@@ -711,6 +711,7 @@ export interface Missions {
   updated_at: string;
   workspace_id: string;
   worktree_preference: string | null;
+  allow_parallel_objectives: Generated<number>;
 }
 
 export interface MissionSequences {

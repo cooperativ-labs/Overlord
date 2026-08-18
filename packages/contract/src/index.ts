@@ -581,6 +581,12 @@ export interface MissionDto {
    */
   hasUnseenReturnedToExecute: boolean;
   /**
+   * When true, two objectives on this mission may execute at once if they use
+   * different `resource_key`s. Default false: launching a sibling 409s until
+   * the active one parks. Same-resource pairs stay serial even when true.
+   */
+  allowParallelObjectives: boolean;
+  /**
    * `objectives.resource_key` on the mission's current `draft` objective, or
    * `null` when the draft inherits the project primary resource.
    */
@@ -1999,6 +2005,11 @@ export interface UpdateMissionBody {
    */
   worktreePreference?: MissionWorktreePreference | null;
   /**
+   * Allow two objectives on this mission to execute at once when they use
+   * different `resource_key`s. Default false. Same-resource pairs still 409.
+   */
+  allowParallelObjectives?: boolean;
+  /**
    * Clear `missions.active_branch` so the mission panel returns to a pending
    * branch preview. Used when switching to a different branch after the
    * previous one has merged. Clears stored branch observations for the mission.
@@ -2083,6 +2094,14 @@ export interface ActivityFeedItemBaseDto {
   objectiveId: string | null;
   /** `{mission.displayId}.{objective.displayKey}` when the item names an objective. */
   objectiveDisplayId: string | null;
+  /**
+   * Who authored the underlying objective. Same closed vocabulary and human
+   * fallback as `ObjectiveDto.createdByKind`. When the feed item has no
+   * objective (a rare ask without an objective id), this is `human`.
+   */
+  createdByKind: CreatedByKind;
+  /** Connector that authored the objective, when `createdByKind` is `agent`. */
+  createdByAgent: string | null;
 }
 
 /** One objective queued behind a running one because it is set to auto-advance. */

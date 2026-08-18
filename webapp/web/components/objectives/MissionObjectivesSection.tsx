@@ -47,12 +47,14 @@ function SortableFutureObjective({
   objective,
   siblings,
   executionRequests,
-  focusObjectiveRef
+  focusObjectiveRef,
+  allowParallelObjectives
 }: {
   objective: ObjectiveDto;
   siblings: ObjectiveDto[];
   executionRequests: ExecutionRequestDto[];
   focusObjectiveRef: string | undefined;
+  allowParallelObjectives: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: objective.id
@@ -79,6 +81,7 @@ function SortableFutureObjective({
             objective={objective}
             siblings={siblings}
             executionRequests={executionRequests}
+            allowParallelObjectives={allowParallelObjectives}
           />
         </ObjectiveFocusAnchor>
       </div>
@@ -148,8 +151,11 @@ export function MissionObjectivesSection({
   const [extraSlotRequested, setExtraSlotRequested] = useState(false);
 
   const lifecycleView = useMemo(
-    () => deriveObjectiveLifecycleView(mission.objectives),
-    [mission.objectives]
+    () =>
+      deriveObjectiveLifecycleView(mission.objectives, {
+        allowParallelObjectives: mission.allowParallelObjectives
+      }),
+    [mission.allowParallelObjectives, mission.objectives]
   );
   const objectives = lifecycleView.orderedObjectives;
   const executedObjectives = lifecycleView.executedObjectives;
@@ -250,6 +256,7 @@ export function MissionObjectivesSection({
               objective={objective}
               siblings={objectives}
               executionRequests={mission.executionRequests}
+              allowParallelObjectives={mission.allowParallelObjectives}
             />
           </ObjectiveFocusAnchor>
         ))}
@@ -282,6 +289,7 @@ export function MissionObjectivesSection({
                     siblings={objectives}
                     executionRequests={mission.executionRequests}
                     focusObjectiveRef={focusObjectiveRef}
+                    allowParallelObjectives={mission.allowParallelObjectives}
                   />
                 ))}
               </div>

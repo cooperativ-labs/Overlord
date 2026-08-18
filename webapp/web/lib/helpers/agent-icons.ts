@@ -48,11 +48,12 @@ const AGENT_DISPLAY_NAMES: Record<string, string> = {
 
 /**
  * Folds a connector/agent identifier onto the canonical key the icon and name
- * tables use. Returns null for a blank identifier so callers can branch once.
+ * tables use. Returns null for a blank identifier or the protocol sentinel
+ * `unknown` so callers can branch once.
  */
 export function normalizeAgentKey(key: string | null | undefined): string | null {
   const trimmed = key?.trim().toLowerCase();
-  if (!trimmed) return null;
+  if (!trimmed || trimmed === 'unknown') return null;
   return AGENT_KEY_ALIASES[trimmed] ?? trimmed;
 }
 
@@ -69,6 +70,7 @@ export function agentDisplayName(key: string | null | undefined): string | null 
 
 /** Resolve an agent's icon metadata by connector key. Returns null when unmapped. */
 export function getAgentIcon(key: string | null | undefined): AgentIconMeta | null {
-  if (!key) return null;
-  return AGENT_ICONS[key] ?? null;
+  const normalized = normalizeAgentKey(key);
+  if (!normalized) return null;
+  return AGENT_ICONS[normalized] ?? null;
 }

@@ -33,6 +33,11 @@ import {
   type ObjectiveSummary,
   type SharedContextEntry
 } from './missions.js';
+import {
+  countActiveMissionObjectives,
+  findConflictingActiveSibling,
+  missionAllowsParallelObjectives
+} from './objective-parallelism.js';
 import { loadAgentInstructionsForWorkspaceUser } from './profiles.js';
 import { resolveLaunchConfig, resolveLaunchExecutionTarget } from './project-execution-target.js';
 import {
@@ -120,12 +125,21 @@ Delivery evidence:
   Tradeoffs must describe an implementation decision, alternatives considered, and why it was chosen.`;
 
 function resolveActiveObjective(objectives: ObjectiveSummary[]): ObjectiveSummary {
+  const rankedStates = ['executing', 'launching', 'pending_delivery'] as const;
+  for (const state of rankedStates) {
+    const matches = objectives.filter(objective => objective.state === state);
+    if (matches.length > 1) {
+      throw new ServiceError(
+        'Multiple active objectives; pass --objective-id to attach',
+        'ambiguous_active_objective',
+        409
+      );
+    }
+    if (matches.length === 1) return matches[0]!;
+  }
+
   const active =
-    objectives.find(o => o.state === 'executing') ??
-    objectives.find(o => o.state === 'launching') ??
-    objectives.find(o => o.state === 'pending_delivery') ??
-    objectives.find(o => o.state === 'draft') ??
-    objectives.find(o => o.state !== 'complete');
+    objectives.find(o => o.state === 'draft') ?? objectives.find(o => o.state !== 'complete');
 
   if (!active) {
     throw new ServiceError('No active objective found on mission', 'no_active_objective', 409);
@@ -626,12 +640,20 @@ export async function attachSession({
 }): Promise<AttachResponse & { sessionKey: string }> {
   const mission = await getMissionSummary({ ctx, missionId });
   const objectives = await listObjectives({ ctx, missionId: mission.id });
-  const pinned = Boolean(objectiveId?.trim() || executionRequestId?.trim());
+  const explicitPin = Boolean(objectiveId?.trim() || executionRequestId?.trim());
+  // A live session already knows its objective. Re-attach must not rediscover
+  // via mission state — with two executing siblings that 409s as ambiguous.
+  let resolvedObjectiveId = objectiveId;
+  if (existingSessionKey?.trim() && !explicitPin) {
+    const existing = await getSessionByKey(ctx, existingSessionKey);
+    resolvedObjectiveId = existing.objective_id;
+  }
+  const pinned = Boolean(resolvedObjectiveId?.trim() || executionRequestId?.trim());
   const objective = await resolvePinnedAttachObjective({
     ctx,
     missionId: mission.id,
     objectives,
-    objectiveId,
+    objectiveId: resolvedObjectiveId,
     executionRequestId
   });
   const resolvedTargetId = await resolveProtocolExecutionTargetId({
@@ -2100,7 +2122,13 @@ export async function deliverSession({
       changedFields: ['delivery_state', 'phase', 'ended_at']
     });
 
-    await moveMissionToReview({ ctx: txCtx, missionId: mission.id });
+    const remainingActive = await countActiveMissionObjectives({
+      ctx: txCtx,
+      missionId: mission.id
+    });
+    if (remainingActive === 0) {
+      await moveMissionToReview({ ctx: txCtx, missionId: mission.id });
+    }
   });
 
   // The objective that just delivered is the agent the user last ran. Auto-advance
@@ -2150,133 +2178,151 @@ export async function deliverSession({
   // in review owes the assignee an interrupting notification.
   let autoAdvanceQueued = false;
   if (nextObjective) {
-    const eventId = newId();
-    const eventNow = nowIso();
-    if (nextObjective.auto_advance === 1) {
-      // Resolve the agent from the database: the next objective's own assignment
-      // wins, otherwise inherit the just-delivered objective's selection. Persist
-      // any inherited choice onto the objective so the stored agent, the launch
-      // button that reads it, and the queued execution request all agree.
-      const inheritAgent =
-        !nextObjective.assigned_agent && Boolean(deliveredObjective?.assigned_agent);
-      const objectiveFields = ["state = 'launching'"];
-      const objectiveParams: unknown[] = [];
-      const changedFields = ['state'];
-      if (inheritAgent && deliveredObjective) {
-        objectiveFields.push('assigned_agent = ?', 'model = ?', 'reasoning_effort = ?');
-        objectiveParams.push(
-          deliveredObjective.assigned_agent,
-          deliveredObjective.model,
-          deliveredObjective.reasoning_effort
-        );
-        changedFields.push('assigned_agent', 'model', 'reasoning_effort');
-      }
-      await ctx.db.run(
-        `UPDATE objectives SET ${objectiveFields.join(', ')}, updated_at = ?, revision = revision + 1
+    const allowParallelObjectives = await missionAllowsParallelObjectives({
+      ctx,
+      missionId: mission.id
+    });
+    const siblingConflict = await findConflictingActiveSibling({
+      ctx,
+      missionId: mission.id,
+      projectId: mission.projectId,
+      objectiveId: nextObjective.id,
+      resourceKey: nextObjective.resource_key,
+      allowParallelObjectives
+    });
+    if (!siblingConflict) {
+      const eventId = newId();
+      const eventNow = nowIso();
+      if (nextObjective.auto_advance === 1) {
+        // Resolve the agent from the database: the next objective's own assignment
+        // wins, otherwise inherit the just-delivered objective's selection. Persist
+        // any inherited choice onto the objective so the stored agent, the launch
+        // button that reads it, and the queued execution request all agree.
+        const inheritAgent =
+          !nextObjective.assigned_agent && Boolean(deliveredObjective?.assigned_agent);
+        const objectiveFields = ["state = 'launching'"];
+        const objectiveParams: unknown[] = [];
+        const changedFields = ['state'];
+        if (inheritAgent && deliveredObjective) {
+          objectiveFields.push('assigned_agent = ?', 'model = ?', 'reasoning_effort = ?');
+          objectiveParams.push(
+            deliveredObjective.assigned_agent,
+            deliveredObjective.model,
+            deliveredObjective.reasoning_effort
+          );
+          changedFields.push('assigned_agent', 'model', 'reasoning_effort');
+        }
+        await ctx.db.run(
+          `UPDATE objectives SET ${objectiveFields.join(', ')}, updated_at = ?, revision = revision + 1
            WHERE id = ?`,
-        [...objectiveParams, eventNow, nextObjective.id]
-      );
-      const updatedRevision = (await ctx.db.get(`SELECT revision FROM objectives WHERE id = ?`, [
-        nextObjective.id
-      ])) as { revision: number };
-      await recordChange({
-        ctx: ctx,
-        entityType: 'objective',
-        entityId: nextObjective.id,
-        operation: 'update',
-        entityRevision: updatedRevision.revision,
-        projectId: mission.projectId,
-        missionId: mission.id,
-        objectiveId: nextObjective.id,
-        changedFields
-      });
-      try {
-        // Mirror the manual launch path (webapp launchObjective): resolve the
-        // project's execution target and the effective launch config (pre-command
-        // + flags) for the resolved agent, then stamp both onto the queued request.
-        // Without this, auto-advanced requests were written with launch_flags_json
-        // = '{}' and a null target, so the agent launched with no pre-command and
-        // none of the configured flags.
-        const resolvedAgent =
-          nextObjective.assigned_agent ?? deliveredObjective?.assigned_agent ?? null;
-        const { executionTargetId, agentConfigs } = await resolveLaunchExecutionTarget({
+          [...objectiveParams, eventNow, nextObjective.id]
+        );
+        const updatedRevision = (await ctx.db.get(`SELECT revision FROM objectives WHERE id = ?`, [
+          nextObjective.id
+        ])) as { revision: number };
+        await recordChange({
           ctx: ctx,
-          projectId: mission.projectId
-        });
-        const resolvedLaunch = await resolveLaunchConfig({
-          ctx: ctx,
-          objectiveLaunchConfigJson: nextObjective.launch_config_json,
-          executionTargetId,
-          agentKey: resolvedAgent ?? '',
-          userConfigs: agentConfigs,
+          entityType: 'objective',
+          entityId: nextObjective.id,
+          operation: 'update',
+          entityRevision: updatedRevision.revision,
           projectId: mission.projectId,
-          objectiveResourceKey: nextObjective.resource_key
-        });
-        await createExecutionRequest({
-          ctx: ctx,
           missionId: mission.id,
           objectiveId: nextObjective.id,
-          requestedAgent: resolvedAgent,
-          requestedModel: nextObjective.assigned_agent
-            ? nextObjective.model
-            : (deliveredObjective?.model ?? null),
-          requestedReasoningEffort: nextObjective.assigned_agent
-            ? nextObjective.reasoning_effort
-            : (deliveredObjective?.reasoning_effort ?? null),
-          launchFlags: {
-            preCommand: resolvedLaunch.config.preCommand,
-            flags: resolvedLaunch.config.flags
-          },
-          executionTargetId,
-          requestedSource: 'auto_advance',
-          metadata: { launchConfigSource: resolvedLaunch.source },
-          idempotencyKey: `auto_advance:${nextObjective.id}`
+          changedFields
         });
-        autoAdvanceQueued = true;
-      } catch (error) {
-        await ctx.db.run(
-          `INSERT INTO mission_events
+        try {
+          // Mirror the manual launch path (webapp launchObjective): resolve the
+          // project's execution target and the effective launch config (pre-command
+          // + flags) for the resolved agent, then stamp both onto the queued request.
+          // Without this, auto-advanced requests were written with launch_flags_json
+          // = '{}' and a null target, so the agent launched with no pre-command and
+          // none of the configured flags.
+          const resolvedAgent =
+            nextObjective.assigned_agent ?? deliveredObjective?.assigned_agent ?? null;
+          const { executionTargetId, agentConfigs } = await resolveLaunchExecutionTarget({
+            ctx: ctx,
+            projectId: mission.projectId
+          });
+          const resolvedLaunch = await resolveLaunchConfig({
+            ctx: ctx,
+            objectiveLaunchConfigJson: nextObjective.launch_config_json,
+            executionTargetId,
+            agentKey: resolvedAgent ?? '',
+            userConfigs: agentConfigs,
+            projectId: mission.projectId,
+            objectiveResourceKey: nextObjective.resource_key
+          });
+          await createExecutionRequest({
+            ctx: ctx,
+            missionId: mission.id,
+            objectiveId: nextObjective.id,
+            requestedAgent: resolvedAgent,
+            requestedModel: nextObjective.assigned_agent
+              ? nextObjective.model
+              : (deliveredObjective?.model ?? null),
+            requestedReasoningEffort: nextObjective.assigned_agent
+              ? nextObjective.reasoning_effort
+              : (deliveredObjective?.reasoning_effort ?? null),
+            launchFlags: {
+              preCommand: resolvedLaunch.config.preCommand,
+              flags: resolvedLaunch.config.flags
+            },
+            executionTargetId,
+            requestedSource: 'auto_advance',
+            metadata: { launchConfigSource: resolvedLaunch.source },
+            idempotencyKey: `auto_advance:${nextObjective.id}`
+          });
+          autoAdvanceQueued = true;
+        } catch (error) {
+          await ctx.db.run(
+            `INSERT INTO mission_events
                (id, workspace_id, project_id, mission_id, objective_id,
                 type, phase, summary, payload_json, source, actor_workspace_user_id, created_at)
              VALUES (?, ?, ?, ?, ?, 'alert', 'review', ?, ?, ?, ?, ?)`,
+            [
+              eventId,
+              ctx.workspace.id,
+              mission.projectId,
+              mission.id,
+              nextObjective.id,
+              `Auto-advance could not queue the next objective: ${
+                error instanceof Error ? error.message : String(error)
+              }`,
+              JSON.stringify({ autoAdvanceFailed: true }),
+              ctx.source,
+              ctx.actorWorkspaceUserId,
+              eventNow
+            ]
+          );
+        }
+      } else {
+        await ctx.db.run(
+          `INSERT INTO mission_events
+             (id, workspace_id, project_id, mission_id, objective_id,
+              type, phase, summary, payload_json, source, actor_workspace_user_id, created_at)
+           VALUES (?, ?, ?, ?, ?, 'awaiting_approval', 'review', ?, '{}', ?, ?, ?)`,
           [
             eventId,
             ctx.workspace.id,
             mission.projectId,
             mission.id,
             nextObjective.id,
-            `Auto-advance could not queue the next objective: ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            JSON.stringify({ autoAdvanceFailed: true }),
+            `Next objective is waiting for approval: ${nextObjective.title}`,
             ctx.source,
             ctx.actorWorkspaceUserId,
             eventNow
           ]
         );
       }
-    } else {
-      await ctx.db.run(
-        `INSERT INTO mission_events
-             (id, workspace_id, project_id, mission_id, objective_id,
-              type, phase, summary, payload_json, source, actor_workspace_user_id, created_at)
-           VALUES (?, ?, ?, ?, ?, 'awaiting_approval', 'review', ?, '{}', ?, ?, ?)`,
-        [
-          eventId,
-          ctx.workspace.id,
-          mission.projectId,
-          mission.id,
-          nextObjective.id,
-          `Next objective is waiting for approval: ${nextObjective.title}`,
-          ctx.source,
-          ctx.actorWorkspaceUserId,
-          eventNow
-        ]
-      );
     }
   }
 
-  if (!autoAdvanceQueued) {
+  const remainingActive = await countActiveMissionObjectives({
+    ctx,
+    missionId: mission.id
+  });
+  if (!autoAdvanceQueued && remainingActive === 0) {
     await emitNotification({
       db: ctx.db,
       workspaceId: ctx.workspace.id,

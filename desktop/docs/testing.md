@@ -51,6 +51,43 @@ build:server` then `node backend/dist-server/index.cjs` against a fresh
    `<userData>/diagnostics/process-inventory.jsonl` (it records the utility
    process `serviceName`, which `ps` cannot see).
 
-5. **Packaging.** `yarn desktop:package:prod --out <dir> --no-sign` emits a launchable
+   ### Reading the process list
+
+   A healthy macOS install shows four Overlord processes, and Activity Monitor
+   names three of them identically, so read them from the inventory rather than
+   from the name:
+
+   | Activity Monitor name | What it is | Rough expectation |
+   | --- | --- | --- |
+   | `Overlord` | Electron main process — window management, IPC, updaters, the local-target bridge | ~100–150 MB |
+   | `Overlord Helper (Renderer)` with `rendererUrl` ending in `/` | The main SPA window | a few hundred MB; **growth over hours is a leak** |
+   | `Overlord Helper (Renderer)` with `rendererUrl` ending in `/quick-task` | The quick-task panel. Only exists once the hotkey has been used in this session | ~60–80 MB |
+   | plain `Overlord Helper` | A utility process. `serviceName: overlord-server` is the embedded backend; anything else is a Chromium service (network, storage, audio) | backend ~300–500 MB in Local, **absent in Remote** |
+
+   A plain `Overlord Helper` in Remote mode is only a conformance failure if the
+   inventory marks it `isEmbeddedBackend`. Chromium's own network/storage
+   services carry the same name and are expected in both modes.
+
+5. **Renderer memory over time.** Renderer growth is a curve, not an event, so
+   the two lifecycle snapshots cannot distinguish "large working set" from
+   "leaking". The app samples its own process tree every ten minutes into the
+   same `process-inventory.jsonl`; each renderer row carries the `rendererUrl`
+   it is hosting. To read the slope for the main window:
+
+   ```bash
+   jq -r 'select(.tag=="sample") | .at as $at
+          | .processes[] | select(.rendererUrl != null)
+          | "\($at) \(.rendererUrl) \((.memoryKb/1024)|floor)MB"' \
+     "$HOME/Library/Application Support/Overlord/diagnostics/process-inventory.jsonl"
+   ```
+
+   A flat or sawtooth series is normal. A monotonically rising series over hours
+   is a leak; capture a heap snapshot at that point (View → Toggle Developer
+   Tools → Memory → Heap snapshot) and compare two snapshots taken an hour apart
+   to find the retainer. Set `OVERLORD_DESKTOP_PROCESS_SAMPLE_MS=0` to disable
+   sampling, or to a millisecond value (minimum 30000) to sample faster while
+   chasing a specific leak.
+
+6. **Packaging.** `yarn desktop:package:prod --out <dir> --no-sign` emits a launchable
    `.app`/`.dmg`. With `--sign --notarize` (and Apple creds), the `.dmg` passes
    `spctl -a -vvv` and launches on a clean Mac.

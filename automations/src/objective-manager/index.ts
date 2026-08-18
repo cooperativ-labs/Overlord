@@ -6,6 +6,7 @@ import {
   deriveObjectiveLifecycleView,
   type EnsureDraftSlotPlan,
   type ObjectiveLifecycleObjective,
+  type ObjectiveLifecycleOptions,
   type ObjectiveLifecycleViolation,
   planEnsureDraftSlot
 } from './rules.js';
@@ -14,6 +15,7 @@ export type {
   AutoAdvanceDecision,
   EnsureDraftSlotPlan,
   ObjectiveLifecycleObjective,
+  ObjectiveLifecycleOptions,
   ObjectiveLifecycleState,
   ObjectiveLifecycleView,
   ObjectiveLifecycleViolation
@@ -22,8 +24,10 @@ export {
   ACTIVE_OBJECTIVE_STATES,
   AUTO_ADVANCE_TOGGLE_OBJECTIVE_STATES,
   canEditObjectiveInstruction,
+  canonicalObjectiveResourceKey,
   canToggleObjectiveAutoAdvance,
   decideAutoAdvanceAfterDelivery,
+  DEFAULT_PRIMARY_RESOURCE_KEY,
   deriveObjectiveLifecycleView,
   EDITABLE_NEXT_UP_OBJECTIVE_STATES,
   FUTURE_OBJECTIVE_STATES,
@@ -35,8 +39,11 @@ export {
   OBJECTIVE_LIFECYCLE_STATES,
   objectiveHasInstructionText,
   objectiveInstructionText,
+  objectiveResourcesConflict,
+  PARALLEL_BLOCKING_OBJECTIVE_STATES,
   planEnsureDraftSlot,
   shouldDiscardEmptiedObjective,
+  siblingBlocksParallelLaunch,
   sortObjectivesByLifecycleOrder,
   validateObjectiveLifecycle
 } from './rules.js';
@@ -45,6 +52,8 @@ export type ManageObjectiveLifecycleInput = {
   objectives: ObjectiveLifecycleObjective[];
   mission?: {
     humanOnly?: boolean;
+    allowParallelObjectives?: boolean;
+    primaryResourceKey?: string;
   };
   planAutoAdvance?: boolean;
 };
@@ -65,7 +74,14 @@ export type ManageObjectiveLifecycleOutput = {
 export function manageObjectiveLifecycle(
   input: ManageObjectiveLifecycleInput
 ): ManageObjectiveLifecycleOutput {
-  const view = deriveObjectiveLifecycleView(input.objectives);
+  const options: ObjectiveLifecycleOptions = {};
+  if (input.mission?.allowParallelObjectives !== undefined) {
+    options.allowParallelObjectives = input.mission.allowParallelObjectives;
+  }
+  if (input.mission?.primaryResourceKey !== undefined) {
+    options.primaryResourceKey = input.mission.primaryResourceKey;
+  }
+  const view = deriveObjectiveLifecycleView(input.objectives, options);
   const autoAdvanceOptions =
     input.mission?.humanOnly === undefined ? {} : { humanOnly: input.mission.humanOnly };
 

@@ -187,10 +187,12 @@ describe('channel binding at attach', () => {
 
   it('binds the mission preparing channel when attach omits sessionChannelId', async () => {
     const { ctx, db, missionId, projectId } = await seedMission();
+    const objectives = await listObjectives({ ctx, missionId });
     const { channel } = await createSessionChannel({
       ctx,
       missionId,
       projectId,
+      objectiveId: objectives[0]!.id,
       launchKind: 'queued'
     });
 
@@ -207,6 +209,29 @@ describe('channel binding at attach', () => {
     assert.equal(bound?.session_id, attached.session.id);
     assert.equal(bound?.state, 'online');
     assert.equal(await findBindableChannelForMission({ ctx, missionId }), null);
+
+    await db.close();
+  });
+
+  it('does not fall back to a mission-wide unbound channel when an objective id is known', async () => {
+    const { ctx, db, missionId, projectId } = await seedMission();
+    const objectives = await listObjectives({ ctx, missionId });
+    const { channel } = await createSessionChannel({
+      ctx,
+      missionId,
+      projectId,
+      launchKind: 'queued'
+    });
+
+    assert.equal(
+      await findBindableChannelForMission({
+        ctx,
+        missionId,
+        objectiveId: objectives[0]!.id
+      }),
+      null
+    );
+    assert.equal(await findBindableChannelForMission({ ctx, missionId }), channel.id);
 
     await db.close();
   });

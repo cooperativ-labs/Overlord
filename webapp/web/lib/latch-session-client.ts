@@ -1,5 +1,6 @@
 import { type QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
+import { chunkLatchHarnessEventsForIngest } from '../../../packages/core/service/latch-harness-ingest.ts';
 import { isLatchSessionAbsentMessage } from '../../../packages/core/service/latch-session-absent.ts';
 import type {
   CapabilityFailure,
@@ -167,7 +168,15 @@ export function useLatchHarnessEventIngest({
   const localTargetAvailable = useLocalTargetCapabilityAvailable();
   const from = session.observation?.cursor ?? 0;
   return useQuery({
-    queryKey: ['latch-events', session.providerSessionId, from] as const,
+    // The cursor deliberately stays out of the key. Keying on it minted a fresh
+    // cache entry — holding a full collected-event payload — every time the
+    // observation advanced, and a session polling every ten seconds kept a
+    // gcTime's worth of those alive at once. The interval already refetches, and
+    // each refetch runs the current render's `queryFn`, so a stable key reads the
+    // latest cursor without accumulating entries. `gcTime: 0` drops the payload
+    // as soon as nothing is subscribed rather than parking it for five minutes.
+    queryKey: ['latch-events', session.providerSessionId] as const,
+    gcTime: 0,
     queryFn: async () => {
       const collected = await requireLocalTargetResult(
         await invokeLocalTarget<CollectLatchEventsResult>({
@@ -180,12 +189,18 @@ export function useLatchHarnessEventIngest({
         })
       );
       if (collected.events.length > 0) {
-        await api.ingestMissionHarnessEvents(missionId, {
-          providerSessionId: session.providerSessionId,
+        const chunks = chunkLatchHarnessEventsForIngest({
           events: collected.events,
-          from: collected.from,
-          executionRequestId: session.executionRequestId
+          from: collected.from
         });
+        for (const chunk of chunks) {
+          await api.ingestMissionHarnessEvents(missionId, {
+            providerSessionId: session.providerSessionId,
+            events: chunk.events,
+            from: chunk.from,
+            executionRequestId: session.executionRequestId
+          });
+        }
         await qc.invalidateQueries({ queryKey: keys.mission(missionId) });
       }
       return collected;

@@ -332,7 +332,9 @@ export function MissionPanel({
               sessions={mission.terminalSessions}
               objectives={mission.objectives}
               currentObjectiveId={
-                deriveObjectiveLifecycleView(mission.objectives).activeObjective?.id ?? null
+                deriveObjectiveLifecycleView(mission.objectives, {
+                  allowParallelObjectives: mission.allowParallelObjectives
+                }).activeObjective?.id ?? null
               }
             />
             <div className="space-y-3">

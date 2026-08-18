@@ -16,6 +16,7 @@ export type {
   ManageObjectiveLifecycleInput,
   ManageObjectiveLifecycleOutput,
   ObjectiveLifecycleObjective,
+  ObjectiveLifecycleOptions,
   ObjectiveLifecycleState,
   ObjectiveLifecycleView,
   ObjectiveLifecycleViolation
@@ -24,8 +25,10 @@ export {
   ACTIVE_OBJECTIVE_STATES,
   AUTO_ADVANCE_TOGGLE_OBJECTIVE_STATES,
   canEditObjectiveInstruction,
+  canonicalObjectiveResourceKey,
   canToggleObjectiveAutoAdvance,
   decideAutoAdvanceAfterDelivery,
+  DEFAULT_PRIMARY_RESOURCE_KEY,
   deriveObjectiveLifecycleView,
   EDITABLE_NEXT_UP_OBJECTIVE_STATES,
   FUTURE_OBJECTIVE_STATES,
@@ -39,7 +42,10 @@ export {
   OBJECTIVE_LIFECYCLE_STATES,
   objectiveHasInstructionText,
   objectiveInstructionText,
+  objectiveResourcesConflict,
+  PARALLEL_BLOCKING_OBJECTIVE_STATES,
   planEnsureDraftSlot,
+  siblingBlocksParallelLaunch,
   sortObjectivesByLifecycleOrder,
   validateObjectiveLifecycle
 } from './objective-manager/index.js';

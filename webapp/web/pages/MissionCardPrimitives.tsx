@@ -4,7 +4,7 @@ import { OriginSparklesIcon } from '@/components/OriginSparklesIcon.tsx';
 import { formatDueDatetimeLabel } from '@/components/scheduling/schedule-utils.ts';
 import { AuthenticatedAvatarImage, Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { missionOriginLabel } from '@/lib/mission-origin.ts';
+import { missionOriginLabel, objectiveOriginLabel } from '@/lib/mission-origin.ts';
 import { cn } from '@/lib/utils';
 
 import type { CreatedByKind, WorkspaceMemberDto } from '../../shared/contract.ts';
@@ -226,6 +226,38 @@ export function MissionOriginMark({
   withTooltip?: boolean;
 }) {
   const label = missionOriginLabel({ createdByKind, createdByAgent });
+  if (!label) return null;
+
+  const mark = (
+    <span className="inline-flex shrink-0" aria-label={label}>
+      <OriginSparklesIcon />
+    </span>
+  );
+
+  if (!withTooltip) return mark;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger render={mark} />
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+/**
+ * Same glanceable sparkle as `MissionOriginMark`, but for an objective row —
+ * tooltip says "Added by …" because the distinction is who appended the step.
+ */
+export function ObjectiveOriginMark({
+  createdByKind,
+  createdByAgent,
+  withTooltip = true
+}: {
+  createdByKind: CreatedByKind;
+  createdByAgent: string | null;
+  withTooltip?: boolean;
+}) {
+  const label = objectiveOriginLabel({ createdByKind, createdByAgent });
   if (!label) return null;
 
   const mark = (

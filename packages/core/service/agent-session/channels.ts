@@ -518,13 +518,14 @@ export async function endChannel({
  * Find a prepared channel that attach should bind when the launch bootstrap did not reach
  * the agent process (common for agent-pod / `agp` launches that strip `OVERLORD_SESSION_*`).
  *
- * Preference order: matching execution request, then matching objective (or a
- * legacy unbound channel with NULL objective_id), then — only when `objectiveId`
- * is unknown — the newest unbound live channel for the mission.
+ * Preference order: matching execution request, then matching objective, then —
+ * only when `objectiveId` is unknown — the newest unbound live channel for the
+ * mission.
  *
- * When an objective id is known, never bind a channel whose `objective_id` is a
- * different objective. Only unbound rows are considered — a channel already
- * bound to another session must not be stolen by a later attach.
+ * When an objective id is known, never bind a channel whose `objective_id` is
+ * null or a different objective. Mission-wide fallback is only for unpinned
+ * attach. Only unbound rows are considered — a channel already bound to another
+ * session must not be stolen by a later attach.
  */
 export async function findBindableChannelForMission({
   ctx,
@@ -553,12 +554,12 @@ export async function findBindableChannelForMission({
     const byObjective = await ctx.db.get<{ id: string }>(
       `SELECT id FROM agent_session_channels
          WHERE workspace_id = ? AND mission_id = ?
-           AND (objective_id = ? OR objective_id IS NULL)
+           AND objective_id = ?
            AND session_id IS NULL AND deleted_at IS NULL
            AND state IN ('preparing', 'online', 'degraded')
-         ORDER BY CASE WHEN objective_id = ? THEN 0 ELSE 1 END, created_at DESC
+         ORDER BY created_at DESC
          LIMIT 1`,
-      [ctx.workspace.id, missionId, objectiveId, objectiveId]
+      [ctx.workspace.id, missionId, objectiveId]
     );
     return byObjective?.id ?? null;
   }

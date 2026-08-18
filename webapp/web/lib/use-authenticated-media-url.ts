@@ -6,6 +6,40 @@ import { isOverlordStorageUrl, storageUrlNeedsAuthenticatedFetch } from './stora
 const failedAuthenticatedMediaUrls = new Set<string>();
 const inFlightAuthenticatedMediaFetches = new Map<string, Promise<Blob | null>>();
 
+/**
+ * Bounded cache of resolved `blob:` URLs, keyed by the source storage URL.
+ *
+ * Without it every mount of every `<Avatar>` in remote mode re-downloaded the
+ * same image and allocated a fresh object URL — a list that remounts as the
+ * realtime link invalidates queries re-fetches the same handful of avatars
+ * indefinitely, and each in-flight blob is held in the renderer heap. Entries
+ * are kept in insertion order and the oldest is revoked once the cache is full,
+ * so the retained set has a hard ceiling instead of tracking how long the app
+ * has been open.
+ */
+const MAX_CACHED_MEDIA_OBJECT_URLS = 64;
+const authenticatedMediaObjectUrls = new Map<string, string>();
+
+function readCachedObjectUrl(url: string): string | null {
+  const cached = authenticatedMediaObjectUrls.get(url);
+  if (!cached) return null;
+  // Refresh recency so the avatars actually on screen are the last to be evicted.
+  authenticatedMediaObjectUrls.delete(url);
+  authenticatedMediaObjectUrls.set(url, cached);
+  return cached;
+}
+
+function cacheObjectUrl(url: string, objectUrl: string): void {
+  authenticatedMediaObjectUrls.set(url, objectUrl);
+  while (authenticatedMediaObjectUrls.size > MAX_CACHED_MEDIA_OBJECT_URLS) {
+    const oldest = authenticatedMediaObjectUrls.keys().next();
+    if (oldest.done) break;
+    const evicted = authenticatedMediaObjectUrls.get(oldest.value);
+    authenticatedMediaObjectUrls.delete(oldest.value);
+    if (evicted) URL.revokeObjectURL(evicted);
+  }
+}
+
 async function fetchAuthenticatedMediaBlob(url: string): Promise<Blob | null> {
   const existing = inFlightAuthenticatedMediaFetches.get(url);
   if (existing) return existing;
@@ -36,7 +70,7 @@ export function useAuthenticatedMediaUrl(url: string | null | undefined): string
   const [resolvedUrl, setResolvedUrl] = useState<string | null>(() => {
     if (!url) return null;
     if (!isOverlordStorageUrl(url) || !storageUrlNeedsAuthenticatedFetch({ url })) return url;
-    return null;
+    return readCachedObjectUrl(url);
   });
 
   useEffect(() => {
@@ -54,17 +88,25 @@ export function useAuthenticatedMediaUrl(url: string | null | undefined): string
       return;
     }
 
+    const cached = readCachedObjectUrl(url);
+    if (cached) {
+      setResolvedUrl(cached);
+      return;
+    }
+
     setResolvedUrl(null);
     let cancelled = false;
-    let objectUrl: string | null = null;
 
     void (async () => {
       try {
         const blob = await fetchAuthenticatedMediaBlob(url);
-        if (!blob || cancelled) return;
-        if (cancelled) return;
-        objectUrl = URL.createObjectURL(blob);
-        setResolvedUrl(objectUrl);
+        if (!blob) return;
+        // The object URL is owned by the cache, not by this mount: two avatars
+        // pointing at the same person share one, and unmounting either must not
+        // revoke a URL the other is still rendering. Eviction is the only revoke.
+        const objectUrl = readCachedObjectUrl(url) ?? URL.createObjectURL(blob);
+        cacheObjectUrl(url, objectUrl);
+        if (!cancelled) setResolvedUrl(objectUrl);
       } catch {
         if (!cancelled) setResolvedUrl(null);
       }
@@ -72,7 +114,6 @@ export function useAuthenticatedMediaUrl(url: string | null | undefined): string
 
     return () => {
       cancelled = true;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
   }, [url]);
 

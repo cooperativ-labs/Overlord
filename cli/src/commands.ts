@@ -4,6 +4,7 @@ import {
   parseAgentLaunchFlagText
 } from '@overlord/contract';
 import { collectLatchEvents } from '@overlord/core/service/latch-events';
+import { chunkLatchHarnessEventsForIngest } from '@overlord/core/service/latch-harness-ingest';
 import {
   readProjectJsonLinks,
   writeProjectJson
@@ -2226,14 +2227,20 @@ async function postLatchHarnessEventsAfterLaunch({
       from: 0
     });
     if (collected.events.length === 0) return;
-    await backend.post({
-      path: `/api/runner/requests/${requestId}/harness-events`,
-      body: {
-        providerSessionId,
-        events: collected.events,
-        from: collected.from
-      }
+    const chunks = chunkLatchHarnessEventsForIngest({
+      events: collected.events,
+      from: collected.from
     });
+    for (const chunk of chunks) {
+      await backend.post({
+        path: `/api/runner/requests/${requestId}/harness-events`,
+        body: {
+          providerSessionId,
+          events: chunk.events,
+          from: chunk.from
+        }
+      });
+    }
   } catch {
     // Presentation ingest must not fail a successful launch.
   }

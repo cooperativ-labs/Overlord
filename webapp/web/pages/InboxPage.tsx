@@ -81,7 +81,7 @@ export function InboxPage() {
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
-      <main className="flex min-h-0 min-w-0 flex-1 overflow-x-auto">
+      <main className="flex min-h-0 min-w-0 flex-1 overflow-x-auto overflow-y-hidden">
         <UnallocatedColumn />
         <ProjectWorkspaceErrorBoundary region="activity feed">
           <ActivityFeed

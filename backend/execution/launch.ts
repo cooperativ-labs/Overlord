@@ -57,6 +57,10 @@ import {
   parseLocalTargetMutation
 } from '../../packages/core/service/local-target-mutations.ts';
 import {
+  findConflictingActiveSibling,
+  missionAllowsParallelObjectives
+} from '../../packages/core/service/objective-parallelism.ts';
+import {
   parseAgentConfigs,
   readProjectUserPreferenceRow,
   resolveLaunchConfig,
@@ -1148,7 +1152,6 @@ interface LaunchObjectiveRow {
 }
 
 export const LAUNCHABLE_STATES = ['draft', 'submitted', 'launching'];
-const ACTIVE_SIBLING_OBJECTIVE_STATES = ['launching', 'executing', 'pending_delivery'];
 
 /**
  * Remove an objective from the runner queue when a user manually completes,
@@ -1309,47 +1312,30 @@ export async function launchObjective(
       );
     }
 
-    const activeSiblingObjective = await tx.get<{ id: string }>(
-      `SELECT id FROM objectives
-          WHERE mission_id = ? AND workspace_id = ? AND id <> ? AND deleted_at IS NULL
-            AND state IN (${ACTIVE_SIBLING_OBJECTIVE_STATES.map(() => '?').join(', ')})
-          LIMIT 1`,
-      [
-        objective.mission_id,
-        objective.workspace_id,
-        objective.id,
-        ...ACTIVE_SIBLING_OBJECTIVE_STATES
-      ]
+    const serviceCtx = await buildWebappServiceContextForWorkspace(
+      objective.workspace_id,
+      tx,
+      workspaceUserId
     );
-    const activeSiblingRequest = await tx.get<{ id: string }>(
-      `SELECT er.id
-           FROM execution_requests er
-           JOIN objectives o ON o.id = er.objective_id AND o.deleted_at IS NULL
-          WHERE er.mission_id = ? AND er.workspace_id = ? AND er.objective_id <> ?
-            AND er.deleted_at IS NULL
-            AND er.status IN (${ACTIVE_EXECUTION_REQUEST_STATUSES.map(() => '?').join(', ')})
-            AND o.state IN (${ACTIVE_SIBLING_OBJECTIVE_STATES.map(() => '?').join(', ')})
-          LIMIT 1`,
-      [
-        objective.mission_id,
-        objective.workspace_id,
-        objective.id,
-        ...ACTIVE_EXECUTION_REQUEST_STATUSES,
-        ...ACTIVE_SIBLING_OBJECTIVE_STATES
-      ]
-    );
-    if (activeSiblingObjective || activeSiblingRequest) {
+    const allowParallelObjectives = await missionAllowsParallelObjectives({
+      ctx: serviceCtx,
+      missionId: objective.mission_id
+    });
+    const activeSibling = await findConflictingActiveSibling({
+      ctx: serviceCtx,
+      missionId: objective.mission_id,
+      projectId: objective.project_id,
+      objectiveId: objective.id,
+      resourceKey: objective.resource_key,
+      allowParallelObjectives
+    });
+    if (activeSibling) {
       throw new ApiError(
         409,
         'Another objective on this mission is already active. Enable auto-advance on this objective instead of queueing it for the runner.'
       );
     }
 
-    const serviceCtx = await buildWebappServiceContextForWorkspace(
-      objective.workspace_id,
-      tx,
-      workspaceUserId
-    );
     const launchTarget = await resolveLaunchExecutionTarget({
       ctx: serviceCtx,
       projectId: objective.project_id,

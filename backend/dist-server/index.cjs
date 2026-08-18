@@ -76063,6 +76063,12 @@ var init_db = __esm({
 });
 
 // errors.ts
+function apiErrorFromBodyParser(error53) {
+  if (!error53 || typeof error53 !== "object") return null;
+  const { type } = error53;
+  if (type !== "entity.too.large") return null;
+  return new ApiError(413, "Request body is too large.", void 0, "body_too_large");
+}
 function apiErrorFromDatabaseError(error53) {
   if (!error53 || typeof error53 !== "object") return null;
   const { code, message: message2 = "" } = error53;
@@ -132813,6 +132819,23 @@ var composeDeliveryTool = {
 };
 
 // ../automations/dist/objective-manager/rules.js
+var DEFAULT_PRIMARY_RESOURCE_KEY = "primary";
+function canonicalObjectiveResourceKey(resourceKey, primaryResourceKey2 = DEFAULT_PRIMARY_RESOURCE_KEY) {
+  const trimmed10 = resourceKey?.trim();
+  return trimmed10 && trimmed10.length > 0 ? trimmed10 : primaryResourceKey2;
+}
+function objectiveResourcesConflict({ left, right, primaryResourceKey: primaryResourceKey2 = DEFAULT_PRIMARY_RESOURCE_KEY }) {
+  return canonicalObjectiveResourceKey(left, primaryResourceKey2) === canonicalObjectiveResourceKey(right, primaryResourceKey2);
+}
+function siblingBlocksParallelLaunch({ allowParallelObjectives, candidateResourceKey, siblingResourceKey, primaryResourceKey: primaryResourceKey2 = DEFAULT_PRIMARY_RESOURCE_KEY }) {
+  if (!allowParallelObjectives)
+    return true;
+  return objectiveResourcesConflict({
+    left: candidateResourceKey,
+    right: siblingResourceKey,
+    primaryResourceKey: primaryResourceKey2
+  });
+}
 var EDITABLE_NEXT_UP_OBJECTIVE_STATES = [
   "draft",
   "submitted",
@@ -132822,6 +132845,11 @@ var FUTURE_OBJECTIVE_STATES = [
   "future"
 ];
 var ACTIVE_OBJECTIVE_STATES = [
+  "executing",
+  "pending_delivery"
+];
+var PARALLEL_BLOCKING_OBJECTIVE_STATES = [
+  "launching",
   "executing",
   "pending_delivery"
 ];
@@ -132861,9 +132889,11 @@ function sortObjectivesByLifecycleOrder(objectives) {
     return a5.id.localeCompare(b5.id);
   });
 }
-function validateObjectiveLifecycle(objectives) {
+function validateObjectiveLifecycle(objectives, options = {}) {
   const ordered = sortObjectivesByLifecycleOrder(objectives);
   const violations = [];
+  const primaryResourceKey2 = options.primaryResourceKey ?? DEFAULT_PRIMARY_RESOURCE_KEY;
+  const allowParallel = options.allowParallelObjectives === true;
   const drafts = ordered.filter((o3) => o3.state === "draft");
   if (drafts.length > 1) {
     violations.push({
@@ -132873,11 +132903,17 @@ function validateObjectiveLifecycle(objectives) {
     });
   }
   const active = ordered.filter(isActiveObjective);
-  if (active.length > 1) {
+  const conflictingActive = allowParallel ? active.filter((candidate, index) => active.some((other, otherIndex) => otherIndex !== index && objectiveResourcesConflict({
+    left: candidate.resourceKey,
+    right: other.resourceKey,
+    primaryResourceKey: primaryResourceKey2
+  }))) : active;
+  const uniqueConflicting = [...new Map(conflictingActive.map((item) => [item.id, item])).values()];
+  if (uniqueConflicting.length > 1) {
     violations.push({
       code: "multiple_active_objectives",
-      objectiveIds: active.map((o3) => o3.id),
-      message: "A mission may have at most one executing or pending-delivery objective."
+      objectiveIds: uniqueConflicting.map((o3) => o3.id),
+      message: allowParallel ? "A mission may not run two executing or pending-delivery objectives on the same resource." : "A mission may have at most one executing or pending-delivery objective."
     });
   }
   const byPosition = /* @__PURE__ */ new Map();
@@ -132903,12 +132939,13 @@ function validateObjectiveLifecycle(objectives) {
   }
   return violations;
 }
-function deriveObjectiveLifecycleView(objectives) {
+function deriveObjectiveLifecycleView(objectives, options = {}) {
   const orderedObjectives = sortObjectivesByLifecycleOrder(objectives);
   const executedObjectives = orderedObjectives.filter((objective) => (isActiveObjective(objective) || objective.state === "complete") && objectiveHasInstructionText(objective));
   const editableObjectives = orderedObjectives.filter(isEditableNextUpObjective);
   const futureObjectives = orderedObjectives.filter(isFutureObjective);
-  const activeObjective = orderedObjectives.find(isActiveObjective) ?? null;
+  const activeObjectives = orderedObjectives.filter(isActiveObjective);
+  const activeObjective = activeObjectives[0] ?? null;
   const nextUpObjective = orderedObjectives.find(isEditableNextUpObjective) ?? null;
   return {
     orderedObjectives,
@@ -132916,9 +132953,10 @@ function deriveObjectiveLifecycleView(objectives) {
     editableObjectives,
     futureObjectives,
     activeObjective,
+    activeObjectives,
     nextUpObjective,
     hasNonExecuted: editableObjectives.length > 0 || futureObjectives.length > 0,
-    violations: validateObjectiveLifecycle(orderedObjectives)
+    violations: validateObjectiveLifecycle(orderedObjectives, options)
   };
 }
 function planEnsureDraftSlot(objectives) {
@@ -132966,7 +133004,14 @@ function decideAutoAdvanceAfterDelivery(objectives, options = {}) {
 
 // ../automations/dist/objective-manager/index.js
 function manageObjectiveLifecycle(input) {
-  const view = deriveObjectiveLifecycleView(input.objectives);
+  const options = {};
+  if (input.mission?.allowParallelObjectives !== void 0) {
+    options.allowParallelObjectives = input.mission.allowParallelObjectives;
+  }
+  if (input.mission?.primaryResourceKey !== void 0) {
+    options.primaryResourceKey = input.mission.primaryResourceKey;
+  }
+  const view = deriveObjectiveLifecycleView(input.objectives, options);
   const autoAdvanceOptions = input.mission?.humanOnly === void 0 ? {} : { humanOnly: input.mission.humanOnly };
   return {
     orderedObjectiveIds: view.orderedObjectives.map((objective) => objective.id),
@@ -135238,12 +135283,12 @@ async function findBindableChannelForMission({
     const byObjective = await ctx.db.get(
       `SELECT id FROM agent_session_channels
          WHERE workspace_id = ? AND mission_id = ?
-           AND (objective_id = ? OR objective_id IS NULL)
+           AND objective_id = ?
            AND session_id IS NULL AND deleted_at IS NULL
            AND state IN ('preparing', 'online', 'degraded')
-         ORDER BY CASE WHEN objective_id = ? THEN 0 ELSE 1 END, created_at DESC
+         ORDER BY created_at DESC
          LIMIT 1`,
-      [ctx.workspace.id, missionId, objectiveId, objectiveId]
+      [ctx.workspace.id, missionId, objectiveId]
     );
     return byObjective?.id ?? null;
   }
@@ -136664,6 +136709,101 @@ async function enqueueLiveActivityStartForMission({
   return enqueueLiveActivityStartJob({ db, workspaceId, profileId, missionId, now: now2 });
 }
 
+// ../packages/core/service/objective-parallelism.ts
+init_dist();
+function isTruthyFlag3(value) {
+  return value === true || value === 1;
+}
+async function missionAllowsParallelObjectives({
+  ctx,
+  missionId
+}) {
+  const row = await ctx.db.get(
+    `SELECT allow_parallel_objectives FROM missions
+      WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+    [missionId, ctx.workspace.id]
+  );
+  return isTruthyFlag3(row?.allow_parallel_objectives);
+}
+async function primaryResourceKeyForProject({
+  ctx,
+  projectId
+}) {
+  const row = await ctx.db.get(
+    `SELECT resource_key FROM project_resources
+      WHERE project_id = ? AND workspace_id = ? AND deleted_at IS NULL AND is_primary = ?
+      LIMIT 1`,
+    [projectId, ctx.workspace.id, bindBool(ctx.db.dialect, true)]
+  );
+  return row?.resource_key?.trim() || DEFAULT_PRIMARY_RESOURCE_KEY;
+}
+async function countActiveMissionObjectives({
+  ctx,
+  missionId
+}) {
+  const row = await ctx.db.get(
+    `SELECT COUNT(*) AS n FROM objectives
+      WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL
+        AND state IN (${PARALLEL_BLOCKING_OBJECTIVE_STATES.map(() => "?").join(", ")})`,
+    [missionId, ctx.workspace.id, ...PARALLEL_BLOCKING_OBJECTIVE_STATES]
+  );
+  return Number(row?.n ?? 0);
+}
+async function findConflictingActiveSibling({
+  ctx,
+  missionId,
+  projectId,
+  objectiveId,
+  resourceKey,
+  allowParallelObjectives
+}) {
+  const primaryResourceKey2 = allowParallelObjectives ? await primaryResourceKeyForProject({ ctx, projectId }) : DEFAULT_PRIMARY_RESOURCE_KEY;
+  const candidateKey = canonicalObjectiveResourceKey(resourceKey, primaryResourceKey2);
+  const siblings = await ctx.db.all(
+    `SELECT id, resource_key FROM objectives
+      WHERE mission_id = ? AND workspace_id = ? AND id <> ? AND deleted_at IS NULL
+        AND state IN (${PARALLEL_BLOCKING_OBJECTIVE_STATES.map(() => "?").join(", ")})`,
+    [missionId, ctx.workspace.id, objectiveId, ...PARALLEL_BLOCKING_OBJECTIVE_STATES]
+  );
+  for (const sibling of siblings) {
+    if (siblingBlocksParallelLaunch({
+      allowParallelObjectives,
+      candidateResourceKey: candidateKey,
+      siblingResourceKey: sibling.resource_key,
+      primaryResourceKey: primaryResourceKey2
+    })) {
+      return { id: sibling.id };
+    }
+  }
+  const requestSiblings = await ctx.db.all(
+    `SELECT o.id, o.resource_key
+       FROM execution_requests er
+       JOIN objectives o ON o.id = er.objective_id AND o.deleted_at IS NULL
+      WHERE er.mission_id = ? AND er.workspace_id = ? AND er.objective_id <> ?
+        AND er.deleted_at IS NULL
+        AND er.status IN (${ACTIVE_EXECUTION_REQUEST_STATUSES.map(() => "?").join(", ")})
+        AND o.state IN (${PARALLEL_BLOCKING_OBJECTIVE_STATES.map(() => "?").join(", ")})`,
+    [
+      missionId,
+      ctx.workspace.id,
+      objectiveId,
+      ...ACTIVE_EXECUTION_REQUEST_STATUSES,
+      ...PARALLEL_BLOCKING_OBJECTIVE_STATES
+    ]
+  );
+  for (const sibling of requestSiblings) {
+    if (siblingBlocksParallelLaunch({
+      allowParallelObjectives,
+      candidateResourceKey: candidateKey,
+      siblingResourceKey: sibling.resource_key,
+      primaryResourceKey: primaryResourceKey2
+    })) {
+      return { id: sibling.id };
+    }
+  }
+  return null;
+}
+
 // ../packages/core/service/protocol.ts
 init_profiles();
 init_project_execution_target();
@@ -137143,7 +137283,19 @@ Delivery evidence:
   human must perform outside completed agent work; never include Git actions or routine review/testing.
   Tradeoffs must describe an implementation decision, alternatives considered, and why it was chosen.`;
 function resolveActiveObjective(objectives) {
-  const active = objectives.find((o3) => o3.state === "executing") ?? objectives.find((o3) => o3.state === "launching") ?? objectives.find((o3) => o3.state === "pending_delivery") ?? objectives.find((o3) => o3.state === "draft") ?? objectives.find((o3) => o3.state !== "complete");
+  const rankedStates = ["executing", "launching", "pending_delivery"];
+  for (const state2 of rankedStates) {
+    const matches = objectives.filter((objective) => objective.state === state2);
+    if (matches.length > 1) {
+      throw new ServiceError(
+        "Multiple active objectives; pass --objective-id to attach",
+        "ambiguous_active_objective",
+        409
+      );
+    }
+    if (matches.length === 1) return matches[0];
+  }
+  const active = objectives.find((o3) => o3.state === "draft") ?? objectives.find((o3) => o3.state !== "complete");
   if (!active) {
     throw new ServiceError("No active objective found on mission", "no_active_objective", 409);
   }
@@ -137491,12 +137643,18 @@ async function attachSession({
 }) {
   const mission = await getMissionSummary({ ctx, missionId });
   const objectives = await listObjectives({ ctx, missionId: mission.id });
-  const pinned = Boolean(objectiveId?.trim() || executionRequestId?.trim());
+  const explicitPin = Boolean(objectiveId?.trim() || executionRequestId?.trim());
+  let resolvedObjectiveId = objectiveId;
+  if (existingSessionKey?.trim() && !explicitPin) {
+    const existing = await getSessionByKey(ctx, existingSessionKey);
+    resolvedObjectiveId = existing.objective_id;
+  }
+  const pinned = Boolean(resolvedObjectiveId?.trim() || executionRequestId?.trim());
   const objective = await resolvePinnedAttachObjective({
     ctx,
     missionId: mission.id,
     objectives,
-    objectiveId,
+    objectiveId: resolvedObjectiveId,
     executionRequestId
   });
   const resolvedTargetId = await resolveProtocolExecutionTargetId({
@@ -138641,7 +138799,13 @@ async function deliverSession({
       objectiveId: session.objective_id,
       changedFields: ["delivery_state", "phase", "ended_at"]
     });
-    await moveMissionToReview({ ctx: txCtx, missionId: mission.id });
+    const remainingActive2 = await countActiveMissionObjectives({
+      ctx: txCtx,
+      missionId: mission.id
+    });
+    if (remainingActive2 === 0) {
+      await moveMissionToReview({ ctx: txCtx, missionId: mission.id });
+    }
   });
   const deliveredObjective = await ctx.db.get(
     `SELECT assigned_agent, model, reasoning_effort FROM objectives WHERE id = ?`,
@@ -138665,114 +138829,132 @@ async function deliverSession({
   );
   let autoAdvanceQueued = false;
   if (nextObjective) {
-    const eventId2 = newId();
-    const eventNow = nowIso();
-    if (nextObjective.auto_advance === 1) {
-      const inheritAgent = !nextObjective.assigned_agent && Boolean(deliveredObjective?.assigned_agent);
-      const objectiveFields = ["state = 'launching'"];
-      const objectiveParams = [];
-      const changedFields = ["state"];
-      if (inheritAgent && deliveredObjective) {
-        objectiveFields.push("assigned_agent = ?", "model = ?", "reasoning_effort = ?");
-        objectiveParams.push(
-          deliveredObjective.assigned_agent,
-          deliveredObjective.model,
-          deliveredObjective.reasoning_effort
-        );
-        changedFields.push("assigned_agent", "model", "reasoning_effort");
-      }
-      await ctx.db.run(
-        `UPDATE objectives SET ${objectiveFields.join(", ")}, updated_at = ?, revision = revision + 1
+    const allowParallelObjectives = await missionAllowsParallelObjectives({
+      ctx,
+      missionId: mission.id
+    });
+    const siblingConflict = await findConflictingActiveSibling({
+      ctx,
+      missionId: mission.id,
+      projectId: mission.projectId,
+      objectiveId: nextObjective.id,
+      resourceKey: nextObjective.resource_key,
+      allowParallelObjectives
+    });
+    if (!siblingConflict) {
+      const eventId2 = newId();
+      const eventNow = nowIso();
+      if (nextObjective.auto_advance === 1) {
+        const inheritAgent = !nextObjective.assigned_agent && Boolean(deliveredObjective?.assigned_agent);
+        const objectiveFields = ["state = 'launching'"];
+        const objectiveParams = [];
+        const changedFields = ["state"];
+        if (inheritAgent && deliveredObjective) {
+          objectiveFields.push("assigned_agent = ?", "model = ?", "reasoning_effort = ?");
+          objectiveParams.push(
+            deliveredObjective.assigned_agent,
+            deliveredObjective.model,
+            deliveredObjective.reasoning_effort
+          );
+          changedFields.push("assigned_agent", "model", "reasoning_effort");
+        }
+        await ctx.db.run(
+          `UPDATE objectives SET ${objectiveFields.join(", ")}, updated_at = ?, revision = revision + 1
            WHERE id = ?`,
-        [...objectiveParams, eventNow, nextObjective.id]
-      );
-      const updatedRevision = await ctx.db.get(`SELECT revision FROM objectives WHERE id = ?`, [
-        nextObjective.id
-      ]);
-      await recordChange({
-        ctx,
-        entityType: "objective",
-        entityId: nextObjective.id,
-        operation: "update",
-        entityRevision: updatedRevision.revision,
-        projectId: mission.projectId,
-        missionId: mission.id,
-        objectiveId: nextObjective.id,
-        changedFields
-      });
-      try {
-        const resolvedAgent = nextObjective.assigned_agent ?? deliveredObjective?.assigned_agent ?? null;
-        const { executionTargetId, agentConfigs } = await resolveLaunchExecutionTarget({
+          [...objectiveParams, eventNow, nextObjective.id]
+        );
+        const updatedRevision = await ctx.db.get(`SELECT revision FROM objectives WHERE id = ?`, [
+          nextObjective.id
+        ]);
+        await recordChange({
           ctx,
-          projectId: mission.projectId
-        });
-        const resolvedLaunch = await resolveLaunchConfig({
-          ctx,
-          objectiveLaunchConfigJson: nextObjective.launch_config_json,
-          executionTargetId,
-          agentKey: resolvedAgent ?? "",
-          userConfigs: agentConfigs,
+          entityType: "objective",
+          entityId: nextObjective.id,
+          operation: "update",
+          entityRevision: updatedRevision.revision,
           projectId: mission.projectId,
-          objectiveResourceKey: nextObjective.resource_key
-        });
-        await createExecutionRequest({
-          ctx,
           missionId: mission.id,
           objectiveId: nextObjective.id,
-          requestedAgent: resolvedAgent,
-          requestedModel: nextObjective.assigned_agent ? nextObjective.model : deliveredObjective?.model ?? null,
-          requestedReasoningEffort: nextObjective.assigned_agent ? nextObjective.reasoning_effort : deliveredObjective?.reasoning_effort ?? null,
-          launchFlags: {
-            preCommand: resolvedLaunch.config.preCommand,
-            flags: resolvedLaunch.config.flags
-          },
-          executionTargetId,
-          requestedSource: "auto_advance",
-          metadata: { launchConfigSource: resolvedLaunch.source },
-          idempotencyKey: `auto_advance:${nextObjective.id}`
+          changedFields
         });
-        autoAdvanceQueued = true;
-      } catch (error53) {
-        await ctx.db.run(
-          `INSERT INTO mission_events
+        try {
+          const resolvedAgent = nextObjective.assigned_agent ?? deliveredObjective?.assigned_agent ?? null;
+          const { executionTargetId, agentConfigs } = await resolveLaunchExecutionTarget({
+            ctx,
+            projectId: mission.projectId
+          });
+          const resolvedLaunch = await resolveLaunchConfig({
+            ctx,
+            objectiveLaunchConfigJson: nextObjective.launch_config_json,
+            executionTargetId,
+            agentKey: resolvedAgent ?? "",
+            userConfigs: agentConfigs,
+            projectId: mission.projectId,
+            objectiveResourceKey: nextObjective.resource_key
+          });
+          await createExecutionRequest({
+            ctx,
+            missionId: mission.id,
+            objectiveId: nextObjective.id,
+            requestedAgent: resolvedAgent,
+            requestedModel: nextObjective.assigned_agent ? nextObjective.model : deliveredObjective?.model ?? null,
+            requestedReasoningEffort: nextObjective.assigned_agent ? nextObjective.reasoning_effort : deliveredObjective?.reasoning_effort ?? null,
+            launchFlags: {
+              preCommand: resolvedLaunch.config.preCommand,
+              flags: resolvedLaunch.config.flags
+            },
+            executionTargetId,
+            requestedSource: "auto_advance",
+            metadata: { launchConfigSource: resolvedLaunch.source },
+            idempotencyKey: `auto_advance:${nextObjective.id}`
+          });
+          autoAdvanceQueued = true;
+        } catch (error53) {
+          await ctx.db.run(
+            `INSERT INTO mission_events
                (id, workspace_id, project_id, mission_id, objective_id,
                 type, phase, summary, payload_json, source, actor_workspace_user_id, created_at)
              VALUES (?, ?, ?, ?, ?, 'alert', 'review', ?, ?, ?, ?, ?)`,
+            [
+              eventId2,
+              ctx.workspace.id,
+              mission.projectId,
+              mission.id,
+              nextObjective.id,
+              `Auto-advance could not queue the next objective: ${error53 instanceof Error ? error53.message : String(error53)}`,
+              JSON.stringify({ autoAdvanceFailed: true }),
+              ctx.source,
+              ctx.actorWorkspaceUserId,
+              eventNow
+            ]
+          );
+        }
+      } else {
+        await ctx.db.run(
+          `INSERT INTO mission_events
+             (id, workspace_id, project_id, mission_id, objective_id,
+              type, phase, summary, payload_json, source, actor_workspace_user_id, created_at)
+           VALUES (?, ?, ?, ?, ?, 'awaiting_approval', 'review', ?, '{}', ?, ?, ?)`,
           [
             eventId2,
             ctx.workspace.id,
             mission.projectId,
             mission.id,
             nextObjective.id,
-            `Auto-advance could not queue the next objective: ${error53 instanceof Error ? error53.message : String(error53)}`,
-            JSON.stringify({ autoAdvanceFailed: true }),
+            `Next objective is waiting for approval: ${nextObjective.title}`,
             ctx.source,
             ctx.actorWorkspaceUserId,
             eventNow
           ]
         );
       }
-    } else {
-      await ctx.db.run(
-        `INSERT INTO mission_events
-             (id, workspace_id, project_id, mission_id, objective_id,
-              type, phase, summary, payload_json, source, actor_workspace_user_id, created_at)
-           VALUES (?, ?, ?, ?, ?, 'awaiting_approval', 'review', ?, '{}', ?, ?, ?)`,
-        [
-          eventId2,
-          ctx.workspace.id,
-          mission.projectId,
-          mission.id,
-          nextObjective.id,
-          `Next objective is waiting for approval: ${nextObjective.title}`,
-          ctx.source,
-          ctx.actorWorkspaceUserId,
-          eventNow
-        ]
-      );
     }
   }
-  if (!autoAdvanceQueued) {
+  const remainingActive = await countActiveMissionObjectives({
+    ctx,
+    missionId: mission.id
+  });
+  if (!autoAdvanceQueued && remainingActive === 0) {
     await emitNotification({
       db: ctx.db,
       workspaceId: ctx.workspace.id,
@@ -140500,7 +140682,6 @@ async function forgetMissionLatchSession(missionRef, body) {
   });
 }
 var LAUNCHABLE_STATES = ["draft", "submitted", "launching"];
-var ACTIVE_SIBLING_OBJECTIVE_STATES = ["launching", "executing", "pending_delivery"];
 async function dequeueObjective({
   objectiveId,
   projectId,
@@ -140606,46 +140787,29 @@ async function launchObjective(objectiveRef, body) {
         objective.state === "future" ? "Promote the objective to draft first." : "Only draft, submitted, or launching objectives can be queued."
       );
     }
-    const activeSiblingObjective = await tx.get(
-      `SELECT id FROM objectives
-          WHERE mission_id = ? AND workspace_id = ? AND id <> ? AND deleted_at IS NULL
-            AND state IN (${ACTIVE_SIBLING_OBJECTIVE_STATES.map(() => "?").join(", ")})
-          LIMIT 1`,
-      [
-        objective.mission_id,
-        objective.workspace_id,
-        objective.id,
-        ...ACTIVE_SIBLING_OBJECTIVE_STATES
-      ]
-    );
-    const activeSiblingRequest = await tx.get(
-      `SELECT er.id
-           FROM execution_requests er
-           JOIN objectives o ON o.id = er.objective_id AND o.deleted_at IS NULL
-          WHERE er.mission_id = ? AND er.workspace_id = ? AND er.objective_id <> ?
-            AND er.deleted_at IS NULL
-            AND er.status IN (${ACTIVE_EXECUTION_REQUEST_STATUSES.map(() => "?").join(", ")})
-            AND o.state IN (${ACTIVE_SIBLING_OBJECTIVE_STATES.map(() => "?").join(", ")})
-          LIMIT 1`,
-      [
-        objective.mission_id,
-        objective.workspace_id,
-        objective.id,
-        ...ACTIVE_EXECUTION_REQUEST_STATUSES,
-        ...ACTIVE_SIBLING_OBJECTIVE_STATES
-      ]
-    );
-    if (activeSiblingObjective || activeSiblingRequest) {
-      throw new ApiError(
-        409,
-        "Another objective on this mission is already active. Enable auto-advance on this objective instead of queueing it for the runner."
-      );
-    }
     const serviceCtx = await buildWebappServiceContextForWorkspace(
       objective.workspace_id,
       tx,
       workspaceUserId
     );
+    const allowParallelObjectives = await missionAllowsParallelObjectives({
+      ctx: serviceCtx,
+      missionId: objective.mission_id
+    });
+    const activeSibling = await findConflictingActiveSibling({
+      ctx: serviceCtx,
+      missionId: objective.mission_id,
+      projectId: objective.project_id,
+      objectiveId: objective.id,
+      resourceKey: objective.resource_key,
+      allowParallelObjectives
+    });
+    if (activeSibling) {
+      throw new ApiError(
+        409,
+        "Another objective on this mission is already active. Enable auto-advance on this objective instead of queueing it for the runner."
+      );
+    }
     const launchTarget = await resolveLaunchExecutionTarget({
       ctx: serviceCtx,
       projectId: objective.project_id,
@@ -142382,11 +142546,11 @@ function toStatusDto(r5) {
     name: r5.name,
     type: r5.type,
     position: r5.position,
-    isDefault: isTruthyFlag3(r5.is_default),
-    isTerminal: isTruthyFlag3(r5.is_terminal)
+    isDefault: isTruthyFlag4(r5.is_default),
+    isTerminal: isTruthyFlag4(r5.is_terminal)
   };
 }
-function isTruthyFlag3(value) {
+function isTruthyFlag4(value) {
   return value === true || value === 1;
 }
 async function toProjectResourceDto(r5, observationsByResourceId = /* @__PURE__ */ new Map(), sources = []) {
@@ -142405,8 +142569,8 @@ async function toProjectResourceDto(r5, observationsByResourceId = /* @__PURE__ 
     type: source?.source_kind === "local_checkout" ? "local_directory" : source?.source_kind ?? "remote_directory",
     label: r5.label,
     path: sourcePath(source),
-    isPrimary: isTruthyFlag3(r5.is_primary),
-    accessMode: isTruthyFlag3(r5.is_primary) ? "read_write" : r5.access_mode === "read" ? "read" : "read_write",
+    isPrimary: isTruthyFlag4(r5.is_primary),
+    accessMode: isTruthyFlag4(r5.is_primary) ? "read_write" : r5.access_mode === "read" ? "read" : "read_write",
     status: merged.status,
     observedAt: merged.observedAt,
     observationSource: merged.observedAt ? "client" : null,
@@ -142530,6 +142694,7 @@ function toMissionDto(r5, tags = []) {
     hasPendingObjectiveWithInstructions: r5.has_pending_objective_with_instructions === 1,
     hasUnseenBlockingQuestion: r5.has_unseen_blocking_question === 1,
     hasUnseenReturnedToExecute: r5.has_unseen_returned_to_execute === 1,
+    allowParallelObjectives: isTruthyFlag4(r5.allow_parallel_objectives),
     draftObjectiveResourceKey: r5.draft_objective_resource_key?.trim() || null,
     tags,
     createdByKind: toCreatedByKind(r5.created_by_kind),
@@ -143065,7 +143230,7 @@ function toProjectTagDto(r5) {
     projectId: r5.project_id,
     label: r5.label,
     color: r5.color,
-    active: isTruthyFlag3(r5.active)
+    active: isTruthyFlag4(r5.active)
   };
 }
 async function getMissionTags(missionId) {
@@ -143129,7 +143294,7 @@ function toObjectiveDto(r5) {
     title: r5.title,
     instructionText: r5.instruction_text,
     state: r5.state,
-    autoAdvance: isTruthyFlag3(r5.auto_advance),
+    autoAdvance: isTruthyFlag4(r5.auto_advance),
     assignedAgent: r5.assigned_agent,
     model: r5.model,
     reasoningEffort: r5.reasoning_effort,
@@ -143917,7 +144082,7 @@ async function updateProjectResource(projectId, resourceId, body) {
         changedFields.push("resource_key");
       }
     }
-    const becomingPrimary = body.isPrimary === true && !isTruthyFlag3(existing.is_primary);
+    const becomingPrimary = body.isPrimary === true && !isTruthyFlag4(existing.is_primary);
     if (becomingPrimary) {
       await clearPrimaryResourcesForTarget(tx, {
         projectId,
@@ -143933,7 +144098,7 @@ async function updateProjectResource(projectId, resourceId, body) {
       changedFields.push("is_primary");
       changedFields.push("access_mode");
     }
-    const staysPrimary = becomingPrimary || isTruthyFlag3(existing.is_primary);
+    const staysPrimary = becomingPrimary || isTruthyFlag4(existing.is_primary);
     if (body.accessMode !== void 0 && !staysPrimary) {
       const nextAccessMode = body.accessMode === "read_write" ? "read_write" : "read";
       if (nextAccessMode !== (existing.access_mode === "read" ? "read" : "read_write")) {
@@ -144699,7 +144864,7 @@ var selectMissionsSql = `
          t.notes_text,
          t.schedule_id, t.due_datetime,
          t.created_at, t.updated_at, t.revision, t.active_branch, t.branch_override,
-         t.worktree_preference,
+         t.worktree_preference, t.allow_parallel_objectives,
          t.created_by_kind, t.created_by_agent, t.created_by_workspace_user_id,
          t.created_by_session_id,
          (SELECT COUNT(*) FROM objectives o
@@ -145906,6 +146071,14 @@ async function patchMissionFieldsTx(id, body) {
       setParams.push(preference);
       changed.push("worktree_preference");
     }
+    if (body.allowParallelObjectives !== void 0) {
+      if (typeof body.allowParallelObjectives !== "boolean") {
+        throw new ApiError(400, "allowParallelObjectives must be a boolean");
+      }
+      fields.push("allow_parallel_objectives = ?");
+      setParams.push(bindBool(DATABASE_DIALECT, body.allowParallelObjectives));
+      changed.push("allow_parallel_objectives");
+    }
     if (body.resetActiveBranch === true) {
       if (!existing.active_branch?.trim()) {
         throw new ApiError(400, "Mission has no prepared branch to reset.");
@@ -146490,10 +146663,10 @@ async function createScheduledDuplicateIfNeeded(tx, mission, newStatusType) {
        (id, workspace_id, project_id, display_id, sequence_number, title,
         status_id, status_type, board_position, priority, assigned_workspace_user_id,
         notes_text, execution_target_intent_json,
-        metadata_json, schedule_id, due_datetime,
+        metadata_json, schedule_id, due_datetime, allow_parallel_objectives,
         created_by_kind, created_by_agent, created_by_session_id,
         created_at, updated_at, revision)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}', '{}', ?, ?, 'automation', NULL, NULL, ?, ?, 1)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}', '{}', ?, ?, ?, 'automation', NULL, NULL, ?, ?, 1)`,
     [
       newMissionId,
       mission.workspace_id,
@@ -146509,6 +146682,7 @@ async function createScheduledDuplicateIfNeeded(tx, mission, newStatusType) {
       mission.notes_text,
       mission.schedule_id,
       nextDueDatetime,
+      bindBool(DATABASE_DIALECT, isTruthyFlag4(mission.allow_parallel_objectives)),
       now2,
       now2
     ]
@@ -158874,6 +159048,18 @@ function truncate(value, max) {
 function placeholders(count) {
   return new Array(count).fill("?").join(", ");
 }
+function resolveAgentIdentifier(...candidates) {
+  for (const candidate of candidates) {
+    const trimmed10 = candidate?.trim();
+    if (!trimmed10) continue;
+    if (trimmed10.toLowerCase() === "unknown") continue;
+    return trimmed10;
+  }
+  return null;
+}
+function toCreatedByKind2(value) {
+  return value === "agent" || value === "automation" ? value : "human";
+}
 function baseFields(row) {
   return {
     workspaceId: row.workspace_id,
@@ -158883,7 +159069,9 @@ function baseFields(row) {
     projectColor: readProjectColor(row.project_settings_json),
     missionId: row.mission_id,
     missionDisplayId: row.mission_display_id,
-    missionTitle: row.mission_title
+    missionTitle: row.mission_title,
+    createdByKind: toCreatedByKind2(row.created_by_kind),
+    createdByAgent: row.created_by_agent ?? null
   };
 }
 function objectiveDisplayId(missionDisplayId, displayKey) {
@@ -158914,9 +159102,10 @@ var CONTEXT_COLUMNS = `
             o.workspace_id, w.name AS workspace_name,
             o.project_id, p.name AS project_name, p.settings_json AS project_settings_json,
             o.mission_id, m.display_id AS mission_display_id, m.title AS mission_title`;
+var OBJECTIVE_PROVENANCE_COLUMNS = `o.created_by_kind, o.created_by_agent`;
 async function loadRuns(workspaceIds) {
   return await requireDatabaseClient().all(
-    `SELECT ${CONTEXT_COLUMNS},
+    `SELECT ${CONTEXT_COLUMNS}, ${OBJECTIVE_PROVENANCE_COLUMNS},
             o.id AS objective_id, o.display_key AS objective_display_key,
             o.title AS objective_title, o.instruction_text, o.state, o.position,
             o.branch, o.resource_key, o.assigned_agent, o.model,
@@ -158984,11 +159173,11 @@ async function loadLatestEvents(runs) {
 }
 async function loadDeliveries(workspaceIds) {
   return await requireDatabaseClient().all(
-    `SELECT ${CONTEXT_COLUMNS},
+    `SELECT ${CONTEXT_COLUMNS}, ${OBJECTIVE_PROVENANCE_COLUMNS},
             d.id AS delivery_id, d.objective_id, o.display_key AS objective_display_key,
             o.title AS objective_title, d.session_id, d.summary, d.verification_summary,
             d.follow_up_notes, d.payload_json, d.delivered_at,
-            s.agent_identifier, s.model_identifier
+            s.agent_identifier, s.model_identifier, o.assigned_agent
        FROM deliveries d
        JOIN objectives o ON o.id = d.objective_id AND o.deleted_at IS NULL${CONTEXT_JOIN}
        LEFT JOIN agent_sessions s ON s.id = d.session_id AND s.deleted_at IS NULL
@@ -159002,7 +159191,7 @@ async function loadDeliveries(workspaceIds) {
 var QUESTION_CONTEXT_COLUMNS = CONTEXT_COLUMNS.replace(/\bo\./g, "e.");
 async function loadQuestions(workspaceIds) {
   return await requireDatabaseClient().all(
-    `SELECT ${QUESTION_CONTEXT_COLUMNS},
+    `SELECT ${QUESTION_CONTEXT_COLUMNS}, ${OBJECTIVE_PROVENANCE_COLUMNS},
             e.id AS event_id, e.objective_id, o.display_key AS objective_display_key,
             e.summary, e.created_at, s.agent_identifier
        FROM mission_events e
@@ -159049,7 +159238,7 @@ function toRunItem(row, queued, latest) {
     state: row.state === "launching" ? "launching" : "executing",
     objectiveTitle: row.objective_title,
     instructionPreview: truncate(row.instruction_text, INSTRUCTION_PREVIEW_CHARS),
-    agentIdentifier: row.session_agent_identifier ?? row.assigned_agent,
+    agentIdentifier: resolveAgentIdentifier(row.session_agent_identifier, row.assigned_agent),
     modelIdentifier: row.session_model_identifier ?? row.model,
     branch: row.branch,
     resourceKey: row.resource_key?.trim() || null,
@@ -159078,7 +159267,7 @@ function toDeliveryItem(row) {
       followUpNotes: row.follow_up_notes,
       report: deliveryReportFromPayload(row.payload_json, row.summary),
       deliveredAt: row.delivered_at,
-      agentIdentifier: row.agent_identifier,
+      agentIdentifier: resolveAgentIdentifier(row.agent_identifier, row.assigned_agent),
       modelIdentifier: row.model_identifier
     }
   };
@@ -159093,7 +159282,7 @@ function toQuestionItem(row) {
     objectiveDisplayId: objectiveDisplayId(row.mission_display_id, row.objective_display_key),
     eventId: row.event_id,
     question: truncate(row.summary, EVENT_SUMMARY_CHARS * 2),
-    agentIdentifier: row.agent_identifier,
+    agentIdentifier: resolveAgentIdentifier(row.agent_identifier),
     askedAt: row.created_at
   };
 }
@@ -164586,14 +164775,20 @@ app.get("/api/auth/callback/github/repository", async (req, res, next) => {
 });
 app.all("/api/auth/*", authNodeHandler);
 var jsonBody = import_express4.default.json();
+var harnessEventsJsonBody = import_express4.default.json({ limit: "1mb" });
 var urlEncodedBody = import_express4.default.urlencoded({ extended: false });
 function isRawUploadRequest(req) {
   if (req.method !== "POST") return false;
   if (req.path.startsWith("/api/uploads/")) return true;
   return /^\/api\/objectives\/[^/]+\/attachments$/.test(req.path);
 }
+function isHarnessEventsRequest(req) {
+  if (req.method !== "POST") return false;
+  return req.path.endsWith("/terminal-sessions/harness-events") || /^\/api\/runner\/requests\/[^/]+\/harness-events$/.test(req.path);
+}
 app.use((req, res, next) => {
   if (isRawUploadRequest(req)) return next();
+  if (isHarnessEventsRequest(req)) return harnessEventsJsonBody(req, res, next);
   return jsonBody(req, res, next);
 });
 app.get("/api/auth-providers", (_req, res) => {
@@ -165941,6 +166136,14 @@ app.use((err, _req, res, _next) => {
       error: err.message,
       code: err.code,
       ...err.details !== void 0 ? { details: err.details } : {}
+    });
+    return;
+  }
+  const bodyParserError = apiErrorFromBodyParser(err);
+  if (bodyParserError) {
+    res.status(bodyParserError.status).json({
+      error: bodyParserError.message,
+      code: bodyParserError.code
     });
     return;
   }

@@ -128,9 +128,12 @@ partial indexes, check constraints, triggers); where it cannot, the service laye
 enforce them and the adapter conformance suite must test that enforcement.
 
 1. **At most one `draft` per mission.**
-2. **At most one `executing` _or_ `pending_delivery` objective per mission.** This
-   prevents auto-advance races from leaving two objectives active, and prevents
-   follow-up work awaiting redelivery from racing with another active objective.
+2. **At most one `executing` _or_ `pending_delivery` objective per mission, unless
+   `missions.allow_parallel_objectives` is true.** The default remains serial so
+   auto-advance races cannot leave two objectives active on the same checkout.
+   When the flag is on, two active objectives are allowed only if their effective
+   `resource_key`s differ (null inherits the project's primary resource). Same-resource
+   pairs stay serial until per-objective worktrees exist (Phase E).
 3. **Unique per-mission positions.** `position` is an integer, unique per mission,
    0-based.
 4. **Auto-assigned position on insert.** When a caller omits `position`, the system
@@ -401,8 +404,9 @@ the queue; it only changes by explicit user/agent action). Combined with invaria
 the steady-state shape of a mission's queue is:
 
 ```text
-[complete*] [one executing|pending_delivery?] [one next-up: draft|launching] [future*]
-            └──────── at most one ─────────┘  └──── at most one draft ─────┘
+[complete*] [executing|pending_delivery*] [one next-up: draft|launching] [future*]
+            └ default: at most one; opt-in parallel across resource_key ┘
+            └──── at most one draft ─────┘
 ```
 
 (A `draft` and a `launching` objective may briefly coexist — e.g. a user promotes a
@@ -449,7 +453,7 @@ transitions resolve the project's preferred status name per type.
 | Objective event                                                 | Mission effect                                                                                  |
 | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
 | Agent attaches (→ `executing`)                                  | Mission → `execute`-type status. If it was in `review`/`complete`, a reopened event is emitted. |
-| Deliver with nothing auto-advanced                              | Mission → `review`-type status, top of the review column, marked unread.                        |
+| Deliver with nothing auto-advanced                              | Mission → `review`-type status, top of the review column, marked unread — **unless** another objective is still `launching` / `executing` / `pending_delivery`, in which case the mission stays `execute`. |
 | Deliver with auto-advance queued                                | Mission **stays** in execute; the next objective launches.                                      |
 | Deliver gated on approval                                       | Mission stays put; flagged as awaiting a response, blocking `awaiting_approval` event.          |
 | Agent `update` with a phase mapping to a `complete`-type status | All `executing`/`pending_delivery` objectives → `complete`.                                    |

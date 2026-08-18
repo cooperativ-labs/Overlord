@@ -8,17 +8,27 @@ type SseHandlers = {
 
 const RECONNECT_DELAY_MS = 2_000;
 
+/**
+ * Reconnect backoff that leaves nothing attached to the signal.
+ *
+ * `{ once: true }` only detaches a listener when the event actually fires, and
+ * this signal is aborted at most once for the lifetime of the app. A stream
+ * that reconnects every couple of seconds — an unreachable backend, a laptop
+ * asleep on a train — therefore accumulated one live listener (and its captured
+ * timer and resolver) per attempt on a signal that outlives them all. Detaching
+ * in the timeout path keeps the listener list at one entry.
+ */
 function sleep(ms: number, signal: AbortSignal): Promise<void> {
   return new Promise(resolve => {
-    const timeout = globalThis.setTimeout(resolve, ms);
-    signal.addEventListener(
-      'abort',
-      () => {
-        globalThis.clearTimeout(timeout);
-        resolve();
-      },
-      { once: true }
-    );
+    const onAbort = () => {
+      globalThis.clearTimeout(timeout);
+      resolve();
+    };
+    const timeout = globalThis.setTimeout(() => {
+      signal.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    signal.addEventListener('abort', onAbort, { once: true });
   });
 }
 

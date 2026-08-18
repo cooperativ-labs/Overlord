@@ -18,6 +18,7 @@ const {
   createMission,
   createObjective,
   getMissionDetail,
+  updateMission,
   updateObjective
 } = await import('./repository.ts');
 const { launchObjective, getAgentCatalog, updateAgentCatalog } =
@@ -285,6 +286,89 @@ test('updateAgentCatalog persists model order and display names', async () => {
     agentCatalog?: { agents?: { cursor?: { models?: Array<{ displayName: string }> } } };
   };
   assert.equal(settings.agentCatalog?.agents?.cursor?.models?.[0]?.displayName, 'Top Model');
+});
+
+test('persists allowParallelObjectives on the mission', async () => {
+  const project = await createProject({ name: 'Parallel Flag Round Trip' });
+  await createProjectResource(project.id, {
+    directoryPath: createIsolatedCheckout('overlord-launch-parallel-flag-'),
+    executionTargetId: null,
+    isPrimary: true
+  });
+  const mission = await createMission({
+    projectId: project.id,
+    firstObjective: 'Serial by default'
+  });
+  assert.equal(mission.allowParallelObjectives, false);
+
+  const enabled = await updateMission(mission.id, { allowParallelObjectives: true });
+  assert.equal(enabled.allowParallelObjectives, true);
+  assert.equal((await getMissionDetail(mission.id)).allowParallelObjectives, true);
+
+  const disabled = await updateMission(mission.id, { allowParallelObjectives: false });
+  assert.equal(disabled.allowParallelObjectives, false);
+});
+
+test('queues two objectives on different resources when parallel is opted in', async () => {
+  const project = await createProject({ name: 'Parallel Different Resource Launch' });
+  await createProjectResource(project.id, {
+    directoryPath: createIsolatedCheckout('overlord-launch-parallel-primary-'),
+    isPrimary: true
+  });
+  await createProjectResource(project.id, {
+    directoryPath: createIsolatedCheckout('overlord-launch-parallel-docs-'),
+    resourceKey: 'docs',
+    isPrimary: false
+  });
+  const mission = await createMission({
+    projectId: project.id,
+    firstObjective: 'Primary checkout work'
+  });
+  await updateMission(mission.id, { allowParallelObjectives: true });
+  const first = await launchObjective(mission.objectives[0]!.id, { agent: 'codex' });
+
+  const second = await createObjective({
+    missionId: mission.id,
+    instructionText: 'Docs checkout work',
+    resourceKey: 'docs'
+  });
+  const secondRequest = await launchObjective(second.id, { agent: 'codex' });
+
+  assert.notEqual(secondRequest.id, first.id);
+  assert.equal(secondRequest.objectiveId, second.id);
+  const queued = db
+    .prepare(
+      `SELECT COUNT(*) AS n FROM execution_requests
+        WHERE mission_id = ? AND status = 'queued' AND deleted_at IS NULL`
+    )
+    .get(mission.id) as { n: number };
+  assert.equal(queued.n, 2);
+});
+
+test('still rejects same-resource sibling launch when parallel is opted in', async () => {
+  const project = await createProject({ name: 'Parallel Same Resource Launch' });
+  await createProjectResource(project.id, {
+    directoryPath: createIsolatedCheckout('overlord-launch-parallel-same-'),
+    isPrimary: true
+  });
+  const mission = await createMission({
+    projectId: project.id,
+    firstObjective: 'First on primary'
+  });
+  await updateMission(mission.id, { allowParallelObjectives: true });
+  await launchObjective(mission.objectives[0]!.id, { agent: 'codex' });
+
+  const second = await createObjective({
+    missionId: mission.id,
+    instructionText: 'Also on primary'
+  });
+
+  await assert.rejects(() => launchObjective(second.id, { agent: 'codex' }), /Enable auto-advance/);
+
+  const secondRequestCount = db
+    .prepare(`SELECT COUNT(*) AS n FROM execution_requests WHERE objective_id = ?`)
+    .get(second.id) as { n: number };
+  assert.equal(secondRequestCount.n, 0);
 });
 
 test('launchObjective stamps an explicit execution target and rejects an ineligible one', async () => {

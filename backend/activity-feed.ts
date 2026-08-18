@@ -7,7 +7,8 @@ import type {
   ActivityFeedItemDto,
   ActivityFeedQuestionItemDto,
   ActivityFeedQueuedObjectiveDto,
-  ActivityFeedRunItemDto
+  ActivityFeedRunItemDto,
+  CreatedByKind
 } from '../webapp/shared/contract.ts';
 
 import { requireDatabaseClient } from './db.ts';
@@ -49,6 +50,9 @@ interface FeedContextRow {
   mission_id: string;
   mission_display_id: string;
   mission_title: string;
+  /** Objective authorship; null only when the objective join itself is null. */
+  created_by_kind: string | null;
+  created_by_agent: string | null;
 }
 
 interface RunRow extends FeedContextRow {
@@ -99,6 +103,7 @@ interface DeliveryFeedRow extends FeedContextRow {
   delivered_at: string;
   agent_identifier: string | null;
   model_identifier: string | null;
+  assigned_agent: string | null;
 }
 
 interface QuestionRow extends FeedContextRow {
@@ -110,6 +115,25 @@ interface QuestionRow extends FeedContextRow {
   agent_identifier: string | null;
 }
 
+/**
+ * Protocol defaults a missing `--agent` to the literal sentinel `unknown`. That
+ * string is truthy, so `session ?? assigned` would permanently hide a real
+ * assigned agent. Treat the sentinel (and blank) as absent.
+ */
+function resolveAgentIdentifier(...candidates: Array<string | null | undefined>): string | null {
+  for (const candidate of candidates) {
+    const trimmed = candidate?.trim();
+    if (!trimmed) continue;
+    if (trimmed.toLowerCase() === 'unknown') continue;
+    return trimmed;
+  }
+  return null;
+}
+
+function toCreatedByKind(value: string | null | undefined): CreatedByKind {
+  return value === 'agent' || value === 'automation' ? value : 'human';
+}
+
 function baseFields(row: FeedContextRow) {
   return {
     workspaceId: row.workspace_id,
@@ -119,7 +143,9 @@ function baseFields(row: FeedContextRow) {
     projectColor: readProjectColor(row.project_settings_json),
     missionId: row.mission_id,
     missionDisplayId: row.mission_display_id,
-    missionTitle: row.mission_title
+    missionTitle: row.mission_title,
+    createdByKind: toCreatedByKind(row.created_by_kind),
+    createdByAgent: row.created_by_agent ?? null
   };
 }
 
@@ -163,9 +189,12 @@ const CONTEXT_COLUMNS = `
             o.project_id, p.name AS project_name, p.settings_json AS project_settings_json,
             o.mission_id, m.display_id AS mission_display_id, m.title AS mission_title`;
 
+/** Objective authorship — kept off CONTEXT_COLUMNS so the ask query can re-alias chrome without inventing columns on `mission_events`. */
+const OBJECTIVE_PROVENANCE_COLUMNS = `o.created_by_kind, o.created_by_agent`;
+
 async function loadRuns(workspaceIds: string[]): Promise<RunRow[]> {
   return (await requireDatabaseClient().all(
-    `SELECT ${CONTEXT_COLUMNS},
+    `SELECT ${CONTEXT_COLUMNS}, ${OBJECTIVE_PROVENANCE_COLUMNS},
             o.id AS objective_id, o.display_key AS objective_display_key,
             o.title AS objective_title, o.instruction_text, o.state, o.position,
             o.branch, o.resource_key, o.assigned_agent, o.model,
@@ -249,11 +278,11 @@ async function loadLatestEvents(runs: RunRow[]): Promise<Map<string, LatestEvent
 
 async function loadDeliveries(workspaceIds: string[]): Promise<DeliveryFeedRow[]> {
   return (await requireDatabaseClient().all(
-    `SELECT ${CONTEXT_COLUMNS},
+    `SELECT ${CONTEXT_COLUMNS}, ${OBJECTIVE_PROVENANCE_COLUMNS},
             d.id AS delivery_id, d.objective_id, o.display_key AS objective_display_key,
             o.title AS objective_title, d.session_id, d.summary, d.verification_summary,
             d.follow_up_notes, d.payload_json, d.delivered_at,
-            s.agent_identifier, s.model_identifier
+            s.agent_identifier, s.model_identifier, o.assigned_agent
        FROM deliveries d
        JOIN objectives o ON o.id = d.objective_id AND o.deleted_at IS NULL${CONTEXT_JOIN}
        LEFT JOIN agent_sessions s ON s.id = d.session_id AND s.deleted_at IS NULL
@@ -278,7 +307,7 @@ const QUESTION_CONTEXT_COLUMNS = CONTEXT_COLUMNS.replace(/\bo\./g, 'e.');
  */
 async function loadQuestions(workspaceIds: string[]): Promise<QuestionRow[]> {
   return (await requireDatabaseClient().all(
-    `SELECT ${QUESTION_CONTEXT_COLUMNS},
+    `SELECT ${QUESTION_CONTEXT_COLUMNS}, ${OBJECTIVE_PROVENANCE_COLUMNS},
             e.id AS event_id, e.objective_id, o.display_key AS objective_display_key,
             e.summary, e.created_at, s.agent_identifier
        FROM mission_events e
@@ -335,7 +364,7 @@ function toRunItem(
     state: row.state === 'launching' ? 'launching' : 'executing',
     objectiveTitle: row.objective_title,
     instructionPreview: truncate(row.instruction_text, INSTRUCTION_PREVIEW_CHARS),
-    agentIdentifier: row.session_agent_identifier ?? row.assigned_agent,
+    agentIdentifier: resolveAgentIdentifier(row.session_agent_identifier, row.assigned_agent),
     modelIdentifier: row.session_model_identifier ?? row.model,
     branch: row.branch,
     resourceKey: row.resource_key?.trim() || null,
@@ -365,7 +394,7 @@ function toDeliveryItem(row: DeliveryFeedRow): ActivityFeedDeliveryItemDto {
       followUpNotes: row.follow_up_notes,
       report: deliveryReportFromPayload(row.payload_json, row.summary),
       deliveredAt: row.delivered_at,
-      agentIdentifier: row.agent_identifier,
+      agentIdentifier: resolveAgentIdentifier(row.agent_identifier, row.assigned_agent),
       modelIdentifier: row.model_identifier
     }
   };
@@ -381,7 +410,7 @@ function toQuestionItem(row: QuestionRow): ActivityFeedQuestionItemDto {
     objectiveDisplayId: objectiveDisplayId(row.mission_display_id, row.objective_display_key),
     eventId: row.event_id,
     question: truncate(row.summary, EVENT_SUMMARY_CHARS * 2),
-    agentIdentifier: row.agent_identifier,
+    agentIdentifier: resolveAgentIdentifier(row.agent_identifier),
     askedAt: row.created_at
   };
 }

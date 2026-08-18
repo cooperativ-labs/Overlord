@@ -16,7 +16,71 @@ export type ObjectiveLifecycleObjective = {
   autoAdvance?: boolean;
   assignedAgent?: string | null;
   createdAt?: string;
+  /** Logical project resource; null/blank inherits the mission's primary resource. */
+  resourceKey?: string | null;
 };
+
+export type ObjectiveLifecycleOptions = {
+  /** When true, multiple active objectives are allowed if their resource keys differ. */
+  allowParallelObjectives?: boolean;
+  /**
+   * Project primary `resource_key`. Used to compare a null/blank objective key
+   * against an explicit sibling key. Defaults to `'primary'`.
+   */
+  primaryResourceKey?: string;
+};
+
+export const DEFAULT_PRIMARY_RESOURCE_KEY = 'primary';
+
+/**
+ * Canonical checkout identity for sibling-lock comparison. Null/blank inherits
+ * the project's primary resource.
+ */
+export function canonicalObjectiveResourceKey(
+  resourceKey: string | null | undefined,
+  primaryResourceKey: string = DEFAULT_PRIMARY_RESOURCE_KEY
+): string {
+  const trimmed = resourceKey?.trim();
+  return trimmed && trimmed.length > 0 ? trimmed : primaryResourceKey;
+}
+
+export function objectiveResourcesConflict({
+  left,
+  right,
+  primaryResourceKey = DEFAULT_PRIMARY_RESOURCE_KEY
+}: {
+  left: string | null | undefined;
+  right: string | null | undefined;
+  primaryResourceKey?: string;
+}): boolean {
+  return (
+    canonicalObjectiveResourceKey(left, primaryResourceKey) ===
+    canonicalObjectiveResourceKey(right, primaryResourceKey)
+  );
+}
+
+/**
+ * Whether an already-active sibling should block launching this candidate.
+ * Flag off → always block. Flag on → block only when the checkouts match.
+ */
+export function siblingBlocksParallelLaunch({
+  allowParallelObjectives,
+  candidateResourceKey,
+  siblingResourceKey,
+  primaryResourceKey = DEFAULT_PRIMARY_RESOURCE_KEY
+}: {
+  allowParallelObjectives: boolean;
+  candidateResourceKey: string | null | undefined;
+  siblingResourceKey: string | null | undefined;
+  primaryResourceKey?: string;
+}): boolean {
+  if (!allowParallelObjectives) return true;
+  return objectiveResourcesConflict({
+    left: candidateResourceKey,
+    right: siblingResourceKey,
+    primaryResourceKey
+  });
+}
 
 export type ObjectiveLifecycleViolation = {
   code:
@@ -46,6 +110,8 @@ export type ObjectiveLifecycleView<TObjective extends ObjectiveLifecycleObjectiv
   editableObjectives: TObjective[];
   futureObjectives: TObjective[];
   activeObjective: TObjective | null;
+  /** Every `executing` / `pending_delivery` objective, position order. */
+  activeObjectives: TObjective[];
   nextUpObjective: TObjective | null;
   hasNonExecuted: boolean;
   violations: ObjectiveLifecycleViolation[];
@@ -72,6 +138,13 @@ export const FUTURE_OBJECTIVE_STATES = [
 ] as const satisfies readonly ObjectiveLifecycleState[];
 
 export const ACTIVE_OBJECTIVE_STATES = [
+  'executing',
+  'pending_delivery'
+] as const satisfies readonly ObjectiveLifecycleState[];
+
+/** States that occupy the sibling-execution lock (includes pre-attach launching). */
+export const PARALLEL_BLOCKING_OBJECTIVE_STATES = [
+  'launching',
   'executing',
   'pending_delivery'
 ] as const satisfies readonly ObjectiveLifecycleState[];
@@ -179,10 +252,13 @@ export function sortObjectivesByLifecycleOrder<TObjective extends ObjectiveLifec
 }
 
 export function validateObjectiveLifecycle(
-  objectives: readonly ObjectiveLifecycleObjective[]
+  objectives: readonly ObjectiveLifecycleObjective[],
+  options: ObjectiveLifecycleOptions = {}
 ): ObjectiveLifecycleViolation[] {
   const ordered = sortObjectivesByLifecycleOrder(objectives);
   const violations: ObjectiveLifecycleViolation[] = [];
+  const primaryResourceKey = options.primaryResourceKey ?? DEFAULT_PRIMARY_RESOURCE_KEY;
+  const allowParallel = options.allowParallelObjectives === true;
 
   const drafts = ordered.filter(o => o.state === 'draft');
   if (drafts.length > 1) {
@@ -194,11 +270,27 @@ export function validateObjectiveLifecycle(
   }
 
   const active = ordered.filter(isActiveObjective);
-  if (active.length > 1) {
+  const conflictingActive = allowParallel
+    ? active.filter((candidate, index) =>
+        active.some(
+          (other, otherIndex) =>
+            otherIndex !== index &&
+            objectiveResourcesConflict({
+              left: candidate.resourceKey,
+              right: other.resourceKey,
+              primaryResourceKey
+            })
+        )
+      )
+    : active;
+  const uniqueConflicting = [...new Map(conflictingActive.map(item => [item.id, item])).values()];
+  if (uniqueConflicting.length > 1) {
     violations.push({
       code: 'multiple_active_objectives',
-      objectiveIds: active.map(o => o.id),
-      message: 'A mission may have at most one executing or pending-delivery objective.'
+      objectiveIds: uniqueConflicting.map(o => o.id),
+      message: allowParallel
+        ? 'A mission may not run two executing or pending-delivery objectives on the same resource.'
+        : 'A mission may have at most one executing or pending-delivery objective.'
     });
   }
 
@@ -231,7 +323,8 @@ export function validateObjectiveLifecycle(
 }
 
 export function deriveObjectiveLifecycleView<TObjective extends ObjectiveLifecycleObjective>(
-  objectives: readonly TObjective[]
+  objectives: readonly TObjective[],
+  options: ObjectiveLifecycleOptions = {}
 ): ObjectiveLifecycleView<TObjective> {
   const orderedObjectives = sortObjectivesByLifecycleOrder(objectives);
   const executedObjectives = orderedObjectives.filter(
@@ -241,7 +334,8 @@ export function deriveObjectiveLifecycleView<TObjective extends ObjectiveLifecyc
   );
   const editableObjectives = orderedObjectives.filter(isEditableNextUpObjective);
   const futureObjectives = orderedObjectives.filter(isFutureObjective);
-  const activeObjective = orderedObjectives.find(isActiveObjective) ?? null;
+  const activeObjectives = orderedObjectives.filter(isActiveObjective);
+  const activeObjective = activeObjectives[0] ?? null;
   const nextUpObjective = orderedObjectives.find(isEditableNextUpObjective) ?? null;
 
   return {
@@ -250,9 +344,10 @@ export function deriveObjectiveLifecycleView<TObjective extends ObjectiveLifecyc
     editableObjectives,
     futureObjectives,
     activeObjective,
+    activeObjectives,
     nextUpObjective,
     hasNonExecuted: editableObjectives.length > 0 || futureObjectives.length > 0,
-    violations: validateObjectiveLifecycle(orderedObjectives)
+    violations: validateObjectiveLifecycle(orderedObjectives, options)
   };
 }
 

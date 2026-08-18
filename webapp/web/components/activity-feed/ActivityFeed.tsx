@@ -177,60 +177,63 @@ export function ActivityFeed({
         </div>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4">
-        {feed.isLoading ? (
-          <div className="flex justify-center py-8">
-            <Spinner />
-          </div>
-        ) : feed.isError ? (
-          <p className="text-sm text-red-400">
-            Could not load activity: {(feed.error as Error)?.message ?? 'unknown error'}
-          </p>
-        ) : visible.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-(--color-border) p-6 text-center">
-            <p className="text-sm font-medium text-(--color-ink)">
-              {items.length === 0
-                ? 'No recent objective activity'
-                : 'Nothing matches these filters'}
+      {/* Scroll the pane; keep the stack unconstrained so overflow-hidden cards do not shrink. */}
+      <div className="min-h-0 flex-1 overflow-y-auto p-4">
+        <div className="flex flex-col gap-3">
+          {feed.isLoading ? (
+            <div className="flex justify-center py-8">
+              <Spinner />
+            </div>
+          ) : feed.isError ? (
+            <p className="text-sm text-red-400">
+              Could not load activity: {(feed.error as Error)?.message ?? 'unknown error'}
             </p>
-            <p className="mt-1 text-xs text-(--color-ink-dim)">
-              {items.length === 0
-                ? 'Launch an objective and it will appear here while it runs.'
-                : 'Turn a filter back on to see deliveries and executing objectives again.'}
-            </p>
-          </div>
-        ) : (
-          visible.map(item => {
-            if (isRunItem(item)) {
-              return (
-                <ObjectiveRunCard
-                  key={item.id}
-                  item={item}
-                  nowIso={nowIso}
-                  onOpenMission={onOpenMission}
-                />
-              );
-            }
-            if (isQuestionItem(item)) {
-              return (
-                <BlockingQuestionCard
-                  key={item.id}
-                  item={item}
-                  nowIso={nowIso}
-                  onOpenMission={onOpenMission}
-                />
-              );
-            }
-            if (isDeliveryItem(item)) {
-              return <DeliveryFeedCard key={item.id} item={item} nowIso={nowIso} />;
-            }
-            return null;
-          })
-        )}
+          ) : visible.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-(--color-border) p-6 text-center">
+              <p className="text-sm font-medium text-(--color-ink)">
+                {items.length === 0
+                  ? 'No recent objective activity'
+                  : 'Nothing matches these filters'}
+              </p>
+              <p className="mt-1 text-xs text-(--color-ink-dim)">
+                {items.length === 0
+                  ? 'Launch an objective and it will appear here while it runs.'
+                  : 'Turn a filter back on to see deliveries and executing objectives again.'}
+              </p>
+            </div>
+          ) : (
+            visible.map(item => {
+              if (isRunItem(item)) {
+                return (
+                  <ObjectiveRunCard
+                    key={item.id}
+                    item={item}
+                    nowIso={nowIso}
+                    onOpenMission={onOpenMission}
+                  />
+                );
+              }
+              if (isQuestionItem(item)) {
+                return (
+                  <BlockingQuestionCard
+                    key={item.id}
+                    item={item}
+                    nowIso={nowIso}
+                    onOpenMission={onOpenMission}
+                  />
+                );
+              }
+              if (isDeliveryItem(item)) {
+                return <DeliveryFeedCard key={item.id} item={item} nowIso={nowIso} />;
+              }
+              return null;
+            })
+          )}
 
-        {truncated ? (
-          <p className="pb-2 text-center text-[11px] text-(--color-ink-dim)">{truncated}</p>
-        ) : null}
+          {truncated ? (
+            <p className="pb-2 text-center text-[11px] text-(--color-ink-dim)">{truncated}</p>
+          ) : null}
+        </div>
       </div>
     </section>
   );

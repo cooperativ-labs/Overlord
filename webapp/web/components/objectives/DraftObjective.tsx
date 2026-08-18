@@ -22,6 +22,7 @@ type DraftObjectiveProps = {
   siblings: ObjectiveDto[];
   /** Active execution requests for the mission (from MissionDetailDto). */
   executionRequests: ExecutionRequestDto[];
+  allowParallelObjectives?: boolean;
 };
 
 /**
@@ -29,7 +30,12 @@ type DraftObjectiveProps = {
  * instruction editing, auto-advance toggle, agent/model chooser, and the
  * split run button (or Promote for `future` objectives).
  */
-export function DraftObjective({ objective, siblings, executionRequests }: DraftObjectiveProps) {
+export function DraftObjective({
+  objective,
+  siblings,
+  executionRequests,
+  allowParallelObjectives = false
+}: DraftObjectiveProps) {
   const update = useUpdateObjective();
   const remove = useDeleteObjective();
   const { mentionPaths, projectMentionOptions, missionMentionOptions } =
@@ -146,6 +152,7 @@ export function DraftObjective({ objective, siblings, executionRequests }: Draft
             objective={objective}
             siblings={siblings}
             executionRequests={executionRequests}
+            allowParallelObjectives={allowParallelObjectives}
           />
         </ObjectiveAttachmentUploadTrigger>
       </div>

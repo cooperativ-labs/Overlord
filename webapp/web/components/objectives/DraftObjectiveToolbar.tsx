@@ -1,3 +1,4 @@
+import { siblingBlocksParallelLaunch } from '@overlord/automations/objective-manager';
 import { ArrowUpToLine, Loader2 } from 'lucide-react';
 
 import type {
@@ -27,12 +28,15 @@ type DraftObjectiveToolbarProps = {
   siblings: ObjectiveDto[];
   /** Active execution requests for the mission (from MissionDetailDto). */
   executionRequests: ExecutionRequestDto[];
+  /** Mission-level opt-in for cross-resource parallel execution. */
+  allowParallelObjectives?: boolean;
 };
 
 export function DraftObjectiveToolbar({
   objective,
   siblings,
-  executionRequests
+  executionRequests,
+  allowParallelObjectives = false
 }: DraftObjectiveToolbarProps) {
   const update = useUpdateObjective();
   const resourcesQ = useProjectResources(objective.projectId);
@@ -43,6 +47,8 @@ export function DraftObjectiveToolbar({
   const isLaunching = objective.state === 'launching';
   const isSubmitted = objective.state === 'submitted';
   const isLaunchable = objective.state === 'draft' || isSubmitted || isLaunching;
+  const primaryResourceKey =
+    resourcesQ.data?.find(resource => resource.isPrimary)?.resourceKey ?? 'primary';
   const activeSiblingObjective =
     siblings.find(o => o.id !== objective.id && ACTIVE_SIBLING_STATES.includes(o.state)) ?? null;
   const activeSiblingRequest =
@@ -56,7 +62,15 @@ export function DraftObjectiveToolbar({
     activeSiblingObjective ??
     siblings.find(o => o.id === activeSiblingRequest?.objectiveId) ??
     null;
-  const hasActiveSibling = Boolean(resolvedActiveSibling);
+  const hasBlockingSibling = Boolean(
+    resolvedActiveSibling &&
+    siblingBlocksParallelLaunch({
+      allowParallelObjectives,
+      candidateResourceKey: objective.resourceKey,
+      siblingResourceKey: resolvedActiveSibling.resourceKey,
+      primaryResourceKey
+    })
+  );
   const activeSiblingId = resolvedActiveSibling?.id ?? null;
   const activeRequest = executionRequests.find(r => r.objectiveId === objective.id) ?? null;
 
@@ -107,7 +121,7 @@ export function DraftObjectiveToolbar({
           objective={objective}
           selection={selection}
           selectionLoaded={loaded}
-          hasActiveSibling={hasActiveSibling}
+          hasActiveSibling={hasBlockingSibling}
           activeSiblingId={activeSiblingId}
           activeRequest={activeRequest}
           size="sm"

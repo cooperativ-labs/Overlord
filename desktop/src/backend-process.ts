@@ -15,6 +15,10 @@
  *   exited, escalating to a force kill if it ignores the graceful signal. Every
  *   backend-profile transition and app shutdown awaits this, so a Remote
  *   profile can never inherit a still-running Local backend.
+ * - **Escalation always fires.** The grace and force-kill timers hold the event
+ *   loop open for the duration of a reap, so a child that ignores the graceful
+ *   signal cannot leave `stop()` pending against an otherwise-idle loop. See
+ *   `raceTimeout` for why the timers are not unref'd.
  */
 
 export interface SupervisedChild {
@@ -123,15 +127,34 @@ export function createProcessSupervisor<TChild extends SupervisedChild>({
   };
 }
 
+/**
+ * Wait for `promise`, giving up after `ms`.
+ *
+ * The timer is deliberately **refed**. An unref'd timer does not hold the event
+ * loop open, so when a child ignores the graceful signal and nothing else is
+ * pending (the common shape at app quit), Node can judge the loop idle and tear
+ * down before the escalation timer ever fires — `reap()` then stalls forever and
+ * `stop()` never resolves. Since `before-quit` awaits `stop()`, that turns a
+ * stuck backend into a hung quit.
+ *
+ * Keeping the timer refed is bounded, not open-ended: it is cleared the moment
+ * the race settles, and the only two callers pass `graceMs` and `forceMs`, so an
+ * active reap can hold the loop open for at most `graceMs + forceMs` before
+ * `reap()` returns regardless of whether the child died.
+ */
 async function raceTimeout(promise: Promise<void>, ms: number): Promise<boolean> {
   let timer: NodeJS.Timeout | undefined;
   const timeout = new Promise<'timeout'>(resolve => {
     timer = setTimeout(() => resolve('timeout'), ms);
-    timer.unref?.();
   });
-  const result = await Promise.race([promise.then(() => 'exited' as const), timeout]);
-  if (timer) clearTimeout(timer);
-  return result === 'exited';
+  try {
+    const result = await Promise.race([promise.then(() => 'exited' as const), timeout]);
+    return result === 'exited';
+  } finally {
+    // Always release the handle, including on an unexpected rejection, so an
+    // idle supervisor never keeps the process alive.
+    if (timer) clearTimeout(timer);
+  }
 }
 
 function describe(error: unknown): string {

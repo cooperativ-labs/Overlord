@@ -12,7 +12,6 @@ import {
 import { useEffect, useState } from 'react';
 
 import { AgentLaunchFooter } from '@/components/objectives/AgentLaunchFooter';
-import { useProjectRepositoryContext } from '@/components/projects/ProjectRepositoryContext.tsx';
 import {
   Accordion,
   AccordionContent,
@@ -58,6 +57,7 @@ import {
   useDeleteProjectResourceSource,
   useLaunchSettings,
   useProject,
+  useProjectExecutionTarget,
   useProjectResources,
   useUpdateProject,
   useUpdateProjectExecutionTarget,
@@ -1080,7 +1080,12 @@ function AddResourceDialog({
 }
 
 export function ResourcesPage({ open, projectId }: ResourcesPageProps) {
-  const { eligibleTargets, selectedExecutionTargetId } = useProjectRepositoryContext();
+  // Resolve the execution target from this page's own project rather than the board-scoped
+  // ProjectRepositoryProvider: project settings can be opened from the sidebar for any project,
+  // including while no board (and therefore no provider) is mounted.
+  const executionTargetQ = useProjectExecutionTarget(projectId);
+  const eligibleTargets = executionTargetQ.data?.eligibleTargets ?? [];
+  const selectedExecutionTargetId = executionTargetQ.data?.selectedExecutionTargetId ?? null;
   const updateExecutionTarget = useUpdateProjectExecutionTarget(projectId);
   const resourcesQ = useProjectResources(projectId);
   const launchSettingsQ = useLaunchSettings();

@@ -11,10 +11,29 @@ import { useRealtime } from '../../lib/realtime.tsx';
 
 let browserPermissionRequest: Promise<NotificationPermission> | null = null;
 
+/**
+ * One `Audio` element per distinct sound, reused for the life of the document.
+ *
+ * Constructing a fresh element per notification left every one of them — and
+ * its decoded audio buffer — reachable from the media element list for as long
+ * as the renderer lived, so a long-running desktop session accumulated one
+ * permanently retained decoder per notification it had ever played. The catalog
+ * holds a handful of sounds, so caching by URL bounds this at that handful.
+ */
+const notificationSounds = new Map<string, HTMLAudioElement>();
+
 function playNotificationSound(soundUrl: string): void {
   if (typeof Audio === 'undefined') return;
   try {
-    void new Audio(soundUrl).play().catch(() => {});
+    let audio = notificationSounds.get(soundUrl);
+    if (!audio) {
+      audio = new Audio(soundUrl);
+      notificationSounds.set(soundUrl, audio);
+    }
+    // Rewind so two notifications close together both make a sound instead of
+    // the second one being a no-op on an element that is already at its end.
+    audio.currentTime = 0;
+    void audio.play().catch(() => {});
   } catch {
     // Audio is optional in restricted browser contexts.
   }

@@ -8,6 +8,7 @@ import {
   type ObjectiveLifecycleObjective,
   planEnsureDraftSlot,
   shouldDiscardEmptiedObjective,
+  siblingBlocksParallelLaunch,
   validateObjectiveLifecycle
 } from './index.js';
 
@@ -196,5 +197,73 @@ describe('objective lifecycle rules', () => {
     assert.deepEqual(output.editableObjectiveIds, ['next']);
     assert.deepEqual(output.futureObjectiveIds, ['future']);
     assert.equal(output.autoAdvanceDecision?.action, 'await_approval');
+  });
+
+  it('allows two active objectives on different resources when parallel is opted in', () => {
+    const violations = validateObjectiveLifecycle(
+      [
+        objective({
+          id: 'a',
+          position: 0,
+          state: 'executing',
+          resourceKey: 'primary'
+        }),
+        objective({
+          id: 'b',
+          position: 1,
+          state: 'executing',
+          resourceKey: 'docs'
+        })
+      ],
+      { allowParallelObjectives: true, primaryResourceKey: 'primary' }
+    );
+    assert.equal(
+      violations.some(violation => violation.code === 'multiple_active_objectives'),
+      false
+    );
+  });
+
+  it('still reports multiple_active_objectives for same-resource pairs when parallel is on', () => {
+    const violations = validateObjectiveLifecycle(
+      [
+        objective({ id: 'a', position: 0, state: 'executing', resourceKey: null }),
+        objective({ id: 'b', position: 1, state: 'pending_delivery', resourceKey: 'primary' })
+      ],
+      { allowParallelObjectives: true, primaryResourceKey: 'primary' }
+    );
+    assert.deepEqual(
+      violations
+        .filter(violation => violation.code === 'multiple_active_objectives')
+        .map(v => v.code),
+      ['multiple_active_objectives']
+    );
+  });
+
+  it('blocks parallel launch on the same effective resource and allows different ones', () => {
+    assert.equal(
+      siblingBlocksParallelLaunch({
+        allowParallelObjectives: false,
+        candidateResourceKey: 'docs',
+        siblingResourceKey: 'primary'
+      }),
+      true
+    );
+    assert.equal(
+      siblingBlocksParallelLaunch({
+        allowParallelObjectives: true,
+        candidateResourceKey: 'docs',
+        siblingResourceKey: 'primary'
+      }),
+      false
+    );
+    assert.equal(
+      siblingBlocksParallelLaunch({
+        allowParallelObjectives: true,
+        candidateResourceKey: null,
+        siblingResourceKey: 'overlord',
+        primaryResourceKey: 'overlord'
+      }),
+      true
+    );
   });
 });

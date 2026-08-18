@@ -565,6 +565,7 @@ interface MissionRow {
   active_branch: string | null;
   branch_override: string | null;
   worktree_preference: string | null;
+  allow_parallel_objectives?: unknown;
   objective_count: number;
   completed_objective_count: number;
   has_executing_objective: number;
@@ -857,6 +858,7 @@ function toMissionDto(r: MissionRow, tags: ProjectTagDto[] = []): MissionDto {
     hasPendingObjectiveWithInstructions: r.has_pending_objective_with_instructions === 1,
     hasUnseenBlockingQuestion: r.has_unseen_blocking_question === 1,
     hasUnseenReturnedToExecute: r.has_unseen_returned_to_execute === 1,
+    allowParallelObjectives: isTruthyFlag(r.allow_parallel_objectives),
     draftObjectiveResourceKey: r.draft_objective_resource_key?.trim() || null,
     tags,
     createdByKind: toCreatedByKind(r.created_by_kind),
@@ -3667,7 +3669,7 @@ const selectMissionsSql = `
          t.notes_text,
          t.schedule_id, t.due_datetime,
          t.created_at, t.updated_at, t.revision, t.active_branch, t.branch_override,
-         t.worktree_preference,
+         t.worktree_preference, t.allow_parallel_objectives,
          t.created_by_kind, t.created_by_agent, t.created_by_workspace_user_id,
          t.created_by_session_id,
          (SELECT COUNT(*) FROM objectives o
@@ -5314,6 +5316,14 @@ async function patchMissionFieldsTx(id: string, body: UpdateMissionBody): Promis
       setParams.push(preference);
       changed.push('worktree_preference');
     }
+    if (body.allowParallelObjectives !== undefined) {
+      if (typeof body.allowParallelObjectives !== 'boolean') {
+        throw new ApiError(400, 'allowParallelObjectives must be a boolean');
+      }
+      fields.push('allow_parallel_objectives = ?');
+      setParams.push(bindBool(DATABASE_DIALECT, body.allowParallelObjectives));
+      changed.push('allow_parallel_objectives');
+    }
     if (body.resetActiveBranch === true) {
       if (!existing.active_branch?.trim()) {
         throw new ApiError(400, 'Mission has no prepared branch to reset.');
@@ -6057,10 +6067,10 @@ async function createScheduledDuplicateIfNeeded(
        (id, workspace_id, project_id, display_id, sequence_number, title,
         status_id, status_type, board_position, priority, assigned_workspace_user_id,
         notes_text, execution_target_intent_json,
-        metadata_json, schedule_id, due_datetime,
+        metadata_json, schedule_id, due_datetime, allow_parallel_objectives,
         created_by_kind, created_by_agent, created_by_session_id,
         created_at, updated_at, revision)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}', '{}', ?, ?, 'automation', NULL, NULL, ?, ?, 1)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}', '{}', ?, ?, ?, 'automation', NULL, NULL, ?, ?, 1)`,
     [
       newMissionId,
       mission.workspace_id,
@@ -6076,6 +6086,7 @@ async function createScheduledDuplicateIfNeeded(
       mission.notes_text,
       mission.schedule_id,
       nextDueDatetime,
+      bindBool(DATABASE_DIALECT, isTruthyFlag(mission.allow_parallel_objectives)),
       now,
       now
     ]

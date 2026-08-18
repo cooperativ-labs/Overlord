@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
+import path from 'node:path';
 import { describe, it } from 'node:test';
+import { pathToFileURL } from 'node:url';
 
 import { createProcessSupervisor, type SupervisedChild } from './backend-process.js';
 
@@ -144,5 +147,69 @@ describe('process supervisor', () => {
 
     assert.equal(child.exited, true);
     assert.equal(table.live().length, 0);
+  });
+});
+
+/**
+ * The escalation path must survive an otherwise-idle event loop.
+ *
+ * Inside the test runner there is always other work pending, so an unref'd
+ * escalation timer still fires and the bug hides. This runs the supervisor in a
+ * clean child process whose *only* pending handle is that timer — exactly the
+ * shape of Electron's main process at quit when the backend ignores SIGTERM. If
+ * the timer does not hold the loop open, the child exits before `stop()`
+ * resolves and prints nothing.
+ */
+describe('process supervisor escalation on an idle event loop', () => {
+  it('resolves stop() even when the escalation timer is the only pending work', async () => {
+    const moduleUrl = pathToFileURL(path.join(__dirname, 'backend-process.ts')).href;
+    const source = `
+      import { createProcessSupervisor } from ${JSON.stringify(moduleUrl)};
+
+      // A child that ignores the graceful kill and only dies when force-killed.
+      // It schedules no timers of its own, so the supervisor's escalation timer
+      // is the sole thing that can keep this process alive.
+      let listener = () => {};
+      const child = {
+        pid: 4242,
+        kill: () => true,
+        once: (_event, fn) => { listener = fn; }
+      };
+
+      const supervisor = createProcessSupervisor({
+        fork: () => child,
+        forceKill: () => listener(null),
+        graceMs: 20,
+        forceMs: 50
+      });
+
+      supervisor.start();
+      await supervisor.stop();
+      console.log('stopped:' + supervisor.isRunning());
+    `;
+
+    const result = await new Promise<{ code: number | null; stdout: string; stderr: string }>(
+      resolve => {
+        const child = spawn(
+          process.execPath,
+          ['--import', 'tsx', '--input-type=module', '--eval', source],
+          { stdio: ['ignore', 'pipe', 'pipe'] }
+        );
+        let stdout = '';
+        let stderr = '';
+        child.stdout.setEncoding('utf8');
+        child.stderr.setEncoding('utf8');
+        child.stdout.on('data', chunk => (stdout += chunk));
+        child.stderr.on('data', chunk => (stderr += chunk));
+        child.once('close', code => resolve({ code, stdout, stderr }));
+      }
+    );
+
+    assert.equal(result.code, 0, `child exited non-zero: ${result.stderr}`);
+    assert.match(
+      result.stdout,
+      /stopped:false/,
+      'stop() never resolved: the escalation timer did not hold the event loop open'
+    );
   });
 });

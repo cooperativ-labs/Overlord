@@ -16,6 +16,24 @@ type SqliteErrorLike = {
   message?: string;
 };
 
+type BodyParserErrorLike = {
+  type?: string;
+};
+
+/**
+ * Map Express/body-parser `PayloadTooLargeError` onto the same JSON error
+ * envelope as `ApiError`. Without this, the generic handler returns 500 with
+ * `{ error, detail }` both set to "request entity too large", which the web
+ * client renders as the duplicated "request entity too large — request entity
+ * too large" string on the Latch mission widget.
+ */
+export function apiErrorFromBodyParser(error: unknown): ApiError | null {
+  if (!error || typeof error !== 'object') return null;
+  const { type } = error as BodyParserErrorLike;
+  if (type !== 'entity.too.large') return null;
+  return new ApiError(413, 'Request body is too large.', undefined, 'body_too_large');
+}
+
 /** Map better-sqlite3 constraint failures to actionable API errors. */
 export function apiErrorFromDatabaseError(error: unknown): ApiError | null {
   if (!error || typeof error !== 'object') return null;

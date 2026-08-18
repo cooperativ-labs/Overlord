@@ -9,11 +9,12 @@ import { OriginSparklesIcon } from '@/components/OriginSparklesIcon.tsx';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 import { agentDisplayName } from '@/lib/helpers/agent-icons.ts';
-import { useWorkspaceMembers } from '@/lib/queries.ts';
+import { useUpdateMission, useWorkspaceMembers } from '@/lib/queries.ts';
 
 import type { MissionDetailDto } from '../../shared/contract.ts';
 
@@ -88,6 +89,8 @@ export function MissionPanelHeader({ mission, projectId, onClose }: MissionPanel
 }
 
 function MissionPanelHeaderBar({ mission, projectId, onClose }: MissionPanelHeaderProps) {
+  const update = useUpdateMission(mission.id);
+
   return (
     <div className="relative flex shrink-0 items-center justify-between gap-2 overflow-hidden border-b border-[var(--color-border)] px-4 py-2.5">
       <div className="flex min-w-0 items-center gap-2">
@@ -104,7 +107,7 @@ function MissionPanelHeaderBar({ mission, projectId, onClose }: MissionPanelHead
           >
             <EllipsisVertical className="h-3.5 w-3.5" />
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-52">
+          <DropdownMenuContent align="start" className="w-64">
             <div className="flex items-center justify-between gap-2 px-2 py-1.5 text-sm">
               <span>
                 Mission ID: <strong>{mission.displayId}</strong>
@@ -115,6 +118,20 @@ function MissionPanelHeaderBar({ mission, projectId, onClose }: MissionPanelHead
                 className="inline-flex h-6 w-6 items-center justify-center rounded-sm hover:bg-accent"
               />
             </div>
+            <DropdownMenuCheckboxItem
+              checked={mission.allowParallelObjectives}
+              disabled={update.isPending}
+              onCheckedChange={checked =>
+                update.mutate({ allowParallelObjectives: checked === true })
+              }
+              onSelect={event => event.preventDefault()}
+            >
+              Allow parallel objectives
+            </DropdownMenuCheckboxItem>
+            <p className="px-2 pb-1.5 text-[11px] leading-snug text-muted-foreground">
+              Off by default. When on, Run can start a second objective that uses a different
+              project resource. Same-resource pairs stay serial.
+            </p>
             <div className="flex items-center justify-between gap-2 px-2 py-1.5 text-sm">
               <span>Delete mission</span>
               <DeleteMissionButton

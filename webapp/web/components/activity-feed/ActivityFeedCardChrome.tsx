@@ -1,7 +1,10 @@
 import type { ReactNode } from 'react';
 
-import type { ActivityFeedItemDto } from '../../../shared/contract.ts';
+import type { ActivityFeedItemDto, CreatedByKind } from '../../../shared/contract.ts';
+import { normalizeAgentKey } from '../../lib/helpers/agent-icons.ts';
 import { cn } from '../../lib/utils.ts';
+import { ObjectiveOriginMark } from '../../pages/MissionCardPrimitives.tsx';
+import { AgentIcon } from '../objectives/AgentIcon.tsx';
 
 /** Small colored dot standing in for the project, matching the board's accent color. */
 export function ProjectDot({ color }: { color: string | null }) {
@@ -77,6 +80,45 @@ export function ActivityFeedCardMeta({
       <span aria-hidden="true">·</span>
       <span className="min-w-0 truncate">{item.missionTitle}</span>
       {trailing}
+    </div>
+  );
+}
+
+/**
+ * Connector icon + model id. The protocol sentinel `unknown` is already null
+ * after `normalizeAgentKey`; we never print a display name here — the icon is
+ * the agent identifier, and the model string is the secondary label.
+ */
+export function ActivityFeedAgentLine({
+  agentKey,
+  modelIdentifier
+}: {
+  agentKey: string | null | undefined;
+  modelIdentifier?: string | null;
+}) {
+  const normalized = normalizeAgentKey(agentKey);
+  const model = modelIdentifier?.trim() || null;
+  if (!normalized && !model) return null;
+
+  return (
+    <span className="inline-flex min-w-0 items-center gap-1.5">
+      {normalized ? <AgentIcon agentKey={normalized} size={12} /> : null}
+      {model ? <span className="truncate font-mono">{model}</span> : null}
+    </span>
+  );
+}
+
+/** Top-right sparkle when the underlying objective was agent-authored. */
+export function ActivityFeedOriginCorner({
+  createdByKind,
+  createdByAgent
+}: {
+  createdByKind: CreatedByKind;
+  createdByAgent: string | null;
+}) {
+  return (
+    <div className="pointer-events-auto absolute top-2.5 right-2.5 z-10">
+      <ObjectiveOriginMark createdByKind={createdByKind} createdByAgent={createdByAgent} />
     </div>
   );
 }
