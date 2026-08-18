@@ -632,16 +632,192 @@ var init_migration_ledger = __esm({
   }
 });
 
-// ../database/dist/objective-display-key.js
-function generateObjectiveDisplayKey({ length = OBJECTIVE_DISPLAY_KEY_LENGTH, bytes = import_node_crypto.randomBytes } = {}) {
-  const alphabet = OBJECTIVE_DISPLAY_KEY_ALPHABET;
-  const raw = bytes(length);
-  let key = "";
-  for (let index = 0; index < length; index += 1) {
-    key += alphabet[(raw[index] ?? 0) % alphabet.length];
+// ../packages/contract/dist/agent-launch-flags.js
+function parseAgentLaunchFlagText(text) {
+  const trimmed10 = text.trim();
+  if (!trimmed10)
+    return null;
+  const eqIndex = trimmed10.indexOf("=");
+  if (eqIndex > 0 && trimmed10.startsWith("--")) {
+    const name = trimmed10.slice(0, eqIndex).trim();
+    const value = trimmed10.slice(eqIndex + 1).trim();
+    return name ? { name, value: value.length > 0 ? value : null } : null;
   }
-  return key;
+  const spaceIndex = trimmed10.indexOf(" ");
+  if (spaceIndex > 0 && trimmed10.startsWith("--")) {
+    const name = trimmed10.slice(0, spaceIndex).trim();
+    const value = trimmed10.slice(spaceIndex + 1).trim();
+    return name ? { name, value: value.length > 0 ? value : null } : null;
+  }
+  return { name: trimmed10 };
 }
+function normalizeAgentLaunchFlags(input) {
+  if (!Array.isArray(input))
+    return [];
+  const flags = [];
+  for (const item of input) {
+    if (typeof item === "string") {
+      const parsed = parseAgentLaunchFlagText(item);
+      if (parsed)
+        flags.push(parsed);
+      continue;
+    }
+    if (!item || typeof item !== "object")
+      continue;
+    const record2 = item;
+    if (typeof record2.name !== "string")
+      continue;
+    const name = record2.name.trim();
+    if (!name)
+      continue;
+    const value = typeof record2.value === "string" ? record2.value.trim() || null : null;
+    flags.push({ name, value });
+  }
+  return flags;
+}
+function formatAgentLaunchFlagText(flag) {
+  const name = flag.name.trim();
+  const value = flag.value?.trim();
+  return value ? `${name} ${value}` : name;
+}
+function formatShellWord(value) {
+  if (/^[a-zA-Z0-9_@./:-]+$/.test(value))
+    return value;
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+function formatOvldLaunchCommand({ agent, missionDisplayId, objectiveId = null, model = null, thinking = null, preCommand = "", flags = [] }) {
+  const parts = ["ovld", "launch", formatShellWord(agent.trim())];
+  parts.push("--mission-id", formatShellWord(missionDisplayId.trim()));
+  const objective = objectiveId?.trim();
+  if (objective)
+    parts.push("--objective-id", formatShellWord(objective));
+  const modelId = model?.trim();
+  if (modelId)
+    parts.push("--model", formatShellWord(modelId));
+  const thinkingLevel = thinking?.trim();
+  if (thinkingLevel)
+    parts.push("--thinking", formatShellWord(thinkingLevel));
+  const wrapper = preCommand.trim();
+  if (wrapper)
+    parts.push("--pre-command", formatShellWord(wrapper));
+  for (const flag of flags) {
+    const flagText = formatAgentLaunchFlagText(flag);
+    if (flagText)
+      parts.push("--flag", formatShellWord(flagText));
+  }
+  return parts.join(" ");
+}
+var init_agent_launch_flags = __esm({
+  "../packages/contract/dist/agent-launch-flags.js"() {
+    "use strict";
+  }
+});
+
+// ../packages/contract/dist/launch-variables.js
+var LAUNCH_VARIABLES, LAUNCH_VARIABLE_NAMES;
+var init_launch_variables = __esm({
+  "../packages/contract/dist/launch-variables.js"() {
+    "use strict";
+    LAUNCH_VARIABLES = [
+      {
+        name: "MISSION_ID",
+        description: "Mission display id for the launch (e.g. coo:359).",
+        example: "coo:359",
+        availableAt: ["plan_build", "terminal_env"]
+      },
+      {
+        name: "OVERLORD_MISSION_ID",
+        description: "Same value as MISSION_ID \u2014 preferred Overlord-prefixed form.",
+        example: "coo:359",
+        availableAt: ["plan_build", "terminal_env"]
+      },
+      {
+        name: "OVERLORD_OBJECTIVE_ID",
+        description: "Objective display id for the launch (e.g. coo:359.k7xm). Used to pin protocol attach.",
+        example: "coo:359.k7xm",
+        availableAt: ["plan_build", "terminal_env"]
+      },
+      {
+        name: "OVERLORD_BACKEND_URL",
+        description: "Backend URL the agent CLI/MCP should call for this launch.",
+        example: "http://127.0.0.1:4310",
+        availableAt: ["plan_build", "terminal_env"]
+      },
+      {
+        name: "OVERLORD_EXECUTION_REQUEST_ID",
+        description: "Execution-request id when the launch is runner-driven. Empty/absent for a bare `ovld launch`.",
+        example: "380e8a6a-ccf0-49f4-9761-f1c0ba02c39c",
+        availableAt: ["plan_build", "terminal_env"]
+      },
+      {
+        name: "OVERLORD_WORKING_DIRECTORY",
+        description: "Absolute path the agent terminal cds into \u2014 the resolved execution-target checkout (or worktree).",
+        example: "/Users/you/src/overlord",
+        availableAt: ["plan_build", "terminal_env"]
+      },
+      {
+        name: "OVERLORD_CONTEXT_FILE",
+        description: "Absolute path to the markdown briefing written for this launch under `.overlord/tmp/`.",
+        example: "/Users/you/src/overlord/.overlord/tmp/mission-coo-359.md",
+        availableAt: ["plan_build", "terminal_env"]
+      },
+      {
+        name: "OVERLORD_TMPDIR",
+        description: "Project-scoped scratch directory (`.overlord/tmp/`). Also mirrored as TMPDIR/TMP/TEMP.",
+        example: "/Users/you/src/overlord/.overlord/tmp",
+        availableAt: ["plan_build", "terminal_env"]
+      },
+      {
+        name: "TMPDIR",
+        description: "Same path as OVERLORD_TMPDIR \u2014 standard temp-dir env name.",
+        example: "/Users/you/src/overlord/.overlord/tmp",
+        availableAt: ["plan_build", "terminal_env"]
+      },
+      {
+        name: "TMP",
+        description: "Same path as OVERLORD_TMPDIR \u2014 Windows-style temp-dir alias.",
+        example: "/Users/you/src/overlord/.overlord/tmp",
+        availableAt: ["plan_build", "terminal_env"]
+      },
+      {
+        name: "TEMP",
+        description: "Same path as OVERLORD_TMPDIR \u2014 Windows-style temp-dir alias.",
+        example: "/Users/you/src/overlord/.overlord/tmp",
+        availableAt: ["plan_build", "terminal_env"]
+      },
+      {
+        name: "OVERLORD_PROJECT_RESOURCES",
+        description: "JSON array of every project resource for this execution target (resourceKey, path, state, flags, accessMode). Set only when the project has resources.",
+        example: '[{"resourceKey":"primary","path":"/repo/a","state":"ready","isPrimary":true,"accessMode":"read_write"}]',
+        availableAt: ["plan_build", "terminal_env"],
+        format: "JSON array"
+      },
+      {
+        name: "OVERLORD_PROJECT_RESOURCES_PATHS",
+        description: "Comma-separated absolute paths of connected project resources with explicit `:rw` or `:ro` permission suffixes (entries without a local path are omitted). `read_write` resources emit `:rw`; reference (`read`) resources emit `:ro`.",
+        example: "/repo/a:rw,/repo/b:ro",
+        availableAt: ["plan_build", "terminal_env"],
+        format: "comma-separated paths with :rw/:ro suffix"
+      },
+      {
+        name: "OVERLORD_PROJECT_RESOURCES_PATHS_CSV",
+        description: "Alias of OVERLORD_PROJECT_RESOURCES_PATHS, kept for backward compatibility. Same comma-separated `:rw`/`:ro`-suffixed paths. Useful for env vars that expect a CSV list (e.g. AGENT_POD_EXTRA_ALLOWED_PATHS).",
+        example: "/repo/a:rw,/repo/b:ro",
+        availableAt: ["plan_build", "terminal_env"],
+        format: "comma-separated paths with :rw/:ro suffix"
+      },
+      {
+        name: "OVERLORD_PRIMARY_RESOURCE_PATH",
+        description: "Absolute path of the primary (or else current) project resource when connected locally; empty string otherwise.",
+        example: "/repo/a",
+        availableAt: ["plan_build", "terminal_env"]
+      }
+    ];
+    LAUNCH_VARIABLE_NAMES = LAUNCH_VARIABLES.filter((variable) => variable.availableAt.includes("plan_build")).map((variable) => variable.name);
+  }
+});
+
+// ../packages/contract/dist/objective-ref.js
 function formatObjectiveDisplayId({ missionDisplayId, displayKey }) {
   return `${missionDisplayId}${OBJECTIVE_DISPLAY_ID_SEPARATOR}${displayKey}`;
 }
@@ -676,11 +852,16 @@ function parseObjectiveRef(ref) {
   }
   return { kind: "unknown", ref: trimmed10 };
 }
-var import_node_crypto, OBJECTIVE_DISPLAY_KEY_ALPHABET, OBJECTIVE_DISPLAY_KEY_LENGTH, OBJECTIVE_DISPLAY_ID_SEPARATOR, UUID_RE, KEY_BODY, DISPLAY_ID_RE, MISSION_DISPLAY_ID_RE, WRONG_SEPARATOR_COLON_RE, WRONG_SEPARATOR_PIPE_RE, WRONG_SEPARATOR_HYPHEN_RE, BARE_KEY_RE;
-var init_objective_display_key = __esm({
-  "../database/dist/objective-display-key.js"() {
+function missionDisplayIdFromObjectiveRef(ref) {
+  if (typeof ref !== "string" || ref.trim() === "")
+    return null;
+  const parsed = parseObjectiveRef(ref);
+  return parsed.kind === "display_id" ? parsed.missionDisplayId : null;
+}
+var OBJECTIVE_DISPLAY_KEY_ALPHABET, OBJECTIVE_DISPLAY_KEY_LENGTH, OBJECTIVE_DISPLAY_ID_SEPARATOR, UUID_RE, KEY_BODY, DISPLAY_ID_RE, MISSION_DISPLAY_ID_RE, WRONG_SEPARATOR_COLON_RE, WRONG_SEPARATOR_PIPE_RE, WRONG_SEPARATOR_HYPHEN_RE, BARE_KEY_RE;
+var init_objective_ref = __esm({
+  "../packages/contract/dist/objective-ref.js"() {
     "use strict";
-    import_node_crypto = require("node:crypto");
     OBJECTIVE_DISPLAY_KEY_ALPHABET = "0123456789abcdefghjkmnpqrstvwxyz";
     OBJECTIVE_DISPLAY_KEY_LENGTH = 4;
     OBJECTIVE_DISPLAY_ID_SEPARATOR = ".";
@@ -692,6 +873,44 @@ var init_objective_display_key = __esm({
     WRONG_SEPARATOR_PIPE_RE = new RegExp(`^(.+):(\\d+)\\|(${KEY_BODY})$`, "i");
     WRONG_SEPARATOR_HYPHEN_RE = new RegExp(`^(.+):(\\d+)-(${KEY_BODY})$`, "i");
     BARE_KEY_RE = new RegExp(`^${KEY_BODY}$`, "i");
+  }
+});
+
+// ../packages/contract/dist/resource-paths.js
+var init_resource_paths = __esm({
+  "../packages/contract/dist/resource-paths.js"() {
+    "use strict";
+  }
+});
+
+// ../packages/contract/dist/index.js
+var init_dist = __esm({
+  "../packages/contract/dist/index.js"() {
+    "use strict";
+    init_agent_launch_flags();
+    init_launch_variables();
+    init_objective_ref();
+    init_resource_paths();
+  }
+});
+
+// ../database/dist/objective-display-key.js
+function generateObjectiveDisplayKey({ length = OBJECTIVE_DISPLAY_KEY_LENGTH, bytes = import_node_crypto.randomBytes } = {}) {
+  const alphabet = OBJECTIVE_DISPLAY_KEY_ALPHABET;
+  const raw = bytes(length);
+  let key = "";
+  for (let index = 0; index < length; index += 1) {
+    key += alphabet[(raw[index] ?? 0) % alphabet.length];
+  }
+  return key;
+}
+var import_node_crypto;
+var init_objective_display_key = __esm({
+  "../database/dist/objective-display-key.js"() {
+    "use strict";
+    init_dist();
+    import_node_crypto = require("node:crypto");
+    init_dist();
   }
 });
 
@@ -6623,7 +6842,7 @@ var init_storage_seed = __esm({
 });
 
 // ../database/dist/index.js
-var init_dist = __esm({
+var init_dist2 = __esm({
   "../database/dist/index.js"() {
     "use strict";
     init_adapter();
@@ -23874,7 +24093,7 @@ function insensitiveEndsWith(recordVal, value) {
   return recordVal.toLowerCase().endsWith(value.toLowerCase());
 }
 var memoryAdapter;
-var init_dist2 = __esm({
+var init_dist3 = __esm({
   "../node_modules/@better-auth/memory-adapter/dist/index.mjs"() {
     init_adapter2();
     init_env();
@@ -42999,7 +43218,7 @@ var init_simple_reference_expression_node = __esm({
 });
 
 // ../node_modules/kysely/dist/index.js
-var init_dist3 = __esm({
+var init_dist4 = __esm({
   "../node_modules/kysely/dist/index.js"() {
     init_kysely();
     init_query_creator();
@@ -43225,7 +43444,7 @@ var BunSqliteAdapter, BunSqliteDriver, BunSqliteConnection, ConnectionMutex2, Bu
 var init_bun_sqlite_dialect_DApWON3g = __esm({
   "../node_modules/@better-auth/kysely-adapter/dist/bun-sqlite-dialect-DApWON3g.mjs"() {
     init_kysely_migration_tables_JkVUjPF();
-    init_dist3();
+    init_dist4();
     BunSqliteAdapter = class {
       get supportsCreateIfNotExists() {
         return true;
@@ -43390,7 +43609,7 @@ var NodeSqliteAdapter, NodeSqliteDriver, NodeSqliteConnection, ConnectionMutex3,
 var init_node_sqlite_dialect = __esm({
   "../node_modules/@better-auth/kysely-adapter/dist/node-sqlite-dialect.mjs"() {
     init_kysely_migration_tables_JkVUjPF();
-    init_dist3();
+    init_dist4();
     NodeSqliteAdapter = class {
       get supportsCreateIfNotExists() {
         return true;
@@ -43555,7 +43774,7 @@ var D1SqliteAdapter, D1SqliteDriver, D1SqliteConnection, D1SqliteIntrospector, D
 var init_d1_sqlite_dialect_BLC8LXE6 = __esm({
   "../node_modules/@better-auth/kysely-adapter/dist/d1-sqlite-dialect-BLC8LXE6.mjs"() {
     init_kysely_migration_tables_JkVUjPF();
-    init_dist3();
+    init_dist4();
     D1SqliteAdapter = class extends SqliteAdapter {
     };
     D1SqliteDriver = class {
@@ -43716,9 +43935,9 @@ function insensitiveNe(columnRef, value) {
   };
 }
 var createKyselyAdapter, kyselyAdapter;
-var init_dist4 = __esm({
+var init_dist5 = __esm({
   "../node_modules/@better-auth/kysely-adapter/dist/index.mjs"() {
-    init_dist3();
+    init_dist4();
     init_adapter2();
     init_env();
     init_string();
@@ -44192,7 +44411,7 @@ __export(kysely_adapter_exports, {
 });
 var init_kysely_adapter = __esm({
   "../node_modules/better-auth/dist/adapters/kysely-adapter/index.mjs"() {
-    init_dist4();
+    init_dist5();
   }
 });
 
@@ -69184,7 +69403,7 @@ var init_stringify = __esm({
 });
 
 // ../node_modules/smol-toml/dist/index.js
-var init_dist5 = __esm({
+var init_dist6 = __esm({
   "../node_modules/smol-toml/dist/index.js"() {
     init_parse3();
     init_stringify();
@@ -69643,7 +69862,7 @@ var init_config = __esm({
     import_node_fs5 = require("node:fs");
     import_node_os3 = __toESM(require("node:os"), 1);
     import_node_path9 = __toESM(require("node:path"), 1);
-    init_dist5();
+    init_dist6();
     init_agent_catalog();
     init_env2();
     init_errors3();
@@ -69982,7 +70201,7 @@ async function loadObjectiveByKey({
 var init_context = __esm({
   "../packages/core/service/context.ts"() {
     "use strict";
-    init_dist();
+    init_dist2();
     init_errors4();
   }
 });
@@ -73807,7 +74026,7 @@ var import_node_fs14, import_node_path14, PRIMARY_RESOURCE_REPAIR_HINT;
 var init_projects = __esm({
   "../packages/core/service/projects.ts"() {
     "use strict";
-    init_dist();
+    init_dist2();
     import_node_fs14 = require("node:fs");
     import_node_path14 = __toESM(require("node:path"), 1);
     init_local_target();
@@ -74186,7 +74405,7 @@ var WEBHOOK_EVENT_TYPES, WEBHOOK_OUTBOX_TOPIC, WEBHOOK_API_VERSION, FULL_ENVELOP
 var init_webhook_events = __esm({
   "../packages/core/service/webhook-events.ts"() {
     "use strict";
-    init_dist();
+    init_dist2();
     init_delivery_report();
     init_util3();
     WEBHOOK_EVENT_TYPES = [
@@ -74198,208 +74417,6 @@ var init_webhook_events = __esm({
     WEBHOOK_OUTBOX_TOPIC = "webhook.deliver.v1";
     WEBHOOK_API_VERSION = "2026-07-01";
     FULL_ENVELOPE_ARRAY_LIMIT = 50;
-  }
-});
-
-// ../packages/contract/dist/agent-launch-flags.js
-function parseAgentLaunchFlagText(text) {
-  const trimmed10 = text.trim();
-  if (!trimmed10)
-    return null;
-  const eqIndex = trimmed10.indexOf("=");
-  if (eqIndex > 0 && trimmed10.startsWith("--")) {
-    const name = trimmed10.slice(0, eqIndex).trim();
-    const value = trimmed10.slice(eqIndex + 1).trim();
-    return name ? { name, value: value.length > 0 ? value : null } : null;
-  }
-  const spaceIndex = trimmed10.indexOf(" ");
-  if (spaceIndex > 0 && trimmed10.startsWith("--")) {
-    const name = trimmed10.slice(0, spaceIndex).trim();
-    const value = trimmed10.slice(spaceIndex + 1).trim();
-    return name ? { name, value: value.length > 0 ? value : null } : null;
-  }
-  return { name: trimmed10 };
-}
-function normalizeAgentLaunchFlags(input) {
-  if (!Array.isArray(input))
-    return [];
-  const flags = [];
-  for (const item of input) {
-    if (typeof item === "string") {
-      const parsed = parseAgentLaunchFlagText(item);
-      if (parsed)
-        flags.push(parsed);
-      continue;
-    }
-    if (!item || typeof item !== "object")
-      continue;
-    const record2 = item;
-    if (typeof record2.name !== "string")
-      continue;
-    const name = record2.name.trim();
-    if (!name)
-      continue;
-    const value = typeof record2.value === "string" ? record2.value.trim() || null : null;
-    flags.push({ name, value });
-  }
-  return flags;
-}
-function formatAgentLaunchFlagText(flag) {
-  const name = flag.name.trim();
-  const value = flag.value?.trim();
-  return value ? `${name} ${value}` : name;
-}
-function formatShellWord(value) {
-  if (/^[a-zA-Z0-9_@./:-]+$/.test(value))
-    return value;
-  return `'${value.replace(/'/g, `'\\''`)}'`;
-}
-function formatOvldLaunchCommand({ agent, missionDisplayId, objectiveId = null, model = null, thinking = null, preCommand = "", flags = [] }) {
-  const parts = ["ovld", "launch", formatShellWord(agent.trim())];
-  parts.push("--mission-id", formatShellWord(missionDisplayId.trim()));
-  const objective = objectiveId?.trim();
-  if (objective)
-    parts.push("--objective-id", formatShellWord(objective));
-  const modelId = model?.trim();
-  if (modelId)
-    parts.push("--model", formatShellWord(modelId));
-  const thinkingLevel = thinking?.trim();
-  if (thinkingLevel)
-    parts.push("--thinking", formatShellWord(thinkingLevel));
-  const wrapper = preCommand.trim();
-  if (wrapper)
-    parts.push("--pre-command", formatShellWord(wrapper));
-  for (const flag of flags) {
-    const flagText = formatAgentLaunchFlagText(flag);
-    if (flagText)
-      parts.push("--flag", formatShellWord(flagText));
-  }
-  return parts.join(" ");
-}
-var init_agent_launch_flags = __esm({
-  "../packages/contract/dist/agent-launch-flags.js"() {
-    "use strict";
-  }
-});
-
-// ../packages/contract/dist/launch-variables.js
-var LAUNCH_VARIABLES, LAUNCH_VARIABLE_NAMES;
-var init_launch_variables = __esm({
-  "../packages/contract/dist/launch-variables.js"() {
-    "use strict";
-    LAUNCH_VARIABLES = [
-      {
-        name: "MISSION_ID",
-        description: "Mission display id for the launch (e.g. coo:359).",
-        example: "coo:359",
-        availableAt: ["plan_build", "terminal_env"]
-      },
-      {
-        name: "OVERLORD_MISSION_ID",
-        description: "Same value as MISSION_ID \u2014 preferred Overlord-prefixed form.",
-        example: "coo:359",
-        availableAt: ["plan_build", "terminal_env"]
-      },
-      {
-        name: "OVERLORD_OBJECTIVE_ID",
-        description: "Objective display id for the launch (e.g. coo:359.k7xm). Used to pin protocol attach.",
-        example: "coo:359.k7xm",
-        availableAt: ["plan_build", "terminal_env"]
-      },
-      {
-        name: "OVERLORD_BACKEND_URL",
-        description: "Backend URL the agent CLI/MCP should call for this launch.",
-        example: "http://127.0.0.1:4310",
-        availableAt: ["plan_build", "terminal_env"]
-      },
-      {
-        name: "OVERLORD_EXECUTION_REQUEST_ID",
-        description: "Execution-request id when the launch is runner-driven. Empty/absent for a bare `ovld launch`.",
-        example: "380e8a6a-ccf0-49f4-9761-f1c0ba02c39c",
-        availableAt: ["plan_build", "terminal_env"]
-      },
-      {
-        name: "OVERLORD_WORKING_DIRECTORY",
-        description: "Absolute path the agent terminal cds into \u2014 the resolved execution-target checkout (or worktree).",
-        example: "/Users/you/src/overlord",
-        availableAt: ["plan_build", "terminal_env"]
-      },
-      {
-        name: "OVERLORD_CONTEXT_FILE",
-        description: "Absolute path to the markdown briefing written for this launch under `.overlord/tmp/`.",
-        example: "/Users/you/src/overlord/.overlord/tmp/mission-coo-359.md",
-        availableAt: ["plan_build", "terminal_env"]
-      },
-      {
-        name: "OVERLORD_TMPDIR",
-        description: "Project-scoped scratch directory (`.overlord/tmp/`). Also mirrored as TMPDIR/TMP/TEMP.",
-        example: "/Users/you/src/overlord/.overlord/tmp",
-        availableAt: ["plan_build", "terminal_env"]
-      },
-      {
-        name: "TMPDIR",
-        description: "Same path as OVERLORD_TMPDIR \u2014 standard temp-dir env name.",
-        example: "/Users/you/src/overlord/.overlord/tmp",
-        availableAt: ["plan_build", "terminal_env"]
-      },
-      {
-        name: "TMP",
-        description: "Same path as OVERLORD_TMPDIR \u2014 Windows-style temp-dir alias.",
-        example: "/Users/you/src/overlord/.overlord/tmp",
-        availableAt: ["plan_build", "terminal_env"]
-      },
-      {
-        name: "TEMP",
-        description: "Same path as OVERLORD_TMPDIR \u2014 Windows-style temp-dir alias.",
-        example: "/Users/you/src/overlord/.overlord/tmp",
-        availableAt: ["plan_build", "terminal_env"]
-      },
-      {
-        name: "OVERLORD_PROJECT_RESOURCES",
-        description: "JSON array of every project resource for this execution target (resourceKey, path, state, flags, accessMode). Set only when the project has resources.",
-        example: '[{"resourceKey":"primary","path":"/repo/a","state":"ready","isPrimary":true,"accessMode":"read_write"}]',
-        availableAt: ["plan_build", "terminal_env"],
-        format: "JSON array"
-      },
-      {
-        name: "OVERLORD_PROJECT_RESOURCES_PATHS",
-        description: "Comma-separated absolute paths of connected project resources with explicit `:rw` or `:ro` permission suffixes (entries without a local path are omitted). `read_write` resources emit `:rw`; reference (`read`) resources emit `:ro`.",
-        example: "/repo/a:rw,/repo/b:ro",
-        availableAt: ["plan_build", "terminal_env"],
-        format: "comma-separated paths with :rw/:ro suffix"
-      },
-      {
-        name: "OVERLORD_PROJECT_RESOURCES_PATHS_CSV",
-        description: "Alias of OVERLORD_PROJECT_RESOURCES_PATHS, kept for backward compatibility. Same comma-separated `:rw`/`:ro`-suffixed paths. Useful for env vars that expect a CSV list (e.g. AGENT_POD_EXTRA_ALLOWED_PATHS).",
-        example: "/repo/a:rw,/repo/b:ro",
-        availableAt: ["plan_build", "terminal_env"],
-        format: "comma-separated paths with :rw/:ro suffix"
-      },
-      {
-        name: "OVERLORD_PRIMARY_RESOURCE_PATH",
-        description: "Absolute path of the primary (or else current) project resource when connected locally; empty string otherwise.",
-        example: "/repo/a",
-        availableAt: ["plan_build", "terminal_env"]
-      }
-    ];
-    LAUNCH_VARIABLE_NAMES = LAUNCH_VARIABLES.filter((variable) => variable.availableAt.includes("plan_build")).map((variable) => variable.name);
-  }
-});
-
-// ../packages/contract/dist/resource-paths.js
-var init_resource_paths = __esm({
-  "../packages/contract/dist/resource-paths.js"() {
-    "use strict";
-  }
-});
-
-// ../packages/contract/dist/index.js
-var init_dist6 = __esm({
-  "../packages/contract/dist/index.js"() {
-    "use strict";
-    init_agent_launch_flags();
-    init_launch_variables();
-    init_resource_paths();
   }
 });
 
@@ -75426,8 +75443,8 @@ var PROJECT_EXECUTION_TARGET_PREFERENCE_KEY, TARGET_REACHABLE_STALE_MS, ACTIVE_Q
 var init_project_execution_target = __esm({
   "../packages/core/service/project-execution-target.ts"() {
     "use strict";
-    init_dist6();
     init_dist();
+    init_dist2();
     init_local_target();
     init_change_feed();
     init_devices();
@@ -76025,7 +76042,7 @@ var import_node_async_hooks2, import_node_crypto10, import_node_path15, database
 var init_db = __esm({
   "db.ts"() {
     "use strict";
-    init_dist();
+    init_dist2();
     import_node_async_hooks2 = require("node:async_hooks");
     import_node_crypto10 = require("node:crypto");
     import_node_path15 = __toESM(require("node:path"), 1);
@@ -114072,7 +114089,7 @@ function normalizeEnvFileValue({
 loadRepoEnvForProfile(REPO_ROOT, ENV_PROFILE);
 
 // ../auth/dist/auth/config.js
-init_dist();
+init_dist2();
 
 // ../node_modules/better-auth/dist/utils/wildcard.mjs
 function escapeRegExpChar(char) {
@@ -130178,7 +130195,7 @@ async function getBaseAdapter(options, handleDirectDatabase) {
       acc[key] = [];
       return acc;
     }, {});
-    const { memoryAdapter: memoryAdapter2 } = await Promise.resolve().then(() => (init_dist2(), dist_exports));
+    const { memoryAdapter: memoryAdapter2 } = await Promise.resolve().then(() => (init_dist3(), dist_exports));
     adapter2 = memoryAdapter2(memoryDB)(options);
   } else if (typeof options.database === "function") adapter2 = options.database(options);
   else adapter2 = await handleDirectDatabase(options);
@@ -130243,9 +130260,9 @@ function getSchema(config4) {
 
 // ../node_modules/better-auth/dist/db/get-migration.mjs
 init_env();
-init_dist4();
+init_dist5();
 init_adapter2();
-init_dist3();
+init_dist4();
 var map2 = {
   postgres: {
     string: [
@@ -131294,7 +131311,7 @@ Most of the features of Better Auth will not work correctly.`);
 
 // ../node_modules/better-auth/dist/context/init.mjs
 init_error2();
-init_dist4();
+init_dist5();
 var init = async (options) => {
   const adapter2 = await getAdapter(options);
   const getDatabaseType = (database) => getKyselyDatabaseType(database) || "unknown";
@@ -133930,11 +133947,15 @@ var import_node_url8 = require("node:url");
 init_config();
 init_env2();
 
+// ../mcp/server.ts
+init_dist();
+
 // protocol.ts
+init_dist();
 init_errors4();
 
 // ../packages/core/service/missions.ts
-init_dist();
+init_dist2();
 init_change_feed();
 init_context();
 init_errors4();
@@ -133984,9 +134005,9 @@ function missionSearchWorkspaceParams({
 }
 
 // ../packages/core/service/objective-display-id.ts
-init_dist();
+init_dist2();
 init_errors4();
-init_dist();
+init_dist2();
 var ALLOCATE_ATTEMPTS = 8;
 async function allocateObjectiveDisplayKey({
   db,
@@ -134607,12 +134628,36 @@ async function addObjectivesToMission({
   });
   return created;
 }
+async function resolveDraftObjectiveToDiscuss({
+  ctx,
+  missionId,
+  objectives,
+  objectiveId
+}) {
+  const resolved = await resolveObjectiveRef({ ctx, ref: objectiveId, missionId });
+  const match = objectives.find((candidate) => candidate.id === resolved.id);
+  if (!match) {
+    throw new ServiceError(
+      `Objective ${objectiveId} does not belong to this mission`,
+      "invalid_objective_ref",
+      400
+    );
+  }
+  if (match.state !== "draft") {
+    throw new ServiceError(
+      `Objective ${match.displayId} is ${match.state}, not draft`,
+      "validation_error"
+    );
+  }
+  return match;
+}
 async function discussObjective({
   ctx,
-  missionId
+  missionId,
+  objectiveId = null
 }) {
   const objectives = await listObjectives({ ctx, missionId });
-  const draft = objectives.find((o3) => o3.state === "draft");
+  const draft = objectiveId?.trim() ? await resolveDraftObjectiveToDiscuss({ ctx, missionId, objectives, objectiveId }) : objectives.find((o3) => o3.state === "draft");
   if (!draft) {
     throw new ServiceError("No draft objective found on mission", "validation_error");
   }
@@ -134840,8 +134885,9 @@ async function listAttachments({
              FROM attachments
              WHERE mission_id = ? AND deleted_at IS NULL`;
   if (objectiveId) {
+    const objective = await resolveObjectiveRef({ ctx, ref: objectiveId, missionId: resolved.id });
     sql2 += " AND objective_id = ?";
-    params.push(objectiveId);
+    params.push(objective.id);
   }
   sql2 += " ORDER BY created_at ASC";
   const rows = await ctx.db.all(sql2, params);
@@ -134978,7 +135024,7 @@ init_project_execution_target();
 init_projects();
 
 // ../packages/core/service/protocol.ts
-init_dist();
+init_dist2();
 var import_node_crypto9 = require("node:crypto");
 
 // ../packages/core/service/agent-session/channels.ts
@@ -135502,7 +135548,7 @@ init_delivery_report();
 init_errors4();
 
 // ../packages/core/service/execution-requests.ts
-init_dist6();
+init_dist();
 init_change_feed();
 init_context();
 init_errors4();
@@ -136193,8 +136239,11 @@ async function clearExecutionRequests({
     ];
     const params = [ctx.workspace.id, ...ACTIVE_EXECUTION_REQUEST_STATUSES];
     if (objectiveId) {
+      const parsed = parseObjectiveRef(objectiveId);
       conditions.push("objective_id = ?");
-      params.push(objectiveId);
+      params.push(
+        parsed.kind === "uuid" ? parsed.id : (await resolveObjectiveRef({ ctx: txCtx, ref: objectiveId })).id
+      );
     }
     if (projectId) {
       conditions.push("project_id = ?");
@@ -137281,6 +137330,25 @@ function resolveActiveObjective(objectives) {
   }
   return active;
 }
+async function resolvePinnedObjective({
+  ctx,
+  missionId,
+  objectives,
+  objectiveId
+}) {
+  const explicit = objectiveId?.trim();
+  if (!explicit) return resolveActiveObjective(objectives);
+  const resolved = await resolveObjectiveRef({ ctx, ref: explicit, missionId });
+  const match = objectives.find((candidate) => candidate.id === resolved.id);
+  if (!match) {
+    throw new ServiceError(
+      `Objective ${explicit} does not belong to this mission`,
+      "invalid_objective_ref",
+      400
+    );
+  }
+  return match;
+}
 async function resolvePinnedAttachObjective({
   ctx,
   missionId,
@@ -137290,16 +137358,7 @@ async function resolvePinnedAttachObjective({
 }) {
   const explicit = objectiveId?.trim();
   if (explicit) {
-    const resolved = await resolveObjectiveRef({ ctx, ref: explicit, missionId });
-    const match = objectives.find((candidate) => candidate.id === resolved.id);
-    if (!match) {
-      throw new ServiceError(
-        `Objective ${explicit} does not belong to this mission`,
-        "invalid_objective_ref",
-        400
-      );
-    }
-    return match;
+    return resolvePinnedObjective({ ctx, missionId, objectives, objectiveId: explicit });
   }
   const requestId = executionRequestId?.trim();
   if (requestId) {
@@ -137590,11 +137649,17 @@ async function contextForObjective({
 async function loadMissionContext({
   ctx,
   missionId,
+  objectiveId = null,
   executionTargetId = null
 }) {
   const mission = await getMissionSummary({ ctx, missionId });
   const objectives = await listObjectives({ ctx, missionId: mission.id });
-  const objective = resolveActiveObjective(objectives);
+  const objective = await resolvePinnedObjective({
+    ctx,
+    missionId: mission.id,
+    objectives,
+    objectiveId
+  });
   const resolvedTargetId = await resolveProtocolExecutionTargetId({
     ctx,
     executionTargetId,
@@ -137878,12 +137943,14 @@ async function attachSession({
 async function connectSession({
   ctx,
   missionId,
+  objectiveId = null,
   agentIdentifier = "unknown",
   externalSessionId: externalSessionId2
 }) {
   const result = await attachSession({
     ctx,
     missionId,
+    objectiveId,
     agentIdentifier,
     connectionMethod: "connect",
     externalSessionId: externalSessionId2 ?? null
@@ -137891,7 +137958,8 @@ async function connectSession({
   return {
     sessionKey: result.sessionKey,
     missionId: result.mission.id,
-    objectiveId: result.objective.id
+    objectiveId: result.objective.id,
+    objectiveDisplayId: result.objective.displayId
   };
 }
 function promptHash(prompt) {
@@ -139352,7 +139420,7 @@ async function listOrganizationAdminProfileIds(organizationId, client = requireD
 }
 
 // repository.ts
-init_dist();
+init_dist2();
 var import_node_os9 = __toESM(require("node:os"), 1);
 var import_node_path26 = __toESM(require("node:path"), 1);
 init_delivery_report();
@@ -139361,7 +139429,7 @@ init_execution_targets();
 init_local_target();
 
 // ../packages/core/service/mission-branch-observations.ts
-init_dist();
+init_dist2();
 init_errors4();
 init_execution_targets();
 init_util3();
@@ -139583,7 +139651,7 @@ init_project_execution_target();
 init_util3();
 
 // ../webapp/shared/contract.ts
-init_dist6();
+init_dist();
 
 // automation/commit-message-automation.ts
 var MAX_DIFF_CHARS = 12e3;
@@ -140102,8 +140170,8 @@ async function forgetMissionLatchSession(missionRef, body) {
 }
 
 // execution/launch.ts
-init_dist6();
 init_dist();
+init_dist2();
 init_agent_catalog();
 init_config();
 init_execution_targets();
@@ -145941,14 +146009,16 @@ async function createArtifact(missionRef, body) {
       sessionId = session.id;
       objectiveId = session.objective_id;
     } else if (objectiveId) {
+      const resolvedRef = await resolveObjectiveIdForRest({ ref: objectiveId, db: tx });
       const objective = await tx.get(
         `SELECT id FROM objectives
           WHERE id = ? AND mission_id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-        [objectiveId, mission.id, mission.workspace_id]
+        [resolvedRef.id, mission.id, mission.workspace_id]
       );
       if (!objective) {
         throw new ApiError(404, "Objective not found on mission");
       }
+      objectiveId = objective.id;
     } else if (sessionId) {
       const session = await tx.get(
         `SELECT id, objective_id FROM agent_sessions
@@ -148545,7 +148615,7 @@ async function revokeUserTokenSecret(rawToken) {
 }
 
 // workspaces.ts
-init_dist();
+init_dist2();
 var import_node_crypto18 = require("node:crypto");
 
 // sql-studio/sql-studio.ts
@@ -155422,7 +155492,16 @@ async function protocolWorkspaceId(body) {
     );
     if (session) return session.workspace_id;
   }
-  const missionRef = strFlag(body, "--mission-id");
+  const objectiveRef = strFlag(body, "--objective-id");
+  if (objectiveRef) {
+    const objective = await db.get(
+      `SELECT workspace_id FROM objectives
+        WHERE id = ? AND deleted_at IS NULL AND workspace_id IN (${placeholders2})`,
+      [objectiveRef, ...workspaceIds]
+    );
+    if (objective) return objective.workspace_id;
+  }
+  const missionRef = strFlag(body, "--mission-id") ?? missionDisplayIdFromObjectiveRef(objectiveRef) ?? void 0;
   if (missionRef) {
     const byId = await db.get(
       `SELECT workspace_id FROM missions
@@ -155582,6 +155661,20 @@ function requireFlag(body, name) {
     throw new ApiError(400, `Missing required flag: ${name}`);
   }
   return value;
+}
+function missionRefFlag(body) {
+  const explicit = strFlag(body, "--mission-id");
+  if (explicit !== void 0 && explicit.trim() !== "") return explicit;
+  const derived = missionDisplayIdFromObjectiveRef(strFlag(body, "--objective-id"));
+  if (derived) return derived;
+  throw new ApiError(
+    400,
+    "Missing required flag: --mission-id (pass it, or an objective display id such as coo:756.k7xm as --objective-id)"
+  );
+}
+function objectiveRefFlag(body) {
+  const value = strFlag(body, "--objective-id");
+  return value !== void 0 && value.trim() !== "" ? value.trim() : null;
 }
 function parseJsonInput(body, jsonFlag, fileFlag) {
   const raw = resolveInput(body, jsonFlag, fileFlag);
@@ -155762,7 +155855,7 @@ var handlers = {
   // Session lifecycle ------------------------------------------------------
   attach: (ctx, body) => attachSession({
     ctx,
-    missionId: requireFlag(body, "--mission-id"),
+    missionId: missionRefFlag(body),
     agentIdentifier: strFlag(body, "--agent") ?? "unknown",
     modelIdentifier: strFlag(body, "--model") ?? null,
     existingSessionKey: strFlag(body, "--session-key") ?? null,
@@ -155772,11 +155865,11 @@ var handlers = {
     // The channel id only. Its credential never travels in a protocol flag — it reaches the
     // backend solely as an Authorization header on the adapter route family.
     sessionChannelId: strFlag(body, "--session-channel-id") ?? null,
-    objectiveId: strFlag(body, "--objective-id") ?? null
+    objectiveId: objectiveRefFlag(body)
   }),
   update: (ctx, body) => updateSession2({
     ctx,
-    missionId: requireFlag(body, "--mission-id"),
+    missionId: missionRefFlag(body),
     sessionKey: requireFlag(body, "--session-key"),
     summary: resolveInput(body, "--summary", "--summary-file") ?? "",
     phase: strFlag(body, "--phase") ?? null,
@@ -155803,14 +155896,14 @@ var handlers = {
   }),
   heartbeat: (ctx, body) => heartbeatSession({
     ctx,
-    missionId: requireFlag(body, "--mission-id"),
+    missionId: missionRefFlag(body),
     sessionKey: requireFlag(body, "--session-key"),
     phase: strFlag(body, "--phase") ?? null,
     note: strFlag(body, "--note") ?? null
   }),
   ask: (ctx, body) => askQuestion({
     ctx,
-    missionId: requireFlag(body, "--mission-id"),
+    missionId: missionRefFlag(body),
     sessionKey: requireFlag(body, "--session-key"),
     question: resolveInput(body, "--question", "--question-file") ?? ""
   }),
@@ -155824,7 +155917,7 @@ var handlers = {
     );
     return deliverSession({
       ctx,
-      missionId: requireFlag(body, "--mission-id"),
+      missionId: missionRefFlag(body),
       sessionKey: requireFlag(body, "--session-key"),
       summary: resolveInput(body, "--summary", "--summary-file") ?? envelope.summary ?? "",
       artifacts: artifacts ?? envelope.artifacts ?? [],
@@ -155852,7 +155945,7 @@ var handlers = {
   },
   "hook-event": (ctx, body) => recordHookEvent({
     ctx,
-    missionId: requireFlag(body, "--mission-id"),
+    missionId: missionRefFlag(body),
     hookType: requireFlag(body, "--hook-type"),
     prompt: resolveInput(body, "--prompt", "--prompt-file") ?? "",
     sessionKey: strFlag(body, "--session-key") ?? null,
@@ -155861,8 +155954,8 @@ var handlers = {
   }),
   "resume-follow-up": (ctx, body) => resumeFollowUp({
     ctx,
-    missionId: requireFlag(body, "--mission-id"),
-    objectiveId: strFlag(body, "--objective-id") ?? null,
+    missionId: missionRefFlag(body),
+    objectiveId: objectiveRefFlag(body),
     agentIdentifier: strFlag(body, "--agent") ?? "unknown",
     modelIdentifier: strFlag(body, "--model") ?? null,
     externalSessionId: externalSessionId(body),
@@ -155921,12 +156014,14 @@ var handlers = {
   },
   "load-context": (ctx, body) => loadMissionContext({
     ctx,
-    missionId: requireFlag(body, "--mission-id"),
+    missionId: missionRefFlag(body),
+    objectiveId: objectiveRefFlag(body),
     executionTargetId: strFlag(body, "--execution-target-id") ?? null
   }),
   connect: (ctx, body) => connectSession({
     ctx,
-    missionId: requireFlag(body, "--mission-id"),
+    missionId: missionRefFlag(body),
+    objectiveId: objectiveRefFlag(body),
     agentIdentifier: strFlag(body, "--agent") ?? "unknown",
     externalSessionId: externalSessionId(body)
   }),
@@ -155937,10 +156032,14 @@ var handlers = {
     projectId: strFlag(body, "--project-id") ?? null,
     limit: intFlag(body, "--limit") ?? 25
   }),
-  "discuss-objective": (ctx, body) => discussObjective({ ctx, missionId: requireFlag(body, "--mission-id") }),
+  "discuss-objective": (ctx, body) => discussObjective({
+    ctx,
+    missionId: missionRefFlag(body),
+    objectiveId: objectiveRefFlag(body)
+  }),
   "add-objectives": async (ctx, body) => addObjectivesToMission({
     ctx: await withAgentOrigin({ ctx, body }),
-    missionId: requireFlag(body, "--mission-id"),
+    missionId: missionRefFlag(body),
     objectives: withDefaultAutoAdvance(
       parseJsonInput(body, "--objectives-json", "--objectives-file") ?? [],
       optionalAutoAdvanceFlag(body)
@@ -156008,7 +156107,7 @@ var handlers = {
   // Shared context ---------------------------------------------------------
   "read-context": (ctx, body) => listSharedContext({
     ctx,
-    missionId: requireFlag(body, "--mission-id"),
+    missionId: missionRefFlag(body),
     keySubstring: strFlag(body, "--key") ?? null,
     limit: intFlag(body, "--limit") ?? 50
   }),
@@ -156017,7 +156116,7 @@ var handlers = {
     const value = valueJson !== void 0 ? valueJson : strFlag(body, "--value") ?? "";
     return writeSharedContext({
       ctx,
-      missionId: requireFlag(body, "--mission-id"),
+      missionId: missionRefFlag(body),
       key: requireFlag(body, "--key"),
       value
     });
@@ -156041,7 +156140,11 @@ var handlers = {
     if (sessionKey) {
       create.sessionKey = sessionKey;
     }
-    return createArtifact(requireFlag(body, "--mission-id"), create);
+    const objectiveRef = objectiveRefFlag(body);
+    if (objectiveRef) {
+      create.objectiveId = objectiveRef;
+    }
+    return createArtifact(missionRefFlag(body), create);
   },
   // In-place artifact edit (same service as REST PATCH). No session key — a
   // later objective or follow-up can revise an artifact created earlier.
@@ -156062,24 +156165,28 @@ var handlers = {
       const url2 = strFlag(body, "--external-url");
       update.externalUrl = url2 !== void 0 && url2.trim() ? url2 : null;
     }
-    return updateArtifact(
-      requireFlag(body, "--mission-id"),
-      requireFlag(body, "--artifact-id"),
-      update
-    );
+    return updateArtifact(missionRefFlag(body), requireFlag(body, "--artifact-id"), update);
   },
   "attachment-list": async (ctx, body) => {
-    const missionId = requireFlag(body, "--mission-id");
-    const attachments = await listAttachments({ ctx, missionId });
+    const missionId = missionRefFlag(body);
+    const attachments = await listAttachments({
+      ctx,
+      missionId,
+      objectiveId: objectiveRefFlag(body)
+    });
     return attachments.map((a5) => ({
       ...a5,
       url: `/api/storage/attachments/${encodeURIComponent(a5.storageKey)}`
     }));
   },
   "attachment-download-url": async (ctx, body) => {
-    const missionId = requireFlag(body, "--mission-id");
+    const missionId = missionRefFlag(body);
     const attachmentId = requireFlag(body, "--attachment-id");
-    const attachments = await listAttachments({ ctx, missionId });
+    const attachments = await listAttachments({
+      ctx,
+      missionId,
+      objectiveId: objectiveRefFlag(body)
+    });
     const found = attachments.find((a5) => a5.id === attachmentId);
     if (!found) throw new ApiError(404, `Attachment not found: ${attachmentId}`);
     return {
@@ -156281,15 +156388,17 @@ var hostedMcpToolDefinitions = [
     name: "overlord_load_mission_context",
     title: "Load mission context",
     description: "Use this when the user wants to inspect one mission, its objectives, history, artifacts, or shared context.",
-    inputSchema: objectSchema(
-      {
-        missionId: stringProperty("Mission UUID or workspace display id such as coo:150."),
-        executionTargetId: stringProperty(
-          "Optional local execution target id for resolving sibling project resource paths."
-        )
-      },
-      ["missionId"]
-    ),
+    inputSchema: objectSchema({
+      missionId: stringProperty(
+        "Mission UUID or workspace display id. Optional when objectiveId is a display id such as coo:756.k7xm, which already names its mission."
+      ),
+      objectiveId: stringProperty(
+        "Objective UUID or display id such as coo:756.k7xm. Returns that objective as the current one instead of rediscovering the mission active objective \u2014 required on a mission running objectives in parallel."
+      ),
+      executionTargetId: stringProperty(
+        "Optional local execution target id for resolving sibling project resource paths."
+      )
+    }),
     outputSchema: protocolOutputSchema("Structured context for the requested mission."),
     annotations: readOnly,
     _meta: widget("ui://overlord/objective-viewer.html")
@@ -156300,7 +156409,12 @@ var hostedMcpToolDefinitions = [
     description: "Use this only when the user explicitly asks to append draft objectives to an existing mission.",
     inputSchema: objectSchema(
       {
-        missionId: stringProperty("Mission UUID or workspace display id."),
+        missionId: stringProperty(
+          "Mission UUID or workspace display id. Optional when objectiveId is a display id such as coo:756.k7xm, which already names its mission."
+        ),
+        objectiveId: stringProperty(
+          "Objective UUID or display id such as coo:756.k7xm. Used only to supply missionId when it is omitted; the new objectives are appended to that objective mission."
+        ),
         objectives: {
           type: "array",
           description: "Objective objects with objective text and optional title, resourceKey, and autoAdvance.",
@@ -156314,7 +156428,7 @@ var hostedMcpToolDefinitions = [
           })
         }
       },
-      ["missionId", "objectives"]
+      ["objectives"]
     ),
     outputSchema: protocolOutputSchema("The mission with the appended draft objectives."),
     annotations: writeAction
@@ -156346,9 +156460,11 @@ var hostedMcpToolDefinitions = [
     description: "Use this only after the user asks the connected agent to begin work on a mission. It opens an MCP-hosted session for later updates and delivery. Pass objectiveId when the caller already knows which objective to execute so attach does not rediscover another one.",
     inputSchema: objectSchema(
       {
-        missionId: stringProperty("Mission UUID or workspace display id."),
+        missionId: stringProperty(
+          "Mission UUID or workspace display id. Optional when objectiveId is a display id such as coo:756.k7xm, which already names its mission."
+        ),
         objectiveId: stringProperty(
-          "Optional objective UUID or display id (e.g. coo:756.k7xm). Pins attach to that objective."
+          "Objective UUID or display id such as coo:756.k7xm. Pins attach to that objective, and supplies missionId when it is omitted."
         ),
         agent: stringProperty("Agent identifier. Defaults to hosted-mcp."),
         model: stringProperty("Optional model identifier."),
@@ -156356,7 +156472,7 @@ var hostedMcpToolDefinitions = [
           "Optional local execution target id for resolving sibling project resource paths."
         )
       },
-      ["missionId"]
+      []
     ),
     outputSchema: protocolOutputSchema(
       "Attached session context, including the session key required for lifecycle calls."
@@ -156369,13 +156485,18 @@ var hostedMcpToolDefinitions = [
     description: "Use this only to post the user-requested work update, alert, decision, or discussion summary to an attached mission session.",
     inputSchema: objectSchema(
       {
-        missionId: stringProperty("Mission UUID or workspace display id."),
+        missionId: stringProperty(
+          "Mission UUID or workspace display id. Optional when objectiveId is a display id such as coo:756.k7xm, which already names its mission."
+        ),
+        objectiveId: stringProperty(
+          "Objective UUID or display id such as coo:756.k7xm. Supplies missionId when it is omitted; the session key still determines which objective the event lands on."
+        ),
         sessionKey: stringProperty("Session key returned by overlord_attach_session."),
         summary: stringProperty("Update text."),
         phase: stringProperty("Optional protocol phase."),
         eventType: stringProperty("Optional event type. Defaults to update.")
       },
-      ["missionId", "sessionKey", "summary"]
+      ["sessionKey", "summary"]
     ),
     outputSchema: protocolOutputSchema("The recorded mission activity event."),
     annotations: writeAction
@@ -156386,7 +156507,12 @@ var hostedMcpToolDefinitions = [
     description: "Use this only when the user-requested mission work is complete. It delivers the attached session with an explicit summary, optional file-change rationales, and optional authoritative human-action/tradeoff evidence.",
     inputSchema: objectSchema(
       {
-        missionId: stringProperty("Mission UUID or workspace display id."),
+        missionId: stringProperty(
+          "Mission UUID or workspace display id. Optional when objectiveId is a display id such as coo:756.k7xm, which already names its mission."
+        ),
+        objectiveId: stringProperty(
+          "Objective UUID or display id such as coo:756.k7xm. Supplies missionId when it is omitted; the session key still determines which objective is delivered."
+        ),
         sessionKey: stringProperty("Session key returned by overlord_attach_session."),
         summary: stringProperty("Delivery summary."),
         artifacts: {
@@ -156441,7 +156567,7 @@ var hostedMcpToolDefinitions = [
         deferredWork: { type: "array", items: stringProperty("Intentionally deferred work.") },
         assumptions: { type: "array", items: stringProperty("Material implementation assumption.") }
       },
-      ["missionId", "sessionKey", "summary"]
+      ["sessionKey", "summary"]
     ),
     outputSchema: protocolOutputSchema(
       "The completed delivery record and any recorded file changes."
@@ -156455,7 +156581,12 @@ var hostedMcpToolDefinitions = [
     description: "Use this to create a mission artifact during a turn without delivering \u2014 for example a plan, notes, decision, or URL the reviewer should see while work continues. Provide type, label, and at least one of contentText or externalUrl. Optional sessionKey stamps session/objective provenance. Revise later with overlord_update_artifact. Delivery may still attach more artifacts.",
     inputSchema: objectSchema(
       {
-        missionId: stringProperty("Mission UUID or workspace display id such as coo:150."),
+        missionId: stringProperty(
+          "Mission UUID or workspace display id. Optional when objectiveId is a display id such as coo:756.k7xm, which already names its mission."
+        ),
+        objectiveId: stringProperty(
+          "Objective UUID or display id such as coo:756.k7xm. Stamps objective provenance when no live sessionKey is available; sessionKey wins when both are given."
+        ),
         type: stringProperty(
           "Artifact type: test_results, next_steps, note, url, decision, or migration."
         ),
@@ -156466,7 +156597,7 @@ var hostedMcpToolDefinitions = [
           "Optional live session key from attach; stamps session/objective provenance when present."
         )
       },
-      ["missionId", "type", "label"]
+      ["type", "label"]
     ),
     outputSchema: protocolOutputSchema("The created artifact DTO (revision 1)."),
     annotations: writeAction
@@ -156477,7 +156608,12 @@ var hostedMcpToolDefinitions = [
     description: "Use this when an existing mission artifact must be revised in place (for example a plan written in an earlier objective) rather than delivering a duplicate. Requires the current artifact revision for optimistic concurrency. Provide at least one of label, contentText, or externalUrl.",
     inputSchema: objectSchema(
       {
-        missionId: stringProperty("Mission UUID or workspace display id such as coo:150."),
+        missionId: stringProperty(
+          "Mission UUID or workspace display id. Optional when objectiveId is a display id such as coo:756.k7xm, which already names its mission."
+        ),
+        objectiveId: stringProperty(
+          "Objective UUID or display id such as coo:756.k7xm. Used only to supply missionId when it is omitted."
+        ),
         artifactId: stringProperty("Artifact id from mission context or load-context artifacts."),
         expectedRevision: {
           type: "number",
@@ -156491,7 +156627,7 @@ var hostedMcpToolDefinitions = [
           "Optional HTTP(S) URL. Pass an empty string to clear the external URL."
         )
       },
-      ["missionId", "artifactId", "expectedRevision"]
+      ["artifactId", "expectedRevision"]
     ),
     outputSchema: protocolOutputSchema("The updated artifact DTO including the new revision."),
     annotations: writeAction
@@ -156639,6 +156775,19 @@ function requiredString(args, name) {
   if (!value) throw new Error(`Missing required argument: ${name}`);
   return value;
 }
+function missionScopeFlags(args) {
+  const objectiveId = optionalString(args, "objectiveId");
+  const missionId = optionalString(args, "missionId") ?? missionDisplayIdFromObjectiveRef(objectiveId);
+  if (!missionId) {
+    throw new Error(
+      "Missing required argument: missionId (pass it, or an objective display id such as coo:756.k7xm as objectiveId)"
+    );
+  }
+  return {
+    "--mission-id": missionId,
+    ...objectiveId ? { "--objective-id": objectiveId } : {}
+  };
+}
 function autoAdvanceFlags(args) {
   if (args.autoAdvance === true) return { "--auto-advance": true };
   if (args.autoAdvance === false) return { "--no-auto-advance": true };
@@ -156714,7 +156863,7 @@ var toolHandlers = {
   overlord_load_mission_context: (args) => runProtocolSubcommand(
     "load-context",
     protocolBody({
-      "--mission-id": requiredString(args, "missionId"),
+      ...missionScopeFlags(args),
       ...optionalString(args, "executionTargetId") ? { "--execution-target-id": requiredString(args, "executionTargetId") } : {}
     })
   ),
@@ -156724,7 +156873,9 @@ var toolHandlers = {
     }
     return runProtocolSubcommand("add-objectives", {
       flags: {
-        "--mission-id": requiredString(args, "missionId"),
+        // add-objectives appends to the mission, so an objectiveId here only
+        // names which mission — it is deliberately not forwarded as a pin.
+        "--mission-id": missionScopeFlags(args)["--mission-id"],
         "--objectives-file": true
       },
       fileInputs: { "--objectives-file": JSON.stringify(args.objectives) }
@@ -156748,9 +156899,8 @@ var toolHandlers = {
   overlord_attach_session: (args) => runProtocolSubcommand(
     "attach",
     protocolBody({
-      "--mission-id": requiredString(args, "missionId"),
+      ...missionScopeFlags(args),
       "--agent": optionalString(args, "agent") ?? "hosted-mcp",
-      ...optionalString(args, "objectiveId") ? { "--objective-id": requiredString(args, "objectiveId") } : {},
       ...optionalString(args, "model") ? { "--model": requiredString(args, "model") } : {},
       ...optionalString(args, "executionTargetId") ? { "--execution-target-id": requiredString(args, "executionTargetId") } : {}
     })
@@ -156758,7 +156908,7 @@ var toolHandlers = {
   overlord_update_session: (args) => runProtocolSubcommand(
     "update",
     protocolBody({
-      "--mission-id": requiredString(args, "missionId"),
+      ...missionScopeFlags(args),
       "--session-key": requiredString(args, "sessionKey"),
       "--summary": requiredString(args, "summary"),
       ...optionalString(args, "phase") ? { "--phase": requiredString(args, "phase") } : {},
@@ -156767,7 +156917,7 @@ var toolHandlers = {
   ),
   overlord_deliver_session: (args) => runProtocolSubcommand("deliver", {
     flags: {
-      "--mission-id": requiredString(args, "missionId"),
+      ...missionScopeFlags(args),
       "--session-key": requiredString(args, "sessionKey"),
       "--summary": requiredString(args, "summary"),
       ...args.noFileChanges === true ? { "--no-file-changes": true } : {},
@@ -156802,7 +156952,7 @@ var toolHandlers = {
     const sessionKey = optionalString(args, "sessionKey");
     return runProtocolSubcommand("add-artifact", {
       flags: {
-        "--mission-id": requiredString(args, "missionId"),
+        ...missionScopeFlags(args),
         "--type": requiredString(args, "type"),
         "--label": requiredString(args, "label"),
         ...hasContentText ? { "--content-text-file": true } : {},
@@ -156824,7 +156974,9 @@ var toolHandlers = {
     }
     return runProtocolSubcommand("update-artifact", {
       flags: {
-        "--mission-id": requiredString(args, "missionId"),
+        // The artifact is addressed by its own id; objectiveId only supplies
+        // the mission scope, so it is not forwarded to the update.
+        "--mission-id": missionScopeFlags(args)["--mission-id"],
         "--artifact-id": requiredString(args, "artifactId"),
         "--expected-revision": String(Math.trunc(args.expectedRevision)),
         ...hasLabel ? { "--label": args.label } : {},
@@ -157330,7 +157482,7 @@ async function updateProjectExecutionTarget(projectId, body, client = requireDat
 }
 
 // execution/runner.ts
-init_dist6();
+init_dist();
 init_errors4();
 init_execution_targets();
 init_latch_launch();
@@ -159198,7 +159350,7 @@ function resolveServeSpa({
 }
 
 // activity-feed.ts
-init_dist();
+init_dist2();
 init_db();
 var RUN_LIMIT = 25;
 var DELIVERY_LIMIT = 7;
@@ -160584,11 +160736,11 @@ function sessionControlsGone() {
 }
 
 // auth.ts
-init_dist();
+init_dist2();
 
 // ../auth/src/auth/config.ts
-init_dist();
-init_dist3();
+init_dist2();
+init_dist4();
 init_esm();
 var EMAIL_OTP_EXPIRES_IN_SECONDS2 = 60 * 60;
 var EMAIL_OTP_LENGTH = 6;
@@ -161711,7 +161863,7 @@ init_env_profile();
 init_errors5();
 
 // live-activities.ts
-init_dist();
+init_dist2();
 var import_node_crypto21 = require("node:crypto");
 init_util3();
 init_db();
@@ -162497,7 +162649,7 @@ init_db();
 init_errors5();
 
 // notification-presentation.ts
-init_dist();
+init_dist2();
 function notificationSubject({
   missionDisplayId,
   missionTitle,
@@ -164028,7 +164180,7 @@ function serveStoredObject(res, resolved) {
 }
 
 // webhook-dispatcher.ts
-init_dist();
+init_dist2();
 init_util3();
 init_webhook_events();
 init_db();
@@ -164367,7 +164519,7 @@ async function recordSubscriptionFailure(client, subscriptionId, currentConsecut
 var webhookDispatcher = new WebhookDispatcher();
 
 // webhooks.ts
-init_dist();
+init_dist2();
 var import_node_crypto26 = require("node:crypto");
 init_webhook_events();
 init_db();

@@ -57,6 +57,7 @@ export { listPostgresMigrationFiles, migratePostgres } from './migrate-postgres.
 export {
   formatObjectiveDisplayId,
   generateObjectiveDisplayKey,
+  missionDisplayIdFromObjectiveRef,
   OBJECTIVE_DISPLAY_ID_SEPARATOR,
   OBJECTIVE_DISPLAY_KEY_ALPHABET,
   OBJECTIVE_DISPLAY_KEY_LENGTH,

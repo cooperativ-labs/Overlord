@@ -1,9 +1,33 @@
 # CLI Command Reference
 
+## Addressing a mission or an objective
+
+Every `ovld protocol` subcommand that takes `--mission-id` also takes
+`--objective-id`, and an objective **display** id (`coo:756.k7xm`) already names
+its mission — so `--mission-id` is optional whenever you pass one:
+
+```bash
+ovld protocol update --objective-id coo:756.k7xm --summary "..."      # mission derived
+ovld protocol update --mission-id coo:756 --objective-id coo:756.k7xm # same thing
+```
+
+Use the objective form when reconnecting to a mission that is running more than
+one objective: "the active objective" is ambiguous there, and commands that
+rediscover it (`attach`, `load-context`, `connect`) fail with
+`ambiguous_active_objective` until you name one.
+
+An objective **UUID** carries no parent mission, so it still needs
+`--mission-id` next to it. The CLI also fills `--objective-id` in from
+`OVERLORD_OBJECTIVE_ID` on session-scoped commands, so a launched agent rarely
+types it at all. Two commands deliberately never inherit it:
+`update-objective` (the id names the row being changed) and `discuss-objective`
+(it wants a draft, not the objective already executing).
+
 ## Attach
 
 ```bash
 ovld protocol attach --mission-id $MISSION_ID [--objective-id $OVERLORD_OBJECTIVE_ID]
+ovld protocol attach --objective-id coo:756.k7xm
 ```
 
 In a git workspace, `attach` records a VCS baseline (changed file paths from local `git status`) so delivery can compute the run-attributable delta automatically.

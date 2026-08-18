@@ -128,7 +128,7 @@ Registration is workspace-scoped and "parentless" (no project/mission identifies
 
 | Command | Description | Positional args | Flags |
 | ------- | ----------- | --------------- | ----- |
-| `ovld launch` | Spawn an agent locally with assembled mission context | `agent` | `--mission-id <id>` (required), `--working-directory <path>`, `--model <id>`, `--thinking <level>`, `--branch <name>`, `--no-worktree`, `--pre-command <wrapper>`, `--terminal <launcher>`, `--no-terminal`, `--flag <name-or-name=value>` (repeatable passthrough; e.g. `--flag --permission-mode=auto`), `--dry-run`, `--json` |
+| `ovld launch` | Spawn an agent locally with assembled mission context | `agent` | `--mission-id <id>` (required unless `--objective-id` is a display id), `--objective-id <id>`, `--working-directory <path>`, `--model <id>`, `--thinking <level>`, `--branch <name>`, `--no-worktree`, `--pre-command <wrapper>`, `--terminal <launcher>`, `--no-terminal`, `--flag <name-or-name=value>` (repeatable passthrough; e.g. `--flag --permission-mode=auto`), `--dry-run`, `--json` |
 | `ovld restart` | Resume when the agent supports native resume | `agent` | Same as `launch` |
 | `ovld run` | Compatibility alias for `launch` | `agent`, `missionId` (positional) | Same as `launch` (also accepts `--agent`) |
 | `ovld connect` | Compatibility alias for `launch` | `agent`, `missionId` (positional) | Same as `launch` |
@@ -145,7 +145,7 @@ Registration is workspace-scoped and "parentless" (no project/mission identifies
 | `ovld runner once` | Claim and launch at most one queued execution request | — | `--project-id <id>`, `--branch <name>`, `--no-worktree`, `--dry-run`, `--json` |
 | `ovld runner start` | Poll continuously for execution requests | — | `--project-id <id>`, `--branch <name>`, `--no-worktree`, `--poll-interval-ms <n>` (default: 3000), `--dry-run`, `--json` |
 | `ovld runner status` | Show runner identity and visible queue | — | `--json` |
-| `ovld runner clear` | Clear one active execution request | `objective_id` | `--project-id <id>`, `--json` |
+| `ovld runner clear` | Clear one active execution request | `objectiveId` (UUID or display id such as `coo:8.k7xm`) | `--objective-id <id>`, `--project-id <id>`, `--json` |
 | `ovld runner clear-all` | Clear every active request visible to the runner | — | `--project-id <id>`, `--json` |
 | `ovld runner supervise` | Long-lived adaptive-polling loop for the persistent runner service; delegates each poll to the same claim-and-launch path as `ovld runner once` | — | `--json` |
 | `ovld runner service install` | Register and (by default) start the OS-level persistent runner service | — | `--no-start`, `--json` |
@@ -190,7 +190,7 @@ Session instructions sent to a live agent-session channel while the harness is r
 
 | Command | Description | Positional args | Flags |
 | ------- | ----------- | --------------- | ----- |
-| `ovld inputs list` | List session instructions for a mission's live channels | — | `--mission-id <id>` (required), `--json` |
+| `ovld inputs list` | List session instructions for a mission's live channels | — | `--mission-id <id>` (required unless `--objective-id` is a display id), `--objective-id <id>`, `--json` |
 | `ovld inputs send` | Send an instruction to one live session channel | — | `--channel-id <id>` (required), `--body <text>` (required), `--kind <kind>` (default: `instruction`), `--json` |
 
 The list response identifies the addressed channel; sending requires that channel id because a mission can have more than one live session.
@@ -204,7 +204,7 @@ The list response identifies the addressed channel; sending requires that channe
 | Command | Description | Positional args | Flags |
 | ------- | ----------- | --------------- | ----- |
 | `ovld agent-session capabilities [<agent>]` | Print the fixture-backed capability descriptor (compiled catalog, no network/filesystem I/O) | `agent` (optional) | `--json` |
-| `ovld agent-session bind` | Correlate a harness-native session id with this process's channel | — | `--agent <key>` (required), `--native-session-id <id>` (required), `--mission-id <id>` |
+| `ovld agent-session bind` | Correlate a harness-native session id with this process's channel | — | `--agent <key>` (required), `--native-session-id <id>` (required), `--mission-id <id>`, `--objective-id <id>` |
 | `ovld agent-session event` | Push one native harness event; silent, never blocks, always exits 0 | — | `--agent <key>` (required), `--payload-file <path\|->` |
 | `ovld agent-session request` | Wait for a remote decision or defer to the harness | — | `--agent <key>` (required), `--payload-file <path\|->` |
 | `ovld agent-session inbox` | Claim one pending instruction and emit it natively | — | `--agent <key>` (required), `--payload-file <path\|->`, `--confirm <input-id>`, `--lease-id <lease>`, `--wait-ms <n>` |
@@ -222,13 +222,16 @@ Protocol commands return JSON on stdout by default. Run `ovld protocol help` for
 
 | Flag | Description |
 | ---- | ----------- |
-| `--mission-id <id>` | Mission display id (e.g. `coo:8`) or UUID |
+| `--mission-id <id>` | Mission display id (e.g. `coo:8`) or UUID. Optional when `--objective-id` is a display id |
+| `--objective-id <id>` | Objective UUID or display id (e.g. `coo:8.k7xm`). Accepted anywhere `--mission-id` is; a display id supplies the mission on its own. Auto-filled from `OVERLORD_OBJECTIVE_ID` on session-scoped subcommands |
 | `--session-key <key>` | Session key from attach, connect, prompt, or resume-follow-up |
 | `--agent <identifier>` | Agent identifier (default: `unknown`) |
 | `--model <identifier>` | Model identifier |
 | `--timeout <ms>` | Request timeout in milliseconds (default: 30000) |
 
 File-backed payloads: any `-*-json` flag has a paired `-*-file <path>` flag (use `-` for stdin). Only one `-*-file -` per invocation. Inline JSON larger than ~8 KB is rejected — use file/stdin instead.
+
+Addressing: an objective **display** id names its parent mission (`coo:8.k7xm` → `coo:8`), so `ovld protocol update --objective-id coo:8.k7xm --summary "..."` needs no `--mission-id`. An objective **UUID** names no mission and still needs one. This is how an agent reconnects to a mission running more than one objective, where `--mission-id` alone cannot identify a unit of execution. `update-objective` and `discuss-objective` never inherit `OVERLORD_OBJECTIVE_ID`.
 
 ### Protocol subcommands
 
@@ -238,10 +241,10 @@ File-backed payloads: any `-*-json` flag has a paired `-*-file <path>` flag (use
 | `discover-project` | Resolve project from working directory or explicit id | — | `--project-id <id-or-name>`, `--directory <path>` |
 | `list-organizations` | Legacy name predating the organizations hierarchy; returns only the caller's current workspace context, not organization data | — | — |
 | `attach` | Start a mission session; returns full working context | `--mission-id <id>` | `--session-key <key>`, `--agent <id>`, `--model <id>`, `--execution-request-id <id>`, `--objective-id <id>`, `--external-session-id <id>` |
-| `connect` | Lightweight session (session key only) | `--mission-id <id>` | `--agent <id>`, `--external-session-id <id>` |
-| `load-context` | Read mission context without creating a session | `--mission-id <id>` | — |
+| `connect` | Lightweight session (session key only) | `--mission-id <id>` | `--objective-id <id>` (pins the session), `--agent <id>`, `--external-session-id <id>` |
+| `load-context` | Read mission context without creating a session | `--mission-id <id>` | `--objective-id <id>` (returns that objective instead of rediscovering the active one; required on a mission running objectives in parallel), `--execution-target-id <id>` |
 | `search-missions` | Find missions by keyword, status, or project | — | `--query <text>`, `--status <csv>`, `--project-id <id>`, `--limit <n>` (default: 25) |
-| `discuss-objective` | Mark latest draft objective submitted (does not start execution) | `--mission-id <id>` | — |
+| `discuss-objective` | Mark a draft objective submitted (does not start execution) | `--mission-id <id>` | `--objective-id <id>` (submit this draft instead of the first one found) |
 | `add-objectives` | Append ordered objectives | `--mission-id <id>`, `--objectives-json <json>` or `--objectives-file <path>` | — |
 | `update-objective` | Turn auto-advance on or off for an existing objective | `--objective-id <id>`, `--auto-advance` or `--no-auto-advance` | — |
 | `create` | Create draft mission without attaching. Without `--project-id` and without a resolvable working-directory project, falls back to an account-owned inbox item | `--objective "<text>"` or `--objectives-json` / `--objectives-file` | `--title <text>`, `--project-id <id>`, `--inbox` (force the inbox fallback), `--assigned-to <id>` (meaningless on the inbox fallback) |
@@ -254,13 +257,13 @@ File-backed payloads: any `-*-json` flag has a paired `-*-file <path>` flag (use
 | `resume-follow-up` | Reopen completed objective for post-delivery work | `--mission-id <id>` | `--objective-id <id>`, `--agent <id>`, `--model <id>`, `--summary <text>` or `--summary-file`, `--external-session-id <id>` |
 | `hook-event` | Record connector lifecycle hook | `--hook-type UserPromptSubmit`, `--mission-id <id>` | `--prompt <text>` or `--prompt-file <path>`, `--session-key <key>`, `--external-session-id <id>`, `--turn-index <n>` |
 | `record-touched` | Local-only: append an edit hook's touched files to the session log (no backend call); connector-internal, invoked from adapter hooks | — | `--mission-id <id>` (falls back to `MISSION_ID` / `OVERLORD_MISSION_ID`); reads the hook payload from stdin |
-| `changes` | Local-only preflight: classify every dirty path as `mine`, `claimed`, or `unclaimed` and draft rationales, the same way `deliver` will (no backend call) | `--mission-id <id>` | — |
+| `changes` | Local-only preflight: classify every dirty path as `mine`, `claimed`, or `unclaimed` and draft rationales, the same way `deliver` will (no backend call) | `--mission-id <id>` | `--objective-id <id>` (supplies the mission) |
 | `read-context` | Read shared persistent mission context | `--mission-id <id>` | `--key <substring>`, `--limit <n>` (default: 50) |
 | `write-context` | Write shared persistent mission context | `--mission-id <id>`, `--key <name>`, `--value <text>` or `--value-json` / `--value-file` | — |
-| `add-artifact` | Create a mission artifact mid-turn without delivering (same rules as REST POST) | `--mission-id <id>`, `--type <type>`, `--label <text>` | `--session-key <key>`, `--content-text <text>` or `--content-text-file <path|->`, `--external-url <url>` (at least one content field required) |
+| `add-artifact` | Create a mission artifact mid-turn without delivering (same rules as REST POST) | `--mission-id <id>`, `--type <type>`, `--label <text>` | `--session-key <key>`, `--objective-id <id>` (stamps objective provenance with no live session; `--session-key` wins), `--content-text <text>` or `--content-text-file <path|->`, `--external-url <url>` (at least one content field required) |
 | `update-artifact` | Update an existing mission artifact in place (same rules as REST PATCH) | `--mission-id <id>`, `--artifact-id <id>`, `--expected-revision <n>` | `--label <text>`, `--content-text <text>` or `--content-text-file <path|->`, `--external-url <url>` (at least one optional field required) |
-| `attachment-list` | List all mission attachments | `--mission-id <id>` | — |
-| `attachment-download-url` | Get download URL for one attachment | `--mission-id <id>`, `--attachment-id <id>` | — |
+| `attachment-list` | List mission attachments | `--mission-id <id>` | `--objective-id <id>` (restrict to one objective) |
+| `attachment-download-url` | Get download URL for one attachment | `--mission-id <id>`, `--attachment-id <id>` | `--objective-id <id>` |
 | `help` | Print protocol reference (this document's protocol section in long form) | — | — |
 
 ### Change-rationale entry shape (`deliver`, `update`, `record-work`)

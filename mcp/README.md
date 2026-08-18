@@ -83,6 +83,24 @@ advertise the same canonical tool names and input contract shape. Backend tests
 compare those local `tools/list` responses against this hosted registry so a new
 hosted tool cannot be added without updating shipped connector shims.
 
+### Addressing a mission or an objective
+
+Every mission-scoped tool takes `objectiveId` — an objective UUID or a display
+id such as `coo:756.k7xm` — alongside `missionId`. A display id already names
+its parent mission, so `missionId` is **optional** whenever one is supplied:
+`overlord_load_mission_context`, `overlord_attach_session`,
+`overlord_update_session`, `overlord_deliver_session`, `overlord_add_artifact`,
+`overlord_add_objectives`, and `overlord_update_artifact` all derive it. An
+objective **UUID** names no mission and still needs `missionId`.
+
+On `overlord_load_mission_context` and `overlord_attach_session` the objective is
+also a *pin*: it selects which objective to read or execute. That is the only way
+to address a mission running objectives in parallel, where rediscovering "the
+active objective" is ambiguous and returns `ambiguous_active_objective`. On
+`overlord_add_artifact` it stamps objective provenance when no live `sessionKey`
+is available. On `overlord_add_objectives` and `overlord_update_artifact` it only
+supplies the mission scope.
+
 `overlord_create_mission` and `overlord_add_objectives` accept optional
 `autoAdvance` (boolean; default false) so delivery can queue the next objective.
 `overlord_update_objective` toggles that flag on an existing objective.

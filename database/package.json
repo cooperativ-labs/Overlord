@@ -27,6 +27,7 @@
     "test": "node --import tsx --test 'src/**/*.test.ts'"
   },
   "dependencies": {
+    "@overlord/contract": "workspace:*",
     "better-sqlite3": "^12.11.1"
   },
   "license": "MIT"

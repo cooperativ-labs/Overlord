@@ -34,6 +34,15 @@ export {
   type LaunchVariableDefinition
 } from './launch-variables.js';
 export {
+  formatObjectiveDisplayId,
+  missionDisplayIdFromObjectiveRef,
+  OBJECTIVE_DISPLAY_ID_SEPARATOR,
+  OBJECTIVE_DISPLAY_KEY_ALPHABET,
+  OBJECTIVE_DISPLAY_KEY_LENGTH,
+  type ParsedObjectiveRef,
+  parseObjectiveRef
+} from './objective-ref.js';
+export {
   accessModeToResourcePathPermission,
   formatProjectResourcePathsFromManifest,
   formatResourcePathWithPermission,

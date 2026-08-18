@@ -1,8 +1,9 @@
 import { type Permission, PERMISSIONS } from '@overlord/auth';
-import type {
-  CreateArtifactBody,
-  UpdateArtifactBody,
-  UpdateObjectiveBody
+import {
+  type CreateArtifactBody,
+  missionDisplayIdFromObjectiveRef,
+  type UpdateArtifactBody,
+  type UpdateObjectiveBody
 } from '@overlord/contract';
 
 import type { ServiceContext } from '../packages/core/service/context.ts';
@@ -118,7 +119,21 @@ async function protocolWorkspaceId(body: ProtocolRequestBody): Promise<string | 
     if (session) return session.workspace_id;
   }
 
-  const missionRef = strFlag(body, '--mission-id');
+  // `--objective-id` alone is a complete address, so it has to resolve a
+  // workspace on its own: a UUID identifies the objective row directly, and a
+  // display id falls through to the mission lookup below via `missionRefFlag`.
+  const objectiveRef = strFlag(body, '--objective-id');
+  if (objectiveRef) {
+    const objective = await db.get<{ workspace_id: string }>(
+      `SELECT workspace_id FROM objectives
+        WHERE id = ? AND deleted_at IS NULL AND workspace_id IN (${placeholders})`,
+      [objectiveRef, ...workspaceIds]
+    );
+    if (objective) return objective.workspace_id;
+  }
+
+  const missionRef =
+    strFlag(body, '--mission-id') ?? missionDisplayIdFromObjectiveRef(objectiveRef) ?? undefined;
   if (missionRef) {
     const byId = await db.get<{ workspace_id: string }>(
       `SELECT workspace_id FROM missions
@@ -344,6 +359,36 @@ function requireFlag(body: ProtocolRequestBody, name: string): string {
     throw new ApiError(400, `Missing required flag: ${name}`);
   }
   return value;
+}
+
+/**
+ * The mission reference for a subcommand, derived from `--objective-id` when the
+ * caller supplied only that.
+ *
+ * An objective display id spells its parent mission (`coo:756.k7xm` -> `coo:756`),
+ * so an agent that has been handed one identifier can address every subcommand
+ * with it. The CLI derives this client-side too, but hosted MCP and any direct
+ * REST caller reach this handler with an untouched body, so the derivation has
+ * to exist on both sides. An objective UUID names no mission, so it cannot
+ * stand in for one.
+ */
+function missionRefFlag(body: ProtocolRequestBody): string {
+  const explicit = strFlag(body, '--mission-id');
+  if (explicit !== undefined && explicit.trim() !== '') return explicit;
+
+  const derived = missionDisplayIdFromObjectiveRef(strFlag(body, '--objective-id'));
+  if (derived) return derived;
+
+  throw new ApiError(
+    400,
+    'Missing required flag: --mission-id (pass it, or an objective display id such as coo:756.k7xm as --objective-id)'
+  );
+}
+
+/** Optional objective reference (UUID or `{mission.display_id}.{display_key}`). */
+function objectiveRefFlag(body: ProtocolRequestBody): string | null {
+  const value = strFlag(body, '--objective-id');
+  return value !== undefined && value.trim() !== '' ? value.trim() : null;
 }
 
 /** Parse a JSON flag supplied inline (`--x-json`) or via stdin (`--x-file`). */
@@ -635,7 +680,7 @@ const handlers: Record<string, Handler> = {
   attach: (ctx, body) =>
     attachSession({
       ctx,
-      missionId: requireFlag(body, '--mission-id'),
+      missionId: missionRefFlag(body),
       agentIdentifier: strFlag(body, '--agent') ?? 'unknown',
       modelIdentifier: strFlag(body, '--model') ?? null,
       existingSessionKey: strFlag(body, '--session-key') ?? null,
@@ -645,13 +690,13 @@ const handlers: Record<string, Handler> = {
       // The channel id only. Its credential never travels in a protocol flag — it reaches the
       // backend solely as an Authorization header on the adapter route family.
       sessionChannelId: strFlag(body, '--session-channel-id') ?? null,
-      objectiveId: strFlag(body, '--objective-id') ?? null
+      objectiveId: objectiveRefFlag(body)
     }),
 
   update: (ctx, body) =>
     updateSession({
       ctx,
-      missionId: requireFlag(body, '--mission-id'),
+      missionId: missionRefFlag(body),
       sessionKey: requireFlag(body, '--session-key'),
       summary: resolveInput(body, '--summary', '--summary-file') ?? '',
       phase: strFlag(body, '--phase') ?? null,
@@ -680,7 +725,7 @@ const handlers: Record<string, Handler> = {
   heartbeat: (ctx, body) =>
     heartbeatSession({
       ctx,
-      missionId: requireFlag(body, '--mission-id'),
+      missionId: missionRefFlag(body),
       sessionKey: requireFlag(body, '--session-key'),
       phase: strFlag(body, '--phase') ?? null,
       note: strFlag(body, '--note') ?? null
@@ -689,7 +734,7 @@ const handlers: Record<string, Handler> = {
   ask: (ctx, body) =>
     askQuestion({
       ctx,
-      missionId: requireFlag(body, '--mission-id'),
+      missionId: missionRefFlag(body),
       sessionKey: requireFlag(body, '--session-key'),
       question: resolveInput(body, '--question', '--question-file') ?? ''
     }),
@@ -704,7 +749,7 @@ const handlers: Record<string, Handler> = {
     );
     return deliverSession({
       ctx,
-      missionId: requireFlag(body, '--mission-id'),
+      missionId: missionRefFlag(body),
       sessionKey: requireFlag(body, '--session-key'),
       summary: resolveInput(body, '--summary', '--summary-file') ?? envelope.summary ?? '',
       artifacts: artifacts ?? envelope.artifacts ?? [],
@@ -736,7 +781,7 @@ const handlers: Record<string, Handler> = {
   'hook-event': (ctx, body) =>
     recordHookEvent({
       ctx,
-      missionId: requireFlag(body, '--mission-id'),
+      missionId: missionRefFlag(body),
       hookType: requireFlag(body, '--hook-type'),
       prompt: resolveInput(body, '--prompt', '--prompt-file') ?? '',
       sessionKey: strFlag(body, '--session-key') ?? null,
@@ -747,8 +792,8 @@ const handlers: Record<string, Handler> = {
   'resume-follow-up': (ctx, body) =>
     resumeFollowUp({
       ctx,
-      missionId: requireFlag(body, '--mission-id'),
-      objectiveId: strFlag(body, '--objective-id') ?? null,
+      missionId: missionRefFlag(body),
+      objectiveId: objectiveRefFlag(body),
       agentIdentifier: strFlag(body, '--agent') ?? 'unknown',
       modelIdentifier: strFlag(body, '--model') ?? null,
       externalSessionId: externalSessionId(body),
@@ -815,14 +860,16 @@ const handlers: Record<string, Handler> = {
   'load-context': (ctx, body) =>
     loadMissionContext({
       ctx,
-      missionId: requireFlag(body, '--mission-id'),
+      missionId: missionRefFlag(body),
+      objectiveId: objectiveRefFlag(body),
       executionTargetId: strFlag(body, '--execution-target-id') ?? null
     }),
 
   connect: (ctx, body) =>
     connectSession({
       ctx,
-      missionId: requireFlag(body, '--mission-id'),
+      missionId: missionRefFlag(body),
+      objectiveId: objectiveRefFlag(body),
       agentIdentifier: strFlag(body, '--agent') ?? 'unknown',
       externalSessionId: externalSessionId(body)
     }),
@@ -837,12 +884,16 @@ const handlers: Record<string, Handler> = {
     }),
 
   'discuss-objective': (ctx, body) =>
-    discussObjective({ ctx, missionId: requireFlag(body, '--mission-id') }),
+    discussObjective({
+      ctx,
+      missionId: missionRefFlag(body),
+      objectiveId: objectiveRefFlag(body)
+    }),
 
   'add-objectives': async (ctx, body) =>
     addObjectivesToMission({
       ctx: await withAgentOrigin({ ctx, body }),
-      missionId: requireFlag(body, '--mission-id'),
+      missionId: missionRefFlag(body),
       objectives: withDefaultAutoAdvance(
         parseJsonInput<ObjectiveInput[]>(body, '--objectives-json', '--objectives-file') ?? [],
         optionalAutoAdvanceFlag(body)
@@ -923,7 +974,7 @@ const handlers: Record<string, Handler> = {
   'read-context': (ctx, body) =>
     listSharedContext({
       ctx,
-      missionId: requireFlag(body, '--mission-id'),
+      missionId: missionRefFlag(body),
       keySubstring: strFlag(body, '--key') ?? null,
       limit: intFlag(body, '--limit') ?? 50
     }),
@@ -933,7 +984,7 @@ const handlers: Record<string, Handler> = {
     const value = valueJson !== undefined ? valueJson : (strFlag(body, '--value') ?? '');
     return writeSharedContext({
       ctx,
-      missionId: requireFlag(body, '--mission-id'),
+      missionId: missionRefFlag(body),
       key: requireFlag(body, '--key'),
       value
     });
@@ -958,7 +1009,14 @@ const handlers: Record<string, Handler> = {
     if (sessionKey) {
       create.sessionKey = sessionKey;
     }
-    return createArtifact(requireFlag(body, '--mission-id'), create);
+    // Without a live session there is nothing to infer objective provenance
+    // from, so an explicit reference is the only way a mid-turn artifact lands
+    // on the objective it belongs to.
+    const objectiveRef = objectiveRefFlag(body);
+    if (objectiveRef) {
+      create.objectiveId = objectiveRef;
+    }
+    return createArtifact(missionRefFlag(body), create);
   },
 
   // In-place artifact edit (same service as REST PATCH). No session key — a
@@ -980,16 +1038,16 @@ const handlers: Record<string, Handler> = {
       const url = strFlag(body, '--external-url');
       update.externalUrl = url !== undefined && url.trim() ? url : null;
     }
-    return updateArtifact(
-      requireFlag(body, '--mission-id'),
-      requireFlag(body, '--artifact-id'),
-      update
-    );
+    return updateArtifact(missionRefFlag(body), requireFlag(body, '--artifact-id'), update);
   },
 
   'attachment-list': async (ctx, body) => {
-    const missionId = requireFlag(body, '--mission-id');
-    const attachments = await listAttachments({ ctx, missionId });
+    const missionId = missionRefFlag(body);
+    const attachments = await listAttachments({
+      ctx,
+      missionId,
+      objectiveId: objectiveRefFlag(body)
+    });
     return attachments.map(a => ({
       ...a,
       url: `/api/storage/attachments/${encodeURIComponent(a.storageKey)}`
@@ -997,9 +1055,13 @@ const handlers: Record<string, Handler> = {
   },
 
   'attachment-download-url': async (ctx, body) => {
-    const missionId = requireFlag(body, '--mission-id');
+    const missionId = missionRefFlag(body);
     const attachmentId = requireFlag(body, '--attachment-id');
-    const attachments = await listAttachments({ ctx, missionId });
+    const attachments = await listAttachments({
+      ctx,
+      missionId,
+      objectiveId: objectiveRefFlag(body)
+    });
     const found = attachments.find(a => a.id === attachmentId);
     if (!found) throw new ApiError(404, `Attachment not found: ${attachmentId}`);
     return {

@@ -164,12 +164,15 @@ const tools = [
       'Load structured mission context, objectives, history, artifacts, and shared context.',
     inputSchema: objectSchema(
       {
-        missionId: stringProperty('Mission UUID or workspace display id such as coo:150.'),
+        missionId: stringProperty('Mission UUID or workspace display id. Optional when objectiveId is a display id such as coo:756.k7xm, which already names its mission.'),
+        objectiveId: stringProperty(
+          'Objective UUID or display id such as coo:756.k7xm. Returns that objective as the current one instead of rediscovering the mission active objective.'
+        ),
         executionTargetId: stringProperty(
           'Optional local execution target id for resolving sibling project resource paths.'
         )
       },
-      ['missionId']
+      []
     )
   },
   {
@@ -178,7 +181,10 @@ const tools = [
     description: 'Append one or more draft objectives to an existing mission.',
     inputSchema: objectSchema(
       {
-        missionId: stringProperty('Mission UUID or workspace display id.'),
+        missionId: stringProperty('Mission UUID or workspace display id. Optional when objectiveId is a display id such as coo:756.k7xm, which already names its mission.'),
+        objectiveId: stringProperty(
+          'Objective UUID or display id such as coo:756.k7xm. Used only to supply missionId when it is omitted.'
+        ),
         objectives: {
           type: 'array',
           description:
@@ -193,7 +199,7 @@ const tools = [
           })
         }
       },
-      ['missionId', 'objectives']
+      ['objectives']
     )
   },
   {
@@ -221,7 +227,7 @@ const tools = [
       'Attach an MCP-hosted agent session to a mission before update/ask/deliver. Pass objectiveId when the caller already knows which objective to execute.',
     inputSchema: objectSchema(
       {
-        missionId: stringProperty('Mission UUID or workspace display id.'),
+        missionId: stringProperty('Mission UUID or workspace display id. Optional when objectiveId is a display id such as coo:756.k7xm, which already names its mission.'),
         objectiveId: stringProperty(
           'Optional objective UUID or display id (e.g. coo:756.k7xm). Pins attach to that objective.'
         ),
@@ -231,7 +237,7 @@ const tools = [
           'Optional local execution target id for resolving sibling project resource paths.'
         )
       },
-      ['missionId']
+      []
     )
   },
   {
@@ -240,13 +246,16 @@ const tools = [
     description: 'Post an update, alert, decision, or discussion summary for an attached session.',
     inputSchema: objectSchema(
       {
-        missionId: stringProperty('Mission UUID or workspace display id.'),
+        missionId: stringProperty('Mission UUID or workspace display id. Optional when objectiveId is a display id such as coo:756.k7xm, which already names its mission.'),
+        objectiveId: stringProperty(
+          'Objective UUID or display id such as coo:756.k7xm. Supplies missionId when it is omitted; the session key still determines which objective the event lands on.'
+        ),
         sessionKey: stringProperty('Session key returned by overlord_attach_session.'),
         summary: stringProperty('Update text.'),
         phase: stringProperty('Optional protocol phase.'),
         eventType: stringProperty('Optional event type. Defaults to update.')
       },
-      ['missionId', 'sessionKey', 'summary']
+      ['sessionKey', 'summary']
     )
   },
   {
@@ -256,7 +265,10 @@ const tools = [
       'Deliver an attached session with explicit summary, optional change rationales, and optional human-action/tradeoff evidence.',
     inputSchema: objectSchema(
       {
-        missionId: stringProperty('Mission UUID or workspace display id.'),
+        missionId: stringProperty('Mission UUID or workspace display id. Optional when objectiveId is a display id such as coo:756.k7xm, which already names its mission.'),
+        objectiveId: stringProperty(
+          'Objective UUID or display id such as coo:756.k7xm. Supplies missionId when it is omitted; the session key still determines which objective is delivered.'
+        ),
         sessionKey: stringProperty('Session key returned by overlord_attach_session.'),
         summary: stringProperty('Delivery summary.'),
         artifacts: {
@@ -284,7 +296,7 @@ const tools = [
         deferredWork: { type: 'array', description: 'Intentionally deferred work.' },
         assumptions: { type: 'array', description: 'Material implementation assumptions.' }
       },
-      ['missionId', 'sessionKey', 'summary']
+      ['sessionKey', 'summary']
     )
   },
   {
@@ -294,7 +306,10 @@ const tools = [
       'Create a mission artifact during a turn without delivering (plan, notes, decision, URL). Provide type, label, and at least one of contentText or externalUrl. Optional sessionKey stamps provenance. Revise later with overlord_update_artifact.',
     inputSchema: objectSchema(
       {
-        missionId: stringProperty('Mission UUID or workspace display id.'),
+        missionId: stringProperty('Mission UUID or workspace display id. Optional when objectiveId is a display id such as coo:756.k7xm, which already names its mission.'),
+        objectiveId: stringProperty(
+          'Objective UUID or display id such as coo:756.k7xm. Stamps objective provenance when no live sessionKey is available.'
+        ),
         type: stringProperty(
           'Artifact type: test_results, next_steps, note, url, decision, or migration.'
         ),
@@ -303,7 +318,7 @@ const tools = [
         externalUrl: stringProperty('Optional HTTP(S) URL.'),
         sessionKey: stringProperty('Optional live session key from attach.')
       },
-      ['missionId', 'type', 'label']
+      ['type', 'label']
     )
   },
   {
@@ -313,7 +328,10 @@ const tools = [
       'Revise an existing mission artifact in place (label, Markdown content, and/or URL) using optimistic concurrency via expectedRevision.',
     inputSchema: objectSchema(
       {
-        missionId: stringProperty('Mission UUID or workspace display id.'),
+        missionId: stringProperty('Mission UUID or workspace display id. Optional when objectiveId is a display id such as coo:756.k7xm, which already names its mission.'),
+        objectiveId: stringProperty(
+          'Objective UUID or display id such as coo:756.k7xm. Used only to supply missionId when it is omitted.'
+        ),
         artifactId: stringProperty('Artifact id from mission context.'),
         expectedRevision: {
           type: 'number',
@@ -323,7 +341,7 @@ const tools = [
         contentText: stringProperty('Optional new Markdown/text content.'),
         externalUrl: stringProperty('Optional HTTP(S) URL.')
       },
-      ['missionId', 'artifactId', 'expectedRevision']
+      ['artifactId', 'expectedRevision']
     )
   },
   {
@@ -364,6 +382,32 @@ function requiredString(args, name) {
   const value = optionalString(args, name);
   if (!value) throw new Error(`Missing required argument: ${name}`);
   return value;
+}
+
+/** Mission display id spelled inside an objective display id (`coo:756.k7xm`). */
+function missionFromObjectiveRef(ref) {
+  const match =
+    typeof ref === 'string' ? /^(.+:\d+)\.[0-9a-hjkmnp-tv-z]{4,5}$/i.exec(ref.trim()) : null;
+  return match ? match[1] : null;
+}
+
+/**
+ * Mission/objective addressing shared by every mission-scoped tool: an objective
+ * display id already names its mission, so a caller holding only that identifier
+ * can address the tool with it. Mirrors `missionScopeFlags` in mcp/server.ts.
+ */
+function missionScopeFlags(args) {
+  const objectiveId = optionalString(args, 'objectiveId');
+  const missionId = optionalString(args, 'missionId') ?? missionFromObjectiveRef(objectiveId);
+  if (!missionId) {
+    throw new Error(
+      'Missing required argument: missionId (pass it, or an objective display id such as coo:756.k7xm as objectiveId)'
+    );
+  }
+  return {
+    'mission-id': missionId,
+    ...(objectiveId ? { 'objective-id': objectiveId } : {})
+  };
 }
 
 function callOverlordTool(name, args) {
@@ -425,7 +469,7 @@ function callOverlordTool(name, args) {
   }
   if (name === 'overlord_load_mission_context') {
     return runProtocol('load-context', {
-      'mission-id': requiredString(args, 'missionId'),
+      ...missionScopeFlags(args),
       ...(optionalString(args, 'executionTargetId')
         ? { 'execution-target-id': requiredString(args, 'executionTargetId') }
         : {})
@@ -434,7 +478,8 @@ function callOverlordTool(name, args) {
   if (name === 'overlord_add_objectives') {
     if (!Array.isArray(args.objectives)) throw new Error('objectives must be an array');
     return runProtocol('add-objectives', {
-      'mission-id': requiredString(args, 'missionId'),
+      // objectiveId here only names the mission; the new objectives are appended.
+      'mission-id': missionScopeFlags(args)['mission-id'],
       'objectives-json': args.objectives
     });
   }
@@ -452,11 +497,8 @@ function callOverlordTool(name, args) {
   }
   if (name === 'overlord_attach_session') {
     return runProtocol('attach', {
-      'mission-id': requiredString(args, 'missionId'),
+      ...missionScopeFlags(args),
       agent: optionalString(args, 'agent') ?? DEFAULT_AGENT,
-      ...(optionalString(args, 'objectiveId')
-        ? { 'objective-id': requiredString(args, 'objectiveId') }
-        : {}),
       ...(optionalString(args, 'model') ? { model: requiredString(args, 'model') } : {}),
       ...(optionalString(args, 'executionTargetId')
         ? { 'execution-target-id': requiredString(args, 'executionTargetId') }
@@ -465,7 +507,7 @@ function callOverlordTool(name, args) {
   }
   if (name === 'overlord_update_session') {
     return runProtocol('update', {
-      'mission-id': requiredString(args, 'missionId'),
+      ...missionScopeFlags(args),
       'session-key': requiredString(args, 'sessionKey'),
       summary: requiredString(args, 'summary'),
       ...(optionalString(args, 'phase') ? { phase: requiredString(args, 'phase') } : {}),
@@ -476,7 +518,7 @@ function callOverlordTool(name, args) {
   }
   if (name === 'overlord_deliver_session') {
     return runProtocol('deliver', {
-      'mission-id': requiredString(args, 'missionId'),
+      ...missionScopeFlags(args),
       'session-key': requiredString(args, 'sessionKey'),
       summary: requiredString(args, 'summary'),
       ...(args.noFileChanges === true ? { 'no-file-changes': true } : {}),
@@ -515,7 +557,7 @@ function callOverlordTool(name, args) {
       throw new Error('Provide at least one of contentText or externalUrl');
     }
     return runProtocol('add-artifact', {
-      'mission-id': requiredString(args, 'missionId'),
+      ...missionScopeFlags(args),
       type: requiredString(args, 'type'),
       label: requiredString(args, 'label'),
       ...(hasContentText ? { 'content-text': args.contentText } : {}),
@@ -536,7 +578,8 @@ function callOverlordTool(name, args) {
       throw new Error('Provide at least one of label, contentText, or externalUrl');
     }
     return runProtocol('update-artifact', {
-      'mission-id': requiredString(args, 'missionId'),
+      // The artifact is addressed by its own id; objectiveId only scopes the mission.
+      'mission-id': missionScopeFlags(args)['mission-id'],
       'artifact-id': requiredString(args, 'artifactId'),
       'expected-revision': String(Math.trunc(args.expectedRevision)),
       ...(hasLabel ? { label: args.label } : {}),
@@ -590,7 +633,7 @@ process.stdin.on('data', async chunk => {
         result: {
           protocolVersion: PROTOCOL_VERSION,
           capabilities: { tools: { listChanged: false } },
-          serverInfo: { name: 'overlord-__OVERLORD_ADAPTER_KEY__', version: '0.3.26' }
+          serverInfo: { name: 'overlord-__OVERLORD_ADAPTER_KEY__', version: '0.3.27' }
         }
       });
       continue;

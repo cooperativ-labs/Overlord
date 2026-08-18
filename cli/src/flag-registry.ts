@@ -36,6 +36,7 @@ const AGENT_SESSION_FLAGS = [
   '--agent',
   '--native-session-id',
   '--mission-id',
+  '--objective-id',
   '--payload-file',
   '--port',
   '--confirm',
@@ -105,6 +106,7 @@ export const COMMAND_FLAGS: Record<string, readonly string[]> = {
   resume: LAUNCH_FLAGS,
   runner: [
     '--project-id',
+    '--objective-id',
     '--poll-interval-ms',
     '--dry-run',
     '--branch',
@@ -115,7 +117,7 @@ export const COMMAND_FLAGS: Record<string, readonly string[]> = {
   ],
   missions: ['--status', '--query', '--project-id', '--limit'],
   requests: ['--revision', '--decision', '--text'],
-  inputs: ['--mission-id', '--channel-id', '--body', '--kind'],
+  inputs: ['--mission-id', '--objective-id', '--channel-id', '--body', '--kind'],
   mission: [],
   changes: ['--mission-id', '--objective-id']
 };

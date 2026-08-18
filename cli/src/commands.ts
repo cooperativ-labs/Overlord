@@ -1,7 +1,9 @@
 import {
   type AgentLaunchFlagDto,
+  missionDisplayIdFromObjectiveRef,
   normalizeAgentLaunchFlags,
-  parseAgentLaunchFlagText
+  parseAgentLaunchFlagText,
+  parseObjectiveRef
 } from '@overlord/contract';
 import { collectLatchEvents } from '@overlord/core/service/latch-events';
 import { chunkLatchHarnessEventsForIngest } from '@overlord/core/service/latch-harness-ingest';
@@ -657,12 +659,44 @@ export function queueableObjectiveId(mission: unknown): string | undefined {
   return undefined;
 }
 
-/** The agent already assigned to an objective on a fetched mission payload, if any. */
-function objectiveAssignedAgent(mission: unknown, objectiveId: string): string | undefined {
+/**
+ * Find an objective on a fetched mission payload by any of the references a
+ * caller may hold: UUID, full display id (`coo:756.k7xm`), or the bare display
+ * key. Matching only the UUID would silently miss a `--objective-id` that used
+ * the public form, which is the form every prompt and launch command prints.
+ */
+function findObjectiveByRef(
+  mission: unknown,
+  objectiveRef: string
+): Record<string, unknown> | undefined {
   const objectives = asRecord(mission).objectives;
   if (!Array.isArray(objectives)) return undefined;
-  const match = objectives.find(objective => asRecord(objective).id === objectiveId);
-  const agent = asRecord(match).assignedAgent;
+  const parsed = parseObjectiveRef(objectiveRef);
+  const wanted = objectiveRef.trim().toLowerCase();
+  return objectives
+    .map(objective => asRecord(objective))
+    .find(objective => {
+      const id = typeof objective.id === 'string' ? objective.id.toLowerCase() : null;
+      const displayId =
+        typeof objective.displayId === 'string' ? objective.displayId.toLowerCase() : null;
+      const displayKey =
+        typeof objective.displayKey === 'string' ? objective.displayKey.toLowerCase() : null;
+      if (id === wanted || displayId === wanted) return true;
+      if (parsed.kind === 'display_id' && displayKey === parsed.displayKey) return true;
+      if (parsed.kind === 'display_key' && displayKey === parsed.displayKey) return true;
+      return false;
+    });
+}
+
+/** The objective UUID for any reference form, falling back to the reference itself. */
+function objectiveIdForRef(mission: unknown, objectiveRef: string): string {
+  const id = asRecord(findObjectiveByRef(mission, objectiveRef)).id;
+  return typeof id === 'string' && id.trim() ? id : objectiveRef;
+}
+
+/** The agent already assigned to an objective on a fetched mission payload, if any. */
+function objectiveAssignedAgent(mission: unknown, objectiveRef: string): string | undefined {
+  const agent = asRecord(findObjectiveByRef(mission, objectiveRef)).assignedAgent;
   return typeof agent === 'string' && agent.trim() ? agent.trim() : undefined;
 }
 
@@ -698,6 +732,38 @@ const SESSION_KEY_SUBCOMMANDS = new Set([
   'deliver',
   'hook-event',
   'record-change-rationales'
+]);
+
+/**
+ * Subcommands whose `--objective-id` may be auto-filled from the launch
+ * environment (`OVERLORD_OBJECTIVE_ID`) or the recovered launch bootstrap.
+ *
+ * These are the commands that operate on the objective the session is already
+ * running, so inheriting it is what the caller meant. Deliberately excluded:
+ * `update-objective` (the id names the row being mutated, so guessing it would
+ * silently edit the wrong objective), `discuss-objective` (it wants a *draft*,
+ * never the executing objective the env points at), and the mission-creation
+ * commands, where an objective reference has no meaning.
+ */
+const OBJECTIVE_SCOPED_SUBCOMMANDS = new Set([
+  'add-artifact',
+  'ask',
+  'attachment-download-url',
+  'attachment-list',
+  'changes',
+  'connect',
+  'deliver',
+  'heartbeat',
+  'hook-event',
+  'load-context',
+  'read-context',
+  'record-change-rationales',
+  'record-touched',
+  'resume-follow-up',
+  'attach',
+  'update',
+  'update-artifact',
+  'write-context'
 ]);
 
 /**
@@ -794,7 +860,6 @@ export async function runProtocolCommand({
   rejectOversizedInlineJson({ flags: parsed.flags });
 
   const workingDirectory = process.cwd();
-  const missionId = flagValue(parsed.flags, '--mission-id') ?? parsed.positional[0];
   const flags = Object.fromEntries(parsed.flags);
   if (
     subcommand === 'attach' &&
@@ -804,7 +869,7 @@ export async function runProtocolCommand({
     flags['--execution-request-id'] = process.env.OVERLORD_EXECUTION_REQUEST_ID;
   }
   if (
-    subcommand === 'attach' &&
+    OBJECTIVE_SCOPED_SUBCOMMANDS.has(subcommand) &&
     typeof flags['--objective-id'] !== 'string' &&
     process.env.OVERLORD_OBJECTIVE_ID
   ) {
@@ -822,9 +887,12 @@ export async function runProtocolCommand({
   // Agent-pod / `agp` launches often strip the Overlord launch exports from the agent process
   // environment even though they remain in `.overlord/tmp/launch-*.sh`. Recover the non-secret
   // channel id (and execution request id) from that script so attach still binds.
-  if (subcommand === 'attach') {
-    const needsChannelId = typeof flags['--session-channel-id'] !== 'string';
-    const needsExecutionRequestId = typeof flags['--execution-request-id'] !== 'string';
+  const explicitMissionId = flagValue(parsed.flags, '--mission-id') ?? parsed.positional[0];
+  if (subcommand === 'attach' || OBJECTIVE_SCOPED_SUBCOMMANDS.has(subcommand)) {
+    const needsChannelId =
+      subcommand === 'attach' && typeof flags['--session-channel-id'] !== 'string';
+    const needsExecutionRequestId =
+      subcommand === 'attach' && typeof flags['--execution-request-id'] !== 'string';
     const needsObjectiveId = typeof flags['--objective-id'] !== 'string';
     if (needsChannelId && process.env.OVERLORD_SESSION_CHANNEL_ID) {
       flags['--session-channel-id'] = process.env.OVERLORD_SESSION_CHANNEL_ID;
@@ -832,10 +900,12 @@ export async function runProtocolCommand({
     if (
       (needsChannelId && typeof flags['--session-channel-id'] !== 'string') ||
       (needsExecutionRequestId && typeof flags['--execution-request-id'] !== 'string') ||
-      (needsObjectiveId && typeof flags['--objective-id'] !== 'string')
+      needsObjectiveId
     ) {
       const missionHint =
-        (typeof missionId === 'string' && missionId.trim() ? missionId.trim() : null) ??
+        (typeof explicitMissionId === 'string' && explicitMissionId.trim()
+          ? explicitMissionId.trim()
+          : null) ??
         process.env.MISSION_ID ??
         process.env.OVERLORD_MISSION_ID ??
         null;
@@ -856,6 +926,20 @@ export async function runProtocolCommand({
       }
     }
   }
+
+  // An objective display id already names its mission (`coo:756.k7xm` ->
+  // `coo:756`), so an agent that reconnects holding only the objective it was
+  // launched for can address every subcommand with it. Fill `--mission-id` in
+  // here rather than leaving it to the backend so the local paths below —
+  // session-key cache, VCS baseline, touched-files log — all key off the same
+  // mission the request will.
+  const objectiveRef =
+    typeof flags['--objective-id'] === 'string' ? flags['--objective-id'] : undefined;
+  const missionId =
+    explicitMissionId ?? missionDisplayIdFromObjectiveRef(objectiveRef) ?? undefined;
+  if (missionId && typeof flags['--mission-id'] !== 'string') {
+    flags['--mission-id'] = missionId;
+  }
   const { fileInputs, stdin: protocolStdin } = await resolveProtocolFileInputs({
     flags: parsed.flags,
     stdin
@@ -866,10 +950,7 @@ export async function runProtocolCommand({
   // its native hook JSON on stdin and gets the same bookkeeping cli/src/vcs.ts
   // already does for the Claude hook, without needing MISSION_ID in env.
   if (subcommand === 'record-touched') {
-    const missionOverride =
-      flagValue(parsed.flags, '--mission-id') ??
-      process.env.MISSION_ID ??
-      process.env.OVERLORD_MISSION_ID;
+    const missionOverride = missionId ?? process.env.MISSION_ID ?? process.env.OVERLORD_MISSION_ID;
     // The hook payload arrives as raw piped stdin, not a --*-file flag, so read
     // fd 0 directly rather than going through resolveProtocolFileInputs (which
     // only reads stdin when a --*-file flag is literally '-').
@@ -889,7 +970,10 @@ export async function runProtocolCommand({
   // before delivering with one read-only, ready-to-use report.
   if (subcommand === 'changes') {
     if (!missionId) {
-      throw new CliError({ message: 'Usage: ovld protocol changes --mission-id <id>' });
+      throw new CliError({
+        message:
+          'Usage: ovld protocol changes --mission-id <id> (or --objective-id <mission-display-id>.<key>)'
+      });
     }
     const classified = filterRunAttributableChanges({
       workingDirectory,
@@ -929,7 +1013,7 @@ export async function runProtocolCommand({
     const cached = readCachedSessionKey({
       missionId,
       workingDirectory,
-      objectiveId: flagValue(parsed.flags, '--objective-id') ?? process.env.OVERLORD_OBJECTIVE_ID
+      objectiveId: objectiveRef
     });
     if (cached) flags['--session-key'] = cached;
   }
@@ -992,9 +1076,9 @@ export async function runProtocolCommand({
       resolveNativeSessionId({
         explicit: undefined,
         agent: flagValue(parsed.flags, '--agent') ?? 'unknown',
-        missionId: flagValue(parsed.flags, '--mission-id') ?? 'unknown',
+        missionId: missionId ?? 'unknown',
         workingDirectory,
-        objectiveId: flagValue(parsed.flags, '--objective-id') ?? process.env.OVERLORD_OBJECTIVE_ID
+        objectiveId: objectiveRef
       })
   };
 
@@ -1046,8 +1130,11 @@ export async function runProtocolCommand({
       const attachedObjectiveId =
         (typeof attachedObjective.displayId === 'string' && attachedObjective.displayId.trim()) ||
         (typeof attachedObjective.id === 'string' && attachedObjective.id.trim()) ||
-        flagValue(parsed.flags, '--objective-id') ||
-        process.env.OVERLORD_OBJECTIVE_ID ||
+        // `connect` returns a flat result rather than the full objective record.
+        (typeof resultRecord.objectiveDisplayId === 'string' &&
+          resultRecord.objectiveDisplayId.trim()) ||
+        (typeof resultRecord.objectiveId === 'string' && resultRecord.objectiveId.trim()) ||
+        objectiveRef ||
         null;
       writeCachedSessionKey({
         missionId,
@@ -1143,6 +1230,9 @@ export async function runProtocolCommand({
               positional: [],
               flags: {
                 '--mission-id': missionId,
+                // Carry the objective so the alert lands on the run that
+                // produced it rather than on whichever one attach rediscovers.
+                ...(objectiveRef ? { '--objective-id': objectiveRef } : {}),
                 '--session-key': sessionKeyForAlert,
                 '--event-type': 'alert',
                 '--summary': warning
@@ -1424,17 +1514,24 @@ export async function runManagementCommand({
     }
     case 'attach':
     case 'execution': {
+      const objectiveRef = flagValue(parsed.flags, '--objective-id');
       const missionId =
-        command === 'attach'
+        (command === 'attach'
           ? (parsed.positional[0] ?? flagValue(parsed.flags, '--mission-id'))
-          : requireFlag(parsed.flags, '--mission-id');
+          : flagValue(parsed.flags, '--mission-id')) ??
+        missionDisplayIdFromObjectiveRef(objectiveRef);
       const explicitAgent = parsed.positional[1] ?? flagValue(parsed.flags, '--agent');
-      if (!missionId) throw new CliError({ message: 'Usage: ovld attach <missionId> [agent]' });
+      if (!missionId) {
+        throw new CliError({
+          message: `Usage: ovld ${command} <missionId> [agent] (or --objective-id <mission-display-id>.<key>)`
+        });
+      }
       const mission = await runtime.backend.get<unknown>(
         `/api/missions/${encodeURIComponent(missionId)}`
       );
-      const objectiveId =
-        flagValue(parsed.flags, '--objective-id') ?? queueableObjectiveId(mission);
+      const objectiveId = objectiveRef
+        ? objectiveIdForRef(mission, objectiveRef)
+        : queueableObjectiveId(mission);
       if (!objectiveId)
         throw new CliError({ message: `No launchable objective found for ${missionId}` });
       // Honor an explicit agent; otherwise reuse the agent already stored on the
@@ -1465,13 +1562,19 @@ export async function runManagementCommand({
             parsed.positional[0] ??
             loadConfig().defaultAgent)
           : parsed.positional[0];
+      const objectiveRef = flagValue(parsed.flags, '--objective-id');
+      // `--objective-id coo:756.k7xm` is a complete address, so a caller who was
+      // handed only the objective (the reconnect case) does not need to restate
+      // the mission it belongs to.
       const missionId =
         flagValue(parsed.flags, '--mission-id') ??
-        (command === 'run' || command === 'connect' || command === 'resume'
-          ? parsed.positional[1]
-          : parsed.positional[1]);
+        parsed.positional[1] ??
+        missionDisplayIdFromObjectiveRef(objectiveRef) ??
+        undefined;
       if (!agent || !missionId) {
-        throw new CliError({ message: `Usage: ovld ${command} <agent> --mission-id <missionId>` });
+        throw new CliError({
+          message: `Usage: ovld ${command} <agent> --mission-id <missionId> (or --objective-id <mission-display-id>.<key>)`
+        });
       }
       const workingDirectory = flagValue(parsed.flags, '--working-directory') ?? process.cwd();
       const dryRun = flagBoolean(parsed.flags, '--dry-run');
@@ -1483,8 +1586,9 @@ export async function runManagementCommand({
         runtime: scopedRuntime,
         flags: parsed.flags
       });
-      const objectiveId =
-        flagValue(parsed.flags, '--objective-id') ?? resolveActiveObjectiveId(mission);
+      const objectiveId = objectiveRef
+        ? objectiveIdForRef(mission, objectiveRef)
+        : resolveActiveObjectiveId(mission);
       const executionTargetId = await resolvePreferredExecutionTargetId({
         backend: scopedRuntime.backend
       });
@@ -1642,7 +1746,10 @@ export async function runManagementCommand({
     case 'inputs': {
       const sub = parsed.positional[0];
       if (!sub || sub === 'list') {
-        const missionId = flagValue(parsed.flags, '--mission-id') ?? parsed.positional[1];
+        const missionId =
+          flagValue(parsed.flags, '--mission-id') ??
+          parsed.positional[1] ??
+          missionDisplayIdFromObjectiveRef(flagValue(parsed.flags, '--objective-id'));
         if (!missionId) {
           throw new CliError({
             message:
@@ -1692,7 +1799,12 @@ export async function runManagementCommand({
     }
     case 'mission': {
       const sub = parsed.positional[0];
-      const missionId = parsed.positional[1];
+      // Mission read commands take an objective display id too: it names the
+      // mission, and it is the identifier an agent is most likely holding.
+      const missionRef = parsed.positional[1];
+      const missionId = missionRef
+        ? (missionDisplayIdFromObjectiveRef(missionRef) ?? missionRef)
+        : undefined;
       if (!missionId) {
         throw new CliError({
           message:
@@ -1721,13 +1833,32 @@ export async function runManagementCommand({
     }
     case 'changes': {
       const sub = parsed.positional[0];
-      const missionId = requireFlag(parsed.flags, '--mission-id');
+      const objectiveRef = flagValue(parsed.flags, '--objective-id');
+      const missionId =
+        flagValue(parsed.flags, '--mission-id') ?? missionDisplayIdFromObjectiveRef(objectiveRef);
+      if (!missionId) {
+        throw new CliError({
+          message:
+            'Usage: ovld changes status|rationales --mission-id <id> (or --objective-id <mission-display-id>.<key>)'
+        });
+      }
       if (sub !== 'status' && sub !== 'rationales') {
         throw new CliError({ message: 'Usage: ovld changes status|rationales --mission-id <id>' });
       }
-      const result = await runtime.backend.get<unknown[]>(
+      const all = await runtime.backend.get<unknown[]>(
         `/api/missions/${encodeURIComponent(missionId)}/file-changes`
       );
+      // The route is mission-scoped and each row carries its objective, so
+      // narrow here rather than making `--objective-id` a flag that parses and
+      // then quietly does nothing.
+      let result = all;
+      if (objectiveRef) {
+        const mission = await runtime.backend.get<unknown>(
+          `/api/missions/${encodeURIComponent(missionId)}`
+        );
+        const objectiveId = objectiveIdForRef(mission, objectiveRef);
+        result = all.filter(row => asRecord(row).objectiveId === objectiveId);
+      }
       if (json) printJson({ files: result, rationales: result });
       else for (const row of result) console.log(JSON.stringify(row));
       return;
@@ -1969,10 +2100,16 @@ async function runRunnerCommand({
     return;
   }
   if (sub === 'clear' || sub === 'clear-all') {
+    // The queue is addressed by objective, so accept the display id users read
+    // off a prompt (`coo:756.k7xm`) as readily as the positional UUID.
+    const objectiveRef =
+      sub === 'clear'
+        ? (parsed.positional[1] ?? flagValue(parsed.flags, '--objective-id'))
+        : undefined;
     const result = await runtime.backend.post({
       path: '/api/runner/clear',
       body: {
-        objectiveId: sub === 'clear' ? parsed.positional[1] : undefined,
+        objectiveId: objectiveRef,
         projectId: flagValue(parsed.flags, '--project-id')
       }
     });
@@ -1987,7 +2124,7 @@ async function runRunnerCommand({
   if (sub !== 'once' && sub !== 'start' && sub !== 'supervise') {
     throw new CliError({
       message:
-        'Usage: ovld runner once|start|supervise|status|clear <objective_id>|clear-all|service <install|start|stop|restart|status|uninstall>'
+        'Usage: ovld runner once|start|supervise|status|clear <objectiveId>|clear-all|service <install|start|stop|restart|status|uninstall>'
     });
   }
 

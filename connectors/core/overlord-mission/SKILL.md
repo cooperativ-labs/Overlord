@@ -15,6 +15,8 @@ Use this mode when the prompt already contains a mission ID or explicitly says t
 
 **`<mission_id>` is always the short display id** — `coo:695`, `1:899`: a workspace prefix, a colon, and a number. Pass it as `--mission-id`. **`<objective_id>`** is the objective display id (`coo:695.k7xm`) or UUID; pass it as `--objective-id` when you know which objective to execute. Never pass an objective id as `--mission-id`. If the prompt includes `OVERLORD_OBJECTIVE_ID` or an Objective ID line, include `--objective-id` on attach. If the only id you can find is a bare UUID with no mission display id, re-read the prompt or run `ovld protocol search-missions` rather than guessing.
 
+**An objective display id is a complete address.** `coo:695.k7xm` already spells its mission, so `--mission-id` is optional on every command whenever you pass a full objective display id as `--objective-id`; Overlord derives `coo:695` from it. This is the identifier to reach for when reconnecting to a mission that is running more than one objective, where "the active objective" is ambiguous and a mission id alone is not enough. An objective **UUID** names no mission, so it still needs `--mission-id` alongside it.
+
 1. Attach first with `ovld protocol attach --mission-id <mission_id> [--objective-id <objective_id>]`.
 2. The attach response prints JSON to stdout containing `session.sessionKey`. The CLI also persists this key automatically so subsequent `ovld protocol` commands in the same working directory resolve it without `--session-key`. If auto-resolution fails, pass `--session-key <sessionKey>` explicitly on every subsequent call.
 3. Treat the Overlord mission prompt as authoritative for the objective, constraints, and delivery target. Begin executing the current objective immediately after attach; do not wait for more instructions or ask for confirmation. This differs from `connect` or `load-context`, which only retrieve mission context and never imply the agent should act.
@@ -61,7 +63,7 @@ ovld protocol add-objectives --mission-id <mission_id> --objectives-json '[{"obj
 
 Discussing or otherwise opening a mission from within a chat should cause the draft objective to be marked **submitted** — this signals the mission is in active discussion with an agent, but not yet being executed. Only an explicit order to execute (e.g. "execute this", "do this", "start working on it") should cause you to **attach** to the mission and trigger execution.
 
-- **Discussing / opening a mission** → `ovld protocol discuss-objective --mission-id $MISSION_ID` (draft → submitted, no session).
+- **Discussing / opening a mission** → `ovld protocol discuss-objective --mission-id $MISSION_ID` (draft → submitted, no session). Add `--objective-id <objective_id>` when the mission holds more than one draft and you mean a specific one.
 - **Creating a mission** via `ovld protocol create` keeps the objective in `draft` state.
 - **Explicitly ordered to execute** → `ovld protocol attach --mission-id $MISSION_ID` (draft/submitted → executing, session begins).
 
@@ -78,9 +80,9 @@ Use this mode when the conversation starts normally and the user asks the agent 
    - If the user wants to **add more objectives to an existing mission** (not create a new mission), use `ovld protocol add-objectives --mission-id <mission_id> --objectives-json '[{"objective":"..."}]'` instead.
 2. Default to `create` for new missions. Only use `ovld protocol prompt --agent <agent-identifier> --objectives-json '[{"objective":"..."}]'` when the user explicitly asks to create and execute immediately.
    `prompt` creates the mission in `execute` status and attaches immediately.
-3. If the user already has a mission ID and only wants to inspect it, run `ovld protocol load-context --mission-id <mission_id>`.
+3. If the user already has a mission ID and only wants to inspect it, run `ovld protocol load-context --mission-id <mission_id>`. To read one specific objective's context — the only way to read context on a mission running objectives in parallel — add `--objective-id <objective_id>` (or pass it alone).
    When you open or discuss an existing mission that has a draft objective, submit it with `ovld protocol discuss-objective --mission-id <mission_id>`.
-4. If the user wants to route the current session onto an existing mission by ID, run `ovld protocol connect --mission-id <mission_id>`.
+4. If the user wants to route the current session onto an existing mission by ID, run `ovld protocol connect --mission-id <mission_id>` (add `--objective-id <objective_id>` to pin the session to a specific objective).
 5. If the user wants to establish a persistent session with a mission by ID, run `ovld protocol attach --mission-id <mission_id>`.
 6. If the user wants to find a mission but does not know the ID, run `ovld protocol search-missions --query "..." --status next-up,execute` and ask the user to confirm.
 7. If you need to understand project routing before prompting, use `ovld protocol discover-project`.
@@ -96,7 +98,12 @@ For mission creation examples, project discovery, and `--objectives-json` format
 
 ```bash
 ovld protocol attach --mission-id $MISSION_ID
+ovld protocol attach --mission-id $MISSION_ID --objective-id $OBJECTIVE_ID   # pin the objective
+ovld protocol attach --objective-id $OBJECTIVE_ID                            # display id only
 ```
+
+The third form works because an objective display id (`coo:695.k7xm`) already
+names its mission — use it when reconnecting and the mission id is not at hand.
 
 In a git workspace, `attach` records a VCS baseline (changed file paths from local `git status`) so delivery can compute the run-attributable delta automatically.
 
@@ -394,6 +401,7 @@ Field shape, inline vs stdin piping, and `record-change-rationales` syntax are i
 ## Rules
 
 - Always attach first and always deliver last once you are on a mission.
+- `--objective-id` is accepted anywhere `--mission-id` is, and a full objective display id (`coo:695.k7xm`) makes `--mission-id` optional. Prefer passing it on every call once you know which objective you are running, so events, artifacts, and file changes land on that objective rather than on whichever one Overlord would rediscover.
 - `attach` is itself the go-ahead to start work — proceed with implementation immediately after attaching, without pausing to ask the user whether to continue. Only `connect` or `load-context` are for inspection without action; do not treat `attach` the same way.
 - Use `ovld protocol` commands and the connector's native commands/tools instead of ad hoc scripts.
 - Do not invent protocol subcommands. Use `ovld protocol help` when unsure.

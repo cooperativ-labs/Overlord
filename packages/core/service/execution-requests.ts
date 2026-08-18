@@ -1,9 +1,13 @@
-import { type AgentLaunchFlagDto, formatAgentLaunchFlagText } from '@overlord/contract';
+import {
+  type AgentLaunchFlagDto,
+  formatAgentLaunchFlagText,
+  parseObjectiveRef
+} from '@overlord/contract';
 
 import { emitNotification } from './notifications/notifications.js';
 import { recordChange } from './change-feed.js';
 import type { ServiceContext } from './context.js';
-import { resolveMissionId, resolveProjectId } from './context.js';
+import { resolveMissionId, resolveObjectiveRef, resolveProjectId } from './context.js';
 import { ServiceError } from './errors.js';
 import {
   recordRunnerHeartbeat,
@@ -983,8 +987,18 @@ export async function clearExecutionRequests({
     ];
     const params: Array<string> = [ctx.workspace.id, ...ACTIVE_EXECUTION_REQUEST_STATUSES];
     if (objectiveId) {
+      // `ovld runner clear coo:756.k7xm` passes a display id; comparing it to the
+      // UUID column would report "cleared 0" instead of clearing the queue. A
+      // UUID is used as-is: the query is already workspace-scoped, and callers
+      // that sweep every workspace (clearRunnerRequests, dequeueObjective) rely
+      // on a foreign objective matching nothing rather than raising not-found.
+      const parsed = parseObjectiveRef(objectiveId);
       conditions.push('objective_id = ?');
-      params.push(objectiveId);
+      params.push(
+        parsed.kind === 'uuid'
+          ? parsed.id
+          : (await resolveObjectiveRef({ ctx: txCtx, ref: objectiveId })).id
+      );
     }
     if (projectId) {
       conditions.push('project_id = ?');

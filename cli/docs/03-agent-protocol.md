@@ -39,21 +39,66 @@ Requirements:
   objective (default off). `--objectives-json` items may set per-objective
   `autoAdvance`.
 - `prompt`: create a mission and attach or queue execution immediately.
-- `load-context`: read mission context without creating a session.
-- `connect`: create a lightweight session key without full context.
+- `load-context`: read mission context without creating a session. Optional
+  `--objective-id` returns that objective as the current one instead of
+  rediscovering the mission's active objective — required on a mission running
+  objectives in parallel, where unpinned rediscovery returns
+  `ambiguous_active_objective`.
+- `connect`: create a lightweight session key without full context. Optional
+  `--objective-id` pins the session to that objective.
 - `search-missions`: search by query, status, project, creator, and update dates.
-- `discuss-objective`: mark a draft objective submitted.
+- `discuss-objective`: mark a draft objective submitted. Optional
+  `--objective-id` names which draft when a mission holds more than one; the
+  objective must be in `draft` state.
 - `add-objectives`: append ordered objectives to a mission. Same `autoAdvance`
   JSON field and `--auto-advance` / `--no-auto-advance` default as create.
 - `update-objective`: turn auto-advance on or off and/or edit instruction text on draft/future objectives
   (`--objective-id` plus `--auto-advance` or `--no-auto-advance`).
 - `record-work`: record already-completed chat work as a review mission with completed objective and delivery record.
 
+### Addressing A Mission Or An Objective
+
+Every subcommand that accepts `--mission-id` also accepts `--objective-id`
+(objective UUID or `{mission.display_id}.{display_key}`).
+
+An objective **display** id spells its parent mission — `coo:756.k7xm` contains
+`coo:756` — so `--mission-id` may be omitted whenever one is supplied. The
+client CLI derives it before sending the request, and the backend derives it
+again from the request body, because hosted MCP and direct REST callers never
+pass through the CLI. An explicit `--mission-id` always wins and must name that
+objective's own mission.
+
+An objective **UUID** names no mission, so `--mission-id` stays required with
+one.
+
+```bash
+ovld protocol attach --objective-id coo:756.k7xm
+ovld protocol update --objective-id coo:756.k7xm --summary "..."
+ovld protocol deliver --objective-id coo:756.k7xm --summary "..."
+```
+
+This is what makes reconnection work on a mission running more than one
+objective: the mission id alone no longer identifies a unit of execution, and
+commands that rediscover "the active objective" return
+`ambiguous_active_objective` until one is named.
+
+The CLI fills `--objective-id` in from `OVERLORD_OBJECTIVE_ID` (and the
+recovered launch bootstrap) on session-scoped subcommands, so an Overlord-launched
+agent rarely types it. `update-objective` and `discuss-objective` deliberately
+never inherit it: on the first, the id names the row being mutated, and on the
+second, the environment points at the executing objective when the command wants
+a draft.
+
+The reference grammar lives in `@overlord/contract`
+(`parseObjectiveRef`, `formatObjectiveDisplayId`,
+`missionDisplayIdFromObjectiveRef`) and is re-exported by `@overlord/database`;
+no surface carries a private copy of it.
+
 ### Session Lifecycle
 
 Requirements:
 
-- `attach`: start the working session and return full context. Optional `--objective-id` (UUID or `{mission.display_id}.{display_key}`) pins the session to that objective. When `--objective-id` or `--execution-request-id` is present, attach must not rediscover another objective from mission state. `--mission-id` remains required.
+- `attach`: start the working session and return full context. Optional `--objective-id` (UUID or `{mission.display_id}.{display_key}`) pins the session to that objective. When `--objective-id` or `--execution-request-id` is present, attach must not rediscover another objective from mission state. `--mission-id` is required only when it cannot be derived (see [Addressing](#addressing-a-mission-or-an-objective)).
 - `update`: post progress, discussion/decision events, optional change rationales, and follow-up execution transitions.
 - `heartbeat`: update liveness and transient telemetry without creating a mission event.
 - `ask`: post a blocking question and stop work.
@@ -72,7 +117,9 @@ Requirements:
   (same rules as REST `POST /api/missions/:id/artifacts`). Requires `--type`,
   `--label`, and at least one of `--content-text`/`--content-text-file` or
   `--external-url`. Optional `--session-key` stamps session/objective
-  provenance. Delivery may still attach additional artifacts later.
+  provenance; optional `--objective-id` does the same when there is no live
+  session, and `--session-key` wins when both are present. Delivery may still
+  attach additional artifacts later.
 - `update-artifact`: revise an existing mission artifact's label, Markdown
   content, and/or HTTP(S) URL in place (same rules as REST
   `PATCH /api/missions/:id/artifacts/:artifactId`). Requires
@@ -265,7 +312,7 @@ Delivery rules:
 - `deliver` accepts an optional `observedDirtyPaths` (every path the client currently observes as dirty — the full worktree, not just the run-attributable delta). When present, `changed_files` rows for the objective that are `present` but whose path is absent from `observedDirtyPaths` are reconciled to `current_diff_state = 'resolved'` before rationale coverage is computed. This un-poisons coverage from a past over-attribution (e.g. a file recorded while an edit hook was inert and never dirty again) instead of permanently demanding a rationale for it. Omitting the field skips reconciliation (older clients behave exactly as before).
 - A `resolved` row is excluded from rationale-coverage enforcement and is reported in review as coverage state `resolved`, distinct from `covered`, `missing_rationale`, `skipped`, and `unassigned`.
 - A `missing_rationale` failure carries a structured `details.missingRationales` array, one entry per outstanding path: `{ filePath, classification: 'mine' | 'claimed' | 'unclaimed', suggestedSkip: { filePath, reason } | null }`. `suggestedSkip` is `null` for `'mine'` (a real rationale is owed, not a skip) and a ready-to-use `--skip-rationale-for-json` entry otherwise, so a rejected `deliver` needs exactly one mechanical retry instead of an investigation. Classification comes from the `attribution` the client attached to each `changed-files-json` entry.
-- `ovld protocol changes --mission-id <id>` is a local-only, read-only preflight (no backend call) that prints this same mine/claimed/unclaimed classification plus draft rationales ahead of time, so an agent never has to hand-triage `git status` before delivering.
+- `ovld protocol changes --mission-id <id>` (or `--objective-id <display id>`) is a local-only, read-only preflight (no backend call) that prints this same mine/claimed/unclaimed classification plus draft rationales ahead of time, so an agent never has to hand-triage `git status` before delivering.
 
 ## Record-Work Requirements
 

@@ -178,7 +178,7 @@ export function ActivityFeed({
       </div>
 
       {/* Scroll the pane; keep the stack unconstrained so overflow-hidden cards do not shrink. */}
-      <div className="min-h-0 flex-1 overflow-y-auto p-4">
+      <div className="min-h-0 flex-1 overflow-y-auto bg-(--color-surface-2) p-4">
         <div className="flex flex-col gap-3">
           {feed.isLoading ? (
             <div className="flex justify-center py-8">

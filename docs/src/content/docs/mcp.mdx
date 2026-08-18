@@ -29,17 +29,24 @@ The hosted server advertises these mission-lifecycle tools:
 | `overlord_resolve_project` | Resolves a project the user identifies by id, slug, name, or repository metadata. |
 | `overlord_create_project` | Creates a workspace project (asks the user to choose a workspace when memberships are ambiguous). |
 | `overlord_search_missions` | Lists or searches missions in the connected workspace. |
-| `overlord_load_mission_context` | Shows one mission's objectives, history, artifacts, and shared context. |
+| `overlord_load_mission_context` | Shows one mission's objectives, history, artifacts, and shared context. Pass `objectiveId` to read a specific objective. |
 | `overlord_create_mission` | Creates a draft mission in a project you specify, or an account-owned inbox item when no project is given (never chooses a project for you). |
 | `overlord_create_inbox_item` | Creates a private, account-owned unassigned task capture. |
 | `overlord_add_objectives` | Appends draft objectives to an existing mission. |
 | `overlord_update_objective` | Turns auto-advance on or off for an existing objective. |
-| `overlord_attach_session` | Starts requested work on a mission and opens an MCP session. |
+| `overlord_attach_session` | Starts requested work on a mission and opens an MCP session. Pass `objectiveId` to pin which objective runs. |
 | `overlord_update_session` | Posts progress, decisions, or discussion updates to an attached session. |
 | `overlord_deliver_session` | Delivers completed work for an attached session. |
 | `overlord_add_artifact` | Creates a mission artifact mid-turn without delivering. |
 | `overlord_update_artifact` | Revises an existing mission artifact in place (label, Markdown content, and/or URL). |
 | `overlord_record_work` | Records already-finished chat work as a review-column mission. |
+
+Every mission-scoped tool accepts `objectiveId` — an objective UUID or a display
+id such as `coo:756.k7xm` — next to `missionId`. A display id already names its
+mission, so `missionId` is optional whenever you pass one, and a client holding
+only the objective can call the tool with it. An objective UUID names no mission
+and still needs `missionId`. This matters most on a mission running several
+objectives at once, where "the active objective" is ambiguous and must be named.
 
 Read tools may also render Overlord MCP Apps widgets (`ui://overlord/*`) for project
 selection, mission lists, objective viewers, and file-change summaries. Hosted MCP

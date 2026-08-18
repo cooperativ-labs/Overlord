@@ -43,17 +43,44 @@ only attach when the user explicitly says to execute.
   should make you **attach** and start work.
 </Aside>
 
+## Addressing a mission or an objective
+
+Every `ovld protocol` subcommand that takes `--mission-id` also takes
+`--objective-id` (an objective UUID, or a display id such as `coo:312.k7xm`).
+
+An objective **display** id already names its mission — `coo:312.k7xm` contains
+`coo:312` — so `--mission-id` is optional whenever you pass one:
+
+```bash
+ovld protocol update --objective-id coo:312.k7xm --summary "Refactored the parser."
+ovld protocol deliver --objective-id coo:312.k7xm --summary "Done."
+```
+
+Reach for the objective form when reconnecting to a mission that is running more
+than one objective. There, the mission id no longer identifies a unit of work,
+and commands that rediscover "the active objective" (`attach`, `load-context`,
+`connect`) return `ambiguous_active_objective` until you name one.
+
+An objective **UUID** carries no parent mission, so pass `--mission-id`
+alongside it.
+
+The CLI fills `--objective-id` in from `OVERLORD_OBJECTIVE_ID` on session-scoped
+subcommands, so a launched agent rarely types it. Two commands never inherit it:
+`update-objective`, where the id names the objective being changed, and
+`discuss-objective`, which wants a draft rather than the objective already
+executing.
+
 ## Attach
 
 ```bash
 ovld protocol attach --mission-id coo:312 --objective-id coo:312.k7xm
+ovld protocol attach --objective-id coo:312.k7xm
 ```
 
-`--mission-id` is required. Pass `--objective-id` (UUID or display id such as
-`coo:312.k7xm`) when you already know which objective to execute — attach will
-not rediscover another one. Runner launches export `OVERLORD_OBJECTIVE_ID` and
-the CLI forwards it automatically. Mission-only attach still selects the current
-active objective.
+Pass `--objective-id` when you already know which objective to execute — attach
+will not rediscover another one. Runner launches export `OVERLORD_OBJECTIVE_ID`
+and the CLI forwards it automatically. Mission-only attach still selects the
+current active objective, as long as only one is active.
 
 The response prints JSON containing `session.sessionKey`. The CLI also persists
 that key for the working directory, so later `ovld protocol` commands resolve it
@@ -266,7 +293,9 @@ ovld protocol add-artifact \
 Provide `--type`, `--label`, and at least one of `--content-text` /
 `--content-text-file` or `--external-url`. An optional `--session-key`
 (auto-injected from the attach cache when present) stamps session/objective
-provenance. Hosted MCP exposes the same call as `overlord_add_artifact`.
+provenance; `--objective-id` does the same when you have no live session, and
+the session key wins when both are given. Hosted MCP exposes the same call as
+`overlord_add_artifact`.
 
 ## Update an existing artifact
 
@@ -305,11 +334,11 @@ ovld protocol add-objectives --mission-id coo:312 \
 | Command                          | Purpose                                                   |
 | -------------------------------- | --------------------------------------------------------- |
 | `attach`                         | Start a session, return full context. Begin work.         |
-| `connect`                        | Lightweight session without full context assembly.        |
-| `load-context`                   | Read mission context without a session (inspection only). |
+| `connect`                        | Lightweight session without full context assembly. `--objective-id` pins it. |
+| `load-context`                   | Read mission context without a session (inspection only). `--objective-id` selects the objective. |
 | `discover-project`               | Resolve the project from cwd, id, or directory.           |
 | `search-missions`                | Find missions by query, state, project.                   |
-| `discuss-objective`              | Submit a draft objective for discussion (no session).     |
+| `discuss-objective`              | Submit a draft objective for discussion (no session). `--objective-id` names which draft. |
 | `create` / `prompt`              | Create a draft / create-and-attach a mission.             |
 | `add-objectives`                 | Append ordered objectives to a mission.                   |
 | `update-objective`               | Turn auto-advance on or off for an existing objective.    |

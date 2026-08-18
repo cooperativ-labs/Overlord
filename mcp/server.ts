@@ -1,3 +1,4 @@
+import { missionDisplayIdFromObjectiveRef } from '@overlord/contract';
 import type { NextFunction, Request, Response } from 'express';
 
 import type { ProtocolRequestBody } from '../backend/protocol.ts';
@@ -48,6 +49,31 @@ function requiredString(args: Record<string, unknown>, name: string): string {
   const value = optionalString(args, name);
   if (!value) throw new Error(`Missing required argument: ${name}`);
   return value;
+}
+
+/**
+ * Mission/objective addressing shared by every mission-scoped tool.
+ *
+ * A hosted MCP client is often handed one identifier — usually the objective
+ * display id, because that is what names a unit of execution — so `missionId`
+ * is optional whenever `objectiveId` spells its parent mission. The backend
+ * derives the same thing from the request body, but emitting `--mission-id`
+ * here keeps the flags a caller would have typed by hand identical to the ones
+ * the tool sends.
+ */
+function missionScopeFlags(args: Record<string, unknown>): Record<string, string> {
+  const objectiveId = optionalString(args, 'objectiveId');
+  const missionId =
+    optionalString(args, 'missionId') ?? missionDisplayIdFromObjectiveRef(objectiveId);
+  if (!missionId) {
+    throw new Error(
+      'Missing required argument: missionId (pass it, or an objective display id such as coo:756.k7xm as objectiveId)'
+    );
+  }
+  return {
+    '--mission-id': missionId,
+    ...(objectiveId ? { '--objective-id': objectiveId } : {})
+  };
 }
 
 function autoAdvanceFlags(args: Record<string, unknown>): Record<string, true> {
@@ -161,7 +187,7 @@ const toolHandlers: Record<string, ToolHandler> = {
     runProtocolSubcommand(
       'load-context',
       protocolBody({
-        '--mission-id': requiredString(args, 'missionId'),
+        ...missionScopeFlags(args),
         ...(optionalString(args, 'executionTargetId')
           ? { '--execution-target-id': requiredString(args, 'executionTargetId') }
           : {})
@@ -173,7 +199,9 @@ const toolHandlers: Record<string, ToolHandler> = {
     }
     return runProtocolSubcommand('add-objectives', {
       flags: {
-        '--mission-id': requiredString(args, 'missionId'),
+        // add-objectives appends to the mission, so an objectiveId here only
+        // names which mission — it is deliberately not forwarded as a pin.
+        '--mission-id': missionScopeFlags(args)['--mission-id']!,
         '--objectives-file': true
       },
       fileInputs: { '--objectives-file': JSON.stringify(args.objectives) }
@@ -200,11 +228,8 @@ const toolHandlers: Record<string, ToolHandler> = {
     runProtocolSubcommand(
       'attach',
       protocolBody({
-        '--mission-id': requiredString(args, 'missionId'),
+        ...missionScopeFlags(args),
         '--agent': optionalString(args, 'agent') ?? 'hosted-mcp',
-        ...(optionalString(args, 'objectiveId')
-          ? { '--objective-id': requiredString(args, 'objectiveId') }
-          : {}),
         ...(optionalString(args, 'model') ? { '--model': requiredString(args, 'model') } : {}),
         ...(optionalString(args, 'executionTargetId')
           ? { '--execution-target-id': requiredString(args, 'executionTargetId') }
@@ -215,7 +240,7 @@ const toolHandlers: Record<string, ToolHandler> = {
     runProtocolSubcommand(
       'update',
       protocolBody({
-        '--mission-id': requiredString(args, 'missionId'),
+        ...missionScopeFlags(args),
         '--session-key': requiredString(args, 'sessionKey'),
         '--summary': requiredString(args, 'summary'),
         ...(optionalString(args, 'phase') ? { '--phase': requiredString(args, 'phase') } : {}),
@@ -227,7 +252,7 @@ const toolHandlers: Record<string, ToolHandler> = {
   overlord_deliver_session: args =>
     runProtocolSubcommand('deliver', {
       flags: {
-        '--mission-id': requiredString(args, 'missionId'),
+        ...missionScopeFlags(args),
         '--session-key': requiredString(args, 'sessionKey'),
         '--summary': requiredString(args, 'summary'),
         ...(args.noFileChanges === true ? { '--no-file-changes': true } : {}),
@@ -281,7 +306,7 @@ const toolHandlers: Record<string, ToolHandler> = {
     const sessionKey = optionalString(args, 'sessionKey');
     return runProtocolSubcommand('add-artifact', {
       flags: {
-        '--mission-id': requiredString(args, 'missionId'),
+        ...missionScopeFlags(args),
         '--type': requiredString(args, 'type'),
         '--label': requiredString(args, 'label'),
         ...(hasContentText ? { '--content-text-file': true } : {}),
@@ -303,7 +328,9 @@ const toolHandlers: Record<string, ToolHandler> = {
     }
     return runProtocolSubcommand('update-artifact', {
       flags: {
-        '--mission-id': requiredString(args, 'missionId'),
+        // The artifact is addressed by its own id; objectiveId only supplies
+        // the mission scope, so it is not forwarded to the update.
+        '--mission-id': missionScopeFlags(args)['--mission-id']!,
         '--artifact-id': requiredString(args, 'artifactId'),
         '--expected-revision': String(Math.trunc(args.expectedRevision)),
         ...(hasLabel ? { '--label': args.label as string } : {}),

@@ -59,9 +59,13 @@ function assertBundleHasNoPackageImports({ bundlePath }) {
 
 rmSync(path.join(cliRoot, 'dist'), { recursive: true, force: true });
 
+// Dependency order matters: `@overlord/database` and `@overlord/core` both
+// typecheck against `@overlord/contract`'s emitted declarations, so contract
+// has to be built before either of them. Building it last only worked while a
+// previously-emitted dist happened to be lying around.
+run('yarn', ['workspace', '@overlord/contract', 'build'], repoRoot);
 run('yarn', ['workspace', '@overlord/database', 'build'], repoRoot);
 run('yarn', ['workspace', '@overlord/core', 'build'], repoRoot);
-run('yarn', ['workspace', '@overlord/contract', 'build'], repoRoot);
 
 // Per-module emit for unit tests that import individual `dist/*.js` modules.
 run(tsc, ['--project', 'tsconfig.build.json'], cliRoot);

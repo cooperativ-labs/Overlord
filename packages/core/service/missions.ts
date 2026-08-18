@@ -1017,15 +1017,50 @@ export async function updateObjective({
   return toObjectiveSummary({ ...existing, auto_advance: autoAdvance ? 1 : 0 });
 }
 
-export async function discussObjective({
+async function resolveDraftObjectiveToDiscuss({
   ctx,
-  missionId
+  missionId,
+  objectives,
+  objectiveId
 }: {
   ctx: ServiceContext;
   missionId: string;
+  objectives: ObjectiveSummary[];
+  objectiveId: string;
+}): Promise<ObjectiveSummary> {
+  const resolved = await resolveObjectiveRef({ ctx, ref: objectiveId, missionId });
+  const match = objectives.find(candidate => candidate.id === resolved.id);
+  if (!match) {
+    throw new ServiceError(
+      `Objective ${objectiveId} does not belong to this mission`,
+      'invalid_objective_ref',
+      400
+    );
+  }
+  if (match.state !== 'draft') {
+    throw new ServiceError(
+      `Objective ${match.displayId} is ${match.state}, not draft`,
+      'validation_error'
+    );
+  }
+  return match;
+}
+
+export async function discussObjective({
+  ctx,
+  missionId,
+  objectiveId = null
+}: {
+  ctx: ServiceContext;
+  missionId: string;
+  objectiveId?: string | null;
 }): Promise<ObjectiveSummary> {
   const objectives = await listObjectives({ ctx, missionId });
-  const draft = objectives.find(o => o.state === 'draft');
+  // A mission may hold several drafts once objectives are added in batches, so
+  // "the draft" is only unambiguous when the caller did not name one.
+  const draft = objectiveId?.trim()
+    ? await resolveDraftObjectiveToDiscuss({ ctx, missionId, objectives, objectiveId })
+    : objectives.find(o => o.state === 'draft');
   if (!draft) {
     throw new ServiceError('No draft objective found on mission', 'validation_error');
   }
@@ -1340,8 +1375,12 @@ export async function listAttachments({
              WHERE mission_id = ? AND deleted_at IS NULL`;
 
   if (objectiveId) {
+    // Callers reach this with an objective display id (`coo:756.k7xm`) as often
+    // as a UUID; comparing the raw ref to the UUID column would silently match
+    // nothing instead of failing.
+    const objective = await resolveObjectiveRef({ ctx, ref: objectiveId, missionId: resolved.id });
     sql += ' AND objective_id = ?';
-    params.push(objectiveId);
+    params.push(objective.id);
   }
 
   sql += ' ORDER BY created_at ASC';

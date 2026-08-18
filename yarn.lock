@@ -2911,6 +2911,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@overlord/database@workspace:database"
   dependencies:
+    "@overlord/contract": "workspace:*"
     better-sqlite3: "npm:^12.11.1"
   languageName: unknown
   linkType: soft

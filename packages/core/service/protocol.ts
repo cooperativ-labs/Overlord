@@ -157,6 +157,38 @@ function resolveActiveObjective(objectives: ObjectiveSummary[]): ObjectiveSummar
  *
  * When (1) or (2) is present, do not fall through to (3).
  */
+/**
+ * Resolve an explicit objective reference (UUID or `coo:756.k7xm`) against the
+ * mission's own objectives, falling back to state-based rediscovery when no
+ * reference was supplied. Shared by attach, connect, and load-context so every
+ * session-shaped entry point pins identically.
+ */
+async function resolvePinnedObjective({
+  ctx,
+  missionId,
+  objectives,
+  objectiveId
+}: {
+  ctx: ServiceContext;
+  missionId: string;
+  objectives: ObjectiveSummary[];
+  objectiveId?: string | null;
+}): Promise<ObjectiveSummary> {
+  const explicit = objectiveId?.trim();
+  if (!explicit) return resolveActiveObjective(objectives);
+
+  const resolved = await resolveObjectiveRef({ ctx, ref: explicit, missionId });
+  const match = objectives.find(candidate => candidate.id === resolved.id);
+  if (!match) {
+    throw new ServiceError(
+      `Objective ${explicit} does not belong to this mission`,
+      'invalid_objective_ref',
+      400
+    );
+  }
+  return match;
+}
+
 async function resolvePinnedAttachObjective({
   ctx,
   missionId,
@@ -172,16 +204,7 @@ async function resolvePinnedAttachObjective({
 }): Promise<ObjectiveSummary> {
   const explicit = objectiveId?.trim();
   if (explicit) {
-    const resolved = await resolveObjectiveRef({ ctx, ref: explicit, missionId });
-    const match = objectives.find(candidate => candidate.id === resolved.id);
-    if (!match) {
-      throw new ServiceError(
-        `Objective ${explicit} does not belong to this mission`,
-        'invalid_objective_ref',
-        400
-      );
-    }
-    return match;
+    return resolvePinnedObjective({ ctx, missionId, objectives, objectiveId: explicit });
   }
 
   const requestId = executionRequestId?.trim();
@@ -580,15 +603,25 @@ async function contextForObjective({
 export async function loadMissionContext({
   ctx,
   missionId,
+  objectiveId = null,
   executionTargetId = null
 }: {
   ctx: ServiceContext;
   missionId: string;
+  objectiveId?: string | null;
   executionTargetId?: string | null;
 }): Promise<Omit<AttachResponse, 'session'>> {
   const mission = await getMissionSummary({ ctx, missionId });
   const objectives = await listObjectives({ ctx, missionId: mission.id });
-  const objective = resolveActiveObjective(objectives);
+  // Reading context is the reconnect path, so it must be pinnable the same way
+  // attach is: a mission running two objectives in parallel has no single
+  // "active" objective to rediscover.
+  const objective = await resolvePinnedObjective({
+    ctx,
+    missionId: mission.id,
+    objectives,
+    objectiveId
+  });
   const resolvedTargetId = await resolveProtocolExecutionTargetId({
     ctx,
     executionTargetId,
@@ -928,17 +961,25 @@ export async function attachSession({
 export async function connectSession({
   ctx,
   missionId,
+  objectiveId = null,
   agentIdentifier = 'unknown',
   externalSessionId
 }: {
   ctx: ServiceContext;
   missionId: string;
+  objectiveId?: string | null;
   agentIdentifier?: string;
   externalSessionId?: string | null;
-}): Promise<{ sessionKey: string; missionId: string; objectiveId: string }> {
+}): Promise<{
+  sessionKey: string;
+  missionId: string;
+  objectiveId: string;
+  objectiveDisplayId: string;
+}> {
   const result = await attachSession({
     ctx,
     missionId,
+    objectiveId,
     agentIdentifier,
     connectionMethod: 'connect',
     externalSessionId: externalSessionId ?? null
@@ -946,7 +987,8 @@ export async function connectSession({
   return {
     sessionKey: result.sessionKey,
     missionId: result.mission.id,
-    objectiveId: result.objective.id
+    objectiveId: result.objective.id,
+    objectiveDisplayId: result.objective.displayId
   };
 }
 

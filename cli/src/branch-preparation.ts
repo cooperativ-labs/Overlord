@@ -1,3 +1,4 @@
+import { parseObjectiveRef } from '@overlord/contract';
 import { deriveProjectResourceKey } from '@overlord/core/service/project-resource-key';
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, statSync } from 'node:fs';
@@ -478,7 +479,19 @@ export async function resolveBranchIsolation({
   if (!objectiveId) return null;
 
   const objectives = Array.isArray(mission.objectives) ? mission.objectives : [];
-  const self = objectives.find(candidate => readString(candidate.id) === objectiveId);
+  // The pin may arrive as a UUID (runner) or a display id (`ovld launch
+  // --objective-id coo:756.k7xm`); missing the display form would silently drop
+  // per-objective worktree isolation rather than fail loudly.
+  const parsedPin = parseObjectiveRef(objectiveId);
+  const pinnedKey =
+    parsedPin.kind === 'display_id' || parsedPin.kind === 'display_key'
+      ? parsedPin.displayKey
+      : null;
+  const matchesPin = (candidate: { id?: unknown; displayId?: unknown; displayKey?: unknown }) =>
+    readString(candidate.id) === objectiveId ||
+    readString(candidate.displayId) === objectiveId ||
+    (pinnedKey !== null && readString(candidate.displayKey) === pinnedKey);
+  const self = objectives.find(candidate => matchesPin(candidate));
   const objectiveKey = readString(self?.displayKey);
   if (!self || !objectiveKey) return null;
 
@@ -488,7 +501,7 @@ export async function resolveBranchIsolation({
 
   const hasLiveSibling = objectives.some(
     candidate =>
-      readString(candidate.id) !== objectiveId &&
+      !matchesPin(candidate) &&
       PARALLEL_BLOCKING_OBJECTIVE_STATES.includes(readString(candidate.state)) &&
       canonical(candidate.resourceKey) === selfResourceKey
   );

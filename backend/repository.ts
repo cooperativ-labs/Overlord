@@ -4440,14 +4440,18 @@ export async function createArtifact(
       sessionId = session.id;
       objectiveId = session.objective_id;
     } else if (objectiveId) {
+      // Protocol/MCP callers pass the objective display id (`coo:756.k7xm`) far
+      // more often than the UUID, so resolve the reference before matching.
+      const resolvedRef = await resolveObjectiveIdForRest({ ref: objectiveId, db: tx });
       const objective = (await tx.get(
         `SELECT id FROM objectives
           WHERE id = ? AND mission_id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-        [objectiveId, mission.id, mission.workspace_id]
+        [resolvedRef.id, mission.id, mission.workspace_id]
       )) as { id: string } | undefined;
       if (!objective) {
         throw new ApiError(404, 'Objective not found on mission');
       }
+      objectiveId = objective.id;
     } else if (sessionId) {
       const session = (await tx.get(
         `SELECT id, objective_id FROM agent_sessions

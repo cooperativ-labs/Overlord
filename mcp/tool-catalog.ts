@@ -148,15 +148,17 @@ export const hostedMcpToolDefinitions: ToolDefinition[] = [
     title: 'Load mission context',
     description:
       'Use this when the user wants to inspect one mission, its objectives, history, artifacts, or shared context.',
-    inputSchema: objectSchema(
-      {
-        missionId: stringProperty('Mission UUID or workspace display id such as coo:150.'),
-        executionTargetId: stringProperty(
-          'Optional local execution target id for resolving sibling project resource paths.'
-        )
-      },
-      ['missionId']
-    ),
+    inputSchema: objectSchema({
+      missionId: stringProperty(
+        'Mission UUID or workspace display id. Optional when objectiveId is a display id such as coo:756.k7xm, which already names its mission.'
+      ),
+      objectiveId: stringProperty(
+        'Objective UUID or display id such as coo:756.k7xm. Returns that objective as the current one instead of rediscovering the mission active objective — required on a mission running objectives in parallel.'
+      ),
+      executionTargetId: stringProperty(
+        'Optional local execution target id for resolving sibling project resource paths.'
+      )
+    }),
     outputSchema: protocolOutputSchema('Structured context for the requested mission.'),
     annotations: readOnly,
     _meta: widget('ui://overlord/objective-viewer.html')
@@ -168,7 +170,12 @@ export const hostedMcpToolDefinitions: ToolDefinition[] = [
       'Use this only when the user explicitly asks to append draft objectives to an existing mission.',
     inputSchema: objectSchema(
       {
-        missionId: stringProperty('Mission UUID or workspace display id.'),
+        missionId: stringProperty(
+          'Mission UUID or workspace display id. Optional when objectiveId is a display id such as coo:756.k7xm, which already names its mission.'
+        ),
+        objectiveId: stringProperty(
+          'Objective UUID or display id such as coo:756.k7xm. Used only to supply missionId when it is omitted; the new objectives are appended to that objective mission.'
+        ),
         objectives: {
           type: 'array',
           description:
@@ -183,7 +190,7 @@ export const hostedMcpToolDefinitions: ToolDefinition[] = [
           })
         }
       },
-      ['missionId', 'objectives']
+      ['objectives']
     ),
     outputSchema: protocolOutputSchema('The mission with the appended draft objectives.'),
     annotations: writeAction
@@ -217,9 +224,11 @@ export const hostedMcpToolDefinitions: ToolDefinition[] = [
       'Use this only after the user asks the connected agent to begin work on a mission. It opens an MCP-hosted session for later updates and delivery. Pass objectiveId when the caller already knows which objective to execute so attach does not rediscover another one.',
     inputSchema: objectSchema(
       {
-        missionId: stringProperty('Mission UUID or workspace display id.'),
+        missionId: stringProperty(
+          'Mission UUID or workspace display id. Optional when objectiveId is a display id such as coo:756.k7xm, which already names its mission.'
+        ),
         objectiveId: stringProperty(
-          'Optional objective UUID or display id (e.g. coo:756.k7xm). Pins attach to that objective.'
+          'Objective UUID or display id such as coo:756.k7xm. Pins attach to that objective, and supplies missionId when it is omitted.'
         ),
         agent: stringProperty('Agent identifier. Defaults to hosted-mcp.'),
         model: stringProperty('Optional model identifier.'),
@@ -227,7 +236,7 @@ export const hostedMcpToolDefinitions: ToolDefinition[] = [
           'Optional local execution target id for resolving sibling project resource paths.'
         )
       },
-      ['missionId']
+      []
     ),
     outputSchema: protocolOutputSchema(
       'Attached session context, including the session key required for lifecycle calls.'
@@ -241,13 +250,18 @@ export const hostedMcpToolDefinitions: ToolDefinition[] = [
       'Use this only to post the user-requested work update, alert, decision, or discussion summary to an attached mission session.',
     inputSchema: objectSchema(
       {
-        missionId: stringProperty('Mission UUID or workspace display id.'),
+        missionId: stringProperty(
+          'Mission UUID or workspace display id. Optional when objectiveId is a display id such as coo:756.k7xm, which already names its mission.'
+        ),
+        objectiveId: stringProperty(
+          'Objective UUID or display id such as coo:756.k7xm. Supplies missionId when it is omitted; the session key still determines which objective the event lands on.'
+        ),
         sessionKey: stringProperty('Session key returned by overlord_attach_session.'),
         summary: stringProperty('Update text.'),
         phase: stringProperty('Optional protocol phase.'),
         eventType: stringProperty('Optional event type. Defaults to update.')
       },
-      ['missionId', 'sessionKey', 'summary']
+      ['sessionKey', 'summary']
     ),
     outputSchema: protocolOutputSchema('The recorded mission activity event.'),
     annotations: writeAction
@@ -259,7 +273,12 @@ export const hostedMcpToolDefinitions: ToolDefinition[] = [
       'Use this only when the user-requested mission work is complete. It delivers the attached session with an explicit summary, optional file-change rationales, and optional authoritative human-action/tradeoff evidence.',
     inputSchema: objectSchema(
       {
-        missionId: stringProperty('Mission UUID or workspace display id.'),
+        missionId: stringProperty(
+          'Mission UUID or workspace display id. Optional when objectiveId is a display id such as coo:756.k7xm, which already names its mission.'
+        ),
+        objectiveId: stringProperty(
+          'Objective UUID or display id such as coo:756.k7xm. Supplies missionId when it is omitted; the session key still determines which objective is delivered.'
+        ),
         sessionKey: stringProperty('Session key returned by overlord_attach_session.'),
         summary: stringProperty('Delivery summary.'),
         artifacts: {
@@ -316,7 +335,7 @@ export const hostedMcpToolDefinitions: ToolDefinition[] = [
         deferredWork: { type: 'array', items: stringProperty('Intentionally deferred work.') },
         assumptions: { type: 'array', items: stringProperty('Material implementation assumption.') }
       },
-      ['missionId', 'sessionKey', 'summary']
+      ['sessionKey', 'summary']
     ),
     outputSchema: protocolOutputSchema(
       'The completed delivery record and any recorded file changes.'
@@ -334,7 +353,12 @@ export const hostedMcpToolDefinitions: ToolDefinition[] = [
       'provenance. Revise later with overlord_update_artifact. Delivery may still attach more artifacts.',
     inputSchema: objectSchema(
       {
-        missionId: stringProperty('Mission UUID or workspace display id such as coo:150.'),
+        missionId: stringProperty(
+          'Mission UUID or workspace display id. Optional when objectiveId is a display id such as coo:756.k7xm, which already names its mission.'
+        ),
+        objectiveId: stringProperty(
+          'Objective UUID or display id such as coo:756.k7xm. Stamps objective provenance when no live sessionKey is available; sessionKey wins when both are given.'
+        ),
         type: stringProperty(
           'Artifact type: test_results, next_steps, note, url, decision, or migration.'
         ),
@@ -345,7 +369,7 @@ export const hostedMcpToolDefinitions: ToolDefinition[] = [
           'Optional live session key from attach; stamps session/objective provenance when present.'
         )
       },
-      ['missionId', 'type', 'label']
+      ['type', 'label']
     ),
     outputSchema: protocolOutputSchema('The created artifact DTO (revision 1).'),
     annotations: writeAction
@@ -359,7 +383,12 @@ export const hostedMcpToolDefinitions: ToolDefinition[] = [
       'artifact revision for optimistic concurrency. Provide at least one of label, contentText, or externalUrl.',
     inputSchema: objectSchema(
       {
-        missionId: stringProperty('Mission UUID or workspace display id such as coo:150.'),
+        missionId: stringProperty(
+          'Mission UUID or workspace display id. Optional when objectiveId is a display id such as coo:756.k7xm, which already names its mission.'
+        ),
+        objectiveId: stringProperty(
+          'Objective UUID or display id such as coo:756.k7xm. Used only to supply missionId when it is omitted.'
+        ),
         artifactId: stringProperty('Artifact id from mission context or load-context artifacts.'),
         expectedRevision: {
           type: 'number',
@@ -373,7 +402,7 @@ export const hostedMcpToolDefinitions: ToolDefinition[] = [
           'Optional HTTP(S) URL. Pass an empty string to clear the external URL.'
         )
       },
-      ['missionId', 'artifactId', 'expectedRevision']
+      ['artifactId', 'expectedRevision']
     ),
     outputSchema: protocolOutputSchema('The updated artifact DTO including the new revision.'),
     annotations: writeAction

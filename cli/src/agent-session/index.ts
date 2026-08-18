@@ -1,3 +1,5 @@
+import { missionDisplayIdFromObjectiveRef } from '@overlord/contract';
+
 import { parseArgs } from '../args.js';
 import { CliError } from '../errors.js';
 import { writeNativeSessionId } from '../native-session.js';
@@ -145,8 +147,16 @@ async function runBindCommand({
   const agent = parsed.flags.get('--agent');
   const nativeSessionId = parsed.flags.get('--native-session-id');
   const missionFlag = parsed.flags.get('--mission-id');
+  const objectiveFlag = parsed.flags.get('--objective-id');
+  const objectiveId =
+    (typeof objectiveFlag === 'string' && objectiveFlag.trim()
+      ? objectiveFlag.trim()
+      : undefined) ?? process.env.OVERLORD_OBJECTIVE_ID;
+  // The correlation alias is keyed per objective, so a bind that names only the
+  // objective still resolves its mission: an objective display id spells it.
   const missionId =
     (typeof missionFlag === 'string' ? missionFlag : undefined) ??
+    missionDisplayIdFromObjectiveRef(objectiveId) ??
     process.env.MISSION_ID ??
     process.env.OVERLORD_MISSION_ID ??
     null;
@@ -155,7 +165,7 @@ async function runBindCommand({
     throw new CliError({
       message:
         `Usage: ${primaryCommand} agent-session bind --agent <key> ` +
-        `--native-session-id <id> [--mission-id <id>]`
+        `--native-session-id <id> [--mission-id <id>] [--objective-id <id>]`
     });
   }
 
@@ -167,7 +177,7 @@ async function runBindCommand({
       agent,
       missionId,
       externalSessionId: nativeSessionId,
-      objectiveId: process.env.OVERLORD_OBJECTIVE_ID
+      objectiveId
     });
   }
 
@@ -352,7 +362,9 @@ export async function runAgentSessionCommand({
     console.log(
       '  capabilities [<agent>] [--json]  Print the fixture-backed capability descriptor.'
     );
-    console.log('  bind --agent <key> --native-session-id <id> [--mission-id <id>]');
+    console.log(
+      '  bind --agent <key> --native-session-id <id> [--mission-id <id>] [--objective-id <id>]'
+    );
     console.log(
       '                                   Correlate a harness session id with this channel.'
     );

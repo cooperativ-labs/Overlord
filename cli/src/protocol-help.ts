@@ -117,6 +117,13 @@ Environment fallback:
 
 Common flags:
   --mission-id <id>         Mission identifier when operating on an existing mission
+  --objective-id <id>       Objective UUID or display id (coo:756.k7xm). Accepted anywhere
+                            --mission-id is; a display id supplies --mission-id on its own,
+                            so \`${primaryCommand} protocol update --objective-id coo:756.k7xm\`
+                            needs no mission flag. An objective UUID names no mission, so it
+                            still needs --mission-id beside it. Pass it whenever you know
+                            which objective you are running — a mission may run several at
+                            once, and unpinned commands cannot tell them apart.
   --session-key <key>      Session key returned by attach/connect/prompt/resume-follow-up
   --agent <identifier>     Agent identifier sent to Overlord (default: unknown)
   --model <identifier>     Model identifier to snapshot on executing objectives
@@ -144,7 +151,8 @@ attach:
   Purpose:
     Create the working session for an agent on an existing mission. Call this first.
   Required:
-    --mission-id <id>            Display id (e.g. coo:8) or UUID
+    --mission-id <id>            Display id (e.g. coo:8) or UUID. May be omitted when
+                                 --objective-id is a display id such as coo:756.k7xm.
   Optional:
     --session-key <key>         Reuse an existing session key
     --agent <identifier>
@@ -163,18 +171,23 @@ connect:
   Purpose:
     Create a lightweight session when you only need a session key, not full context.
   Required:
-    --mission-id <id>
+    --mission-id <id>            Or --objective-id with a display id
   Optional:
+    --objective-id <id>         Pin the session to this objective
     --agent <identifier>
     --external-session-id <id>
   Returns:
-    Session JSON and SESSION_KEY on stderr when available.
+    Session JSON, SESSION_KEY on stderr, and the pinned objectiveDisplayId.
 
 load-context:
   Purpose:
     Read mission details without creating a session.
   Required:
-    --mission-id <id>
+    --mission-id <id>            Or --objective-id with a display id
+  Optional:
+    --objective-id <id>         Return this objective as the current one instead of
+                                rediscovering the mission's active objective. Required
+                                on a mission running objectives in parallel.
 
 search-missions:
   Purpose:
@@ -192,6 +205,11 @@ discuss-objective:
     Mark the latest draft objective as submitted. Does not start execution — use attach.
   Required:
     --mission-id <id>
+  Optional:
+    --objective-id <id>         Submit this draft instead of the first one found. Must
+                                belong to the mission and be in draft state. Never
+                                inherited from OVERLORD_OBJECTIVE_ID, which points at
+                                the objective already executing.
 
 add-objectives:
   Purpose:
@@ -461,16 +479,21 @@ add-artifact:
     --external-url <url>
   Optional:
     --session-key <key>
+    --objective-id <id>         Stamp objective provenance with no live session key.
+                                --session-key wins when both are present.
   Returns:
     Created ArtifactDto JSON (revision 1).
 
 attachment-list:
   Purpose:
-    List all attachments for the mission (across all objectives).
+    List attachments for the mission (across all objectives, or one objective
+    with --objective-id).
     Each entry includes id, filename, mimeType, sizeBytes, status, storageKey, and url.
     The url field is a server-relative path; prepend the backend base URL to download.
   Required:
     --mission-id <id>
+  Optional:
+    --objective-id <id>         Restrict the listing to one objective
 
 attachment-download-url:
   Purpose:
@@ -478,6 +501,8 @@ attachment-download-url:
   Required:
     --mission-id <id>
     --attachment-id <id>  (use the id from attachment-list output)
+  Optional:
+    --objective-id <id>         Restrict the lookup to one objective
 
 list-organizations:
   Purpose:
