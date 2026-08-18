@@ -59,8 +59,8 @@ chmodSync(fakeLatch, 0o700);
 
 after(() => rmSync(tempDir, { recursive: true, force: true }));
 
-test('inspects bounded Latch terminal-session state', () => {
-  const result = inspectLatchSession({
+test('inspects bounded Latch terminal-session state', async () => {
+  const result = await inspectLatchSession({
     executable: fakeLatch,
     providerSessionId: 'ses_test'
   });
@@ -69,8 +69,42 @@ test('inspects bounded Latch terminal-session state', () => {
   assert.equal(result.state, 'running');
 });
 
-test('opens the stored viewer separately from the session process', () => {
-  const result = openLatchSession({
+test('session commands do not block the local-target event loop', async () => {
+  const slowLatch = path.join(tempDir, 'latch-slow');
+  writeFileSync(
+    slowLatch,
+    `#!/usr/bin/env node
+const id = process.argv[3];
+setTimeout(() => process.stdout.write(JSON.stringify({
+  id,
+  name: 'slow-session',
+  state: 'running',
+  exit: null
+})), 250);
+`
+  );
+  chmodSync(slowLatch, 0o700);
+
+  const eventLoopTurn = new Promise<'event-loop'>(resolve => {
+    setTimeout(() => resolve('event-loop'), 25);
+  });
+  const inspection = inspectLatchSession({
+    executable: slowLatch,
+    providerSessionId: 'ses_slow'
+  });
+
+  assert.equal(
+    await Promise.race([
+      Promise.resolve(inspection).then(() => 'inspection' as const),
+      eventLoopTurn
+    ]),
+    'event-loop'
+  );
+  assert.equal((await inspection).name, 'slow-session');
+});
+
+test('opens the stored viewer separately from the session process', async () => {
+  const result = await openLatchSession({
     executable: fakeLatch,
     providerSessionId: 'ses_test',
     viewerKind: 'iterm'
@@ -83,8 +117,8 @@ test('opens the stored viewer separately from the session process', () => {
   });
 });
 
-test('sends the requested window-or-tab shape to a Latch that supports it', () => {
-  const result = openLatchSession({
+test('sends the requested window-or-tab shape to a Latch that supports it', async () => {
+  const result = await openLatchSession({
     executable: fakeLatch,
     providerSessionId: 'ses_test',
     viewerKind: 'iterm',
@@ -93,13 +127,13 @@ test('sends the requested window-or-tab shape to a Latch that supports it', () =
   assert.equal(result.behavior, 'tab');
 });
 
-test('omits the shape flag for a Latch build that predates it', () => {
+test('omits the shape flag for a Latch build that predates it', async () => {
   const saved = process.env.FAKE_LATCH_VERSION;
   // clap rejects unknown flags, so an ungated `--as` would fail the open
   // outright; omitting it degrades to a new window instead.
   process.env.FAKE_LATCH_VERSION = '0.2608140801.0';
   try {
-    const result = openLatchSession({
+    const result = await openLatchSession({
       executable: fakeLatch,
       providerSessionId: 'ses_test',
       viewerKind: 'iterm',
@@ -113,8 +147,8 @@ test('omits the shape flag for a Latch build that predates it', () => {
   }
 });
 
-test('stops only after an explicit lifecycle call', () => {
-  const result = stopLatchSession({
+test('stops only after an explicit lifecycle call', async () => {
+  const result = await stopLatchSession({
     executable: fakeLatch,
     providerSessionId: 'ses_test'
   });
@@ -124,7 +158,7 @@ test('stops only after an explicit lifecycle call', () => {
   });
 });
 
-test('spawns Latch with a UTF-8 locale even when the parent has none', () => {
+test('spawns Latch with a UTF-8 locale even when the parent has none', async () => {
   const localeEcho = path.join(tempDir, 'latch-locale');
   writeFileSync(
     localeEcho,
@@ -144,7 +178,7 @@ process.stdout.write(JSON.stringify({
   const saved = localeKeys.map(key => [key, process.env[key]] as const);
   for (const key of localeKeys) delete process.env[key];
   try {
-    const result = inspectLatchSession({
+    const result = await inspectLatchSession({
       executable: localeEcho,
       providerSessionId: 'ses_locale'
     });
@@ -169,8 +203,8 @@ test('inspect treats Latch no-session as absence, not a generic failure', async 
   );
   chmodSync(missing, 0o700);
 
-  assert.throws(
-    () => inspectLatchSession({ executable: missing, providerSessionId: 'ses_gone' }),
+  await assert.rejects(
+    inspectLatchSession({ executable: missing, providerSessionId: 'ses_gone' }),
     (error: unknown) => {
       assert.ok(error instanceof LatchSessionAbsentError);
       assert.match(error.message, /no session `ses_gone`/);
@@ -192,7 +226,7 @@ test('inspect treats Latch no-session as absence, not a generic failure', async 
   }
 });
 
-test('inspect keeps unrelated Latch failures as command errors', () => {
+test('inspect keeps unrelated Latch failures as command errors', async () => {
   const broken = path.join(tempDir, 'latch-broken');
   writeFileSync(
     broken,
@@ -204,8 +238,8 @@ test('inspect keeps unrelated Latch failures as command errors', () => {
   );
   chmodSync(broken, 0o700);
 
-  assert.throws(
-    () => inspectLatchSession({ executable: broken, providerSessionId: 'ses_alive' }),
+  await assert.rejects(
+    inspectLatchSession({ executable: broken, providerSessionId: 'ses_alive' }),
     (error: unknown) => {
       assert.equal(error instanceof LatchSessionAbsentError, false);
       assert.ok(error instanceof LatchSessionCommandError);

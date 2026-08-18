@@ -60,13 +60,12 @@ test('answers null when no Latch binary exists on this device', () => {
   assert.match(latchBinaryMissingMessage('latch'), /Latch executable "latch" was not found/);
 });
 
-test('a session command reports the missing binary instead of raising ENOENT', () => {
-  assert.throws(
-    () =>
-      inspectLatchSession({
-        executable: path.join(tempDir, 'definitely-not-installed'),
-        providerSessionId: 'ses_1'
-      }),
+test('a session command reports the missing binary instead of raising ENOENT', async () => {
+  await assert.rejects(
+    inspectLatchSession({
+      executable: path.join(tempDir, 'definitely-not-installed'),
+      providerSessionId: 'ses_1'
+    }),
     (error: unknown) => {
       assert.ok(error instanceof LatchSessionCommandError);
       assert.match((error as Error).message, /was not found on this device/);
@@ -76,8 +75,11 @@ test('a session command reports the missing binary instead of raising ENOENT', (
   );
 });
 
-test('an absolute executable path is used directly', () => {
-  const inspection = inspectLatchSession({ executable: fakeLatch, providerSessionId: 'ses_1' });
+test('an absolute executable path is used directly', async () => {
+  const inspection = await inspectLatchSession({
+    executable: fakeLatch,
+    providerSessionId: 'ses_1'
+  });
   assert.equal(inspection.state, 'running');
   assert.equal(inspection.name, 'mission-shell');
 });

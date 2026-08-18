@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process';
+import { execFile } from 'node:child_process';
 
 import { latchBinaryMissingMessage, resolveLatchBinaryPath } from './latch-binary.ts';
 import { latchChildEnvironment } from './latch-environment.ts';
@@ -80,31 +80,35 @@ function parseState(value: unknown): LatchSessionState | null {
   }
 }
 
-function runLatchJson({
+async function runLatchJson({
   executable,
   args
 }: {
   executable: string;
   args: string[];
-}): Record<string, unknown> {
+}): Promise<Record<string, unknown>> {
   const binary = resolveLatchBinaryPath(executable);
   if (!binary) throw new LatchSessionCommandError(latchBinaryMissingMessage(executable));
-  const result = spawnSync(binary, args, {
-    encoding: 'utf8',
-    shell: false,
-    timeout: 10_000,
-    maxBuffer: 1024 * 1024,
-    env: latchChildEnvironment()
+  const result = await new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
+    execFile(
+      binary,
+      args,
+      {
+        encoding: 'utf8',
+        timeout: 10_000,
+        maxBuffer: 1024 * 1024,
+        env: latchChildEnvironment()
+      },
+      (error, stdout, stderr) => {
+        if (error) {
+          const detail = (stderr || stdout || error.message).trim().slice(0, 500);
+          reject(latchSessionCommandError(detail));
+          return;
+        }
+        resolve({ stdout, stderr });
+      }
+    );
   });
-  if (result.error) {
-    throw new LatchSessionCommandError(result.error.message);
-  }
-  if (result.status !== 0) {
-    const detail = (result.stderr || result.stdout || `exit ${result.status ?? 'unknown'}`)
-      .trim()
-      .slice(0, 500);
-    throw latchSessionCommandError(detail);
-  }
   try {
     const parsed = JSON.parse(result.stdout) as unknown;
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
@@ -116,16 +120,16 @@ function runLatchJson({
   }
 }
 
-export function inspectLatchSession({
+export async function inspectLatchSession({
   executable = 'latch',
   providerSessionId
 }: {
   executable?: string | null;
   providerSessionId: string;
-}): LatchSessionInspection {
+}): Promise<LatchSessionInspection> {
   const sessionId = trimmed(providerSessionId);
   if (!sessionId) throw new LatchSessionCommandError('A Latch session id is required.');
-  const report = runLatchJson({
+  const report = await runLatchJson({
     executable: trimmed(executable) ?? 'latch',
     args: ['inspect', sessionId, '--json']
   });
@@ -149,15 +153,17 @@ export function inspectLatchSession({
  * Best-effort: any failure answers null, which omits the flag and opens a
  * window rather than failing an open for a session that is already running.
  */
-function readLatchProductVersion(executable: string): string | null {
+async function readLatchProductVersion(executable: string): Promise<string | null> {
   try {
-    return trimmed(runLatchJson({ executable, args: ['capabilities', '--json'] }).productVersion);
+    return trimmed(
+      (await runLatchJson({ executable, args: ['capabilities', '--json'] })).productVersion
+    );
   } catch {
     return null;
   }
 }
 
-export function openLatchSession({
+export async function openLatchSession({
   executable = 'latch',
   providerSessionId,
   viewerKind,
@@ -172,7 +178,7 @@ export function openLatchSession({
    * disagree with the setting the user sees in Overlord.
    */
   openAs?: ViewerOpenAs | string | null;
-}): LatchSessionOpenResult {
+}): Promise<LatchSessionOpenResult> {
   const sessionId = trimmed(providerSessionId);
   if (!sessionId) throw new LatchSessionCommandError('A Latch session id is required.');
   const viewer = latchViewerFlagForKind(viewerKind);
@@ -180,13 +186,13 @@ export function openLatchSession({
     throw new LatchSessionCommandError(`Latch cannot open the configured viewer "${viewerKind}".`);
   }
   const exe = trimmed(executable) ?? 'latch';
-  const report = runLatchJson({
+  const report = await runLatchJson({
     executable: exe,
     args: buildLatchOpenArgs({
       providerSessionId: sessionId,
       viewer,
       openAs,
-      productVersion: openAs ? readLatchProductVersion(exe) : null
+      productVersion: openAs ? await readLatchProductVersion(exe) : null
     })
   });
   if (report.opened !== true) {
@@ -200,16 +206,16 @@ export function openLatchSession({
   };
 }
 
-export function stopLatchSession({
+export async function stopLatchSession({
   executable = 'latch',
   providerSessionId
 }: {
   executable?: string | null;
   providerSessionId: string;
-}): LatchSessionStopResult {
+}): Promise<LatchSessionStopResult> {
   const sessionId = trimmed(providerSessionId);
   if (!sessionId) throw new LatchSessionCommandError('A Latch session id is required.');
-  const report = runLatchJson({
+  const report = await runLatchJson({
     executable: trimmed(executable) ?? 'latch',
     args: ['stop', sessionId, '--json']
   });

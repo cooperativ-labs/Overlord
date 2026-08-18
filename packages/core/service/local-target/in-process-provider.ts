@@ -294,7 +294,7 @@ export class InProcessProvider implements LocalTargetCapabilities {
 
   async inspectLatchSession(input: InspectLatchSessionInput) {
     try {
-      return ok(this.target, inspectLatchSession(input));
+      return ok(this.target, await inspectLatchSession(input));
     } catch (error) {
       return failLatchCommand({
         target: this.target,
@@ -306,7 +306,7 @@ export class InProcessProvider implements LocalTargetCapabilities {
 
   async openLatchSession(input: OpenLatchSessionInput) {
     try {
-      return ok(this.target, openLatchSession(input));
+      return ok(this.target, await openLatchSession(input));
     } catch (error) {
       return failLatchCommand({
         target: this.target,
@@ -318,7 +318,7 @@ export class InProcessProvider implements LocalTargetCapabilities {
 
   async stopLatchSession(input: StopLatchSessionInput) {
     try {
-      return ok(this.target, stopLatchSession(input));
+      return ok(this.target, await stopLatchSession(input));
     } catch (error) {
       return failLatchCommand({
         target: this.target,

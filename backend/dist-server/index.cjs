@@ -2144,7 +2144,7 @@ var require_utils2 = __commonJS({
     var nodeCrypto = require("crypto");
     module2.exports = {
       postgresMd5PasswordHash,
-      randomBytes: randomBytes12,
+      randomBytes: randomBytes13,
       deriveKey: deriveKey3,
       sha256: sha2562,
       hashByName,
@@ -2154,7 +2154,7 @@ var require_utils2 = __commonJS({
     var webCrypto = nodeCrypto.webcrypto || globalThis.crypto;
     var subtleCrypto = webCrypto.subtle;
     var textEncoder2 = new TextEncoder();
-    function randomBytes12(length) {
+    function randomBytes13(length) {
       return webCrypto.getRandomValues(Buffer.alloc(length));
     }
     async function md5(string4) {
@@ -71258,26 +71258,32 @@ function parseState2(value) {
       return null;
   }
 }
-function runLatchJson({
+async function runLatchJson({
   executable,
   args
 }) {
   const binary2 = resolveLatchBinaryPath(executable);
   if (!binary2) throw new LatchSessionCommandError(latchBinaryMissingMessage(executable));
-  const result = (0, import_node_child_process4.spawnSync)(binary2, args, {
-    encoding: "utf8",
-    shell: false,
-    timeout: 1e4,
-    maxBuffer: 1024 * 1024,
-    env: latchChildEnvironment()
+  const result = await new Promise((resolve, reject) => {
+    (0, import_node_child_process4.execFile)(
+      binary2,
+      args,
+      {
+        encoding: "utf8",
+        timeout: 1e4,
+        maxBuffer: 1024 * 1024,
+        env: latchChildEnvironment()
+      },
+      (error53, stdout, stderr) => {
+        if (error53) {
+          const detail = (stderr || stdout || error53.message).trim().slice(0, 500);
+          reject(latchSessionCommandError(detail));
+          return;
+        }
+        resolve({ stdout, stderr });
+      }
+    );
   });
-  if (result.error) {
-    throw new LatchSessionCommandError(result.error.message);
-  }
-  if (result.status !== 0) {
-    const detail = (result.stderr || result.stdout || `exit ${result.status ?? "unknown"}`).trim().slice(0, 500);
-    throw latchSessionCommandError(detail);
-  }
   try {
     const parsed = JSON.parse(result.stdout);
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
@@ -71288,13 +71294,13 @@ function runLatchJson({
     throw new LatchSessionCommandError("Latch returned an invalid JSON response.");
   }
 }
-function inspectLatchSession({
+async function inspectLatchSession({
   executable = "latch",
   providerSessionId
 }) {
   const sessionId = trimmed5(providerSessionId);
   if (!sessionId) throw new LatchSessionCommandError("A Latch session id is required.");
-  const report = runLatchJson({
+  const report = await runLatchJson({
     executable: trimmed5(executable) ?? "latch",
     args: ["inspect", sessionId, "--json"]
   });
@@ -71309,14 +71315,16 @@ function inspectLatchSession({
     inspectedAt: (/* @__PURE__ */ new Date()).toISOString()
   };
 }
-function readLatchProductVersion(executable) {
+async function readLatchProductVersion(executable) {
   try {
-    return trimmed5(runLatchJson({ executable, args: ["capabilities", "--json"] }).productVersion);
+    return trimmed5(
+      (await runLatchJson({ executable, args: ["capabilities", "--json"] })).productVersion
+    );
   } catch {
     return null;
   }
 }
-function openLatchSession({
+async function openLatchSession({
   executable = "latch",
   providerSessionId,
   viewerKind,
@@ -71329,13 +71337,13 @@ function openLatchSession({
     throw new LatchSessionCommandError(`Latch cannot open the configured viewer "${viewerKind}".`);
   }
   const exe = trimmed5(executable) ?? "latch";
-  const report = runLatchJson({
+  const report = await runLatchJson({
     executable: exe,
     args: buildLatchOpenArgs({
       providerSessionId: sessionId,
       viewer,
       openAs,
-      productVersion: openAs ? readLatchProductVersion(exe) : null
+      productVersion: openAs ? await readLatchProductVersion(exe) : null
     })
   });
   if (report.opened !== true) {
@@ -71348,13 +71356,13 @@ function openLatchSession({
     behavior: trimmed5(report.behavior) ? parseViewerOpenAs(report.behavior) : null
   };
 }
-function stopLatchSession({
+async function stopLatchSession({
   executable = "latch",
   providerSessionId
 }) {
   const sessionId = trimmed5(providerSessionId);
   if (!sessionId) throw new LatchSessionCommandError("A Latch session id is required.");
-  const report = runLatchJson({
+  const report = await runLatchJson({
     executable: trimmed5(executable) ?? "latch",
     args: ["stop", sessionId, "--json"]
   });
@@ -72206,7 +72214,7 @@ var init_in_process_provider = __esm({
       }
       async inspectLatchSession(input) {
         try {
-          return ok2(this.target, inspectLatchSession(input));
+          return ok2(this.target, await inspectLatchSession(input));
         } catch (error53) {
           return failLatchCommand({
             target: this.target,
@@ -72217,7 +72225,7 @@ var init_in_process_provider = __esm({
       }
       async openLatchSession(input) {
         try {
-          return ok2(this.target, openLatchSession(input));
+          return ok2(this.target, await openLatchSession(input));
         } catch (error53) {
           return failLatchCommand({
             target: this.target,
@@ -72228,7 +72236,7 @@ var init_in_process_provider = __esm({
       }
       async stopLatchSession(input) {
         try {
-          return ok2(this.target, stopLatchSession(input));
+          return ok2(this.target, await stopLatchSession(input));
         } catch (error53) {
           return failLatchCommand({
             target: this.target,
@@ -141134,7 +141142,8 @@ async function getGitHubIntegration() {
     configured: githubAppConfig() !== null,
     connected: installation !== null,
     accountLogin: installation?.github_account_login ?? null,
-    accountType: installation?.github_account_type ?? null
+    accountType: installation?.github_account_type ?? null,
+    workspaceName: WORKSPACE.name
   };
 }
 function beginGitHubInstall() {
@@ -157908,6 +157917,68 @@ function missionRoute(permission, fn) {
 // ext/everhour/service.ts
 init_db();
 init_errors5();
+
+// ext/everhour/crypto.ts
+var import_node_crypto19 = require("node:crypto");
+init_errors5();
+function decodeEncryptionKey(encoded) {
+  const trimmed10 = encoded?.trim();
+  if (!trimmed10) return null;
+  const key = Buffer.from(trimmed10, "base64url");
+  if (key.length !== 32) return null;
+  return key;
+}
+function everhourEncryptionKeyFromEnv() {
+  return decodeEncryptionKey(process.env.EVERHOUR_API_KEY_ENCRYPTION_KEY) ?? decodeEncryptionKey(process.env.GITHUB_USER_TOKEN_ENCRYPTION_KEY);
+}
+function requireEverhourEncryptionKey() {
+  const key = everhourEncryptionKeyFromEnv();
+  if (!key) {
+    throw new ApiError(
+      503,
+      "Everhour API-key encryption is not configured on this Overlord server."
+    );
+  }
+  return key;
+}
+function apiKeyAad(profileId) {
+  return Buffer.from(`overlord:everhour-user-key:v1:${profileId}:api-key`, "utf8");
+}
+function encryptEverhourApiKey({
+  apiKey,
+  profileId,
+  key
+}) {
+  const nonce = (0, import_node_crypto19.randomBytes)(12);
+  const cipher = (0, import_node_crypto19.createCipheriv)("aes-256-gcm", key, nonce);
+  cipher.setAAD(apiKeyAad(profileId));
+  const ciphertext = Buffer.concat([cipher.update(apiKey, "utf8"), cipher.final()]);
+  const tag2 = cipher.getAuthTag();
+  return `v1.${nonce.toString("base64url")}.${tag2.toString("base64url")}.${ciphertext.toString("base64url")}`;
+}
+function decryptEverhourApiKey({
+  envelope,
+  profileId,
+  key
+}) {
+  const [version4, nonceText, tagText, ciphertextText, ...extra] = envelope.split(".");
+  if (version4 !== "v1" || !nonceText || !tagText || !ciphertextText || extra.length > 0) {
+    throw new ApiError(503, "The stored Everhour connection cannot be decrypted.");
+  }
+  try {
+    const decipher = (0, import_node_crypto19.createDecipheriv)("aes-256-gcm", key, Buffer.from(nonceText, "base64url"));
+    decipher.setAAD(apiKeyAad(profileId));
+    decipher.setAuthTag(Buffer.from(tagText, "base64url"));
+    return Buffer.concat([
+      decipher.update(Buffer.from(ciphertextText, "base64url")),
+      decipher.final()
+    ]).toString("utf8");
+  } catch {
+    throw new ApiError(503, "The stored Everhour connection cannot be decrypted.");
+  }
+}
+
+// ext/everhour/service.ts
 var EVERHOUR_BASE_URL = "https://api.everhour.com";
 async function everhourFetch(apiKey, path25, init2 = {}) {
   let res;
@@ -157942,15 +158013,41 @@ async function getCurrentEverhourUserId(apiKey) {
   const user = await everhourFetch(apiKey, "/users/me");
   return typeof user?.id === "number" ? user.id : null;
 }
+async function ensureActorIsEverhourProjectMember({
+  apiKey,
+  everhourProjectId,
+  knownProject
+}) {
+  const userId = await getCurrentEverhourUserId(apiKey);
+  if (userId === null) return;
+  const project = knownProject ?? await everhourFetch(
+    apiKey,
+    `/projects/${encodeURIComponent(everhourProjectId)}`
+  );
+  if ((project.users ?? []).includes(userId)) return;
+  await everhourFetch(apiKey, `/projects/${encodeURIComponent(everhourProjectId)}`, {
+    method: "PUT",
+    body: {
+      name: project.name,
+      type: project.type ?? "board",
+      users: [...project.users ?? [], userId]
+    }
+  });
+}
 function isNativeEverhourProjectId(id) {
   return typeof id === "string" && id.startsWith("ev:");
 }
-async function requireApiKey(workspaceId) {
-  const apiKey = await readEverhourApiKey(workspaceId);
+async function requireApiKey() {
+  const apiKey = await readEverhourApiKey();
   if (!apiKey) {
     throw new ApiError(400, "Connect Everhour in Settings \u2192 Integrations first.");
   }
   return apiKey;
+}
+async function requireActorProfileId(client = requireDatabaseClient()) {
+  const profileId = await resolveActiveProfileId(client);
+  if (!profileId) throw new ApiError(401, "Authentication required.");
+  return profileId;
 }
 function normalizeRecord(raw) {
   const seconds = typeof raw.time === "number" ? raw.time : raw.duration ?? 0;
@@ -157972,103 +158069,169 @@ function unwrapArray(payload) {
   return [];
 }
 var PROJECT_GENERAL_TASK_NAME = "general";
-async function readEverhourConnection(client = requireDatabaseClient(), workspaceId = WORKSPACE.id) {
+async function readUserConnection(profileId, client = requireDatabaseClient()) {
   const row = await client.get(
-    `SELECT id, api_key_secret, account_id, account_name, revision
-       FROM ext_everhour_workspace_connections
-      WHERE workspace_id = ? AND deleted_at IS NULL`,
-    [workspaceId]
+    `SELECT id, profile_id, api_key_ciphertext, account_id, account_name, revision
+       FROM ext_everhour_user_connections
+      WHERE profile_id = ? AND deleted_at IS NULL`,
+    [profileId]
   );
   return row ?? null;
 }
-async function readEverhourApiKey(workspaceId, client = requireDatabaseClient()) {
-  return (await readEverhourConnection(client, workspaceId))?.api_key_secret ?? null;
+async function decryptUserConnectionApiKey(row) {
+  const key = requireEverhourEncryptionKey();
+  return decryptEverhourApiKey({
+    envelope: row.api_key_ciphertext,
+    profileId: row.profile_id,
+    key
+  });
 }
-async function writeEverhourConnection(apiKey, accountName, accountId) {
-  await requireDatabaseClient().transaction(async (tx) => {
-    const existing = await readEverhourConnection(tx);
-    const now2 = nowIso2();
-    if (existing) {
-      const revision = existing.revision + 1;
-      await tx.run(
-        `UPDATE ext_everhour_workspace_connections
-            SET api_key_secret = ?, account_id = ?, account_name = ?,
-                updated_at = ?, revision = ?
-          WHERE id = ? AND workspace_id = ? AND revision = ?`,
-        [
-          apiKey,
-          accountId,
-          accountName,
-          now2,
-          revision,
-          existing.id,
-          WORKSPACE.id,
-          existing.revision
-        ]
-      );
-      await recordChange2(
-        {
-          entityType: "everhour:workspace_connection",
-          entityId: existing.id,
-          operation: "update",
-          entityRevision: revision,
-          changedFields: ["accountId", "accountName"],
-          workspaceId: WORKSPACE.id
-        },
-        tx
-      );
-      return;
+async function connectionActorsAreUnambiguously({
+  client,
+  connectionId,
+  profileId
+}) {
+  const actors = await client.all(
+    `SELECT DISTINCT actor_workspace_user_id
+       FROM entity_changes
+      WHERE entity_type = 'everhour:workspace_connection'
+        AND entity_id = ?
+        AND operation IN ('insert', 'update')
+        AND actor_workspace_user_id IS NOT NULL`,
+    [connectionId]
+  );
+  if (actors.length === 0) return false;
+  for (const actor of actors) {
+    const membership = await client.get(
+      `SELECT profile_id FROM workspace_users WHERE id = ?`,
+      [actor.actor_workspace_user_id]
+    );
+    if (!membership || membership.profile_id !== profileId) return false;
+  }
+  return true;
+}
+async function adoptUnambiguousWorkspaceConnection(profileId, client) {
+  const encryptionKey = everhourEncryptionKeyFromEnv();
+  if (!encryptionKey) return null;
+  const candidates = await client.all(
+    `SELECT c.id, c.workspace_id, c.api_key_secret, c.account_id, c.account_name, c.revision
+       FROM ext_everhour_workspace_connections c
+       INNER JOIN workspace_users wu ON wu.workspace_id = c.workspace_id
+      WHERE wu.profile_id = ? AND wu.deleted_at IS NULL AND c.deleted_at IS NULL`,
+    [profileId]
+  );
+  const adoptable = [];
+  for (const candidate of candidates) {
+    if (await connectionActorsAreUnambiguously({ client, connectionId: candidate.id, profileId })) {
+      adoptable.push(candidate);
     }
-    const id = newId2();
-    await tx.run(
-      `INSERT INTO ext_everhour_workspace_connections
-         (id, workspace_id, api_key_secret, account_id, account_name, created_at, updated_at, revision)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 1)`,
-      [id, WORKSPACE.id, apiKey, accountId, accountName, now2, now2]
+  }
+  if (adoptable.length === 0) return null;
+  const secrets = new Set(adoptable.map((row) => row.api_key_secret));
+  if (secrets.size !== 1) return null;
+  const source = adoptable[0];
+  const now2 = nowIso2();
+  const ciphertext = encryptEverhourApiKey({
+    apiKey: source.api_key_secret,
+    profileId,
+    key: encryptionKey
+  });
+  await client.run(
+    `INSERT INTO ext_everhour_user_connections
+       (id, profile_id, api_key_ciphertext, account_id, account_name,
+        last_validated_at, created_at, updated_at, revision)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+    [newId2(), profileId, ciphertext, source.account_id, source.account_name, now2, now2, now2]
+  );
+  for (const row of adoptable) {
+    const revision = row.revision + 1;
+    await client.run(
+      `UPDATE ext_everhour_workspace_connections
+          SET deleted_at = ?, updated_at = ?, revision = ?
+        WHERE id = ? AND revision = ?`,
+      [now2, now2, revision, row.id, row.revision]
     );
     await recordChange2(
       {
         entityType: "everhour:workspace_connection",
-        entityId: id,
-        operation: "insert",
-        entityRevision: 1,
-        changedFields: ["connected", "accountId", "accountName"],
-        workspaceId: WORKSPACE.id
+        entityId: row.id,
+        operation: "delete",
+        entityRevision: revision,
+        changedFields: ["connected"],
+        workspaceId: row.workspace_id
       },
-      tx
+      client
+    );
+  }
+  return readUserConnection(profileId, client);
+}
+async function readActorUserConnection(client = requireDatabaseClient()) {
+  const profileId = await requireActorProfileId(client);
+  return await readUserConnection(profileId, client) ?? await adoptUnambiguousWorkspaceConnection(profileId, client);
+}
+async function readEverhourApiKey(client = requireDatabaseClient()) {
+  const connection = await readActorUserConnection(client);
+  if (!connection) return null;
+  return decryptUserConnectionApiKey(connection);
+}
+async function writeEverhourConnection(apiKey, accountName, accountId) {
+  const encryptionKey = requireEverhourEncryptionKey();
+  await requireDatabaseClient().transaction(async (tx) => {
+    const profileId = await requireActorProfileId(tx);
+    const existing = await readUserConnection(profileId, tx);
+    const now2 = nowIso2();
+    const ciphertext = encryptEverhourApiKey({ apiKey, profileId, key: encryptionKey });
+    if (existing) {
+      const revision = existing.revision + 1;
+      await tx.run(
+        `UPDATE ext_everhour_user_connections
+            SET api_key_ciphertext = ?, account_id = ?, account_name = ?,
+                last_validated_at = ?, updated_at = ?, revision = ?
+          WHERE id = ? AND profile_id = ? AND revision = ?`,
+        [
+          ciphertext,
+          accountId,
+          accountName,
+          now2,
+          now2,
+          revision,
+          existing.id,
+          profileId,
+          existing.revision
+        ]
+      );
+      return;
+    }
+    await tx.run(
+      `INSERT INTO ext_everhour_user_connections
+         (id, profile_id, api_key_ciphertext, account_id, account_name,
+          last_validated_at, created_at, updated_at, revision)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+      [newId2(), profileId, ciphertext, accountId, accountName, now2, now2, now2]
     );
   });
 }
 async function clearEverhourConnection() {
   await requireDatabaseClient().transaction(async (tx) => {
-    const existing = await readEverhourConnection(tx);
+    const profileId = await requireActorProfileId(tx);
+    const existing = await readUserConnection(profileId, tx);
     if (!existing) return;
     const now2 = nowIso2();
     const revision = existing.revision + 1;
     await tx.run(
-      `UPDATE ext_everhour_workspace_connections
+      `UPDATE ext_everhour_user_connections
           SET deleted_at = ?, updated_at = ?, revision = ?
-        WHERE id = ? AND workspace_id = ? AND revision = ?`,
-      [now2, now2, revision, existing.id, WORKSPACE.id, existing.revision]
-    );
-    await recordChange2(
-      {
-        entityType: "everhour:workspace_connection",
-        entityId: existing.id,
-        operation: "delete",
-        entityRevision: revision,
-        changedFields: ["connected"],
-        workspaceId: WORKSPACE.id
-      },
-      tx
+        WHERE id = ? AND profile_id = ? AND revision = ?`,
+      [now2, now2, revision, existing.id, profileId, existing.revision]
     );
   });
 }
 async function getEverhourIntegration() {
-  const connection = await readEverhourConnection();
+  const connection = await readActorUserConnection();
   if (!connection) return { connected: false, accountName: null };
   try {
-    const user = await everhourFetch(connection.api_key_secret, "/users/me");
+    const apiKey = await decryptUserConnectionApiKey(connection);
+    const user = await everhourFetch(apiKey, "/users/me");
     return { connected: true, accountName: user?.name ?? connection.account_name };
   } catch {
     return { connected: true, accountName: connection.account_name };
@@ -158263,14 +158426,11 @@ async function resolveEverhourProject(apiKey, name) {
     method: "POST",
     body: { name, type: "board", ...userId !== null ? { users: [userId] } : {} }
   });
-  if (match && userId !== null && !(match.users ?? []).includes(userId)) {
-    await everhourFetch(apiKey, `/projects/${encodeURIComponent(match.id)}`, {
-      method: "PUT",
-      body: {
-        name: match.name,
-        type: match.type ?? "board",
-        users: [...match.users ?? [], userId]
-      }
+  if (match) {
+    await ensureActorIsEverhourProjectMember({
+      apiKey,
+      everhourProjectId: match.id,
+      knownProject: match
     });
   }
   return { id: project.id, sectionId: await resolveSectionId(apiKey, project.id) };
@@ -158296,8 +158456,8 @@ async function linkProjectEverhour(projectId, rawName) {
     await clearProjectLink(projectId);
     return { projectId, everhourProjectId: null, everhourProjectName: null };
   }
-  const workspaceId = await assertProjectExists(projectId);
-  const apiKey = await requireApiKey(workspaceId);
+  await assertProjectExists(projectId);
+  const apiKey = await requireApiKey();
   const resolved = await resolveEverhourProject(apiKey, name);
   await writeProjectLink(projectId, resolved.id, name, resolved.sectionId);
   return { projectId, everhourProjectId: resolved.id, everhourProjectName: name };
@@ -158412,6 +158572,7 @@ async function ensureMissionTask(apiKey, missionId) {
       "This project is linked to an integration-backed Everhour project (e.g. GitHub or Jira), which does not allow creating tasks via the API. Re-link it to a native Everhour project in project settings to track mission time."
     );
   }
+  await ensureActorIsEverhourProjectMember({ apiKey, everhourProjectId });
   const resolvedSectionId = sectionId ?? await resolveSectionId(apiKey, everhourProjectId);
   if (!resolvedSectionId) {
     throw new ApiError(
@@ -158481,6 +158642,7 @@ async function ensureProjectGeneralTask(apiKey, projectId) {
       "This project is linked to an integration-backed Everhour project (e.g. GitHub or Jira), which does not allow creating tasks via the API. Re-link it to a native Everhour project in project settings to track project time."
     );
   }
+  await ensureActorIsEverhourProjectMember({ apiKey, everhourProjectId });
   const existingTask = await findProjectTaskByName({
     apiKey,
     everhourProjectId,
@@ -158550,7 +158712,7 @@ async function listTaskRecords(apiKey, taskId) {
 }
 async function getMissionEverhourState(missionId) {
   const mission = await getMissionRow2(missionId);
-  const apiKey = await readEverhourApiKey(mission.workspace_id);
+  const apiKey = await readEverhourApiKey();
   const { everhourProjectId } = await getProjectEverhour(mission.project_id);
   const base = {
     connected: Boolean(apiKey),
@@ -158574,15 +158736,15 @@ async function getMissionEverhourState(missionId) {
   };
 }
 async function startMissionTimer(missionId) {
-  const mission = await getMissionRow2(missionId);
-  const apiKey = await requireApiKey(mission.workspace_id);
+  await getMissionRow2(missionId);
+  const apiKey = await requireApiKey();
   const taskId = await ensureMissionTask(apiKey, missionId);
   await everhourFetch(apiKey, "/timers", { method: "POST", body: { task: taskId } });
   return getMissionEverhourState(missionId);
 }
 async function stopMissionTimer(missionId) {
-  const mission = await getMissionRow2(missionId);
-  const apiKey = await requireApiKey(mission.workspace_id);
+  await getMissionRow2(missionId);
+  const apiKey = await requireApiKey();
   try {
     await everhourFetch(apiKey, "/timers/current", { method: "DELETE" });
   } catch (err) {
@@ -158592,7 +158754,7 @@ async function stopMissionTimer(missionId) {
 }
 async function getProjectEverhourState(projectId) {
   const workspaceId = await assertProjectExists(projectId);
-  const apiKey = await readEverhourApiKey(workspaceId);
+  const apiKey = await readEverhourApiKey();
   const link = await readProjectLink2(projectId, workspaceId);
   const taskId = link?.everhour_general_task_id ?? null;
   const base = {
@@ -158621,15 +158783,15 @@ async function getProjectEverhourState(projectId) {
   };
 }
 async function startProjectTimer(projectId) {
-  const workspaceId = await assertProjectExists(projectId);
-  const apiKey = await requireApiKey(workspaceId);
+  await assertProjectExists(projectId);
+  const apiKey = await requireApiKey();
   const taskId = await ensureProjectGeneralTask(apiKey, projectId);
   await everhourFetch(apiKey, "/timers", { method: "POST", body: { task: taskId } });
   return getProjectEverhourState(projectId);
 }
 async function stopProjectTimer(projectId) {
-  const workspaceId = await assertProjectExists(projectId);
-  const apiKey = await requireApiKey(workspaceId);
+  await assertProjectExists(projectId);
+  const apiKey = await requireApiKey();
   try {
     await everhourFetch(apiKey, "/timers/current", { method: "DELETE" });
   } catch (err) {
@@ -158638,8 +158800,8 @@ async function stopProjectTimer(projectId) {
   return getProjectEverhourState(projectId);
 }
 async function addProjectTime(projectId, body) {
-  const workspaceId = await assertProjectExists(projectId);
-  const apiKey = await requireApiKey(workspaceId);
+  await assertProjectExists(projectId);
+  const apiKey = await requireApiKey();
   if (!Number.isFinite(body.timeSeconds) || body.timeSeconds <= 0) {
     throw new ApiError(400, "Enter a positive duration.");
   }
@@ -158656,8 +158818,8 @@ async function addProjectTime(projectId, body) {
   return getProjectEverhourState(projectId);
 }
 async function updateProjectTime(projectId, recordId, body) {
-  const workspaceId = await assertProjectExists(projectId);
-  const apiKey = await requireApiKey(workspaceId);
+  await assertProjectExists(projectId);
+  const apiKey = await requireApiKey();
   if (!Number.isFinite(body.timeSeconds) || body.timeSeconds <= 0) {
     throw new ApiError(400, "Enter a positive duration.");
   }
@@ -158671,14 +158833,14 @@ async function updateProjectTime(projectId, recordId, body) {
   return getProjectEverhourState(projectId);
 }
 async function deleteProjectTime(projectId, recordId) {
-  const workspaceId = await assertProjectExists(projectId);
-  const apiKey = await requireApiKey(workspaceId);
+  await assertProjectExists(projectId);
+  const apiKey = await requireApiKey();
   await everhourFetch(apiKey, `/time/${encodeURIComponent(recordId)}`, { method: "DELETE" });
   return getProjectEverhourState(projectId);
 }
 async function addMissionTime(missionId, body) {
-  const mission = await getMissionRow2(missionId);
-  const apiKey = await requireApiKey(mission.workspace_id);
+  await getMissionRow2(missionId);
+  const apiKey = await requireApiKey();
   if (!Number.isFinite(body.timeSeconds) || body.timeSeconds <= 0) {
     throw new ApiError(400, "Enter a positive duration.");
   }
@@ -158695,8 +158857,8 @@ async function addMissionTime(missionId, body) {
   return getMissionEverhourState(missionId);
 }
 async function updateMissionTime(missionId, recordId, body) {
-  const mission = await getMissionRow2(missionId);
-  const apiKey = await requireApiKey(mission.workspace_id);
+  await getMissionRow2(missionId);
+  const apiKey = await requireApiKey();
   if (!Number.isFinite(body.timeSeconds) || body.timeSeconds <= 0) {
     throw new ApiError(400, "Enter a positive duration.");
   }
@@ -158710,8 +158872,8 @@ async function updateMissionTime(missionId, recordId, body) {
   return getMissionEverhourState(missionId);
 }
 async function deleteMissionTime(missionId, recordId) {
-  const mission = await getMissionRow2(missionId);
-  const apiKey = await requireApiKey(mission.workspace_id);
+  await getMissionRow2(missionId);
+  const apiKey = await requireApiKey();
   await everhourFetch(apiKey, `/time/${encodeURIComponent(recordId)}`, { method: "DELETE" });
   return getMissionEverhourState(missionId);
 }
@@ -158720,22 +158882,28 @@ async function deleteMissionTime(missionId, recordId) {
 function createEverhourExtensionRouter(handle4) {
   const router2 = (0, import_express.Router)();
   router2.get(
+    "/user-connection",
+    handle4(() => getEverhourIntegration())
+  );
+  router2.put(
+    "/user-connection",
+    handle4((req) => setEverhourApiKey(String(req.body?.apiKey ?? "")), { mutates: true })
+  );
+  router2.delete(
+    "/user-connection",
+    handle4(() => clearEverhourApiKey(), { mutates: true })
+  );
+  router2.get(
     "/integration",
-    handle4(() => getEverhourIntegration(), { requires: PERMISSIONS.WORKSPACE_READ })
+    handle4(() => getEverhourIntegration())
   );
   router2.put(
     "/integration",
-    handle4((req) => setEverhourApiKey(String(req.body?.apiKey ?? "")), {
-      mutates: true,
-      requires: PERMISSIONS.WORKSPACE_UPDATE
-    })
+    handle4((req) => setEverhourApiKey(String(req.body?.apiKey ?? "")), { mutates: true })
   );
   router2.delete(
     "/integration",
-    handle4(() => clearEverhourApiKey(), {
-      mutates: true,
-      requires: PERMISSIONS.WORKSPACE_UPDATE
-    })
+    handle4(() => clearEverhourApiKey(), { mutates: true })
   );
   router2.put(
     "/projects/:projectId/link",
@@ -161483,7 +161651,7 @@ function boundComposeText(value, maxChars) {
 var deliveryComposeWorker = new DeliveryComposeWorker();
 
 // desktop-oauth-handoff.ts
-var import_node_crypto19 = require("node:crypto");
+var import_node_crypto20 = require("node:crypto");
 var HANDOFF_TTL_MS = 6e4;
 var TICKET_PATTERN = /^[A-Za-z0-9_-]{32,128}$/;
 var handoffs = /* @__PURE__ */ new Map();
@@ -161494,7 +161662,7 @@ function discardExpiredHandoffs(now2 = Date.now()) {
 }
 function createOAuthHandoff(sessionToken, audience) {
   discardExpiredHandoffs();
-  const ticket = (0, import_node_crypto19.randomBytes)(32).toString("base64url");
+  const ticket = (0, import_node_crypto20.randomBytes)(32).toString("base64url");
   handoffs.set(ticket, { audience, sessionToken, expiresAt: Date.now() + HANDOFF_TTL_MS });
   return ticket;
 }
@@ -161544,7 +161712,7 @@ init_errors5();
 
 // live-activities.ts
 init_dist();
-var import_node_crypto20 = require("node:crypto");
+var import_node_crypto21 = require("node:crypto");
 init_util3();
 init_db();
 init_errors5();
@@ -161833,7 +162001,7 @@ async function buildLiveActivityContentState(db, profileId, now2 = /* @__PURE__ 
   };
 }
 function liveActivityContentHash(state2) {
-  return (0, import_node_crypto20.createHash)("sha256").update(
+  return (0, import_node_crypto21.createHash)("sha256").update(
     JSON.stringify(
       state2 && {
         running: state2.running,
@@ -161847,7 +162015,7 @@ function liveActivityContentHash(state2) {
 init_util3();
 
 // apns-client.ts
-var import_node_crypto21 = require("node:crypto");
+var import_node_crypto22 = require("node:crypto");
 var import_node_http2 = __toESM(require("node:http2"), 1);
 var SANDBOX_HOST = "https://api.sandbox.push.apple.com";
 var PRODUCTION_HOST = "https://api.push.apple.com";
@@ -161876,7 +162044,7 @@ function apnsJwt(config4) {
   const signingInput = `${b64url(JSON.stringify({ alg: "ES256", kid: config4.keyId }))}.${b64url(
     JSON.stringify({ iss: config4.teamId, iat: now2 })
   )}`;
-  const signer = (0, import_node_crypto21.createSign)("SHA256");
+  const signer = (0, import_node_crypto22.createSign)("SHA256");
   signer.update(signingInput);
   signer.end();
   const signature = signer.sign({ key: config4.privateKey, dsaEncoding: "ieee-p1363" });
@@ -162953,7 +163121,7 @@ async function dismissNotification(id, body) {
 }
 
 // oauth.ts
-var import_node_crypto22 = require("node:crypto");
+var import_node_crypto23 = require("node:crypto");
 init_db();
 init_errors5();
 var CLIENT_ID_PREFIX = "ovlc_";
@@ -162989,12 +163157,12 @@ function oauthSigningSecret() {
   return process.env.OVERLORD_OAUTH_SIGNING_SECRET?.trim() || process.env.BETTER_AUTH_SECRET?.trim() || "overlord-local-oauth-development-secret";
 }
 function signPayload(payload) {
-  return (0, import_node_crypto22.createHmac)("sha256", oauthSigningSecret()).update(payload).digest("base64url");
+  return (0, import_node_crypto23.createHmac)("sha256", oauthSigningSecret()).update(payload).digest("base64url");
 }
 function fixedTimeEqual(a5, b5) {
   const left = Buffer.from(a5);
   const right = Buffer.from(b5);
-  return left.length === right.length && (0, import_node_crypto22.timingSafeEqual)(left, right);
+  return left.length === right.length && (0, import_node_crypto23.timingSafeEqual)(left, right);
 }
 function jsonError(res, status, error53, description) {
   res.status(status).json({ error: error53, error_description: description });
@@ -163231,7 +163399,7 @@ async function handleOAuthApprove(req, res) {
     scope: "mission_lifecycle",
     expiresAt: new Date(Date.now() + USER_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1e3).toISOString()
   });
-  const code = `${AUTH_CODE_PREFIX}${(0, import_node_crypto22.randomBytes)(32).toString("base64url")}`;
+  const code = `${AUTH_CODE_PREFIX}${(0, import_node_crypto23.randomBytes)(32).toString("base64url")}`;
   authorizationCodes.set(code, {
     clientId: parsed.clientId,
     redirectUri: parsed.redirectUri,
@@ -163275,7 +163443,7 @@ async function handleOAuthToken(req, res) {
     jsonError(res, 400, "invalid_target", "OAuth resource does not match the authorization code.");
     return;
   }
-  const challenge = (0, import_node_crypto22.createHash)("sha256").update(codeVerifier).digest("base64url");
+  const challenge = (0, import_node_crypto23.createHash)("sha256").update(codeVerifier).digest("base64url");
   if (!codeVerifier || challenge !== entry.codeChallenge) {
     await revokeOrphanedAccessToken(entry.accessToken);
     jsonError(res, 400, "invalid_grant", "PKCE verification failed.");
@@ -163295,7 +163463,7 @@ async function handleOAuthRevoke(req, res) {
 }
 
 // storage.ts
-var import_node_crypto23 = require("node:crypto");
+var import_node_crypto24 = require("node:crypto");
 var import_node_fs19 = require("node:fs");
 var import_node_path30 = __toESM(require("node:path"), 1);
 var import_node_url7 = require("node:url");
@@ -163379,7 +163547,7 @@ async function writeImageObject(bucket, input, storageKeyFor) {
     storageKey,
     sizeBytes: input.bytes.length,
     contentType,
-    checksum: (0, import_node_crypto23.createHash)("sha256").update(input.bytes).digest("hex"),
+    checksum: (0, import_node_crypto24.createHash)("sha256").update(input.bytes).digest("hex"),
     publicUrl: publicUrlFor(bucket.bucket_key, storageKey)
   };
 }
@@ -163611,7 +163779,7 @@ async function uploadObjectiveAttachment(input) {
     contentType: contentType ?? "application/octet-stream"
   });
   const filename = input.filename.trim() || `attachment${import_node_path30.default.extname(storageKey)}`;
-  const checksum3 = (0, import_node_crypto23.createHash)("sha256").update(input.bytes).digest("hex");
+  const checksum3 = (0, import_node_crypto24.createHash)("sha256").update(input.bytes).digest("hex");
   return requireDatabaseClient().transaction(async (tx) => {
     await tx.run(
       `INSERT INTO attachments (
@@ -163866,14 +164034,14 @@ init_webhook_events();
 init_db();
 
 // webhook-security.ts
-var import_node_crypto24 = require("node:crypto");
+var import_node_crypto25 = require("node:crypto");
 var import_promises5 = __toESM(require("node:dns/promises"), 1);
 var import_node_net = require("node:net");
 init_db();
 init_errors5();
 function signWebhookPayload(secret, rawBody) {
   const timestamp = Math.floor(Date.now() / 1e3);
-  const signature = (0, import_node_crypto24.createHmac)("sha256", secret).update(`${timestamp}.${rawBody}`).digest("hex");
+  const signature = (0, import_node_crypto25.createHmac)("sha256", secret).update(`${timestamp}.${rawBody}`).digest("hex");
   return { header: `t=${timestamp},v1=${signature}`, timestamp };
 }
 function internalHostPatterns() {
@@ -164200,7 +164368,7 @@ var webhookDispatcher = new WebhookDispatcher();
 
 // webhooks.ts
 init_dist();
-var import_node_crypto25 = require("node:crypto");
+var import_node_crypto26 = require("node:crypto");
 init_webhook_events();
 init_db();
 init_errors5();
@@ -164236,7 +164404,7 @@ function toSubscriptionDto(row) {
   };
 }
 function generateWebhookSecret() {
-  return { secret: `${WEBHOOK_SECRET_SCHEME}_${(0, import_node_crypto25.randomBytes)(24).toString("hex")}` };
+  return { secret: `${WEBHOOK_SECRET_SCHEME}_${(0, import_node_crypto26.randomBytes)(24).toString("hex")}` };
 }
 function normalizeEventTypes(input) {
   if (!Array.isArray(input) || input.length === 0) {
