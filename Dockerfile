@@ -46,14 +46,14 @@ RUN printf '%s\n' \
   && chmod +x /usr/local/bin/repo-yarn
 RUN repo-yarn install --immutable --mode=skip-build
 
-# Build workspace packages that resolve to dist/ (database, auth, automations,
-# contract, core), then bundle the Postgres-only server. esbuild still follows
+# Build workspace packages that resolve to dist/ (contract, database, auth,
+# automations, core), then bundle the Postgres-only server. esbuild still follows
 # relative imports into packages/core/service/*.ts for the server graph.
 COPY . .
-RUN repo-yarn db:build:prod \
+RUN repo-yarn contract:build:prod \
+  && repo-yarn db:build:prod \
   && repo-yarn auth:build:prod \
   && repo-yarn automations:build:prod \
-  && repo-yarn contract:build:prod \
   && repo-yarn core:build:prod \
   && repo-yarn workspace @overlord/backend build:server:cloud \
   && repo-yarn workspaces focus --production @overlord/automations

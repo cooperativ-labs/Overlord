@@ -68,10 +68,10 @@ COPY cli/src/agent-catalog.ts \
 # Prune runtime deps to the bundle's cloud external set under the existing
 # workspace lockfile. The bundled server carries its own code; Railway only
 # needs the automations provider package (@google/genai) and its transitives.
-RUN repo-yarn db:build:prod \
+RUN repo-yarn contract:build:prod \
+  && repo-yarn db:build:prod \
   && repo-yarn auth:build:prod \
   && repo-yarn automations:build:prod \
-  && repo-yarn contract:build:prod \
   && repo-yarn core:build:prod \
   && repo-yarn workspace @overlord/backend build:server:cloud \
   && repo-yarn workspaces focus --production @overlord/automations
