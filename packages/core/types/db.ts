@@ -486,6 +486,19 @@ export interface ExtEverhourProjectLinks {
   workspace_id: string;
 }
 
+export interface ExtEverhourUserConnections {
+  account_id: string | null;
+  account_name: string | null;
+  api_key_ciphertext: string;
+  created_at: string;
+  deleted_at: string | null;
+  id: string | null;
+  last_validated_at: string;
+  profile_id: string;
+  revision: Generated<number>;
+  updated_at: string;
+}
+
 export interface ExtEverhourWorkspaceConnections {
   account_id: string | null;
   account_name: string | null;
@@ -1369,6 +1382,7 @@ export interface DB {
   execution_targets: ExecutionTargets;
   ext_everhour_mission_links: ExtEverhourMissionLinks;
   ext_everhour_project_links: ExtEverhourProjectLinks;
+  ext_everhour_user_connections: ExtEverhourUserConnections;
   ext_everhour_workspace_connections: ExtEverhourWorkspaceConnections;
   ext_github_installations: ExtGithubInstallations;
   ext_github_mission_pull_requests: ExtGithubMissionPullRequests;

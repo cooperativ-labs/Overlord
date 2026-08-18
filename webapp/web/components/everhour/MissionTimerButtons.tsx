@@ -13,7 +13,7 @@ import { formatClock, useLiveSeconds } from '../../lib/everhour.ts';
 
 /**
  * Shared timer state + start/stop control for one mission. Returns `connected:
- * false` when the workspace has no Everhour API key, so callers can render
+ * false` when the acting user has not connected Everhour, so callers can render
  * nothing. `liveSeconds` ticks locally while the timer runs.
  */
 export function useMissionTimerControls(missionId: string, options: { poll?: boolean } = {}) {
@@ -48,7 +48,7 @@ export function useMissionTimerControls(missionId: string, options: { poll?: boo
 /**
  * Small play/stop circle for dense surfaces (e.g. the mission card hover footer).
  * Idle: gray play, green on hover. Running: red stop. Renders nothing when the
- * workspace isn't connected to Everhour.
+ * acting user hasn't connected Everhour.
  */
 export function MissionTimerCircleButton({
   missionId,

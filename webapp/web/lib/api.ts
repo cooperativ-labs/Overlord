@@ -773,10 +773,12 @@ export const api = {
     ),
 
   // ---- Everhour integration ----------------------------------------------
-  getEverhourIntegration: () => request<EverhourIntegrationDto>('GET', '/ext/everhour/integration'),
+  getEverhourIntegration: () =>
+    request<EverhourIntegrationDto>('GET', '/ext/everhour/user-connection'),
   setEverhourApiKey: (apiKey: string) =>
-    request<EverhourIntegrationDto>('PUT', '/ext/everhour/integration', { apiKey }),
-  clearEverhourApiKey: () => request<EverhourIntegrationDto>('DELETE', '/ext/everhour/integration'),
+    request<EverhourIntegrationDto>('PUT', '/ext/everhour/user-connection', { apiKey }),
+  clearEverhourApiKey: () =>
+    request<EverhourIntegrationDto>('DELETE', '/ext/everhour/user-connection'),
   getProjectEverhourLink: (projectId: string) =>
     request<ProjectEverhourLinkDto>('GET', `/ext/everhour/projects/${projectId}/link`),
   linkProjectEverhour: (projectId: string, body: LinkProjectEverhourBody) =>

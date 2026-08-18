@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
+process.env.EVERHOUR_API_KEY_ENCRYPTION_KEY ??= Buffer.alloc(32, 11).toString('base64url');
 const tempDir = mkdtempSync(path.join(tmpdir(), 'overlord-everhour-routes-'));
 const { bootstrapIntegrationTestDb } = await import('../../test-helpers.ts');
 await bootstrapIntegrationTestDb({ sqlitePath: path.join(tempDir, 'everhour-routes.sqlite') });
@@ -77,7 +78,7 @@ test.after(() => {
   rmSync(tempDir, { recursive: true, force: true });
 });
 
-test('GET /ext/everhour/integration requires workspace:read', async () => {
+test('GET /ext/everhour/user-connection does not require a workspace permission', async () => {
   setActiveTokenAuth({
     workspaceUserId: operatorWorkspaceUserId,
     tokenId: 'tok-read-test',
@@ -85,12 +86,14 @@ test('GET /ext/everhour/integration requires workspace:read', async () => {
   });
 
   await withEverhourServer(async baseUrl => {
-    const response = await fetch(`${baseUrl}/ext/everhour/integration`);
-    assert.equal(response.status, 403);
+    const response = await fetch(`${baseUrl}/ext/everhour/user-connection`);
+    assert.equal(response.status, 200);
+    const body = (await response.json()) as { connected: boolean };
+    assert.equal(body.connected, false);
   });
 });
 
-test('GET /ext/everhour/integration succeeds for a full-scope operator', async () => {
+test('GET /ext/everhour/integration is a deprecated alias of user-connection', async () => {
   setActiveWorkspaceUser(operatorWorkspaceUserId);
 
   await withEverhourServer(async baseUrl => {
@@ -98,23 +101,6 @@ test('GET /ext/everhour/integration succeeds for a full-scope operator', async (
     assert.equal(response.status, 200);
     const body = (await response.json()) as { connected: boolean };
     assert.equal(body.connected, false);
-  });
-});
-
-test('PUT /ext/everhour/integration requires workspace:update', async () => {
-  setActiveTokenAuth({
-    workspaceUserId: operatorWorkspaceUserId,
-    tokenId: 'tok-update-test',
-    scopeGrants: ['workspace:read']
-  });
-
-  await withEverhourServer(async baseUrl => {
-    const response = await fetch(`${baseUrl}/ext/everhour/integration`, {
-      method: 'PUT',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ apiKey: 'secret' })
-    });
-    assert.equal(response.status, 403);
   });
 });
 

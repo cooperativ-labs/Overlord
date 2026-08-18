@@ -2466,10 +2466,33 @@ core workspace/project/mission columns. Its migrations use
 `schema_migrations.component = 'ext:everhour'` and all tables use the
 `ext_everhour_` prefix.
 
+### `ext_everhour_user_connections`
+
+One active Everhour personal API-key connection per profile. The key
+authenticates a person at Everhour, so this record is account-wide — the same
+shape as `ext_github_user_connections`. Plaintext keys must never enter this
+table, DTOs, logs, browser/mobile storage, realtime, entity changes, or error
+text. Ciphertext is AES-256-GCM under the server-held
+`EVERHOUR_API_KEY_ENCRYPTION_KEY`, falling back to
+`GITHUB_USER_TOKEN_ENCRYPTION_KEY` when the dedicated variable is unset.
+
+| Column                                                                    | Type     | Required | Notes                                                              |
+| ------------------------------------------------------------------------- | -------- | -------- | ------------------------------------------------------------------ |
+| `id`, `profile_id`                                                        | Id       | yes      | Extension row and owning profile FK (`ON DELETE CASCADE`).         |
+| `api_key_ciphertext`                                                      | text     | yes      | Versioned AES-256-GCM envelope; never projected.                   |
+| `account_id`, `account_name`                                              | text     | no       | Upstream Everhour user identifier and display name, when known.    |
+| `created_at`, `updated_at`, `last_validated_at`, `deleted_at`, `revision` | standard | yes/no   | Standard lifecycle, validation, and optimistic-concurrency fields. |
+
+Index: unique active `(profile_id)`.
+
 ### `ext_everhour_workspace_connections`
 
-Workspace-scoped Everhour connection and secret storage. Services must never
-return `api_key_secret` to clients or include it in change-feed fields.
+Deprecated workspace-scoped Everhour connection retained only as a migration
+source. New writes go to `ext_everhour_user_connections`. A workspace row is
+adopted onto a profile only when `entity_changes` attribution uniquely
+identifies that profile as the connector; otherwise it stays readable until
+the connector reconnects personally. Services must never return
+`api_key_secret` to clients or include it in change-feed fields.
 
 | Column           | Type         | Required | Notes                                                  |
 | ---------------- | ------------ | -------- | ------------------------------------------------------ |

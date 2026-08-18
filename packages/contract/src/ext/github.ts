@@ -36,6 +36,8 @@ export interface GitHubIntegrationDto {
   connected: boolean;
   accountLogin: string | null;
   accountType: string | null;
+  /** Overlord workspace this GitHub App installation applies to. */
+  workspaceName: string | null;
 }
 
 export interface GitHubInstallUrlDto {

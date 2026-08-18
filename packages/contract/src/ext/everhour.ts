@@ -1,18 +1,24 @@
 // ---- Everhour extension contract -----------------------------------------
 //
 // Time tracking via Everhour (https://api.everhour.com). Extension endpoints are
-// exposed under `/ext/everhour/`; the workspace API key is stored server-side and
-// never returned to clients.
+// exposed under `/ext/everhour/`; the caller's personal API key is stored
+// server-side as ciphertext and never returned to clients.
 
-/** Connection state for the workspace Everhour integration (never includes the key). */
-export interface EverhourIntegrationDto {
-  /** True when a workspace Everhour API key is configured. */
+/** Connection state for the caller's Everhour identity (never includes the key). */
+export interface EverhourUserConnectionDto {
+  /** True when this profile has an Everhour API key configured. */
   connected: boolean;
   /** Name of the authenticated Everhour user, when the key validated. */
   accountName: string | null;
 }
 
-/** Body for `PUT /ext/everhour/integration` - sets/replaces the workspace API key. */
+/**
+ * @deprecated Use `EverhourUserConnectionDto`. Kept as an alias so existing
+ * `/ext/everhour/integration` clients keep compiling during the transition.
+ */
+export type EverhourIntegrationDto = EverhourUserConnectionDto;
+
+/** Body for `PUT /ext/everhour/user-connection` (and deprecated `/integration`). */
 export interface UpdateEverhourIntegrationBody {
   apiKey: string;
 }
@@ -58,11 +64,12 @@ export interface EverhourTimerDto {
 }
 
 /**
- * Everhour state for one mission: whether the workspace is connected, the linked
- * task, the task's time records, and whether this mission's timer is running.
+ * Everhour state for one mission: whether the acting user is connected, the
+ * linked task, the task's time records, and whether this mission's timer is
+ * running.
  */
 export interface MissionEverhourStateDto {
-  /** True when a workspace Everhour API key is configured. */
+  /** True when the acting user has connected their Everhour API key. */
   connected: boolean;
   /** True when the mission's project has a linked Everhour project. */
   projectLinked: boolean;
@@ -81,7 +88,7 @@ export interface MissionEverhourStateDto {
  * project link, time records, and whether the project timer is running.
  */
 export interface ProjectEverhourStateDto {
-  /** True when a workspace Everhour API key is configured. */
+  /** True when the acting user has connected their Everhour API key. */
   connected: boolean;
   /** True when this project has a linked Everhour project. */
   projectLinked: boolean;

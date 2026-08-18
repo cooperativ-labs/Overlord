@@ -1,6 +1,6 @@
 # Integration Credential Scoping — User vs Workspace
 
-Status: proposed (recommendation only; no code changed)
+Status: implemented (coo:769.szq3)
 Mission: `coo:769` — *Clarify Integration Workspace Association*
 Date: 2026-08-18
 Related:

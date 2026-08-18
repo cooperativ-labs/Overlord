@@ -26,7 +26,9 @@ extensions/everhour/
 
 database/
   sqlite/migrations/20260706000000_ext_everhour_persistence.sql
+  sqlite/migrations/20260818080000_ext_everhour_userconnections.sql
   postgres/migrations/20260706000000_ext_everhour_persistence.sql
+  postgres/migrations/20260818080000_ext_everhour_userconnections.sql
 
 backend/ext/everhour/
   conformance-manifest.yaml   # REST extension declaration
@@ -69,7 +71,8 @@ Everhour tables:
 
 | Table | Purpose |
 | --- | --- |
-| `ext_everhour_workspace_connections` | Workspace API key and account metadata |
+| `ext_everhour_user_connections` | Profile-scoped personal API key (AES-256-GCM ciphertext) |
+| `ext_everhour_workspace_connections` | Deprecated workspace key; migration source only |
 | `ext_everhour_project_links` | Overlord project ↔ Everhour project |
 | `ext_everhour_mission_links` | Overlord mission ↔ Everhour task |
 
@@ -82,9 +85,12 @@ All endpoints live under `/ext/everhour/` (registered in `backend/index.ts`).
 
 | Method | Route | Permission |
 | --- | --- | --- |
-| `GET` | `/ext/everhour/integration` | `workspace:read` |
-| `PUT` | `/ext/everhour/integration` | `workspace:update` |
-| `DELETE` | `/ext/everhour/integration` | `workspace:update` |
+| `GET` | `/ext/everhour/user-connection` | authenticated (no workspace permission) |
+| `PUT` | `/ext/everhour/user-connection` | authenticated (no workspace permission) |
+| `DELETE` | `/ext/everhour/user-connection` | authenticated (no workspace permission) |
+| `GET` | `/ext/everhour/integration` | deprecated alias of `user-connection` |
+| `PUT` | `/ext/everhour/integration` | deprecated alias of `user-connection` |
+| `DELETE` | `/ext/everhour/integration` | deprecated alias of `user-connection` |
 | `GET` | `/ext/everhour/projects/:projectId/link` | `project:read` |
 | `PUT` | `/ext/everhour/projects/:projectId/link` | `project:update` |
 | `GET` | `/ext/everhour/missions/:missionId` | `mission:read` |
@@ -99,14 +105,14 @@ All endpoints live under `/ext/everhour/` (registered in `backend/index.ts`).
 ## Auth and permissions
 
 - Every route goes through the standard Auth Layer (`handle` wrapper with
-  `requires` permission).
-- Workspace-scoped operations (`integration`) require `workspace:read` or
-  `workspace:update`.
+  `requires` permission when the operation is workspace/project/mission scoped).
+- Account-wide identity (`user-connection`) requires only an authenticated
+  session — the same shape as `/ext/github/user-connection`.
 - Project link operations require `project:read` or `project:update`.
 - Mission timer and time-record operations require `mission:read` or
   `mission:update`.
-- API keys are stored in `ext_everhour_workspace_connections.api_key_secret` and
-  are never returned to clients.
+- API keys are stored in `ext_everhour_user_connections.api_key_ciphertext`
+  (AES-256-GCM) and are never returned to clients.
 
 ## Realtime invalidation
 
@@ -124,7 +130,8 @@ in the sync feed (`webapp/web/lib/query-invalidation.ts`).
 
 Everhour UI remains first-party code under `webapp/web/`:
 
-- **Settings → Integrations** — workspace API key connect/disconnect.
+- **Settings → Integrations** — personal Everhour API key connect/disconnect
+  (account-wide) and workspace GitHub App installation.
 - **Project settings → Integrations** — link Overlord project to an Everhour
   project by name.
 - **Mission panel** — timer buttons, popover, polling while a timer runs.

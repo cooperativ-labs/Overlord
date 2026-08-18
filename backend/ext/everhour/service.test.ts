@@ -5,12 +5,14 @@ import path from 'node:path';
 import test from 'node:test';
 
 const tempDir = mkdtempSync(path.join(tmpdir(), 'overlord-everhour-service-'));
+process.env.EVERHOUR_API_KEY_ENCRYPTION_KEY ??= Buffer.alloc(32, 9).toString('base64url');
 const { bootstrapIntegrationTestDb } = await import('../../test-helpers.ts');
 await bootstrapIntegrationTestDb({ sqlitePath: path.join(tempDir, 'everhour.sqlite') });
 
-const { db, WORKSPACE } = await import('../../db.ts');
+const { db, getActorWorkspaceUserId, newId, nowIso, WORKSPACE } = await import('../../db.ts');
 const { createMission, createProject } = await import('../../repository.ts');
 const { ApiError } = await import('../../errors.ts');
+const { decryptEverhourApiKey, requireEverhourEncryptionKey } = await import('./crypto.ts');
 const {
   addMissionTime,
   clearEverhourApiKey,
@@ -44,15 +46,24 @@ function installEverhourFetchMock(
         return handler.respond(url, init);
       }
     }
+    if (/\/projects\/ev%3A[^/?]+$/.test(url)) {
+      const id = decodeURIComponent(url.slice(url.lastIndexOf('/') + 1));
+      if (!init?.method || init.method === 'GET') {
+        return Response.json({ id, name: 'Board', type: 'board', users: [] });
+      }
+      if (init.method === 'PUT') {
+        return Response.json({ id, name: 'Board', type: 'board' });
+      }
+    }
     throw new Error(`Unexpected Everhour fetch: ${url} ${init?.method ?? 'GET'}`);
   }) as typeof fetch;
 }
 
-test('getEverhourIntegration reports disconnected when no workspace connection exists', async () => {
+test('getEverhourIntegration reports disconnected when no user connection exists', async () => {
   assert.deepEqual(await getEverhourIntegration(), { connected: false, accountName: null });
 });
 
-test('setEverhourApiKey validates against Everhour and persists the workspace connection', async () => {
+test('setEverhourApiKey validates against Everhour and persists the encrypted user connection', async () => {
   installEverhourFetchMock([
     {
       match: url => url.endsWith('/users/me'),
@@ -65,16 +76,26 @@ test('setEverhourApiKey validates against Everhour and persists the workspace co
 
   const row = db
     .prepare(
-      `SELECT api_key_secret, account_id, account_name
-         FROM ext_everhour_workspace_connections
-        WHERE workspace_id = ? AND deleted_at IS NULL`
+      `SELECT profile_id, api_key_ciphertext, account_id, account_name
+         FROM ext_everhour_user_connections
+        WHERE deleted_at IS NULL`
     )
-    .get(WORKSPACE.id) as {
-    api_key_secret: string;
+    .get() as {
+    profile_id: string;
+    api_key_ciphertext: string;
     account_id: string;
     account_name: string;
   };
-  assert.equal(row.api_key_secret, 'test-api-key');
+  assert.ok(row.profile_id);
+  assert.notEqual(row.api_key_ciphertext, 'test-api-key');
+  assert.equal(
+    decryptEverhourApiKey({
+      envelope: row.api_key_ciphertext,
+      profileId: row.profile_id,
+      key: requireEverhourEncryptionKey()
+    }),
+    'test-api-key'
+  );
   assert.equal(row.account_id, '7');
   assert.equal(row.account_name, 'Everhour Operator');
 });
@@ -86,7 +107,7 @@ test('setEverhourApiKey rejects blank keys before calling Everhour', async () =>
   );
 });
 
-test('clearEverhourApiKey soft-deletes the workspace connection', async () => {
+test('clearEverhourApiKey soft-deletes the user connection', async () => {
   installEverhourFetchMock([
     {
       match: url => url.endsWith('/users/me'),
@@ -101,11 +122,73 @@ test('clearEverhourApiKey soft-deletes the workspace connection', async () => {
   const active = db
     .prepare(
       `SELECT COUNT(*) AS count
-         FROM ext_everhour_workspace_connections
-        WHERE workspace_id = ? AND deleted_at IS NULL`
+         FROM ext_everhour_user_connections
+        WHERE deleted_at IS NULL`
     )
-    .get(WORKSPACE.id) as { count: number };
+    .get() as { count: number };
   assert.equal(active.count, 0);
+});
+
+test('getEverhourIntegration adopts an unambiguously attributed workspace key onto the actor profile', async () => {
+  await clearEverhourApiKey();
+  const connectionId = newId();
+  const now = nowIso();
+  const actorId = getActorWorkspaceUserId();
+  assert.ok(actorId);
+
+  db.prepare(
+    `INSERT INTO ext_everhour_workspace_connections
+       (id, workspace_id, api_key_secret, account_id, account_name, created_at, updated_at, revision)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 1)`
+  ).run(connectionId, WORKSPACE.id, 'legacy-workspace-key', '7', 'Legacy Owner', now, now);
+
+  db.prepare(
+    `INSERT INTO entity_changes
+       (id, workspace_id, entity_type, entity_id, operation, entity_revision,
+        changed_fields_json, actor_workspace_user_id, source, occurred_at)
+     VALUES (?, ?, 'everhour:workspace_connection', ?, 'insert', 1, '[]', ?, 'webapp', ?)`
+  ).run(newId(), WORKSPACE.id, connectionId, actorId, now);
+
+  installEverhourFetchMock([
+    {
+      match: url => url.endsWith('/users/me'),
+      respond: () => Response.json({ id: 7, name: 'Legacy Owner' }, { status: 200 })
+    }
+  ]);
+
+  const integration = await getEverhourIntegration();
+  assert.deepEqual(integration, { connected: true, accountName: 'Legacy Owner' });
+
+  const userRow = db
+    .prepare(
+      `SELECT api_key_ciphertext FROM ext_everhour_user_connections WHERE deleted_at IS NULL`
+    )
+    .get() as { api_key_ciphertext: string };
+  assert.notEqual(userRow.api_key_ciphertext, 'legacy-workspace-key');
+
+  const leftover = db
+    .prepare(
+      `SELECT COUNT(*) AS count FROM ext_everhour_workspace_connections WHERE deleted_at IS NULL`
+    )
+    .get() as { count: number };
+  assert.equal(leftover.count, 0);
+});
+
+test('getEverhourIntegration does not adopt a workspace key without unique actor attribution', async () => {
+  await clearEverhourApiKey();
+  const connectionId = newId();
+  const now = nowIso();
+  db.prepare(
+    `INSERT INTO ext_everhour_workspace_connections
+       (id, workspace_id, api_key_secret, account_id, account_name, created_at, updated_at, revision)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 1)`
+  ).run(connectionId, WORKSPACE.id, 'unattributed-key', '8', 'Unknown', now, now);
+
+  assert.deepEqual(await getEverhourIntegration(), { connected: false, accountName: null });
+  db.prepare(`UPDATE ext_everhour_workspace_connections SET deleted_at = ? WHERE id = ?`).run(
+    nowIso(),
+    connectionId
+  );
 });
 
 test('getProjectEverhourLink reads extension-owned project link rows', async () => {

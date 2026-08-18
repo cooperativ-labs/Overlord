@@ -102,7 +102,7 @@ function EverhourProjectField({ open, project }: IntegrationsPageProps) {
         </div>
       ) : (
         <p className="text-sm text-muted-foreground">
-          No Everhour API key is configured for this workspace. Set one in{' '}
+          No Everhour account is connected for you. Connect Everhour in{' '}
           <strong>Settings → Integrations</strong> to enable time tracking.
         </p>
       )}

@@ -13,7 +13,7 @@ import { formatClock, useLiveSeconds } from '../../lib/everhour.ts';
 
 /**
  * Shared timer state + start/stop control for one project's Everhour `general`
- * task. Returns `connected: false` when the workspace has no Everhour API key.
+ * task. Returns `connected: false` when the acting user has not connected Everhour.
  */
 export function useProjectTimerControls(projectId: string, options: { poll?: boolean } = {}) {
   const integration = useEverhourIntegration();

@@ -219,7 +219,8 @@ export async function getGitHubIntegration(): Promise<GitHubIntegrationDto> {
     configured: githubAppConfig() !== null,
     connected: installation !== null,
     accountLogin: installation?.github_account_login ?? null,
-    accountType: installation?.github_account_type ?? null
+    accountType: installation?.github_account_type ?? null,
+    workspaceName: WORKSPACE.name
   };
 }
 

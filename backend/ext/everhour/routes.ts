@@ -32,22 +32,29 @@ export function createEverhourExtensionRouter(handle: RouteHandler): Router {
   const router = Router();
 
   router.get(
+    '/user-connection',
+    handle(() => getEverhourIntegration())
+  );
+  router.put(
+    '/user-connection',
+    handle(req => setEverhourApiKey(String(req.body?.apiKey ?? '')), { mutates: true })
+  );
+  router.delete(
+    '/user-connection',
+    handle(() => clearEverhourApiKey(), { mutates: true })
+  );
+  // Deprecated aliases of the profile-scoped user-connection surface.
+  router.get(
     '/integration',
-    handle(() => getEverhourIntegration(), { requires: PERMISSIONS.WORKSPACE_READ })
+    handle(() => getEverhourIntegration())
   );
   router.put(
     '/integration',
-    handle(req => setEverhourApiKey(String(req.body?.apiKey ?? '')), {
-      mutates: true,
-      requires: PERMISSIONS.WORKSPACE_UPDATE
-    })
+    handle(req => setEverhourApiKey(String(req.body?.apiKey ?? '')), { mutates: true })
   );
   router.delete(
     '/integration',
-    handle(() => clearEverhourApiKey(), {
-      mutates: true,
-      requires: PERMISSIONS.WORKSPACE_UPDATE
-    })
+    handle(() => clearEverhourApiKey(), { mutates: true })
   );
   router.put(
     '/projects/:projectId/link',

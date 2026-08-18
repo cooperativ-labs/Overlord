@@ -1695,7 +1695,7 @@ export function useUpdateAgentCatalog(workspaceId?: string | null) {
 
 // ---- Everhour integration ------------------------------------------------
 
-/** Workspace Everhour connection state. Used to gate all Everhour UI. */
+/** Caller's Everhour connection state. Used to gate all Everhour UI. */
 export const useEverhourIntegration = () =>
   useQuery({ queryKey: keys.everhourIntegration, queryFn: () => api.getEverhourIntegration() });
 
@@ -1744,7 +1744,7 @@ export const useProjectEverhourLink = (projectId: string, options: { enabled?: b
 
 /**
  * Everhour state for one project's fixed `general` task. Only enabled once we
- * know the workspace is connected. Polls while the caller opts in (e.g. a
+ * know the acting user is connected. Polls while the caller opts in (e.g. a
  * running timer) to keep elapsed time roughly fresh.
  */
 export const useProjectEverhour = (

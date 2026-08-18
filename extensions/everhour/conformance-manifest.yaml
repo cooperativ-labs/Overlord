@@ -3,8 +3,8 @@ componentType: extension
 componentKey: everhour
 label: "Everhour Time Tracking"
 description: >
-  Reference database extension for Everhour time tracking. Owns workspace
-  connections, project links, and mission task links in ext_everhour_* tables.
+  Reference database extension for Everhour time tracking. Owns profile-scoped
+  user connections, project links, and mission task links in ext_everhour_* tables.
 
 extension:
   tablePrefix: "ext_everhour_"

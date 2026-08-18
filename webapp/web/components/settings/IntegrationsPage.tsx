@@ -29,6 +29,7 @@ export function IntegrationsPage() {
 
   const connected = integration.data?.connected ?? false;
   const accountName = integration.data?.accountName ?? null;
+  const githubWorkspaceName = github.data?.workspaceName;
 
   async function handleConnect() {
     const trimmed = apiKey.trim();
@@ -70,138 +71,172 @@ export function IntegrationsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div>
         <h2 className="text-base font-medium">Integrations</h2>
         <p className="text-sm text-muted-foreground">
-          Connect external services. Credentials are stored on this workspace and never sent to the
+          Connect the accounts you sign in with, then grant workspace access where the provider
+          needs an organization install. Secrets stay on the server and are never sent to the
           browser.
         </p>
       </div>
 
-      <div className="max-w-lg space-y-3 rounded-lg border border-border p-4">
-        <div className="flex items-center justify-between gap-2">
-          <div>
-            <h3 className="text-sm font-medium">Everhour</h3>
-            <p className="text-xs text-muted-foreground">
-              Track time on missions. Each project links to an Everhour project and each mission to
-              a task.
-            </p>
-          </div>
-          {connected ? (
-            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-medium text-emerald-600">
-              <CheckCircle2 className="h-3.5 w-3.5" />
-              Connected
-            </span>
-          ) : null}
+      <section className="space-y-3">
+        <div>
+          <h3 className="text-sm font-medium">Your accounts</h3>
+          <p className="text-xs text-muted-foreground">
+            These credentials belong to you and apply in every workspace you belong to.
+          </p>
         </div>
 
-        {connected ? (
-          <div className="space-y-3">
-            <p className="text-sm text-muted-foreground">
-              {accountName ? (
-                <>
-                  Connected as <strong className="text-foreground">{accountName}</strong>.
-                </>
-              ) : (
-                'An Everhour API key is configured for this workspace.'
-              )}
-            </p>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              disabled={clearKey.isPending}
-              onClick={handleDisconnect}
-            >
-              Disconnect
-            </Button>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            <Label htmlFor="everhour-api-key">API key</Label>
-            <div className="flex gap-2">
-              <Input
-                id="everhour-api-key"
-                type="password"
-                autoComplete="off"
-                value={apiKey}
-                onChange={e => setApiKey(e.target.value)}
-                placeholder="abcd-efgh-1234567-7890ab-cdefgh12"
-                className="h-8 font-mono text-xs"
-                onKeyDown={e => {
-                  if (e.key === 'Enter') void handleConnect();
-                }}
-              />
-              <LoadingButton
-                buttonState={saveState}
-                setButtonState={setSaveState}
-                text="Connect"
-                loadingText="Validating…"
-                successText="Connected"
-                errorText="Retry"
-                reset
-                size="sm"
-                className="h-8 shrink-0"
-                onClick={handleConnect}
-              />
+        <div className="max-w-lg space-y-3 rounded-lg border border-border p-4">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <h4 className="text-sm font-medium">Everhour</h4>
+              <p className="text-xs text-muted-foreground">
+                Track time on missions with your own Everhour user. Each project still links to an
+                Everhour project and each mission to a task.
+              </p>
             </div>
-            <p className="text-xs text-muted-foreground">
-              Find your key in your Everhour profile (Account → Profile, at the bottom).
-            </p>
+            {connected ? (
+              <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-medium text-emerald-600">
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                Connected
+              </span>
+            ) : null}
           </div>
-        )}
-        {error ? <p className="text-xs text-destructive">{error}</p> : null}
-      </div>
 
-      <div className="max-w-lg space-y-3 rounded-lg border border-border p-4">
-        <div className="flex items-center justify-between gap-2">
-          <div>
-            <h3 className="text-sm font-medium">GitHub</h3>
-            <p className="text-xs text-muted-foreground">
-              Link repositories to projects and create pull requests from published mission
-              branches.
-            </p>
+          {connected ? (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                {accountName ? (
+                  <>
+                    Connected as <strong className="text-foreground">{accountName}</strong>.
+                  </>
+                ) : (
+                  'Your Everhour API key is configured for this account.'
+                )}
+              </p>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={clearKey.isPending}
+                onClick={handleDisconnect}
+              >
+                Disconnect
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <Label htmlFor="everhour-api-key">API key</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="everhour-api-key"
+                  type="password"
+                  autoComplete="off"
+                  value={apiKey}
+                  onChange={e => setApiKey(e.target.value)}
+                  placeholder="abcd-efgh-1234567-7890ab-cdefgh12"
+                  className="h-8 font-mono text-xs"
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') void handleConnect();
+                  }}
+                />
+                <LoadingButton
+                  buttonState={saveState}
+                  setButtonState={setSaveState}
+                  text="Connect"
+                  loadingText="Validating…"
+                  successText="Connected"
+                  errorText="Retry"
+                  reset
+                  size="sm"
+                  className="h-8 shrink-0"
+                  onClick={handleConnect}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Find your key in your Everhour profile (Account → Profile, at the bottom).
+              </p>
+            </div>
+          )}
+          {error ? <p className="text-xs text-destructive">{error}</p> : null}
+        </div>
+      </section>
+
+      <section className="space-y-3">
+        <div>
+          <h3 className="text-sm font-medium">Workspace</h3>
+          <p className="text-xs text-muted-foreground">
+            Organization-level grants that apply to one Overlord workspace, not to your personal
+            login.
+          </p>
+        </div>
+
+        <div className="max-w-lg space-y-3 rounded-lg border border-border p-4">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <h4 className="text-sm font-medium">GitHub App</h4>
+              <p className="text-xs text-muted-foreground">
+                Link repositories to projects and create pull requests from published mission
+                branches.
+                {githubWorkspaceName ? (
+                  <>
+                    {' '}
+                    Applies to workspace{' '}
+                    <strong className="text-foreground">{githubWorkspaceName}</strong>.
+                  </>
+                ) : null}
+              </p>
+            </div>
+            {github.data?.connected ? (
+              <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-medium text-emerald-600">
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                Connected
+              </span>
+            ) : null}
           </div>
           {github.data?.connected ? (
-            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-medium text-emerald-600">
-              <CheckCircle2 className="h-3.5 w-3.5" />
-              Connected
-            </span>
-          ) : null}
-        </div>
-        {github.data?.connected ? (
-          <div className="space-y-3">
-            <p className="text-sm text-muted-foreground">
-              Connected to <strong className="text-foreground">{github.data.accountLogin}</strong>.
-            </p>
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Connected to <strong className="text-foreground">{github.data.accountLogin}</strong>
+                {githubWorkspaceName ? (
+                  <>
+                    {' '}
+                    for workspace <strong className="text-foreground">{githubWorkspaceName}</strong>
+                  </>
+                ) : null}
+                .
+              </p>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={disconnectGitHub.isPending}
+                onClick={() => void disconnectGitHub.mutateAsync()}
+              >
+                Disconnect
+              </Button>
+            </div>
+          ) : github.data?.configured ? (
             <Button
               type="button"
               size="sm"
-              variant="outline"
-              disabled={disconnectGitHub.isPending}
-              onClick={() => void disconnectGitHub.mutateAsync()}
+              disabled={beginGitHubInstall.isPending}
+              onClick={() => void handleGitHubInstall()}
             >
-              Disconnect
+              Install GitHub App
             </Button>
-          </div>
-        ) : github.data?.configured ? (
-          <Button
-            type="button"
-            size="sm"
-            disabled={beginGitHubInstall.isPending}
-            onClick={() => void handleGitHubInstall()}
-          >
-            Install GitHub App
-          </Button>
-        ) : (
-          <p className="text-xs text-muted-foreground">
-            A server administrator must configure GITHUB_APP_ID, GITHUB_APP_PRIVATE_KEY, and
-            GITHUB_APP_SLUG before this workspace can install GitHub.
-          </p>
-        )}
-        {githubError ? <p className="text-xs text-destructive">{githubError}</p> : null}
-      </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              A server administrator must configure GITHUB_APP_ID, GITHUB_APP_PRIVATE_KEY, and
+              GITHUB_APP_SLUG before this workspace can install GitHub.
+            </p>
+          )}
+          {githubError ? <p className="text-xs text-destructive">{githubError}</p> : null}
+        </div>
+      </section>
     </div>
   );
 }
