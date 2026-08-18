@@ -26,7 +26,7 @@ export function BlockingQuestionCard({
   onOpenMission: (args: { missionId: string; objectiveDisplayId?: string | null }) => void;
 }) {
   return (
-    <article className="relative grid shrink-0 gap-2 rounded-xl border border-amber-300 bg-amber-50 p-3 pr-8 dark:border-amber-500/50 dark:bg-amber-500/10">
+    <article className="relative grid shrink-0 gap-2 rounded-xl border border-amber-300 bg-amber-50 p-3 pr-8 transition-shadow hover:shadow-lg dark:border-amber-500/50 dark:bg-amber-500/10">
       <ActivityFeedOriginCorner
         createdByKind={item.createdByKind}
         createdByAgent={item.createdByAgent}
@@ -42,9 +42,9 @@ export function BlockingQuestionCard({
         label="blocking question"
       />
 
-      <p className="wrap-anywhere text-sm text-amber-950 dark:text-amber-100">{item.question}</p>
+      <p className="wrap-anywhere text-base text-amber-950 dark:text-amber-100">{item.question}</p>
 
-      <div className="flex flex-wrap items-center gap-3 text-[11px] text-amber-900 dark:text-amber-200">
+      <div className="flex flex-wrap items-center gap-3 text-xs text-amber-900 dark:text-amber-200">
         <ActivityFeedAgentLine agentKey={item.agentIdentifier} />
         <span>Blocked until answered</span>
         <Button

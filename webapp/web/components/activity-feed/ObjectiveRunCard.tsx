@@ -29,7 +29,7 @@ export function ObjectiveRunCard({
   const elapsed = elapsedLabel(item.startedAt, nowIso);
 
   return (
-    <article className="relative shrink-0 overflow-hidden rounded-xl border border-(--color-border) bg-(--color-surface-1)">
+    <article className="relative shrink-0 overflow-hidden rounded-xl border border-(--color-border) bg-(--color-surface-1) transition-shadow hover:shadow-lg">
       <ActivityFeedOriginCorner
         createdByKind={item.createdByKind}
         createdByAgent={item.createdByAgent}
@@ -42,7 +42,7 @@ export function ObjectiveRunCard({
             objectiveDisplayId: item.objectiveDisplayId
           })
         }
-        className="flex w-full flex-col gap-2 p-3 pr-8 text-left transition-colors hover:bg-(--color-surface-2)"
+        className="flex w-full flex-col gap-2 p-3 pr-8 text-left"
       >
         <ActivityFeedCardMeta
           item={item}
@@ -68,16 +68,16 @@ export function ObjectiveRunCard({
             }
             label={launching ? 'launching' : 'executing'}
           />
-          <h3 className="min-w-0 flex-1 truncate text-sm font-semibold text-(--color-ink)">
+          <h3 className="min-w-0 flex-1 truncate text-base font-semibold text-(--color-ink)">
             {item.objectiveTitle ?? item.instructionPreview.slice(0, 80) ?? 'Objective'}
           </h3>
         </div>
 
-        <p className="line-clamp-2 wrap-anywhere text-sm text-(--color-ink-dim)">
+        <p className="line-clamp-2 wrap-anywhere text-base text-(--color-ink-dim)">
           {item.latestEventSummary ?? item.instructionPreview}
         </p>
 
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-(--color-ink-dim)">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-(--color-ink-dim)">
           <ActivityFeedAgentLine
             agentKey={item.agentIdentifier}
             modelIdentifier={item.modelIdentifier}
@@ -99,7 +99,7 @@ export function ObjectiveRunCard({
 
       {item.upcoming.length > 0 ? (
         <footer className="border-t border-(--color-border) bg-(--color-surface-2) px-3 py-2">
-          <div className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-(--color-ink-dim)">
+          <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-(--color-ink-dim)">
             <FastForward className="size-3" aria-hidden="true" />
             Auto-advances to {item.upcoming.length} more
           </div>
@@ -107,13 +107,13 @@ export function ObjectiveRunCard({
             {item.upcoming.map((next, index) => (
               <li
                 key={next.objectiveId}
-                className="flex min-w-0 items-center gap-2 text-[11px] text-(--color-ink-dim)"
+                className="flex min-w-0 items-center gap-2 text-xs text-(--color-ink-dim)"
               >
                 <span className="w-4 shrink-0 text-right font-mono">{index + 1}.</span>
                 <span className="min-w-0 flex-1 truncate text-(--color-ink)">
                   {next.title ?? 'Untitled objective'}
                 </span>
-                <span className="shrink-0 font-mono text-[10px]">{next.displayId}</span>
+                <span className="shrink-0 font-mono text-[11px]">{next.displayId}</span>
                 {next.assignedAgent ? <AgentIcon agentKey={next.assignedAgent} size={12} /> : null}
               </li>
             ))}

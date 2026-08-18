@@ -39,7 +39,7 @@ export function DeliveryFeedCard({
   return (
     <article
       ref={cardRef}
-      className="relative shrink-0 overflow-hidden rounded-xl border border-(--color-border) bg-(--color-surface-1)"
+      className="relative shrink-0 overflow-hidden rounded-xl border border-(--color-border) bg-(--color-surface-1) transition-shadow hover:shadow-lg"
     >
       <ActivityFeedOriginCorner
         createdByKind={item.createdByKind}
@@ -49,7 +49,7 @@ export function DeliveryFeedCard({
         type="button"
         onClick={() => setExpanded(current => !current)}
         aria-expanded={expanded}
-        className="flex w-full flex-col gap-2 p-3 pr-8 text-left transition-colors hover:bg-(--color-surface-2)"
+        className="flex w-full flex-col gap-2 p-3 pr-8 text-left"
       >
         <ActivityFeedCardMeta
           item={item}
@@ -68,16 +68,16 @@ export function DeliveryFeedCard({
             icon={<Package className="size-3" aria-hidden="true" />}
             label="delivered"
           />
-          <h3 className="min-w-0 flex-1 truncate text-sm font-semibold text-(--color-ink)">
+          <h3 className="min-w-0 flex-1 truncate text-base font-semibold text-(--color-ink)">
             {item.objectiveTitle ?? 'Delivery'}
           </h3>
         </div>
 
         {expanded ? null : (
-          <p className="line-clamp-2 wrap-anywhere text-sm text-(--color-ink-dim)">{preview}</p>
+          <p className="line-clamp-2 wrap-anywhere text-base text-(--color-ink-dim)">{preview}</p>
         )}
 
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-(--color-ink-dim)">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-(--color-ink-dim)">
           <ActivityFeedAgentLine
             agentKey={item.delivery.agentIdentifier}
             modelIdentifier={item.delivery.modelIdentifier}

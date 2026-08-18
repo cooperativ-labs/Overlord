@@ -41,7 +41,7 @@ export function KindBadge({
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide',
+        'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide',
         toneClass
       )}
     >
@@ -75,7 +75,7 @@ export function ActivityFeedCardMeta({
   };
 
   return (
-    <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-(--color-ink-dim)">
+    <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-(--color-ink-dim)">
       <span className="inline-flex min-w-0 items-center gap-1.5">
         <ProjectDot color={item.projectColor} />
         <span className="truncate">{item.projectName}</span>
@@ -83,7 +83,7 @@ export function ActivityFeedCardMeta({
       {item.objectiveDisplayId ? (
         <>
           <span aria-hidden="true">·</span>
-          <span className="font-mono text-[11px] font-medium text-(--color-ink)">
+          <span className="font-mono text-xs font-medium text-(--color-ink)">
             {item.objectiveDisplayId}
           </span>
         </>
