@@ -33,11 +33,11 @@ export interface MyMissionsDropTarget {
  * Drag-and-drop state machine for the My Missions aggregate board. Mirrors the
  * project board's optimistic-override pattern (`useBoardColumnDnd`): a drop is
  * applied to a local override immediately, then handed to `onDrop` to persist.
- * Because My Missions merges like-named columns across workspaces, resolving a
- * drop to a concrete workspace status (and validating it exists in the card's
- * own workspace) is workspace-aware logic the page owns — the hook only decides
- * *that* something moved, not *how* it persists. `onDrop` rejects to signal an
- * invalid or failed move, which reverts the optimistic override.
+ * The aggregate board groups by status type across projects and workspaces;
+ * resolving a drop to each card's concrete project status is page-owned logic.
+ * The hook only decides *that* something moved, not *how* it persists. `onDrop`
+ * rejects to signal an invalid or failed move, which reverts the optimistic
+ * override.
  */
 export function useMyMissionsDnd({
   columns,

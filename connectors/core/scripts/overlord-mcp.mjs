@@ -85,9 +85,12 @@ const tools = [
     name: 'overlord_resolve_project',
     title: 'Resolve Overlord project',
     description:
-      'Resolve a project by id, slug, name, or linked repository directory metadata exposed to the MCP client.',
+      "Resolve a project by id, slug, name, or linked repository directory metadata exposed to the MCP client. Names are matched case-insensitively across every workspace the caller can reach; a name matching in more than one returns a 'project_selection_required' result listing the candidates with their workspaces — ask the user, then retry with workspaceId.",
     inputSchema: objectSchema({
       projectId: stringProperty('Explicit Overlord project id, slug, or project name.'),
+      workspaceId: stringProperty(
+        "Optional workspace (id, slug, or name) narrowing an ambiguous projectId. Use this to retry after a 'project_selection_required' result."
+      ),
       directory: stringProperty(
         'Optional repository directory path when the MCP client can expose one with .overlord/project.json.'
       )
@@ -117,7 +120,12 @@ const tools = [
       "Read one project's board columns. Status names and order are defined per project, so two projects in the same workspace can label the same lifecycle differently; each status also carries a stable type (draft, next, execute, review, complete, blocked, cancelled) that does not vary by project.",
     inputSchema: objectSchema(
       {
-        projectId: stringProperty('Overlord project id, slug, or name.')
+        projectId: stringProperty(
+          "Overlord project id, slug, or name. An ambiguous name returns 'project_selection_required'; retry with workspaceId."
+        ),
+        workspaceId: stringProperty(
+          'Optional workspace (id, slug, or name) narrowing an ambiguous projectId.'
+        )
       },
       ['projectId']
     )
@@ -133,12 +141,17 @@ const tools = [
         'Comma-separated status TYPES, such as draft,next,execute,review. Types are workspace-invariant (draft, next, execute, review, complete, blocked, cancelled). Project-defined status names are not accepted here.'
       ),
       projectId: stringProperty(
-        'Optional stable Overlord project UUID. Resolve a human project reference first.'
+        "Optional project reference: a stable UUID, a slug, or the project name as the user said it. Names are matched case-insensitively against the projects the caller can reach. If the name matches in more than one workspace the call returns a 'project_selection_required' result listing the candidates with their workspaces — ask the user which one, then retry with workspaceId set."
+      ),
+      workspaceId: stringProperty(
+        "Optional workspace (id, slug, or name) narrowing an ambiguous projectId. Use this to retry after a 'project_selection_required' result."
       ),
       resourceKey: stringProperty(
         'Optional logical resource key, matched by name within selected projects.'
       ),
-      dateField: stringProperty('Date column for an explicit range: createdAt or updatedAt.'),
+      dateField: stringProperty(
+        'Date column for an explicit range: createdAt, updatedAt, or dueDatetime. Use dueDatetime for questions about what is scheduled or due; missions with no due date are excluded from a dueDatetime range.'
+      ),
       from: stringProperty('Optional inclusive ISO-8601 date/time lower bound.'),
       to: stringProperty('Optional exclusive ISO-8601 date/time upper bound.'),
       limit: {
@@ -422,17 +435,6 @@ function requiredString(args, name) {
   return value;
 }
 
-function optionalProjectUuid(args) {
-  const projectId = optionalString(args, 'projectId');
-  if (!projectId) return null;
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(projectId)) {
-    throw new Error(
-      'projectId must be a stable Overlord project UUID; resolve human references first'
-    );
-  }
-  return projectId;
-}
-
 /**
  * Forward mission/objective addressing to the CLI. The CLI owns the shared
  * `@overlord/contract` parser and derives a mission from a display id before it
@@ -459,6 +461,9 @@ function callOverlordTool(name, args) {
       ...(optionalString(args, 'projectId')
         ? { 'project-id': requiredString(args, 'projectId') }
         : {}),
+      ...(optionalString(args, 'workspaceId')
+        ? { 'workspace-id': requiredString(args, 'workspaceId') }
+        : {}),
       ...(optionalString(args, 'directory') ? { directory: requiredString(args, 'directory') } : {})
     });
   }
@@ -476,7 +481,10 @@ function callOverlordTool(name, args) {
   }
   if (name === 'overlord_list_project_statuses') {
     return runProtocol('statuses', {
-      'project-id': requiredString(args, 'projectId')
+      'project-id': requiredString(args, 'projectId'),
+      ...(optionalString(args, 'workspaceId')
+        ? { 'workspace-id': requiredString(args, 'workspaceId') }
+        : {})
     });
   }
   if (name === 'overlord_search_missions') {
@@ -484,7 +492,12 @@ function callOverlordTool(name, args) {
       'response-version': '2',
       ...(optionalString(args, 'query') ? { query: requiredString(args, 'query') } : {}),
       ...(optionalString(args, 'status') ? { status: requiredString(args, 'status') } : {}),
-      ...(optionalProjectUuid(args) ? { 'project-id': optionalProjectUuid(args) } : {}),
+      ...(optionalString(args, 'projectId')
+        ? { 'project-id': requiredString(args, 'projectId') }
+        : {}),
+      ...(optionalString(args, 'workspaceId')
+        ? { 'workspace-id': requiredString(args, 'workspaceId') }
+        : {}),
       ...(optionalString(args, 'resourceKey')
         ? { 'resource-key': requiredString(args, 'resourceKey') }
         : {}),

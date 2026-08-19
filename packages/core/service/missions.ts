@@ -1,4 +1,4 @@
-import type { SearchMissionsResponseV2 } from '@overlord/contract';
+import type { MissionSearchDateField, SearchMissionsResponseV2 } from '@overlord/contract';
 import { bindBool, formatObjectiveDisplayId, OBJECTIVE_STATES } from '@overlord/database';
 
 import { recordChange } from './change-feed.js';
@@ -827,7 +827,7 @@ async function searchMissionsWorkspace({
   statusTypes?: string[] | null;
   projectId?: string | null;
   resourceKeys?: string[] | null;
-  dateField?: 'createdAt' | 'updatedAt' | null;
+  dateField?: MissionSearchDateField | null;
   from?: string | null;
   to?: string | null;
   limit?: number;
@@ -863,7 +863,7 @@ export async function searchMissions({
   statusTypes?: string[] | null;
   projectId?: string | null;
   resourceKeys?: string[] | null;
-  dateField?: 'createdAt' | 'updatedAt' | null;
+  dateField?: MissionSearchDateField | null;
   from?: string | null;
   to?: string | null;
   limit?: number;
@@ -909,7 +909,7 @@ export async function searchMissionsV2({
   statusTypes?: string[] | null;
   projectId?: string | null;
   resourceKeys?: string[] | null;
-  dateField?: 'createdAt' | 'updatedAt' | null;
+  dateField?: MissionSearchDateField | null;
   from?: string | null;
   to?: string | null;
   limit?: number;

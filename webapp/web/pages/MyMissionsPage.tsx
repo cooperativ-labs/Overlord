@@ -5,7 +5,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { NewMissionModal } from '@/components/NewMissionModal.tsx';
 
-import type { MyMissionDto, ProjectStatusDto, WorkspaceMemberDto } from '../../shared/contract.ts';
+import type {
+  MyMissionDto,
+  MyMissionsColumnType,
+  ProjectStatusDto,
+  WorkspaceMemberDto
+} from '../../shared/contract.ts';
 import { Button, EmptyState, Spinner } from '../components/ui.tsx';
 import {
   Dialog,
@@ -47,15 +52,16 @@ import { MissionStatusFilterDropdown } from './MissionStatusFilterDropdown.tsx';
 import { MissionsViewToggle } from './MissionsViewToggle.tsx';
 import { MissionTagFilterDropdown } from './MissionTagFilterDropdown.tsx';
 import {
-  buildMergedStatusColumns,
-  groupMissionsByMergedColumn,
-  resolveMergedColumnReorder
+  groupMissionsByStatusType,
+  isMyMissionsColumnKey,
+  MY_MISSIONS_BOARD_COLUMNS,
+  projectsMissingColumnType,
+  resolveProjectStatusForColumn
 } from './my-missions-columns.ts';
 import { MyMissionsColumn } from './MyMissionsColumn.tsx';
 import { SortableMissionCard } from './SortableMissionCard.tsx';
 import { type MyMissionsDropTarget, useMyMissionsDnd } from './useMyMissionsDnd.ts';
 
-const UNCATEGORIZED_ID = '__my_missions_uncategorized__';
 const VIEW_STORAGE_KEY = 'overlord:my-missions-view';
 const MY_MISSIONS_VIEWS: BoardView[] = ['board', 'list', 'calendar'];
 
@@ -77,6 +83,14 @@ function storeView(view: BoardView) {
   }
 }
 
+/**
+ * The aggregate My Missions board. Columns are the four shared status *types*
+ * (Next / Executing / Review / Completed) rather than project status names,
+ * which are project-defined and inconsistent across the organization. A card
+ * therefore always has a home column, and a drag resolves to the concrete
+ * status of that type inside the card's own project — server-side, in one call
+ * that can span several projects and workspaces at once.
+ */
 export function MyMissionsPage() {
   const navigate = useNavigate();
   const meta = useMeta();
@@ -96,8 +110,9 @@ export function MyMissionsPage() {
   const workspaceIds = useMemo(() => workspaces.map(workspace => workspace.id), [workspaces]);
   const activeOrganizationId = meta.data?.organization?.id ?? null;
 
-  // My Missions aggregates across every workspace of the active organization, so
-  // project statuses and members are fetched once per workspace and merged.
+  // Statuses no longer shape the columns — they are only needed to resolve a
+  // status *type* back to a concrete status when creating or completing a
+  // mission in a specific project, so the board never waits on them.
   const statusQueries = useQueries({
     queries: workspaceIds.map(id => ({
       queryKey: keys.workspaceProjectStatuses(id),
@@ -115,18 +130,24 @@ export function MyMissionsPage() {
 
   const [view, setView] = useState<BoardView>(() => readStoredView());
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
-  const [selectedStatusKeys, setSelectedStatusKeys] = useState<string[]>([]);
+  const [selectedStatusTypes, setSelectedStatusTypes] = useState<string[]>([]);
   const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([]);
   const [projectFilterOrganizationId, setProjectFilterOrganizationId] = useState<string | null>(
     null
   );
-  const [dropError, setDropError] = useState<{ statusName: string; projectName: string } | null>(
-    null
-  );
+  const [dropError, setDropError] = useState<{
+    columnName: string;
+    projectNames: string[];
+  } | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [defaultDueDate, setDefaultDueDate] = useState<Date | null>(null);
 
-  const missions = useMemo(() => myMissionsQ.data?.missions ?? [], [myMissionsQ.data]);
+  // Only missions whose status type is one of the four board columns belong on
+  // My Missions; draft/blocked/cancelled work stays on its project board.
+  const missions = useMemo(
+    () => (myMissionsQ.data?.missions ?? []).filter(m => isMyMissionsColumnKey(m.statusType)),
+    [myMissionsQ.data]
+  );
   const projects = useMemo(() => activeProjectsQ.data ?? [], [activeProjectsQ.data]);
 
   const statusesByProject = useMemo(() => {
@@ -140,24 +161,6 @@ export function MyMissionsPage() {
     }
     return map;
   }, [statusQueries]);
-
-  // `useAllProjects` preserves workspace order and each workspace's project
-  // position, so this keeps a stable first-seen precedence for merged columns.
-  const orderedProjectIds = useMemo(() => {
-    const missionProjectIds = new Set(missions.map(mission => mission.projectId));
-    const ordered = projects
-      .filter(project => missionProjectIds.has(project.id))
-      .map(project => project.id);
-    for (const mission of missions) {
-      if (!ordered.includes(mission.projectId)) ordered.push(mission.projectId);
-    }
-    return ordered;
-  }, [missions, projects]);
-
-  const merged = useMemo(
-    () => buildMergedStatusColumns(orderedProjectIds, statusesByProject),
-    [orderedProjectIds, statusesByProject]
-  );
 
   const membersByWorkspaceUserId = useMemo(() => {
     const map = new Map<string, WorkspaceMemberDto>();
@@ -192,8 +195,13 @@ export function MyMissionsPage() {
   );
 
   const statusFilterOptions = useMemo(
-    () => merged.columns.map(column => ({ id: column.key, name: column.name, type: column.type })),
-    [merged.columns]
+    () =>
+      MY_MISSIONS_BOARD_COLUMNS.map(column => ({
+        id: column.key,
+        name: column.name,
+        type: column.type
+      })),
+    []
   );
 
   const tagOptions = useMemo(() => {
@@ -212,13 +220,6 @@ export function MyMissionsPage() {
     const next = selectedTagIds.filter(id => validIds.has(id));
     if (next.length !== selectedTagIds.length) setSelectedTagIds(next);
   }, [selectedTagIds, tagOptions]);
-
-  useEffect(() => {
-    if (selectedStatusKeys.length === 0) return;
-    const validKeys = new Set(merged.columns.map(column => column.key));
-    const next = selectedStatusKeys.filter(key => validKeys.has(key));
-    if (next.length !== selectedStatusKeys.length) setSelectedStatusKeys(next);
-  }, [selectedStatusKeys, merged.columns]);
 
   useEffect(() => {
     setSelectedProjectIds(
@@ -265,7 +266,7 @@ export function MyMissionsPage() {
   );
 
   const selectedTagIdSet = useMemo(() => new Set(selectedTagIds), [selectedTagIds]);
-  const selectedStatusKeySet = useMemo(() => new Set(selectedStatusKeys), [selectedStatusKeys]);
+  const selectedStatusTypeSet = useMemo(() => new Set(selectedStatusTypes), [selectedStatusTypes]);
   const selectedProjectIdSet = useMemo(() => new Set(selectedProjectIds), [selectedProjectIds]);
 
   const filteredMissions = useMemo(() => {
@@ -273,11 +274,8 @@ export function MyMissionsPage() {
     if (selectedProjectIds.length > 0) {
       result = result.filter(mission => selectedProjectIdSet.has(mission.projectId));
     }
-    if (selectedStatusKeys.length > 0) {
-      result = result.filter(mission => {
-        const key = merged.keyByStatusId.get(mission.statusId);
-        return key !== undefined && selectedStatusKeySet.has(key);
-      });
+    if (selectedStatusTypes.length > 0) {
+      result = result.filter(mission => selectedStatusTypeSet.has(mission.statusType));
     }
     if (selectedTagIds.length > 0) {
       result = result.filter(mission =>
@@ -287,41 +285,37 @@ export function MyMissionsPage() {
     return result;
   }, [
     missions,
-    merged.keyByStatusId,
     selectedProjectIds.length,
     selectedProjectIdSet,
-    selectedStatusKeys.length,
-    selectedStatusKeySet,
+    selectedStatusTypes.length,
+    selectedStatusTypeSet,
     selectedTagIds.length,
     selectedTagIdSet
   ]);
 
   const isTagFilterActive = selectedTagIds.length > 0;
-  const isStatusFilterActive = selectedStatusKeys.length > 0;
+  const isStatusFilterActive = selectedStatusTypes.length > 0;
   const isProjectFilterActive = selectedProjectIds.length > 0;
   const isFilterActive = isTagFilterActive || isStatusFilterActive || isProjectFilterActive;
 
   const visibleStatusColumns = useMemo(
     () =>
       isStatusFilterActive
-        ? merged.columns.filter(column => selectedStatusKeySet.has(column.key))
-        : merged.columns,
-    [isStatusFilterActive, merged.columns, selectedStatusKeySet]
+        ? MY_MISSIONS_BOARD_COLUMNS.filter(column => selectedStatusTypeSet.has(column.key))
+        : MY_MISSIONS_BOARD_COLUMNS,
+    [isStatusFilterActive, selectedStatusTypeSet]
   );
 
   const clearFilters = useCallback(() => {
     setSelectedTagIds([]);
-    setSelectedStatusKeys([]);
+    setSelectedStatusTypes([]);
     updateSelectedProjectIds(() => []);
   }, [updateSelectedProjectIds]);
 
-  // Bucket every mission into its merged column (like-named statuses across
-  // projects collapse into one). Any mission whose status isn't an active
-  // column falls into the Uncategorized bucket.
-  const { columns: baseColumns, uncategorized } = useMemo(
-    () => groupMissionsByMergedColumn(missions, merged.keyByStatusId),
-    [missions, merged.keyByStatusId]
-  );
+  // Every board column always exists (even when empty) so a card can be dropped
+  // into it, and every mission has a home column because the column key *is* its
+  // status type.
+  const columnsForDnd = useMemo<ColumnMap>(() => groupMissionsByStatusType(missions), [missions]);
 
   const defaultCreateProjectId = useMemo(() => {
     const defaultProjectId = meta.data?.defaultProjectId;
@@ -331,65 +325,49 @@ export function MyMissionsPage() {
     return projects[0]?.id ?? '';
   }, [meta.data?.defaultProjectId, projects]);
 
-  // Every merged column key gets a slot (even empty ones) so cards can be dropped
-  // into currently-empty columns.
-  const columnsForDnd = useMemo<ColumnMap>(() => {
-    const cols: ColumnMap = {};
-    for (const column of merged.columns) cols[column.key] = baseColumns[column.key] ?? [];
-    if (uncategorized.length > 0) cols[UNCATEGORIZED_ID] = uncategorized;
-    return cols;
-  }, [merged.columns, baseColumns, uncategorized]);
-
   const filteredColumns = useMemo<ColumnMap>(() => {
     const visibleMissionIds = new Set(filteredMissions.map(mission => mission.id));
     const map: ColumnMap = {};
-    for (const column of merged.columns) {
-      map[column.key] = (baseColumns[column.key] ?? []).filter(id => visibleMissionIds.has(id));
-    }
-    const filteredUncategorized = uncategorized.filter(id => visibleMissionIds.has(id));
-    if (filteredUncategorized.length > 0) {
-      map[UNCATEGORIZED_ID] = filteredUncategorized;
+    for (const column of MY_MISSIONS_BOARD_COLUMNS) {
+      map[column.key] = (columnsForDnd[column.key] ?? []).filter(id => visibleMissionIds.has(id));
     }
     return map;
-  }, [merged.columns, baseColumns, filteredMissions, uncategorized]);
+  }, [columnsForDnd, filteredMissions]);
 
-  // Persist a drop. My Missions merges columns across projects, so a drop into a
-  // merged column resolves to the concrete status in the moved card's *own*
-  // project. When that project has
-  // no status with the column's name, the move is rejected with an error modal.
+  // Persist a drop. The column is a status type, so the whole column — across
+  // every project and workspace it aggregates — is sent in one call and the
+  // server resolves each moved mission's target status inside its own project.
   const onDrop = useCallback(
-    async ({ movedMissionId, dropColumnKey, orderedMissionIds }: MyMissionsDropTarget) => {
-      const mission = missionById.get(movedMissionId);
-      const column = merged.byKey.get(dropColumnKey);
-      // Dropped into Uncategorized (no status) or an unknown card: nothing to
-      // persist. Reject so the DnD hook rolls the optimistic move back.
-      if (!mission || !column) throw new Error('drop-noop');
+    async ({ dropColumnKey, orderedMissionIds }: MyMissionsDropTarget) => {
+      if (!isMyMissionsColumnKey(dropColumnKey)) throw new Error('drop-noop');
+      const statusType: MyMissionsColumnType = dropColumnKey;
+      const columnName =
+        MY_MISSIONS_BOARD_COLUMNS.find(column => column.key === statusType)?.name ?? statusType;
 
-      const plan = resolveMergedColumnReorder(column, mission, orderedMissionIds, missionById);
-      if (!plan) {
+      const moved = orderedMissionIds
+        .map(id => missionById.get(id))
+        .filter((mission): mission is MyMissionDto => mission !== undefined);
+
+      // Fail before writing anything when a project cannot represent this column,
+      // so a multi-project reorder is never half-applied.
+      const missingProjectIds = projectsMissingColumnType(moved, statusType, statusesByProject);
+      if (missingProjectIds.length > 0) {
         setDropError({
-          statusName: column.name,
-          projectName: projectNameById.get(mission.projectId) ?? mission.projectName
+          columnName,
+          projectNames: missingProjectIds.map(id => projectNameById.get(id) ?? 'that project')
         });
         throw new Error('status-unavailable-for-project');
       }
 
       try {
-        await reorder.mutateAsync({
-          statusId: plan.statusId,
-          statusType: column.type,
-          orderedMissionIds: plan.orderedMissionIds
-        });
+        await reorder.mutateAsync({ statusType, orderedMissionIds });
       } catch (error) {
         // Defensive: the server can still reject a status removed mid-drag.
-        setDropError({
-          statusName: column.name,
-          projectName: projectNameById.get(mission.projectId) ?? mission.projectName
-        });
+        setDropError({ columnName, projectNames: [] });
         throw error;
       }
     },
-    [missionById, merged.byKey, projectNameById, reorder]
+    [missionById, projectNameById, reorder, statusesByProject]
   );
 
   const myMissionsDnd = useMyMissionsDnd({ columns: columnsForDnd, onDrop });
@@ -402,19 +380,16 @@ export function MyMissionsPage() {
     draggable: !isFilterActive
   });
 
-  // The list view groups by the same merged columns as the board, plus the
-  // Uncategorized bucket when any mission's status isn't an active column.
-  const listStatuses = useMemo<BoardColumnStatus[]>(() => {
-    const items: BoardColumnStatus[] = visibleStatusColumns.map(column => ({
-      id: column.key,
-      name: column.name,
-      type: column.type
-    }));
-    if (!isStatusFilterActive && (visibleColumns[UNCATEGORIZED_ID] ?? []).length > 0) {
-      items.push({ id: UNCATEGORIZED_ID, name: 'Uncategorized', type: null });
-    }
-    return items;
-  }, [isStatusFilterActive, visibleColumns, visibleStatusColumns]);
+  // The list view groups by the same four status-type columns as the board.
+  const listStatuses = useMemo<BoardColumnStatus[]>(
+    () =>
+      visibleStatusColumns.map(column => ({
+        id: column.key,
+        name: column.name,
+        type: column.type
+      })),
+    [visibleStatusColumns]
+  );
 
   const handleViewChange = (next: BoardView) => {
     setView(next);
@@ -444,9 +419,10 @@ export function MyMissionsPage() {
     (missionId: string) => {
       const mission = missionById.get(missionId);
       if (!mission) return;
-      const completeStatusId = (statusesByProject.get(mission.projectId) ?? []).find(
-        status => status.type === 'complete'
-      )?.id;
+      const completeStatusId = resolveProjectStatusForColumn(
+        statusesByProject.get(mission.projectId) ?? [],
+        'complete'
+      );
       if (!completeStatusId) return;
       void setMissionStatus.mutateAsync({ missionId, statusId: completeStatusId });
     },
@@ -463,9 +439,9 @@ export function MyMissionsPage() {
     [openMission]
   );
 
-  // Board columns are keyed by merged-column name; resolve back to the concrete
-  // status in the target project before creating. When that project
-  // lacks a status with this name, the mission lands in its default status.
+  // Board columns are status types; resolve back to the concrete status of that
+  // type in the target project before creating. When that project lacks one, the
+  // mission lands in its default status.
   const createMissionInColumn = useCallback(
     async (
       columnKey: string,
@@ -475,9 +451,9 @@ export function MyMissionsPage() {
       const targetProjectId = options?.projectId ?? defaultCreateProjectId;
       if (!targetProjectId) throw new Error('Choose a project before creating a mission.');
 
-      const statusId = columnKey
-        ? merged.byKey.get(columnKey)?.statusIdByProject.get(targetProjectId)
-        : undefined;
+      const statusId = isMyMissionsColumnKey(columnKey)
+        ? resolveProjectStatusForColumn(statusesByProject.get(targetProjectId) ?? [], columnKey)
+        : null;
 
       const tagIds = options?.tagIds ?? [];
       const detail = await createMission.mutateAsync({
@@ -488,7 +464,7 @@ export function MyMissionsPage() {
       });
       return { missionId: detail.id };
     },
-    [createMission, defaultCreateProjectId, merged.byKey]
+    [createMission, defaultCreateProjectId, statusesByProject]
   );
 
   const handleCreateMissionFromColumn = useCallback(
@@ -516,8 +492,7 @@ export function MyMissionsPage() {
     [createMissionInColumn, navigate]
   );
 
-  const statusesLoading = statusQueries.some(query => query.isLoading);
-  if (meta.isLoading || myMissionsQ.isLoading || activeProjectsQ.isLoading || statusesLoading) {
+  if (meta.isLoading || myMissionsQ.isLoading || activeProjectsQ.isLoading) {
     return (
       <div className="p-8">
         <Spinner />
@@ -556,22 +531,6 @@ export function MyMissionsPage() {
           />
         );
       })}
-      {!isStatusFilterActive && (visibleColumns[UNCATEGORIZED_ID] ?? []).length > 0 ? (
-        <MyMissionsColumn
-          droppableId={UNCATEGORIZED_ID}
-          title="Uncategorized"
-          type={null}
-          missions={resolveColumnMissions(visibleColumns[UNCATEGORIZED_ID] ?? [], missionById)}
-          count={(visibleColumns[UNCATEGORIZED_ID] ?? []).length}
-          defaultProjectId={defaultCreateProjectId}
-          membersByWorkspaceUserId={membersByWorkspaceUserId}
-          selectedMissionId={selectedMissionId}
-          draggable={draggable}
-          onOpenMission={openMission}
-          onCreateMission={handleCreateMissionFromColumn}
-          onCreateAndOpenMission={handleCreateAndOpenMissionFromColumn}
-        />
-      ) : null}
     </>
   );
 
@@ -598,13 +557,13 @@ export function MyMissionsPage() {
             />
             <MissionStatusFilterDropdown
               statuses={statusFilterOptions}
-              selectedStatusIds={selectedStatusKeys}
-              onClear={() => setSelectedStatusKeys([])}
-              onToggle={statusKey =>
-                setSelectedStatusKeys(current =>
-                  current.includes(statusKey)
-                    ? current.filter(key => key !== statusKey)
-                    : [...current, statusKey]
+              selectedStatusIds={selectedStatusTypes}
+              onClear={() => setSelectedStatusTypes([])}
+              onToggle={statusType =>
+                setSelectedStatusTypes(current =>
+                  current.includes(statusType)
+                    ? current.filter(key => key !== statusType)
+                    : [...current, statusType]
                 )
               }
             />
@@ -710,9 +669,9 @@ export function MyMissionsPage() {
           <DialogHeader>
             <DialogTitle>Can’t move this mission</DialogTitle>
             <DialogDescription>
-              The “{dropError?.statusName}” status doesn’t exist in the {dropError?.projectName}{' '}
-              project, so this mission can’t move there. Add a matching status to that project, or
-              move the mission within its own project’s columns.
+              {dropError && dropError.projectNames.length > 0
+                ? `The ${dropError.projectNames.join(', ')} project has no “${dropError.columnName}” status, so this move can’t be saved. Add one to that project, then try again.`
+                : `This move couldn’t be saved to the “${dropError?.columnName}” column. Try again in a moment.`}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

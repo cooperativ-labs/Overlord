@@ -53,10 +53,13 @@ function discoverProjectJsonFromFilesystem({
 
 export async function resolveProjectByIdOrName({
   backend,
-  projectRef
+  projectRef,
+  workspaceRef
 }: {
   backend: BackendClient;
   projectRef: string;
+  /** Workspace id, slug, or name narrowing an otherwise ambiguous name. */
+  workspaceRef?: string | null;
 }): Promise<ProjectDto> {
   const trimmed = projectRef.trim();
   try {
@@ -64,16 +67,69 @@ export async function resolveProjectByIdOrName({
   } catch (error) {
     if (!(error instanceof CliError) || !/project not found/i.test(error.message)) throw error;
   }
-  // Slugs and names are not globally unique, so resolve them from the
-  // account-wide catalog after the direct id lookup misses.
+  // Slugs and names are unique per workspace, not per account, so the catalog
+  // lookup can legitimately match more than once. Report the candidates rather
+  // than silently taking the first: picking for the user is how a mission ends
+  // up filed against the wrong board.
   const projects = await listAccessibleProjects({ backend });
-  const match =
-    projects.find(project => project.name === trimmed) ??
-    projects.find(project => project.slug === trimmed);
-  if (!match) {
+  const needle = trimmed.toLowerCase();
+  const byName = projects.filter(project => project.name.toLowerCase() === needle);
+  const matches =
+    byName.length > 0 ? byName : projects.filter(project => project.slug.toLowerCase() === needle);
+  if (matches.length === 0) {
     throw new CliError({ message: `Project not found: ${trimmed}` });
   }
-  return match;
+  const narrowed = await narrowByWorkspace({ backend, matches, workspaceRef });
+  if (narrowed.length === 1) return narrowed[0]!;
+  const workspaces = await workspaceLabels({ backend });
+  const candidates = narrowed
+    .map(
+      project =>
+        `  ${project.id}  (workspace: ${workspaces.get(project.workspaceId) ?? project.workspaceId})`
+    )
+    .join('\n');
+  throw new CliError({
+    message:
+      `Project reference matches ${narrowed.length} projects: ${trimmed}\n${candidates}\n` +
+      'Re-run with --workspace-id <id|slug|name>, or pass the project id directly.'
+  });
+}
+
+async function workspaceLabels({
+  backend
+}: {
+  backend: BackendClient;
+}): Promise<Map<string, string>> {
+  const workspaces =
+    await backend.get<Array<{ id: string; name: string; slug: string }>>('/api/workspaces');
+  return new Map(workspaces.map(workspace => [workspace.id, workspace.name]));
+}
+
+async function narrowByWorkspace({
+  backend,
+  matches,
+  workspaceRef
+}: {
+  backend: BackendClient;
+  matches: ProjectDto[];
+  workspaceRef?: string | null;
+}): Promise<ProjectDto[]> {
+  const hint = workspaceRef?.trim().toLowerCase();
+  if (!hint || matches.length <= 1) return matches;
+  const workspaces =
+    await backend.get<Array<{ id: string; name: string; slug: string }>>('/api/workspaces');
+  const targets = new Set(
+    workspaces
+      .filter(
+        workspace =>
+          workspace.id.toLowerCase() === hint ||
+          workspace.slug.toLowerCase() === hint ||
+          workspace.name.toLowerCase() === hint
+      )
+      .map(workspace => workspace.id)
+  );
+  const narrowed = matches.filter(project => targets.has(project.workspaceId));
+  return narrowed.length > 0 ? narrowed : matches;
 }
 
 async function tryResolveProjectByIdOrName({

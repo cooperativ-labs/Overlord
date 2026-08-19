@@ -62,7 +62,7 @@ const EVENT_TYPE_OPTIONS: { value: WebhookEventType; label: string; description:
   {
     value: 'mission.status_changed',
     label: 'Mission status changed',
-    description: 'A mission moves between workspace statuses (board columns).'
+    description: 'A mission moves between project-defined board statuses.'
   },
   {
     value: 'objective.completed',

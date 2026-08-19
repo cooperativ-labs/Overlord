@@ -2,6 +2,7 @@ import { type Permission, PERMISSIONS } from '@overlord/auth';
 import {
   type CreateArtifactBody,
   missionDisplayIdFromObjectiveRef,
+  type MissionSearchDateField,
   type UpdateArtifactBody,
   type UpdateObjectiveBody
 } from '@overlord/contract';
@@ -86,6 +87,113 @@ export interface ProtocolRequestBody {
   externalSessionId?: string | null;
 }
 
+/**
+ * One project the caller can reach, labelled with its owning workspace.
+ *
+ * Project slugs and names are unique per workspace, never per organization, so
+ * a human reference can legitimately match in more than one workspace. The
+ * workspace labels are what let the caller (or the user behind an agent) tell
+ * the candidates apart.
+ */
+export type ProjectChoice = {
+  id: string;
+  name: string;
+  slug: string;
+  workspaceId: string;
+  workspaceName: string;
+  workspaceSlug: string;
+};
+
+/**
+ * Raised when a human project reference matches in more than one workspace.
+ *
+ * Carried as a throw rather than a return value because project references are
+ * resolved deep inside workspace derivation, before any subcommand handler
+ * runs. `runProtocolSubcommand` converts it into the structured
+ * `project_selection_required` result so every surface that accepts a project
+ * name gets the same disambiguation contract — search, board-column reads,
+ * mission creation, and project discovery alike.
+ */
+export class ProjectSelectionRequiredError extends Error {
+  readonly projectRef: string;
+  readonly projects: ProjectChoice[];
+
+  constructor(projectRef: string, projects: ProjectChoice[]) {
+    super(`Project reference matches more than one workspace: ${projectRef}`);
+    this.name = 'ProjectSelectionRequiredError';
+    this.projectRef = projectRef;
+    this.projects = projects;
+  }
+}
+
+/**
+ * Resolve a human project reference — UUID, slug, or name — against the
+ * caller's live memberships.
+ *
+ * A UUID is an exact address and short-circuits. Slug and name matching is
+ * case-insensitive and may return several rows; `--workspace-id` (id, slug, or
+ * name) narrows them, which is how a caller retries after a
+ * `project_selection_required` result.
+ */
+async function resolveProjectRefChoices({
+  projectRef,
+  workspaceHint,
+  workspaceIds
+}: {
+  projectRef: string;
+  workspaceHint?: string | null;
+  workspaceIds: string[];
+}): Promise<ProjectChoice[]> {
+  if (workspaceIds.length === 0) return [];
+  const db = serviceDatabaseClient();
+  const placeholders = workspaceIds.map(() => '?').join(', ');
+  const selectChoice = `SELECT p.id, p.name, p.slug, p.workspace_id, w.name AS workspace_name,
+            w.slug AS workspace_slug
+       FROM projects p
+       JOIN workspaces w ON w.id = p.workspace_id
+      WHERE p.deleted_at IS NULL AND p.workspace_id IN (${placeholders})`;
+  type ChoiceRow = {
+    id: string;
+    name: string;
+    slug: string;
+    workspace_id: string;
+    workspace_name: string;
+    workspace_slug: string;
+  };
+  const toChoice = (row: ChoiceRow): ProjectChoice => ({
+    id: row.id,
+    name: row.name,
+    slug: row.slug,
+    workspaceId: row.workspace_id,
+    workspaceName: row.workspace_name,
+    workspaceSlug: row.workspace_slug
+  });
+
+  const byId = await db.get<ChoiceRow>(`${selectChoice} AND p.id = ?`, [
+    ...workspaceIds,
+    projectRef
+  ]);
+  if (byId) return [toChoice(byId)];
+
+  const matches = (
+    await db.all<ChoiceRow>(
+      `${selectChoice} AND (lower(p.slug) = lower(?) OR lower(p.name) = lower(?))`,
+      [...workspaceIds, projectRef, projectRef]
+    )
+  ).map(toChoice);
+
+  const hint = workspaceHint?.trim().toLowerCase();
+  if (!hint || matches.length <= 1) return matches;
+  // A hint only narrows: it never widens the set beyond live membership.
+  const narrowed = matches.filter(
+    choice =>
+      choice.workspaceId.toLowerCase() === hint ||
+      choice.workspaceSlug.toLowerCase() === hint ||
+      choice.workspaceName.toLowerCase() === hint
+  );
+  return narrowed.length > 0 ? narrowed : matches;
+}
+
 async function protocolWorkspaceId(body: ProtocolRequestBody): Promise<string | null> {
   const scopes = await callerWorkspaceMemberships();
   if (scopes.length === 0) return null;
@@ -147,25 +255,19 @@ async function protocolWorkspaceId(body: ProtocolRequestBody): Promise<string | 
     if (byDisplay[0]) return byDisplay[0].workspace_id;
   }
 
+  // Human project references (slug/name) are unique per workspace only, so this
+  // is the one derivation step that can legitimately be ambiguous. Ambiguity is
+  // reported as a selection result rather than an error so an agent can ask the
+  // user and retry with `--workspace-id`.
   const projectRef = strFlag(body, '--project-id');
   if (!projectRef) return null;
-  const projectById = await db.get<{ workspace_id: string }>(
-    `SELECT workspace_id FROM projects
-      WHERE id = ? AND deleted_at IS NULL AND workspace_id IN (${placeholders})`,
-    [projectRef, ...workspaceIds]
-  );
-  if (projectById) return projectById.workspace_id;
-
-  const projects = await db.all<{ workspace_id: string }>(
-    `SELECT workspace_id FROM projects
-      WHERE (slug = ? OR lower(name) = lower(?))
-        AND deleted_at IS NULL AND workspace_id IN (${placeholders})`,
-    [projectRef, projectRef, ...workspaceIds]
-  );
-  if (projects.length > 1) {
-    throw new ApiError(409, `Project reference is ambiguous across workspaces: ${projectRef}`);
-  }
-  return projects[0]?.workspace_id ?? null;
+  const choices = await resolveProjectRefChoices({
+    projectRef,
+    workspaceHint: strFlag(body, '--workspace-id'),
+    workspaceIds
+  });
+  if (choices.length > 1) throw new ProjectSelectionRequiredError(projectRef, choices);
+  return choices[0]?.workspaceId ?? null;
 }
 
 async function buildProtocolContext(
@@ -527,24 +629,28 @@ function intFlag(body: ProtocolRequestBody, name: string): number | undefined {
  * commands, but the fan-out repository search deliberately accepts only
  * stable project IDs. Resolve the human form before crossing that boundary.
  */
-async function resolveV2SearchProjectId(projectRef: string | null): Promise<string[] | null> {
+/**
+ * Resolve the `--project-id` filter for a V2 search.
+ *
+ * V2 is an organization-bounded aggregate read, so the reference resolves
+ * against every membership in the active organization rather than one anchor
+ * workspace. A name matching in two workspaces raises the selection flow
+ * instead of guessing which board the user meant.
+ */
+async function resolveV2SearchProjectId(
+  projectRef: string | null,
+  workspaceHint?: string | null
+): Promise<string[] | null> {
   if (!projectRef) return null;
   const scopes = await callerMembershipsInActiveOrganization(serviceDatabaseClient());
-  if (scopes.length === 0) throw new ApiError(404, 'Project not found');
-  const workspaceIds = scopes.map(scope => scope.workspaceId);
-  const placeholders = workspaceIds.map(() => '?').join(', ');
-  const projects = await serviceDatabaseClient().all<{ id: string }>(
-    `SELECT id FROM projects
-      WHERE deleted_at IS NULL
-        AND workspace_id IN (${placeholders})
-        AND (id = ? OR slug = ? OR lower(name) = lower(?))`,
-    [...workspaceIds, projectRef, projectRef, projectRef]
-  );
-  if (projects.length === 0) throw new ApiError(404, 'Project not found');
-  if (projects.length > 1) {
-    throw new ApiError(409, `Project reference is ambiguous across workspaces: ${projectRef}`);
-  }
-  return [projects[0]!.id];
+  const choices = await resolveProjectRefChoices({
+    projectRef,
+    workspaceHint,
+    workspaceIds: scopes.map(scope => scope.workspaceId)
+  });
+  if (choices.length === 0) throw new ApiError(404, `Project not found: ${projectRef}`);
+  if (choices.length > 1) throw new ProjectSelectionRequiredError(projectRef, choices);
+  return [choices[0]!.id];
 }
 
 /** Objective text for create/prompt/record-work: `--objective`, else positional. */
@@ -940,7 +1046,7 @@ const handlers: Record<string, Handler> = {
       statusTypes: csvFlag(body, '--status') ?? null,
       projectId: strFlag(body, '--project-id') ?? null,
       resourceKeys: csvFlag(body, '--resource-key') ?? null,
-      dateField: (strFlag(body, '--date-field') as 'createdAt' | 'updatedAt' | undefined) ?? null,
+      dateField: (strFlag(body, '--date-field') as MissionSearchDateField | undefined) ?? null,
       from: strFlag(body, '--from') ?? null,
       to: strFlag(body, '--to') ?? null,
       limit: intFlag(body, '--limit') ?? 25
@@ -951,7 +1057,7 @@ const handlers: Record<string, Handler> = {
     // one workspace selected for ordinary protocol entity operations.
     return searchMissionsAcrossWorkspaces({
       query: params.query,
-      projectIds: await resolveV2SearchProjectId(params.projectId),
+      projectIds: await resolveV2SearchProjectId(params.projectId, strFlag(body, '--workspace-id')),
       statusTypes: params.statusTypes,
       resourceKeys: params.resourceKeys,
       dateField: params.dateField,
@@ -1250,7 +1356,24 @@ export async function runProtocolSubcommand(
   // workspaces and reintroduce the pre-v95 scoping bug.
   const isV2Search = subcommand === 'search-missions' && intFlag(body, '--response-version') === 2;
   const requiredPermission = isV2Search ? null : (SUBCOMMAND_PERMISSIONS[subcommand] ?? null);
-  const ctx = await buildProtocolContext(body, requiredPermission);
-  await validateObjectiveAddressing({ ctx, body, subcommand });
-  return handler(ctx, body);
+  try {
+    const ctx = await buildProtocolContext(body, requiredPermission);
+    await validateObjectiveAddressing({ ctx, body, subcommand });
+    return await handler(ctx, body);
+  } catch (error) {
+    // A project name that matches in two workspaces is a question for the user,
+    // not a failure. Mirrors `workspace_selection_required` on the parentless
+    // creates: the caller asks, then retries with `--workspace-id`.
+    if (error instanceof ProjectSelectionRequiredError) {
+      return {
+        status: 'project_selection_required',
+        message:
+          `More than one project matches "${error.projectRef}". Ask the user which workspace ` +
+          'they mean, then retry with workspaceId set to the chosen workspace id, slug, or name.',
+        projectRef: error.projectRef,
+        projects: error.projects
+      };
+    }
+    throw error;
+  }
 }

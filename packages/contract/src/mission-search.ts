@@ -4,8 +4,15 @@ export type MissionSearchMode = 'display_id' | 'any' | 'all' | 'phrase' | 'fallb
 /** Where a result matched the query. */
 export type MissionSearchMatchKind = 'title' | 'displayId' | 'objective' | 'event';
 
-/** Date column used by an explicit v2 range filter. */
-export type MissionSearchDateField = 'createdAt' | 'updatedAt';
+/**
+ * Date column used by an explicit v2 range filter.
+ *
+ * `dueDatetime` is how "scheduled" is expressed: a mission is scheduled by the
+ * date it is due, not by an execution timer. Because the column is nullable,
+ * a `dueDatetime` range excludes missions that have no due date at all, which
+ * is the opposite of the created/updated columns.
+ */
+export type MissionSearchDateField = 'createdAt' | 'updatedAt' | 'dueDatetime';
 
 /**
  * Filters that actually constrained a v2 search. Omitted or empty fields were
@@ -44,6 +51,8 @@ export interface MissionSearchResultV2 {
   workspaceSlug: string;
   createdAt: string;
   updatedAt: string;
+  /** When the mission is due. Null when it has never been scheduled. */
+  dueDatetime: string | null;
   objectiveCount: number;
   /**
    * Deterministic fused ranking score (text rank fused with recency, with

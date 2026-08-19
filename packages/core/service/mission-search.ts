@@ -1,5 +1,6 @@
 import type {
   MissionSearchAppliedFilters,
+  MissionSearchDateField,
   MissionSearchMatchKind,
   MissionSearchResultV2,
   SearchMissionsResponseV2
@@ -44,6 +45,7 @@ export type RankedMissionHit = {
   workspaceSlug: string;
   createdAt: string;
   updatedAt: string;
+  dueDatetime: string | null;
   objectiveCount: number;
   relevance: number;
   snippet: string | null;
@@ -77,6 +79,7 @@ type SearchDocumentRow = {
   priority: string | null;
   created_at: string;
   updated_at: string;
+  due_datetime: string | null;
   objective_count: number;
   project_name: string;
   workspace_name: string;
@@ -98,6 +101,7 @@ type MissionLabelRow = {
   priority: string | null;
   created_at: string;
   updated_at: string;
+  due_datetime: string | null;
   objective_count: number;
   project_name: string;
   workspace_name: string;
@@ -107,6 +111,7 @@ type MissionLabelRow = {
 function missionSelectColumns(): string {
   return `t.id, t.workspace_id, t.project_id, t.display_id, t.title,
           t.status_type, t.status_id, t.priority, t.created_at, t.updated_at,
+          t.due_datetime,
           (SELECT COUNT(*) FROM objectives o
              WHERE o.mission_id = t.id AND o.deleted_at IS NULL) AS objective_count,
           p.name AS project_name, w.name AS workspace_name, w.slug AS workspace_slug`;
@@ -123,7 +128,7 @@ function projectAndStatusSql({
   projectIds: string[];
   statusTypes: string[];
   resourceKeys: string[];
-  dateField: 'createdAt' | 'updatedAt' | null;
+  dateField: MissionSearchDateField | null;
   from: string | null;
   to: string | null;
 }): { sql: string; params: string[] } {
@@ -145,7 +150,16 @@ function projectAndStatusSql({
     )`;
     params.push(...resourceKeys);
   }
-  const dateColumn = dateField === 'createdAt' ? 't.created_at' : 't.updated_at';
+  const dateColumn =
+    dateField === 'createdAt'
+      ? 't.created_at'
+      : dateField === 'dueDatetime'
+        ? 't.due_datetime'
+        : 't.updated_at';
+  // `due_datetime` is nullable, so a due-date range is a question about
+  // scheduled missions only. NULL never satisfies a comparison, which excludes
+  // unscheduled missions exactly as intended — but only once a bound exists,
+  // so naming the field without bounds stays a no-op like the other columns.
   if (from) {
     sql += ` AND ${dateColumn} >= ?`;
     params.push(from);
@@ -260,6 +274,7 @@ function toHitFromRow({
     workspaceSlug: row.workspace_slug,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    dueDatetime: row.due_datetime,
     objectiveCount: Number(row.objective_count) || 0,
     relevance,
     snippet,
@@ -281,7 +296,7 @@ function buildAppliedFilters({
   projectIds: string[];
   statusTypes: string[];
   resourceKeys: string[];
-  dateField: 'createdAt' | 'updatedAt' | null;
+  dateField: MissionSearchDateField | null;
   from: string | null;
   to: string | null;
 }): MissionSearchAppliedFilters {
@@ -316,7 +331,7 @@ function envelope({
   projectIds: string[];
   statusTypes: string[];
   resourceKeys: string[];
-  dateField: 'createdAt' | 'updatedAt' | null;
+  dateField: MissionSearchDateField | null;
   from: string | null;
   to: string | null;
   workspaceId: string;
@@ -354,7 +369,7 @@ async function listFallbackMissions({
   projectIds: string[];
   statusTypes: string[];
   resourceKeys: string[];
-  dateField: 'createdAt' | 'updatedAt' | null;
+  dateField: MissionSearchDateField | null;
   from: string | null;
   to: string | null;
   limit: number;
@@ -403,7 +418,7 @@ async function lookupDisplayId({
   projectIds: string[];
   statusTypes: string[];
   resourceKeys: string[];
-  dateField: 'createdAt' | 'updatedAt' | null;
+  dateField: MissionSearchDateField | null;
   from: string | null;
   to: string | null;
 }): Promise<MissionLabelRow | undefined> {
@@ -449,7 +464,7 @@ export async function searchWorkspaceMissions({
   projectIds?: string[] | null;
   statusTypes?: string[] | null;
   resourceKeys?: string[] | null;
-  dateField?: 'createdAt' | 'updatedAt' | null;
+  dateField?: MissionSearchDateField | null;
   from?: string | null;
   to?: string | null;
   limit?: number;
@@ -460,8 +475,11 @@ export async function searchWorkspaceMissions({
   const resources = resourceKeys?.filter(key => key.trim() !== '') ?? [];
   const boundsPresent = Boolean(from || to);
   const date = dateField ?? (boundsPresent ? 'updatedAt' : null);
-  if (date !== null && date !== 'createdAt' && date !== 'updatedAt') {
-    throw new ServiceError('dateField must be createdAt or updatedAt', 'validation_error');
+  if (date !== null && date !== 'createdAt' && date !== 'updatedAt' && date !== 'dueDatetime') {
+    throw new ServiceError(
+      'dateField must be createdAt, updatedAt, or dueDatetime',
+      'validation_error'
+    );
   }
   validateDateBound('from', from);
   validateDateBound('to', to);
@@ -609,6 +627,7 @@ export async function searchWorkspaceMissions({
       priority: row.priority,
       created_at: row.created_at,
       updated_at: row.updated_at,
+      due_datetime: row.due_datetime,
       objective_count: row.objective_count,
       project_name: row.project_name,
       workspace_name: row.workspace_name,
@@ -744,6 +763,7 @@ export function toMissionSearchResultV2(hit: RankedMissionHit): MissionSearchRes
     workspaceSlug: hit.workspaceSlug,
     createdAt: hit.createdAt,
     updatedAt: hit.updatedAt,
+    dueDatetime: hit.dueDatetime,
     objectiveCount: hit.objectiveCount,
     relevance: hit.relevance,
     snippet: hit.snippet,

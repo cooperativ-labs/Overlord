@@ -51,15 +51,18 @@ function requiredString(args: Record<string, unknown>, name: string): string {
   return value;
 }
 
-function optionalProjectUuid(args: Record<string, unknown>): string | null {
-  const projectId = optionalString(args, 'projectId');
-  if (!projectId) return null;
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(projectId)) {
-    throw new Error(
-      'projectId must be a stable Overlord project UUID; resolve human references first'
-    );
-  }
-  return projectId;
+/**
+ * Project references travel to the backend as the user wrote them.
+ *
+ * A hosted MCP client is talking to a person, and people name projects the way
+ * they say them out loud. The protocol surface resolves a UUID, slug, or name
+ * against the caller's live memberships and answers an ambiguous name with a
+ * `project_selection_required` result, so gating this to UUIDs here would only
+ * deny the agent a resolver that already exists — and leave it with a bare 404
+ * and nothing to ask the user about.
+ */
+function optionalProjectRef(args: Record<string, unknown>): string | null {
+  return optionalString(args, 'projectId') ? requiredString(args, 'projectId') : null;
 }
 
 /**
@@ -134,6 +137,9 @@ const toolHandlers: Record<string, ToolHandler> = {
         ...(optionalString(args, 'projectId')
           ? { '--project-id': requiredString(args, 'projectId') }
           : {}),
+        ...(optionalString(args, 'workspaceId')
+          ? { '--workspace-id': requiredString(args, 'workspaceId') }
+          : {}),
         ...(optionalString(args, 'directory')
           ? { '--directory': requiredString(args, 'directory') }
           : {})
@@ -156,7 +162,12 @@ const toolHandlers: Record<string, ToolHandler> = {
   overlord_list_project_statuses: args =>
     runProtocolSubcommand(
       'statuses',
-      protocolBody({ '--project-id': requiredString(args, 'projectId') })
+      protocolBody({
+        '--project-id': requiredString(args, 'projectId'),
+        ...(optionalString(args, 'workspaceId')
+          ? { '--workspace-id': requiredString(args, 'workspaceId') }
+          : {})
+      })
     ),
   overlord_search_missions: args =>
     runProtocolSubcommand(
@@ -165,7 +176,10 @@ const toolHandlers: Record<string, ToolHandler> = {
         '--response-version': '2',
         ...(optionalString(args, 'query') ? { '--query': requiredString(args, 'query') } : {}),
         ...(optionalString(args, 'status') ? { '--status': requiredString(args, 'status') } : {}),
-        ...(optionalProjectUuid(args) ? { '--project-id': optionalProjectUuid(args)! } : {}),
+        ...(optionalProjectRef(args) ? { '--project-id': optionalProjectRef(args)! } : {}),
+        ...(optionalString(args, 'workspaceId')
+          ? { '--workspace-id': requiredString(args, 'workspaceId') }
+          : {}),
         ...(optionalString(args, 'resourceKey')
           ? { '--resource-key': requiredString(args, 'resourceKey') }
           : {}),

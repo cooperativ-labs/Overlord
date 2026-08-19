@@ -87,6 +87,7 @@ import type {
   MissionDto,
   MissionEventDto,
   MissionScheduleDto,
+  MissionSearchDateField,
   MissionWorktreePreference,
   MyMissionDto,
   MyMissionReorderRequest,
@@ -127,7 +128,11 @@ import type {
   UserTokenDto,
   WorktreeDto
 } from '../webapp/shared/contract.ts';
-import { normalizeAgentLaunchFlags } from '../webapp/shared/contract.ts';
+import {
+  isMyMissionsColumnType,
+  MY_MISSIONS_COLUMN_TYPES,
+  normalizeAgentLaunchFlags
+} from '../webapp/shared/contract.ts';
 
 import { generateCommitMessageFromDiff } from './automation/commit-message-automation.ts';
 import {
@@ -3775,7 +3780,7 @@ async function searchMissionsInWorkspace({
   projectIds?: string[] | null;
   statusTypes?: string[] | null;
   resourceKeys?: string[] | null;
-  dateField?: 'createdAt' | 'updatedAt' | null;
+  dateField?: MissionSearchDateField | null;
   from?: string | null;
   to?: string | null;
   limit?: number;
@@ -3811,7 +3816,7 @@ export async function searchMissions({
   projectId?: string | null;
   statusTypes?: string[] | null;
   resourceKeys?: string[] | null;
-  dateField?: 'createdAt' | 'updatedAt' | null;
+  dateField?: MissionSearchDateField | null;
   from?: string | null;
   to?: string | null;
   limit?: number;
@@ -3905,7 +3910,7 @@ export async function searchMissionsV2({
   projectIds?: string[] | null;
   statusTypes?: string[] | null;
   resourceKeys?: string[] | null;
-  dateField?: 'createdAt' | 'updatedAt' | null;
+  dateField?: MissionSearchDateField | null;
   from?: string | null;
   to?: string | null;
   limit?: number;
@@ -6380,89 +6385,88 @@ async function upsertMyMissionPosition(
 }
 
 /**
- * A status/mission reorder targets a specific `statusId`, which is owned by
- * exactly one project. That project's workspace need not be the
- * caller's currently *active* workspace now that My Missions aggregates
- * across the whole organization — this resolves and authorizes it explicitly:
- * the status's workspace must belong to the caller's active organization, and
- * the caller must have an active membership there.
+ * My Missions columns are `StatusType`s, not project statuses, so a reorder is
+ * resolved per mission inside that mission's *own* project: the lowest-position
+ * active status of the requested type. A mission already sitting in a status of
+ * that type keeps its concrete status, so project-specific column naming
+ * survives a drag. Returns `undefined` when the project defines no active status
+ * of the type, which the caller reports as `STATUS_UNAVAILABLE_FOR_WORKSPACE`.
  */
-async function requireStatusWorkspaceMembership(
+async function resolveMyMissionsColumnStatus(
   tx: DatabaseClient,
-  statusId: string
-): Promise<{ statusRow: ProjectStatusRow; workspaceUserId: string }> {
-  const organizationId = await getActiveOrganizationIdOrNull(tx);
-  if (!organizationId) {
-    throw new ApiError(409, 'No active organization', undefined, STATUS_UNAVAILABLE_FOR_WORKSPACE);
-  }
-
-  const statusRow = (await tx.get(
+  { projectId, statusType }: { projectId: string; statusType: StatusType }
+): Promise<ProjectStatusRow | undefined> {
+  return (await tx.get(
     `SELECT ps.* FROM project_statuses ps
-       JOIN projects p ON p.id = ps.project_id AND p.deleted_at IS NULL
-       JOIN workspaces w ON w.id = ps.workspace_id AND w.deleted_at IS NULL
-      WHERE ps.id = ? AND ps.deleted_at IS NULL AND w.organization_id = ?`,
-    [statusId, organizationId]
+        WHERE ps.project_id = ? AND ps.type = ? AND ps.deleted_at IS NULL
+        ORDER BY ps.position ASC, ps.id ASC
+        LIMIT 1`,
+    [projectId, statusType]
   )) as ProjectStatusRow | undefined;
-  if (!statusRow) {
-    throw new ApiError(
-      409,
-      'That status is not available for missions in this project',
-      undefined,
-      STATUS_UNAVAILABLE_FOR_WORKSPACE
-    );
-  }
+}
 
-  const profileId = await resolveActiveProfileId(tx);
-  const membership = profileId
-    ? await findActiveMembershipId(statusRow.workspace_id, profileId, tx)
-    : null;
-  if (!membership) {
-    throw new ApiError(403, 'Not an active member of that mission’s workspace');
-  }
-
-  return { statusRow, workspaceUserId: membership };
+/**
+ * The caller's `workspace_users.id` per workspace they actively belong to in the
+ * active organization — the same membership rule the My Missions read uses. A
+ * reorder may span several workspaces at once, so membership is resolved once
+ * up front rather than per status.
+ */
+async function myMissionsActorByWorkspace(tx: DatabaseClient): Promise<Map<string, string>> {
+  const memberships = await callerMembershipsInActiveOrganization(tx);
+  return new Map(memberships.map(m => [m.workspaceId, m.workspaceUserId]));
 }
 
 async function reorderWorkspaceMyMissionsTx(body: MyMissionReorderRequest): Promise<void> {
-  const statusId = body.statusId;
+  const statusType = body.statusType;
   const orderedIds = body.orderedMissionIds;
-  if (!statusId) throw new ApiError(400, 'statusId is required');
+  if (!statusType || !isMyMissionsColumnType(statusType)) {
+    throw new ApiError(400, `statusType must be one of ${MY_MISSIONS_COLUMN_TYPES.join(', ')}`);
+  }
   if (!Array.isArray(orderedIds)) throw new ApiError(400, 'orderedMissionIds must be an array');
   if (new Set(orderedIds).size !== orderedIds.length) {
     throw new ApiError(400, 'orderedMissionIds contains duplicates');
   }
 
   await requireDatabaseClient().transaction(async tx => {
-    const { statusRow, workspaceUserId: actor } = await requireStatusWorkspaceMembership(
-      tx,
-      statusId
-    );
-    const workspaceId = statusRow.workspace_id;
+    const actorByWorkspace = await myMissionsActorByWorkspace(tx);
     const now = nowIso();
 
     for (const [index, missionId] of orderedIds.entries()) {
-      const existing = (await tx.get(
-        `SELECT * FROM missions WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-        [missionId, workspaceId]
-      )) as MissionRow | undefined;
-      if (!existing) throw new ApiError(404, `Mission ${missionId} not found in workspace`);
+      const existing = (await tx.get(`SELECT * FROM missions WHERE id = ? AND deleted_at IS NULL`, [
+        missionId
+      ])) as MissionRow | undefined;
+      if (!existing) throw new ApiError(404, `Mission ${missionId} not found`);
+
+      const workspaceId = existing.workspace_id;
+      const actor = actorByWorkspace.get(workspaceId);
+      if (!actor) throw new ApiError(403, 'Not an active member of that mission’s workspace');
       if (existing.assigned_workspace_user_id !== actor) {
         throw new ApiError(403, `Mission ${missionId} is not assigned to you`);
       }
-      if (existing.project_id !== statusRow.project_id) {
-        throw new ApiError(
-          409,
-          'That status is not available for missions in this project',
-          undefined,
-          STATUS_UNAVAILABLE_FOR_WORKSPACE
-        );
-      }
 
-      // Cross-column drag: a real status change. Apply the canonical status-change
-      // writes (status_id + denormalized status_type + reset board_position to
-      // top-of-new-column) so the project board and the My Missions unpositioned
-      // fallback both stay correct. The composite FK backstops invalid statuses.
-      if (existing.status_id !== statusRow.id) {
+      // Already in a status of this type: keep the project's own status so a
+      // custom column name is not collapsed onto the seeded one. Otherwise this
+      // is a real cross-column status change, resolved within this mission's
+      // project.
+      let statusId = existing.status_id;
+      if (existing.status_type !== statusType) {
+        const targetStatus = await resolveMyMissionsColumnStatus(tx, {
+          projectId: existing.project_id,
+          statusType
+        });
+        if (!targetStatus) {
+          throw new ApiError(
+            409,
+            `That mission's project has no ${statusType} status`,
+            undefined,
+            STATUS_UNAVAILABLE_FOR_WORKSPACE
+          );
+        }
+        statusId = targetStatus.id;
+
+        // Apply the canonical status-change writes (status_id + denormalized
+        // status_type + reset board_position to top-of-new-column) so the project
+        // board and the My Missions unpositioned fallback both stay correct.
         const revision = existing.revision + 1;
         await tx.run(
           `UPDATE missions
@@ -6470,9 +6474,9 @@ async function reorderWorkspaceMyMissionsTx(body: MyMissionReorderRequest): Prom
                   board_position = ?, updated_at = ?, revision = ?
             WHERE id = ? AND workspace_id = ?`,
           [
-            statusRow.id,
-            statusRow.type,
-            await topBoardPosition(tx, existing.project_id, statusRow.id, missionId),
+            targetStatus.id,
+            targetStatus.type,
+            await topBoardPosition(tx, existing.project_id, targetStatus.id, missionId),
             now,
             revision,
             missionId,
@@ -6494,13 +6498,15 @@ async function reorderWorkspaceMyMissionsTx(body: MyMissionReorderRequest): Prom
         );
       }
 
-      // Personal slot within the (operator, status) column. Writes only
-      // my_mission_positions — never missions.board_position for a within-column move.
+      // Personal slot within the (operator, status-type) column. Positions are
+      // assigned across the whole aggregated column, so an interleaved order that
+      // spans several projects round-trips exactly. Writes only
+      // my_mission_positions — never missions.board_position for a same-type move.
       await upsertMyMissionPosition(tx, {
         workspaceId,
         projectId: existing.project_id,
         missionId,
-        statusId: statusRow.id,
+        statusId,
         position: (index + 1) * MY_POSITION_STEP,
         actor,
         now
@@ -6511,7 +6517,9 @@ async function reorderWorkspaceMyMissionsTx(body: MyMissionReorderRequest): Prom
 
 /**
  * PATCH /api/workspace/my-missions/order — persist a personal reorder of one My
- * Missions status column for the active operator. Translates a foreign-key
+ * Missions status-*type* column for the active operator. The column aggregates
+ * every project and workspace in the active organization, so one call may move
+ * and reorder missions across several of them. Translates a foreign-key
  * rejection (a status the mission's project lacks) into the typed
  * `STATUS_UNAVAILABLE_FOR_WORKSPACE` error so the client can alert and revert.
  */

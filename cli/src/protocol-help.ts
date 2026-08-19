@@ -201,10 +201,17 @@ search-missions:
                                 complete, blocked, cancelled. Project-defined status
                                 names (board column labels) are not accepted here —
                                 use \`statuses\` to read one project's names.
-    --project-id <id|slug|name> Restrict to one project (CLI resolves human references)
+    --project-id <id|slug|name> Restrict to one project. Names are matched
+                                case-insensitively across the workspaces you can reach;
+                                a name matching in two workspaces returns
+                                project_selection_required listing the candidates.
+    --workspace-id <id|slug|name>
+                                Narrow an ambiguous --project-id
     --resource-key <csv>        Restrict to logical resource key names
-    --date-field <createdAt|updatedAt>
-                                Date column for explicit range filtering
+    --date-field <createdAt|updatedAt|dueDatetime>
+                                Date column for explicit range filtering. Use dueDatetime
+                                for "scheduled"/"due" questions; missions with no due date
+                                are excluded from a dueDatetime range.
     --from <ISO-8601>           Inclusive date/time lower bound
     --to <ISO-8601>             Exclusive date/time upper bound
     --limit <n>                 Max results (default: 25)

@@ -142,11 +142,10 @@ camelCase per the [REST API Boundary](../database/docs/09-database-schema-contra
 | `PATCH /api/launch-settings/session-defaults` | Persist the user-level execution-provider / viewer default new execution targets inherit |
 | `PATCH /api/projects/:id/resources/:resourceId/sources/:sourceId` | Replace per-agent pre-command / flag defaults on one project resource source |
 | `GET/POST /api/projects`, `GET/PATCH /api/projects/:id` | Projects (PATCH covers rename / describe / archive) |
-| `GET /api/workspace/statuses` | Workspace card statuses (board columns, shared across projects) |
-| `POST /api/workspace/statuses` | Add a workspace status |
-| `PATCH /api/workspace/statuses/:statusId` | Rename a status or set the default |
-| `PATCH /api/workspace/statuses/reorder` | Reorder workspace statuses |
-| `DELETE /api/workspace/statuses/:statusId` | Soft-delete a workspace status |
+| `GET /api/workspaces/:id/project-statuses` | Aggregate project-status read for a workspace |
+| `GET/POST /api/projects/:id/statuses` | Read or add project-owned board statuses |
+| `PATCH/DELETE /api/projects/:id/statuses/:statusId` | Update or soft-delete a project status |
+| `PATCH /api/projects/:id/statuses/reorder` | Reorder a project's statuses |
 | `GET /api/projects/:id/resources` | Linked project resources, including execution-target-specific working directories |
 | `POST /api/projects/:id/resources` | Add a linked project resource for an execution target |
 | `PATCH /api/projects/:id/resources/:resourceId` | Set a project resource as primary |
@@ -157,11 +156,9 @@ camelCase per the [REST API Boundary](../database/docs/09-database-schema-contra
 | `GET /api/missions/:id/objectives` | Objectives of a mission |
 | `POST /api/objectives`, `PATCH/DELETE /api/objectives/:id` | Objectives |
 
-**Deviations from the recommended boundary, to ratify:** `/api/meta` and
-`/api/workspace/statuses` are new reads the board needs. As a local single-user
-console it does **not** yet do per-request auth/authorization or use idempotency
-keys — both are required before any multi-user/hosted deployment and before the
-shared service layer lands.
+The SPA uses the authenticated project-status REST surface above; status names,
+order, and defaults are defined by each project, while status types provide the
+shared lifecycle vocabulary for cross-project views.
 
 ### Contract Component
 

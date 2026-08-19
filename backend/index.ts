@@ -14,7 +14,11 @@ import { isExplicitRuntimeEnv, resolveLayeredEnv } from '../cli/src/env.ts';
 import { handleMcpPost, mcpServerInfo } from '../mcp/server.ts';
 import { ServiceError } from '../packages/core/service/errors.ts';
 import type { LocalTargetBridgeCall } from '../packages/core/service/local-target/desktop-bridge.ts';
-import type { ProjectListLifecycle, StoredImageDto } from '../webapp/shared/contract.ts';
+import type {
+  MissionSearchDateField,
+  ProjectListLifecycle,
+  StoredImageDto
+} from '../webapp/shared/contract.ts';
 
 import { postMissionBranchObservations } from './branching/mission-branch-observations.ts';
 import { postExecutionTargetObservations } from './branching/target-resource-observations.ts';
@@ -1675,10 +1679,15 @@ app.get(
           ? [req.query.resourceKey.trim()]
           : null;
     const rawDateField = typeof req.query.dateField === 'string' ? req.query.dateField : null;
-    if (rawDateField && rawDateField !== 'createdAt' && rawDateField !== 'updatedAt') {
-      throw new ApiError(400, 'dateField must be createdAt or updatedAt');
+    if (
+      rawDateField &&
+      rawDateField !== 'createdAt' &&
+      rawDateField !== 'updatedAt' &&
+      rawDateField !== 'dueDatetime'
+    ) {
+      throw new ApiError(400, 'dateField must be createdAt, updatedAt, or dueDatetime');
     }
-    const dateField = rawDateField as 'createdAt' | 'updatedAt' | null;
+    const dateField = rawDateField as MissionSearchDateField | null;
     const from =
       typeof req.query.from === 'string' && req.query.from.trim() ? req.query.from : null;
     const to = typeof req.query.to === 'string' && req.query.to.trim() ? req.query.to : null;

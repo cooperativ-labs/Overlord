@@ -985,6 +985,10 @@ var init_resource_paths = __esm({
 });
 
 // ../packages/contract/dist/index.js
+function isMyMissionsColumnType(value) {
+  return MY_MISSIONS_COLUMN_TYPES.includes(value);
+}
+var MY_MISSIONS_COLUMNS, MY_MISSIONS_COLUMN_TYPES;
 var init_dist = __esm({
   "../packages/contract/dist/index.js"() {
     "use strict";
@@ -992,6 +996,13 @@ var init_dist = __esm({
     init_launch_variables();
     init_objective_ref();
     init_resource_paths();
+    MY_MISSIONS_COLUMNS = [
+      { type: "next", label: "Next" },
+      { type: "execute", label: "Executing" },
+      { type: "review", label: "Review" },
+      { type: "complete", label: "Completed" }
+    ];
+    MY_MISSIONS_COLUMN_TYPES = MY_MISSIONS_COLUMNS.map((column) => column.type);
   }
 });
 
@@ -134592,6 +134603,7 @@ function validateDateBound(name, value) {
 function missionSelectColumns() {
   return `t.id, t.workspace_id, t.project_id, t.display_id, t.title,
           t.status_type, t.status_id, t.priority, t.created_at, t.updated_at,
+          t.due_datetime,
           (SELECT COUNT(*) FROM objectives o
              WHERE o.mission_id = t.id AND o.deleted_at IS NULL) AS objective_count,
           p.name AS project_name, w.name AS workspace_name, w.slug AS workspace_slug`;
@@ -134622,7 +134634,7 @@ function projectAndStatusSql({
     )`;
     params.push(...resourceKeys);
   }
-  const dateColumn = dateField === "createdAt" ? "t.created_at" : "t.updated_at";
+  const dateColumn = dateField === "createdAt" ? "t.created_at" : dateField === "dueDatetime" ? "t.due_datetime" : "t.updated_at";
   if (from) {
     sql2 += ` AND ${dateColumn} >= ?`;
     params.push(from);
@@ -134708,6 +134720,7 @@ function toHitFromRow({
     workspaceSlug: row.workspace_slug,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    dueDatetime: row.due_datetime,
     objectiveCount: Number(row.objective_count) || 0,
     relevance,
     snippet,
@@ -134848,8 +134861,11 @@ async function searchWorkspaceMissions({
   const resources = resourceKeys?.filter((key) => key.trim() !== "") ?? [];
   const boundsPresent = Boolean(from || to);
   const date6 = dateField ?? (boundsPresent ? "updatedAt" : null);
-  if (date6 !== null && date6 !== "createdAt" && date6 !== "updatedAt") {
-    throw new ServiceError("dateField must be createdAt or updatedAt", "validation_error");
+  if (date6 !== null && date6 !== "createdAt" && date6 !== "updatedAt" && date6 !== "dueDatetime") {
+    throw new ServiceError(
+      "dateField must be createdAt, updatedAt, or dueDatetime",
+      "validation_error"
+    );
   }
   validateDateBound("from", from);
   validateDateBound("to", to);
@@ -134983,6 +134999,7 @@ async function searchWorkspaceMissions({
       priority: row.priority,
       created_at: row.created_at,
       updated_at: row.updated_at,
+      due_datetime: row.due_datetime,
       objective_count: row.objective_count,
       project_name: row.project_name,
       workspace_name: row.workspace_name,
@@ -135095,6 +135112,7 @@ function toMissionSearchResultV2(hit) {
     workspaceSlug: hit.workspaceSlug,
     createdAt: hit.createdAt,
     updatedAt: hit.updatedAt,
+    dueDatetime: hit.dueDatetime,
     objectiveCount: hit.objectiveCount,
     relevance: hit.relevance,
     snippet: hit.snippet,
@@ -148823,66 +148841,58 @@ async function upsertMyMissionPosition(db, {
     [newId2(), workspaceId2, projectId, actor, missionId, statusId, position, now2, now2]
   );
 }
-async function requireStatusWorkspaceMembership(tx, statusId) {
-  const organizationId = await getActiveOrganizationIdOrNull(tx);
-  if (!organizationId) {
-    throw new ApiError(409, "No active organization", void 0, STATUS_UNAVAILABLE_FOR_WORKSPACE);
-  }
-  const statusRow = await tx.get(
+async function resolveMyMissionsColumnStatus(tx, { projectId, statusType }) {
+  return await tx.get(
     `SELECT ps.* FROM project_statuses ps
-       JOIN projects p ON p.id = ps.project_id AND p.deleted_at IS NULL
-       JOIN workspaces w ON w.id = ps.workspace_id AND w.deleted_at IS NULL
-      WHERE ps.id = ? AND ps.deleted_at IS NULL AND w.organization_id = ?`,
-    [statusId, organizationId]
+        WHERE ps.project_id = ? AND ps.type = ? AND ps.deleted_at IS NULL
+        ORDER BY ps.position ASC, ps.id ASC
+        LIMIT 1`,
+    [projectId, statusType]
   );
-  if (!statusRow) {
-    throw new ApiError(
-      409,
-      "That status is not available for missions in this project",
-      void 0,
-      STATUS_UNAVAILABLE_FOR_WORKSPACE
-    );
-  }
-  const profileId = await resolveActiveProfileId(tx);
-  const membership = profileId ? await findActiveMembershipId(statusRow.workspace_id, profileId, tx) : null;
-  if (!membership) {
-    throw new ApiError(403, "Not an active member of that mission\u2019s workspace");
-  }
-  return { statusRow, workspaceUserId: membership };
+}
+async function myMissionsActorByWorkspace(tx) {
+  const memberships = await callerMembershipsInActiveOrganization(tx);
+  return new Map(memberships.map((m3) => [m3.workspaceId, m3.workspaceUserId]));
 }
 async function reorderWorkspaceMyMissionsTx(body) {
-  const statusId = body.statusId;
+  const statusType = body.statusType;
   const orderedIds = body.orderedMissionIds;
-  if (!statusId) throw new ApiError(400, "statusId is required");
+  if (!statusType || !isMyMissionsColumnType(statusType)) {
+    throw new ApiError(400, `statusType must be one of ${MY_MISSIONS_COLUMN_TYPES.join(", ")}`);
+  }
   if (!Array.isArray(orderedIds)) throw new ApiError(400, "orderedMissionIds must be an array");
   if (new Set(orderedIds).size !== orderedIds.length) {
     throw new ApiError(400, "orderedMissionIds contains duplicates");
   }
   await requireDatabaseClient().transaction(async (tx) => {
-    const { statusRow, workspaceUserId: actor } = await requireStatusWorkspaceMembership(
-      tx,
-      statusId
-    );
-    const workspaceId2 = statusRow.workspace_id;
+    const actorByWorkspace = await myMissionsActorByWorkspace(tx);
     const now2 = nowIso2();
     for (const [index, missionId] of orderedIds.entries()) {
-      const existing = await tx.get(
-        `SELECT * FROM missions WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-        [missionId, workspaceId2]
-      );
-      if (!existing) throw new ApiError(404, `Mission ${missionId} not found in workspace`);
+      const existing = await tx.get(`SELECT * FROM missions WHERE id = ? AND deleted_at IS NULL`, [
+        missionId
+      ]);
+      if (!existing) throw new ApiError(404, `Mission ${missionId} not found`);
+      const workspaceId2 = existing.workspace_id;
+      const actor = actorByWorkspace.get(workspaceId2);
+      if (!actor) throw new ApiError(403, "Not an active member of that mission\u2019s workspace");
       if (existing.assigned_workspace_user_id !== actor) {
         throw new ApiError(403, `Mission ${missionId} is not assigned to you`);
       }
-      if (existing.project_id !== statusRow.project_id) {
-        throw new ApiError(
-          409,
-          "That status is not available for missions in this project",
-          void 0,
-          STATUS_UNAVAILABLE_FOR_WORKSPACE
-        );
-      }
-      if (existing.status_id !== statusRow.id) {
+      let statusId = existing.status_id;
+      if (existing.status_type !== statusType) {
+        const targetStatus = await resolveMyMissionsColumnStatus(tx, {
+          projectId: existing.project_id,
+          statusType
+        });
+        if (!targetStatus) {
+          throw new ApiError(
+            409,
+            `That mission's project has no ${statusType} status`,
+            void 0,
+            STATUS_UNAVAILABLE_FOR_WORKSPACE
+          );
+        }
+        statusId = targetStatus.id;
         const revision = existing.revision + 1;
         await tx.run(
           `UPDATE missions
@@ -148890,9 +148900,9 @@ async function reorderWorkspaceMyMissionsTx(body) {
                   board_position = ?, updated_at = ?, revision = ?
             WHERE id = ? AND workspace_id = ?`,
           [
-            statusRow.id,
-            statusRow.type,
-            await topBoardPosition2(tx, existing.project_id, statusRow.id, missionId),
+            targetStatus.id,
+            targetStatus.type,
+            await topBoardPosition2(tx, existing.project_id, targetStatus.id, missionId),
             now2,
             revision,
             missionId,
@@ -148917,7 +148927,7 @@ async function reorderWorkspaceMyMissionsTx(body) {
         workspaceId: workspaceId2,
         projectId: existing.project_id,
         missionId,
-        statusId: statusRow.id,
+        statusId,
         position: (index + 1) * MY_POSITION_STEP2,
         actor,
         now: now2
@@ -157000,6 +157010,53 @@ async function removeWorkspaceMember(workspaceId2, workspaceUserId) {
 }
 
 // protocol.ts
+var ProjectSelectionRequiredError = class extends Error {
+  projectRef;
+  projects;
+  constructor(projectRef, projects) {
+    super(`Project reference matches more than one workspace: ${projectRef}`);
+    this.name = "ProjectSelectionRequiredError";
+    this.projectRef = projectRef;
+    this.projects = projects;
+  }
+};
+async function resolveProjectRefChoices({
+  projectRef,
+  workspaceHint,
+  workspaceIds
+}) {
+  if (workspaceIds.length === 0) return [];
+  const db = serviceDatabaseClient();
+  const placeholders2 = workspaceIds.map(() => "?").join(", ");
+  const selectChoice = `SELECT p.id, p.name, p.slug, p.workspace_id, w.name AS workspace_name,
+            w.slug AS workspace_slug
+       FROM projects p
+       JOIN workspaces w ON w.id = p.workspace_id
+      WHERE p.deleted_at IS NULL AND p.workspace_id IN (${placeholders2})`;
+  const toChoice = (row) => ({
+    id: row.id,
+    name: row.name,
+    slug: row.slug,
+    workspaceId: row.workspace_id,
+    workspaceName: row.workspace_name,
+    workspaceSlug: row.workspace_slug
+  });
+  const byId = await db.get(`${selectChoice} AND p.id = ?`, [
+    ...workspaceIds,
+    projectRef
+  ]);
+  if (byId) return [toChoice(byId)];
+  const matches = (await db.all(
+    `${selectChoice} AND (lower(p.slug) = lower(?) OR lower(p.name) = lower(?))`,
+    [...workspaceIds, projectRef, projectRef]
+  )).map(toChoice);
+  const hint = workspaceHint?.trim().toLowerCase();
+  if (!hint || matches.length <= 1) return matches;
+  const narrowed = matches.filter(
+    (choice) => choice.workspaceId.toLowerCase() === hint || choice.workspaceSlug.toLowerCase() === hint || choice.workspaceName.toLowerCase() === hint
+  );
+  return narrowed.length > 0 ? narrowed : matches;
+}
 async function protocolWorkspaceId(body) {
   const scopes = await callerWorkspaceMemberships();
   if (scopes.length === 0) return null;
@@ -157053,22 +157110,13 @@ async function protocolWorkspaceId(body) {
   }
   const projectRef = strFlag(body, "--project-id");
   if (!projectRef) return null;
-  const projectById = await db.get(
-    `SELECT workspace_id FROM projects
-      WHERE id = ? AND deleted_at IS NULL AND workspace_id IN (${placeholders2})`,
-    [projectRef, ...workspaceIds]
-  );
-  if (projectById) return projectById.workspace_id;
-  const projects = await db.all(
-    `SELECT workspace_id FROM projects
-      WHERE (slug = ? OR lower(name) = lower(?))
-        AND deleted_at IS NULL AND workspace_id IN (${placeholders2})`,
-    [projectRef, projectRef, ...workspaceIds]
-  );
-  if (projects.length > 1) {
-    throw new ApiError(409, `Project reference is ambiguous across workspaces: ${projectRef}`);
-  }
-  return projects[0]?.workspace_id ?? null;
+  const choices = await resolveProjectRefChoices({
+    projectRef,
+    workspaceHint: strFlag(body, "--workspace-id"),
+    workspaceIds
+  });
+  if (choices.length > 1) throw new ProjectSelectionRequiredError(projectRef, choices);
+  return choices[0]?.workspaceId ?? null;
 }
 async function buildProtocolContext(body, permission) {
   const workspaceId2 = await protocolWorkspaceId(body);
@@ -157295,24 +157343,17 @@ function intFlag(body, name) {
   const parsed = Number.parseInt(value, 10);
   return Number.isFinite(parsed) ? parsed : void 0;
 }
-async function resolveV2SearchProjectId(projectRef) {
+async function resolveV2SearchProjectId(projectRef, workspaceHint) {
   if (!projectRef) return null;
   const scopes = await callerMembershipsInActiveOrganization(serviceDatabaseClient());
-  if (scopes.length === 0) throw new ApiError(404, "Project not found");
-  const workspaceIds = scopes.map((scope) => scope.workspaceId);
-  const placeholders2 = workspaceIds.map(() => "?").join(", ");
-  const projects = await serviceDatabaseClient().all(
-    `SELECT id FROM projects
-      WHERE deleted_at IS NULL
-        AND workspace_id IN (${placeholders2})
-        AND (id = ? OR slug = ? OR lower(name) = lower(?))`,
-    [...workspaceIds, projectRef, projectRef, projectRef]
-  );
-  if (projects.length === 0) throw new ApiError(404, "Project not found");
-  if (projects.length > 1) {
-    throw new ApiError(409, `Project reference is ambiguous across workspaces: ${projectRef}`);
-  }
-  return [projects[0].id];
+  const choices = await resolveProjectRefChoices({
+    projectRef,
+    workspaceHint,
+    workspaceIds: scopes.map((scope) => scope.workspaceId)
+  });
+  if (choices.length === 0) throw new ApiError(404, `Project not found: ${projectRef}`);
+  if (choices.length > 1) throw new ProjectSelectionRequiredError(projectRef, choices);
+  return [choices[0].id];
 }
 function objectiveText(body) {
   const flag = strFlag(body, "--objective");
@@ -157615,7 +157656,7 @@ var handlers = {
     if (intFlag(body, "--response-version") !== 2) return searchMissions(params);
     return searchMissionsV22({
       query: params.query,
-      projectIds: await resolveV2SearchProjectId(params.projectId),
+      projectIds: await resolveV2SearchProjectId(params.projectId, strFlag(body, "--workspace-id")),
       statusTypes: params.statusTypes,
       resourceKeys: params.resourceKeys,
       dateField: params.dateField,
@@ -157862,9 +157903,21 @@ async function runProtocolSubcommand(subcommand, body) {
   }
   const isV2Search = subcommand === "search-missions" && intFlag(body, "--response-version") === 2;
   const requiredPermission = isV2Search ? null : SUBCOMMAND_PERMISSIONS[subcommand] ?? null;
-  const ctx = await buildProtocolContext(body, requiredPermission);
-  await validateObjectiveAddressing({ ctx, body, subcommand });
-  return handler(ctx, body);
+  try {
+    const ctx = await buildProtocolContext(body, requiredPermission);
+    await validateObjectiveAddressing({ ctx, body, subcommand });
+    return await handler(ctx, body);
+  } catch (error53) {
+    if (error53 instanceof ProjectSelectionRequiredError) {
+      return {
+        status: "project_selection_required",
+        message: `More than one project matches "${error53.projectRef}". Ask the user which workspace they mean, then retry with workspaceId set to the chosen workspace id, slug, or name.`,
+        projectRef: error53.projectRef,
+        projects: error53.projects
+      };
+    }
+    throw error53;
+  }
 }
 
 // ../mcp/tool-catalog.ts
@@ -157901,14 +157954,19 @@ var hostedMcpToolDefinitions = [
   {
     name: "overlord_resolve_project",
     title: "Resolve Overlord project",
-    description: "Use this when the user identifies an Overlord project by id, slug, name, or exposed repository metadata. When resolving from .overlord/project.json, the result is the isPrimary project if the checkout is linked to more than one project; linkedProjects lists every linked project.",
+    description: "Use this when the user identifies an Overlord project by id, slug, name, or exposed repository metadata. Names are matched case-insensitively across every workspace the caller can reach; when a name matches in more than one, this returns a 'project_selection_required' result listing the candidates with their workspaces \u2014 ask the user which one, then retry with workspaceId set. When resolving from .overlord/project.json, the result is the isPrimary project if the checkout is linked to more than one project; linkedProjects lists every linked project.",
     inputSchema: objectSchema({
       projectId: stringProperty("Explicit Overlord project id, slug, or project name."),
+      workspaceId: stringProperty(
+        "Optional workspace (id, slug, or name) that narrows an ambiguous projectId. Use this to retry after a 'project_selection_required' result."
+      ),
       directory: stringProperty(
         "Optional repository directory path when the MCP client can expose one with .overlord/project.json."
       )
     }),
-    outputSchema: protocolOutputSchema("Resolved Overlord project metadata."),
+    outputSchema: protocolOutputSchema(
+      "Resolved Overlord project metadata, or a 'project_selection_required' result listing candidate projects."
+    ),
     annotations: readOnly,
     _meta: widget("ui://overlord/project-selector.html")
   },
@@ -157938,7 +157996,12 @@ var hostedMcpToolDefinitions = [
     description: "Use this to read one project's board columns. Status names and order are defined per project, so two projects in the same workspace can label the same lifecycle differently; this is the only way to discover a specific board\u2019s columns. Each status carries a stable type (draft, next, execute, review, complete, blocked, cancelled) that does not vary by project \u2014 use the type for filtering and the name only for display.",
     inputSchema: objectSchema(
       {
-        projectId: stringProperty("Overlord project id, slug, or name.")
+        projectId: stringProperty(
+          "Overlord project id, slug, or name. An ambiguous name returns 'project_selection_required'; retry with workspaceId."
+        ),
+        workspaceId: stringProperty(
+          "Optional workspace (id, slug, or name) that narrows an ambiguous projectId."
+        )
       },
       ["projectId"]
     ),
@@ -157950,20 +158013,23 @@ var hostedMcpToolDefinitions = [
   {
     name: "overlord_search_missions",
     title: "Search Overlord missions",
-    description: "Use this when the user wants to find or list missions across the caller's authorized workspaces in one organization. Returns SearchMissionsResponseV2 with snippets, match evidence, appliedFilters, and totalMatchedBeforeLimit. Complete and cancelled missions stay eligible by default.",
+    description: "Use this when the user wants to find or list missions across the caller's authorized workspaces in one organization. Returns SearchMissionsResponseV2 with snippets, match evidence, appliedFilters, and totalMatchedBeforeLimit. Complete and cancelled missions stay eligible by default. There is no relative-date parsing and no implicit time window: compute absolute ISO bounds yourself and pass them as from/to. Raise limit for broad questions \u2014 the default of 25 is split evenly across the workspaces searched \u2014 and read workspaceCounts and totalMatchedBeforeLimit before telling the user a list is complete. An appliedFilters.mode of 'fallback' means the query text matched nothing usable and the results are a recency listing rather than an answer.",
     inputSchema: objectSchema({
       query: stringProperty("Search query text."),
       status: stringProperty(
         "Comma-separated status TYPES, such as draft,execute,review. Types are workspace-invariant (draft, next, execute, review, complete, blocked, cancelled). Project-defined status names \u2014 the board column labels read by overlord_list_project_statuses \u2014 are not accepted here."
       ),
       projectId: stringProperty(
-        "Optional stable Overlord project UUID. Use overlord_resolve_project first for a human project reference."
+        "Optional project reference: a stable UUID, a slug, or the project name as the user said it. Names are matched case-insensitively against the projects the caller can reach. If the name matches in more than one workspace the call returns a 'project_selection_required' result listing the candidates with their workspaces \u2014 ask the user which one, then retry with workspaceId set."
+      ),
+      workspaceId: stringProperty(
+        "Optional workspace (id, slug, or name) that narrows an ambiguous projectId. Use this to retry after a 'project_selection_required' result."
       ),
       resourceKey: stringProperty(
         "Optional logical resource key. Keys are matched by name within every selected project."
       ),
       dateField: stringProperty(
-        "Date column for an explicit range: createdAt or updatedAt. Defaults to updatedAt only when from or to is supplied."
+        "Date column for an explicit range: createdAt, updatedAt, or dueDatetime. Defaults to updatedAt only when from or to is supplied. Use dueDatetime for questions about what is scheduled or due \u2014 a mission is scheduled by its due date, not by an execution timer. Missions with no due date are excluded from a dueDatetime range."
       ),
       from: stringProperty("Optional inclusive ISO-8601 date/time lower bound."),
       to: stringProperty("Optional exclusive ISO-8601 date/time upper bound."),
@@ -157973,7 +158039,7 @@ var hostedMcpToolDefinitions = [
       }
     }),
     outputSchema: protocolOutputSchema(
-      "SearchMissionsResponseV2: version, results (with labels, snippets, matchedTerms), appliedFilters, totalMatchedBeforeLimit, workspaceCounts."
+      "SearchMissionsResponseV2: version, results (with labels, dueDatetime, snippets, matchedTerms), appliedFilters, totalMatchedBeforeLimit, workspaceCounts. Or a 'project_selection_required' result when projectId names a project in more than one workspace."
     ),
     annotations: readOnly,
     _meta: widget("ui://overlord/mission-list.html")
@@ -158407,15 +158473,8 @@ function requiredString(args, name) {
   if (!value) throw new Error(`Missing required argument: ${name}`);
   return value;
 }
-function optionalProjectUuid(args) {
-  const projectId = optionalString(args, "projectId");
-  if (!projectId) return null;
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(projectId)) {
-    throw new Error(
-      "projectId must be a stable Overlord project UUID; resolve human references first"
-    );
-  }
-  return projectId;
+function optionalProjectRef(args) {
+  return optionalString(args, "projectId") ? requiredString(args, "projectId") : null;
 }
 function missionScopeFlags(args) {
   const objectiveId = optionalString(args, "objectiveId");
@@ -158462,6 +158521,7 @@ var toolHandlers = {
     "discover-project",
     protocolBody({
       ...optionalString(args, "projectId") ? { "--project-id": requiredString(args, "projectId") } : {},
+      ...optionalString(args, "workspaceId") ? { "--workspace-id": requiredString(args, "workspaceId") } : {},
       ...optionalString(args, "directory") ? { "--directory": requiredString(args, "directory") } : {}
     })
   ),
@@ -158476,7 +158536,10 @@ var toolHandlers = {
   ),
   overlord_list_project_statuses: (args) => runProtocolSubcommand(
     "statuses",
-    protocolBody({ "--project-id": requiredString(args, "projectId") })
+    protocolBody({
+      "--project-id": requiredString(args, "projectId"),
+      ...optionalString(args, "workspaceId") ? { "--workspace-id": requiredString(args, "workspaceId") } : {}
+    })
   ),
   overlord_search_missions: (args) => runProtocolSubcommand(
     "search-missions",
@@ -158484,7 +158547,8 @@ var toolHandlers = {
       "--response-version": "2",
       ...optionalString(args, "query") ? { "--query": requiredString(args, "query") } : {},
       ...optionalString(args, "status") ? { "--status": requiredString(args, "status") } : {},
-      ...optionalProjectUuid(args) ? { "--project-id": optionalProjectUuid(args) } : {},
+      ...optionalProjectRef(args) ? { "--project-id": optionalProjectRef(args) } : {},
+      ...optionalString(args, "workspaceId") ? { "--workspace-id": requiredString(args, "workspaceId") } : {},
       ...optionalString(args, "resourceKey") ? { "--resource-key": requiredString(args, "resourceKey") } : {},
       ...optionalString(args, "dateField") ? { "--date-field": requiredString(args, "dateField") } : {},
       ...optionalString(args, "from") ? { "--from": requiredString(args, "from") } : {},
@@ -162885,9 +162949,9 @@ async function resolveAuthorizedWorkspaces(profileId, token) {
          ON ra.workspace_id = wu.workspace_id AND ra.workspace_user_id = wu.id
         AND ra.deleted_at IS NULL
       WHERE wu.profile_id = ? AND wu.status = 'active' AND wu.deleted_at IS NULL
-        AND (? IS NULL OR w.organization_id = ?)
+        AND (?::text IS NULL OR w.organization_id = ?)
         AND (
-          ? IS NULL OR ? = 1 OR EXISTS (
+          ?::text IS NULL OR ? = 1 OR EXISTS (
             SELECT 1 FROM user_token_workspaces utw
              WHERE utw.token_id = ? AND utw.workspace_id = wu.workspace_id
           )
@@ -167931,8 +167995,8 @@ app.get(
     }
     const resourceKeys = typeof req.query.resourceKeys === "string" ? req.query.resourceKeys.split(",").map((value) => value.trim()).filter(Boolean) : typeof req.query.resourceKey === "string" && req.query.resourceKey.trim() ? [req.query.resourceKey.trim()] : null;
     const rawDateField = typeof req.query.dateField === "string" ? req.query.dateField : null;
-    if (rawDateField && rawDateField !== "createdAt" && rawDateField !== "updatedAt") {
-      throw new ApiError(400, "dateField must be createdAt or updatedAt");
+    if (rawDateField && rawDateField !== "createdAt" && rawDateField !== "updatedAt" && rawDateField !== "dueDatetime") {
+      throw new ApiError(400, "dateField must be createdAt, updatedAt, or dueDatetime");
     }
     const dateField = rawDateField;
     const from = typeof req.query.from === "string" && req.query.from.trim() ? req.query.from : null;

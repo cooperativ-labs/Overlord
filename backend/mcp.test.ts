@@ -137,7 +137,8 @@ test('overlord_list_project_statuses is a read-only project-scoped discovery too
   assert.ok(tool, 'the hosted catalog exposes project status discovery');
   assert.equal(tool.annotations?.readOnlyHint, true);
   assert.deepEqual(tool.inputSchema.required, ['projectId']);
-  assert.deepEqual(Object.keys(tool.inputSchema.properties ?? {}), ['projectId']);
+  // `workspaceId` is optional and only ever narrows an ambiguous project name.
+  assert.deepEqual(Object.keys(tool.inputSchema.properties ?? {}), ['projectId', 'workspaceId']);
 
   // Board column names vary per project; the type vocabulary does not. Both
   // facts have to be in the description or a model will filter on a name.
@@ -160,8 +161,14 @@ test('overlord_list_project_statuses is a read-only project-scoped discovery too
     'query',
     'resourceKey',
     'status',
-    'to'
+    'to',
+    'workspaceId'
   ]);
-  assert.match(properties.projectId.description, /stable Overlord project UUID/);
+  // The project filter takes the reference the user actually said (coo:781);
+  // an ambiguous name is a question for the user, not a rejected argument.
+  assert.match(properties.projectId.description, /slug, or the project name/);
+  assert.match(properties.projectId.description, /project_selection_required/);
+  assert.match(properties.workspaceId.description, /narrows an ambiguous projectId/);
+  assert.match(properties.dateField.description, /dueDatetime/);
   assert.match(search.description, /authorized workspaces/);
 });

@@ -3,6 +3,7 @@ import type { QueryClient } from '@tanstack/react-query';
 import type {
   MissionDetailDto,
   MissionDto,
+  MyMissionsColumnType,
   MyMissionsResponse,
   StatusType
 } from '../../../shared/contract.ts';
@@ -63,15 +64,14 @@ export function createReorderBoardColumnMutation(qc: QueryClient) {
 }
 
 export interface ReorderMyMissionsVars {
-  statusId: string;
-  statusType: StatusType;
+  statusType: MyMissionsColumnType;
   orderedMissionIds: string[];
 }
 
 export function createReorderMyMissionsMutation(qc: QueryClient) {
   return {
-    mutationFn: ({ statusId, orderedMissionIds }: ReorderMyMissionsVars) =>
-      api.reorderWorkspaceMyMissions({ statusId, orderedMissionIds }),
+    mutationFn: ({ statusType, orderedMissionIds }: ReorderMyMissionsVars) =>
+      api.reorderWorkspaceMyMissions({ statusType, orderedMissionIds }),
     onMutate: async (vars: ReorderMyMissionsVars) => {
       await qc.cancelQueries({ queryKey: keys.myMissions });
       const previous = qc.getQueryData<MyMissionsResponse>(keys.myMissions);
@@ -79,17 +79,15 @@ export function createReorderMyMissionsMutation(qc: QueryClient) {
         const positionById = new Map(
           vars.orderedMissionIds.map((id, index) => [id, (index + 1) * 100])
         );
+        // My Missions columns are status *types*: the concrete per-project
+        // `statusId` is resolved server-side, so only the type and the personal
+        // slot are predictable here. The refetch reconciles `statusId`.
         qc.setQueryData<MyMissionsResponse>(keys.myMissions, {
           missions: previous.missions.map(mission => {
             const position = positionById.get(mission.id);
             return position === undefined
               ? mission
-              : {
-                  ...mission,
-                  statusId: vars.statusId,
-                  statusType: vars.statusType,
-                  myPosition: position
-                };
+              : { ...mission, statusType: vars.statusType, myPosition: position };
           })
         });
       }

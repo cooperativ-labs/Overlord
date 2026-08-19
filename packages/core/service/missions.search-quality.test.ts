@@ -197,6 +197,57 @@ for (const adapter of adapters) {
       }
     });
 
+    it('filters by due date and excludes missions that were never scheduled', async () => {
+      const handle = await adapter.create();
+      try {
+        const { ctx, projectId } = await setup(handle.client);
+        const dueTomorrow = await createMissionWithObjectives({
+          ctx,
+          projectId,
+          title: 'Ship the investor portal login',
+          dueDatetime: '2026-08-20T09:00:00.000Z',
+          objectives: [{ objective: 'Wire up the SSO handshake' }]
+        });
+        await createMissionWithObjectives({
+          ctx,
+          projectId,
+          title: 'Quarterly compliance filing',
+          dueDatetime: '2026-08-28T09:00:00.000Z',
+          objectives: [{ objective: 'Collate the filings' }]
+        });
+        await createMissionWithObjectives({
+          ctx,
+          projectId,
+          title: 'Unscheduled backlog item',
+          objectives: [{ objective: 'Someday' }]
+        });
+
+        const tomorrow = await searchMissionsV2({
+          ctx,
+          query: '',
+          dateField: 'dueDatetime',
+          from: '2026-08-20T00:00:00.000Z',
+          to: '2026-08-21T00:00:00.000Z'
+        });
+        assert.equal(tomorrow.appliedFilters.dateField, 'dueDatetime');
+        assert.deepEqual(
+          tomorrow.results.map(result => result.id),
+          [dueTomorrow.mission.id]
+        );
+        // A due-date window is a question about scheduled work, so a mission with
+        // no due date is absent rather than sorted last.
+        assert.equal(tomorrow.totalMatchedBeforeLimit, 1);
+
+        // The column is on every result regardless of filtering, so a caller can
+        // report the date it just filtered on.
+        const unfiltered = await searchMissionsV2({ ctx, query: '' });
+        assert.equal(unfiltered.results.length, 3);
+        assert.equal(unfiltered.results.filter(result => result.dueDatetime !== null).length, 2);
+      } finally {
+        await handle.teardown();
+      }
+    });
+
     it('ranks an exact title above a 25-event chatter mission', async () => {
       const handle = await adapter.create();
       try {

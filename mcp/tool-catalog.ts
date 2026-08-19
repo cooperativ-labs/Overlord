@@ -51,14 +51,25 @@ export const hostedMcpToolDefinitions: ToolDefinition[] = [
     name: 'overlord_resolve_project',
     title: 'Resolve Overlord project',
     description:
-      'Use this when the user identifies an Overlord project by id, slug, name, or exposed repository metadata. When resolving from .overlord/project.json, the result is the isPrimary project if the checkout is linked to more than one project; linkedProjects lists every linked project.',
+      'Use this when the user identifies an Overlord project by id, slug, name, or exposed repository metadata. ' +
+      'Names are matched case-insensitively across every workspace the caller can reach; when a name ' +
+      "matches in more than one, this returns a 'project_selection_required' result listing the candidates " +
+      'with their workspaces — ask the user which one, then retry with workspaceId set. When resolving ' +
+      'from .overlord/project.json, the result is the isPrimary project if the checkout is linked to more ' +
+      'than one project; linkedProjects lists every linked project.',
     inputSchema: objectSchema({
       projectId: stringProperty('Explicit Overlord project id, slug, or project name.'),
+      workspaceId: stringProperty(
+        'Optional workspace (id, slug, or name) that narrows an ambiguous projectId. Use this to ' +
+          "retry after a 'project_selection_required' result."
+      ),
       directory: stringProperty(
         'Optional repository directory path when the MCP client can expose one with .overlord/project.json.'
       )
     }),
-    outputSchema: protocolOutputSchema('Resolved Overlord project metadata.'),
+    outputSchema: protocolOutputSchema(
+      "Resolved Overlord project metadata, or a 'project_selection_required' result listing candidate projects."
+    ),
     annotations: readOnly,
     _meta: widget('ui://overlord/project-selector.html')
   },
@@ -97,7 +108,13 @@ export const hostedMcpToolDefinitions: ToolDefinition[] = [
       'project — use the type for filtering and the name only for display.',
     inputSchema: objectSchema(
       {
-        projectId: stringProperty('Overlord project id, slug, or name.')
+        projectId: stringProperty(
+          'Overlord project id, slug, or name. An ambiguous name returns ' +
+            "'project_selection_required'; retry with workspaceId."
+        ),
+        workspaceId: stringProperty(
+          'Optional workspace (id, slug, or name) that narrows an ambiguous projectId.'
+        )
       },
       ['projectId']
     ),
@@ -110,7 +127,13 @@ export const hostedMcpToolDefinitions: ToolDefinition[] = [
     name: 'overlord_search_missions',
     title: 'Search Overlord missions',
     description:
-      "Use this when the user wants to find or list missions across the caller's authorized workspaces in one organization. Returns SearchMissionsResponseV2 with snippets, match evidence, appliedFilters, and totalMatchedBeforeLimit. Complete and cancelled missions stay eligible by default.",
+      "Use this when the user wants to find or list missions across the caller's authorized workspaces in one organization. Returns SearchMissionsResponseV2 with snippets, match evidence, appliedFilters, and totalMatchedBeforeLimit. Complete and cancelled missions stay eligible by default. " +
+      'There is no relative-date parsing and no implicit time window: compute absolute ISO ' +
+      'bounds yourself and pass them as from/to. Raise limit for broad questions — the default ' +
+      'of 25 is split evenly across the workspaces searched — and read workspaceCounts and ' +
+      'totalMatchedBeforeLimit before telling the user a list is complete. An appliedFilters.mode ' +
+      "of 'fallback' means the query text matched nothing usable and the results are a recency " +
+      'listing rather than an answer.',
     inputSchema: objectSchema({
       query: stringProperty('Search query text.'),
       status: stringProperty(
@@ -119,13 +142,24 @@ export const hostedMcpToolDefinitions: ToolDefinition[] = [
           'board column labels read by overlord_list_project_statuses — are not accepted here.'
       ),
       projectId: stringProperty(
-        'Optional stable Overlord project UUID. Use overlord_resolve_project first for a human project reference.'
+        'Optional project reference: a stable UUID, a slug, or the project name as the user said ' +
+          'it. Names are matched case-insensitively against the projects the caller can reach. If ' +
+          "the name matches in more than one workspace the call returns a 'project_selection_required' " +
+          'result listing the candidates with their workspaces — ask the user which one, then retry ' +
+          'with workspaceId set.'
+      ),
+      workspaceId: stringProperty(
+        'Optional workspace (id, slug, or name) that narrows an ambiguous projectId. Use this to ' +
+          "retry after a 'project_selection_required' result."
       ),
       resourceKey: stringProperty(
         'Optional logical resource key. Keys are matched by name within every selected project.'
       ),
       dateField: stringProperty(
-        'Date column for an explicit range: createdAt or updatedAt. Defaults to updatedAt only when from or to is supplied.'
+        'Date column for an explicit range: createdAt, updatedAt, or dueDatetime. Defaults to ' +
+          'updatedAt only when from or to is supplied. Use dueDatetime for questions about what is ' +
+          'scheduled or due — a mission is scheduled by its due date, not by an execution timer. ' +
+          'Missions with no due date are excluded from a dueDatetime range.'
       ),
       from: stringProperty('Optional inclusive ISO-8601 date/time lower bound.'),
       to: stringProperty('Optional exclusive ISO-8601 date/time upper bound.'),
@@ -135,7 +169,9 @@ export const hostedMcpToolDefinitions: ToolDefinition[] = [
       }
     }),
     outputSchema: protocolOutputSchema(
-      'SearchMissionsResponseV2: version, results (with labels, snippets, matchedTerms), appliedFilters, totalMatchedBeforeLimit, workspaceCounts.'
+      'SearchMissionsResponseV2: version, results (with labels, dueDatetime, snippets, matchedTerms), ' +
+        "appliedFilters, totalMatchedBeforeLimit, workspaceCounts. Or a 'project_selection_required' " +
+        'result when projectId names a project in more than one workspace.'
     ),
     annotations: readOnly,
     _meta: widget('ui://overlord/mission-list.html')

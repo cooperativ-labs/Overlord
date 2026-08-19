@@ -267,8 +267,8 @@ export function BoardPage() {
     [createMissionInColumn, navigate]
   );
 
-  // The list-row checkbox marks a mission complete by moving it into the
-  // workspace status whose type is `complete`. No-op if no such status exists.
+  // The list-row checkbox marks a mission complete by moving it into this
+  // project's status whose type is `complete`. No-op if no such status exists.
   const completeStatusId = useMemo(
     () => statuses.find(status => status.type === 'complete')?.id ?? null,
     [statuses]

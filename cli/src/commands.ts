@@ -1689,12 +1689,25 @@ export async function runManagementCommand({
       const sub = parsed.positional[0];
       if (sub !== 'list') {
         throw new CliError({
-          message: 'Usage: ovld missions list [--status <csv>] [--project-id <id>] [--json]'
+          message:
+            'Usage: ovld missions list [--status <csv>] [--project-id <id|slug|name>] ' +
+            '[--workspace-id <id|slug|name>] [--json]'
         });
       }
       const params = new URLSearchParams();
       const query = flagValue(parsed.flags, '--query');
-      const projectId = flagValue(parsed.flags, '--project-id');
+      // Search accepts a project the way the user says it. The REST filter is
+      // UUID-only, so resolve here rather than making people look up an id.
+      const projectRef = flagValue(parsed.flags, '--project-id');
+      const projectId = projectRef
+        ? (
+            await resolveProjectByIdOrName({
+              backend: runtime.backend,
+              projectRef,
+              workspaceRef: flagValue(parsed.flags, '--workspace-id')
+            })
+          ).id
+        : undefined;
       const limit = flagValue(parsed.flags, '--limit');
       // `--status` filters status *types* (draft/execute/review/complete/
       // blocked/cancelled), never the project-defined status names shown on a
@@ -1742,7 +1755,8 @@ export async function runManagementCommand({
       }
       const project = await resolveProjectByIdOrName({
         backend: runtime.backend,
-        projectRef
+        projectRef,
+        workspaceRef: flagValue(parsed.flags, '--workspace-id')
       });
       const statuses = await runtime.backend.get<unknown[]>(
         `/api/projects/${encodeURIComponent(project.id)}/statuses`

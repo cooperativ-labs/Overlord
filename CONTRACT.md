@@ -34,7 +34,7 @@ where a surface differs by edition this document calls it out explicitly.
 
 ## Contract Version
 
-Current version: `95`
+Current version: `97`
 
 This `Current version` line is the **sole authoritative** statement of the contract
 version in this document. Automated checks and agents MUST read it (and
@@ -44,6 +44,8 @@ declare the contract version they were validated against.
 
 | Version | Changes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `97`    | Agent surfaces accept human project references, and "scheduled" becomes a searchable date (coo:781). Protocol `--project-id` and MCP `projectId` accept a project UUID, slug, or name; names match case-insensitively across the caller's live memberships. Because slugs and names are unique per workspace rather than per organization, a reference matching in more than one workspace returns the structured `project_selection_required` result — `{ status, message, projectRef, projects[] }`, each project labelled with its workspace — instead of a 409, and an additive `--workspace-id` / `workspaceId` (id, slug, or name) narrows the retry. This replaces the MCP-side UUID gate, which denied agents a resolver the protocol already had. `MissionSearchDateField` additively accepts `dueDatetime` alongside `createdAt` and `updatedAt`, and `MissionSearchResultV2` additively carries `dueDatetime`. A mission is *scheduled* by its due date, not by an execution timer; because `missions.due_datetime` is nullable, a `dueDatetime` range excludes missions that were never scheduled, which is the opposite of the created/updated columns. REST v2 keeps its UUID-only `projectIds` and its frozen v1 response. |
+| `96`    | My Missions is a status-*type* board (coo:753). The aggregate surface renders exactly four columns — `next` / `execute` / `review` / `complete`, published as `MY_MISSIONS_COLUMNS` — instead of deduplicating project status *names*, which are project-defined and inconsistent across an organization. Missions whose status type is `draft`, `blocked`, or `cancelled` are not shown on My Missions; they remain on their project board. `MyMissionReorderRequest` replaces `statusId` with `statusType`: one `PATCH /api/workspace/my-missions/order` call carries the whole column across every project and workspace it aggregates, and the server resolves each moved mission's target status **inside that mission's own project** (the lowest-position active status of the type). A mission already in a status of the target type keeps its concrete status, so project-specific column naming survives a drag. A project with no active status of the requested type rejects the whole call with `STATUS_UNAVAILABLE_FOR_WORKSPACE` before any write. `my_mission_positions` is unchanged; positions are now assigned across the whole aggregated column, so an interleaved cross-project order round-trips. |
 | `95`    | Cross-workspace authorization is organization-bounded: OAuth `USER_TOKEN`s bind to one organization with either explicit workspace consent or all current/future workspace consent, always intersected with live membership and RBAC; legacy tokens backfill only to their recorded issuance workspace. V2 search adds the organization-bounded, non-redistributed quota envelope and explicit date/project filter semantics while retaining the v1 REST response. |
 | `94`    | Project status types gain `next`, a non-terminal lifecycle type for work intended to execute soon but not yet active. Every project has exactly one active `next` status, enforced by adapter partial unique indexes and service validation. New projects seed `Next Up` (`next_up`) with type `next`; the migration retags existing active `next_up` status rows from `draft` to `next`. Status type filters and discovery may return `next`; protocol update phases remain unchanged because they describe agent side effects, not board column vocabulary. |
 | `93`    | Project-scoped mission status definitions (coo:752). Status DTOs and mutation bodies are renamed from `Workspace*Status*` to `Project*Status*`, with every status carrying its owning `projectId`; status type values remain unchanged. Status CRUD moves to `/api/projects/:id/statuses*`, authorized with `project:read` / `project:update`, and `GET /api/workspaces/:id/project-statuses` provides the aggregate read. Both former workspace route families, `/api/workspace/statuses*` and `/api/workspaces/:id/statuses*`, are removed. Status-edit authorization therefore shifts from `workspace:update` to `project:update`; under the shipped roles this does not expand the effective editor set. A mission's `status_id` must belong to its own project. Scheduled duplicate targets are stored as `schedules.next_status_key` and resolved in the mission's project. Because board columns now vary per project, discovery is additive on the agent surfaces: Protocol gains read-only `statuses --project-id`, the CLI gains `ovld statuses list --project-id <id|slug|name>`, and MCP gains read-only `overlord_list_project_statuses`. The agent protocol is otherwise semantically unchanged — every status side effect and filter is expressed in status *types*, which do not move. `GET /api/missions/search` additively accepts a `statusTypes` CSV so the long-documented `ovld missions list --status` filter is actually applied; it filters types, never project-defined names. |
@@ -160,9 +162,75 @@ quotas and no cross-organization fan-out. Existing `GET /api/missions/search`
 remains v1; additive `GET /api/missions/search/v2`, Protocol
 `search-missions --response-version 2`, and MCP `overlord_search_missions` v2
 return a versioned envelope with result labels, match evidence, filters, and
-truncation counts. Date filters select `createdAt` or `updatedAt`, defaulting to
-`updatedAt` only with a range, and use inclusive `from` / exclusive `to`; REST
-and MCP use stable project UUIDs while CLI may resolve human project references.
+truncation counts. Date filters select `createdAt`, `updatedAt`, or
+`dueDatetime`, defaulting to `updatedAt` only with a range, and use inclusive
+`from` / exclusive `to`. REST v2 takes stable project UUIDs; Protocol, CLI, and
+MCP resolve human project references and answer an ambiguous one with
+`project_selection_required` (see Version 97).
+
+### Version 97 Change Summary
+
+A project reference on an agent surface is whatever the user called the project.
+Protocol `--project-id` and MCP `projectId` accept a UUID, a slug, or a name,
+matched case-insensitively against the caller's live memberships. The MCP-side
+UUID gate is removed: it denied hosted agents a resolver the protocol layer
+already implemented, leaving them with a bare 404 and nothing to ask the user
+about.
+
+Project slugs and names are unique per **workspace**, not per organization, so a
+human reference can legitimately match twice. That is a question, not a failure.
+Every protocol subcommand that resolves a project reference — `search-missions`,
+`statuses`, `discover-project`, mission creation — returns
+
+```json
+{ "status": "project_selection_required", "message": "...", "projectRef": "...",
+  "projects": [{ "id", "name", "slug", "workspaceId", "workspaceName", "workspaceSlug" }] }
+```
+
+instead of a 409, mirroring `workspace_selection_required` on the parentless
+creates. The workspace labels are load-bearing: without them the caller holds two
+identical-looking projects and cannot phrase the question. An additive
+`--workspace-id` / `workspaceId` (id, slug, or name) narrows the retry; it only
+ever narrows, never widening past live membership. The CLI resolves the same way
+and reports candidates rather than silently taking the first match.
+
+`MissionSearchDateField` additively accepts `dueDatetime`, and
+`MissionSearchResultV2` additively carries `dueDatetime`. This is what makes
+"what is scheduled for tomorrow" answerable: a mission is scheduled by its due
+date, and `schedules` is a recurrence template that writes `due_datetime`
+forward rather than a second notion of scheduling. Because the column is
+nullable, a `dueDatetime` range excludes missions that were never scheduled —
+the opposite of `createdAt`/`updatedAt`, and intended, since a due-date window is
+a question about scheduled work.
+
+REST `GET /api/missions/search/v2` is unchanged in project handling: it still
+accepts only stable UUIDs in `projectIds`, so name resolution stays an explicit
+step rather than an implicit one on the HTTP surface. `GET /api/missions/search`
+remains frozen as v1.
+
+### Version 96 Change Summary
+
+My Missions is keyed on status **type**, not status name. The aggregate board
+renders exactly four columns — Next (`next`), Executing (`execute`), Review
+(`review`), Completed (`complete`) — published from the contract as
+`MY_MISSIONS_COLUMNS` / `MyMissionsColumnType`. The previous behavior, merging
+per-project status lists by lowercase name, is removed along with the
+"Uncategorized" bucket: every rendered mission now has exactly one home column,
+because the column key *is* its `statusType`. Missions in `draft`, `blocked`, or
+`cancelled` statuses are outside the board vocabulary and are not listed on My
+Missions; the read endpoint still returns them and clients filter.
+
+`MyMissionReorderRequest` carries `statusType` instead of `statusId`. Because a
+type column aggregates projects and workspaces, one reorder call now spans all
+of them: the server resolves each moved mission's destination inside that
+mission's own project as the lowest-position active status of the requested
+type, and leaves the mission's concrete status alone when it already has that
+type. Every mission is validated before any write, so a project that defines no
+active status of the type rejects the whole call with
+`STATUS_UNAVAILABLE_FOR_WORKSPACE` rather than half-applying the move. Personal
+positions in `my_mission_positions` are unchanged in shape but are now numbered
+across the whole aggregated column, so an order interleaving several projects
+round-trips exactly.
 
 ## Component Registry
 
@@ -653,7 +721,7 @@ answering a decision it is blocked on, and injecting an instruction into it.
 - **Account-owned inbox**: Inbox CRUD resolves the authenticated `profiles.id` rather than an ambient workspace. Reads and mutations are scoped to that profile; promotion derives authorization and tenancy solely from its destination project. Inbox CRUD writes do not append workspace `entity_changes`, because those records have no workspace; promotion appends the ordinary mission change in the destination workspace.
 - **Workspace resolution taxonomy**: Entity-addressed reads and writes derive a workspace from their operand and require it in the immutable request `authorizedWorkspaces` set. Single-workspace UI reads require an explicit `workspaceId` and return `400` when omitted. Aggregate parentless reads fan out only across the selected organization's authorized set; when a session holder belongs to multiple organizations, selection is explicit. Parentless writes use `resolveParentlessWorkspace` only for `create-project` and `register-target`; mission writes derive tenancy from their named project and inbox operations are profile-owned. No route may select the oldest membership.
 - **Authorized workspace shape**: Auth resolves once per request `{ organizationId, workspaces: [{ workspaceId, workspaceUserId, roleKeys }] }`, where workspaces are active live memberships intersected with token consent (when present). Services may retain one operation-local `resolvedWorkspaceId`, but must not reinterpret the set from request headers or persistence.
-- **Mission search versioning**: `GET /api/missions/search` is frozen as its v1 array-shaped response. `GET /api/missions/search/v2` returns `SearchMissionsResponseV2`: `{ version: 2, results, appliedFilters, totalMatchedBeforeLimit, workspaceCounts }`. Each result includes project/workspace labels, `relevance` (deterministic fused score with exact display-id / exact-title precedence), `snippet`, `matchedTerms`, and `matchedIn`. Ranking is portable across adapters: display-id short-circuit, meaningful-term coverage floor `min(3, max(1, ceil(termCount / 2)))`, `max(documentScore)` plus bounded corroboration, and recency as rank fusion rather than an eligibility gate. Empty or stop-word-only queries use an explicit `fallback` mode. Complete and cancelled missions stay eligible by default. V2 accepts only stable `projectIds`, plus `resourceKeys`, status types, `dateField`, inclusive `from`, exclusive `to`, and global `limit`; it neither resolves project names nor applies an implicit date window. Fan-out is one organization only, with `floor(limit / workspaceCount)` per workspace and UUID-ordered remainder slots; unused quota is not redistributed.
+- **Mission search versioning**: `GET /api/missions/search` is frozen as its v1 array-shaped response. `GET /api/missions/search/v2` returns `SearchMissionsResponseV2`: `{ version: 2, results, appliedFilters, totalMatchedBeforeLimit, workspaceCounts }`. Each result includes project/workspace labels, `dueDatetime`, `relevance` (deterministic fused score with exact display-id / exact-title precedence), `snippet`, `matchedTerms`, and `matchedIn`. Ranking is portable across adapters: display-id short-circuit, meaningful-term coverage floor `min(3, max(1, ceil(termCount / 2)))`, `max(documentScore)` plus bounded corroboration, and recency as rank fusion rather than an eligibility gate. Empty or stop-word-only queries use an explicit `fallback` mode. Complete and cancelled missions stay eligible by default. The REST route accepts only stable `projectIds`, plus `resourceKeys`, status types, `dateField` (`createdAt`, `updatedAt`, or `dueDatetime`), inclusive `from`, exclusive `to`, and global `limit`; it applies no implicit date window. The Protocol, CLI, and MCP v2 surfaces additionally resolve a human project reference and answer an ambiguous one with `project_selection_required` (Version 97). A `dueDatetime` range excludes missions with no due date, because the column is nullable and a due-date window asks about scheduled work. Fan-out is one organization only, with `floor(limit / workspaceCount)` per workspace and UUID-ordered remainder slots; unused quota is not redistributed.
 
 ### Mobile → REST (Live Activity Push Surface)
 

@@ -12,6 +12,7 @@ await bootstrapIntegrationTestDb({ sqlitePath: path.join(tempDir, 'webapp.sqlite
 const {
   db,
   setActiveProfileId,
+  setAuthorizedWorkspacesContext,
   setActiveWorkspaceContext,
   setActiveWorkspaceUser,
   nowIso,
@@ -20,8 +21,10 @@ const {
 const {
   createProject,
   createMission,
+  createProjectStatus,
   updateMission,
   deleteMission,
+  deleteProjectStatus,
   listMissions,
   listProjectStatuses,
   listWorkspaceMyMissions,
@@ -70,13 +73,15 @@ test('lists missions assigned to the operator across projects, with project cont
 
 test('within-column reorder writes personal position and leaves board_position untouched', async () => {
   const project = await createProject({ name: 'MT Reorder' });
-  const backlog = await statusFor(project.id, 'backlog');
+  const nextUp = await statusFor(project.id, 'next_up');
   const t1 = await createMission({ projectId: project.id, firstObjective: 'r1' });
   const t2 = await createMission({ projectId: project.id, firstObjective: 'r2' });
+  await updateMission(t1.id, { statusId: nextUp.id });
+  await updateMission(t2.id, { statusId: nextUp.id });
   const beforeBoard = new Map((await listMissions(project.id)).map(t => [t.id, t.boardPosition]));
 
-  // Put t2 above t1 in the backlog column.
-  await reorderWorkspaceMyMissions({ statusId: backlog.id, orderedMissionIds: [t2.id, t1.id] });
+  // Put t2 above t1 in the Next column.
+  await reorderWorkspaceMyMissions({ statusType: 'next', orderedMissionIds: [t2.id, t1.id] });
 
   const afterBoard = new Map((await listMissions(project.id)).map(t => [t.id, t.boardPosition]));
   assert.equal(afterBoard.get(t1.id), beforeBoard.get(t1.id), 'board_position must not change');
@@ -99,7 +104,7 @@ test('cross-column drag changes the mission status, type, and board_position', a
     backlog.id
   );
 
-  await reorderWorkspaceMyMissions({ statusId: inProgress.id, orderedMissionIds: [mission.id] });
+  await reorderWorkspaceMyMissions({ statusType: 'execute', orderedMissionIds: [mission.id] });
 
   const after = (await listMissions(project.id)).find(t => t.id === mission.id)!;
   assert.equal(after.statusId, inProgress.id);
@@ -113,10 +118,14 @@ test('cross-column drag changes the mission status, type, and board_position', a
 
 test('a personal position is ignored once the mission leaves that column via another surface', async () => {
   const project = await createProject({ name: 'MT Stale' });
-  const backlog = await statusFor(project.id, 'backlog');
   const inProgress = await statusFor(project.id, 'in_progress');
   const mission = await createMission({ projectId: project.id, firstObjective: 's' });
-  await reorderWorkspaceMyMissions({ statusId: backlog.id, orderedMissionIds: [mission.id] });
+  const nextUp = await statusFor(project.id, 'next_up');
+  await reorderWorkspaceMyMissions({ statusType: 'next', orderedMissionIds: [mission.id] });
+  assert.equal(
+    (await listMissions(project.id)).find(t => t.id === mission.id)!.statusId,
+    nextUp.id
+  );
   // Move it via the project-board status-change path; the stored position keeps
   // its old status_id and must no longer apply.
   await updateMission(mission.id, { statusId: inProgress.id });
@@ -126,16 +135,83 @@ test('a personal position is ignored once the mission leaves that column via ano
   assert.equal(moved.myPosition, null, 'stale position is ignored at read time');
 });
 
-test('reorder into a status the workspace lacks is rejected with a typed code', async () => {
+test('reorder into a column type the project lacks is rejected with a typed code', async () => {
   const project = await createProject({ name: 'MT Reject' });
   const mission = await createMission({ projectId: project.id, firstObjective: 'rej' });
+  // `execute` and `review` are required per project, but a `complete` status can
+  // be removed, leaving a project that cannot represent the Completed column.
+  const done = await statusFor(project.id, 'done');
+  await deleteProjectStatus(project.id, done.id);
+
   await assert.rejects(
-    reorderWorkspaceMyMissions({ statusId: 'does-not-exist', orderedMissionIds: [mission.id] }),
+    reorderWorkspaceMyMissions({ statusType: 'complete', orderedMissionIds: [mission.id] }),
     (err: unknown) =>
       err instanceof ApiError &&
       err.status === 409 &&
       err.code === 'STATUS_UNAVAILABLE_FOR_WORKSPACE'
   );
+  // Nothing was persisted: the mission is still in its original status.
+  assert.equal(
+    (await listWorkspaceMyMissions()).missions.find(t => t.id === mission.id)!.statusType,
+    'draft'
+  );
+});
+
+test('an unknown column type is rejected before any write', async () => {
+  const project = await createProject({ name: 'MT BadType' });
+  const mission = await createMission({ projectId: project.id, firstObjective: 'bad' });
+  await assert.rejects(
+    reorderWorkspaceMyMissions({
+      statusType: 'blocked' as never,
+      orderedMissionIds: [mission.id]
+    }),
+    (err: unknown) => err instanceof ApiError && err.status === 400
+  );
+});
+
+test('one reorder call moves and interleaves missions across projects', async () => {
+  const projectA = await createProject({ name: 'MT Cross A' });
+  const projectB = await createProject({ name: 'MT Cross B' });
+  const a1 = await createMission({ projectId: projectA.id, firstObjective: 'ca1' });
+  const b1 = await createMission({ projectId: projectB.id, firstObjective: 'cb1' });
+  const a2 = await createMission({ projectId: projectA.id, firstObjective: 'ca2' });
+
+  await reorderWorkspaceMyMissions({
+    statusType: 'execute',
+    orderedMissionIds: [b1.id, a1.id, a2.id]
+  });
+
+  // Each mission resolved to the `execute` status of its *own* project.
+  assert.equal(
+    (await listMissions(projectA.id)).find(t => t.id === a1.id)!.statusId,
+    (await statusFor(projectA.id, 'in_progress')).id
+  );
+  assert.equal(
+    (await listMissions(projectB.id)).find(t => t.id === b1.id)!.statusId,
+    (await statusFor(projectB.id, 'in_progress')).id
+  );
+
+  // Personal positions span the whole column, so the interleaved order survives.
+  const executing = (await listWorkspaceMyMissions()).missions
+    .filter(t => [a1.id, a2.id, b1.id].includes(t.id))
+    .map(t => t.id);
+  assert.deepEqual(executing, [b1.id, a1.id, a2.id]);
+});
+
+test('a mission already in the column type keeps its project-specific status', async () => {
+  const project = await createProject({ name: 'MT KeepCustom' });
+  // A project may define several `complete`-type statuses; the seeded "Done"
+  // sorts first, so a mission parked in the custom one proves the drag does not
+  // collapse it onto whichever status the column would otherwise resolve to.
+  const custom = await createProjectStatus(project.id, { name: 'Shipped', type: 'complete' });
+  const mission = await createMission({ projectId: project.id, firstObjective: 'kc' });
+  await updateMission(mission.id, { statusId: custom.id });
+
+  await reorderWorkspaceMyMissions({ statusType: 'complete', orderedMissionIds: [mission.id] });
+
+  const after = (await listWorkspaceMyMissions()).missions.find(t => t.id === mission.id)!;
+  assert.equal(after.statusId, custom.id, 'the custom complete status is preserved');
+  assert.equal(after.myPosition, 100);
 });
 
 test('excludes missions whose project has been deleted', async () => {
@@ -152,9 +228,8 @@ test('excludes missions whose project has been deleted', async () => {
 
 test('a personal position survives reassignment and is restored when the mission returns', async () => {
   const project = await createProject({ name: 'MT Reassign' });
-  const backlog = await statusFor(project.id, 'backlog');
   const mission = await createMission({ projectId: project.id, firstObjective: 'ra' });
-  await reorderWorkspaceMyMissions({ statusId: backlog.id, orderedMissionIds: [mission.id] });
+  await reorderWorkspaceMyMissions({ statusType: 'next', orderedMissionIds: [mission.id] });
 
   await updateMission(mission.id, { assignedWorkspaceUserId: null });
   assert.ok(!(await listWorkspaceMyMissions()).missions.some(t => t.id === mission.id));
@@ -166,11 +241,10 @@ test('a personal position survives reassignment and is restored when the mission
 
 test('reorder rejects a mission not assigned to the operator', async () => {
   const project = await createProject({ name: 'MT NotMine' });
-  const backlog = await statusFor(project.id, 'backlog');
   const mission = await createMission({ projectId: project.id, firstObjective: 'nm' });
   await updateMission(mission.id, { assignedWorkspaceUserId: null });
   await assert.rejects(
-    reorderWorkspaceMyMissions({ statusId: backlog.id, orderedMissionIds: [mission.id] }),
+    reorderWorkspaceMyMissions({ statusType: 'next', orderedMissionIds: [mission.id] }),
     (err: unknown) => err instanceof ApiError && err.status === 403
   );
 });
@@ -208,8 +282,22 @@ test('different tenants only see their own My Missions entries', async () => {
     setActiveProfileId('tenant-b-user');
     setActiveWorkspaceContext(tenantBWorkspace);
     setActiveWorkspaceUser('tenant-b-workspace-user');
+    setAuthorizedWorkspacesContext({
+      organizationId: DEFAULT_TEST_ORGANIZATION_ID,
+      workspaces: [
+        {
+          workspaceId: 'tenant-b',
+          workspaceUserId: 'tenant-b-workspace-user',
+          roleKeys: ['ADMIN'],
+          workspace: tenantBWorkspace
+        }
+      ]
+    });
 
-    const tenantBProject = await createProject({ name: 'Tenant B Project' });
+    const tenantBProject = await createProject({
+      name: 'Tenant B Project',
+      workspaceId: 'tenant-b'
+    });
     const tenantBMission = await createMission({
       projectId: tenantBProject.id,
       firstObjective: 'tenant-b-objective'
