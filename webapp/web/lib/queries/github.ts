@@ -4,19 +4,23 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api.ts';
 import { keys } from '../query-keys.ts';
 
-export const useGitHubIntegration = () =>
-  useQuery({ queryKey: keys.githubIntegration, queryFn: () => api.getGitHubIntegration() });
+export const useGitHubIntegration = (workspaceId: string) =>
+  useQuery({
+    queryKey: keys.githubIntegration(workspaceId),
+    queryFn: () => api.getGitHubIntegration(workspaceId),
+    enabled: Boolean(workspaceId)
+  });
 
-export function useBeginGitHubInstall() {
-  return useMutation({ mutationFn: () => api.beginGitHubInstall() });
+export function useBeginGitHubInstall(workspaceId: string) {
+  return useMutation({ mutationFn: () => api.beginGitHubInstall(workspaceId) });
 }
 
-export function useDisconnectGitHub() {
+export function useDisconnectGitHub(workspaceId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: () => api.disconnectGitHub(),
+    mutationFn: () => api.disconnectGitHub(workspaceId),
     onSuccess: data => {
-      qc.setQueryData(keys.githubIntegration, data);
+      qc.setQueryData(keys.githubIntegration(workspaceId), data);
       void qc.invalidateQueries({ predicate: query => query.queryKey[2] === 'github-link' });
     }
   });

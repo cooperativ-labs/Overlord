@@ -19,7 +19,8 @@ import {
 
 import {
   DATABASE_DIALECT,
-  getActiveWorkspaceId,
+  getAuthorizedWorkspacesContext,
+  getBootstrapWorkspaceIdOrNull,
   newId,
   nowIso,
   recordChange,
@@ -131,14 +132,15 @@ async function assertProjectInWorkspace(
 
 /**
  * A subscription attached to a project belongs to that project's workspace,
- * not whichever workspace is currently active in the browser. Unattached
- * subscriptions retain the legacy active-workspace creation default.
+ * not browser navigation state. Unattached subscriptions must explicitly name
+ * their workspace on authenticated requests.
  */
 async function resolveWebhookCreateScope(
   db: DatabaseClient,
-  projectId: string | null | undefined
+  projectId: string | null | undefined,
+  explicitWorkspaceId: string | null | undefined
 ): Promise<{ workspaceId: string; workspaceUserId: string }> {
-  let workspaceId = getActiveWorkspaceId();
+  let workspaceId = explicitWorkspaceId?.trim() || null;
   if (projectId) {
     const project = await db.get<{ workspace_id: string }>(
       `SELECT workspace_id FROM projects WHERE id = ? AND deleted_at IS NULL`,
@@ -147,6 +149,9 @@ async function resolveWebhookCreateScope(
     if (!project) throw new ApiError(400, `Project not found: ${projectId}`);
     workspaceId = project.workspace_id;
   }
+  if (!workspaceId && !getAuthorizedWorkspacesContext())
+    workspaceId = getBootstrapWorkspaceIdOrNull();
+  if (!workspaceId) throw new ApiError(400, 'workspaceId is required');
   const workspaceUserId = await requireWorkspacePermission({
     workspaceId,
     permission: PERMISSIONS.WEBHOOK_CREATE,
@@ -176,13 +181,25 @@ async function loadSubscriptionForUpdate(
   return row;
 }
 
-export async function listWebhookSubscriptions(): Promise<WebhookSubscriptionDto[]> {
+export async function listWebhookSubscriptions(
+  explicitWorkspaceId?: string | null
+): Promise<WebhookSubscriptionDto[]> {
   const client = requireDatabaseClient();
+  const workspaceId =
+    explicitWorkspaceId?.trim() ||
+    (getAuthorizedWorkspacesContext() ? null : getBootstrapWorkspaceIdOrNull());
+  if (!workspaceId) throw new ApiError(400, 'workspaceId is required');
+  await requireWorkspacePermission({
+    workspaceId,
+    permission: PERMISSIONS.WEBHOOK_READ,
+    db: client,
+    notFoundMessage: 'Workspace not found'
+  });
   const rows = (await client.all(
     `SELECT ${SUBSCRIPTION_COLUMNS} FROM webhook_subscriptions
        WHERE workspace_id = ? AND deleted_at IS NULL
        ORDER BY created_at DESC`,
-    [getActiveWorkspaceId()]
+    [workspaceId]
   )) as WebhookSubscriptionRow[];
   return rows.map(toSubscriptionDto);
 }
@@ -201,7 +218,11 @@ export async function createWebhookSubscription(
   }
 
   return requireDatabaseClient().transaction(async tx => {
-    const { workspaceId, workspaceUserId } = await resolveWebhookCreateScope(tx, body.projectId);
+    const { workspaceId, workspaceUserId } = await resolveWebhookCreateScope(
+      tx,
+      body.projectId,
+      body.workspaceId
+    );
     if (body.projectId) await assertProjectInWorkspace(tx, body.projectId, workspaceId);
 
     const { secret } = generateWebhookSecret();

@@ -63,6 +63,7 @@ test('realtime change DTOs include safely parsed changed fields', () => {
 
   const dto = entityChangeDtoFromRow({
     seq: 42,
+    workspace_id: 'workspace-1',
     entity_type: 'objective',
     entity_id: 'objective-1',
     operation: 'update',
@@ -75,6 +76,7 @@ test('realtime change DTOs include safely parsed changed fields', () => {
 
   assert.deepEqual(dto, {
     seq: 42,
+    workspaceId: 'workspace-1',
     entityType: 'objective',
     entityId: 'objective-1',
     operation: 'update',
@@ -106,18 +108,18 @@ test('realtime catch-up reads changes after the cursor in order', async () => {
     changedFields: ['state', 'updated_at']
   });
 
-  const firstPage = await readChangesAfter(before.seq, 1);
+  const firstPage = await readChangesAfter(before.seq, [WORKSPACE.id], 1);
   assert.equal(firstPage.changes.length, 1);
   assert.equal(firstPage.changes[0]!.entityId, 'sync-1');
   assert.equal(firstPage.hasMore, true);
 
-  const secondPage = await readChangesAfter(firstPage.cursor, 1);
+  const secondPage = await readChangesAfter(firstPage.cursor, [WORKSPACE.id], 1);
   assert.equal(secondPage.changes.length, 1);
   assert.equal(secondPage.changes[0]!.entityId, 'sync-2');
   assert.deepEqual(secondPage.changes[0]!.changedFields, ['state', 'updated_at']);
   assert.equal(secondPage.hasMore, false);
 
-  const emptyPage = await readChangesAfter(secondPage.cursor, 1);
+  const emptyPage = await readChangesAfter(secondPage.cursor, [WORKSPACE.id], 1);
   assert.deepEqual(emptyPage, { changes: [], cursor: secondPage.cursor, hasMore: false });
 });
 

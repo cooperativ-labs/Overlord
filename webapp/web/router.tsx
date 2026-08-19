@@ -15,11 +15,11 @@ import { ProjectCreatorModal } from './components/projects/ProjectCreatorModal.t
 import { OrganizationOnboardingScreen } from './components/setup/OrganizationOnboardingScreen.tsx';
 import { SidebarInset, SidebarProvider } from './components/ui/sidebar.tsx';
 import { parseMissionPanelSearch } from './lib/mission-panel-search.ts';
-import { useMeta, useProjects, useWorkspaceMyMissions } from './lib/queries.ts';
+import { useAllProjects, useMeta, useWorkspaceMyMissions } from './lib/queries.ts';
 import { shouldShowOnboarding, shouldShowOnboardingSetup } from './lib/router-gates.ts';
 
 function EmptyWorkspaceModal() {
-  const projects = useProjects();
+  const projects = useAllProjects();
   const myMissions = useWorkspaceMyMissions();
   const [dismissed, setDismissed] = useState(false);
 

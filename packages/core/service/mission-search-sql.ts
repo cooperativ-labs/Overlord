@@ -1,25 +1,34 @@
 import type { SqlDialect } from '@overlord/database';
 
+import { parseMissionSearchQuery } from './mission-search-query.js';
+
 /**
  * Turn free-form user input into a dialect-specific full-text match expression.
- * Lowercase alphanumeric runs become OR-combined prefix tokens so partial words
- * match and FTS boolean keywords stay neutralised. Returns null when there is
- * nothing to match.
+ * Meaningful terms become OR-combined prefix tokens so partial words match and
+ * FTS boolean keywords stay neutralised. Returns null when there is nothing to
+ * match (empty, stop-words-only, or a display-id short-circuit).
  */
 export function buildMissionSearchMatch({
   dialect,
-  query
+  query,
+  terms
 }: {
   dialect: SqlDialect;
-  query: string;
+  query?: string;
+  terms?: string[];
 }): string | null {
-  const terms = query.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
-  if (terms.length === 0) return null;
+  const resolvedTerms = terms ?? (query ? parseMissionSearchQuery(query).terms : []);
+  const ftsTerms = resolvedTerms.map(term => sanitizeFtsTerm(term)).filter(term => term.length > 0);
+  if (ftsTerms.length === 0) return null;
 
   const separator = dialect === 'postgres' ? ' | ' : ' OR ';
   const prefixToken =
     dialect === 'postgres' ? (term: string) => `${term}:*` : (term: string) => `${term}*`;
-  return terms.map(term => prefixToken(term)).join(separator);
+  return ftsTerms.map(term => prefixToken(term)).join(separator);
+}
+
+function sanitizeFtsTerm(term: string): string {
+  return (term.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []).join('');
 }
 
 /**
@@ -42,6 +51,14 @@ export function missionSearchMissionIdColumn(dialect: SqlDialect): string {
 /** Column on the indexed search source used for entity-kind weighting. */
 export function missionSearchEntityTypeColumn(dialect: SqlDialect): string {
   return dialect === 'postgres' ? 'sd.entity_type' : 'search_documents_fts.entity_type';
+}
+
+export function missionSearchDocTitleColumn(dialect: SqlDialect): string {
+  return dialect === 'postgres' ? 'sd.title' : 'search_documents_fts.title';
+}
+
+export function missionSearchDocBodyColumn(dialect: SqlDialect): string {
+  return dialect === 'postgres' ? 'sd.body_text' : 'search_documents_fts.body_text';
 }
 
 /**

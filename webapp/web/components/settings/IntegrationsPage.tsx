@@ -12,19 +12,24 @@ import {
   useDisconnectGitHub,
   useEverhourIntegration,
   useGitHubIntegration,
-  useSetEverhourApiKey
+  useSetEverhourApiKey,
+  useWorkspaces
 } from '@/lib/queries';
 
 export function IntegrationsPage() {
+  const workspaces = useWorkspaces();
+  const [githubWorkspaceId, setGitHubWorkspaceId] = useState('');
+  const selectedWorkspaceId =
+    githubWorkspaceId || (workspaces.data?.length === 1 ? workspaces.data[0]!.id : '');
   const integration = useEverhourIntegration();
   const setKey = useSetEverhourApiKey();
   const clearKey = useClearEverhourApiKey();
   const [apiKey, setApiKey] = useState('');
   const [saveState, setSaveState] = useState<ButtonLoadingState>('default');
   const [error, setError] = useState<string | null>(null);
-  const github = useGitHubIntegration();
-  const beginGitHubInstall = useBeginGitHubInstall();
-  const disconnectGitHub = useDisconnectGitHub();
+  const github = useGitHubIntegration(selectedWorkspaceId);
+  const beginGitHubInstall = useBeginGitHubInstall(selectedWorkspaceId);
+  const disconnectGitHub = useDisconnectGitHub(selectedWorkspaceId);
   const [githubError, setGithubError] = useState<string | null>(null);
 
   const connected = integration.data?.connected ?? false;
@@ -90,6 +95,24 @@ export function IntegrationsPage() {
         </div>
 
         <div className="max-w-lg space-y-3 rounded-lg border border-border p-4">
+          {(workspaces.data?.length ?? 0) > 1 ? (
+            <div className="space-y-1.5">
+              <Label htmlFor="github-workspace">Workspace</Label>
+              <select
+                id="github-workspace"
+                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                value={selectedWorkspaceId}
+                onChange={event => setGitHubWorkspaceId(event.target.value)}
+              >
+                <option value="">Select a workspace</option>
+                {workspaces.data?.map(workspace => (
+                  <option key={workspace.id} value={workspace.id}>
+                    {workspace.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
           <div className="flex items-center justify-between gap-2">
             <div>
               <h4 className="text-sm font-medium">Everhour</h4>
@@ -213,7 +236,7 @@ export function IntegrationsPage() {
                 type="button"
                 size="sm"
                 variant="outline"
-                disabled={disconnectGitHub.isPending}
+                disabled={!selectedWorkspaceId || disconnectGitHub.isPending}
                 onClick={() => void disconnectGitHub.mutateAsync()}
               >
                 Disconnect
@@ -223,7 +246,7 @@ export function IntegrationsPage() {
             <Button
               type="button"
               size="sm"
-              disabled={beginGitHubInstall.isPending}
+              disabled={!selectedWorkspaceId || beginGitHubInstall.isPending}
               onClick={() => void handleGitHubInstall()}
             >
               Install GitHub App

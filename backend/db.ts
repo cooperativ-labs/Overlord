@@ -229,6 +229,20 @@ export interface ActiveWorkspace {
 }
 
 /**
+ * The caller's immutable authorization snapshot for one request. Auth resolves
+ * this once from live membership, organization selection, token consent, and
+ * role assignments. It is deliberately richer than an active workspace: an
+ * aggregate read may fan out over all entries, while an entity operation keeps
+ * its own resolved workspace separately.
+ */
+export interface AuthorizedWorkspace {
+  workspaceId: string;
+  workspaceUserId: string;
+  roleKeys: string[];
+  workspace: ActiveWorkspace;
+}
+
+/**
  * The process-wide fallback workspace: the value used for code that runs
  * outside any per-request context (server boot logging, the CLI/loopback
  * surface, background scripts, tests that never call `withRequestContextAsync`).
@@ -258,6 +272,10 @@ export interface RequestContext {
   activeTokenId: string | null;
   activeTokenScopes: string[] | null;
   clientDevice: ClientDeviceIdentity | null;
+  /** `null` before authentication; otherwise the authoritative request snapshot. */
+  authorizedWorkspaces: { organizationId: string | null; workspaces: AuthorizedWorkspace[] } | null;
+  /** Workspace derived by the current entity-addressed operation, never a default. */
+  resolvedWorkspaceId: string | null;
   /**
    * The tenant this request is scoped to. `null` means the authenticated
    * caller has no active workspace membership — reads/writes that depend on
@@ -275,6 +293,8 @@ function defaultRequestContext(): RequestContext {
     activeTokenId: ACTIVE_TOKEN_ID,
     activeTokenScopes: ACTIVE_TOKEN_SCOPES,
     clientDevice: null,
+    authorizedWorkspaces: null,
+    resolvedWorkspaceId: null,
     activeWorkspace: defaultWorkspace
   };
 }
@@ -299,6 +319,8 @@ function mutateRequestContext(next: RequestContext): void {
     store.activeTokenId = next.activeTokenId;
     store.activeTokenScopes = next.activeTokenScopes;
     store.clientDevice = next.clientDevice;
+    store.authorizedWorkspaces = next.authorizedWorkspaces;
+    store.resolvedWorkspaceId = next.resolvedWorkspaceId;
     store.activeWorkspace = next.activeWorkspace;
     return;
   }
@@ -309,6 +331,40 @@ function mutateRequestContext(next: RequestContext): void {
   // `defaultWorkspace` is maintained solely by `refreshActiveWorkspaceFromClient`/
   // `bindDatabaseClient`, and this branch only runs when a setter is invoked
   // outside `withRequestContextAsync` (test helpers), which never target it.
+}
+
+export function setAuthorizedWorkspacesContext(authorizedWorkspaces: {
+  organizationId: string | null;
+  workspaces: AuthorizedWorkspace[];
+}): void {
+  mutateRequestContext({ ...requestContext(), authorizedWorkspaces });
+}
+
+export function getAuthorizedWorkspacesContext(): {
+  organizationId: string | null;
+  workspaces: AuthorizedWorkspace[];
+} | null {
+  return requestContext().authorizedWorkspaces;
+}
+
+export function getAuthorizedWorkspace(workspaceId: string): AuthorizedWorkspace | null {
+  return (
+    requestContext().authorizedWorkspaces?.workspaces.find(
+      workspace => workspace.workspaceId === workspaceId
+    ) ?? null
+  );
+}
+
+export function getResolvedWorkspaceId(): string | null {
+  return requestContext().resolvedWorkspaceId;
+}
+
+/** Record a workspace that was derived from an entity and checked against the snapshot. */
+export function setResolvedWorkspaceId(workspaceId: string | null): void {
+  if (workspaceId && getAuthorizedWorkspacesContext() && !getAuthorizedWorkspace(workspaceId)) {
+    throw new Error('Resolved workspace is not authorized for this request');
+  }
+  mutateRequestContext({ ...requestContext(), resolvedWorkspaceId: workspaceId });
 }
 
 export function getActiveProfileId(): string | null {
@@ -385,6 +441,15 @@ export function getActiveWorkspaceId(): string {
  */
 export function getActiveWorkspaceIdOrNull(): string | null {
   return requestContext().activeWorkspace?.id ?? null;
+}
+
+/**
+ * Process-local bootstrap workspace used only outside authenticated request
+ * scoping (server startup, direct service tests, and loopback compatibility).
+ * Request handlers must use authorized/resolved workspace context instead.
+ */
+export function getBootstrapWorkspaceIdOrNull(): string | null {
+  return defaultWorkspace?.id ?? null;
 }
 
 /** Point the current request's tenant scoping at `workspace` (or `null` for no active membership). */

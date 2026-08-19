@@ -23,7 +23,6 @@ let activeBackend: DesktopBackendInfo | null = null;
 let sessionToken: string | null = null;
 
 const BROWSER_SESSION_TOKEN_STORAGE_PREFIX = 'overlord:auth:session-token';
-const ACTIVE_WORKSPACE_STORAGE_PREFIX = 'overlord:active-workspace';
 const ACTIVE_BACKEND_KEY_STORAGE = 'overlord:active-backend-key';
 const BROWSER_OAUTH_TICKET_PARAM = 'overlord_oauth_ticket';
 
@@ -69,11 +68,6 @@ function browserSessionStorageKey(): string | null {
   return `${BROWSER_SESSION_TOKEN_STORAGE_PREFIX}:${activeBackend.id}:${getApiBaseUrl()}`;
 }
 
-function activeWorkspaceStorageKey(): string | null {
-  if (!activeBackend) return null;
-  return `${ACTIVE_WORKSPACE_STORAGE_PREFIX}:${activeBackend.id}:${getApiBaseUrl()}`;
-}
-
 function readBrowserSessionToken(): string | null {
   const key = browserSessionStorageKey();
   if (!key) return null;
@@ -96,36 +90,6 @@ function writeBrowserSessionToken(token: string): void {
 
 function clearBrowserSessionToken(): void {
   const key = browserSessionStorageKey();
-  if (!key) return;
-  try {
-    window.localStorage.removeItem(key);
-  } catch {
-    /* localStorage may be unavailable in hardened browser contexts. */
-  }
-}
-
-function readActiveWorkspaceId(): string | null {
-  const key = activeWorkspaceStorageKey();
-  if (!key) return null;
-  try {
-    return window.localStorage.getItem(key)?.trim() || null;
-  } catch {
-    return null;
-  }
-}
-
-export function persistActiveWorkspaceId(workspaceId: string): void {
-  const key = activeWorkspaceStorageKey();
-  if (!key) return;
-  try {
-    window.localStorage.setItem(key, workspaceId);
-  } catch {
-    /* localStorage may be unavailable in hardened browser contexts. */
-  }
-}
-
-function clearActiveWorkspaceId(): void {
-  const key = activeWorkspaceStorageKey();
   if (!key) return;
   try {
     window.localStorage.removeItem(key);
@@ -245,14 +209,11 @@ export function getDesktopSessionToken(): string {
 }
 
 export async function persistAuthSessionToken(token: string): Promise<void> {
-  const previous = sessionToken;
   sessionToken = token.trim();
   if (!sessionToken) {
     clearBrowserSessionToken();
-    clearActiveWorkspaceId();
     return;
   }
-  if (previous && previous !== sessionToken) clearActiveWorkspaceId();
   const bridge = getDesktopBridge();
   if (!activeBackend) return;
   if (!bridge?.setSessionToken) {
@@ -266,7 +227,6 @@ export async function clearAuthTokens(): Promise<void> {
   sessionToken = null;
   const bridge = getDesktopBridge();
   clearBrowserSessionToken();
-  clearActiveWorkspaceId();
   if (!activeBackend) return;
   if (bridge?.clearSessionToken) await bridge.clearSessionToken(activeBackend.id);
 }
@@ -278,7 +238,6 @@ export function apiFetchCredentials(): RequestCredentials {
 export function clearInMemoryAuthTokens(): void {
   sessionToken = null;
   clearBrowserSessionToken();
-  clearActiveWorkspaceId();
 }
 
 export function captureAuthTokenFromResponse(response: Response): void {

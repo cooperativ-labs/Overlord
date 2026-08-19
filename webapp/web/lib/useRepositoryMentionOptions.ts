@@ -10,11 +10,11 @@ import type {
 import { hasDesktopLocalTargetBridge, invokeLocalTarget } from './local-target-client.ts';
 import { resolveResourceForKey } from './project-resources.ts';
 import {
+  useAllProjects,
   useMissions,
   useProjectExecutionTarget,
   useProjectRepository,
-  useProjectResources,
-  useProjects
+  useProjectResources
 } from './queries.ts';
 
 /**
@@ -37,7 +37,7 @@ export function useRepositoryMentionOptions(projectId: string, resourceKey?: str
     selectedExecutionTargetId,
     resourceKey ?? null
   );
-  const projects = useProjects();
+  const projects = useAllProjects();
   const missions = useMissions(projectId);
 
   const mentionResource = useMemo(

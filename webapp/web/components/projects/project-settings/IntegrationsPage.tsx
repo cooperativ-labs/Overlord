@@ -111,7 +111,7 @@ function EverhourProjectField({ open, project }: IntegrationsPageProps) {
 }
 
 function GitHubProjectField({ open, project }: IntegrationsPageProps) {
-  const integration = useGitHubIntegration();
+  const integration = useGitHubIntegration(project.workspaceId);
   const linkState = useProjectGitHubLink(project.id, { enabled: open });
   const link = useLinkProjectGitHub(project.id);
   const [value, setValue] = useState(linkState.data?.repo?.fullName ?? '');

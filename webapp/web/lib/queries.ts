@@ -77,7 +77,7 @@ import type {
 } from '../../shared/contract.ts';
 
 import { api } from './api.ts';
-import { clearAuthTokens, persistActiveWorkspaceId } from './api-base.ts';
+import { clearAuthTokens } from './api-base.ts';
 import { authClient, normalizeEmail } from './auth-client.ts';
 import { getDesktopBridge } from './desktop-chrome.ts';
 import {
@@ -216,8 +216,12 @@ export const useRunnerServiceStatus = (options?: { enabled?: boolean }) => {
 export const useUserTokens = () =>
   useQuery({ queryKey: keys.userTokens, queryFn: api.listUserTokens });
 
-export const useWebhookSubscriptions = () =>
-  useQuery({ queryKey: keys.webhookSubscriptions, queryFn: api.listWebhookSubscriptions });
+export const useWebhookSubscriptions = (workspaceId: string) =>
+  useQuery({
+    queryKey: keys.webhookSubscriptions(workspaceId),
+    queryFn: () => api.listWebhookSubscriptions(workspaceId),
+    enabled: Boolean(workspaceId)
+  });
 
 export const useWebhookDeliveries = (id: string, enabled: boolean) =>
   useQuery({
@@ -319,16 +323,13 @@ export const useWorkspaceInvitations = (id: string | null) =>
   });
 
 export const useProjects = (workspaceId?: string, lifecycle: ProjectListLifecycle = 'active') => {
-  const meta = useMeta();
-  const targetWorkspaceId = workspaceId ?? meta.data?.workspace?.id;
-
   return useQuery({
-    queryKey: keys.projects(targetWorkspaceId, lifecycle),
+    queryKey: keys.projects(workspaceId, lifecycle),
     queryFn: () => {
-      if (!targetWorkspaceId) return Promise.resolve([]);
-      return api.listProjectsForWorkspace(targetWorkspaceId, lifecycle);
+      if (!workspaceId) return Promise.resolve([]);
+      return api.listProjectsForWorkspace(workspaceId, lifecycle);
     },
-    enabled: Boolean(targetWorkspaceId)
+    enabled: Boolean(workspaceId)
   });
 };
 
@@ -356,7 +357,8 @@ export const useAllProjects = () => {
 
   return {
     data: combined.projects,
-    isLoading: meta.isLoading || combined.anyLoading
+    isLoading: meta.isLoading || combined.anyLoading,
+    isPending: meta.isPending || combined.anyLoading
   };
 };
 
@@ -464,7 +466,7 @@ export const useMissionBranches = ({
 
 export const useWorktrees = () => {
   const localTargetAvailable = useLocalTargetCapabilityAvailable();
-  const projects = useProjects();
+  const projects = useAllProjects();
 
   return useQuery({
     queryKey: keys.worktrees,
@@ -725,7 +727,6 @@ export function useCreateOrganizationOnboarding() {
     mutationFn: (body: CreateOrganizationOnboardingBody) => api.createOrganizationOnboarding(body),
     onSuccess: data => {
       if (data.organization) persistActiveOrganizationId(data.organization.id);
-      if (data.workspace) persistActiveWorkspaceId(data.workspace.id);
       invalidateAll(qc);
     }
   });
@@ -817,7 +818,7 @@ export function useCreateWebhookSubscription() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: CreateWebhookSubscriptionBody) => api.createWebhookSubscription(body),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: keys.webhookSubscriptions })
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['webhooks'] })
   });
 }
 
@@ -826,7 +827,7 @@ export function useUpdateWebhookSubscription() {
   return useMutation({
     mutationFn: ({ id, body }: { id: string; body: UpdateWebhookSubscriptionBody }) =>
       api.updateWebhookSubscription(id, body),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: keys.webhookSubscriptions })
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['webhooks'] })
   });
 }
 
@@ -834,7 +835,7 @@ export function useDeleteWebhookSubscription() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => api.deleteWebhookSubscription(id),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: keys.webhookSubscriptions })
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['webhooks'] })
   });
 }
 
@@ -842,7 +843,7 @@ export function useRotateWebhookSecret() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => api.rotateWebhookSecret(id),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: keys.webhookSubscriptions })
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['webhooks'] })
   });
 }
 
@@ -880,7 +881,6 @@ export function useCreateWorkspace() {
   return useMutation({
     mutationFn: (body: CreateWorkspaceBody) => api.createWorkspace(body),
     onSuccess: data => {
-      persistActiveWorkspaceId(data.id);
       invalidateAll(qc);
     }
   });
@@ -951,7 +951,6 @@ export function useAcceptWorkspaceInvitation() {
     mutationFn: (body: AcceptWorkspaceInvitationBody) => api.acceptWorkspaceInvitation(body),
     // Accepting grants a brand-new workspace membership, so the whole cache is stale.
     onSuccess: data => {
-      persistActiveWorkspaceId(data.id);
       invalidateAll(qc);
     }
   });
@@ -1000,18 +999,14 @@ export function useDeleteProject() {
   });
 }
 
-export function useReorderProjects(workspaceId?: string) {
+export function useReorderProjects(workspaceId: string) {
   const qc = useQueryClient();
-  const meta = useMeta();
-  const targetWorkspaceId = workspaceId ?? meta.data?.workspace?.id;
 
   return useMutation({
     mutationFn: (body: ReorderProjectsBody) => api.reorderProjects(body),
     onSuccess: data => {
-      if (targetWorkspaceId) {
-        qc.setQueryData(keys.projects(targetWorkspaceId), data);
-        void qc.invalidateQueries({ queryKey: keys.projects(targetWorkspaceId) });
-      }
+      qc.setQueryData(keys.projects(workspaceId), data);
+      void qc.invalidateQueries({ queryKey: keys.projects(workspaceId) });
       invalidateAll(qc);
     }
   });
@@ -1353,7 +1348,7 @@ export function useBranchAction(mission: MissionDetailDto) {
 export function useRemoveWorktree() {
   const qc = useQueryClient();
   const localTargetAvailable = useLocalTargetCapabilityAvailable();
-  const projects = useProjects();
+  const projects = useAllProjects();
 
   return useMutation({
     mutationFn: async (body: RemoveWorktreeBody) => {
@@ -1418,7 +1413,7 @@ export function useRemoveWorktree() {
 export function usePurgeMergedWorktrees() {
   const qc = useQueryClient();
   const localTargetAvailable = useLocalTargetCapabilityAvailable();
-  const projects = useProjects();
+  const projects = useAllProjects();
 
   return useMutation({
     mutationFn: async () => {

@@ -4,10 +4,10 @@ import { useState } from 'react';
 import { ProjectCreatorModal } from '@/components/projects/ProjectCreatorModal';
 
 import { Badge, Button, Card, EmptyState, Spinner } from '../components/ui.tsx';
-import { useProjects } from '../lib/queries.ts';
+import { useAllProjects } from '../lib/queries.ts';
 
 export function ProjectsPage() {
-  const projects = useProjects();
+  const projects = useAllProjects();
   const [modalOpen, setModalOpen] = useState(false);
 
   return (
@@ -16,7 +16,7 @@ export function ProjectsPage() {
         <div>
           <h1 className="text-xl font-semibold">Projects</h1>
           <p className="text-sm text-[var(--color-ink-dim)]">
-            Everything in this workspace, live from the database.
+            Projects across every workspace you can access in this organization.
           </p>
         </div>
         <Button variant="primary" onClick={() => setModalOpen(true)}>
@@ -25,12 +25,6 @@ export function ProjectsPage() {
       </header>
 
       {projects.isLoading && <Spinner />}
-      {projects.isError && (
-        <p className="text-sm text-red-400">
-          Could not load projects: {(projects.error as Error).message}
-        </p>
-      )}
-
       {projects.data && projects.data.length === 0 && (
         <EmptyState
           title="No projects yet"

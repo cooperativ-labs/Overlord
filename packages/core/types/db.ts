@@ -1180,6 +1180,7 @@ export interface UserImages {
 }
 
 export interface UserTokens {
+  all_workspaces: Generated<number>;
   created_at: string;
   deleted_at: string | null;
   expires_at: string | null;
@@ -1189,6 +1190,7 @@ export interface UserTokens {
   last_used_at: string | null;
   last_used_context_json: Generated<string>;
   metadata_json: Generated<string>;
+  organization_id: string | null;
   predecessor_token_id: string | null;
   profile_id: string;
   revision: Generated<number>;
@@ -1212,6 +1214,12 @@ export interface UserTokenScopes {
   revision: Generated<number>;
   token_id: string;
   updated_at: string;
+  workspace_id: string;
+}
+
+export interface UserTokenWorkspaces {
+  created_at: string;
+  token_id: string;
   workspace_id: string;
 }
 
@@ -1434,6 +1442,7 @@ export interface DB {
   user_execution_target_preferences: UserExecutionTargetPreferences;
   user_images: UserImages;
   user_token_scopes: UserTokenScopes;
+  user_token_workspaces: UserTokenWorkspaces;
   user_tokens: UserTokens;
   verification: Verification;
   webhook_delivery_attempts: WebhookDeliveryAttempts;

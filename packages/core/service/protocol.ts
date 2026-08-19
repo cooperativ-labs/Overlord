@@ -2682,6 +2682,7 @@ export {
   discussObjective,
   listSharedContext,
   searchMissions,
+  searchMissionsV2,
   updateObjective,
   writeSharedContext
 } from './missions.js';

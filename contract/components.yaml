@@ -4,7 +4,7 @@
 # IMPORTANT: Update this file and CONTRACT.md together when adding components or surfaces.
 # Increment contractVersion when any stable interface changes.
 
-contractVersion: '94'
+contractVersion: '95'
 
 components:
   protocol:
@@ -45,6 +45,7 @@ components:
       - 'objectives.display_key: required Crockford Base32 key unique among live rows of a mission; public displayId is computed as {missions.display_id}.{display_key} and is not stored as a second column'
 
       - 'organizations table (grouping layer above workspaces) and the required workspaces.organization_id FK; workspaces remain the sole RBAC layer; slugs are unique per organization, not instance-wide'
+      - 'organization-bound USER_TOKEN consent: user_tokens.organization_id plus all_workspaces, with user_token_workspaces as the explicit allowlist. An active token authorizes only live memberships in that one organization intersected with its consent; an empty explicit allowlist fails closed. Existing tokens backfill only their recorded user_tokens.workspace_id'
       - 'Agent Session Exchange core tables (agent_session_channels, agent_session_events, agent_requests, agent_session_inputs) declared by contract and migrated with the channel bootstrap; the scoped channel credential is hash-only and scoped to one channel, native_session_id is a correlation alias and never an authorization key, raw native payloads are never persisted, and no derived capability tier is persisted. The never-migrated hook_events and permission_requests designs are superseded by them; their closed status vocabulary and the mission_events permission_request value remain valid'
       - 'controlled vocabularies (closed and open sets)'
       - 'creation provenance on missions and objectives: created_by_kind (closed human/agent/automation, NOT NULL DEFAULT human), created_by_agent (open connector identifier), and created_by_session_id as a deliberate soft reference to agent_sessions.id with no foreign key, so a dangling provenance pointer can never block a delete; provenance is read as a column on rows already selected and carries no new index'
@@ -192,7 +193,7 @@ components:
       - 'server-side payload allowlist and bounds for agent-session summaries, options, ids, sequences, timestamps, and diagnostic codes; formatter output renders as escaped plain text with explicit truncation'
       - 'SSE/WebSocket realtime endpoint (GET /realtime, compatibility GET /api/stream) and GET /sync/changes?after=<seq> catch-up read; both aggregate current readable memberships, filter before EntityChangeDto projection, expose workspaceId, and advance the global cursor past filtered rows'
       - 'SQL Studio launch metadata exposed through /api/meta'
-      - 'webhook subscription management (/api/webhooks*: list/create, update/soft-delete, rotate-secret, test, deliveries, redeliver), gated by webhook:* permissions'
+      - 'webhook subscription management (/api/webhooks*: list/create, update/soft-delete, rotate-secret, test, deliveries, redeliver), gated by webhook:* permissions; parentless list/create name workspaceId explicitly (or create derives it from projectId), while entity-addressed mutations derive and authorize the subscription owner workspace'
       - 'in-process webhook dispatcher (backend/webhook-dispatcher.ts), a RealtimeHub-style singleton polling loop claiming outbox_messages rows and delivering HMAC-signed HTTP POSTs; SSRF guards (https-only, private-network block) apply to external endpoints, with an OVERLORD_WEBHOOK_INTERNAL_HOSTS allowlist (plus implicit localhost in Local edition) exempting colocated consumers'
       - 'full mission.delivered webhook envelopes include the normalized delivery.report projection without exposing raw deliveries.payload_json; thin envelopes remain identifier/link-only'
       - 'in-process delivery composition worker (backend/delivery-compose-worker.ts) claiming overlord.delivery.compose.v1 worker_jobs, calling the compose-delivery automation, and updating deliveryReport.presentation with entity_changes(entity_type=delivery)'
@@ -205,7 +206,8 @@ components:
       - "resource-owned REST and extension operations derive the named resource's workspace and the caller's matching workspace_users membership before authorization, persistence, external-provider access, and entity_changes attribution; account-wide reads aggregate authorized memberships server-side and parentless creates name a workspace when ambiguous"
       - "workspace execution-target projection: GET /api/workspaces/:id/execution-targets returns all non-deleted target identity/status/owner display metadata, reachability, honest unavailable reason, safe runner-instance diagnostics, non-secret leased-lifecycle policy/expiry, and active workspace-member access count to an authenticated member; never connection_json, credentials, raw capabilities, target registration, creation, or access mutation. Project selection remains limited to the acting member's eligible targets. Workspace admins may PATCH a target label and active/disabled status; disabled targets are ineligible and cannot be claimed. DELETE soft-deletes the target plus its linked device when that device has no remaining live execution target; the GET projection opportunistically soft-deletes any remaining orphan devices"
       - 'storage routes for the organization-images bucket key (/api/storage/organization-images/…) with a PUBLIC organization_image:read grant'
-      - 'hosted MCP OAuth endpoints: POST /oauth/register, POST /oauth/token, POST /oauth/revoke, GET /oauth/authorize, POST /oauth/authorize/request, POST /oauth/authorize/approve'
+      - 'hosted MCP OAuth endpoints: POST /oauth/register, POST /oauth/token, POST /oauth/revoke, GET /oauth/authorize, POST /oauth/authorize/request, POST /oauth/authorize/approve; GET /api/authorized-workspaces is the read-only organization/workspace authorization discovery projection'
+      - 'versioned mission-search REST: legacy GET /api/missions/search stays v1; GET /api/missions/search/v2 returns SearchMissionsResponseV2, applies organization-bounded authorized-workspace fan-out, and accepts stable project UUIDs, resource keys, explicit date ranges, and status types'
       - 'versioned virtual-target gateway route family (/api/virtual-targets/v1/*): PUT …/registration, POST …/claim, POST …/requests/:id/progress, POST …/requests/:id/launched, POST …/requests/:id/failed, POST …/grants/:id/exchange, GET …/missions/:id/resources, POST …/missions/:id/actions; owns DTO shapes, target-authenticated auth/RBAC, per-request idempotency, and bounded/redacted output; the immutable VirtualExecutionQueueItemV1 payload + digest are built by the service layer at queue time and returned only to the authenticated claiming gateway; local /api/runner/* routes are unchanged'
       - 'authenticated mobile Live Activity registration routes: PUT and DELETE /api/mobile/live-activities/:activityId/push-token; registrations are private to the caller and APNs delivery is handled by the in-process live-activity dispatcher'
       - 'authenticated standard push routes: PUT /api/mobile/push/device-token and POST /api/mobile/push/device-token/revoke (opaque device token carried in the body, never the URL, with no read surface), plus GET/PUT /api/profile/notification-preferences returning canonical { enabled, preferences: { type, transport, mode }[] } with an additive APNs categories compatibility projection; alert/background APNs delivery is handled by the in-process push-notification dispatcher and never reuses ActivityKit tokens or topics'
@@ -333,6 +335,7 @@ components:
       - 'additive autoAdvance input on overlord_create_mission and overlord_add_objectives items, forwarded to Protocol create/add-objectives'
       - 'hosted overlord_update_objective tool forwarding to Protocol update-objective'
       - "read-only overlord_list_project_statuses tool forwarding to Protocol statuses, returning one project's ordered board columns; overlord_search_missions.status remains a status TYPE filter and rejects project-defined status names"
+      - 'overlord_search_missions v2: uses stable project UUID projectIds (never ambiguous names), resourceKeys, dateField/from/to, and status types; returns SearchMissionsResponseV2 and never crosses the token/session selected organization'
     dependsOn:
       - auth
       - protocol
@@ -518,6 +521,7 @@ interactionSurfaces:
       - 'Missing or failed authentication returns an OAuth-compatible WWW-Authenticate: Bearer challenge'
       - 'MCP authentication resolves the profile/credential without selecting an ambient workspace; resource operations derive scope and account-wide tools aggregate authorized memberships'
       - 'OAuth approval creates mission_lifecycle-scoped USER_TOKEN access tokens and does not issue refresh tokens through contract version 2'
+      - 'OAuth approval selects exactly one organization and either one-or-more explicit workspace ids or all current-and-future workspaces in that organization; tokens authorize only consent intersected with live memberships, and an empty explicit allowlist authorizes nothing'
       - 'OAuth resource parameters, when supplied, are bound through approval and token exchange to the canonical hosted /mcp resource; mismatches return invalid_target'
 
   mcpToService:

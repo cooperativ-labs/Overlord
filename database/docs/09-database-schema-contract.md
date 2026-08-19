@@ -352,11 +352,14 @@ Indexes:
 ### `user_tokens`
 
 Stores `USER_TOKEN` metadata and hashes only. A token is owned by `profile_id`
-and authenticates that user account across workspaces. Workspace fields on this
-table record the issuance/revocation context for audit and backwards
-compatibility; they are not the authorization boundary. At request time, the
-Auth Layer resolves the token to `profile_id`, validates the requested active
-workspace against `workspace_users`, and then applies RBAC for that workspace.
+and, once it authorizes workspace data, is bound to exactly one `organization_id`.
+Its authorization boundary is its organization-bound consent: either
+`all_workspaces = true` or the non-empty `user_token_workspaces` allowlist,
+always intersected with the owner's live memberships and per-workspace RBAC.
+`workspace_id` and `workspace_user_id` retain issuance/revocation audit context;
+they are not runtime authorization inputs. Tokens minted before onboarding may
+have no organization or workspace consent and authorize no workspace data until
+explicitly consented.
 
 `workspace_id` and `workspace_user_id` are both nullable: a profile with zero
 workspace memberships (pre-onboarding) can still mint a token — needed for
@@ -367,6 +370,8 @@ completes onboarding or joins a workspace.
 | ------------------------------ | ------------ | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `id`                           | Id           | yes      | Token identifier.                                                                                                                                                                           |
 | `workspace_id`                 | Id           | no       | Issuance workspace FK to `workspaces`; not the token's authorization scope. `NULL` for a token minted before the profile has any workspace membership.                                      |
+| `organization_id`              | Id           | no       | Approved organization FK. Required for a token that authorizes workspace data; `NULL` pre-onboarding tokens authorize no workspace data.                                                        |
+| `all_workspaces`               | boolean      | yes      | `true` authorizes current and future live memberships only within `organization_id`; `false` uses `user_token_workspaces`.                                                                       |
 | `profile_id`                   | Id           | yes      | Profile that owns the token.                                                                                                                                                                |
 | `workspace_user_id`            | Id           | no       | Issuing workspace membership for audit. Runtime permissions come from the owner's active membership in the requested workspace. `NULL` alongside `workspace_id` for a pre-onboarding token. |
 | `label`                        | text         | yes      | User supplied.                                                                                                                                                                              |
@@ -394,6 +399,7 @@ Indexes:
 - `(profile_id, token_prefix)` for per-user token management.
 - `(token_hash)` for hash-only authentication before workspace authorization.
 - `(workspace_id, expires_at)`.
+- `(organization_id, status)`.
 
 Token rotation stores `predecessor_token_id` only. The successor is derived by querying rows whose predecessor points at the current token, which avoids maintaining two linked-list directions in one transaction.
 
@@ -401,6 +407,26 @@ Revocation retains the token for audit. A user may subsequently remove only a
 revoked token through the self-service REST lifecycle; removal sets `deleted_at`
 and increments `revision`, emits an `entity_changes` `delete` tombstone, and
 never removes the audit trail or exposes the token hash.
+
+### `user_token_workspaces`
+
+Explicit workspace consent for a `USER_TOKEN` where `user_tokens.all_workspaces`
+is false. Every row's workspace must belong to the token's approved organization.
+An empty explicit allowlist is fail-closed: it grants no workspace access.
+
+| Column | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `token_id` | Id | yes | FK to `user_tokens`. |
+| `workspace_id` | Id | yes | FK to `workspaces`; must be in the token's `organization_id`. |
+| `created_at` | TimestampUTC | yes | Consent audit timestamp. |
+
+Indexes and constraints:
+
+- Primary key `(token_id, workspace_id)`.
+- Adapter/service enforcement that every row belongs to the token's organization.
+- Migration backfills each existing token with a non-null recorded
+  `user_tokens.workspace_id` to exactly that one row and sets `all_workspaces = false`;
+  it never widens a legacy token to all workspaces.
 
 ### Better Auth Implementation Tables
 
@@ -2319,10 +2345,22 @@ Mission search should support:
 
 - Exact lookup by `display_id`.
 - Ranked text search over title, display ID, objective text, and mission-event summaries.
-- Filters for workspace, project, status list, creator, and updated date range.
+- V2 filters for stable project UUIDs, resource-key names, status types, and an
+  explicit date field (`createdAt` or `updatedAt`) with inclusive `from` and
+  exclusive `to`. `updatedAt` is the default field only when either range bound
+  is supplied; there is no implicit date eligibility window.
 - A bounded result limit suitable for protocol `search-missions`.
 
-Ranking aggregates per-document relevance into one score per mission. The reference implementation weights the title column above the body and weights source kinds by importance (mission title > objective > event), so a query that hits a mission's title outranks one that only appears in an event.
+V2 search fans out only inside one selected organization over the request's
+pre-resolved `authorizedWorkspaces`. It performs per-workspace RBAC, derives
+`resourceKeys` through an `EXISTS` join to live objectives, and joins workspaces
+and projects for labels rather than denormalizing mutable names or multi-valued
+resource keys. Per-workspace quota is `floor(globalCap / workspaceCount)` with
+the remainder assigned by ascending workspace UUID; unused quota is never
+redistributed. The versioned response reports `appliedFilters`,
+`totalMatchedBeforeLimit`, and per-workspace matched/returned counts.
+
+Ranking aggregates per-document relevance into one score per mission with `max(documentScore)` plus a bounded corroboration bonus, never an unbounded sum. The reference implementation weights the title column above the body and weights source kinds by importance (mission title > objective > event), fuses text rank with recency, and sorts exact display-id and exact-title matches ahead of the fused ranking, so a query that hits a mission's title outranks chatter in its events.
 
 The index is maintained by adapter triggers, not application writes: insert/update/delete on `missions`, `objectives`, and `mission_events` keep `search_documents` (and the adapter full-text index) in sync, and a soft delete of a mission removes every document for that mission so deleted missions never surface. `content_hash` and `source_revision` allow incremental reindexing instead of blind rebuilds.
 
@@ -2827,6 +2865,7 @@ Auth/RBAC expansion can then add:
 
 - `role_assignments`
 - `user_tokens`
+- `user_token_workspaces`
 - `user_token_scopes`
 - `audit_log`
 

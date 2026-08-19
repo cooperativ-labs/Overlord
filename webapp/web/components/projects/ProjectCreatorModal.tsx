@@ -38,7 +38,9 @@ export function ProjectCreatorModal({ open, onOpenChange, workspaceId }: Project
   const navigate = useNavigate();
   const meta = useMeta();
   const createProjectMutation = useCreateProject();
-  const targetWorkspaceId = workspaceId ?? meta.data?.workspace?.id;
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState('');
+  const targetWorkspaceId = workspaceId ?? (selectedWorkspaceId || undefined);
+  const workspaces = meta.data?.workspaces ?? [];
   const launchSettingsQ = useLaunchSettings(targetWorkspaceId);
   const { isDesktop } = getDesktopChrome();
   const bridge = getDesktopBridge();
@@ -63,6 +65,7 @@ export function ProjectCreatorModal({ open, onOpenChange, workspaceId }: Project
     setIsBrowsing(false);
     setError(null);
     setCreateButtonState('default');
+    if (!workspaceId) setSelectedWorkspaceId('');
   }
 
   function handleOpenChange(next: boolean) {
@@ -177,6 +180,24 @@ export function ProjectCreatorModal({ open, onOpenChange, workspaceId }: Project
               : 'Create a project to organize missions and tasks.'}
           </DialogDescription>
         </DialogHeader>
+        {!workspaceId && (
+          <div className="space-y-2">
+            <Label htmlFor="project-workspace">Workspace</Label>
+            <select
+              id="project-workspace"
+              className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+              value={selectedWorkspaceId}
+              onChange={event => setSelectedWorkspaceId(event.target.value)}
+            >
+              <option value="">Select a workspace…</option>
+              {workspaces.map(workspace => (
+                <option key={workspace.id} value={workspace.id}>
+                  {workspace.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {isLinkCliPhase ? (
           <div className="py-2">

@@ -33,15 +33,16 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { useCopyToClipboard } from '@/lib/hooks/use-copy-to-clipboard';
 import {
+  useAllProjects,
   useCreateWebhookSubscription,
   useDeleteWebhookSubscription,
-  useProjects,
   useRedeliverWebhookDelivery,
   useRotateWebhookSecret,
   useTestWebhookSubscription,
   useUpdateWebhookSubscription,
   useWebhookDeliveries,
-  useWebhookSubscriptions
+  useWebhookSubscriptions,
+  useWorkspaces
 } from '@/lib/queries';
 
 import type {
@@ -110,7 +111,11 @@ function statusPill(subscription: WebhookSubscriptionDto): { label: string; clas
 }
 
 export function WebhooksPage({ open }: { open: boolean }) {
-  const subscriptions = useWebhookSubscriptions();
+  const workspaces = useWorkspaces();
+  const [workspaceId, setWorkspaceId] = useState('');
+  const selectedWorkspaceId =
+    workspaceId || (workspaces.data?.length === 1 ? workspaces.data[0]!.id : '');
+  const subscriptions = useWebhookSubscriptions(selectedWorkspaceId);
   const [dialogTarget, setDialogTarget] = useState<'create' | WebhookSubscriptionDto | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<WebhookSubscriptionDto | null>(null);
   const [logTarget, setLogTarget] = useState<WebhookSubscriptionDto | null>(null);
@@ -149,6 +154,7 @@ export function WebhooksPage({ open }: { open: boolean }) {
           type="button"
           size="sm"
           className="h-8 shrink-0"
+          disabled={!selectedWorkspaceId}
           onClick={() => setDialogTarget('create')}
         >
           <Webhook className="size-3.5" />
@@ -157,6 +163,22 @@ export function WebhooksPage({ open }: { open: boolean }) {
       </div>
 
       <Separator />
+
+      <div className="max-w-sm space-y-1.5">
+        <Label htmlFor="webhooks-workspace">Workspace</Label>
+        <Select value={selectedWorkspaceId} onValueChange={value => setWorkspaceId(value ?? '')}>
+          <SelectTrigger id="webhooks-workspace">
+            <SelectValue placeholder="Select a workspace" />
+          </SelectTrigger>
+          <SelectContent>
+            {workspaces.data?.map(workspace => (
+              <SelectItem key={workspace.id} value={workspace.id}>
+                {workspace.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
 
       <div className="space-y-3">
         {subscriptions.isLoading && !subscriptions.data ? (
@@ -185,7 +207,11 @@ export function WebhooksPage({ open }: { open: boolean }) {
         )}
       </div>
 
-      <WebhookDialog target={dialogTarget} onOpenChange={open => !open && setDialogTarget(null)} />
+      <WebhookDialog
+        target={dialogTarget}
+        workspaceId={selectedWorkspaceId}
+        onOpenChange={open => !open && setDialogTarget(null)}
+      />
 
       <Dialog
         open={deleteTarget !== null}
@@ -346,15 +372,17 @@ function WebhookSubscriptionRow({
 
 function WebhookDialog({
   target,
+  workspaceId,
   onOpenChange
 }: {
   target: 'create' | WebhookSubscriptionDto | null;
+  workspaceId: string;
   onOpenChange: (open: boolean) => void;
 }) {
   const isEdit = target !== null && target !== 'create';
   const existing = isEdit ? (target as WebhookSubscriptionDto) : null;
 
-  const projectsQ = useProjects();
+  const projectsQ = useAllProjects();
   const createSubscription = useCreateWebhookSubscription();
   const updateSubscription = useUpdateWebhookSubscription();
   const rotateSecret = useRotateWebhookSecret();
@@ -421,6 +449,7 @@ function WebhookDialog({
         const body: CreateWebhookSubscriptionBody = {
           name: trimmedName,
           endpointUrl,
+          workspaceId,
           projectId: resolvedProjectId,
           eventTypes,
           ...(payloadMode !== 'auto' ? { payloadMode } : {})
@@ -544,7 +573,9 @@ function WebhookDialog({
                 <SelectContent>
                   <SelectItem value="all">All projects</SelectItem>
                   {(projectsQ.data ?? [])
-                    .filter(project => project.status === 'active')
+                    .filter(
+                      project => project.status === 'active' && project.workspaceId === workspaceId
+                    )
                     .map(project => (
                       <SelectItem key={project.id} value={project.id}>
                         {project.name}

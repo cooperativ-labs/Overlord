@@ -18,7 +18,7 @@ import {
   primaryResourceConnection,
   projectResourceLabel
 } from '@/lib/project-resources.ts';
-import { useProjectResources, useProjects, useProjectTags } from '@/lib/queries.ts';
+import { useAllProjects, useProjectResources, useProjectTags } from '@/lib/queries.ts';
 import type { TextareaHandle } from '@/lib/types/text-control';
 import { cn } from '@/lib/utils.ts';
 
@@ -121,7 +121,7 @@ export function BlankMissionCard({
 
   valueRef.current = value;
 
-  const projectsQ = useProjects();
+  const projectsQ = useAllProjects();
   const projects = useMemo(
     () => (projectsQ.data ?? []).filter(project => project.status === 'active'),
     [projectsQ.data]

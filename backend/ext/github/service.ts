@@ -1,3 +1,4 @@
+import { PERMISSIONS } from '@overlord/auth';
 import type {
   CreatedGitHubRepositoryDto,
   CreateGitHubPullRequestBody,
@@ -11,8 +12,9 @@ import type {
 import type { DatabaseClient } from '@overlord/database';
 import { createHmac, createSign, timingSafeEqual } from 'node:crypto';
 
-import { newId, nowIso, recordChange, requireDatabaseClient, WORKSPACE } from '../../db.ts';
+import { newId, nowIso, recordChange, requireDatabaseClient } from '../../db.ts';
 import { ApiError } from '../../errors.ts';
+import { requireWorkspacePermission } from '../../rbac.ts';
 
 const GITHUB_API = 'https://api.github.com';
 const STATE_TTL_MS = 10 * 60 * 1000;
@@ -121,11 +123,7 @@ function signedInstallState(workspaceId: string, privateKey: string): string {
   return `${payload}.${mac}`;
 }
 
-function verifyInstallState(
-  value: string | undefined,
-  workspaceId: string,
-  privateKey: string
-): void {
+function verifyInstallState(value: string | undefined, privateKey: string): string {
   const [payload, suppliedMac, ...extra] = value?.split('.') ?? [];
   if (!payload || !suppliedMac || extra.length)
     throw new ApiError(400, 'Invalid GitHub installation state.');
@@ -141,17 +139,18 @@ function verifyInstallState(
     throw new ApiError(400, 'Invalid GitHub installation state.');
   }
   if (
-    decoded.workspaceId !== workspaceId ||
+    typeof decoded.workspaceId !== 'string' ||
     typeof decoded.expiresAt !== 'number' ||
     decoded.expiresAt < Date.now()
   ) {
     throw new ApiError(400, 'GitHub installation state has expired. Start installation again.');
   }
+  return decoded.workspaceId;
 }
 
 async function readInstallation(
   client: DatabaseClient = requireDatabaseClient(),
-  workspaceId: string = WORKSPACE.id
+  workspaceId: string
 ): Promise<InstallationRow | null> {
   return (
     (await client.get<InstallationRow>(
@@ -163,7 +162,7 @@ async function readInstallation(
   );
 }
 
-async function requireInstallationToken(workspaceId: string = WORKSPACE.id): Promise<string> {
+async function requireInstallationToken(workspaceId: string): Promise<string> {
   const installation = await readInstallation(undefined, workspaceId);
   if (!installation)
     throw new ApiError(400, 'Install the GitHub App in Settings → Integrations first.');
@@ -213,20 +212,34 @@ function repoDto(row: ProjectLinkRow): GitHubRepoSummaryDto {
   };
 }
 
-export async function getGitHubIntegration(): Promise<GitHubIntegrationDto> {
-  const installation = await readInstallation();
+export async function getGitHubIntegration(workspaceId: string): Promise<GitHubIntegrationDto> {
+  await requireWorkspacePermission({
+    workspaceId,
+    permission: PERMISSIONS.WORKSPACE_READ,
+    notFoundMessage: 'Workspace not found'
+  });
+  const installation = await readInstallation(undefined, workspaceId);
+  const workspace = await requireDatabaseClient().get<{ name: string }>(
+    `SELECT name FROM workspaces WHERE id = ? AND deleted_at IS NULL`,
+    [workspaceId]
+  );
   return {
     configured: githubAppConfig() !== null,
     connected: installation !== null,
     accountLogin: installation?.github_account_login ?? null,
     accountType: installation?.github_account_type ?? null,
-    workspaceName: WORKSPACE.name
+    workspaceName: workspace?.name ?? ''
   };
 }
 
-export function beginGitHubInstall(): GitHubInstallUrlDto {
+export async function beginGitHubInstall(workspaceId: string): Promise<GitHubInstallUrlDto> {
+  await requireWorkspacePermission({
+    workspaceId,
+    permission: PERMISSIONS.WORKSPACE_UPDATE,
+    notFoundMessage: 'Workspace not found'
+  });
   const config = requireGitHubAppConfig();
-  const state = signedInstallState(WORKSPACE.id, config.privateKey);
+  const state = signedInstallState(workspaceId, config.privateKey);
   return {
     installUrl: `https://github.com/apps/${encodeURIComponent(config.slug)}/installations/new?state=${encodeURIComponent(state)}`
   };
@@ -237,7 +250,12 @@ export async function completeGitHubInstall(input: {
   state?: string;
 }): Promise<GitHubIntegrationDto> {
   const config = requireGitHubAppConfig();
-  verifyInstallState(input.state, WORKSPACE.id, config.privateKey);
+  const workspaceId = verifyInstallState(input.state, config.privateKey);
+  await requireWorkspacePermission({
+    workspaceId,
+    permission: PERMISSIONS.WORKSPACE_UPDATE,
+    notFoundMessage: 'Workspace not found'
+  });
   if (!/^\d+$/.test(input.installationId))
     throw new ApiError(400, 'GitHub installation id is invalid.');
   const upstream = await githubFetch<{
@@ -247,7 +265,7 @@ export async function completeGitHubInstall(input: {
   const accountLogin = upstream.account?.login?.trim();
   if (!accountLogin) throw new ApiError(502, 'GitHub installation has no account login.');
   await requireDatabaseClient().transaction(async tx => {
-    const existing = await readInstallation(tx);
+    const existing = await readInstallation(tx, workspaceId);
     const now = nowIso();
     if (existing) {
       const revision = existing.revision + 1;
@@ -273,7 +291,7 @@ export async function completeGitHubInstall(input: {
           operation: 'update',
           entityRevision: revision,
           changedFields: ['connected', 'accountLogin'],
-          workspaceId: WORKSPACE.id
+          workspaceId
         },
         tx
       );
@@ -284,7 +302,7 @@ export async function completeGitHubInstall(input: {
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`,
         [
           id,
-          WORKSPACE.id,
+          workspaceId,
           input.installationId,
           accountLogin,
           upstream.account?.type ?? null,
@@ -300,18 +318,23 @@ export async function completeGitHubInstall(input: {
           operation: 'insert',
           entityRevision: 1,
           changedFields: ['connected', 'accountLogin'],
-          workspaceId: WORKSPACE.id
+          workspaceId
         },
         tx
       );
     }
   });
-  return getGitHubIntegration();
+  return getGitHubIntegration(workspaceId);
 }
 
-export async function disconnectGitHub(): Promise<GitHubIntegrationDto> {
+export async function disconnectGitHub(workspaceId: string): Promise<GitHubIntegrationDto> {
+  await requireWorkspacePermission({
+    workspaceId,
+    permission: PERMISSIONS.WORKSPACE_UPDATE,
+    notFoundMessage: 'Workspace not found'
+  });
   await requireDatabaseClient().transaction(async tx => {
-    const installation = await readInstallation(tx);
+    const installation = await readInstallation(tx, workspaceId);
     if (!installation) return;
     const now = nowIso();
     const revision = installation.revision + 1;
@@ -321,7 +344,7 @@ export async function disconnectGitHub(): Promise<GitHubIntegrationDto> {
     );
     await tx.run(
       `UPDATE ext_github_project_links SET deleted_at = ?, updated_at = ?, revision = revision + 1 WHERE workspace_id = ? AND deleted_at IS NULL`,
-      [now, now, WORKSPACE.id]
+      [now, now, workspaceId]
     );
     await recordChange(
       {
@@ -330,16 +353,24 @@ export async function disconnectGitHub(): Promise<GitHubIntegrationDto> {
         operation: 'delete',
         entityRevision: revision,
         changedFields: ['connected'],
-        workspaceId: WORKSPACE.id
+        workspaceId
       },
       tx
     );
   });
-  return getGitHubIntegration();
+  return getGitHubIntegration(workspaceId);
 }
 
-export async function listGitHubRepos(query: string | null): Promise<GitHubRepoSummaryDto[]> {
-  const token = await requireInstallationToken();
+export async function listGitHubRepos(
+  query: string | null,
+  workspaceId: string
+): Promise<GitHubRepoSummaryDto[]> {
+  await requireWorkspacePermission({
+    workspaceId,
+    permission: PERMISSIONS.PROJECT_READ,
+    notFoundMessage: 'Workspace not found'
+  });
+  const token = await requireInstallationToken(workspaceId);
   const data = await githubFetch<{
     repositories?: Array<{
       id: number;

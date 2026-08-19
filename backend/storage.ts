@@ -31,17 +31,21 @@ import type { ObjectiveAttachmentDto, StoredImageDto } from '../webapp/shared/co
 
 import {
   getActorWorkspaceUserId,
+  getBootstrapWorkspaceIdOrNull,
   newId,
   nowIso,
   recordChange,
   requireDatabaseClient,
-  resolveActiveProfileId,
-  WORKSPACE
+  resolveActiveProfileId
 } from './db.ts';
 import { ApiError } from './errors.ts';
 import { resolveObjectiveIdForRest } from './objective-ref.ts';
 import { getActiveOrganizationIdOrNull } from './organizations.ts';
-import { isOrganizationAdmin, requireWorkspacePermission } from './rbac.ts';
+import {
+  isOrganizationAdmin,
+  requireAnyWorkspacePermission,
+  requireWorkspacePermission
+} from './rbac.ts';
 import { createStorageBackend, readStorageReadSettings } from './storage-backends.ts';
 
 // backend/storage.ts -> repo root is one level up from backend/.
@@ -213,8 +217,18 @@ async function operatorUserId(): Promise<string> {
  * Upload an image to the `user-images` bucket and record it against the local
  * operator. Returns the stored-image descriptor including the URL to serve it.
  */
-export async function uploadUserImage(input: UploadImageInput): Promise<StoredImageDto> {
-  const bucket = await resolveBucket('user-images', WORKSPACE.id);
+function uploadWorkspaceId(explicitWorkspaceId?: string): string {
+  const workspaceId = explicitWorkspaceId?.trim() || getBootstrapWorkspaceIdOrNull();
+  if (!workspaceId) throw new ApiError(400, 'workspaceId is required');
+  return workspaceId;
+}
+
+export async function uploadUserImage(
+  input: UploadImageInput,
+  explicitWorkspaceId?: string
+): Promise<StoredImageDto> {
+  const workspaceId = uploadWorkspaceId(explicitWorkspaceId);
+  const bucket = await resolveBucket('user-images', workspaceId);
   const userId = await operatorUserId();
   const written = await writeImageObject(bucket, input, (id, ext) =>
     userImageObjectKey(userId, id, ext)
@@ -235,7 +249,7 @@ export async function uploadUserImage(input: UploadImageInput): Promise<StoredIm
        )`,
       [
         written.id,
-        WORKSPACE.id,
+        workspaceId,
         userId,
         bucket.id,
         written.storageKey,
@@ -256,7 +270,7 @@ export async function uploadUserImage(input: UploadImageInput): Promise<StoredIm
         entityId: written.id,
         operation: 'insert',
         entityRevision: 1,
-        workspaceId: WORKSPACE.id
+        workspaceId
       },
       tx
     );
@@ -281,10 +295,14 @@ export async function uploadUserImage(input: UploadImageInput): Promise<StoredIm
  * workspace's bytes live under their own `storage_buckets` row/folder —
  * callers gate this to workspace admins (`PERMISSIONS.WORKSPACE_IMAGE_CREATE`).
  */
-export async function uploadWorkspaceImage(input: UploadImageInput): Promise<StoredImageDto> {
-  const bucket = await resolveBucket('workspace-images', WORKSPACE.id);
+export async function uploadWorkspaceImage(
+  input: UploadImageInput,
+  explicitWorkspaceId?: string
+): Promise<StoredImageDto> {
+  const workspaceId = uploadWorkspaceId(explicitWorkspaceId);
+  const bucket = await resolveBucket('workspace-images', workspaceId);
   const written = await writeImageObject(bucket, input, (id, ext) =>
-    workspaceImageObjectKey(WORKSPACE.id, id, ext)
+    workspaceImageObjectKey(workspaceId, id, ext)
   );
   const now = nowIso();
   const filename = input.filename.trim() || `image${path.extname(written.storageKey)}`;
@@ -302,7 +320,7 @@ export async function uploadWorkspaceImage(input: UploadImageInput): Promise<Sto
        )`,
       [
         written.id,
-        WORKSPACE.id,
+        workspaceId,
         bucket.id,
         written.storageKey,
         filename,
@@ -322,7 +340,7 @@ export async function uploadWorkspaceImage(input: UploadImageInput): Promise<Sto
         entityId: written.id,
         operation: 'insert',
         entityRevision: 1,
-        workspaceId: WORKSPACE.id
+        workspaceId
       },
       tx
     );
@@ -772,11 +790,7 @@ export async function resolveStoredObject(
 ): Promise<ResolvedStoredObject> {
   if (bucketKey === 'organization-images') {
     const organizationId = await requireActiveOrganizationId();
-    await requireWorkspacePermission({
-      workspaceId: WORKSPACE.id,
-      permission,
-      notFoundMessage: 'File not found'
-    });
+    await requireAnyWorkspacePermission(permission);
     const bucket = await resolveOrganizationBucket(organizationId, bucketKey);
     const ext = path.extname(storageKey).toLowerCase();
     return finalizeStoredObject({

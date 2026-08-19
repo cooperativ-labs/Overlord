@@ -1,6 +1,7 @@
 import { type Permission, PERMISSIONS } from '@overlord/auth';
 import { type NextFunction, type Request, type Response, Router } from 'express';
 
+import { ApiError } from '../../errors.ts';
 import { missionRoute, projectRoute } from '../resource-routes.ts';
 
 import {
@@ -25,6 +26,12 @@ type RouteHandler = (
   fn: (req: Request, res: Response) => unknown,
   options?: { mutates?: boolean; requires?: Permission }
 ) => (req: Request, res: Response, next: NextFunction) => void;
+
+function workspaceId(req: Request): string {
+  const value = typeof req.query.workspaceId === 'string' ? req.query.workspaceId.trim() : '';
+  if (!value) throw new ApiError(400, 'workspaceId query parameter is required');
+  return value;
+}
 
 export function createGitHubExtensionRouter(
   handle: RouteHandler,
@@ -58,11 +65,11 @@ export function createGitHubExtensionRouter(
   );
   router.get(
     '/integration',
-    handle(() => getGitHubIntegration(), { requires: PERMISSIONS.WORKSPACE_READ })
+    handle(req => getGitHubIntegration(workspaceId(req)))
   );
   router.post(
     '/install',
-    handle(() => beginGitHubInstall(), { mutates: true, requires: PERMISSIONS.WORKSPACE_UPDATE })
+    handle(req => beginGitHubInstall(workspaceId(req)), { mutates: true })
   );
   router.get(
     '/callback',
@@ -79,13 +86,13 @@ export function createGitHubExtensionRouter(
   );
   router.delete(
     '/integration',
-    handle(() => disconnectGitHub(), { mutates: true, requires: PERMISSIONS.WORKSPACE_UPDATE })
+    handle(req => disconnectGitHub(workspaceId(req)), { mutates: true })
   );
   router.get(
     '/repos',
-    handle(req => listGitHubRepos(typeof req.query.q === 'string' ? req.query.q : null), {
-      requires: PERMISSIONS.PROJECT_READ
-    })
+    handle(req =>
+      listGitHubRepos(typeof req.query.q === 'string' ? req.query.q : null, workspaceId(req))
+    )
   );
   router.get(
     '/projects/:projectId/link',

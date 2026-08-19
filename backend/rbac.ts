@@ -11,9 +11,12 @@ import { type DatabaseClient } from '@overlord/database';
 import {
   findActiveMembershipId,
   getActiveTokenScopes,
-  getActiveWorkspaceId,
+  getAuthorizedWorkspace,
+  getAuthorizedWorkspacesContext,
+  getBootstrapWorkspaceIdOrNull,
   requireDatabaseClient,
   resolveActiveProfileId,
+  setResolvedWorkspaceId,
   type WorkspaceActorScope
 } from './db.ts';
 import { ApiError } from './errors.ts';
@@ -68,7 +71,19 @@ export async function actorCan(
   }
 ): Promise<boolean> {
   if (!workspaceUserId) return false;
-  const roles = await loadActorRoles({ workspaceId, workspaceUserId });
+  const authorizedWorkspace = getAuthorizedWorkspace(workspaceId);
+  // Auth has already loaded roles for an authenticated request. Re-querying
+  // membership/roles here would let individual services reinterpret a snapshot
+  // that must remain immutable for the request.
+  if (
+    getAuthorizedWorkspacesContext() &&
+    authorizedWorkspace?.workspaceUserId !== workspaceUserId
+  ) {
+    return false;
+  }
+  const roles = authorizedWorkspace
+    ? (authorizedWorkspace.roleKeys as RoleType[])
+    : await loadActorRoles({ workspaceId, workspaceUserId });
   if (roles.length === 0) return false;
   const actor = makeActor(workspaceUserId, roles);
   return defaultAuthorizer.can(actor, action).allowed && tokenScopeAllows(tokenScopes, action);
@@ -107,6 +122,17 @@ export async function requireWorkspacePermission({
   db?: DatabaseClient;
   notFoundMessage?: string;
 }): Promise<string> {
+  const authorized = getAuthorizedWorkspace(workspaceId);
+  if (getAuthorizedWorkspacesContext()) {
+    if (!authorized) throw new ApiError(404, notFoundMessage);
+    if (
+      !(await actorCan(permission, { workspaceId, workspaceUserId: authorized.workspaceUserId }))
+    ) {
+      throw new ApiError(403, `Permission denied: ${permission}`);
+    }
+    setResolvedWorkspaceId(workspaceId);
+    return authorized.workspaceUserId;
+  }
   const profileId = await resolveActiveProfileId(db);
   if (!profileId) throw new ApiError(401, 'Authentication required');
   const membershipId = await findActiveMembershipId(workspaceId, profileId, db);
@@ -114,10 +140,59 @@ export async function requireWorkspacePermission({
   if (!(await actorCan(permission, { workspaceId, workspaceUserId: membershipId }))) {
     throw new ApiError(403, `Permission denied: ${permission}`);
   }
+  setResolvedWorkspaceId(workspaceId);
   return membershipId;
 }
 
 export type AuthorizedWorkspaceScope = WorkspaceActorScope & { workspaceUserId: string };
+
+/**
+ * Gate an account-owned or organization-aggregate operation without inventing
+ * an ambient workspace. Authorization succeeds when at least one entry in the
+ * immutable organization snapshot grants the permission. The returned scope is
+ * deterministic and may be used only for audit attribution, never to narrow an
+ * aggregate read.
+ */
+export async function requireAnyWorkspacePermission(
+  permission: Permission
+): Promise<AuthorizedWorkspaceScope> {
+  const authorized = getAuthorizedWorkspacesContext();
+  if (authorized) {
+    const candidates = [...authorized.workspaces].sort((a, b) =>
+      a.workspaceId.localeCompare(b.workspaceId)
+    );
+    for (const candidate of candidates) {
+      if (
+        await actorCan(permission, {
+          workspaceId: candidate.workspaceId,
+          workspaceUserId: candidate.workspaceUserId
+        })
+      ) {
+        return {
+          workspaceId: candidate.workspaceId,
+          workspaceUserId: candidate.workspaceUserId
+        };
+      }
+    }
+    throw new ApiError(403, `Permission denied: ${permission}`);
+  }
+
+  // Bootstrap/direct-service tests and the loopback local operator do not have
+  // an authenticated request snapshot. Preserve that non-HTTP compatibility
+  // path without allowing it to participate in Cloud request scoping.
+  const workspaceId = getBootstrapWorkspaceIdOrNull();
+  const profileId = await resolveActiveProfileId();
+  const workspaceUserId =
+    workspaceId && profileId ? await findActiveMembershipId(workspaceId, profileId) : null;
+  if (
+    !workspaceId ||
+    !workspaceUserId ||
+    !(await actorCan(permission, { workspaceId, workspaceUserId }))
+  ) {
+    throw new ApiError(403, `Permission denied: ${permission}`);
+  }
+  return { workspaceId, workspaceUserId };
+}
 
 /** Resolve and authorize a workspace together with the caller membership that belongs to it. */
 export async function requireWorkspaceScope(args: {
@@ -172,13 +247,25 @@ export async function requireMissionPermission({
     `SELECT id, workspace_id FROM missions WHERE id = ? AND deleted_at IS NULL`,
     [missionRef]
   )) as { id: string; workspace_id: string } | undefined;
-  const resolved =
-    mission ??
-    ((await db.get(
+  let resolved = mission;
+  if (!resolved) {
+    const authorized = getAuthorizedWorkspacesContext();
+    if (!authorized || authorized.workspaces.length === 0) {
+      throw new ApiError(404, 'Mission not found');
+    }
+    const workspaceIds = authorized.workspaces.map(workspace => workspace.workspaceId);
+    const rows = await db.all<{ id: string; workspace_id: string }>(
       `SELECT id, workspace_id FROM missions
-        WHERE display_id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-      [missionRef, getActiveWorkspaceId()]
-    )) as { id: string; workspace_id: string } | undefined);
+        WHERE display_id = ?
+          AND workspace_id IN (${workspaceIds.map(() => '?').join(', ')})
+          AND deleted_at IS NULL`,
+      [missionRef, ...workspaceIds]
+    );
+    if (rows.length > 1) {
+      throw new ApiError(409, `Mission reference is ambiguous in this organization: ${missionRef}`);
+    }
+    resolved = rows[0];
+  }
   if (!resolved) throw new ApiError(404, 'Mission not found');
   const scope = await requireWorkspaceScope({
     workspaceId: resolved.workspace_id,

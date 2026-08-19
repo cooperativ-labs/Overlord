@@ -10,7 +10,7 @@ process.env.OVERLORD_SQLITE_PATH = path.join(tempDir, 'webapp.sqlite');
 const dbModule = await import('./db.ts');
 const { db, initDatabase, setActiveWorkspaceUser } = dbModule;
 await initDatabase();
-const { ensureWorkspaceUser } = await import('./auth.ts');
+const { ensureWorkspaceUser, resolveAuthorizedWorkspaces } = await import('./auth.ts');
 const { DEFAULT_TEST_ORGANIZATION_ID, seedAuthenticatedOperator } =
   await import('./test-helpers.ts');
 const { createWorkspace } = await import('./workspaces.ts');
@@ -85,6 +85,55 @@ test('ensureWorkspaceUser resolves a member without request transport', async ()
 test('ensureWorkspaceUser uses its compatibility membership without a request preference', async () => {
   const membership = await ensureWorkspaceUser('operator-user');
   assert.equal(membership?.workspace.id, 'local-workspace');
+});
+
+test('authorized workspace resolution batches every live membership in one organization', async () => {
+  const workspace = await createWorkspace({
+    organizationId: DEFAULT_TEST_ORGANIZATION_ID,
+    name: 'Authorized Context Workspace'
+  });
+  insertUnaffiliatedProfile('authorized-context-user');
+  const now = new Date().toISOString();
+  for (const [workspaceId, membershipId] of [
+    ['local-workspace', 'authorized-context-local-member'],
+    [workspace.id, 'authorized-context-secondary-member']
+  ] as const) {
+    db.prepare(
+      `INSERT INTO workspace_users
+         (id, workspace_id, profile_id, member_key, status, metadata_json, created_at, updated_at, revision)
+       VALUES (?, ?, 'authorized-context-user', ?, 'active', '{}', ?, ?, 1)`
+    ).run(membershipId, workspaceId, `auth:${membershipId}`, now, now);
+    db.prepare(
+      `INSERT INTO role_assignments
+         (id, workspace_id, workspace_user_id, role_key, resource_type, resource_id,
+          assigned_by_workspace_user_id, created_at, updated_at, revision)
+       VALUES (?, ?, ?, 'MEMBER', '', '', ?, ?, ?, 1)`
+    ).run(`role:${membershipId}`, workspaceId, membershipId, membershipId, now, now);
+  }
+
+  const authorized = await resolveAuthorizedWorkspaces('authorized-context-user', null);
+  assert.equal(authorized.organizationId, DEFAULT_TEST_ORGANIZATION_ID);
+  assert.deepEqual(
+    authorized.workspaces
+      .map(workspace => [workspace.workspaceId, workspace.workspaceUserId])
+      .sort(([a], [b]) => a.localeCompare(b)),
+    [
+      ['local-workspace', 'authorized-context-local-member'],
+      [workspace.id, 'authorized-context-secondary-member']
+    ].sort(([a], [b]) => a.localeCompare(b))
+  );
+  assert.ok(authorized.workspaces.every(workspace => workspace.roleKeys.includes('MEMBER')));
+
+  const explicitButEmpty = await resolveAuthorizedWorkspaces('authorized-context-user', {
+    id: 'token-with-no-consent-rows',
+    organizationId: DEFAULT_TEST_ORGANIZATION_ID,
+    allWorkspaces: false
+  });
+  assert.deepEqual(
+    explicitButEmpty.workspaces,
+    [],
+    'an empty explicit token allowlist fails closed'
+  );
 });
 
 test('a request with no active workspace cleanly 403s through requirePermission instead of throwing', async () => {

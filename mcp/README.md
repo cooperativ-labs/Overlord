@@ -36,9 +36,12 @@ Bearer` challenge that points clients at the protected-resource metadata.
 
 OAuth-aware clients can use dynamic client registration followed by an
 authorization-code + PKCE flow. Approval happens in the web app at
-`/oauth/approve`; approving creates a scoped `USER_TOKEN` with the
-`mission_lifecycle` preset and exchanges the one-time authorization code for a
-bearer access token. Refresh tokens are not issued in contract version `0`.
+`/oauth/approve`; it selects exactly one organization and either explicit
+workspace consent or the all-current-and-future option for that organization.
+Approval creates a scoped `USER_TOKEN` with the `mission_lifecycle` preset;
+each call is still narrowed by the holder's live memberships and workspace RBAC.
+An empty explicit consent list fails closed. Refresh tokens are not issued in
+contract version `0`.
 
 When a client supplies an OAuth `resource` parameter, Overlord binds it to the
 canonical hosted `/mcp` URL at approval and token exchange. A mismatch returns
@@ -95,7 +98,7 @@ its parent mission, so `missionId` is **optional** whenever one is supplied:
 objective **UUID** names no mission and still needs `missionId`.
 
 On `overlord_load_mission_context` and `overlord_attach_session` the objective is
-also a *pin*: it selects which objective to read or execute. That is the only way
+also a _pin_: it selects which objective to read or execute. That is the only way
 to address a mission running objectives in parallel, where rediscovering "the
 active objective" is ambiguous and returns `ambiguous_active_objective`. On
 `overlord_add_artifact` it stamps objective provenance when no live `sessionKey`
@@ -112,6 +115,18 @@ that create missions require explicit `projectId`; clients should call
 repository resource carrying `.overlord/project.json`. If that file lists
 multiple projects, use the entry with `isPrimary: true` (also the top-level
 `projectId`) unless the caller names a different linked project.
+
+### Search v2
+
+`overlord_search_missions` returns the versioned `SearchMissionsResponseV2`
+envelope across the caller's authorized workspaces in one organization. It
+accepts one stable project UUID in `projectId`, plus `resourceKey`, `dateField`
+(`createdAt` or `updatedAt`), inclusive `from`,
+exclusive `to`, status types, and a global limit. A date field defaults to
+`updatedAt` only when a bound is supplied. The response includes `results`,
+`appliedFilters`, `totalMatchedBeforeLimit`, and per-workspace matched/returned
+counts. It never resolves project names and never fans out across organizations;
+the OAuth consent organization is the hard boundary.
 
 `overlord_deliver_session` accepts the same optional `artifacts` shape as the
 Protocol delivery operation — still valid when finishing a turn. Agents can also

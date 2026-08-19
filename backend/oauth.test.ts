@@ -16,6 +16,13 @@ const { db } = await bootstrapIntegrationTestDb({
 });
 const oauth = await import('./oauth.ts');
 const { hashUserTokenSecret, USER_TOKEN_PREFIX } = await import('@overlord/auth');
+const { setActiveProfileId } = await import('./db.ts');
+const { resolveAuthorizedWorkspaces } = await import('./auth.ts');
+const { verifyUserToken } = await import('@overlord/auth');
+const { authDomainDatabase } = await import('./db.ts');
+const { DEFAULT_TEST_ORGANIZATION_ID } = await import('./test-helpers.ts');
+
+setActiveProfileId('operator-user');
 
 const REDIRECT_URI = 'http://127.0.0.1:9876/callback';
 const MCP_RESOURCE = 'https://overlord.example.test/mcp';
@@ -62,7 +69,14 @@ function registerClient(clientName: string): string {
   return (res.payload as { client_id: string }).client_id;
 }
 
-async function approveAndGetCode(clientId: string): Promise<string> {
+async function approveAndGetCode(
+  clientId: string,
+  consent: Record<string, unknown> = {
+    organizationId: DEFAULT_TEST_ORGANIZATION_ID,
+    workspaceIds: ['local-workspace'],
+    allWorkspaces: false
+  }
+): Promise<string> {
   const res = mockResponse();
   await oauth.handleOAuthApprove(
     requestWith({
@@ -73,7 +87,8 @@ async function approveAndGetCode(clientId: string): Promise<string> {
       code_challenge: CODE_CHALLENGE,
       resource: MCP_RESOURCE,
       state: 'test-state',
-      decision: 'approve'
+      decision: 'approve',
+      ...consent
     }),
     res
   );
@@ -82,6 +97,142 @@ async function approveAndGetCode(clientId: string): Promise<string> {
   assert.ok(code, 'approval must redirect back with an authorization code');
   return code;
 }
+
+test('approval exposes live organizations and grants only the selected explicit workspace', async () => {
+  const now = new Date().toISOString();
+  db.prepare(
+    `INSERT INTO workspaces (id, organization_id, slug, name, kind, settings_json, created_at, updated_at, revision)
+     VALUES ('oauth-second-workspace', ?, 'oauth-second', 'OAuth Second', 'local', '{}', ?, ?, 1)`
+  ).run(DEFAULT_TEST_ORGANIZATION_ID, now, now);
+  db.prepare(
+    `INSERT INTO workspace_users (id, workspace_id, profile_id, member_key, status, metadata_json, created_at, updated_at, revision)
+     VALUES ('oauth-second-member', 'oauth-second-workspace', 'operator-user', 'auth:oauth-second', 'active', '{}', ?, ?, 1)`
+  ).run(now, now);
+  db.prepare(
+    `INSERT INTO role_assignments (id, workspace_id, workspace_user_id, role_key, resource_type, resource_id, assigned_by_workspace_user_id, created_at, updated_at, revision)
+     VALUES ('oauth-second-admin', 'oauth-second-workspace', 'oauth-second-member', 'ADMIN', '', '', 'oauth-second-member', ?, ?, 1)`
+  ).run(now, now);
+
+  const requestInfo = mockResponse();
+  const clientId = registerClient('Scoped Consent Client');
+  await oauth.handleOAuthRequestInfo(
+    requestWith({
+      response_type: 'code',
+      client_id: clientId,
+      redirect_uri: REDIRECT_URI,
+      code_challenge_method: 'S256',
+      code_challenge: CODE_CHALLENGE,
+      resource: MCP_RESOURCE
+    }),
+    requestInfo
+  );
+  const organizations = (
+    requestInfo.payload as { organizations: Array<{ id: string; workspaces: unknown[] }> }
+  ).organizations;
+  assert.equal(
+    organizations.find(organization => organization.id === DEFAULT_TEST_ORGANIZATION_ID)?.workspaces
+      .length,
+    2
+  );
+
+  const code = await approveAndGetCode(clientId, {
+    organizationId: DEFAULT_TEST_ORGANIZATION_ID,
+    workspaceIds: ['oauth-second-workspace'],
+    allWorkspaces: false
+  });
+  const exchanged = await exchangeCode({ code, clientId });
+  const accessToken = (exchanged.payload as { access_token: string }).access_token;
+  const verified = await verifyUserToken(authDomainDatabase(), accessToken);
+  assert.ok(verified);
+  const authorized = await resolveAuthorizedWorkspaces('operator-user', verified);
+  assert.deepEqual(
+    authorized.workspaces.map(workspace => workspace.workspaceId),
+    ['oauth-second-workspace']
+  );
+
+  db.prepare(
+    `UPDATE workspace_users SET status = 'disabled' WHERE id = 'oauth-second-member'`
+  ).run();
+  const afterRemoval = await resolveAuthorizedWorkspaces('operator-user', verified);
+  assert.deepEqual(
+    afterRemoval.workspaces,
+    [],
+    'live membership removal narrows consent immediately'
+  );
+});
+
+test('all-workspaces approval is organization-bounded and includes a future membership', async () => {
+  const clientId = registerClient('All Workspaces Client');
+  const code = await approveAndGetCode(clientId, {
+    organizationId: DEFAULT_TEST_ORGANIZATION_ID,
+    allWorkspaces: true,
+    workspaceIds: []
+  });
+  const exchanged = await exchangeCode({ code, clientId });
+  const verified = await verifyUserToken(
+    authDomainDatabase(),
+    (exchanged.payload as { access_token: string }).access_token
+  );
+  assert.ok(verified?.allWorkspaces);
+  assert.equal(verified?.organizationId, DEFAULT_TEST_ORGANIZATION_ID);
+  const now = new Date().toISOString();
+  db.prepare(
+    `INSERT INTO workspaces (id, organization_id, slug, name, kind, settings_json, created_at, updated_at, revision)
+     VALUES ('oauth-future-workspace', ?, 'oauth-future', 'OAuth Future', 'local', '{}', ?, ?, 1)`
+  ).run(DEFAULT_TEST_ORGANIZATION_ID, now, now);
+  db.prepare(
+    `INSERT INTO workspace_users (id, workspace_id, profile_id, member_key, status, metadata_json, created_at, updated_at, revision)
+     VALUES ('oauth-future-member', 'oauth-future-workspace', 'operator-user', 'auth:oauth-future', 'active', '{}', ?, ?, 1)`
+  ).run(now, now);
+  db.prepare(
+    `INSERT INTO role_assignments (id, workspace_id, workspace_user_id, role_key, resource_type, resource_id, assigned_by_workspace_user_id, created_at, updated_at, revision)
+     VALUES ('oauth-future-admin', 'oauth-future-workspace', 'oauth-future-member', 'ADMIN', '', '', 'oauth-future-member', ?, ?, 1)`
+  ).run(now, now);
+  const afterFutureMembership = await resolveAuthorizedWorkspaces('operator-user', verified!);
+  assert.ok(
+    afterFutureMembership.workspaces.some(
+      workspace => workspace.workspaceId === 'oauth-future-workspace'
+    )
+  );
+});
+
+test('approval fails closed when memberships span organizations and no organization is selected', async () => {
+  const now = new Date().toISOString();
+  db.prepare(
+    `INSERT INTO organizations (id, name, settings_json, created_at, updated_at, revision) VALUES ('oauth-other-org', 'OAuth Other', '{}', ?, ?, 1)`
+  ).run(now, now);
+  db.prepare(
+    `INSERT INTO workspaces (id, organization_id, slug, name, kind, settings_json, created_at, updated_at, revision)
+     VALUES ('oauth-other-workspace', 'oauth-other-org', 'oauth-other', 'OAuth Other Workspace', 'local', '{}', ?, ?, 1)`
+  ).run(now, now);
+  db.prepare(
+    `INSERT INTO workspace_users (id, workspace_id, profile_id, member_key, status, metadata_json, created_at, updated_at, revision)
+     VALUES ('oauth-other-member', 'oauth-other-workspace', 'operator-user', 'auth:oauth-other', 'active', '{}', ?, ?, 1)`
+  ).run(now, now);
+  db.prepare(
+    `INSERT INTO role_assignments (id, workspace_id, workspace_user_id, role_key, resource_type, resource_id, assigned_by_workspace_user_id, created_at, updated_at, revision)
+     VALUES ('oauth-other-admin', 'oauth-other-workspace', 'oauth-other-member', 'ADMIN', '', '', 'oauth-other-member', ?, ?, 1)`
+  ).run(now, now);
+  const clientId = registerClient('Ambiguous Organization Client');
+  await assert.rejects(
+    () =>
+      oauth.handleOAuthApprove(
+        requestWith({
+          response_type: 'code',
+          client_id: clientId,
+          redirect_uri: REDIRECT_URI,
+          code_challenge_method: 'S256',
+          code_challenge: CODE_CHALLENGE,
+          resource: MCP_RESOURCE,
+          decision: 'approve',
+          workspaceIds: ['local-workspace'],
+          allWorkspaces: false
+        }),
+        mockResponse()
+      ),
+    (error: unknown) => error instanceof Error && (error as { status?: number }).status === 400
+  );
+});
 
 async function exchangeCode(params: {
   code: string;

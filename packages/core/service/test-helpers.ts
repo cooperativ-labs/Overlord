@@ -92,15 +92,19 @@ export async function seedServiceOperator({
 
 /**
  * One-call setup for service tests: an in-memory SQLite database with the
- * operator chain seeded and a ready ServiceContext.
+ * operator chain seeded and a ready ServiceContext. Pass `db` to reuse an
+ * already-opened client (including a PostgreSQL session after dialect-aware
+ * seeding).
  */
 export async function createSeededServiceContext({
-  source = 'protocol'
+  source = 'protocol',
+  db
 }: {
   source?: ServiceContext['source'];
+  db?: DatabaseClient;
 } = {}): Promise<{ db: DatabaseClient; ctx: ServiceContext; workspaceUserId: string }> {
-  const db = createSqliteClient(openInMemoryDatabase());
-  const workspaceUserId = await seedServiceOperator({ db });
-  const ctx = await createServiceContext({ db, source });
-  return { db, ctx, workspaceUserId };
+  const client = db ?? createSqliteClient(openInMemoryDatabase());
+  const workspaceUserId = await seedServiceOperator({ db: client });
+  const ctx = await createServiceContext({ db: client, source });
+  return { db: client, ctx, workspaceUserId };
 }

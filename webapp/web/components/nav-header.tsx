@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { SidebarTrigger, useSidebar } from '@/components/ui/sidebar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip.tsx';
 import { DRAG_REGION, getDesktopChrome, NO_DRAG_REGION } from '@/lib/desktop-chrome';
-import { useMeta, useProjects } from '@/lib/queries.ts';
+import { useAllProjects, useMeta } from '@/lib/queries.ts';
 
 import { MissionSearch } from './nav-header/MissionSearch.tsx';
 
@@ -37,7 +37,7 @@ export function NavHeader() {
   const { isDesktop, isMacDesktop } = getDesktopChrome();
   const { state } = useSidebar();
   const { projectId } = useParams({ strict: false }) as { projectId?: string };
-  const projectsQ = useProjects();
+  const projectsQ = useAllProjects();
   const meta = useMeta();
   const [isNewMissionOpen, setIsNewMissionOpen] = useState(false);
   const hasProjects = (projectsQ.data?.length ?? 0) > 0;

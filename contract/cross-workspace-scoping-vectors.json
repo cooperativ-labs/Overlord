@@ -1,0 +1,54 @@
+{
+  "contractVersion": 95,
+  "description": "Normative vectors for the organization-bounded authorization and SearchMissionsResponseV2 contract.",
+  "vectors": [
+    {
+      "name": "explicit-token-consent-is-narrowed-by-live-membership",
+      "token": { "organizationId": "org-a", "allWorkspaces": false, "workspaceIds": ["ws-a", "ws-b"] },
+      "liveMemberships": ["ws-a", "ws-c"],
+      "expectedAuthorizedWorkspaces": ["ws-a"]
+    },
+    {
+      "name": "all-workspaces-never-crosses-organization",
+      "token": { "organizationId": "org-a", "allWorkspaces": true, "workspaceIds": [] },
+      "liveMemberships": ["ws-a", "ws-b", "ws-other-org"],
+      "workspaceOrganizations": { "ws-a": "org-a", "ws-b": "org-a", "ws-other-org": "org-b" },
+      "expectedAuthorizedWorkspaces": ["ws-a", "ws-b"]
+    },
+    {
+      "name": "empty-explicit-consent-fails-closed",
+      "token": { "organizationId": "org-a", "allWorkspaces": false, "workspaceIds": [] },
+      "liveMemberships": ["ws-a"],
+      "expectedAuthorizedWorkspaces": []
+    },
+    {
+      "name": "legacy-token-backfill-is-conservative",
+      "legacyToken": { "workspaceId": "ws-a" },
+      "expectedConsent": { "organizationIdFromWorkspace": "org-a", "allWorkspaces": false, "workspaceIds": ["ws-a"] }
+    },
+    {
+      "name": "quota-is-even-and-never-redistributed",
+      "globalLimit": 10,
+      "workspaceIdsAscending": ["ws-a", "ws-b", "ws-c"],
+      "expectedQuotas": { "ws-a": 4, "ws-b": 3, "ws-c": 3 },
+      "matchedCounts": { "ws-a": 30, "ws-b": 0, "ws-c": 1 },
+      "expectedReturnedCounts": { "ws-a": 4, "ws-b": 0, "ws-c": 1 },
+      "redistribution": false
+    },
+    {
+      "name": "date-range-is-explicit-and-half-open",
+      "filter": { "from": "2026-08-01T00:00:00Z", "to": "2026-09-01T00:00:00Z" },
+      "expectedDateField": "updatedAt",
+      "includedAt": ["2026-08-01T00:00:00Z", "2026-08-31T23:59:59Z"],
+      "excludedAt": ["2026-07-31T23:59:59Z", "2026-09-01T00:00:00Z"]
+    },
+    {
+      "name": "v2-response-and-project-addressing",
+      "request": { "route": "/api/missions/search/v2", "projectIds": ["project-uuid-a"] },
+      "expectedResponseKeys": ["version", "results", "appliedFilters", "totalMatchedBeforeLimit", "workspaceCounts"],
+      "expectedVersion": 2,
+      "rejectsProjectName": true,
+      "v1RouteRemainsArray": true
+    }
+  ]
+}

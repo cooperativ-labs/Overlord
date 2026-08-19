@@ -24,7 +24,8 @@ import type {
 } from '../webapp/shared/contract.ts';
 
 import {
-  getActiveWorkspaceIdOrNull,
+  getAuthorizedWorkspacesContext,
+  getBootstrapWorkspaceIdOrNull,
   newId,
   nowIso,
   recordChange,
@@ -102,15 +103,16 @@ export async function resolveOrganizationIdForWorkspace(
 }
 
 /**
- * The caller's currently active organization id, derived from the active
- * workspace (there is no separate "active organization" binding — Q6 keeps
- * the existing active-workspace preference as the scope of record). `null`
- * pre-onboarding (zero-workspace boot, Q10).
+ * The request's selected organization. Authenticated requests read the
+ * immutable authorization snapshot; bootstrap/direct-service callers retain
+ * the process-local workspace fallback.
  */
 export async function getActiveOrganizationIdOrNull(
   client: DatabaseClient = requireDatabaseClient()
 ): Promise<string | null> {
-  const workspaceId = getActiveWorkspaceIdOrNull();
+  const authorized = getAuthorizedWorkspacesContext();
+  if (authorized) return authorized.organizationId;
+  const workspaceId = getBootstrapWorkspaceIdOrNull();
   if (!workspaceId) return null;
   return resolveOrganizationIdForWorkspace(workspaceId, client);
 }

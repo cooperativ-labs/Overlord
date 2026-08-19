@@ -8,12 +8,7 @@ import {
 } from '../../packages/core/service/local-target-mutations.ts';
 import { resolveProjectExecutionTargetForLaunch } from '../../packages/core/service/project-execution-target.ts';
 import { recordRunnerBranchEvent } from '../branching/branch-activity.ts';
-import {
-  buildWebappServiceContext,
-  buildWebappServiceContextForWorkspace,
-  nowIso,
-  recordChange
-} from '../db.ts';
+import { buildWebappServiceContextForWorkspace, nowIso, recordChange } from '../db.ts';
 import { ApiError } from '../errors.ts';
 
 export async function resolveRemoteMutationTarget({
@@ -52,16 +47,14 @@ export async function queueLocalTargetMutation({
    * under the caller's active workspace — only correct for surfaces that are
    * themselves active-workspace-scoped (Settings → Worktrees).
    */
-  workspaceId?: string;
+  workspaceId: string;
   executionTargetId: string;
   kind: LocalTargetMutationKind;
   capability: LocalTargetMutationCapability;
   input: Record<string, unknown>;
   eventSummary?: string;
 }): Promise<{ executionRequestId: string }> {
-  const ctx = workspaceId
-    ? await buildWebappServiceContextForWorkspace(workspaceId)
-    : buildWebappServiceContext();
+  const ctx = await buildWebappServiceContextForWorkspace(workspaceId);
   const created = await createLocalTargetMutationRequest({
     ctx,
     projectId,
@@ -75,8 +68,11 @@ export async function queueLocalTargetMutation({
   return { executionRequestId: created.id };
 }
 
-export async function resolveMutationAnchorMissionId(projectId: string): Promise<string> {
-  const ctx = buildWebappServiceContext();
+export async function resolveMutationAnchorMissionId(
+  projectId: string,
+  workspaceId: string
+): Promise<string> {
+  const ctx = await buildWebappServiceContextForWorkspace(workspaceId);
   const row = (await ctx.db.get(
     `SELECT m.id
        FROM missions m

@@ -1,6 +1,6 @@
 # Cross-workspace access as a first-class model
 
-Origin: **coo:781** review follow-up · Drafted 2026-08-19 · Contract v92
+Origin: **coo:781** review follow-up · Implemented 2026-08-19 · Contract v95
 
 ## The headline
 
@@ -139,6 +139,8 @@ CREATE TABLE user_token_workspaces (
 );
 
 ALTER TABLE user_tokens ADD COLUMN all_workspaces boolean NOT NULL DEFAULT false;
+-- Recommended pending the organization-binding decision below:
+ALTER TABLE user_tokens ADD COLUMN organization_id text REFERENCES organizations (id);
 ```
 
 - **Retire `user_tokens.workspace_id`** from the enforcement path. It is currently
@@ -162,7 +164,7 @@ behavior of any new endpoint obvious:
 | --- | --- | --- | --- |
 | **Entity-addressed** | `load coo:781`, `launch coo:781.6zvj` | Derived from the entity, intersected with the authorized set | **Already correct** |
 | **Parentless read** | search, my work, activity feed, agent requests | Fan out over the authorized set; **every result carries its `workspaceId` + `workspaceName`** | Two precedents, no general mechanism |
-| **Parentless write** | create mission, create project | Must name one workspace; `workspace_selection_required` when ambiguous | **Already correct** |
+| **Parentless write** | create project, register execution target | Must name one workspace; `workspace_selection_required` when ambiguous | **Already correct** |
 
 The one non-obvious requirement is in the middle row: a fan-out read **must** label
 every result with its workspace. Otherwise the caller — especially an LLM — cannot
@@ -208,8 +210,8 @@ relaxed by request:
 - `display_id` is `{workspace_slug}:{sequence}`, allocated from a per-workspace
   `mission_sequences` counter.
 - `idx_missions_workspace_display_id` makes it unique per workspace.
-- Statuses (`workspace_statuses`) are workspace-shared, and `missions.status_id` FKs to
-  `(workspace_id, status_id)`.
+- Statuses are project-owned, and a mission's `status_id` must belong to its own project.
+  A cross-workspace project move therefore cannot preserve the status relationship.
 
 Moving a mission to another workspace would require **reissuing its display id**,
 breaking every external reference to it: git branches, chat links, agent transcripts,
@@ -224,10 +226,12 @@ link back to the original** — new display id, explicit provenance, original pr
 
 ## Suggested sequencing
 
-0. **Scope the realtime broadcast to the subscriber's workspaces** (Q4). Pre-existing
-   cross-tenant metadata leak in Cloud, independent of everything below, and the surface
-   that has to answer the same question this design answers. **Now tracked separately as
-   mission coo:783** — not part of this work, but should land first.
+0. **Scope the realtime broadcast to the subscriber's workspaces** (Q4). **Completed
+   separately by mission coo:783 and reflected in contract v94.** `GET /realtime`, its
+   compatibility route, and `/sync/changes` now aggregate readable memberships, filter
+   before projection, carry `workspaceId`, and advance the global cursor past filtered
+   rows. Reuse the resulting membership/RBAC machinery when introducing
+   `authorizedWorkspaces`; do not leave a second parallel membership lookup.
 1. **Fix the token/workspace divergence** — honour `verified.workspaceId` or retire the
    column. Small, independent, and it is a live consent bug today.
 2. **Lift `authorizedWorkspaces` into request context** — resolved once per request from
@@ -235,9 +239,11 @@ link back to the original** — new display id, explicit provenance, original pr
    `(workspace_id, workspace_user_id) IN (...)` query (Q7). No behavior change yet.
    Pure groundwork.
 3. **Re-point `getActiveOrganizationIdOrNull`** off the oldest-membership default.
-4. **Convert the parentless reads to fan-out**, in this order: search missions
-   (unblocks the NLP work), my-missions, activity feed. Each result gains
-   `workspaceId` + `workspaceName`.
+4. **Convert the remaining parentless reads to fan-out**, beginning with mission and
+   objective search (the NLP blocker). My Missions and the activity feed already have
+   cross-workspace implementations in the active organization; migrate them onto the
+   shared authorization context rather than rebuilding their behavior. Each aggregate
+   result gains `workspaceId` + `workspaceName` where it does not already carry them.
 5. **Add `user_token_workspaces` + `all_workspaces`**, with the conservative migration
    from `user_tokens.workspace_id`.
 6. **Add workspace selection to the OAuth approval page**, defaulting to the single
@@ -246,14 +252,16 @@ link back to the original** — new display id, explicit provenance, original pr
    `workspaceIds` on the search tools.
 7a. **Add the Q5 search filters** — project, date range, resource — to the service layer,
    the MCP search tools, the CLI, and a filter footer that appears when the search bar is
-   focused. These must land *after* the concurrent project-scoped mission statuses work
-   (contract v93), which already changed how status filtering is addressed: status
-   *types* stay workspace-invariant while status *names* are now project-defined.
+   focused. Project-scoped mission statuses are now in contract v94: status *types*
+   (`draft`, `next`, `execute`, `review`, `complete`, `blocked`, `cancelled`) remain the
+   agent filter vocabulary, while status *names* are project-defined and discoverable
+   through `overlord_list_project_statuses`.
 8. **Document the taxonomy in `CONTRACT.md`** so new endpoints inherit the rule instead
    of re-deriving it.
 
-Steps 1–4 deliver the cross-workspace search the NLP interface needs. Steps 5–7 are the
-consent story and can ship after.
+The service foundation may merge incrementally, but cross-workspace search must not ship
+to OAuth tokens until the consent schema, approval UI, and per-workspace authorization
+checks are all in place.
 
 ### Contract impact
 
@@ -367,9 +375,10 @@ a pathological query.
 ### What Q6 changes about the design
 
 Deriving the workspace from the project on create is a real simplification: it removes
-workspace selection from the common write path entirely. `resolveParentlessWorkspace` is
-then needed only for genuinely parentless creates — `create-project` itself and
-account-owned inbox items — rather than for every mission write.
+workspace selection from the common mission-write path entirely.
+`resolveParentlessWorkspace` remains for genuinely parentless workspace resources — its
+current callers are `create-project` and `register-target`. Account-owned inbox items
+belong to no workspace and do not use it.
 
 Note the current frontend state, which makes the `setActiveWorkspace` removal smaller
 than it looks: `webapp/web/lib/api-base.ts` defines `readActiveWorkspaceId()` and it is
@@ -377,6 +386,168 @@ than it looks: `webapp/web/lib/api-base.ts` defines `readActiveWorkspaceId()` an
 (`persistActiveWorkspaceId`, three call sites in `queries.ts`) and never transmits it.
 So there is no durable workspace switcher wired through to the backend today — dead code
 on the client, oldest-membership default on the server.
+
+---
+
+## Reconciliation against the settled decisions (contract v95)
+
+This section is the implementation hand-off for coo:784. It supersedes details above
+where the repository has moved since the first draft.
+
+### Concrete search policy
+
+Do **not** threshold raw SQLite `bm25()` and PostgreSQL `ts_rank()` values. Their scales
+are different, corpus-sensitive, and not a stable API. Use a portable eligibility gate,
+then use dialect-native relevance only for ordering:
+
+1. Parse distinct meaningful query terms, preserving identifiers and quoted phrases but
+   dropping a small shared stop-word list. A display-id-shaped query bypasses FTS and is
+   resolved directly.
+2. In default `any` mode, require a candidate to match at least
+   `min(3, max(1, ceil(termCount / 2)))` distinct meaningful terms. `all` and `phrase`
+   modes remain stricter explicit choices. This term-coverage rule is the relevance
+   floor; it is absolute, explainable, and identical in SQLite and PostgreSQL.
+3. Aggregate document relevance as `max(documentScore)` plus a bounded corroboration
+   bonus, never an unbounded sum. Preserve the native score as an internal ordering
+   input, not a cross-dialect API promise.
+4. Apply recency as a bounded rank fusion after text ranking, not as an eligibility
+   predicate: `1 / (60 + textRank) + 0.15 / (60 + recencyRank)`. This lets recent work
+   break close calls without allowing age to hide an old exact match. Exact display-id
+   and exact-title matches sort ahead of the fused ranking.
+5. Return `matchedTerms`, `matchedIn`, and a snippet so the result explains why it
+   survived. The public `relevance` field should be the deterministic fused score, not
+   a raw adapter score.
+
+The numeric coverage and fusion constants need fixture-backed tuning before they become
+contracted defaults, but this algorithm is concrete enough to implement and avoids a
+non-portable raw-score threshold. Test it against the measured vague-query, 25-event
+chatter, exact-title, exact-display-id, and old-but-exact cases in both adapters.
+
+### Quotas and truncation
+
+The settled even division is deliberately **not redistributed**. Redistributing unused
+slots would make a large workspace dominate whenever smaller workspaces have few hits,
+undoing the fairness guarantee and making result composition depend on the absence of
+matches elsewhere. Compute `floor(globalCap / workspaceCount)` with any remainder
+assigned deterministically by workspace id; report per-workspace matched/returned counts,
+`totalMatchedBeforeLimit`, and `appliedFilters`. A caller that wants more from one
+workspace can reissue with an explicit workspace filter.
+
+### Workspace resolution by operation kind
+
+- **Entity-addressed read/write:** derive the workspace from the operand and verify it is
+  in the request's authorized set. No workspace query parameter.
+- **Single-workspace UI read:** accept an explicit `workspaceId`; omission is `400`, not
+  fan-out. This covers board and workspace/project administration views.
+- **Aggregate parentless read:** omission means fan-out across the selected organization's
+  authorized workspaces. `/inbox` remains profile-owned and has no workspace scope.
+- **Parentless write:** retain `resolveParentlessWorkspace` for `create-project` and
+  `register-target`, its two current callers. Mission creation derives workspace from
+  the required project. Inbox capture is profile-owned and does not call the resolver.
+
+There should not be a universal meaning for an omitted `workspaceId`; the endpoint's
+operation kind defines it and the contract must label the route accordingly.
+
+### Search filters and labels: join first
+
+`search_documents` already has indexed `workspace_id` and `project_id`. Use those columns
+for workspace/project filtering, join `workspaces` and `projects` for result labels, and
+use an `EXISTS` subquery through non-deleted objectives for `resource_key`. A resource key
+matches by name across projects, as already decided. Do **not** add `workspace_name`,
+`project_name`, or `resource_key` columns merely for filters or labels: names are mutable,
+and one mission can have objectives on several resource keys.
+
+Widening free-text retrieval to treat project/workspace names as searchable text is a
+separate index-quality objective. If measurement shows the join-first filter path is too
+slow, denormalization can follow with both-adapter triggers and backfill; it is not the
+starting design.
+
+### Resolved product decisions (contract v95)
+
+1. **Organization-bound consent.** Each OAuth `USER_TOKEN` has one approved
+   `organization_id`. `all_workspaces` means all present and future *live
+   memberships in that organization only*; otherwise `user_token_workspaces` is an
+   explicit allowlist. The runtime set is consent intersected with live membership
+   and per-workspace RBAC. Empty explicit consent fails closed. Legacy tokens backfill
+   to exactly their recorded issuance `workspace_id`, never to all workspaces.
+2. **Public search versioning.** Keep `GET /api/missions/search` as v1. Add
+   `GET /api/missions/search/v2` with `SearchMissionsResponseV2`; Protocol selects it
+   with `--response-version 2` and hosted MCP exposes the v2 envelope. The envelope is
+   `{ version: 2, results, appliedFilters, totalMatchedBeforeLimit, workspaceCounts }`.
+3. **Date filters.** V2 accepts `dateField: createdAt | updatedAt`; it defaults to
+   `updatedAt` only when `from` or `to` is supplied. Bounds are inclusive `from` and
+   exclusive `to`. There is no default date eligibility window.
+4. **Filter addressing.** REST and hosted MCP accept stable project UUIDs only in
+   `projectIds`, plus `resourceKeys`. The CLI may resolve supported human references
+   (id, slug, or name) before calling REST. Hosted MCP never resolves ambiguous names.
+
+The request context contract is
+`{ organizationId, workspaces: [{ workspaceId, workspaceUserId, roleKeys }] }`.
+It is resolved exactly once. Entity-addressed operations derive and validate their
+workspace, single-workspace UI reads require `workspaceId`, aggregate parentless
+reads fan out only in the selected organization, and the only parentless writes
+that retain workspace selection are create-project and register-target.
+
+### Proposed implementation objectives
+
+Treat the sequence below as release-gated: cross-workspace search does not ship to OAuth
+tokens until the consent model and security checks land, even if its service work merges
+earlier.
+
+1. **Contract and authorization model.** Update `CONTRACT.md`, component registry,
+   schema contract, REST/MCP/protocol specs, and test vectors for the operation taxonomy,
+   organization boundary, authorized-workspace shape, quota semantics, and v2 search DTO.
+2. **Token consent schema and migration.** Add organization-bound token consent,
+   `user_token_workspaces`, and `all_workspaces` in PostgreSQL and SQLite; backfill every
+   existing token to exactly its recorded `user_tokens.workspace_id` and fail closed.
+3. **Request authorization foundation.** Build `authorizedWorkspaces` once per request as
+   token consent intersected with live memberships, batch roles, add an operation-local
+   resolved workspace, and migrate the coo:783 realtime/activity/My Missions membership
+   paths onto it without widening access.
+4. **OAuth consent and workspace discovery.** Add organization/workspace selection to
+   OAuth approval, implement the one-workspace shortcut and all-current/future option,
+   and expose the authorized workspace list needed by REST and MCP.
+5. **Portable search quality and v2 DTO.** Add display-id short-circuit, term-coverage
+   floor, bounded document aggregation, rank-fused recency, snippets/match evidence,
+   result labels, `appliedFilters`, counts, and dual-adapter regression fixtures.
+6. **Cross-workspace mission/objective search.** Fan out inside one organization with
+   per-workspace RBAC and deterministic quotas; add project/resource/date/status-type
+   filters and preserve the no-cross-workspace-mission-move invariant.
+7. **Agent surfaces.** Add/list workspace discovery and identical filters/count metadata
+   on CLI and MCP mission/objective search. Use project status *types* for filtering and
+   the existing project-status discovery tool for names.
+8. **Web application migration.** Remove dead active-workspace persistence, pass explicit
+   workspace ids on single-workspace pages, preserve aggregate `/inbox` and `/user`
+   behavior, load all authorized projects where required, and add the focused-search
+   filter footer.
+9. **Ambient-scope retirement and security verification.** Classify and migrate every
+   remaining `getActiveWorkspaceId()` call by operation kind, run PostgreSQL/SQLite and
+   Local/Cloud conformance, and perform a dedicated cross-tenant security audit before
+   release.
+
+## Final rollout state (coo:784.m4da)
+
+- The enforced inventory contains no production `getActiveWorkspace*` or `WORKSPACE.*`
+  reads. Compatibility definitions remain centralized in `backend/db.ts` solely for
+  server bootstrap, loopback, and direct-service tests.
+- Entity-addressed mission/objective, GitHub, stored-object, webhook, worktree, and
+  execution-target operations derive the owner workspace and authorize its matching
+  membership. Parentless writes require an explicit workspace; aggregate/profile reads
+  use the immutable organization-bounded authorization snapshot.
+- Realtime catch-up, live SSE fan-out, cursor advancement, and authorization changes use
+  the shared `authorizedWorkspaces` context. No parallel membership lookup remains in
+  the realtime hub, and hidden global sequence gaps cannot reveal another workspace.
+- OAuth consent and USER_TOKEN enforcement intersect organization-bound consent with live
+  memberships. Existing/single-workspace tokens remain conservatively scoped, and
+  same-profile membership in another organization is not authority.
+- Web settings surfaces pass explicit workspace ids for GitHub and webhook management;
+  result/profile projections carry workspace identity or organization-wide role unions as
+  defined by contract v95.
+- SQLite conformance, focused tenant-boundary suites, full repository typechecking, and
+  Local/Cloud server plus web production builds pass. PostgreSQL batteries use the same
+  conformance suite but could not execute in this workspace because `TEST_DATABASE_URL`
+  is unset and the Docker daemon is unavailable; CI or a PostgreSQL-enabled host remains
+  the release gate for that adapter.
 
 ---
 
@@ -400,7 +571,7 @@ Recommendation: **to their recorded `user_tokens.workspace_id`** — the conserv
 reading of what the user consented to, even though it was never enforced. Migrating
 them to "all workspaces" would silently widen access that nobody approved.
 
-### Q4 · What does realtime subscribe to once reads are cross-workspace? *(blocking)*
+### Q4 · What does realtime subscribe to once reads are cross-workspace? *(resolved by coo:783)*
 
 This is the gap the original draft missed, and it turns out to matter twice over.
 
@@ -416,7 +587,7 @@ private broadcast(event: string, data: unknown): void {
 }
 ```
 
-So today every authenticated SSE subscriber receives change metadata for **every
+At the time of the original review, every authenticated SSE subscriber received change metadata for **every
 workspace in the deployment**: `entity_type`, `entity_id`, `operation`, `project_id`,
 `mission_id`, `objective_id`, `changed_fields_json`, `occurred_at`. That is ids,
 changed *field names*, and timing — not field values, and not titles or instruction
@@ -430,9 +601,9 @@ on this work: realtime is precisely the surface that has to answer "which worksp
 changes does this client see?", and the current answer is "all of them, regardless of
 membership."
 
-Recommendation: filter `entity_changes` by the subscriber's `authorizedWorkspaces` at
-send time (the same set this design introduces), and treat it as a security fix with its
-own objective rather than folding it into the fan-out work.
+Resolution: coo:783 added membership-scoped realtime and catch-up reads in contract v94.
+This mission should consolidate that implementation onto `authorizedWorkspaces` when the
+shared request context exists.
 
 ### Q5 · How is ranking kept fair across workspaces of very different sizes?
 `bm25()` / `ts_rank()` scores are computed per document against the whole index, so

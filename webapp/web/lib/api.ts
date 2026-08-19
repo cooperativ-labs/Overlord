@@ -1,3 +1,4 @@
+import type { MissionSearchDateField, SearchMissionsResponseV2 } from '@overlord/contract';
 import type {
   CreateEverhourTimeBody,
   EverhourIntegrationDto,
@@ -330,7 +331,11 @@ export const api = {
   revokeUserToken: (id: string) => request<UserTokenDto>('POST', `/api/user-tokens/${id}/revoke`),
   deleteRevokedUserToken: (id: string) => request<void>('DELETE', `/api/user-tokens/${id}`),
 
-  listWebhookSubscriptions: () => request<WebhookSubscriptionDto[]>('GET', '/api/webhooks'),
+  listWebhookSubscriptions: (workspaceId: string) =>
+    request<WebhookSubscriptionDto[]>(
+      'GET',
+      `/api/webhooks?workspaceId=${encodeURIComponent(workspaceId)}`
+    ),
   createWebhookSubscription: (body: CreateWebhookSubscriptionBody) =>
     request<CreateWebhookSubscriptionResultDto>('POST', '/api/webhooks', body),
   updateWebhookSubscription: (id: string, body: UpdateWebhookSubscriptionBody) =>
@@ -488,6 +493,26 @@ export const api = {
     if (options.projectId) params.set('projectId', options.projectId);
     if (options.limit !== undefined) params.set('limit', String(options.limit));
     return request<{ missions: MissionDto[] }>('GET', `/api/missions/search?${params.toString()}`);
+  },
+  searchMissionsV2: (
+    query: string,
+    options: {
+      projectIds?: string[];
+      resourceKeys?: string[];
+      dateField?: MissionSearchDateField;
+      from?: string;
+      to?: string;
+      limit?: number;
+    } = {}
+  ) => {
+    const params = new URLSearchParams({ q: query });
+    if (options.projectIds?.length) params.set('projectIds', options.projectIds.join(','));
+    if (options.resourceKeys?.length) params.set('resourceKeys', options.resourceKeys.join(','));
+    if (options.dateField) params.set('dateField', options.dateField);
+    if (options.from) params.set('from', options.from);
+    if (options.to) params.set('to', options.to);
+    if (options.limit !== undefined) params.set('limit', String(options.limit));
+    return request<SearchMissionsResponseV2>('GET', `/api/missions/search/v2?${params.toString()}`);
   },
   getMission: (id: string) => request<MissionDetailDto>('GET', `/api/missions/${id}`),
   createMission: (body: CreateMissionBody) =>
@@ -796,13 +821,25 @@ export const api = {
     ),
 
   // ---- GitHub integration ------------------------------------------------
-  getGitHubIntegration: () => request<GitHubIntegrationDto>('GET', '/ext/github/integration'),
-  beginGitHubInstall: () => request<GitHubInstallUrlDto>('POST', '/ext/github/install'),
-  disconnectGitHub: () => request<GitHubIntegrationDto>('DELETE', '/ext/github/integration'),
-  listGitHubRepos: (query?: string) =>
+  getGitHubIntegration: (workspaceId: string) =>
+    request<GitHubIntegrationDto>(
+      'GET',
+      `/ext/github/integration?workspaceId=${encodeURIComponent(workspaceId)}`
+    ),
+  beginGitHubInstall: (workspaceId: string) =>
+    request<GitHubInstallUrlDto>(
+      'POST',
+      `/ext/github/install?workspaceId=${encodeURIComponent(workspaceId)}`
+    ),
+  disconnectGitHub: (workspaceId: string) =>
+    request<GitHubIntegrationDto>(
+      'DELETE',
+      `/ext/github/integration?workspaceId=${encodeURIComponent(workspaceId)}`
+    ),
+  listGitHubRepos: (query: string | undefined, workspaceId: string) =>
     request<GitHubRepoSummaryDto[]>(
       'GET',
-      `/ext/github/repos${query ? `?q=${encodeURIComponent(query)}` : ''}`
+      `/ext/github/repos?workspaceId=${encodeURIComponent(workspaceId)}${query ? `&q=${encodeURIComponent(query)}` : ''}`
     ),
   getProjectGitHubLink: (projectId: string) =>
     request<ProjectGitHubLinkDto>('GET', `/ext/github/projects/${projectId}/link`),

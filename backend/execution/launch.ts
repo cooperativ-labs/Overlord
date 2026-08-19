@@ -82,16 +82,15 @@ import type {
   UpdateWorktreeBranchAutomationBody
 } from '../../webapp/shared/contract.ts';
 import {
-  buildWebappServiceContext,
   buildWebappServiceContextForWorkspace,
   findActiveMembershipId,
+  getAuthorizedWorkspacesContext,
+  getBootstrapWorkspaceIdOrNull,
   newId,
   nowIso,
   recordChange,
   requireDatabaseClient,
-  resolveActiveProfileId,
-  serviceDatabaseClient,
-  WORKSPACE
+  resolveActiveProfileId
 } from '../db.ts';
 import { ApiError } from '../errors.ts';
 import { resolveObjectiveIdForRest } from '../objective-ref.ts';
@@ -195,7 +194,12 @@ async function resolveCatalogWorkspaceId(
   permission: Permission,
   db: DatabaseClient
 ): Promise<string> {
-  if (!workspaceId) return WORKSPACE.id;
+  if (!workspaceId) {
+    if (getAuthorizedWorkspacesContext()) throw new ApiError(400, 'workspaceId is required');
+    const fallback = getBootstrapWorkspaceIdOrNull();
+    if (!fallback) throw new ApiError(400, 'workspaceId is required');
+    return fallback;
+  }
   await requireWorkspacePermission({
     workspaceId,
     permission,
@@ -270,8 +274,11 @@ async function resolveLaunchSettingsScope(
   client: DatabaseClient
 ): Promise<{ workspaceId: string; ctx: ServiceContext }> {
   if (!workspaceId) {
-    const ctx = serviceContext(client);
-    return { workspaceId: ctx.workspace.id, ctx };
+    if (getAuthorizedWorkspacesContext()) throw new ApiError(400, 'workspaceId is required');
+    const fallback = getBootstrapWorkspaceIdOrNull();
+    if (!fallback) throw new ApiError(400, 'workspaceId is required');
+    const ctx = await buildWebappServiceContextForWorkspace(fallback, client);
+    return { workspaceId: fallback, ctx };
   }
   const membershipId = await requireWorkspacePermission({
     workspaceId,
@@ -462,10 +469,6 @@ export async function updateAgentCatalog(
 
 // ---- Local device / execution target provisioning -------------------------
 
-function serviceContext(client: DatabaseClient = serviceDatabaseClient()) {
-  return buildWebappServiceContext(client);
-}
-
 function toTerminalProfileDto(profile: TerminalProfile): TerminalProfileDto {
   return {
     launcher: profile.launcher ?? null,
@@ -581,8 +584,8 @@ async function toLocalLaunchTarget(
  * when the machine has none — they no longer declare it.
  */
 async function requireLocalLaunchTarget(
-  client: DatabaseClient = requireDatabaseClient(),
-  ctx: ServiceContext = serviceContext(client)
+  client: DatabaseClient,
+  ctx: ServiceContext
 ): Promise<LocalLaunchTarget> {
   return toLocalLaunchTarget(
     await requireActingDeviceTarget({
@@ -598,8 +601,8 @@ async function requireLocalLaunchTarget(
  * returns `null` when it has none. Reading launch settings must never declare one.
  */
 async function findLocalLaunchTarget(
-  client: DatabaseClient = requireDatabaseClient(),
-  ctx: ServiceContext = serviceContext(client)
+  client: DatabaseClient,
+  ctx: ServiceContext
 ): Promise<LocalLaunchTarget | null> {
   const target = await findActingDeviceTarget({ ctx });
   return target ? toLocalLaunchTarget(target, client) : null;

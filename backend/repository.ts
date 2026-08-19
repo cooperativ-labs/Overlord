@@ -39,13 +39,11 @@ import {
   mergeMissionBranchObservation
 } from '../packages/core/service/mission-branch-observations.ts';
 import {
-  buildMissionSearchMatch,
-  missionSearchDocScoreExpr,
-  missionSearchFromClause,
-  missionSearchMatchPredicate,
-  missionSearchMissionIdColumn,
-  missionSearchWorkspaceParams
-} from '../packages/core/service/mission-search-sql.ts';
+  allocateWorkspaceSearchLimits,
+  mergeWorkspaceMissionSearches,
+  searchWorkspaceMissions,
+  toSearchMissionsResponseV2
+} from '../packages/core/service/mission-search.ts';
 import {
   assignMissionTags as assignMissionTagsOnCreate,
   createMissionWithObjectives,
@@ -110,6 +108,7 @@ import type {
   ReorderProjectStatusesBody,
   ScheduleDto,
   ScheduleInput,
+  SearchMissionsResponseV2,
   SharedContextEntryDto,
   StatusType,
   TokenScope,
@@ -161,13 +160,13 @@ import {
 import { createPrivateGitHubRepository } from './ext/github/user-oauth.ts';
 import { missionWorktreePath, previewMissionBranch } from './branch-planning.ts';
 import {
-  buildWebappServiceContext,
   buildWebappServiceContextForWorkspace,
   DATABASE_DIALECT,
   enqueueWebhookEventRest,
   findActiveMembershipId,
-  getActiveWorkspaceId,
   getActorWorkspaceUserId,
+  getAuthorizedWorkspacesContext,
+  getBootstrapWorkspaceIdOrNull,
   newId,
   nowIso,
   recordChange,
@@ -1568,8 +1567,16 @@ export async function removeWorktree(body: RemoveWorktreeBody): Promise<PurgeWor
 
   const projectId = typeof body.projectId === 'string' ? body.projectId.trim() : '';
   if (projectId) {
+    const scope = await requireProjectPermission({
+      projectId,
+      permission: PERMISSIONS.PROJECT_UPDATE
+    });
     const remoteTarget = await resolveRemoteMutationTarget({
-      ctx: buildWebappServiceContext(),
+      ctx: await buildWebappServiceContextForWorkspace(
+        scope.workspaceId,
+        undefined,
+        scope.workspaceUserId
+      ),
       projectId,
       executionTargetId: body.executionTargetId ?? null
     });
@@ -1582,10 +1589,11 @@ export async function removeWorktree(body: RemoveWorktreeBody): Promise<PurgeWor
           'primaryRepoPath is required to queue worktree removal on a remote target.'
         );
       }
-      const missionId = await resolveMutationAnchorMissionId(projectId);
+      const missionId = await resolveMutationAnchorMissionId(projectId, scope.workspaceId);
       await queueLocalTargetMutation({
         projectId,
         missionId,
+        workspaceId: scope.workspaceId,
         executionTargetId: remoteTarget.executionTargetId,
         kind: 'worktree_purge',
         capability: 'removeWorktree',
@@ -1615,8 +1623,16 @@ export async function purgeMergedWorktrees(
 ): Promise<PurgeWorktreesResultDto> {
   const projectId = typeof body.projectId === 'string' ? body.projectId.trim() : '';
   if (projectId) {
+    const scope = await requireProjectPermission({
+      projectId,
+      permission: PERMISSIONS.PROJECT_UPDATE
+    });
     const remoteTarget = await resolveRemoteMutationTarget({
-      ctx: buildWebappServiceContext(),
+      ctx: await buildWebappServiceContextForWorkspace(
+        scope.workspaceId,
+        undefined,
+        scope.workspaceUserId
+      ),
       projectId,
       executionTargetId:
         typeof body.executionTargetId === 'string' ? body.executionTargetId.trim() : null
@@ -1630,10 +1646,11 @@ export async function purgeMergedWorktrees(
           'primaryRepoPath is required to queue merged worktree purge on a remote target.'
         );
       }
-      const missionId = await resolveMutationAnchorMissionId(projectId);
+      const missionId = await resolveMutationAnchorMissionId(projectId, scope.workspaceId);
       await queueLocalTargetMutation({
         projectId,
         missionId,
+        workspaceId: scope.workspaceId,
         executionTargetId: remoteTarget.executionTargetId,
         kind: 'worktree_purge',
         capability: 'purgeMergedWorktrees',
@@ -1834,7 +1851,10 @@ async function callerAuthorizedWorkspaceScopes(
   permission: Permission,
   db: DatabaseClient
 ): Promise<Array<{ workspaceId: string; workspaceUserId: string }>> {
-  const memberships = await callerWorkspaceMemberships(db);
+  // Auth captures this immutable, organization-bounded set once per request.
+  // The fallback is for local/background callers without request context and is
+  // still constrained to one selected organization.
+  const memberships = await callerMembershipsInActiveOrganization(db);
   const checked = await Promise.all(
     memberships.map(async scope => ({ scope, allowed: await actorCan(permission, scope) }))
   );
@@ -3124,7 +3144,12 @@ export async function createProject(body: CreateProjectBody): Promise<ProjectDto
     const name = (body.name ?? '').trim();
     if (!name) throw new ApiError(400, 'Project name is required');
 
-    const targetWorkspaceId = body.workspaceId?.trim() || getActiveWorkspaceId();
+    const targetWorkspaceId =
+      body.workspaceId?.trim() ||
+      (getAuthorizedWorkspacesContext() ? null : getBootstrapWorkspaceIdOrNull());
+    if (!targetWorkspaceId) {
+      throw new ApiError(400, 'workspaceId is required when creating a project');
+    }
     const targetWorkspaceUserId = await requireWorkspacePermission({
       workspaceId: targetWorkspaceId,
       permission: PERMISSIONS.PROJECT_CREATE,
@@ -3710,114 +3735,85 @@ export async function listMissions(
   });
 }
 
+async function hydrateMissionDtos({
+  workspaceId,
+  missionIds,
+  client
+}: {
+  workspaceId: string;
+  missionIds: string[];
+  client: DatabaseClient;
+}): Promise<MissionDto[]> {
+  if (missionIds.length === 0) return [];
+  const rows = (await client.all(
+    `${selectMissionsSql} AND t.id IN (${missionIds.map(() => '?').join(', ')})`,
+    [workspaceId, ...missionIds]
+  )) as MissionRow[];
+  const byId = new Map(rows.map(row => [row.id, row]));
+  const tagsByMission = await getTagsByMission(missionIds);
+  return missionIds.flatMap(id => {
+    const row = byId.get(id);
+    return row ? [toMissionDto(row, tagsByMission.get(id) ?? [])] : [];
+  });
+}
+
 async function searchMissionsInWorkspace({
   query,
   projectId,
+  projectIds,
   statusTypes,
+  resourceKeys,
+  dateField,
+  from,
+  to,
   limit = 25,
   workspaceId,
   client
 }: {
   query?: string | null;
   projectId?: string | null;
+  projectIds?: string[] | null;
   statusTypes?: string[] | null;
+  resourceKeys?: string[] | null;
+  dateField?: 'createdAt' | 'updatedAt' | null;
+  from?: string | null;
+  to?: string | null;
   limit?: number;
   workspaceId: string;
   client: DatabaseClient;
-}): Promise<MissionDto[]> {
-  const match = query?.trim()
-    ? buildMissionSearchMatch({ dialect: client.dialect, query: query.trim() })
-    : null;
-  // Status *types* (coo:752): project-defined status names never reach this
-  // filter, so a type CSV keeps meaning the same thing in every project.
-  const types = statusTypes?.filter(type => type.trim() !== '') ?? [];
-  const statusFilter =
-    types.length > 0 ? ` AND t.status_type IN (${types.map(() => '?').join(', ')})` : '';
-
-  if (!match) {
-    const sql = `${selectMissionsSql}${projectId ? ' AND t.project_id = ?' : ''}${statusFilter} ORDER BY t.updated_at DESC LIMIT ?`;
-    const params = [workspaceId, ...(projectId ? [projectId] : []), ...types, limit];
-    const rows = (await client.all(sql, params)) as MissionRow[];
-    const tagsByMission = await getTagsByMission(rows.map(row => row.id));
-    return rows.map(row => toMissionDto(row, tagsByMission.get(row.id) ?? []));
-  }
-
-  const projectFilter = projectId ? ' AND t.project_id = ?' : '';
-  const missionIdColumn = missionSearchMissionIdColumn(client.dialect);
-  const rows = (await client.all(
-    `SELECT t.id, t.workspace_id, t.project_id, t.display_id, t.sequence_number, t.title,
-              t.status_id, t.status_type, t.board_position, t.priority,
-              t.assigned_workspace_user_id,
-              t.notes_text,
-              t.schedule_id, t.due_datetime,
-              t.created_at, t.updated_at, t.revision,
-              t.created_by_kind, t.created_by_agent, t.created_by_workspace_user_id,
-              (SELECT COUNT(*) FROM objectives o
-                 WHERE o.mission_id = t.id AND o.deleted_at IS NULL) AS objective_count,
-              (SELECT COUNT(*) FROM objectives o
-                 WHERE o.mission_id = t.id AND o.deleted_at IS NULL AND o.state = 'complete')
-                 AS completed_objective_count,
-              (SELECT COUNT(*) > 0 FROM objectives o
-                 WHERE o.mission_id = t.id AND o.deleted_at IS NULL AND o.state = 'executing')
-                 AS has_executing_objective,
-              (SELECT COUNT(*) > 0 FROM objectives o
-                 WHERE o.mission_id = t.id AND o.deleted_at IS NULL AND o.state = 'complete')
-                 AS has_completed_objective,
-              (SELECT COUNT(*) > 0 FROM objectives o
-                 WHERE o.mission_id = t.id AND o.deleted_at IS NULL
-                   AND o.state IN ('draft', 'future') AND TRIM(o.instruction_text) != '')
-                 AS has_pending_objective_with_instructions,
-${missionHasUnseenBlockingQuestionSql},
-${missionHasUnseenReturnedToExecuteSql},
-              (SELECT o.resource_key FROM objectives o
-                 WHERE o.mission_id = t.id AND o.deleted_at IS NULL AND o.state = 'draft'
-                 LIMIT 1) AS draft_objective_resource_key,
-              ${missionSearchDocScoreExpr(client.dialect)} AS doc_score
-         FROM ${missionSearchFromClause(client.dialect)}
-         JOIN missions t ON t.id = ${missionIdColumn}
-           AND t.workspace_id = ? AND t.deleted_at IS NULL
-        WHERE ${missionSearchMatchPredicate(client.dialect)}${projectFilter}${statusFilter}`,
-    [
-      ...missionSearchWorkspaceParams({
-        dialect: client.dialect,
-        workspaceId,
-        match
-      }),
-      ...(projectId ? [projectId] : []),
-      ...types
-    ]
-  )) as Array<MissionRow & { doc_score: number }>;
-
-  // Aggregate per-document scores into one relevance per mission, then rank.
-  const byMission = new Map<string, { row: MissionRow; relevance: number }>();
-  for (const row of rows) {
-    const existing = byMission.get(row.id);
-    if (existing) {
-      existing.relevance += row.doc_score;
-      continue;
-    }
-    byMission.set(row.id, { row, relevance: row.doc_score });
-  }
-
-  const ranked = [...byMission.values()]
-    .sort(
-      (left, right) =>
-        right.relevance - left.relevance || right.row.updated_at.localeCompare(left.row.updated_at)
-    )
-    .slice(0, limit);
-  const tagsByMission = await getTagsByMission(ranked.map(entry => entry.row.id));
-  return ranked.map(entry => toMissionDto(entry.row, tagsByMission.get(entry.row.id) ?? []));
+}) {
+  const resolvedProjectIds = projectIds?.length ? projectIds : projectId ? [projectId] : [];
+  return searchWorkspaceMissions({
+    db: client,
+    workspaceId,
+    query,
+    projectIds: resolvedProjectIds,
+    statusTypes,
+    resourceKeys,
+    dateField,
+    from,
+    to,
+    limit
+  });
 }
 
 export async function searchMissions({
   query,
   projectId,
   statusTypes,
+  resourceKeys,
+  dateField,
+  from,
+  to,
   limit = 25
 }: {
   query?: string | null;
   projectId?: string | null;
   statusTypes?: string[] | null;
+  resourceKeys?: string[] | null;
+  dateField?: 'createdAt' | 'updatedAt' | null;
+  from?: string | null;
+  to?: string | null;
   limit?: number;
 }): Promise<MissionDto[]> {
   const client = requireDatabaseClient();
@@ -3827,26 +3823,138 @@ export async function searchMissions({
       permission: PERMISSIONS.MISSION_READ,
       db: client
     });
-    return searchMissionsInWorkspace({ query, projectId, statusTypes, limit, workspaceId, client });
+    const result = await searchMissionsInWorkspace({
+      query,
+      projectId,
+      statusTypes,
+      resourceKeys,
+      dateField,
+      from,
+      to,
+      limit,
+      workspaceId,
+      client
+    });
+    return hydrateMissionDtos({
+      workspaceId,
+      missionIds: result.hits.map(hit => hit.id),
+      client
+    });
   }
 
   const scopes = await callerAuthorizedWorkspaceScopes(PERMISSIONS.MISSION_READ, client);
-  const missions = (
+  const quotas = allocateWorkspaceSearchLimits({
+    workspaceIds: scopes.map(scope => scope.workspaceId),
+    limit
+  });
+  const ranked = (
     await Promise.all(
-      scopes.map(scope =>
-        searchMissionsInWorkspace({
+      scopes.map(async scope => {
+        const result = await searchMissionsInWorkspace({
           query,
           statusTypes,
-          limit,
+          resourceKeys,
+          dateField,
+          from,
+          to,
+          limit: quotas.get(scope.workspaceId) ?? 0,
           workspaceId: scope.workspaceId,
           client
-        })
-      )
+        });
+        return result.hits;
+      })
     )
-  ).flat();
-  return missions
-    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+  )
+    .flat()
+    .sort(
+      (left, right) =>
+        right.relevance - left.relevance || right.updatedAt.localeCompare(left.updatedAt)
+    )
     .slice(0, limit);
+
+  const byWorkspace = new Map<string, string[]>();
+  for (const hit of ranked) {
+    const ids = byWorkspace.get(hit.workspaceId) ?? [];
+    ids.push(hit.id);
+    byWorkspace.set(hit.workspaceId, ids);
+  }
+  const dtosById = new Map<string, MissionDto>();
+  await Promise.all(
+    [...byWorkspace.entries()].map(async ([workspaceId, missionIds]) => {
+      const dtos = await hydrateMissionDtos({ workspaceId, missionIds, client });
+      for (const dto of dtos) dtosById.set(dto.id, dto);
+    })
+  );
+  return ranked.flatMap(hit => {
+    const dto = dtosById.get(hit.id);
+    return dto ? [dto] : [];
+  });
+}
+
+export async function searchMissionsV2({
+  query,
+  projectIds,
+  statusTypes,
+  resourceKeys,
+  dateField,
+  from,
+  to,
+  limit = 25
+}: {
+  query?: string | null;
+  projectIds?: string[] | null;
+  statusTypes?: string[] | null;
+  resourceKeys?: string[] | null;
+  dateField?: 'createdAt' | 'updatedAt' | null;
+  from?: string | null;
+  to?: string | null;
+  limit?: number;
+}): Promise<SearchMissionsResponseV2> {
+  const client = requireDatabaseClient();
+  const projects = projectIds?.filter(id => id.trim() !== '') ?? [];
+  if (projects.length === 1) {
+    const { workspaceId } = await requireProjectPermission({
+      projectId: projects[0]!,
+      permission: PERMISSIONS.MISSION_READ,
+      db: client
+    });
+    const result = await searchMissionsInWorkspace({
+      query,
+      projectIds: projects,
+      statusTypes,
+      resourceKeys,
+      dateField,
+      from,
+      to,
+      limit,
+      workspaceId,
+      client
+    });
+    return toSearchMissionsResponseV2(result);
+  }
+
+  const scopes = await callerAuthorizedWorkspaceScopes(PERMISSIONS.MISSION_READ, client);
+  const quotas = allocateWorkspaceSearchLimits({
+    workspaceIds: scopes.map(scope => scope.workspaceId),
+    limit
+  });
+  const results = await Promise.all(
+    scopes.map(scope =>
+      searchMissionsInWorkspace({
+        query,
+        projectIds: projects,
+        statusTypes,
+        resourceKeys,
+        dateField,
+        from,
+        to,
+        limit: quotas.get(scope.workspaceId) ?? 0,
+        workspaceId: scope.workspaceId,
+        client
+      })
+    )
+  );
+  return mergeWorkspaceMissionSearches({ results, limit });
 }
 
 // New cards drop in at the top of their column. Gap-based: one step (100) above
@@ -6115,6 +6223,13 @@ export async function callerWorkspaceMemberships(
 export async function callerMembershipsInActiveOrganization(
   client: DatabaseClient = requireDatabaseClient()
 ): Promise<Array<{ workspaceId: string; workspaceUserId: string }>> {
+  const authorized = getAuthorizedWorkspacesContext();
+  if (authorized) {
+    return authorized.workspaces.map(workspace => ({
+      workspaceId: workspace.workspaceId,
+      workspaceUserId: workspace.workspaceUserId
+    }));
+  }
   const profileId = await resolveActiveProfileId(client);
   const organizationId = await getActiveOrganizationIdOrNull(client);
   if (!profileId || !organizationId) return [];
@@ -6195,10 +6310,21 @@ ${missionHasUnseenReturnedToExecuteSql},
  */
 export async function listWorkspaceMyMissions(): Promise<MyMissionsResponse> {
   const memberships = await callerMembershipsInActiveOrganization();
-  if (memberships.length === 0) return { missions: [] };
+  const readableMemberships: Array<{ workspaceId: string; workspaceUserId: string }> = [];
+  for (const membership of memberships) {
+    if (
+      await actorCan(PERMISSIONS.MISSION_READ, {
+        workspaceId: membership.workspaceId,
+        workspaceUserId: membership.workspaceUserId
+      })
+    ) {
+      readableMemberships.push(membership);
+    }
+  }
+  if (readableMemberships.length === 0) return { missions: [] };
 
-  const pairPlaceholders = memberships.map(() => '(?, ?)').join(', ');
-  const pairParams = memberships.flatMap(m => [m.workspaceId, m.workspaceUserId]);
+  const pairPlaceholders = readableMemberships.map(() => '(?, ?)').join(', ');
+  const pairParams = readableMemberships.flatMap(m => [m.workspaceId, m.workspaceUserId]);
 
   const rows = (await requireDatabaseClient().all(
     `${selectMyMissionsSql(pairPlaceholders)}
@@ -7301,6 +7427,13 @@ function mergeProfileMetadataJson({
 }
 
 async function toProfileDto(row: UserRow): Promise<ProfileDto> {
+  const authorized = getAuthorizedWorkspacesContext();
+  const roles = authorized
+    ? [...new Set(authorized.workspaces.flatMap(workspace => workspace.roleKeys))].sort()
+    : await loadActorRoles({
+        workspaceId: getBootstrapWorkspaceIdOrNull() ?? '',
+        workspaceUserId: getActorWorkspaceUserId()
+      });
   return {
     userId: row.id,
     displayName: row.display_name,
@@ -7311,10 +7444,7 @@ async function toProfileDto(row: UserRow): Promise<ProfileDto> {
     editorScheme: editorSchemeFromMetadata(row.metadata_json),
     kind: row.kind,
     authProvider: 'better-auth',
-    roles: await loadActorRoles({
-      workspaceId: getActiveWorkspaceId(),
-      workspaceUserId: getActorWorkspaceUserId()
-    }),
+    roles,
     createdAt: row.created_at
   };
 }
@@ -7589,17 +7719,34 @@ export async function updateProfile(body: UpdateProfileBody): Promise<ProfileDto
       [...setParams, now, revision, existing.id]
     );
 
-    await recordChange(
-      {
-        entityType: 'profile',
-        entityId: existing.id,
-        operation: 'update',
-        entityRevision: revision,
-        changedFields: changed,
-        workspaceId: getActiveWorkspaceId()
-      },
-      tx
-    );
+    const authorized = getAuthorizedWorkspacesContext();
+    const changeScopes = authorized?.workspaces.length
+      ? authorized.workspaces.map(workspace => ({
+          workspaceId: workspace.workspaceId,
+          workspaceUserId: workspace.workspaceUserId
+        }))
+      : getBootstrapWorkspaceIdOrNull()
+        ? [
+            {
+              workspaceId: getBootstrapWorkspaceIdOrNull()!,
+              workspaceUserId: getActorWorkspaceUserId()
+            }
+          ]
+        : [];
+    for (const scope of changeScopes) {
+      await recordChange(
+        {
+          entityType: 'profile',
+          entityId: existing.id,
+          operation: 'update',
+          entityRevision: revision,
+          changedFields: changed,
+          workspaceId: scope.workspaceId,
+          actorWorkspaceUserId: scope.workspaceUserId
+        },
+        tx
+      );
+    }
   });
 
   return getProfile();
@@ -7633,7 +7780,7 @@ interface UserTokenRow {
 
 interface UserTokenMutableRow {
   id: string;
-  workspace_id: string;
+  workspace_id: string | null;
   workspace_user_id: string | null;
   status: string;
   revision: number;
@@ -7641,7 +7788,7 @@ interface UserTokenMutableRow {
 
 interface OperatorIdentity {
   userId: string;
-  workspaceUserId: string;
+  workspaceUserId: string | null;
 }
 
 async function toUserTokenDto(db: DatabaseClient, row: UserTokenRow): Promise<UserTokenDto> {
@@ -7666,16 +7813,35 @@ async function toUserTokenDto(db: DatabaseClient, row: UserTokenRow): Promise<Us
  */
 async function loadOperatorIdentity(db: DatabaseClient): Promise<OperatorIdentity> {
   const user = await loadOperatorUserRow(db);
-  const membership = (await db.get(
-    `SELECT id FROM workspace_users
-         WHERE workspace_id = ? AND profile_id = ? AND deleted_at IS NULL
-         ORDER BY created_at ASC LIMIT 1`,
-    [getActiveWorkspaceId(), user.id]
-  )) as { id: string } | undefined;
-  if (!membership) {
-    throw new ApiError(409, 'No active workspace membership for the authenticated user');
+  return { userId: user.id, workspaceUserId: getActorWorkspaceUserId() };
+}
+
+function singleWorkspaceTokenIssuanceScope(): {
+  workspaceId: string;
+  workspaceUserId: string;
+  organizationId: string | null;
+} {
+  const authorized = getAuthorizedWorkspacesContext();
+  if (authorized) {
+    if (authorized.workspaces.length !== 1) {
+      throw new ApiError(
+        400,
+        'Token creation requires explicit organization/workspace consent when more than one workspace is authorized'
+      );
+    }
+    const only = authorized.workspaces[0]!;
+    return {
+      workspaceId: only.workspaceId,
+      workspaceUserId: only.workspaceUserId,
+      organizationId: authorized.organizationId
+    };
   }
-  return { userId: user.id, workspaceUserId: membership.id };
+  const workspaceId = getBootstrapWorkspaceIdOrNull();
+  const workspaceUserId = getActorWorkspaceUserId();
+  if (!workspaceId || !workspaceUserId) {
+    throw new ApiError(409, 'No workspace membership is available for token issuance');
+  }
+  return { workspaceId, workspaceUserId, organizationId: null };
 }
 
 async function loadUserTokenForUpdate(
@@ -7711,7 +7877,14 @@ export async function listUserTokens(): Promise<UserTokenDto[]> {
 }
 
 export async function createUserToken(
-  body: CreateUserTokenBody
+  body: CreateUserTokenBody,
+  consent?: {
+    organizationId: string;
+    allWorkspaces: boolean;
+    workspaceIds: string[];
+    issuanceWorkspaceId: string;
+    issuanceWorkspaceUserId: string;
+  }
 ): Promise<CreateUserTokenResultDto> {
   return requireDatabaseClient().transaction(async tx => {
     const label = body.label?.trim();
@@ -7738,8 +7911,47 @@ export async function createUserToken(
     }
     const scopeGrants = scopeGrantsForPreset(scope);
 
-    const { userId, workspaceUserId } = await loadOperatorIdentity(tx);
-    const workspaceId = getActiveWorkspaceId();
+    const issuanceScope = consent
+      ? {
+          workspaceId: consent.issuanceWorkspaceId,
+          workspaceUserId: consent.issuanceWorkspaceUserId,
+          organizationId: consent.organizationId
+        }
+      : singleWorkspaceTokenIssuanceScope();
+    const identity = consent
+      ? {
+          userId: await resolveActiveProfileId(tx),
+          workspaceUserId: consent.issuanceWorkspaceUserId
+        }
+      : {
+          userId: (await loadOperatorIdentity(tx)).userId,
+          workspaceUserId: issuanceScope.workspaceUserId
+        };
+    if (!identity.userId) throw new ApiError(401, 'Authentication required');
+    const { userId, workspaceUserId } = identity;
+    const workspaceId = issuanceScope.workspaceId;
+    const workspace = await tx.get<{ organization_id: string }>(
+      `SELECT organization_id FROM workspaces WHERE id = ? AND deleted_at IS NULL`,
+      [workspaceId]
+    );
+    if (!workspace) throw new ApiError(409, 'Active workspace no longer exists');
+    if (consent && workspace.organization_id !== consent.organizationId) {
+      throw new ApiError(400, 'Token consent organization does not match its issuance workspace');
+    }
+    if (consent && !consent.allWorkspaces && consent.workspaceIds.length === 0) {
+      throw new ApiError(400, 'Explicit token consent requires at least one workspace');
+    }
+    if (consent && !consent.allWorkspaces) {
+      for (const consentedWorkspaceId of consent.workspaceIds) {
+        const consentedWorkspace = await tx.get<{ organization_id: string }>(
+          `SELECT organization_id FROM workspaces WHERE id = ? AND deleted_at IS NULL`,
+          [consentedWorkspaceId]
+        );
+        if (!consentedWorkspace || consentedWorkspace.organization_id !== consent.organizationId) {
+          throw new ApiError(400, 'Token consent workspaces must belong to its organization');
+        }
+      }
+    }
 
     // Token prefixes are display/lookup metadata owned by the profile; retry on
     // the rare per-user clash.
@@ -7761,13 +7973,14 @@ export async function createUserToken(
     const now = nowIso();
     await tx.run(
       `INSERT INTO user_tokens (
-         id, workspace_id, profile_id, workspace_user_id, label,
+         id, workspace_id, organization_id, all_workspaces, profile_id, workspace_user_id, label,
          token_prefix, token_hash, hash_algorithm, status, expires_at,
          last_used_context_json, metadata_json, created_at, updated_at, revision
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, '{}', '{}', ?, ?, 1)`,
+       ) VALUES (?, ?, ?, false, ?, ?, ?, ?, ?, ?, 'active', ?, '{}', '{}', ?, ?, 1)`,
       [
         id,
         workspaceId,
+        consent?.organizationId ?? workspace.organization_id,
         userId,
         workspaceUserId,
         label,
@@ -7779,6 +7992,19 @@ export async function createUserToken(
         now
       ]
     );
+
+    if (consent?.allWorkspaces) {
+      await tx.run(`UPDATE user_tokens SET all_workspaces = true WHERE id = ?`, [id]);
+    } else {
+      const workspaceIds = consent?.workspaceIds ?? [workspaceId];
+      for (const consentedWorkspaceId of workspaceIds) {
+        await tx.run(
+          `INSERT INTO user_token_workspaces (token_id, workspace_id, created_at)
+           VALUES (?, ?, ?)`,
+          [id, consentedWorkspaceId, now]
+        );
+      }
+    }
 
     // A `full` token carries no scope rows (no token-level restriction). A scoped
     // token persists one grant pattern per row; auth-time enforcement intersects
@@ -7818,6 +8044,7 @@ export async function renameUserToken(
 ): Promise<UserTokenDto> {
   return requireDatabaseClient().transaction(async tx => {
     const existing = await loadUserTokenForUpdate(tx, id);
+    if (!existing.workspace_id) throw new ApiError(409, 'Token has no issuance workspace');
     const label = body.label?.trim();
     if (!label) throw new ApiError(400, 'Token label cannot be empty');
 
@@ -7848,6 +8075,7 @@ export async function renameUserToken(
 export async function revokeUserToken(id: string): Promise<UserTokenDto> {
   return requireDatabaseClient().transaction(async tx => {
     const existing = await loadUserTokenForUpdate(tx, id);
+    if (!existing.workspace_id) throw new ApiError(409, 'Token has no issuance workspace');
     // Revocation is idempotent: revoking an already-revoked token is a no-op.
     if (existing.status === 'revoked') return toUserTokenDto(tx, await reloadUserToken(tx, id));
 
@@ -7888,6 +8116,7 @@ export async function revokeUserToken(id: string): Promise<UserTokenDto> {
 export async function deleteRevokedUserToken(id: string): Promise<void> {
   await requireDatabaseClient().transaction(async tx => {
     const existing = await loadUserTokenForUpdate(tx, id);
+    if (!existing.workspace_id) throw new ApiError(409, 'Token has no issuance workspace');
     if (existing.status !== 'revoked') {
       throw new ApiError(409, 'Only revoked tokens can be deleted');
     }

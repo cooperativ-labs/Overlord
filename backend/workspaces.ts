@@ -18,7 +18,8 @@ import { syncSqlStudioForWorkspace } from './sql-studio/sql-studio-manager.ts';
 import {
   findActiveMembershipId,
   getActiveProfileId,
-  getActiveWorkspaceIdOrNull,
+  getAuthorizedWorkspacesContext,
+  getBootstrapWorkspaceIdOrNull,
   newId,
   nowIso,
   recordChange,
@@ -64,7 +65,7 @@ function toWorkspaceDto(r: WorkspaceListRow): WorkspaceDto {
     slug: r.slug,
     name: r.name,
     kind: r.kind,
-    isActive: r.id === getActiveWorkspaceIdOrNull(),
+    isActive: r.id === getBootstrapWorkspaceIdOrNull(),
     projectCount: r.project_count,
     memberCount: r.member_count,
     sqlStudioEnabled: sqlStudioEnabledFromSettingsJson(r.settings_json),
@@ -461,7 +462,7 @@ export async function createWorkspace(body: CreateWorkspaceBody): Promise<Worksp
 
   // New workspaces become the active one, mirroring the team switcher: creating
   // a workspace drops you into it.
-  await setActiveWorkspace(workspaceId);
+  if (!getAuthorizedWorkspacesContext()) await setActiveWorkspace(workspaceId);
   const created = (await listWorkspaces()).find(w => w.id === workspaceId);
   if (!created) throw new ApiError(500, 'Workspace was created but could not be loaded');
   return created;
@@ -583,7 +584,7 @@ export async function createOrganizationOnboarding(
     return nextWorkspaceId;
   });
 
-  await setActiveWorkspace(workspaceId);
+  if (!getAuthorizedWorkspacesContext()) await setActiveWorkspace(workspaceId);
   const created = (await listWorkspaces()).find(w => w.id === workspaceId);
   if (!created) throw new ApiError(500, 'Workspace was created but could not be loaded');
   return created;
@@ -631,7 +632,7 @@ export async function updateWorkspace(
           client: tx
         });
         changed.push('settings_json');
-        if (id === getActiveWorkspaceIdOrNull()) {
+        if (id === getBootstrapWorkspaceIdOrNull()) {
           syncSqlStudioForWorkspace({ enabled: body.sqlStudioEnabled });
         }
       }
@@ -660,7 +661,9 @@ export async function updateWorkspace(
 
   // Renaming the active workspace must be observed by the `WORKSPACE` live
   // binding so `/api/meta` and change attribution stay accurate.
-  if (id === getActiveWorkspaceIdOrNull()) await reloadActiveWorkspace();
+  if (!getAuthorizedWorkspacesContext() && id === getBootstrapWorkspaceIdOrNull()) {
+    await reloadActiveWorkspace();
+  }
   const updated = (await listWorkspaces()).find(w => w.id === id);
   if (!updated) throw new ApiError(404, 'Workspace not found or no active membership');
   return updated;
@@ -706,7 +709,7 @@ export async function deleteWorkspace(id: string): Promise<WorkspaceDto[]> {
     await deleteOrganizationIfEmpty(existing.organization_id, tx);
   });
 
-  if (id === getActiveWorkspaceIdOrNull()) {
+  if (!getAuthorizedWorkspacesContext() && id === getBootstrapWorkspaceIdOrNull()) {
     const next = (await listWorkspaces())[0];
     if (next) {
       await setActiveWorkspace(next.id);
@@ -1250,7 +1253,7 @@ export async function acceptWorkspaceInvitation(
   }
 
   const workspaceId = outcome.workspaceId;
-  await setActiveWorkspace(workspaceId);
+  if (!getAuthorizedWorkspacesContext()) await setActiveWorkspace(workspaceId);
   const workspace = (await listWorkspaces()).find(w => w.id === workspaceId);
   if (!workspace) throw new ApiError(500, 'Joined workspace could not be loaded');
   return workspace;

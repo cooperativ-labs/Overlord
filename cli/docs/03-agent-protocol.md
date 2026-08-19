@@ -46,7 +46,12 @@ Requirements:
   `ambiguous_active_objective`.
 - `connect`: create a lightweight session key without full context. Optional
   `--objective-id` pins the session to that objective.
-- `search-missions`: search by query, status, project, creator, and update dates.
+- `search-missions`: v1 remains compatible. `--response-version 2` returns the
+  versioned cross-workspace envelope and accepts stable `--project-id` values,
+  `--resource-key`, `--date-field createdAt|updatedAt`, inclusive `--from`, and
+  exclusive `--to`. The CLI may resolve a human project id/slug/name before it
+  calls the service; REST and MCP never resolve project names. V2 operates only
+  within one selected organization and reports applied filters and truncation.
 - `discuss-objective`: mark a draft objective submitted. Optional
   `--objective-id` names which draft when a mission holds more than one; the
   objective must be in `draft` state.

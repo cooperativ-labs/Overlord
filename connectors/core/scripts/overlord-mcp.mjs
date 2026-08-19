@@ -125,13 +125,22 @@ const tools = [
   {
     name: 'overlord_search_missions',
     title: 'Search Overlord missions',
-    description: 'Search missions in the OAuth-bound workspace.',
+    description:
+      "Search missions across the caller's authorized workspaces in one organization. Returns applied filters and truncation metadata; complete and cancelled missions remain eligible by default.",
     inputSchema: objectSchema({
       query: stringProperty('Search query text.'),
       status: stringProperty(
         'Comma-separated status TYPES, such as draft,next,execute,review. Types are workspace-invariant (draft, next, execute, review, complete, blocked, cancelled). Project-defined status names are not accepted here.'
       ),
-      projectId: stringProperty('Optional project id, slug, or name.'),
+      projectId: stringProperty(
+        'Optional stable Overlord project UUID. Resolve a human project reference first.'
+      ),
+      resourceKey: stringProperty(
+        'Optional logical resource key, matched by name within selected projects.'
+      ),
+      dateField: stringProperty('Date column for an explicit range: createdAt or updatedAt.'),
+      from: stringProperty('Optional inclusive ISO-8601 date/time lower bound.'),
+      to: stringProperty('Optional exclusive ISO-8601 date/time upper bound.'),
       limit: {
         type: 'number',
         description: 'Maximum result count. Defaults to 25.'
@@ -413,6 +422,17 @@ function requiredString(args, name) {
   return value;
 }
 
+function optionalProjectUuid(args) {
+  const projectId = optionalString(args, 'projectId');
+  if (!projectId) return null;
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(projectId)) {
+    throw new Error(
+      'projectId must be a stable Overlord project UUID; resolve human references first'
+    );
+  }
+  return projectId;
+}
+
 /**
  * Forward mission/objective addressing to the CLI. The CLI owns the shared
  * `@overlord/contract` parser and derives a mission from a display id before it
@@ -461,11 +481,18 @@ function callOverlordTool(name, args) {
   }
   if (name === 'overlord_search_missions') {
     return runProtocol('search-missions', {
+      'response-version': '2',
       ...(optionalString(args, 'query') ? { query: requiredString(args, 'query') } : {}),
       ...(optionalString(args, 'status') ? { status: requiredString(args, 'status') } : {}),
-      ...(optionalString(args, 'projectId')
-        ? { 'project-id': requiredString(args, 'projectId') }
+      ...(optionalProjectUuid(args) ? { 'project-id': optionalProjectUuid(args) } : {}),
+      ...(optionalString(args, 'resourceKey')
+        ? { 'resource-key': requiredString(args, 'resourceKey') }
         : {}),
+      ...(optionalString(args, 'dateField')
+        ? { 'date-field': requiredString(args, 'dateField') }
+        : {}),
+      ...(optionalString(args, 'from') ? { from: requiredString(args, 'from') } : {}),
+      ...(optionalString(args, 'to') ? { to: requiredString(args, 'to') } : {}),
       ...(typeof args.limit === 'number' && Number.isFinite(args.limit)
         ? { limit: String(Math.trunc(args.limit)) }
         : {})
@@ -663,7 +690,7 @@ process.stdin.on('data', async chunk => {
         result: {
           protocolVersion: PROTOCOL_VERSION,
           capabilities: { tools: { listChanged: false } },
-          serverInfo: { name: 'overlord-__OVERLORD_ADAPTER_KEY__', version: '0.3.28' }
+          serverInfo: { name: 'overlord-__OVERLORD_ADAPTER_KEY__', version: '0.3.29' }
         }
       });
       continue;

@@ -2,7 +2,8 @@ import { PERMISSIONS } from '@overlord/auth';
 import type { Request, Response } from 'express';
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 
-import { getActiveWorkspaceId, getActorWorkspaceUserId } from './db.ts';
+import { listWorkspaceConsentOrganizations } from './auth.ts';
+import { resolveActiveProfileId } from './db.ts';
 import { ApiError } from './errors.ts';
 import { requirePermission } from './rbac.ts';
 import { createUserToken, revokeUserTokenSecret } from './repository.ts';
@@ -36,6 +37,8 @@ type AuthorizationCode = {
   expiresAt: number;
   accessToken: string;
 };
+
+type OAuthWorkspaceChoice = { workspaceId: string; workspaceUserId: string };
 
 const authorizationCodes = new Map<string, AuthorizationCode>();
 
@@ -329,23 +332,107 @@ export function handleOAuthRegister(req: Request, res: Response): void {
   });
 }
 
-export function handleOAuthRequestInfo(req: Request, res: Response): void {
+export async function handleOAuthRequestInfo(req: Request, res: Response): Promise<void> {
   const parsed = validateAuthorizationRequest(req);
+  const profileId = await resolveActiveProfileId();
+  if (!profileId) throw new ApiError(401, 'Authentication required');
+  const organizations = await listWorkspaceConsentOrganizations(profileId);
   res.json({
     clientName: parsed.client.clientName,
     redirectUri: parsed.redirectUri,
     redirectHost: new URL(parsed.redirectUri).host,
     resource: parsed.resource,
     scopes: parsed.scope.split(/\s+/),
-    state: parsed.state
+    state: parsed.state,
+    organizations: organizations.map(organization => ({
+      id: organization.id,
+      name: organization.name,
+      workspaces: organization.workspaces.map(workspace => ({
+        workspaceId: workspace.workspaceId,
+        workspaceUserId: workspace.workspaceUserId,
+        slug: workspace.workspace.slug,
+        name: workspace.workspace.name,
+        kind: workspace.workspace.kind,
+        roleKeys: workspace.roleKeys
+      }))
+    }))
   });
 }
 
+async function resolveOAuthConsent(req: Request): Promise<{
+  organizationId: string;
+  allWorkspaces: boolean;
+  workspaceIds: string[];
+  issuanceWorkspace: OAuthWorkspaceChoice;
+}> {
+  const profileId = await resolveActiveProfileId();
+  if (!profileId) throw new ApiError(401, 'Authentication required');
+  const organizations = await listWorkspaceConsentOrganizations(profileId);
+  const requestedOrganizationId = bodyString(req, 'organizationId');
+  const organization = requestedOrganizationId
+    ? organizations.find(item => item.id === requestedOrganizationId)
+    : organizations.length === 1
+      ? organizations[0]
+      : undefined;
+  if (!organization) {
+    throw new ApiError(
+      400,
+      'Select one organization for this MCP connection',
+      undefined,
+      'invalid_request'
+    );
+  }
+  const allWorkspaces = (req.body as Record<string, unknown> | undefined)?.allWorkspaces === true;
+  const rawWorkspaceIds = (req.body as Record<string, unknown> | undefined)?.workspaceIds;
+  const requestedWorkspaceIds = Array.isArray(rawWorkspaceIds)
+    ? [
+        ...new Set(
+          rawWorkspaceIds
+            .filter((id): id is string => typeof id === 'string' && !!id.trim())
+            .map(id => id.trim())
+        )
+      ]
+    : [];
+  const workspaceById = new Map(
+    organization.workspaces.map(workspace => [workspace.workspaceId, workspace] as const)
+  );
+  if (requestedWorkspaceIds.some(id => !workspaceById.has(id))) {
+    throw new ApiError(
+      400,
+      'Selected workspaces must be live members of the selected organization',
+      undefined,
+      'invalid_request'
+    );
+  }
+  const workspaceIds = allWorkspaces
+    ? []
+    : requestedWorkspaceIds.length > 0
+      ? requestedWorkspaceIds
+      : organization.workspaces.length === 1
+        ? [organization.workspaces[0]!.workspaceId]
+        : [];
+  if (!allWorkspaces && workspaceIds.length === 0) {
+    throw new ApiError(
+      400,
+      'Select one or more workspaces, or all current and future workspaces',
+      undefined,
+      'invalid_request'
+    );
+  }
+  const issuanceWorkspace = workspaceById.get(
+    workspaceIds[0] ?? organization.workspaces[0]?.workspaceId ?? ''
+  );
+  if (!issuanceWorkspace)
+    throw new ApiError(
+      400,
+      'No live workspace membership is available',
+      undefined,
+      'invalid_request'
+    );
+  return { organizationId: organization.id, allWorkspaces, workspaceIds, issuanceWorkspace };
+}
+
 export async function handleOAuthApprove(req: Request, res: Response): Promise<void> {
-  await requirePermission(PERMISSIONS.USER_TOKEN_SELF_CREATE, {
-    workspaceId: getActiveWorkspaceId(),
-    workspaceUserId: getActorWorkspaceUserId()
-  });
   await sweepExpiredAuthorizationCodes();
   const parsed = validateAuthorizationRequest(req);
   const decision = bodyString(req, 'decision');
@@ -365,11 +452,26 @@ export async function handleOAuthApprove(req: Request, res: Response): Promise<v
     throw new ApiError(400, 'OAuth decision must be approve or deny', undefined, 'invalid_request');
   }
 
-  const result = await createUserToken({
-    label: `OAuth MCP: ${parsed.client.clientName}`,
-    scope: 'mission_lifecycle',
-    expiresAt: new Date(Date.now() + USER_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000).toISOString()
+  const consent = await resolveOAuthConsent(req);
+  await requirePermission(PERMISSIONS.USER_TOKEN_SELF_CREATE, {
+    workspaceId: consent.issuanceWorkspace.workspaceId,
+    workspaceUserId: consent.issuanceWorkspace.workspaceUserId
   });
+
+  const result = await createUserToken(
+    {
+      label: `OAuth MCP: ${parsed.client.clientName}`,
+      scope: 'mission_lifecycle',
+      expiresAt: new Date(Date.now() + USER_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000).toISOString()
+    },
+    {
+      organizationId: consent.organizationId,
+      allWorkspaces: consent.allWorkspaces,
+      workspaceIds: consent.workspaceIds,
+      issuanceWorkspaceId: consent.issuanceWorkspace.workspaceId,
+      issuanceWorkspaceUserId: consent.issuanceWorkspace.workspaceUserId
+    }
+  );
   const code = `${AUTH_CODE_PREFIX}${randomBytes(32).toString('base64url')}`;
   authorizationCodes.set(code, {
     clientId: parsed.clientId,

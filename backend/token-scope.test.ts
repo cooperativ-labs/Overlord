@@ -47,6 +47,19 @@ test('createUserToken defaults to a ~90-day expiry when none is given', async ()
   assert.ok(delta > NINETY_DAYS_MS - 60_000 && delta < NINETY_DAYS_MS + 60_000);
   assert.equal(token.scope, 'full');
   assert.deepEqual(token.scopeGrants, []);
+  const consent = db
+    .prepare(
+      `SELECT t.organization_id, t.all_workspaces, utw.workspace_id
+         FROM user_tokens t
+         JOIN user_token_workspaces utw ON utw.token_id = t.id
+        WHERE t.id = ?`
+    )
+    .get(token.id) as { organization_id: string; all_workspaces: number; workspace_id: string };
+  assert.deepEqual(consent, {
+    organization_id: 'test-organization',
+    all_workspaces: 0,
+    workspace_id: 'local-workspace'
+  });
 });
 
 test('createUserToken honours an explicit null expiry (never expires)', async () => {

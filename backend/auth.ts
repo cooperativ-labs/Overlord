@@ -18,9 +18,10 @@ import { cascadeDeleteAccount } from './account-deletion.ts';
 import {
   type ActiveWorkspace,
   authDomainDatabase,
+  type AuthorizedWorkspace,
   DATABASE_PATH,
   findActiveMembershipId,
-  getActiveWorkspaceIdOrNull,
+  getBootstrapWorkspaceIdOrNull,
   loadWorkspaceRow,
   requireDatabaseClient,
   resolveActorForWorkspace,
@@ -28,12 +29,78 @@ import {
   setActiveTokenAuth,
   setActiveWorkspaceContext,
   setActiveWorkspaceUser,
+  setAuthorizedWorkspacesContext,
   setClientDeviceIdentity,
   withRequestContextAsync
 } from './db.ts';
 import { emailOTPSenderFromEnv, verificationEmailSenderFromEnv } from './email-verification.ts';
 import { ApiError } from './errors.ts';
 import { grantWorkspaceAdminRole } from './workspaces.ts';
+
+export interface WorkspaceConsentOrganization {
+  id: string;
+  name: string;
+  workspaces: AuthorizedWorkspace[];
+}
+
+/**
+ * Lists live memberships grouped by organization for an explicit consent or
+ * organization picker. Unlike the request snapshot this deliberately does not
+ * choose an organization when the profile belongs to more than one.
+ */
+export async function listWorkspaceConsentOrganizations(
+  profileId: string
+): Promise<WorkspaceConsentOrganization[]> {
+  const rows = await requireDatabaseClient().all<{
+    organization_id: string;
+    organization_name: string;
+    workspace_id: string;
+    workspace_user_id: string;
+    workspace_slug: string;
+    workspace_name: string;
+    workspace_kind: string;
+    role_key: string | null;
+  }>(
+    `SELECT w.organization_id, o.name AS organization_name,
+            wu.workspace_id, wu.id AS workspace_user_id,
+            w.slug AS workspace_slug, w.name AS workspace_name, w.kind AS workspace_kind,
+            ra.role_key
+       FROM workspace_users wu
+       JOIN workspaces w ON w.id = wu.workspace_id AND w.deleted_at IS NULL
+       JOIN organizations o ON o.id = w.organization_id AND o.deleted_at IS NULL
+       LEFT JOIN role_assignments ra
+         ON ra.workspace_id = wu.workspace_id AND ra.workspace_user_id = wu.id
+        AND ra.deleted_at IS NULL
+      WHERE wu.profile_id = ? AND wu.status = 'active' AND wu.deleted_at IS NULL
+      ORDER BY o.created_at ASC, w.created_at ASC, ra.role_key ASC`,
+    [profileId]
+  );
+  const organizations = new Map<string, WorkspaceConsentOrganization>();
+  for (const row of rows) {
+    let organization = organizations.get(row.organization_id);
+    if (!organization) {
+      organization = { id: row.organization_id, name: row.organization_name, workspaces: [] };
+      organizations.set(row.organization_id, organization);
+    }
+    let workspace = organization.workspaces.find(item => item.workspaceId === row.workspace_id);
+    if (!workspace) {
+      workspace = {
+        workspaceId: row.workspace_id,
+        workspaceUserId: row.workspace_user_id,
+        roleKeys: [],
+        workspace: {
+          id: row.workspace_id,
+          slug: row.workspace_slug,
+          name: row.workspace_name,
+          kind: row.workspace_kind
+        }
+      };
+      organization.workspaces.push(workspace);
+    }
+    if (row.role_key) workspace.roleKeys.push(row.role_key);
+  }
+  return [...organizations.values()];
+}
 
 const authBaseUrl = resolveAuthBaseUrl();
 process.env.BETTER_AUTH_URL ??= authBaseUrl;
@@ -87,6 +154,85 @@ function isLoopbackRequest(req: Request): boolean {
 export interface WorkspaceMembership {
   workspaceUserId: string;
   workspace: ActiveWorkspace;
+}
+
+/**
+ * Resolve the complete authorization set once, at the authentication boundary.
+ * A session with memberships in several organizations intentionally has no
+ * ambient selection; a later explicit organization-selection surface must pick
+ * one. USER_TOKENs already carry that selection in their consent record.
+ */
+export async function resolveAuthorizedWorkspaces(
+  profileId: string,
+  token: { id: string; organizationId: string | null; allWorkspaces: boolean } | null
+): Promise<{ organizationId: string | null; workspaces: AuthorizedWorkspace[] }> {
+  // A partially migrated/pre-onboarding token has no organization boundary and
+  // must not turn an explicit allowlist into cross-organization access.
+  if (token && !token.organizationId) return { organizationId: null, workspaces: [] };
+  const rows = await requireDatabaseClient().all<{
+    workspace_id: string;
+    workspace_user_id: string;
+    workspace_slug: string;
+    workspace_name: string;
+    workspace_kind: string;
+    organization_id: string;
+    role_key: string | null;
+  }>(
+    `SELECT wu.workspace_id, wu.id AS workspace_user_id,
+            w.slug AS workspace_slug, w.name AS workspace_name, w.kind AS workspace_kind,
+            w.organization_id, ra.role_key
+       FROM workspace_users wu
+       JOIN workspaces w ON w.id = wu.workspace_id AND w.deleted_at IS NULL
+       LEFT JOIN role_assignments ra
+         ON ra.workspace_id = wu.workspace_id AND ra.workspace_user_id = wu.id
+        AND ra.deleted_at IS NULL
+      WHERE wu.profile_id = ? AND wu.status = 'active' AND wu.deleted_at IS NULL
+        AND (? IS NULL OR w.organization_id = ?)
+        AND (
+          ? IS NULL OR ? = 1 OR EXISTS (
+            SELECT 1 FROM user_token_workspaces utw
+             WHERE utw.token_id = ? AND utw.workspace_id = wu.workspace_id
+          )
+        )
+      ORDER BY w.organization_id ASC, wu.workspace_id ASC, ra.role_key ASC`,
+    [
+      profileId,
+      token?.organizationId ?? null,
+      token?.organizationId ?? null,
+      token?.id ?? null,
+      token?.allWorkspaces ? 1 : 0,
+      token?.id ?? null
+    ]
+  );
+
+  const organizationIds = [...new Set(rows.map(row => row.organization_id))];
+  // Browser/session authentication has no transport-level organization selector.
+  // Refuse to make the historical oldest-membership choice when it is ambiguous.
+  const organizationId =
+    token?.organizationId ?? (organizationIds.length === 1 ? organizationIds[0]! : null);
+  if (!organizationId) return { organizationId: null, workspaces: [] };
+
+  const byWorkspace = new Map<string, AuthorizedWorkspace>();
+  for (const row of rows) {
+    if (row.organization_id !== organizationId) continue;
+    const existing = byWorkspace.get(row.workspace_id);
+    if (existing) {
+      if (row.role_key) existing.roleKeys.push(row.role_key);
+      continue;
+    }
+    byWorkspace.set(row.workspace_id, {
+      workspaceId: row.workspace_id,
+      workspaceUserId: row.workspace_user_id,
+      roleKeys: row.role_key ? [row.role_key] : [],
+      workspace: {
+        id: row.workspace_id,
+        slug: row.workspace_slug,
+        name: row.workspace_name,
+        kind: row.workspace_kind
+      }
+    });
+  }
+  return { organizationId, workspaces: [...byWorkspace.values()] };
 }
 
 async function profileIdForWorkspaceUser(workspaceUserId: string): Promise<string | null> {
@@ -183,14 +329,13 @@ export async function requireAuthenticatedSession(
       const session = await resolveSessionFromBrowserRequest({ auth, req });
       if (session) {
         setActiveProfileId(session.user.id);
-        // `null` means the profile has no active workspace membership at all
-        // (e.g. a brand-new signup with no invite). The request proceeds
-        // authenticated but with no active workspace; RBAC gates below
-        // (`requirePermission`/`actorCan`) reject it uniformly since they
-        // treat a null actor as having no roles.
-        const membership = await ensureWorkspaceUser(session.user.id);
-        setActiveWorkspaceContext(membership?.workspace ?? null);
-        setActiveWorkspaceUser(membership?.workspaceUserId ?? null);
+        const authorized = await resolveAuthorizedWorkspaces(session.user.id, null);
+        setAuthorizedWorkspacesContext(authorized);
+        // Authentication establishes an authorization set, never an ambient
+        // workspace. Operation handlers resolve their entity, explicit
+        // workspace, or aggregate scope after this boundary.
+        setActiveWorkspaceContext(null);
+        setActiveWorkspaceUser(null);
         next();
         return;
       }
@@ -211,13 +356,12 @@ export async function requireAuthenticatedSession(
           return;
         }
         setActiveProfileId(verified.profileId);
-        // `membership.workspace` is already backed by a live workspace row —
-        // `ensureWorkspaceUser` resolved it moments ago — so it is used directly.
-        const membership = await ensureWorkspaceUser(verified.profileId);
+        const authorized = await resolveAuthorizedWorkspaces(verified.profileId, verified);
         const scopeGrants = await listActiveTokenScopeGrants(authDomainDatabase(), verified.id);
-        setActiveWorkspaceContext(membership?.workspace ?? null);
+        setAuthorizedWorkspacesContext(authorized);
+        setActiveWorkspaceContext(null);
         setActiveTokenAuth({
-          workspaceUserId: membership?.workspaceUserId ?? null,
+          workspaceUserId: null,
           tokenId: verified.id,
           scopeGrants
         });
@@ -236,7 +380,7 @@ export async function requireAuthenticatedSession(
       //    proceed unauthenticated-actor rather than throwing, mirroring the
       //    zero-membership USER_TOKEN branch above.
       if (nonBrowser && isLoopbackRequest(req)) {
-        const defaultWorkspaceId = getActiveWorkspaceIdOrNull();
+        const defaultWorkspaceId = getBootstrapWorkspaceIdOrNull();
         const workspaceUserId = defaultWorkspaceId
           ? await resolveActorForWorkspace(defaultWorkspaceId)
           : null;

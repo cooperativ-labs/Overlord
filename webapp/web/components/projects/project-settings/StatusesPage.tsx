@@ -132,7 +132,7 @@ function SortableStatusRow({
           >
             {status.isDefault ? 'Default' : 'Set default'}
           </Button>
-        ) : status.type === 'next' || status.type === 'execute' || status.type === 'review' ? (
+        ) : status.type === 'execute' || status.type === 'review' ? (
           <span className="text-muted-foreground">Exclusive</span>
         ) : (
           <span className="text-muted-foreground">—</span>
@@ -351,7 +351,8 @@ export function StatusesPage({ projectId }: { projectId: string }) {
       <div className="rounded-lg border p-4">
         <h3 className="text-sm font-medium">Add status</h3>
         <p className="mt-1 text-xs text-muted-foreground">
-          New missions use the default draft or next status unless another is chosen at creation time.
+          New missions use the default draft or next status unless another is chosen at creation
+          time.
         </p>
         <div className="mt-3 flex flex-wrap items-end gap-3">
           <div className="grid min-w-[12rem] gap-1.5">

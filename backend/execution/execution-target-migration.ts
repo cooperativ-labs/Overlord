@@ -1,20 +1,19 @@
 import { PERMISSIONS } from '@overlord/auth';
 
 import { loadExecutionTargetMigrationDiagnostics } from '../../packages/core/service/execution-target-migration.ts';
-import { buildWebappServiceContext, getActiveWorkspaceId, getActorWorkspaceUserId } from '../db.ts';
+import { buildWebappServiceContextForWorkspace } from '../db.ts';
 import { ApiError } from '../errors.ts';
-import { actorCan } from '../rbac.ts';
+import { requireWorkspacePermission } from '../rbac.ts';
 
-export async function getExecutionTargetMigrationDiagnostics() {
-  const canRead = await actorCan(PERMISSIONS.WORKSPACE_READ, {
-    workspaceId: getActiveWorkspaceId(),
-    workspaceUserId: getActorWorkspaceUserId()
+export async function getExecutionTargetMigrationDiagnostics(workspaceId: string) {
+  if (!workspaceId.trim()) throw new ApiError(400, 'workspaceId is required');
+  const workspaceUserId = await requireWorkspacePermission({
+    workspaceId,
+    permission: PERMISSIONS.WORKSPACE_READ,
+    notFoundMessage: 'Workspace not found'
   });
-  if (!canRead) {
-    throw new ApiError(403, 'Not allowed to read execution-target migration diagnostics.');
-  }
 
   return loadExecutionTargetMigrationDiagnostics({
-    ctx: buildWebappServiceContext()
+    ctx: await buildWebappServiceContextForWorkspace(workspaceId, undefined, workspaceUserId)
   });
 }

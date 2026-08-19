@@ -1,3 +1,4 @@
+import type { SearchMissionsResponseV2 } from '@overlord/contract';
 import { bindBool, formatObjectiveDisplayId, OBJECTIVE_STATES } from '@overlord/database';
 
 import { recordChange } from './change-feed.js';
@@ -9,14 +10,7 @@ import {
   resolveProjectId
 } from './context.js';
 import { ServiceError } from './errors.js';
-import {
-  buildMissionSearchMatch,
-  missionSearchDocScoreExpr,
-  missionSearchFromClause,
-  missionSearchMatchPredicate,
-  missionSearchMissionIdColumn,
-  missionSearchWorkspaceParams
-} from './mission-search-sql.js';
+import { searchWorkspaceMissions, toSearchMissionsResponseV2 } from './mission-search.js';
 import { allocateObjectiveDisplayKey } from './objective-display-id.js';
 import { assertProjectResourceKeyExists } from './projects.js';
 import { initialTitleFromInstruction, newId, nowIso } from './util.js';
@@ -817,112 +811,121 @@ export async function listMissions({
   }));
 }
 
-export async function searchMissions({
+async function searchMissionsWorkspace({
   ctx,
   query,
   statusTypes,
   projectId,
+  resourceKeys,
+  dateField,
+  from,
+  to,
   limit = 25
 }: {
   ctx: ServiceContext;
   query?: string | null;
   statusTypes?: string[] | null;
   projectId?: string | null;
+  resourceKeys?: string[] | null;
+  dateField?: 'createdAt' | 'updatedAt' | null;
+  from?: string | null;
+  to?: string | null;
+  limit?: number;
+}) {
+  const projectIds = projectId ? [await resolveProjectId(ctx, projectId)] : [];
+  return searchWorkspaceMissions({
+    db: ctx.db,
+    workspaceId: ctx.workspace.id,
+    query: query ?? null,
+    projectIds,
+    statusTypes: statusTypes ?? null,
+    resourceKeys: resourceKeys ?? null,
+    dateField: dateField ?? null,
+    from: from ?? null,
+    to: to ?? null,
+    limit
+  });
+}
+
+export async function searchMissions({
+  ctx,
+  query,
+  statusTypes,
+  projectId,
+  resourceKeys,
+  dateField,
+  from,
+  to,
+  limit = 25
+}: {
+  ctx: ServiceContext;
+  query?: string | null;
+  statusTypes?: string[] | null;
+  projectId?: string | null;
+  resourceKeys?: string[] | null;
+  dateField?: 'createdAt' | 'updatedAt' | null;
+  from?: string | null;
+  to?: string | null;
   limit?: number;
 }): Promise<MissionSummary[]> {
-  const trimmed = query?.trim();
-  const match = trimmed
-    ? buildMissionSearchMatch({ dialect: ctx.db.dialect, query: trimmed })
-    : null;
-
-  // No usable search terms → fall back to a recency-ordered browse of the same
-  // filtered set rather than running an empty full-text query.
-  if (!match) {
-    return await listMissions({
-      ctx,
-      projectId: projectId ?? null,
-      statusTypes: statusTypes ?? null,
-      limit
-    });
-  }
-
-  // Score every matching source document, then aggregate per mission below.
-  // Per-document relevance weights the title column above the body and the
-  // source kind by importance (mission title > objective > event). SQLite uses
-  // FTS5 bm25() (negated so higher is better); PostgreSQL uses ts_rank().
-  const params: Array<string | number> = missionSearchWorkspaceParams({
-    dialect: ctx.db.dialect,
-    workspaceId: ctx.workspace.id,
-    match
+  const result = await searchMissionsWorkspace({
+    ctx,
+    query: query ?? null,
+    statusTypes: statusTypes ?? null,
+    projectId: projectId ?? null,
+    resourceKeys: resourceKeys ?? null,
+    dateField: dateField ?? null,
+    from: from ?? null,
+    to: to ?? null,
+    limit
   });
-  const missionIdColumn = missionSearchMissionIdColumn(ctx.db.dialect);
-  let sql = `SELECT t.id, t.display_id, t.project_id, t.title, t.status_type, t.status_id,
-                    t.priority, t.created_at, t.updated_at,
-                    (SELECT COUNT(*) FROM objectives o WHERE o.mission_id = t.id AND o.deleted_at IS NULL) AS objective_count,
-                    ${missionSearchDocScoreExpr(ctx.db.dialect)} AS doc_score
-             FROM ${missionSearchFromClause(ctx.db.dialect)}
-             JOIN missions t ON t.id = ${missionIdColumn}
-               AND t.workspace_id = ? AND t.deleted_at IS NULL
-             WHERE ${missionSearchMatchPredicate(ctx.db.dialect)}`;
+  return result.hits.map(hit => ({
+    id: hit.id,
+    displayId: hit.displayId,
+    projectId: hit.projectId,
+    title: hit.title,
+    statusType: hit.statusType,
+    statusId: hit.statusId,
+    priority: hit.priority,
+    createdAt: hit.createdAt,
+    updatedAt: hit.updatedAt,
+    objectiveCount: hit.objectiveCount
+  }));
+}
 
-  if (projectId) {
-    sql += ' AND t.project_id = ?';
-    params.push(await resolveProjectId(ctx, projectId));
-  }
-
-  if (statusTypes && statusTypes.length > 0) {
-    const placeholders = statusTypes.map(() => '?').join(', ');
-    sql += ` AND t.status_type IN (${placeholders})`;
-    params.push(...statusTypes);
-  }
-
-  const rows = (await ctx.db.all(sql, params)) as Array<{
-    id: string;
-    display_id: string;
-    project_id: string;
-    title: string;
-    status_type: string;
-    status_id: string;
-    priority: string | null;
-    created_at: string;
-    updated_at: string;
-    objective_count: number;
-    doc_score: number;
-  }>;
-
-  // Aggregate per-document scores into one relevance per mission.
-  const byMission = new Map<string, { mission: MissionSummary; relevance: number }>();
-  for (const row of rows) {
-    const existing = byMission.get(row.id);
-    if (existing) {
-      existing.relevance += row.doc_score;
-      continue;
-    }
-    byMission.set(row.id, {
-      relevance: row.doc_score,
-      mission: {
-        id: row.id,
-        displayId: row.display_id,
-        projectId: row.project_id,
-        title: row.title,
-        statusType: row.status_type,
-        statusId: row.status_id,
-        priority: row.priority,
-        createdAt: row.created_at,
-        updatedAt: row.updated_at,
-        objectiveCount: row.objective_count
-      }
-    });
-  }
-
-  return [...byMission.values()]
-    .sort(
-      (left, right) =>
-        right.relevance - left.relevance ||
-        right.mission.updatedAt.localeCompare(left.mission.updatedAt)
-    )
-    .slice(0, limit)
-    .map(entry => entry.mission);
+export async function searchMissionsV2({
+  ctx,
+  query,
+  statusTypes,
+  projectId,
+  resourceKeys,
+  dateField,
+  from,
+  to,
+  limit = 25
+}: {
+  ctx: ServiceContext;
+  query?: string | null;
+  statusTypes?: string[] | null;
+  projectId?: string | null;
+  resourceKeys?: string[] | null;
+  dateField?: 'createdAt' | 'updatedAt' | null;
+  from?: string | null;
+  to?: string | null;
+  limit?: number;
+}): Promise<SearchMissionsResponseV2> {
+  const result = await searchMissionsWorkspace({
+    ctx,
+    query: query ?? null,
+    statusTypes: statusTypes ?? null,
+    projectId: projectId ?? null,
+    resourceKeys: resourceKeys ?? null,
+    dateField: dateField ?? null,
+    from: from ?? null,
+    to: to ?? null,
+    limit
+  });
+  return toSearchMissionsResponseV2(result);
 }
 
 export async function addObjectivesToMission({

@@ -110,7 +110,7 @@ export const hostedMcpToolDefinitions: ToolDefinition[] = [
     name: 'overlord_search_missions',
     title: 'Search Overlord missions',
     description:
-      'Use this when the user wants to find or list missions in the connected workspace.',
+      "Use this when the user wants to find or list missions across the caller's authorized workspaces in one organization. Returns SearchMissionsResponseV2 with snippets, match evidence, appliedFilters, and totalMatchedBeforeLimit. Complete and cancelled missions stay eligible by default.",
     inputSchema: objectSchema({
       query: stringProperty('Search query text.'),
       status: stringProperty(
@@ -118,13 +118,25 @@ export const hostedMcpToolDefinitions: ToolDefinition[] = [
           '(draft, next, execute, review, complete, blocked, cancelled). Project-defined status names — the ' +
           'board column labels read by overlord_list_project_statuses — are not accepted here.'
       ),
-      projectId: stringProperty('Optional project id, slug, or name.'),
+      projectId: stringProperty(
+        'Optional stable Overlord project UUID. Use overlord_resolve_project first for a human project reference.'
+      ),
+      resourceKey: stringProperty(
+        'Optional logical resource key. Keys are matched by name within every selected project.'
+      ),
+      dateField: stringProperty(
+        'Date column for an explicit range: createdAt or updatedAt. Defaults to updatedAt only when from or to is supplied.'
+      ),
+      from: stringProperty('Optional inclusive ISO-8601 date/time lower bound.'),
+      to: stringProperty('Optional exclusive ISO-8601 date/time upper bound.'),
       limit: {
         type: 'number',
         description: 'Maximum result count. Defaults to 25.'
       }
     }),
-    outputSchema: protocolOutputSchema('A bounded list of matching mission records.'),
+    outputSchema: protocolOutputSchema(
+      'SearchMissionsResponseV2: version, results (with labels, snippets, matchedTerms), appliedFilters, totalMatchedBeforeLimit, workspaceCounts.'
+    ),
     annotations: readOnly,
     _meta: widget('ui://overlord/mission-list.html')
   },

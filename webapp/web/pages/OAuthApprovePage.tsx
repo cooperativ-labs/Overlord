@@ -11,6 +11,18 @@ type OAuthRequestInfo = {
   redirectHost: string;
   resource: string;
   scopes: string[];
+  organizations: Array<{
+    id: string;
+    name: string;
+    workspaces: Array<{
+      workspaceId: string;
+      workspaceUserId: string;
+      slug: string;
+      name: string;
+      kind: string;
+      roleKeys: string[];
+    }>;
+  }>;
 };
 
 type OAuthDecisionResponse = {
@@ -67,13 +79,23 @@ export function OAuthApprovePage() {
   const [requestInfo, setRequestInfo] = useState<OAuthRequestInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busyDecision, setBusyDecision] = useState<'approve' | 'deny' | null>(null);
+  const [organizationId, setOrganizationId] = useState<string | null>(null);
+  const [workspaceIds, setWorkspaceIds] = useState<string[]>([]);
+  const [allWorkspaces, setAllWorkspaces] = useState(false);
 
   useEffect(() => {
     let alive = true;
     setError(null);
     void postOAuth<OAuthRequestInfo>('/oauth/authorize/request', params)
       .then(info => {
-        if (alive) setRequestInfo(info);
+        if (alive) {
+          setRequestInfo(info);
+          const organization = info.organizations.length === 1 ? info.organizations[0] : null;
+          setOrganizationId(organization?.id ?? null);
+          setWorkspaceIds(
+            organization?.workspaces.length === 1 ? [organization.workspaces[0]!.workspaceId] : []
+          );
+        }
       })
       .catch(err => {
         if (alive) setError(err instanceof Error ? err.message : 'Could not load OAuth request.');
@@ -83,13 +105,35 @@ export function OAuthApprovePage() {
     };
   }, [params]);
 
+  const selectedOrganization = requestInfo?.organizations.find(
+    organization => organization.id === organizationId
+  );
+
+  function selectOrganization(nextOrganizationId: string) {
+    const organization = requestInfo?.organizations.find(item => item.id === nextOrganizationId);
+    setOrganizationId(nextOrganizationId);
+    setWorkspaceIds(
+      organization?.workspaces.length === 1 ? [organization.workspaces[0]!.workspaceId] : []
+    );
+    setAllWorkspaces(false);
+  }
+
+  function toggleWorkspace(workspaceId: string) {
+    setWorkspaceIds(current =>
+      current.includes(workspaceId)
+        ? current.filter(id => id !== workspaceId)
+        : [...current, workspaceId]
+    );
+  }
+
   async function decide(decision: 'approve' | 'deny') {
     setBusyDecision(decision);
     setError(null);
     try {
       const result = await postOAuth<OAuthDecisionResponse>('/oauth/authorize/approve', {
         ...params,
-        decision
+        decision,
+        ...(decision === 'approve' ? { organizationId, workspaceIds, allWorkspaces } : {})
       });
       window.location.assign(result.redirectTo);
     } catch (err) {
@@ -144,6 +188,60 @@ export function OAuthApprovePage() {
                 ))}
               </ul>
 
+              {requestInfo.organizations.length > 1 ? (
+                <label className="grid gap-1.5 text-sm">
+                  <span className="font-medium">Organization</span>
+                  <select
+                    className="h-9 rounded-md border bg-background px-2"
+                    value={organizationId ?? ''}
+                    onChange={event => selectOrganization(event.target.value)}
+                  >
+                    <option value="" disabled>
+                      Select an organization
+                    </option>
+                    {requestInfo.organizations.map(organization => (
+                      <option key={organization.id} value={organization.id}>
+                        {organization.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+
+              {selectedOrganization ? (
+                <fieldset className="space-y-2 rounded-md border p-3 text-sm">
+                  <legend className="px-1 font-medium">Workspace access</legend>
+                  {selectedOrganization.workspaces.length === 1 ? (
+                    <p className="text-muted-foreground">
+                      {selectedOrganization.workspaces[0]!.name} is the only workspace in this
+                      organization and will be selected.
+                    </p>
+                  ) : (
+                    <>
+                      {selectedOrganization.workspaces.map(workspace => (
+                        <label key={workspace.workspaceId} className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={workspaceIds.includes(workspace.workspaceId)}
+                            disabled={allWorkspaces}
+                            onChange={() => toggleWorkspace(workspace.workspaceId)}
+                          />
+                          <span>{workspace.name}</span>
+                        </label>
+                      ))}
+                      <label className="flex items-center gap-2 border-t pt-2 font-medium">
+                        <input
+                          type="checkbox"
+                          checked={allWorkspaces}
+                          onChange={event => setAllWorkspaces(event.target.checked)}
+                        />
+                        All current and future workspaces in {selectedOrganization.name}
+                      </label>
+                    </>
+                  )}
+                </fieldset>
+              ) : null}
+
               <p className="text-xs leading-relaxed text-muted-foreground">
                 Approval creates a scoped token limited to these capabilities in workspaces you can
                 access.
@@ -165,7 +263,11 @@ export function OAuthApprovePage() {
                 </Button>
                 <Button
                   type="button"
-                  disabled={busyDecision !== null}
+                  disabled={
+                    busyDecision !== null ||
+                    !selectedOrganization ||
+                    (!allWorkspaces && workspaceIds.length === 0)
+                  }
                   onClick={() => void decide('approve')}
                 >
                   {busyDecision === 'approve' ? (

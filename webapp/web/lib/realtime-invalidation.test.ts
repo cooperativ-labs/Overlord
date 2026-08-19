@@ -10,6 +10,7 @@ type InvalidationCall = readonly unknown[] | 'all';
 function change(overrides: Partial<EntityChangeDto> = {}): EntityChangeDto {
   return {
     seq: 1,
+    workspaceId: 'workspace-1',
     entityType: 'mission',
     entityId: 'mission-1',
     operation: 'update',

@@ -39,19 +39,26 @@ import {
 import { hashSessionKey } from '../packages/core/service/util.ts';
 
 import {
+  buildWebappServiceContext,
   buildWebappServiceContextForWorkspace,
   getActorWorkspaceUserId,
+  getAuthorizedWorkspacesContext,
   requireDatabaseClient,
-  serviceDatabaseClient,
-  WORKSPACE
+  serviceDatabaseClient
 } from './db.ts';
 import { ApiError } from './errors.ts';
 import { resolveObjectiveIdForRest } from './objective-ref.ts';
-import { requirePermission, requireWorkspacePermission } from './rbac.ts';
 import {
+  requireAnyWorkspacePermission,
+  requirePermission,
+  requireWorkspacePermission
+} from './rbac.ts';
+import {
+  callerMembershipsInActiveOrganization,
   callerWorkspaceMemberships,
   createArtifact,
   createInboxItem,
+  searchMissionsV2 as searchMissionsAcrossWorkspaces,
   updateArtifact,
   updateObjective as updateObjectiveRecord
 } from './repository.ts';
@@ -77,20 +84,6 @@ export interface ProtocolRequestBody {
   /** Legacy single-payload field; still honored when `fileInputs` lacks the flag. */
   stdin?: string;
   externalSessionId?: string | null;
-}
-
-/**
- * Build a service context bound to the web server's active workspace. Reads the
- * live `WORKSPACE` / `getActorWorkspaceUserId()` bindings so workspace switching
- * is observed, and tags writes with the `protocol` source for the change feed.
- */
-function buildContext(): ServiceContext {
-  return {
-    db: serviceDatabaseClient(),
-    workspace: { id: WORKSPACE.id, slug: WORKSPACE.slug, name: WORKSPACE.name },
-    actorWorkspaceUserId: getActorWorkspaceUserId(),
-    source: 'protocol'
-  };
 }
 
 async function protocolWorkspaceId(body: ProtocolRequestBody): Promise<string | null> {
@@ -181,13 +174,32 @@ async function buildProtocolContext(
 ): Promise<ServiceContext> {
   const workspaceId = await protocolWorkspaceId(body);
   if (!workspaceId) {
-    const ctx = buildContext();
-    if (permission)
+    const authorized = getAuthorizedWorkspacesContext();
+    if (authorized) {
+      const scope = permission
+        ? await requireAnyWorkspacePermission(permission)
+        : [...authorized.workspaces].sort((a, b) => a.workspaceId.localeCompare(b.workspaceId))[0];
+      if (!scope) throw new ApiError(404, 'Workspace not found');
+      const ctx = await buildWebappServiceContextForWorkspace(
+        scope.workspaceId,
+        serviceDatabaseClient(),
+        scope.workspaceUserId
+      );
+      // Aggregate/account-owned protocol handlers require ServiceContext for
+      // the shared service signature, but authorization/fan-out remains inside
+      // the handler. This deterministic anchor is never an ambient default.
+      return { ...ctx, source: 'protocol' };
+    }
+    // Direct service tests and the loopback bootstrap surface have no request
+    // authorization snapshot; preserve their process-local compatibility path.
+    const ctx = buildWebappServiceContext();
+    if (permission) {
       await requirePermission(permission, {
         workspaceId: ctx.workspace.id,
         workspaceUserId: ctx.actorWorkspaceUserId
       });
-    return ctx;
+    }
+    return { ...ctx, source: 'protocol' };
   }
   const workspaceUserId = permission
     ? await requireWorkspacePermission({ workspaceId, permission })
@@ -508,6 +520,31 @@ function intFlag(body: ProtocolRequestBody, name: string): number | undefined {
   if (value === undefined) return undefined;
   const parsed = Number.parseInt(value, 10);
   return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+/**
+ * CLI protocol accepts the same human project references as other CLI
+ * commands, but the fan-out repository search deliberately accepts only
+ * stable project IDs. Resolve the human form before crossing that boundary.
+ */
+async function resolveV2SearchProjectId(projectRef: string | null): Promise<string[] | null> {
+  if (!projectRef) return null;
+  const scopes = await callerMembershipsInActiveOrganization(serviceDatabaseClient());
+  if (scopes.length === 0) throw new ApiError(404, 'Project not found');
+  const workspaceIds = scopes.map(scope => scope.workspaceId);
+  const placeholders = workspaceIds.map(() => '?').join(', ');
+  const projects = await serviceDatabaseClient().all<{ id: string }>(
+    `SELECT id FROM projects
+      WHERE deleted_at IS NULL
+        AND workspace_id IN (${placeholders})
+        AND (id = ? OR slug = ? OR lower(name) = lower(?))`,
+    [...workspaceIds, projectRef, projectRef, projectRef]
+  );
+  if (projects.length === 0) throw new ApiError(404, 'Project not found');
+  if (projects.length > 1) {
+    throw new ApiError(409, `Project reference is ambiguous across workspaces: ${projectRef}`);
+  }
+  return [projects[0]!.id];
 }
 
 /** Objective text for create/prompt/record-work: `--objective`, else positional. */
@@ -896,14 +933,33 @@ const handlers: Record<string, Handler> = {
       externalSessionId: externalSessionId(body)
     }),
 
-  'search-missions': (ctx, body) =>
-    searchMissions({
+  'search-missions': async (ctx, body) => {
+    const params = {
       ctx,
       query: strFlag(body, '--query') ?? null,
       statusTypes: csvFlag(body, '--status') ?? null,
       projectId: strFlag(body, '--project-id') ?? null,
+      resourceKeys: csvFlag(body, '--resource-key') ?? null,
+      dateField: (strFlag(body, '--date-field') as 'createdAt' | 'updatedAt' | undefined) ?? null,
+      from: strFlag(body, '--from') ?? null,
+      to: strFlag(body, '--to') ?? null,
       limit: intFlag(body, '--limit') ?? 25
-    }),
+    };
+    if (intFlag(body, '--response-version') !== 2) return searchMissions(params);
+
+    // V2 is an organization-bounded aggregate read. It must not inherit the
+    // one workspace selected for ordinary protocol entity operations.
+    return searchMissionsAcrossWorkspaces({
+      query: params.query,
+      projectIds: await resolveV2SearchProjectId(params.projectId),
+      statusTypes: params.statusTypes,
+      resourceKeys: params.resourceKeys,
+      dateField: params.dateField,
+      from: params.from,
+      to: params.to,
+      limit: params.limit
+    });
+  },
 
   'discuss-objective': (ctx, body) =>
     discussObjective({
@@ -1189,7 +1245,11 @@ export async function runProtocolSubcommand(
       `Supported subcommands: ${Object.keys(handlers).sort().join(', ')}`
     );
   }
-  const requiredPermission = SUBCOMMAND_PERMISSIONS[subcommand] ?? null;
+  // V2 search authorizes mission:read per workspace inside the repository
+  // fan-out. A single ambient workspace check would deny valid secondary
+  // workspaces and reintroduce the pre-v95 scoping bug.
+  const isV2Search = subcommand === 'search-missions' && intFlag(body, '--response-version') === 2;
+  const requiredPermission = isV2Search ? null : (SUBCOMMAND_PERMISSIONS[subcommand] ?? null);
   const ctx = await buildProtocolContext(body, requiredPermission);
   await validateObjectiveAddressing({ ctx, body, subcommand });
   return handler(ctx, body);

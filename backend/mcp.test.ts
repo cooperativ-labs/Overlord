@@ -148,7 +148,20 @@ test('overlord_list_project_statuses is a read-only project-scoped discovery too
     definition => definition.name === 'overlord_search_missions'
   );
   assert.ok(search);
-  const status = (search.inputSchema.properties as Record<string, { description: string }>).status;
+  const properties = search.inputSchema.properties as Record<string, { description: string }>;
+  const status = properties.status;
   assert.match(status.description, /status TYPES/);
   assert.match(status.description, /not accepted here/);
+  assert.deepEqual(Object.keys(properties).sort(), [
+    'dateField',
+    'from',
+    'limit',
+    'projectId',
+    'query',
+    'resourceKey',
+    'status',
+    'to'
+  ]);
+  assert.match(properties.projectId.description, /stable Overlord project UUID/);
+  assert.match(search.description, /authorized workspaces/);
 });

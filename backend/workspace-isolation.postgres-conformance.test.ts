@@ -91,6 +91,7 @@ if (process.env.TEST_DATABASE_URL) {
 }
 
 interface Tenant {
+  organizationId: string;
   workspaceId: string;
   workspaceUserId: string;
   workspace: { id: string; slug: string; name: string; kind: string };
@@ -134,6 +135,7 @@ async function seedTenant(
     workspaceUserId
   });
   return {
+    organizationId,
     workspaceId,
     workspaceUserId,
     workspace: { id: workspaceId, slug, name, kind: 'local' }
@@ -165,6 +167,20 @@ for (const adapter of adapters) {
 
         async function runAsTenant<T>(tenant: Tenant, fn: () => Promise<T>): Promise<T> {
           return dbModule.withRequestContextAsync(async () => {
+            dbModule.setActiveProfileId(
+              tenant.workspaceId === tenantA.workspaceId ? 'user-a' : 'user-b'
+            );
+            dbModule.setAuthorizedWorkspacesContext({
+              organizationId: tenant.organizationId,
+              workspaces: [
+                {
+                  workspaceId: tenant.workspaceId,
+                  workspaceUserId: tenant.workspaceUserId,
+                  roleKeys: ['ADMIN'],
+                  workspace: tenant.workspace
+                }
+              ]
+            });
             dbModule.setActiveWorkspaceContext(tenant.workspace);
             dbModule.setActiveWorkspaceUser(tenant.workspaceUserId);
             return fn();
@@ -176,13 +192,13 @@ for (const adapter of adapters) {
         // holds under real concurrency, not just sequential correctness.
         const [projectsA, projectsB] = await Promise.all([
           runAsTenant(tenantA, async () => {
-            await createProject({ name: 'Tenant A Project' });
+            await createProject({ name: 'Tenant A Project', workspaceId: tenantA.workspaceId });
             await new Promise(resolve => setTimeout(resolve, 10));
             return listProjects();
           }),
           runAsTenant(tenantB, async () => {
             await new Promise(resolve => setTimeout(resolve, 5));
-            await createProject({ name: 'Tenant B Project' });
+            await createProject({ name: 'Tenant B Project', workspaceId: tenantB.workspaceId });
             return listProjects();
           })
         ]);
@@ -244,7 +260,7 @@ for (const adapter of adapters) {
       }
     });
 
-    it('a USER_TOKEN authenticates the user and authorizes only active workspace memberships', async () => {
+    it('a USER_TOKEN authenticates the user and stays within its explicit organization consent', async () => {
       const { client, teardown } = await adapter.create();
       try {
         const { getActorForToken, resolveUserTokenProfileId, verifyUserToken } =
@@ -276,6 +292,18 @@ for (const adapter of adapters) {
 
         async function runAsTenant<T>(tenant: Tenant, fn: () => Promise<T>): Promise<T> {
           return dbModule.withRequestContextAsync(async () => {
+            dbModule.setActiveProfileId('user-a-token');
+            dbModule.setAuthorizedWorkspacesContext({
+              organizationId: tenant.organizationId,
+              workspaces: [
+                {
+                  workspaceId: tenant.workspaceId,
+                  workspaceUserId: tenant.workspaceUserId,
+                  roleKeys: ['ADMIN'],
+                  workspace: tenant.workspace
+                }
+              ]
+            });
             dbModule.setActiveWorkspaceContext(tenant.workspace);
             dbModule.setActiveWorkspaceUser(tenant.workspaceUserId);
             return fn();
@@ -290,10 +318,92 @@ for (const adapter of adapters) {
         const verified = await verifyUserToken(client, tokenA.secret);
         assert.equal(verified?.profileId, 'user-a-token');
 
-        // The same token can act in another workspace where its owning profile
-        // is a member, but cannot cross into a workspace owned by another user.
-        assert.ok(await getActorForToken(client, tokenA.secret, tenantB.workspaceId));
+        // Issuance from tenant A is conservative single-workspace consent. The
+        // same profile's membership in another organization is not authority.
+        assert.equal(await getActorForToken(client, tokenA.secret, tenantB.workspaceId), null);
         assert.equal(await getActorForToken(client, tokenA.secret, 'tenant-c-token'), null);
+      } finally {
+        await teardown();
+      }
+    });
+
+    it('filters change-feed pages to readable memberships while advancing across global gaps', async () => {
+      const { client, teardown } = await adapter.create();
+      try {
+        const dbModule = await import('./db.ts');
+        const { readableChangeFeedWorkspaceIds, readChangesAfter } = await import('./realtime.ts');
+
+        const tenantA = await seedTenant(client, {
+          workspaceId: 'tenant-a-realtime',
+          slug: 'tenant-a-realtime',
+          name: 'Tenant A Realtime',
+          profileId: 'user-a-realtime',
+          workspaceUserId: 'tenant-a-realtime-user'
+        });
+        await seedTenant(client, {
+          workspaceId: 'tenant-b-realtime',
+          slug: 'tenant-b-realtime',
+          name: 'Tenant B Realtime',
+          profileId: 'user-b-realtime',
+          workspaceUserId: 'tenant-b-realtime-user'
+        });
+
+        const beforeSeq = await dbModule.currentMaxSeq(client);
+        await dbModule.recordChange(
+          {
+            workspaceId: 'tenant-b-realtime',
+            entityType: 'conformance_realtime',
+            entityId: 'hidden-before',
+            operation: 'update',
+            actorWorkspaceUserId: null
+          },
+          client
+        );
+        await dbModule.recordChange(
+          {
+            workspaceId: tenantA.workspaceId,
+            entityType: 'conformance_realtime',
+            entityId: 'visible',
+            operation: 'update',
+            actorWorkspaceUserId: null
+          },
+          client
+        );
+        await dbModule.recordChange(
+          {
+            workspaceId: 'tenant-b-realtime',
+            entityType: 'conformance_realtime',
+            entityId: 'hidden-after',
+            operation: 'update',
+            actorWorkspaceUserId: null
+          },
+          client
+        );
+        const highWaterSeq = await dbModule.currentMaxSeq(client);
+
+        await dbModule.withRequestContextAsync(async () => {
+          dbModule.setAuthorizedWorkspacesContext({
+            organizationId: tenantA.organizationId,
+            workspaces: [
+              {
+                workspaceId: tenantA.workspaceId,
+                workspaceUserId: tenantA.workspaceUserId,
+                roleKeys: ['ADMIN'],
+                workspace: tenantA.workspace
+              }
+            ]
+          });
+          const workspaceIds = await readableChangeFeedWorkspaceIds();
+          assert.deepEqual(workspaceIds, [tenantA.workspaceId]);
+          const batch = await readChangesAfter(beforeSeq, workspaceIds, 10);
+          assert.deepEqual(
+            batch.changes.map(change => change.entityId),
+            ['visible']
+          );
+          assert.equal(batch.changes[0]!.workspaceId, tenantA.workspaceId);
+          assert.equal(batch.cursor, highWaterSeq);
+          assert.equal(batch.hasMore, false);
+        });
       } finally {
         await teardown();
       }

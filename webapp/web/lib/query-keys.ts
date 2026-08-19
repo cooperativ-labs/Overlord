@@ -4,7 +4,7 @@ export const keys = {
   meta: ['meta'] as const,
   profile: ['profile'] as const,
   userTokens: ['user-tokens'] as const,
-  webhookSubscriptions: ['webhooks'] as const,
+  webhookSubscriptions: (workspaceId: string) => ['webhooks', workspaceId] as const,
   webhookDeliveries: (id: string) => ['webhooks', id, 'deliveries'] as const,
   organizations: ['organizations'] as const,
   organizationAdmins: (id: string) => ['organization', id, 'admins'] as const,
@@ -65,7 +65,7 @@ export const keys = {
   projectEverhourLink: (projectId: string) => ['project', projectId, 'everhour-link'] as const,
   projectEverhour: (projectId: string) => ['project', projectId, 'everhour'] as const,
   missionEverhour: (id: string) => ['mission', id, 'everhour'] as const,
-  githubIntegration: ['integrations', 'github'] as const,
+  githubIntegration: (workspaceId: string) => ['integrations', 'github', workspaceId] as const,
   projectGitHubLink: (projectId: string) => ['project', projectId, 'github-link'] as const,
   missionGitHubPullRequest: (id: string) => ['mission', id, 'github-pull-request'] as const
 };

@@ -1323,9 +1323,9 @@ function sqliteRebuildDependentsSql() {
   `;
 }
 function sqliteVerify(db) {
-  const invalidMission = db.prepare(`SELECT 1 FROM missions m LEFT JOIN project_statuses ps ON ps.project_id = m.project_id AND ps.id = m.status_id WHERE m.deleted_at IS NULL AND ps.id IS NULL LIMIT 1`).get();
+  const invalidMission = db.prepare(`SELECT 1 FROM missions m LEFT JOIN project_statuses ps ON ps.project_id = m.project_id AND ps.id = m.status_id WHERE ps.id IS NULL LIMIT 1`).get();
   const badSingleton = db.prepare(`SELECT 1 FROM projects p LEFT JOIN project_statuses ps ON ps.project_id = p.id AND ps.deleted_at IS NULL WHERE p.deleted_at IS NULL GROUP BY p.id HAVING SUM(ps.is_default = 1) != 1 OR SUM(ps.type = 'execute') != 1 OR SUM(ps.type = 'review') != 1 LIMIT 1`).get();
-  const badFanout = db.prepare(`SELECT 1 FROM (SELECT p.workspace_id, COUNT(*) projects FROM projects p WHERE p.deleted_at IS NULL GROUP BY p.workspace_id) p LEFT JOIN (SELECT workspace_id, COUNT(*) statuses FROM workspace_statuses GROUP BY workspace_id) ws ON ws.workspace_id = p.workspace_id LEFT JOIN (SELECT workspace_id, COUNT(*) statuses FROM project_statuses GROUP BY workspace_id) ps ON ps.workspace_id = p.workspace_id WHERE COALESCE(ps.statuses, 0) != p.projects * COALESCE(ws.statuses, 0) LIMIT 1`).get();
+  const badFanout = db.prepare(`SELECT 1 FROM (SELECT p.workspace_id, COUNT(*) projects FROM projects p GROUP BY p.workspace_id) p LEFT JOIN (SELECT workspace_id, COUNT(*) statuses FROM workspace_statuses WHERE deleted_at IS NULL GROUP BY workspace_id) ws ON ws.workspace_id = p.workspace_id LEFT JOIN (SELECT workspace_id, COUNT(*) statuses FROM project_statuses GROUP BY workspace_id) ps ON ps.workspace_id = p.workspace_id WHERE COALESCE(ps.statuses, 0) != p.projects * COALESCE(ws.statuses, 0) LIMIT 1`).get();
   if (invalidMission || badSingleton || badFanout)
     throw new Error("Project-status migration verification failed");
 }
@@ -1339,7 +1339,7 @@ function finalizeProjectStatusesSqlite(db) {
     db.exec(sqliteProjectStatusesSql());
     db.exec("ALTER TABLE schedules ADD COLUMN next_status_key TEXT");
     const statuses = db.prepare(`SELECT id, workspace_id, key, name, type, position, is_default, is_terminal, metadata_json FROM workspace_statuses WHERE deleted_at IS NULL`).all();
-    const projects = db.prepare(`SELECT id, workspace_id FROM projects WHERE deleted_at IS NULL`).all();
+    const projects = db.prepare(`SELECT id, workspace_id FROM projects`).all();
     const insert = db.prepare(`INSERT INTO project_statuses (id, workspace_id, project_id, key, name, type, position, is_default, is_terminal, metadata_json, created_at, updated_at, revision) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`);
     const now2 = (/* @__PURE__ */ new Date()).toISOString();
     for (const project of projects)
@@ -1347,8 +1347,10 @@ function finalizeProjectStatusesSqlite(db) {
         if (status.workspace_id === project.workspace_id)
           insert.run((0, import_node_crypto3.randomUUID)(), project.workspace_id, project.id, status.key, status.name, status.type, status.position, status.is_default, status.is_terminal, status.metadata_json, now2, now2);
     db.exec(`UPDATE missions SET status_id = (SELECT ps.id FROM workspace_statuses ws JOIN project_statuses ps ON ps.project_id = missions.project_id AND ps.key = ws.key WHERE ws.id = missions.status_id)`);
+    db.exec(`UPDATE missions SET status_id = (SELECT ps.id FROM project_statuses ps WHERE ps.project_id = missions.project_id AND ps.is_default = 1 AND ps.deleted_at IS NULL) WHERE NOT EXISTS (SELECT 1 FROM project_statuses ps WHERE ps.project_id = missions.project_id AND ps.id = missions.status_id)`);
     db.exec(`ALTER TABLE my_mission_positions ADD COLUMN project_id TEXT; UPDATE my_mission_positions SET project_id = (SELECT project_id FROM missions WHERE missions.id = my_mission_positions.mission_id);`);
     db.exec(`UPDATE my_mission_positions SET status_id = (SELECT ps.id FROM workspace_statuses ws JOIN project_statuses ps ON ps.project_id = my_mission_positions.project_id AND ps.key = ws.key WHERE ws.id = my_mission_positions.status_id);`);
+    db.exec(`UPDATE my_mission_positions SET status_id = (SELECT ps.id FROM project_statuses ps WHERE ps.project_id = my_mission_positions.project_id AND ps.is_default = 1 AND ps.deleted_at IS NULL) WHERE NOT EXISTS (SELECT 1 FROM project_statuses ps WHERE ps.project_id = my_mission_positions.project_id AND ps.id = my_mission_positions.status_id);`);
     db.exec(`UPDATE schedules SET next_status_key = (SELECT key FROM workspace_statuses WHERE id = schedules.next_status_id)`);
     db.exec(sqliteRebuildDependentsSql());
     sqliteVerify(db);
@@ -1368,7 +1370,7 @@ async function finalizeProjectStatusesPostgres(client) {
   await client.transaction(async (tx) => {
     await tx.exec(`CREATE TABLE project_statuses (id text PRIMARY KEY, workspace_id text NOT NULL REFERENCES workspaces(id) ON DELETE RESTRICT, project_id text NOT NULL REFERENCES projects(id) ON DELETE RESTRICT, key text NOT NULL CHECK (char_length(btrim(key)) > 0), name text NOT NULL CHECK (char_length(btrim(name)) > 0 AND name = btrim(name)), type text NOT NULL CHECK (type IN ('draft','next','execute','review','complete','blocked','cancelled')), position integer NOT NULL CHECK (position >= 0), is_default boolean NOT NULL DEFAULT false, is_terminal boolean NOT NULL DEFAULT false, metadata_json jsonb NOT NULL DEFAULT '{}'::jsonb, created_at timestamptz NOT NULL, updated_at timestamptz NOT NULL, deleted_at timestamptz, revision integer NOT NULL DEFAULT 1 CHECK (revision >= 1), UNIQUE (workspace_id,id), UNIQUE (project_id,id), FOREIGN KEY (workspace_id,project_id) REFERENCES projects(workspace_id,id) ON DELETE RESTRICT); CREATE UNIQUE INDEX idx_project_statuses_project_key ON project_statuses(project_id,key); CREATE UNIQUE INDEX idx_project_statuses_active_name ON project_statuses(project_id,lower(name)) WHERE deleted_at IS NULL; CREATE UNIQUE INDEX idx_project_statuses_active_default ON project_statuses(project_id) WHERE is_default AND deleted_at IS NULL; CREATE UNIQUE INDEX idx_project_statuses_active_execute ON project_statuses(project_id) WHERE type='execute' AND deleted_at IS NULL; CREATE UNIQUE INDEX idx_project_statuses_active_review ON project_statuses(project_id) WHERE type='review' AND deleted_at IS NULL; CREATE UNIQUE INDEX idx_project_statuses_active_next ON project_statuses(project_id) WHERE type='next' AND deleted_at IS NULL; CREATE INDEX idx_project_statuses_project_position ON project_statuses(project_id,position) WHERE deleted_at IS NULL; ALTER TABLE schedules ADD COLUMN next_status_key text;`);
     const statuses = await tx.all(`SELECT id, workspace_id, key, name, type, position, is_default, is_terminal, metadata_json::text FROM workspace_statuses WHERE deleted_at IS NULL`);
-    const projects = await tx.all(`SELECT id, workspace_id FROM projects WHERE deleted_at IS NULL`);
+    const projects = await tx.all(`SELECT id, workspace_id FROM projects`);
     const now2 = (/* @__PURE__ */ new Date()).toISOString();
     for (const project of projects)
       for (const status of statuses)
@@ -1387,10 +1389,28 @@ async function finalizeProjectStatusesPostgres(client) {
             now2,
             now2
           ]);
-    await tx.exec(`UPDATE missions m SET status_id = ps.id FROM workspace_statuses ws JOIN project_statuses ps ON ps.project_id=m.project_id AND ps.key=ws.key WHERE ws.id=m.status_id; ALTER TABLE my_mission_positions ADD COLUMN project_id text; UPDATE my_mission_positions mp SET project_id=m.project_id FROM missions m WHERE m.id=mp.mission_id; UPDATE my_mission_positions mp SET status_id=ps.id FROM workspace_statuses ws JOIN project_statuses ps ON ps.project_id=mp.project_id AND ps.key=ws.key WHERE ws.id=mp.status_id; UPDATE schedules s SET next_status_key=ws.key FROM workspace_statuses ws WHERE ws.id=s.next_status_id; ALTER TABLE schedules DROP CONSTRAINT IF EXISTS schedules_next_status_id_fkey, DROP CONSTRAINT IF EXISTS schedules_workspace_id_next_status_id_fkey; ALTER TABLE schedules DROP COLUMN next_status_id; DROP INDEX IF EXISTS idx_schedules_workspace_next_status; ALTER TABLE missions DROP CONSTRAINT IF EXISTS missions_status_id_fkey, DROP CONSTRAINT IF EXISTS missions_workspace_id_status_id_fkey; ALTER TABLE missions ADD FOREIGN KEY (project_id,status_id) REFERENCES project_statuses(project_id,id) ON DELETE RESTRICT; ALTER TABLE my_mission_positions ALTER COLUMN project_id SET NOT NULL; ALTER TABLE my_mission_positions DROP CONSTRAINT IF EXISTS my_mission_positions_status_id_fkey, DROP CONSTRAINT IF EXISTS my_mission_positions_workspace_id_status_id_fkey; ALTER TABLE my_mission_positions ADD FOREIGN KEY (project_id,status_id) REFERENCES project_statuses(project_id,id) ON DELETE CASCADE; ALTER TABLE my_mission_positions ADD FOREIGN KEY (project_id,mission_id) REFERENCES missions(project_id,id) ON DELETE CASCADE;`);
-    const invalid = await tx.get(`SELECT 1 FROM missions m LEFT JOIN project_statuses ps ON ps.project_id=m.project_id AND ps.id=m.status_id WHERE m.deleted_at IS NULL AND ps.id IS NULL LIMIT 1`);
+    await tx.exec(`ALTER TABLE missions DROP CONSTRAINT IF EXISTS missions_status_id_fkey, DROP CONSTRAINT IF EXISTS missions_workspace_id_status_id_fkey`);
+    await tx.exec(`ALTER TABLE my_mission_positions DROP CONSTRAINT IF EXISTS my_mission_positions_status_id_fkey, DROP CONSTRAINT IF EXISTS my_mission_positions_workspace_id_status_id_fkey`);
+    await tx.exec(`ALTER TABLE schedules DROP CONSTRAINT IF EXISTS schedules_next_status_id_fkey, DROP CONSTRAINT IF EXISTS schedules_workspace_id_next_status_id_fkey`);
+    await tx.exec(`UPDATE missions m SET status_id = ps.id FROM workspace_statuses ws JOIN project_statuses ps ON ps.key=ws.key WHERE ws.id=m.status_id AND ps.project_id=m.project_id`);
+    await tx.exec(`UPDATE missions m SET status_id = ps.id FROM project_statuses ps WHERE ps.project_id=m.project_id AND ps.is_default AND ps.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM project_statuses x WHERE x.project_id=m.project_id AND x.id=m.status_id)`);
+    await tx.exec(`ALTER TABLE my_mission_positions ADD COLUMN project_id text`);
+    await tx.exec(`UPDATE my_mission_positions mp SET project_id=m.project_id FROM missions m WHERE m.id=mp.mission_id`);
+    await tx.exec(`UPDATE my_mission_positions mp SET status_id=ps.id FROM workspace_statuses ws JOIN project_statuses ps ON ps.key=ws.key WHERE ws.id=mp.status_id AND ps.project_id=mp.project_id`);
+    await tx.exec(`UPDATE my_mission_positions mp SET status_id=ps.id FROM project_statuses ps WHERE ps.project_id=mp.project_id AND ps.is_default AND ps.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM project_statuses x WHERE x.project_id=mp.project_id AND x.id=mp.status_id)`);
+    await tx.exec(`UPDATE schedules s SET next_status_key=ws.key FROM workspace_statuses ws WHERE ws.id=s.next_status_id`);
+    const orphan = await tx.get(`SELECT m.id FROM missions m LEFT JOIN project_statuses ps ON ps.project_id=m.project_id AND ps.id=m.status_id WHERE ps.id IS NULL LIMIT 1`);
+    if (orphan)
+      throw new Error(`Project-status migration left mission ${orphan.id} without a project-scoped status`);
+    await tx.exec(`ALTER TABLE schedules DROP COLUMN next_status_id`);
+    await tx.exec(`DROP INDEX IF EXISTS idx_schedules_workspace_next_status`);
+    await tx.exec(`ALTER TABLE missions ADD FOREIGN KEY (project_id,status_id) REFERENCES project_statuses(project_id,id) ON DELETE RESTRICT`);
+    await tx.exec(`ALTER TABLE my_mission_positions ALTER COLUMN project_id SET NOT NULL`);
+    await tx.exec(`ALTER TABLE my_mission_positions ADD FOREIGN KEY (project_id,status_id) REFERENCES project_statuses(project_id,id) ON DELETE CASCADE`);
+    await tx.exec(`ALTER TABLE my_mission_positions ADD FOREIGN KEY (project_id,mission_id) REFERENCES missions(project_id,id) ON DELETE CASCADE`);
+    const invalid = await tx.get(`SELECT 1 FROM missions m LEFT JOIN project_statuses ps ON ps.project_id=m.project_id AND ps.id=m.status_id WHERE ps.id IS NULL LIMIT 1`);
     const singleton = await tx.get(`SELECT 1 FROM projects p LEFT JOIN project_statuses ps ON ps.project_id=p.id AND ps.deleted_at IS NULL WHERE p.deleted_at IS NULL GROUP BY p.id HAVING COUNT(*) FILTER (WHERE ps.is_default) != 1 OR COUNT(*) FILTER (WHERE ps.type='execute') != 1 OR COUNT(*) FILTER (WHERE ps.type='review') != 1 LIMIT 1`);
-    const fanout = await tx.get(`SELECT 1 FROM (SELECT p.workspace_id,COUNT(*) projects FROM projects p WHERE p.deleted_at IS NULL GROUP BY p.workspace_id) p LEFT JOIN (SELECT workspace_id,COUNT(*) statuses FROM workspace_statuses GROUP BY workspace_id) ws USING (workspace_id) LEFT JOIN (SELECT workspace_id,COUNT(*) statuses FROM project_statuses GROUP BY workspace_id) ps USING (workspace_id) WHERE COALESCE(ps.statuses,0) != p.projects * COALESCE(ws.statuses,0) LIMIT 1`);
+    const fanout = await tx.get(`SELECT 1 FROM (SELECT p.workspace_id,COUNT(*) projects FROM projects p GROUP BY p.workspace_id) p LEFT JOIN (SELECT workspace_id,COUNT(*) statuses FROM workspace_statuses WHERE deleted_at IS NULL GROUP BY workspace_id) ws USING (workspace_id) LEFT JOIN (SELECT workspace_id,COUNT(*) statuses FROM project_statuses GROUP BY workspace_id) ps USING (workspace_id) WHERE COALESCE(ps.statuses,0) != p.projects * COALESCE(ws.statuses,0) LIMIT 1`);
     if (invalid || singleton || fanout)
       throw new Error("Project-status migration verification failed");
     await tx.exec("ALTER TABLE workspace_statuses RENAME TO workspace_statuses_legacy");
@@ -7136,9 +7156,9 @@ function resolveHostedS3SettingsFromEnv(env3 = process.env) {
   if (!accessKeyId || !secretAccessKey || !endpoint || !bucketName)
     return null;
   return {
-    settingsFor(bucketKey, workspaceId) {
+    settingsFor(bucketKey, workspaceId2) {
       void bucketKey;
-      void workspaceId;
+      void workspaceId2;
       const pathPrefix = basePrefix;
       return { bucketName, region, endpoint, pathPrefix };
     }
@@ -74665,7 +74685,7 @@ async function buildWebhookEnvelope(ctx, {
     fileChanges: `/api/missions/${mission.id}/file-changes`,
     artifacts: `/api/missions/${mission.id}/artifacts`
   };
-  const envelope = {
+  const envelope2 = {
     id: outboxMessageId,
     apiVersion: WEBHOOK_API_VERSION,
     type,
@@ -74675,16 +74695,16 @@ async function buildWebhookEnvelope(ctx, {
     mission: { id: mission.id, displayId: mission.display_id },
     links
   };
-  if (entity.objectiveId) envelope.objective = { id: entity.objectiveId };
-  if (entity.sessionId) envelope.session = { id: entity.sessionId };
-  if (entity.deliveryId) envelope.delivery = { id: entity.deliveryId };
+  if (entity.objectiveId) envelope2.objective = { id: entity.objectiveId };
+  if (entity.sessionId) envelope2.session = { id: entity.sessionId };
+  if (entity.deliveryId) envelope2.delivery = { id: entity.deliveryId };
   if (mode === "thin") {
-    return envelope;
+    return envelope2;
   }
-  envelope.workspace.name = ctx.workspace.name;
-  if (project) envelope.project = { id: project.id, name: project.name };
-  envelope.mission = {
-    ...envelope.mission,
+  envelope2.workspace.name = ctx.workspace.name;
+  if (project) envelope2.project = { id: project.id, name: project.name };
+  envelope2.mission = {
+    ...envelope2.mission,
     title: mission.title,
     status: { id: mission.status_id, type: mission.status_type, label: mission.status_name },
     priority: mission.priority,
@@ -74696,7 +74716,7 @@ async function buildWebhookEnvelope(ctx, {
       [entity.objectiveId, ctx.workspace.id]
     );
     if (objective) {
-      envelope.objective = {
+      envelope2.objective = {
         id: objective.id,
         // Consumers should key off `displayId` rather than `position`: position
         // changes when objectives are reordered, the display id never does.
@@ -74716,7 +74736,7 @@ async function buildWebhookEnvelope(ctx, {
       [entity.sessionId, ctx.workspace.id]
     );
     if (session) {
-      envelope.session = {
+      envelope2.session = {
         id: session.id,
         agentIdentifier: session.agent_identifier,
         modelIdentifier: session.model_identifier
@@ -74739,7 +74759,7 @@ async function buildWebhookEnvelope(ctx, {
         payload = delivery.payload_json ? JSON.parse(delivery.payload_json) : null;
       } catch {
       }
-      envelope.delivery = {
+      envelope2.delivery = {
         id: delivery.id,
         summary: delivery.summary,
         verificationSummary: delivery.verification_summary,
@@ -74761,7 +74781,7 @@ async function buildWebhookEnvelope(ctx, {
            ORDER BY last_observed_at DESC LIMIT ?`,
         [entity.objectiveId, FULL_ENVELOPE_ARRAY_LIMIT + 1]
       );
-      envelope.changedFiles = truncateArray(
+      envelope2.changedFiles = truncateArray(
         changedFileRows.map((row) => ({ filePath: row.file_path, vcsStatus: row.vcs_status }))
       );
       const rationaleRows = await ctx.db.all(
@@ -74770,7 +74790,7 @@ async function buildWebhookEnvelope(ctx, {
            ORDER BY created_at ASC LIMIT ?`,
         [delivery.id, FULL_ENVELOPE_ARRAY_LIMIT + 1]
       );
-      envelope.changeRationales = truncateArray(
+      envelope2.changeRationales = truncateArray(
         rationaleRows.map((row) => ({
           filePath: row.file_path,
           label: row.label,
@@ -74787,7 +74807,7 @@ async function buildWebhookEnvelope(ctx, {
        ORDER BY created_at DESC LIMIT ?`,
     [mission.id, ctx.workspace.id, FULL_ENVELOPE_ARRAY_LIMIT + 1]
   );
-  envelope.missionEvents = truncateArray(
+  envelope2.missionEvents = truncateArray(
     eventRows.map((row) => ({
       id: row.id,
       type: row.type,
@@ -74795,7 +74815,7 @@ async function buildWebhookEnvelope(ctx, {
       createdAt: row.created_at
     }))
   );
-  return envelope;
+  return envelope2;
 }
 function truncateArray(rows) {
   if (rows.length <= FULL_ENVELOPE_ARRAY_LIMIT) return rows;
@@ -75130,7 +75150,7 @@ function requireActor2(ctx) {
 }
 async function readProjectUserPreferenceRow({
   db,
-  workspaceId,
+  workspaceId: workspaceId2,
   workspaceUserId,
   projectId
 }) {
@@ -75138,7 +75158,7 @@ async function readProjectUserPreferenceRow({
   const row = await db.get(
     `SELECT id, preferences_json, revision FROM project_user_preferences
         WHERE workspace_id = ? AND project_id = ? AND workspace_user_id = ? AND deleted_at IS NULL`,
-    [workspaceId, projectId, workspaceUserId]
+    [workspaceId2, projectId, workspaceUserId]
   );
   if (!row) return null;
   let preferences;
@@ -76163,27 +76183,27 @@ async function oldestWorkspaceRowFromClient(client) {
        WHERE deleted_at IS NULL ORDER BY created_at ASC LIMIT 1`
   );
 }
-async function findActiveMembershipId(workspaceId, profileId, client = requireDatabaseClient()) {
+async function findActiveMembershipId(workspaceId2, profileId, client = requireDatabaseClient()) {
   const row = await client.get(
     `SELECT wu.id FROM workspace_users wu
        JOIN workspaces w ON w.id = wu.workspace_id AND w.deleted_at IS NULL
       WHERE wu.workspace_id = ? AND wu.profile_id = ?
         AND wu.status = 'active' AND wu.deleted_at IS NULL
       ORDER BY wu.created_at ASC LIMIT 1`,
-    [workspaceId, profileId]
+    [workspaceId2, profileId]
   );
   return row?.id ?? null;
 }
-async function resolveActorForWorkspace(workspaceId, client = requireDatabaseClient()) {
+async function resolveActorForWorkspace(workspaceId2, client = requireDatabaseClient()) {
   const row = await client.get(
     `SELECT id FROM workspace_users
        WHERE workspace_id = ? AND status = 'active' AND deleted_at IS NULL
        ORDER BY created_at ASC LIMIT 1`,
-    [workspaceId]
+    [workspaceId2]
   );
   return row?.id ?? null;
 }
-async function resolveRequestActorForWorkspace(workspaceId, client = requireDatabaseClient()) {
+async function resolveRequestActorForWorkspace(workspaceId2, client = requireDatabaseClient()) {
   const context = requestContextStorage.getStore();
   if (!context) return null;
   let profileId = context.activeProfileId;
@@ -76195,7 +76215,7 @@ async function resolveRequestActorForWorkspace(workspaceId, client = requireData
     profileId = actorRow?.profile_id ?? null;
   }
   if (!profileId) return null;
-  return findActiveMembershipId(workspaceId, profileId, client);
+  return findActiveMembershipId(workspaceId2, profileId, client);
 }
 function defaultRequestContext() {
   return {
@@ -76204,6 +76224,8 @@ function defaultRequestContext() {
     activeTokenId: ACTIVE_TOKEN_ID,
     activeTokenScopes: ACTIVE_TOKEN_SCOPES,
     clientDevice: null,
+    authorizedWorkspaces: null,
+    resolvedWorkspaceId: null,
     activeWorkspace: defaultWorkspace
   };
 }
@@ -76223,12 +76245,31 @@ function mutateRequestContext(next) {
     store.activeTokenId = next.activeTokenId;
     store.activeTokenScopes = next.activeTokenScopes;
     store.clientDevice = next.clientDevice;
+    store.authorizedWorkspaces = next.authorizedWorkspaces;
+    store.resolvedWorkspaceId = next.resolvedWorkspaceId;
     store.activeWorkspace = next.activeWorkspace;
     return;
   }
   ACTOR_WORKSPACE_USER_ID = next.actorWorkspaceUserId;
   ACTIVE_TOKEN_ID = next.activeTokenId;
   ACTIVE_TOKEN_SCOPES = next.activeTokenScopes;
+}
+function setAuthorizedWorkspacesContext(authorizedWorkspaces) {
+  mutateRequestContext({ ...requestContext(), authorizedWorkspaces });
+}
+function getAuthorizedWorkspacesContext() {
+  return requestContext().authorizedWorkspaces;
+}
+function getAuthorizedWorkspace(workspaceId2) {
+  return requestContext().authorizedWorkspaces?.workspaces.find(
+    (workspace) => workspace.workspaceId === workspaceId2
+  ) ?? null;
+}
+function setResolvedWorkspaceId(workspaceId2) {
+  if (workspaceId2 && getAuthorizedWorkspacesContext() && !getAuthorizedWorkspace(workspaceId2)) {
+    throw new Error("Resolved workspace is not authorized for this request");
+  }
+  mutateRequestContext({ ...requestContext(), resolvedWorkspaceId: workspaceId2 });
 }
 function getActiveProfileId() {
   return requestContext().activeProfileId;
@@ -76264,8 +76305,8 @@ function getActiveWorkspace() {
 function getActiveWorkspaceId() {
   return getActiveWorkspace().id;
 }
-function getActiveWorkspaceIdOrNull() {
-  return requestContext().activeWorkspace?.id ?? null;
+function getBootstrapWorkspaceIdOrNull() {
+  return defaultWorkspace?.id ?? null;
 }
 function setActiveWorkspaceContext(workspace) {
   mutateRequestContext({ ...requestContext(), activeWorkspace: workspace });
@@ -76293,13 +76334,13 @@ function buildWebappServiceContext(client = requireDatabaseClient()) {
     clientDevice: getClientDeviceIdentity()
   };
 }
-async function buildWebappServiceContextForWorkspace(workspaceId, client = requireDatabaseClient(), actorWorkspaceUserId = getActorWorkspaceUserId()) {
+async function buildWebappServiceContextForWorkspace(workspaceId2, client = requireDatabaseClient(), actorWorkspaceUserId = getActorWorkspaceUserId()) {
   const workspace = await client.get(
     `SELECT id, slug, name FROM workspaces WHERE id = ? AND deleted_at IS NULL`,
-    [workspaceId]
+    [workspaceId2]
   );
   if (!workspace) {
-    throw new Error(`Workspace ${workspaceId} not found`);
+    throw new Error(`Workspace ${workspaceId2} not found`);
   }
   return {
     db: client,
@@ -76440,7 +76481,7 @@ async function currentMaxSeq(client = requireDatabaseClient()) {
   );
   return row?.seq ?? 0;
 }
-var import_node_async_hooks2, import_node_crypto12, import_node_path15, databasePath, adapter, sqliteDb, DATABASE_DIALECT, databaseClient, databaseInitPromise, DATABASE_PATH, defaultWorkspace, ACTOR_WORKSPACE_USER_ID, requestContextStorage, WORKSPACE, loadWorkspaceRow, ACTIVE_TOKEN_SCOPES, ACTIVE_TOKEN_ID;
+var import_node_async_hooks2, import_node_crypto12, import_node_path15, databasePath, adapter, sqliteDb, DATABASE_DIALECT, databaseClient, databaseInitPromise, DATABASE_PATH, defaultWorkspace, ACTOR_WORKSPACE_USER_ID, requestContextStorage, ACTIVE_TOKEN_SCOPES, ACTIVE_TOKEN_ID;
 var init_db = __esm({
   "db.ts"() {
     "use strict";
@@ -76469,21 +76510,6 @@ var init_db = __esm({
     defaultWorkspace = null;
     ACTOR_WORKSPACE_USER_ID = null;
     requestContextStorage = new import_node_async_hooks2.AsyncLocalStorage();
-    WORKSPACE = {
-      get id() {
-        return getActiveWorkspaceId();
-      },
-      get slug() {
-        return getActiveWorkspace().slug;
-      },
-      get name() {
-        return getActiveWorkspace().name;
-      },
-      get kind() {
-        return getActiveWorkspace().kind;
-      }
-    };
-    loadWorkspaceRow = loadWorkspaceRowAsync;
     ACTIVE_TOKEN_SCOPES = null;
     ACTIVE_TOKEN_ID = null;
   }
@@ -76539,7 +76565,7 @@ var init_errors5 = __esm({
 
 // branching/branch-activity.ts
 async function recordRunnerBranchEvent(tx, {
-  workspaceId,
+  workspaceId: workspaceId2,
   projectId,
   missionId,
   objectiveId = null,
@@ -76552,7 +76578,7 @@ async function recordRunnerBranchEvent(tx, {
        (id, workspace_id, project_id, mission_id, objective_id, type, phase, summary,
         payload_json, source, actor_workspace_user_id, created_at)
      VALUES (?, ?, ?, ?, ?, 'update', 'execute', ?, ?, 'runner', NULL, ?)`,
-    [newId2(), workspaceId, projectId, missionId, objectiveId, summary, JSON.stringify(payload), now2]
+    [newId2(), workspaceId2, projectId, missionId, objectiveId, summary, JSON.stringify(payload), now2]
   );
 }
 var init_branch_activity = __esm({
@@ -76586,14 +76612,14 @@ async function resolveRemoteMutationTarget({
 async function queueLocalTargetMutation({
   projectId,
   missionId,
-  workspaceId,
+  workspaceId: workspaceId2,
   executionTargetId,
   kind,
   capability,
   input,
   eventSummary
 }) {
-  const ctx = workspaceId ? await buildWebappServiceContextForWorkspace(workspaceId) : buildWebappServiceContext();
+  const ctx = await buildWebappServiceContextForWorkspace(workspaceId2);
   const created = await createLocalTargetMutationRequest({
     ctx,
     projectId,
@@ -76606,8 +76632,8 @@ async function queueLocalTargetMutation({
   });
   return { executionRequestId: created.id };
 }
-async function resolveMutationAnchorMissionId(projectId) {
-  const ctx = buildWebappServiceContext();
+async function resolveMutationAnchorMissionId(projectId, workspaceId2) {
+  const ctx = await buildWebappServiceContextForWorkspace(workspaceId2);
   const row = await ctx.db.get(
     `SELECT m.id
        FROM missions m
@@ -76633,12 +76659,12 @@ async function recordBranchActionActivityFromMutation({
   requestId,
   summary
 }) {
-  const workspaceId = ctx.workspace.id;
+  const workspaceId2 = ctx.workspace.id;
   const row = await ctx.db.get(
     `SELECT mission_id, project_id, metadata_json
        FROM execution_requests
       WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-    [requestId, workspaceId]
+    [requestId, workspaceId2]
   );
   if (!row) return;
   const mutation = parseLocalTargetMutation(row.metadata_json);
@@ -76647,7 +76673,7 @@ async function recordBranchActionActivityFromMutation({
   await ctx.db.transaction(async (tx) => {
     const mission = await tx.get(
       `SELECT revision FROM missions WHERE id = ? AND workspace_id = ?`,
-      [row.mission_id, workspaceId]
+      [row.mission_id, workspaceId2]
     );
     const now2 = nowIso2();
     if (mission) {
@@ -76655,11 +76681,11 @@ async function recordBranchActionActivityFromMutation({
       await tx.run(
         `UPDATE missions SET updated_at = ?, revision = ?
          WHERE id = ? AND workspace_id = ?`,
-        [now2, revision, row.mission_id, workspaceId]
+        [now2, revision, row.mission_id, workspaceId2]
       );
       await recordChange2(
         {
-          workspaceId,
+          workspaceId: workspaceId2,
           entityType: "mission",
           entityId: row.mission_id,
           operation: "update",
@@ -76672,7 +76698,7 @@ async function recordBranchActionActivityFromMutation({
       );
     }
     await recordRunnerBranchEvent(tx, {
-      workspaceId,
+      workspaceId: workspaceId2,
       projectId: row.project_id,
       missionId: row.mission_id,
       summary,
@@ -119383,11 +119409,11 @@ var symmetricEncrypt = async ({ key, data }) => {
 };
 var symmetricDecrypt = async ({ key, data }) => {
   if (typeof key === "string") return rawDecrypt(key, data);
-  const envelope = parseEnvelope(data);
-  if (envelope) {
-    const secret = key.keys.get(envelope.version);
-    if (!secret) throw new Error(`Secret version ${envelope.version} not found in keys (key may have been retired)`);
-    return rawDecrypt(secret, envelope.ciphertext);
+  const envelope2 = parseEnvelope(data);
+  if (envelope2) {
+    const secret = key.keys.get(envelope2.version);
+    if (!secret) throw new Error(`Secret version ${envelope2.version} not found in keys (key may have been retired)`);
+    return rawDecrypt(secret, envelope2.ciphertext);
   }
   if (key.legacySecret) return rawDecrypt(key.legacySecret, data);
   throw new Error("Cannot decrypt legacy bare-hex payload: no legacy secret available. Set BETTER_AUTH_SECRET for backwards compatibility.");
@@ -132909,7 +132935,8 @@ async function listActiveTokenScopeGrants(db, tokenId) {
 async function verifyUserToken(db, rawToken) {
   const tokenHash = hashUserTokenSecret(rawToken);
   const now2 = isoNow();
-  const row = await queryOne(db, `SELECT id, workspace_id, profile_id, workspace_user_id, status, expires_at
+  const row = await queryOne(db, `SELECT id, workspace_id, profile_id, workspace_user_id, organization_id,
+            all_workspaces, status, expires_at
      FROM user_tokens
      WHERE token_hash = ?
        AND status = 'active'
@@ -132928,6 +132955,8 @@ async function verifyUserToken(db, rawToken) {
     workspaceId: row.workspace_id,
     profileId: row.profile_id,
     workspaceUserId: row.workspace_user_id,
+    organizationId: row.organization_id,
+    allWorkspaces: row.all_workspaces === true || row.all_workspaces === 1,
     status: row.status,
     expiresAt
   };
@@ -134363,16 +134392,148 @@ init_change_feed();
 init_context();
 init_errors4();
 
+// ../packages/core/service/mission-search.ts
+init_errors4();
+
+// ../packages/core/service/mission-search-query.ts
+var MISSION_SEARCH_STOP_WORDS = /* @__PURE__ */ new Set([
+  "a",
+  "about",
+  "an",
+  "and",
+  "are",
+  "as",
+  "at",
+  "be",
+  "been",
+  "being",
+  "but",
+  "by",
+  "can",
+  "could",
+  "did",
+  "do",
+  "does",
+  "for",
+  "from",
+  "had",
+  "has",
+  "have",
+  "how",
+  "i",
+  "if",
+  "in",
+  "into",
+  "is",
+  "it",
+  "its",
+  "just",
+  "me",
+  "my",
+  "no",
+  "not",
+  "of",
+  "on",
+  "or",
+  "our",
+  "so",
+  "than",
+  "that",
+  "the",
+  "their",
+  "them",
+  "then",
+  "there",
+  "these",
+  "they",
+  "this",
+  "to",
+  "too",
+  "us",
+  "was",
+  "we",
+  "were",
+  "what",
+  "when",
+  "where",
+  "which",
+  "who",
+  "will",
+  "with",
+  "would",
+  "you",
+  "your"
+]);
+var DISPLAY_ID_QUERY_RE = /^[a-z0-9-]+:\d+(?:\.[a-z0-9]+)?$/i;
+var IDENTIFIER_RE = /[a-z0-9-]+:\d+(?:\.[a-z0-9]+)?/gi;
+function missionSearchCoverageFloor(termCount) {
+  if (termCount <= 0) return 0;
+  return Math.min(3, Math.max(1, Math.ceil(termCount / 2)));
+}
+function uniquePreserve(values) {
+  const seen = /* @__PURE__ */ new Set();
+  const result = [];
+  for (const value of values) {
+    if (seen.has(value)) continue;
+    seen.add(value);
+    result.push(value);
+  }
+  return result;
+}
+function tokenizeRemainder(text) {
+  return text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
+}
+function parseMissionSearchQuery(query) {
+  const raw = query.trim();
+  if (!raw) {
+    return { raw, mode: "fallback", displayId: null, terms: [], coverageFloor: null };
+  }
+  if (DISPLAY_ID_QUERY_RE.test(raw)) {
+    const displayId = raw.replace(/\.[a-z0-9]+$/i, "");
+    return { raw, mode: "display_id", displayId, terms: [], coverageFloor: null };
+  }
+  const terms = [];
+  const withoutIdentifiers = raw.replace(IDENTIFIER_RE, (match) => {
+    terms.push(match.toLowerCase());
+    return " ";
+  });
+  const withoutPhrases = withoutIdentifiers.replace(/"([^"]+)"/g, (_match, phrase) => {
+    const cleaned = phrase.trim().toLowerCase().replace(/\s+/g, " ");
+    if (cleaned) terms.push(cleaned);
+    return " ";
+  });
+  for (const token of tokenizeRemainder(withoutPhrases)) {
+    if (MISSION_SEARCH_STOP_WORDS.has(token)) continue;
+    terms.push(token);
+  }
+  const meaningful = uniquePreserve(terms);
+  if (meaningful.length === 0) {
+    return { raw, mode: "fallback", displayId: null, terms: [], coverageFloor: null };
+  }
+  return {
+    raw,
+    mode: "any",
+    displayId: null,
+    terms: meaningful,
+    coverageFloor: missionSearchCoverageFloor(meaningful.length)
+  };
+}
+
 // ../packages/core/service/mission-search-sql.ts
 function buildMissionSearchMatch({
   dialect,
-  query
+  query,
+  terms
 }) {
-  const terms = query.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
-  if (terms.length === 0) return null;
+  const resolvedTerms = terms ?? (query ? parseMissionSearchQuery(query).terms : []);
+  const ftsTerms = resolvedTerms.map((term) => sanitizeFtsTerm(term)).filter((term) => term.length > 0);
+  if (ftsTerms.length === 0) return null;
   const separator = dialect === "postgres" ? " | " : " OR ";
   const prefixToken = dialect === "postgres" ? (term) => `${term}:*` : (term) => `${term}*`;
-  return terms.map((term) => prefixToken(term)).join(separator);
+  return ftsTerms.map((term) => prefixToken(term)).join(separator);
+}
+function sanitizeFtsTerm(term) {
+  return (term.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []).join("");
 }
 function missionSearchFromClause(dialect) {
   if (dialect === "postgres") {
@@ -134386,6 +134547,12 @@ function missionSearchMissionIdColumn(dialect) {
 }
 function missionSearchEntityTypeColumn(dialect) {
   return dialect === "postgres" ? "sd.entity_type" : "search_documents_fts.entity_type";
+}
+function missionSearchDocTitleColumn(dialect) {
+  return dialect === "postgres" ? "sd.title" : "search_documents_fts.title";
+}
+function missionSearchDocBodyColumn(dialect) {
+  return dialect === "postgres" ? "sd.body_text" : "search_documents_fts.body_text";
 }
 function missionSearchDocScoreExpr(dialect) {
   const entityType = missionSearchEntityTypeColumn(dialect);
@@ -134401,10 +134568,601 @@ function missionSearchMatchPredicate(dialect) {
 }
 function missionSearchWorkspaceParams({
   dialect,
-  workspaceId,
+  workspaceId: workspaceId2,
   match
 }) {
-  return dialect === "postgres" ? [match, workspaceId] : [workspaceId, match];
+  return dialect === "postgres" ? [match, workspaceId2] : [workspaceId2, match];
+}
+
+// ../packages/core/service/mission-search.ts
+var CORROBORATION_WEIGHT = 0.1;
+var RANK_FUSION_OFFSET = 60;
+var RECENCY_FUSION_WEIGHT = 0.15;
+var SNIPPET_MAX_LENGTH = 160;
+var EXACT_DISPLAY_ID_BOOST = 2;
+var EXACT_TITLE_BOOST = 1;
+var TITLE_MATCH_BOOST = 0.5;
+var ISO_DATE_BOUND_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:\d{2})$/;
+function validateDateBound(name, value) {
+  if (!value) return;
+  if (!ISO_DATE_BOUND_RE.test(value) || Number.isNaN(Date.parse(value))) {
+    throw new ServiceError(`${name} must be an ISO-8601 timestamp`, "validation_error");
+  }
+}
+function missionSelectColumns() {
+  return `t.id, t.workspace_id, t.project_id, t.display_id, t.title,
+          t.status_type, t.status_id, t.priority, t.created_at, t.updated_at,
+          (SELECT COUNT(*) FROM objectives o
+             WHERE o.mission_id = t.id AND o.deleted_at IS NULL) AS objective_count,
+          p.name AS project_name, w.name AS workspace_name, w.slug AS workspace_slug`;
+}
+function projectAndStatusSql({
+  projectIds,
+  statusTypes,
+  resourceKeys,
+  dateField,
+  from,
+  to
+}) {
+  const params = [];
+  let sql2 = "";
+  if (projectIds.length > 0) {
+    sql2 += ` AND t.project_id IN (${projectIds.map(() => "?").join(", ")})`;
+    params.push(...projectIds);
+  }
+  if (statusTypes.length > 0) {
+    sql2 += ` AND t.status_type IN (${statusTypes.map(() => "?").join(", ")})`;
+    params.push(...statusTypes);
+  }
+  if (resourceKeys.length > 0) {
+    sql2 += ` AND EXISTS (
+      SELECT 1 FROM objectives o
+       WHERE o.mission_id = t.id AND o.deleted_at IS NULL
+         AND o.resource_key IN (${resourceKeys.map(() => "?").join(", ")})
+    )`;
+    params.push(...resourceKeys);
+  }
+  const dateColumn = dateField === "createdAt" ? "t.created_at" : "t.updated_at";
+  if (from) {
+    sql2 += ` AND ${dateColumn} >= ?`;
+    params.push(from);
+  }
+  if (to) {
+    sql2 += ` AND ${dateColumn} < ?`;
+    params.push(to);
+  }
+  return { sql: sql2, params };
+}
+function termMatchesHaystack({ term, haystack }) {
+  return haystack.toLowerCase().includes(term.toLowerCase());
+}
+function matchedTermsInText({ terms, text }) {
+  return terms.filter((term) => termMatchesHaystack({ term, haystack: text }));
+}
+function snippetAroundTerms({ text, terms }) {
+  const trimmed10 = text.trim();
+  if (!trimmed10) return null;
+  const lower = trimmed10.toLowerCase();
+  let idx = -1;
+  let matchedLen = 0;
+  for (const term of terms) {
+    const at = lower.indexOf(term.toLowerCase());
+    if (at === -1) continue;
+    if (idx === -1 || at < idx) {
+      idx = at;
+      matchedLen = term.length;
+    }
+  }
+  if (idx === -1) {
+    if (trimmed10.length <= SNIPPET_MAX_LENGTH) return trimmed10;
+    return `${trimmed10.slice(0, SNIPPET_MAX_LENGTH).trimEnd()}\u2026`;
+  }
+  const padding = Math.max(0, Math.floor((SNIPPET_MAX_LENGTH - matchedLen) / 2));
+  let start2 = Math.max(0, idx - padding);
+  let end = Math.min(trimmed10.length, start2 + SNIPPET_MAX_LENGTH);
+  if (end - start2 < SNIPPET_MAX_LENGTH) start2 = Math.max(0, end - SNIPPET_MAX_LENGTH);
+  let snippet = trimmed10.slice(start2, end).trim();
+  if (start2 > 0) snippet = `\u2026${snippet}`;
+  if (end < trimmed10.length) snippet = `${snippet}\u2026`;
+  return snippet;
+}
+function aggregateDocumentScore(scores) {
+  if (scores.length === 0) return 0;
+  const max = Math.max(...scores);
+  const others = Math.max(0, scores.length - 1);
+  return max + CORROBORATION_WEIGHT * Math.log(1 + others);
+}
+function fusedRankScore({
+  textRank,
+  recencyRank
+}) {
+  return 1 / (RANK_FUSION_OFFSET + textRank) + RECENCY_FUSION_WEIGHT / (RANK_FUSION_OFFSET + recencyRank);
+}
+function publicRelevance({
+  exactDisplayId,
+  exactTitle,
+  titleMatch,
+  fused
+}) {
+  const precedence = exactDisplayId ? EXACT_DISPLAY_ID_BOOST : exactTitle ? EXACT_TITLE_BOOST : titleMatch ? TITLE_MATCH_BOOST : 0;
+  return precedence + fused;
+}
+function toHitFromRow({
+  row,
+  relevance,
+  snippet,
+  matchedTerms,
+  matchedIn
+}) {
+  return {
+    id: row.id,
+    displayId: row.display_id,
+    title: row.title,
+    statusType: row.status_type,
+    statusId: row.status_id,
+    priority: row.priority,
+    projectId: row.project_id,
+    projectName: row.project_name,
+    workspaceId: row.workspace_id,
+    workspaceName: row.workspace_name,
+    workspaceSlug: row.workspace_slug,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    objectiveCount: Number(row.objective_count) || 0,
+    relevance,
+    snippet,
+    matchedTerms,
+    matchedIn
+  };
+}
+function buildAppliedFilters({
+  parsed,
+  projectIds,
+  statusTypes,
+  resourceKeys,
+  dateField,
+  from,
+  to
+}) {
+  return {
+    query: parsed.raw || null,
+    mode: parsed.mode,
+    projectIds,
+    resourceKeys,
+    statusTypes,
+    dateField,
+    from,
+    to,
+    coverageFloor: parsed.coverageFloor
+  };
+}
+function envelope({
+  parsed,
+  hits,
+  totalMatchedBeforeLimit,
+  projectIds,
+  statusTypes,
+  resourceKeys,
+  dateField,
+  from,
+  to,
+  workspaceId: workspaceId2
+}) {
+  return {
+    parsed,
+    hits,
+    totalMatchedBeforeLimit,
+    appliedFilters: buildAppliedFilters({
+      parsed,
+      projectIds,
+      statusTypes,
+      resourceKeys,
+      dateField,
+      from,
+      to
+    }),
+    workspaceCounts: [{ workspaceId: workspaceId2, matched: totalMatchedBeforeLimit, returned: hits.length }]
+  };
+}
+async function listFallbackMissions({
+  db,
+  workspaceId: workspaceId2,
+  projectIds,
+  statusTypes,
+  resourceKeys,
+  dateField,
+  from,
+  to,
+  limit
+}) {
+  const filters = projectAndStatusSql({
+    projectIds,
+    statusTypes,
+    resourceKeys,
+    dateField,
+    from,
+    to
+  });
+  const countRow = await db.get(
+    `SELECT COUNT(*) AS total
+       FROM missions t
+      WHERE t.workspace_id = ? AND t.deleted_at IS NULL${filters.sql}`,
+    [workspaceId2, ...filters.params]
+  );
+  const rows = await db.all(
+    `SELECT ${missionSelectColumns()}
+       FROM missions t
+       JOIN projects p ON p.id = t.project_id
+       JOIN workspaces w ON w.id = t.workspace_id
+      WHERE t.workspace_id = ? AND t.deleted_at IS NULL${filters.sql}
+      ORDER BY t.updated_at DESC
+      LIMIT ?`,
+    [workspaceId2, ...filters.params, limit]
+  );
+  return { rows, total: Number(countRow.total) || 0 };
+}
+async function lookupDisplayId({
+  db,
+  workspaceId: workspaceId2,
+  displayId,
+  projectIds,
+  statusTypes,
+  resourceKeys,
+  dateField,
+  from,
+  to
+}) {
+  const filters = projectAndStatusSql({
+    projectIds,
+    statusTypes,
+    resourceKeys,
+    dateField,
+    from,
+    to
+  });
+  return await db.get(
+    `SELECT ${missionSelectColumns()}
+       FROM missions t
+       JOIN projects p ON p.id = t.project_id
+       JOIN workspaces w ON w.id = t.workspace_id
+      WHERE t.workspace_id = ? AND t.deleted_at IS NULL
+        AND lower(t.display_id) = lower(?)${filters.sql}`,
+    [workspaceId2, displayId, ...filters.params]
+  );
+}
+async function searchWorkspaceMissions({
+  db,
+  workspaceId: workspaceId2,
+  query,
+  projectIds,
+  statusTypes,
+  resourceKeys,
+  dateField,
+  from,
+  to,
+  limit = 25
+}) {
+  const parsed = parseMissionSearchQuery(query ?? "");
+  const projects = projectIds?.filter((id) => id.trim() !== "") ?? [];
+  const types3 = statusTypes?.filter((type) => type.trim() !== "") ?? [];
+  const resources = resourceKeys?.filter((key) => key.trim() !== "") ?? [];
+  const boundsPresent = Boolean(from || to);
+  const date6 = dateField ?? (boundsPresent ? "updatedAt" : null);
+  if (date6 !== null && date6 !== "createdAt" && date6 !== "updatedAt") {
+    throw new ServiceError("dateField must be createdAt or updatedAt", "validation_error");
+  }
+  validateDateBound("from", from);
+  validateDateBound("to", to);
+  if (from && to && Date.parse(from) >= Date.parse(to)) {
+    throw new ServiceError("from must be earlier than to", "validation_error");
+  }
+  const cappedLimit = Number.isFinite(limit) ? Math.max(0, Math.trunc(limit)) : 25;
+  if (parsed.mode === "fallback") {
+    const { rows: rows2, total } = await listFallbackMissions({
+      db,
+      workspaceId: workspaceId2,
+      projectIds: projects,
+      statusTypes: types3,
+      resourceKeys: resources,
+      dateField: date6,
+      from: from ?? null,
+      to: to ?? null,
+      limit: cappedLimit
+    });
+    const hits2 = rows2.map(
+      (row) => toHitFromRow({
+        row,
+        relevance: 0,
+        snippet: null,
+        matchedTerms: [],
+        matchedIn: []
+      })
+    );
+    return envelope({
+      parsed,
+      hits: hits2,
+      totalMatchedBeforeLimit: total,
+      projectIds: projects,
+      statusTypes: types3,
+      resourceKeys: resources,
+      dateField: date6,
+      from: from ?? null,
+      to: to ?? null,
+      workspaceId: workspaceId2
+    });
+  }
+  if (parsed.mode === "display_id" && parsed.displayId) {
+    const row = await lookupDisplayId({
+      db,
+      workspaceId: workspaceId2,
+      displayId: parsed.displayId,
+      projectIds: projects,
+      statusTypes: types3,
+      resourceKeys: resources,
+      dateField: date6,
+      from: from ?? null,
+      to: to ?? null
+    });
+    const hits2 = row ? [
+      toHitFromRow({
+        row,
+        relevance: publicRelevance({
+          exactDisplayId: true,
+          exactTitle: false,
+          titleMatch: false,
+          fused: 1
+        }),
+        snippet: row.title,
+        matchedTerms: [parsed.displayId],
+        matchedIn: ["displayId"]
+      })
+    ] : [];
+    return envelope({
+      parsed,
+      hits: hits2,
+      totalMatchedBeforeLimit: hits2.length,
+      projectIds: projects,
+      statusTypes: types3,
+      resourceKeys: resources,
+      dateField: date6,
+      from: from ?? null,
+      to: to ?? null,
+      workspaceId: workspaceId2
+    });
+  }
+  const match = buildMissionSearchMatch({ dialect: db.dialect, terms: parsed.terms });
+  if (!match) {
+    return searchWorkspaceMissions({
+      db,
+      workspaceId: workspaceId2,
+      query: "",
+      projectIds: projects,
+      statusTypes: types3,
+      resourceKeys: resources,
+      dateField: date6,
+      from: from ?? null,
+      to: to ?? null,
+      limit: cappedLimit
+    });
+  }
+  const filters = projectAndStatusSql({
+    projectIds: projects,
+    statusTypes: types3,
+    resourceKeys: resources,
+    dateField: date6,
+    from: from ?? null,
+    to: to ?? null
+  });
+  const dialect = db.dialect;
+  const rows = await db.all(
+    `SELECT ${missionSelectColumns()},
+            ${missionSearchDocTitleColumn(dialect)} AS doc_title,
+            ${missionSearchDocBodyColumn(dialect)} AS doc_body,
+            ${missionSearchEntityTypeColumn(dialect)} AS entity_type,
+            ${missionSearchDocScoreExpr(dialect)} AS doc_score
+       FROM ${missionSearchFromClause(dialect)}
+       JOIN missions t ON t.id = ${missionSearchMissionIdColumn(dialect)}
+         AND t.workspace_id = ? AND t.deleted_at IS NULL
+       JOIN projects p ON p.id = t.project_id
+       JOIN workspaces w ON w.id = t.workspace_id
+      WHERE ${missionSearchMatchPredicate(dialect)}${filters.sql}`,
+    [...missionSearchWorkspaceParams({ dialect, workspaceId: workspaceId2, match }), ...filters.params]
+  );
+  const byMission = /* @__PURE__ */ new Map();
+  for (const row of rows) {
+    const docText = `${row.doc_title ?? ""} ${row.doc_body ?? ""}`.trim();
+    const existing = byMission.get(row.id);
+    const missionRow = {
+      id: row.id,
+      workspace_id: row.workspace_id,
+      project_id: row.project_id,
+      display_id: row.display_id,
+      title: row.title,
+      status_type: row.status_type,
+      status_id: row.status_id,
+      priority: row.priority,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+      objective_count: row.objective_count,
+      project_name: row.project_name,
+      workspace_name: row.workspace_name,
+      workspace_slug: row.workspace_slug
+    };
+    if (!existing) {
+      const kinds = /* @__PURE__ */ new Set();
+      if (row.entity_type === "objective") kinds.add("objective");
+      if (row.entity_type === "event") kinds.add("event");
+      byMission.set(row.id, {
+        row: missionRow,
+        scores: [Number(row.doc_score) || 0],
+        texts: [docText, row.title, row.display_id],
+        kinds,
+        bestSnippetSource: { score: Number(row.doc_score) || 0, text: docText || row.title }
+      });
+      continue;
+    }
+    existing.scores.push(Number(row.doc_score) || 0);
+    existing.texts.push(docText);
+    if (row.entity_type === "objective") existing.kinds.add("objective");
+    if (row.entity_type === "event") existing.kinds.add("event");
+    const score = Number(row.doc_score) || 0;
+    if (score > existing.bestSnippetSource.score && docText) {
+      existing.bestSnippetSource = { score, text: docText };
+    }
+  }
+  const coverageFloor = parsed.coverageFloor ?? 1;
+  const eligible = [];
+  for (const acc of byMission.values()) {
+    const haystack = acc.texts.join("\n");
+    const matchedTerms = matchedTermsInText({ terms: parsed.terms, text: haystack });
+    if (matchedTerms.length < coverageFloor) continue;
+    const matchedIn = [...acc.kinds];
+    if (matchedTermsInText({ terms: parsed.terms, text: acc.row.title }).length > 0) {
+      matchedIn.push("title");
+    }
+    if (matchedTermsInText({ terms: parsed.terms, text: acc.row.display_id }).length > 0) {
+      matchedIn.push("displayId");
+    }
+    const exactDisplayId = acc.row.display_id.toLowerCase() === parsed.raw.toLowerCase() || parsed.terms.some((term) => term === acc.row.display_id.toLowerCase());
+    const exactTitle = acc.row.title.trim().toLowerCase() === parsed.raw.toLowerCase();
+    eligible.push({
+      acc,
+      textScore: aggregateDocumentScore(acc.scores),
+      matchedTerms,
+      matchedIn: [...new Set(matchedIn)],
+      exactDisplayId,
+      exactTitle
+    });
+  }
+  const byText = [...eligible].sort(
+    (left, right) => right.textScore - left.textScore || right.acc.row.updated_at.localeCompare(left.acc.row.updated_at)
+  );
+  const textRankById = new Map(byText.map((entry, index) => [entry.acc.row.id, index + 1]));
+  const byRecency = [...eligible].sort(
+    (left, right) => right.acc.row.updated_at.localeCompare(left.acc.row.updated_at)
+  );
+  const recencyRankById = new Map(byRecency.map((entry, index) => [entry.acc.row.id, index + 1]));
+  const ranked = eligible.map((entry) => {
+    const fused = fusedRankScore({
+      textRank: textRankById.get(entry.acc.row.id) ?? eligible.length,
+      recencyRank: recencyRankById.get(entry.acc.row.id) ?? eligible.length
+    });
+    const relevance = publicRelevance({
+      exactDisplayId: entry.exactDisplayId,
+      exactTitle: entry.exactTitle,
+      titleMatch: entry.matchedIn.includes("title"),
+      fused
+    });
+    return toHitFromRow({
+      row: entry.acc.row,
+      relevance,
+      snippet: snippetAroundTerms({
+        text: entry.acc.bestSnippetSource.text || entry.acc.row.title,
+        terms: entry.matchedTerms
+      }),
+      matchedTerms: entry.matchedTerms,
+      matchedIn: entry.matchedIn
+    });
+  }).sort(
+    (left, right) => right.relevance - left.relevance || right.updatedAt.localeCompare(left.updatedAt)
+  );
+  const hits = ranked.slice(0, cappedLimit);
+  return envelope({
+    parsed,
+    hits,
+    totalMatchedBeforeLimit: ranked.length,
+    projectIds: projects,
+    statusTypes: types3,
+    resourceKeys: resources,
+    dateField: date6,
+    from: from ?? null,
+    to: to ?? null,
+    workspaceId: workspaceId2
+  });
+}
+function toMissionSearchResultV2(hit) {
+  return {
+    id: hit.id,
+    displayId: hit.displayId,
+    title: hit.title,
+    statusType: hit.statusType,
+    statusId: hit.statusId,
+    priority: hit.priority,
+    projectId: hit.projectId,
+    projectName: hit.projectName,
+    workspaceId: hit.workspaceId,
+    workspaceName: hit.workspaceName,
+    workspaceSlug: hit.workspaceSlug,
+    createdAt: hit.createdAt,
+    updatedAt: hit.updatedAt,
+    objectiveCount: hit.objectiveCount,
+    relevance: hit.relevance,
+    snippet: hit.snippet,
+    matchedTerms: hit.matchedTerms,
+    matchedIn: hit.matchedIn
+  };
+}
+function toSearchMissionsResponseV2(result) {
+  return {
+    version: 2,
+    results: result.hits.map((hit) => toMissionSearchResultV2(hit)),
+    appliedFilters: result.appliedFilters,
+    totalMatchedBeforeLimit: result.totalMatchedBeforeLimit,
+    workspaceCounts: result.workspaceCounts
+  };
+}
+function mergeWorkspaceMissionSearches({
+  results,
+  limit
+}) {
+  const hits = results.flatMap((result) => result.hits).sort(
+    (left, right) => right.relevance - left.relevance || right.updatedAt.localeCompare(left.updatedAt)
+  );
+  const sliced = hits.slice(0, limit);
+  const returnedByWorkspace = /* @__PURE__ */ new Map();
+  for (const hit of sliced) {
+    returnedByWorkspace.set(hit.workspaceId, (returnedByWorkspace.get(hit.workspaceId) ?? 0) + 1);
+  }
+  const workspaceCounts = results.flatMap(
+    (result) => result.workspaceCounts.map((count) => ({
+      workspaceId: count.workspaceId,
+      matched: count.matched,
+      returned: returnedByWorkspace.get(count.workspaceId) ?? 0
+    }))
+  );
+  const appliedFilters = results[0]?.appliedFilters ?? {
+    query: null,
+    mode: "fallback",
+    projectIds: [],
+    resourceKeys: [],
+    statusTypes: [],
+    dateField: null,
+    from: null,
+    to: null,
+    coverageFloor: null
+  };
+  return {
+    version: 2,
+    results: sliced.map((hit) => toMissionSearchResultV2(hit)),
+    appliedFilters,
+    totalMatchedBeforeLimit: results.reduce(
+      (sum, result) => sum + result.totalMatchedBeforeLimit,
+      0
+    ),
+    workspaceCounts
+  };
+}
+function allocateWorkspaceSearchLimits({
+  workspaceIds,
+  limit
+}) {
+  const ordered = [...new Set(workspaceIds)].sort((left, right) => left.localeCompare(right));
+  const capped = Number.isFinite(limit) ? Math.max(0, Math.trunc(limit)) : 25;
+  const base = ordered.length === 0 ? 0 : Math.floor(capped / ordered.length);
+  const remainder = ordered.length === 0 ? 0 : capped % ordered.length;
+  return new Map(
+    ordered.map((workspaceId2, index) => [workspaceId2, base + (index < remainder ? 1 : 0)])
+  );
 }
 
 // ../packages/core/service/objective-display-id.ts
@@ -134898,110 +135656,65 @@ async function getMissionSummary({
     objectiveCount: row.objective_count
   };
 }
-async function listMissions({
+async function searchMissionsWorkspace({
   ctx,
-  projectId,
+  query,
   statusTypes,
-  limit = 50
+  projectId,
+  resourceKeys,
+  dateField,
+  from,
+  to,
+  limit = 25
 }) {
-  const params = [ctx.workspace.id];
-  let sql2 = `SELECT t.id, t.display_id, t.project_id, t.title, t.status_type, t.status_id,
-                    t.priority, t.created_at, t.updated_at,
-                    (SELECT COUNT(*) FROM objectives o WHERE o.mission_id = t.id AND o.deleted_at IS NULL) AS objective_count
-             FROM missions t
-             WHERE t.workspace_id = ? AND t.deleted_at IS NULL`;
-  if (projectId) {
-    sql2 += " AND t.project_id = ?";
-    params.push(await resolveProjectId(ctx, projectId));
-  }
-  if (statusTypes && statusTypes.length > 0) {
-    const placeholders2 = statusTypes.map(() => "?").join(", ");
-    sql2 += ` AND t.status_type IN (${placeholders2})`;
-    params.push(...statusTypes);
-  }
-  sql2 += " ORDER BY t.updated_at DESC LIMIT ?";
-  params.push(limit);
-  const rows = await ctx.db.all(sql2, params);
-  return rows.map((row) => ({
-    id: row.id,
-    displayId: row.display_id,
-    projectId: row.project_id,
-    title: row.title,
-    statusType: row.status_type,
-    statusId: row.status_id,
-    priority: row.priority,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-    objectiveCount: row.objective_count
-  }));
+  const projectIds = projectId ? [await resolveProjectId(ctx, projectId)] : [];
+  return searchWorkspaceMissions({
+    db: ctx.db,
+    workspaceId: ctx.workspace.id,
+    query: query ?? null,
+    projectIds,
+    statusTypes: statusTypes ?? null,
+    resourceKeys: resourceKeys ?? null,
+    dateField: dateField ?? null,
+    from: from ?? null,
+    to: to ?? null,
+    limit
+  });
 }
 async function searchMissions({
   ctx,
   query,
   statusTypes,
   projectId,
+  resourceKeys,
+  dateField,
+  from,
+  to,
   limit = 25
 }) {
-  const trimmed10 = query?.trim();
-  const match = trimmed10 ? buildMissionSearchMatch({ dialect: ctx.db.dialect, query: trimmed10 }) : null;
-  if (!match) {
-    return await listMissions({
-      ctx,
-      projectId: projectId ?? null,
-      statusTypes: statusTypes ?? null,
-      limit
-    });
-  }
-  const params = missionSearchWorkspaceParams({
-    dialect: ctx.db.dialect,
-    workspaceId: ctx.workspace.id,
-    match
+  const result = await searchMissionsWorkspace({
+    ctx,
+    query: query ?? null,
+    statusTypes: statusTypes ?? null,
+    projectId: projectId ?? null,
+    resourceKeys: resourceKeys ?? null,
+    dateField: dateField ?? null,
+    from: from ?? null,
+    to: to ?? null,
+    limit
   });
-  const missionIdColumn = missionSearchMissionIdColumn(ctx.db.dialect);
-  let sql2 = `SELECT t.id, t.display_id, t.project_id, t.title, t.status_type, t.status_id,
-                    t.priority, t.created_at, t.updated_at,
-                    (SELECT COUNT(*) FROM objectives o WHERE o.mission_id = t.id AND o.deleted_at IS NULL) AS objective_count,
-                    ${missionSearchDocScoreExpr(ctx.db.dialect)} AS doc_score
-             FROM ${missionSearchFromClause(ctx.db.dialect)}
-             JOIN missions t ON t.id = ${missionIdColumn}
-               AND t.workspace_id = ? AND t.deleted_at IS NULL
-             WHERE ${missionSearchMatchPredicate(ctx.db.dialect)}`;
-  if (projectId) {
-    sql2 += " AND t.project_id = ?";
-    params.push(await resolveProjectId(ctx, projectId));
-  }
-  if (statusTypes && statusTypes.length > 0) {
-    const placeholders2 = statusTypes.map(() => "?").join(", ");
-    sql2 += ` AND t.status_type IN (${placeholders2})`;
-    params.push(...statusTypes);
-  }
-  const rows = await ctx.db.all(sql2, params);
-  const byMission = /* @__PURE__ */ new Map();
-  for (const row of rows) {
-    const existing = byMission.get(row.id);
-    if (existing) {
-      existing.relevance += row.doc_score;
-      continue;
-    }
-    byMission.set(row.id, {
-      relevance: row.doc_score,
-      mission: {
-        id: row.id,
-        displayId: row.display_id,
-        projectId: row.project_id,
-        title: row.title,
-        statusType: row.status_type,
-        statusId: row.status_id,
-        priority: row.priority,
-        createdAt: row.created_at,
-        updatedAt: row.updated_at,
-        objectiveCount: row.objective_count
-      }
-    });
-  }
-  return [...byMission.values()].sort(
-    (left, right) => right.relevance - left.relevance || right.mission.updatedAt.localeCompare(left.mission.updatedAt)
-  ).slice(0, limit).map((entry) => entry.mission);
+  return result.hits.map((hit) => ({
+    id: hit.id,
+    displayId: hit.displayId,
+    projectId: hit.projectId,
+    title: hit.title,
+    statusType: hit.statusType,
+    statusId: hit.statusId,
+    priority: hit.priority,
+    createdAt: hit.createdAt,
+    updatedAt: hit.updatedAt,
+    objectiveCount: hit.objectiveCount
+  }));
 }
 async function addObjectivesToMission({
   ctx,
@@ -135212,7 +135925,7 @@ var CORE_ARTIFACT_TYPES = /* @__PURE__ */ new Set([
 ]);
 async function insertArtifactRow({
   ctx,
-  workspaceId,
+  workspaceId: workspaceId2,
   projectId,
   missionId,
   objectiveId,
@@ -135242,7 +135955,7 @@ async function insertArtifactRow({
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
     [
       id,
-      workspaceId,
+      workspaceId2,
       projectId,
       missionId,
       objectiveId,
@@ -135314,7 +136027,7 @@ async function topMyMissionPosition(ctx, workspaceUserId, statusId) {
   return minPos === null ? MY_POSITION_STEP : minPos - MY_POSITION_STEP;
 }
 async function upsertMyMissionPositionOnReview(ctx, {
-  workspaceId,
+  workspaceId: workspaceId2,
   projectId,
   workspaceUserId,
   missionId,
@@ -135325,7 +136038,7 @@ async function upsertMyMissionPositionOnReview(ctx, {
   const existing = await ctx.db.get(
     `SELECT id, revision FROM my_mission_positions
        WHERE workspace_id = ? AND workspace_user_id = ? AND mission_id = ?`,
-    [workspaceId, workspaceUserId, missionId]
+    [workspaceId2, workspaceUserId, missionId]
   );
   if (existing) {
     await ctx.db.run(
@@ -135340,7 +136053,7 @@ async function upsertMyMissionPositionOnReview(ctx, {
     `INSERT INTO my_mission_positions
        (id, workspace_id, project_id, workspace_user_id, mission_id, status_id, position, created_at, updated_at, revision)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
-    [newId(), workspaceId, projectId, workspaceUserId, missionId, statusId, position, now2, now2]
+    [newId(), workspaceId2, projectId, workspaceUserId, missionId, statusId, position, now2, now2]
   );
 }
 async function moveMissionToReview({
@@ -135836,7 +136549,7 @@ async function retryWorkerJob(db, id, attemptCount, lastError, now2 = nowIso()) 
 }
 async function enqueueWorkerJob({
   db,
-  workspaceId,
+  workspaceId: workspaceId2,
   type,
   dedupeBy,
   payload,
@@ -135853,7 +136566,7 @@ async function enqueueWorkerJob({
          AND ${workerJobJsonFieldPredicate(db.dialect, dedupeBy.field)}
        ORDER BY created_at ASC
        LIMIT 1`,
-    [workspaceId, type, dedupeBy.value]
+    [workspaceId2, type, dedupeBy.value]
   );
   if (existing) return { jobId: existing.id, enqueued: false };
   const jobId = newId();
@@ -135862,7 +136575,7 @@ async function enqueueWorkerJob({
          (id, workspace_id, type, status, priority, run_after, attempt_count, max_attempts,
           payload_json, created_at, updated_at, revision)
        VALUES (?, ?, ?, 'queued', ?, ?, 0, ?, ?, ?, ?, 1)`,
-    [jobId, workspaceId, type, priority, now2, maxAttempts, JSON.stringify(payload), now2, now2]
+    [jobId, workspaceId2, type, priority, now2, maxAttempts, JSON.stringify(payload), now2, now2]
   );
   return { jobId, enqueued: true };
 }
@@ -135899,7 +136612,7 @@ async function enqueueDeliveryComposeJob({
 }
 async function missionOwnerProfileId({
   db,
-  workspaceId,
+  workspaceId: workspaceId2,
   missionId
 }) {
   const owner = await db.get(
@@ -135908,7 +136621,7 @@ async function missionOwnerProfileId({
        JOIN workspace_users wu ON wu.id = m.assigned_workspace_user_id
       WHERE m.id = ? AND m.workspace_id = ? AND m.deleted_at IS NULL
         AND wu.deleted_at IS NULL AND wu.status = 'active'`,
-    [missionId, workspaceId]
+    [missionId, workspaceId2]
   );
   return owner?.profile_id ?? null;
 }
@@ -135917,13 +136630,13 @@ async function missionOwnerProfileId({
 var NOTIFICATION_DISPATCH_JOB_TYPE = "overlord.notification.dispatch.v1";
 async function emitNotification({
   db,
-  workspaceId,
+  workspaceId: workspaceId2,
   missionId,
   objectiveId = null,
   type,
   now: now2 = nowIso()
 }) {
-  const recipientProfileId = await missionOwnerProfileId({ db, workspaceId, missionId });
+  const recipientProfileId = await missionOwnerProfileId({ db, workspaceId: workspaceId2, missionId });
   if (!recipientProfileId) return { notificationId: null, emitted: false };
   const notificationId = newId();
   await db.run(
@@ -135931,11 +136644,11 @@ async function emitNotification({
          (id, workspace_id, recipient_profile_id, type, mission_id, objective_id,
           created_at, read_at, revision, deleted_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, NULL, 1, NULL)`,
-    [notificationId, workspaceId, recipientProfileId, type, missionId, objectiveId, now2]
+    [notificationId, workspaceId2, recipientProfileId, type, missionId, objectiveId, now2]
   );
   await enqueueWorkerJob({
     db,
-    workspaceId,
+    workspaceId: workspaceId2,
     type: NOTIFICATION_DISPATCH_JOB_TYPE,
     dedupeBy: { field: "notificationId", value: notificationId },
     payload: { notificationId },
@@ -137120,13 +137833,13 @@ var LIVE_ACTIVITY_DISPATCH_JOB_TYPE = "overlord.live_activity.dispatch.v1";
 var LIVE_ACTIVITY_START_JOB_TYPE = "overlord.live_activity.start.v1";
 async function enqueueLiveActivityDispatchJob({
   db,
-  workspaceId,
+  workspaceId: workspaceId2,
   profileId,
   now: now2 = nowIso()
 }) {
   const result = await enqueueWorkerJob({
     db,
-    workspaceId,
+    workspaceId: workspaceId2,
     type: LIVE_ACTIVITY_DISPATCH_JOB_TYPE,
     dedupeBy: { field: "profileId", value: profileId },
     payload: { profileId },
@@ -137138,23 +137851,23 @@ async function enqueueLiveActivityDispatchJob({
 }
 async function enqueueLiveActivityRefreshForMission({
   db,
-  workspaceId,
+  workspaceId: workspaceId2,
   missionId,
   now: now2 = nowIso()
 }) {
-  const profileId = await missionOwnerProfileId({ db, workspaceId, missionId });
-  return profileId ? enqueueLiveActivityDispatchJob({ db, workspaceId, profileId, now: now2 }) : false;
+  const profileId = await missionOwnerProfileId({ db, workspaceId: workspaceId2, missionId });
+  return profileId ? enqueueLiveActivityDispatchJob({ db, workspaceId: workspaceId2, profileId, now: now2 }) : false;
 }
 async function enqueueLiveActivityStartJob({
   db,
-  workspaceId,
+  workspaceId: workspaceId2,
   profileId,
   missionId,
   now: now2 = nowIso()
 }) {
   const result = await enqueueWorkerJob({
     db,
-    workspaceId,
+    workspaceId: workspaceId2,
     type: LIVE_ACTIVITY_START_JOB_TYPE,
     dedupeBy: { field: "profileId", value: profileId },
     payload: { profileId, missionId },
@@ -137166,14 +137879,14 @@ async function enqueueLiveActivityStartJob({
 }
 async function enqueueLiveActivityStartForMission({
   db,
-  workspaceId,
+  workspaceId: workspaceId2,
   missionId,
   now: now2 = nowIso()
 }) {
-  const profileId = await missionOwnerProfileId({ db, workspaceId, missionId });
+  const profileId = await missionOwnerProfileId({ db, workspaceId: workspaceId2, missionId });
   if (!profileId) return false;
-  await enqueueLiveActivityDispatchJob({ db, workspaceId, profileId, now: now2 });
-  return enqueueLiveActivityStartJob({ db, workspaceId, profileId, missionId, now: now2 });
+  await enqueueLiveActivityDispatchJob({ db, workspaceId: workspaceId2, profileId, now: now2 });
+  return enqueueLiveActivityStartJob({ db, workspaceId: workspaceId2, profileId, missionId, now: now2 });
 }
 
 // ../packages/core/service/objective-parallelism.ts
@@ -139660,7 +140373,30 @@ async function resolveObjectiveIdForRest({
   db,
   uuidWorkspaceScoped = false
 }) {
-  const ctx = await buildWebappServiceContextForWorkspace(getActiveWorkspaceId(), db);
+  const authorized = getAuthorizedWorkspacesContext();
+  if (!authorized || authorized.workspaces.length === 0) {
+    throw new ApiError(404, "Objective not found");
+  }
+  const workspaceIds = authorized.workspaces.map((workspace) => workspace.workspaceId);
+  const parsedMissionDisplayId = ref.includes(".") ? ref.slice(0, ref.lastIndexOf(".")) : null;
+  const rows = parsedMissionDisplayId ? await db.all(
+    `SELECT workspace_id FROM missions
+          WHERE display_id = ?
+            AND workspace_id IN (${workspaceIds.map(() => "?").join(", ")})
+            AND deleted_at IS NULL`,
+    [parsedMissionDisplayId, ...workspaceIds]
+  ) : await db.all(
+    `SELECT workspace_id FROM objectives
+          WHERE id = ?
+            AND workspace_id IN (${workspaceIds.map(() => "?").join(", ")})
+            AND deleted_at IS NULL`,
+    [ref, ...workspaceIds]
+  );
+  if (rows.length > 1) {
+    throw new ApiError(409, `Objective reference is ambiguous in this organization: ${ref}`);
+  }
+  if (!rows[0]) throw new ApiError(404, "Objective not found");
+  const ctx = await buildWebappServiceContextForWorkspace(rows[0].workspace_id, db);
   try {
     return await resolveObjectiveRef({ ctx, ref, uuidWorkspaceScoped });
   } catch (error53) {
@@ -139675,33 +140411,37 @@ async function resolveObjectiveIdForRest({
 init_db();
 init_errors5();
 async function loadActorRoles({
-  workspaceId,
+  workspaceId: workspaceId2,
   workspaceUserId
 }) {
   if (!workspaceUserId) return [];
   const rows = await requireDatabaseClient().all(
     `SELECT role_key FROM role_assignments
        WHERE workspace_id = ? AND workspace_user_id = ? AND deleted_at IS NULL`,
-    [workspaceId, workspaceUserId]
+    [workspaceId2, workspaceUserId]
   );
   return rows.map((row) => row.role_key);
 }
 async function actorIsAdmin({
-  workspaceId,
+  workspaceId: workspaceId2,
   workspaceUserId
 }) {
-  const roles = await loadActorRoles({ workspaceId, workspaceUserId });
+  const roles = await loadActorRoles({ workspaceId: workspaceId2, workspaceUserId });
   if (roles.length === 0) return false;
   const actor = makeActor(workspaceUserId ?? "anonymous", roles);
   return defaultAuthorizer.can(actor, "*").allowed || roles.includes(Role.ADMIN);
 }
 async function actorCan(action, {
-  workspaceId,
+  workspaceId: workspaceId2,
   workspaceUserId,
   tokenScopes = getActiveTokenScopes()
 }) {
   if (!workspaceUserId) return false;
-  const roles = await loadActorRoles({ workspaceId, workspaceUserId });
+  const authorizedWorkspace = getAuthorizedWorkspace(workspaceId2);
+  if (getAuthorizedWorkspacesContext() && authorizedWorkspace?.workspaceUserId !== workspaceUserId) {
+    return false;
+  }
+  const roles = authorizedWorkspace ? authorizedWorkspace.roleKeys : await loadActorRoles({ workspaceId: workspaceId2, workspaceUserId });
   if (roles.length === 0) return false;
   const actor = makeActor(workspaceUserId, roles);
   return defaultAuthorizer.can(actor, action).allowed && tokenScopeAllows(tokenScopes, action);
@@ -139712,19 +140452,56 @@ async function requirePermission(action, scope) {
   }
 }
 async function requireWorkspacePermission({
-  workspaceId,
+  workspaceId: workspaceId2,
   permission,
   db = requireDatabaseClient(),
   notFoundMessage = "Workspace not found"
 }) {
+  const authorized = getAuthorizedWorkspace(workspaceId2);
+  if (getAuthorizedWorkspacesContext()) {
+    if (!authorized) throw new ApiError(404, notFoundMessage);
+    if (!await actorCan(permission, { workspaceId: workspaceId2, workspaceUserId: authorized.workspaceUserId })) {
+      throw new ApiError(403, `Permission denied: ${permission}`);
+    }
+    setResolvedWorkspaceId(workspaceId2);
+    return authorized.workspaceUserId;
+  }
   const profileId = await resolveActiveProfileId(db);
   if (!profileId) throw new ApiError(401, "Authentication required");
-  const membershipId = await findActiveMembershipId(workspaceId, profileId, db);
+  const membershipId = await findActiveMembershipId(workspaceId2, profileId, db);
   if (!membershipId) throw new ApiError(404, notFoundMessage);
-  if (!await actorCan(permission, { workspaceId, workspaceUserId: membershipId })) {
+  if (!await actorCan(permission, { workspaceId: workspaceId2, workspaceUserId: membershipId })) {
     throw new ApiError(403, `Permission denied: ${permission}`);
   }
+  setResolvedWorkspaceId(workspaceId2);
   return membershipId;
+}
+async function requireAnyWorkspacePermission(permission) {
+  const authorized = getAuthorizedWorkspacesContext();
+  if (authorized) {
+    const candidates = [...authorized.workspaces].sort(
+      (a5, b5) => a5.workspaceId.localeCompare(b5.workspaceId)
+    );
+    for (const candidate of candidates) {
+      if (await actorCan(permission, {
+        workspaceId: candidate.workspaceId,
+        workspaceUserId: candidate.workspaceUserId
+      })) {
+        return {
+          workspaceId: candidate.workspaceId,
+          workspaceUserId: candidate.workspaceUserId
+        };
+      }
+    }
+    throw new ApiError(403, `Permission denied: ${permission}`);
+  }
+  const workspaceId2 = getBootstrapWorkspaceIdOrNull();
+  const profileId = await resolveActiveProfileId();
+  const workspaceUserId = workspaceId2 && profileId ? await findActiveMembershipId(workspaceId2, profileId) : null;
+  if (!workspaceId2 || !workspaceUserId || !await actorCan(permission, { workspaceId: workspaceId2, workspaceUserId })) {
+    throw new ApiError(403, `Permission denied: ${permission}`);
+  }
+  return { workspaceId: workspaceId2, workspaceUserId };
 }
 async function requireWorkspaceScope(args) {
   const workspaceUserId = await requireWorkspacePermission(args);
@@ -139756,11 +140533,25 @@ async function requireMissionPermission({
     `SELECT id, workspace_id FROM missions WHERE id = ? AND deleted_at IS NULL`,
     [missionRef]
   );
-  const resolved = mission ?? await db.get(
-    `SELECT id, workspace_id FROM missions
-        WHERE display_id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-    [missionRef, getActiveWorkspaceId()]
-  );
+  let resolved = mission;
+  if (!resolved) {
+    const authorized = getAuthorizedWorkspacesContext();
+    if (!authorized || authorized.workspaces.length === 0) {
+      throw new ApiError(404, "Mission not found");
+    }
+    const workspaceIds = authorized.workspaces.map((workspace) => workspace.workspaceId);
+    const rows = await db.all(
+      `SELECT id, workspace_id FROM missions
+        WHERE display_id = ?
+          AND workspace_id IN (${workspaceIds.map(() => "?").join(", ")})
+          AND deleted_at IS NULL`,
+      [missionRef, ...workspaceIds]
+    );
+    if (rows.length > 1) {
+      throw new ApiError(409, `Mission reference is ambiguous in this organization: ${missionRef}`);
+    }
+    resolved = rows[0];
+  }
   if (!resolved) throw new ApiError(404, "Mission not found");
   const scope = await requireWorkspaceScope({
     workspaceId: resolved.workspace_id,
@@ -139777,7 +140568,7 @@ async function liveOrganizationWorkspaceIds(organizationId, client) {
   );
   return rows.map((row) => row.id);
 }
-async function profileIsWorkspaceAdmin(profileId, workspaceId, client) {
+async function profileIsWorkspaceAdmin(profileId, workspaceId2, client) {
   const row = await client.get(
     `SELECT ra.id
        FROM workspace_users wu
@@ -139787,22 +140578,22 @@ async function profileIsWorkspaceAdmin(profileId, workspaceId, client) {
       WHERE wu.workspace_id = ? AND wu.profile_id = ?
         AND wu.status = 'active' AND wu.deleted_at IS NULL
       LIMIT 1`,
-    [workspaceId, profileId]
+    [workspaceId2, profileId]
   );
   return !!row;
 }
 async function isOrganizationAdmin(profileId, organizationId, client = requireDatabaseClient()) {
   const workspaceIds = await liveOrganizationWorkspaceIds(organizationId, client);
   if (workspaceIds.length === 0) return false;
-  for (const workspaceId of workspaceIds) {
-    if (!await profileIsWorkspaceAdmin(profileId, workspaceId, client)) return false;
+  for (const workspaceId2 of workspaceIds) {
+    if (!await profileIsWorkspaceAdmin(profileId, workspaceId2, client)) return false;
   }
   return true;
 }
 async function canViewOrganizationSettings(profileId, organizationId, client = requireDatabaseClient()) {
   const workspaceIds = await liveOrganizationWorkspaceIds(organizationId, client);
-  for (const workspaceId of workspaceIds) {
-    if (await profileIsWorkspaceAdmin(profileId, workspaceId, client)) return true;
+  for (const workspaceId2 of workspaceIds) {
+    if (await profileIsWorkspaceAdmin(profileId, workspaceId2, client)) return true;
   }
   return false;
 }
@@ -140094,8 +140885,15 @@ init_db();
 // realtime.ts
 init_db();
 var CHANGE_BATCH_LIMIT = 500;
+var AUTHORIZATION_CHANGE_ENTITY_TYPES = /* @__PURE__ */ new Set([
+  "role_assignment",
+  "user_token",
+  "user_token_workspace",
+  "workspace",
+  "workspace_user"
+]);
 var SELECT_CHANGES_SQL = `
-  SELECT seq, entity_type, entity_id, operation, project_id, mission_id, objective_id,
+  SELECT seq, workspace_id, entity_type, entity_id, operation, project_id, mission_id, objective_id,
          changed_fields_json, occurred_at
     FROM entity_changes
    WHERE seq > ?
@@ -140115,6 +140913,7 @@ function parseChangedFields(value) {
 function entityChangeDtoFromRow(row) {
   return {
     seq: row.seq,
+    workspaceId: row.workspace_id,
     entityType: row.entity_type,
     entityId: row.entity_id,
     operation: row.operation,
@@ -140125,22 +140924,48 @@ function entityChangeDtoFromRow(row) {
     occurredAt: row.occurred_at
   };
 }
-async function readChangesAfter(afterSeq, limit = CHANGE_BATCH_LIMIT) {
+async function readableChangeFeedWorkspaceIds() {
+  const authorized = getAuthorizedWorkspacesContext();
+  if (!authorized) return [];
+  const checked = await Promise.all(
+    authorized.workspaces.map(async (workspace) => ({
+      workspaceId: workspace.workspaceId,
+      allowed: await actorCan(PERMISSIONS.PROJECT_READ, {
+        workspaceId: workspace.workspaceId,
+        workspaceUserId: workspace.workspaceUserId
+      })
+    }))
+  );
+  return checked.filter((workspace) => workspace.allowed).map((workspace) => workspace.workspaceId);
+}
+async function readChangesAfter(afterSeq, workspaceIds, limit = CHANGE_BATCH_LIMIT) {
   const normalizedAfter = Number.isFinite(afterSeq) && afterSeq > 0 ? Math.floor(afterSeq) : 0;
   const requestedLimit = Number.isFinite(limit) ? Math.floor(limit) : CHANGE_BATCH_LIMIT;
   const normalizedLimit = Math.max(1, Math.min(requestedLimit, CHANGE_BATCH_LIMIT));
-  const rows = await requireDatabaseClient().all(SELECT_CHANGES_SQL, [
-    normalizedAfter,
-    normalizedLimit + 1
-  ]);
+  const client = requireDatabaseClient();
+  const scanThroughSeq = Math.max(normalizedAfter, await currentMaxSeq(client));
+  const authorizedWorkspaceIds = [...new Set(workspaceIds.filter(Boolean))];
+  if (authorizedWorkspaceIds.length === 0 || scanThroughSeq === normalizedAfter) {
+    return { changes: [], cursor: scanThroughSeq, hasMore: false };
+  }
+  const workspacePlaceholders = authorizedWorkspaceIds.map(() => "?").join(", ");
+  const rows = await client.all(
+    `SELECT seq, workspace_id, entity_type, entity_id, operation, project_id, mission_id,
+            objective_id, changed_fields_json, occurred_at
+       FROM entity_changes
+      WHERE seq > ? AND seq <= ? AND workspace_id IN (${workspacePlaceholders})
+      ORDER BY seq ASC
+      LIMIT ?`,
+    [normalizedAfter, scanThroughSeq, ...authorizedWorkspaceIds, normalizedLimit + 1]
+  );
   const hasMore = rows.length > normalizedLimit;
   const returnedRows = hasMore ? rows.slice(0, normalizedLimit) : rows;
   const changes = returnedRows.map(entityChangeDtoFromRow);
-  const cursor = changes.length > 0 ? changes[changes.length - 1].seq : normalizedAfter;
+  const cursor = hasMore ? changes[changes.length - 1].seq : scanThroughSeq;
   return { changes, cursor, hasMore };
 }
 var RealtimeHub = class {
-  clients = /* @__PURE__ */ new Set();
+  clients = /* @__PURE__ */ new Map();
   cursor = 0;
   lastDataVersion = null;
   pollTimer = null;
@@ -140151,7 +140976,7 @@ var RealtimeHub = class {
     this.pollTimer = setInterval(() => void this.poll(), 500);
     this.heartbeatTimer = setInterval(() => this.heartbeat(), 25e3);
   }
-  addClient(res, options = {}) {
+  addClient(res, options) {
     res.writeHead(200, {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache, no-transform",
@@ -140159,7 +140984,11 @@ var RealtimeHub = class {
       "X-Accel-Buffering": "no"
     });
     res.write("retry: 2000\n\n");
-    this.clients.add(res);
+    const client = {
+      response: res,
+      workspaceIds: new Set(options.workspaceIds)
+    };
+    this.clients.set(res, client);
     this.send(res, "hello", { type: "hello", cursor: this.cursor });
     if (options.afterSeq !== void 0 && options.afterSeq < this.cursor) {
       void this.sendCatchUp(res, options.afterSeq);
@@ -140170,7 +140999,7 @@ var RealtimeHub = class {
   }
   /** Run a poll immediately — used right after a local mutation for snappy echoes. */
   pollNow() {
-    void this.poll();
+    return this.poll();
   }
   /**
    * Force every subscriber to refetch. Used for server-state changes that do not
@@ -140194,9 +141023,12 @@ var RealtimeHub = class {
     }
     const rows = await client.all(SELECT_CHANGES_SQL, [this.cursor, CHANGE_BATCH_LIMIT]);
     if (rows.length > 0) {
-      const changes = rows.map(entityChangeDtoFromRow);
       this.cursor = rows[rows.length - 1].seq;
-      this.broadcast("change", { type: "change", changes, cursor: this.cursor });
+      if (rows.some((row) => AUTHORIZATION_CHANGE_ENTITY_TYPES.has(row.entity_type))) {
+        this.reconnectClientsForAuthorizationChange();
+      } else {
+        this.broadcastChanges(rows, this.cursor);
+      }
     }
     const version4 = await client.sqliteDataVersion?.() ?? null;
     if (version4 !== null && version4 !== this.lastDataVersion) {
@@ -140207,17 +141039,34 @@ var RealtimeHub = class {
     }
   }
   heartbeat() {
-    for (const res of this.clients) res.write(": ping\n\n");
+    for (const { response } of this.clients.values()) response.write(": ping\n\n");
   }
   broadcast(event, data) {
-    for (const res of this.clients) this.send(res, event, data);
+    for (const { response } of this.clients.values()) this.send(response, event, data);
+  }
+  broadcastChanges(rows, cursor) {
+    for (const client of this.clients.values()) {
+      const changes = rows.filter((row) => client.workspaceIds.has(row.workspace_id)).map(entityChangeDtoFromRow);
+      if (changes.length > 0) {
+        this.send(client.response, "change", { type: "change", changes, cursor });
+      }
+    }
+  }
+  reconnectClientsForAuthorizationChange() {
+    for (const { response } of [...this.clients.values()]) {
+      this.removeClient(response);
+      response.end();
+    }
   }
   async sendCatchUp(res, afterSeq) {
     let cursor = afterSeq;
     while (this.clients.has(res)) {
-      const batch = await readChangesAfter(cursor);
-      if (batch.changes.length === 0) return;
-      this.send(res, "change", { type: "change", changes: batch.changes, cursor: batch.cursor });
+      const client = this.clients.get(res);
+      const batch = await readChangesAfter(cursor, [...client.workspaceIds]);
+      if (!this.clients.has(res)) return;
+      if (batch.changes.length > 0) {
+        this.send(res, "change", { type: "change", changes: batch.changes, cursor: batch.cursor });
+      }
       cursor = batch.cursor;
       if (!batch.hasMore) return;
     }
@@ -140591,10 +141440,10 @@ function instanceAgentCatalog() {
   const config4 = loadConfig();
   return resolveInstanceAgentCatalog({ configCatalog: config4.agentCatalog });
 }
-async function readWorkspaceSettings(client = requireDatabaseClient(), workspaceId) {
+async function readWorkspaceSettings(client = requireDatabaseClient(), workspaceId2) {
   const row = await client.get(
     `SELECT settings_json FROM workspaces WHERE id = ? AND deleted_at IS NULL`,
-    [workspaceId]
+    [workspaceId2]
   );
   if (!row) throw new ApiError(500, "Workspace not found");
   try {
@@ -140603,40 +141452,45 @@ async function readWorkspaceSettings(client = requireDatabaseClient(), workspace
     return {};
   }
 }
-async function writeWorkspaceSettings(settings, client = requireDatabaseClient(), workspaceId) {
+async function writeWorkspaceSettings(settings, client = requireDatabaseClient(), workspaceId2) {
   await client.run(
     `UPDATE workspaces SET settings_json = ?, updated_at = ?, revision = revision + 1 WHERE id = ?`,
-    [JSON.stringify(settings), nowIso2(), workspaceId]
+    [JSON.stringify(settings), nowIso2(), workspaceId2]
   );
 }
-async function readStoredCatalog(client, workspaceId) {
-  const settings = await readWorkspaceSettings(client, workspaceId);
+async function readStoredCatalog(client, workspaceId2) {
+  const settings = await readWorkspaceSettings(client, workspaceId2);
   const stored = settings[AGENT_CATALOG_SETTINGS_KEY];
   if (!stored || typeof stored !== "object" || typeof stored.agents !== "object") return null;
   return stored;
 }
-async function persistCatalog(catalog, client, workspaceId) {
-  const settings = await readWorkspaceSettings(client, workspaceId);
+async function persistCatalog(catalog, client, workspaceId2) {
+  const settings = await readWorkspaceSettings(client, workspaceId2);
   settings[AGENT_CATALOG_SETTINGS_KEY] = { ...catalog, updatedAt: nowIso2() };
-  await writeWorkspaceSettings(settings, client, workspaceId);
+  await writeWorkspaceSettings(settings, client, workspaceId2);
 }
-async function resolveCatalogWorkspaceId(workspaceId, permission, db) {
-  if (!workspaceId) return WORKSPACE.id;
+async function resolveCatalogWorkspaceId(workspaceId2, permission, db) {
+  if (!workspaceId2) {
+    if (getAuthorizedWorkspacesContext()) throw new ApiError(400, "workspaceId is required");
+    const fallback2 = getBootstrapWorkspaceIdOrNull();
+    if (!fallback2) throw new ApiError(400, "workspaceId is required");
+    return fallback2;
+  }
   await requireWorkspacePermission({
-    workspaceId,
+    workspaceId: workspaceId2,
     permission,
     db,
     notFoundMessage: "Workspace not found or no active membership"
   });
-  return workspaceId;
+  return workspaceId2;
 }
-async function readWorktreeBranchAutomationEnabled(client = requireDatabaseClient(), workspaceId) {
-  const settings = await readWorkspaceSettings(client, workspaceId);
+async function readWorktreeBranchAutomationEnabled(client = requireDatabaseClient(), workspaceId2) {
+  const settings = await readWorkspaceSettings(client, workspaceId2);
   return settings[WORKTREE_BRANCH_AUTOMATION_SETTINGS_KEY] === true;
 }
 async function launchSettingsDto({
   target,
-  workspaceId,
+  workspaceId: workspaceId2,
   ctx,
   agentConfigs = target?.agentConfigs ?? {},
   terminalProfile = target?.terminalProfile ?? toTerminalProfileDto(DEFAULT_TERMINAL_PROFILE2),
@@ -140653,22 +141507,25 @@ async function launchSettingsDto({
     // Resolved from the same stored profile the DTO carries, so a client never has
     // to re-implement the target-override-then-user-default precedence itself.
     resolvedLaunchSession: target ? resolveLaunchSession2({ profile: fromTerminalProfileDto(terminalProfile), defaults: defaults2 }) : null,
-    worktreeBranchAutomationEnabled: await readWorktreeBranchAutomationEnabled(client, workspaceId)
+    worktreeBranchAutomationEnabled: await readWorktreeBranchAutomationEnabled(client, workspaceId2)
   };
 }
-async function resolveLaunchSettingsScope(workspaceId, permission, client) {
-  if (!workspaceId) {
-    const ctx2 = serviceContext(client);
-    return { workspaceId: ctx2.workspace.id, ctx: ctx2 };
+async function resolveLaunchSettingsScope(workspaceId2, permission, client) {
+  if (!workspaceId2) {
+    if (getAuthorizedWorkspacesContext()) throw new ApiError(400, "workspaceId is required");
+    const fallback2 = getBootstrapWorkspaceIdOrNull();
+    if (!fallback2) throw new ApiError(400, "workspaceId is required");
+    const ctx2 = await buildWebappServiceContextForWorkspace(fallback2, client);
+    return { workspaceId: fallback2, ctx: ctx2 };
   }
   const membershipId = await requireWorkspacePermission({
-    workspaceId,
+    workspaceId: workspaceId2,
     permission,
     db: client,
     notFoundMessage: "Workspace not found or no active membership"
   });
-  const ctx = await buildWebappServiceContextForWorkspace(workspaceId, client, membershipId);
-  return { workspaceId, ctx };
+  const ctx = await buildWebappServiceContextForWorkspace(workspaceId2, client, membershipId);
+  return { workspaceId: workspaceId2, ctx };
 }
 function toCatalogDto(stored) {
   const config4 = loadConfig();
@@ -140692,10 +141549,10 @@ function toCatalogDto(stored) {
     defaultModel: config4.defaultModel
   };
 }
-async function getAgentCatalog(workspaceId) {
+async function getAgentCatalog(workspaceId2) {
   return requireDatabaseClient().transaction(async (tx) => {
     const targetWorkspaceId = await resolveCatalogWorkspaceId(
-      workspaceId,
+      workspaceId2,
       PERMISSIONS.LAUNCH_READ,
       tx
     );
@@ -140707,10 +141564,10 @@ async function getAgentCatalog(workspaceId) {
     return toCatalogDto(stored);
   });
 }
-async function refreshAgentCatalog(workspaceId) {
+async function refreshAgentCatalog(workspaceId2) {
   return requireDatabaseClient().transaction(async (tx) => {
     const targetWorkspaceId = await resolveCatalogWorkspaceId(
-      workspaceId,
+      workspaceId2,
       PERMISSIONS.LAUNCH_CONFIGURE,
       tx
     );
@@ -140783,10 +141640,10 @@ function storedCatalogFromBody(body) {
   }
   return { agents };
 }
-async function updateAgentCatalog(body, workspaceId) {
+async function updateAgentCatalog(body, workspaceId2) {
   return requireDatabaseClient().transaction(async (tx) => {
     const targetWorkspaceId = await resolveCatalogWorkspaceId(
-      workspaceId,
+      workspaceId2,
       PERMISSIONS.LAUNCH_CONFIGURE,
       tx
     );
@@ -140801,9 +141658,6 @@ async function updateAgentCatalog(body, workspaceId) {
     await persistCatalog(stored, tx, targetWorkspaceId);
     return toCatalogDto(stored);
   });
-}
-function serviceContext(client = serviceDatabaseClient()) {
-  return buildWebappServiceContext(client);
 }
 function toTerminalProfileDto(profile) {
   return {
@@ -140865,7 +141719,7 @@ async function toLocalLaunchTarget(target, client) {
     terminalProfile: toTerminalProfileDto(target.terminalProfile)
   };
 }
-async function requireLocalLaunchTarget(client = requireDatabaseClient(), ctx = serviceContext(client)) {
+async function requireLocalLaunchTarget(client, ctx) {
   return toLocalLaunchTarget(
     await requireActingDeviceTarget({
       ctx,
@@ -140874,21 +141728,21 @@ async function requireLocalLaunchTarget(client = requireDatabaseClient(), ctx = 
     client
   );
 }
-async function findLocalLaunchTarget(client = requireDatabaseClient(), ctx = serviceContext(client)) {
+async function findLocalLaunchTarget(client, ctx) {
   const target = await findActingDeviceTarget({ ctx });
   return target ? toLocalLaunchTarget(target, client) : null;
 }
-async function getLaunchSettings(workspaceId) {
+async function getLaunchSettings(workspaceId2) {
   const client = requireDatabaseClient();
-  const scope = await resolveLaunchSettingsScope(workspaceId, PERMISSIONS.LAUNCH_READ, client);
+  const scope = await resolveLaunchSettingsScope(workspaceId2, PERMISSIONS.LAUNCH_READ, client);
   const target = await findLocalLaunchTarget(client, scope.ctx);
   return launchSettingsDto({ target, workspaceId: scope.workspaceId, ctx: scope.ctx, client });
 }
-async function updateAgentLaunchConfig(agentKey, body, workspaceId) {
+async function updateAgentLaunchConfig(agentKey, body, workspaceId2) {
   return requireDatabaseClient().transaction(async (tx) => {
     const key = agentKey.trim();
     if (!key) throw new ApiError(400, "Agent key is required");
-    const scope = await resolveLaunchSettingsScope(workspaceId, PERMISSIONS.LAUNCH_CONFIGURE, tx);
+    const scope = await resolveLaunchSettingsScope(workspaceId2, PERMISSIONS.LAUNCH_CONFIGURE, tx);
     const target = await requireLocalLaunchTarget(tx, scope.ctx);
     if (!target.preferenceId) {
       throw new ApiError(409, "No active workspace user to store launch configs for");
@@ -140913,9 +141767,9 @@ async function updateAgentLaunchConfig(agentKey, body, workspaceId) {
     });
   });
 }
-async function updateTerminalProfile2(body, workspaceId) {
+async function updateTerminalProfile2(body, workspaceId2) {
   return requireDatabaseClient().transaction(async (tx) => {
-    const scope = await resolveLaunchSettingsScope(workspaceId, PERMISSIONS.LAUNCH_CONFIGURE, tx);
+    const scope = await resolveLaunchSettingsScope(workspaceId2, PERMISSIONS.LAUNCH_CONFIGURE, tx);
     const current = await findLocalLaunchTarget(tx, scope.ctx);
     const saved = await updateTerminalProfile({
       ctx: scope.ctx,
@@ -140938,9 +141792,9 @@ async function updateTerminalProfile2(body, workspaceId) {
     });
   });
 }
-async function updateLaunchSessionDefaults(body, workspaceId) {
+async function updateLaunchSessionDefaults(body, workspaceId2) {
   return requireDatabaseClient().transaction(async (tx) => {
-    const scope = await resolveLaunchSettingsScope(workspaceId, PERMISSIONS.LAUNCH_CONFIGURE, tx);
+    const scope = await resolveLaunchSettingsScope(workspaceId2, PERMISSIONS.LAUNCH_CONFIGURE, tx);
     const defaults2 = await updateActorLaunchSessionDefaults({
       ctx: scope.ctx,
       executionProvider: body.executionProvider === void 0 ? void 0 : body.executionProvider === null ? DEFAULT_LAUNCH_SESSION_DEFAULTS2.executionProvider : normalizeExecutionProvider2(body.executionProvider),
@@ -140956,9 +141810,9 @@ async function updateLaunchSessionDefaults(body, workspaceId) {
     });
   });
 }
-async function updateWorktreeBranchAutomation(body, workspaceId) {
+async function updateWorktreeBranchAutomation(body, workspaceId2) {
   return requireDatabaseClient().transaction(async (tx) => {
-    const scope = await resolveLaunchSettingsScope(workspaceId, PERMISSIONS.LAUNCH_CONFIGURE, tx);
+    const scope = await resolveLaunchSettingsScope(workspaceId2, PERMISSIONS.LAUNCH_CONFIGURE, tx);
     const settings = await readWorkspaceSettings(tx, scope.workspaceId);
     settings[WORKTREE_BRANCH_AUTOMATION_SETTINGS_KEY] = body.enabled === true;
     await writeWorkspaceSettings(settings, tx, scope.workspaceId);
@@ -140972,21 +141826,21 @@ async function updateWorktreeBranchAutomation(body, workspaceId) {
   });
 }
 var LAUNCH_PREFERENCE_KEY = "launchPreference";
-function readPreferenceRow2(projectId, workspaceId, workspaceUserId, client = requireDatabaseClient()) {
+function readPreferenceRow2(projectId, workspaceId2, workspaceUserId, client = requireDatabaseClient()) {
   return readProjectUserPreferenceRow({
     db: client,
-    workspaceId,
+    workspaceId: workspaceId2,
     workspaceUserId,
     projectId
   });
 }
 async function getLaunchPreference(projectId, client = requireDatabaseClient()) {
-  const { workspaceId, workspaceUserId } = await requireProjectPermission({
+  const { workspaceId: workspaceId2, workspaceUserId } = await requireProjectPermission({
     projectId,
     permission: PERMISSIONS.LAUNCH_READ,
     db: client
   });
-  const row = await readPreferenceRow2(projectId, workspaceId, workspaceUserId, client);
+  const row = await readPreferenceRow2(projectId, workspaceId2, workspaceUserId, client);
   const stored = row?.preferences[LAUNCH_PREFERENCE_KEY];
   return {
     selectedAgent: stored?.selectedAgent ?? null,
@@ -140996,12 +141850,12 @@ async function getLaunchPreference(projectId, client = requireDatabaseClient()) 
 }
 async function updateLaunchPreference(projectId, body) {
   return requireDatabaseClient().transaction(async (tx) => {
-    const { workspaceId, workspaceUserId } = await requireProjectPermission({
+    const { workspaceId: workspaceId2, workspaceUserId } = await requireProjectPermission({
       projectId,
       permission: PERMISSIONS.LAUNCH_CONFIGURE,
       db: tx
     });
-    const row = await readPreferenceRow2(projectId, workspaceId, workspaceUserId, tx);
+    const row = await readPreferenceRow2(projectId, workspaceId2, workspaceUserId, tx);
     const current = row?.preferences[LAUNCH_PREFERENCE_KEY] ?? {};
     const next = {
       selectedAgent: body.selectedAgent !== void 0 ? body.selectedAgent : current.selectedAgent ?? null,
@@ -141025,7 +141879,7 @@ async function updateLaunchPreference(projectId, body) {
          VALUES (?, ?, ?, ?, ?, ?, ?, 1)`,
         [
           newId2(),
-          workspaceId,
+          workspaceId2,
           projectId,
           workspaceUserId,
           JSON.stringify({ [LAUNCH_PREFERENCE_KEY]: next }),
@@ -141118,7 +141972,7 @@ async function dequeueObjective({
   objectiveId,
   projectId,
   missionId,
-  workspaceId,
+  workspaceId: workspaceId2,
   workspaceUserId,
   reason,
   newState,
@@ -141127,7 +141981,7 @@ async function dequeueObjective({
 }) {
   const { cleared } = await clearExecutionRequests({
     ctx: {
-      ...await buildWebappServiceContextForWorkspace(workspaceId, tx, workspaceUserId),
+      ...await buildWebappServiceContextForWorkspace(workspaceId2, tx, workspaceUserId),
       db: tx
     },
     objectiveId,
@@ -141139,7 +141993,7 @@ async function dequeueObjective({
     `SELECT id, revision FROM agent_sessions
         WHERE workspace_id = ? AND objective_id = ? AND deleted_at IS NULL
           AND ended_at IS NULL`,
-    [workspaceId, objectiveId]
+    [workspaceId2, objectiveId]
   );
   for (const session of openSessions) {
     const revision = session.revision + 1;
@@ -141147,7 +142001,7 @@ async function dequeueObjective({
       `UPDATE agent_sessions
          SET phase = ?, ended_at = ?, updated_at = ?, revision = ?
        WHERE id = ? AND workspace_id = ?`,
-      [sessionPhase, now2, now2, revision, session.id, workspaceId]
+      [sessionPhase, now2, now2, revision, session.id, workspaceId2]
     );
     await recordChange2(
       {
@@ -141159,7 +142013,7 @@ async function dequeueObjective({
         missionId,
         objectiveId,
         changedFields: ["phase", "ended_at"],
-        workspaceId,
+        workspaceId: workspaceId2,
         actorWorkspaceUserId: workspaceUserId
       },
       tx
@@ -141173,7 +142027,7 @@ async function dequeueObjective({
        VALUES (?, ?, ?, ?, ?, 'status_change', NULL, ?, ?, 'webapp', ?, ?)`,
       [
         newId2(),
-        workspaceId,
+        workspaceId2,
         projectId,
         missionId,
         objectiveId,
@@ -141540,12 +142394,12 @@ async function githubFetch(path25, token, init2 = {}) {
   if (response.status === 204) return null;
   return await response.json();
 }
-function signedInstallState(workspaceId, privateKey) {
-  const payload = base64url3(JSON.stringify({ workspaceId, expiresAt: Date.now() + STATE_TTL_MS }));
+function signedInstallState(workspaceId2, privateKey) {
+  const payload = base64url3(JSON.stringify({ workspaceId: workspaceId2, expiresAt: Date.now() + STATE_TTL_MS }));
   const mac3 = (0, import_node_crypto13.createHmac)("sha256", privateKey).update(payload).digest("base64url");
   return `${payload}.${mac3}`;
 }
-function verifyInstallState(value, workspaceId, privateKey) {
+function verifyInstallState(value, privateKey) {
   const [payload, suppliedMac, ...extra] = value?.split(".") ?? [];
   if (!payload || !suppliedMac || extra.length)
     throw new ApiError(400, "Invalid GitHub installation state.");
@@ -141560,20 +142414,21 @@ function verifyInstallState(value, workspaceId, privateKey) {
   } catch {
     throw new ApiError(400, "Invalid GitHub installation state.");
   }
-  if (decoded.workspaceId !== workspaceId || typeof decoded.expiresAt !== "number" || decoded.expiresAt < Date.now()) {
+  if (typeof decoded.workspaceId !== "string" || typeof decoded.expiresAt !== "number" || decoded.expiresAt < Date.now()) {
     throw new ApiError(400, "GitHub installation state has expired. Start installation again.");
   }
+  return decoded.workspaceId;
 }
-async function readInstallation(client = requireDatabaseClient(), workspaceId = WORKSPACE.id) {
+async function readInstallation(client = requireDatabaseClient(), workspaceId2) {
   return await client.get(
     `SELECT id, github_installation_id, github_account_login, github_account_type, permissions_json, revision
          FROM ext_github_installations
         WHERE workspace_id = ? AND deleted_at IS NULL`,
-    [workspaceId]
+    [workspaceId2]
   ) ?? null;
 }
-async function requireInstallationToken(workspaceId = WORKSPACE.id) {
-  const installation = await readInstallation(void 0, workspaceId);
+async function requireInstallationToken(workspaceId2) {
+  const installation = await readInstallation(void 0, workspaceId2);
   if (!installation)
     throw new ApiError(400, "Install the GitHub App in Settings \u2192 Integrations first.");
   const config4 = requireGitHubAppConfig();
@@ -141593,12 +142448,12 @@ async function assertProject(projectId, client = requireDatabaseClient()) {
   if (!project) throw new ApiError(404, "Project not found.");
   return project.workspace_id;
 }
-async function readProjectLink(projectId, workspaceId, client = requireDatabaseClient()) {
+async function readProjectLink(projectId, workspaceId2, client = requireDatabaseClient()) {
   return await client.get(
     `SELECT id, github_repo_id, full_name, default_branch, revision
          FROM ext_github_project_links
         WHERE workspace_id = ? AND project_id = ? AND deleted_at IS NULL`,
-    [workspaceId, projectId]
+    [workspaceId2, projectId]
   ) ?? null;
 }
 function repoDto(row) {
@@ -141609,33 +142464,52 @@ function repoDto(row) {
     private: false
   };
 }
-async function getGitHubIntegration() {
-  const installation = await readInstallation();
+async function getGitHubIntegration(workspaceId2) {
+  await requireWorkspacePermission({
+    workspaceId: workspaceId2,
+    permission: PERMISSIONS.WORKSPACE_READ,
+    notFoundMessage: "Workspace not found"
+  });
+  const installation = await readInstallation(void 0, workspaceId2);
+  const workspace = await requireDatabaseClient().get(
+    `SELECT name FROM workspaces WHERE id = ? AND deleted_at IS NULL`,
+    [workspaceId2]
+  );
   return {
     configured: githubAppConfig() !== null,
     connected: installation !== null,
     accountLogin: installation?.github_account_login ?? null,
     accountType: installation?.github_account_type ?? null,
-    workspaceName: WORKSPACE.name
+    workspaceName: workspace?.name ?? ""
   };
 }
-function beginGitHubInstall() {
+async function beginGitHubInstall(workspaceId2) {
+  await requireWorkspacePermission({
+    workspaceId: workspaceId2,
+    permission: PERMISSIONS.WORKSPACE_UPDATE,
+    notFoundMessage: "Workspace not found"
+  });
   const config4 = requireGitHubAppConfig();
-  const state2 = signedInstallState(WORKSPACE.id, config4.privateKey);
+  const state2 = signedInstallState(workspaceId2, config4.privateKey);
   return {
     installUrl: `https://github.com/apps/${encodeURIComponent(config4.slug)}/installations/new?state=${encodeURIComponent(state2)}`
   };
 }
 async function completeGitHubInstall(input) {
   const config4 = requireGitHubAppConfig();
-  verifyInstallState(input.state, WORKSPACE.id, config4.privateKey);
+  const workspaceId2 = verifyInstallState(input.state, config4.privateKey);
+  await requireWorkspacePermission({
+    workspaceId: workspaceId2,
+    permission: PERMISSIONS.WORKSPACE_UPDATE,
+    notFoundMessage: "Workspace not found"
+  });
   if (!/^\d+$/.test(input.installationId))
     throw new ApiError(400, "GitHub installation id is invalid.");
   const upstream = await githubFetch(`/app/installations/${input.installationId}`, appJwt(config4));
   const accountLogin = upstream.account?.login?.trim();
   if (!accountLogin) throw new ApiError(502, "GitHub installation has no account login.");
   await requireDatabaseClient().transaction(async (tx) => {
-    const existing = await readInstallation(tx);
+    const existing = await readInstallation(tx, workspaceId2);
     const now2 = nowIso2();
     if (existing) {
       const revision = existing.revision + 1;
@@ -141661,7 +142535,7 @@ async function completeGitHubInstall(input) {
           operation: "update",
           entityRevision: revision,
           changedFields: ["connected", "accountLogin"],
-          workspaceId: WORKSPACE.id
+          workspaceId: workspaceId2
         },
         tx
       );
@@ -141672,7 +142546,7 @@ async function completeGitHubInstall(input) {
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`,
         [
           id,
-          WORKSPACE.id,
+          workspaceId2,
           input.installationId,
           accountLogin,
           upstream.account?.type ?? null,
@@ -141688,17 +142562,22 @@ async function completeGitHubInstall(input) {
           operation: "insert",
           entityRevision: 1,
           changedFields: ["connected", "accountLogin"],
-          workspaceId: WORKSPACE.id
+          workspaceId: workspaceId2
         },
         tx
       );
     }
   });
-  return getGitHubIntegration();
+  return getGitHubIntegration(workspaceId2);
 }
-async function disconnectGitHub() {
+async function disconnectGitHub(workspaceId2) {
+  await requireWorkspacePermission({
+    workspaceId: workspaceId2,
+    permission: PERMISSIONS.WORKSPACE_UPDATE,
+    notFoundMessage: "Workspace not found"
+  });
   await requireDatabaseClient().transaction(async (tx) => {
-    const installation = await readInstallation(tx);
+    const installation = await readInstallation(tx, workspaceId2);
     if (!installation) return;
     const now2 = nowIso2();
     const revision = installation.revision + 1;
@@ -141708,7 +142587,7 @@ async function disconnectGitHub() {
     );
     await tx.run(
       `UPDATE ext_github_project_links SET deleted_at = ?, updated_at = ?, revision = revision + 1 WHERE workspace_id = ? AND deleted_at IS NULL`,
-      [now2, now2, WORKSPACE.id]
+      [now2, now2, workspaceId2]
     );
     await recordChange2(
       {
@@ -141717,15 +142596,20 @@ async function disconnectGitHub() {
         operation: "delete",
         entityRevision: revision,
         changedFields: ["connected"],
-        workspaceId: WORKSPACE.id
+        workspaceId: workspaceId2
       },
       tx
     );
   });
-  return getGitHubIntegration();
+  return getGitHubIntegration(workspaceId2);
 }
-async function listGitHubRepos(query) {
-  const token = await requireInstallationToken();
+async function listGitHubRepos(query, workspaceId2) {
+  await requireWorkspacePermission({
+    workspaceId: workspaceId2,
+    permission: PERMISSIONS.PROJECT_READ,
+    notFoundMessage: "Workspace not found"
+  });
+  const token = await requireInstallationToken(workspaceId2);
   const data = await githubFetch("/installation/repositories?per_page=100", token);
   const needle = query?.trim().toLowerCase();
   return (data.repositories ?? []).filter((repo) => !needle || repo.full_name.toLowerCase().includes(needle)).map((repo) => ({
@@ -141736,15 +142620,15 @@ async function listGitHubRepos(query) {
   }));
 }
 async function getProjectGitHubLink(projectId) {
-  const workspaceId = await assertProject(projectId);
-  const link = await readProjectLink(projectId, workspaceId);
+  const workspaceId2 = await assertProject(projectId);
+  const link = await readProjectLink(projectId, workspaceId2);
   return { projectId, repo: link ? repoDto(link) : null };
 }
 async function linkProjectGitHub(projectId, body) {
-  const workspaceId = await assertProject(projectId);
+  const workspaceId2 = await assertProject(projectId);
   const fullName = body.repoFullName?.trim() ?? "";
   if (!fullName) {
-    const existing = await readProjectLink(projectId, workspaceId);
+    const existing = await readProjectLink(projectId, workspaceId2);
     if (existing) {
       const now2 = nowIso2();
       await requireDatabaseClient().run(
@@ -141756,7 +142640,7 @@ async function linkProjectGitHub(projectId, body) {
   }
   if (!/^[^/\s]+\/[^/\s]+$/.test(fullName))
     throw new ApiError(400, "Repository must be written as owner/name.");
-  const token = await requireInstallationToken(workspaceId);
+  const token = await requireInstallationToken(workspaceId2);
   const repo = await githubFetch(`/repos/${fullName.split("/").map(encodeURIComponent).join("/")}`, token);
   const next = {
     id: String(repo.id),
@@ -141765,7 +142649,7 @@ async function linkProjectGitHub(projectId, body) {
     private: Boolean(repo.private)
   };
   await requireDatabaseClient().transaction(async (tx) => {
-    const existing = await readProjectLink(projectId, workspaceId, tx);
+    const existing = await readProjectLink(projectId, workspaceId2, tx);
     const now2 = nowIso2();
     if (existing) {
       await tx.run(
@@ -141789,7 +142673,7 @@ async function linkProjectGitHub(projectId, body) {
           entityRevision: existing.revision + 1,
           projectId,
           changedFields: ["repo"],
-          workspaceId
+          workspaceId: workspaceId2
         },
         tx
       );
@@ -141799,7 +142683,7 @@ async function linkProjectGitHub(projectId, body) {
         `INSERT INTO ext_github_project_links (id, workspace_id, project_id, github_repo_id, full_name, default_branch, metadata_json, created_at, updated_at, revision) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
         [
           id,
-          workspaceId,
+          workspaceId2,
           projectId,
           next.id,
           next.fullName,
@@ -141817,7 +142701,7 @@ async function linkProjectGitHub(projectId, body) {
           entityRevision: 1,
           projectId,
           changedFields: ["repo"],
-          workspaceId
+          workspaceId: workspaceId2
         },
         tx
       );
@@ -141825,10 +142709,10 @@ async function linkProjectGitHub(projectId, body) {
   });
   return { projectId, repo: next };
 }
-async function readPullRequest(missionId, workspaceId, client = requireDatabaseClient()) {
+async function readPullRequest(missionId, workspaceId2, client = requireDatabaseClient()) {
   return await client.get(
     `SELECT id, github_pull_number, html_url, state, head_branch, base_branch, revision FROM ext_github_mission_pull_requests WHERE workspace_id = ? AND mission_id = ? AND deleted_at IS NULL`,
-    [workspaceId, missionId]
+    [workspaceId2, missionId]
   ) ?? null;
 }
 function pullRequestDto(row) {
@@ -142116,8 +143000,8 @@ function encryptToken(token, profileId, kind, key) {
   const tag2 = cipher.getAuthTag();
   return `v1.${nonce.toString("base64url")}.${tag2.toString("base64url")}.${ciphertext.toString("base64url")}`;
 }
-function decryptToken(envelope, profileId, kind, key) {
-  const [version4, nonceText, tagText, ciphertextText, ...extra] = envelope.split(".");
+function decryptToken(envelope2, profileId, kind, key) {
+  const [version4, nonceText, tagText, ciphertextText, ...extra] = envelope2.split(".");
   if (version4 !== "v1" || !nonceText || !tagText || !ciphertextText || extra.length > 0) {
     throw new ApiError(503, "The stored GitHub connection cannot be decrypted.");
   }
@@ -142984,17 +143868,19 @@ async function toOrganizationDto(row, { activeOrganizationId, client }) {
     createdAt: row.created_at
   };
 }
-async function resolveOrganizationIdForWorkspace(workspaceId, client = requireDatabaseClient()) {
+async function resolveOrganizationIdForWorkspace(workspaceId2, client = requireDatabaseClient()) {
   const row = await client.get(
     `SELECT organization_id FROM workspaces WHERE id = ? AND deleted_at IS NULL`,
-    [workspaceId]
+    [workspaceId2]
   );
   return row?.organization_id ?? null;
 }
 async function getActiveOrganizationIdOrNull(client = requireDatabaseClient()) {
-  const workspaceId = getActiveWorkspaceIdOrNull();
-  if (!workspaceId) return null;
-  return resolveOrganizationIdForWorkspace(workspaceId, client);
+  const authorized = getAuthorizedWorkspacesContext();
+  if (authorized) return authorized.organizationId;
+  const workspaceId2 = getBootstrapWorkspaceIdOrNull();
+  if (!workspaceId2) return null;
+  return resolveOrganizationIdForWorkspace(workspaceId2, client);
 }
 async function listOrganizationsForUser(profileId, client = requireDatabaseClient()) {
   const activeOrganizationId = await getActiveOrganizationIdOrNull(client);
@@ -143034,7 +143920,7 @@ async function requireOrganizationAdmin(organizationId, client) {
   return profileId;
 }
 async function setSoleRoleAssignment(tx, {
-  workspaceId,
+  workspaceId: workspaceId2,
   workspaceUserId,
   roleKey,
   assignedByWorkspaceUserId,
@@ -143043,28 +143929,28 @@ async function setSoleRoleAssignment(tx, {
   const roles = await tx.all(
     `SELECT role_key FROM role_assignments
        WHERE workspace_id = ? AND workspace_user_id = ? AND deleted_at IS NULL`,
-    [workspaceId, workspaceUserId]
+    [workspaceId2, workspaceUserId]
   );
   if (roles.length === 1 && roles[0].role_key === roleKey) return;
   await tx.run(
     `UPDATE role_assignments
         SET deleted_at = ?, updated_at = ?, revision = revision + 1
       WHERE workspace_id = ? AND workspace_user_id = ? AND deleted_at IS NULL`,
-    [now2, now2, workspaceId, workspaceUserId]
+    [now2, now2, workspaceId2, workspaceUserId]
   );
   await tx.run(
     `INSERT INTO role_assignments
        (id, workspace_id, workspace_user_id, role_key, resource_type, resource_id,
         assigned_by_workspace_user_id, created_at, updated_at, revision)
      VALUES (?, ?, ?, ?, '', '', ?, ?, ?, 1)`,
-    [newId2(), workspaceId, workspaceUserId, roleKey, assignedByWorkspaceUserId, now2, now2]
+    [newId2(), workspaceId2, workspaceUserId, roleKey, assignedByWorkspaceUserId, now2, now2]
   );
   await recordChange2(
     {
       entityType: "role_assignment",
       entityId: workspaceUserId,
       operation: "update",
-      workspaceId,
+      workspaceId: workspaceId2,
       changedFields: ["role_key"]
     },
     tx
@@ -143078,7 +143964,7 @@ async function recordOrganizationChange({
   client
 }) {
   const workspaceIds = await liveOrganizationWorkspaceIds(organizationId, client);
-  for (const workspaceId of workspaceIds) {
+  for (const workspaceId2 of workspaceIds) {
     await recordChange2(
       {
         entityType: "organization",
@@ -143086,7 +143972,7 @@ async function recordOrganizationChange({
         operation: operation2,
         entityRevision,
         changedFields,
-        workspaceId
+        workspaceId: workspaceId2
       },
       client
     );
@@ -143199,11 +144085,11 @@ async function addOrganizationAdmin(organizationId, body) {
       throw new ApiError(400, "User must already belong to a workspace in this organization");
     }
     const now2 = nowIso2();
-    for (const workspaceId of workspaceIds) {
+    for (const workspaceId2 of workspaceIds) {
       const membership = await tx.get(
         `SELECT id FROM workspace_users
            WHERE workspace_id = ? AND profile_id = ? AND status = 'active' AND deleted_at IS NULL`,
-        [workspaceId, targetProfileId]
+        [workspaceId2, targetProfileId]
       );
       let workspaceUserId;
       if (membership) {
@@ -143215,7 +144101,7 @@ async function addOrganizationAdmin(organizationId, body) {
              (id, workspace_id, profile_id, member_key, status, metadata_json,
               created_at, updated_at, revision)
            VALUES (?, ?, ?, ?, 'active', '{}', ?, ?, 1)`,
-          [workspaceUserId, workspaceId, targetProfileId, `auth:${targetProfileId}`, now2, now2]
+          [workspaceUserId, workspaceId2, targetProfileId, `auth:${targetProfileId}`, now2, now2]
         );
         await recordChange2(
           {
@@ -143223,7 +144109,7 @@ async function addOrganizationAdmin(organizationId, body) {
             entityId: workspaceUserId,
             operation: "insert",
             entityRevision: 1,
-            workspaceId,
+            workspaceId: workspaceId2,
             actorWorkspaceUserId: workspaceUserId
           },
           tx
@@ -143232,10 +144118,10 @@ async function addOrganizationAdmin(organizationId, body) {
       const actingMembership = await tx.get(
         `SELECT id FROM workspace_users
            WHERE workspace_id = ? AND profile_id = ? AND status = 'active' AND deleted_at IS NULL`,
-        [workspaceId, actingProfileId]
+        [workspaceId2, actingProfileId]
       );
       await setSoleRoleAssignment(tx, {
-        workspaceId,
+        workspaceId: workspaceId2,
         workspaceUserId,
         roleKey: "ADMIN",
         assignedByWorkspaceUserId: actingMembership?.id ?? workspaceUserId,
@@ -143260,15 +144146,15 @@ async function removeOrganizationAdmin(organizationId, body) {
   await client.transaction(async (tx) => {
     const workspaceIds = await liveOrganizationWorkspaceIds(organizationId, tx);
     const now2 = nowIso2();
-    for (const workspaceId of workspaceIds) {
+    for (const workspaceId2 of workspaceIds) {
       const membership = await tx.get(
         `SELECT id FROM workspace_users
            WHERE workspace_id = ? AND profile_id = ? AND status = 'active' AND deleted_at IS NULL`,
-        [workspaceId, targetProfileId]
+        [workspaceId2, targetProfileId]
       );
       if (!membership) continue;
       await setSoleRoleAssignment(tx, {
-        workspaceId,
+        workspaceId: workspaceId2,
         workspaceUserId: membership.id,
         roleKey: "MEMBER",
         assignedByWorkspaceUserId: membership.id,
@@ -143614,23 +144500,23 @@ async function toProjectResourceDto(r5, observationsByResourceId = /* @__PURE__ 
     sources: sources.map(toSourceDto)
   };
 }
-async function executionTargetBelongsToWorkspace(db, executionTargetId, workspaceId) {
+async function executionTargetBelongsToWorkspace(db, executionTargetId, workspaceId2) {
   const row = await db.get(
     `SELECT id FROM execution_targets
         WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-    [executionTargetId, workspaceId]
+    [executionTargetId, workspaceId2]
   );
   return Boolean(row);
 }
-async function resolveResourceExecutionTargetId(db, workspaceId, executionTargetId) {
+async function resolveResourceExecutionTargetId(db, workspaceId2, executionTargetId) {
   if (executionTargetId === void 0) {
     const workspaceUserId = await requireWorkspacePermission({
-      workspaceId,
+      workspaceId: workspaceId2,
       permission: PERMISSIONS.PROJECT_UPDATE,
       db,
       notFoundMessage: "Project not found"
     });
-    const ctx = await buildWebappServiceContextForWorkspace(workspaceId, db, workspaceUserId);
+    const ctx = await buildWebappServiceContextForWorkspace(workspaceId2, db, workspaceUserId);
     try {
       return (await declareActingDeviceTarget({ ctx, declaration: "local_checkout_link" })).executionTargetId;
     } catch (error53) {
@@ -143648,7 +144534,7 @@ async function resolveResourceExecutionTargetId(db, workspaceId, executionTarget
   if (executionTargetId === null) return null;
   const trimmed10 = executionTargetId.trim();
   if (!trimmed10) return null;
-  if (!await executionTargetBelongsToWorkspace(db, trimmed10, workspaceId)) {
+  if (!await executionTargetBelongsToWorkspace(db, trimmed10, workspaceId2)) {
     throw new ApiError(404, "Execution target not found");
   }
   return trimmed10;
@@ -143745,10 +144631,10 @@ function resolveWorktreeRoot() {
 async function deriveBranchStatus(_input) {
   return "created";
 }
-async function getProjectSlug(projectId, workspaceId) {
+async function getProjectSlug(projectId, workspaceId2) {
   const row = await requireDatabaseClient().get(
     `SELECT slug FROM projects WHERE id = ? AND workspace_id = ?`,
-    [projectId, workspaceId]
+    [projectId, workspaceId2]
   );
   return row?.slug ?? "project";
 }
@@ -143756,21 +144642,21 @@ var FALLBACK_BASE_BRANCH = "main";
 async function primaryCheckoutBranch(_projectId, _executionTargetId) {
   return null;
 }
-async function resolveProjectBaseBranch(projectId, workspaceId, executionTargetId) {
+async function resolveProjectBaseBranch(projectId, workspaceId2, executionTargetId) {
   const row = await requireDatabaseClient().get(
     `SELECT settings_json FROM projects WHERE id = ? AND workspace_id = ?`,
-    [projectId, workspaceId]
+    [projectId, workspaceId2]
   );
   return row && readProjectDefaultBranch(row.settings_json) || await primaryCheckoutBranch(projectId, executionTargetId) || FALLBACK_BASE_BRANCH;
 }
-async function preparedBaseBranch(missionId, workspaceId, branchName) {
+async function preparedBaseBranch(missionId, workspaceId2, branchName) {
   const rows = await requireDatabaseClient().all(
     `SELECT payload_json FROM mission_events
         WHERE workspace_id = ? AND mission_id = ?
           AND payload_json IS NOT NULL
         ORDER BY created_at DESC
         LIMIT 50`,
-    [workspaceId, missionId]
+    [workspaceId2, missionId]
   );
   for (const row of rows) {
     if (!row.payload_json) continue;
@@ -143792,17 +144678,17 @@ async function preparedBaseBranch(missionId, workspaceId, branchName) {
 async function resolveMissionBaseBranch({
   projectId,
   missionId,
-  workspaceId,
+  workspaceId: workspaceId2,
   branchName,
   executionTargetId
 }) {
-  return await preparedBaseBranch(missionId, workspaceId, branchName) || await resolveProjectBaseBranch(projectId, workspaceId, executionTargetId);
+  return await preparedBaseBranch(missionId, workspaceId2, branchName) || await resolveProjectBaseBranch(projectId, workspaceId2, executionTargetId);
 }
 function parseWorktreePreference(value) {
   return value === "worktree" || value === "branch" ? value : null;
 }
-async function resolveBranchAutomation(preference, workspaceId) {
-  const automationEnabled = await readWorktreeBranchAutomationEnabled(void 0, workspaceId);
+async function resolveBranchAutomation(preference, workspaceId2) {
+  const automationEnabled = await readWorktreeBranchAutomationEnabled(void 0, workspaceId2);
   const willPrepareBranch = preference === "worktree" || preference === "branch" || preference === null && automationEnabled;
   const willUseWorktree = preference === "worktree" || preference === null && automationEnabled;
   return { automationEnabled, willPrepareBranch, willUseWorktree };
@@ -143907,19 +144793,19 @@ async function missionBranchDto(row) {
     willUseWorktree
   };
 }
-async function resolveProjectResourceScopeTargetId(projectId, workspaceId) {
+async function resolveProjectResourceScopeTargetId(projectId, workspaceId2) {
   return resolveProjectExecutionTargetForLaunch({
-    ctx: await buildWebappServiceContextForWorkspace(workspaceId),
+    ctx: await buildWebappServiceContextForWorkspace(workspaceId2),
     projectId
   });
 }
 async function activeResourceRow({
   projectId,
-  workspaceId,
+  workspaceId: workspaceId2,
   resourceKey = null,
   executionTargetId
 }) {
-  const targetId = executionTargetId === void 0 ? await resolveProjectResourceScopeTargetId(projectId, workspaceId) : executionTargetId;
+  const targetId = executionTargetId === void 0 ? await resolveProjectResourceScopeTargetId(projectId, workspaceId2) : executionTargetId;
   const conditions = [
     "pr.project_id = ?",
     "pr.workspace_id = ?",
@@ -143927,7 +144813,7 @@ async function activeResourceRow({
     "pr.deleted_at IS NULL",
     `prs.source_kind = 'local_checkout'`
   ];
-  const params = [projectId, workspaceId];
+  const params = [projectId, workspaceId2];
   if (resourceKey !== null) {
     conditions.push("pr.resource_key = ?");
     params.push(resourceKey);
@@ -143950,8 +144836,8 @@ async function activeResourceRow({
     params
   );
 }
-async function primaryResource(projectId, workspaceId, executionTargetId) {
-  const row = await activeResourceRow({ projectId, workspaceId, executionTargetId });
+async function primaryResource(projectId, workspaceId2, executionTargetId) {
+  const row = await activeResourceRow({ projectId, workspaceId: workspaceId2, executionTargetId });
   if (!row) return null;
   return {
     id: row.id,
@@ -143961,7 +144847,7 @@ async function primaryResource(projectId, workspaceId, executionTargetId) {
 }
 async function resourceByKey({
   projectId,
-  workspaceId,
+  workspaceId: workspaceId2,
   resourceKey,
   executionTargetId
 }) {
@@ -143969,7 +144855,7 @@ async function resourceByKey({
   if (!normalizedKey) return null;
   const row = await activeResourceRow({
     projectId,
-    workspaceId,
+    workspaceId: workspaceId2,
     resourceKey: normalizedKey,
     executionTargetId
   });
@@ -143980,8 +144866,8 @@ async function resourceByKey({
     resourceKey: row.resource_key?.trim() || normalizedKey
   };
 }
-async function primaryResourceKey(projectId, workspaceId, executionTargetId) {
-  return (await primaryResource(projectId, workspaceId, executionTargetId))?.resourceKey ?? "project";
+async function primaryResourceKey(projectId, workspaceId2, executionTargetId) {
+  return (await primaryResource(projectId, workspaceId2, executionTargetId))?.resourceKey ?? "project";
 }
 async function loadBranchActionContext(missionRef, options = {}) {
   const row = await getMissionRow(missionRef, void 0, PERMISSIONS.MISSION_UPDATE);
@@ -144042,14 +144928,14 @@ async function loadBranchActionContext(missionRef, options = {}) {
     primaryRepoPath: resource.path
   };
 }
-async function missionHasActiveExecution(missionId, workspaceId) {
+async function missionHasActiveExecution(missionId, workspaceId2) {
   return Boolean(
     await requireDatabaseClient().get(
       `SELECT 1 FROM execution_requests
           WHERE mission_id = ? AND workspace_id = ?
             AND status IN ('queued', 'claimed', 'launching')
           LIMIT 1`,
-      [missionId, workspaceId]
+      [missionId, workspaceId2]
     )
   );
 }
@@ -144191,8 +145077,16 @@ async function removeWorktree(body) {
   }
   const projectId = typeof body.projectId === "string" ? body.projectId.trim() : "";
   if (projectId) {
+    const scope = await requireProjectPermission({
+      projectId,
+      permission: PERMISSIONS.PROJECT_UPDATE
+    });
     const remoteTarget = await resolveRemoteMutationTarget({
-      ctx: buildWebappServiceContext(),
+      ctx: await buildWebappServiceContextForWorkspace(
+        scope.workspaceId,
+        void 0,
+        scope.workspaceUserId
+      ),
       projectId,
       executionTargetId: body.executionTargetId ?? null
     });
@@ -144204,10 +145098,11 @@ async function removeWorktree(body) {
           "primaryRepoPath is required to queue worktree removal on a remote target."
         );
       }
-      const missionId = await resolveMutationAnchorMissionId(projectId);
+      const missionId = await resolveMutationAnchorMissionId(projectId, scope.workspaceId);
       await queueLocalTargetMutation({
         projectId,
         missionId,
+        workspaceId: scope.workspaceId,
         executionTargetId: remoteTarget.executionTargetId,
         kind: "worktree_purge",
         capability: "removeWorktree",
@@ -144226,8 +145121,16 @@ async function removeWorktree(body) {
 async function purgeMergedWorktrees(body = {}) {
   const projectId = typeof body.projectId === "string" ? body.projectId.trim() : "";
   if (projectId) {
+    const scope = await requireProjectPermission({
+      projectId,
+      permission: PERMISSIONS.PROJECT_UPDATE
+    });
     const remoteTarget = await resolveRemoteMutationTarget({
-      ctx: buildWebappServiceContext(),
+      ctx: await buildWebappServiceContextForWorkspace(
+        scope.workspaceId,
+        void 0,
+        scope.workspaceUserId
+      ),
       projectId,
       executionTargetId: typeof body.executionTargetId === "string" ? body.executionTargetId.trim() : null
     });
@@ -144239,10 +145142,11 @@ async function purgeMergedWorktrees(body = {}) {
           "primaryRepoPath is required to queue merged worktree purge on a remote target."
         );
       }
-      const missionId = await resolveMutationAnchorMissionId(projectId);
+      const missionId = await resolveMutationAnchorMissionId(projectId, scope.workspaceId);
       await queueLocalTargetMutation({
         projectId,
         missionId,
+        workspaceId: scope.workspaceId,
         executionTargetId: remoteTarget.executionTargetId,
         kind: "worktree_purge",
         capability: "purgeMergedWorktrees",
@@ -144393,7 +145297,7 @@ function projectListLifecycleParams(lifecycle) {
   return lifecycle === "all" ? [] : [lifecycle];
 }
 async function callerAuthorizedWorkspaceScopes(permission, db) {
-  const memberships = await callerWorkspaceMemberships(db);
+  const memberships = await callerMembershipsInActiveOrganization(db);
   const checked = await Promise.all(
     memberships.map(async (scope) => ({ scope, allowed: await actorCan(permission, scope) }))
   );
@@ -144414,26 +145318,26 @@ async function listProjects(db = requireDatabaseClient(), lifecycle = "active") 
   );
   return rows.map(toProjectDto);
 }
-async function listProjectsForWorkspace(workspaceId, db = requireDatabaseClient(), lifecycle = "active") {
+async function listProjectsForWorkspace(workspaceId2, db = requireDatabaseClient(), lifecycle = "active") {
   await requireWorkspacePermission({
-    workspaceId,
+    workspaceId: workspaceId2,
     permission: PERMISSIONS.PROJECT_READ,
     db,
     notFoundMessage: "Workspace not found or no active membership"
   });
   const rows = await db.all(
     `${selectProjectsSql}${projectListLifecyclePredicate(lifecycle)} ORDER BY p.status ASC, p.position ASC, p.created_at ASC`,
-    [workspaceId, ...projectListLifecycleParams(lifecycle)]
+    [workspaceId2, ...projectListLifecycleParams(lifecycle)]
   );
   return rows.map(toProjectDto);
 }
 async function getProject2(id, db = requireDatabaseClient(), permission = PERMISSIONS.PROJECT_READ) {
-  const { workspaceId } = await requireProjectPermission({
+  const { workspaceId: workspaceId2 } = await requireProjectPermission({
     projectId: id,
     permission,
     db
   });
-  const row = await db.get(`${selectProjectsSql} AND p.id = ?`, [workspaceId, id]);
+  const row = await db.get(`${selectProjectsSql} AND p.id = ?`, [workspaceId2, id]);
   if (!row) throw new ApiError(404, "Project not found");
   return toProjectDto(row);
 }
@@ -144458,9 +145362,9 @@ async function reorderProjects(body) {
     if (workspaceIds.size !== 1) {
       throw new ApiError(400, "All projects in a reorder must belong to the same workspace");
     }
-    const workspaceId = [...workspaceIds][0];
+    const workspaceId2 = [...workspaceIds][0];
     await requireWorkspacePermission({
-      workspaceId,
+      workspaceId: workspaceId2,
       permission: PERMISSIONS.PROJECT_UPDATE,
       db: tx,
       notFoundMessage: "Project not found"
@@ -144469,7 +145373,7 @@ async function reorderProjects(body) {
       `SELECT id, position, revision
          FROM projects
         WHERE workspace_id = ? AND deleted_at IS NULL`,
-      [workspaceId]
+      [workspaceId2]
     );
     if (orderedIds.length !== current.length) {
       throw new ApiError(400, "orderedProjectIds must include every project");
@@ -144493,7 +145397,7 @@ async function reorderProjects(body) {
       };
     }).filter(({ existing, position }) => existing.position !== position);
     if (updates.length === 0) {
-      return listProjectsForWorkspace(workspaceId, tx);
+      return listProjectsForWorkspace(workspaceId2, tx);
     }
     const now2 = nowIso2();
     const maxPosition = Math.max(...current.map((project) => project.position ?? 0), 0);
@@ -144503,7 +145407,7 @@ async function reorderProjects(body) {
         `UPDATE projects
             SET position = ?, updated_at = ?
           WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-        [tempBase + index, now2, id, workspaceId]
+        [tempBase + index, now2, id, workspaceId2]
       );
     }
     for (const { id, position, existing } of updates) {
@@ -144512,7 +145416,7 @@ async function reorderProjects(body) {
         `UPDATE projects
             SET position = ?, updated_at = ?, revision = ?
           WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-        [position, now2, revision, id, workspaceId]
+        [position, now2, revision, id, workspaceId2]
       );
       await recordChange2(
         {
@@ -144522,12 +145426,12 @@ async function reorderProjects(body) {
           entityRevision: revision,
           changedFields: ["position"],
           projectId: id,
-          workspaceId
+          workspaceId: workspaceId2
         },
         tx
       );
     }
-    return listProjectsForWorkspace(workspaceId, tx);
+    return listProjectsForWorkspace(workspaceId2, tx);
   });
 }
 async function selectProjectStatuses(projectId, db = requireDatabaseClient()) {
@@ -144544,9 +145448,9 @@ async function listProjectStatuses2(projectId, db = requireDatabaseClient()) {
   await requireProjectPermission({ projectId, permission: PERMISSIONS.PROJECT_READ, db });
   return selectProjectStatuses(projectId, db);
 }
-async function listWorkspaceProjectStatuses(workspaceId, db = requireDatabaseClient()) {
+async function listWorkspaceProjectStatuses(workspaceId2, db = requireDatabaseClient()) {
   await requireWorkspacePermission({
-    workspaceId,
+    workspaceId: workspaceId2,
     permission: PERMISSIONS.WORKSPACE_READ,
     db,
     notFoundMessage: "Workspace not found or no active membership"
@@ -144558,7 +145462,7 @@ async function listWorkspaceProjectStatuses(workspaceId, db = requireDatabaseCli
        JOIN projects p ON p.id = ps.project_id AND p.workspace_id = ps.workspace_id
       WHERE ps.workspace_id = ? AND ps.deleted_at IS NULL AND p.deleted_at IS NULL
       ORDER BY p.position ASC, ps.position ASC`,
-    [workspaceId]
+    [workspaceId2]
   );
   return rows.map(toStatusDto);
 }
@@ -144583,8 +145487,8 @@ async function createProjectStatus(projectId, body) {
       }
     }
     const isDefault = body.isDefault ?? false;
-    if (isDefault && type !== "draft") {
-      throw new ApiError(400, "Only draft-type statuses can be the default");
+    if (isDefault && type !== "draft" && type !== "next") {
+      throw new ApiError(400, "Only draft- or next-type statuses can be the default");
     }
     const now2 = nowIso2();
     const id = newId2();
@@ -144650,8 +145554,8 @@ async function updateProjectStatus(projectId, statusId, body) {
     }
     if (body.isDefault !== void 0) {
       if (body.isDefault) {
-        if (existing.type !== "draft") {
-          throw new ApiError(400, "Only draft-type statuses can be the default");
+        if (existing.type !== "draft" && existing.type !== "next") {
+          throw new ApiError(400, "Only draft- or next-type statuses can be the default");
         }
         await clearProjectDefaultStatuses(tx, { now: now2, projectId });
         fields.push("is_default = ?");
@@ -145443,7 +146347,10 @@ async function createProject2(body) {
   return requireDatabaseClient().transaction(async (tx) => {
     const name = (body.name ?? "").trim();
     if (!name) throw new ApiError(400, "Project name is required");
-    const targetWorkspaceId = body.workspaceId?.trim() || getActiveWorkspaceId();
+    const targetWorkspaceId = body.workspaceId?.trim() || (getAuthorizedWorkspacesContext() ? null : getBootstrapWorkspaceIdOrNull());
+    if (!targetWorkspaceId) {
+      throw new ApiError(400, "workspaceId is required when creating a project");
+    }
     const targetWorkspaceUserId = await requireWorkspacePermission({
       workspaceId: targetWorkspaceId,
       permission: PERMISSIONS.PROJECT_CREATE,
@@ -145512,7 +146419,7 @@ async function createProject2(body) {
     return getProject2(id, tx);
   });
 }
-async function seedProjectStatuses2(db, { projectId, workspaceId, now: now2 }) {
+async function seedProjectStatuses2(db, { projectId, workspaceId: workspaceId2, now: now2 }) {
   for (const status of DEFAULT_STATUSES) {
     await db.run(
       `INSERT INTO project_statuses
@@ -145521,7 +146428,7 @@ async function seedProjectStatuses2(db, { projectId, workspaceId, now: now2 }) {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
       [
         newId2(),
-        workspaceId,
+        workspaceId2,
         projectId,
         status.key,
         status.name,
@@ -145554,13 +146461,13 @@ function initializationProvisioning(row, resource) {
 }
 async function initializeProject(body) {
   const db = requireDatabaseClient();
-  const workspaceId = body.workspaceId?.trim();
+  const workspaceId2 = body.workspaceId?.trim();
   const idempotencyKey = body.idempotencyKey?.trim();
   const name = body.name?.trim();
   const description = body.description?.trim();
   const wantsRepository = body.createGitHubRepository === true;
   const ownerLogin = body.githubOwnerLogin?.trim() || null;
-  if (!workspaceId || !idempotencyKey || idempotencyKey.length > 200 || !name || !description) {
+  if (!workspaceId2 || !idempotencyKey || idempotencyKey.length > 200 || !name || !description) {
     throw new ApiError(400, "workspaceId, idempotencyKey, name, and description are required.");
   }
   if (wantsRepository !== Boolean(ownerLogin)) {
@@ -145572,7 +146479,7 @@ async function initializeProject(body) {
     const existing = await readProjectInitialization(tx, profileId, idempotencyKey);
     if (existing) return existing;
     const workspaceUserId = await requireWorkspacePermission({
-      workspaceId,
+      workspaceId: workspaceId2,
       permission: PERMISSIONS.PROJECT_CREATE,
       db: tx,
       notFoundMessage: "Workspace not found or no active membership"
@@ -145582,7 +146489,7 @@ async function initializeProject(body) {
     const maxPosition = await tx.get(
       `SELECT COALESCE(MAX(position), 0) AS max_position FROM projects
         WHERE workspace_id = ? AND deleted_at IS NULL`,
-      [workspaceId]
+      [workspaceId2]
     );
     await tx.run(
       `INSERT INTO projects (id, workspace_id, slug, name, description, status, settings_json,
@@ -145590,7 +146497,7 @@ async function initializeProject(body) {
        VALUES (?, ?, ?, ?, ?, 'active', '{}', ?, ?, ?, 1, ?)`,
       [
         projectId,
-        workspaceId,
+        workspaceId2,
         slugify4(name),
         name,
         description,
@@ -145600,7 +146507,7 @@ async function initializeProject(body) {
         maxPosition.max_position + 1
       ]
     );
-    await seedProjectStatuses2(tx, { projectId, workspaceId, now: now2 });
+    await seedProjectStatuses2(tx, { projectId, workspaceId: workspaceId2, now: now2 });
     await recordChange2(
       {
         entityType: "project",
@@ -145608,7 +146515,7 @@ async function initializeProject(body) {
         operation: "insert",
         entityRevision: 1,
         projectId,
-        workspaceId,
+        workspaceId: workspaceId2,
         actorWorkspaceUserId: workspaceUserId
       },
       tx
@@ -145623,7 +146530,7 @@ async function initializeProject(body) {
     return createProjectInitialization(tx, {
       id,
       profileId,
-      workspaceId,
+      workspaceId: workspaceId2,
       projectId,
       missionId: mission2.missionId,
       idempotencyKey,
@@ -145689,14 +146596,14 @@ async function persistInitializedRepository({
 }
 async function updateProject(id, body) {
   return requireDatabaseClient().transaction(async (tx) => {
-    const { workspaceId, workspaceUserId } = await requireProjectPermission({
+    const { workspaceId: workspaceId2, workspaceUserId } = await requireProjectPermission({
       projectId: id,
       permission: PERMISSIONS.PROJECT_UPDATE,
       db: tx
     });
     const existing = await tx.get(
       `SELECT * FROM projects WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-      [id, workspaceId]
+      [id, workspaceId2]
     );
     if (!existing) throw new ApiError(404, "Project not found");
     const fields = [];
@@ -145760,7 +146667,7 @@ async function updateProject(id, body) {
     await tx.run(
       `UPDATE projects SET ${fields.join(", ")}, updated_at = ?, revision = ?
          WHERE id = ? AND workspace_id = ?`,
-      [...setParams, now2, revision, id, workspaceId]
+      [...setParams, now2, revision, id, workspaceId2]
     );
     await recordChange2(
       {
@@ -145770,7 +146677,7 @@ async function updateProject(id, body) {
         entityRevision: revision,
         projectId: id,
         changedFields: changed,
-        workspaceId,
+        workspaceId: workspaceId2,
         actorWorkspaceUserId: workspaceUserId
       },
       tx
@@ -145780,21 +146687,21 @@ async function updateProject(id, body) {
 }
 async function deleteProject(id) {
   await requireDatabaseClient().transaction(async (tx) => {
-    const { workspaceId, workspaceUserId } = await requireProjectPermission({
+    const { workspaceId: workspaceId2, workspaceUserId } = await requireProjectPermission({
       projectId: id,
       permission: PERMISSIONS.PROJECT_DELETE,
       db: tx
     });
     const existing = await tx.get(
       `SELECT id, revision FROM projects WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-      [id, workspaceId]
+      [id, workspaceId2]
     );
     if (!existing) throw new ApiError(404, "Project not found");
     const now2 = nowIso2();
     const revision = existing.revision + 1;
     const missionIds = (await tx.all(
       `SELECT id FROM missions WHERE project_id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-      [id, workspaceId]
+      [id, workspaceId2]
     )).map((r5) => r5.id);
     for (const missionId of missionIds) {
       await tx.run(
@@ -145807,13 +146714,13 @@ async function deleteProject(id) {
       await tx.run(
         `UPDATE missions SET deleted_at = ?, revision = revision + 1
          WHERE project_id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-        [now2, id, workspaceId]
+        [now2, id, workspaceId2]
       );
     }
     await tx.run(
       `UPDATE projects SET deleted_at = ?, updated_at = ?, revision = ?
        WHERE id = ? AND workspace_id = ?`,
-      [now2, now2, revision, id, workspaceId]
+      [now2, now2, revision, id, workspaceId2]
     );
     await recordChange2(
       {
@@ -145822,7 +146729,7 @@ async function deleteProject(id) {
         operation: "delete",
         entityRevision: revision,
         projectId: id,
-        workspaceId,
+        workspaceId: workspaceId2,
         actorWorkspaceUserId: workspaceUserId
       },
       tx
@@ -145908,8 +146815,8 @@ async function getObjectivesByMission(missionIds, db = requireDatabaseClient()) 
   }
   return byMission;
 }
-async function listMissions2(projectId, options = {}) {
-  const { workspaceId } = await requireProjectPermission({
+async function listMissions(projectId, options = {}) {
+  const { workspaceId: workspaceId2 } = await requireProjectPermission({
     projectId,
     permission: PERMISSIONS.MISSION_READ
   });
@@ -145919,7 +146826,7 @@ async function listMissions2(projectId, options = {}) {
   const rows = await requireDatabaseClient().all(
     `${selectMissionsSql} AND t.project_id = ?
          ORDER BY t.board_position ASC, t.sequence_number DESC`,
-    [workspaceId, projectId]
+    [workspaceId2, projectId]
   );
   const tagsByMission = await getTagsByMission(rows.map((row) => row.id));
   const objectivesByMission = options.includeObjectives ? await getObjectivesByMission(rows.map((row) => row.id)) : null;
@@ -145928,112 +146835,180 @@ async function listMissions2(projectId, options = {}) {
     return objectivesByMission ? { ...dto, objectives: objectivesByMission.get(row.id) ?? [] } : dto;
   });
 }
+async function hydrateMissionDtos({
+  workspaceId: workspaceId2,
+  missionIds,
+  client
+}) {
+  if (missionIds.length === 0) return [];
+  const rows = await client.all(
+    `${selectMissionsSql} AND t.id IN (${missionIds.map(() => "?").join(", ")})`,
+    [workspaceId2, ...missionIds]
+  );
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  const tagsByMission = await getTagsByMission(missionIds);
+  return missionIds.flatMap((id) => {
+    const row = byId.get(id);
+    return row ? [toMissionDto(row, tagsByMission.get(id) ?? [])] : [];
+  });
+}
 async function searchMissionsInWorkspace({
   query,
   projectId,
+  projectIds,
   statusTypes,
+  resourceKeys,
+  dateField,
+  from,
+  to,
   limit = 25,
-  workspaceId,
+  workspaceId: workspaceId2,
   client
 }) {
-  const match = query?.trim() ? buildMissionSearchMatch({ dialect: client.dialect, query: query.trim() }) : null;
-  const types3 = statusTypes?.filter((type) => type.trim() !== "") ?? [];
-  const statusFilter = types3.length > 0 ? ` AND t.status_type IN (${types3.map(() => "?").join(", ")})` : "";
-  if (!match) {
-    const sql2 = `${selectMissionsSql}${projectId ? " AND t.project_id = ?" : ""}${statusFilter} ORDER BY t.updated_at DESC LIMIT ?`;
-    const params = [workspaceId, ...projectId ? [projectId] : [], ...types3, limit];
-    const rows2 = await client.all(sql2, params);
-    const tagsByMission2 = await getTagsByMission(rows2.map((row) => row.id));
-    return rows2.map((row) => toMissionDto(row, tagsByMission2.get(row.id) ?? []));
-  }
-  const projectFilter = projectId ? " AND t.project_id = ?" : "";
-  const missionIdColumn = missionSearchMissionIdColumn(client.dialect);
-  const rows = await client.all(
-    `SELECT t.id, t.workspace_id, t.project_id, t.display_id, t.sequence_number, t.title,
-              t.status_id, t.status_type, t.board_position, t.priority,
-              t.assigned_workspace_user_id,
-              t.notes_text,
-              t.schedule_id, t.due_datetime,
-              t.created_at, t.updated_at, t.revision,
-              t.created_by_kind, t.created_by_agent, t.created_by_workspace_user_id,
-              (SELECT COUNT(*) FROM objectives o
-                 WHERE o.mission_id = t.id AND o.deleted_at IS NULL) AS objective_count,
-              (SELECT COUNT(*) FROM objectives o
-                 WHERE o.mission_id = t.id AND o.deleted_at IS NULL AND o.state = 'complete')
-                 AS completed_objective_count,
-              (SELECT COUNT(*) > 0 FROM objectives o
-                 WHERE o.mission_id = t.id AND o.deleted_at IS NULL AND o.state = 'executing')
-                 AS has_executing_objective,
-              (SELECT COUNT(*) > 0 FROM objectives o
-                 WHERE o.mission_id = t.id AND o.deleted_at IS NULL AND o.state = 'complete')
-                 AS has_completed_objective,
-              (SELECT COUNT(*) > 0 FROM objectives o
-                 WHERE o.mission_id = t.id AND o.deleted_at IS NULL
-                   AND o.state IN ('draft', 'future') AND TRIM(o.instruction_text) != '')
-                 AS has_pending_objective_with_instructions,
-${missionHasUnseenBlockingQuestionSql},
-${missionHasUnseenReturnedToExecuteSql},
-              (SELECT o.resource_key FROM objectives o
-                 WHERE o.mission_id = t.id AND o.deleted_at IS NULL AND o.state = 'draft'
-                 LIMIT 1) AS draft_objective_resource_key,
-              ${missionSearchDocScoreExpr(client.dialect)} AS doc_score
-         FROM ${missionSearchFromClause(client.dialect)}
-         JOIN missions t ON t.id = ${missionIdColumn}
-           AND t.workspace_id = ? AND t.deleted_at IS NULL
-        WHERE ${missionSearchMatchPredicate(client.dialect)}${projectFilter}${statusFilter}`,
-    [
-      ...missionSearchWorkspaceParams({
-        dialect: client.dialect,
-        workspaceId,
-        match
-      }),
-      ...projectId ? [projectId] : [],
-      ...types3
-    ]
-  );
-  const byMission = /* @__PURE__ */ new Map();
-  for (const row of rows) {
-    const existing = byMission.get(row.id);
-    if (existing) {
-      existing.relevance += row.doc_score;
-      continue;
-    }
-    byMission.set(row.id, { row, relevance: row.doc_score });
-  }
-  const ranked = [...byMission.values()].sort(
-    (left, right) => right.relevance - left.relevance || right.row.updated_at.localeCompare(left.row.updated_at)
-  ).slice(0, limit);
-  const tagsByMission = await getTagsByMission(ranked.map((entry) => entry.row.id));
-  return ranked.map((entry) => toMissionDto(entry.row, tagsByMission.get(entry.row.id) ?? []));
+  const resolvedProjectIds = projectIds?.length ? projectIds : projectId ? [projectId] : [];
+  return searchWorkspaceMissions({
+    db: client,
+    workspaceId: workspaceId2,
+    query,
+    projectIds: resolvedProjectIds,
+    statusTypes,
+    resourceKeys,
+    dateField,
+    from,
+    to,
+    limit
+  });
 }
 async function searchMissions2({
   query,
   projectId,
   statusTypes,
+  resourceKeys,
+  dateField,
+  from,
+  to,
   limit = 25
 }) {
   const client = requireDatabaseClient();
   if (projectId) {
-    const { workspaceId } = await requireProjectPermission({
+    const { workspaceId: workspaceId2 } = await requireProjectPermission({
       projectId,
       permission: PERMISSIONS.MISSION_READ,
       db: client
     });
-    return searchMissionsInWorkspace({ query, projectId, statusTypes, limit, workspaceId, client });
+    const result = await searchMissionsInWorkspace({
+      query,
+      projectId,
+      statusTypes,
+      resourceKeys,
+      dateField,
+      from,
+      to,
+      limit,
+      workspaceId: workspaceId2,
+      client
+    });
+    return hydrateMissionDtos({
+      workspaceId: workspaceId2,
+      missionIds: result.hits.map((hit) => hit.id),
+      client
+    });
   }
   const scopes = await callerAuthorizedWorkspaceScopes(PERMISSIONS.MISSION_READ, client);
-  const missions = (await Promise.all(
+  const quotas = allocateWorkspaceSearchLimits({
+    workspaceIds: scopes.map((scope) => scope.workspaceId),
+    limit
+  });
+  const ranked = (await Promise.all(
+    scopes.map(async (scope) => {
+      const result = await searchMissionsInWorkspace({
+        query,
+        statusTypes,
+        resourceKeys,
+        dateField,
+        from,
+        to,
+        limit: quotas.get(scope.workspaceId) ?? 0,
+        workspaceId: scope.workspaceId,
+        client
+      });
+      return result.hits;
+    })
+  )).flat().sort(
+    (left, right) => right.relevance - left.relevance || right.updatedAt.localeCompare(left.updatedAt)
+  ).slice(0, limit);
+  const byWorkspace = /* @__PURE__ */ new Map();
+  for (const hit of ranked) {
+    const ids = byWorkspace.get(hit.workspaceId) ?? [];
+    ids.push(hit.id);
+    byWorkspace.set(hit.workspaceId, ids);
+  }
+  const dtosById = /* @__PURE__ */ new Map();
+  await Promise.all(
+    [...byWorkspace.entries()].map(async ([workspaceId2, missionIds]) => {
+      const dtos = await hydrateMissionDtos({ workspaceId: workspaceId2, missionIds, client });
+      for (const dto of dtos) dtosById.set(dto.id, dto);
+    })
+  );
+  return ranked.flatMap((hit) => {
+    const dto = dtosById.get(hit.id);
+    return dto ? [dto] : [];
+  });
+}
+async function searchMissionsV22({
+  query,
+  projectIds,
+  statusTypes,
+  resourceKeys,
+  dateField,
+  from,
+  to,
+  limit = 25
+}) {
+  const client = requireDatabaseClient();
+  const projects = projectIds?.filter((id) => id.trim() !== "") ?? [];
+  if (projects.length === 1) {
+    const { workspaceId: workspaceId2 } = await requireProjectPermission({
+      projectId: projects[0],
+      permission: PERMISSIONS.MISSION_READ,
+      db: client
+    });
+    const result = await searchMissionsInWorkspace({
+      query,
+      projectIds: projects,
+      statusTypes,
+      resourceKeys,
+      dateField,
+      from,
+      to,
+      limit,
+      workspaceId: workspaceId2,
+      client
+    });
+    return toSearchMissionsResponseV2(result);
+  }
+  const scopes = await callerAuthorizedWorkspaceScopes(PERMISSIONS.MISSION_READ, client);
+  const quotas = allocateWorkspaceSearchLimits({
+    workspaceIds: scopes.map((scope) => scope.workspaceId),
+    limit
+  });
+  const results = await Promise.all(
     scopes.map(
       (scope) => searchMissionsInWorkspace({
         query,
+        projectIds: projects,
         statusTypes,
-        limit,
+        resourceKeys,
+        dateField,
+        from,
+        to,
+        limit: quotas.get(scope.workspaceId) ?? 0,
         workspaceId: scope.workspaceId,
         client
       })
     )
-  )).flat();
-  return missions.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)).slice(0, limit);
+  );
+  return mergeWorkspaceMissionSearches({ results, limit });
 }
 async function topBoardPosition2(db, projectId, statusId, excludeMissionId) {
   const row = excludeMissionId ? await db.get(
@@ -146059,7 +147034,7 @@ async function getProjectStatus(db, projectId, statusId) {
   return statusRow;
 }
 async function cascadeMissionProjectId(db, {
-  workspaceId,
+  workspaceId: workspaceId2,
   missionId,
   newProjectId,
   now: now2
@@ -146068,63 +147043,63 @@ async function cascadeMissionProjectId(db, {
     `UPDATE objectives
        SET project_id = ?, updated_at = ?, revision = revision + 1
      WHERE mission_id = ? AND workspace_id = ?`,
-    [newProjectId, now2, missionId, workspaceId]
+    [newProjectId, now2, missionId, workspaceId2]
   );
   await db.run(
     `UPDATE my_mission_positions
        SET project_id = ?, updated_at = ?, revision = revision + 1
      WHERE mission_id = ? AND workspace_id = ?`,
-    [newProjectId, now2, missionId, workspaceId]
+    [newProjectId, now2, missionId, workspaceId2]
   );
   await db.run(
     `UPDATE agent_sessions
        SET project_id = ?, updated_at = ?, revision = revision + 1
      WHERE mission_id = ? AND workspace_id = ?`,
-    [newProjectId, now2, missionId, workspaceId]
+    [newProjectId, now2, missionId, workspaceId2]
   );
   await db.run(
     `UPDATE mission_events SET project_id = ?
      WHERE mission_id = ? AND workspace_id = ?`,
-    [newProjectId, missionId, workspaceId]
+    [newProjectId, missionId, workspaceId2]
   );
   await db.run(
     `UPDATE deliveries
        SET project_id = ?, updated_at = ?, revision = revision + 1
      WHERE mission_id = ? AND workspace_id = ?`,
-    [newProjectId, now2, missionId, workspaceId]
+    [newProjectId, now2, missionId, workspaceId2]
   );
   await db.run(
     `UPDATE artifacts
        SET project_id = ?, updated_at = ?, revision = revision + 1
      WHERE mission_id = ? AND workspace_id = ?`,
-    [newProjectId, now2, missionId, workspaceId]
+    [newProjectId, now2, missionId, workspaceId2]
   );
   await db.run(
     `UPDATE changed_files
        SET project_id = ?, updated_at = ?, revision = revision + 1
      WHERE mission_id = ? AND workspace_id = ?`,
-    [newProjectId, now2, missionId, workspaceId]
+    [newProjectId, now2, missionId, workspaceId2]
   );
   await db.run(
     `UPDATE change_rationales
        SET project_id = ?, updated_at = ?, revision = revision + 1
      WHERE mission_id = ? AND workspace_id = ?`,
-    [newProjectId, now2, missionId, workspaceId]
+    [newProjectId, now2, missionId, workspaceId2]
   );
   await db.run(
     `UPDATE execution_requests
        SET project_id = ?, updated_at = ?, revision = revision + 1
      WHERE mission_id = ? AND workspace_id = ?`,
-    [newProjectId, now2, missionId, workspaceId]
+    [newProjectId, now2, missionId, workspaceId2]
   );
 }
 async function getMissionRow(missionRef, db = requireDatabaseClient(), permission = PERMISSIONS.MISSION_READ) {
-  const { workspaceId, missionId } = await requireMissionPermission({
+  const { workspaceId: workspaceId2, missionId } = await requireMissionPermission({
     missionRef,
     permission,
     db
   });
-  const row = await db.get(`${selectMissionsSql} AND t.id = ?`, [workspaceId, missionId]);
+  const row = await db.get(`${selectMissionsSql} AND t.id = ?`, [workspaceId2, missionId]);
   if (!row) throw new ApiError(404, "Mission not found");
   return row;
 }
@@ -146642,19 +147617,19 @@ async function updateArtifact(missionRef, artifactId, body) {
     return toArtifactDto(updated);
   });
 }
-async function nextMissionSequence2(db, workspaceId) {
+async function nextMissionSequence2(db, workspaceId2) {
   const row = await db.get(
     `SELECT id, next_value FROM mission_sequences
          WHERE workspace_id = ? AND scope_type = 'workspace'
            AND scope_id = ? AND counter_name = 'mission'`,
-    [workspaceId, workspaceId]
+    [workspaceId2, workspaceId2]
   );
   if (!row) {
     const seq2 = 1;
     await db.run(
       `INSERT INTO mission_sequences (id, workspace_id, scope_type, scope_id, counter_name, next_value, updated_at)
        VALUES (?, ?, 'workspace', ?, 'mission', ?, ?)`,
-      [newId2(), workspaceId, workspaceId, seq2 + 1, nowIso2()]
+      [newId2(), workspaceId2, workspaceId2, seq2 + 1, nowIso2()]
     );
     return seq2;
   }
@@ -146674,7 +147649,7 @@ async function createMissionTx(body, client = requireDatabaseClient(), alreadyIn
       throw new ApiError(400, "Describe the work to be done (title or first objective)");
     }
     const explicitTitle = (body.title ?? "").trim();
-    const { workspaceId, workspaceUserId } = await requireProjectPermission({
+    const { workspaceId: workspaceId2, workspaceUserId } = await requireProjectPermission({
       projectId: body.projectId,
       permission: PERMISSIONS.MISSION_CREATE,
       db: tx
@@ -146687,8 +147662,8 @@ async function createMissionTx(body, client = requireDatabaseClient(), alreadyIn
       throw new ApiError(400, "dueDatetime must be a valid ISO-8601 datetime or null");
     }
     if (body.statusId) await getProjectStatus(tx, body.projectId, body.statusId);
-    const assignedWorkspaceUserId = body.assignedWorkspaceUserId === void 0 ? workspaceUserId : await resolveAssignedWorkspaceUserId(tx, workspaceId, body.assignedWorkspaceUserId);
-    const ctx = await buildWebappServiceContextForWorkspace(workspaceId, tx, workspaceUserId);
+    const assignedWorkspaceUserId = body.assignedWorkspaceUserId === void 0 ? workspaceUserId : await resolveAssignedWorkspaceUserId(tx, workspaceId2, body.assignedWorkspaceUserId);
+    const ctx = await buildWebappServiceContextForWorkspace(workspaceId2, tx, workspaceUserId);
     const created = await createMissionWithObjectives({
       ctx,
       projectId: body.projectId,
@@ -146715,7 +147690,7 @@ async function createMissionTx(body, client = requireDatabaseClient(), alreadyIn
   return alreadyInTransaction ? execute2(client) : client.transaction(execute2);
 }
 async function syncMissionTags(db, {
-  workspaceId,
+  workspaceId: workspaceId2,
   projectId,
   missionId,
   tagIds,
@@ -146726,7 +147701,7 @@ async function syncMissionTags(db, {
     const tag2 = await db.get(
       `SELECT id FROM project_tags
        WHERE id = ? AND project_id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-      [tagId, projectId, workspaceId]
+      [tagId, projectId, workspaceId2]
     );
     if (!tag2) throw new ApiError(400, "Tag does not belong to this project");
   }
@@ -146748,14 +147723,14 @@ async function syncMissionTags(db, {
   }
 }
 async function assignMissionTags2(db, {
-  workspaceId,
+  workspaceId: workspaceId2,
   missionId,
   projectId,
   tagIds,
   now: now2
 }) {
   if (!tagIds || tagIds.length === 0) return;
-  const ctx = await buildWebappServiceContextForWorkspace(workspaceId, db);
+  const ctx = await buildWebappServiceContextForWorkspace(workspaceId2, db);
   await assignMissionTags({ ctx, missionId, projectId, tagIds, now: now2 });
 }
 async function createMission(body) {
@@ -146941,14 +147916,14 @@ async function generateMissionTitle(missionRef) {
   }
   return getMissionDetail(missionRef);
 }
-async function resolveAssignedWorkspaceUserId(db, workspaceId, value) {
+async function resolveAssignedWorkspaceUserId(db, workspaceId2, value) {
   if (value === null || value === void 0) return null;
   const trimmed10 = value.trim();
   if (!trimmed10) return null;
   const member2 = await db.get(
     `SELECT id FROM workspace_users
         WHERE id = ? AND workspace_id = ? AND status = 'active' AND deleted_at IS NULL`,
-    [trimmed10, workspaceId]
+    [trimmed10, workspaceId2]
   );
   if (!member2) throw new ApiError(400, "Assignee is not a member of this workspace");
   return member2.id;
@@ -147297,7 +148272,7 @@ async function reorderBoardColumn(projectId, body) {
   if (!statusId) throw new ApiError(400, "statusId is required");
   if (!Array.isArray(orderedIds)) throw new ApiError(400, "orderedMissionIds must be an array");
   await requireDatabaseClient().transaction(async (tx) => {
-    const { workspaceId, workspaceUserId } = await requireProjectPermission({
+    const { workspaceId: workspaceId2, workspaceUserId } = await requireProjectPermission({
       projectId,
       permission: PERMISSIONS.MISSION_UPDATE,
       db: tx
@@ -147316,7 +148291,7 @@ async function reorderBoardColumn(projectId, body) {
       const existing = await tx.get(
         `SELECT * FROM missions
              WHERE id = ? AND workspace_id = ? AND project_id = ? AND deleted_at IS NULL`,
-        [missionId, workspaceId, projectId]
+        [missionId, workspaceId2, projectId]
       );
       if (!existing) throw new ApiError(404, `Mission ${missionId} not found in project`);
       const boardPosition = (index + 1) * 100;
@@ -147340,7 +148315,7 @@ async function reorderBoardColumn(projectId, body) {
       await tx.run(
         `UPDATE missions SET ${setClauses.join(", ")}, updated_at = ?, revision = ?
            WHERE id = ? AND workspace_id = ?`,
-        [...setParams, now2, revision, missionId, workspaceId]
+        [...setParams, now2, revision, missionId, workspaceId2]
       );
       await recordChange2(
         {
@@ -147351,7 +148326,7 @@ async function reorderBoardColumn(projectId, body) {
           projectId,
           missionId,
           changedFields: changed,
-          workspaceId
+          workspaceId: workspaceId2
         },
         tx
       );
@@ -147361,7 +148336,7 @@ async function reorderBoardColumn(projectId, body) {
             type: "mission.status_changed",
             projectId,
             entity: { missionId },
-            scope: { workspaceId, workspaceUserId }
+            scope: { workspaceId: workspaceId2, workspaceUserId }
           },
           tx
         );
@@ -147369,7 +148344,7 @@ async function reorderBoardColumn(projectId, body) {
         if (statusRow.type === "execute" && existing.status_type !== "execute") {
           await emitNotification({
             db: tx,
-            workspaceId,
+            workspaceId: workspaceId2,
             missionId,
             type: "returned_to_execute",
             now: now2
@@ -147378,7 +148353,7 @@ async function reorderBoardColumn(projectId, body) {
       }
     }
   });
-  return (await listMissions2(projectId)).filter((t) => t.statusId === statusId);
+  return (await listMissions(projectId)).filter((t) => t.statusId === statusId);
 }
 function parseScheduleJsonArray(json2) {
   try {
@@ -147432,13 +148407,13 @@ function scheduleRowToInput(row) {
     nextStatusKey: dto.nextStatusKey
   };
 }
-async function getScheduleRow(db, workspaceId, scheduleId) {
+async function getScheduleRow(db, workspaceId2, scheduleId) {
   return await db.get(
     `SELECT id, workspace_id, name, period_type, period_interval, weeks_of_month_json,
             days_of_month_json, days_of_week_json, timezone, start_date, next_status_key,
             created_at, updated_at, revision
        FROM schedules WHERE id = ? AND workspace_id = ?`,
-    [scheduleId, workspaceId]
+    [scheduleId, workspaceId2]
   );
 }
 function previewScheduleDueDatetime(input, itemDueDatetime) {
@@ -147731,6 +148706,13 @@ async function callerWorkspaceMemberships(client = requireDatabaseClient()) {
   }));
 }
 async function callerMembershipsInActiveOrganization(client = requireDatabaseClient()) {
+  const authorized = getAuthorizedWorkspacesContext();
+  if (authorized) {
+    return authorized.workspaces.map((workspace) => ({
+      workspaceId: workspace.workspaceId,
+      workspaceUserId: workspace.workspaceUserId
+    }));
+  }
   const profileId = await resolveActiveProfileId(client);
   const organizationId = await getActiveOrganizationIdOrNull(client);
   if (!profileId || !organizationId) return [];
@@ -147790,9 +148772,18 @@ ${missionHasUnseenReturnedToExecuteSql},
 }
 async function listWorkspaceMyMissions() {
   const memberships = await callerMembershipsInActiveOrganization();
-  if (memberships.length === 0) return { missions: [] };
-  const pairPlaceholders = memberships.map(() => "(?, ?)").join(", ");
-  const pairParams = memberships.flatMap((m3) => [m3.workspaceId, m3.workspaceUserId]);
+  const readableMemberships = [];
+  for (const membership of memberships) {
+    if (await actorCan(PERMISSIONS.MISSION_READ, {
+      workspaceId: membership.workspaceId,
+      workspaceUserId: membership.workspaceUserId
+    })) {
+      readableMemberships.push(membership);
+    }
+  }
+  if (readableMemberships.length === 0) return { missions: [] };
+  const pairPlaceholders = readableMemberships.map(() => "(?, ?)").join(", ");
+  const pairParams = readableMemberships.flatMap((m3) => [m3.workspaceId, m3.workspaceUserId]);
   const rows = await requireDatabaseClient().all(
     `${selectMyMissionsSql(pairPlaceholders)}
          ORDER BY (mtp.position IS NULL) ASC, mtp.position ASC,
@@ -147803,7 +148794,7 @@ async function listWorkspaceMyMissions() {
   return { missions: rows.map((row) => toMyMissionDto(row, tagsByMission.get(row.id) ?? [])) };
 }
 async function upsertMyMissionPosition(db, {
-  workspaceId,
+  workspaceId: workspaceId2,
   projectId,
   missionId,
   statusId,
@@ -147814,7 +148805,7 @@ async function upsertMyMissionPosition(db, {
   const existing = await db.get(
     `SELECT id, revision FROM my_mission_positions
          WHERE workspace_id = ? AND workspace_user_id = ? AND mission_id = ?`,
-    [workspaceId, actor, missionId]
+    [workspaceId2, actor, missionId]
   );
   if (existing) {
     await db.run(
@@ -147829,7 +148820,7 @@ async function upsertMyMissionPosition(db, {
     `INSERT INTO my_mission_positions
        (id, workspace_id, project_id, workspace_user_id, mission_id, status_id, position, created_at, updated_at, revision)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
-    [newId2(), workspaceId, projectId, actor, missionId, statusId, position, now2, now2]
+    [newId2(), workspaceId2, projectId, actor, missionId, statusId, position, now2, now2]
   );
 }
 async function requireStatusWorkspaceMembership(tx, statusId) {
@@ -147872,12 +148863,12 @@ async function reorderWorkspaceMyMissionsTx(body) {
       tx,
       statusId
     );
-    const workspaceId = statusRow.workspace_id;
+    const workspaceId2 = statusRow.workspace_id;
     const now2 = nowIso2();
     for (const [index, missionId] of orderedIds.entries()) {
       const existing = await tx.get(
         `SELECT * FROM missions WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-        [missionId, workspaceId]
+        [missionId, workspaceId2]
       );
       if (!existing) throw new ApiError(404, `Mission ${missionId} not found in workspace`);
       if (existing.assigned_workspace_user_id !== actor) {
@@ -147905,7 +148896,7 @@ async function reorderWorkspaceMyMissionsTx(body) {
             now2,
             revision,
             missionId,
-            workspaceId
+            workspaceId2
           ]
         );
         await recordChange2(
@@ -147916,14 +148907,14 @@ async function reorderWorkspaceMyMissionsTx(body) {
             entityRevision: revision,
             projectId: existing.project_id,
             missionId,
-            workspaceId,
+            workspaceId: workspaceId2,
             changedFields: ["status_id", "status_type", "board_position"]
           },
           tx
         );
       }
       await upsertMyMissionPosition(tx, {
-        workspaceId,
+        workspaceId: workspaceId2,
         projectId: existing.project_id,
         missionId,
         statusId: statusRow.id,
@@ -147975,7 +148966,7 @@ async function listObjectives2(missionId, db = requireDatabaseClient()) {
 }
 var DISCONNECT_FROM_STATES = ["launching", "executing", "pending_delivery"];
 async function applyObjectivePositionUpdates(tx, options) {
-  const { workspaceId, missionId, projectId, rows, positionById, now: now2 } = options;
+  const { workspaceId: workspaceId2, missionId, projectId, rows, positionById, now: now2 } = options;
   const byId = new Map(rows.map((row) => [row.id, row]));
   const updates = [...positionById.entries()].map(([objectiveId, position]) => {
     const existing = byId.get(objectiveId);
@@ -147992,14 +148983,14 @@ async function applyObjectivePositionUpdates(tx, options) {
     await tx.run(
       `UPDATE objectives SET position = ?, updated_at = ?
          WHERE id = ? AND workspace_id = ?`,
-      [tempBase + index, now2, existing.id, workspaceId]
+      [tempBase + index, now2, existing.id, workspaceId2]
     );
   }
   for (const { existing, position, revision } of updates) {
     await tx.run(
       `UPDATE objectives SET position = ?, updated_at = ?, revision = ?
          WHERE id = ? AND workspace_id = ?`,
-      [position, now2, revision, existing.id, workspaceId]
+      [position, now2, revision, existing.id, workspaceId2]
     );
     await recordChange2(
       {
@@ -148011,7 +149002,7 @@ async function applyObjectivePositionUpdates(tx, options) {
         missionId,
         objectiveId: existing.id,
         changedFields: ["position"],
-        workspaceId
+        workspaceId: workspaceId2
       },
       tx
     );
@@ -148026,20 +149017,20 @@ async function reorderFutureObjectives(missionId, body) {
     throw new ApiError(400, "orderedObjectiveIds contains duplicates");
   }
   await requireDatabaseClient().transaction(async (tx) => {
-    const { workspaceId } = await requireMissionPermission({
+    const { workspaceId: workspaceId2 } = await requireMissionPermission({
       missionRef: missionId,
       permission: PERMISSIONS.OBJECTIVE_UPDATE,
       db: tx
     });
     const mission = await tx.get(
       `SELECT id, project_id FROM missions WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-      [missionId, workspaceId]
+      [missionId, workspaceId2]
     );
     if (!mission) throw new ApiError(404, "Mission not found");
     const rows = await tx.all(
       `SELECT * FROM objectives
            WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-      [missionId, workspaceId]
+      [missionId, workspaceId2]
     );
     const byId = new Map(rows.map((row) => [row.id, row]));
     const targets = orderedIds.map((id) => {
@@ -148065,14 +149056,14 @@ async function reorderFutureObjectives(missionId, body) {
       await tx.run(
         `UPDATE objectives SET position = ?, updated_at = ?
            WHERE id = ? AND workspace_id = ?`,
-        [tempBase + index, now2, existing.id, workspaceId]
+        [tempBase + index, now2, existing.id, workspaceId2]
       );
     }
     for (const { existing, position, revision } of updates) {
       await tx.run(
         `UPDATE objectives SET position = ?, updated_at = ?, revision = ?
            WHERE id = ? AND workspace_id = ?`,
-        [position, now2, revision, existing.id, workspaceId]
+        [position, now2, revision, existing.id, workspaceId2]
       );
       await recordChange2(
         {
@@ -148084,7 +149075,7 @@ async function reorderFutureObjectives(missionId, body) {
           missionId,
           objectiveId: existing.id,
           changedFields: ["position"],
-          workspaceId
+          workspaceId: workspaceId2
         },
         tx
       );
@@ -148119,12 +149110,12 @@ async function insertObjective2(db, ctx, body) {
 }
 function createObjectiveTx(body) {
   return requireDatabaseClient().transaction(async (tx) => {
-    const { workspaceId, workspaceUserId } = await requireMissionPermission({
+    const { workspaceId: workspaceId2, workspaceUserId } = await requireMissionPermission({
       missionRef: body.missionId,
       permission: PERMISSIONS.OBJECTIVE_UPDATE,
       db: tx
     });
-    return insertObjective2(tx, { workspaceId, workspaceUserId }, body);
+    return insertObjective2(tx, { workspaceId: workspaceId2, workspaceUserId }, body);
   });
 }
 async function createObjective(body) {
@@ -148140,7 +149131,7 @@ async function createObjective(body) {
   return objective;
 }
 async function ensureDraftSlotAfterObjectiveLeavesQueue(db, {
-  workspaceId,
+  workspaceId: workspaceId2,
   missionId,
   projectId,
   now: now2
@@ -148149,7 +149140,7 @@ async function ensureDraftSlotAfterObjectiveLeavesQueue(db, {
     `SELECT id, instruction_text, revision FROM objectives
        WHERE mission_id = ? AND workspace_id = ? AND state = 'draft' AND deleted_at IS NULL
        ORDER BY position ASC, created_at ASC`,
-    [missionId, workspaceId]
+    [missionId, workspaceId2]
   );
   if (drafts.some((draft) => draft.instruction_text.trim())) return;
   const nextFuture = await db.get(
@@ -148157,7 +149148,7 @@ async function ensureDraftSlotAfterObjectiveLeavesQueue(db, {
        WHERE mission_id = ? AND workspace_id = ? AND state = 'future' AND deleted_at IS NULL
          AND TRIM(instruction_text) <> ''
        ORDER BY position ASC, created_at ASC LIMIT 1`,
-    [missionId, workspaceId]
+    [missionId, workspaceId2]
   );
   if (nextFuture) {
     for (const draft of drafts) {
@@ -148166,7 +149157,7 @@ async function ensureDraftSlotAfterObjectiveLeavesQueue(db, {
         `UPDATE objectives
          SET deleted_at = ?, updated_at = ?, revision = ?
          WHERE id = ? AND workspace_id = ?`,
-        [now2, now2, draftRevision, draft.id, workspaceId]
+        [now2, now2, draftRevision, draft.id, workspaceId2]
       );
       await recordChange2(
         {
@@ -148177,7 +149168,7 @@ async function ensureDraftSlotAfterObjectiveLeavesQueue(db, {
           projectId,
           missionId,
           objectiveId: draft.id,
-          workspaceId
+          workspaceId: workspaceId2
         },
         db
       );
@@ -148187,7 +149178,7 @@ async function ensureDraftSlotAfterObjectiveLeavesQueue(db, {
       `UPDATE objectives
        SET state = 'draft', completed_at = NULL, updated_at = ?, revision = ?
        WHERE id = ? AND workspace_id = ?`,
-      [now2, nextRevision, nextFuture.id, workspaceId]
+      [now2, nextRevision, nextFuture.id, workspaceId2]
     );
     await recordChange2(
       {
@@ -148199,7 +149190,7 @@ async function ensureDraftSlotAfterObjectiveLeavesQueue(db, {
         missionId,
         objectiveId: nextFuture.id,
         changedFields: ["state", "completed_at"],
-        workspaceId
+        workspaceId: workspaceId2
       },
       db
     );
@@ -148226,7 +149217,7 @@ async function requireObjectivePermission({
 async function updateObjectiveTx(idRef, body) {
   return requireDatabaseClient().transaction(async (tx) => {
     const {
-      workspaceId,
+      workspaceId: workspaceId2,
       workspaceUserId,
       objectiveId: id
     } = await requireObjectivePermission({
@@ -148239,7 +149230,7 @@ async function updateObjectiveTx(idRef, body) {
          FROM objectives o
          JOIN missions m ON m.id = o.mission_id
         WHERE o.id = ? AND o.workspace_id = ? AND o.deleted_at IS NULL`,
-      [id, workspaceId]
+      [id, workspaceId2]
     );
     if (!existing) throw new ApiError(404, "Objective not found");
     const fields = [];
@@ -148357,14 +149348,14 @@ async function updateObjectiveTx(idRef, body) {
         `SELECT id, revision, position FROM objectives
            WHERE mission_id = ? AND workspace_id = ? AND state = 'draft'
              AND id <> ? AND deleted_at IS NULL`,
-        [existing.mission_id, workspaceId, id]
+        [existing.mission_id, workspaceId2, id]
       );
       for (const draft of otherDrafts) {
         const draftRevision = draft.revision + 1;
         await tx.run(
           `UPDATE objectives SET state = 'future', updated_at = ?, revision = ?
            WHERE id = ? AND workspace_id = ?`,
-          [now2, draftRevision, draft.id, workspaceId]
+          [now2, draftRevision, draft.id, workspaceId2]
         );
         await recordChange2(
           {
@@ -148376,7 +149367,7 @@ async function updateObjectiveTx(idRef, body) {
             missionId: existing.mission_id,
             objectiveId: draft.id,
             changedFields: ["state"],
-            workspaceId
+            workspaceId: workspaceId2
           },
           tx
         );
@@ -148387,7 +149378,7 @@ async function updateObjectiveTx(idRef, body) {
           const missionRows = await tx.all(
             `SELECT * FROM objectives
                WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-            [existing.mission_id, workspaceId]
+            [existing.mission_id, workspaceId2]
           );
           const positionById = /* @__PURE__ */ new Map();
           for (const row2 of missionRows) {
@@ -148400,7 +149391,7 @@ async function updateObjectiveTx(idRef, body) {
             }
           }
           await applyObjectivePositionUpdates(tx, {
-            workspaceId,
+            workspaceId: workspaceId2,
             missionId: existing.mission_id,
             projectId: existing.project_id,
             rows: missionRows,
@@ -148413,7 +149404,7 @@ async function updateObjectiveTx(idRef, body) {
     await tx.run(
       `UPDATE objectives SET ${fields.join(", ")}, updated_at = ?, revision = ?
          WHERE id = ? AND workspace_id = ?`,
-      [...setParams, now2, revision, id, workspaceId]
+      [...setParams, now2, revision, id, workspaceId2]
     );
     await recordChange2(
       {
@@ -148425,7 +149416,7 @@ async function updateObjectiveTx(idRef, body) {
         missionId: existing.mission_id,
         objectiveId: id,
         changedFields: changed,
-        workspaceId
+        workspaceId: workspaceId2
       },
       tx
     );
@@ -148433,13 +149424,13 @@ async function updateObjectiveTx(idRef, body) {
       if (body.state === "executing") {
         await enqueueLiveActivityStartForMission({
           db: tx,
-          workspaceId,
+          workspaceId: workspaceId2,
           missionId: existing.mission_id,
           now: now2
         });
         await emitNotification({
           db: tx,
-          workspaceId,
+          workspaceId: workspaceId2,
           missionId: existing.mission_id,
           objectiveId: id,
           type: "agent_started",
@@ -148448,7 +149439,7 @@ async function updateObjectiveTx(idRef, body) {
       } else {
         await enqueueLiveActivityRefreshForMission({
           db: tx,
-          workspaceId,
+          workspaceId: workspaceId2,
           missionId: existing.mission_id,
           now: now2
         });
@@ -148456,7 +149447,7 @@ async function updateObjectiveTx(idRef, body) {
     }
     if (body.state === "executing" && body.state !== existing.state && (existing.state === "draft" || existing.state === "future" || existing.state === "submitted" || existing.state === "launching")) {
       await ensureDraftSlotAfterObjectiveLeavesQueue(tx, {
-        workspaceId,
+        workspaceId: workspaceId2,
         missionId: existing.mission_id,
         projectId: existing.project_id,
         now: now2
@@ -148468,7 +149459,7 @@ async function updateObjectiveTx(idRef, body) {
         objectiveId: id,
         projectId: existing.project_id,
         missionId: existing.mission_id,
-        workspaceId,
+        workspaceId: workspaceId2,
         workspaceUserId,
         reason: body.state === "complete" ? "completed" : "disconnected",
         newState: body.state,
@@ -148505,7 +149496,7 @@ async function updateObjective2(id, body) {
 async function deleteObjective(idRef) {
   await requireDatabaseClient().transaction(async (tx) => {
     const {
-      workspaceId,
+      workspaceId: workspaceId2,
       workspaceUserId,
       objectiveId: id
     } = await requireObjectivePermission({
@@ -148518,7 +149509,7 @@ async function deleteObjective(idRef) {
          FROM objectives o
          JOIN missions m ON m.id = o.mission_id
         WHERE o.id = ? AND o.workspace_id = ? AND o.deleted_at IS NULL`,
-      [id, workspaceId]
+      [id, workspaceId2]
     );
     if (!existing) throw new ApiError(404, "Objective not found");
     const now2 = nowIso2();
@@ -148526,7 +149517,7 @@ async function deleteObjective(idRef) {
     await tx.run(
       `UPDATE objectives SET deleted_at = ?, revision = ?
        WHERE id = ? AND workspace_id = ?`,
-      [now2, revision, id, workspaceId]
+      [now2, revision, id, workspaceId2]
     );
     await recordChange2(
       {
@@ -148537,7 +149528,7 @@ async function deleteObjective(idRef) {
         projectId: existing.project_id,
         missionId: existing.mission_id,
         objectiveId: id,
-        workspaceId
+        workspaceId: workspaceId2
       },
       tx
     );
@@ -148545,7 +149536,7 @@ async function deleteObjective(idRef) {
       objectiveId: id,
       projectId: existing.project_id,
       missionId: existing.mission_id,
-      workspaceId,
+      workspaceId: workspaceId2,
       workspaceUserId,
       reason: "deleted",
       newState: null,
@@ -148619,6 +149610,11 @@ function mergeProfileMetadataJson2({
   return JSON.stringify(parsed);
 }
 async function toProfileDto(row) {
+  const authorized = getAuthorizedWorkspacesContext();
+  const roles = authorized ? [...new Set(authorized.workspaces.flatMap((workspace) => workspace.roleKeys))].sort() : await loadActorRoles({
+    workspaceId: getBootstrapWorkspaceIdOrNull() ?? "",
+    workspaceUserId: getActorWorkspaceUserId()
+  });
   return {
     userId: row.id,
     displayName: row.display_name,
@@ -148629,10 +149625,7 @@ async function toProfileDto(row) {
     editorScheme: editorSchemeFromMetadata(row.metadata_json),
     kind: row.kind,
     authProvider: "better-auth",
-    roles: await loadActorRoles({
-      workspaceId: getActiveWorkspaceId(),
-      workspaceUserId: getActorWorkspaceUserId()
-    }),
+    roles,
     createdAt: row.created_at
   };
 }
@@ -148835,17 +149828,30 @@ async function updateProfile(body) {
        WHERE id = ?`,
       [...setParams, now2, revision, existing.id]
     );
-    await recordChange2(
+    const authorized = getAuthorizedWorkspacesContext();
+    const changeScopes = authorized?.workspaces.length ? authorized.workspaces.map((workspace) => ({
+      workspaceId: workspace.workspaceId,
+      workspaceUserId: workspace.workspaceUserId
+    })) : getBootstrapWorkspaceIdOrNull() ? [
       {
-        entityType: "profile",
-        entityId: existing.id,
-        operation: "update",
-        entityRevision: revision,
-        changedFields: changed,
-        workspaceId: getActiveWorkspaceId()
-      },
-      tx
-    );
+        workspaceId: getBootstrapWorkspaceIdOrNull(),
+        workspaceUserId: getActorWorkspaceUserId()
+      }
+    ] : [];
+    for (const scope of changeScopes) {
+      await recordChange2(
+        {
+          entityType: "profile",
+          entityId: existing.id,
+          operation: "update",
+          entityRevision: revision,
+          changedFields: changed,
+          workspaceId: scope.workspaceId,
+          actorWorkspaceUserId: scope.workspaceUserId
+        },
+        tx
+      );
+    }
   });
   return getProfile();
 }
@@ -148867,16 +149873,30 @@ async function toUserTokenDto(db, row) {
 }
 async function loadOperatorIdentity(db) {
   const user = await loadOperatorUserRow(db);
-  const membership = await db.get(
-    `SELECT id FROM workspace_users
-         WHERE workspace_id = ? AND profile_id = ? AND deleted_at IS NULL
-         ORDER BY created_at ASC LIMIT 1`,
-    [getActiveWorkspaceId(), user.id]
-  );
-  if (!membership) {
-    throw new ApiError(409, "No active workspace membership for the authenticated user");
+  return { userId: user.id, workspaceUserId: getActorWorkspaceUserId() };
+}
+function singleWorkspaceTokenIssuanceScope() {
+  const authorized = getAuthorizedWorkspacesContext();
+  if (authorized) {
+    if (authorized.workspaces.length !== 1) {
+      throw new ApiError(
+        400,
+        "Token creation requires explicit organization/workspace consent when more than one workspace is authorized"
+      );
+    }
+    const only = authorized.workspaces[0];
+    return {
+      workspaceId: only.workspaceId,
+      workspaceUserId: only.workspaceUserId,
+      organizationId: authorized.organizationId
+    };
   }
-  return { userId: user.id, workspaceUserId: membership.id };
+  const workspaceId2 = getBootstrapWorkspaceIdOrNull();
+  const workspaceUserId = getActorWorkspaceUserId();
+  if (!workspaceId2 || !workspaceUserId) {
+    throw new ApiError(409, "No workspace membership is available for token issuance");
+  }
+  return { workspaceId: workspaceId2, workspaceUserId, organizationId: null };
 }
 async function loadUserTokenForUpdate(db, id) {
   const { userId } = await loadOperatorIdentity(db);
@@ -148904,7 +149924,7 @@ async function listUserTokens() {
   );
   return Promise.all(rows.map((row) => toUserTokenDto(client, row)));
 }
-async function createUserToken(body) {
+async function createUserToken(body, consent) {
   return requireDatabaseClient().transaction(async (tx) => {
     const label = body.label?.trim();
     if (!label) throw new ApiError(400, "Token label cannot be empty");
@@ -148924,8 +149944,43 @@ async function createUserToken(body) {
       throw new ApiError(400, `Unknown token scope: ${String(scope)}`);
     }
     const scopeGrants = scopeGrantsForPreset(scope);
-    const { userId, workspaceUserId } = await loadOperatorIdentity(tx);
-    const workspaceId = getActiveWorkspaceId();
+    const issuanceScope = consent ? {
+      workspaceId: consent.issuanceWorkspaceId,
+      workspaceUserId: consent.issuanceWorkspaceUserId,
+      organizationId: consent.organizationId
+    } : singleWorkspaceTokenIssuanceScope();
+    const identity = consent ? {
+      userId: await resolveActiveProfileId(tx),
+      workspaceUserId: consent.issuanceWorkspaceUserId
+    } : {
+      userId: (await loadOperatorIdentity(tx)).userId,
+      workspaceUserId: issuanceScope.workspaceUserId
+    };
+    if (!identity.userId) throw new ApiError(401, "Authentication required");
+    const { userId, workspaceUserId } = identity;
+    const workspaceId2 = issuanceScope.workspaceId;
+    const workspace = await tx.get(
+      `SELECT organization_id FROM workspaces WHERE id = ? AND deleted_at IS NULL`,
+      [workspaceId2]
+    );
+    if (!workspace) throw new ApiError(409, "Active workspace no longer exists");
+    if (consent && workspace.organization_id !== consent.organizationId) {
+      throw new ApiError(400, "Token consent organization does not match its issuance workspace");
+    }
+    if (consent && !consent.allWorkspaces && consent.workspaceIds.length === 0) {
+      throw new ApiError(400, "Explicit token consent requires at least one workspace");
+    }
+    if (consent && !consent.allWorkspaces) {
+      for (const consentedWorkspaceId of consent.workspaceIds) {
+        const consentedWorkspace = await tx.get(
+          `SELECT organization_id FROM workspaces WHERE id = ? AND deleted_at IS NULL`,
+          [consentedWorkspaceId]
+        );
+        if (!consentedWorkspace || consentedWorkspace.organization_id !== consent.organizationId) {
+          throw new ApiError(400, "Token consent workspaces must belong to its organization");
+        }
+      }
+    }
     let generated = null;
     for (let attempt = 0; attempt < 5; attempt += 1) {
       const candidate = generateUserTokenSecret();
@@ -148943,13 +149998,14 @@ async function createUserToken(body) {
     const now2 = nowIso2();
     await tx.run(
       `INSERT INTO user_tokens (
-         id, workspace_id, profile_id, workspace_user_id, label,
+         id, workspace_id, organization_id, all_workspaces, profile_id, workspace_user_id, label,
          token_prefix, token_hash, hash_algorithm, status, expires_at,
          last_used_context_json, metadata_json, created_at, updated_at, revision
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, '{}', '{}', ?, ?, 1)`,
+       ) VALUES (?, ?, ?, false, ?, ?, ?, ?, ?, ?, 'active', ?, '{}', '{}', ?, ?, 1)`,
       [
         id,
-        workspaceId,
+        workspaceId2,
+        consent?.organizationId ?? workspace.organization_id,
         userId,
         workspaceUserId,
         label,
@@ -148961,13 +150017,25 @@ async function createUserToken(body) {
         now2
       ]
     );
+    if (consent?.allWorkspaces) {
+      await tx.run(`UPDATE user_tokens SET all_workspaces = true WHERE id = ?`, [id]);
+    } else {
+      const workspaceIds = consent?.workspaceIds ?? [workspaceId2];
+      for (const consentedWorkspaceId of workspaceIds) {
+        await tx.run(
+          `INSERT INTO user_token_workspaces (token_id, workspace_id, created_at)
+           VALUES (?, ?, ?)`,
+          [id, consentedWorkspaceId, now2]
+        );
+      }
+    }
     for (const permission of scopeGrants) {
       await tx.run(
         `INSERT INTO user_token_scopes (
          id, workspace_id, token_id, permission, resource_type, resource_id,
          created_at, updated_at, revision
        ) VALUES (?, ?, ?, ?, NULL, NULL, ?, ?, 1)`,
-        [newId2(), workspaceId, id, permission, now2, now2]
+        [newId2(), workspaceId2, id, permission, now2, now2]
       );
     }
     await recordChange2(
@@ -148976,7 +150044,7 @@ async function createUserToken(body) {
         entityId: id,
         operation: "insert",
         entityRevision: 1,
-        workspaceId,
+        workspaceId: workspaceId2,
         actorWorkspaceUserId: workspaceUserId
       },
       tx
@@ -148990,6 +150058,7 @@ async function createUserToken(body) {
 async function renameUserToken(id, body) {
   return requireDatabaseClient().transaction(async (tx) => {
     const existing = await loadUserTokenForUpdate(tx, id);
+    if (!existing.workspace_id) throw new ApiError(409, "Token has no issuance workspace");
     const label = body.label?.trim();
     if (!label) throw new ApiError(400, "Token label cannot be empty");
     const now2 = nowIso2();
@@ -149016,6 +150085,7 @@ async function renameUserToken(id, body) {
 async function revokeUserToken(id) {
   return requireDatabaseClient().transaction(async (tx) => {
     const existing = await loadUserTokenForUpdate(tx, id);
+    if (!existing.workspace_id) throw new ApiError(409, "Token has no issuance workspace");
     if (existing.status === "revoked") return toUserTokenDto(tx, await reloadUserToken(tx, id));
     const { userId } = await loadOperatorIdentity(tx);
     const workspaceUserId = await findActiveMembershipId(existing.workspace_id, userId, tx);
@@ -149047,6 +150117,7 @@ async function revokeUserToken(id) {
 async function deleteRevokedUserToken(id) {
   await requireDatabaseClient().transaction(async (tx) => {
     const existing = await loadUserTokenForUpdate(tx, id);
+    if (!existing.workspace_id) throw new ApiError(409, "Token has no issuance workspace");
     if (existing.status !== "revoked") {
       throw new ApiError(409, "Only revoked tokens can be deleted");
     }
@@ -154872,21 +155943,21 @@ function parseSettings3(raw) {
     return {};
   }
 }
-async function readSettingsJson(workspaceId, client) {
+async function readSettingsJson(workspaceId2, client) {
   const row = await client.get(
     `SELECT settings_json FROM workspaces WHERE id = ? AND deleted_at IS NULL`,
-    [workspaceId]
+    [workspaceId2]
   );
   if (!row) throw new ApiError(404, "Workspace not found");
   return row.settings_json;
 }
 async function writeWorkspaceSetting({
-  workspaceId,
+  workspaceId: workspaceId2,
   key,
   value,
   client
 }) {
-  const settings = parseSettings3(await readSettingsJson(workspaceId, client));
+  const settings = parseSettings3(await readSettingsJson(workspaceId2, client));
   if (value === void 0) {
     delete settings[key];
   } else {
@@ -154896,7 +155967,7 @@ async function writeWorkspaceSetting({
     `UPDATE workspaces
         SET settings_json = ?, updated_at = ?, revision = revision + 1
       WHERE id = ? AND deleted_at IS NULL`,
-    [JSON.stringify(settings), nowIso2(), workspaceId]
+    [JSON.stringify(settings), nowIso2(), workspaceId2]
   );
 }
 function sqlStudioEnabledFromSettingsJson(raw) {
@@ -154904,18 +155975,18 @@ function sqlStudioEnabledFromSettingsJson(raw) {
   return typeof value === "boolean" ? value : loadConfig().sqlStudioEnabled;
 }
 async function readSqlStudioEnabled({
-  workspaceId,
+  workspaceId: workspaceId2,
   client = requireDatabaseClient()
 }) {
-  return sqlStudioEnabledFromSettingsJson(await readSettingsJson(workspaceId, client));
+  return sqlStudioEnabledFromSettingsJson(await readSettingsJson(workspaceId2, client));
 }
 async function writeSqlStudioEnabled({
-  workspaceId,
+  workspaceId: workspaceId2,
   enabled,
   client = requireDatabaseClient()
 }) {
   await writeWorkspaceSetting({
-    workspaceId,
+    workspaceId: workspaceId2,
     key: SQL_STUDIO_SETTINGS_KEY,
     value: enabled,
     client
@@ -154930,7 +156001,7 @@ function toWorkspaceDto(r5) {
     slug: r5.slug,
     name: r5.name,
     kind: r5.kind,
-    isActive: r5.id === getActiveWorkspaceIdOrNull(),
+    isActive: r5.id === getBootstrapWorkspaceIdOrNull(),
     projectCount: r5.project_count,
     memberCount: r5.member_count,
     sqlStudioEnabled: sqlStudioEnabledFromSettingsJson(r5.settings_json),
@@ -154979,23 +156050,23 @@ async function resolveCurrentProfileId(client = requireDatabaseClient()) {
   if (!fallback2) throw new ApiError(409, "No local user profile exists");
   return fallback2.id;
 }
-async function requireWorkspaceMember(workspaceId) {
-  const membershipId = await findActiveMembershipId(workspaceId, await resolveCurrentProfileId());
+async function requireWorkspaceMember(workspaceId2) {
+  const membershipId = await findActiveMembershipId(workspaceId2, await resolveCurrentProfileId());
   if (!membershipId) {
     throw new ApiError(404, "Workspace not found or no active membership");
   }
   return membershipId;
 }
-async function requireWorkspaceAdmin(workspaceId) {
-  const workspaceUserId = await requireWorkspaceMember(workspaceId);
-  if (!await actorIsAdmin({ workspaceId, workspaceUserId })) {
+async function requireWorkspaceAdmin(workspaceId2) {
+  const workspaceUserId = await requireWorkspaceMember(workspaceId2);
+  if (!await actorIsAdmin({ workspaceId: workspaceId2, workspaceUserId })) {
     throw new ApiError(403, "Admin role required");
   }
   return workspaceUserId;
 }
-async function requireWorkspaceManager(workspaceId) {
-  const workspaceUserId = await requireWorkspaceMember(workspaceId);
-  const roleKeys = await listMemberRoleKeys({ workspaceId, workspaceUserId });
+async function requireWorkspaceManager(workspaceId2) {
+  const workspaceUserId = await requireWorkspaceMember(workspaceId2);
+  const roleKeys = await listMemberRoleKeys({ workspaceId: workspaceId2, workspaceUserId });
   const isAdmin = roleKeys.includes("ADMIN");
   if (!isAdmin && !roleKeys.includes("MANAGER")) {
     throw new ApiError(403, "Manager role required");
@@ -155006,7 +156077,7 @@ function csvCell(value) {
   return `"${(value ?? "").replaceAll('"', '""')}"`;
 }
 async function grantWorkspaceAdminRole({
-  workspaceId,
+  workspaceId: workspaceId2,
   workspaceUserId,
   assignedByWorkspaceUserId = workspaceUserId,
   client = requireDatabaseClient()
@@ -155015,7 +156086,7 @@ async function grantWorkspaceAdminRole({
     `SELECT 1 FROM role_assignments
        WHERE workspace_id = ? AND workspace_user_id = ? AND deleted_at IS NULL
        LIMIT 1`,
-    [workspaceId, workspaceUserId]
+    [workspaceId2, workspaceUserId]
   );
   if (existing) return;
   const now2 = nowIso2();
@@ -155026,7 +156097,7 @@ async function grantWorkspaceAdminRole({
      VALUES
        (?, ?, ?, 'ADMIN', '', '',
         ?, ?, ?, 1)`,
-    [newId2(), workspaceId, workspaceUserId, assignedByWorkspaceUserId, now2, now2]
+    [newId2(), workspaceId2, workspaceUserId, assignedByWorkspaceUserId, now2, now2]
   );
 }
 var WORKSPACE_LIST_COLUMNS = `
@@ -155066,7 +156137,7 @@ async function listWorkspacesForOrganization(organizationId) {
   return rows.map(toWorkspaceDto);
 }
 async function seedWorkspaceStorageBuckets({
-  workspaceId,
+  workspaceId: workspaceId2,
   createdByWorkspaceUserId,
   now: now2,
   client
@@ -155077,7 +156148,7 @@ async function seedWorkspaceStorageBuckets({
          id, workspace_id, bucket_key, storage_backend, base_url, local_path, settings_json,
          created_by_workspace_user_id, created_at, updated_at, revision
        ) VALUES (?, ?, ?, 'local_fs', NULL, 'database/.local/storage', '{}', ?, ?, ?, 1)`,
-      [newId2(), workspaceId, bucketKey, createdByWorkspaceUserId, now2, now2]
+      [newId2(), workspaceId2, bucketKey, createdByWorkspaceUserId, now2, now2]
     );
   }
 }
@@ -155102,7 +156173,7 @@ async function createWorkspace(body) {
   if (!await canViewOrganizationSettings(creatorProfileId, organizationId)) {
     throw new ApiError(403, "Workspace admin access to the organization required");
   }
-  const workspaceId = await requireDatabaseClient().transaction(async (tx) => {
+  const workspaceId2 = await requireDatabaseClient().transaction(async (tx) => {
     const name = (body.name ?? "").trim();
     if (!name) throw new ApiError(400, "Workspace name is required");
     const organization = await tx.get(
@@ -155190,14 +156261,14 @@ async function createWorkspace(body) {
     }
     return nextWorkspaceId;
   });
-  await setActiveWorkspace(workspaceId);
-  const created = (await listWorkspaces()).find((w) => w.id === workspaceId);
+  if (!getAuthorizedWorkspacesContext()) await setActiveWorkspace(workspaceId2);
+  const created = (await listWorkspaces()).find((w) => w.id === workspaceId2);
   if (!created) throw new ApiError(500, "Workspace was created but could not be loaded");
   return created;
 }
 async function createOrganizationOnboarding(body) {
   const profileId = await resolveCurrentProfileId();
-  const workspaceId = await requireDatabaseClient().transaction(async (tx) => {
+  const workspaceId2 = await requireDatabaseClient().transaction(async (tx) => {
     const existingMembership = await tx.get(
       `SELECT wu.id FROM workspace_users wu
          JOIN workspaces w ON w.id = wu.workspace_id AND w.deleted_at IS NULL
@@ -155289,8 +156360,8 @@ async function createOrganizationOnboarding(body) {
     );
     return nextWorkspaceId;
   });
-  await setActiveWorkspace(workspaceId);
-  const created = (await listWorkspaces()).find((w) => w.id === workspaceId);
+  if (!getAuthorizedWorkspacesContext()) await setActiveWorkspace(workspaceId2);
+  const created = (await listWorkspaces()).find((w) => w.id === workspaceId2);
   if (!created) throw new ApiError(500, "Workspace was created but could not be loaded");
   return created;
 }
@@ -155323,7 +156394,7 @@ async function updateWorkspace(id, body) {
           client: tx
         });
         changed.push("settings_json");
-        if (id === getActiveWorkspaceIdOrNull()) {
+        if (id === getBootstrapWorkspaceIdOrNull()) {
           syncSqlStudioForWorkspace({ enabled: body.sqlStudioEnabled });
         }
       }
@@ -155346,7 +156417,9 @@ async function updateWorkspace(id, body) {
       tx
     );
   });
-  if (id === getActiveWorkspaceIdOrNull()) await reloadActiveWorkspace();
+  if (!getAuthorizedWorkspacesContext() && id === getBootstrapWorkspaceIdOrNull()) {
+    await reloadActiveWorkspace();
+  }
   const updated = (await listWorkspaces()).find((w) => w.id === id);
   if (!updated) throw new ApiError(404, "Workspace not found or no active membership");
   return updated;
@@ -155378,7 +156451,7 @@ async function deleteWorkspace(id) {
     );
     await deleteOrganizationIfEmpty(existing.organization_id, tx);
   });
-  if (id === getActiveWorkspaceIdOrNull()) {
+  if (!getAuthorizedWorkspacesContext() && id === getBootstrapWorkspaceIdOrNull()) {
     const next = (await listWorkspaces())[0];
     if (next) {
       await setActiveWorkspace(next.id);
@@ -155390,7 +156463,7 @@ async function deleteWorkspace(id) {
   return listWorkspaces();
 }
 async function listMemberRoleKeys({
-  workspaceId,
+  workspaceId: workspaceId2,
   workspaceUserId,
   client = requireDatabaseClient()
 }) {
@@ -155398,12 +156471,12 @@ async function listMemberRoleKeys({
     `SELECT role_key FROM role_assignments
       WHERE workspace_id = ? AND workspace_user_id = ? AND deleted_at IS NULL
       ORDER BY role_key ASC`,
-    [workspaceId, workspaceUserId]
+    [workspaceId2, workspaceUserId]
   );
   return rows.map((row) => row.role_key);
 }
-async function listWorkspaceMembers(workspaceId) {
-  await requireWorkspaceMember(workspaceId);
+async function listWorkspaceMembers(workspaceId2) {
+  await requireWorkspaceMember(workspaceId2);
   const currentProfileId = await resolveCurrentProfileId();
   const rows = await requireDatabaseClient().all(
     `SELECT wu.id AS workspace_user_id, wu.profile_id,
@@ -155413,12 +156486,12 @@ async function listWorkspaceMembers(workspaceId) {
        JOIN profiles p ON p.id = wu.profile_id AND p.deleted_at IS NULL
       WHERE wu.workspace_id = ? AND wu.status = 'active' AND wu.deleted_at IS NULL
       ORDER BY wu.created_at ASC`,
-    [workspaceId]
+    [workspaceId2]
   );
   return Promise.all(
     rows.map(async (r5) => {
       const roleKeys = await listMemberRoleKeys({
-        workspaceId,
+        workspaceId: workspaceId2,
         workspaceUserId: r5.workspace_user_id
       });
       let avatarUrl = null;
@@ -155445,13 +156518,13 @@ async function listWorkspaceMembers(workspaceId) {
     })
   );
 }
-async function exportWorkspaceObjectivesCsv(workspaceId) {
+async function exportWorkspaceObjectivesCsv(workspaceId2) {
   const workspace = await requireDatabaseClient().get(
     `SELECT id, slug FROM workspaces WHERE id = ? AND deleted_at IS NULL`,
-    [workspaceId]
+    [workspaceId2]
   );
   if (!workspace) throw new ApiError(404, "Workspace not found");
-  await requireWorkspaceAdmin(workspaceId);
+  await requireWorkspaceAdmin(workspaceId2);
   const projectOrder = requireDatabaseClient().dialect === "sqlite" ? "p.name COLLATE NOCASE ASC" : "LOWER(p.name) ASC";
   const missionOrder = requireDatabaseClient().dialect === "sqlite" ? "m.title COLLATE NOCASE ASC" : "LOWER(m.title) ASC";
   const rows = await requireDatabaseClient().all(
@@ -155473,7 +156546,7 @@ async function exportWorkspaceObjectivesCsv(workspaceId) {
                ${missionOrder},
                o.position ASC,
                o.created_at ASC`,
-    [workspaceId]
+    [workspaceId2]
   );
   const lines = [
     ["Mission name", "Objective instructions", "Date created", "Project name", "Mission status"],
@@ -155514,8 +156587,8 @@ function toWorkspaceInvitationDto(row) {
     createdAt: row.created_at
   };
 }
-async function inviteWorkspaceMember(workspaceId, body) {
-  const { isAdmin, workspaceUserId: invitedByWorkspaceUserId } = await requireWorkspaceManager(workspaceId);
+async function inviteWorkspaceMember(workspaceId2, body) {
+  const { isAdmin, workspaceUserId: invitedByWorkspaceUserId } = await requireWorkspaceManager(workspaceId2);
   const email3 = (body.email ?? "").trim().toLowerCase();
   if (!email3 || !email3.includes("@")) throw new ApiError(400, "A valid email is required");
   const roleKey = (body.roleKey ?? "MEMBER").trim().toUpperCase();
@@ -155526,7 +156599,7 @@ async function inviteWorkspaceMember(workspaceId, body) {
   const client = requireDatabaseClient();
   const workspace = await client.get(
     `SELECT id FROM workspaces WHERE id = ? AND deleted_at IS NULL`,
-    [workspaceId]
+    [workspaceId2]
   );
   if (!workspace) throw new ApiError(404, "Workspace not found");
   const existingMember = await client.get(
@@ -155534,14 +156607,14 @@ async function inviteWorkspaceMember(workspaceId, body) {
        JOIN profiles p ON p.id = wu.profile_id AND p.deleted_at IS NULL
       WHERE wu.workspace_id = ? AND wu.status = 'active' AND wu.deleted_at IS NULL
         AND LOWER(p.email) = ?`,
-    [workspaceId, email3]
+    [workspaceId2, email3]
   );
   if (existingMember) throw new ApiError(409, "This email already belongs to a member");
   const { invitation, rawToken } = await client.transaction(async (tx) => {
     const pending = await tx.get(
       `SELECT id FROM workspace_invitations
          WHERE workspace_id = ? AND email = ? AND status = 'pending' AND deleted_at IS NULL`,
-      [workspaceId, email3]
+      [workspaceId2, email3]
     );
     const now2 = nowIso2();
     if (pending) {
@@ -155557,7 +156630,7 @@ async function inviteWorkspaceMember(workspaceId, body) {
       const candidate = generateInvitationSecret();
       const clash = await tx.get(
         `SELECT 1 FROM workspace_invitations WHERE workspace_id = ? AND token_prefix = ?`,
-        [workspaceId, candidate.prefix]
+        [workspaceId2, candidate.prefix]
       );
       if (!clash) {
         generated = candidate;
@@ -155578,7 +156651,7 @@ async function inviteWorkspaceMember(workspaceId, body) {
        ) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, 1)`,
       [
         id,
-        workspaceId,
+        workspaceId2,
         email3,
         roleKey,
         generated.prefix,
@@ -155596,7 +156669,7 @@ async function inviteWorkspaceMember(workspaceId, body) {
         entityId: id,
         operation: "insert",
         entityRevision: 1,
-        workspaceId,
+        workspaceId: workspaceId2,
         actorWorkspaceUserId: invitedByWorkspaceUserId
       },
       tx
@@ -155616,23 +156689,23 @@ async function inviteWorkspaceMember(workspaceId, body) {
   }
   return { invitation, acceptUrl };
 }
-async function listWorkspaceInvitations(workspaceId) {
-  await requireWorkspaceManager(workspaceId);
+async function listWorkspaceInvitations(workspaceId2) {
+  await requireWorkspaceManager(workspaceId2);
   const rows = await requireDatabaseClient().all(
     `SELECT ${INVITATION_COLUMNS} FROM workspace_invitations
        WHERE workspace_id = ? AND deleted_at IS NULL
        ORDER BY created_at DESC`,
-    [workspaceId]
+    [workspaceId2]
   );
   return rows.map(toWorkspaceInvitationDto);
 }
-async function revokeWorkspaceInvitation(workspaceId, invitationId) {
-  const { workspaceUserId: actorWorkspaceUserId } = await requireWorkspaceManager(workspaceId);
+async function revokeWorkspaceInvitation(workspaceId2, invitationId) {
+  const { workspaceUserId: actorWorkspaceUserId } = await requireWorkspaceManager(workspaceId2);
   await requireDatabaseClient().transaction(async (tx) => {
     const invitation = await tx.get(
       `SELECT id, status, revision FROM workspace_invitations
          WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-      [invitationId, workspaceId]
+      [invitationId, workspaceId2]
     );
     if (!invitation) throw new ApiError(404, "Invitation not found");
     if (invitation.status !== "pending") return;
@@ -155650,7 +156723,7 @@ async function revokeWorkspaceInvitation(workspaceId, invitationId) {
         entityId: invitationId,
         operation: "update",
         entityRevision: revision,
-        workspaceId,
+        workspaceId: workspaceId2,
         actorWorkspaceUserId
       },
       tx
@@ -155786,14 +156859,14 @@ async function acceptWorkspaceInvitation(body) {
   if (outcome.kind === "expired") {
     throw new ApiError(410, "Invitation has expired");
   }
-  const workspaceId = outcome.workspaceId;
-  await setActiveWorkspace(workspaceId);
-  const workspace = (await listWorkspaces()).find((w) => w.id === workspaceId);
+  const workspaceId2 = outcome.workspaceId;
+  if (!getAuthorizedWorkspacesContext()) await setActiveWorkspace(workspaceId2);
+  const workspace = (await listWorkspaces()).find((w) => w.id === workspaceId2);
   if (!workspace) throw new ApiError(500, "Joined workspace could not be loaded");
   return workspace;
 }
 async function countActiveWorkspaceAdmins({
-  workspaceId,
+  workspaceId: workspaceId2,
   client = requireDatabaseClient()
 }) {
   const row = await client.get(
@@ -155807,23 +156880,23 @@ async function countActiveWorkspaceAdmins({
       WHERE wu.workspace_id = ?
         AND wu.status = 'active'
         AND wu.deleted_at IS NULL`,
-    [workspaceId]
+    [workspaceId2]
   );
   return row?.count ?? 0;
 }
 async function assertNotLastWorkspaceAdmin({
-  workspaceId,
+  workspaceId: workspaceId2,
   workspaceUserId,
   client
 }) {
-  const roles = await listMemberRoleKeys({ workspaceId, workspaceUserId, client });
+  const roles = await listMemberRoleKeys({ workspaceId: workspaceId2, workspaceUserId, client });
   if (!roles.includes("ADMIN")) return;
-  if (await countActiveWorkspaceAdmins({ workspaceId, client }) <= 1) {
+  if (await countActiveWorkspaceAdmins({ workspaceId: workspaceId2, client }) <= 1) {
     throw new ApiError(409, "Cannot remove or demote the last workspace admin");
   }
 }
-async function updateWorkspaceMemberRole(workspaceId, workspaceUserId, body) {
-  const { isAdmin, workspaceUserId: actorWorkspaceUserId } = await requireWorkspaceManager(workspaceId);
+async function updateWorkspaceMemberRole(workspaceId2, workspaceUserId, body) {
+  const { isAdmin, workspaceUserId: actorWorkspaceUserId } = await requireWorkspaceManager(workspaceId2);
   const roleKey = (body.roleKey ?? "").trim().toUpperCase();
   if (!WORKSPACE_ROLE_KEYS.has(roleKey)) throw new ApiError(400, `Unknown role: ${roleKey}`);
   if (roleKey === "ADMIN" && !isAdmin) {
@@ -155833,15 +156906,15 @@ async function updateWorkspaceMemberRole(workspaceId, workspaceUserId, body) {
     const membership = await tx.get(
       `SELECT id FROM workspace_users
          WHERE id = ? AND workspace_id = ? AND status = 'active' AND deleted_at IS NULL`,
-      [workspaceUserId, workspaceId]
+      [workspaceUserId, workspaceId2]
     );
     if (!membership) throw new ApiError(404, "Member not found");
-    const existingRoles = await listMemberRoleKeys({ workspaceId, workspaceUserId, client: tx });
+    const existingRoles = await listMemberRoleKeys({ workspaceId: workspaceId2, workspaceUserId, client: tx });
     if (existingRoles.includes("ADMIN") && !isAdmin) {
       throw new ApiError(403, "A manager may not change an admin\u2019s role");
     }
     if (roleKey !== "ADMIN") {
-      await assertNotLastWorkspaceAdmin({ workspaceId, workspaceUserId, client: tx });
+      await assertNotLastWorkspaceAdmin({ workspaceId: workspaceId2, workspaceUserId, client: tx });
     }
     if (existingRoles.length === 1 && existingRoles[0] === roleKey) return;
     const now2 = nowIso2();
@@ -155849,51 +156922,51 @@ async function updateWorkspaceMemberRole(workspaceId, workspaceUserId, body) {
       `UPDATE role_assignments
           SET deleted_at = ?, updated_at = ?, revision = revision + 1
         WHERE workspace_id = ? AND workspace_user_id = ? AND deleted_at IS NULL`,
-      [now2, now2, workspaceId, workspaceUserId]
+      [now2, now2, workspaceId2, workspaceUserId]
     );
     await tx.run(
       `INSERT INTO role_assignments
          (id, workspace_id, workspace_user_id, role_key, resource_type, resource_id,
           assigned_by_workspace_user_id, created_at, updated_at, revision)
        VALUES (?, ?, ?, ?, '', '', ?, ?, ?, 1)`,
-      [newId2(), workspaceId, workspaceUserId, roleKey, actorWorkspaceUserId, now2, now2]
+      [newId2(), workspaceId2, workspaceUserId, roleKey, actorWorkspaceUserId, now2, now2]
     );
     await recordChange2(
       {
         entityType: "role_assignment",
         entityId: workspaceUserId,
         operation: "update",
-        workspaceId,
+        workspaceId: workspaceId2,
         actorWorkspaceUserId,
         changedFields: ["role_key"]
       },
       tx
     );
   });
-  const updated = (await listWorkspaceMembers(workspaceId)).find(
+  const updated = (await listWorkspaceMembers(workspaceId2)).find(
     (member2) => member2.workspaceUserId === workspaceUserId
   );
   if (!updated) throw new ApiError(404, "Member not found");
   return updated;
 }
-async function removeWorkspaceMember(workspaceId, workspaceUserId) {
-  const { isAdmin, workspaceUserId: actorWorkspaceUserId } = await requireWorkspaceManager(workspaceId);
+async function removeWorkspaceMember(workspaceId2, workspaceUserId) {
+  const { isAdmin, workspaceUserId: actorWorkspaceUserId } = await requireWorkspaceManager(workspaceId2);
   await requireDatabaseClient().transaction(async (tx) => {
     const membership = await tx.get(
       `SELECT id, revision FROM workspace_users
          WHERE id = ? AND workspace_id = ? AND status = 'active' AND deleted_at IS NULL`,
-      [workspaceUserId, workspaceId]
+      [workspaceUserId, workspaceId2]
     );
     if (!membership) throw new ApiError(404, "Member not found");
-    const existingRoles = await listMemberRoleKeys({ workspaceId, workspaceUserId, client: tx });
+    const existingRoles = await listMemberRoleKeys({ workspaceId: workspaceId2, workspaceUserId, client: tx });
     if (existingRoles.includes("ADMIN") && !isAdmin) {
       throw new ApiError(403, "A manager may not remove an admin");
     }
-    await assertNotLastWorkspaceAdmin({ workspaceId, workspaceUserId, client: tx });
+    await assertNotLastWorkspaceAdmin({ workspaceId: workspaceId2, workspaceUserId, client: tx });
     const activeCount = await tx.get(
       `SELECT COUNT(*) AS count FROM workspace_users
          WHERE workspace_id = ? AND status = 'active' AND deleted_at IS NULL`,
-      [workspaceId]
+      [workspaceId2]
     );
     if ((activeCount?.count ?? 0) <= 1) {
       throw new ApiError(409, "Cannot remove the only member of a workspace");
@@ -155910,7 +156983,7 @@ async function removeWorkspaceMember(workspaceId, workspaceUserId) {
       `UPDATE role_assignments
           SET deleted_at = ?, updated_at = ?, revision = revision + 1
         WHERE workspace_id = ? AND workspace_user_id = ? AND deleted_at IS NULL`,
-      [now2, now2, workspaceId, workspaceUserId]
+      [now2, now2, workspaceId2, workspaceUserId]
     );
     await recordChange2(
       {
@@ -155918,7 +156991,7 @@ async function removeWorkspaceMember(workspaceId, workspaceUserId) {
         entityId: workspaceUserId,
         operation: "delete",
         entityRevision: revision,
-        workspaceId,
+        workspaceId: workspaceId2,
         actorWorkspaceUserId
       },
       tx
@@ -155927,14 +157000,6 @@ async function removeWorkspaceMember(workspaceId, workspaceUserId) {
 }
 
 // protocol.ts
-function buildContext() {
-  return {
-    db: serviceDatabaseClient(),
-    workspace: { id: WORKSPACE.id, slug: WORKSPACE.slug, name: WORKSPACE.name },
-    actorWorkspaceUserId: getActorWorkspaceUserId(),
-    source: "protocol"
-  };
-}
 async function protocolWorkspaceId(body) {
   const scopes = await callerWorkspaceMemberships();
   if (scopes.length === 0) return null;
@@ -156006,20 +157071,32 @@ async function protocolWorkspaceId(body) {
   return projects[0]?.workspace_id ?? null;
 }
 async function buildProtocolContext(body, permission) {
-  const workspaceId = await protocolWorkspaceId(body);
-  if (!workspaceId) {
-    const ctx2 = buildContext();
-    if (permission)
+  const workspaceId2 = await protocolWorkspaceId(body);
+  if (!workspaceId2) {
+    const authorized = getAuthorizedWorkspacesContext();
+    if (authorized) {
+      const scope = permission ? await requireAnyWorkspacePermission(permission) : [...authorized.workspaces].sort((a5, b5) => a5.workspaceId.localeCompare(b5.workspaceId))[0];
+      if (!scope) throw new ApiError(404, "Workspace not found");
+      const ctx3 = await buildWebappServiceContextForWorkspace(
+        scope.workspaceId,
+        serviceDatabaseClient(),
+        scope.workspaceUserId
+      );
+      return { ...ctx3, source: "protocol" };
+    }
+    const ctx2 = buildWebappServiceContext();
+    if (permission) {
       await requirePermission(permission, {
         workspaceId: ctx2.workspace.id,
         workspaceUserId: ctx2.actorWorkspaceUserId
       });
-    return ctx2;
+    }
+    return { ...ctx2, source: "protocol" };
   }
-  const workspaceUserId = permission ? await requireWorkspacePermission({ workspaceId, permission }) : (await callerWorkspaceMemberships()).find((scope) => scope.workspaceId === workspaceId)?.workspaceUserId;
+  const workspaceUserId = permission ? await requireWorkspacePermission({ workspaceId: workspaceId2, permission }) : (await callerWorkspaceMemberships()).find((scope) => scope.workspaceId === workspaceId2)?.workspaceUserId;
   if (!workspaceUserId) throw new ApiError(404, "Workspace not found");
   const ctx = await buildWebappServiceContextForWorkspace(
-    workspaceId,
+    workspaceId2,
     serviceDatabaseClient(),
     workspaceUserId
   );
@@ -156218,6 +157295,25 @@ function intFlag(body, name) {
   const parsed = Number.parseInt(value, 10);
   return Number.isFinite(parsed) ? parsed : void 0;
 }
+async function resolveV2SearchProjectId(projectRef) {
+  if (!projectRef) return null;
+  const scopes = await callerMembershipsInActiveOrganization(serviceDatabaseClient());
+  if (scopes.length === 0) throw new ApiError(404, "Project not found");
+  const workspaceIds = scopes.map((scope) => scope.workspaceId);
+  const placeholders2 = workspaceIds.map(() => "?").join(", ");
+  const projects = await serviceDatabaseClient().all(
+    `SELECT id FROM projects
+      WHERE deleted_at IS NULL
+        AND workspace_id IN (${placeholders2})
+        AND (id = ? OR slug = ? OR lower(name) = lower(?))`,
+    [...workspaceIds, projectRef, projectRef, projectRef]
+  );
+  if (projects.length === 0) throw new ApiError(404, "Project not found");
+  if (projects.length > 1) {
+    throw new ApiError(409, `Project reference is ambiguous across workspaces: ${projectRef}`);
+  }
+  return [projects[0].id];
+}
 function objectiveText(body) {
   const flag = strFlag(body, "--objective");
   if (flag !== void 0 && flag.trim() !== "") return flag;
@@ -156387,7 +157483,7 @@ var handlers = {
     question: resolveInput(body, "--question", "--question-file") ?? ""
   }),
   deliver: (ctx, body) => {
-    const envelope = parseDeliveryPayloadEnvelope(body);
+    const envelope2 = parseDeliveryPayloadEnvelope(body);
     const artifacts = parseJsonInput(body, "--artifacts", "--artifacts-file");
     const changeRationales = parseJsonInput(
       body,
@@ -156398,9 +157494,9 @@ var handlers = {
       ctx,
       missionId: missionRefFlag(body),
       sessionKey: requireFlag(body, "--session-key"),
-      summary: resolveInput(body, "--summary", "--summary-file") ?? envelope.summary ?? "",
-      artifacts: artifacts ?? envelope.artifacts ?? [],
-      changeRationales: changeRationales ?? envelope.changeRationales ?? [],
+      summary: resolveInput(body, "--summary", "--summary-file") ?? envelope2.summary ?? "",
+      artifacts: artifacts ?? envelope2.artifacts ?? [],
+      changeRationales: changeRationales ?? envelope2.changeRationales ?? [],
       changedFiles: parseJsonInput(
         body,
         "--changed-files-json",
@@ -156417,9 +157513,9 @@ var handlers = {
         "--observed-dirty-paths-json",
         "--observed-dirty-paths-file"
       ),
-      payloadJson: envelope.payloadJson,
-      verificationSummary: strFlag(body, "--verification-summary") ?? envelope.verificationSummary ?? null,
-      followUpNotes: strFlag(body, "--follow-up-notes") ?? envelope.followUpNotes ?? null
+      payloadJson: envelope2.payloadJson,
+      verificationSummary: strFlag(body, "--verification-summary") ?? envelope2.verificationSummary ?? null,
+      followUpNotes: strFlag(body, "--follow-up-notes") ?? envelope2.followUpNotes ?? null
     });
   },
   "hook-event": (ctx, body) => recordHookEvent({
@@ -156504,13 +157600,30 @@ var handlers = {
     agentIdentifier: strFlag(body, "--agent") ?? "unknown",
     externalSessionId: externalSessionId(body)
   }),
-  "search-missions": (ctx, body) => searchMissions({
-    ctx,
-    query: strFlag(body, "--query") ?? null,
-    statusTypes: csvFlag(body, "--status") ?? null,
-    projectId: strFlag(body, "--project-id") ?? null,
-    limit: intFlag(body, "--limit") ?? 25
-  }),
+  "search-missions": async (ctx, body) => {
+    const params = {
+      ctx,
+      query: strFlag(body, "--query") ?? null,
+      statusTypes: csvFlag(body, "--status") ?? null,
+      projectId: strFlag(body, "--project-id") ?? null,
+      resourceKeys: csvFlag(body, "--resource-key") ?? null,
+      dateField: strFlag(body, "--date-field") ?? null,
+      from: strFlag(body, "--from") ?? null,
+      to: strFlag(body, "--to") ?? null,
+      limit: intFlag(body, "--limit") ?? 25
+    };
+    if (intFlag(body, "--response-version") !== 2) return searchMissions(params);
+    return searchMissionsV22({
+      query: params.query,
+      projectIds: await resolveV2SearchProjectId(params.projectId),
+      statusTypes: params.statusTypes,
+      resourceKeys: params.resourceKeys,
+      dateField: params.dateField,
+      from: params.from,
+      to: params.to,
+      limit: params.limit
+    });
+  },
   "discuss-objective": (ctx, body) => discussObjective({
     ctx,
     missionId: missionRefFlag(body),
@@ -156544,13 +157657,13 @@ var handlers = {
     return updateObjective2(objectiveId, update);
   },
   "record-work": async (ctx, body) => {
-    const envelope = parseDeliveryPayloadEnvelope(body);
+    const envelope2 = parseDeliveryPayloadEnvelope(body);
     const {
       objective: payloadObjective,
       title: payloadTitle,
       changedFiles: payloadChangedFiles,
       ...restPayload
-    } = envelope.payloadJson ?? {};
+    } = envelope2.payloadJson ?? {};
     const artifacts = parseJsonInput(body, "--artifacts", "--artifacts-file");
     const changeRationales = parseJsonInput(
       body,
@@ -156573,11 +157686,11 @@ var handlers = {
     return recordWork({
       ctx: await withAgentOrigin({ ctx, body }),
       projectId: strFlag(body, "--project-id") ?? null,
-      summary: resolveInput(body, "--summary", "--summary-file") ?? envelope.summary ?? "",
+      summary: resolveInput(body, "--summary", "--summary-file") ?? envelope2.summary ?? "",
       objective,
       title: strFlag(body, "--title") ?? (typeof payloadTitle === "string" ? payloadTitle : null),
-      artifacts: artifacts ?? envelope.artifacts ?? [],
-      changeRationales: changeRationales ?? envelope.changeRationales ?? [],
+      artifacts: artifacts ?? envelope2.artifacts ?? [],
+      changeRationales: changeRationales ?? envelope2.changeRationales ?? [],
       changedFiles: changedFiles ?? (Array.isArray(payloadChangedFiles) ? payloadChangedFiles : []),
       payloadJson: restPayload,
       ...assignedTo !== void 0 ? { assignedTo } : {}
@@ -156747,7 +157860,8 @@ async function runProtocolSubcommand(subcommand, body) {
       `Supported subcommands: ${Object.keys(handlers).sort().join(", ")}`
     );
   }
-  const requiredPermission = SUBCOMMAND_PERMISSIONS[subcommand] ?? null;
+  const isV2Search = subcommand === "search-missions" && intFlag(body, "--response-version") === 2;
+  const requiredPermission = isV2Search ? null : SUBCOMMAND_PERMISSIONS[subcommand] ?? null;
   const ctx = await buildProtocolContext(body, requiredPermission);
   await validateObjectiveAddressing({ ctx, body, subcommand });
   return handler(ctx, body);
@@ -156836,19 +157950,31 @@ var hostedMcpToolDefinitions = [
   {
     name: "overlord_search_missions",
     title: "Search Overlord missions",
-    description: "Use this when the user wants to find or list missions in the connected workspace.",
+    description: "Use this when the user wants to find or list missions across the caller's authorized workspaces in one organization. Returns SearchMissionsResponseV2 with snippets, match evidence, appliedFilters, and totalMatchedBeforeLimit. Complete and cancelled missions stay eligible by default.",
     inputSchema: objectSchema({
       query: stringProperty("Search query text."),
       status: stringProperty(
         "Comma-separated status TYPES, such as draft,execute,review. Types are workspace-invariant (draft, next, execute, review, complete, blocked, cancelled). Project-defined status names \u2014 the board column labels read by overlord_list_project_statuses \u2014 are not accepted here."
       ),
-      projectId: stringProperty("Optional project id, slug, or name."),
+      projectId: stringProperty(
+        "Optional stable Overlord project UUID. Use overlord_resolve_project first for a human project reference."
+      ),
+      resourceKey: stringProperty(
+        "Optional logical resource key. Keys are matched by name within every selected project."
+      ),
+      dateField: stringProperty(
+        "Date column for an explicit range: createdAt or updatedAt. Defaults to updatedAt only when from or to is supplied."
+      ),
+      from: stringProperty("Optional inclusive ISO-8601 date/time lower bound."),
+      to: stringProperty("Optional exclusive ISO-8601 date/time upper bound."),
       limit: {
         type: "number",
         description: "Maximum result count. Defaults to 25."
       }
     }),
-    outputSchema: protocolOutputSchema("A bounded list of matching mission records."),
+    outputSchema: protocolOutputSchema(
+      "SearchMissionsResponseV2: version, results (with labels, snippets, matchedTerms), appliedFilters, totalMatchedBeforeLimit, workspaceCounts."
+    ),
     annotations: readOnly,
     _meta: widget("ui://overlord/mission-list.html")
   },
@@ -157281,6 +158407,16 @@ function requiredString(args, name) {
   if (!value) throw new Error(`Missing required argument: ${name}`);
   return value;
 }
+function optionalProjectUuid(args) {
+  const projectId = optionalString(args, "projectId");
+  if (!projectId) return null;
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(projectId)) {
+    throw new Error(
+      "projectId must be a stable Overlord project UUID; resolve human references first"
+    );
+  }
+  return projectId;
+}
 function missionScopeFlags(args) {
   const objectiveId = optionalString(args, "objectiveId");
   const missionId = optionalString(args, "missionId") ?? missionDisplayIdFromObjectiveRef(objectiveId);
@@ -157345,9 +158481,14 @@ var toolHandlers = {
   overlord_search_missions: (args) => runProtocolSubcommand(
     "search-missions",
     protocolBody({
+      "--response-version": "2",
       ...optionalString(args, "query") ? { "--query": requiredString(args, "query") } : {},
       ...optionalString(args, "status") ? { "--status": requiredString(args, "status") } : {},
-      ...optionalString(args, "projectId") ? { "--project-id": requiredString(args, "projectId") } : {},
+      ...optionalProjectUuid(args) ? { "--project-id": optionalProjectUuid(args) } : {},
+      ...optionalString(args, "resourceKey") ? { "--resource-key": requiredString(args, "resourceKey") } : {},
+      ...optionalString(args, "dateField") ? { "--date-field": requiredString(args, "dateField") } : {},
+      ...optionalString(args, "from") ? { "--from": requiredString(args, "from") } : {},
+      ...optionalString(args, "to") ? { "--to": requiredString(args, "to") } : {},
       ...typeof args.limit === "number" && Number.isFinite(args.limit) ? { "--limit": String(Math.trunc(args.limit)) } : {}
     })
   ),
@@ -157781,16 +158922,15 @@ async function loadExecutionTargetMigrationDiagnostics({
 // execution/execution-target-migration.ts
 init_db();
 init_errors5();
-async function getExecutionTargetMigrationDiagnostics() {
-  const canRead = await actorCan(PERMISSIONS.WORKSPACE_READ, {
-    workspaceId: getActiveWorkspaceId(),
-    workspaceUserId: getActorWorkspaceUserId()
+async function getExecutionTargetMigrationDiagnostics(workspaceId2) {
+  if (!workspaceId2.trim()) throw new ApiError(400, "workspaceId is required");
+  const workspaceUserId = await requireWorkspacePermission({
+    workspaceId: workspaceId2,
+    permission: PERMISSIONS.WORKSPACE_READ,
+    notFoundMessage: "Workspace not found"
   });
-  if (!canRead) {
-    throw new ApiError(403, "Not allowed to read execution-target migration diagnostics.");
-  }
   return loadExecutionTargetMigrationDiagnostics({
-    ctx: buildWebappServiceContext()
+    ctx: await buildWebappServiceContextForWorkspace(workspaceId2, void 0, workspaceUserId)
   });
 }
 
@@ -157853,12 +158993,12 @@ init_project_execution_target();
 init_db();
 init_errors5();
 async function projectServiceContext(projectId, permission, client) {
-  const { workspaceId, workspaceUserId } = await requireProjectPermission({
+  const { workspaceId: workspaceId2, workspaceUserId } = await requireProjectPermission({
     projectId,
     permission,
     db: client
   });
-  return buildWebappServiceContextForWorkspace(workspaceId, client, workspaceUserId);
+  return buildWebappServiceContextForWorkspace(workspaceId2, client, workspaceUserId);
 }
 function toDto(selection) {
   return {
@@ -157884,24 +159024,24 @@ async function getProjectExecutionTarget(projectId, client = requireDatabaseClie
     throw error53;
   }
 }
-async function getWorkspaceExecutionTargets(workspaceId, client = requireDatabaseClient()) {
+async function getWorkspaceExecutionTargets(workspaceId2, client = requireDatabaseClient()) {
   const workspaceUserId = await requireWorkspacePermission({
-    workspaceId,
+    workspaceId: workspaceId2,
     permission: PERMISSIONS.WORKSPACE_READ,
     db: client
   });
-  const ctx = await buildWebappServiceContextForWorkspace(workspaceId, client, workspaceUserId);
+  const ctx = await buildWebappServiceContextForWorkspace(workspaceId2, client, workspaceUserId);
   return listWorkspaceExecutionTargets({ ctx });
 }
-async function registerWorkspaceExecutionTarget(workspaceId, body, client = requireDatabaseClient()) {
+async function registerWorkspaceExecutionTarget(workspaceId2, body, client = requireDatabaseClient()) {
   const label = typeof body.label === "string" ? body.label.trim() : "";
   const workspaceUserId = await requireWorkspacePermission({
-    workspaceId,
+    workspaceId: workspaceId2,
     permission: PERMISSIONS.EXECUTION_REQUEST_CLAIM,
     db: client,
     notFoundMessage: "Workspace not found or no active membership"
   });
-  const ctx = await buildWebappServiceContextForWorkspace(workspaceId, client, workspaceUserId);
+  const ctx = await buildWebappServiceContextForWorkspace(workspaceId2, client, workspaceUserId);
   let registered;
   try {
     registered = await registerActingExecutionTarget({ ctx, label: label || null });
@@ -157916,13 +159056,13 @@ async function registerWorkspaceExecutionTarget(workspaceId, body, client = requ
   if (!dto) throw new ApiError(500, "Execution target was registered but could not be read back");
   return dto;
 }
-async function removeWorkspaceExecutionTarget(workspaceId, executionTargetId, client = requireDatabaseClient()) {
+async function removeWorkspaceExecutionTarget(workspaceId2, executionTargetId, client = requireDatabaseClient()) {
   const workspaceUserId = await requireWorkspacePermission({
-    workspaceId,
+    workspaceId: workspaceId2,
     permission: PERMISSIONS.WORKSPACE_UPDATE,
     db: client
   });
-  const ctx = await buildWebappServiceContextForWorkspace(workspaceId, client, workspaceUserId);
+  const ctx = await buildWebappServiceContextForWorkspace(workspaceId2, client, workspaceUserId);
   try {
     await deleteWorkspaceExecutionTarget({ ctx, executionTargetId });
   } catch (error53) {
@@ -157933,18 +159073,18 @@ async function removeWorkspaceExecutionTarget(workspaceId, executionTargetId, cl
     throw error53;
   }
 }
-async function updateWorkspaceExecutionTarget(workspaceId, executionTargetId, body, client = requireDatabaseClient()) {
+async function updateWorkspaceExecutionTarget(workspaceId2, executionTargetId, body, client = requireDatabaseClient()) {
   const label = typeof body.label === "string" ? body.label : null;
   const status = body.status === "active" || body.status === "disabled" ? body.status : null;
   if (label === null && status === null) {
     throw new ApiError(400, "Provide a label or status of active or disabled");
   }
   const workspaceUserId = await requireWorkspacePermission({
-    workspaceId,
+    workspaceId: workspaceId2,
     permission: PERMISSIONS.WORKSPACE_UPDATE,
     db: client
   });
-  const ctx = await buildWebappServiceContextForWorkspace(workspaceId, client, workspaceUserId);
+  const ctx = await buildWebappServiceContextForWorkspace(workspaceId2, client, workspaceUserId);
   try {
     if (label !== null) {
       await renameWorkspaceExecutionTarget({ ctx, executionTargetId, label });
@@ -158095,9 +159235,9 @@ async function createRunnerQueueListener({
 }
 
 // execution/runner.ts
-async function workspaceServiceContext(workspaceId, actorWorkspaceUserId, clientDevice) {
+async function workspaceServiceContext(workspaceId2, actorWorkspaceUserId, clientDevice) {
   const ctx = await buildWebappServiceContextForWorkspace(
-    workspaceId,
+    workspaceId2,
     requireDatabaseClient(),
     actorWorkspaceUserId
   );
@@ -158365,7 +159505,7 @@ async function resolveBranchResourceKey({
   return row?.resource_key?.trim() || "project";
 }
 async function recordBranchPreparedTx(tx, {
-  workspaceId,
+  workspaceId: workspaceId2,
   missionId,
   requestId,
   payload
@@ -158376,7 +159516,7 @@ async function recordBranchPreparedTx(tx, {
       WHERE workspace_id = ?
         AND deleted_at IS NULL
         AND (id = ? OR display_id = ?)`,
-    [workspaceId, missionId, missionId]
+    [workspaceId2, missionId, missionId]
   );
   if (!mission) throw new ApiError(404, "Mission not found");
   let objectiveId = null;
@@ -158385,7 +159525,7 @@ async function recordBranchPreparedTx(tx, {
     requestRow = await tx.get(
       `SELECT ${EXECUTION_REQUEST_COLUMNS2} FROM execution_requests
          WHERE id = ? AND workspace_id = ?`,
-      [requestId, workspaceId]
+      [requestId, workspaceId2]
     );
     if (!requestRow) throw new ApiError(404, "Execution request not found");
     objectiveId = requestRow.objective_id;
@@ -158403,7 +159543,7 @@ async function recordBranchPreparedTx(tx, {
     );
     await recordChange2(
       {
-        workspaceId,
+        workspaceId: workspaceId2,
         entityType: "execution_request",
         entityId: requestRow.id,
         operation: "update",
@@ -158432,7 +159572,7 @@ async function recordBranchPreparedTx(tx, {
       );
       await recordChange2(
         {
-          workspaceId,
+          workspaceId: workspaceId2,
           entityType: "objective",
           entityId: objectiveId,
           operation: "update",
@@ -158457,7 +159597,7 @@ async function recordBranchPreparedTx(tx, {
     );
     await recordChange2(
       {
-        workspaceId,
+        workspaceId: workspaceId2,
         entityType: "mission",
         entityId: mission.id,
         operation: "update",
@@ -158471,7 +159611,7 @@ async function recordBranchPreparedTx(tx, {
     );
   }
   await recordRunnerBranchEvent(tx, {
-    workspaceId,
+    workspaceId: workspaceId2,
     projectId: mission.project_id,
     missionId: mission.id,
     objectiveId,
@@ -158502,7 +159642,7 @@ async function recordBranchPreparedTx(tx, {
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           newId2(),
-          workspaceId,
+          workspaceId2,
           executionTargetId,
           mission.id,
           resourceKey,
@@ -158615,11 +159755,11 @@ function encryptEverhourApiKey({
   return `v1.${nonce.toString("base64url")}.${tag2.toString("base64url")}.${ciphertext.toString("base64url")}`;
 }
 function decryptEverhourApiKey({
-  envelope,
+  envelope: envelope2,
   profileId,
   key
 }) {
-  const [version4, nonceText, tagText, ciphertextText, ...extra] = envelope.split(".");
+  const [version4, nonceText, tagText, ciphertextText, ...extra] = envelope2.split(".");
   if (version4 !== "v1" || !nonceText || !tagText || !ciphertextText || extra.length > 0) {
     throw new ApiError(503, "The stored Everhour connection cannot be decrypted.");
   }
@@ -158910,13 +160050,13 @@ async function clearEverhourApiKey() {
   await clearEverhourConnection();
   return { connected: false, accountName: null };
 }
-async function readProjectLink2(projectId, workspaceId, client = requireDatabaseClient()) {
+async function readProjectLink2(projectId, workspaceId2, client = requireDatabaseClient()) {
   const row = await client.get(
     `SELECT id, project_id, everhour_project_id, everhour_project_name,
             everhour_section_id, everhour_general_task_id, revision
        FROM ext_everhour_project_links
       WHERE project_id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-    [projectId, workspaceId]
+    [projectId, workspaceId2]
   );
   return row ?? null;
 }
@@ -158930,8 +160070,8 @@ async function assertProjectExists(projectId, client = requireDatabaseClient()) 
 }
 async function clearProjectLink(projectId) {
   await requireDatabaseClient().transaction(async (tx) => {
-    const workspaceId = await assertProjectExists(projectId, tx);
-    const existing = await readProjectLink2(projectId, workspaceId, tx);
+    const workspaceId2 = await assertProjectExists(projectId, tx);
+    const existing = await readProjectLink2(projectId, workspaceId2, tx);
     if (!existing) return;
     const now2 = nowIso2();
     const revision = existing.revision + 1;
@@ -158939,7 +160079,7 @@ async function clearProjectLink(projectId) {
       `UPDATE ext_everhour_project_links
           SET deleted_at = ?, updated_at = ?, revision = ?
         WHERE id = ? AND workspace_id = ? AND revision = ?`,
-      [now2, now2, revision, existing.id, workspaceId, existing.revision]
+      [now2, now2, revision, existing.id, workspaceId2, existing.revision]
     );
     await recordChange2(
       {
@@ -158949,15 +160089,15 @@ async function clearProjectLink(projectId) {
         entityRevision: revision,
         projectId,
         changedFields: ["linked"],
-        workspaceId
+        workspaceId: workspaceId2
       },
       tx
     );
   });
 }
 async function getProjectEverhourLink(projectId) {
-  const workspaceId = await assertProjectExists(projectId);
-  const link = await readProjectLink2(projectId, workspaceId);
+  const workspaceId2 = await assertProjectExists(projectId);
+  const link = await readProjectLink2(projectId, workspaceId2);
   return {
     projectId,
     everhourProjectId: link?.everhour_project_id ?? null,
@@ -158966,8 +160106,8 @@ async function getProjectEverhourLink(projectId) {
 }
 async function writeProjectLink(projectId, everhourProjectId, everhourProjectName, everhourSectionId) {
   await requireDatabaseClient().transaction(async (tx) => {
-    const workspaceId = await assertProjectExists(projectId, tx);
-    const existing = await readProjectLink2(projectId, workspaceId, tx);
+    const workspaceId2 = await assertProjectExists(projectId, tx);
+    const existing = await readProjectLink2(projectId, workspaceId2, tx);
     const now2 = nowIso2();
     if (existing) {
       const revision = existing.revision + 1;
@@ -158986,7 +160126,7 @@ async function writeProjectLink(projectId, everhourProjectId, everhourProjectNam
           now2,
           revision,
           existing.id,
-          workspaceId,
+          workspaceId2,
           existing.revision
         ]
       );
@@ -159000,7 +160140,7 @@ async function writeProjectLink(projectId, everhourProjectId, everhourProjectNam
           entityRevision: revision,
           projectId,
           changedFields,
-          workspaceId
+          workspaceId: workspaceId2
         },
         tx
       );
@@ -159014,7 +160154,7 @@ async function writeProjectLink(projectId, everhourProjectId, everhourProjectNam
        VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, 1)`,
       [
         id,
-        workspaceId,
+        workspaceId2,
         projectId,
         everhourProjectId,
         everhourProjectName,
@@ -159031,7 +160171,7 @@ async function writeProjectLink(projectId, everhourProjectId, everhourProjectNam
         entityRevision: 1,
         projectId,
         changedFields: ["linked", "everhourProjectId", "everhourProjectName", "everhourSectionId"],
-        workspaceId
+        workspaceId: workspaceId2
       },
       tx
     );
@@ -159039,8 +160179,8 @@ async function writeProjectLink(projectId, everhourProjectId, everhourProjectNam
 }
 async function writeProjectGeneralTaskId(projectId, taskId) {
   await requireDatabaseClient().transaction(async (tx) => {
-    const workspaceId = await assertProjectExists(projectId, tx);
-    const existing = await readProjectLink2(projectId, workspaceId, tx);
+    const workspaceId2 = await assertProjectExists(projectId, tx);
+    const existing = await readProjectLink2(projectId, workspaceId2, tx);
     if (!existing) {
       throw new ApiError(
         400,
@@ -159054,7 +160194,7 @@ async function writeProjectGeneralTaskId(projectId, taskId) {
       `UPDATE ext_everhour_project_links
           SET everhour_general_task_id = ?, updated_at = ?, revision = ?
         WHERE id = ? AND workspace_id = ? AND revision = ?`,
-      [taskId, now2, revision, existing.id, workspaceId, existing.revision]
+      [taskId, now2, revision, existing.id, workspaceId2, existing.revision]
     );
     await recordChange2(
       {
@@ -159064,7 +160204,7 @@ async function writeProjectGeneralTaskId(projectId, taskId) {
         entityRevision: revision,
         projectId,
         changedFields: ["everhourGeneralTaskId"],
-        workspaceId
+        workspaceId: workspaceId2
       },
       tx
     );
@@ -159131,17 +160271,17 @@ async function getMissionRow2(missionId) {
   return { ...row, everhourTaskId: link?.everhour_task_id ?? null };
 }
 async function getProjectEverhour(projectId) {
-  const workspaceId = await assertProjectExists(projectId);
-  const link = await readProjectLink2(projectId, workspaceId);
+  const workspaceId2 = await assertProjectExists(projectId);
+  const link = await readProjectLink2(projectId, workspaceId2);
   if (!link) return { everhourProjectId: null, sectionId: null };
   return {
     everhourProjectId: link.everhour_project_id,
     sectionId: link.everhour_section_id
   };
 }
-async function listProjectEverhourTaskIds(projectId, client = requireDatabaseClient(), workspaceId) {
+async function listProjectEverhourTaskIds(projectId, client = requireDatabaseClient(), workspaceId2) {
   const taskIds = /* @__PURE__ */ new Set();
-  const link = await readProjectLink2(projectId, workspaceId, client);
+  const link = await readProjectLink2(projectId, workspaceId2, client);
   if (link?.everhour_general_task_id) {
     taskIds.add(link.everhour_general_task_id);
   }
@@ -159149,19 +160289,19 @@ async function listProjectEverhourTaskIds(projectId, client = requireDatabaseCli
     `SELECT everhour_task_id
        FROM ext_everhour_mission_links
       WHERE project_id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-    [projectId, workspaceId]
+    [projectId, workspaceId2]
   );
   for (const row of missionTasks) {
     taskIds.add(row.everhour_task_id);
   }
   return taskIds;
 }
-async function readMissionLink(missionId, workspaceId, client = requireDatabaseClient()) {
+async function readMissionLink(missionId, workspaceId2, client = requireDatabaseClient()) {
   const row = await client.get(
     `SELECT id, mission_id, everhour_task_id, revision
        FROM ext_everhour_mission_links
       WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-    [missionId, workspaceId]
+    [missionId, workspaceId2]
   );
   return row ?? null;
 }
@@ -159284,8 +160424,8 @@ async function findProjectTaskByName({
   return unwrapArray(listed).find(matchesName) ?? null;
 }
 async function ensureProjectGeneralTask(apiKey, projectId) {
-  const workspaceId = await assertProjectExists(projectId);
-  const link = await readProjectLink2(projectId, workspaceId);
+  const workspaceId2 = await assertProjectExists(projectId);
+  const link = await readProjectLink2(projectId, workspaceId2);
   if (!link?.everhour_project_id) {
     throw new ApiError(
       400,
@@ -159411,9 +160551,9 @@ async function stopMissionTimer(missionId) {
   return getMissionEverhourState(missionId);
 }
 async function getProjectEverhourState(projectId) {
-  const workspaceId = await assertProjectExists(projectId);
+  const workspaceId2 = await assertProjectExists(projectId);
   const apiKey = await readEverhourApiKey();
-  const link = await readProjectLink2(projectId, workspaceId);
+  const link = await readProjectLink2(projectId, workspaceId2);
   const taskId = link?.everhour_general_task_id ?? null;
   const base = {
     connected: Boolean(apiKey),
@@ -159428,7 +160568,7 @@ async function getProjectEverhourState(projectId) {
   const [records, timer, projectTaskIds] = await Promise.all([
     taskId ? listTaskRecords(apiKey, taskId) : Promise.resolve([]),
     getCurrentTimer(apiKey),
-    listProjectEverhourTaskIds(projectId, void 0, workspaceId)
+    listProjectEverhourTaskIds(projectId, void 0, workspaceId2)
   ]);
   const runningDto = timer ? toTimerDto(timer) : null;
   const hasRunningTimerInProject = Boolean(runningDto && projectTaskIds.has(runningDto.taskId));
@@ -159696,6 +160836,12 @@ function createEverhourExtensionRouter(handle4) {
 
 // ext/github/routes.ts
 var import_express2 = __toESM(require_express2(), 1);
+init_errors5();
+function workspaceId(req) {
+  const value = typeof req.query.workspaceId === "string" ? req.query.workspaceId.trim() : "";
+  if (!value) throw new ApiError(400, "workspaceId query parameter is required");
+  return value;
+}
 function createGitHubExtensionRouter(handle4, options = {}) {
   const router2 = (0, import_express2.Router)();
   router2.get(
@@ -159724,11 +160870,11 @@ function createGitHubExtensionRouter(handle4, options = {}) {
   );
   router2.get(
     "/integration",
-    handle4(() => getGitHubIntegration(), { requires: PERMISSIONS.WORKSPACE_READ })
+    handle4((req) => getGitHubIntegration(workspaceId(req)))
   );
   router2.post(
     "/install",
-    handle4(() => beginGitHubInstall(), { mutates: true, requires: PERMISSIONS.WORKSPACE_UPDATE })
+    handle4((req) => beginGitHubInstall(workspaceId(req)), { mutates: true })
   );
   router2.get(
     "/callback",
@@ -159745,13 +160891,13 @@ function createGitHubExtensionRouter(handle4, options = {}) {
   );
   router2.delete(
     "/integration",
-    handle4(() => disconnectGitHub(), { mutates: true, requires: PERMISSIONS.WORKSPACE_UPDATE })
+    handle4((req) => disconnectGitHub(workspaceId(req)), { mutates: true })
   );
   router2.get(
     "/repos",
-    handle4((req) => listGitHubRepos(typeof req.query.q === "string" ? req.query.q : null), {
-      requires: PERMISSIONS.PROJECT_READ
-    })
+    handle4(
+      (req) => listGitHubRepos(typeof req.query.q === "string" ? req.query.q : null, workspaceId(req))
+    )
   );
   router2.get(
     "/projects/:projectId/link",
@@ -159832,7 +160978,7 @@ async function buildMeta() {
   const organizations = profileId ? await listOrganizationsForUser(profileId) : [];
   const organization = organizations.find((org) => org.isActive) ?? null;
   const workspaces = activeOrganizationId ? await listWorkspacesForOrganization(activeOrganizationId) : [];
-  const activeWorkspaceId = getActiveWorkspaceIdOrNull();
+  const activeWorkspaceId = getAuthorizedWorkspacesContext() ? null : getBootstrapWorkspaceIdOrNull();
   const workspace = activeWorkspaceId ? workspaces.find((w) => w.isActive) ?? null : null;
   const { projectId: defaultProjectId } = await getDefaultProjectPreference();
   return { organization, organizations, workspaces, workspace, defaultProjectId };
@@ -161651,6 +162797,48 @@ function emailOTPSenderFromEnv() {
 
 // auth.ts
 init_errors5();
+async function listWorkspaceConsentOrganizations(profileId) {
+  const rows = await requireDatabaseClient().all(
+    `SELECT w.organization_id, o.name AS organization_name,
+            wu.workspace_id, wu.id AS workspace_user_id,
+            w.slug AS workspace_slug, w.name AS workspace_name, w.kind AS workspace_kind,
+            ra.role_key
+       FROM workspace_users wu
+       JOIN workspaces w ON w.id = wu.workspace_id AND w.deleted_at IS NULL
+       JOIN organizations o ON o.id = w.organization_id AND o.deleted_at IS NULL
+       LEFT JOIN role_assignments ra
+         ON ra.workspace_id = wu.workspace_id AND ra.workspace_user_id = wu.id
+        AND ra.deleted_at IS NULL
+      WHERE wu.profile_id = ? AND wu.status = 'active' AND wu.deleted_at IS NULL
+      ORDER BY o.created_at ASC, w.created_at ASC, ra.role_key ASC`,
+    [profileId]
+  );
+  const organizations = /* @__PURE__ */ new Map();
+  for (const row of rows) {
+    let organization = organizations.get(row.organization_id);
+    if (!organization) {
+      organization = { id: row.organization_id, name: row.organization_name, workspaces: [] };
+      organizations.set(row.organization_id, organization);
+    }
+    let workspace = organization.workspaces.find((item) => item.workspaceId === row.workspace_id);
+    if (!workspace) {
+      workspace = {
+        workspaceId: row.workspace_id,
+        workspaceUserId: row.workspace_user_id,
+        roleKeys: [],
+        workspace: {
+          id: row.workspace_id,
+          slug: row.workspace_slug,
+          name: row.workspace_name,
+          kind: row.workspace_kind
+        }
+      };
+      organization.workspaces.push(workspace);
+    }
+    if (row.role_key) workspace.roleKeys.push(row.role_key);
+  }
+  return [...organizations.values()];
+}
 var authBaseUrl = resolveAuthBaseUrl();
 process.env.BETTER_AUTH_URL ??= authBaseUrl;
 function getAllowedBrowserOrigins() {
@@ -161685,6 +162873,60 @@ function isLoopbackAddress(addr) {
 function isLoopbackRequest(req) {
   return isLoopbackAddress(req.ip) || isLoopbackAddress(req.socket?.remoteAddress);
 }
+async function resolveAuthorizedWorkspaces(profileId, token) {
+  if (token && !token.organizationId) return { organizationId: null, workspaces: [] };
+  const rows = await requireDatabaseClient().all(
+    `SELECT wu.workspace_id, wu.id AS workspace_user_id,
+            w.slug AS workspace_slug, w.name AS workspace_name, w.kind AS workspace_kind,
+            w.organization_id, ra.role_key
+       FROM workspace_users wu
+       JOIN workspaces w ON w.id = wu.workspace_id AND w.deleted_at IS NULL
+       LEFT JOIN role_assignments ra
+         ON ra.workspace_id = wu.workspace_id AND ra.workspace_user_id = wu.id
+        AND ra.deleted_at IS NULL
+      WHERE wu.profile_id = ? AND wu.status = 'active' AND wu.deleted_at IS NULL
+        AND (? IS NULL OR w.organization_id = ?)
+        AND (
+          ? IS NULL OR ? = 1 OR EXISTS (
+            SELECT 1 FROM user_token_workspaces utw
+             WHERE utw.token_id = ? AND utw.workspace_id = wu.workspace_id
+          )
+        )
+      ORDER BY w.organization_id ASC, wu.workspace_id ASC, ra.role_key ASC`,
+    [
+      profileId,
+      token?.organizationId ?? null,
+      token?.organizationId ?? null,
+      token?.id ?? null,
+      token?.allWorkspaces ? 1 : 0,
+      token?.id ?? null
+    ]
+  );
+  const organizationIds = [...new Set(rows.map((row) => row.organization_id))];
+  const organizationId = token?.organizationId ?? (organizationIds.length === 1 ? organizationIds[0] : null);
+  if (!organizationId) return { organizationId: null, workspaces: [] };
+  const byWorkspace = /* @__PURE__ */ new Map();
+  for (const row of rows) {
+    if (row.organization_id !== organizationId) continue;
+    const existing = byWorkspace.get(row.workspace_id);
+    if (existing) {
+      if (row.role_key) existing.roleKeys.push(row.role_key);
+      continue;
+    }
+    byWorkspace.set(row.workspace_id, {
+      workspaceId: row.workspace_id,
+      workspaceUserId: row.workspace_user_id,
+      roleKeys: row.role_key ? [row.role_key] : [],
+      workspace: {
+        id: row.workspace_id,
+        slug: row.workspace_slug,
+        name: row.workspace_name,
+        kind: row.workspace_kind
+      }
+    });
+  }
+  return { organizationId, workspaces: [...byWorkspace.values()] };
+}
 async function profileIdForWorkspaceUser(workspaceUserId) {
   const row = await requireDatabaseClient().get(
     `SELECT profile_id FROM workspace_users
@@ -161694,43 +162936,6 @@ async function profileIdForWorkspaceUser(workspaceUserId) {
   );
   return row?.profile_id ?? null;
 }
-async function resolveMembership(workspaceUserId, workspace) {
-  await grantWorkspaceAdminRole({ workspaceId: workspace.id, workspaceUserId });
-  return {
-    workspaceUserId,
-    workspace: {
-      id: workspace.id,
-      slug: workspace.slug,
-      name: workspace.name,
-      kind: workspace.kind
-    }
-  };
-}
-async function ensureWorkspaceUser(profileId, explicitWorkspaceId) {
-  if (explicitWorkspaceId) {
-    const workspace2 = await loadWorkspaceRow(explicitWorkspaceId);
-    if (workspace2) {
-      const membershipId = await findActiveMembershipId(explicitWorkspaceId, profileId);
-      if (!membershipId) {
-        throw new ApiError(403, "Not an active member of the requested workspace");
-      }
-      return resolveMembership(membershipId, workspace2);
-    }
-  }
-  const defaultMembership = await requireDatabaseClient().get(
-    `SELECT wu.id, wu.workspace_id FROM workspace_users wu
-       JOIN workspaces w ON w.id = wu.workspace_id AND w.deleted_at IS NULL
-      WHERE wu.profile_id = ? AND wu.status = 'active' AND wu.deleted_at IS NULL
-      ORDER BY wu.created_at ASC LIMIT 1`,
-    [profileId]
-  );
-  if (!defaultMembership) return null;
-  const workspace = await loadWorkspaceRow(defaultMembership.workspace_id);
-  if (!workspace) {
-    throw new ApiError(500, "Workspace membership references a missing workspace");
-  }
-  return resolveMembership(defaultMembership.id, workspace);
-}
 async function requireAuthenticatedSession(req, res, next) {
   return withRequestContextAsync(async () => {
     setClientDeviceIdentity(clientDeviceFromRequest(req));
@@ -161739,9 +162944,10 @@ async function requireAuthenticatedSession(req, res, next) {
       const session = await resolveSessionFromBrowserRequest({ auth, req });
       if (session) {
         setActiveProfileId(session.user.id);
-        const membership = await ensureWorkspaceUser(session.user.id);
-        setActiveWorkspaceContext(membership?.workspace ?? null);
-        setActiveWorkspaceUser(membership?.workspaceUserId ?? null);
+        const authorized = await resolveAuthorizedWorkspaces(session.user.id, null);
+        setAuthorizedWorkspacesContext(authorized);
+        setActiveWorkspaceContext(null);
+        setActiveWorkspaceUser(null);
         next();
         return;
       }
@@ -161753,11 +162959,12 @@ async function requireAuthenticatedSession(req, res, next) {
           return;
         }
         setActiveProfileId(verified.profileId);
-        const membership = await ensureWorkspaceUser(verified.profileId);
+        const authorized = await resolveAuthorizedWorkspaces(verified.profileId, verified);
         const scopeGrants = await listActiveTokenScopeGrants(authDomainDatabase(), verified.id);
-        setActiveWorkspaceContext(membership?.workspace ?? null);
+        setAuthorizedWorkspacesContext(authorized);
+        setActiveWorkspaceContext(null);
         setActiveTokenAuth({
-          workspaceUserId: membership?.workspaceUserId ?? null,
+          workspaceUserId: null,
           tokenId: verified.id,
           scopeGrants
         });
@@ -161765,7 +162972,7 @@ async function requireAuthenticatedSession(req, res, next) {
         return;
       }
       if (nonBrowser && isLoopbackRequest(req)) {
-        const defaultWorkspaceId = getActiveWorkspaceIdOrNull();
+        const defaultWorkspaceId = getBootstrapWorkspaceIdOrNull();
         const workspaceUserId = defaultWorkspaceId ? await resolveActorForWorkspace(defaultWorkspaceId) : null;
         setActiveProfileId(
           workspaceUserId ? await profileIdForWorkspaceUser(workspaceUserId) : null
@@ -162534,7 +163741,7 @@ async function registerLiveActivityPushToken(activityId, body) {
   const origin = body.startedByPush === true ? "push_to_start" : "local";
   const db = requireDatabaseClient();
   const profileId = await requireOwnProfileId(db);
-  const workspaceId = await requireOwnWorkspaceId(db, profileId);
+  const workspaceId2 = await requireOwnWorkspaceId(db, profileId);
   const now2 = nowIso();
   await db.transaction(async (tx) => {
     const existing = await tx.get(
@@ -162570,7 +163777,7 @@ async function registerLiveActivityPushToken(activityId, body) {
     }
     await enqueueLiveActivityDispatchJob({
       db: tx,
-      workspaceId,
+      workspaceId: workspaceId2,
       profileId,
       now: now2
     });
@@ -164055,22 +165262,86 @@ function handleOAuthRegister(req, res) {
     client_id_issued_at: client.issuedAt
   });
 }
-function handleOAuthRequestInfo(req, res) {
+async function handleOAuthRequestInfo(req, res) {
   const parsed = validateAuthorizationRequest(req);
+  const profileId = await resolveActiveProfileId();
+  if (!profileId) throw new ApiError(401, "Authentication required");
+  const organizations = await listWorkspaceConsentOrganizations(profileId);
   res.json({
     clientName: parsed.client.clientName,
     redirectUri: parsed.redirectUri,
     redirectHost: new URL(parsed.redirectUri).host,
     resource: parsed.resource,
     scopes: parsed.scope.split(/\s+/),
-    state: parsed.state
+    state: parsed.state,
+    organizations: organizations.map((organization) => ({
+      id: organization.id,
+      name: organization.name,
+      workspaces: organization.workspaces.map((workspace) => ({
+        workspaceId: workspace.workspaceId,
+        workspaceUserId: workspace.workspaceUserId,
+        slug: workspace.workspace.slug,
+        name: workspace.workspace.name,
+        kind: workspace.workspace.kind,
+        roleKeys: workspace.roleKeys
+      }))
+    }))
   });
 }
+async function resolveOAuthConsent(req) {
+  const profileId = await resolveActiveProfileId();
+  if (!profileId) throw new ApiError(401, "Authentication required");
+  const organizations = await listWorkspaceConsentOrganizations(profileId);
+  const requestedOrganizationId = bodyString(req, "organizationId");
+  const organization = requestedOrganizationId ? organizations.find((item) => item.id === requestedOrganizationId) : organizations.length === 1 ? organizations[0] : void 0;
+  if (!organization) {
+    throw new ApiError(
+      400,
+      "Select one organization for this MCP connection",
+      void 0,
+      "invalid_request"
+    );
+  }
+  const allWorkspaces = req.body?.allWorkspaces === true;
+  const rawWorkspaceIds = req.body?.workspaceIds;
+  const requestedWorkspaceIds = Array.isArray(rawWorkspaceIds) ? [
+    ...new Set(
+      rawWorkspaceIds.filter((id) => typeof id === "string" && !!id.trim()).map((id) => id.trim())
+    )
+  ] : [];
+  const workspaceById = new Map(
+    organization.workspaces.map((workspace) => [workspace.workspaceId, workspace])
+  );
+  if (requestedWorkspaceIds.some((id) => !workspaceById.has(id))) {
+    throw new ApiError(
+      400,
+      "Selected workspaces must be live members of the selected organization",
+      void 0,
+      "invalid_request"
+    );
+  }
+  const workspaceIds = allWorkspaces ? [] : requestedWorkspaceIds.length > 0 ? requestedWorkspaceIds : organization.workspaces.length === 1 ? [organization.workspaces[0].workspaceId] : [];
+  if (!allWorkspaces && workspaceIds.length === 0) {
+    throw new ApiError(
+      400,
+      "Select one or more workspaces, or all current and future workspaces",
+      void 0,
+      "invalid_request"
+    );
+  }
+  const issuanceWorkspace = workspaceById.get(
+    workspaceIds[0] ?? organization.workspaces[0]?.workspaceId ?? ""
+  );
+  if (!issuanceWorkspace)
+    throw new ApiError(
+      400,
+      "No live workspace membership is available",
+      void 0,
+      "invalid_request"
+    );
+  return { organizationId: organization.id, allWorkspaces, workspaceIds, issuanceWorkspace };
+}
 async function handleOAuthApprove(req, res) {
-  await requirePermission(PERMISSIONS.USER_TOKEN_SELF_CREATE, {
-    workspaceId: getActiveWorkspaceId(),
-    workspaceUserId: getActorWorkspaceUserId()
-  });
   await sweepExpiredAuthorizationCodes();
   const parsed = validateAuthorizationRequest(req);
   const decision = bodyString(req, "decision");
@@ -164087,11 +165358,25 @@ async function handleOAuthApprove(req, res) {
   if (decision !== "approve") {
     throw new ApiError(400, "OAuth decision must be approve or deny", void 0, "invalid_request");
   }
-  const result = await createUserToken({
-    label: `OAuth MCP: ${parsed.client.clientName}`,
-    scope: "mission_lifecycle",
-    expiresAt: new Date(Date.now() + USER_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1e3).toISOString()
+  const consent = await resolveOAuthConsent(req);
+  await requirePermission(PERMISSIONS.USER_TOKEN_SELF_CREATE, {
+    workspaceId: consent.issuanceWorkspace.workspaceId,
+    workspaceUserId: consent.issuanceWorkspace.workspaceUserId
   });
+  const result = await createUserToken(
+    {
+      label: `OAuth MCP: ${parsed.client.clientName}`,
+      scope: "mission_lifecycle",
+      expiresAt: new Date(Date.now() + USER_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1e3).toISOString()
+    },
+    {
+      organizationId: consent.organizationId,
+      allWorkspaces: consent.allWorkspaces,
+      workspaceIds: consent.workspaceIds,
+      issuanceWorkspaceId: consent.issuanceWorkspace.workspaceId,
+      issuanceWorkspaceUserId: consent.issuanceWorkspace.workspaceUserId
+    }
+  );
   const code = `${AUTH_CODE_PREFIX}${(0, import_node_crypto25.randomBytes)(32).toString("base64url")}`;
   authorizationCodes.set(code, {
     clientId: parsed.clientId,
@@ -164172,12 +165457,12 @@ var IMAGE_EXTENSIONS = {
   "image/gif": ".gif",
   "image/webp": ".webp"
 };
-async function resolveBucket(bucketKey, workspaceId) {
+async function resolveBucket(bucketKey, workspaceId2) {
   const row = await requireDatabaseClient().get(
     `SELECT id, bucket_key, storage_backend, base_url, local_path, settings_json
        FROM storage_buckets
       WHERE workspace_id = ? AND bucket_key = ? AND deleted_at IS NULL`,
-    [workspaceId, bucketKey]
+    [workspaceId2, bucketKey]
   );
   if (!row) throw new ApiError(404, `Unknown storage bucket '${bucketKey}'`);
   return row;
@@ -164210,14 +165495,14 @@ function publicUrlFor(bucketKey, storageKey) {
 function userImageObjectKey(userId, imageId, ext) {
   return `user-images/${userId}/${imageId}${ext}`;
 }
-function workspaceImageObjectKey(workspaceId, imageId, ext) {
-  return `workspace-files/${workspaceId}/images/${imageId}${ext}`;
+function workspaceImageObjectKey(workspaceId2, imageId, ext) {
+  return `workspace-files/${workspaceId2}/images/${imageId}${ext}`;
 }
 function organizationImageObjectKey(organizationId, imageId, ext) {
   return `organization-files/${organizationId}/images/${imageId}${ext}`;
 }
-function attachmentObjectKey(workspaceId, attachmentId, ext) {
-  return `workspace-files/${workspaceId}/attachments/${attachmentId}${ext}`;
+function attachmentObjectKey(workspaceId2, attachmentId, ext) {
+  return `workspace-files/${workspaceId2}/attachments/${attachmentId}${ext}`;
 }
 function escapeSqlLike(value) {
   return value.replace(/[\\%_]/g, (match) => `\\${match}`);
@@ -164261,8 +165546,14 @@ async function operatorUserId() {
   if (!fallback2) throw new ApiError(409, "No local user profile exists");
   return fallback2.id;
 }
-async function uploadUserImage(input) {
-  const bucket = await resolveBucket("user-images", WORKSPACE.id);
+function uploadWorkspaceId(explicitWorkspaceId) {
+  const workspaceId2 = explicitWorkspaceId?.trim() || getBootstrapWorkspaceIdOrNull();
+  if (!workspaceId2) throw new ApiError(400, "workspaceId is required");
+  return workspaceId2;
+}
+async function uploadUserImage(input, explicitWorkspaceId) {
+  const workspaceId2 = uploadWorkspaceId(explicitWorkspaceId);
+  const bucket = await resolveBucket("user-images", workspaceId2);
   const userId = await operatorUserId();
   const written = await writeImageObject(
     bucket,
@@ -164284,7 +165575,7 @@ async function uploadUserImage(input) {
        )`,
       [
         written.id,
-        WORKSPACE.id,
+        workspaceId2,
         userId,
         bucket.id,
         written.storageKey,
@@ -164304,7 +165595,7 @@ async function uploadUserImage(input) {
         entityId: written.id,
         operation: "insert",
         entityRevision: 1,
-        workspaceId: WORKSPACE.id
+        workspaceId: workspaceId2
       },
       tx
     );
@@ -164320,12 +165611,13 @@ async function uploadUserImage(input) {
     };
   });
 }
-async function uploadWorkspaceImage(input) {
-  const bucket = await resolveBucket("workspace-images", WORKSPACE.id);
+async function uploadWorkspaceImage(input, explicitWorkspaceId) {
+  const workspaceId2 = uploadWorkspaceId(explicitWorkspaceId);
+  const bucket = await resolveBucket("workspace-images", workspaceId2);
   const written = await writeImageObject(
     bucket,
     input,
-    (id, ext) => workspaceImageObjectKey(WORKSPACE.id, id, ext)
+    (id, ext) => workspaceImageObjectKey(workspaceId2, id, ext)
   );
   const now2 = nowIso2();
   const filename = input.filename.trim() || `image${import_node_path30.default.extname(written.storageKey)}`;
@@ -164342,7 +165634,7 @@ async function uploadWorkspaceImage(input) {
        )`,
       [
         written.id,
-        WORKSPACE.id,
+        workspaceId2,
         bucket.id,
         written.storageKey,
         filename,
@@ -164361,7 +165653,7 @@ async function uploadWorkspaceImage(input) {
         entityId: written.id,
         operation: "insert",
         entityRevision: 1,
-        workspaceId: WORKSPACE.id
+        workspaceId: workspaceId2
       },
       tx
     );
@@ -164651,11 +165943,7 @@ async function finalizeStoredObject({
 async function resolveStoredObject(bucketKey, storageKey, permission) {
   if (bucketKey === "organization-images") {
     const organizationId = await requireActiveOrganizationId();
-    await requireWorkspacePermission({
-      workspaceId: WORKSPACE.id,
-      permission,
-      notFoundMessage: "File not found"
-    });
+    await requireAnyWorkspacePermission(permission);
     const bucket2 = await resolveOrganizationBucket(organizationId, bucketKey);
     const ext = import_node_path30.default.extname(storageKey).toLowerCase();
     return finalizeStoredObject({
@@ -164893,7 +166181,7 @@ var WebhookDispatcher = class {
         await assertOwnerCanRead(subscription);
         ctx.workspace.name = await loadWorkspaceName(client, subscription.workspace_id);
       }
-      const envelope = await buildWebhookEnvelope(ctx, {
+      const envelope2 = await buildWebhookEnvelope(ctx, {
         outboxMessageId: row.id,
         type: payload.eventType,
         entity: payload.entity,
@@ -164902,7 +166190,7 @@ var WebhookDispatcher = class {
       });
       const url2 = new URL(subscription.endpoint_url);
       await assertPublicWebhookTarget(url2);
-      const rawBody = JSON.stringify(envelope);
+      const rawBody = JSON.stringify(envelope2);
       const { header: signatureHeader } = signWebhookPayload(subscription.secret, rawBody);
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -164970,8 +166258,8 @@ async function assertOwnerCanRead(subscription) {
     throw new Error("Subscription owner can no longer read missions in this workspace");
   }
 }
-async function loadWorkspaceName(client, workspaceId) {
-  const row = await client.get(`SELECT name FROM workspaces WHERE id = ?`, [workspaceId]);
+async function loadWorkspaceName(client, workspaceId2) {
+  const row = await client.get(`SELECT name FROM workspaces WHERE id = ?`, [workspaceId2]);
   return row?.name ?? "";
 }
 async function claimNextOutboxMessage(client) {
@@ -165114,30 +166402,33 @@ function normalizeEventTypes(input) {
   }
   return unique;
 }
-async function assertProjectInWorkspace(db, projectId, workspaceId) {
+async function assertProjectInWorkspace(db, projectId, workspaceId2) {
   const row = await db.get(
     `SELECT id FROM projects WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-    [projectId, workspaceId]
+    [projectId, workspaceId2]
   );
   if (!row) throw new ApiError(400, `Project not found: ${projectId}`);
 }
-async function resolveWebhookCreateScope(db, projectId) {
-  let workspaceId = getActiveWorkspaceId();
+async function resolveWebhookCreateScope(db, projectId, explicitWorkspaceId) {
+  let workspaceId2 = explicitWorkspaceId?.trim() || null;
   if (projectId) {
     const project = await db.get(
       `SELECT workspace_id FROM projects WHERE id = ? AND deleted_at IS NULL`,
       [projectId]
     );
     if (!project) throw new ApiError(400, `Project not found: ${projectId}`);
-    workspaceId = project.workspace_id;
+    workspaceId2 = project.workspace_id;
   }
+  if (!workspaceId2 && !getAuthorizedWorkspacesContext())
+    workspaceId2 = getBootstrapWorkspaceIdOrNull();
+  if (!workspaceId2) throw new ApiError(400, "workspaceId is required");
   const workspaceUserId = await requireWorkspacePermission({
-    workspaceId,
+    workspaceId: workspaceId2,
     permission: PERMISSIONS.WEBHOOK_CREATE,
     db,
     notFoundMessage: projectId ? "Project not found" : "Workspace not found"
   });
-  return { workspaceId, workspaceUserId };
+  return { workspaceId: workspaceId2, workspaceUserId };
 }
 async function loadSubscriptionForUpdate(db, id, permission = PERMISSIONS.WEBHOOK_READ) {
   const row = await db.get(
@@ -165154,13 +166445,21 @@ async function loadSubscriptionForUpdate(db, id, permission = PERMISSIONS.WEBHOO
   });
   return row;
 }
-async function listWebhookSubscriptions() {
+async function listWebhookSubscriptions(explicitWorkspaceId) {
   const client = requireDatabaseClient();
+  const workspaceId2 = explicitWorkspaceId?.trim() || (getAuthorizedWorkspacesContext() ? null : getBootstrapWorkspaceIdOrNull());
+  if (!workspaceId2) throw new ApiError(400, "workspaceId is required");
+  await requireWorkspacePermission({
+    workspaceId: workspaceId2,
+    permission: PERMISSIONS.WEBHOOK_READ,
+    db: client,
+    notFoundMessage: "Workspace not found"
+  });
   const rows = await client.all(
     `SELECT ${SUBSCRIPTION_COLUMNS} FROM webhook_subscriptions
        WHERE workspace_id = ? AND deleted_at IS NULL
        ORDER BY created_at DESC`,
-    [getActiveWorkspaceId()]
+    [workspaceId2]
   );
   return rows.map(toSubscriptionDto);
 }
@@ -165175,8 +166474,12 @@ async function createWebhookSubscription(body) {
     throw new ApiError(400, 'payloadMode must be "thin" or "full"');
   }
   return requireDatabaseClient().transaction(async (tx) => {
-    const { workspaceId, workspaceUserId } = await resolveWebhookCreateScope(tx, body.projectId);
-    if (body.projectId) await assertProjectInWorkspace(tx, body.projectId, workspaceId);
+    const { workspaceId: workspaceId2, workspaceUserId } = await resolveWebhookCreateScope(
+      tx,
+      body.projectId,
+      body.workspaceId
+    );
+    if (body.projectId) await assertProjectInWorkspace(tx, body.projectId, workspaceId2);
     const { secret } = generateWebhookSecret();
     const id = newId2();
     const now2 = nowIso2();
@@ -165188,7 +166491,7 @@ async function createWebhookSubscription(body) {
          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, 1)`,
       [
         id,
-        workspaceId,
+        workspaceId2,
         body.projectId ?? null,
         name,
         url2.toString(),
@@ -165208,7 +166511,7 @@ async function createWebhookSubscription(body) {
         operation: "insert",
         entityRevision: 1,
         projectId: body.projectId ?? null,
-        workspaceId,
+        workspaceId: workspaceId2,
         actorWorkspaceUserId: workspaceUserId
       },
       tx
@@ -165344,14 +166647,14 @@ async function testWebhookSubscription(id) {
   const client = requireDatabaseClient();
   const subscription = await loadSubscriptionForUpdate(client, id, PERMISSIONS.WEBHOOK_UPDATE);
   const url2 = new URL(subscription.endpoint_url);
-  const envelope = {
+  const envelope2 = {
     id: newId2(),
     apiVersion: "2026-07-01",
     type: "webhook.ping",
     occurredAt: nowIso2(),
     message: "This is a test delivery from Overlord. No mission data is included."
   };
-  const rawBody = JSON.stringify(envelope);
+  const rawBody = JSON.stringify(envelope2);
   const { header: signatureHeader } = signWebhookPayload(subscription.secret, rawBody);
   const startedAt = Date.now();
   let responseStatus = null;
@@ -165369,7 +166672,7 @@ async function testWebhookSubscription(id) {
           "Content-Type": "application/json",
           "X-Overlord-Signature": signatureHeader,
           "X-Overlord-Event": "webhook.ping",
-          "X-Overlord-Delivery": envelope.id,
+          "X-Overlord-Delivery": envelope2.id,
           "X-Overlord-Workspace": subscription.workspace_id
         },
         body: rawBody
@@ -165405,13 +166708,13 @@ async function testWebhookSubscription(id) {
   if (error53) throw new ApiError(502, `Test delivery failed: ${error53}`);
   return { ok: true, responseStatus };
 }
-async function ensurePingOutboxRow(client, subscriptionId, workspaceId) {
+async function ensurePingOutboxRow(client, subscriptionId, workspaceId2) {
   const id = newId2();
   const now2 = nowIso2();
   await client.run(
     `INSERT INTO outbox_messages (id, workspace_id, topic, payload_json, status, available_at, attempt_count, created_at, updated_at)
        VALUES (?, ?, 'webhook.ping', ?, 'cancelled', ?, 0, ?, ?)`,
-    [id, workspaceId, JSON.stringify({ subscriptionId, ping: true }), now2, now2, now2]
+    [id, workspaceId2, JSON.stringify({ subscriptionId, ping: true }), now2, now2, now2]
   );
   return id;
 }
@@ -165474,6 +166777,46 @@ async function redeliverWebhookDelivery(subscriptionId, outboxMessageId) {
        WHERE id = ?`,
     [now2, now2, outboxMessageId]
   );
+}
+
+// workspace-discovery.ts
+init_db();
+init_errors5();
+function toDto2(workspace, organizationId) {
+  return {
+    workspaceId: workspace.workspaceId,
+    workspaceUserId: workspace.workspaceUserId,
+    organizationId,
+    slug: workspace.workspace.slug,
+    name: workspace.workspace.name,
+    kind: workspace.workspace.kind,
+    roleKeys: workspace.roleKeys
+  };
+}
+async function getAuthorizedWorkspaceDiscovery() {
+  const profileId = await resolveActiveProfileId();
+  if (!profileId) throw new ApiError(401, "Authentication required");
+  const snapshot = getAuthorizedWorkspacesContext();
+  const organizations = await listOrganizationsForUser(profileId);
+  if (snapshot?.organizationId) {
+    return {
+      organizationId: snapshot.organizationId,
+      organizations: organizations.filter(
+        (organization) => organization.id === snapshot.organizationId
+      ),
+      workspaces: snapshot.workspaces.map((workspace) => toDto2(workspace, snapshot.organizationId)),
+      selectionRequired: false
+    };
+  }
+  const consentOrganizations = await listWorkspaceConsentOrganizations(profileId);
+  return {
+    organizationId: null,
+    organizations,
+    workspaces: consentOrganizations.flatMap(
+      (organization) => organization.workspaces.map((workspace) => toDto2(workspace, organization.id))
+    ),
+    selectionRequired: consentOrganizations.length > 1
+  };
 }
 
 // index.ts
@@ -165670,11 +167013,7 @@ function handle3(fn, options = {}) {
   return (req, res, next) => {
     void (async () => {
       try {
-        if (options.requires)
-          await requirePermission(options.requires, {
-            workspaceId: getActiveWorkspaceId(),
-            workspaceUserId: getActorWorkspaceUserId()
-          });
+        if (options.requires) await requireAnyWorkspacePermission(options.requires);
         const result = await Promise.resolve(fn(req, res));
         if (options.mutates) {
           realtime.pollNow();
@@ -165780,9 +167119,14 @@ app.get(
   )
 );
 app.get(
+  "/api/authorized-workspaces",
+  handle3(() => getAuthorizedWorkspaceDiscovery())
+);
+app.get(
   "/api/diagnostics/execution-target-migration",
-  handle3(() => getExecutionTargetMigrationDiagnostics(), {
-    requires: PERMISSIONS.WORKSPACE_READ
+  handle3((req) => {
+    const workspaceId2 = typeof req.query.workspaceId === "string" ? req.query.workspaceId.trim() : "";
+    return getExecutionTargetMigrationDiagnostics(workspaceId2);
   })
 );
 app.post(
@@ -165831,24 +167175,14 @@ app.delete(
 );
 app.get(
   "/api/workspaces",
-  handle3(async () => {
-    if (getActorWorkspaceUserId())
-      await requirePermission(PERMISSIONS.WORKSPACE_READ, {
-        workspaceId: getActiveWorkspaceId(),
-        workspaceUserId: getActorWorkspaceUserId()
-      });
-    return listWorkspaces();
-  })
+  handle3(() => listWorkspaces())
 );
 app.post(
   "/api/workspaces",
   handle3(
     async (req, res) => {
       if (getActorWorkspaceUserId())
-        await requirePermission(PERMISSIONS.WORKSPACE_CREATE, {
-          workspaceId: getActiveWorkspaceId(),
-          workspaceUserId: getActorWorkspaceUserId()
-        });
+        await requireAnyWorkspacePermission(PERMISSIONS.WORKSPACE_CREATE);
       const result = await createWorkspace(req.body);
       realtime.refreshAll();
       return result;
@@ -166054,7 +167388,11 @@ app.delete(
 );
 app.get(
   "/api/webhooks",
-  handle3(() => listWebhookSubscriptions(), { requires: PERMISSIONS.WEBHOOK_READ })
+  handle3(
+    (req) => listWebhookSubscriptions(
+      typeof req.query.workspaceId === "string" ? req.query.workspaceId : null
+    )
+  )
 );
 app.post(
   "/api/webhooks",
@@ -166119,17 +167457,31 @@ app.post(
       if (!uploadHandler) {
         throw new ApiError(404, `Uploads are not configured for bucket '${req.params.bucketKey}'`);
       }
-      await requirePermission(uploadHandler.permission, {
-        workspaceId: getActiveWorkspaceId(),
-        workspaceUserId: getActorWorkspaceUserId()
-      });
+      const workspaceId2 = typeof req.query.workspaceId === "string" && req.query.workspaceId.trim() ? req.query.workspaceId.trim() : null;
+      if (req.params.bucketKey === "workspace-images" && !workspaceId2) {
+        throw new ApiError(400, "workspaceId query parameter is required for this upload");
+      }
+      let resolvedWorkspaceId = workspaceId2;
+      if (workspaceId2) {
+        await requireWorkspacePermission({
+          workspaceId: workspaceId2,
+          permission: uploadHandler.permission,
+          notFoundMessage: "Workspace not found"
+        });
+      } else {
+        const scope = await requireAnyWorkspacePermission(uploadHandler.permission);
+        if (req.params.bucketKey === "user-images") resolvedWorkspaceId = scope.workspaceId;
+      }
       const headerName = req.header("x-upload-filename");
       const filename = headerName ? decodeURIComponent(headerName) : "upload";
-      return uploadHandler.upload({
-        bytes: Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0),
-        filename,
-        contentType: req.header("content-type") ?? ""
-      });
+      return uploadHandler.upload(
+        {
+          bytes: Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0),
+          filename,
+          contentType: req.header("content-type") ?? ""
+        },
+        resolvedWorkspaceId ?? void 0
+      );
     },
     { mutates: true }
   )
@@ -166190,20 +167542,23 @@ function isTruthyQueryFlag(value) {
   const normalized = raw.trim().toLowerCase();
   return normalized !== "0" && normalized !== "false";
 }
-function streamRealtime(req, res) {
+function streamRealtime(req, res, next) {
   void (async () => {
     try {
-      await requirePermission(PERMISSIONS.PROJECT_READ, {
-        workspaceId: getActiveWorkspaceId(),
-        workspaceUserId: getActorWorkspaceUserId()
+      const workspaceIds = await readableChangeFeedWorkspaceIds();
+      if (workspaceIds.length === 0) {
+        res.status(403).json({ error: "Permission denied: realtime stream" });
+        return;
+      }
+      const afterSeq = parseSeqCursor(req.query.after) ?? parseSeqCursor(req.headers["last-event-id"]) ?? void 0;
+      realtime.addClient(res, {
+        afterSeq,
+        workspaceIds
       });
-    } catch {
-      res.status(403).json({ error: "Permission denied: realtime stream" });
-      return;
+      req.on("close", () => realtime.removeClient(res));
+    } catch (err) {
+      next(err);
     }
-    const afterSeq = parseSeqCursor(req.query.after) ?? parseSeqCursor(req.headers["last-event-id"]) ?? void 0;
-    realtime.addClient(res, { afterSeq });
-    req.on("close", () => realtime.removeClient(res));
   })();
 }
 app.get("/api/stream", streamRealtime);
@@ -166214,21 +167569,17 @@ app.get(
   (req, res, next) => {
     void (async () => {
       try {
-        await requirePermission(PERMISSIONS.PROJECT_READ, {
-          workspaceId: getActiveWorkspaceId(),
-          workspaceUserId: getActorWorkspaceUserId()
-        });
-      } catch {
-        res.status(403).json({ error: "Permission denied: realtime catch-up" });
-        return;
-      }
-      try {
+        const workspaceIds = await readableChangeFeedWorkspaceIds();
+        if (workspaceIds.length === 0) {
+          res.status(403).json({ error: "Permission denied: realtime catch-up" });
+          return;
+        }
         const afterSeq = parseSeqCursor(req.query.after);
         if (afterSeq === null) {
           res.status(400).json({ error: 'Query parameter "after" must be a non-negative integer' });
           return;
         }
-        res.json(await readChangesAfter(afterSeq));
+        res.json(await readChangesAfter(afterSeq, workspaceIds));
       } catch (err) {
         next(err);
       }
@@ -166293,7 +167644,10 @@ app.delete(
 );
 app.get(
   "/api/workspace/my-missions",
-  handle3(() => listWorkspaceMyMissions(), { requires: PERMISSIONS.MISSION_READ })
+  // The service checks MISSION_READ independently for every immutable
+  // authorized-workspace entry. An ambient workspace gate would either select
+  // the old oldest membership or reject valid multi-workspace aggregate reads.
+  handle3(() => listWorkspaceMyMissions())
 );
 app.patch(
   "/api/workspace/my-missions/order",
@@ -166304,7 +167658,7 @@ app.patch(
 );
 app.get(
   "/api/activity-feed",
-  handle3(() => listActivityFeed(), { requires: PERMISSIONS.MISSION_READ })
+  handle3(() => listActivityFeed())
 );
 app.put(
   "/api/mobile/live-activities/:activityId/push-token",
@@ -166496,7 +167850,7 @@ app.get(
   // query for the whole board) so chat-style clients do not fan out into one
   // `GET /api/missions/:id/objectives` per mission.
   handle3(
-    (req) => listMissions2(req.params.id, {
+    (req) => listMissions(req.params.id, {
       includeObjectives: isTruthyQueryFlag(req.query.includeObjectives)
     })
   )
@@ -166557,6 +167911,42 @@ app.get(
     const limit = Number.isFinite(parsedLimit) ? parsedLimit : void 0;
     const statusTypes = typeof req.query.statusTypes === "string" ? req.query.statusTypes.split(",").map((value) => value.trim()).filter((value) => value !== "") : null;
     return { missions: await searchMissions2({ query, projectId, statusTypes, limit }) };
+  })
+);
+app.get(
+  "/api/missions/search/v2",
+  handle3(async (req) => {
+    const query = typeof req.query.q === "string" ? req.query.q : null;
+    const parsedLimit = Number.parseInt(
+      typeof req.query.limit === "string" ? req.query.limit : "",
+      10
+    );
+    const limit = Number.isFinite(parsedLimit) ? parsedLimit : void 0;
+    const statusTypes = typeof req.query.statusTypes === "string" ? req.query.statusTypes.split(",").map((value) => value.trim()).filter((value) => value !== "") : null;
+    const projectIdsRaw = typeof req.query.projectIds === "string" ? req.query.projectIds : typeof req.query.projectId === "string" ? req.query.projectId : "";
+    const projectIds = projectIdsRaw.split(",").map((value) => value.trim()).filter((value) => value !== "");
+    const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (projectIds.some((id) => !uuidRe.test(id))) {
+      throw new ApiError(400, "V2 search accepts only stable project UUIDs in projectIds");
+    }
+    const resourceKeys = typeof req.query.resourceKeys === "string" ? req.query.resourceKeys.split(",").map((value) => value.trim()).filter(Boolean) : typeof req.query.resourceKey === "string" && req.query.resourceKey.trim() ? [req.query.resourceKey.trim()] : null;
+    const rawDateField = typeof req.query.dateField === "string" ? req.query.dateField : null;
+    if (rawDateField && rawDateField !== "createdAt" && rawDateField !== "updatedAt") {
+      throw new ApiError(400, "dateField must be createdAt or updatedAt");
+    }
+    const dateField = rawDateField;
+    const from = typeof req.query.from === "string" && req.query.from.trim() ? req.query.from : null;
+    const to = typeof req.query.to === "string" && req.query.to.trim() ? req.query.to : null;
+    return searchMissionsV22({
+      query,
+      projectIds: projectIds.length > 0 ? projectIds : null,
+      statusTypes,
+      resourceKeys,
+      dateField,
+      from,
+      to,
+      limit
+    });
   })
 );
 app.post(
@@ -166737,50 +168127,75 @@ app.delete(
 );
 app.get(
   "/api/agent-catalog",
-  handle3(() => getAgentCatalog(), { requires: PERMISSIONS.LAUNCH_READ })
+  handle3(
+    (req) => getAgentCatalog(typeof req.query.workspaceId === "string" ? req.query.workspaceId : void 0)
+  )
 );
 app.post(
   "/api/agent-catalog/refresh",
-  handle3(() => refreshAgentCatalog(), { mutates: true, requires: PERMISSIONS.LAUNCH_CONFIGURE })
+  handle3(
+    (req) => refreshAgentCatalog(
+      typeof req.query.workspaceId === "string" ? req.query.workspaceId : void 0
+    ),
+    { mutates: true }
+  )
 );
 app.put(
   "/api/agent-catalog",
-  handle3((req) => updateAgentCatalog(req.body), {
-    mutates: true,
-    requires: PERMISSIONS.LAUNCH_CONFIGURE
-  })
+  handle3(
+    (req) => updateAgentCatalog(
+      req.body,
+      typeof req.query.workspaceId === "string" ? req.query.workspaceId : void 0
+    ),
+    { mutates: true }
+  )
 );
 app.get(
   "/api/launch-settings",
-  handle3(() => getLaunchSettings(), { requires: PERMISSIONS.LAUNCH_READ })
+  handle3(
+    (req) => getLaunchSettings(typeof req.query.workspaceId === "string" ? req.query.workspaceId : void 0)
+  )
 );
 app.patch(
   "/api/launch-settings/agents/:agentKey",
-  handle3((req) => updateAgentLaunchConfig(req.params.agentKey, req.body), {
-    mutates: true,
-    requires: PERMISSIONS.LAUNCH_CONFIGURE
-  })
+  handle3(
+    (req) => updateAgentLaunchConfig(
+      req.params.agentKey,
+      req.body,
+      typeof req.query.workspaceId === "string" ? req.query.workspaceId : void 0
+    ),
+    { mutates: true }
+  )
 );
 app.patch(
   "/api/launch-settings/terminal-profile",
-  handle3((req) => updateTerminalProfile2(req.body), {
-    mutates: true,
-    requires: PERMISSIONS.LAUNCH_CONFIGURE
-  })
+  handle3(
+    (req) => updateTerminalProfile2(
+      req.body,
+      typeof req.query.workspaceId === "string" ? req.query.workspaceId : void 0
+    ),
+    { mutates: true }
+  )
 );
 app.patch(
   "/api/launch-settings/session-defaults",
-  handle3((req) => updateLaunchSessionDefaults(req.body), {
-    mutates: true,
-    requires: PERMISSIONS.LAUNCH_CONFIGURE
-  })
+  handle3(
+    (req) => updateLaunchSessionDefaults(
+      req.body,
+      typeof req.query.workspaceId === "string" ? req.query.workspaceId : void 0
+    ),
+    { mutates: true }
+  )
 );
 app.patch(
   "/api/launch-settings/worktree-branch-automation",
-  handle3((req) => updateWorktreeBranchAutomation(req.body), {
-    mutates: true,
-    requires: PERMISSIONS.LAUNCH_CONFIGURE
-  })
+  handle3(
+    (req) => updateWorktreeBranchAutomation(
+      req.body,
+      typeof req.query.workspaceId === "string" ? req.query.workspaceId : void 0
+    ),
+    { mutates: true }
+  )
 );
 app.get(
   "/api/workspaces/:id/launch-settings",
@@ -167003,7 +168418,7 @@ app.use((err, _req, res, _next) => {
 });
 async function start() {
   await initDatabase();
-  const bootWorkspaceId = getActiveWorkspaceIdOrNull();
+  const bootWorkspaceId = getBootstrapWorkspaceIdOrNull();
   syncSqlStudioForWorkspace({
     enabled: DATABASE_DIALECT === "sqlite" && bootWorkspaceId && (envSqlStudioEnabled ?? await readSqlStudioEnabled({ workspaceId: bootWorkspaceId })) ? true : false
   });
@@ -167021,7 +168436,7 @@ async function start() {
     const databaseLabel = DATABASE_DIALECT === "postgres" ? "postgres (DATABASE_URL)" : DATABASE_PATH;
     console.log(`[webapp] Overlord web server listening on ${bindHost}:${bindPort}`);
     console.log(
-      bootWorkspaceId ? `[webapp] workspace: ${WORKSPACE.name} (${WORKSPACE.slug})` : "[webapp] no workspace yet \u2014 awaiting onboarding"
+      bootWorkspaceId ? `[webapp] bootstrap workspace id: ${bootWorkspaceId}` : "[webapp] no workspace yet \u2014 awaiting onboarding"
     );
     console.log(`[webapp] database: ${databaseLabel} (${DATABASE_DIALECT})`);
   });

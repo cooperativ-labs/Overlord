@@ -145,7 +145,7 @@ test('recordPrivateRepositoryLink and recordProvisioningSuccess persist link and
     id: '9876',
     fullName: 'octocat/private-repo',
     defaultBranch: 'main',
-    private: true,
+    private: true as const,
     cloneUrl: 'https://github.com/octocat/private-repo.git'
   };
 

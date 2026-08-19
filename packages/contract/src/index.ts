@@ -34,6 +34,15 @@ export {
   type LaunchVariableDefinition
 } from './launch-variables.js';
 export {
+  type MissionSearchAppliedFilters,
+  type MissionSearchDateField,
+  type MissionSearchMatchKind,
+  type MissionSearchMode,
+  type MissionSearchResultV2,
+  type MissionSearchWorkspaceCount,
+  type SearchMissionsResponseV2
+} from './mission-search.js';
+export {
   formatObjectiveDisplayId,
   missionDisplayIdFromObjectiveRef,
   OBJECTIVE_DISPLAY_ID_SEPARATOR,
@@ -175,6 +184,29 @@ export interface WorkspaceDto {
   /** Whether SQL Studio is enabled for this workspace (admin-managed). */
   sqlStudioEnabled: boolean;
   createdAt: string;
+}
+
+/** A live workspace membership as exposed for explicit scope selection. */
+export interface AuthorizedWorkspaceDto {
+  workspaceId: string;
+  workspaceUserId: string;
+  organizationId: string;
+  slug: string;
+  name: string;
+  kind: string;
+  roleKeys: string[];
+}
+
+/**
+ * Read-only scope discovery. A caller selects one organization before a
+ * cross-workspace operation; a USER_TOKEN response contains only its bound
+ * organization and consent-narrowed workspace set.
+ */
+export interface AuthorizedWorkspaceDiscoveryDto {
+  organizationId: string | null;
+  organizations: OrganizationDto[];
+  workspaces: AuthorizedWorkspaceDto[];
+  selectionRequired: boolean;
 }
 
 export interface CreateWorkspaceBody {
@@ -1641,6 +1673,7 @@ export interface ObjectiveLaunchCommandDto {
  */
 export interface EntityChangeDto {
   seq: number;
+  workspaceId: string;
   entityType: string;
   entityId: string;
   operation: ChangeOperation;
@@ -2297,7 +2330,7 @@ export interface ProfileDto {
   kind: string;
   /** Identity provider, when the account is externally federated. */
   authProvider: string | null;
-  /** RBAC role keys assigned in the active workspace (`ADMIN`, `MEMBER`, …). */
+  /** Distinct RBAC role keys across the selected organization's authorized workspaces. */
   roles: string[];
   createdAt: string;
 }
@@ -2481,6 +2514,8 @@ export interface WebhookSubscriptionDto {
 export interface CreateWebhookSubscriptionBody {
   name: string;
   endpointUrl: string;
+  /** Required when projectId is absent; ignored when projectId derives tenancy. */
+  workspaceId?: string | null;
   projectId?: string | null;
   eventTypes: WebhookEventType[];
   /** Defaults to `full` for internal endpoints, `thin` for external ones, when omitted. */

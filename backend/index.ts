@@ -90,11 +90,9 @@ import {
   DATABASE_DIALECT,
   DATABASE_PATH,
   getActiveProfileId,
-  getActiveWorkspaceId,
-  getActiveWorkspaceIdOrNull,
   getActorWorkspaceUserId,
-  initDatabase,
-  WORKSPACE
+  getBootstrapWorkspaceIdOrNull,
+  initDatabase
 } from './db.ts';
 import { deliveryComposeWorker } from './delivery-compose-worker.ts';
 import {
@@ -142,8 +140,12 @@ import {
   revokeDevicePushToken,
   updateNotificationPreferences
 } from './push-notifications.ts';
-import { requirePermission } from './rbac.ts';
-import { readChangesAfter, realtime } from './realtime.ts';
+import {
+  requireAnyWorkspacePermission,
+  requirePermission,
+  requireWorkspacePermission
+} from './rbac.ts';
+import { readableChangeFeedWorkspaceIds, readChangesAfter, realtime } from './realtime.ts';
 import {
   ApiError,
   clearDefaultProjectPreference,
@@ -208,6 +210,7 @@ import {
   reorderWorkspaceMyMissions,
   revokeUserToken,
   searchMissions,
+  searchMissionsV2,
   setDefaultProjectPreference,
   updateArtifact,
   updateInboxItem,
@@ -246,6 +249,7 @@ import {
   testWebhookSubscription,
   updateWebhookSubscription
 } from './webhooks.ts';
+import { getAuthorizedWorkspaceDiscovery } from './workspace-discovery.ts';
 import { readSqlStudioEnabled } from './workspace-settings.ts';
 import {
   acceptWorkspaceInvitation,
@@ -528,11 +532,7 @@ function handle(
   return (req: Request, res: Response, next: NextFunction) => {
     void (async () => {
       try {
-        if (options.requires)
-          await requirePermission(options.requires, {
-            workspaceId: getActiveWorkspaceId(),
-            workspaceUserId: getActorWorkspaceUserId()
-          });
+        if (options.requires) await requireAnyWorkspacePermission(options.requires);
         const result = await Promise.resolve(fn(req, res));
         if (options.mutates) {
           realtime.pollNow();
@@ -658,9 +658,16 @@ app.get(
 );
 
 app.get(
+  '/api/authorized-workspaces',
+  handle(() => getAuthorizedWorkspaceDiscovery())
+);
+
+app.get(
   '/api/diagnostics/execution-target-migration',
-  handle(() => getExecutionTargetMigrationDiagnostics(), {
-    requires: PERMISSIONS.WORKSPACE_READ
+  handle(req => {
+    const workspaceId =
+      typeof req.query.workspaceId === 'string' ? req.query.workspaceId.trim() : '';
+    return getExecutionTargetMigrationDiagnostics(workspaceId);
   })
 );
 
@@ -736,24 +743,14 @@ app.delete(
 
 app.get(
   '/api/workspaces',
-  handle(async () => {
-    if (getActorWorkspaceUserId())
-      await requirePermission(PERMISSIONS.WORKSPACE_READ, {
-        workspaceId: getActiveWorkspaceId(),
-        workspaceUserId: getActorWorkspaceUserId()
-      });
-    return listWorkspaces();
-  })
+  handle(() => listWorkspaces())
 );
 app.post(
   '/api/workspaces',
   handle(
     async (req, res) => {
       if (getActorWorkspaceUserId())
-        await requirePermission(PERMISSIONS.WORKSPACE_CREATE, {
-          workspaceId: getActiveWorkspaceId(),
-          workspaceUserId: getActorWorkspaceUserId()
-        });
+        await requireAnyWorkspacePermission(PERMISSIONS.WORKSPACE_CREATE);
       const result = await createWorkspace(req.body);
       realtime.refreshAll();
       return result;
@@ -1003,7 +1000,11 @@ app.delete(
 
 app.get(
   '/api/webhooks',
-  handle(() => listWebhookSubscriptions(), { requires: PERMISSIONS.WEBHOOK_READ })
+  handle(req =>
+    listWebhookSubscriptions(
+      typeof req.query.workspaceId === 'string' ? req.query.workspaceId : null
+    )
+  )
 );
 app.post(
   '/api/webhooks',
@@ -1061,7 +1062,10 @@ const rawImageBody = express.raw({ type: () => true, limit: MAX_IMAGE_BYTES });
 
 const UPLOAD_HANDLERS: Record<
   string,
-  { permission: Permission; upload: (input: UploadImageInput) => Promise<StoredImageDto> }
+  {
+    permission: Permission;
+    upload: (input: UploadImageInput, workspaceId?: string) => Promise<StoredImageDto>;
+  }
 > = {
   'user-images': { permission: PERMISSIONS.USER_IMAGE_SELF_CREATE, upload: uploadUserImage },
   'workspace-images': {
@@ -1090,17 +1094,37 @@ app.post(
       if (!uploadHandler) {
         throw new ApiError(404, `Uploads are not configured for bucket '${req.params.bucketKey}'`);
       }
-      await requirePermission(uploadHandler.permission, {
-        workspaceId: getActiveWorkspaceId(),
-        workspaceUserId: getActorWorkspaceUserId()
-      });
+      const workspaceId =
+        typeof req.query.workspaceId === 'string' && req.query.workspaceId.trim()
+          ? req.query.workspaceId.trim()
+          : null;
+      if (req.params.bucketKey === 'workspace-images' && !workspaceId) {
+        throw new ApiError(400, 'workspaceId query parameter is required for this upload');
+      }
+      let resolvedWorkspaceId = workspaceId;
+      if (workspaceId) {
+        await requireWorkspacePermission({
+          workspaceId,
+          permission: uploadHandler.permission,
+          notFoundMessage: 'Workspace not found'
+        });
+      } else {
+        const scope = await requireAnyWorkspacePermission(uploadHandler.permission);
+        // Account-owned images still need a physical workspace bucket in the
+        // current schema. This deterministic authorized scope is storage/audit
+        // placement only; it never narrows account ownership.
+        if (req.params.bucketKey === 'user-images') resolvedWorkspaceId = scope.workspaceId;
+      }
       const headerName = req.header('x-upload-filename');
       const filename = headerName ? decodeURIComponent(headerName) : 'upload';
-      return uploadHandler.upload({
-        bytes: Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0),
-        filename,
-        contentType: req.header('content-type') ?? ''
-      });
+      return uploadHandler.upload(
+        {
+          bytes: Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0),
+          filename,
+          contentType: req.header('content-type') ?? ''
+        },
+        resolvedWorkspaceId ?? undefined
+      );
     },
     { mutates: true }
   )
@@ -1176,21 +1200,26 @@ function isTruthyQueryFlag(value: unknown): boolean {
   return normalized !== '0' && normalized !== 'false';
 }
 
-function streamRealtime(req: Request, res: Response): void {
+function streamRealtime(req: Request, res: Response, next: NextFunction): void {
   void (async () => {
     try {
-      await requirePermission(PERMISSIONS.PROJECT_READ, {
-        workspaceId: getActiveWorkspaceId(),
-        workspaceUserId: getActorWorkspaceUserId()
+      const workspaceIds = await readableChangeFeedWorkspaceIds();
+      if (workspaceIds.length === 0) {
+        res.status(403).json({ error: 'Permission denied: realtime stream' });
+        return;
+      }
+      const afterSeq =
+        parseSeqCursor(req.query.after) ??
+        parseSeqCursor(req.headers['last-event-id']) ??
+        undefined;
+      realtime.addClient(res, {
+        afterSeq,
+        workspaceIds
       });
-    } catch {
-      res.status(403).json({ error: 'Permission denied: realtime stream' });
-      return;
+      req.on('close', () => realtime.removeClient(res));
+    } catch (err) {
+      next(err);
     }
-    const afterSeq =
-      parseSeqCursor(req.query.after) ?? parseSeqCursor(req.headers['last-event-id']) ?? undefined;
-    realtime.addClient(res, { afterSeq });
-    req.on('close', () => realtime.removeClient(res));
   })();
 }
 
@@ -1202,22 +1231,17 @@ app.get(
   (req: Request, res: Response, next: NextFunction) => {
     void (async () => {
       try {
-        await requirePermission(PERMISSIONS.PROJECT_READ, {
-          workspaceId: getActiveWorkspaceId(),
-          workspaceUserId: getActorWorkspaceUserId()
-        });
-      } catch {
-        res.status(403).json({ error: 'Permission denied: realtime catch-up' });
-        return;
-      }
-
-      try {
+        const workspaceIds = await readableChangeFeedWorkspaceIds();
+        if (workspaceIds.length === 0) {
+          res.status(403).json({ error: 'Permission denied: realtime catch-up' });
+          return;
+        }
         const afterSeq = parseSeqCursor(req.query.after);
         if (afterSeq === null) {
           res.status(400).json({ error: 'Query parameter "after" must be a non-negative integer' });
           return;
         }
-        res.json(await readChangesAfter(afterSeq));
+        res.json(await readChangesAfter(afterSeq, workspaceIds));
       } catch (err) {
         next(err);
       }
@@ -1284,10 +1308,13 @@ app.delete(
   )
 );
 
-// ---- My Missions (selected-workspace aggregate) ---------------------------
+// ---- My Missions (organization aggregate) ---------------------------------
 app.get(
   '/api/workspace/my-missions',
-  handle(() => listWorkspaceMyMissions(), { requires: PERMISSIONS.MISSION_READ })
+  // The service checks MISSION_READ independently for every immutable
+  // authorized-workspace entry. An ambient workspace gate would either select
+  // the old oldest membership or reject valid multi-workspace aggregate reads.
+  handle(() => listWorkspaceMyMissions())
 );
 app.patch(
   '/api/workspace/my-missions/order',
@@ -1299,11 +1326,11 @@ app.patch(
 
 // ---- Inbox activity feed (cross-workspace) --------------------------------
 // One bounded read for the Inbox feed. Per-workspace authorization happens
-// inside `listActivityFeed`; this gate is the ordinary active-workspace check
-// every mission read carries.
+// inside `listActivityFeed`; aggregate reads must not depend on an ambient
+// workspace selection.
 app.get(
   '/api/activity-feed',
-  handle(() => listActivityFeed(), { requires: PERMISSIONS.MISSION_READ })
+  handle(() => listActivityFeed())
 );
 
 // ---- Mobile Live Activities ---------------------------------------------
@@ -1608,6 +1635,65 @@ app.get(
     return { missions: await searchMissions({ query, projectId, statusTypes, limit }) };
   })
 );
+app.get(
+  '/api/missions/search/v2',
+  handle(async req => {
+    const query = typeof req.query.q === 'string' ? req.query.q : null;
+    const parsedLimit = Number.parseInt(
+      typeof req.query.limit === 'string' ? req.query.limit : '',
+      10
+    );
+    const limit = Number.isFinite(parsedLimit) ? parsedLimit : undefined;
+    const statusTypes =
+      typeof req.query.statusTypes === 'string'
+        ? req.query.statusTypes
+            .split(',')
+            .map(value => value.trim())
+            .filter(value => value !== '')
+        : null;
+    const projectIdsRaw =
+      typeof req.query.projectIds === 'string'
+        ? req.query.projectIds
+        : typeof req.query.projectId === 'string'
+          ? req.query.projectId
+          : '';
+    const projectIds = projectIdsRaw
+      .split(',')
+      .map(value => value.trim())
+      .filter(value => value !== '');
+    const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (projectIds.some(id => !uuidRe.test(id))) {
+      throw new ApiError(400, 'V2 search accepts only stable project UUIDs in projectIds');
+    }
+    const resourceKeys =
+      typeof req.query.resourceKeys === 'string'
+        ? req.query.resourceKeys
+            .split(',')
+            .map(value => value.trim())
+            .filter(Boolean)
+        : typeof req.query.resourceKey === 'string' && req.query.resourceKey.trim()
+          ? [req.query.resourceKey.trim()]
+          : null;
+    const rawDateField = typeof req.query.dateField === 'string' ? req.query.dateField : null;
+    if (rawDateField && rawDateField !== 'createdAt' && rawDateField !== 'updatedAt') {
+      throw new ApiError(400, 'dateField must be createdAt or updatedAt');
+    }
+    const dateField = rawDateField as 'createdAt' | 'updatedAt' | null;
+    const from =
+      typeof req.query.from === 'string' && req.query.from.trim() ? req.query.from : null;
+    const to = typeof req.query.to === 'string' && req.query.to.trim() ? req.query.to : null;
+    return searchMissionsV2({
+      query,
+      projectIds: projectIds.length > 0 ? projectIds : null,
+      statusTypes,
+      resourceKeys,
+      dateField,
+      from,
+      to,
+      limit
+    });
+  })
+);
 // `createMission`/`getMissionDetail`/`updateMission`/`deleteMission` resolve and
 // authorize against the mission's (or target project's) own workspace
 // internally (coo:135) — mirroring `GET /api/projects/:id` above — so these
@@ -1814,50 +1900,81 @@ app.delete(
 
 app.get(
   '/api/agent-catalog',
-  handle(() => getAgentCatalog(), { requires: PERMISSIONS.LAUNCH_READ })
+  handle(req =>
+    getAgentCatalog(typeof req.query.workspaceId === 'string' ? req.query.workspaceId : undefined)
+  )
 );
 app.post(
   '/api/agent-catalog/refresh',
-  handle(() => refreshAgentCatalog(), { mutates: true, requires: PERMISSIONS.LAUNCH_CONFIGURE })
+  handle(
+    req =>
+      refreshAgentCatalog(
+        typeof req.query.workspaceId === 'string' ? req.query.workspaceId : undefined
+      ),
+    { mutates: true }
+  )
 );
 app.put(
   '/api/agent-catalog',
-  handle(req => updateAgentCatalog(req.body), {
-    mutates: true,
-    requires: PERMISSIONS.LAUNCH_CONFIGURE
-  })
+  handle(
+    req =>
+      updateAgentCatalog(
+        req.body,
+        typeof req.query.workspaceId === 'string' ? req.query.workspaceId : undefined
+      ),
+    { mutates: true }
+  )
 );
 app.get(
   '/api/launch-settings',
-  handle(() => getLaunchSettings(), { requires: PERMISSIONS.LAUNCH_READ })
+  handle(req =>
+    getLaunchSettings(typeof req.query.workspaceId === 'string' ? req.query.workspaceId : undefined)
+  )
 );
 app.patch(
   '/api/launch-settings/agents/:agentKey',
-  handle(req => updateAgentLaunchConfig(req.params.agentKey, req.body), {
-    mutates: true,
-    requires: PERMISSIONS.LAUNCH_CONFIGURE
-  })
+  handle(
+    req =>
+      updateAgentLaunchConfig(
+        req.params.agentKey,
+        req.body,
+        typeof req.query.workspaceId === 'string' ? req.query.workspaceId : undefined
+      ),
+    { mutates: true }
+  )
 );
 app.patch(
   '/api/launch-settings/terminal-profile',
-  handle(req => updateTerminalProfile(req.body), {
-    mutates: true,
-    requires: PERMISSIONS.LAUNCH_CONFIGURE
-  })
+  handle(
+    req =>
+      updateTerminalProfile(
+        req.body,
+        typeof req.query.workspaceId === 'string' ? req.query.workspaceId : undefined
+      ),
+    { mutates: true }
+  )
 );
 app.patch(
   '/api/launch-settings/session-defaults',
-  handle(req => updateLaunchSessionDefaults(req.body), {
-    mutates: true,
-    requires: PERMISSIONS.LAUNCH_CONFIGURE
-  })
+  handle(
+    req =>
+      updateLaunchSessionDefaults(
+        req.body,
+        typeof req.query.workspaceId === 'string' ? req.query.workspaceId : undefined
+      ),
+    { mutates: true }
+  )
 );
 app.patch(
   '/api/launch-settings/worktree-branch-automation',
-  handle(req => updateWorktreeBranchAutomation(req.body), {
-    mutates: true,
-    requires: PERMISSIONS.LAUNCH_CONFIGURE
-  })
+  handle(
+    req =>
+      updateWorktreeBranchAutomation(
+        req.body,
+        typeof req.query.workspaceId === 'string' ? req.query.workspaceId : undefined
+      ),
+    { mutates: true }
+  )
 );
 // Workspace-scoped launch settings. Unlike the legacy `/api/launch-settings`
 // routes (active-workspace only), these target the `:id` workspace and authorize
@@ -2135,7 +2252,7 @@ app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
 async function start(): Promise<void> {
   await initDatabase();
 
-  const bootWorkspaceId = getActiveWorkspaceIdOrNull();
+  const bootWorkspaceId = getBootstrapWorkspaceIdOrNull();
   syncSqlStudioForWorkspace({
     enabled:
       DATABASE_DIALECT === 'sqlite' &&
@@ -2165,7 +2282,7 @@ async function start(): Promise<void> {
     console.log(`[webapp] Overlord web server listening on ${bindHost}:${bindPort}`);
     console.log(
       bootWorkspaceId
-        ? `[webapp] workspace: ${WORKSPACE.name} (${WORKSPACE.slug})`
+        ? `[webapp] bootstrap workspace id: ${bootWorkspaceId}`
         : '[webapp] no workspace yet — awaiting onboarding'
     );
     console.log(`[webapp] database: ${databaseLabel} (${DATABASE_DIALECT})`);

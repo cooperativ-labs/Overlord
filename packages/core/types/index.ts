@@ -47,9 +47,9 @@ export type {
   User,
   UserTokens,
   UserTokenScopes,
+  UserTokenWorkspaces,
   Verification,
   Workspaces,
-  WorkspaceStatusesLegacy,
   WorkspaceUserExecutionTargets,
   WorkspaceUsers
 } from './db.js';

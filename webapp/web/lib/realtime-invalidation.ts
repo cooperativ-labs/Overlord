@@ -201,7 +201,7 @@ function routeChange(change: EntityChangeDto): QueryKey[] | null {
       return [keys.userTokens];
     }
     case 'webhook_subscription': {
-      return [keys.webhookSubscriptions];
+      return [['webhooks']];
     }
     case 'user_image': {
       return [keys.profile, keys.meta];
@@ -228,6 +228,7 @@ function isEntityChangeDto(value: unknown): value is EntityChangeDto {
   const change = value as Partial<EntityChangeDto>;
   return (
     typeof change.seq === 'number' &&
+    isNonEmptyString(change.workspaceId) &&
     isNonEmptyString(change.entityType) &&
     isNonEmptyString(change.entityId) &&
     isNonEmptyString(change.operation) &&

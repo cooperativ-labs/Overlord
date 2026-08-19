@@ -37,7 +37,6 @@ import { seedServiceOperator } from './test-helpers.js';
  */
 
 const WORKSPACE_ID = 'local-workspace';
-const WORKSPACE_DRAFT_STATUS_ID = `${WORKSPACE_ID}-status-draft`;
 const ISO = (offsetMs = 0): string => new Date(Date.now() + offsetMs).toISOString();
 
 // ---- Adapter factories ---------------------------------------------------
@@ -134,6 +133,14 @@ async function seedGraph(client: DatabaseClient): Promise<{
      VALUES (?, ?, ?, ?, 'active', ?, ?)`,
     [projectId, WORKSPACE_ID, `slug-${projectId}`, 'Conformance Project', now, now]
   );
+  const draftStatusId = `status_${randomUUID()}`;
+  await client.run(
+    `INSERT INTO project_statuses
+       (id, workspace_id, project_id, key, name, type, position, is_default, is_terminal,
+        created_at, updated_at, revision)
+     VALUES (?, ?, ?, 'draft', 'Draft', 'draft', 0, 1, 0, ?, ?, 1)`,
+    [draftStatusId, WORKSPACE_ID, projectId, now, now]
+  );
   await client.run(
     `INSERT INTO missions
        (id, workspace_id, project_id, display_id, sequence_number, title,
@@ -146,7 +153,7 @@ async function seedGraph(client: DatabaseClient): Promise<{
       `coo:test-${missionId.slice(-6)}`,
       sequenceNumber,
       'Conformance Mission',
-      WORKSPACE_DRAFT_STATUS_ID,
+      draftStatusId,
       now,
       now
     ]
@@ -227,7 +234,7 @@ async function insertQueuedRequest(
        (id, workspace_id, project_id, mission_id, objective_id,
         launch_mode, requested_source, idempotency_key, status,
         created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, 'run', 'local', 'webapp', ?, 'queued', ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, 'run', 'webapp', ?, 'queued', ?, ?)`,
     [
       id,
       WORKSPACE_ID,

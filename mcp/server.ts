@@ -51,6 +51,17 @@ function requiredString(args: Record<string, unknown>, name: string): string {
   return value;
 }
 
+function optionalProjectUuid(args: Record<string, unknown>): string | null {
+  const projectId = optionalString(args, 'projectId');
+  if (!projectId) return null;
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(projectId)) {
+    throw new Error(
+      'projectId must be a stable Overlord project UUID; resolve human references first'
+    );
+  }
+  return projectId;
+}
+
 /**
  * Mission/objective addressing shared by every mission-scoped tool.
  *
@@ -151,11 +162,18 @@ const toolHandlers: Record<string, ToolHandler> = {
     runProtocolSubcommand(
       'search-missions',
       protocolBody({
+        '--response-version': '2',
         ...(optionalString(args, 'query') ? { '--query': requiredString(args, 'query') } : {}),
         ...(optionalString(args, 'status') ? { '--status': requiredString(args, 'status') } : {}),
-        ...(optionalString(args, 'projectId')
-          ? { '--project-id': requiredString(args, 'projectId') }
+        ...(optionalProjectUuid(args) ? { '--project-id': optionalProjectUuid(args)! } : {}),
+        ...(optionalString(args, 'resourceKey')
+          ? { '--resource-key': requiredString(args, 'resourceKey') }
           : {}),
+        ...(optionalString(args, 'dateField')
+          ? { '--date-field': requiredString(args, 'dateField') }
+          : {}),
+        ...(optionalString(args, 'from') ? { '--from': requiredString(args, 'from') } : {}),
+        ...(optionalString(args, 'to') ? { '--to': requiredString(args, 'to') } : {}),
         ...(typeof args.limit === 'number' && Number.isFinite(args.limit)
           ? { '--limit': String(Math.trunc(args.limit)) }
           : {})

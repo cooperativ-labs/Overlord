@@ -209,9 +209,10 @@ export function finalizeProjectStatusesSqlite(db: BetterSqlite3Database): void {
         `SELECT id, workspace_id, key, name, type, position, is_default, is_terminal, metadata_json FROM workspace_statuses WHERE deleted_at IS NULL`
       )
       .all() as LegacyStatus[];
-    const projects = db
-      .prepare(`SELECT id, workspace_id FROM projects`)
-      .all() as Array<{ id: string; workspace_id: string }>;
+    const projects = db.prepare(`SELECT id, workspace_id FROM projects`).all() as Array<{
+      id: string;
+      workspace_id: string;
+    }>;
     const insert = db.prepare(
       `INSERT INTO project_statuses (id, workspace_id, project_id, key, name, type, position, is_default, is_terminal, metadata_json, created_at, updated_at, revision) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`
     );

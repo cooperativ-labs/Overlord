@@ -201,10 +201,18 @@ search-missions:
                                 complete, blocked, cancelled. Project-defined status
                                 names (board column labels) are not accepted here —
                                 use \`statuses\` to read one project's names.
-    --project-id <id>           Restrict to one project
+    --project-id <id|slug|name> Restrict to one project (CLI resolves human references)
+    --resource-key <csv>        Restrict to logical resource key names
+    --date-field <createdAt|updatedAt>
+                                Date column for explicit range filtering
+    --from <ISO-8601>           Inclusive date/time lower bound
+    --to <ISO-8601>             Exclusive date/time upper bound
     --limit <n>                 Max results (default: 25)
+    --response-version <1|2>    1 (default) returns the legacy array; 2 returns
+                                SearchMissionsResponseV2 with snippets, match
+                                evidence, appliedFilters, and truncation counts
   Returns:
-    JSON with matching missions.
+    JSON with matching missions (v1) or the versioned search envelope (v2).
 
 statuses:
   Purpose:

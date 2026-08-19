@@ -82,7 +82,7 @@ Each group is independent from the others unless noted. Install them in any orde
 
 ### Group 1: Multi-User Access and API Tokens
 
-**Tables:** `user_tokens`, `user_token_scopes`, `role_assignments`
+**Tables:** `user_tokens`, `user_token_workspaces`, `user_token_scopes`, `role_assignments`
 
 **When to add:**
 
@@ -92,6 +92,8 @@ Each group is independent from the others unless noted. Install them in any orde
 
 **Dependency notes:**
 
+- `user_token_workspaces` is the explicit organization-bound consent allowlist for
+  `user_tokens`; add it with token authorization rather than as an independent feature.
 - `user_token_scopes` only makes sense alongside `user_tokens`; add both or neither.
 - `role_assignments` can be added without tokens when all users access the system directly (no API token flow). It stores workspace-scoped role grants (`ADMIN`, `MEMBER`, etc.) that the auth layer checks.
 - The local CLI-first MVP runs in implicit full-trust mode, so none of these are required until you explicitly add other users or enable API access.
