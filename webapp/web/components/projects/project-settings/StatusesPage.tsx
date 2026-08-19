@@ -121,7 +121,7 @@ function SortableStatusRow({
         <Badge className={statusClasses(status.type)}>{STATUS_LABEL[status.type]}</Badge>
       </td>
       <td className="px-3 py-2">
-        {status.type === 'draft' ? (
+        {status.type === 'draft' || status.type === 'next' ? (
           <Button
             type="button"
             size="sm"
@@ -227,7 +227,7 @@ export function StatusesPage({ projectId }: { projectId: string }) {
   }
 
   async function handleSetDefault(status: ProjectStatusDto) {
-    if (status.isDefault || status.type !== 'draft') return;
+    if (status.isDefault || (status.type !== 'draft' && status.type !== 'next')) return;
 
     setRowError(null);
     try {
@@ -351,7 +351,7 @@ export function StatusesPage({ projectId }: { projectId: string }) {
       <div className="rounded-lg border p-4">
         <h3 className="text-sm font-medium">Add status</h3>
         <p className="mt-1 text-xs text-muted-foreground">
-          New missions use the default draft status unless another is chosen at creation time.
+          New missions use the default draft or next status unless another is chosen at creation time.
         </p>
         <div className="mt-3 flex flex-wrap items-end gap-3">
           <div className="grid min-w-[12rem] gap-1.5">

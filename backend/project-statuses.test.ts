@@ -57,6 +57,20 @@ test('next is a project-local singleton status type', async () => {
   );
 });
 
+test('a next status can become the project default', async () => {
+  const project = await createProject({ name: 'Next default' });
+  const statuses = await listProjectStatuses(project.id);
+  const next = statuses.find(status => status.type === 'next')!;
+  const previousDefault = statuses.find(status => status.isDefault)!;
+
+  const updated = await updateProjectStatus(project.id, next.id, { isDefault: true });
+
+  assert.equal(updated.isDefault, true);
+  const persisted = await listProjectStatuses(project.id);
+  assert.equal(persisted.find(status => status.isDefault)?.id, next.id);
+  assert.equal(persisted.find(status => status.id === previousDefault.id)?.isDefault, false);
+});
+
 test('status-id writes reject a sibling project status while the aggregate retains project ids', async () => {
   const projectA = await createProject({ name: 'Status Writer A' });
   const projectB = await createProject({ name: 'Status Writer B' });

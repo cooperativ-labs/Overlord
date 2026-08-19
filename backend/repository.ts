@@ -2091,8 +2091,8 @@ export async function createProjectStatus(
     }
 
     const isDefault = body.isDefault ?? false;
-    if (isDefault && type !== 'draft') {
-      throw new ApiError(400, 'Only draft-type statuses can be the default');
+    if (isDefault && type !== 'draft' && type !== 'next') {
+      throw new ApiError(400, 'Only draft- or next-type statuses can be the default');
     }
 
     const now = nowIso();
@@ -2170,8 +2170,8 @@ export async function updateProjectStatus(
 
     if (body.isDefault !== undefined) {
       if (body.isDefault) {
-        if (existing.type !== 'draft') {
-          throw new ApiError(400, 'Only draft-type statuses can be the default');
+        if (existing.type !== 'draft' && existing.type !== 'next') {
+          throw new ApiError(400, 'Only draft- or next-type statuses can be the default');
         }
         await clearProjectDefaultStatuses(tx, { now, projectId });
         fields.push('is_default = ?');

@@ -1332,22 +1332,6 @@ export interface Workspaces {
   updated_at: string;
 }
 
-export interface WorkspaceStatusesLegacy {
-  created_at: string;
-  deleted_at: string | null;
-  id: string | null;
-  is_default: Generated<number>;
-  is_terminal: Generated<number>;
-  key: string;
-  metadata_json: Generated<string>;
-  name: string;
-  position: number;
-  revision: Generated<number>;
-  type: string;
-  updated_at: string;
-  workspace_id: string;
-}
-
 export interface WorkspaceUserExecutionTargets {
   access_status: string;
   created_at: string;
@@ -1457,7 +1441,6 @@ export interface DB {
   worker_jobs: WorkerJobs;
   workspace_images: WorkspaceImages;
   workspace_invitations: WorkspaceInvitations;
-  workspace_statuses_legacy: WorkspaceStatusesLegacy;
   workspace_user_execution_targets: WorkspaceUserExecutionTargets;
   workspace_users: WorkspaceUsers;
   workspaces: Workspaces;

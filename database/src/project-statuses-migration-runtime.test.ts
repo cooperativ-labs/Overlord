@@ -169,6 +169,27 @@ test('project-status migration accepts a workspace with zero projects', () => {
   );
 });
 
+test('Phase G drops the legacy rollback table after the retention window', () => {
+  const db = seedLegacyBoard();
+  finalizeProjectStatusesSqlite(db);
+
+  db.exec(
+    readFileSync(
+      path.resolve('sqlite/migrations/20260820090000_drop_workspace_statuses_legacy.sql'),
+      'utf8'
+    )
+  );
+
+  assert.equal(
+    db
+      .prepare(
+        `SELECT name FROM sqlite_schema WHERE type = 'table' AND name = 'workspace_statuses_legacy'`
+      )
+      .get(),
+    undefined
+  );
+});
+
 /**
  * The SQLite path rebuilds `missions` with create-copy-drop-rename, and SQLite
  * drops a table's triggers along with the table. The four mission full-text

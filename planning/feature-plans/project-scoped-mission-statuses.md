@@ -370,18 +370,6 @@ create-new → copy → drop → rename, with every index recreated afterwards).
 | A project that is `archived` | Treated identically to active; archived projects are unarchivable and must keep working boards. |
 | Duplicate lowercase names in one workspace | Blocked today by `idx_workspace_statuses_active_name`, so the per-project copy is safe. |
 
-### 4.3 Rollback
-
-Within the one-release retention window: repoint `missions.status_id` and
-`my_mission_positions.status_id` back through `key`-matching against
-`workspace_statuses_legacy`, restore `schedules.next_status_id` from
-`next_status_key`, restore the old FKs, drop `project_statuses`. Any status
-*created* in project settings after the migration has no legacy counterpart;
-rollback maps those missions to the legacy default status and logs each remap.
-This is lossy by construction and must be stated in the release notes.
-
----
-
 ## 5. Core service changes
 
 ### 5.1 Seeding moves to project creation
@@ -913,15 +901,15 @@ Each phase is independently shippable and leaves the product working.
 | **D — Webapp** | Settings page move, transport rename, board, My Missions re-keying, scheduling editor | Manual board + My Missions pass with two divergent projects |
 | **E — Mobile** | §9.1, built and submitted against a v93 staging backend | Mobile build approved and ready for release |
 | **F — CLI + MCP + docs** | `statuses list`, `--status` fix, new MCP tool, all doc updates | `drift-review` clean |
-| **G — Cleanup (next version)** | Drop `workspace_statuses_legacy` | One release elapsed with no rollback needed |
+| **G — Cleanup (next version)** | Drop `workspace_statuses_legacy` | One release elapsed with no rollback needed; the v93 rollback path is expired |
 
 **A–E ship as one release.** The schema and the service that reads it cannot be
 split across deploys against the Cloud edition's shared control plane, the webapp
 is served by the backend, and — with no compatibility layer — the mobile build and
 the backend are mutually exclusive with each other's old surface. E is built and
 approved ahead of the deploy, then released alongside it. F is independent and can
-land any time after C. G is a full contract version later and exists only to give
-the rollback path (§4.3) a real window.
+land any time after C. G is a full contract version later and expires the retained
+legacy rollback window.
 
 ---
 
@@ -935,7 +923,6 @@ the rollback path (§4.3) a real window.
 | Status ids rotate, breaking webhook consumers that persisted them | Documented in the webhooks changelog; the `type` field (which consumers should key on) is stable |
 | My Missions column explosion once projects diverge | Accepted for v1 — identical to today at migration time; per-project grouping deferred |
 | SQLite FK changes require full table rebuilds of `missions` | Established repo pattern; rebuild + index recreation covered by the §12 conformance tests on both dialects |
-| Rollback after post-migration status edits is lossy | Stated in release notes; remapped missions are logged |
 
 ---
 

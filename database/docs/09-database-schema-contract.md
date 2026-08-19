@@ -2454,7 +2454,7 @@ Every fresh local database should seed the same logical minimum:
 - One local `workspaces` row from `overlord.toml` defaults.
 - One implicit Better Auth `user`, matching human `profiles` row, and active `workspace_users` membership.
 - One `ADMIN` role assignment for the implicit user when RBAC tables are present.
-- Default project statuses for each project: `draft`, `next-up`, `execute`, `review`, `complete`, `blocked`, `cancelled`, with the `next-up` status mapped to `type = 'draft'`.
+- Default project statuses for each project: `draft`, `next-up`, `execute`, `review`, `complete`, `blocked`, `cancelled`, with the `next-up` status mapped to `type = 'next'`.
 - One workspace-scoped `mission_sequences` row for `counter_name = 'mission'`.
 - One local `devices` row and one local `execution_targets` row when runner features are initialized.
 
