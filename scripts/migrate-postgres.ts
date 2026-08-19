@@ -61,6 +61,15 @@ function warnIfRailwayPrivateUrl(connectionString: string): void {
 }
 
 main().catch(error => {
-  console.error('migrate-postgres: failed —', error instanceof Error ? error.message : error);
+  console.error('migrate-postgres: failed —', formatMigrateError(error));
   process.exit(1);
 });
+
+function formatMigrateError(error: unknown): string {
+  if (!(error instanceof Error)) return String(error);
+  const extra = error as Error & { detail?: unknown; hint?: unknown };
+  const parts = [error.message];
+  if (typeof extra.detail === 'string' && extra.detail) parts.push(extra.detail);
+  if (typeof extra.hint === 'string' && extra.hint) parts.push(extra.hint);
+  return parts.join(' — ');
+}

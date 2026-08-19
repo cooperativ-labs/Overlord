@@ -84,7 +84,7 @@ Use this mode when the conversation starts normally and the user asks the agent 
    When you open or discuss an existing mission that has a draft objective, submit it with `ovld protocol discuss-objective --mission-id <mission_id>`.
 4. If the user wants to route the current session onto an existing mission by ID, run `ovld protocol connect --mission-id <mission_id>` (add `--objective-id <objective_id>` to pin the session to a specific objective).
 5. If the user wants to establish a persistent session with a mission by ID, run `ovld protocol attach --mission-id <mission_id>`.
-6. If the user wants to find a mission but does not know the ID, run `ovld protocol search-missions --query "..." --status next-up,execute` and ask the user to confirm.
+6. If the user wants to find a mission but does not know the ID, run `ovld protocol search-missions --query "..." --status execute,review` and ask the user to confirm.
 7. If you need to understand project routing before prompting, use `ovld protocol discover-project`.
 8. If the user wants to **record work that is already finished** in this chat (for example, something you just built in a chat app) as a completed mission, run `ovld protocol record-work` (or the hosted `overlord_record_work` MCP tool). This creates a mission with one completed objective, records the file changes with rationales, lands it in the review column, and runs the standard Gemini delivery summary — all in one call, with no `attach`/`deliver`. Do **not** use it for in-progress work. The exact submission format is in [reference/record-work.md](reference/record-work.md).
 9. If you need other lifecycle commands or flags, run `ovld protocol help` and use the real subcommand list instead of guessing.

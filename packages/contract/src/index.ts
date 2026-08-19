@@ -58,7 +58,14 @@ export type ProjectLifecycle = 'active' | 'archived';
 /** Lifecycle subset accepted by project-list REST endpoints. */
 export type ProjectListLifecycle = ProjectLifecycle | 'all';
 
-export type StatusType = 'draft' | 'execute' | 'review' | 'complete' | 'blocked' | 'cancelled';
+export type StatusType =
+  | 'draft'
+  | 'next'
+  | 'execute'
+  | 'review'
+  | 'complete'
+  | 'blocked'
+  | 'cancelled';
 
 export type MissionPriority = 'low' | 'normal' | 'high' | 'urgent';
 
@@ -345,9 +352,10 @@ export interface ReorderProjectsBody {
   orderedProjectIds: string[];
 }
 
-export interface WorkspaceStatusDto {
+export interface ProjectStatusDto {
   id: string;
   workspaceId: string;
+  projectId: string;
   key: string;
   name: string;
   type: StatusType;
@@ -356,24 +364,24 @@ export interface WorkspaceStatusDto {
   isTerminal: boolean;
 }
 
-export interface CreateWorkspaceStatusBody {
+export interface CreateProjectStatusBody {
   name: string;
   type: StatusType;
   /** When true, clears the previous default. Only draft-type statuses may be default. */
   isDefault?: boolean;
 }
 
-export interface UpdateWorkspaceStatusBody {
+export interface UpdateProjectStatusBody {
   name?: string;
   /** When true, clears the previous default. Only draft-type statuses may be default. */
   isDefault?: boolean;
 }
 
 /**
- * Reorders every status in the workspace. `orderedStatusIds` lists status ids
+ * Reorders every active status in the project. `orderedStatusIds` lists status ids
  * top-to-bottom after the move and must include every active status exactly once.
  */
-export interface ReorderWorkspaceStatusesBody {
+export interface ReorderProjectStatusesBody {
   orderedStatusIds: string[];
 }
 
@@ -777,7 +785,8 @@ export interface MissionCreatedFromDto {
 
 export interface MissionDetailDto extends MissionDto {
   objectives: ObjectiveDto[];
-  statuses: WorkspaceStatusDto[];
+  /** The statuses of this mission's project. */
+  statuses: ProjectStatusDto[];
   /** Active (queued/claimed/launching) execution requests for this mission's objectives. */
   executionRequests: ExecutionRequestDto[];
   /** Persistent terminal sessions are independent from mission and agent-session state. */
@@ -822,10 +831,10 @@ export interface ScheduleDto {
   /** Optional recurrence anchor (ISO-8601); becomes the primary anchor when set. */
   startDate: string | null;
   /**
-   * Workspace status the duplicate mission lands in on regeneration. `null`
-   * falls back to the workspace default/next-up status.
+   * Project status key the duplicate mission lands in on regeneration. `null`
+   * falls back to the mission project's default status.
    */
-  nextStatusId: string | null;
+  nextStatusKey: string | null;
   createdAt: string;
   updatedAt: string;
   revision: number;
@@ -841,7 +850,7 @@ export interface ScheduleInput {
   daysOfWeek?: ScheduleWeekDayDto[];
   timezone: string;
   startDate?: string | null;
-  nextStatusId?: string | null;
+  nextStatusKey?: string | null;
 }
 
 /** `GET /api/missions/:id/schedule` and the `upsert`/`preview` response shape. */

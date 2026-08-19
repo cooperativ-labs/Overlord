@@ -49,7 +49,7 @@ export function MyMissionsColumn({
       projectName=""
       projectColor={null}
       createProjectId={defaultProjectId}
-      createStatusScope="workspace"
+      createStatusScope="aggregate"
       membersByWorkspaceUserId={membersByWorkspaceUserId}
       selectedMissionId={selectedMissionId}
       draggable={draggable}

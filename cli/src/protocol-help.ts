@@ -193,14 +193,29 @@ load-context:
 
 search-missions:
   Purpose:
-    Find missions by keyword, status, or project.
+    Find missions by keyword, status type, or project.
   Optional:
     --query <text>              Free-text search
-    --status <csv>              Comma-separated statuses (e.g. next-up,execute)
+    --status <csv>              Comma-separated status TYPES (e.g. execute,review).
+                                Types are workspace-invariant: draft, next, execute, review,
+                                complete, blocked, cancelled. Project-defined status
+                                names (board column labels) are not accepted here —
+                                use \`statuses\` to read one project's names.
     --project-id <id>           Restrict to one project
     --limit <n>                 Max results (default: 25)
   Returns:
     JSON with matching missions.
+
+statuses:
+  Purpose:
+    List one project's board columns. Statuses are defined per project, so their
+    names and order vary between projects in the same workspace; the status TYPE
+    of each column does not.
+  Required:
+    --project-id <id>           Project id, slug, or name
+  Returns:
+    JSON array of statuses ordered by position, each with id, projectId, key,
+    name, type, position, isDefault, and isTerminal.
 
 discuss-objective:
   Purpose:

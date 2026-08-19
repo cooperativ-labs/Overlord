@@ -63,6 +63,13 @@ Missions:
   ${primaryCommand} prompt "<objective>" [--json]
   ${primaryCommand} attach <missionId> [agent] [--json]
   ${primaryCommand} missions list [--status <csv>] [--project-id <id>] [--json]
+                                               --status filters status TYPES
+                                               (draft,execute,review,complete,blocked,cancelled),
+                                               not the project-defined status names on a board
+  ${primaryCommand} statuses list --project-id <id|slug|name> [--json]
+                                               List one project's board columns (key, name, type,
+                                               position, default/terminal). Statuses are defined
+                                               per project, so they vary between projects.
   ${primaryCommand} mission context|events|deliveries|artifacts|rationales <missionId> [--json]
   ${primaryCommand} requests [--mission-id <id>] [--objective-id <id>] [--json]
                                                List open and recent agent decisions
@@ -92,7 +99,8 @@ Protocol (JSON output by default):
   ${primaryCommand} protocol heartbeat --mission-id <id> --session-key <key>
   ${primaryCommand} protocol ask --mission-id <id> --session-key <key> --question "..."
   ${primaryCommand} protocol deliver --mission-id <id> --session-key <key> --summary "..."
-  ${primaryCommand} protocol search-missions --query "<text>" --status next-up,execute
+  ${primaryCommand} protocol search-missions --query "<text>" --status execute,review
+  ${primaryCommand} protocol statuses --project-id <id|slug|name>
   ${primaryCommand} protocol load-context --mission-id <id>
   ${primaryCommand} protocol help
 

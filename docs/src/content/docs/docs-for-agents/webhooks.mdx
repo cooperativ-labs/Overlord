@@ -66,7 +66,7 @@ The response's `secret` field is the only time the raw secret is returned.
 | Event type               | Fires when                                                                           |
 | ------------------------ | ------------------------------------------------------------------------------------ |
 | `mission.delivered`      | An agent delivers work for review (`ovld protocol deliver` or `record-work`).        |
-| `mission.status_changed` | A mission moves between workspace statuses, including board drags in the web UI.     |
+| `mission.status_changed` | A mission moves between the project's statuses, including board drags in the web UI. |
 | `objective.completed`    | An objective reaches `complete`.                                                     |
 | `mission.blocked`        | An agent posts a blocking question (`ovld protocol ask`) — use this to page a human. |
 
@@ -140,6 +140,19 @@ Every delivery has the same envelope shape; `type` tells you which event it is.
   `deliveries.payload_json` and internal worker metadata are never included.
 - `objective`/`session`/`delivery` are present only when the firing event
   carries them (e.g. `mission.status_changed` has no `delivery`).
+- `mission.status.id` names a status belonging to that mission's **project**.
+  Status names and order are configured per project, so `label` may differ
+  between two projects at the same lifecycle stage — match on `status.type`,
+  never on `id` or `label`.
+
+:::caution[Status ids rotated once]
+When status definitions moved from the workspace to the project, every status
+row was re-minted per project, so **`mission.status.id` values changed once** at
+that migration. The stable `status.type` vocabulary (`draft`, `execute`,
+`review`, `complete`, `blocked`, `cancelled`) did **not** change. A consumer that
+had persisted status ids must re-resolve them; a consumer that keyed on
+`status.type` needed no change.
+:::
 
 ## 5. Pulling the rest
 

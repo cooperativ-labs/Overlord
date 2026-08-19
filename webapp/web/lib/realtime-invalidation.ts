@@ -177,8 +177,10 @@ function routeChange(change: EntityChangeDto): QueryKey[] | null {
       if (!projectId) return null;
       return [keys.projectTags(projectId), keys.missions(projectId)];
     }
-    case 'workspace_status': {
-      return [['workspace'] as const, allProjectScopedQueries(), keys.myMissions];
+    case 'project_status': {
+      const projectId = projectIdFor(change);
+      if (!projectId) return null;
+      return [keys.projectStatuses(projectId), keys.missions(projectId), keys.myMissions];
     }
     case 'workspace':
     case 'workspace_user': {

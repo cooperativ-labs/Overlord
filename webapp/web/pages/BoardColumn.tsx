@@ -6,14 +6,14 @@ import { useCallback, useState } from 'react';
 import { STATUS_CONFIG, statusClasses } from '@/components/ui.tsx';
 import { cn } from '@/lib/utils';
 
-import type { MissionDto, WorkspaceMemberDto, WorkspaceStatusDto } from '../../shared/contract.ts';
+import type { MissionDto, ProjectStatusDto, WorkspaceMemberDto } from '../../shared/contract.ts';
 
 import { BlankMissionCard, type BlankMissionCreateOptions } from './BlankMissionCard.tsx';
 import { resolveAssignee } from './board-shared.ts';
 import { SortableMissionCard } from './SortableMissionCard.tsx';
 
 export type BoardColumnStatus =
-  | Pick<WorkspaceStatusDto, 'id' | 'name' | 'type'>
+  | Pick<ProjectStatusDto, 'id' | 'name' | 'type'>
   | { id: string; name: string; type: null };
 
 export type MissionCardContext = {
@@ -31,7 +31,7 @@ type BoardColumnProps<TMission extends MissionDto> = {
   projectName: string;
   projectColor: string | null;
   createProjectId?: string;
-  createStatusScope?: 'project' | 'workspace';
+  createStatusScope?: 'project' | 'aggregate';
   membersByWorkspaceUserId: Map<string, WorkspaceMemberDto>;
   selectedMissionId?: string;
   draggable?: boolean;

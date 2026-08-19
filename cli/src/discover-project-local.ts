@@ -51,7 +51,7 @@ function discoverProjectJsonFromFilesystem({
   return null;
 }
 
-async function resolveProjectByIdOrName({
+export async function resolveProjectByIdOrName({
   backend,
   projectRef
 }: {

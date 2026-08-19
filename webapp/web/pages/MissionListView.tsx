@@ -30,7 +30,7 @@ export function MissionListView<TMission extends MissionDto = MissionDto>({
   statuses: BoardColumnStatus[];
   /**
    * Drag state owned by the page, from `useBoardColumnDnd` (project board,
-   * project-scoped reorder) or `useMyMissionsDnd` (My Missions, workspace-scoped
+   * project-scoped reorder) or `useMyMissionsDnd` (My Missions, project-scoped
    * reorder across projects) — see `BoardDndResult`.
    */
   dnd: BoardDndResult;
@@ -39,7 +39,7 @@ export function MissionListView<TMission extends MissionDto = MissionDto>({
   projectName: string;
   projectColor: string | null;
   createProjectId?: string;
-  createStatusScope?: 'project' | 'workspace';
+  createStatusScope?: 'project' | 'aggregate';
   membersByWorkspaceUserId: Map<string, WorkspaceMemberDto>;
   selectedMissionId?: string;
   getMissionCardContext?: (mission: TMission) => MissionCardContext;

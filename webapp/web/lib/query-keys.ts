@@ -23,10 +23,9 @@ export const keys = {
       ? (['workspace', workspaceId, 'projects', lifecycle] as const)
       : (['projects', lifecycle] as const),
   project: (id: string) => ['project', id] as const,
-  workspaceStatuses: (workspaceId?: string | null) =>
-    workspaceId
-      ? (['workspace', workspaceId, 'statuses'] as const)
-      : (['workspace', 'statuses'] as const),
+  projectStatuses: (projectId: string) => ['project', projectId, 'statuses'] as const,
+  workspaceProjectStatuses: (workspaceId: string) =>
+    ['workspace', workspaceId, 'project-statuses'] as const,
   projectResources: (id: string) => ['project', id, 'resources'] as const,
   projectTags: (id: string) => ['project', id, 'tags'] as const,
   projectRepository: (id: string, executionTargetId: string | null, resourceKey?: string | null) =>

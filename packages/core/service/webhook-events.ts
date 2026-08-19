@@ -207,7 +207,7 @@ export async function buildWebhookEnvelope(
     `SELECT m.id, m.display_id, m.project_id, m.title, m.priority, m.created_at,
             s.id AS status_id, s.type AS status_type, s.name AS status_name
        FROM missions m
-       JOIN workspace_statuses s ON s.id = m.status_id
+       JOIN project_statuses s ON s.id = m.status_id AND s.project_id = m.project_id
        WHERE m.id = ? AND m.workspace_id = ?`,
     [entity.missionId, ctx.workspace.id]
   )) as

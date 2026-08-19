@@ -57,6 +57,7 @@ The current tool catalog is mission-first:
 
 - `overlord_resolve_project`
 - `overlord_create_project`
+- `overlord_list_project_statuses` — read one project's board columns (names and order are per project; the status type is not)
 - `overlord_search_missions`
 - `overlord_create_mission`
 - `overlord_create_inbox_item`

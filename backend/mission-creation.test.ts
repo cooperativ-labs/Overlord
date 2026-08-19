@@ -14,7 +14,7 @@ const tempDir = mkdtempSync(path.join(os.tmpdir(), 'overlord-mission-creation-')
 const { bootstrapIntegrationTestDb } = await import('./test-helpers.ts');
 await bootstrapIntegrationTestDb({ sqlitePath: path.join(tempDir, 'webapp.sqlite') });
 
-const { createMission, createProject, createProjectTag, getMissionDetail, listWorkspaceStatuses } =
+const { createMission, createProject, createProjectTag, getMissionDetail, listProjectStatuses } =
   await import('./repository.ts');
 const { db, WORKSPACE } = await import('./db.ts');
 const { ApiError } = await import('./errors.ts');
@@ -69,7 +69,7 @@ describe('REST mission creation', () => {
 
   it('creates the mission into an explicitly chosen status column', async () => {
     const project = await createProject({ name: 'REST Create Status' });
-    const statuses = await listWorkspaceStatuses();
+    const statuses = await listProjectStatuses(project.id);
     const target = statuses.find(status => status.type === 'execute') ?? statuses[1]!;
 
     const mission = await createMission({
@@ -165,7 +165,7 @@ describe('REST mission creation', () => {
       firstObjective: 'Ordinary work'
     });
 
-    const statuses = await listWorkspaceStatuses();
+    const statuses = await listProjectStatuses(project.id);
     const defaultStatus = statuses.find(status => status.isDefault)!;
     assert.equal(mission.statusId, defaultStatus.id);
     assert.equal(mission.objectives[0]!.state, 'draft');
@@ -211,7 +211,7 @@ describe('REST mission creation', () => {
         firstObjective: 'Bad status',
         statusId: 'not-a-status'
       }),
-      (err: unknown) => (err as { status?: number }).status === 400
+      (err: unknown) => (err as { status?: number }).status === 409
     );
   });
 

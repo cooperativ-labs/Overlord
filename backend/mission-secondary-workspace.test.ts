@@ -500,7 +500,7 @@ describe('runner claims and drives executions in a secondary (non-active) worksp
 
     const { setActiveWorkspace } = await import('./db.ts');
     const { createWorkspace } = await import('./workspaces.ts');
-    const { createWorkspaceStatus, listWorkspaceStatusesForWorkspace } =
+    const { createProject, createProjectStatus, listProjectStatuses } =
       await import('./repository.ts');
 
     const secondary = await createWorkspace({
@@ -509,25 +509,33 @@ describe('runner claims and drives executions in a secondary (non-active) worksp
     });
     await setActiveWorkspace(workspaceAId);
 
-    const before = await listWorkspaceStatusesForWorkspace(secondary.id);
-    const aBefore = await listWorkspaceStatusesForWorkspace(workspaceAId);
+    const project = await createProject({
+      name: 'Secondary Statuses Project',
+      workspaceId: secondary.id
+    });
+    const activeProject = await createProject({
+      name: 'Active Statuses Project',
+      workspaceId: workspaceAId
+    });
+    const before = await listProjectStatuses(project.id);
+    const aBefore = await listProjectStatuses(activeProject.id);
 
-    // Create a status in the secondary workspace while A is active — the
-    // workspace-scoped route stamps B, not the active workspace.
-    const created = await createWorkspaceStatus(
-      { name: 'Awaiting QA Signoff', type: 'draft' },
-      secondary.id
-    );
+    // Create a status in the secondary project while workspace A is active.
+    const created = await createProjectStatus(project.id, {
+      name: 'Awaiting QA Signoff',
+      type: 'draft'
+    });
     assert.equal(created.workspaceId, secondary.id);
+    assert.equal(created.projectId, project.id);
 
-    const after = await listWorkspaceStatusesForWorkspace(secondary.id);
+    const after = await listProjectStatuses(project.id);
     assert.equal(after.length, before.length + 1);
     assert.ok(
       after.some(status => status.id === created.id && status.name === 'Awaiting QA Signoff')
     );
 
-    // The active workspace's statuses must be untouched.
-    const aAfter = await listWorkspaceStatusesForWorkspace(workspaceAId);
+    // The active project's statuses must be untouched.
+    const aAfter = await listProjectStatuses(activeProject.id);
     assert.equal(aAfter.length, aBefore.length);
     assert.ok(!aAfter.some(status => status.name === 'Awaiting QA Signoff'));
   });

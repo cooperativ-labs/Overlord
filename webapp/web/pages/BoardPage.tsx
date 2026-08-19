@@ -12,11 +12,11 @@ import {
   useCreateMission,
   useMissions,
   useProject,
+  useProjectStatuses,
   useProjectTags,
   useReorderBoardColumn,
   useSetMissionStatus,
-  useWorkspaceMembers,
-  useWorkspaceStatuses
+  useWorkspaceMembers
 } from '../lib/queries.ts';
 
 import type { BlankMissionCreateOptions } from './BlankMissionCard.tsx';
@@ -48,7 +48,7 @@ export function BoardPage() {
   const selectedMissionId = missionMatch?.params.missionId;
   const project = useProject(projectId);
   const workspaceId = project.data?.workspaceId ?? null;
-  const statusesQ = useWorkspaceStatuses(workspaceId);
+  const statusesQ = useProjectStatuses(projectId);
   const missionsQ = useMissions(projectId);
   const projectTagsQ = useProjectTags(projectId);
   const createMission = useCreateMission();

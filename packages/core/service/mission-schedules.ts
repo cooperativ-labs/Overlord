@@ -21,7 +21,7 @@ export type ScheduleInput = {
   daysOfWeek?: ScheduleWeekDay[];
   timezone: string;
   startDate?: string | null;
-  nextStatusId?: string | null;
+  nextStatusKey?: string | null;
 };
 
 export type ScheduleSummary = {
@@ -35,7 +35,7 @@ export type ScheduleSummary = {
   daysOfWeek: ScheduleWeekDay[];
   timezone: string;
   startDate: string | null;
-  nextStatusId: string | null;
+  nextStatusKey: string | null;
   createdAt: string;
   updatedAt: string;
   revision: number;
@@ -57,7 +57,7 @@ interface ScheduleRow {
   days_of_week_json: string;
   timezone: string;
   start_date: string | null;
-  next_status_id: string | null;
+  next_status_key: string | null;
   created_at: string;
   updated_at: string;
   revision: number;
@@ -84,7 +84,7 @@ function toScheduleSummary(row: ScheduleRow): ScheduleSummary {
     daysOfWeek: parseJsonArray(row.days_of_week_json) as ScheduleWeekDay[],
     timezone: row.timezone,
     startDate: row.start_date,
-    nextStatusId: row.next_status_id,
+    nextStatusKey: row.next_status_key,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     revision: row.revision
@@ -136,7 +136,7 @@ async function getScheduleRow(
 ): Promise<ScheduleRow | undefined> {
   return db.get<ScheduleRow>(
     `SELECT id, workspace_id, name, period_type, period_interval, weeks_of_month_json,
-            days_of_month_json, days_of_week_json, timezone, start_date, next_status_id,
+            days_of_month_json, days_of_week_json, timezone, start_date, next_status_key,
             created_at, updated_at, revision
        FROM schedules WHERE id = ? AND workspace_id = ?`,
     [scheduleId, workspaceId]
@@ -188,14 +188,22 @@ export async function upsertMissionSchedule({
       id: string;
       schedule_id: string | null;
       due_datetime: string | null;
+      project_id: string;
       revision: number;
     }>(
-      `SELECT id, schedule_id, due_datetime, revision FROM missions WHERE id = ? AND workspace_id = ?`,
+      `SELECT id, project_id, schedule_id, due_datetime, revision FROM missions WHERE id = ? AND workspace_id = ?`,
       [resolved.id, ctx.workspace.id]
     );
 
     if (!mission) {
       throw new ServiceError('Mission not found', 'mission_not_found', 404);
+    }
+    if (input.nextStatusKey) {
+      const status = await tx.get(
+        `SELECT 1 FROM project_statuses WHERE project_id = ? AND key = ? AND deleted_at IS NULL`,
+        [mission.project_id, input.nextStatusKey]
+      );
+      if (!status) throw new ServiceError('Unknown status for project', 'validation_error', 409);
     }
 
     const dueDatetime = previewScheduleDueDatetime(input, mission.due_datetime);
@@ -207,7 +215,7 @@ export async function upsertMissionSchedule({
         `UPDATE schedules
            SET name = ?, period_type = ?, period_interval = ?, weeks_of_month_json = ?,
                days_of_month_json = ?, days_of_week_json = ?, timezone = ?, start_date = ?,
-               next_status_id = ?, updated_at = ?, revision = revision + 1
+               next_status_key = ?, updated_at = ?, revision = revision + 1
          WHERE id = ? AND workspace_id = ?`,
         [
           input.name?.trim() || null,
@@ -218,7 +226,7 @@ export async function upsertMissionSchedule({
           JSON.stringify(input.daysOfWeek ?? []),
           input.timezone,
           input.startDate ?? null,
-          input.nextStatusId ?? null,
+          input.nextStatusKey ?? null,
           now,
           mission.schedule_id,
           ctx.workspace.id
@@ -228,7 +236,7 @@ export async function upsertMissionSchedule({
       await tx.run(
         `INSERT INTO schedules
            (id, workspace_id, name, period_type, period_interval, weeks_of_month_json,
-            days_of_month_json, days_of_week_json, timezone, start_date, next_status_id,
+            days_of_month_json, days_of_week_json, timezone, start_date, next_status_key,
             created_at, updated_at, revision)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
         [
@@ -242,7 +250,7 @@ export async function upsertMissionSchedule({
           JSON.stringify(input.daysOfWeek ?? []),
           input.timezone,
           input.startDate ?? null,
-          input.nextStatusId ?? null,
+          input.nextStatusKey ?? null,
           now,
           now
         ]
@@ -372,6 +380,6 @@ function toScheduleInputFromRow(row: ScheduleRow): ScheduleInput {
     daysOfWeek: summary.daysOfWeek,
     timezone: summary.timezone,
     startDate: summary.startDate,
-    nextStatusId: summary.nextStatusId
+    nextStatusKey: summary.nextStatusKey
   };
 }

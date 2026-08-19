@@ -129,3 +129,26 @@ test('hosted MCP widget resources are self-contained and readable', () => {
     assert.doesNotMatch(loaded.text, /<iframe/i);
   }
 });
+
+test('overlord_list_project_statuses is a read-only project-scoped discovery tool', () => {
+  const tool = hostedMcpToolDefinitions.find(
+    definition => definition.name === 'overlord_list_project_statuses'
+  );
+  assert.ok(tool, 'the hosted catalog exposes project status discovery');
+  assert.equal(tool.annotations?.readOnlyHint, true);
+  assert.deepEqual(tool.inputSchema.required, ['projectId']);
+  assert.deepEqual(Object.keys(tool.inputSchema.properties ?? {}), ['projectId']);
+
+  // Board column names vary per project; the type vocabulary does not. Both
+  // facts have to be in the description or a model will filter on a name.
+  assert.match(tool.description, /per project/);
+  assert.match(tool.description, /draft, next, execute, review, complete, blocked, cancelled/);
+
+  const search = hostedMcpToolDefinitions.find(
+    definition => definition.name === 'overlord_search_missions'
+  );
+  assert.ok(search);
+  const status = (search.inputSchema.properties as Record<string, { description: string }>).status;
+  assert.match(status.description, /status TYPES/);
+  assert.match(status.description, /not accepted here/);
+});

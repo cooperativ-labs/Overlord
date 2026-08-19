@@ -111,12 +111,26 @@ const tools = [
     )
   },
   {
+    name: 'overlord_list_project_statuses',
+    title: 'List Overlord project statuses',
+    description:
+      "Read one project's board columns. Status names and order are defined per project, so two projects in the same workspace can label the same lifecycle differently; each status also carries a stable type (draft, next, execute, review, complete, blocked, cancelled) that does not vary by project.",
+    inputSchema: objectSchema(
+      {
+        projectId: stringProperty('Overlord project id, slug, or name.')
+      },
+      ['projectId']
+    )
+  },
+  {
     name: 'overlord_search_missions',
     title: 'Search Overlord missions',
     description: 'Search missions in the OAuth-bound workspace.',
     inputSchema: objectSchema({
       query: stringProperty('Search query text.'),
-      status: stringProperty('Comma-separated status types, such as draft,execute,review.'),
+      status: stringProperty(
+        'Comma-separated status TYPES, such as draft,next,execute,review. Types are workspace-invariant (draft, next, execute, review, complete, blocked, cancelled). Project-defined status names are not accepted here.'
+      ),
       projectId: stringProperty('Optional project id, slug, or name.'),
       limit: {
         type: 'number',
@@ -438,6 +452,11 @@ function callOverlordTool(name, args) {
         ? { description: requiredString(args, 'description') }
         : {}),
       ...(optionalString(args, 'slug') ? { slug: requiredString(args, 'slug') } : {})
+    });
+  }
+  if (name === 'overlord_list_project_statuses') {
+    return runProtocol('statuses', {
+      'project-id': requiredString(args, 'projectId')
     });
   }
   if (name === 'overlord_search_missions') {

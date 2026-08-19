@@ -18,7 +18,7 @@ import { getStatusFilterLabel } from './board-shared.ts';
 
 /**
  * Minimal status shape this dropdown needs. The project board passes
- * `WorkspaceStatusDto` rows (id = status id); My Missions passes its merged
+ * `ProjectStatusDto` rows (id = status id); My Missions passes its merged
  * columns (id = the lowercase-name column key) so filtering matches the
  * deduplicated columns rather than one workspace's status ids.
  */

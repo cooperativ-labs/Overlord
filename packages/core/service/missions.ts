@@ -118,71 +118,81 @@ async function nextMissionSequence(ctx: ServiceContext): Promise<number> {
   return seq;
 }
 
-async function getDefaultStatusId(ctx: ServiceContext): Promise<{
+async function getDefaultStatusId(
+  ctx: ServiceContext,
+  projectId: string
+): Promise<{
   id: string;
   type: string;
 }> {
   const row = (await ctx.db.get(
-    `SELECT id, type FROM workspace_statuses
-       WHERE workspace_id = ? AND is_default = ? AND deleted_at IS NULL LIMIT 1`,
-    [ctx.workspace.id, bindBool(ctx.db.dialect, true)]
+    `SELECT id, type FROM project_statuses
+       WHERE project_id = ? AND is_default = ? AND deleted_at IS NULL LIMIT 1`,
+    [projectId, bindBool(ctx.db.dialect, true)]
   )) as { id: string; type: string } | undefined;
 
   if (!row) {
-    throw new ServiceError('Workspace has no default status', 'validation_error', 409);
+    throw new ServiceError('Project has no default status', 'validation_error', 409);
   }
   return row;
 }
 
-async function getReviewStatusId(ctx: ServiceContext): Promise<{
+async function getReviewStatusId(
+  ctx: ServiceContext,
+  projectId: string
+): Promise<{
   id: string;
   type: string;
 }> {
   const row = (await ctx.db.get(
-    `SELECT id, type FROM workspace_statuses
-       WHERE workspace_id = ? AND type = 'review' AND deleted_at IS NULL LIMIT 1`,
-    [ctx.workspace.id]
+    `SELECT id, type FROM project_statuses
+       WHERE project_id = ? AND type = 'review' AND deleted_at IS NULL LIMIT 1`,
+    [projectId]
   )) as { id: string; type: string } | undefined;
 
   if (!row) {
-    throw new ServiceError('Workspace has no review status', 'validation_error', 409);
+    throw new ServiceError('Project has no review status', 'validation_error', 409);
   }
   return row;
 }
 
-async function getExecuteStatusId(ctx: ServiceContext): Promise<{
+async function getExecuteStatusId(
+  ctx: ServiceContext,
+  projectId: string
+): Promise<{
   id: string;
   type: string;
 }> {
   const row = (await ctx.db.get(
-    `SELECT id, type FROM workspace_statuses
-       WHERE workspace_id = ? AND type = 'execute' AND deleted_at IS NULL LIMIT 1`,
-    [ctx.workspace.id]
+    `SELECT id, type FROM project_statuses
+       WHERE project_id = ? AND type = 'execute' AND deleted_at IS NULL LIMIT 1`,
+    [projectId]
   )) as { id: string; type: string } | undefined;
 
   if (!row) {
-    throw new ServiceError('Workspace has no execute status', 'validation_error', 409);
+    throw new ServiceError('Project has no execute status', 'validation_error', 409);
   }
   return row;
 }
 
 /**
- * Look up an explicitly-chosen workspace status. The board lets a REST caller
+ * Look up an explicitly-chosen project status. The board lets a REST caller
  * create a mission directly into any column, so creation cannot always go
  * through the default/review lookups above.
  */
-async function getWorkspaceStatusById(
+async function getProjectStatusById(
   ctx: ServiceContext,
+  projectId: string,
   statusId: string
 ): Promise<{ id: string; type: string }> {
   const row = (await ctx.db.get(
-    `SELECT id, type FROM workspace_statuses
-       WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-    [statusId, ctx.workspace.id]
+    `SELECT id, type FROM project_statuses
+       WHERE id = ? AND project_id = ? AND deleted_at IS NULL`,
+    [statusId, projectId]
   )) as { id: string; type: string } | undefined;
 
   if (!row) {
-    throw new ServiceError('Unknown status for workspace', 'validation_error');
+    throw new ServiceError('Unknown status for project', 'validation_error', 409);
   }
   return row;
 }
@@ -607,10 +617,10 @@ export async function createMissionWithObjectives({
 
   const missionTitle = explicitTitle || initialTitleFromInstruction(firstInstruction);
   const status = statusId
-    ? await getWorkspaceStatusById(ctx, statusId)
+    ? await getProjectStatusById(ctx, resolvedProjectId, statusId)
     : statusType === 'review'
-      ? await getReviewStatusId(ctx)
-      : await getDefaultStatusId(ctx);
+      ? await getReviewStatusId(ctx, resolvedProjectId)
+      : await getDefaultStatusId(ctx, resolvedProjectId);
 
   const now = nowIso();
   const missionId = newId();
@@ -1430,6 +1440,7 @@ async function upsertMyMissionPositionOnReview(
   ctx: ServiceContext,
   {
     workspaceId,
+    projectId,
     workspaceUserId,
     missionId,
     statusId,
@@ -1437,6 +1448,7 @@ async function upsertMyMissionPositionOnReview(
     now
   }: {
     workspaceId: string;
+    projectId: string;
     workspaceUserId: string;
     missionId: string;
     statusId: string;
@@ -1453,18 +1465,18 @@ async function upsertMyMissionPositionOnReview(
   if (existing) {
     await ctx.db.run(
       `UPDATE my_mission_positions
-          SET status_id = ?, position = ?, updated_at = ?, revision = ?
+          SET project_id = ?, status_id = ?, position = ?, updated_at = ?, revision = ?
         WHERE id = ?`,
-      [statusId, position, now, existing.revision + 1, existing.id]
+      [projectId, statusId, position, now, existing.revision + 1, existing.id]
     );
     return;
   }
 
   await ctx.db.run(
     `INSERT INTO my_mission_positions
-       (id, workspace_id, workspace_user_id, mission_id, status_id, position, created_at, updated_at, revision)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`,
-    [newId(), workspaceId, workspaceUserId, missionId, statusId, position, now, now]
+       (id, workspace_id, project_id, workspace_user_id, mission_id, status_id, position, created_at, updated_at, revision)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+    [newId(), workspaceId, projectId, workspaceUserId, missionId, statusId, position, now, now]
   );
 }
 
@@ -1476,7 +1488,7 @@ export async function moveMissionToReview({
   missionId: string;
 }): Promise<void> {
   const mission = await getMissionSummary({ ctx, missionId });
-  const reviewStatus = await getReviewStatusId(ctx);
+  const reviewStatus = await getReviewStatusId(ctx, mission.projectId);
   const now = nowIso();
   const boardPosition = await topBoardPosition(ctx, mission.projectId, reviewStatus.id);
 
@@ -1498,6 +1510,7 @@ export async function moveMissionToReview({
     );
     await upsertMyMissionPositionOnReview(ctx, {
       workspaceId: ctx.workspace.id,
+      projectId: mission.projectId,
       workspaceUserId: assignee.assigned_workspace_user_id,
       missionId: mission.id,
       statusId: reviewStatus.id,
@@ -1530,7 +1543,7 @@ export async function moveMissionToExecute({
   missionId: string;
 }): Promise<void> {
   const mission = await getMissionSummary({ ctx, missionId });
-  const executeStatus = await getExecuteStatusId(ctx);
+  const executeStatus = await getExecuteStatusId(ctx, mission.projectId);
   if (mission.statusId === executeStatus.id && mission.statusType === executeStatus.type) {
     return;
   }
@@ -1561,4 +1574,4 @@ export async function moveMissionToExecute({
   });
 }
 
-export { getDefaultStatusId, getExecuteStatusId, getReviewStatusId };
+export { getDefaultStatusId, getExecuteStatusId, getProjectStatusById, getReviewStatusId };

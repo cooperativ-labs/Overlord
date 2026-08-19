@@ -142,6 +142,11 @@ const toolHandlers: Record<string, ToolHandler> = {
         ...(optionalString(args, 'slug') ? { '--slug': requiredString(args, 'slug') } : {})
       })
     ),
+  overlord_list_project_statuses: args =>
+    runProtocolSubcommand(
+      'statuses',
+      protocolBody({ '--project-id': requiredString(args, 'projectId') })
+    ),
   overlord_search_missions: args =>
     runProtocolSubcommand(
       'search-missions',

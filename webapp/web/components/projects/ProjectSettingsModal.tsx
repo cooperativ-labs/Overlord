@@ -1,4 +1,4 @@
-import { FolderTree, Plug, Rocket, Settings, Tag, Trash2 } from 'lucide-react';
+import { FolderTree, GitBranch, Plug, Rocket, Settings, Tag, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { DangerZonePage } from '@/components/projects/project-settings/DangerZonePage.tsx';
@@ -6,6 +6,7 @@ import { GeneralPage } from '@/components/projects/project-settings/GeneralPage.
 import { IntegrationsPage } from '@/components/projects/project-settings/IntegrationsPage.tsx';
 import { LaunchPage } from '@/components/projects/project-settings/LaunchPage.tsx';
 import { ResourcesPage } from '@/components/projects/project-settings/ResourcesPage.tsx';
+import { StatusesPage } from '@/components/projects/project-settings/StatusesPage.tsx';
 import { TagsPage } from '@/components/projects/project-settings/TagsPage.tsx';
 import {
   SettingsDialogShell,
@@ -19,6 +20,7 @@ const navItems: SettingsNavItem[] = [
   { name: 'Launch', icon: Rocket },
   { name: 'Resources', icon: FolderTree },
   { name: 'Tags', icon: Tag },
+  { name: 'Card statuses', icon: GitBranch },
   { name: 'Integrations', icon: Plug },
   { name: 'Danger zone', icon: Trash2 }
 ];
@@ -73,6 +75,7 @@ export function ProjectSettingsModal({
       {activeNav === 'Launch' && <LaunchPage open={open} projectId={project.id} />}
       {activeNav === 'Resources' && <ResourcesPage open={open} projectId={project.id} />}
       {activeNav === 'Tags' && <TagsPage projectId={project.id} />}
+      {activeNav === 'Card statuses' && <StatusesPage projectId={project.id} />}
       {activeNav === 'Integrations' && <IntegrationsPage open={open} project={project} />}
       {activeNav === 'Danger zone' && (
         <DangerZonePage

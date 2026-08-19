@@ -77,7 +77,7 @@ if (process.env.TEST_DATABASE_URL) {
 }
 
 async function runMissionProjectMoveCase(): Promise<void> {
-  const { createProject, createMission, updateMission, getMissionDetail } =
+  const { createProject, createMission, updateMission, getMissionDetail, listProjectStatuses } =
     await import('./repository.ts');
 
   const p1 = await createProject({ name: 'Project A' });
@@ -87,11 +87,19 @@ async function runMissionProjectMoveCase(): Promise<void> {
 
   const updated = await updateMission(mission.id, { projectId: p2.id });
   assert.equal(updated.projectId, p2.id);
+  const p2Default = (await listProjectStatuses(p2.id)).find(status => status.isDefault)!;
+  assert.equal(updated.statusId, p2Default.id, 'the target project receives its matching status');
 
   const detail = await getMissionDetail(mission.id);
   assert.equal(detail.projectId, p2.id);
   assert.equal(detail.objectives.length, 1);
   assert.equal(detail.objectives[0]?.projectId, p2.id);
+
+  const p2Execute = (await listProjectStatuses(p2.id)).find(status => status.type === 'execute')!;
+  await assert.rejects(
+    updateMission(mission.id, { projectId: p1.id, statusId: p2Execute.id }),
+    (error: unknown) => (error as { status?: number }).status === 409
+  );
 }
 
 for (const adapter of adapters) {

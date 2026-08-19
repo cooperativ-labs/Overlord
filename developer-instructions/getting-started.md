@@ -190,7 +190,7 @@ ovld create "Refactor the auth middleware" \
 The command prints the mission ID (e.g. `1:1042`). You can also list missions:
 
 ```bash
-ovld missions list --status next-up,execute
+ovld missions list --status execute,review
 ```
 
 ---

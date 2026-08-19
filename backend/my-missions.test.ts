@@ -23,7 +23,7 @@ const {
   updateMission,
   deleteMission,
   listMissions,
-  listWorkspaceStatuses,
+  listProjectStatuses,
   listWorkspaceMyMissions,
   reorderWorkspaceMyMissions
 } = await import('./repository.ts');
@@ -32,9 +32,11 @@ const { ApiError } = await import('./errors.ts');
 // Operator is seeded by bootstrapIntegrationTestDb.
 const operatorId = 'operator-workspace-user';
 
-const statuses = await listWorkspaceStatuses();
-const backlog = statuses.find(s => s.key === 'backlog')!;
-const inProgress = statuses.find(s => s.key === 'in_progress')!;
+async function statusFor(projectId: string, key: string) {
+  const status = (await listProjectStatuses(projectId)).find(item => item.key === key);
+  assert.ok(status, `expected ${key} status for project ${projectId}`);
+  return status;
+}
 
 test('the test database seeds the active operator workspace user', async () => {
   const row = db.prepare(`SELECT status FROM workspace_users WHERE id = ?`).get(operatorId) as
@@ -68,6 +70,7 @@ test('lists missions assigned to the operator across projects, with project cont
 
 test('within-column reorder writes personal position and leaves board_position untouched', async () => {
   const project = await createProject({ name: 'MT Reorder' });
+  const backlog = await statusFor(project.id, 'backlog');
   const t1 = await createMission({ projectId: project.id, firstObjective: 'r1' });
   const t2 = await createMission({ projectId: project.id, firstObjective: 'r2' });
   const beforeBoard = new Map((await listMissions(project.id)).map(t => [t.id, t.boardPosition]));
@@ -88,6 +91,8 @@ test('within-column reorder writes personal position and leaves board_position u
 
 test('cross-column drag changes the mission status, type, and board_position', async () => {
   const project = await createProject({ name: 'MT CrossCol' });
+  const backlog = await statusFor(project.id, 'backlog');
+  const inProgress = await statusFor(project.id, 'in_progress');
   const mission = await createMission({ projectId: project.id, firstObjective: 'x' });
   assert.equal(
     (await listMissions(project.id)).find(t => t.id === mission.id)!.statusId,
@@ -108,6 +113,8 @@ test('cross-column drag changes the mission status, type, and board_position', a
 
 test('a personal position is ignored once the mission leaves that column via another surface', async () => {
   const project = await createProject({ name: 'MT Stale' });
+  const backlog = await statusFor(project.id, 'backlog');
+  const inProgress = await statusFor(project.id, 'in_progress');
   const mission = await createMission({ projectId: project.id, firstObjective: 's' });
   await reorderWorkspaceMyMissions({ statusId: backlog.id, orderedMissionIds: [mission.id] });
   // Move it via the project-board status-change path; the stored position keeps
@@ -145,6 +152,7 @@ test('excludes missions whose project has been deleted', async () => {
 
 test('a personal position survives reassignment and is restored when the mission returns', async () => {
   const project = await createProject({ name: 'MT Reassign' });
+  const backlog = await statusFor(project.id, 'backlog');
   const mission = await createMission({ projectId: project.id, firstObjective: 'ra' });
   await reorderWorkspaceMyMissions({ statusId: backlog.id, orderedMissionIds: [mission.id] });
 
@@ -158,6 +166,7 @@ test('a personal position survives reassignment and is restored when the mission
 
 test('reorder rejects a mission not assigned to the operator', async () => {
   const project = await createProject({ name: 'MT NotMine' });
+  const backlog = await statusFor(project.id, 'backlog');
   const mission = await createMission({ projectId: project.id, firstObjective: 'nm' });
   await updateMission(mission.id, { assignedWorkspaceUserId: null });
   await assert.rejects(
@@ -188,12 +197,6 @@ test('different tenants only see their own My Missions entries', async () => {
         assigned_by_workspace_user_id, created_at, updated_at, revision)
      VALUES (?, 'tenant-b', 'tenant-b-workspace-user', 'ADMIN', '', '', ?, ?, ?, 1)`
   ).run('tenant-b-admin-role', 'tenant-b-workspace-user', now, now);
-  db.prepare(
-    `INSERT INTO workspace_statuses
-       (id, workspace_id, key, name, type, position, is_default, is_terminal, created_at, updated_at, revision)
-     VALUES ('tenant-b-backlog', 'tenant-b', 'backlog', 'Backlog', 'draft', 100, 1, 0, ?, ?, 1)`
-  ).run(now, now);
-
   const operatorProject = await createProject({ name: 'Tenant A Project' });
   const operatorMission = await createMission({
     projectId: operatorProject.id,

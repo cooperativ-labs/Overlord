@@ -411,7 +411,7 @@ var init_constants = __esm({
       {
         key: "next_up",
         name: "Next Up",
-        type: "draft",
+        type: "next",
         position: 1,
         isDefault: false,
         isTerminal: false
@@ -629,6 +629,107 @@ function resolveAppliedMigrationSqlite({ db, migration }) {
 var init_migration_ledger = __esm({
   "../database/dist/migration-ledger.js"() {
     "use strict";
+  }
+});
+
+// ../database/dist/next-status-type-migration-runtime.js
+function isNextStatusTypeMigration(migration) {
+  return migration.version === MIGRATION_VERSION;
+}
+function tableSql(db, name) {
+  const row = db.prepare(`SELECT sql FROM sqlite_schema WHERE type = 'table' AND name = ?`).get(name);
+  if (!row?.sql)
+    throw new Error(`Missing ${name} while migrating next status type`);
+  return row.sql;
+}
+function tableColumns(db, name) {
+  return db.prepare(`SELECT name FROM pragma_table_info(?) ORDER BY cid`).all(name).map((row) => `"${row.name.replaceAll('"', '""')}"`).join(", ");
+}
+function indexesAndTriggers(db, table) {
+  return db.prepare(`SELECT sql FROM sqlite_schema
+          WHERE tbl_name = ? AND type IN ('index', 'trigger') AND sql IS NOT NULL
+          ORDER BY type, name`).all(table).map((row) => row.sql);
+}
+function replacementTableSql(sql2, oldName) {
+  const renamed = sql2.replace(`CREATE TABLE ${oldName}`, `CREATE TABLE ${oldName}_before_next`);
+  if (renamed === sql2)
+    throw new Error(`Could not rename ${oldName} table DDL`);
+  return sql2.replace(OLD_TYPES, NEW_TYPES);
+}
+function rebuildTableWithNextType(db, name) {
+  const sql2 = tableSql(db, name);
+  if (sql2.includes(NEW_TYPES))
+    return;
+  const dependentSql = indexesAndTriggers(db, name);
+  const columns = tableColumns(db, name);
+  db.exec(`ALTER TABLE ${name} RENAME TO ${name}_before_next`);
+  db.exec(replacementTableSql(sql2, name));
+  db.exec(`INSERT INTO ${name} (${columns}) SELECT ${columns} FROM ${name}_before_next`);
+  db.exec(`DROP TABLE ${name}_before_next`);
+  for (const statement of dependentSql)
+    db.exec(statement);
+}
+function finalizeNextStatusTypeSqlite(db) {
+  const exists = db.prepare(`SELECT 1 FROM sqlite_schema WHERE type = 'table' AND name = 'project_statuses'`).get();
+  if (!exists)
+    return;
+  db.exec("PRAGMA foreign_keys = OFF");
+  db.exec("PRAGMA legacy_alter_table = ON");
+  try {
+    db.exec("BEGIN");
+    rebuildTableWithNextType(db, "project_statuses");
+    rebuildTableWithNextType(db, "missions");
+    const now2 = (/* @__PURE__ */ new Date()).toISOString();
+    db.prepare(`UPDATE project_statuses SET type = 'next', updated_at = ?, revision = revision + 1
+        WHERE key = 'next_up' AND type = 'draft' AND deleted_at IS NULL`).run(now2);
+    for (const project of db.prepare(`SELECT p.id, p.workspace_id FROM projects p
+          WHERE p.deleted_at IS NULL
+            AND NOT EXISTS (
+              SELECT 1 FROM project_statuses ps
+              WHERE ps.project_id = p.id AND ps.type = 'next' AND ps.deleted_at IS NULL
+            )`).all()) {
+      const position = db.prepare(`SELECT COALESCE(MAX(position), -1) + 1 AS position
+              FROM project_statuses WHERE project_id = ? AND deleted_at IS NULL`).get(project.id).position;
+      db.prepare(`INSERT INTO project_statuses
+           (id, workspace_id, project_id, key, name, type, position, is_default, is_terminal, metadata_json, created_at, updated_at, revision)
+         VALUES (?, ?, ?, 'next_up', 'Next Up', 'next', ?, 0, 0, '{}', ?, ?, 1)`).run((0, import_node_crypto.randomUUID)(), project.workspace_id, project.id, position, now2, now2);
+    }
+    db.exec(`UPDATE missions
+          SET status_type = (
+            SELECT type FROM project_statuses ps
+             WHERE ps.project_id = missions.project_id AND ps.id = missions.status_id
+          )
+        WHERE status_id IN (SELECT id FROM project_statuses WHERE type = 'next')`);
+    db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_project_statuses_active_next
+         ON project_statuses (project_id) WHERE type = 'next' AND deleted_at IS NULL`);
+    const invalid = db.prepare(`SELECT 1 FROM projects p
+          LEFT JOIN project_statuses ps ON ps.project_id = p.id AND ps.deleted_at IS NULL
+         WHERE p.deleted_at IS NULL
+         GROUP BY p.id
+        HAVING SUM(ps.type = 'next') != 1
+         LIMIT 1`).get();
+    if (invalid)
+      throw new Error("Next-status migration could not establish one next status per project");
+    db.exec("COMMIT");
+  } catch (error53) {
+    db.exec("ROLLBACK");
+    throw error53;
+  } finally {
+    db.exec("PRAGMA legacy_alter_table = OFF");
+    db.exec("PRAGMA foreign_keys = ON");
+  }
+  const foreignKeyViolation = db.prepare("PRAGMA foreign_key_check").get();
+  if (foreignKeyViolation)
+    throw new Error("Next-status migration foreign-key verification failed");
+}
+var import_node_crypto, MIGRATION_VERSION, OLD_TYPES, NEW_TYPES;
+var init_next_status_type_migration_runtime = __esm({
+  "../database/dist/next-status-type-migration-runtime.js"() {
+    "use strict";
+    import_node_crypto = require("node:crypto");
+    MIGRATION_VERSION = "20260819100000";
+    OLD_TYPES = "'draft','execute','review','complete','blocked','cancelled'";
+    NEW_TYPES = "'draft','next','execute','review','complete','blocked','cancelled'";
   }
 });
 
@@ -895,7 +996,7 @@ var init_dist = __esm({
 });
 
 // ../database/dist/objective-display-key.js
-function generateObjectiveDisplayKey({ length = OBJECTIVE_DISPLAY_KEY_LENGTH, bytes = import_node_crypto.randomBytes } = {}) {
+function generateObjectiveDisplayKey({ length = OBJECTIVE_DISPLAY_KEY_LENGTH, bytes = import_node_crypto2.randomBytes } = {}) {
   const alphabet = OBJECTIVE_DISPLAY_KEY_ALPHABET;
   const raw = bytes(length);
   let key = "";
@@ -904,12 +1005,12 @@ function generateObjectiveDisplayKey({ length = OBJECTIVE_DISPLAY_KEY_LENGTH, by
   }
   return key;
 }
-var import_node_crypto;
+var import_node_crypto2;
 var init_objective_display_key = __esm({
   "../database/dist/objective-display-key.js"() {
     "use strict";
     init_dist();
-    import_node_crypto = require("node:crypto");
+    import_node_crypto2 = require("node:crypto");
     init_dist();
   }
 });
@@ -1069,12 +1170,247 @@ var init_project_resources_resource_key_migration_runtime = __esm({
   }
 });
 
+// ../database/dist/project-statuses-migration-runtime.js
+function isProjectStatusesMigration(migration) {
+  return migration.version === PROJECT_STATUSES_MIGRATION_VERSION && migration.component === "core";
+}
+function sqliteProjectStatusesSql() {
+  return `
+    CREATE TABLE project_statuses (
+      id TEXT PRIMARY KEY,
+      workspace_id TEXT NOT NULL REFERENCES workspaces (id) ON DELETE RESTRICT,
+      project_id TEXT NOT NULL REFERENCES projects (id) ON DELETE RESTRICT,
+      key TEXT NOT NULL CHECK (length(trim(key)) > 0),
+      name TEXT NOT NULL CHECK (length(trim(name)) > 0 AND name = trim(name)),
+      type TEXT NOT NULL CHECK (type IN ('draft','next','execute','review','complete','blocked','cancelled')),
+      position INTEGER NOT NULL CHECK (position >= 0),
+      is_default INTEGER NOT NULL DEFAULT 0 CHECK (is_default IN (0, 1)),
+      is_terminal INTEGER NOT NULL DEFAULT 0 CHECK (is_terminal IN (0, 1)),
+      metadata_json TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(metadata_json)),
+      created_at TEXT NOT NULL CHECK (created_at GLOB '????-??-??T??:??:??.???Z'),
+      updated_at TEXT NOT NULL CHECK (updated_at GLOB '????-??-??T??:??:??.???Z'),
+      deleted_at TEXT CHECK (deleted_at IS NULL OR deleted_at GLOB '????-??-??T??:??:??.???Z'),
+      revision INTEGER NOT NULL DEFAULT 1 CHECK (revision >= 1),
+      UNIQUE (workspace_id, id),
+      UNIQUE (project_id, id),
+      FOREIGN KEY (workspace_id, project_id) REFERENCES projects (workspace_id, id) ON DELETE RESTRICT
+    );
+    CREATE UNIQUE INDEX idx_project_statuses_project_key ON project_statuses (project_id, key);
+    CREATE UNIQUE INDEX idx_project_statuses_active_name ON project_statuses (project_id, lower(name)) WHERE deleted_at IS NULL;
+    CREATE UNIQUE INDEX idx_project_statuses_active_default ON project_statuses (project_id) WHERE is_default = 1 AND deleted_at IS NULL;
+    CREATE UNIQUE INDEX idx_project_statuses_active_execute ON project_statuses (project_id) WHERE type = 'execute' AND deleted_at IS NULL;
+    CREATE UNIQUE INDEX idx_project_statuses_active_review ON project_statuses (project_id) WHERE type = 'review' AND deleted_at IS NULL;
+    CREATE UNIQUE INDEX idx_project_statuses_active_next ON project_statuses (project_id) WHERE type = 'next' AND deleted_at IS NULL;
+    CREATE INDEX idx_project_statuses_project_position ON project_statuses (project_id, position) WHERE deleted_at IS NULL;
+  `;
+}
+function sqliteRebuildDependentsSql() {
+  return `
+    CREATE TABLE schedules_new (
+      id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL REFERENCES workspaces (id) ON DELETE RESTRICT,
+      name TEXT, period_type TEXT NOT NULL DEFAULT 'd' CHECK (period_type IN ('d', 'w', 'm')),
+      period_interval INTEGER NOT NULL DEFAULT 1 CHECK (period_interval >= 1),
+      weeks_of_month_json TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(weeks_of_month_json)),
+      days_of_month_json TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(days_of_month_json)),
+      days_of_week_json TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(days_of_week_json)),
+      start_date TEXT CHECK (start_date IS NULL OR start_date GLOB '????-??-??T??:??:??.???Z'),
+      timezone TEXT NOT NULL CHECK (length(trim(timezone)) > 0), next_status_key TEXT,
+      created_at TEXT NOT NULL CHECK (created_at GLOB '????-??-??T??:??:??.???Z'),
+      updated_at TEXT NOT NULL CHECK (updated_at GLOB '????-??-??T??:??:??.???Z'),
+      revision INTEGER NOT NULL DEFAULT 1 CHECK (revision >= 1)
+    );
+    INSERT INTO schedules_new (id, workspace_id, name, period_type, period_interval, weeks_of_month_json, days_of_month_json, days_of_week_json, start_date, timezone, next_status_key, created_at, updated_at, revision)
+      SELECT id, workspace_id, name, period_type, period_interval, weeks_of_month_json, days_of_month_json, days_of_week_json, start_date, timezone, next_status_key, created_at, updated_at, revision FROM schedules;
+    DROP TABLE schedules;
+    ALTER TABLE schedules_new RENAME TO schedules;
+    CREATE UNIQUE INDEX idx_schedules_workspace_id ON schedules (workspace_id, id);
+    CREATE TABLE missions_new (
+      id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL REFERENCES workspaces (id) ON DELETE RESTRICT,
+      project_id TEXT NOT NULL REFERENCES projects (id) ON DELETE RESTRICT, display_id TEXT NOT NULL CHECK (length(trim(display_id)) > 0),
+      sequence_number INTEGER NOT NULL CHECK (sequence_number >= 1), title TEXT NOT NULL CHECK (length(trim(title)) > 0),
+      status_id TEXT NOT NULL REFERENCES project_statuses (id) ON DELETE RESTRICT,
+      status_type TEXT NOT NULL CHECK (status_type IN ('draft','next','execute','review','complete','blocked','cancelled')), board_position INTEGER NOT NULL DEFAULT 0,
+      priority TEXT CHECK (priority IS NULL OR priority IN ('low','normal','high','urgent')), constraints_text TEXT, output_format_text TEXT,
+      execution_target_intent_json TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(execution_target_intent_json)), metadata_json TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(metadata_json)),
+      active_branch TEXT, branch_override TEXT, worktree_preference TEXT, schedule_id TEXT REFERENCES schedules (id) ON DELETE SET NULL,
+      due_datetime TEXT CHECK (due_datetime IS NULL OR due_datetime GLOB '????-??-??T??:??:??.???Z'), created_by_workspace_user_id TEXT REFERENCES workspace_users (id) ON DELETE SET NULL,
+      assigned_workspace_user_id TEXT REFERENCES workspace_users (id) ON DELETE SET NULL, created_at TEXT NOT NULL CHECK (created_at GLOB '????-??-??T??:??:??.???Z'),
+      updated_at TEXT NOT NULL CHECK (updated_at GLOB '????-??-??T??:??:??.???Z'), deleted_at TEXT CHECK (deleted_at IS NULL OR deleted_at GLOB '????-??-??T??:??:??.???Z'),
+      revision INTEGER NOT NULL DEFAULT 1 CHECK (revision >= 1), notes_text TEXT, blocking_question_seen_at TEXT, returned_to_execute_at TEXT,
+      created_by_kind TEXT NOT NULL DEFAULT 'human' CHECK (created_by_kind IN ('human','agent','automation')), created_by_agent TEXT, created_by_session_id TEXT,
+      allow_parallel_objectives INTEGER NOT NULL DEFAULT 0 CHECK (allow_parallel_objectives IN (0, 1)),
+      FOREIGN KEY (workspace_id, project_id) REFERENCES projects (workspace_id, id) ON DELETE RESTRICT,
+      FOREIGN KEY (project_id, status_id) REFERENCES project_statuses (project_id, id) ON DELETE RESTRICT
+    );
+    INSERT INTO missions_new SELECT * FROM missions;
+    DROP TABLE missions;
+    ALTER TABLE missions_new RENAME TO missions;
+    CREATE UNIQUE INDEX idx_missions_workspace_display_id ON missions (workspace_id, display_id);
+    CREATE UNIQUE INDEX idx_missions_workspace_sequence_number ON missions (workspace_id, sequence_number);
+    CREATE UNIQUE INDEX idx_missions_workspace_id ON missions (workspace_id, id);
+    CREATE UNIQUE INDEX idx_missions_project_id ON missions (project_id, id);
+    CREATE INDEX idx_missions_project_status_updated ON missions (project_id, status_type, updated_at);
+    CREATE INDEX idx_missions_project_status_board ON missions (project_id, status_id, board_position);
+    CREATE INDEX idx_missions_workspace_creator_updated ON missions (workspace_id, created_by_workspace_user_id, updated_at);
+    CREATE INDEX idx_missions_schedule_id ON missions (schedule_id) WHERE schedule_id IS NOT NULL;
+    CREATE INDEX idx_missions_project_due_datetime ON missions (project_id, due_datetime) WHERE due_datetime IS NOT NULL AND deleted_at IS NULL;
+    -- SQLite drops a table's triggers with the table, so the create-copy-drop-rename
+    -- above silently detaches the mission full-text index maintainers from
+    -- 002_initial_core.sql. Recreating them verbatim is not optional: without them
+    -- the missions table stops feeding search_documents and every keyword search
+    -- (ovld missions list --query, protocol search-missions, the webapp search box)
+    -- goes quiet for newly written rows without erroring anywhere.
+    CREATE TRIGGER trg_search_missions_ai AFTER INSERT ON missions
+    WHEN new.deleted_at IS NULL
+    BEGIN
+      INSERT INTO search_documents (
+        id, workspace_id, project_id, mission_id, entity_type, entity_id,
+        title, body_text, source_revision, indexed_at
+      ) VALUES (
+        lower(hex(randomblob(16))), new.workspace_id, new.project_id, new.id, 'mission', new.id,
+        new.title, new.title || ' ' || new.display_id, new.revision,
+        strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+      )
+      ON CONFLICT (workspace_id, entity_type, entity_id) DO UPDATE SET
+        project_id = excluded.project_id,
+        mission_id = excluded.mission_id,
+        title = excluded.title,
+        body_text = excluded.body_text,
+        source_revision = excluded.source_revision,
+        indexed_at = excluded.indexed_at;
+    END;
+    CREATE TRIGGER trg_search_missions_au AFTER UPDATE ON missions
+    WHEN new.deleted_at IS NULL
+    BEGIN
+      INSERT INTO search_documents (
+        id, workspace_id, project_id, mission_id, entity_type, entity_id,
+        title, body_text, source_revision, indexed_at
+      ) VALUES (
+        lower(hex(randomblob(16))), new.workspace_id, new.project_id, new.id, 'mission', new.id,
+        new.title, new.title || ' ' || new.display_id, new.revision,
+        strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+      )
+      ON CONFLICT (workspace_id, entity_type, entity_id) DO UPDATE SET
+        project_id = excluded.project_id,
+        mission_id = excluded.mission_id,
+        title = excluded.title,
+        body_text = excluded.body_text,
+        source_revision = excluded.source_revision,
+        indexed_at = excluded.indexed_at;
+    END;
+    CREATE TRIGGER trg_search_missions_soft_delete AFTER UPDATE ON missions
+    WHEN new.deleted_at IS NOT NULL AND old.deleted_at IS NULL
+    BEGIN
+      DELETE FROM search_documents WHERE workspace_id = new.workspace_id AND mission_id = new.id;
+    END;
+    CREATE TRIGGER trg_search_missions_ad AFTER DELETE ON missions BEGIN
+      DELETE FROM search_documents WHERE workspace_id = old.workspace_id AND mission_id = old.id;
+    END;
+    CREATE TABLE my_mission_positions_new (
+      id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL REFERENCES workspaces (id) ON DELETE CASCADE,
+      project_id TEXT NOT NULL REFERENCES projects (id) ON DELETE CASCADE, workspace_user_id TEXT NOT NULL REFERENCES workspace_users (id) ON DELETE CASCADE,
+      mission_id TEXT NOT NULL REFERENCES missions (id) ON DELETE CASCADE, status_id TEXT NOT NULL REFERENCES project_statuses (id) ON DELETE CASCADE,
+      position REAL NOT NULL, created_at TEXT NOT NULL CHECK (created_at GLOB '????-??-??T??:??:??.???Z'), updated_at TEXT NOT NULL CHECK (updated_at GLOB '????-??-??T??:??:??.???Z'),
+      revision INTEGER NOT NULL DEFAULT 1 CHECK (revision >= 1), UNIQUE (workspace_id, workspace_user_id, mission_id),
+      FOREIGN KEY (workspace_id, mission_id) REFERENCES missions (workspace_id, id) ON DELETE CASCADE,
+      FOREIGN KEY (project_id, mission_id) REFERENCES missions (project_id, id) ON DELETE CASCADE,
+      FOREIGN KEY (project_id, status_id) REFERENCES project_statuses (project_id, id) ON DELETE CASCADE
+    );
+    INSERT INTO my_mission_positions_new SELECT id, workspace_id, project_id, workspace_user_id, mission_id, status_id, position, created_at, updated_at, revision FROM my_mission_positions;
+    DROP TABLE my_mission_positions;
+    ALTER TABLE my_mission_positions_new RENAME TO my_mission_positions;
+    CREATE INDEX idx_my_mission_positions_user_status ON my_mission_positions (workspace_id, workspace_user_id, status_id, position);
+  `;
+}
+function sqliteVerify(db) {
+  const invalidMission = db.prepare(`SELECT 1 FROM missions m LEFT JOIN project_statuses ps ON ps.project_id = m.project_id AND ps.id = m.status_id WHERE m.deleted_at IS NULL AND ps.id IS NULL LIMIT 1`).get();
+  const badSingleton = db.prepare(`SELECT 1 FROM projects p LEFT JOIN project_statuses ps ON ps.project_id = p.id AND ps.deleted_at IS NULL WHERE p.deleted_at IS NULL GROUP BY p.id HAVING SUM(ps.is_default = 1) != 1 OR SUM(ps.type = 'execute') != 1 OR SUM(ps.type = 'review') != 1 LIMIT 1`).get();
+  const badFanout = db.prepare(`SELECT 1 FROM (SELECT p.workspace_id, COUNT(*) projects FROM projects p WHERE p.deleted_at IS NULL GROUP BY p.workspace_id) p LEFT JOIN (SELECT workspace_id, COUNT(*) statuses FROM workspace_statuses GROUP BY workspace_id) ws ON ws.workspace_id = p.workspace_id LEFT JOIN (SELECT workspace_id, COUNT(*) statuses FROM project_statuses GROUP BY workspace_id) ps ON ps.workspace_id = p.workspace_id WHERE COALESCE(ps.statuses, 0) != p.projects * COALESCE(ws.statuses, 0) LIMIT 1`).get();
+  if (invalidMission || badSingleton || badFanout)
+    throw new Error("Project-status migration verification failed");
+}
+function finalizeProjectStatusesSqlite(db) {
+  const legacyExists = db.prepare(`SELECT 1 FROM sqlite_schema WHERE type = 'table' AND name = 'workspace_statuses'`).get();
+  if (!legacyExists)
+    return;
+  db.exec("PRAGMA foreign_keys = OFF");
+  try {
+    db.exec("BEGIN");
+    db.exec(sqliteProjectStatusesSql());
+    db.exec("ALTER TABLE schedules ADD COLUMN next_status_key TEXT");
+    const statuses = db.prepare(`SELECT id, workspace_id, key, name, type, position, is_default, is_terminal, metadata_json FROM workspace_statuses WHERE deleted_at IS NULL`).all();
+    const projects = db.prepare(`SELECT id, workspace_id FROM projects WHERE deleted_at IS NULL`).all();
+    const insert = db.prepare(`INSERT INTO project_statuses (id, workspace_id, project_id, key, name, type, position, is_default, is_terminal, metadata_json, created_at, updated_at, revision) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`);
+    const now2 = (/* @__PURE__ */ new Date()).toISOString();
+    for (const project of projects)
+      for (const status of statuses)
+        if (status.workspace_id === project.workspace_id)
+          insert.run((0, import_node_crypto3.randomUUID)(), project.workspace_id, project.id, status.key, status.name, status.type, status.position, status.is_default, status.is_terminal, status.metadata_json, now2, now2);
+    db.exec(`UPDATE missions SET status_id = (SELECT ps.id FROM workspace_statuses ws JOIN project_statuses ps ON ps.project_id = missions.project_id AND ps.key = ws.key WHERE ws.id = missions.status_id)`);
+    db.exec(`ALTER TABLE my_mission_positions ADD COLUMN project_id TEXT; UPDATE my_mission_positions SET project_id = (SELECT project_id FROM missions WHERE missions.id = my_mission_positions.mission_id);`);
+    db.exec(`UPDATE my_mission_positions SET status_id = (SELECT ps.id FROM workspace_statuses ws JOIN project_statuses ps ON ps.project_id = my_mission_positions.project_id AND ps.key = ws.key WHERE ws.id = my_mission_positions.status_id);`);
+    db.exec(`UPDATE schedules SET next_status_key = (SELECT key FROM workspace_statuses WHERE id = schedules.next_status_id)`);
+    db.exec(sqliteRebuildDependentsSql());
+    sqliteVerify(db);
+    db.exec("ALTER TABLE workspace_statuses RENAME TO workspace_statuses_legacy");
+    db.exec("COMMIT");
+  } catch (error53) {
+    db.exec("ROLLBACK");
+    throw error53;
+  } finally {
+    db.exec("PRAGMA foreign_keys = ON");
+  }
+}
+async function finalizeProjectStatusesPostgres(client) {
+  const legacy = await client.get(`SELECT to_regclass('workspace_statuses') AS present`);
+  if (!legacy?.present)
+    return;
+  await client.transaction(async (tx) => {
+    await tx.exec(`CREATE TABLE project_statuses (id text PRIMARY KEY, workspace_id text NOT NULL REFERENCES workspaces(id) ON DELETE RESTRICT, project_id text NOT NULL REFERENCES projects(id) ON DELETE RESTRICT, key text NOT NULL CHECK (char_length(btrim(key)) > 0), name text NOT NULL CHECK (char_length(btrim(name)) > 0 AND name = btrim(name)), type text NOT NULL CHECK (type IN ('draft','next','execute','review','complete','blocked','cancelled')), position integer NOT NULL CHECK (position >= 0), is_default boolean NOT NULL DEFAULT false, is_terminal boolean NOT NULL DEFAULT false, metadata_json jsonb NOT NULL DEFAULT '{}'::jsonb, created_at timestamptz NOT NULL, updated_at timestamptz NOT NULL, deleted_at timestamptz, revision integer NOT NULL DEFAULT 1 CHECK (revision >= 1), UNIQUE (workspace_id,id), UNIQUE (project_id,id), FOREIGN KEY (workspace_id,project_id) REFERENCES projects(workspace_id,id) ON DELETE RESTRICT); CREATE UNIQUE INDEX idx_project_statuses_project_key ON project_statuses(project_id,key); CREATE UNIQUE INDEX idx_project_statuses_active_name ON project_statuses(project_id,lower(name)) WHERE deleted_at IS NULL; CREATE UNIQUE INDEX idx_project_statuses_active_default ON project_statuses(project_id) WHERE is_default AND deleted_at IS NULL; CREATE UNIQUE INDEX idx_project_statuses_active_execute ON project_statuses(project_id) WHERE type='execute' AND deleted_at IS NULL; CREATE UNIQUE INDEX idx_project_statuses_active_review ON project_statuses(project_id) WHERE type='review' AND deleted_at IS NULL; CREATE UNIQUE INDEX idx_project_statuses_active_next ON project_statuses(project_id) WHERE type='next' AND deleted_at IS NULL; CREATE INDEX idx_project_statuses_project_position ON project_statuses(project_id,position) WHERE deleted_at IS NULL; ALTER TABLE schedules ADD COLUMN next_status_key text;`);
+    const statuses = await tx.all(`SELECT id, workspace_id, key, name, type, position, is_default, is_terminal, metadata_json::text FROM workspace_statuses WHERE deleted_at IS NULL`);
+    const projects = await tx.all(`SELECT id, workspace_id FROM projects WHERE deleted_at IS NULL`);
+    const now2 = (/* @__PURE__ */ new Date()).toISOString();
+    for (const project of projects)
+      for (const status of statuses)
+        if (status.workspace_id === project.workspace_id)
+          await tx.run(`INSERT INTO project_statuses (id,workspace_id,project_id,key,name,type,position,is_default,is_terminal,metadata_json,created_at,updated_at,revision) VALUES (?,?,?,?,?,?,?,?,?,?::jsonb,?,?,1)`, [
+            (0, import_node_crypto3.randomUUID)(),
+            project.workspace_id,
+            project.id,
+            status.key,
+            status.name,
+            status.type,
+            status.position,
+            status.is_default,
+            status.is_terminal,
+            status.metadata_json,
+            now2,
+            now2
+          ]);
+    await tx.exec(`UPDATE missions m SET status_id = ps.id FROM workspace_statuses ws JOIN project_statuses ps ON ps.project_id=m.project_id AND ps.key=ws.key WHERE ws.id=m.status_id; ALTER TABLE my_mission_positions ADD COLUMN project_id text; UPDATE my_mission_positions mp SET project_id=m.project_id FROM missions m WHERE m.id=mp.mission_id; UPDATE my_mission_positions mp SET status_id=ps.id FROM workspace_statuses ws JOIN project_statuses ps ON ps.project_id=mp.project_id AND ps.key=ws.key WHERE ws.id=mp.status_id; UPDATE schedules s SET next_status_key=ws.key FROM workspace_statuses ws WHERE ws.id=s.next_status_id; ALTER TABLE schedules DROP CONSTRAINT IF EXISTS schedules_next_status_id_fkey, DROP CONSTRAINT IF EXISTS schedules_workspace_id_next_status_id_fkey; ALTER TABLE schedules DROP COLUMN next_status_id; DROP INDEX IF EXISTS idx_schedules_workspace_next_status; ALTER TABLE missions DROP CONSTRAINT IF EXISTS missions_status_id_fkey, DROP CONSTRAINT IF EXISTS missions_workspace_id_status_id_fkey; ALTER TABLE missions ADD FOREIGN KEY (project_id,status_id) REFERENCES project_statuses(project_id,id) ON DELETE RESTRICT; ALTER TABLE my_mission_positions ALTER COLUMN project_id SET NOT NULL; ALTER TABLE my_mission_positions DROP CONSTRAINT IF EXISTS my_mission_positions_status_id_fkey, DROP CONSTRAINT IF EXISTS my_mission_positions_workspace_id_status_id_fkey; ALTER TABLE my_mission_positions ADD FOREIGN KEY (project_id,status_id) REFERENCES project_statuses(project_id,id) ON DELETE CASCADE; ALTER TABLE my_mission_positions ADD FOREIGN KEY (project_id,mission_id) REFERENCES missions(project_id,id) ON DELETE CASCADE;`);
+    const invalid = await tx.get(`SELECT 1 FROM missions m LEFT JOIN project_statuses ps ON ps.project_id=m.project_id AND ps.id=m.status_id WHERE m.deleted_at IS NULL AND ps.id IS NULL LIMIT 1`);
+    const singleton = await tx.get(`SELECT 1 FROM projects p LEFT JOIN project_statuses ps ON ps.project_id=p.id AND ps.deleted_at IS NULL WHERE p.deleted_at IS NULL GROUP BY p.id HAVING COUNT(*) FILTER (WHERE ps.is_default) != 1 OR COUNT(*) FILTER (WHERE ps.type='execute') != 1 OR COUNT(*) FILTER (WHERE ps.type='review') != 1 LIMIT 1`);
+    const fanout = await tx.get(`SELECT 1 FROM (SELECT p.workspace_id,COUNT(*) projects FROM projects p WHERE p.deleted_at IS NULL GROUP BY p.workspace_id) p LEFT JOIN (SELECT workspace_id,COUNT(*) statuses FROM workspace_statuses GROUP BY workspace_id) ws USING (workspace_id) LEFT JOIN (SELECT workspace_id,COUNT(*) statuses FROM project_statuses GROUP BY workspace_id) ps USING (workspace_id) WHERE COALESCE(ps.statuses,0) != p.projects * COALESCE(ws.statuses,0) LIMIT 1`);
+    if (invalid || singleton || fanout)
+      throw new Error("Project-status migration verification failed");
+    await tx.exec("ALTER TABLE workspace_statuses RENAME TO workspace_statuses_legacy");
+  });
+}
+var import_node_crypto3, PROJECT_STATUSES_MIGRATION_VERSION;
+var init_project_statuses_migration_runtime = __esm({
+  "../database/dist/project-statuses-migration-runtime.js"() {
+    "use strict";
+    import_node_crypto3 = require("node:crypto");
+    PROJECT_STATUSES_MIGRATION_VERSION = "20260819090000";
+  }
+});
+
 // ../database/dist/connection.js
 function migrationsDir() {
   return import_node_path5.default.resolve(import_node_path5.default.dirname((0, import_node_url2.fileURLToPath)(__overlord_import_meta_url)), "..", "sqlite", "migrations");
 }
 function checksum(sql2) {
-  return (0, import_node_crypto2.createHash)("sha256").update(sql2).digest("hex");
+  return (0, import_node_crypto4.createHash)("sha256").update(sql2).digest("hex");
 }
 function migrationComponent(fileName) {
   const match = fileName.match(/^\d+_ext_([a-z0-9_]+)_/);
@@ -1106,6 +1442,12 @@ function applyMigration(db, migration) {
   }
   if (isObjectivesDisplayKeyMigration(migration)) {
     finalizeObjectivesDisplayKeySqlite(db);
+  }
+  if (isProjectStatusesMigration(migration)) {
+    finalizeProjectStatusesSqlite(db);
+  }
+  if (isNextStatusTypeMigration(migration)) {
+    finalizeNextStatusTypeSqlite(db);
   }
   db.prepare(`INSERT INTO schema_migrations (version, adapter, component, contract_version, checksum, applied_at)
      VALUES (?, 'sqlite', ?, ?, ?, ?)`).run(migration.version, migration.component, CONTRACT_VERSION, migration.checksum, (/* @__PURE__ */ new Date()).toISOString());
@@ -1170,11 +1512,11 @@ function fixupLocalStoragePaths(db, databasePath2) {
     update.run(import_node_path5.default.join(storageDir, bucket.bucket_key), now2, bucket.id);
   }
 }
-var import_node_crypto2, import_node_fs, import_node_path5, import_node_url2, MIGRATION_FILE_PATTERN;
+var import_node_crypto4, import_node_fs, import_node_path5, import_node_url2, MIGRATION_FILE_PATTERN;
 var init_connection = __esm({
   "../database/dist/connection.js"() {
     "use strict";
-    import_node_crypto2 = require("node:crypto");
+    import_node_crypto4 = require("node:crypto");
     import_node_fs = require("node:fs");
     import_node_path5 = __toESM(require("node:path"), 1);
     import_node_url2 = require("node:url");
@@ -1183,8 +1525,10 @@ var init_connection = __esm({
     init_ext_everhour_migration_runtime();
     init_local_paths();
     init_migration_ledger();
+    init_next_status_type_migration_runtime();
     init_objective_display_key_migration_runtime();
     init_project_resources_resource_key_migration_runtime();
+    init_project_statuses_migration_runtime();
     MIGRATION_FILE_PATTERN = /^\d+_[a-z0-9_]+\.sql$/;
   }
 });
@@ -6683,7 +7027,7 @@ function postgresMigrationsDir() {
   return import_node_path6.default.resolve(import_node_path6.default.dirname((0, import_node_url3.fileURLToPath)(__overlord_import_meta_url)), "..", "postgres", "migrations");
 }
 function checksum2(sql2) {
-  return (0, import_node_crypto3.createHash)("sha256").update(sql2).digest("hex");
+  return (0, import_node_crypto5.createHash)("sha256").update(sql2).digest("hex");
 }
 function migrationComponent2(fileName) {
   const match = fileName.match(/^\d+_ext_([a-z0-9_]+)_/);
@@ -6731,6 +7075,9 @@ async function migratePostgres(client) {
       if (isObjectivesDisplayKeyMigration(migration)) {
         await finalizeObjectivesDisplayKeyPostgres(client);
       }
+      if (isProjectStatusesMigration(migration)) {
+        await finalizeProjectStatusesPostgres(client);
+      }
       if (!await schemaMigrationsExists(client)) {
         pending.push(migration);
         continue;
@@ -6755,14 +7102,17 @@ async function migratePostgres(client) {
     if (isObjectivesDisplayKeyMigration(migration)) {
       await finalizeObjectivesDisplayKeyPostgres(client);
     }
+    if (isProjectStatusesMigration(migration)) {
+      await finalizeProjectStatusesPostgres(client);
+    }
     await recordMigration(client, migration);
   }
 }
-var import_node_crypto3, import_node_fs2, import_node_path6, import_node_url3, MIGRATION_FILE_PATTERN2;
+var import_node_crypto5, import_node_fs2, import_node_path6, import_node_url3, MIGRATION_FILE_PATTERN2;
 var init_migrate_postgres = __esm({
   "../database/dist/migrate-postgres.js"() {
     "use strict";
-    import_node_crypto3 = require("node:crypto");
+    import_node_crypto5 = require("node:crypto");
     import_node_fs2 = require("node:fs");
     import_node_path6 = __toESM(require("node:path"), 1);
     import_node_url3 = require("node:url");
@@ -6770,6 +7120,7 @@ var init_migrate_postgres = __esm({
     init_ext_everhour_migration_runtime();
     init_migration_ledger();
     init_objective_display_key_migration_runtime();
+    init_project_statuses_migration_runtime();
     MIGRATION_FILE_PATTERN2 = /^\d+_[a-z0-9_]+\.sql$/;
   }
 });
@@ -70112,7 +70463,7 @@ function nowIso() {
   return (/* @__PURE__ */ new Date()).toISOString();
 }
 function newId() {
-  return (0, import_node_crypto6.randomUUID)();
+  return (0, import_node_crypto8.randomUUID)();
 }
 function slugify3(input) {
   const base = input.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48);
@@ -70124,19 +70475,19 @@ function initialTitleFromInstruction(instruction) {
   return `${firstLine.slice(0, 77)}...`;
 }
 function generateSessionKey() {
-  const rawKey = SESSION_KEY_PREFIX + (0, import_node_crypto6.randomBytes)(24).toString("base64url");
+  const rawKey = SESSION_KEY_PREFIX + (0, import_node_crypto8.randomBytes)(24).toString("base64url");
   const prefix = rawKey.slice(0, SESSION_KEY_PREFIX.length + 8);
-  const hash2 = (0, import_node_crypto6.createHash)("sha256").update(rawKey).digest("hex");
+  const hash2 = (0, import_node_crypto8.createHash)("sha256").update(rawKey).digest("hex");
   return { rawKey, prefix, hash: hash2 };
 }
 function hashSessionKey(rawKey) {
-  return (0, import_node_crypto6.createHash)("sha256").update(rawKey).digest("hex");
+  return (0, import_node_crypto8.createHash)("sha256").update(rawKey).digest("hex");
 }
-var import_node_crypto6, SESSION_KEY_PREFIX;
+var import_node_crypto8, SESSION_KEY_PREFIX;
 var init_util3 = __esm({
   "../packages/core/service/util.ts"() {
     "use strict";
-    import_node_crypto6 = require("node:crypto");
+    import_node_crypto8 = require("node:crypto");
     SESSION_KEY_PREFIX = "sess_";
   }
 });
@@ -72768,7 +73119,7 @@ var init_local_target = __esm({
 
 // ../packages/core/service/devices.ts
 function deviceFingerprint() {
-  return (0, import_node_crypto7.createHash)("sha256").update(`${(0, import_node_os5.hostname)()}:${(0, import_node_os5.platform)()}`).digest("hex").slice(0, 32);
+  return (0, import_node_crypto9.createHash)("sha256").update(`${(0, import_node_os5.hostname)()}:${(0, import_node_os5.platform)()}`).digest("hex").slice(0, 32);
 }
 function callerDeviceFingerprint() {
   return deviceFingerprint();
@@ -72844,11 +73195,11 @@ async function softDeleteDeviceIfOrphaned({
   });
   return true;
 }
-var import_node_crypto7, import_node_os5;
+var import_node_crypto9, import_node_os5;
 var init_devices = __esm({
   "../packages/core/service/devices.ts"() {
     "use strict";
-    import_node_crypto7 = require("node:crypto");
+    import_node_crypto9 = require("node:crypto");
     import_node_os5 = require("node:os");
     init_change_feed();
     init_util3();
@@ -73503,6 +73854,33 @@ var init_project_resource_key = __esm({
 });
 
 // ../packages/core/service/projects.ts
+async function seedProjectStatuses({
+  ctx,
+  projectId,
+  now: now2
+}) {
+  for (const status of DEFAULT_STATUSES) {
+    await ctx.db.run(
+      `INSERT INTO project_statuses
+         (id, workspace_id, project_id, key, name, type, position, is_default, is_terminal,
+          created_at, updated_at, revision)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+      [
+        newId(),
+        ctx.workspace.id,
+        projectId,
+        status.key,
+        status.name,
+        status.type,
+        status.position,
+        bindBool(ctx.db.dialect, status.isDefault),
+        bindBool(ctx.db.dialect, status.isTerminal),
+        now2,
+        now2
+      ]
+    );
+  }
+}
 function objectiveResourceRepairHint(resourceKey) {
   return `Run \`ovld add-cwd --key ${resourceKey}\` from the intended checkout on this device.`;
 }
@@ -73563,6 +73941,7 @@ async function createProject({
         position
       ]
     );
+    await seedProjectStatuses({ ctx: txCtx, projectId: id, now: now2 });
     await recordChange({
       ctx: txCtx,
       entityType: "project",
@@ -73607,6 +73986,29 @@ async function tryGetProject({
     if (error53 instanceof ServiceError && error53.code === "project_not_found") return null;
     throw error53;
   }
+}
+async function listProjectStatuses({
+  ctx,
+  projectId
+}) {
+  const resolvedProjectId = await resolveProjectId(ctx, projectId);
+  const rows = await ctx.db.all(
+    `SELECT id, project_id, key, name, type, position, is_default, is_terminal
+       FROM project_statuses
+      WHERE project_id = ? AND deleted_at IS NULL
+      ORDER BY position ASC`,
+    [resolvedProjectId]
+  );
+  return rows.map((row) => ({
+    id: row.id,
+    projectId: row.project_id,
+    key: row.key,
+    name: row.name,
+    type: row.type,
+    position: row.position,
+    isDefault: row.is_default === true || row.is_default === 1,
+    isTerminal: row.is_terminal === true || row.is_terminal === 1
+  }));
 }
 async function listProjectResources({
   ctx,
@@ -74249,7 +74651,7 @@ async function buildWebhookEnvelope(ctx, {
     `SELECT m.id, m.display_id, m.project_id, m.title, m.priority, m.created_at,
             s.id AS status_id, s.type AS status_type, s.name AS status_name
        FROM missions m
-       JOIN workspace_statuses s ON s.id = m.status_id
+       JOIN project_statuses s ON s.id = m.status_id AND s.project_id = m.project_id
        WHERE m.id = ? AND m.workspace_id = ?`,
     [entity.missionId, ctx.workspace.id]
   );
@@ -75753,7 +76155,7 @@ function nowIso2() {
   return (/* @__PURE__ */ new Date()).toISOString();
 }
 function newId2() {
-  return (0, import_node_crypto10.randomUUID)();
+  return (0, import_node_crypto12.randomUUID)();
 }
 async function oldestWorkspaceRowFromClient(client) {
   return client.get(
@@ -76038,13 +76440,13 @@ async function currentMaxSeq(client = requireDatabaseClient()) {
   );
   return row?.seq ?? 0;
 }
-var import_node_async_hooks2, import_node_crypto10, import_node_path15, databasePath, adapter, sqliteDb, DATABASE_DIALECT, databaseClient, databaseInitPromise, DATABASE_PATH, defaultWorkspace, ACTOR_WORKSPACE_USER_ID, requestContextStorage, WORKSPACE, loadWorkspaceRow, ACTIVE_TOKEN_SCOPES, ACTIVE_TOKEN_ID;
+var import_node_async_hooks2, import_node_crypto12, import_node_path15, databasePath, adapter, sqliteDb, DATABASE_DIALECT, databaseClient, databaseInitPromise, DATABASE_PATH, defaultWorkspace, ACTOR_WORKSPACE_USER_ID, requestContextStorage, WORKSPACE, loadWorkspaceRow, ACTIVE_TOKEN_SCOPES, ACTIVE_TOKEN_ID;
 var init_db = __esm({
   "db.ts"() {
     "use strict";
     init_dist2();
     import_node_async_hooks2 = require("node:async_hooks");
-    import_node_crypto10 = require("node:crypto");
+    import_node_crypto12 = require("node:crypto");
     import_node_path15 = __toESM(require("node:path"), 1);
     init_config();
     init_env2();
@@ -80040,14 +80442,14 @@ var init_getProfileName = __esm({
 });
 
 // ../node_modules/@smithy/core/dist-es/submodules/config/shared-ini-file-loader/getSSOTokenFilepath.js
-var import_node_crypto13, import_node_path18, getSSOTokenFilepath;
+var import_node_crypto15, import_node_path18, getSSOTokenFilepath;
 var init_getSSOTokenFilepath = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/config/shared-ini-file-loader/getSSOTokenFilepath.js"() {
-    import_node_crypto13 = require("node:crypto");
+    import_node_crypto15 = require("node:crypto");
     import_node_path18 = require("node:path");
     init_getHomeDir();
     getSSOTokenFilepath = (id) => {
-      const hasher = (0, import_node_crypto13.createHash)("sha1");
+      const hasher = (0, import_node_crypto15.createHash)("sha1");
       const cacheName = hasher.update(id).digest("hex");
       return (0, import_node_path18.join)(getHomeDir(), ".aws", "sso", "cache", `${cacheName}.json`);
     };
@@ -82218,10 +82620,10 @@ function castSourceData(toCast, encoding) {
   }
   return fromArrayBuffer(toCast);
 }
-var import_node_crypto14, Hash;
+var import_node_crypto16, Hash;
 var init_hash_node = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/serde/hash-node/hash-node.js"() {
-    import_node_crypto14 = require("node:crypto");
+    import_node_crypto16 = require("node:crypto");
     init_buffer_from();
     init_toUint8Array();
     Hash = class {
@@ -82240,7 +82642,7 @@ var init_hash_node = __esm({
         return Promise.resolve(this.hash.digest());
       }
       reset() {
-        this.hash = this.secret ? (0, import_node_crypto14.createHmac)(this.algorithmIdentifier, castSourceData(this.secret)) : (0, import_node_crypto14.createHash)(this.algorithmIdentifier);
+        this.hash = this.secret ? (0, import_node_crypto16.createHmac)(this.algorithmIdentifier, castSourceData(this.secret)) : (0, import_node_crypto16.createHash)(this.algorithmIdentifier);
       }
     };
   }
@@ -83134,10 +83536,10 @@ __export(serde_exports, {
   toUtf8: () => toUtf8,
   v4: () => v4
 });
-var import_node_crypto15, Uint8ArrayBlobAdapter, _getRandomValues, v4, generateIdempotencyToken;
+var import_node_crypto17, Uint8ArrayBlobAdapter, _getRandomValues, v4, generateIdempotencyToken;
 var init_serde = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/serde/index.js"() {
-    import_node_crypto15 = require("node:crypto");
+    import_node_crypto17 = require("node:crypto");
     init_fromBase64();
     init_toBase64();
     init_Uint8ArrayBlobAdapter();
@@ -83174,7 +83576,7 @@ var init_serde = __esm({
     init_stream_collector();
     Uint8ArrayBlobAdapter = class extends bindUint8ArrayBlobAdapter(toUtf8, fromUtf8, toBase64, fromBase64) {
     };
-    _getRandomValues = import_node_crypto15.getRandomValues;
+    _getRandomValues = import_node_crypto17.getRandomValues;
     v4 = bindV4(_getRandomValues);
     generateIdempotencyToken = v4;
   }
@@ -110261,7 +110663,7 @@ var init_Md5Js = __esm({
 function buildNativeClass() {
   return class Md5Node {
     digestLength = 16;
-    hash = (0, import_node_crypto16.createHash)("md5");
+    hash = (0, import_node_crypto18.createHash)("md5");
     update(data) {
       this.hash.update(toUint8Array(data));
     }
@@ -110270,19 +110672,19 @@ function buildNativeClass() {
       return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
     }
     reset() {
-      this.hash = (0, import_node_crypto16.createHash)("md5");
+      this.hash = (0, import_node_crypto18.createHash)("md5");
     }
   };
 }
-var import_node_crypto16, hasNativeCrypto, Md5Node;
+var import_node_crypto18, hasNativeCrypto, Md5Node;
 var init_Md5Node = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/checksum/md5/Md5Node.js"() {
-    import_node_crypto16 = require("node:crypto");
+    import_node_crypto18 = require("node:crypto");
     init_serde();
     init_Md5Js();
     hasNativeCrypto = (() => {
       try {
-        (0, import_node_crypto16.createHash)("md5");
+        (0, import_node_crypto18.createHash)("md5");
         return true;
       } catch {
         return false;
@@ -110626,7 +111028,7 @@ function buildNativeClass3() {
       this.finished = false;
     }
     createHash() {
-      return this.secret ? (0, import_node_crypto17.createHmac)("sha256", toBuffer(this.secret)) : (0, import_node_crypto17.createHash)("sha256");
+      return this.secret ? (0, import_node_crypto19.createHmac)("sha256", toBuffer(this.secret)) : (0, import_node_crypto19.createHash)("sha256");
     }
   };
 }
@@ -110639,14 +111041,14 @@ function toBuffer(data) {
   }
   return Buffer.from(data);
 }
-var import_node_crypto17, hasNativeCrypto2, Sha256Node;
+var import_node_crypto19, hasNativeCrypto2, Sha256Node;
 var init_Sha256Node = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/checksum/sha256/Sha256Node.js"() {
-    import_node_crypto17 = require("node:crypto");
+    import_node_crypto19 = require("node:crypto");
     init_Sha256Js();
     hasNativeCrypto2 = (() => {
       try {
-        (0, import_node_crypto17.createHash)("sha256");
+        (0, import_node_crypto19.createHash)("sha256");
         return true;
       } catch {
         return false;
@@ -117903,7 +118305,7 @@ function constantTimeEqual(a5, b5) {
 }
 
 // ../node_modules/@better-auth/utils/dist/password.node.mjs
-var import_node_crypto4 = require("node:crypto");
+var import_node_crypto6 = require("node:crypto");
 var config = {
   N: 16384,
   r: 16,
@@ -117912,7 +118314,7 @@ var config = {
 };
 function generateKey(password, salt) {
   return new Promise((resolve, reject) => {
-    (0, import_node_crypto4.scrypt)(
+    (0, import_node_crypto6.scrypt)(
       password.normalize("NFKC"),
       salt,
       config.dkLen,
@@ -117932,7 +118334,7 @@ function generateKey(password, salt) {
   });
 }
 async function hashPassword(password) {
-  const salt = (0, import_node_crypto4.randomBytes)(16).toString("hex");
+  const salt = (0, import_node_crypto6.randomBytes)(16).toString("hex");
   const key = await generateKey(password, salt);
   return `${salt}:${key.toString("hex")}`;
 }
@@ -132478,7 +132880,7 @@ async function execute(db, sql2, params = []) {
 }
 
 // ../auth/dist/auth/token.js
-var import_node_crypto5 = require("node:crypto");
+var import_node_crypto7 = require("node:crypto");
 var USER_TOKEN_PREFIX = "out_";
 var USER_TOKEN_HASH_ALGORITHM = "sha256";
 var DEFAULT_USER_TOKEN_TTL_DAYS = 90;
@@ -132491,11 +132893,11 @@ function normalizeTimestamp(value) {
   return value instanceof Date ? value.toISOString() : value;
 }
 function hashUserTokenSecret(rawToken) {
-  return (0, import_node_crypto5.createHash)(USER_TOKEN_HASH_ALGORITHM).update(rawToken).digest("hex");
+  return (0, import_node_crypto7.createHash)(USER_TOKEN_HASH_ALGORITHM).update(rawToken).digest("hex");
 }
 function generateUserTokenSecret() {
-  const prefix = `${USER_TOKEN_PREFIX}${(0, import_node_crypto5.randomBytes)(4).toString("hex")}`;
-  const secret = `${prefix}${(0, import_node_crypto5.randomBytes)(24).toString("hex")}`;
+  const prefix = `${USER_TOKEN_PREFIX}${(0, import_node_crypto7.randomBytes)(4).toString("hex")}`;
+  const secret = `${prefix}${(0, import_node_crypto7.randomBytes)(24).toString("hex")}`;
   return { secret, prefix, hash: hashUserTokenSecret(secret) };
 }
 async function listActiveTokenScopeGrants(db, tokenId) {
@@ -134064,47 +134466,47 @@ async function nextMissionSequence(ctx) {
   ]);
   return seq;
 }
-async function getDefaultStatusId(ctx) {
+async function getDefaultStatusId(ctx, projectId) {
   const row = await ctx.db.get(
-    `SELECT id, type FROM workspace_statuses
-       WHERE workspace_id = ? AND is_default = ? AND deleted_at IS NULL LIMIT 1`,
-    [ctx.workspace.id, bindBool(ctx.db.dialect, true)]
+    `SELECT id, type FROM project_statuses
+       WHERE project_id = ? AND is_default = ? AND deleted_at IS NULL LIMIT 1`,
+    [projectId, bindBool(ctx.db.dialect, true)]
   );
   if (!row) {
-    throw new ServiceError("Workspace has no default status", "validation_error", 409);
+    throw new ServiceError("Project has no default status", "validation_error", 409);
   }
   return row;
 }
-async function getReviewStatusId(ctx) {
+async function getReviewStatusId(ctx, projectId) {
   const row = await ctx.db.get(
-    `SELECT id, type FROM workspace_statuses
-       WHERE workspace_id = ? AND type = 'review' AND deleted_at IS NULL LIMIT 1`,
-    [ctx.workspace.id]
+    `SELECT id, type FROM project_statuses
+       WHERE project_id = ? AND type = 'review' AND deleted_at IS NULL LIMIT 1`,
+    [projectId]
   );
   if (!row) {
-    throw new ServiceError("Workspace has no review status", "validation_error", 409);
+    throw new ServiceError("Project has no review status", "validation_error", 409);
   }
   return row;
 }
-async function getExecuteStatusId(ctx) {
+async function getExecuteStatusId(ctx, projectId) {
   const row = await ctx.db.get(
-    `SELECT id, type FROM workspace_statuses
-       WHERE workspace_id = ? AND type = 'execute' AND deleted_at IS NULL LIMIT 1`,
-    [ctx.workspace.id]
+    `SELECT id, type FROM project_statuses
+       WHERE project_id = ? AND type = 'execute' AND deleted_at IS NULL LIMIT 1`,
+    [projectId]
   );
   if (!row) {
-    throw new ServiceError("Workspace has no execute status", "validation_error", 409);
+    throw new ServiceError("Project has no execute status", "validation_error", 409);
   }
   return row;
 }
-async function getWorkspaceStatusById(ctx, statusId) {
+async function getProjectStatusById(ctx, projectId, statusId) {
   const row = await ctx.db.get(
-    `SELECT id, type FROM workspace_statuses
-       WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-    [statusId, ctx.workspace.id]
+    `SELECT id, type FROM project_statuses
+       WHERE id = ? AND project_id = ? AND deleted_at IS NULL`,
+    [statusId, projectId]
   );
   if (!row) {
-    throw new ServiceError("Unknown status for workspace", "validation_error");
+    throw new ServiceError("Unknown status for project", "validation_error", 409);
   }
   return row;
 }
@@ -134384,7 +134786,7 @@ async function createMissionWithObjectives({
     throw new ServiceError("First objective instruction is required", "validation_error");
   }
   const missionTitle = explicitTitle || initialTitleFromInstruction(firstInstruction);
-  const status = statusId ? await getWorkspaceStatusById(ctx, statusId) : statusType === "review" ? await getReviewStatusId(ctx) : await getDefaultStatusId(ctx);
+  const status = statusId ? await getProjectStatusById(ctx, resolvedProjectId, statusId) : statusType === "review" ? await getReviewStatusId(ctx, resolvedProjectId) : await getDefaultStatusId(ctx, resolvedProjectId);
   const now2 = nowIso();
   const missionId = newId();
   const sequence = await nextMissionSequence(ctx);
@@ -134913,6 +135315,7 @@ async function topMyMissionPosition(ctx, workspaceUserId, statusId) {
 }
 async function upsertMyMissionPositionOnReview(ctx, {
   workspaceId,
+  projectId,
   workspaceUserId,
   missionId,
   statusId,
@@ -134927,17 +135330,17 @@ async function upsertMyMissionPositionOnReview(ctx, {
   if (existing) {
     await ctx.db.run(
       `UPDATE my_mission_positions
-          SET status_id = ?, position = ?, updated_at = ?, revision = ?
+          SET project_id = ?, status_id = ?, position = ?, updated_at = ?, revision = ?
         WHERE id = ?`,
-      [statusId, position, now2, existing.revision + 1, existing.id]
+      [projectId, statusId, position, now2, existing.revision + 1, existing.id]
     );
     return;
   }
   await ctx.db.run(
     `INSERT INTO my_mission_positions
-       (id, workspace_id, workspace_user_id, mission_id, status_id, position, created_at, updated_at, revision)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`,
-    [newId(), workspaceId, workspaceUserId, missionId, statusId, position, now2, now2]
+       (id, workspace_id, project_id, workspace_user_id, mission_id, status_id, position, created_at, updated_at, revision)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+    [newId(), workspaceId, projectId, workspaceUserId, missionId, statusId, position, now2, now2]
   );
 }
 async function moveMissionToReview({
@@ -134945,7 +135348,7 @@ async function moveMissionToReview({
   missionId
 }) {
   const mission = await getMissionSummary({ ctx, missionId });
-  const reviewStatus = await getReviewStatusId(ctx);
+  const reviewStatus = await getReviewStatusId(ctx, mission.projectId);
   const now2 = nowIso();
   const boardPosition = await topBoardPosition(ctx, mission.projectId, reviewStatus.id);
   await ctx.db.run(
@@ -134965,6 +135368,7 @@ async function moveMissionToReview({
     );
     await upsertMyMissionPositionOnReview(ctx, {
       workspaceId: ctx.workspace.id,
+      projectId: mission.projectId,
       workspaceUserId: assignee.assigned_workspace_user_id,
       missionId: mission.id,
       statusId: reviewStatus.id,
@@ -134992,7 +135396,7 @@ async function moveMissionToExecute({
   missionId
 }) {
   const mission = await getMissionSummary({ ctx, missionId });
-  const executeStatus = await getExecuteStatusId(ctx);
+  const executeStatus = await getExecuteStatusId(ctx, mission.projectId);
   if (mission.statusId === executeStatus.id && mission.statusType === executeStatus.type) {
     return;
   }
@@ -135026,7 +135430,7 @@ init_projects();
 
 // ../packages/core/service/protocol.ts
 init_dist2();
-var import_node_crypto9 = require("node:crypto");
+var import_node_crypto11 = require("node:crypto");
 
 // ../packages/core/service/agent-session/channels.ts
 init_change_feed();
@@ -135034,12 +135438,12 @@ init_errors4();
 init_util3();
 
 // ../packages/core/service/agent-session/credential.ts
-var import_node_crypto8 = require("node:crypto");
+var import_node_crypto10 = require("node:crypto");
 var SESSION_CHANNEL_TOKEN_HASH_ALGORITHM = "sha256";
 var SESSION_CHANNEL_LEASE_SECONDS = 180;
 var SESSION_CHANNEL_ABSOLUTE_LIFETIME_SECONDS = 60 * 60 * 24;
 function hashSessionChannelToken(rawToken) {
-  return (0, import_node_crypto8.createHash)(SESSION_CHANNEL_TOKEN_HASH_ALGORITHM).update(rawToken).digest("hex");
+  return (0, import_node_crypto10.createHash)(SESSION_CHANNEL_TOKEN_HASH_ALGORITHM).update(rawToken).digest("hex");
 }
 function addSeconds(iso, seconds) {
   return new Date(new Date(iso).getTime() + seconds * 1e3).toISOString();
@@ -137964,7 +138368,7 @@ async function connectSession({
   };
 }
 function promptHash(prompt) {
-  return (0, import_node_crypto9.createHash)("sha256").update(prompt).digest("hex");
+  return (0, import_node_crypto11.createHash)("sha256").update(prompt).digest("hex");
 }
 function objectiveFromSession(objectives, session) {
   if (!session) return void 0;
@@ -141068,7 +141472,7 @@ async function getObjectiveLaunchCommand(objectiveRef, query) {
 init_local_target_mutation_queue();
 
 // ext/github/service.ts
-var import_node_crypto11 = require("node:crypto");
+var import_node_crypto13 = require("node:crypto");
 init_db();
 init_errors5();
 var GITHUB_API = "https://api.github.com";
@@ -141099,7 +141503,7 @@ function appJwt(config4) {
     JSON.stringify({ iat: now2 - 60, exp: now2 + 9 * 60, iss: config4.appId })
   );
   const signingInput = `${encodedHeader}.${encodedPayload}`;
-  const signer = (0, import_node_crypto11.createSign)("RSA-SHA256");
+  const signer = (0, import_node_crypto13.createSign)("RSA-SHA256");
   signer.update(signingInput);
   signer.end();
   return `${signingInput}.${signer.sign(config4.privateKey, "base64url")}`;
@@ -141138,16 +141542,16 @@ async function githubFetch(path25, token, init2 = {}) {
 }
 function signedInstallState(workspaceId, privateKey) {
   const payload = base64url3(JSON.stringify({ workspaceId, expiresAt: Date.now() + STATE_TTL_MS }));
-  const mac3 = (0, import_node_crypto11.createHmac)("sha256", privateKey).update(payload).digest("base64url");
+  const mac3 = (0, import_node_crypto13.createHmac)("sha256", privateKey).update(payload).digest("base64url");
   return `${payload}.${mac3}`;
 }
 function verifyInstallState(value, workspaceId, privateKey) {
   const [payload, suppliedMac, ...extra] = value?.split(".") ?? [];
   if (!payload || !suppliedMac || extra.length)
     throw new ApiError(400, "Invalid GitHub installation state.");
-  const expectedMac = (0, import_node_crypto11.createHmac)("sha256", privateKey).update(payload).digest("base64url");
+  const expectedMac = (0, import_node_crypto13.createHmac)("sha256", privateKey).update(payload).digest("base64url");
   const sameLength = suppliedMac.length === expectedMac.length;
-  if (!sameLength || !(0, import_node_crypto11.timingSafeEqual)(Buffer.from(suppliedMac), Buffer.from(expectedMac))) {
+  if (!sameLength || !(0, import_node_crypto13.timingSafeEqual)(Buffer.from(suppliedMac), Buffer.from(expectedMac))) {
     throw new ApiError(400, "Invalid GitHub installation state.");
   }
   let decoded;
@@ -141628,7 +142032,7 @@ async function createMissionGitHubPullRequest(missionId, body) {
 }
 
 // ext/github/user-oauth.ts
-var import_node_crypto12 = require("node:crypto");
+var import_node_crypto14 = require("node:crypto");
 init_db();
 init_errors5();
 
@@ -141705,8 +142109,8 @@ function tokenAad(profileId, kind) {
   return Buffer.from(`overlord:github-user-oauth:v1:${profileId}:${kind}`, "utf8");
 }
 function encryptToken(token, profileId, kind, key) {
-  const nonce = (0, import_node_crypto12.randomBytes)(12);
-  const cipher = (0, import_node_crypto12.createCipheriv)("aes-256-gcm", key, nonce);
+  const nonce = (0, import_node_crypto14.randomBytes)(12);
+  const cipher = (0, import_node_crypto14.createCipheriv)("aes-256-gcm", key, nonce);
   cipher.setAAD(tokenAad(profileId, kind));
   const ciphertext = Buffer.concat([cipher.update(token, "utf8"), cipher.final()]);
   const tag2 = cipher.getAuthTag();
@@ -141718,7 +142122,7 @@ function decryptToken(envelope, profileId, kind, key) {
     throw new ApiError(503, "The stored GitHub connection cannot be decrypted.");
   }
   try {
-    const decipher = (0, import_node_crypto12.createDecipheriv)("aes-256-gcm", key, Buffer.from(nonceText, "base64url"));
+    const decipher = (0, import_node_crypto14.createDecipheriv)("aes-256-gcm", key, Buffer.from(nonceText, "base64url"));
     decipher.setAAD(tokenAad(profileId, kind));
     decipher.setAuthTag(Buffer.from(tagText, "base64url"));
     return Buffer.concat([
@@ -141780,7 +142184,7 @@ async function getGitHubUserConnection() {
   return connectionDto(await readConnection(client, profileId));
 }
 function stateHash(state2) {
-  return (0, import_node_crypto12.createHash)("sha256").update(state2).digest("hex");
+  return (0, import_node_crypto14.createHash)("sha256").update(state2).digest("hex");
 }
 function validatedReturnUrl(value, allowedBrowserOrigins2) {
   if (value === void 0 || value === null || value === "") return null;
@@ -141803,7 +142207,7 @@ async function beginGitHubUserAuthorization(body, allowedBrowserOrigins2) {
   const config4 = requireUserOAuthConfig();
   const client = requireDatabaseClient();
   const profileId = await activeProfileId(client);
-  const state2 = (0, import_node_crypto12.randomBytes)(32).toString("base64url");
+  const state2 = (0, import_node_crypto14.randomBytes)(32).toString("base64url");
   const now2 = nowIso2();
   const expiresAt = new Date(Date.now() + OAUTH_STATE_TTL_MS).toISOString();
   const returnUrl = validatedReturnUrl(body.returnTo, allowedBrowserOrigins2);
@@ -143031,6 +143435,7 @@ function mergeProjectSettingsJson(existingJson, updates) {
 }
 var STATUS_TYPES = [
   "draft",
+  "next",
   "execute",
   "review",
   "complete",
@@ -143046,12 +143451,12 @@ function assertValidStatusType(type) {
 function isTerminalStatusType(type) {
   return type === "complete" || type === "cancelled";
 }
-async function uniqueStatusKey(db, { name, workspaceId }) {
+async function uniqueStatusKey(db, { name, projectId }) {
   const base = slugify4(name).replace(/-/g, "_");
   let key = base;
   let suffix = 2;
-  while (await db.get(`SELECT 1 FROM workspace_statuses WHERE workspace_id = ? AND key = ?`, [
-    workspaceId,
+  while (await db.get(`SELECT 1 FROM project_statuses WHERE project_id = ? AND key = ?`, [
+    projectId,
     key
   ])) {
     key = `${base}_${suffix}`;
@@ -143059,12 +143464,12 @@ async function uniqueStatusKey(db, { name, workspaceId }) {
   }
   return key;
 }
-async function getWorkspaceStatusRow(db, statusId, workspaceId) {
+async function getProjectStatusRow(db, statusId, projectId) {
   const row = await db.get(
-    `SELECT id, workspace_id, key, name, type, position, is_default, is_terminal, revision
-         FROM workspace_statuses
-        WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-    [statusId, workspaceId]
+    `SELECT id, workspace_id, project_id, key, name, type, position, is_default, is_terminal, revision
+         FROM project_statuses
+        WHERE id = ? AND project_id = ? AND deleted_at IS NULL`,
+    [statusId, projectId]
   );
   if (!row) throw new ApiError(404, "Status not found");
   return row;
@@ -143072,21 +143477,21 @@ async function getWorkspaceStatusRow(db, statusId, workspaceId) {
 async function assertUniqueStatusName(db, {
   name,
   excludeStatusId,
-  workspaceId
+  projectId
 }) {
   const existing = await db.get(
-    `SELECT 1 FROM workspace_statuses
-        WHERE workspace_id = ? AND deleted_at IS NULL AND lower(name) = lower(?)
+    `SELECT 1 FROM project_statuses
+        WHERE project_id = ? AND deleted_at IS NULL AND lower(name) = lower(?)
           AND id != ?`,
-    [workspaceId, name, excludeStatusId ?? ""]
+    [projectId, name, excludeStatusId ?? ""]
   );
   if (existing) throw new ApiError(409, `A status named "${name}" already exists`);
 }
-async function countActiveStatusesByType(db, { type, workspaceId }) {
+async function countActiveStatusesByType(db, { type, projectId }) {
   const row = await db.get(
-    `SELECT COUNT(*) AS count FROM workspace_statuses
-        WHERE workspace_id = ? AND type = ? AND deleted_at IS NULL`,
-    [workspaceId, type]
+    `SELECT COUNT(*) AS count FROM project_statuses
+        WHERE project_id = ? AND type = ? AND deleted_at IS NULL`,
+    [projectId, type]
   );
   return row.count;
 }
@@ -143097,12 +143502,12 @@ async function countMissionsOnStatus(db, statusId) {
   );
   return row.count;
 }
-async function clearWorkspaceDefaultStatuses(db, { now: now2, workspaceId }) {
+async function clearProjectDefaultStatuses(db, { now: now2, projectId }) {
   await db.run(
-    `UPDATE workspace_statuses
+    `UPDATE project_statuses
         SET is_default = ?, updated_at = ?, revision = revision + 1
-      WHERE workspace_id = ? AND is_default = ? AND deleted_at IS NULL`,
-    [bindBool(DATABASE_DIALECT, false), now2, workspaceId, bindBool(DATABASE_DIALECT, true)]
+      WHERE project_id = ? AND is_default = ? AND deleted_at IS NULL`,
+    [bindBool(DATABASE_DIALECT, false), now2, projectId, bindBool(DATABASE_DIALECT, true)]
   );
 }
 function sourcePath(source) {
@@ -143170,6 +143575,7 @@ function toStatusDto(r5) {
   return {
     id: r5.id,
     workspaceId: r5.workspace_id,
+    projectId: r5.project_id,
     key: r5.key,
     name: r5.name,
     type: r5.type,
@@ -144124,48 +144530,56 @@ async function reorderProjects(body) {
     return listProjectsForWorkspace(workspaceId, tx);
   });
 }
-async function listWorkspaceStatuses(db = requireDatabaseClient()) {
-  return selectWorkspaceStatusesForWorkspace(getActiveWorkspaceId(), db);
-}
-async function selectWorkspaceStatusesForWorkspace(workspaceId, db = requireDatabaseClient()) {
+async function selectProjectStatuses(projectId, db = requireDatabaseClient()) {
   const rows = await db.all(
-    `SELECT id, workspace_id, key, name, type, position, is_default, is_terminal, revision
-         FROM workspace_statuses
-        WHERE workspace_id = ? AND deleted_at IS NULL
+    `SELECT id, workspace_id, project_id, key, name, type, position, is_default, is_terminal, revision
+         FROM project_statuses
+        WHERE project_id = ? AND deleted_at IS NULL
         ORDER BY position ASC`,
-    [workspaceId]
+    [projectId]
   );
   return rows.map(toStatusDto);
 }
-async function listWorkspaceStatusesForWorkspace(workspaceId, db = requireDatabaseClient()) {
+async function listProjectStatuses2(projectId, db = requireDatabaseClient()) {
+  await requireProjectPermission({ projectId, permission: PERMISSIONS.PROJECT_READ, db });
+  return selectProjectStatuses(projectId, db);
+}
+async function listWorkspaceProjectStatuses(workspaceId, db = requireDatabaseClient()) {
   await requireWorkspacePermission({
     workspaceId,
     permission: PERMISSIONS.WORKSPACE_READ,
     db,
     notFoundMessage: "Workspace not found or no active membership"
   });
-  return selectWorkspaceStatusesForWorkspace(workspaceId, db);
+  const rows = await db.all(
+    `SELECT ps.id, ps.workspace_id, ps.project_id, ps.key, ps.name, ps.type, ps.position,
+            ps.is_default, ps.is_terminal, ps.revision
+       FROM project_statuses ps
+       JOIN projects p ON p.id = ps.project_id AND p.workspace_id = ps.workspace_id
+      WHERE ps.workspace_id = ? AND ps.deleted_at IS NULL AND p.deleted_at IS NULL
+      ORDER BY p.position ASC, ps.position ASC`,
+    [workspaceId]
+  );
+  return rows.map(toStatusDto);
 }
-async function resolveStatusWorkspaceId(db, workspaceId) {
-  const targetWorkspaceId = workspaceId ?? getActiveWorkspaceId();
-  await requireWorkspacePermission({
-    workspaceId: targetWorkspaceId,
-    permission: PERMISSIONS.WORKSPACE_UPDATE,
-    db,
-    notFoundMessage: "Workspace not found or no active membership"
+async function resolveStatusProjectScope(db, projectId) {
+  const scope = await requireProjectPermission({
+    projectId,
+    permission: PERMISSIONS.PROJECT_UPDATE,
+    db
   });
-  return targetWorkspaceId;
+  return { projectId, workspaceId: scope.workspaceId };
 }
-async function createWorkspaceStatus(body, workspaceId) {
+async function createProjectStatus(projectId, body) {
   return requireDatabaseClient().transaction(async (tx) => {
-    const ws = await resolveStatusWorkspaceId(tx, workspaceId);
+    const scope = await resolveStatusProjectScope(tx, projectId);
     const name = (body.name ?? "").trim();
     if (!name) throw new ApiError(400, "Status name is required");
-    await assertUniqueStatusName(tx, { name, workspaceId: ws });
+    await assertUniqueStatusName(tx, { name, projectId });
     const type = assertValidStatusType(body.type);
-    if (type === "execute" || type === "review") {
-      if (await countActiveStatusesByType(tx, { type, workspaceId: ws }) > 0) {
-        throw new ApiError(409, `This workspace already has a ${type} status`);
+    if (type === "next" || type === "execute" || type === "review") {
+      if (await countActiveStatusesByType(tx, { type, projectId }) > 0) {
+        throw new ApiError(409, `This project already has a ${type} status`);
       }
     }
     const isDefault = body.isDefault ?? false;
@@ -144174,24 +144588,25 @@ async function createWorkspaceStatus(body, workspaceId) {
     }
     const now2 = nowIso2();
     const id = newId2();
-    const key = await uniqueStatusKey(tx, { name, workspaceId: ws });
+    const key = await uniqueStatusKey(tx, { name, projectId });
     const maxPos = await tx.get(
-      `SELECT COALESCE(MAX(position), -1) AS max_pos FROM workspace_statuses
-          WHERE workspace_id = ? AND deleted_at IS NULL`,
-      [ws]
+      `SELECT COALESCE(MAX(position), -1) AS max_pos FROM project_statuses
+          WHERE project_id = ? AND deleted_at IS NULL`,
+      [projectId]
     );
     const position = maxPos.max_pos + 1;
     if (isDefault) {
-      await clearWorkspaceDefaultStatuses(tx, { now: now2, workspaceId: ws });
+      await clearProjectDefaultStatuses(tx, { now: now2, projectId });
     }
     await tx.run(
-      `INSERT INTO workspace_statuses
-         (id, workspace_id, key, name, type, position, is_default, is_terminal,
+      `INSERT INTO project_statuses
+         (id, workspace_id, project_id, key, name, type, position, is_default, is_terminal,
           created_at, updated_at, revision)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
       [
         id,
-        ws,
+        scope.workspaceId,
+        projectId,
         key,
         name,
         type,
@@ -144204,8 +144619,9 @@ async function createWorkspaceStatus(body, workspaceId) {
     );
     await recordChange2(
       {
-        workspaceId: ws,
-        entityType: "workspace_status",
+        workspaceId: scope.workspaceId,
+        projectId,
+        entityType: "project_status",
         entityId: id,
         operation: "insert",
         entityRevision: 1,
@@ -144213,13 +144629,13 @@ async function createWorkspaceStatus(body, workspaceId) {
       },
       tx
     );
-    return toStatusDto(await getWorkspaceStatusRow(tx, id, ws));
+    return toStatusDto(await getProjectStatusRow(tx, id, projectId));
   });
 }
-async function updateWorkspaceStatus(statusId, body, workspaceId) {
+async function updateProjectStatus(projectId, statusId, body) {
   return requireDatabaseClient().transaction(async (tx) => {
-    const ws = await resolveStatusWorkspaceId(tx, workspaceId);
-    const existing = await getWorkspaceStatusRow(tx, statusId, ws);
+    const scope = await resolveStatusProjectScope(tx, projectId);
+    const existing = await getProjectStatusRow(tx, statusId, projectId);
     const changed = [];
     const now2 = nowIso2();
     const fields = [];
@@ -144227,7 +144643,7 @@ async function updateWorkspaceStatus(statusId, body, workspaceId) {
     if (body.name !== void 0) {
       const name = body.name.trim();
       if (!name) throw new ApiError(400, "Status name cannot be empty");
-      await assertUniqueStatusName(tx, { name, excludeStatusId: statusId, workspaceId: ws });
+      await assertUniqueStatusName(tx, { name, excludeStatusId: statusId, projectId });
       fields.push("name = ?");
       setParams.push(name);
       changed.push("name");
@@ -144237,7 +144653,7 @@ async function updateWorkspaceStatus(statusId, body, workspaceId) {
         if (existing.type !== "draft") {
           throw new ApiError(400, "Only draft-type statuses can be the default");
         }
-        await clearWorkspaceDefaultStatuses(tx, { now: now2, workspaceId: ws });
+        await clearProjectDefaultStatuses(tx, { now: now2, projectId });
         fields.push("is_default = ?");
         setParams.push(bindBool(DATABASE_DIALECT, true));
         changed.push("is_default");
@@ -144250,15 +144666,16 @@ async function updateWorkspaceStatus(statusId, body, workspaceId) {
     }
     const revision = existing.revision + 1;
     await tx.run(
-      `UPDATE workspace_statuses
+      `UPDATE project_statuses
           SET ${fields.join(", ")}, updated_at = ?, revision = ?
-        WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-      [...setParams, now2, revision, statusId, ws]
+        WHERE id = ? AND project_id = ? AND deleted_at IS NULL`,
+      [...setParams, now2, revision, statusId, projectId]
     );
     await recordChange2(
       {
-        workspaceId: ws,
-        entityType: "workspace_status",
+        workspaceId: scope.workspaceId,
+        projectId,
+        entityType: "project_status",
         entityId: statusId,
         operation: "update",
         entityRevision: revision,
@@ -144266,13 +144683,13 @@ async function updateWorkspaceStatus(statusId, body, workspaceId) {
       },
       tx
     );
-    return toStatusDto(await getWorkspaceStatusRow(tx, statusId, ws));
+    return toStatusDto(await getProjectStatusRow(tx, statusId, projectId));
   });
 }
-async function deleteWorkspaceStatus(statusId, workspaceId) {
+async function deleteProjectStatus(projectId, statusId) {
   await requireDatabaseClient().transaction(async (tx) => {
-    const ws = await resolveStatusWorkspaceId(tx, workspaceId);
-    const existing = await getWorkspaceStatusRow(tx, statusId, ws);
+    const scope = await resolveStatusProjectScope(tx, projectId);
+    const existing = await getProjectStatusRow(tx, statusId, projectId);
     if (existing.type === "execute" || existing.type === "review") {
       throw new ApiError(409, "Cannot remove the required execute or review status");
     }
@@ -144289,15 +144706,16 @@ async function deleteWorkspaceStatus(statusId, workspaceId) {
     const now2 = nowIso2();
     const revision = existing.revision + 1;
     await tx.run(
-      `UPDATE workspace_statuses
+      `UPDATE project_statuses
         SET deleted_at = ?, updated_at = ?, revision = ?
-      WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-      [now2, now2, revision, statusId, ws]
+      WHERE id = ? AND project_id = ? AND deleted_at IS NULL`,
+      [now2, now2, revision, statusId, projectId]
     );
     await recordChange2(
       {
-        workspaceId: ws,
-        entityType: "workspace_status",
+        workspaceId: scope.workspaceId,
+        projectId,
+        entityType: "project_status",
         entityId: statusId,
         operation: "delete",
         entityRevision: revision,
@@ -144307,14 +144725,14 @@ async function deleteWorkspaceStatus(statusId, workspaceId) {
     );
   });
 }
-async function reorderWorkspaceStatuses(body, workspaceId) {
+async function reorderProjectStatuses(projectId, body) {
   return requireDatabaseClient().transaction(async (tx) => {
-    const ws = await resolveStatusWorkspaceId(tx, workspaceId);
+    const scope = await resolveStatusProjectScope(tx, projectId);
     const orderedIds = body.orderedStatusIds;
     if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
       throw new ApiError(400, "orderedStatusIds is required");
     }
-    const current = await selectWorkspaceStatusesForWorkspace(ws, tx);
+    const current = await selectProjectStatuses(projectId, tx);
     if (orderedIds.length !== current.length) {
       throw new ApiError(400, "orderedStatusIds must include every status");
     }
@@ -144327,15 +144745,16 @@ async function reorderWorkspaceStatuses(body, workspaceId) {
     const now2 = nowIso2();
     for (const [position, id] of orderedIds.entries()) {
       await tx.run(
-        `UPDATE workspace_statuses
+        `UPDATE project_statuses
           SET position = ?, updated_at = ?, revision = revision + 1
-        WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-        [position, now2, id, ws]
+        WHERE id = ? AND project_id = ? AND deleted_at IS NULL`,
+        [position, now2, id, projectId]
       );
       await recordChange2(
         {
-          workspaceId: ws,
-          entityType: "workspace_status",
+          workspaceId: scope.workspaceId,
+          projectId,
+          entityType: "project_status",
           entityId: id,
           operation: "update",
           changedFields: ["position"]
@@ -144343,7 +144762,7 @@ async function reorderWorkspaceStatuses(body, workspaceId) {
         tx
       );
     }
-    return selectWorkspaceStatusesForWorkspace(ws, tx);
+    return selectProjectStatuses(projectId, tx);
   });
 }
 var selectProjectTagColumns = `id, workspace_id, project_id, label, color, active, revision`;
@@ -145063,6 +145482,7 @@ async function createProject2(body) {
         position
       ]
     );
+    await seedProjectStatuses2(tx, { projectId: id, workspaceId: targetWorkspaceId, now: now2 });
     await recordChange2(
       {
         entityType: "project",
@@ -145091,6 +145511,29 @@ async function createProject2(body) {
     }
     return getProject2(id, tx);
   });
+}
+async function seedProjectStatuses2(db, { projectId, workspaceId, now: now2 }) {
+  for (const status of DEFAULT_STATUSES) {
+    await db.run(
+      `INSERT INTO project_statuses
+         (id, workspace_id, project_id, key, name, type, position, is_default, is_terminal,
+          created_at, updated_at, revision)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+      [
+        newId2(),
+        workspaceId,
+        projectId,
+        status.key,
+        status.name,
+        status.type,
+        status.position,
+        bindBool(db.dialect, status.isDefault),
+        bindBool(db.dialect, status.isTerminal),
+        now2,
+        now2
+      ]
+    );
+  }
 }
 function initializationProvisioning(row, resource) {
   const succeeded = row.provisioning_status === "succeeded";
@@ -145157,6 +145600,7 @@ async function initializeProject(body) {
         maxPosition.max_position + 1
       ]
     );
+    await seedProjectStatuses2(tx, { projectId, workspaceId, now: now2 });
     await recordChange2(
       {
         entityType: "project",
@@ -145487,14 +145931,17 @@ async function listMissions2(projectId, options = {}) {
 async function searchMissionsInWorkspace({
   query,
   projectId,
+  statusTypes,
   limit = 25,
   workspaceId,
   client
 }) {
   const match = query?.trim() ? buildMissionSearchMatch({ dialect: client.dialect, query: query.trim() }) : null;
+  const types3 = statusTypes?.filter((type) => type.trim() !== "") ?? [];
+  const statusFilter = types3.length > 0 ? ` AND t.status_type IN (${types3.map(() => "?").join(", ")})` : "";
   if (!match) {
-    const sql2 = projectId ? `${selectMissionsSql} AND t.project_id = ? ORDER BY t.updated_at DESC LIMIT ?` : `${selectMissionsSql} ORDER BY t.updated_at DESC LIMIT ?`;
-    const params = projectId ? [workspaceId, projectId, limit] : [workspaceId, limit];
+    const sql2 = `${selectMissionsSql}${projectId ? " AND t.project_id = ?" : ""}${statusFilter} ORDER BY t.updated_at DESC LIMIT ?`;
+    const params = [workspaceId, ...projectId ? [projectId] : [], ...types3, limit];
     const rows2 = await client.all(sql2, params);
     const tagsByMission2 = await getTagsByMission(rows2.map((row) => row.id));
     return rows2.map((row) => toMissionDto(row, tagsByMission2.get(row.id) ?? []));
@@ -145532,20 +145979,17 @@ ${missionHasUnseenReturnedToExecuteSql},
               ${missionSearchDocScoreExpr(client.dialect)} AS doc_score
          FROM ${missionSearchFromClause(client.dialect)}
          JOIN missions t ON t.id = ${missionIdColumn}
-           AND t.workspace_id = ? AND t.deleted_at IS NULL${projectFilter}
-        WHERE ${missionSearchMatchPredicate(client.dialect)}`,
-    projectId ? [
+           AND t.workspace_id = ? AND t.deleted_at IS NULL
+        WHERE ${missionSearchMatchPredicate(client.dialect)}${projectFilter}${statusFilter}`,
+    [
       ...missionSearchWorkspaceParams({
         dialect: client.dialect,
         workspaceId,
         match
       }),
-      projectId
-    ] : missionSearchWorkspaceParams({
-      dialect: client.dialect,
-      workspaceId,
-      match
-    })
+      ...projectId ? [projectId] : [],
+      ...types3
+    ]
   );
   const byMission = /* @__PURE__ */ new Map();
   for (const row of rows) {
@@ -145565,6 +146009,7 @@ ${missionHasUnseenReturnedToExecuteSql},
 async function searchMissions2({
   query,
   projectId,
+  statusTypes,
   limit = 25
 }) {
   const client = requireDatabaseClient();
@@ -145574,12 +146019,18 @@ async function searchMissions2({
       permission: PERMISSIONS.MISSION_READ,
       db: client
     });
-    return searchMissionsInWorkspace({ query, projectId, limit, workspaceId, client });
+    return searchMissionsInWorkspace({ query, projectId, statusTypes, limit, workspaceId, client });
   }
   const scopes = await callerAuthorizedWorkspaceScopes(PERMISSIONS.MISSION_READ, client);
   const missions = (await Promise.all(
     scopes.map(
-      (scope) => searchMissionsInWorkspace({ query, limit, workspaceId: scope.workspaceId, client })
+      (scope) => searchMissionsInWorkspace({
+        query,
+        statusTypes,
+        limit,
+        workspaceId: scope.workspaceId,
+        client
+      })
     )
   )).flat();
   return missions.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)).slice(0, limit);
@@ -145597,12 +146048,14 @@ async function topBoardPosition2(db, projectId, statusId, excludeMissionId) {
   );
   return row.min_pos === null ? 100 : row.min_pos - 100;
 }
-async function getWorkspaceStatus(db, workspaceId, statusId) {
+async function getProjectStatus(db, projectId, statusId) {
   const statusRow = await db.get(
-    `SELECT * FROM workspace_statuses WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-    [statusId, workspaceId]
+    `SELECT * FROM project_statuses WHERE id = ? AND project_id = ? AND deleted_at IS NULL`,
+    [statusId, projectId]
   );
-  if (!statusRow) throw new ApiError(400, "Unknown status for workspace");
+  if (!statusRow) {
+    throw new ApiError(409, "That status is not available for missions in this project");
+  }
   return statusRow;
 }
 async function cascadeMissionProjectId(db, {
@@ -145613,6 +146066,12 @@ async function cascadeMissionProjectId(db, {
 }) {
   await db.run(
     `UPDATE objectives
+       SET project_id = ?, updated_at = ?, revision = revision + 1
+     WHERE mission_id = ? AND workspace_id = ?`,
+    [newProjectId, now2, missionId, workspaceId]
+  );
+  await db.run(
+    `UPDATE my_mission_positions
        SET project_id = ?, updated_at = ?, revision = revision + 1
      WHERE mission_id = ? AND workspace_id = ?`,
     [newProjectId, now2, missionId, workspaceId]
@@ -145723,7 +146182,7 @@ async function getMissionDetail(missionRef) {
   const row = await getMissionRow(missionRef);
   const mission = toMissionDto(row, await getMissionTags(row.id));
   const objectives = await listObjectives2(row.id);
-  const statuses = await selectWorkspaceStatusesForWorkspace(row.workspace_id);
+  const statuses = await selectProjectStatuses(row.project_id);
   const executionRequests = await listMissionExecutionRequests(row.id);
   const terminalSessions = await listMissionTerminalSessions(row.id);
   return {
@@ -146227,7 +146686,7 @@ async function createMissionTx(body, client = requireDatabaseClient(), alreadyIn
     if (body.dueDatetime !== void 0 && body.dueDatetime !== null && Number.isNaN(Date.parse(body.dueDatetime))) {
       throw new ApiError(400, "dueDatetime must be a valid ISO-8601 datetime or null");
     }
-    if (body.statusId) await getWorkspaceStatus(tx, workspaceId, body.statusId);
+    if (body.statusId) await getProjectStatus(tx, body.projectId, body.statusId);
     const assignedWorkspaceUserId = body.assignedWorkspaceUserId === void 0 ? workspaceUserId : await resolveAssignedWorkspaceUserId(tx, workspaceId, body.assignedWorkspaceUserId);
     const ctx = await buildWebappServiceContextForWorkspace(workspaceId, tx, workspaceUserId);
     const created = await createMissionWithObjectives({
@@ -146257,8 +146716,8 @@ async function createMissionTx(body, client = requireDatabaseClient(), alreadyIn
 }
 async function syncMissionTags(db, {
   workspaceId,
-  missionId,
   projectId,
+  missionId,
   tagIds,
   now: now2
 }) {
@@ -146529,7 +146988,7 @@ async function patchMissionFieldsTx(id, body) {
     let scheduleTriggerStatusType = null;
     let returnedToExecute = false;
     if (body.statusId !== void 0) {
-      const statusRow = await getWorkspaceStatus(tx, existing.workspace_id, body.statusId);
+      const statusRow = await getProjectStatus(tx, existing.project_id, body.statusId);
       fields.push("status_id = ?", "status_type = ?");
       setParams.push(statusRow.id, statusRow.type);
       changed.push("status_id", "status_type");
@@ -146761,11 +147220,31 @@ async function updateMission(id, body) {
       [body.projectId, existing.workspace_id]
     );
     if (!targetProject) throw new ApiError(404, "Project not found");
-    const statusRow = await getWorkspaceStatus(
-      client,
-      existing.workspace_id,
-      body.statusId ?? existing.status_id
-    );
+    const sourceStatus = await getProjectStatus(client, existing.project_id, existing.status_id);
+    let statusRow;
+    if (body.statusId) {
+      statusRow = await getProjectStatus(client, targetProject.id, body.statusId);
+    } else {
+      statusRow = await client.get(
+        `SELECT * FROM project_statuses WHERE project_id = ? AND key = ? AND deleted_at IS NULL`,
+        [targetProject.id, sourceStatus.key]
+      );
+      if (!statusRow) {
+        statusRow = await client.get(
+          `SELECT * FROM project_statuses
+            WHERE project_id = ? AND lower(name) = lower(?) AND deleted_at IS NULL`,
+          [targetProject.id, sourceStatus.name]
+        );
+      }
+      if (!statusRow) {
+        statusRow = await client.get(
+          `SELECT * FROM project_statuses
+            WHERE project_id = ? AND is_default = ? AND deleted_at IS NULL LIMIT 1`,
+          [targetProject.id, bindBool(client.dialect, true)]
+        );
+      }
+    }
+    if (!statusRow) throw new ApiError(409, "Project has no default status");
     if (client.dialect === "sqlite") await client.exec("PRAGMA foreign_keys = OFF");
     try {
       await moveMissionProjectTx({
@@ -146824,10 +147303,11 @@ async function reorderBoardColumn(projectId, body) {
       db: tx
     });
     const statusRow = await tx.get(
-      `SELECT * FROM workspace_statuses WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-      [statusId, workspaceId]
+      `SELECT * FROM project_statuses WHERE id = ? AND project_id = ? AND deleted_at IS NULL`,
+      [statusId, projectId]
     );
-    if (!statusRow) throw new ApiError(400, "Unknown status for workspace");
+    if (!statusRow)
+      throw new ApiError(409, "That status is not available for missions in this project");
     if (new Set(orderedIds).size !== orderedIds.length) {
       throw new ApiError(400, "orderedMissionIds contains duplicates");
     }
@@ -146920,7 +147400,7 @@ function toScheduleDto(row) {
     daysOfWeek: parseScheduleJsonArray(row.days_of_week_json),
     timezone: row.timezone,
     startDate: row.start_date,
-    nextStatusId: row.next_status_id,
+    nextStatusKey: row.next_status_key,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     revision: row.revision
@@ -146949,13 +147429,13 @@ function scheduleRowToInput(row) {
     daysOfWeek: dto.daysOfWeek,
     timezone: dto.timezone,
     startDate: dto.startDate,
-    nextStatusId: dto.nextStatusId
+    nextStatusKey: dto.nextStatusKey
   };
 }
 async function getScheduleRow(db, workspaceId, scheduleId) {
   return await db.get(
     `SELECT id, workspace_id, name, period_type, period_interval, weeks_of_month_json,
-            days_of_month_json, days_of_week_json, timezone, start_date, next_status_id,
+            days_of_month_json, days_of_week_json, timezone, start_date, next_status_key,
             created_at, updated_at, revision
        FROM schedules WHERE id = ? AND workspace_id = ?`,
     [scheduleId, workspaceId]
@@ -146995,8 +147475,13 @@ async function upsertMissionSchedule(missionRef, input) {
   if (!input) throw new ApiError(400, "schedule is required");
   return requireDatabaseClient().transaction(async (tx) => {
     const existing = await getMissionRow(missionRef, tx, PERMISSIONS.MISSION_UPDATE);
-    if (input.nextStatusId) {
-      await getWorkspaceStatus(tx, existing.workspace_id, input.nextStatusId);
+    if (input.nextStatusKey) {
+      const configured = await tx.get(
+        `SELECT 1 FROM project_statuses WHERE project_id = ? AND key = ? AND deleted_at IS NULL`,
+        [existing.project_id, input.nextStatusKey]
+      );
+      if (!configured)
+        throw new ApiError(409, "That status is not available for missions in this project");
     }
     const dueDatetime = previewScheduleDueDatetime(input, existing.due_datetime);
     const now2 = nowIso2();
@@ -147006,7 +147491,7 @@ async function upsertMissionSchedule(missionRef, input) {
         `UPDATE schedules
            SET name = ?, period_type = ?, period_interval = ?, weeks_of_month_json = ?,
                days_of_month_json = ?, days_of_week_json = ?, timezone = ?, start_date = ?,
-               next_status_id = ?, updated_at = ?, revision = revision + 1
+               next_status_key = ?, updated_at = ?, revision = revision + 1
          WHERE id = ? AND workspace_id = ?`,
         [
           input.name?.trim() || null,
@@ -147017,7 +147502,7 @@ async function upsertMissionSchedule(missionRef, input) {
           JSON.stringify(input.daysOfWeek ?? []),
           input.timezone,
           input.startDate ?? null,
-          input.nextStatusId ?? null,
+          input.nextStatusKey ?? null,
           now2,
           existing.schedule_id,
           existing.workspace_id
@@ -147027,7 +147512,7 @@ async function upsertMissionSchedule(missionRef, input) {
       await tx.run(
         `INSERT INTO schedules
            (id, workspace_id, name, period_type, period_interval, weeks_of_month_json,
-            days_of_month_json, days_of_week_json, timezone, start_date, next_status_id,
+            days_of_month_json, days_of_week_json, timezone, start_date, next_status_key,
             created_at, updated_at, revision)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
         [
@@ -147041,7 +147526,7 @@ async function upsertMissionSchedule(missionRef, input) {
           JSON.stringify(input.daysOfWeek ?? []),
           input.timezone,
           input.startDate ?? null,
-          input.nextStatusId ?? null,
+          input.nextStatusKey ?? null,
           now2,
           now2
         ]
@@ -147107,20 +147592,20 @@ async function clearMissionSchedule(missionRef) {
     }
   });
 }
-async function resolveScheduleDuplicateStatus(db, workspaceId, nextStatusId) {
-  if (nextStatusId) {
+async function resolveScheduleDuplicateStatus(db, projectId, nextStatusKey) {
+  if (nextStatusKey) {
     const configured = await db.get(
-      `SELECT * FROM workspace_statuses WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-      [nextStatusId, workspaceId]
+      `SELECT * FROM project_statuses WHERE project_id = ? AND key = ? AND deleted_at IS NULL`,
+      [projectId, nextStatusKey]
     );
     if (configured) return configured;
   }
   const defaultStatus = await db.get(
-    `SELECT * FROM workspace_statuses
-       WHERE workspace_id = ? AND is_default = ? AND deleted_at IS NULL LIMIT 1`,
-    [workspaceId, bindBool(DATABASE_DIALECT, true)]
+    `SELECT * FROM project_statuses
+       WHERE project_id = ? AND is_default = ? AND deleted_at IS NULL LIMIT 1`,
+    [projectId, bindBool(DATABASE_DIALECT, true)]
   );
-  if (!defaultStatus) throw new ApiError(409, "Workspace has no default status");
+  if (!defaultStatus) throw new ApiError(409, "Project has no default status");
   return defaultStatus;
 }
 async function createScheduledDuplicateIfNeeded(tx, mission, newStatusType) {
@@ -147139,8 +147624,8 @@ async function createScheduledDuplicateIfNeeded(tx, mission, newStatusType) {
   }
   const targetStatus = await resolveScheduleDuplicateStatus(
     tx,
-    mission.workspace_id,
-    scheduleRow.next_status_id
+    mission.project_id,
+    scheduleRow.next_status_key
   );
   const now2 = nowIso2();
   const newMissionId = newId2();
@@ -147319,6 +147804,7 @@ async function listWorkspaceMyMissions() {
 }
 async function upsertMyMissionPosition(db, {
   workspaceId,
+  projectId,
   missionId,
   statusId,
   position,
@@ -147333,17 +147819,17 @@ async function upsertMyMissionPosition(db, {
   if (existing) {
     await db.run(
       `UPDATE my_mission_positions
-          SET status_id = ?, position = ?, updated_at = ?, revision = ?
+          SET project_id = ?, status_id = ?, position = ?, updated_at = ?, revision = ?
         WHERE id = ?`,
-      [statusId, position, now2, existing.revision + 1, existing.id]
+      [projectId, statusId, position, now2, existing.revision + 1, existing.id]
     );
     return;
   }
   await db.run(
     `INSERT INTO my_mission_positions
-       (id, workspace_id, workspace_user_id, mission_id, status_id, position, created_at, updated_at, revision)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`,
-    [newId2(), workspaceId, actor, missionId, statusId, position, now2, now2]
+       (id, workspace_id, project_id, workspace_user_id, mission_id, status_id, position, created_at, updated_at, revision)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+    [newId2(), workspaceId, projectId, actor, missionId, statusId, position, now2, now2]
   );
 }
 async function requireStatusWorkspaceMembership(tx, statusId) {
@@ -147352,15 +147838,16 @@ async function requireStatusWorkspaceMembership(tx, statusId) {
     throw new ApiError(409, "No active organization", void 0, STATUS_UNAVAILABLE_FOR_WORKSPACE);
   }
   const statusRow = await tx.get(
-    `SELECT ws.* FROM workspace_statuses ws
-       JOIN workspaces w ON w.id = ws.workspace_id AND w.deleted_at IS NULL
-      WHERE ws.id = ? AND ws.deleted_at IS NULL AND w.organization_id = ?`,
+    `SELECT ps.* FROM project_statuses ps
+       JOIN projects p ON p.id = ps.project_id AND p.deleted_at IS NULL
+       JOIN workspaces w ON w.id = ps.workspace_id AND w.deleted_at IS NULL
+      WHERE ps.id = ? AND ps.deleted_at IS NULL AND w.organization_id = ?`,
     [statusId, organizationId]
   );
   if (!statusRow) {
     throw new ApiError(
       409,
-      "That status is not available for missions in this organization",
+      "That status is not available for missions in this project",
       void 0,
       STATUS_UNAVAILABLE_FOR_WORKSPACE
     );
@@ -147396,6 +147883,14 @@ async function reorderWorkspaceMyMissionsTx(body) {
       if (existing.assigned_workspace_user_id !== actor) {
         throw new ApiError(403, `Mission ${missionId} is not assigned to you`);
       }
+      if (existing.project_id !== statusRow.project_id) {
+        throw new ApiError(
+          409,
+          "That status is not available for missions in this project",
+          void 0,
+          STATUS_UNAVAILABLE_FOR_WORKSPACE
+        );
+      }
       if (existing.status_id !== statusRow.id) {
         const revision = existing.revision + 1;
         await tx.run(
@@ -147429,6 +147924,7 @@ async function reorderWorkspaceMyMissionsTx(body) {
       }
       await upsertMyMissionPosition(tx, {
         workspaceId,
+        projectId: existing.project_id,
         missionId,
         statusId: statusRow.id,
         position: (index + 1) * MY_POSITION_STEP2,
@@ -147446,7 +147942,7 @@ async function reorderWorkspaceMyMissions(body) {
     if (err && typeof err === "object" && err.code === "SQLITE_CONSTRAINT_FOREIGNKEY") {
       throw new ApiError(
         409,
-        `That status is not available in this mission's workspace`,
+        `That status is not available in this mission's project`,
         void 0,
         STATUS_UNAVAILABLE_FOR_WORKSPACE
       );
@@ -148616,8 +149112,7 @@ async function revokeUserTokenSecret(rawToken) {
 }
 
 // workspaces.ts
-init_dist2();
-var import_node_crypto18 = require("node:crypto");
+var import_node_crypto20 = require("node:crypto");
 
 // sql-studio/sql-studio.ts
 var import_node_child_process9 = require("node:child_process");
@@ -154570,33 +155065,6 @@ async function listWorkspacesForOrganization(organizationId) {
   );
   return rows.map(toWorkspaceDto);
 }
-async function seedWorkspaceStatuses({
-  workspaceId,
-  now: now2,
-  client
-}) {
-  for (const status of DEFAULT_STATUSES) {
-    await client.run(
-      `INSERT INTO workspace_statuses
-         (id, workspace_id, key, name, type, position, is_default, is_terminal,
-          created_at, updated_at, revision)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?,
-          ?, ?, 1)`,
-      [
-        newId2(),
-        workspaceId,
-        status.key,
-        status.name,
-        status.type,
-        status.position,
-        bindBool(client.dialect, status.isDefault),
-        bindBool(client.dialect, status.isTerminal),
-        now2,
-        now2
-      ]
-    );
-  }
-}
 async function seedWorkspaceStorageBuckets({
   workspaceId,
   createdByWorkspaceUserId,
@@ -154665,7 +155133,6 @@ async function createWorkspace(body) {
       [workspaceUserId, nextWorkspaceId, creatorProfileId, `auth:${creatorProfileId}`, now2, now2]
     );
     await grantWorkspaceAdminRole({ workspaceId: nextWorkspaceId, workspaceUserId, client: tx });
-    await seedWorkspaceStatuses({ workspaceId: nextWorkspaceId, now: now2, client: tx });
     await seedWorkspaceStorageBuckets({
       workspaceId: nextWorkspaceId,
       createdByWorkspaceUserId: workspaceUserId,
@@ -154775,7 +155242,6 @@ async function createOrganizationOnboarding(body) {
       [workspaceUserId, nextWorkspaceId, profileId, `auth:${profileId}`, now2, now2]
     );
     await grantWorkspaceAdminRole({ workspaceId: nextWorkspaceId, workspaceUserId, client: tx });
-    await seedWorkspaceStatuses({ workspaceId: nextWorkspaceId, now: now2, client: tx });
     await seedWorkspaceStorageBuckets({
       workspaceId: nextWorkspaceId,
       createdByWorkspaceUserId: workspaceUserId,
@@ -155000,8 +155466,8 @@ async function exportWorkspaceObjectivesCsv(workspaceId) {
          ON m.id = o.mission_id AND m.deleted_at IS NULL
        JOIN projects p
          ON p.id = o.project_id AND p.deleted_at IS NULL
-       LEFT JOIN workspace_statuses ws
-         ON ws.id = m.status_id AND ws.deleted_at IS NULL
+       LEFT JOIN project_statuses ws
+         ON ws.id = m.status_id AND ws.project_id = m.project_id AND ws.deleted_at IS NULL
       WHERE o.workspace_id = ? AND o.deleted_at IS NULL
       ORDER BY ${projectOrder},
                ${missionOrder},
@@ -155030,9 +155496,9 @@ var INVITATION_HASH_ALGORITHM = "sha256";
 var INVITATION_TTL_DAYS = 14;
 var WORKSPACE_ROLE_KEYS = /* @__PURE__ */ new Set(["ADMIN", "MANAGER", "MEMBER"]);
 function generateInvitationSecret() {
-  const prefix = `${INVITATION_TOKEN_SCHEME}_${(0, import_node_crypto18.randomBytes)(4).toString("hex")}`;
-  const secret = `${prefix}${(0, import_node_crypto18.randomBytes)(24).toString("hex")}`;
-  const hash2 = (0, import_node_crypto18.createHash)(INVITATION_HASH_ALGORITHM).update(secret).digest("hex");
+  const prefix = `${INVITATION_TOKEN_SCHEME}_${(0, import_node_crypto20.randomBytes)(4).toString("hex")}`;
+  const secret = `${prefix}${(0, import_node_crypto20.randomBytes)(24).toString("hex")}`;
+  const hash2 = (0, import_node_crypto20.createHash)(INVITATION_HASH_ALGORITHM).update(secret).digest("hex");
   return { secret, prefix, hash: hash2 };
 }
 var INVITATION_COLUMNS = "id, workspace_id, email, role_key, token_prefix, status, invited_by_workspace_user_id, expires_at, created_at, revision";
@@ -155196,7 +155662,7 @@ async function acceptWorkspaceInvitation(body) {
   if (!rawToken) throw new ApiError(400, "Invitation token is required");
   const profileId = getActiveProfileId();
   if (!profileId) throw new ApiError(401, "Authentication required");
-  const tokenHash = (0, import_node_crypto18.createHash)(INVITATION_HASH_ALGORITHM).update(rawToken).digest("hex");
+  const tokenHash = (0, import_node_crypto20.createHash)(INVITATION_HASH_ALGORITHM).update(rawToken).digest("hex");
   const client = requireDatabaseClient();
   const outcome = await client.transaction(async (tx) => {
     const invitation = await tx.get(
@@ -156216,6 +156682,13 @@ var handlers = {
     projectId: strFlag(body, "--project-id") ?? null,
     workingDirectory: strFlag(body, "--directory") ?? null
   }),
+  // Board-column discovery. Statuses are project-scoped (coo:752), so an agent
+  // that needs to name a column must ask the project that owns it. Read-only:
+  // status *definitions* are edited in project settings, never over the protocol.
+  statuses: (ctx, body) => listProjectStatuses({
+    ctx,
+    projectId: requireFlag(body, "--project-id")
+  }),
   // Parentless project creation. Resolves/validates the target workspace itself
   // (see `createProjectFromProtocol`) so it can return a `workspace_selection_required`
   // result when the caller has multiple memberships instead of defaulting.
@@ -156258,6 +156731,7 @@ var SUBCOMMAND_PERMISSIONS = {
   "attachment-download-url": PERMISSIONS.ARTIFACT_READ,
   "auth-status": null,
   "discover-project": PERMISSIONS.PROJECT_READ,
+  statuses: PERMISSIONS.PROJECT_READ,
   // Enforced per-target inside the handler (requireWorkspacePermission) so the
   // multi-workspace selection flow runs before any default-workspace gate.
   "create-project": null,
@@ -156345,12 +156819,29 @@ var hostedMcpToolDefinitions = [
     annotations: writeAction
   },
   {
+    name: "overlord_list_project_statuses",
+    title: "List Overlord project statuses",
+    description: "Use this to read one project's board columns. Status names and order are defined per project, so two projects in the same workspace can label the same lifecycle differently; this is the only way to discover a specific board\u2019s columns. Each status carries a stable type (draft, next, execute, review, complete, blocked, cancelled) that does not vary by project \u2014 use the type for filtering and the name only for display.",
+    inputSchema: objectSchema(
+      {
+        projectId: stringProperty("Overlord project id, slug, or name.")
+      },
+      ["projectId"]
+    ),
+    outputSchema: protocolOutputSchema(
+      "The project's statuses ordered by board position, each with id, projectId, key, name, type, position, isDefault, and isTerminal."
+    ),
+    annotations: readOnly
+  },
+  {
     name: "overlord_search_missions",
     title: "Search Overlord missions",
     description: "Use this when the user wants to find or list missions in the connected workspace.",
     inputSchema: objectSchema({
       query: stringProperty("Search query text."),
-      status: stringProperty("Comma-separated status types, such as draft,execute,review."),
+      status: stringProperty(
+        "Comma-separated status TYPES, such as draft,execute,review. Types are workspace-invariant (draft, next, execute, review, complete, blocked, cancelled). Project-defined status names \u2014 the board column labels read by overlord_list_project_statuses \u2014 are not accepted here."
+      ),
       projectId: stringProperty("Optional project id, slug, or name."),
       limit: {
         type: "number",
@@ -156846,6 +157337,10 @@ var toolHandlers = {
       ...optionalString(args, "description") ? { "--description": requiredString(args, "description") } : {},
       ...optionalString(args, "slug") ? { "--slug": requiredString(args, "slug") } : {}
     })
+  ),
+  overlord_list_project_statuses: (args) => runProtocolSubcommand(
+    "statuses",
+    protocolBody({ "--project-id": requiredString(args, "projectId") })
   ),
   overlord_search_missions: (args) => runProtocolSubcommand(
     "search-missions",
@@ -158082,7 +158577,7 @@ init_db();
 init_errors5();
 
 // ext/everhour/crypto.ts
-var import_node_crypto19 = require("node:crypto");
+var import_node_crypto21 = require("node:crypto");
 init_errors5();
 function decodeEncryptionKey(encoded) {
   const trimmed10 = encoded?.trim();
@@ -158112,8 +158607,8 @@ function encryptEverhourApiKey({
   profileId,
   key
 }) {
-  const nonce = (0, import_node_crypto19.randomBytes)(12);
-  const cipher = (0, import_node_crypto19.createCipheriv)("aes-256-gcm", key, nonce);
+  const nonce = (0, import_node_crypto21.randomBytes)(12);
+  const cipher = (0, import_node_crypto21.createCipheriv)("aes-256-gcm", key, nonce);
   cipher.setAAD(apiKeyAad(profileId));
   const ciphertext = Buffer.concat([cipher.update(apiKey, "utf8"), cipher.final()]);
   const tag2 = cipher.getAuthTag();
@@ -158129,7 +158624,7 @@ function decryptEverhourApiKey({
     throw new ApiError(503, "The stored Everhour connection cannot be decrypted.");
   }
   try {
-    const decipher = (0, import_node_crypto19.createDecipheriv)("aes-256-gcm", key, Buffer.from(nonceText, "base64url"));
+    const decipher = (0, import_node_crypto21.createDecipheriv)("aes-256-gcm", key, Buffer.from(nonceText, "base64url"));
     decipher.setAAD(apiKeyAad(profileId));
     decipher.setAuthTag(Buffer.from(tagText, "base64url"));
     return Buffer.concat([
@@ -161849,7 +162344,7 @@ function boundComposeText(value, maxChars) {
 var deliveryComposeWorker = new DeliveryComposeWorker();
 
 // desktop-oauth-handoff.ts
-var import_node_crypto20 = require("node:crypto");
+var import_node_crypto22 = require("node:crypto");
 var HANDOFF_TTL_MS = 6e4;
 var TICKET_PATTERN = /^[A-Za-z0-9_-]{32,128}$/;
 var handoffs = /* @__PURE__ */ new Map();
@@ -161860,7 +162355,7 @@ function discardExpiredHandoffs(now2 = Date.now()) {
 }
 function createOAuthHandoff(sessionToken, audience) {
   discardExpiredHandoffs();
-  const ticket = (0, import_node_crypto20.randomBytes)(32).toString("base64url");
+  const ticket = (0, import_node_crypto22.randomBytes)(32).toString("base64url");
   handoffs.set(ticket, { audience, sessionToken, expiresAt: Date.now() + HANDOFF_TTL_MS });
   return ticket;
 }
@@ -161910,7 +162405,7 @@ init_errors5();
 
 // live-activities.ts
 init_dist2();
-var import_node_crypto21 = require("node:crypto");
+var import_node_crypto23 = require("node:crypto");
 init_util3();
 init_db();
 init_errors5();
@@ -162199,7 +162694,7 @@ async function buildLiveActivityContentState(db, profileId, now2 = /* @__PURE__ 
   };
 }
 function liveActivityContentHash(state2) {
-  return (0, import_node_crypto21.createHash)("sha256").update(
+  return (0, import_node_crypto23.createHash)("sha256").update(
     JSON.stringify(
       state2 && {
         running: state2.running,
@@ -162213,7 +162708,7 @@ function liveActivityContentHash(state2) {
 init_util3();
 
 // apns-client.ts
-var import_node_crypto22 = require("node:crypto");
+var import_node_crypto24 = require("node:crypto");
 var import_node_http2 = __toESM(require("node:http2"), 1);
 var SANDBOX_HOST = "https://api.sandbox.push.apple.com";
 var PRODUCTION_HOST = "https://api.push.apple.com";
@@ -162242,7 +162737,7 @@ function apnsJwt(config4) {
   const signingInput = `${b64url(JSON.stringify({ alg: "ES256", kid: config4.keyId }))}.${b64url(
     JSON.stringify({ iss: config4.teamId, iat: now2 })
   )}`;
-  const signer = (0, import_node_crypto22.createSign)("SHA256");
+  const signer = (0, import_node_crypto24.createSign)("SHA256");
   signer.update(signingInput);
   signer.end();
   const signature = signer.sign({ key: config4.privateKey, dsaEncoding: "ieee-p1363" });
@@ -163319,7 +163814,7 @@ async function dismissNotification(id, body) {
 }
 
 // oauth.ts
-var import_node_crypto23 = require("node:crypto");
+var import_node_crypto25 = require("node:crypto");
 init_db();
 init_errors5();
 var CLIENT_ID_PREFIX = "ovlc_";
@@ -163355,12 +163850,12 @@ function oauthSigningSecret() {
   return process.env.OVERLORD_OAUTH_SIGNING_SECRET?.trim() || process.env.BETTER_AUTH_SECRET?.trim() || "overlord-local-oauth-development-secret";
 }
 function signPayload(payload) {
-  return (0, import_node_crypto23.createHmac)("sha256", oauthSigningSecret()).update(payload).digest("base64url");
+  return (0, import_node_crypto25.createHmac)("sha256", oauthSigningSecret()).update(payload).digest("base64url");
 }
 function fixedTimeEqual(a5, b5) {
   const left = Buffer.from(a5);
   const right = Buffer.from(b5);
-  return left.length === right.length && (0, import_node_crypto23.timingSafeEqual)(left, right);
+  return left.length === right.length && (0, import_node_crypto25.timingSafeEqual)(left, right);
 }
 function jsonError(res, status, error53, description) {
   res.status(status).json({ error: error53, error_description: description });
@@ -163597,7 +164092,7 @@ async function handleOAuthApprove(req, res) {
     scope: "mission_lifecycle",
     expiresAt: new Date(Date.now() + USER_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1e3).toISOString()
   });
-  const code = `${AUTH_CODE_PREFIX}${(0, import_node_crypto23.randomBytes)(32).toString("base64url")}`;
+  const code = `${AUTH_CODE_PREFIX}${(0, import_node_crypto25.randomBytes)(32).toString("base64url")}`;
   authorizationCodes.set(code, {
     clientId: parsed.clientId,
     redirectUri: parsed.redirectUri,
@@ -163641,7 +164136,7 @@ async function handleOAuthToken(req, res) {
     jsonError(res, 400, "invalid_target", "OAuth resource does not match the authorization code.");
     return;
   }
-  const challenge = (0, import_node_crypto23.createHash)("sha256").update(codeVerifier).digest("base64url");
+  const challenge = (0, import_node_crypto25.createHash)("sha256").update(codeVerifier).digest("base64url");
   if (!codeVerifier || challenge !== entry.codeChallenge) {
     await revokeOrphanedAccessToken(entry.accessToken);
     jsonError(res, 400, "invalid_grant", "PKCE verification failed.");
@@ -163661,7 +164156,7 @@ async function handleOAuthRevoke(req, res) {
 }
 
 // storage.ts
-var import_node_crypto24 = require("node:crypto");
+var import_node_crypto26 = require("node:crypto");
 var import_node_fs19 = require("node:fs");
 var import_node_path30 = __toESM(require("node:path"), 1);
 var import_node_url7 = require("node:url");
@@ -163745,7 +164240,7 @@ async function writeImageObject(bucket, input, storageKeyFor) {
     storageKey,
     sizeBytes: input.bytes.length,
     contentType,
-    checksum: (0, import_node_crypto24.createHash)("sha256").update(input.bytes).digest("hex"),
+    checksum: (0, import_node_crypto26.createHash)("sha256").update(input.bytes).digest("hex"),
     publicUrl: publicUrlFor(bucket.bucket_key, storageKey)
   };
 }
@@ -163977,7 +164472,7 @@ async function uploadObjectiveAttachment(input) {
     contentType: contentType ?? "application/octet-stream"
   });
   const filename = input.filename.trim() || `attachment${import_node_path30.default.extname(storageKey)}`;
-  const checksum3 = (0, import_node_crypto24.createHash)("sha256").update(input.bytes).digest("hex");
+  const checksum3 = (0, import_node_crypto26.createHash)("sha256").update(input.bytes).digest("hex");
   return requireDatabaseClient().transaction(async (tx) => {
     await tx.run(
       `INSERT INTO attachments (
@@ -164232,14 +164727,14 @@ init_webhook_events();
 init_db();
 
 // webhook-security.ts
-var import_node_crypto25 = require("node:crypto");
+var import_node_crypto27 = require("node:crypto");
 var import_promises5 = __toESM(require("node:dns/promises"), 1);
 var import_node_net = require("node:net");
 init_db();
 init_errors5();
 function signWebhookPayload(secret, rawBody) {
   const timestamp = Math.floor(Date.now() / 1e3);
-  const signature = (0, import_node_crypto25.createHmac)("sha256", secret).update(`${timestamp}.${rawBody}`).digest("hex");
+  const signature = (0, import_node_crypto27.createHmac)("sha256", secret).update(`${timestamp}.${rawBody}`).digest("hex");
   return { header: `t=${timestamp},v1=${signature}`, timestamp };
 }
 function internalHostPatterns() {
@@ -164566,7 +165061,7 @@ var webhookDispatcher = new WebhookDispatcher();
 
 // webhooks.ts
 init_dist2();
-var import_node_crypto26 = require("node:crypto");
+var import_node_crypto28 = require("node:crypto");
 init_webhook_events();
 init_db();
 init_errors5();
@@ -164602,7 +165097,7 @@ function toSubscriptionDto(row) {
   };
 }
 function generateWebhookSecret() {
-  return { secret: `${WEBHOOK_SECRET_SCHEME}_${(0, import_node_crypto26.randomBytes)(24).toString("hex")}` };
+  return { secret: `${WEBHOOK_SECRET_SCHEME}_${(0, import_node_crypto28.randomBytes)(24).toString("hex")}` };
 }
 function normalizeEventTypes(input) {
   if (!Array.isArray(input) || input.length === 0) {
@@ -165451,8 +165946,8 @@ app.get(
   handle3((req) => listProjectsForWorkspace(req.params.id, void 0, parseProjectListLifecycle(req)))
 );
 app.get(
-  "/api/workspaces/:id/statuses",
-  handle3((req) => listWorkspaceStatusesForWorkspace(req.params.id))
+  "/api/workspaces/:id/project-statuses",
+  handle3((req) => listWorkspaceProjectStatuses(req.params.id))
 );
 app.get(
   "/api/workspaces/:id/execution-targets",
@@ -165473,30 +165968,6 @@ app.delete(
   handle3(
     async (req) => {
       await removeWorkspaceExecutionTarget(req.params.id, req.params.targetId);
-      return { ok: true };
-    },
-    { mutates: true }
-  )
-);
-app.post(
-  "/api/workspaces/:id/statuses",
-  handle3((req) => createWorkspaceStatus(req.body, req.params.id), { mutates: true })
-);
-app.patch(
-  "/api/workspaces/:id/statuses/reorder",
-  handle3((req) => reorderWorkspaceStatuses(req.body, req.params.id), { mutates: true })
-);
-app.patch(
-  "/api/workspaces/:id/statuses/:statusId",
-  handle3((req) => updateWorkspaceStatus(req.params.statusId, req.body, req.params.id), {
-    mutates: true
-  })
-);
-app.delete(
-  "/api/workspaces/:id/statuses/:statusId",
-  handle3(
-    async (req) => {
-      await deleteWorkspaceStatus(req.params.statusId, req.params.id);
       return { ok: true };
     },
     { mutates: true }
@@ -165793,38 +166264,31 @@ app.delete(
   handle3((req) => deleteProject(req.params.id), { mutates: true })
 );
 app.get(
-  "/api/workspace/statuses",
-  handle3(() => listWorkspaceStatuses(), { requires: PERMISSIONS.WORKSPACE_READ })
+  "/api/projects/:id/statuses",
+  handle3((req) => listProjectStatuses2(req.params.id))
 );
 app.post(
-  "/api/workspace/statuses",
-  handle3((req) => createWorkspaceStatus(req.body), {
-    mutates: true,
-    requires: PERMISSIONS.WORKSPACE_UPDATE
-  })
+  "/api/projects/:id/statuses",
+  handle3((req) => createProjectStatus(req.params.id, req.body), { mutates: true })
 );
 app.patch(
-  "/api/workspace/statuses/reorder",
-  handle3((req) => reorderWorkspaceStatuses(req.body), {
-    mutates: true,
-    requires: PERMISSIONS.WORKSPACE_UPDATE
-  })
+  "/api/projects/:id/statuses/reorder",
+  handle3((req) => reorderProjectStatuses(req.params.id, req.body), { mutates: true })
 );
 app.patch(
-  "/api/workspace/statuses/:statusId",
-  handle3((req) => updateWorkspaceStatus(req.params.statusId, req.body), {
-    mutates: true,
-    requires: PERMISSIONS.WORKSPACE_UPDATE
+  "/api/projects/:id/statuses/:statusId",
+  handle3((req) => updateProjectStatus(req.params.id, req.params.statusId, req.body), {
+    mutates: true
   })
 );
 app.delete(
-  "/api/workspace/statuses/:statusId",
+  "/api/projects/:id/statuses/:statusId",
   handle3(
-    (req) => {
-      deleteWorkspaceStatus(req.params.statusId);
+    async (req) => {
+      await deleteProjectStatus(req.params.id, req.params.statusId);
       return { ok: true };
     },
-    { mutates: true, requires: PERMISSIONS.WORKSPACE_UPDATE }
+    { mutates: true }
   )
 );
 app.get(
@@ -166091,7 +166555,8 @@ app.get(
       10
     );
     const limit = Number.isFinite(parsedLimit) ? parsedLimit : void 0;
-    return { missions: await searchMissions2({ query, projectId, limit }) };
+    const statusTypes = typeof req.query.statusTypes === "string" ? req.query.statusTypes.split(",").map((value) => value.trim()).filter((value) => value !== "") : null;
+    return { missions: await searchMissions2({ query, projectId, statusTypes, limit }) };
   })
 );
 app.post(

@@ -1,4 +1,4 @@
-import { bindBool, type DatabaseClient, DEFAULT_STATUSES } from '@overlord/database';
+import { type DatabaseClient } from '@overlord/database';
 import type Database from 'better-sqlite3';
 
 /**
@@ -40,29 +40,6 @@ export function seedAuthenticatedOperator({
      ) VALUES (?, ?, ?, ?, 'local', '{}', ?, ?, 1)`
   ).run(workspaceId, organizationId, workspaceId, workspaceId, now, now);
 
-  // Migrations 001-004 used to seed these for the pristine `local-workspace`
-  // row; the organizations migration (coo:135) deletes that seed on a fresh
-  // install (Q10), so every workspace a test creates must seed its own
-  // default statuses/buckets the same way `createWorkspace` does in production.
-  for (const status of DEFAULT_STATUSES) {
-    db.prepare(
-      `INSERT OR IGNORE INTO workspace_statuses
-         (id, workspace_id, key, name, type, position, is_default, is_terminal,
-          created_at, updated_at, revision)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`
-    ).run(
-      `${workspaceId}-${status.key}`,
-      workspaceId,
-      status.key,
-      status.name,
-      status.type,
-      status.position,
-      bindBool('sqlite', status.isDefault),
-      bindBool('sqlite', status.isTerminal),
-      now,
-      now
-    );
-  }
   for (const bucketKey of ['workspace-images', 'user-images', 'attachments']) {
     db.prepare(
       `INSERT OR IGNORE INTO storage_buckets (
@@ -136,30 +113,6 @@ export async function seedAuthenticatedOperatorClient({
        ) VALUES (?, ?, ?, ?, 'local', '{}', ?, ?, 1)`,
       [workspaceId, organizationId, workspaceId, workspaceId, now, now]
     );
-    // Migrations 001-004 used to seed these for the pristine `local-workspace`
-    // row; the organizations migration (coo:135) deletes that seed on a fresh
-    // install (Q10), so every workspace a test creates must seed its own
-    // default statuses/buckets the same way `createWorkspace` does in production.
-    for (const status of DEFAULT_STATUSES) {
-      await client.run(
-        `INSERT INTO workspace_statuses
-           (id, workspace_id, key, name, type, position, is_default, is_terminal,
-            created_at, updated_at, revision)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
-        [
-          `${workspaceId}-${status.key}`,
-          workspaceId,
-          status.key,
-          status.name,
-          status.type,
-          status.position,
-          bindBool(client.dialect, status.isDefault),
-          bindBool(client.dialect, status.isTerminal),
-          now,
-          now
-        ]
-      );
-    }
     for (const bucketKey of ['workspace-images', 'user-images', 'attachments']) {
       await client.run(
         `INSERT INTO storage_buckets (

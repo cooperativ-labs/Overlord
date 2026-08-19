@@ -476,7 +476,7 @@ Configurable mission statuses per project, with stable semantic types.
 | `project_id`    | Id           | yes      | FK to `projects`.                                                 |
 | `key`           | text         | yes      | Example: `next-up`.                                               |
 | `name`          | text         | yes      | Display name.                                                     |
-| `type`          | text         | yes      | `draft`, `execute`, `review`, `complete`, `blocked`, `cancelled`. |
+| `type`          | text         | yes      | `draft`, `next`, `execute`, `review`, `complete`, `blocked`, `cancelled`. |
 | `position`      | integer      | yes      | Ordering in board/UI.                                             |
 | `is_default`    | Bool         | yes      | One default per project.                                          |
 | `is_terminal`   | Bool         | yes      | Complete/cancelled-style statuses.                                |
@@ -492,6 +492,7 @@ Indexes:
 - Unique one active default status per project.
 - Unique one active `execute` type per project, enforced by adapter partial unique index.
 - Unique one active `review` type per project, enforced by adapter partial unique index.
+- Unique one active `next` type per project, enforced by adapter partial unique index.
 
 ### `devices`
 
@@ -884,7 +885,7 @@ A repeating recurrence rule for mission due dates, computed by the SchedulingEng
 | `days_of_week_json`   | Json         | yes      | Array of `{ dayNum: 0-6, times: string[] }`; `times` are `HH:mm` or `HH:mm:ss` local to `timezone`.                                                                       |
 | `start_date`          | TimestampUTC | no       | Optional recurrence anchor; becomes the primary anchor when present.                                                                                                      |
 | `timezone`            | text         | yes      | IANA timezone (validated against `Intl.DateTimeFormat`); defaults from the browser at creation.                                                                           |
-| `next_status_id`      | Id           | no       | FK to `workspace_statuses`. Workspace status the duplicate mission lands in on regeneration. Null (or a since-deleted status) falls back to the workspace default status. |
+| `next_status_key`     | text         | no       | Project status key the duplicate mission lands in on regeneration. Null (or a since-deleted key) falls back to the mission project's default status. |
 | `created_at`          | TimestampUTC | yes      |                                                                                                                                                                           |
 | `updated_at`          | TimestampUTC | yes      |                                                                                                                                                                           |
 | `revision`            | integer      | yes      |                                                                                                                                                                           |
@@ -892,9 +893,9 @@ A repeating recurrence rule for mission due dates, computed by the SchedulingEng
 Indexes:
 
 - Unique `(workspace_id, id)` — supports the org-scoped composite FK from `missions.schedule_id` (Postgres only; see the `missions.schedule_id` note).
-- `(workspace_id, next_status_id)`.
+- `(workspace_id, next_status_key)`.
 
-Validation (`periodType`/`periodInterval`/`timezone`/day-of-week-and-month shape rules) happens in the SchedulingEngine's zod schema (`automations/src/scheduling-engine/helpers/scheduleSchema.ts`), not as DB-level CHECK constraints beyond the closed `period_type` enum and `period_interval >= 1`. When a scheduled mission reaches a `complete`-type status (see `workspace_statuses.type` controlled vocabulary; `cancelled` is explicitly excluded), the REST layer spawns a duplicate mission carrying `schedule_id` forward and computes its `due_datetime` from the schedule.
+Validation (`periodType`/`periodInterval`/`timezone`/day-of-week-and-month shape rules) happens in the SchedulingEngine's zod schema (`automations/src/scheduling-engine/helpers/scheduleSchema.ts`), not as DB-level CHECK constraints beyond the closed `period_type` enum and `period_interval >= 1`. When a scheduled mission reaches a `complete`-type status (see `project_statuses.type` controlled vocabulary; `cancelled` is explicitly excluded), the REST layer spawns a duplicate mission carrying `schedule_id` forward and computes its `due_datetime` from the schedule.
 
 ### `objectives`
 
@@ -1006,7 +1007,7 @@ Indexes / constraints:
 
 - `UNIQUE (workspace_id, workspace_user_id, mission_id)` — one position per operator per mission.
 - Composite FK `(workspace_id, mission_id) → missions (workspace_id, id)` `ON DELETE CASCADE` — keeps the row in the mission's own workspace.
-- Composite FK `(workspace_id, status_id) → workspace_statuses (workspace_id, id)` `ON DELETE CASCADE` — the column must be a status of the same workspace.
+- Composite FK `(project_id, status_id) → project_statuses (project_id, id)` `ON DELETE CASCADE` — the column must be a status of the same project.
 - `(workspace_id, workspace_user_id, status_id, position)` — ordered reads of one operator's column.
 
 Rows are sparse: one exists only for a mission the operator has dragged. Cascades fire only on **hard** delete; because missions and statuses are soft-deleted, the read path filters non-deleted missions and ignores positions whose `status_id` no longer matches the mission's current column. Keyed by `workspace_id`, the table is forward-compatible with a future cross-workspace My Missions board.
@@ -2386,8 +2387,8 @@ The schema stores controlled vocabularies as text for portability, but allowed v
 
 Closed values:
 
-- `project_statuses.type`: `draft`, `execute`, `review`, `complete`, `blocked`, `cancelled`.
-- Default status mapping: `draft -> draft`, `next-up -> draft`, `execute -> execute`, `review -> review`, `complete -> complete`, `blocked -> blocked`, `cancelled -> cancelled`.
+- `project_statuses.type`: `draft`, `next`, `execute`, `review`, `complete`, `blocked`, `cancelled`.
+- Default status mapping: `draft -> draft`, `next-up -> next`, `execute -> execute`, `review -> review`, `complete -> complete`, `blocked -> blocked`, `cancelled -> cancelled`.
 - `objectives.state`: `future`, `draft`, `submitted`, `launching`, `executing`, `pending_delivery`, `complete`.
 - `missions.created_by_kind`, `objectives.created_by_kind`: `human`, `agent`, `automation`. `human` is the default and covers every pre-provenance row; `agent` is the protocol surface (CLI-forwarded agent commands, connector harness, MCP); `automation` is Overlord itself creating a row with no actor in the loop, such as scheduled-mission regeneration. The companion `created_by_agent` identifier stays **open** (see connector identifiers below).
 - `execution_requests.status`: `queued`, `claimed`, `launching`, `launched`, `failed`, `cleared`, `cancelled`, `expired`.
@@ -2414,7 +2415,7 @@ Open extension values:
 | Event type               | Fires when                                                                       |
 | ------------------------ | -------------------------------------------------------------------------------- |
 | `mission.delivered`      | `deliverSession()` commits (also `record-work`).                                 |
-| `mission.status_changed` | A mission moves between `workspace_statuses`, including REST-driven board moves. |
+| `mission.status_changed` | A mission moves between its project's `project_statuses`, including REST-driven board moves. |
 | `objective.completed`    | An objective reaches `complete`, including manual completion.                    |
 | `mission.blocked`        | An agent posts an `ask`.                                                         |
 

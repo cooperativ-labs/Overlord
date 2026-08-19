@@ -12,7 +12,7 @@ import {
 import { arrayMove, sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import { useCallback, useEffect, useState } from 'react';
 
-import type { WorkspaceStatusDto } from '../../shared/contract.ts';
+import type { ProjectStatusDto } from '../../shared/contract.ts';
 import { useReorderBoardColumn } from '../lib/queries.ts';
 
 import { type BoardDndResult, type ColumnMap, columnMapsEqual } from './board-shared.ts';
@@ -37,7 +37,7 @@ export function useBoardColumnDnd({
   draggable = true
 }: {
   columns: ColumnMap;
-  statuses: Pick<WorkspaceStatusDto, 'id' | 'type'>[];
+  statuses: Pick<ProjectStatusDto, 'id' | 'type'>[];
   projectId: string;
   draggable?: boolean;
 }): BoardDndResult {

@@ -167,6 +167,25 @@ test('routes durable notification changes to the profile-owned history query', (
   assert.deepEqual(calls, [['notifications']]);
 });
 
+test('routes project status changes only to that project and My Missions', () => {
+  const { client, calls } = fakeClient();
+
+  const mode = invalidateRealtimeChanges(client, [
+    change({
+      entityType: 'project_status',
+      entityId: 'status-1',
+      changedFields: ['position']
+    })
+  ]);
+
+  assert.equal(mode, 'targeted');
+  assert.deepEqual(calls, [
+    ['project', 'project-1', 'statuses'],
+    ['project', 'project-1', 'missions'],
+    ['workspace', 'my-missions']
+  ]);
+});
+
 test('falls back to full invalidation for malformed or unroutable changes', () => {
   for (const changes of [
     { changes: [] },

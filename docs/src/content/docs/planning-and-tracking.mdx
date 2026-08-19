@@ -53,6 +53,11 @@ Work can also enter `blocked` (waiting on a human decision) or `cancelled`. A
 draft objective becomes `submitted` when it is under active discussion with an
 agent, and `executing` once an agent attaches to run it.
 
+These lifecycle *types* are the same everywhere, but the board column **names
+and their order are configured per project**, in project settings — so two
+projects in one workspace can present the same lifecycle under different labels.
+Run `ovld statuses list --project-id <id>` to read a specific project's columns.
+
 ## Create and order work from the CLI
 
 ```bash

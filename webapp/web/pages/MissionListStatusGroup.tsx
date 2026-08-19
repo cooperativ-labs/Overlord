@@ -38,7 +38,7 @@ export function MissionListStatusGroup<TMission extends MissionDto = MissionDto>
   projectName: string;
   projectColor: string | null;
   createProjectId?: string;
-  createStatusScope?: 'project' | 'workspace';
+  createStatusScope?: 'project' | 'aggregate';
   membersByWorkspaceUserId: Map<string, WorkspaceMemberDto>;
   selectedMissionId?: string;
   isCollapsed: boolean;

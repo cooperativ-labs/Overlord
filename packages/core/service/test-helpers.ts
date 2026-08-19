@@ -10,7 +10,7 @@ export { createIsolatedCheckout } from './test-checkout.js';
  * Seeds the minimal operator chain service tests need. Fresh in-memory
  * databases no longer contain an implicit `local-workspace` row (the
  * organization migration dropped that seed), so this creates the full chain —
- * organization -> workspace -> mission sequence -> workspace statuses ->
+ * organization -> workspace -> mission sequence ->
  * user (whose trigger creates the matching profile) -> workspace_user ->
  * ADMIN role — using stable ids and INSERT OR IGNORE so re-seeding is a no-op.
  */
@@ -45,30 +45,6 @@ export async function seedServiceOperator({
      VALUES (?, ?, 'workspace', ?, 'mission', 1, ?)`,
     [`${workspaceId}-mission-seq`, workspaceId, workspaceId, now]
   );
-
-  const statuses: Array<{ type: string; isDefault: boolean }> = [
-    { type: 'draft', isDefault: true },
-    { type: 'execute', isDefault: false },
-    { type: 'review', isDefault: false }
-  ];
-  for (const [index, status] of statuses.entries()) {
-    await db.run(
-      `INSERT OR IGNORE INTO workspace_statuses
-         (id, workspace_id, key, name, type, position, is_default, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        `${workspaceId}-status-${status.type}`,
-        workspaceId,
-        status.type,
-        status.type,
-        status.type,
-        index,
-        status.isDefault ? 1 : 0,
-        now,
-        now
-      ]
-    );
-  }
 
   await db.run(
     `INSERT OR IGNORE INTO "user" (

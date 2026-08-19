@@ -26,10 +26,10 @@ const {
 } = await import('./repository.ts');
 const { ApiError } = await import('./errors.ts');
 
-function statusId(key: string): string {
+function statusId(projectId: string, key: string): string {
   const row = db
-    .prepare(`SELECT id FROM workspace_statuses WHERE workspace_id = ? AND key = ?`)
-    .get(WORKSPACE.id, key) as { id: string } | undefined;
+    .prepare(`SELECT id FROM project_statuses WHERE project_id = ? AND key = ?`)
+    .get(projectId, key) as { id: string } | undefined;
   if (!row) throw new Error(`Seed status missing: ${key}`);
   return row.id;
 }
@@ -151,7 +151,7 @@ describe('scheduled mission completion trigger', () => {
     const beforeMissions = await listMissions(project.id);
     assert.equal(beforeMissions.length, 1);
 
-    await updateMission(mission.id, { statusId: statusId('done') });
+    await updateMission(mission.id, { statusId: statusId(project.id, 'done') });
 
     const afterMissions = await listMissions(project.id);
     assert.equal(afterMissions.length, 2);
@@ -175,7 +175,7 @@ describe('scheduled mission completion trigger', () => {
     const mission = await createMission({ projectId: project.id, firstObjective: 'Daily standup' });
     await upsertMissionSchedule(mission.id, DAILY_UTC_SCHEDULE);
 
-    await updateMission(mission.id, { statusId: statusId('cancelled') });
+    await updateMission(mission.id, { statusId: statusId(project.id, 'cancelled') });
 
     const missions = await listMissions(project.id);
     assert.equal(missions.length, 1);
@@ -186,11 +186,11 @@ describe('scheduled mission completion trigger', () => {
     const mission = await createMission({ projectId: project.id, firstObjective: 'Monthly audit' });
     await upsertMissionSchedule(mission.id, DAILY_UTC_SCHEDULE);
 
-    await updateMission(mission.id, { statusId: statusId('done') });
+    await updateMission(mission.id, { statusId: statusId(project.id, 'done') });
     assert.equal((await listMissions(project.id)).length, 2);
 
     // Re-saving the same status (e.g. an idempotent PATCH) must not spawn another.
-    await updateMission(mission.id, { statusId: statusId('done') });
+    await updateMission(mission.id, { statusId: statusId(project.id, 'done') });
     assert.equal((await listMissions(project.id)).length, 2);
   });
 
@@ -198,7 +198,7 @@ describe('scheduled mission completion trigger', () => {
     const project = await createProject({ name: 'Scheduling Trigger D' });
     const mission = await createMission({ projectId: project.id, firstObjective: 'No schedule' });
 
-    await updateMission(mission.id, { statusId: statusId('done') });
+    await updateMission(mission.id, { statusId: statusId(project.id, 'done') });
 
     const missions = await listMissions(project.id);
     assert.equal(missions.length, 1);
@@ -210,7 +210,7 @@ describe('scheduled mission completion trigger', () => {
     await upsertMissionSchedule(mission.id, DAILY_UTC_SCHEDULE);
 
     await reorderBoardColumn(project.id, {
-      statusId: statusId('done'),
+      statusId: statusId(project.id, 'done'),
       orderedMissionIds: [mission.id]
     });
 

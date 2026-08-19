@@ -5,11 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { NewMissionModal } from '@/components/NewMissionModal.tsx';
 
-import type {
-  MyMissionDto,
-  WorkspaceMemberDto,
-  WorkspaceStatusDto
-} from '../../shared/contract.ts';
+import type { MyMissionDto, ProjectStatusDto, WorkspaceMemberDto } from '../../shared/contract.ts';
 import { Button, EmptyState, Spinner } from '../components/ui.tsx';
 import {
   Dialog,
@@ -30,7 +26,6 @@ import {
   useAllProjects,
   useCreateMission,
   useMeta,
-  useProjects,
   useReorderMyMissions,
   useSetMissionStatus,
   useWorkspaceMyMissions
@@ -86,7 +81,6 @@ export function MyMissionsPage() {
   const navigate = useNavigate();
   const meta = useMeta();
   const myMissionsQ = useWorkspaceMyMissions();
-  const projectsQ = useProjects();
   // My Missions spans every workspace of the active organization, so the project
   // filter is gated on the cross-workspace list, which already excludes archived
   // projects (lifecycle defaults to 'active').
@@ -100,16 +94,14 @@ export function MyMissionsPage() {
 
   const workspaces = useMemo(() => meta.data?.workspaces ?? [], [meta.data]);
   const workspaceIds = useMemo(() => workspaces.map(workspace => workspace.id), [workspaces]);
-  const activeWorkspaceId = meta.data?.workspace?.id ?? null;
   const activeOrganizationId = meta.data?.organization?.id ?? null;
 
   // My Missions aggregates across every workspace of the active organization, so
-  // statuses and members are fetched per workspace and merged. These share query
-  // keys with the single-workspace hooks, so the realtime feed invalidates both.
+  // project statuses and members are fetched once per workspace and merged.
   const statusQueries = useQueries({
     queries: workspaceIds.map(id => ({
-      queryKey: keys.workspaceStatuses(id),
-      queryFn: () => api.listWorkspaceStatusesForWorkspace(id),
+      queryKey: keys.workspaceProjectStatuses(id),
+      queryFn: () => api.listWorkspaceProjectStatuses(id),
       enabled: Boolean(id)
     }))
   });
@@ -128,33 +120,43 @@ export function MyMissionsPage() {
   const [projectFilterOrganizationId, setProjectFilterOrganizationId] = useState<string | null>(
     null
   );
-  const [dropError, setDropError] = useState<{ statusName: string; workspaceName: string } | null>(
+  const [dropError, setDropError] = useState<{ statusName: string; projectName: string } | null>(
     null
   );
   const [modalOpen, setModalOpen] = useState(false);
   const [defaultDueDate, setDefaultDueDate] = useState<Date | null>(null);
 
   const missions = useMemo(() => myMissionsQ.data?.missions ?? [], [myMissionsQ.data]);
-  const projects = useMemo(() => projectsQ.data ?? [], [projectsQ.data]);
+  const projects = useMemo(() => activeProjectsQ.data ?? [], [activeProjectsQ.data]);
 
-  const statusesByWorkspace = useMemo(() => {
-    const map = new Map<string, WorkspaceStatusDto[]>();
-    workspaceIds.forEach((id, index) => {
-      const data = statusQueries[index]?.data;
-      if (data) map.set(id, data);
-    });
+  const statusesByProject = useMemo(() => {
+    const map = new Map<string, ProjectStatusDto[]>();
+    for (const query of statusQueries) {
+      for (const status of query.data ?? []) {
+        const statuses = map.get(status.projectId) ?? [];
+        statuses.push(status);
+        map.set(status.projectId, statuses);
+      }
+    }
     return map;
-  }, [workspaceIds, statusQueries]);
+  }, [statusQueries]);
 
-  // The active workspace drives column ordering and casing (first-seen wins).
-  const orderedWorkspaceIds = useMemo(() => {
-    if (!activeWorkspaceId || !workspaceIds.includes(activeWorkspaceId)) return workspaceIds;
-    return [activeWorkspaceId, ...workspaceIds.filter(id => id !== activeWorkspaceId)];
-  }, [workspaceIds, activeWorkspaceId]);
+  // `useAllProjects` preserves workspace order and each workspace's project
+  // position, so this keeps a stable first-seen precedence for merged columns.
+  const orderedProjectIds = useMemo(() => {
+    const missionProjectIds = new Set(missions.map(mission => mission.projectId));
+    const ordered = projects
+      .filter(project => missionProjectIds.has(project.id))
+      .map(project => project.id);
+    for (const mission of missions) {
+      if (!ordered.includes(mission.projectId)) ordered.push(mission.projectId);
+    }
+    return ordered;
+  }, [missions, projects]);
 
   const merged = useMemo(
-    () => buildMergedStatusColumns(orderedWorkspaceIds, statusesByWorkspace),
-    [orderedWorkspaceIds, statusesByWorkspace]
+    () => buildMergedStatusColumns(orderedProjectIds, statusesByProject),
+    [orderedProjectIds, statusesByProject]
   );
 
   const membersByWorkspaceUserId = useMemo(() => {
@@ -165,11 +167,11 @@ export function MyMissionsPage() {
     return map;
   }, [memberQueries]);
 
-  const workspaceNameById = useMemo(() => {
+  const projectNameById = useMemo(() => {
     const map = new Map<string, string>();
-    for (const workspace of workspaces) map.set(workspace.id, workspace.name);
+    for (const project of projects) map.set(project.id, project.name);
     return map;
-  }, [workspaces]);
+  }, [projects]);
 
   const missionById = useMemo(() => {
     const map = new Map<string, MyMissionDto>();
@@ -314,7 +316,7 @@ export function MyMissionsPage() {
   }, [updateSelectedProjectIds]);
 
   // Bucket every mission into its merged column (like-named statuses across
-  // workspaces collapse into one). Any mission whose status isn't an active
+  // projects collapse into one). Any mission whose status isn't an active
   // column falls into the Uncategorized bucket.
   const { columns: baseColumns, uncategorized } = useMemo(
     () => groupMissionsByMergedColumn(missions, merged.keyByStatusId),
@@ -351,9 +353,9 @@ export function MyMissionsPage() {
     return map;
   }, [merged.columns, baseColumns, filteredMissions, uncategorized]);
 
-  // Persist a drop. My Missions merges columns across workspaces, so a drop into a
+  // Persist a drop. My Missions merges columns across projects, so a drop into a
   // merged column resolves to the concrete status in the moved card's *own*
-  // workspace (the reorder endpoint is workspace-scoped). When that workspace has
+  // project. When that project has
   // no status with the column's name, the move is rejected with an error modal.
   const onDrop = useCallback(
     async ({ movedMissionId, dropColumnKey, orderedMissionIds }: MyMissionsDropTarget) => {
@@ -367,9 +369,9 @@ export function MyMissionsPage() {
       if (!plan) {
         setDropError({
           statusName: column.name,
-          workspaceName: workspaceNameById.get(mission.workspaceId) ?? 'this'
+          projectName: projectNameById.get(mission.projectId) ?? mission.projectName
         });
-        throw new Error('status-unavailable-for-workspace');
+        throw new Error('status-unavailable-for-project');
       }
 
       try {
@@ -382,12 +384,12 @@ export function MyMissionsPage() {
         // Defensive: the server can still reject a status removed mid-drag.
         setDropError({
           statusName: column.name,
-          workspaceName: workspaceNameById.get(mission.workspaceId) ?? 'this'
+          projectName: projectNameById.get(mission.projectId) ?? mission.projectName
         });
         throw error;
       }
     },
-    [missionById, merged.byKey, workspaceNameById, reorder]
+    [missionById, merged.byKey, projectNameById, reorder]
   );
 
   const myMissionsDnd = useMyMissionsDnd({ columns: columnsForDnd, onDrop });
@@ -437,18 +439,18 @@ export function MyMissionsPage() {
   );
 
   // The list-row checkbox marks a mission complete by moving it into the
-  // `complete`-type status of that mission's *own* workspace, mirroring the board.
+  // `complete`-type status of that mission's *own* project, mirroring the board.
   const handleCompleteMission = useCallback(
     (missionId: string) => {
       const mission = missionById.get(missionId);
       if (!mission) return;
-      const completeStatusId = (statusesByWorkspace.get(mission.workspaceId) ?? []).find(
+      const completeStatusId = (statusesByProject.get(mission.projectId) ?? []).find(
         status => status.type === 'complete'
       )?.id;
       if (!completeStatusId) return;
       void setMissionStatus.mutateAsync({ missionId, statusId: completeStatusId });
     },
-    [missionById, statusesByWorkspace, setMissionStatus]
+    [missionById, statusesByProject, setMissionStatus]
   );
 
   const getMissionCardContext = useCallback(
@@ -462,7 +464,7 @@ export function MyMissionsPage() {
   );
 
   // Board columns are keyed by merged-column name; resolve back to the concrete
-  // status in the target project's workspace before creating. When that workspace
+  // status in the target project before creating. When that project
   // lacks a status with this name, the mission lands in its default status.
   const createMissionInColumn = useCallback(
     async (
@@ -473,12 +475,9 @@ export function MyMissionsPage() {
       const targetProjectId = options?.projectId ?? defaultCreateProjectId;
       if (!targetProjectId) throw new Error('Choose a project before creating a mission.');
 
-      const targetWorkspaceId =
-        projects.find(project => project.id === targetProjectId)?.workspaceId ?? activeWorkspaceId;
-      const statusId =
-        columnKey && targetWorkspaceId
-          ? merged.byKey.get(columnKey)?.statusIdByWorkspace.get(targetWorkspaceId)
-          : undefined;
+      const statusId = columnKey
+        ? merged.byKey.get(columnKey)?.statusIdByProject.get(targetProjectId)
+        : undefined;
 
       const tagIds = options?.tagIds ?? [];
       const detail = await createMission.mutateAsync({
@@ -489,7 +488,7 @@ export function MyMissionsPage() {
       });
       return { missionId: detail.id };
     },
-    [createMission, defaultCreateProjectId, projects, activeWorkspaceId, merged.byKey]
+    [createMission, defaultCreateProjectId, merged.byKey]
   );
 
   const handleCreateMissionFromColumn = useCallback(
@@ -518,13 +517,7 @@ export function MyMissionsPage() {
   );
 
   const statusesLoading = statusQueries.some(query => query.isLoading);
-  if (
-    meta.isLoading ||
-    myMissionsQ.isLoading ||
-    projectsQ.isLoading ||
-    activeProjectsQ.isLoading ||
-    statusesLoading
-  ) {
+  if (meta.isLoading || myMissionsQ.isLoading || activeProjectsQ.isLoading || statusesLoading) {
     return (
       <div className="p-8">
         <Spinner />
@@ -689,7 +682,7 @@ export function MyMissionsPage() {
             projectName=""
             projectColor={null}
             createProjectId={defaultCreateProjectId}
-            createStatusScope="workspace"
+            createStatusScope="aggregate"
             membersByWorkspaceUserId={membersByWorkspaceUserId}
             selectedMissionId={selectedMissionId}
             getMissionCardContext={getMissionCardContext}
@@ -717,9 +710,9 @@ export function MyMissionsPage() {
           <DialogHeader>
             <DialogTitle>Can’t move this mission</DialogTitle>
             <DialogDescription>
-              The “{dropError?.statusName}” status doesn’t exist in the {dropError?.workspaceName}{' '}
-              workspace, so this mission can’t move there. Add a matching status to that workspace,
-              or move the mission within its own workspace’s columns.
+              The “{dropError?.statusName}” status doesn’t exist in the {dropError?.projectName}{' '}
+              project, so this mission can’t move there. Add a matching status to that project, or
+              move the mission within its own project’s columns.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

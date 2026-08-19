@@ -29,6 +29,7 @@ ChatGPT web/mobile smoke test.
 | Tool | User-visible behavior | Safety annotation |
 | --- | --- | --- |
 | `overlord_resolve_project` | Resolves a project the user identifies. | Read-only |
+| `overlord_list_project_statuses` | Lists one project's board column names and types. | Read-only |
 | `overlord_search_missions` | Lists matching missions in the connected workspace. | Read-only |
 | `overlord_load_mission_context` | Shows one mission's objectives, history, artifacts, and shared context. | Read-only |
 | `overlord_create_mission` | Creates a draft mission in an explicit project. | Write; no implicit project selection |

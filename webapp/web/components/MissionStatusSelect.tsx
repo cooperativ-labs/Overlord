@@ -7,12 +7,12 @@ import {
 } from '@/components/ui/select';
 import { useUpdateMission } from '@/lib/queries.ts';
 
-import type { WorkspaceStatusDto } from '../../shared/contract.ts';
+import type { ProjectStatusDto } from '../../shared/contract.ts';
 
 type MissionStatusSelectProps = {
   missionId: string;
   currentStatusId: string;
-  statuses: WorkspaceStatusDto[];
+  statuses: ProjectStatusDto[];
 };
 
 export function MissionStatusSelect({

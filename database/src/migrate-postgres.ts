@@ -18,6 +18,10 @@ import {
   finalizeObjectivesDisplayKeyPostgres,
   isObjectivesDisplayKeyMigration
 } from './objective-display-key-migration-runtime.js';
+import {
+  finalizeProjectStatusesPostgres,
+  isProjectStatusesMigration
+} from './project-statuses-migration-runtime.js';
 
 const MIGRATION_FILE_PATTERN = /^\d+_[a-z0-9_]+\.sql$/;
 
@@ -114,6 +118,9 @@ export async function migratePostgres(client: DatabaseClient): Promise<void> {
       if (isObjectivesDisplayKeyMigration(migration)) {
         await finalizeObjectivesDisplayKeyPostgres(client);
       }
+      if (isProjectStatusesMigration(migration)) {
+        await finalizeProjectStatusesPostgres(client);
+      }
       if (!(await schemaMigrationsExists(client))) {
         pending.push(migration);
         continue;
@@ -142,6 +149,9 @@ export async function migratePostgres(client: DatabaseClient): Promise<void> {
     }
     if (isObjectivesDisplayKeyMigration(migration)) {
       await finalizeObjectivesDisplayKeyPostgres(client);
+    }
+    if (isProjectStatusesMigration(migration)) {
+      await finalizeProjectStatusesPostgres(client);
     }
     await recordMigration(client, migration);
   }

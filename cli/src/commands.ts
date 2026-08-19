@@ -39,7 +39,8 @@ import { clientDeviceIdentity } from './device-identity.js';
 import {
   discoverProjectOnClient,
   listAccessibleProjects,
-  resolvePreferredExecutionTargetId
+  resolvePreferredExecutionTargetId,
+  resolveProjectByIdOrName
 } from './discover-project-local.js';
 import { CliError, isUnlinkableExecutionRequestError } from './errors.js';
 import { launchAgent } from './launch.js';
@@ -1695,8 +1696,16 @@ export async function runManagementCommand({
       const query = flagValue(parsed.flags, '--query');
       const projectId = flagValue(parsed.flags, '--project-id');
       const limit = flagValue(parsed.flags, '--limit');
+      // `--status` filters status *types* (draft/execute/review/complete/
+      // blocked/cancelled), never the project-defined status names shown on a
+      // board. Names vary per project (coo:752); types do not.
+      const statusTypes = (flagValue(parsed.flags, '--status') ?? '')
+        .split(',')
+        .map(value => value.trim())
+        .filter(value => value !== '');
       if (query) params.set('q', query);
       if (projectId) params.set('projectId', projectId);
+      if (statusTypes.length > 0) params.set('statusTypes', statusTypes.join(','));
       if (limit) params.set('limit', limit);
       let missions: unknown[];
       const result = await runtime.backend.get<{ missions: unknown[] }>(
@@ -1709,6 +1718,47 @@ export async function runManagementCommand({
           const record = asRecord(mission);
           console.log(
             `${record.displayId ?? record.id}\t${record.statusType ?? ''}\t${record.title ?? ''}`
+          );
+        }
+      }
+      return;
+    }
+    // Board columns are project-scoped (coo:752): two projects in one workspace
+    // may name and order their statuses differently, so the only way to discover
+    // a board's columns is to ask the project that owns them. Read-only —
+    // status definitions are edited in project settings.
+    case 'statuses': {
+      const sub = parsed.positional[0];
+      if (sub !== 'list') {
+        throw new CliError({
+          message: 'Usage: ovld statuses list --project-id <id|slug|name> [--json]'
+        });
+      }
+      const projectRef = flagValue(parsed.flags, '--project-id');
+      if (!projectRef) {
+        throw new CliError({
+          message: 'Missing --project-id (accepts a project id, slug, or name)'
+        });
+      }
+      const project = await resolveProjectByIdOrName({
+        backend: runtime.backend,
+        projectRef
+      });
+      const statuses = await runtime.backend.get<unknown[]>(
+        `/api/projects/${encodeURIComponent(project.id)}/statuses`
+      );
+      if (json) printJson({ projectId: project.id, statuses });
+      else {
+        for (const status of statuses) {
+          const record = asRecord(status);
+          const flags = [
+            record.isDefault === true ? 'default' : null,
+            record.isTerminal === true ? 'terminal' : null
+          ]
+            .filter(Boolean)
+            .join(',');
+          console.log(
+            `${record.position ?? ''}\t${record.key ?? ''}\t${record.name ?? ''}\t${record.type ?? ''}\t${flags}`
           );
         }
       }

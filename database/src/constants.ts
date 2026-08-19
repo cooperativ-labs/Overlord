@@ -16,7 +16,7 @@ export const DEFAULT_STATUSES = [
   {
     key: 'next_up',
     name: 'Next Up',
-    type: 'draft',
+    type: 'next',
     position: 1,
     isDefault: false,
     isTerminal: false

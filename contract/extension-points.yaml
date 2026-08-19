@@ -253,18 +253,21 @@ closedVocabularies:
       followUp: 'executing → pending_delivery (only after a prior delivery starts follow-up execution)'
       reopen: 'complete → executing or pending_delivery via explicit follow-up or admin transition with mission_events record'
 
-  workspace_statuses.type:
+  project_statuses.type:
     values:
       - draft
+      - next
       - execute
       - review
       - complete
       - blocked
       - cancelled
     constraints:
-      - 'Exactly one active status per workspace must have type=execute'
-      - 'Exactly one active status per workspace must have type=review'
-      - 'Exactly one active default status per workspace'
+      - 'Exactly one active status per project must have type=execute'
+      - 'Exactly one active status per project must have type=review'
+      - 'Exactly one active status per project must have type=next'
+      - 'Exactly one active default status per project'
+      - "A mission status_id must belong to that mission's own project"
 
   execution_requests.status:
     values:

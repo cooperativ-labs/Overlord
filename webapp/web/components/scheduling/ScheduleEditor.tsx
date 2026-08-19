@@ -2,7 +2,7 @@ import type { PeriodType, WeekDayType } from '@overlord/automations/scheduling-e
 import { CalendarClock, Loader2, Trash2, TriangleAlert } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import type { WorkspaceStatusDto } from '../../../shared/contract.ts';
+import type { ProjectStatusDto } from '../../../shared/contract.ts';
 import { api } from '../../lib/api.ts';
 import {
   useClearMissionSchedule,
@@ -52,7 +52,7 @@ type ScheduleEditorProps = {
   missionId: string;
   hasSchedule: boolean;
   currentDueDatetime: string | null;
-  statuses: WorkspaceStatusDto[];
+  statuses: ProjectStatusDto[];
   initialSchedule?: ScheduleEditorInitialSchedule | null;
   onScheduleChange?: (hasSchedule: boolean) => void;
 };
@@ -131,7 +131,7 @@ export function ScheduleEditor({
             daysOfMonth: payload.schedule.daysOfMonth,
             weeksOfMonth: payload.schedule.weeksOfMonth,
             timezone: payload.schedule.timezone,
-            nextStatusId: payload.schedule.nextStatusId
+            nextStatusKey: payload.schedule.nextStatusKey
           });
           setSchedule(state);
           scheduleRef.current = state;
@@ -349,8 +349,8 @@ export function ScheduleEditor({
         weeksOfMonth: schedule.weeksOfMonth
       })
     : null;
-  const selectedNextStatus = schedule?.nextStatusId
-    ? statuses.find(status => status.id === schedule.nextStatusId)
+  const selectedNextStatus = schedule?.nextStatusKey
+    ? statuses.find(status => status.key === schedule.nextStatusKey)
     : null;
 
   return (
@@ -544,22 +544,22 @@ export function ScheduleEditor({
                 <div className="flex flex-col gap-1.5">
                   <Label className="text-xs text-muted-foreground">Duplicate lands in</Label>
                   <Select
-                    value={schedule.nextStatusId ?? '__default__'}
+                    value={schedule.nextStatusKey ?? '__default__'}
                     onValueChange={value =>
                       updateSchedule({
-                        nextStatusId: value === '__default__' ? null : value
+                        nextStatusKey: value === '__default__' ? null : value
                       })
                     }
                   >
                     <SelectTrigger className="h-8 w-full text-xs">
-                      <SelectValue placeholder="Workspace default">
-                        {selectedNextStatus?.name ?? 'Workspace default'}
+                      <SelectValue placeholder="Project default">
+                        {selectedNextStatus?.name ?? 'Project default'}
                       </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="__default__">Workspace default</SelectItem>
+                      <SelectItem value="__default__">Project default</SelectItem>
                       {statuses.map(status => (
-                        <SelectItem key={status.id} value={status.id}>
+                        <SelectItem key={status.id} value={status.key}>
                           {status.name}
                         </SelectItem>
                       ))}

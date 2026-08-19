@@ -7,7 +7,7 @@ import { getDefaultSchedule } from './schedule-utils.ts';
 export type ScheduleEditorInitialSchedule = {
   daysOfMonth?: number[];
   daysOfWeek: WeekDayType[];
-  nextStatusId?: string | null;
+  nextStatusKey?: string | null;
   periodInterval: number;
   periodType: PeriodType;
   timezone: string;
@@ -23,7 +23,7 @@ export type ScheduleState = {
   timezone: string;
   time: string;
   monthlyMode: 'dayOfMonth' | 'weekOfMonth';
-  nextStatusId: string | null;
+  nextStatusKey: string | null;
 };
 
 export const LAST_DAY_OF_MONTH = 32;
@@ -72,7 +72,7 @@ export function createStateFromInitialSchedule(
     timezone: initialSchedule.timezone,
     time: extractTimeFromDaysOfWeek(daysOfWeek),
     monthlyMode: weeksOfMonth.length > 0 ? 'weekOfMonth' : 'dayOfMonth',
-    nextStatusId: initialSchedule.nextStatusId ?? null
+    nextStatusKey: initialSchedule.nextStatusKey ?? null
   };
 }
 
@@ -88,7 +88,7 @@ export function createDefaultState(): ScheduleState {
     timezone: defaults.timezone,
     time: '09:00',
     monthlyMode: 'dayOfMonth',
-    nextStatusId: null
+    nextStatusKey: null
   };
 }
 
@@ -97,7 +97,7 @@ export function stateToInput(state: ScheduleState): ScheduleInput {
     periodType: state.periodType,
     periodInterval: state.periodInterval,
     timezone: state.timezone,
-    nextStatusId: state.nextStatusId
+    nextStatusKey: state.nextStatusKey
   };
 
   if (state.periodType === 'd') {

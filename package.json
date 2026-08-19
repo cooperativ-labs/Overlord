@@ -1,6 +1,6 @@
 {
   "name": "overlord",
-  "version": "0.2608181615.0",
+  "version": "0.2608191134.0",
   "description": "Open-source management and coordination layer for AI coding agents",
   "type": "module",
   "private": true,
@@ -57,7 +57,7 @@
     "db:reset": "yarn db:clean && yarn db:start",
     "db:codegen": "yarn db:start && node scripts/with-dev-env.mjs sh -c 'kysely-codegen --dialect sqlite --url \"$(tsx scripts/print-db-path.ts)\" --out-file packages/core/types/db.ts'",
     "db:build:prod": "yarn workspace @overlord/database build",
-    "db:migrate:postgres": "node scripts/with-prod-env.mjs tsx scripts/migrate-postgres.ts",
+    "db:migrate:postgres": "yarn db:build:prod && node scripts/with-prod-env.mjs tsx scripts/migrate-postgres.ts",
     "db:test:up": "node scripts/test-db.mjs up",
     "db:test:down": "node scripts/test-db.mjs down",
     "db:test:url": "node scripts/test-db.mjs url",

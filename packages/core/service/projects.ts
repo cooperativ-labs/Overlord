@@ -1,4 +1,4 @@
-import { bindBool } from '@overlord/database';
+import { bindBool, DEFAULT_STATUSES } from '@overlord/database';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 
@@ -33,6 +33,38 @@ export type ProjectSummary = {
 };
 
 export type ProjectResourceAccessMode = 'read' | 'read_write';
+
+async function seedProjectStatuses({
+  ctx,
+  projectId,
+  now
+}: {
+  ctx: ServiceContext;
+  projectId: string;
+  now: string;
+}): Promise<void> {
+  for (const status of DEFAULT_STATUSES) {
+    await ctx.db.run(
+      `INSERT INTO project_statuses
+         (id, workspace_id, project_id, key, name, type, position, is_default, is_terminal,
+          created_at, updated_at, revision)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+      [
+        newId(),
+        ctx.workspace.id,
+        projectId,
+        status.key,
+        status.name,
+        status.type,
+        status.position,
+        bindBool(ctx.db.dialect, status.isDefault),
+        bindBool(ctx.db.dialect, status.isTerminal),
+        now,
+        now
+      ]
+    );
+  }
+}
 
 export type ProjectResourceSummary = {
   id: string;
@@ -166,8 +198,7 @@ export async function createProject({
       ]
     );
 
-    // Card statuses are configured once per workspace (see `workspace_statuses`),
-    // so project creation no longer seeds its own status set.
+    await seedProjectStatuses({ ctx: txCtx, projectId: id, now });
 
     await recordChange({
       ctx: txCtx,
@@ -259,6 +290,63 @@ export async function listProjects({ ctx }: { ctx: ServiceContext }): Promise<Pr
     status: row.status,
     createdAt: row.created_at,
     updatedAt: row.updated_at
+  }));
+}
+
+export type ProjectStatusSummary = {
+  id: string;
+  projectId: string;
+  key: string;
+  name: string;
+  type: string;
+  position: number;
+  isDefault: boolean;
+  isTerminal: boolean;
+};
+
+/**
+ * The ordered status set a project's board columns are drawn from.
+ *
+ * Statuses are project-scoped (coo:752), so this is the only way for an agent
+ * or a scripted operator to discover the columns of a specific board: two
+ * projects in the same workspace may name and order their statuses differently.
+ * The stable `type` vocabulary does not vary — filters and side effects are
+ * expressed in types, never in these names.
+ */
+export async function listProjectStatuses({
+  ctx,
+  projectId
+}: {
+  ctx: ServiceContext;
+  projectId: string;
+}): Promise<ProjectStatusSummary[]> {
+  const resolvedProjectId = await resolveProjectId(ctx, projectId);
+  const rows = (await ctx.db.all(
+    `SELECT id, project_id, key, name, type, position, is_default, is_terminal
+       FROM project_statuses
+      WHERE project_id = ? AND deleted_at IS NULL
+      ORDER BY position ASC`,
+    [resolvedProjectId]
+  )) as Array<{
+    id: string;
+    project_id: string;
+    key: string;
+    name: string;
+    type: string;
+    position: number;
+    is_default: unknown;
+    is_terminal: unknown;
+  }>;
+
+  return rows.map(row => ({
+    id: row.id,
+    projectId: row.project_id,
+    key: row.key,
+    name: row.name,
+    type: row.type,
+    position: row.position,
+    isDefault: row.is_default === true || row.is_default === 1,
+    isTerminal: row.is_terminal === true || row.is_terminal === 1
   }));
 }
 

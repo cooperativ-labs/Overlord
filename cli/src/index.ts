@@ -45,6 +45,7 @@ const KNOWN_COMMANDS = new Set([
   'resume',
   'runner',
   'missions',
+  'statuses',
   'requests',
   'inputs',
   'inbox',

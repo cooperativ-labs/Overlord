@@ -3,12 +3,11 @@
  * Please do not edit it manually.
  */
 
-import type { ColumnType } from 'kysely';
+import type { ColumnType } from "kysely";
 
-export type Generated<T> =
-  T extends ColumnType<infer S, infer I, infer U>
-    ? ColumnType<S, I | undefined, U>
-    : ColumnType<T, T | undefined, T>;
+export type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
+  ? ColumnType<S, I | undefined, U>
+  : ColumnType<T, T | undefined, T>;
 
 export interface Account {
   accessToken: string | null;
@@ -694,6 +693,7 @@ export interface MissionEvents {
 
 export interface Missions {
   active_branch: string | null;
+  allow_parallel_objectives: Generated<number>;
   assigned_workspace_user_id: string | null;
   blocking_question_seen_at: string | null;
   board_position: Generated<number>;
@@ -724,7 +724,6 @@ export interface Missions {
   updated_at: string;
   workspace_id: string;
   worktree_preference: string | null;
-  allow_parallel_objectives: Generated<number>;
 }
 
 export interface MissionSequences {
@@ -769,6 +768,7 @@ export interface MyMissionPositions {
   id: string | null;
   mission_id: string;
   position: number;
+  project_id: string;
   revision: Generated<number>;
   status_id: string;
   updated_at: string;
@@ -833,7 +833,7 @@ export interface Objectives {
   created_by_session_id: string | null;
   created_by_workspace_user_id: string | null;
   deleted_at: string | null;
-  display_key: string;
+  display_key: Generated<string>;
   execution_metadata_json: Generated<string>;
   id: string | null;
   instruction_text: string | null;
@@ -951,6 +951,23 @@ export interface Projects {
   workspace_id: string;
 }
 
+export interface ProjectStatuses {
+  created_at: string;
+  deleted_at: string | null;
+  id: string | null;
+  is_default: Generated<number>;
+  is_terminal: Generated<number>;
+  key: string;
+  metadata_json: Generated<string>;
+  name: string;
+  position: number;
+  project_id: string;
+  revision: Generated<number>;
+  type: string;
+  updated_at: string;
+  workspace_id: string;
+}
+
 export interface ProjectTags {
   active: Generated<number>;
   color: string | null;
@@ -996,7 +1013,7 @@ export interface Schedules {
   days_of_week_json: Generated<string>;
   id: string | null;
   name: string | null;
-  next_status_id: string | null;
+  next_status_key: string | null;
   period_interval: Generated<number>;
   period_type: Generated<string>;
   revision: Generated<number>;
@@ -1315,7 +1332,7 @@ export interface Workspaces {
   updated_at: string;
 }
 
-export interface WorkspaceStatuses {
+export interface WorkspaceStatusesLegacy {
   created_at: string;
   deleted_at: string | null;
   id: string | null;
@@ -1412,6 +1429,7 @@ export interface DB {
   project_environment_definitions: ProjectEnvironmentDefinitions;
   project_resource_sources: ProjectResourceSources;
   project_resources: ProjectResources;
+  project_statuses: ProjectStatuses;
   project_tags: ProjectTags;
   project_user_preferences: ProjectUserPreferences;
   projects: Projects;
@@ -1439,7 +1457,7 @@ export interface DB {
   worker_jobs: WorkerJobs;
   workspace_images: WorkspaceImages;
   workspace_invitations: WorkspaceInvitations;
-  workspace_statuses: WorkspaceStatuses;
+  workspace_statuses_legacy: WorkspaceStatusesLegacy;
   workspace_user_execution_targets: WorkspaceUserExecutionTargets;
   workspace_users: WorkspaceUsers;
   workspaces: Workspaces;

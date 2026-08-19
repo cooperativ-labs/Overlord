@@ -156,9 +156,9 @@ describe('createMissionWithObjectives — optional board fields', () => {
     const { db, ctx } = await setup();
     const project = await createProject({ ctx, name: 'Core Explicit Status' });
     const status = (await db.get(
-      `SELECT id, type FROM workspace_statuses
-         WHERE workspace_id = ? AND type = 'execute' AND deleted_at IS NULL LIMIT 1`,
-      [ctx.workspace.id]
+      `SELECT id, type FROM project_statuses
+         WHERE project_id = ? AND type = 'execute' AND deleted_at IS NULL LIMIT 1`,
+      [project.id]
     )) as { id: string; type: string };
 
     const { mission } = await createMissionWithObjectives({
@@ -183,7 +183,7 @@ describe('createMissionWithObjectives — optional board fields', () => {
         objectives: [{ objective: 'Nowhere to go' }],
         statusId: 'not-a-status'
       }),
-      (err: unknown) => err instanceof ServiceError && err.status === 400
+      (err: unknown) => err instanceof ServiceError && err.status === 409
     );
   });
 

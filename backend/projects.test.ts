@@ -21,8 +21,7 @@ const {
   listMissions,
   listProjects,
   listProjectsForWorkspace,
-  listWorkspaceStatuses,
-  listWorkspaceStatusesForWorkspace,
+  listProjectStatuses,
   reorderProjects,
   updateProject
 } = await import('./repository.ts');
@@ -162,7 +161,7 @@ test('project reads use the project workspace instead of the active workspace', 
     title: 'Secondary Mission',
     objectives: [{ objective: 'Keep secondary project readable.' }]
   });
-  const secondaryStatuses = await listWorkspaceStatuses();
+  const secondaryStatuses = await listProjectStatuses(project.id);
 
   await setActiveWorkspace(primaryWorkspaceId);
   setActiveWorkspaceUser(operatorWorkspaceUserId);
@@ -172,5 +171,5 @@ test('project reads use the project workspace instead of the active workspace', 
     (await listMissions(project.id)).map(mission => mission.title),
     ['Secondary Mission']
   );
-  assert.deepEqual(await listWorkspaceStatusesForWorkspace(secondary.id), secondaryStatuses);
+  assert.deepEqual(await listProjectStatuses(project.id), secondaryStatuses);
 });

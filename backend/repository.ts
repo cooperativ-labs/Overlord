@@ -14,6 +14,7 @@ import type { CreatedGitHubRepositoryDto } from '@overlord/contract/ext/github';
 import {
   bindBool,
   type DatabaseClient,
+  DEFAULT_STATUSES,
   formatObjectiveDisplayId,
   OBJECTIVE_STATES,
   type ObjectiveState
@@ -69,10 +70,10 @@ import type {
   CreateObjectiveBody,
   CreateProjectBody,
   CreateProjectResourceBody,
+  CreateProjectStatusBody,
   CreateProjectTagBody,
   CreateUserTokenBody,
   CreateUserTokenResultDto,
-  CreateWorkspaceStatusBody,
   DefaultProjectPreferenceDto,
   DeliveryDto,
   DeliveryReportPayloadV1,
@@ -99,13 +100,14 @@ import type {
   ProjectListLifecycle,
   ProjectRepositoryDto,
   ProjectResourceDto,
+  ProjectStatusDto,
   ProjectTagDto,
   PurgeWorktreesResultDto,
   RemoveWorktreeBody,
   ReorderBoardColumnBody,
   ReorderFutureObjectivesBody,
   ReorderProjectsBody,
-  ReorderWorkspaceStatusesBody,
+  ReorderProjectStatusesBody,
   ScheduleDto,
   ScheduleInput,
   SharedContextEntryDto,
@@ -119,12 +121,11 @@ import type {
   UpdateProjectBody,
   UpdateProjectResourceBody,
   UpdateProjectResourceSourceBody,
+  UpdateProjectStatusBody,
   UpdateProjectTagBody,
   UpdateUserTokenBody,
-  UpdateWorkspaceStatusBody,
   UpsertSharedContextBody,
   UserTokenDto,
-  WorkspaceStatusDto,
   WorktreeDto
 } from '../webapp/shared/contract.ts';
 import { normalizeAgentLaunchFlags } from '../webapp/shared/contract.ts';
@@ -364,9 +365,10 @@ function mergeProjectSettingsJson(
   return JSON.stringify(parsed);
 }
 
-interface WorkspaceStatusRow {
+interface ProjectStatusRow {
   id: string;
   workspace_id: string;
+  project_id: string;
   key: string;
   name: string;
   type: string;
@@ -378,6 +380,7 @@ interface WorkspaceStatusRow {
 
 const STATUS_TYPES: StatusType[] = [
   'draft',
+  'next',
   'execute',
   'review',
   'complete',
@@ -398,14 +401,14 @@ function isTerminalStatusType(type: StatusType): boolean {
 
 async function uniqueStatusKey(
   db: DatabaseClient,
-  { name, workspaceId }: { name: string; workspaceId: string }
+  { name, projectId }: { name: string; projectId: string }
 ): Promise<string> {
   const base = slugify(name).replace(/-/g, '_');
   let key = base;
   let suffix = 2;
   while (
-    await db.get(`SELECT 1 FROM workspace_statuses WHERE workspace_id = ? AND key = ?`, [
-      workspaceId,
+    await db.get(`SELECT 1 FROM project_statuses WHERE project_id = ? AND key = ?`, [
+      projectId,
       key
     ])
   ) {
@@ -415,17 +418,17 @@ async function uniqueStatusKey(
   return key;
 }
 
-async function getWorkspaceStatusRow(
+async function getProjectStatusRow(
   db: DatabaseClient,
   statusId: string,
-  workspaceId: string
-): Promise<WorkspaceStatusRow> {
+  projectId: string
+): Promise<ProjectStatusRow> {
   const row = (await db.get(
-    `SELECT id, workspace_id, key, name, type, position, is_default, is_terminal, revision
-         FROM workspace_statuses
-        WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-    [statusId, workspaceId]
-  )) as WorkspaceStatusRow | undefined;
+    `SELECT id, workspace_id, project_id, key, name, type, position, is_default, is_terminal, revision
+         FROM project_statuses
+        WHERE id = ? AND project_id = ? AND deleted_at IS NULL`,
+    [statusId, projectId]
+  )) as ProjectStatusRow | undefined;
   if (!row) throw new ApiError(404, 'Status not found');
   return row;
 }
@@ -435,30 +438,30 @@ async function assertUniqueStatusName(
   {
     name,
     excludeStatusId,
-    workspaceId
+    projectId
   }: {
     name: string;
     excludeStatusId?: string;
-    workspaceId: string;
+    projectId: string;
   }
 ): Promise<void> {
   const existing = await db.get(
-    `SELECT 1 FROM workspace_statuses
-        WHERE workspace_id = ? AND deleted_at IS NULL AND lower(name) = lower(?)
+    `SELECT 1 FROM project_statuses
+        WHERE project_id = ? AND deleted_at IS NULL AND lower(name) = lower(?)
           AND id != ?`,
-    [workspaceId, name, excludeStatusId ?? '']
+    [projectId, name, excludeStatusId ?? '']
   );
   if (existing) throw new ApiError(409, `A status named "${name}" already exists`);
 }
 
 async function countActiveStatusesByType(
   db: DatabaseClient,
-  { type, workspaceId }: { type: string; workspaceId: string }
+  { type, projectId }: { type: string; projectId: string }
 ): Promise<number> {
   const row = (await db.get(
-    `SELECT COUNT(*) AS count FROM workspace_statuses
-        WHERE workspace_id = ? AND type = ? AND deleted_at IS NULL`,
-    [workspaceId, type]
+    `SELECT COUNT(*) AS count FROM project_statuses
+        WHERE project_id = ? AND type = ? AND deleted_at IS NULL`,
+    [projectId, type]
   )) as { count: number };
   return row.count;
 }
@@ -471,15 +474,15 @@ async function countMissionsOnStatus(db: DatabaseClient, statusId: string): Prom
   return row.count;
 }
 
-async function clearWorkspaceDefaultStatuses(
+async function clearProjectDefaultStatuses(
   db: DatabaseClient,
-  { now, workspaceId }: { now: string; workspaceId: string }
+  { now, projectId }: { now: string; projectId: string }
 ): Promise<void> {
   await db.run(
-    `UPDATE workspace_statuses
+    `UPDATE project_statuses
         SET is_default = ?, updated_at = ?, revision = revision + 1
-      WHERE workspace_id = ? AND is_default = ? AND deleted_at IS NULL`,
-    [bindBool(DATABASE_DIALECT, false), now, workspaceId, bindBool(DATABASE_DIALECT, true)]
+      WHERE project_id = ? AND is_default = ? AND deleted_at IS NULL`,
+    [bindBool(DATABASE_DIALECT, false), now, projectId, bindBool(DATABASE_DIALECT, true)]
   );
 }
 
@@ -649,10 +652,11 @@ function toProjectDto(r: ProjectRow): ProjectDto {
   };
 }
 
-function toStatusDto(r: WorkspaceStatusRow): WorkspaceStatusDto {
+function toStatusDto(r: ProjectStatusRow): ProjectStatusDto {
   return {
     id: r.id,
     workspaceId: r.workspace_id,
+    projectId: r.project_id,
     key: r.key,
     name: r.name,
     type: r.type as StatusType,
@@ -2013,74 +2017,76 @@ export async function reorderProjects(body: ReorderProjectsBody): Promise<Projec
   });
 }
 
-export async function listWorkspaceStatuses(
+async function selectProjectStatuses(
+  projectId: string,
   db: DatabaseClient = requireDatabaseClient()
-): Promise<WorkspaceStatusDto[]> {
-  return selectWorkspaceStatusesForWorkspace(getActiveWorkspaceId(), db);
-}
-
-async function selectWorkspaceStatusesForWorkspace(
-  workspaceId: string,
-  db: DatabaseClient = requireDatabaseClient()
-): Promise<WorkspaceStatusDto[]> {
+): Promise<ProjectStatusDto[]> {
   const rows = (await db.all(
-    `SELECT id, workspace_id, key, name, type, position, is_default, is_terminal, revision
-         FROM workspace_statuses
-        WHERE workspace_id = ? AND deleted_at IS NULL
+    `SELECT id, workspace_id, project_id, key, name, type, position, is_default, is_terminal, revision
+         FROM project_statuses
+        WHERE project_id = ? AND deleted_at IS NULL
         ORDER BY position ASC`,
-    [workspaceId]
-  )) as WorkspaceStatusRow[];
+    [projectId]
+  )) as ProjectStatusRow[];
   return rows.map(toStatusDto);
 }
 
-export async function listWorkspaceStatusesForWorkspace(
+export async function listProjectStatuses(
+  projectId: string,
+  db: DatabaseClient = requireDatabaseClient()
+): Promise<ProjectStatusDto[]> {
+  await requireProjectPermission({ projectId, permission: PERMISSIONS.PROJECT_READ, db });
+  return selectProjectStatuses(projectId, db);
+}
+
+export async function listWorkspaceProjectStatuses(
   workspaceId: string,
   db: DatabaseClient = requireDatabaseClient()
-): Promise<WorkspaceStatusDto[]> {
+): Promise<ProjectStatusDto[]> {
   await requireWorkspacePermission({
     workspaceId,
     permission: PERMISSIONS.WORKSPACE_READ,
     db,
     notFoundMessage: 'Workspace not found or no active membership'
   });
-  return selectWorkspaceStatusesForWorkspace(workspaceId, db);
+  const rows = (await db.all(
+    `SELECT ps.id, ps.workspace_id, ps.project_id, ps.key, ps.name, ps.type, ps.position,
+            ps.is_default, ps.is_terminal, ps.revision
+       FROM project_statuses ps
+       JOIN projects p ON p.id = ps.project_id AND p.workspace_id = ps.workspace_id
+      WHERE ps.workspace_id = ? AND ps.deleted_at IS NULL AND p.deleted_at IS NULL
+      ORDER BY p.position ASC, ps.position ASC`,
+    [workspaceId]
+  )) as ProjectStatusRow[];
+  return rows.map(toStatusDto);
 }
 
-/**
- * Resolve the workspace a status mutation targets and authorize it there. When
- * `workspaceId` is omitted the caller's active workspace is used (the legacy
- * `/api/workspace/statuses` routes); when provided (the workspace-scoped
- * `/api/workspaces/:id/statuses` routes) any live workspace of the org can be
- * managed from the settings modal without first switching to it (coo:135).
- */
-async function resolveStatusWorkspaceId(
+async function resolveStatusProjectScope(
   db: DatabaseClient,
-  workspaceId?: string | null
-): Promise<string> {
-  const targetWorkspaceId = workspaceId ?? getActiveWorkspaceId();
-  await requireWorkspacePermission({
-    workspaceId: targetWorkspaceId,
-    permission: PERMISSIONS.WORKSPACE_UPDATE,
-    db,
-    notFoundMessage: 'Workspace not found or no active membership'
+  projectId: string
+): Promise<{ projectId: string; workspaceId: string }> {
+  const scope = await requireProjectPermission({
+    projectId,
+    permission: PERMISSIONS.PROJECT_UPDATE,
+    db
   });
-  return targetWorkspaceId;
+  return { projectId, workspaceId: scope.workspaceId };
 }
 
-export async function createWorkspaceStatus(
-  body: CreateWorkspaceStatusBody,
-  workspaceId?: string | null
-): Promise<WorkspaceStatusDto> {
+export async function createProjectStatus(
+  projectId: string,
+  body: CreateProjectStatusBody
+): Promise<ProjectStatusDto> {
   return requireDatabaseClient().transaction(async tx => {
-    const ws = await resolveStatusWorkspaceId(tx, workspaceId);
+    const scope = await resolveStatusProjectScope(tx, projectId);
     const name = (body.name ?? '').trim();
     if (!name) throw new ApiError(400, 'Status name is required');
-    await assertUniqueStatusName(tx, { name, workspaceId: ws });
+    await assertUniqueStatusName(tx, { name, projectId });
 
     const type = assertValidStatusType(body.type);
-    if (type === 'execute' || type === 'review') {
-      if ((await countActiveStatusesByType(tx, { type, workspaceId: ws })) > 0) {
-        throw new ApiError(409, `This workspace already has a ${type} status`);
+    if (type === 'next' || type === 'execute' || type === 'review') {
+      if ((await countActiveStatusesByType(tx, { type, projectId })) > 0) {
+        throw new ApiError(409, `This project already has a ${type} status`);
       }
     }
 
@@ -2091,26 +2097,27 @@ export async function createWorkspaceStatus(
 
     const now = nowIso();
     const id = newId();
-    const key = await uniqueStatusKey(tx, { name, workspaceId: ws });
+    const key = await uniqueStatusKey(tx, { name, projectId });
     const maxPos = (await tx.get(
-      `SELECT COALESCE(MAX(position), -1) AS max_pos FROM workspace_statuses
-          WHERE workspace_id = ? AND deleted_at IS NULL`,
-      [ws]
+      `SELECT COALESCE(MAX(position), -1) AS max_pos FROM project_statuses
+          WHERE project_id = ? AND deleted_at IS NULL`,
+      [projectId]
     )) as { max_pos: number };
     const position = maxPos.max_pos + 1;
 
     if (isDefault) {
-      await clearWorkspaceDefaultStatuses(tx, { now, workspaceId: ws });
+      await clearProjectDefaultStatuses(tx, { now, projectId });
     }
 
     await tx.run(
-      `INSERT INTO workspace_statuses
-         (id, workspace_id, key, name, type, position, is_default, is_terminal,
+      `INSERT INTO project_statuses
+         (id, workspace_id, project_id, key, name, type, position, is_default, is_terminal,
           created_at, updated_at, revision)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
       [
         id,
-        ws,
+        scope.workspaceId,
+        projectId,
         key,
         name,
         type,
@@ -2124,8 +2131,9 @@ export async function createWorkspaceStatus(
 
     await recordChange(
       {
-        workspaceId: ws,
-        entityType: 'workspace_status',
+        workspaceId: scope.workspaceId,
+        projectId,
+        entityType: 'project_status',
         entityId: id,
         operation: 'insert',
         entityRevision: 1,
@@ -2134,18 +2142,18 @@ export async function createWorkspaceStatus(
       tx
     );
 
-    return toStatusDto(await getWorkspaceStatusRow(tx, id, ws));
+    return toStatusDto(await getProjectStatusRow(tx, id, projectId));
   });
 }
 
-export async function updateWorkspaceStatus(
+export async function updateProjectStatus(
+  projectId: string,
   statusId: string,
-  body: UpdateWorkspaceStatusBody,
-  workspaceId?: string | null
-): Promise<WorkspaceStatusDto> {
+  body: UpdateProjectStatusBody
+): Promise<ProjectStatusDto> {
   return requireDatabaseClient().transaction(async tx => {
-    const ws = await resolveStatusWorkspaceId(tx, workspaceId);
-    const existing = await getWorkspaceStatusRow(tx, statusId, ws);
+    const scope = await resolveStatusProjectScope(tx, projectId);
+    const existing = await getProjectStatusRow(tx, statusId, projectId);
     const changed: string[] = [];
     const now = nowIso();
     const fields: string[] = [];
@@ -2154,7 +2162,7 @@ export async function updateWorkspaceStatus(
     if (body.name !== undefined) {
       const name = body.name.trim();
       if (!name) throw new ApiError(400, 'Status name cannot be empty');
-      await assertUniqueStatusName(tx, { name, excludeStatusId: statusId, workspaceId: ws });
+      await assertUniqueStatusName(tx, { name, excludeStatusId: statusId, projectId });
       fields.push('name = ?');
       setParams.push(name);
       changed.push('name');
@@ -2165,7 +2173,7 @@ export async function updateWorkspaceStatus(
         if (existing.type !== 'draft') {
           throw new ApiError(400, 'Only draft-type statuses can be the default');
         }
-        await clearWorkspaceDefaultStatuses(tx, { now, workspaceId: ws });
+        await clearProjectDefaultStatuses(tx, { now, projectId });
         fields.push('is_default = ?');
         setParams.push(bindBool(DATABASE_DIALECT, true));
         changed.push('is_default');
@@ -2180,16 +2188,17 @@ export async function updateWorkspaceStatus(
 
     const revision = existing.revision + 1;
     await tx.run(
-      `UPDATE workspace_statuses
+      `UPDATE project_statuses
           SET ${fields.join(', ')}, updated_at = ?, revision = ?
-        WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-      [...setParams, now, revision, statusId, ws]
+        WHERE id = ? AND project_id = ? AND deleted_at IS NULL`,
+      [...setParams, now, revision, statusId, projectId]
     );
 
     await recordChange(
       {
-        workspaceId: ws,
-        entityType: 'workspace_status',
+        workspaceId: scope.workspaceId,
+        projectId,
+        entityType: 'project_status',
         entityId: statusId,
         operation: 'update',
         entityRevision: revision,
@@ -2198,17 +2207,14 @@ export async function updateWorkspaceStatus(
       tx
     );
 
-    return toStatusDto(await getWorkspaceStatusRow(tx, statusId, ws));
+    return toStatusDto(await getProjectStatusRow(tx, statusId, projectId));
   });
 }
 
-export async function deleteWorkspaceStatus(
-  statusId: string,
-  workspaceId?: string | null
-): Promise<void> {
+export async function deleteProjectStatus(projectId: string, statusId: string): Promise<void> {
   await requireDatabaseClient().transaction(async tx => {
-    const ws = await resolveStatusWorkspaceId(tx, workspaceId);
-    const existing = await getWorkspaceStatusRow(tx, statusId, ws);
+    const scope = await resolveStatusProjectScope(tx, projectId);
+    const existing = await getProjectStatusRow(tx, statusId, projectId);
 
     if (existing.type === 'execute' || existing.type === 'review') {
       throw new ApiError(409, 'Cannot remove the required execute or review status');
@@ -2228,16 +2234,17 @@ export async function deleteWorkspaceStatus(
     const now = nowIso();
     const revision = existing.revision + 1;
     await tx.run(
-      `UPDATE workspace_statuses
+      `UPDATE project_statuses
         SET deleted_at = ?, updated_at = ?, revision = ?
-      WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-      [now, now, revision, statusId, ws]
+      WHERE id = ? AND project_id = ? AND deleted_at IS NULL`,
+      [now, now, revision, statusId, projectId]
     );
 
     await recordChange(
       {
-        workspaceId: ws,
-        entityType: 'workspace_status',
+        workspaceId: scope.workspaceId,
+        projectId,
+        entityType: 'project_status',
         entityId: statusId,
         operation: 'delete',
         entityRevision: revision,
@@ -2248,18 +2255,18 @@ export async function deleteWorkspaceStatus(
   });
 }
 
-export async function reorderWorkspaceStatuses(
-  body: ReorderWorkspaceStatusesBody,
-  workspaceId?: string | null
-): Promise<WorkspaceStatusDto[]> {
+export async function reorderProjectStatuses(
+  projectId: string,
+  body: ReorderProjectStatusesBody
+): Promise<ProjectStatusDto[]> {
   return requireDatabaseClient().transaction(async tx => {
-    const ws = await resolveStatusWorkspaceId(tx, workspaceId);
+    const scope = await resolveStatusProjectScope(tx, projectId);
     const orderedIds = body.orderedStatusIds;
     if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
       throw new ApiError(400, 'orderedStatusIds is required');
     }
 
-    const current = await selectWorkspaceStatusesForWorkspace(ws, tx);
+    const current = await selectProjectStatuses(projectId, tx);
     if (orderedIds.length !== current.length) {
       throw new ApiError(400, 'orderedStatusIds must include every status');
     }
@@ -2274,15 +2281,16 @@ export async function reorderWorkspaceStatuses(
     const now = nowIso();
     for (const [position, id] of orderedIds.entries()) {
       await tx.run(
-        `UPDATE workspace_statuses
+        `UPDATE project_statuses
           SET position = ?, updated_at = ?, revision = revision + 1
-        WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-        [position, now, id, ws]
+        WHERE id = ? AND project_id = ? AND deleted_at IS NULL`,
+        [position, now, id, projectId]
       );
       await recordChange(
         {
-          workspaceId: ws,
-          entityType: 'workspace_status',
+          workspaceId: scope.workspaceId,
+          projectId,
+          entityType: 'project_status',
           entityId: id,
           operation: 'update',
           changedFields: ['position']
@@ -2291,7 +2299,7 @@ export async function reorderWorkspaceStatuses(
       );
     }
 
-    return selectWorkspaceStatusesForWorkspace(ws, tx);
+    return selectProjectStatuses(projectId, tx);
   });
 }
 
@@ -3159,8 +3167,7 @@ export async function createProject(body: CreateProjectBody): Promise<ProjectDto
       ]
     );
 
-    // Card statuses live at the workspace level (`workspace_statuses`) and are
-    // seeded once per workspace, so creating a project no longer seeds statuses.
+    await seedProjectStatuses(tx, { projectId: id, workspaceId: targetWorkspaceId, now });
 
     await recordChange(
       {
@@ -3192,6 +3199,33 @@ export async function createProject(body: CreateProjectBody): Promise<ProjectDto
 
     return getProject(id, tx);
   });
+}
+
+async function seedProjectStatuses(
+  db: DatabaseClient,
+  { projectId, workspaceId, now }: { projectId: string; workspaceId: string; now: string }
+): Promise<void> {
+  for (const status of DEFAULT_STATUSES) {
+    await db.run(
+      `INSERT INTO project_statuses
+         (id, workspace_id, project_id, key, name, type, position, is_default, is_terminal,
+          created_at, updated_at, revision)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+      [
+        newId(),
+        workspaceId,
+        projectId,
+        status.key,
+        status.name,
+        status.type,
+        status.position,
+        bindBool(db.dialect, status.isDefault),
+        bindBool(db.dialect, status.isTerminal),
+        now,
+        now
+      ]
+    );
+  }
 }
 
 function initializationProvisioning(
@@ -3274,6 +3308,7 @@ export async function initializeProject(
         maxPosition.max_position + 1
       ]
     );
+    await seedProjectStatuses(tx, { projectId, workspaceId, now });
     await recordChange(
       {
         entityType: 'project',
@@ -3678,12 +3713,14 @@ export async function listMissions(
 async function searchMissionsInWorkspace({
   query,
   projectId,
+  statusTypes,
   limit = 25,
   workspaceId,
   client
 }: {
   query?: string | null;
   projectId?: string | null;
+  statusTypes?: string[] | null;
   limit?: number;
   workspaceId: string;
   client: DatabaseClient;
@@ -3691,12 +3728,15 @@ async function searchMissionsInWorkspace({
   const match = query?.trim()
     ? buildMissionSearchMatch({ dialect: client.dialect, query: query.trim() })
     : null;
+  // Status *types* (coo:752): project-defined status names never reach this
+  // filter, so a type CSV keeps meaning the same thing in every project.
+  const types = statusTypes?.filter(type => type.trim() !== '') ?? [];
+  const statusFilter =
+    types.length > 0 ? ` AND t.status_type IN (${types.map(() => '?').join(', ')})` : '';
 
   if (!match) {
-    const sql = projectId
-      ? `${selectMissionsSql} AND t.project_id = ? ORDER BY t.updated_at DESC LIMIT ?`
-      : `${selectMissionsSql} ORDER BY t.updated_at DESC LIMIT ?`;
-    const params = projectId ? [workspaceId, projectId, limit] : [workspaceId, limit];
+    const sql = `${selectMissionsSql}${projectId ? ' AND t.project_id = ?' : ''}${statusFilter} ORDER BY t.updated_at DESC LIMIT ?`;
+    const params = [workspaceId, ...(projectId ? [projectId] : []), ...types, limit];
     const rows = (await client.all(sql, params)) as MissionRow[];
     const tagsByMission = await getTagsByMission(rows.map(row => row.id));
     return rows.map(row => toMissionDto(row, tagsByMission.get(row.id) ?? []));
@@ -3735,22 +3775,17 @@ ${missionHasUnseenReturnedToExecuteSql},
               ${missionSearchDocScoreExpr(client.dialect)} AS doc_score
          FROM ${missionSearchFromClause(client.dialect)}
          JOIN missions t ON t.id = ${missionIdColumn}
-           AND t.workspace_id = ? AND t.deleted_at IS NULL${projectFilter}
-        WHERE ${missionSearchMatchPredicate(client.dialect)}`,
-    projectId
-      ? [
-          ...missionSearchWorkspaceParams({
-            dialect: client.dialect,
-            workspaceId,
-            match
-          }),
-          projectId
-        ]
-      : missionSearchWorkspaceParams({
-          dialect: client.dialect,
-          workspaceId,
-          match
-        })
+           AND t.workspace_id = ? AND t.deleted_at IS NULL
+        WHERE ${missionSearchMatchPredicate(client.dialect)}${projectFilter}${statusFilter}`,
+    [
+      ...missionSearchWorkspaceParams({
+        dialect: client.dialect,
+        workspaceId,
+        match
+      }),
+      ...(projectId ? [projectId] : []),
+      ...types
+    ]
   )) as Array<MissionRow & { doc_score: number }>;
 
   // Aggregate per-document scores into one relevance per mission, then rank.
@@ -3777,10 +3812,12 @@ ${missionHasUnseenReturnedToExecuteSql},
 export async function searchMissions({
   query,
   projectId,
+  statusTypes,
   limit = 25
 }: {
   query?: string | null;
   projectId?: string | null;
+  statusTypes?: string[] | null;
   limit?: number;
 }): Promise<MissionDto[]> {
   const client = requireDatabaseClient();
@@ -3790,14 +3827,20 @@ export async function searchMissions({
       permission: PERMISSIONS.MISSION_READ,
       db: client
     });
-    return searchMissionsInWorkspace({ query, projectId, limit, workspaceId, client });
+    return searchMissionsInWorkspace({ query, projectId, statusTypes, limit, workspaceId, client });
   }
 
   const scopes = await callerAuthorizedWorkspaceScopes(PERMISSIONS.MISSION_READ, client);
   const missions = (
     await Promise.all(
       scopes.map(scope =>
-        searchMissionsInWorkspace({ query, limit, workspaceId: scope.workspaceId, client })
+        searchMissionsInWorkspace({
+          query,
+          statusTypes,
+          limit,
+          workspaceId: scope.workspaceId,
+          client
+        })
       )
     )
   ).flat();
@@ -3829,16 +3872,18 @@ async function topBoardPosition(
   return row.min_pos === null ? 100 : row.min_pos - 100;
 }
 
-async function getWorkspaceStatus(
+async function getProjectStatus(
   db: DatabaseClient,
-  workspaceId: string,
+  projectId: string,
   statusId: string
-): Promise<WorkspaceStatusRow> {
+): Promise<ProjectStatusRow> {
   const statusRow = (await db.get(
-    `SELECT * FROM workspace_statuses WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-    [statusId, workspaceId]
-  )) as WorkspaceStatusRow | undefined;
-  if (!statusRow) throw new ApiError(400, 'Unknown status for workspace');
+    `SELECT * FROM project_statuses WHERE id = ? AND project_id = ? AND deleted_at IS NULL`,
+    [statusId, projectId]
+  )) as ProjectStatusRow | undefined;
+  if (!statusRow) {
+    throw new ApiError(409, 'That status is not available for missions in this project');
+  }
   return statusRow;
 }
 
@@ -3859,6 +3904,12 @@ async function cascadeMissionProjectId(
 ): Promise<void> {
   await db.run(
     `UPDATE objectives
+       SET project_id = ?, updated_at = ?, revision = revision + 1
+     WHERE mission_id = ? AND workspace_id = ?`,
+    [newProjectId, now, missionId, workspaceId]
+  );
+  await db.run(
+    `UPDATE my_mission_positions
        SET project_id = ?, updated_at = ?, revision = revision + 1
      WHERE mission_id = ? AND workspace_id = ?`,
     [newProjectId, now, missionId, workspaceId]
@@ -4003,7 +4054,7 @@ export async function getMissionDetail(missionRef: string): Promise<MissionDetai
   const row = await getMissionRow(missionRef);
   const mission = toMissionDto(row, await getMissionTags(row.id));
   const objectives = await listObjectives(row.id);
-  const statuses = await selectWorkspaceStatusesForWorkspace(row.workspace_id);
+  const statuses = await selectProjectStatuses(row.project_id);
   const executionRequests = await listMissionExecutionRequests(row.id);
   const terminalSessions = await listMissionTerminalSessions(row.id);
   return {
@@ -4710,9 +4761,9 @@ async function createMissionTx(
     }
 
     // The board can create a mission straight into a chosen column; validating
-    // the id here keeps the REST 400 ("Unknown status for workspace") and lets
+    // the id here keeps a project-scoped error and lets
     // the shared create take an already-checked status.
-    if (body.statusId) await getWorkspaceStatus(tx, workspaceId, body.statusId);
+    if (body.statusId) await getProjectStatus(tx, body.projectId, body.statusId);
 
     // Unlike the agent surfaces, a REST-created mission defaults to being owned
     // by whoever created it.
@@ -4758,14 +4809,14 @@ async function syncMissionTags(
   db: DatabaseClient,
   {
     workspaceId,
-    missionId,
     projectId,
+    missionId,
     tagIds,
     now
   }: {
     workspaceId: string;
-    missionId: string;
     projectId: string;
+    missionId: string;
     tagIds: string[];
     now: string;
   }
@@ -5128,7 +5179,7 @@ async function patchMissionFieldsTx(id: string, body: UpdateMissionBody): Promis
     let scheduleTriggerStatusType: StatusType | null = null;
     let returnedToExecute = false;
     if (body.statusId !== undefined) {
-      const statusRow = await getWorkspaceStatus(tx, existing.workspace_id, body.statusId);
+      const statusRow = await getProjectStatus(tx, existing.project_id, body.statusId);
       fields.push('status_id = ?', 'status_type = ?');
       setParams.push(statusRow.id, statusRow.type);
       changed.push('status_id', 'status_type');
@@ -5280,7 +5331,7 @@ async function moveMissionProjectTx({
   body: UpdateMissionBody;
   existing: MissionRow;
   targetProjectId: string;
-  statusRow: WorkspaceStatusRow;
+  statusRow: ProjectStatusRow;
 }): Promise<void> {
   await requireDatabaseClient().transaction(async tx => {
     // On PostgreSQL the composite mission/objective FKs are deferred for the unit
@@ -5393,13 +5444,31 @@ export async function updateMission(
     )) as { id: string } | undefined;
     if (!targetProject) throw new ApiError(404, 'Project not found');
 
-    // Statuses are workspace-shared, so a cross-project move keeps the mission's
-    // current status unless the caller explicitly chooses a different one.
-    const statusRow = await getWorkspaceStatus(
-      client,
-      existing.workspace_id,
-      body.statusId ?? existing.status_id
-    );
+    const sourceStatus = await getProjectStatus(client, existing.project_id, existing.status_id);
+    let statusRow: ProjectStatusRow | undefined;
+    if (body.statusId) {
+      statusRow = await getProjectStatus(client, targetProject.id, body.statusId);
+    } else {
+      statusRow = (await client.get(
+        `SELECT * FROM project_statuses WHERE project_id = ? AND key = ? AND deleted_at IS NULL`,
+        [targetProject.id, sourceStatus.key]
+      )) as ProjectStatusRow | undefined;
+      if (!statusRow) {
+        statusRow = (await client.get(
+          `SELECT * FROM project_statuses
+            WHERE project_id = ? AND lower(name) = lower(?) AND deleted_at IS NULL`,
+          [targetProject.id, sourceStatus.name]
+        )) as ProjectStatusRow | undefined;
+      }
+      if (!statusRow) {
+        statusRow = (await client.get(
+          `SELECT * FROM project_statuses
+            WHERE project_id = ? AND is_default = ? AND deleted_at IS NULL LIMIT 1`,
+          [targetProject.id, bindBool(client.dialect, true)]
+        )) as ProjectStatusRow | undefined;
+      }
+    }
+    if (!statusRow) throw new ApiError(409, 'Project has no default status');
 
     // Composite mission/objective FKs require briefly disabling enforcement; SQLite
     // will not allow toggling the pragma inside an open transaction, so it is done
@@ -5479,10 +5548,11 @@ export async function reorderBoardColumn(
       db: tx
     });
     const statusRow = (await tx.get(
-      `SELECT * FROM workspace_statuses WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-      [statusId, workspaceId]
-    )) as WorkspaceStatusRow | undefined;
-    if (!statusRow) throw new ApiError(400, 'Unknown status for workspace');
+      `SELECT * FROM project_statuses WHERE id = ? AND project_id = ? AND deleted_at IS NULL`,
+      [statusId, projectId]
+    )) as ProjectStatusRow | undefined;
+    if (!statusRow)
+      throw new ApiError(409, 'That status is not available for missions in this project');
 
     if (new Set(orderedIds).size !== orderedIds.length) {
       throw new ApiError(400, 'orderedMissionIds contains duplicates');
@@ -5585,7 +5655,7 @@ interface ScheduleRow {
   days_of_week_json: string;
   timezone: string;
   start_date: string | null;
-  next_status_id: string | null;
+  next_status_key: string | null;
   created_at: string;
   updated_at: string;
   revision: number;
@@ -5612,7 +5682,7 @@ function toScheduleDto(row: ScheduleRow): ScheduleDto {
     daysOfWeek: parseScheduleJsonArray(row.days_of_week_json) as ScheduleDto['daysOfWeek'],
     timezone: row.timezone,
     startDate: row.start_date,
-    nextStatusId: row.next_status_id,
+    nextStatusKey: row.next_status_key,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     revision: row.revision
@@ -5643,7 +5713,7 @@ function scheduleRowToInput(row: ScheduleRow): ScheduleInput {
     daysOfWeek: dto.daysOfWeek,
     timezone: dto.timezone,
     startDate: dto.startDate,
-    nextStatusId: dto.nextStatusId
+    nextStatusKey: dto.nextStatusKey
   };
 }
 
@@ -5654,7 +5724,7 @@ async function getScheduleRow(
 ): Promise<ScheduleRow | undefined> {
   return (await db.get(
     `SELECT id, workspace_id, name, period_type, period_interval, weeks_of_month_json,
-            days_of_month_json, days_of_week_json, timezone, start_date, next_status_id,
+            days_of_month_json, days_of_week_json, timezone, start_date, next_status_key,
             created_at, updated_at, revision
        FROM schedules WHERE id = ? AND workspace_id = ?`,
     [scheduleId, workspaceId]
@@ -5712,8 +5782,13 @@ export async function upsertMissionSchedule(
 
   return requireDatabaseClient().transaction(async tx => {
     const existing = await getMissionRow(missionRef, tx, PERMISSIONS.MISSION_UPDATE);
-    if (input.nextStatusId) {
-      await getWorkspaceStatus(tx, existing.workspace_id, input.nextStatusId);
+    if (input.nextStatusKey) {
+      const configured = await tx.get(
+        `SELECT 1 FROM project_statuses WHERE project_id = ? AND key = ? AND deleted_at IS NULL`,
+        [existing.project_id, input.nextStatusKey]
+      );
+      if (!configured)
+        throw new ApiError(409, 'That status is not available for missions in this project');
     }
     const dueDatetime = previewScheduleDueDatetime(input, existing.due_datetime);
     const now = nowIso();
@@ -5724,7 +5799,7 @@ export async function upsertMissionSchedule(
         `UPDATE schedules
            SET name = ?, period_type = ?, period_interval = ?, weeks_of_month_json = ?,
                days_of_month_json = ?, days_of_week_json = ?, timezone = ?, start_date = ?,
-               next_status_id = ?, updated_at = ?, revision = revision + 1
+               next_status_key = ?, updated_at = ?, revision = revision + 1
          WHERE id = ? AND workspace_id = ?`,
         [
           input.name?.trim() || null,
@@ -5735,7 +5810,7 @@ export async function upsertMissionSchedule(
           JSON.stringify(input.daysOfWeek ?? []),
           input.timezone,
           input.startDate ?? null,
-          input.nextStatusId ?? null,
+          input.nextStatusKey ?? null,
           now,
           existing.schedule_id,
           existing.workspace_id
@@ -5745,7 +5820,7 @@ export async function upsertMissionSchedule(
       await tx.run(
         `INSERT INTO schedules
            (id, workspace_id, name, period_type, period_interval, weeks_of_month_json,
-            days_of_month_json, days_of_week_json, timezone, start_date, next_status_id,
+            days_of_month_json, days_of_week_json, timezone, start_date, next_status_key,
             created_at, updated_at, revision)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
         [
@@ -5759,7 +5834,7 @@ export async function upsertMissionSchedule(
           JSON.stringify(input.daysOfWeek ?? []),
           input.timezone,
           input.startDate ?? null,
-          input.nextStatusId ?? null,
+          input.nextStatusKey ?? null,
           now,
           now
         ]
@@ -5835,29 +5910,28 @@ export async function clearMissionSchedule(missionRef: string): Promise<void> {
 }
 
 /**
- * Resolves the workspace status a scheduled duplicate lands in: the schedule's
- * configured `nextStatusId` when it still names a real, non-deleted workspace
- * status, else the workspace default.
+ * Resolves the project status a scheduled duplicate lands in by its stable key,
+ * falling back to the mission project's default.
  */
 async function resolveScheduleDuplicateStatus(
   db: DatabaseClient,
-  workspaceId: string,
-  nextStatusId: string | null
-): Promise<WorkspaceStatusRow> {
-  if (nextStatusId) {
+  projectId: string,
+  nextStatusKey: string | null
+): Promise<ProjectStatusRow> {
+  if (nextStatusKey) {
     const configured = (await db.get(
-      `SELECT * FROM workspace_statuses WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-      [nextStatusId, workspaceId]
-    )) as WorkspaceStatusRow | undefined;
+      `SELECT * FROM project_statuses WHERE project_id = ? AND key = ? AND deleted_at IS NULL`,
+      [projectId, nextStatusKey]
+    )) as ProjectStatusRow | undefined;
     if (configured) return configured;
   }
 
   const defaultStatus = (await db.get(
-    `SELECT * FROM workspace_statuses
-       WHERE workspace_id = ? AND is_default = ? AND deleted_at IS NULL LIMIT 1`,
-    [workspaceId, bindBool(DATABASE_DIALECT, true)]
-  )) as WorkspaceStatusRow | undefined;
-  if (!defaultStatus) throw new ApiError(409, 'Workspace has no default status');
+    `SELECT * FROM project_statuses
+       WHERE project_id = ? AND is_default = ? AND deleted_at IS NULL LIMIT 1`,
+    [projectId, bindBool(DATABASE_DIALECT, true)]
+  )) as ProjectStatusRow | undefined;
+  if (!defaultStatus) throw new ApiError(409, 'Project has no default status');
   return defaultStatus;
 }
 
@@ -5897,8 +5971,8 @@ async function createScheduledDuplicateIfNeeded(
 
   const targetStatus = await resolveScheduleDuplicateStatus(
     tx,
-    mission.workspace_id,
-    scheduleRow.next_status_id
+    mission.project_id,
+    scheduleRow.next_status_key
   );
 
   const now = nowIso();
@@ -6141,6 +6215,7 @@ async function upsertMyMissionPosition(
   db: DatabaseClient,
   {
     workspaceId,
+    projectId,
     missionId,
     statusId,
     position,
@@ -6148,6 +6223,7 @@ async function upsertMyMissionPosition(
     now
   }: {
     workspaceId: string;
+    projectId: string;
     missionId: string;
     statusId: string;
     position: number;
@@ -6163,23 +6239,23 @@ async function upsertMyMissionPosition(
   if (existing) {
     await db.run(
       `UPDATE my_mission_positions
-          SET status_id = ?, position = ?, updated_at = ?, revision = ?
+          SET project_id = ?, status_id = ?, position = ?, updated_at = ?, revision = ?
         WHERE id = ?`,
-      [statusId, position, now, existing.revision + 1, existing.id]
+      [projectId, statusId, position, now, existing.revision + 1, existing.id]
     );
     return;
   }
   await db.run(
     `INSERT INTO my_mission_positions
-       (id, workspace_id, workspace_user_id, mission_id, status_id, position, created_at, updated_at, revision)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`,
-    [newId(), workspaceId, actor, missionId, statusId, position, now, now]
+       (id, workspace_id, project_id, workspace_user_id, mission_id, status_id, position, created_at, updated_at, revision)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+    [newId(), workspaceId, projectId, actor, missionId, statusId, position, now, now]
   );
 }
 
 /**
  * A status/mission reorder targets a specific `statusId`, which is owned by
- * exactly one workspace (its composite FK). That workspace need not be the
+ * exactly one project. That project's workspace need not be the
  * caller's currently *active* workspace now that My Missions aggregates
  * across the whole organization — this resolves and authorizes it explicitly:
  * the status's workspace must belong to the caller's active organization, and
@@ -6188,22 +6264,23 @@ async function upsertMyMissionPosition(
 async function requireStatusWorkspaceMembership(
   tx: DatabaseClient,
   statusId: string
-): Promise<{ statusRow: WorkspaceStatusRow; workspaceUserId: string }> {
+): Promise<{ statusRow: ProjectStatusRow; workspaceUserId: string }> {
   const organizationId = await getActiveOrganizationIdOrNull(tx);
   if (!organizationId) {
     throw new ApiError(409, 'No active organization', undefined, STATUS_UNAVAILABLE_FOR_WORKSPACE);
   }
 
   const statusRow = (await tx.get(
-    `SELECT ws.* FROM workspace_statuses ws
-       JOIN workspaces w ON w.id = ws.workspace_id AND w.deleted_at IS NULL
-      WHERE ws.id = ? AND ws.deleted_at IS NULL AND w.organization_id = ?`,
+    `SELECT ps.* FROM project_statuses ps
+       JOIN projects p ON p.id = ps.project_id AND p.deleted_at IS NULL
+       JOIN workspaces w ON w.id = ps.workspace_id AND w.deleted_at IS NULL
+      WHERE ps.id = ? AND ps.deleted_at IS NULL AND w.organization_id = ?`,
     [statusId, organizationId]
-  )) as WorkspaceStatusRow | undefined;
+  )) as ProjectStatusRow | undefined;
   if (!statusRow) {
     throw new ApiError(
       409,
-      'That status is not available for missions in this organization',
+      'That status is not available for missions in this project',
       undefined,
       STATUS_UNAVAILABLE_FOR_WORKSPACE
     );
@@ -6246,6 +6323,14 @@ async function reorderWorkspaceMyMissionsTx(body: MyMissionReorderRequest): Prom
       if (existing.assigned_workspace_user_id !== actor) {
         throw new ApiError(403, `Mission ${missionId} is not assigned to you`);
       }
+      if (existing.project_id !== statusRow.project_id) {
+        throw new ApiError(
+          409,
+          'That status is not available for missions in this project',
+          undefined,
+          STATUS_UNAVAILABLE_FOR_WORKSPACE
+        );
+      }
 
       // Cross-column drag: a real status change. Apply the canonical status-change
       // writes (status_id + denormalized status_type + reset board_position to
@@ -6287,6 +6372,7 @@ async function reorderWorkspaceMyMissionsTx(body: MyMissionReorderRequest): Prom
       // my_mission_positions — never missions.board_position for a within-column move.
       await upsertMyMissionPosition(tx, {
         workspaceId,
+        projectId: existing.project_id,
         missionId,
         statusId: statusRow.id,
         position: (index + 1) * MY_POSITION_STEP,
@@ -6300,7 +6386,7 @@ async function reorderWorkspaceMyMissionsTx(body: MyMissionReorderRequest): Prom
 /**
  * PATCH /api/workspace/my-missions/order — persist a personal reorder of one My
  * Missions status column for the active operator. Translates a foreign-key
- * rejection (a status the mission's workspace lacks) into the typed
+ * rejection (a status the mission's project lacks) into the typed
  * `STATUS_UNAVAILABLE_FOR_WORKSPACE` error so the client can alert and revert.
  */
 export async function reorderWorkspaceMyMissions(
@@ -6315,12 +6401,12 @@ export async function reorderWorkspaceMyMissions(
       typeof err === 'object' &&
       (err as { code?: string }).code === 'SQLITE_CONSTRAINT_FOREIGNKEY'
     ) {
-      // The rejected status belongs to the moved mission's workspace, which —
+      // The rejected status belongs to the moved mission's project, which —
       // now that My Missions aggregates across the organization — need not be
       // the caller's active one, so no workspace is named here.
       throw new ApiError(
         409,
-        `That status is not available in this mission's workspace`,
+        `That status is not available in this mission's project`,
         undefined,
         STATUS_UNAVAILABLE_FOR_WORKSPACE
       );

@@ -12,7 +12,8 @@ import { listAttachments } from '../packages/core/service/missions.ts';
 import { registerActingExecutionTarget } from '../packages/core/service/project-execution-target.ts';
 import {
   createProject as createProjectService,
-  discoverProject
+  discoverProject,
+  listProjectStatuses
 } from '../packages/core/service/projects.ts';
 import {
   addObjectivesToMission,
@@ -1103,6 +1104,15 @@ const handlers: Record<string, Handler> = {
       workingDirectory: strFlag(body, '--directory') ?? null
     }),
 
+  // Board-column discovery. Statuses are project-scoped (coo:752), so an agent
+  // that needs to name a column must ask the project that owns it. Read-only:
+  // status *definitions* are edited in project settings, never over the protocol.
+  statuses: (ctx, body) =>
+    listProjectStatuses({
+      ctx,
+      projectId: requireFlag(body, '--project-id')
+    }),
+
   // Parentless project creation. Resolves/validates the target workspace itself
   // (see `createProjectFromProtocol`) so it can return a `workspace_selection_required`
   // result when the caller has multiple memberships instead of defaulting.
@@ -1154,6 +1164,7 @@ const SUBCOMMAND_PERMISSIONS: Record<string, Permission | null> = {
   'attachment-download-url': PERMISSIONS.ARTIFACT_READ,
   'auth-status': null,
   'discover-project': PERMISSIONS.PROJECT_READ,
+  statuses: PERMISSIONS.PROJECT_READ,
   // Enforced per-target inside the handler (requireWorkspacePermission) so the
   // multi-workspace selection flow runs before any default-workspace gate.
   'create-project': null,

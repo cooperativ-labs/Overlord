@@ -1,4 +1,4 @@
-import { bindBool, type DatabaseClient, DEFAULT_STATUSES } from '@overlord/database';
+import { bindBool, type DatabaseClient } from '@overlord/database';
 import { createHash, randomBytes } from 'node:crypto';
 
 import type {
@@ -287,39 +287,6 @@ export async function listWorkspacesForOrganization(
   return rows.map(toWorkspaceDto);
 }
 
-/** Seed the workspace-level card statuses every new workspace starts with. */
-async function seedWorkspaceStatuses({
-  workspaceId,
-  now,
-  client
-}: {
-  workspaceId: string;
-  now: string;
-  client: DatabaseClient;
-}): Promise<void> {
-  for (const status of DEFAULT_STATUSES) {
-    await client.run(
-      `INSERT INTO workspace_statuses
-         (id, workspace_id, key, name, type, position, is_default, is_terminal,
-          created_at, updated_at, revision)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?,
-          ?, ?, 1)`,
-      [
-        newId(),
-        workspaceId,
-        status.key,
-        status.name,
-        status.type,
-        status.position,
-        bindBool(client.dialect, status.isDefault),
-        bindBool(client.dialect, status.isTerminal),
-        now,
-        now
-      ]
-    );
-  }
-}
-
 /**
  * Provision the workspace's logical storage locations. Object keys carry the
  * canonical `user-images/<user-id>` and `workspace-files/<workspace-id>` path,
@@ -430,7 +397,6 @@ export async function createWorkspace(body: CreateWorkspaceBody): Promise<Worksp
 
     await grantWorkspaceAdminRole({ workspaceId: nextWorkspaceId, workspaceUserId, client: tx });
 
-    await seedWorkspaceStatuses({ workspaceId: nextWorkspaceId, now, client: tx });
     await seedWorkspaceStorageBuckets({
       workspaceId: nextWorkspaceId,
       createdByWorkspaceUserId: workspaceUserId,
@@ -567,7 +533,6 @@ export async function createOrganizationOnboarding(
       [workspaceUserId, nextWorkspaceId, profileId, `auth:${profileId}`, now, now]
     );
     await grantWorkspaceAdminRole({ workspaceId: nextWorkspaceId, workspaceUserId, client: tx });
-    await seedWorkspaceStatuses({ workspaceId: nextWorkspaceId, now, client: tx });
     await seedWorkspaceStorageBuckets({
       workspaceId: nextWorkspaceId,
       createdByWorkspaceUserId: workspaceUserId,
@@ -875,8 +840,8 @@ export async function exportWorkspaceObjectivesCsv(
          ON m.id = o.mission_id AND m.deleted_at IS NULL
        JOIN projects p
          ON p.id = o.project_id AND p.deleted_at IS NULL
-       LEFT JOIN workspace_statuses ws
-         ON ws.id = m.status_id AND ws.deleted_at IS NULL
+       LEFT JOIN project_statuses ws
+         ON ws.id = m.status_id AND ws.project_id = m.project_id AND ws.deleted_at IS NULL
       WHERE o.workspace_id = ? AND o.deleted_at IS NULL
       ORDER BY ${projectOrder},
                ${missionOrder},

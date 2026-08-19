@@ -15,6 +15,10 @@ import {
   resolveAppliedMigrationSqlite
 } from './migration-ledger.js';
 import {
+  finalizeNextStatusTypeSqlite,
+  isNextStatusTypeMigration
+} from './next-status-type-migration-runtime.js';
+import {
   finalizeObjectivesDisplayKeySqlite,
   isObjectivesDisplayKeyMigration
 } from './objective-display-key-migration-runtime.js';
@@ -22,6 +26,10 @@ import {
   finalizeProjectResourcesResourceKeySqlite,
   isProjectResourcesResourceKeyMigration
 } from './project-resources-resource-key-migration-runtime.js';
+import {
+  finalizeProjectStatusesSqlite,
+  isProjectStatusesMigration
+} from './project-statuses-migration-runtime.js';
 
 const MIGRATION_FILE_PATTERN = /^\d+_[a-z0-9_]+\.sql$/;
 
@@ -115,6 +123,12 @@ function applyMigration(db: DatabaseInstance, migration: Migration): 'applied' |
   }
   if (isObjectivesDisplayKeyMigration(migration)) {
     finalizeObjectivesDisplayKeySqlite(db);
+  }
+  if (isProjectStatusesMigration(migration)) {
+    finalizeProjectStatusesSqlite(db);
+  }
+  if (isNextStatusTypeMigration(migration)) {
+    finalizeNextStatusTypeSqlite(db);
   }
   recordMigration(db, migration);
 
@@ -261,6 +275,12 @@ function applyMigrationWithPendingRecords(
   }
   if (isObjectivesDisplayKeyMigration(migration)) {
     finalizeObjectivesDisplayKeySqlite(db);
+  }
+  if (isProjectStatusesMigration(migration)) {
+    finalizeProjectStatusesSqlite(db);
+  }
+  if (isNextStatusTypeMigration(migration)) {
+    finalizeNextStatusTypeSqlite(db);
   }
   if (!hasSchemaMigrationsTable(db)) {
     pendingMigrationRecords.push(migration);

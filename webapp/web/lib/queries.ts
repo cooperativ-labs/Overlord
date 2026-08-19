@@ -23,11 +23,11 @@ import type {
   CreateOrganizationOnboardingBody,
   CreateProjectBody,
   CreateProjectResourceBody,
+  CreateProjectStatusBody,
   CreateProjectTagBody,
   CreateUserTokenBody,
   CreateWebhookSubscriptionBody,
   CreateWorkspaceBody,
-  CreateWorkspaceStatusBody,
   DeliveryDto,
   InboxItemDto,
   InviteWorkspaceMemberBody,
@@ -42,11 +42,12 @@ import type {
   PreviewScheduleBody,
   ProjectDto,
   ProjectListLifecycle,
+  ProjectStatusDto,
   ProjectTagDto,
   RemoveWorktreeBody,
   ReorderFutureObjectivesBody,
   ReorderProjectsBody,
-  ReorderWorkspaceStatusesBody,
+  ReorderProjectStatusesBody,
   ScheduleInput,
   StatusType,
   UpdateAgentCatalogBody,
@@ -63,17 +64,16 @@ import type {
   UpdateProjectExecutionTargetBody,
   UpdateProjectResourceBody,
   UpdateProjectResourceSourceBody,
+  UpdateProjectStatusBody,
   UpdateProjectTagBody,
   UpdateTerminalProfileBody,
   UpdateUserTokenBody,
   UpdateWebhookSubscriptionBody,
   UpdateWorkspaceBody,
   UpdateWorkspaceMemberRoleBody,
-  UpdateWorkspaceStatusBody,
   UpdateWorktreeBranchAutomationBody,
   WorkspaceDto,
-  WorkspaceExecutionTargetDto,
-  WorkspaceStatusDto
+  WorkspaceExecutionTargetDto
 } from '../../shared/contract.ts';
 
 import { api } from './api.ts';
@@ -363,14 +363,18 @@ export const useAllProjects = () => {
 export const useProject = (id: string) =>
   useQuery({ queryKey: keys.project(id), queryFn: () => api.getProject(id) });
 
-export const useWorkspaceStatuses = (workspaceId?: string | null) =>
+export const useProjectStatuses = (projectId: string) =>
   useQuery({
-    queryKey: keys.workspaceStatuses(workspaceId),
-    queryFn: () =>
-      workspaceId
-        ? api.listWorkspaceStatusesForWorkspace(workspaceId)
-        : api.listWorkspaceStatuses(),
-    enabled: workspaceId !== null
+    queryKey: keys.projectStatuses(projectId),
+    queryFn: () => api.listProjectStatuses(projectId),
+    enabled: Boolean(projectId)
+  });
+
+export const useWorkspaceProjectStatuses = (workspaceId: string) =>
+  useQuery({
+    queryKey: keys.workspaceProjectStatuses(workspaceId),
+    queryFn: () => api.listWorkspaceProjectStatuses(workspaceId),
+    enabled: Boolean(workspaceId)
   });
 
 // Project-scoped queries are routinely mounted before a project is chosen (the
@@ -1013,50 +1017,50 @@ export function useReorderProjects(workspaceId?: string) {
   });
 }
 
-// The status mutation hooks take an optional `workspaceId`. When set (the
-// settings modal for a specific workspace) they target the workspace-scoped
-// routes and cache the result under that workspace's key; when omitted they use
-// the active-workspace legacy routes (coo:135).
-export function useCreateWorkspaceStatus(workspaceId?: string | null) {
+export function useCreateProjectStatus(projectId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: CreateWorkspaceStatusBody) => api.createWorkspaceStatus(body, workspaceId),
+    mutationFn: (body: CreateProjectStatusBody) => api.createProjectStatus(projectId, body),
     onSuccess: data => {
-      qc.setQueryData(
-        keys.workspaceStatuses(workspaceId),
-        (prev: WorkspaceStatusDto[] | undefined) =>
-          prev ? [...prev, data].sort((a, b) => a.position - b.position) : [data]
+      qc.setQueryData(keys.projectStatuses(projectId), (prev: ProjectStatusDto[] | undefined) =>
+        prev ? [...prev, data].sort((a, b) => a.position - b.position) : [data]
       );
-      void qc.invalidateQueries({ queryKey: ['workspace'] });
+      void qc.invalidateQueries({ queryKey: keys.projectStatuses(projectId) });
     }
   });
 }
 
-export function useUpdateWorkspaceStatus(workspaceId?: string | null) {
+export function useUpdateProjectStatus(projectId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ statusId, body }: { statusId: string; body: UpdateWorkspaceStatusBody }) =>
-      api.updateWorkspaceStatus(statusId, body, workspaceId),
-    onSuccess: () => invalidateAll(qc)
+    mutationFn: ({ statusId, body }: { statusId: string; body: UpdateProjectStatusBody }) =>
+      api.updateProjectStatus(projectId, statusId, body),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.projectStatuses(projectId) });
+      void qc.invalidateQueries({ queryKey: keys.myMissions });
+    }
   });
 }
 
-export function useDeleteWorkspaceStatus(workspaceId?: string | null) {
+export function useDeleteProjectStatus(projectId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (statusId: string) => api.deleteWorkspaceStatus(statusId, workspaceId),
-    onSuccess: () => invalidateAll(qc)
+    mutationFn: (statusId: string) => api.deleteProjectStatus(projectId, statusId),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.projectStatuses(projectId) });
+      void qc.invalidateQueries({ queryKey: keys.myMissions });
+    }
   });
 }
 
-export function useReorderWorkspaceStatuses(workspaceId?: string | null) {
+export function useReorderProjectStatuses(projectId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: ReorderWorkspaceStatusesBody) =>
-      api.reorderWorkspaceStatuses(body, workspaceId),
+    mutationFn: (body: ReorderProjectStatusesBody) => api.reorderProjectStatuses(projectId, body),
     onSuccess: data => {
-      qc.setQueryData(keys.workspaceStatuses(workspaceId), data);
-      void qc.invalidateQueries({ queryKey: ['workspace'] });
+      qc.setQueryData(keys.projectStatuses(projectId), data);
+      void qc.invalidateQueries({ queryKey: keys.projectStatuses(projectId) });
+      void qc.invalidateQueries({ queryKey: keys.myMissions });
     }
   });
 }

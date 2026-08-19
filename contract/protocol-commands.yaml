@@ -313,8 +313,20 @@ missionDiscovery:
       - creates-session-key
 
   searchMissions:
-    description: 'Search by query, status, project, creator, and update dates'
+    description: 'Search by query, status type, project, creator, and update dates'
     readOnly: true
+    rules:
+      - '--status is a CSV of status TYPES (draft, next, execute, review, complete, blocked, cancelled), which are invariant across projects and workspaces; project-defined status names are not accepted'
+
+  statuses:
+    description: "List one project's ordered board columns (statuses)"
+    readOnly: true
+    requiredFlags:
+      - --project-id
+    rules:
+      - 'Status definitions are project-scoped, so names, order, and count vary between projects in one workspace; the status type of each column does not'
+      - 'Read-only: status definitions are created and edited in project settings over REST, never over the protocol'
+      - '--project-id accepts a project id, slug, or name and resolves within the caller workspace'
 
   discussObjective:
     description: 'Mark a draft objective submitted (signals in active discussion)'

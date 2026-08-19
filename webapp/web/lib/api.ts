@@ -36,13 +36,13 @@ import type {
   CreateOrganizationOnboardingBody,
   CreateProjectBody,
   CreateProjectResourceBody,
+  CreateProjectStatusBody,
   CreateProjectTagBody,
   CreateUserTokenBody,
   CreateUserTokenResultDto,
   CreateWebhookSubscriptionBody,
   CreateWebhookSubscriptionResultDto,
   CreateWorkspaceBody,
-  CreateWorkspaceStatusBody,
   DefaultProjectPreferenceDto,
   DeliveryDto,
   ExecutionRequestDto,
@@ -79,6 +79,7 @@ import type {
   ProjectListLifecycle,
   ProjectRepositoryDto,
   ProjectResourceDto,
+  ProjectStatusDto,
   ProjectTagDto,
   PurgeMergedWorktreesBody,
   PurgeWorktreesResultDto,
@@ -90,7 +91,7 @@ import type {
   ReorderBoardColumnBody,
   ReorderFutureObjectivesBody,
   ReorderProjectsBody,
-  ReorderWorkspaceStatusesBody,
+  ReorderProjectStatusesBody,
   RotateWebhookSecretResultDto,
   ScheduleInput,
   SharedContextEntryDto,
@@ -110,13 +111,13 @@ import type {
   UpdateProjectExecutionTargetBody,
   UpdateProjectResourceBody,
   UpdateProjectResourceSourceBody,
+  UpdateProjectStatusBody,
   UpdateProjectTagBody,
   UpdateTerminalProfileBody,
   UpdateUserTokenBody,
   UpdateWebhookSubscriptionBody,
   UpdateWorkspaceBody,
   UpdateWorkspaceMemberRoleBody,
-  UpdateWorkspaceStatusBody,
   UpdateWorktreeBranchAutomationBody,
   UpsertSharedContextBody,
   UserTokenDto,
@@ -126,7 +127,6 @@ import type {
   WorkspaceExecutionTargetDto,
   WorkspaceInvitationDto,
   WorkspaceMemberDto,
-  WorkspaceStatusDto,
   WorktreeDto
 } from '../../shared/contract.ts';
 
@@ -383,8 +383,8 @@ export const api = {
     request<ProjectDto[]>('GET', `/api/projects?lifecycle=${lifecycle}`),
   listProjectsForWorkspace: (workspaceId: string, lifecycle: ProjectListLifecycle = 'active') =>
     request<ProjectDto[]>('GET', `/api/workspaces/${workspaceId}/projects?lifecycle=${lifecycle}`),
-  listWorkspaceStatusesForWorkspace: (workspaceId: string) =>
-    request<WorkspaceStatusDto[]>('GET', `/api/workspaces/${workspaceId}/statuses`),
+  listWorkspaceProjectStatuses: (workspaceId: string) =>
+    request<ProjectStatusDto[]>('GET', `/api/workspaces/${workspaceId}/project-statuses`),
   getProject: (id: string) => request<ProjectDto>('GET', `/api/projects/${id}`),
   createProject: (body: CreateProjectBody) => request<ProjectDto>('POST', '/api/projects', body),
   updateProject: (id: string, body: UpdateProjectBody) =>
@@ -392,43 +392,16 @@ export const api = {
   deleteProject: (id: string) => request<{ ok: true }>('DELETE', `/api/projects/${id}`),
   reorderProjects: (body: ReorderProjectsBody) =>
     request<ProjectDto[]>('PATCH', `/api/projects/reorder`, body),
-  listWorkspaceStatuses: () => request<WorkspaceStatusDto[]>('GET', `/api/workspace/statuses`),
-  // A `workspaceId` targets the workspace-scoped routes (any org workspace,
-  // authorized there), so the settings modal can manage a non-active
-  // workspace's statuses; omit it for the active-workspace legacy routes.
-  createWorkspaceStatus: (body: CreateWorkspaceStatusBody, workspaceId?: string | null) =>
-    request<WorkspaceStatusDto>(
-      'POST',
-      workspaceId ? `/api/workspaces/${workspaceId}/statuses` : `/api/workspace/statuses`,
-      body
-    ),
-  updateWorkspaceStatus: (
-    statusId: string,
-    body: UpdateWorkspaceStatusBody,
-    workspaceId?: string | null
-  ) =>
-    request<WorkspaceStatusDto>(
-      'PATCH',
-      workspaceId
-        ? `/api/workspaces/${workspaceId}/statuses/${statusId}`
-        : `/api/workspace/statuses/${statusId}`,
-      body
-    ),
-  deleteWorkspaceStatus: (statusId: string, workspaceId?: string | null) =>
-    request<{ ok: true }>(
-      'DELETE',
-      workspaceId
-        ? `/api/workspaces/${workspaceId}/statuses/${statusId}`
-        : `/api/workspace/statuses/${statusId}`
-    ),
-  reorderWorkspaceStatuses: (body: ReorderWorkspaceStatusesBody, workspaceId?: string | null) =>
-    request<WorkspaceStatusDto[]>(
-      'PATCH',
-      workspaceId
-        ? `/api/workspaces/${workspaceId}/statuses/reorder`
-        : `/api/workspace/statuses/reorder`,
-      body
-    ),
+  listProjectStatuses: (projectId: string) =>
+    request<ProjectStatusDto[]>('GET', `/api/projects/${projectId}/statuses`),
+  createProjectStatus: (projectId: string, body: CreateProjectStatusBody) =>
+    request<ProjectStatusDto>('POST', `/api/projects/${projectId}/statuses`, body),
+  updateProjectStatus: (projectId: string, statusId: string, body: UpdateProjectStatusBody) =>
+    request<ProjectStatusDto>('PATCH', `/api/projects/${projectId}/statuses/${statusId}`, body),
+  deleteProjectStatus: (projectId: string, statusId: string) =>
+    request<{ ok: true }>('DELETE', `/api/projects/${projectId}/statuses/${statusId}`),
+  reorderProjectStatuses: (projectId: string, body: ReorderProjectStatusesBody) =>
+    request<ProjectStatusDto[]>('PATCH', `/api/projects/${projectId}/statuses/reorder`, body),
   listProjectTags: (id: string) => request<ProjectTagDto[]>('GET', `/api/projects/${id}/tags`),
   createProjectTag: (projectId: string, body: CreateProjectTagBody) =>
     request<ProjectTagDto>('POST', `/api/projects/${projectId}/tags`, body),

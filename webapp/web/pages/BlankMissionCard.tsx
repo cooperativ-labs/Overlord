@@ -78,7 +78,7 @@ type BlankMissionCardProps = {
   statusId: string;
   position: 'top' | 'bottom';
   projectId: string;
-  statusScope?: 'project' | 'workspace';
+  statusScope?: 'project' | 'aggregate';
   onCreateMission: (
     statusId: string,
     objective: string,
@@ -153,10 +153,10 @@ export function BlankMissionCard({
   };
 
   // Project boards can only keep their column status when the selected project
-  // matches the board. Workspace boards use workspace-scoped statuses, so they
-  // can preserve the column status across project selections.
+  // matches the board. Aggregate boards resolve the selected project's concrete
+  // status from the merged column before creating the mission.
   const statusForSelection =
-    statusScope === 'workspace' || selectedProjectId === projectId ? statusId : '';
+    statusScope === 'aggregate' || selectedProjectId === projectId ? statusId : '';
 
   // Tags and resources are project-scoped: clear both when the project changes.
   useEffect(() => {

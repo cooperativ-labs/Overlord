@@ -51,6 +51,14 @@ export const STATUS_CONFIG: Record<StatusType, StatusStyle> = {
     rail: 'border-l-border',
     rule: 'bg-border'
   },
+  next: {
+    label: 'Next',
+    icon: Circle,
+    text: 'text-indigo-600 dark:text-indigo-400',
+    bg: 'bg-indigo-500/15',
+    rail: 'border-l-indigo-500/40',
+    rule: 'bg-indigo-500/25'
+  },
   execute: {
     label: 'Execute',
     icon: Play,
@@ -111,6 +119,8 @@ export function statusClasses(type: StatusType): string {
   switch (type) {
     case 'draft':
       return 'text-slate-600';
+    case 'next':
+      return 'text-indigo-700';
     case 'execute':
       return 'text-blue-700';
     case 'review':

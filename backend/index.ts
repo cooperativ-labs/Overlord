@@ -154,18 +154,18 @@ import {
   createObjective,
   createProject,
   createProjectResource,
+  createProjectStatus,
   createProjectTag,
   createUserToken,
-  createWorkspaceStatus,
   deleteInboxItem,
   deleteMission,
   deleteObjective,
   deleteProject,
   deleteProjectResource,
   deleteProjectResourceSource,
+  deleteProjectStatus,
   deleteProjectTag,
   deleteRevokedUserToken,
-  deleteWorkspaceStatus,
   generateCommitMessage,
   generateMissionTitle,
   getDefaultProjectPreference,
@@ -188,11 +188,11 @@ import {
   listProjectResources,
   listProjects,
   listProjectsForWorkspace,
+  listProjectStatuses,
   listProjectTags,
   listUserTokens,
   listWorkspaceMyMissions,
-  listWorkspaceStatuses,
-  listWorkspaceStatusesForWorkspace,
+  listWorkspaceProjectStatuses,
   listWorktrees,
   markMissionStatusesSeen,
   performBranchAction,
@@ -204,8 +204,8 @@ import {
   reorderBoardColumn,
   reorderFutureObjectives,
   reorderProjects,
+  reorderProjectStatuses,
   reorderWorkspaceMyMissions,
-  reorderWorkspaceStatuses,
   revokeUserToken,
   searchMissions,
   setDefaultProjectPreference,
@@ -217,8 +217,8 @@ import {
   updateProject,
   updateProjectResource,
   updateProjectResourceSource,
+  updateProjectStatus,
   updateProjectTag,
-  updateWorkspaceStatus,
   upsertMissionSchedule,
   upsertMissionSharedContext
 } from './repository.ts';
@@ -865,8 +865,8 @@ app.get(
   handle(req => listProjectsForWorkspace(req.params.id, undefined, parseProjectListLifecycle(req)))
 );
 app.get(
-  '/api/workspaces/:id/statuses',
-  handle(req => listWorkspaceStatusesForWorkspace(req.params.id))
+  '/api/workspaces/:id/project-statuses',
+  handle(req => listWorkspaceProjectStatuses(req.params.id))
 );
 app.get(
   '/api/workspaces/:id/execution-targets',
@@ -889,34 +889,6 @@ app.delete(
   handle(
     async req => {
       await removeWorkspaceExecutionTarget(req.params.id, req.params.targetId);
-      return { ok: true as const };
-    },
-    { mutates: true }
-  )
-);
-// Workspace-scoped status CRUD. Unlike the legacy `/api/workspace/statuses`
-// routes (active-workspace only), these target the `:id` workspace and
-// authorize `workspace:update` there inside the service, so the settings modal
-// can manage any org workspace's statuses without switching to it (coo:135).
-app.post(
-  '/api/workspaces/:id/statuses',
-  handle(req => createWorkspaceStatus(req.body, req.params.id), { mutates: true })
-);
-app.patch(
-  '/api/workspaces/:id/statuses/reorder',
-  handle(req => reorderWorkspaceStatuses(req.body, req.params.id), { mutates: true })
-);
-app.patch(
-  '/api/workspaces/:id/statuses/:statusId',
-  handle(req => updateWorkspaceStatus(req.params.statusId, req.body, req.params.id), {
-    mutates: true
-  })
-);
-app.delete(
-  '/api/workspaces/:id/statuses/:statusId',
-  handle(
-    async req => {
-      await deleteWorkspaceStatus(req.params.statusId, req.params.id);
       return { ok: true as const };
     },
     { mutates: true }
@@ -1284,38 +1256,31 @@ app.delete(
   handle(req => deleteProject(req.params.id), { mutates: true })
 );
 app.get(
-  '/api/workspace/statuses',
-  handle(() => listWorkspaceStatuses(), { requires: PERMISSIONS.WORKSPACE_READ })
+  '/api/projects/:id/statuses',
+  handle(req => listProjectStatuses(req.params.id))
 );
 app.post(
-  '/api/workspace/statuses',
-  handle(req => createWorkspaceStatus(req.body), {
-    mutates: true,
-    requires: PERMISSIONS.WORKSPACE_UPDATE
-  })
+  '/api/projects/:id/statuses',
+  handle(req => createProjectStatus(req.params.id, req.body), { mutates: true })
 );
 app.patch(
-  '/api/workspace/statuses/reorder',
-  handle(req => reorderWorkspaceStatuses(req.body), {
-    mutates: true,
-    requires: PERMISSIONS.WORKSPACE_UPDATE
-  })
+  '/api/projects/:id/statuses/reorder',
+  handle(req => reorderProjectStatuses(req.params.id, req.body), { mutates: true })
 );
 app.patch(
-  '/api/workspace/statuses/:statusId',
-  handle(req => updateWorkspaceStatus(req.params.statusId, req.body), {
-    mutates: true,
-    requires: PERMISSIONS.WORKSPACE_UPDATE
+  '/api/projects/:id/statuses/:statusId',
+  handle(req => updateProjectStatus(req.params.id, req.params.statusId, req.body), {
+    mutates: true
   })
 );
 app.delete(
-  '/api/workspace/statuses/:statusId',
+  '/api/projects/:id/statuses/:statusId',
   handle(
-    req => {
-      deleteWorkspaceStatus(req.params.statusId);
+    async req => {
+      await deleteProjectStatus(req.params.id, req.params.statusId);
       return { ok: true as const };
     },
-    { mutates: true, requires: PERMISSIONS.WORKSPACE_UPDATE }
+    { mutates: true }
   )
 );
 
@@ -1630,7 +1595,17 @@ app.get(
       10
     );
     const limit = Number.isFinite(parsedLimit) ? parsedLimit : undefined;
-    return { missions: await searchMissions({ query, projectId, limit }) };
+    // Status *types* only (coo:752). Project-defined status names are not
+    // accepted here: they vary per project, so a name CSV would silently mean
+    // different things across the workspaces this search spans.
+    const statusTypes =
+      typeof req.query.statusTypes === 'string'
+        ? req.query.statusTypes
+            .split(',')
+            .map(value => value.trim())
+            .filter(value => value !== '')
+        : null;
+    return { missions: await searchMissions({ query, projectId, statusTypes, limit }) };
   })
 );
 // `createMission`/`getMissionDetail`/`updateMission`/`deleteMission` resolve and

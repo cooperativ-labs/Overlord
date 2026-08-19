@@ -87,13 +87,37 @@ export const hostedMcpToolDefinitions: ToolDefinition[] = [
     annotations: writeAction
   },
   {
+    name: 'overlord_list_project_statuses',
+    title: 'List Overlord project statuses',
+    description:
+      "Use this to read one project's board columns. Status names and order are defined per " +
+      'project, so two projects in the same workspace can label the same lifecycle differently; ' +
+      'this is the only way to discover a specific board\u2019s columns. Each status carries a ' +
+      'stable type (draft, next, execute, review, complete, blocked, cancelled) that does not vary by ' +
+      'project — use the type for filtering and the name only for display.',
+    inputSchema: objectSchema(
+      {
+        projectId: stringProperty('Overlord project id, slug, or name.')
+      },
+      ['projectId']
+    ),
+    outputSchema: protocolOutputSchema(
+      "The project's statuses ordered by board position, each with id, projectId, key, name, type, position, isDefault, and isTerminal."
+    ),
+    annotations: readOnly
+  },
+  {
     name: 'overlord_search_missions',
     title: 'Search Overlord missions',
     description:
       'Use this when the user wants to find or list missions in the connected workspace.',
     inputSchema: objectSchema({
       query: stringProperty('Search query text.'),
-      status: stringProperty('Comma-separated status types, such as draft,execute,review.'),
+      status: stringProperty(
+        'Comma-separated status TYPES, such as draft,execute,review. Types are workspace-invariant ' +
+          '(draft, next, execute, review, complete, blocked, cancelled). Project-defined status names — the ' +
+          'board column labels read by overlord_list_project_statuses — are not accepted here.'
+      ),
       projectId: stringProperty('Optional project id, slug, or name.'),
       limit: {
         type: 'number',

@@ -138,27 +138,37 @@ Overlord should separate mission statuses from objective states.
 Mission status types:
 
 - `draft`: not ready or backlog/planning.
+- `next`: queued to start soon, but not yet active.
 - `execute`: active work.
 - `review`: delivered or needs human review.
 - `complete`: finished.
 - `blocked`: blocked or waiting for human resolution.
 - `cancelled`: intentionally stopped.
 
-Default status names can start with:
+Every project is seeded with this default set of status names:
 
-- `draft`
-- `next-up`
-- `execute`
-- `review`
-- `complete`
-- `blocked`
-- `cancelled`
+- `Backlog` (`backlog`)
+- `Next Up` (`next_up`)
+- `In Progress` (`in_progress`)
+- `In Review` (`in_review`)
+- `Complete` (`complete`)
+- `Blocked` (`blocked`)
+- `Cancelled` (`cancelled`)
 
 Requirements:
 
-- `next-up` is a default status name mapped to the stable `draft` status type.
-- Status names should be configurable per project later, but status type semantics should remain stable.
-- Only one project status should have the exclusive `execute` type and one should have the exclusive `review` type.
+- `Next Up` is a seeded status name mapped to the stable `next` status type.
+- Status names, order, and count are configured **per project**, in project settings.
+  Two projects in the same workspace may name and order their columns differently;
+  status type semantics remain stable across every project.
+- A mission's status always belongs to that mission's own project. Status *ids*
+  are therefore project-local and must never be carried across projects; the
+  stable `type` is what every filter, side effect, and webhook payload is
+  expressed in.
+- `ovld statuses list --project-id <id>` (and the `overlord_list_project_statuses`
+  MCP tool) reads one project's status names — the only way to discover a
+  specific board's columns.
+- Only one project status may have each exclusive `next`, `execute`, and `review` type.
 - Only one active default status should exist per project.
 - CLI update phases can include `draft`, `execute`, `review`, `deliver`, `complete`, `blocked`, and `cancelled` for protocol compatibility.
 - Soft deletion is represented by `deleted_at` in the schema, not by adding `deleted` or `removed` lifecycle statuses.

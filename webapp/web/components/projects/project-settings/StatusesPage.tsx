@@ -38,18 +38,19 @@ import {
   SelectValue
 } from '@/components/ui/select';
 import {
-  useCreateWorkspaceStatus,
-  useDeleteWorkspaceStatus,
-  useReorderWorkspaceStatuses,
-  useUpdateWorkspaceStatus,
-  useWorkspaceStatuses
+  useCreateProjectStatus,
+  useDeleteProjectStatus,
+  useProjectStatuses,
+  useReorderProjectStatuses,
+  useUpdateProjectStatus
 } from '@/lib/queries';
 import { cn } from '@/lib/utils';
 
-import type { StatusType, WorkspaceStatusDto } from '../../../shared/contract.ts';
+import type { ProjectStatusDto, StatusType } from '../../../../shared/contract.ts';
 
 const ADDABLE_STATUS_TYPES: StatusType[] = [
   'draft',
+  'next',
   'complete',
   'blocked',
   'cancelled',
@@ -66,13 +67,13 @@ function SortableStatusRow({
   onDelete,
   canDelete
 }: {
-  status: WorkspaceStatusDto;
-  updateStatus: ReturnType<typeof useUpdateWorkspaceStatus>;
-  reorderStatuses: ReturnType<typeof useReorderWorkspaceStatuses>;
-  onSetDefault: (status: WorkspaceStatusDto) => void;
-  onRename: (status: WorkspaceStatusDto, name: string) => void;
-  onDelete: (status: WorkspaceStatusDto) => void;
-  canDelete: (status: WorkspaceStatusDto) => boolean;
+  status: ProjectStatusDto;
+  updateStatus: ReturnType<typeof useUpdateProjectStatus>;
+  reorderStatuses: ReturnType<typeof useReorderProjectStatuses>;
+  onSetDefault: (status: ProjectStatusDto) => void;
+  onRename: (status: ProjectStatusDto, name: string) => void;
+  onDelete: (status: ProjectStatusDto) => void;
+  canDelete: (status: ProjectStatusDto) => boolean;
 }) {
   const {
     attributes,
@@ -131,7 +132,7 @@ function SortableStatusRow({
           >
             {status.isDefault ? 'Default' : 'Set default'}
           </Button>
-        ) : status.type === 'execute' || status.type === 'review' ? (
+        ) : status.type === 'next' || status.type === 'execute' || status.type === 'review' ? (
           <span className="text-muted-foreground">Exclusive</span>
         ) : (
           <span className="text-muted-foreground">—</span>
@@ -156,24 +157,22 @@ function SortableStatusRow({
 }
 
 /**
- * Card-status manager. Pass `workspaceId` to manage a specific (possibly
- * non-active) workspace's statuses via the workspace-scoped routes; omit it to
- * manage the active workspace (coo:135).
+ * Card-status manager for one project's project-scoped status definitions.
  */
-export function StatusesPage({ workspaceId }: { workspaceId?: string | null } = {}) {
-  const statusesQ = useWorkspaceStatuses(workspaceId);
+export function StatusesPage({ projectId }: { projectId: string }) {
+  const statusesQ = useProjectStatuses(projectId);
   const statuses = useMemo(() => statusesQ.data ?? [], [statusesQ.data]);
   const ordered = useMemo(() => [...statuses].sort((a, b) => a.position - b.position), [statuses]);
-  const createStatus = useCreateWorkspaceStatus(workspaceId);
-  const updateStatus = useUpdateWorkspaceStatus(workspaceId);
-  const deleteStatus = useDeleteWorkspaceStatus(workspaceId);
-  const reorderStatuses = useReorderWorkspaceStatuses(workspaceId);
+  const createStatus = useCreateProjectStatus(projectId);
+  const updateStatus = useUpdateProjectStatus(projectId);
+  const deleteStatus = useDeleteProjectStatus(projectId);
+  const reorderStatuses = useReorderProjectStatuses(projectId);
 
   const [newName, setNewName] = useState('');
   const [newType, setNewType] = useState<StatusType>('draft');
   const [addError, setAddError] = useState<string | null>(null);
   const [rowError, setRowError] = useState<string | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<WorkspaceStatusDto | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ProjectStatusDto | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const [statusOrder, setStatusOrder] = useState<string[]>(() => ordered.map(status => status.id));
@@ -196,7 +195,7 @@ export function StatusesPage({ workspaceId }: { workspaceId?: string | null } = 
     const byId = new Map(ordered.map(status => [status.id, status]));
     return statusOrder
       .map(id => byId.get(id))
-      .filter((status): status is WorkspaceStatusDto => Boolean(status));
+      .filter((status): status is ProjectStatusDto => Boolean(status));
   }, [ordered, statusOrder]);
 
   const sensors = useSensors(
@@ -206,14 +205,16 @@ export function StatusesPage({ workspaceId }: { workspaceId?: string | null } = 
 
   const hasExecute = ordered.some(status => status.type === 'execute');
   const hasReview = ordered.some(status => status.type === 'review');
+  const hasNext = ordered.some(status => status.type === 'next');
 
   const addableTypes = ADDABLE_STATUS_TYPES.filter(type => {
+    if (type === 'next') return !hasNext;
     if (type === 'execute') return !hasExecute;
     if (type === 'review') return !hasReview;
     return true;
   });
 
-  async function handleRename(status: WorkspaceStatusDto, name: string) {
+  async function handleRename(status: ProjectStatusDto, name: string) {
     const trimmed = name.trim();
     if (!trimmed || trimmed === status.name) return;
 
@@ -225,7 +226,7 @@ export function StatusesPage({ workspaceId }: { workspaceId?: string | null } = 
     }
   }
 
-  async function handleSetDefault(status: WorkspaceStatusDto) {
+  async function handleSetDefault(status: ProjectStatusDto) {
     if (status.isDefault || status.type !== 'draft') return;
 
     setRowError(null);
@@ -288,7 +289,7 @@ export function StatusesPage({ workspaceId }: { workspaceId?: string | null } = 
     }
   }
 
-  function canDelete(status: WorkspaceStatusDto): boolean {
+  function canDelete(status: ProjectStatusDto): boolean {
     return status.type !== 'execute' && status.type !== 'review' && !status.isDefault;
   }
 
@@ -297,9 +298,8 @@ export function StatusesPage({ workspaceId }: { workspaceId?: string | null } = 
       <div>
         <h2 className="text-base font-medium">Card statuses</h2>
         <p className="text-sm text-muted-foreground">
-          Board columns shared across every project in this workspace. Rename, reorder, add, or
-          remove statuses. Type semantics are fixed; exactly one execute and one review status are
-          required.
+          Board columns for this project. Rename, reorder, add, or remove statuses. Type semantics
+          are fixed; exactly one execute and one review status are required.
         </p>
       </div>
 
