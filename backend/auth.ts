@@ -187,9 +187,9 @@ export async function resolveAuthorizedWorkspaces(
          ON ra.workspace_id = wu.workspace_id AND ra.workspace_user_id = wu.id
         AND ra.deleted_at IS NULL
       WHERE wu.profile_id = ? AND wu.status = 'active' AND wu.deleted_at IS NULL
-        AND (? IS NULL OR w.organization_id = ?)
+        AND (?::text IS NULL OR w.organization_id = ?)
         AND (
-          ? IS NULL OR ? = 1 OR EXISTS (
+          ?::text IS NULL OR ? = 1 OR EXISTS (
             SELECT 1 FROM user_token_workspaces utw
              WHERE utw.token_id = ? AND utw.workspace_id = wu.workspace_id
           )
