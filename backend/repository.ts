@@ -41,8 +41,11 @@ import {
 import {
   allocateWorkspaceSearchLimits,
   mergeWorkspaceMissionSearches,
+  mergeWorkspaceSearchV3,
   searchWorkspaceMissions,
-  toSearchMissionsResponseV2
+  searchWorkspaceMissionsV3,
+  toSearchMissionsResponseV2,
+  toSearchResponseV3
 } from '../packages/core/service/mission-search.ts';
 import {
   assignMissionTags as assignMissionTagsOnCreate,
@@ -110,6 +113,7 @@ import type {
   ScheduleDto,
   ScheduleInput,
   SearchMissionsResponseV2,
+  SearchResponseV3,
   SharedContextEntryDto,
   StatusType,
   TokenScope,
@@ -3960,6 +3964,84 @@ export async function searchMissionsV2({
     )
   );
   return mergeWorkspaceMissionSearches({ results, limit });
+}
+
+export async function searchMissionsV3({
+  query,
+  projectIds,
+  statusTypes,
+  resourceKeys,
+  dateField,
+  from,
+  to,
+  limit = 25,
+  entityTypes,
+  objectiveStates,
+  matchesPerResult,
+  candidateLimit
+}: {
+  query?: string | null;
+  projectIds?: string[] | null;
+  statusTypes?: string[] | null;
+  resourceKeys?: string[] | null;
+  dateField?: MissionSearchDateField | null;
+  from?: string | null;
+  to?: string | null;
+  limit?: number;
+  entityTypes?: string[] | null;
+  objectiveStates?: string[] | null;
+  matchesPerResult?: number | string | null;
+  candidateLimit?: number | null;
+}): Promise<SearchResponseV3> {
+  const client = requireDatabaseClient();
+  const projects = projectIds?.filter(id => id.trim() !== '') ?? [];
+  const searchInWorkspace = ({
+    workspaceId,
+    workspaceLimit
+  }: {
+    workspaceId: string;
+    workspaceLimit: number;
+  }) =>
+    searchWorkspaceMissionsV3({
+      db: client,
+      workspaceId,
+      query,
+      projectIds: projects,
+      statusTypes,
+      resourceKeys,
+      dateField,
+      from,
+      to,
+      limit: workspaceLimit,
+      entityTypes,
+      objectiveStates,
+      matchesPerResult,
+      candidateLimit
+    });
+
+  if (projects.length === 1) {
+    const { workspaceId } = await requireProjectPermission({
+      projectId: projects[0]!,
+      permission: PERMISSIONS.MISSION_READ,
+      db: client
+    });
+    return toSearchResponseV3(await searchInWorkspace({ workspaceId, workspaceLimit: limit }));
+  }
+
+  const scopes = await callerAuthorizedWorkspaceScopes(PERMISSIONS.MISSION_READ, client);
+  const quotas = allocateWorkspaceSearchLimits({
+    workspaceIds: scopes.map(scope => scope.workspaceId),
+    limit
+  });
+  const results = await Promise.all(
+    scopes.map(scope =>
+      searchInWorkspace({
+        workspaceId: scope.workspaceId,
+        workspaceLimit: quotas.get(scope.workspaceId) ?? 0
+      })
+    )
+  );
+  return mergeWorkspaceSearchV3({ results, limit });
 }
 
 // New cards drop in at the top of their column. Gap-based: one step (100) above

@@ -1,4 +1,10 @@
-import type { MissionSearchDateField, SearchMissionsResponseV2 } from '@overlord/contract';
+import type {
+  MissionSearchDateField,
+  SearchMissionsResponseV2,
+  SearchObjectiveState,
+  SearchResponseV3,
+  SearchResultEntityType
+} from '@overlord/contract';
 import type {
   CreateEverhourTimeBody,
   EverhourIntegrationDto,
@@ -513,6 +519,36 @@ export const api = {
     if (options.to) params.set('to', options.to);
     if (options.limit !== undefined) params.set('limit', String(options.limit));
     return request<SearchMissionsResponseV2>('GET', `/api/missions/search/v2?${params.toString()}`);
+  },
+  searchMissionsV3: (
+    query: string,
+    options: {
+      projectIds?: string[];
+      resourceKeys?: string[];
+      dateField?: MissionSearchDateField;
+      from?: string;
+      to?: string;
+      limit?: number;
+      entityTypes?: SearchResultEntityType[];
+      objectiveStates?: SearchObjectiveState[];
+      matchesPerResult?: number;
+    } = {}
+  ) => {
+    const params = new URLSearchParams({ q: query });
+    if (options.projectIds?.length) params.set('projectIds', options.projectIds.join(','));
+    if (options.resourceKeys?.length) params.set('resourceKeys', options.resourceKeys.join(','));
+    if (options.dateField) params.set('dateField', options.dateField);
+    if (options.from) params.set('from', options.from);
+    if (options.to) params.set('to', options.to);
+    if (options.limit !== undefined) params.set('limit', String(options.limit));
+    if (options.entityTypes?.length) params.set('entityTypes', options.entityTypes.join(','));
+    if (options.objectiveStates?.length) {
+      params.set('objectiveStates', options.objectiveStates.join(','));
+    }
+    if (options.matchesPerResult !== undefined) {
+      params.set('matchesPerResult', String(options.matchesPerResult));
+    }
+    return request<SearchResponseV3>('GET', `/api/search/v3?${params.toString()}`);
   },
   getMission: (id: string) => request<MissionDetailDto>('GET', `/api/missions/${id}`),
   createMission: (body: CreateMissionBody) =>

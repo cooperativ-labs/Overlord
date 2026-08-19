@@ -60,6 +60,7 @@ import {
   createArtifact,
   createInboxItem,
   searchMissionsV2 as searchMissionsAcrossWorkspaces,
+  searchMissionsV3 as searchMissionsV3AcrossWorkspaces,
   updateArtifact,
   updateObjective as updateObjectiveRecord
 } from './repository.ts';
@@ -1051,7 +1052,26 @@ const handlers: Record<string, Handler> = {
       to: strFlag(body, '--to') ?? null,
       limit: intFlag(body, '--limit') ?? 25
     };
-    if (intFlag(body, '--response-version') !== 2) return searchMissions(params);
+    const responseVersion = intFlag(body, '--response-version');
+    if (responseVersion === 3) {
+      return searchMissionsV3AcrossWorkspaces({
+        query: params.query,
+        projectIds: await resolveV2SearchProjectId(
+          params.projectId,
+          strFlag(body, '--workspace-id')
+        ),
+        statusTypes: params.statusTypes,
+        resourceKeys: params.resourceKeys,
+        dateField: params.dateField,
+        from: params.from,
+        to: params.to,
+        limit: params.limit,
+        entityTypes: csvFlag(body, '--entity-types') ?? null,
+        objectiveStates: csvFlag(body, '--objective-states') ?? null,
+        matchesPerResult: intFlag(body, '--matches-per-result') ?? null
+      });
+    }
+    if (responseVersion !== 2) return searchMissions(params);
 
     // V2 is an organization-bounded aggregate read. It must not inherit the
     // one workspace selected for ordinary protocol entity operations.
@@ -1343,7 +1363,8 @@ export async function runProtocolSubcommand(
   subcommand: string,
   body: ProtocolRequestBody
 ): Promise<unknown> {
-  const handler = handlers[subcommand];
+  const canonicalSubcommand = subcommand === 'search' ? 'search-missions' : subcommand;
+  const handler = handlers[canonicalSubcommand];
   if (!handler) {
     throw new ApiError(
       404,
@@ -1354,11 +1375,15 @@ export async function runProtocolSubcommand(
   // V2 search authorizes mission:read per workspace inside the repository
   // fan-out. A single ambient workspace check would deny valid secondary
   // workspaces and reintroduce the pre-v95 scoping bug.
-  const isV2Search = subcommand === 'search-missions' && intFlag(body, '--response-version') === 2;
-  const requiredPermission = isV2Search ? null : (SUBCOMMAND_PERMISSIONS[subcommand] ?? null);
+  const isAggregateSearch =
+    canonicalSubcommand === 'search-missions' &&
+    (intFlag(body, '--response-version') === 2 || intFlag(body, '--response-version') === 3);
+  const requiredPermission = isAggregateSearch
+    ? null
+    : (SUBCOMMAND_PERMISSIONS[canonicalSubcommand] ?? null);
   try {
     const ctx = await buildProtocolContext(body, requiredPermission);
-    await validateObjectiveAddressing({ ctx, body, subcommand });
+    await validateObjectiveAddressing({ ctx, body, subcommand: canonicalSubcommand });
     return await handler(ctx, body);
   } catch (error) {
     // A project name that matches in two workspaces is a question for the user,

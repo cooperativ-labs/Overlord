@@ -127,13 +127,7 @@ export const hostedMcpToolDefinitions: ToolDefinition[] = [
     name: 'overlord_search_missions',
     title: 'Search Overlord missions',
     description:
-      "Use this when the user wants to find or list missions across the caller's authorized workspaces in one organization. Returns SearchMissionsResponseV2 with snippets, match evidence, appliedFilters, and totalMatchedBeforeLimit. Complete and cancelled missions stay eligible by default. " +
-      'There is no relative-date parsing and no implicit time window: compute absolute ISO ' +
-      'bounds yourself and pass them as from/to. Raise limit for broad questions — the default ' +
-      'of 25 is split evenly across the workspaces searched — and read workspaceCounts and ' +
-      'totalMatchedBeforeLimit before telling the user a list is complete. An appliedFilters.mode ' +
-      "of 'fallback' means the query text matched nothing usable and the results are a recency " +
-      'listing rather than an answer.',
+      "Use this to find missions across the caller's authorized workspaces. Results are mission anchors with only the matching objectives and deliveries in matches; an objective displayId (for example coo:789.2nnh) can be passed directly to overlord_load_mission_context. matches is never the mission's complete objective list. Artifacts are not indexed; load mission context after locating the mission to read them. There is no relative-date parsing or implicit time window: compute absolute ISO bounds and pass from/to. Raise limit for broad questions and inspect workspaceCounts, entityCounts, and truncatedCandidates before claiming a list is complete. appliedFilters.mode 'fallback' means the query contributed nothing and results are a recency listing, not an answer. Compact detail is the default and retains navigation identity while reducing child payload; request full for snippets and child metadata.",
     inputSchema: objectSchema({
       query: stringProperty('Search query text.'),
       status: stringProperty(
@@ -166,11 +160,28 @@ export const hostedMcpToolDefinitions: ToolDefinition[] = [
       limit: {
         type: 'number',
         description: 'Maximum result count. Defaults to 25.'
+      },
+      entityTypes: stringProperty(
+        'Optional comma-separated v3 entity types: mission, objective, delivery.'
+      ),
+      objectiveStates: stringProperty(
+        'Optional comma-separated v3 objective states for matching objectives.'
+      ),
+      matchesPerResult: {
+        type: 'number',
+        description:
+          'Optional v3 child-match cap per mission (default 3, max 10; compact returns at most 2).'
+      },
+      detail: {
+        type: 'string',
+        enum: ['compact', 'full'],
+        description:
+          'Result detail: compact (default) keeps child navigation fields and removes child snippets/metadata; full returns the complete v3 child matches.'
       }
     }),
     outputSchema: protocolOutputSchema(
-      'SearchMissionsResponseV2: version, results (with labels, dueDatetime, snippets, matchedTerms), ' +
-        "appliedFilters, totalMatchedBeforeLimit, workspaceCounts. Or a 'project_selection_required' " +
+      'SearchResponseV3: mission-anchored results with matched objective/delivery children, appliedFilters, entityCounts, ' +
+        "totalMatchedBeforeLimit, workspaceCounts, and truncatedCandidates. Or a 'project_selection_required' " +
         'result when projectId names a project in more than one workspace.'
     ),
     annotations: readOnly,

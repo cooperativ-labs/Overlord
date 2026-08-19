@@ -80,6 +80,34 @@ function booleanProperty(description) {
   return { type: 'boolean', description };
 }
 
+function compactSearchResponse(response) {
+  const value = response?.structuredContent;
+  if (!value || value.version !== 3 || !Array.isArray(value.results)) return response;
+  const compact = {
+    ...value,
+    results: value.results.map(result => ({
+      ...result,
+      matches: Array.isArray(result.matches)
+        ? result.matches
+            .slice(0, 2)
+            .map(match => {
+              const compactMatch = { ...match };
+              delete compactMatch.snippet;
+              delete compactMatch.matchedTerms;
+              delete compactMatch.createdAt;
+              delete compactMatch.updatedAt;
+              return compactMatch;
+            })
+        : result.matches
+    }))
+  };
+  return {
+    ...response,
+    content: [{ type: 'text', text: JSON.stringify(compact, null, 2) }],
+    structuredContent: compact
+  };
+}
+
 const tools = [
   {
     name: 'overlord_resolve_project',
@@ -134,7 +162,7 @@ const tools = [
     name: 'overlord_search_missions',
     title: 'Search Overlord missions',
     description:
-      "Search missions across the caller's authorized workspaces in one organization. Returns applied filters and truncation metadata; complete and cancelled missions remain eligible by default.",
+      "Search mission anchors with their matching objectives and deliveries across authorized workspaces. An objective displayId can be passed directly to overlord_load_mission_context; matches are matched-only, not the full objective list. Artifacts are not indexed. Use absolute ISO from/to bounds (no relative dates or implicit window), inspect workspaceCounts, entityCounts, and truncatedCandidates before claiming completeness, and treat appliedFilters.mode 'fallback' as a recency listing. Compact detail is default; request full for child snippets and metadata.",
     inputSchema: objectSchema({
       query: stringProperty('Search query text.'),
       status: stringProperty(
@@ -157,6 +185,23 @@ const tools = [
       limit: {
         type: 'number',
         description: 'Maximum result count. Defaults to 25.'
+      },
+      entityTypes: stringProperty(
+        'Optional comma-separated v3 entity types: mission, objective, delivery.'
+      ),
+      objectiveStates: stringProperty(
+        'Optional comma-separated v3 objective states for matching objectives.'
+      ),
+      matchesPerResult: {
+        type: 'number',
+        description:
+          'Optional v3 child-match cap per mission (default 3, max 10; compact returns at most 2).'
+      },
+      detail: {
+        type: 'string',
+        enum: ['compact', 'full'],
+        description:
+          'Result detail: compact (default) keeps child navigation fields and removes child snippets/metadata; full returns complete v3 child matches.'
       }
     })
   },
@@ -455,7 +500,7 @@ function missionScopeFlags(args) {
   };
 }
 
-function callOverlordTool(name, args) {
+async function callOverlordTool(name, args) {
   if (name === 'overlord_resolve_project') {
     return runProtocol('discover-project', {
       ...(optionalString(args, 'projectId')
@@ -488,8 +533,12 @@ function callOverlordTool(name, args) {
     });
   }
   if (name === 'overlord_search_missions') {
-    return runProtocol('search-missions', {
-      'response-version': '2',
+    const detail = optionalString(args, 'detail') || 'compact';
+    if (detail !== 'compact' && detail !== 'full') {
+      throw new Error("detail must be 'compact' or 'full'");
+    }
+    const response = await runProtocol('search', {
+      'response-version': '3',
       ...(optionalString(args, 'query') ? { query: requiredString(args, 'query') } : {}),
       ...(optionalString(args, 'status') ? { status: requiredString(args, 'status') } : {}),
       ...(optionalString(args, 'projectId')
@@ -508,8 +557,18 @@ function callOverlordTool(name, args) {
       ...(optionalString(args, 'to') ? { to: requiredString(args, 'to') } : {}),
       ...(typeof args.limit === 'number' && Number.isFinite(args.limit)
         ? { limit: String(Math.trunc(args.limit)) }
+        : {}),
+      ...(optionalString(args, 'entityTypes')
+        ? { 'entity-types': requiredString(args, 'entityTypes') }
+        : {}),
+      ...(optionalString(args, 'objectiveStates')
+        ? { 'objective-states': requiredString(args, 'objectiveStates') }
+        : {}),
+      ...(typeof args.matchesPerResult === 'number' && Number.isFinite(args.matchesPerResult)
+        ? { 'matches-per-result': String(Math.trunc(args.matchesPerResult)) }
         : {})
     });
+    return detail === 'compact' ? compactSearchResponse(response) : response;
   }
   if (name === 'overlord_create_mission') {
     return runProtocol('create', {

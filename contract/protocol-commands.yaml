@@ -312,8 +312,10 @@ missionDiscovery:
     sideEffects:
       - creates-session-key
 
-  searchMissions:
-    description: 'Search by query, status type, project, resource key, and explicit date range; response version 2 is organization-bounded and reports filter/truncation metadata'
+  search:
+    aliases:
+      - search-missions
+    description: 'Canonical search by query, status type, project, resource key, entity type, objective state, and explicit date range; response versions 2 and 3 are organization-bounded and report filter/truncation metadata'
     readOnly: true
     optionalFlags:
       - --query
@@ -325,9 +327,12 @@ missionDiscovery:
       - --to
       - --limit
       - --response-version
+      - --entity-types
+      - --objective-states
+      - --matches-per-result
     rules:
       - '--status is a CSV of status TYPES (draft, next, execute, review, complete, blocked, cancelled), which are invariant across projects and workspaces; project-defined status names are not accepted'
-      - '--response-version 1 preserves the legacy array response; --response-version 2 returns SearchMissionsResponseV2'
+      - '--response-version 1 preserves the legacy array response; --response-version 2 returns SearchMissionsResponseV2; --response-version 3 returns SearchResponseV3 with v3 defaults (entityTypes all three, matchesPerResult 3). --entity-types, --objective-states, and --matches-per-result apply only to v3.'
       - 'V2 date bounds are inclusive from and exclusive to; dateField is createdAt or updatedAt and defaults to updatedAt only when a bound is supplied'
       - 'V2 fans out only across authorizedWorkspaces in one organization; its even per-workspace quota is deterministic and never redistributes unused slots'
 

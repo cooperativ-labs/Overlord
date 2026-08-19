@@ -99,7 +99,7 @@ Protocol (JSON output by default):
   ${primaryCommand} protocol heartbeat --mission-id <id> --session-key <key>
   ${primaryCommand} protocol ask --mission-id <id> --session-key <key> --question "..."
   ${primaryCommand} protocol deliver --mission-id <id> --session-key <key> --summary "..."
-  ${primaryCommand} protocol search-missions --query "<text>" --status execute,review
+  ${primaryCommand} protocol search --query "<text>" --status execute,review
   ${primaryCommand} protocol statuses --project-id <id|slug|name>
   ${primaryCommand} protocol load-context --mission-id <id>
   ${primaryCommand} protocol help

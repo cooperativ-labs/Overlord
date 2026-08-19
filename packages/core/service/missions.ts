@@ -1,4 +1,8 @@
-import type { MissionSearchDateField, SearchMissionsResponseV2 } from '@overlord/contract';
+import type {
+  MissionSearchDateField,
+  SearchMissionsResponseV2,
+  SearchResponseV3
+} from '@overlord/contract';
 import { bindBool, formatObjectiveDisplayId, OBJECTIVE_STATES } from '@overlord/database';
 
 import { recordChange } from './change-feed.js';
@@ -10,7 +14,12 @@ import {
   resolveProjectId
 } from './context.js';
 import { ServiceError } from './errors.js';
-import { searchWorkspaceMissions, toSearchMissionsResponseV2 } from './mission-search.js';
+import {
+  searchWorkspaceMissions,
+  searchWorkspaceMissionsV3,
+  toSearchMissionsResponseV2,
+  toSearchResponseV3
+} from './mission-search.js';
 import { allocateObjectiveDisplayKey } from './objective-display-id.js';
 import { assertProjectResourceKeyExists } from './projects.js';
 import { initialTitleFromInstruction, newId, nowIso } from './util.js';
@@ -926,6 +935,55 @@ export async function searchMissionsV2({
     limit
   });
   return toSearchMissionsResponseV2(result);
+}
+
+export async function searchMissionsV3({
+  ctx,
+  query,
+  statusTypes,
+  projectId,
+  resourceKeys,
+  dateField,
+  from,
+  to,
+  limit = 25,
+  entityTypes,
+  objectiveStates,
+  matchesPerResult,
+  candidateLimit
+}: {
+  ctx: ServiceContext;
+  query?: string | null;
+  statusTypes?: string[] | null;
+  projectId?: string | null;
+  resourceKeys?: string[] | null;
+  dateField?: MissionSearchDateField | null;
+  from?: string | null;
+  to?: string | null;
+  limit?: number;
+  entityTypes?: string[] | null;
+  objectiveStates?: string[] | null;
+  matchesPerResult?: number | string | null;
+  candidateLimit?: number | null;
+}): Promise<SearchResponseV3> {
+  const projectIds = projectId ? [await resolveProjectId(ctx, projectId)] : [];
+  const result = await searchWorkspaceMissionsV3({
+    db: ctx.db,
+    workspaceId: ctx.workspace.id,
+    query: query ?? null,
+    projectIds,
+    statusTypes: statusTypes ?? null,
+    resourceKeys: resourceKeys ?? null,
+    dateField: dateField ?? null,
+    from: from ?? null,
+    to: to ?? null,
+    limit,
+    entityTypes,
+    objectiveStates,
+    matchesPerResult,
+    candidateLimit
+  });
+  return toSearchResponseV3(result);
 }
 
 export async function addObjectivesToMission({

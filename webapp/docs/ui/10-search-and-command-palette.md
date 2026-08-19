@@ -6,7 +6,7 @@ results** page for ranked, filtered mission search. Both honor the search capabi
 gate.
 
 **Routes:** the palette is a global overlay (no route; opens over any screen);
-results live at `/search?q=&status=&project=&…`.
+results live at `/search?q=`.
 
 ---
 
@@ -61,25 +61,27 @@ Behavior:
 A full, filterable ranked search for when the palette isn't enough.
 
 ```
-Search   [ q: rotation ]            scope: [ All projects ▾ ]
-Filters: [ Status ▾ ] [ Project ▾ ] [ Creator ▾ ▸G1 ] [ Updated ▾ ]
+Search   [ q: rotation ] [ Search ]
 ┌──────────────────────────────────────────────────────────────────────────┐
-│ 1:1421  Token rotation                review · Open0 · updated 12m         │
-│   …rotate a USER_TOKEN and invalidate the old secret… (snippet, matched)   │
-│ 1:1390  Rotate signing keys           complete · Infra · updated 3d        │
-│   …key rotation schedule…                                                  │
+│ Mission · review  1:1421  Token rotation                                  │
+│   …rotate a USER_TOKEN and invalidate the old secret…                      │
+│   └ Objective · executing  1:1421.k7xm  Rotate signing keys               │
+│      …key rotation schedule…                                               │
+│   └ Delivery  Summary of token rotation                                    │
 └──────────────────────────────────────────────────────────────────────────┘
-   matches over title, display_id, and first objective text · ranked
+   mission anchors with matching objective and delivery evidence · ranked
 ```
 
-- **Matchable fields** (per the schema contract search requirements): exact
-  `display_id` lookup; ranked text over title, display ID, and the first objective
-  text; with snippets highlighting the match.
-- **Filters**: workspace, project, status list, creator (gated G1), updated date
-  range — mirroring the protocol `search-missions` contract. All filter state in the
-  URL so a search is shareable/reloadable.
-- Results are bounded (sensible limit) and paginated; selecting a result opens
-  mission detail.
+- **Matchable fields**: mission text, objectives, and delivery summaries. Every
+  result remains anchored by its mission; matching child rows carry an Objective or
+  Delivery badge, an objective state where applicable, a highlighted snippet, and a
+  direct destination.
+- **Navigation**: an objective row opens the existing mission route with
+  `?objective=<display-id>`. A delivery uses its owning objective through that same
+  deep-link shape; there is no delivery-specific route parameter.
+- The full page initially shows two child rows per mission and can expand its returned
+  matches. It explicitly marks mission limits and candidate truncation, so incomplete
+  search output never appears complete.
 
 ---
 
@@ -87,7 +89,7 @@ Filters: [ Status ▾ ] [ Project ▾ ] [ Creator ▾ ▸G1 ] [ Updated ▾ ]
 
 | Region | Read | Notes |
 | --- | --- | --- |
-| Ranked results | `GET /sync`?… no — `GET /missions?q=` / a search endpoint over `search_documents` (Group 8) | with FTS5/`tsvector` under the hood; the UI uses the portable service interface |
+| Ranked results | `GET /api/search/v3` | Mission-anchored groups with matching objective and delivery rows; the UI uses the portable service interface |
 | Exact lookup | `GET /missions?displayId=` | always available, no Group 8 |
 | Palette nav/actions | local route table + `['missions']`/`['executionRequests']` caches | no extra fetch for nav/actions |
 
@@ -99,24 +101,23 @@ next query, not continuously.
 
 ## States
 
-- **Group 8 absent:** search degrades gracefully — `⌘K` and `/search` still do
-  **exact `display_id` lookup** plus client-side filtering of already-loaded
-  missions; a subtle note explains that ranked full-text search needs the search
-  capability. No broken UI.
-- **No query:** palette shows recent missions + top actions; results page shows
-  recent/active missions.
-- **No matches:** "No missions match" + offer to create a mission with the query as
-  the title.
-- **Loading:** inline result skeletons; the palette stays responsive (debounced).
+- **No query:** the page asks for a query; the compact search remains idle.
+- **No matches:** both surfaces say that no matching mission, objective, or delivery
+  was found.
+- **Loading and errors:** the compact search stays responsive while debouncing and
+  presents failures inline; the page offers a retry.
+- **Fallback and truncation:** fallback-mode results and candidate truncation are
+  called out in visible status text.
 
 ---
 
 ## Keyboard model (shared)
 
-- `⌘K`/`Ctrl+K` open palette anywhere; `/` focuses search on the results page.
-- `↑/↓` or `j/k` navigate; `↵` open; `⌘↵` action variant; `esc` close.
-- These compose with the global shortcuts in doc 00 §8 (`c` create, `r` run focused
-  objective, `?` help).
+- `⌘F`/`Ctrl+F` focuses the compact search. Its `↑`/`↓` traversal follows the
+  flattened visible mission/child order and `↵` opens the active row.
+- Full-page rows are ordinary focusable controls in that same visible order; `Enter`
+  or `Space` opens the mission or child destination. Expansion controls announce their
+  state with `aria-expanded`.
 
 ---
 
@@ -133,10 +134,11 @@ next query, not continuously.
 
 - `⌘K` opens from any screen and can jump to a mission by `display_id`, navigate to
   any primary surface, switch projects, and invoke context-appropriate actions.
-- With Group 8 installed, search ranks over title, display ID, and first objective
-  text with snippets and the documented filters, all reflected in the URL.
-- With Group 8 absent, search still resolves exact `display_id` and filters loaded
-  missions, with no broken controls and a clear note about enabling full-text search.
+- Search renders mission anchors, indented objective/delivery evidence, kind/state
+  badges, and highlighted snippets from the v3 response.
+- Objective and delivery selections preserve the existing `?objective=` deep link.
+- Search visibly distinguishes ordinary limits from truncated candidate results; it
+  never presents incomplete output as complete.
 - Palette actions respect RBAC and capability gates — forbidden/unavailable verbs do
   not appear or explain why.
 </content>

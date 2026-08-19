@@ -11,7 +11,12 @@ import { describe, it } from 'node:test';
 
 import { createServiceContext, type ServiceContext } from './context.js';
 import { allocateWorkspaceSearchLimits } from './mission-search.js';
-import { createMissionWithObjectives, searchMissions, searchMissionsV2 } from './missions.js';
+import {
+  createMissionWithObjectives,
+  searchMissions,
+  searchMissionsV2,
+  searchMissionsV3
+} from './missions.js';
 import { createProject } from './projects.js';
 import { seedServiceOperator } from './test-helpers.js';
 import { newId, nowIso } from './util.js';
@@ -462,6 +467,52 @@ for (const adapter of adapters) {
         );
         assert.deepEqual(v2.appliedFilters.resourceKeys, ['mobile']);
         assert.notEqual(other.mission.id, matching.mission.id);
+      } finally {
+        await handle.teardown();
+      }
+    });
+
+    it('preserves v2 mission ordering when v3 is restricted to mission and objective documents', async () => {
+      const handle = await adapter.create();
+      try {
+        const { ctx, projectId } = await setup(handle.client);
+        const inTitle = await createMissionWithObjectives({
+          ctx,
+          projectId,
+          title: 'Moonbeam telemetry overhaul',
+          objectives: [{ objective: 'baseline one' }]
+        });
+        const inEvent = await createMissionWithObjectives({
+          ctx,
+          projectId,
+          title: 'Logging cleanup',
+          objectives: [{ objective: 'baseline two' }]
+        });
+        await recordEvent(
+          ctx,
+          inEvent.mission.id,
+          projectId,
+          'Discussed moonbeam edge cases with the team'
+        );
+        await recordEvent(
+          ctx,
+          inEvent.mission.id,
+          projectId,
+          'Another moonbeam note that should not overtake the title'
+        );
+
+        const v2 = await searchMissionsV2({ ctx, query: 'moonbeam' });
+        const v3 = await searchMissionsV3({
+          ctx,
+          query: 'moonbeam',
+          entityTypes: ['mission', 'objective']
+        });
+        assert.deepEqual(
+          v3.results.map(result => result.id),
+          v2.results.map(result => result.id)
+        );
+        assert.equal(v3.results[0]?.id, inTitle.mission.id);
+        assert.ok(v3.results.some(result => result.id === inEvent.mission.id));
       } finally {
         await handle.teardown();
       }

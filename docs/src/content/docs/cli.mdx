@@ -128,33 +128,33 @@ The `ovld protocol` commands are primarily used by connectors and agent
 runtimes. They create the durable mission lifecycle that you see in Overlord.
 Every command below is available from `ovld protocol help`.
 
-| Command                          | Purpose                                                                       |
-| -------------------------------- | ----------------------------------------------------------------------------- |
-| `auth-status`                    | Check backend and authentication readiness.                                   |
-| `discover-project`               | Resolve a project from the working directory, project ID, or directory.       |
-| `list-organizations`             | Return the current workspace context (the historic command name is retained). |
-| `attach`                         | Start a full mission session and return its working context.                  |
-| `connect`                        | Start a lightweight session without full context assembly.                    |
-| `load-context`                   | Read mission context without starting a session.                              |
-| `search-missions`                | Find missions by text, state, or project.                                     |
-| `discuss-objective`              | Submit the latest draft objective for discussion without execution.           |
-| `add-objectives`                 | Append ordered objectives to a mission.                                       |
-| `create`                         | Create a draft mission without attaching.                                     |
-| `prompt`                         | Create a mission and attach immediately.                                      |
-| `record-work`                    | Record completed chat work as a review mission.                               |
-| `update`                         | Post progress, activity, and optional change rationale.                       |
-| `heartbeat`                      | Send liveness information without creating a feed event.                      |
-| `ask`                            | Raise a blocking question for a human reviewer.                               |
-| `deliver`                        | Finish the session with summary, artifacts, and rationale.                    |
-| `resume-follow-up`               | Reopen completed work for a follow-up.                                        |
-| `hook-event`                     | Record a connector lifecycle event.                                           |
-| `record-touched`                 | Locally record files touched by an edit hook.                                 |
-| `changes`                        | Locally preflight changed-file attribution before delivery.                   |
-| `read-context` / `write-context` | Read or store persistent mission context.                                     |
-| `add-artifact`                   | Create a mission artifact mid-turn without delivering.                        |
-| `update-artifact`                | Revise an existing mission artifact in place (label / content / URL).         |
-| `attachment-list`                | List mission attachments.                                                     |
-| `attachment-download-url`        | Retrieve one attachment's download URL.                                       |
+| Command                            | Purpose                                                                           |
+| ---------------------------------- | --------------------------------------------------------------------------------- |
+| `auth-status`                      | Check backend and authentication readiness.                                       |
+| `discover-project`                 | Resolve a project from the working directory, project ID, or directory.           |
+| `list-organizations`               | Return the current workspace context (the historic command name is retained).     |
+| `attach`                           | Start a full mission session and return its working context.                      |
+| `connect`                          | Start a lightweight session without full context assembly.                        |
+| `load-context`                     | Read mission context without starting a session.                                  |
+| `search` (`search-missions` alias) | Find grouped mission, objective, and delivery matches by text, state, or project. |
+| `discuss-objective`                | Submit the latest draft objective for discussion without execution.               |
+| `add-objectives`                   | Append ordered objectives to a mission.                                           |
+| `create`                           | Create a draft mission without attaching.                                         |
+| `prompt`                           | Create a mission and attach immediately.                                          |
+| `record-work`                      | Record completed chat work as a review mission.                                   |
+| `update`                           | Post progress, activity, and optional change rationale.                           |
+| `heartbeat`                        | Send liveness information without creating a feed event.                          |
+| `ask`                              | Raise a blocking question for a human reviewer.                                   |
+| `deliver`                          | Finish the session with summary, artifacts, and rationale.                        |
+| `resume-follow-up`                 | Reopen completed work for a follow-up.                                            |
+| `hook-event`                       | Record a connector lifecycle event.                                               |
+| `record-touched`                   | Locally record files touched by an edit hook.                                     |
+| `changes`                          | Locally preflight changed-file attribution before delivery.                       |
+| `read-context` / `write-context`   | Read or store persistent mission context.                                         |
+| `add-artifact`                     | Create a mission artifact mid-turn without delivering.                            |
+| `update-artifact`                  | Revise an existing mission artifact in place (label / content / URL).             |
+| `attachment-list`                  | List mission attachments.                                                         |
+| `attachment-download-url`          | Retrieve one attachment's download URL.                                           |
 
 Common protocol flags are `--mission-id <id>`, `--objective-id <id>`,
 `--session-key <key>`, `--agent <identifier>`, `--model <identifier>`, and

@@ -49,6 +49,25 @@
       "expectedVersion": 2,
       "rejectsProjectName": true,
       "v1RouteRemainsArray": true
+    },
+    {
+      "name": "v3-grouped-response-and-project-addressing",
+      "request": { "route": "/api/search/v3", "projectIds": ["project-uuid-a"] },
+      "expectedResponseKeys": [
+        "version",
+        "results",
+        "appliedFilters",
+        "totalMatchedBeforeLimit",
+        "entityCounts",
+        "workspaceCounts",
+        "truncatedCandidates"
+      ],
+      "expectedVersion": 3,
+      "rejectsProjectName": true,
+      "limitAllocatesMissionGroups": true,
+      "matchesPerResultIsPerGroup": true,
+      "v1RouteRemainsArray": true,
+      "v2RouteUnchanged": true
     }
   ]
 }

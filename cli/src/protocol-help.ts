@@ -22,6 +22,7 @@ export const SUPPORTED_PROTOCOL_SUBCOMMANDS = [
   'record-touched',
   'record-work',
   'resume-follow-up',
+  'search',
   'search-missions',
   'update',
   'update-artifact',
@@ -82,7 +83,8 @@ Subcommands:
   attach                 Start a mission session and return full working context
   connect                Start a lightweight session without full context assembly
   load-context           Read mission context without creating a session
-  search-missions         Find missions by keyword, status, or project
+  search                  Find grouped mission/objective/delivery matches (canonical)
+  search-missions         Compatibility alias for search
   discuss-objective      Mark a draft objective as submitted (does not start execution)
   add-objectives         Append ordered objectives to an existing mission
   update-objective       Set auto-advance and/or instruction text on an objective
@@ -191,9 +193,9 @@ load-context:
                                 rediscovering the mission's active objective. Required
                                 on a mission running objectives in parallel.
 
-search-missions:
+search:
   Purpose:
-    Find missions by keyword, status type, or project.
+    Find grouped mission, objective, and delivery matches by keyword, status type, or project.
   Optional:
     --query <text>              Free-text search
     --status <csv>              Comma-separated status TYPES (e.g. execute,review).
@@ -215,11 +217,16 @@ search-missions:
     --from <ISO-8601>           Inclusive date/time lower bound
     --to <ISO-8601>             Exclusive date/time upper bound
     --limit <n>                 Max results (default: 25)
-    --response-version <1|2>    1 (default) returns the legacy array; 2 returns
+    --response-version <1|2|3>  1 (default) returns the legacy array; 2 returns
                                 SearchMissionsResponseV2 with snippets, match
-                                evidence, appliedFilters, and truncation counts
+                                evidence, appliedFilters, and truncation counts;
+                                3 returns SearchResponseV3 with grouped objective
+                                and delivery matches
+    --entity-types <csv>        V3 only: mission,objective,delivery (default all)
+    --objective-states <csv>    V3 only: restrict matching objective states
+    --matches-per-result <n>    V3 only: child matches per mission (default 3, max 10)
   Returns:
-    JSON with matching missions (v1) or the versioned search envelope (v2).
+    JSON with matching missions (v1) or the versioned search envelope (v2/v3).
 
 statuses:
   Purpose:

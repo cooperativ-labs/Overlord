@@ -15,10 +15,12 @@ describe('parseMissionSearchQuery', () => {
     const mission = parseMissionSearchQuery('coo:781');
     assert.equal(mission.mode, 'display_id');
     assert.equal(mission.displayId, 'coo:781');
+    assert.equal(mission.objectiveDisplayKey, null);
 
     const objective = parseMissionSearchQuery('coo:784.k8xe');
     assert.equal(objective.mode, 'display_id');
     assert.equal(objective.displayId, 'coo:784');
+    assert.equal(objective.objectiveDisplayKey, 'k8xe');
   });
 
   it('drops stop words and keeps a portable coverage floor', () => {

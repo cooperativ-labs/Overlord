@@ -66,15 +66,60 @@ export function missionSearchDocBodyColumn(dialect: SqlDialect): string {
  * PostgreSQL uses `ts_rank()` over the generated `search_tsv` column.
  */
 export function missionSearchDocScoreExpr(dialect: SqlDialect): string {
-  const entityType = missionSearchEntityTypeColumn(dialect);
+  return missionSearchDocScoreExprForWeights({ dialect, includeDelivery: false });
+}
+
+/**
+ * Per-document relevance score for a full-text hit. SQLite uses FTS5 `bm25()`;
+ * PostgreSQL uses `ts_rank()` over the generated `search_tsv` column.
+ * V3 additionally weights delivery documents at 1.5, between objective and event.
+ */
+export function missionSearchDocScoreExprForWeights({
+  dialect,
+  includeDelivery
+}: {
+  dialect: SqlDialect;
+  includeDelivery: boolean;
+}): string {
+  const entityType = includeDelivery ? 'sd.entity_type' : missionSearchEntityTypeColumn(dialect);
+  const deliveryWeight = includeDelivery ? ` WHEN 'delivery' THEN 1.5` : '';
   const entityWeight = `(CASE ${entityType}
-    WHEN 'mission' THEN 3.0 WHEN 'objective' THEN 2.0 ELSE 1.0 END)`;
+    WHEN 'mission' THEN 3.0 WHEN 'objective' THEN 2.0${deliveryWeight} ELSE 1.0 END)`;
 
   if (dialect === 'postgres') {
     return `${entityWeight} * ts_rank(sd.search_tsv, q.tsq)`;
   }
 
   return `${entityWeight} * (-bm25(search_documents_fts, 10.0, 1.0))`;
+}
+
+/** FROM clause for v3 search: SQLite joins FTS rows back to `search_documents` for `entity_id`. */
+export function missionSearchFromClauseV3(dialect: SqlDialect): string {
+  if (dialect === 'postgres') {
+    return missionSearchFromClause(dialect);
+  }
+  return `search_documents_fts
+             JOIN search_documents sd ON sd.rowid = search_documents_fts.rowid`;
+}
+
+export function missionSearchEntityIdColumnV3(): string {
+  return 'sd.entity_id';
+}
+
+export function missionSearchEntityTypeColumnV3(): string {
+  return 'sd.entity_type';
+}
+
+export function missionSearchDocTitleColumnV3(): string {
+  return 'sd.title';
+}
+
+export function missionSearchDocBodyColumnV3(): string {
+  return 'sd.body_text';
+}
+
+export function missionSearchMissionIdColumnV3(): string {
+  return 'sd.mission_id';
 }
 
 /** WHERE predicate that restricts indexed documents to the user's search terms. */

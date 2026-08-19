@@ -984,6 +984,103 @@ var init_resource_paths = __esm({
   }
 });
 
+// ../packages/contract/dist/search.js
+function uniquePreserve(values) {
+  const seen = /* @__PURE__ */ new Set();
+  const result = [];
+  for (const value of values) {
+    if (seen.has(value))
+      continue;
+    seen.add(value);
+    result.push(value);
+  }
+  return result;
+}
+function parseSearchEntityTypes(values) {
+  if (!values || values.length === 0) {
+    return { ok: true, value: [...DEFAULT_SEARCH_ENTITY_TYPES] };
+  }
+  const parsed = [];
+  for (const raw of values) {
+    const value = raw.trim();
+    if (value === "")
+      continue;
+    if (value === "event") {
+      return {
+        ok: false,
+        error: "entityTypes does not accept event; events always corroborate and are never returnable"
+      };
+    }
+    if (value !== "mission" && value !== "objective" && value !== "delivery") {
+      return {
+        ok: false,
+        error: "entityTypes must be mission, objective, and/or delivery"
+      };
+    }
+    parsed.push(value);
+  }
+  if (parsed.length === 0) {
+    return { ok: true, value: [...DEFAULT_SEARCH_ENTITY_TYPES] };
+  }
+  return { ok: true, value: uniquePreserve(parsed) };
+}
+function parseSearchObjectiveStates(values) {
+  if (!values || values.length === 0) {
+    return { ok: true, value: [] };
+  }
+  const parsed = [];
+  for (const raw of values) {
+    const value = raw.trim();
+    if (value === "")
+      continue;
+    if (!SEARCH_OBJECTIVE_STATES.includes(value)) {
+      return {
+        ok: false,
+        error: "objectiveStates must be future, draft, submitted, launching, executing, pending_delivery, and/or complete"
+      };
+    }
+    parsed.push(value);
+  }
+  return { ok: true, value: uniquePreserve(parsed) };
+}
+function parseMatchesPerResult(value) {
+  if (value === null || value === void 0 || value === "") {
+    return { ok: true, value: DEFAULT_MATCHES_PER_RESULT };
+  }
+  const parsed = typeof value === "number" ? value : Number.parseInt(String(value), 10);
+  if (!Number.isFinite(parsed) || !Number.isInteger(parsed)) {
+    return { ok: false, error: "matchesPerResult must be an integer between 1 and 10" };
+  }
+  if (parsed < 1 || parsed > MAX_MATCHES_PER_RESULT) {
+    return { ok: false, error: "matchesPerResult must be an integer between 1 and 10" };
+  }
+  return { ok: true, value: parsed };
+}
+var SEARCH_OBJECTIVE_STATES, DEFAULT_SEARCH_ENTITY_TYPES, DEFAULT_MATCHES_PER_RESULT, MAX_MATCHES_PER_RESULT, SEARCH_CANDIDATE_FETCH_LIMIT, SEARCH_CHILD_CONTEXT_WEIGHT;
+var init_search = __esm({
+  "../packages/contract/dist/search.js"() {
+    "use strict";
+    SEARCH_OBJECTIVE_STATES = [
+      "future",
+      "draft",
+      "submitted",
+      "launching",
+      "executing",
+      "pending_delivery",
+      "complete"
+    ];
+    DEFAULT_SEARCH_ENTITY_TYPES = [
+      "mission",
+      "objective",
+      "delivery"
+    ];
+    DEFAULT_MATCHES_PER_RESULT = 3;
+    MAX_MATCHES_PER_RESULT = 10;
+    SEARCH_CANDIDATE_FETCH_LIMIT = 500;
+    SEARCH_CHILD_CONTEXT_WEIGHT = 0.15;
+  }
+});
+
 // ../packages/contract/dist/index.js
 function isMyMissionsColumnType(value) {
   return MY_MISSIONS_COLUMN_TYPES.includes(value);
@@ -996,6 +1093,7 @@ var init_dist = __esm({
     init_launch_variables();
     init_objective_ref();
     init_resource_paths();
+    init_search();
     MY_MISSIONS_COLUMNS = [
       { type: "next", label: "Next" },
       { type: "execute", label: "Executing" },
@@ -70501,9 +70599,9 @@ function slugify3(input) {
   return base.length > 0 ? base : "project";
 }
 function initialTitleFromInstruction(instruction) {
-  const firstLine = instruction.split("\n")[0]?.trim() ?? instruction.trim();
-  if (firstLine.length <= 80) return firstLine;
-  return `${firstLine.slice(0, 77)}...`;
+  const firstLine2 = instruction.split("\n")[0]?.trim() ?? instruction.trim();
+  if (firstLine2.length <= 80) return firstLine2;
+  return `${firstLine2.slice(0, 77)}...`;
 }
 function generateSessionKey() {
   const rawKey = SESSION_KEY_PREFIX + (0, import_node_crypto8.randomBytes)(24).toString("base64url");
@@ -134404,6 +134502,8 @@ init_context();
 init_errors4();
 
 // ../packages/core/service/mission-search.ts
+init_dist();
+init_dist2();
 init_errors4();
 
 // ../packages/core/service/mission-search-query.ts
@@ -134481,7 +134581,7 @@ function missionSearchCoverageFloor(termCount) {
   if (termCount <= 0) return 0;
   return Math.min(3, Math.max(1, Math.ceil(termCount / 2)));
 }
-function uniquePreserve(values) {
+function uniquePreserve2(values) {
   const seen = /* @__PURE__ */ new Set();
   const result = [];
   for (const value of values) {
@@ -134497,11 +134597,27 @@ function tokenizeRemainder(text) {
 function parseMissionSearchQuery(query) {
   const raw = query.trim();
   if (!raw) {
-    return { raw, mode: "fallback", displayId: null, terms: [], coverageFloor: null };
+    return {
+      raw,
+      mode: "fallback",
+      displayId: null,
+      objectiveDisplayKey: null,
+      terms: [],
+      coverageFloor: null
+    };
   }
   if (DISPLAY_ID_QUERY_RE.test(raw)) {
-    const displayId = raw.replace(/\.[a-z0-9]+$/i, "");
-    return { raw, mode: "display_id", displayId, terms: [], coverageFloor: null };
+    const suffix = raw.match(/^([a-z0-9-]+:\d+)\.([a-z0-9]+)$/i);
+    const displayId = suffix ? suffix[1] : raw;
+    const objectiveDisplayKey = suffix ? suffix[2].toLowerCase() : null;
+    return {
+      raw,
+      mode: "display_id",
+      displayId,
+      objectiveDisplayKey,
+      terms: [],
+      coverageFloor: null
+    };
   }
   const terms = [];
   const withoutIdentifiers = raw.replace(IDENTIFIER_RE, (match) => {
@@ -134517,14 +134633,22 @@ function parseMissionSearchQuery(query) {
     if (MISSION_SEARCH_STOP_WORDS.has(token)) continue;
     terms.push(token);
   }
-  const meaningful = uniquePreserve(terms);
+  const meaningful = uniquePreserve2(terms);
   if (meaningful.length === 0) {
-    return { raw, mode: "fallback", displayId: null, terms: [], coverageFloor: null };
+    return {
+      raw,
+      mode: "fallback",
+      displayId: null,
+      objectiveDisplayKey: null,
+      terms: [],
+      coverageFloor: null
+    };
   }
   return {
     raw,
     mode: "any",
     displayId: null,
+    objectiveDisplayKey: null,
     terms: meaningful,
     coverageFloor: missionSearchCoverageFloor(meaningful.length)
   };
@@ -134566,13 +134690,42 @@ function missionSearchDocBodyColumn(dialect) {
   return dialect === "postgres" ? "sd.body_text" : "search_documents_fts.body_text";
 }
 function missionSearchDocScoreExpr(dialect) {
-  const entityType = missionSearchEntityTypeColumn(dialect);
+  return missionSearchDocScoreExprForWeights({ dialect, includeDelivery: false });
+}
+function missionSearchDocScoreExprForWeights({
+  dialect,
+  includeDelivery
+}) {
+  const entityType = includeDelivery ? "sd.entity_type" : missionSearchEntityTypeColumn(dialect);
+  const deliveryWeight = includeDelivery ? ` WHEN 'delivery' THEN 1.5` : "";
   const entityWeight = `(CASE ${entityType}
-    WHEN 'mission' THEN 3.0 WHEN 'objective' THEN 2.0 ELSE 1.0 END)`;
+    WHEN 'mission' THEN 3.0 WHEN 'objective' THEN 2.0${deliveryWeight} ELSE 1.0 END)`;
   if (dialect === "postgres") {
     return `${entityWeight} * ts_rank(sd.search_tsv, q.tsq)`;
   }
   return `${entityWeight} * (-bm25(search_documents_fts, 10.0, 1.0))`;
+}
+function missionSearchFromClauseV3(dialect) {
+  if (dialect === "postgres") {
+    return missionSearchFromClause(dialect);
+  }
+  return `search_documents_fts
+             JOIN search_documents sd ON sd.rowid = search_documents_fts.rowid`;
+}
+function missionSearchEntityIdColumnV3() {
+  return "sd.entity_id";
+}
+function missionSearchEntityTypeColumnV3() {
+  return "sd.entity_type";
+}
+function missionSearchDocTitleColumnV3() {
+  return "sd.title";
+}
+function missionSearchDocBodyColumnV3() {
+  return "sd.body_text";
+}
+function missionSearchMissionIdColumnV3() {
+  return "sd.mission_id";
 }
 function missionSearchMatchPredicate(dialect) {
   return dialect === "postgres" ? "sd.search_tsv @@ q.tsq" : "search_documents_fts MATCH ?";
@@ -134600,10 +134753,11 @@ function validateDateBound(name, value) {
     throw new ServiceError(`${name} must be an ISO-8601 timestamp`, "validation_error");
   }
 }
-function missionSelectColumns() {
+function missionSelectColumns({ includeSearchFields = false } = {}) {
+  const extras = includeSearchFields ? `, t.constraints_text, t.output_format_text, t.notes_text` : "";
   return `t.id, t.workspace_id, t.project_id, t.display_id, t.title,
           t.status_type, t.status_id, t.priority, t.created_at, t.updated_at,
-          t.due_datetime,
+          t.due_datetime${extras},
           (SELECT COUNT(*) FROM objectives o
              WHERE o.mission_id = t.id AND o.deleted_at IS NULL) AS objective_count,
           p.name AS project_name, w.name AS workspace_name, w.slug AS workspace_slug`;
@@ -134979,9 +135133,10 @@ async function searchWorkspaceMissions({
        FROM ${missionSearchFromClause(dialect)}
        JOIN missions t ON t.id = ${missionSearchMissionIdColumn(dialect)}
          AND t.workspace_id = ? AND t.deleted_at IS NULL
-       JOIN projects p ON p.id = t.project_id
-       JOIN workspaces w ON w.id = t.workspace_id
-      WHERE ${missionSearchMatchPredicate(dialect)}${filters.sql}`,
+      JOIN projects p ON p.id = t.project_id
+      JOIN workspaces w ON w.id = t.workspace_id
+      WHERE ${missionSearchMatchPredicate(dialect)}
+        AND ${missionSearchEntityTypeColumn(dialect)} IN ('mission', 'objective', 'event')${filters.sql}`,
     [...missionSearchWorkspaceParams({ dialect, workspaceId: workspaceId2, match }), ...filters.params]
   );
   const byMission = /* @__PURE__ */ new Map();
@@ -135181,6 +135336,892 @@ function allocateWorkspaceSearchLimits({
   return new Map(
     ordered.map((workspaceId2, index) => [workspaceId2, base + (index < remainder ? 1 : 0)])
   );
+}
+function searchChildRelevance({
+  docScore,
+  missionScore
+}) {
+  return docScore + SEARCH_CHILD_CONTEXT_WEIGHT * missionScore;
+}
+function normalizeSearchV3Options({
+  entityTypes,
+  objectiveStates,
+  matchesPerResult,
+  candidateLimit
+}) {
+  const entities = parseSearchEntityTypes(entityTypes);
+  if (!entities.ok) throw new ServiceError(entities.error, "validation_error");
+  const states = parseSearchObjectiveStates(objectiveStates);
+  if (!states.ok) throw new ServiceError(states.error, "validation_error");
+  const matches = parseMatchesPerResult(matchesPerResult);
+  if (!matches.ok) throw new ServiceError(matches.error, "validation_error");
+  const cap = candidateLimit === null || candidateLimit === void 0 ? SEARCH_CANDIDATE_FETCH_LIMIT : Math.trunc(Number(candidateLimit));
+  if (!Number.isFinite(cap) || cap < 1) {
+    throw new ServiceError("candidateLimit must be a positive integer", "validation_error");
+  }
+  return {
+    entityTypes: entities.value,
+    objectiveStates: states.value,
+    matchesPerResult: matches.value,
+    candidateLimit: cap
+  };
+}
+function emptyEntityCounts() {
+  return { mission: 0, objective: 0, delivery: 0, event: 0 };
+}
+function addEntityCount({
+  counts,
+  entityType,
+  amount = 1
+}) {
+  if (entityType === "mission" || entityType === "objective" || entityType === "delivery" || entityType === "event") {
+    counts[entityType] += amount;
+  }
+}
+function sqlPlaceholders(count) {
+  return Array.from({ length: count }, () => "?").join(", ");
+}
+function firstLine(text) {
+  const line2 = (text ?? "").trim().split(/\r?\n/, 1)[0] ?? "";
+  return line2.trim();
+}
+function documentTypesForSearch(entityTypes) {
+  return [.../* @__PURE__ */ new Set(["event", ...entityTypes])];
+}
+function passesObjectiveState({
+  state: state2,
+  objectiveStates
+}) {
+  if (objectiveStates.length === 0) return true;
+  if (!state2) return false;
+  return objectiveStates.includes(state2);
+}
+function missionRecordMatchKinds({
+  row,
+  terms
+}) {
+  const kinds = [];
+  if (matchedTermsInText({ terms, text: row.title }).length > 0) kinds.push("title");
+  if (matchedTermsInText({ terms, text: row.display_id }).length > 0) kinds.push("displayId");
+  const constraints = `${row.constraints_text ?? ""} ${row.output_format_text ?? ""}`;
+  if (matchedTermsInText({ terms, text: constraints }).length > 0) kinds.push("constraints");
+  if (matchedTermsInText({ terms, text: row.notes_text ?? "" }).length > 0) kinds.push("notes");
+  return kinds;
+}
+function toSearchHitV3({
+  row,
+  relevance,
+  snippet,
+  matchedTerms,
+  matchedIn,
+  anchorOnly,
+  matches,
+  matchCounts
+}) {
+  return {
+    ...toHitFromRow({ row, relevance, snippet, matchedTerms, matchedIn }),
+    anchorOnly,
+    matches,
+    matchCounts
+  };
+}
+function buildAppliedFiltersV3({
+  parsed,
+  projectIds,
+  statusTypes,
+  resourceKeys,
+  dateField,
+  from,
+  to,
+  entityTypes,
+  objectiveStates,
+  matchesPerResult
+}) {
+  return {
+    ...buildAppliedFilters({
+      parsed,
+      projectIds,
+      statusTypes,
+      resourceKeys,
+      dateField,
+      from,
+      to
+    }),
+    entityTypes,
+    objectiveStates,
+    matchesPerResult
+  };
+}
+function envelopeV3({
+  parsed,
+  hits,
+  totalMatchedBeforeLimit,
+  projectIds,
+  statusTypes,
+  resourceKeys,
+  dateField,
+  from,
+  to,
+  workspaceId: workspaceId2,
+  entityTypes,
+  objectiveStates,
+  matchesPerResult,
+  entityCounts,
+  truncatedCandidates
+}) {
+  return {
+    parsed,
+    hits,
+    totalMatchedBeforeLimit,
+    appliedFilters: buildAppliedFiltersV3({
+      parsed,
+      projectIds,
+      statusTypes,
+      resourceKeys,
+      dateField,
+      from,
+      to,
+      entityTypes,
+      objectiveStates,
+      matchesPerResult
+    }),
+    workspaceCounts: [{ workspaceId: workspaceId2, matched: totalMatchedBeforeLimit, returned: hits.length }],
+    entityCounts,
+    truncatedCandidates
+  };
+}
+function missionRowFromDocument(row) {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    project_id: row.project_id,
+    display_id: row.display_id,
+    title: row.title,
+    status_type: row.status_type,
+    status_id: row.status_id,
+    priority: row.priority,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    due_datetime: row.due_datetime,
+    objective_count: row.objective_count,
+    project_name: row.project_name,
+    workspace_name: row.workspace_name,
+    workspace_slug: row.workspace_slug,
+    constraints_text: row.constraints_text ?? null,
+    output_format_text: row.output_format_text ?? null,
+    notes_text: row.notes_text ?? null
+  };
+}
+async function loadMatchMetadata({
+  db,
+  objectiveIds,
+  deliveryIds
+}) {
+  const objectives = /* @__PURE__ */ new Map();
+  const deliveries = /* @__PURE__ */ new Map();
+  const uniqueObjectives = [...new Set(objectiveIds)];
+  const uniqueDeliveries = [...new Set(deliveryIds)];
+  if (uniqueObjectives.length > 0) {
+    const rows = await db.all(
+      `SELECT id, display_key, title, instruction_text, state, created_at, updated_at
+         FROM objectives
+        WHERE id IN (${sqlPlaceholders(uniqueObjectives.length)}) AND deleted_at IS NULL`,
+      uniqueObjectives
+    );
+    for (const row of rows) {
+      objectives.set(row.id, {
+        id: row.id,
+        displayKey: row.display_key,
+        title: row.title,
+        instructionText: row.instruction_text,
+        state: row.state,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at
+      });
+    }
+  }
+  if (uniqueDeliveries.length > 0) {
+    const rows = await db.all(
+      `SELECT id, objective_id, summary, created_at, updated_at
+         FROM deliveries
+        WHERE id IN (${sqlPlaceholders(uniqueDeliveries.length)}) AND deleted_at IS NULL`,
+      uniqueDeliveries
+    );
+    for (const row of rows) {
+      deliveries.set(row.id, {
+        id: row.id,
+        objectiveId: row.objective_id,
+        summary: row.summary,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at
+      });
+    }
+    const missingOwners = [
+      ...new Set(
+        [...deliveries.values()].map((delivery) => delivery.objectiveId).filter((id) => id !== null && id !== "").filter((id) => !objectives.has(id))
+      )
+    ];
+    if (missingOwners.length > 0) {
+      const extra = await loadMatchMetadata({
+        db,
+        objectiveIds: missingOwners,
+        deliveryIds: []
+      });
+      for (const [id, meta3] of extra.objectives) objectives.set(id, meta3);
+    }
+  }
+  return { objectives, deliveries };
+}
+async function lookupObjectiveByDisplayKey({
+  db,
+  missionId,
+  displayKey
+}) {
+  const row = await db.get(
+    `SELECT id, display_key, title, instruction_text, state, created_at, updated_at
+       FROM objectives
+      WHERE mission_id = ? AND lower(display_key) = lower(?) AND deleted_at IS NULL`,
+    [missionId, displayKey]
+  );
+  if (!row) return void 0;
+  return {
+    id: row.id,
+    displayKey: row.display_key,
+    title: row.title,
+    instructionText: row.instruction_text,
+    state: row.state,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
+function toObjectiveSearchMatch({
+  meta: meta3,
+  missionDisplayId,
+  relevance,
+  snippet,
+  matchedTerms
+}) {
+  return {
+    entityType: "objective",
+    id: meta3.id,
+    displayId: formatObjectiveDisplayId({
+      missionDisplayId,
+      displayKey: meta3.displayKey
+    }),
+    title: meta3.title?.trim() || firstLine(meta3.instructionText) || "Objective",
+    objectiveId: meta3.id,
+    objectiveState: meta3.state,
+    relevance,
+    snippet,
+    matchedTerms,
+    createdAt: meta3.createdAt,
+    updatedAt: meta3.updatedAt
+  };
+}
+function toDeliverySearchMatch({
+  meta: meta3,
+  owner,
+  relevance,
+  snippet,
+  matchedTerms
+}) {
+  return {
+    entityType: "delivery",
+    id: meta3.id,
+    displayId: null,
+    title: firstLine(meta3.summary) || "Delivery",
+    objectiveId: meta3.objectiveId,
+    objectiveState: owner?.state ?? null,
+    relevance,
+    snippet,
+    matchedTerms,
+    createdAt: meta3.createdAt,
+    updatedAt: meta3.updatedAt
+  };
+}
+function buildChildMatch({
+  doc,
+  missionDisplayId,
+  missionScore,
+  terms,
+  objectives,
+  deliveries
+}) {
+  const text = `${doc.title ?? ""} ${doc.body ?? ""}`.trim();
+  const childMatchedTerms = matchedTermsInText({ terms, text });
+  const snippet = snippetAroundTerms({
+    text: text || doc.title || "",
+    terms: childMatchedTerms
+  });
+  const relevance = searchChildRelevance({ docScore: doc.score, missionScore });
+  if (doc.entityType === "objective") {
+    const meta3 = objectives.get(doc.entityId);
+    if (!meta3) return null;
+    return toObjectiveSearchMatch({
+      meta: meta3,
+      missionDisplayId,
+      relevance,
+      snippet,
+      matchedTerms: childMatchedTerms
+    });
+  }
+  if (doc.entityType === "delivery") {
+    const meta3 = deliveries.get(doc.entityId);
+    if (!meta3) return null;
+    return toDeliverySearchMatch({
+      meta: meta3,
+      owner: meta3.objectiveId ? objectives.get(meta3.objectiveId) : void 0,
+      relevance,
+      snippet,
+      matchedTerms: childMatchedTerms
+    });
+  }
+  return null;
+}
+async function searchWorkspaceMissionsV3({
+  db,
+  workspaceId: workspaceId2,
+  query,
+  projectIds,
+  statusTypes,
+  resourceKeys,
+  dateField,
+  from,
+  to,
+  limit = 25,
+  entityTypes,
+  objectiveStates,
+  matchesPerResult,
+  candidateLimit
+}) {
+  const parsed = parseMissionSearchQuery(query ?? "");
+  const projects = projectIds?.filter((id) => id.trim() !== "") ?? [];
+  const types3 = statusTypes?.filter((type) => type.trim() !== "") ?? [];
+  const resources = resourceKeys?.filter((key) => key.trim() !== "") ?? [];
+  const boundsPresent = Boolean(from || to);
+  const date6 = dateField ?? (boundsPresent ? "updatedAt" : null);
+  if (date6 !== null && date6 !== "createdAt" && date6 !== "updatedAt" && date6 !== "dueDatetime") {
+    throw new ServiceError(
+      "dateField must be createdAt, updatedAt, or dueDatetime",
+      "validation_error"
+    );
+  }
+  validateDateBound("from", from);
+  validateDateBound("to", to);
+  if (from && to && Date.parse(from) >= Date.parse(to)) {
+    throw new ServiceError("from must be earlier than to", "validation_error");
+  }
+  const cappedLimit = Number.isFinite(limit) ? Math.max(0, Math.trunc(limit)) : 25;
+  const options = normalizeSearchV3Options({
+    entityTypes,
+    objectiveStates,
+    matchesPerResult,
+    candidateLimit
+  });
+  const emptyMatchCounts = { objective: 0, delivery: 0, event: 0 };
+  const wrap4 = ({
+    hits,
+    totalMatchedBeforeLimit,
+    entityCounts,
+    truncatedCandidates
+  }) => envelopeV3({
+    parsed,
+    hits,
+    totalMatchedBeforeLimit,
+    projectIds: projects,
+    statusTypes: types3,
+    resourceKeys: resources,
+    dateField: date6,
+    from: from ?? null,
+    to: to ?? null,
+    workspaceId: workspaceId2,
+    entityTypes: options.entityTypes,
+    objectiveStates: options.objectiveStates,
+    matchesPerResult: options.matchesPerResult,
+    entityCounts,
+    truncatedCandidates
+  });
+  if (parsed.mode === "fallback") {
+    const { rows, total } = await listFallbackMissions({
+      db,
+      workspaceId: workspaceId2,
+      projectIds: projects,
+      statusTypes: types3,
+      resourceKeys: resources,
+      dateField: date6,
+      from: from ?? null,
+      to: to ?? null,
+      limit: cappedLimit
+    });
+    const hits = rows.map(
+      (row) => toSearchHitV3({
+        row,
+        relevance: 0,
+        snippet: null,
+        matchedTerms: [],
+        matchedIn: [],
+        anchorOnly: false,
+        matches: [],
+        matchCounts: { ...emptyMatchCounts }
+      })
+    );
+    return wrap4({
+      hits,
+      totalMatchedBeforeLimit: total,
+      entityCounts: emptyEntityCounts(),
+      truncatedCandidates: false
+    });
+  }
+  if (parsed.mode === "display_id" && parsed.displayId) {
+    return wrap4(
+      await searchDisplayIdV3({
+        db,
+        workspaceId: workspaceId2,
+        parsed,
+        rowLookup: {
+          projectIds: projects,
+          statusTypes: types3,
+          resourceKeys: resources,
+          dateField: date6,
+          from: from ?? null,
+          to: to ?? null
+        },
+        options
+      })
+    );
+  }
+  const match = buildMissionSearchMatch({ dialect: db.dialect, terms: parsed.terms });
+  if (!match) {
+    return searchWorkspaceMissionsV3({
+      db,
+      workspaceId: workspaceId2,
+      query: "",
+      projectIds: projects,
+      statusTypes: types3,
+      resourceKeys: resources,
+      dateField: date6,
+      from: from ?? null,
+      to: to ?? null,
+      limit: cappedLimit,
+      entityTypes: options.entityTypes,
+      objectiveStates: options.objectiveStates,
+      matchesPerResult: options.matchesPerResult,
+      candidateLimit: options.candidateLimit
+    });
+  }
+  return wrap4(
+    await searchFullTextV3({
+      db,
+      workspaceId: workspaceId2,
+      parsed,
+      match,
+      projectIds: projects,
+      statusTypes: types3,
+      resourceKeys: resources,
+      dateField: date6,
+      from: from ?? null,
+      to: to ?? null,
+      cappedLimit,
+      options
+    })
+  );
+}
+async function searchDisplayIdV3({
+  db,
+  workspaceId: workspaceId2,
+  parsed,
+  rowLookup,
+  options
+}) {
+  const empty = {
+    hits: [],
+    totalMatchedBeforeLimit: 0,
+    entityCounts: emptyEntityCounts(),
+    truncatedCandidates: false
+  };
+  const row = await lookupDisplayId({
+    db,
+    workspaceId: workspaceId2,
+    displayId: parsed.displayId,
+    ...rowLookup
+  });
+  if (!row) return empty;
+  let matches = [];
+  const matchCounts = { objective: 0, delivery: 0, event: 0 };
+  const entityCounts = emptyEntityCounts();
+  if (parsed.objectiveDisplayKey) {
+    const objective = await lookupObjectiveByDisplayKey({
+      db,
+      missionId: row.id,
+      displayKey: parsed.objectiveDisplayKey
+    });
+    if (!objective || !passesObjectiveState({
+      state: objective.state,
+      objectiveStates: options.objectiveStates
+    })) {
+      return empty;
+    }
+    const snippet = snippetAroundTerms({
+      text: objective.title || objective.instructionText || row.title,
+      terms: [parsed.raw]
+    });
+    matches = [
+      toObjectiveSearchMatch({
+        meta: objective,
+        missionDisplayId: row.display_id,
+        relevance: publicRelevance({
+          exactDisplayId: true,
+          exactTitle: false,
+          titleMatch: false,
+          fused: 1
+        }),
+        snippet,
+        matchedTerms: [parsed.raw]
+      })
+    ];
+    matchCounts.objective = 1;
+    entityCounts.objective = 1;
+  } else {
+    entityCounts.mission = 1;
+  }
+  return {
+    hits: [
+      toSearchHitV3({
+        row,
+        relevance: publicRelevance({
+          exactDisplayId: true,
+          exactTitle: false,
+          titleMatch: false,
+          fused: 1
+        }),
+        snippet: parsed.objectiveDisplayKey ? matches[0]?.snippet ?? row.title : row.title,
+        matchedTerms: [parsed.displayId],
+        matchedIn: ["displayId"],
+        anchorOnly: false,
+        matches,
+        matchCounts
+      })
+    ],
+    totalMatchedBeforeLimit: 1,
+    entityCounts,
+    truncatedCandidates: false
+  };
+}
+async function searchFullTextV3({
+  db,
+  workspaceId: workspaceId2,
+  parsed,
+  match,
+  projectIds,
+  statusTypes,
+  resourceKeys,
+  dateField,
+  from,
+  to,
+  cappedLimit,
+  options
+}) {
+  const filters = projectAndStatusSql({
+    projectIds,
+    statusTypes,
+    resourceKeys,
+    dateField,
+    from,
+    to
+  });
+  const dialect = db.dialect;
+  const docTypes = documentTypesForSearch(options.entityTypes);
+  const rows = await db.all(
+    `SELECT ${missionSelectColumns({ includeSearchFields: true })},
+            ${missionSearchDocTitleColumnV3()} AS doc_title,
+            ${missionSearchDocBodyColumnV3()} AS doc_body,
+            ${missionSearchEntityTypeColumnV3()} AS entity_type,
+            ${missionSearchEntityIdColumnV3()} AS entity_id,
+            ${missionSearchDocScoreExprForWeights({ dialect, includeDelivery: true })} AS doc_score
+       FROM ${missionSearchFromClauseV3(dialect)}
+       JOIN missions t ON t.id = ${missionSearchMissionIdColumnV3()}
+         AND t.workspace_id = ? AND t.deleted_at IS NULL
+      JOIN projects p ON p.id = t.project_id
+      JOIN workspaces w ON w.id = t.workspace_id
+      WHERE ${missionSearchMatchPredicate(dialect)}
+        AND ${missionSearchEntityTypeColumnV3()} IN (${sqlPlaceholders(docTypes.length)})${filters.sql}
+      ORDER BY doc_score DESC
+      LIMIT ?`,
+    [
+      ...missionSearchWorkspaceParams({ dialect, workspaceId: workspaceId2, match }),
+      ...docTypes,
+      ...filters.params,
+      options.candidateLimit
+    ]
+  );
+  const truncatedCandidates = rows.length >= options.candidateLimit;
+  const byMission = /* @__PURE__ */ new Map();
+  for (const row of rows) {
+    const docText = `${row.doc_title ?? ""} ${row.doc_body ?? ""}`.trim();
+    const existing = byMission.get(row.id);
+    const missionRow = missionRowFromDocument(row);
+    const doc = {
+      entityType: row.entity_type ?? "",
+      entityId: row.entity_id ?? "",
+      score: Number(row.doc_score) || 0,
+      title: row.doc_title,
+      body: row.doc_body
+    };
+    if (!existing) {
+      const kinds = /* @__PURE__ */ new Set();
+      if (row.entity_type === "objective") kinds.add("objective");
+      if (row.entity_type === "event") kinds.add("event");
+      if (row.entity_type === "delivery") kinds.add("delivery");
+      byMission.set(row.id, {
+        row: missionRow,
+        scores: [doc.score],
+        texts: [docText, row.title, row.display_id],
+        docs: [doc],
+        kinds,
+        bestSnippetSource: { score: doc.score, text: docText || row.title }
+      });
+      continue;
+    }
+    existing.scores.push(doc.score);
+    existing.texts.push(docText);
+    existing.docs.push(doc);
+    if (row.entity_type === "objective") existing.kinds.add("objective");
+    if (row.entity_type === "event") existing.kinds.add("event");
+    if (row.entity_type === "delivery") existing.kinds.add("delivery");
+    if (doc.score > existing.bestSnippetSource.score && docText) {
+      existing.bestSnippetSource = { score: doc.score, text: docText };
+    }
+  }
+  const { objectives, deliveries } = await loadMatchMetadata({
+    db,
+    objectiveIds: [...byMission.values()].flatMap(
+      (acc) => acc.docs.filter((doc) => doc.entityType === "objective").map((doc) => doc.entityId)
+    ),
+    deliveryIds: [...byMission.values()].flatMap(
+      (acc) => acc.docs.filter((doc) => doc.entityType === "delivery").map((doc) => doc.entityId)
+    )
+  });
+  const coverageFloor = parsed.coverageFloor ?? 1;
+  const missionAllowed = options.entityTypes.includes("mission");
+  const eligible = [];
+  for (const acc of byMission.values()) {
+    const haystack = acc.texts.join("\n");
+    const groupMatchedTerms = matchedTermsInText({ terms: parsed.terms, text: haystack });
+    if (groupMatchedTerms.length < coverageFloor) continue;
+    const recordKinds = missionRecordMatchKinds({ row: acc.row, terms: parsed.terms });
+    const filteredDocs = acc.docs.filter((doc) => {
+      if (doc.entityType === "objective") {
+        return passesObjectiveState({
+          state: objectives.get(doc.entityId)?.state,
+          objectiveStates: options.objectiveStates
+        });
+      }
+      if (doc.entityType === "delivery") {
+        const meta3 = deliveries.get(doc.entityId);
+        const owner = meta3?.objectiveId ? objectives.get(meta3.objectiveId) : void 0;
+        return passesObjectiveState({
+          state: owner?.state,
+          objectiveStates: options.objectiveStates
+        });
+      }
+      return true;
+    });
+    const childDocs = filteredDocs.filter(
+      (doc) => doc.entityType === "objective" || doc.entityType === "delivery"
+    );
+    const missionScore = aggregateDocumentScore(acc.scores);
+    const childMatches = childDocs.map(
+      (doc) => buildChildMatch({
+        doc,
+        missionDisplayId: acc.row.display_id,
+        missionScore,
+        terms: parsed.terms,
+        objectives,
+        deliveries
+      })
+    ).filter((child) => child !== null).sort(
+      (left, right) => right.relevance - left.relevance || right.updatedAt.localeCompare(left.updatedAt)
+    );
+    if (options.objectiveStates.length > 0 && childMatches.length === 0) continue;
+    const missionHit = missionAllowed && recordKinds.length > 0;
+    const eventHit = filteredDocs.some((doc) => doc.entityType === "event");
+    if (childMatches.length === 0 && !missionHit && !(missionAllowed && eventHit)) continue;
+    const matchCounts = {
+      objective: filteredDocs.filter((doc) => doc.entityType === "objective").length,
+      delivery: filteredDocs.filter((doc) => doc.entityType === "delivery").length,
+      event: filteredDocs.filter((doc) => doc.entityType === "event").length
+    };
+    const entityCounts2 = emptyEntityCounts();
+    for (const doc of filteredDocs) {
+      addEntityCount({ counts: entityCounts2, entityType: doc.entityType });
+    }
+    const matchedIn = [...acc.kinds, ...recordKinds];
+    const exactDisplayId = acc.row.display_id.toLowerCase() === parsed.raw.toLowerCase() || parsed.terms.some((term) => term === acc.row.display_id.toLowerCase());
+    const exactTitle = acc.row.title.trim().toLowerCase() === parsed.raw.toLowerCase();
+    eligible.push({
+      acc,
+      textScore: missionScore,
+      matchedTerms: groupMatchedTerms,
+      matchedIn: [...new Set(matchedIn)],
+      exactDisplayId,
+      exactTitle,
+      recordKinds,
+      matches: childMatches.slice(0, options.matchesPerResult),
+      matchCounts,
+      entityCounts: entityCounts2
+    });
+  }
+  const byText = [...eligible].sort(
+    (left, right) => right.textScore - left.textScore || right.acc.row.updated_at.localeCompare(left.acc.row.updated_at)
+  );
+  const textRankById = new Map(byText.map((entry, index) => [entry.acc.row.id, index + 1]));
+  const byRecency = [...eligible].sort(
+    (left, right) => right.acc.row.updated_at.localeCompare(left.acc.row.updated_at)
+  );
+  const recencyRankById = new Map(byRecency.map((entry, index) => [entry.acc.row.id, index + 1]));
+  const ranked = eligible.map((entry) => {
+    const fused = fusedRankScore({
+      textRank: textRankById.get(entry.acc.row.id) ?? eligible.length,
+      recencyRank: recencyRankById.get(entry.acc.row.id) ?? eligible.length
+    });
+    return toSearchHitV3({
+      row: entry.acc.row,
+      relevance: publicRelevance({
+        exactDisplayId: entry.exactDisplayId,
+        exactTitle: entry.exactTitle,
+        titleMatch: entry.matchedIn.includes("title"),
+        fused
+      }),
+      snippet: snippetAroundTerms({
+        text: entry.acc.bestSnippetSource.text || entry.acc.row.title,
+        terms: entry.matchedTerms
+      }),
+      matchedTerms: entry.matchedTerms,
+      matchedIn: entry.matchedIn,
+      anchorOnly: !missionAllowed || entry.recordKinds.length === 0,
+      matches: entry.matches,
+      matchCounts: entry.matchCounts
+    });
+  }).sort(
+    (left, right) => right.relevance - left.relevance || right.updatedAt.localeCompare(left.updatedAt)
+  );
+  const entityCounts = emptyEntityCounts();
+  for (const entry of eligible) {
+    addEntityCount({
+      counts: entityCounts,
+      entityType: "mission",
+      amount: entry.entityCounts.mission
+    });
+    addEntityCount({
+      counts: entityCounts,
+      entityType: "objective",
+      amount: entry.entityCounts.objective
+    });
+    addEntityCount({
+      counts: entityCounts,
+      entityType: "delivery",
+      amount: entry.entityCounts.delivery
+    });
+    addEntityCount({
+      counts: entityCounts,
+      entityType: "event",
+      amount: entry.entityCounts.event
+    });
+  }
+  return {
+    hits: ranked.slice(0, cappedLimit),
+    totalMatchedBeforeLimit: ranked.length,
+    entityCounts,
+    truncatedCandidates
+  };
+}
+function toSearchResultV3(hit) {
+  return {
+    ...toMissionSearchResultV2(hit),
+    anchorOnly: hit.anchorOnly,
+    matches: hit.matches,
+    matchCounts: hit.matchCounts
+  };
+}
+function toSearchResponseV3(result) {
+  return {
+    version: 3,
+    results: result.hits.map((hit) => toSearchResultV3(hit)),
+    appliedFilters: result.appliedFilters,
+    totalMatchedBeforeLimit: result.totalMatchedBeforeLimit,
+    entityCounts: result.entityCounts,
+    workspaceCounts: result.workspaceCounts,
+    truncatedCandidates: result.truncatedCandidates
+  };
+}
+function mergeWorkspaceSearchV3({
+  results,
+  limit
+}) {
+  const hits = results.flatMap((result) => result.hits).sort(
+    (left, right) => right.relevance - left.relevance || right.updatedAt.localeCompare(left.updatedAt)
+  );
+  const sliced = hits.slice(0, limit);
+  const returnedByWorkspace = /* @__PURE__ */ new Map();
+  for (const hit of sliced) {
+    returnedByWorkspace.set(hit.workspaceId, (returnedByWorkspace.get(hit.workspaceId) ?? 0) + 1);
+  }
+  const workspaceCounts = results.flatMap(
+    (result) => result.workspaceCounts.map((count) => ({
+      workspaceId: count.workspaceId,
+      matched: count.matched,
+      returned: returnedByWorkspace.get(count.workspaceId) ?? 0
+    }))
+  );
+  const appliedFilters = results[0]?.appliedFilters ?? {
+    query: null,
+    mode: "fallback",
+    projectIds: [],
+    resourceKeys: [],
+    statusTypes: [],
+    dateField: null,
+    from: null,
+    to: null,
+    coverageFloor: null,
+    entityTypes: [...DEFAULT_SEARCH_ENTITY_TYPES],
+    objectiveStates: [],
+    matchesPerResult: 3
+  };
+  const entityCounts = emptyEntityCounts();
+  for (const result of results) {
+    addEntityCount({
+      counts: entityCounts,
+      entityType: "mission",
+      amount: result.entityCounts.mission
+    });
+    addEntityCount({
+      counts: entityCounts,
+      entityType: "objective",
+      amount: result.entityCounts.objective
+    });
+    addEntityCount({
+      counts: entityCounts,
+      entityType: "delivery",
+      amount: result.entityCounts.delivery
+    });
+    addEntityCount({
+      counts: entityCounts,
+      entityType: "event",
+      amount: result.entityCounts.event
+    });
+  }
+  return {
+    version: 3,
+    results: sliced.map((hit) => toSearchResultV3(hit)),
+    appliedFilters,
+    totalMatchedBeforeLimit: results.reduce(
+      (sum, result) => sum + result.totalMatchedBeforeLimit,
+      0
+    ),
+    entityCounts,
+    workspaceCounts,
+    truncatedCandidates: results.some((result) => result.truncatedCandidates)
+  };
 }
 
 // ../packages/core/service/objective-display-id.ts
@@ -147028,6 +148069,64 @@ async function searchMissionsV22({
   );
   return mergeWorkspaceMissionSearches({ results, limit });
 }
+async function searchMissionsV32({
+  query,
+  projectIds,
+  statusTypes,
+  resourceKeys,
+  dateField,
+  from,
+  to,
+  limit = 25,
+  entityTypes,
+  objectiveStates,
+  matchesPerResult,
+  candidateLimit
+}) {
+  const client = requireDatabaseClient();
+  const projects = projectIds?.filter((id) => id.trim() !== "") ?? [];
+  const searchInWorkspace = ({
+    workspaceId: workspaceId2,
+    workspaceLimit
+  }) => searchWorkspaceMissionsV3({
+    db: client,
+    workspaceId: workspaceId2,
+    query,
+    projectIds: projects,
+    statusTypes,
+    resourceKeys,
+    dateField,
+    from,
+    to,
+    limit: workspaceLimit,
+    entityTypes,
+    objectiveStates,
+    matchesPerResult,
+    candidateLimit
+  });
+  if (projects.length === 1) {
+    const { workspaceId: workspaceId2 } = await requireProjectPermission({
+      projectId: projects[0],
+      permission: PERMISSIONS.MISSION_READ,
+      db: client
+    });
+    return toSearchResponseV3(await searchInWorkspace({ workspaceId: workspaceId2, workspaceLimit: limit }));
+  }
+  const scopes = await callerAuthorizedWorkspaceScopes(PERMISSIONS.MISSION_READ, client);
+  const quotas = allocateWorkspaceSearchLimits({
+    workspaceIds: scopes.map((scope) => scope.workspaceId),
+    limit
+  });
+  const results = await Promise.all(
+    scopes.map(
+      (scope) => searchInWorkspace({
+        workspaceId: scope.workspaceId,
+        workspaceLimit: quotas.get(scope.workspaceId) ?? 0
+      })
+    )
+  );
+  return mergeWorkspaceSearchV3({ results, limit });
+}
 async function topBoardPosition2(db, projectId, statusId, excludeMissionId) {
   const row = excludeMissionId ? await db.get(
     `SELECT MIN(board_position) AS min_pos FROM missions
@@ -157653,7 +158752,26 @@ var handlers = {
       to: strFlag(body, "--to") ?? null,
       limit: intFlag(body, "--limit") ?? 25
     };
-    if (intFlag(body, "--response-version") !== 2) return searchMissions(params);
+    const responseVersion = intFlag(body, "--response-version");
+    if (responseVersion === 3) {
+      return searchMissionsV32({
+        query: params.query,
+        projectIds: await resolveV2SearchProjectId(
+          params.projectId,
+          strFlag(body, "--workspace-id")
+        ),
+        statusTypes: params.statusTypes,
+        resourceKeys: params.resourceKeys,
+        dateField: params.dateField,
+        from: params.from,
+        to: params.to,
+        limit: params.limit,
+        entityTypes: csvFlag(body, "--entity-types") ?? null,
+        objectiveStates: csvFlag(body, "--objective-states") ?? null,
+        matchesPerResult: intFlag(body, "--matches-per-result") ?? null
+      });
+    }
+    if (responseVersion !== 2) return searchMissions(params);
     return searchMissionsV22({
       query: params.query,
       projectIds: await resolveV2SearchProjectId(params.projectId, strFlag(body, "--workspace-id")),
@@ -157893,7 +159011,8 @@ var SUBCOMMAND_PERMISSIONS = {
   "list-organizations": PERMISSIONS.PROJECT_READ
 };
 async function runProtocolSubcommand(subcommand, body) {
-  const handler = handlers[subcommand];
+  const canonicalSubcommand = subcommand === "search" ? "search-missions" : subcommand;
+  const handler = handlers[canonicalSubcommand];
   if (!handler) {
     throw new ApiError(
       404,
@@ -157901,11 +159020,11 @@ async function runProtocolSubcommand(subcommand, body) {
       `Supported subcommands: ${Object.keys(handlers).sort().join(", ")}`
     );
   }
-  const isV2Search = subcommand === "search-missions" && intFlag(body, "--response-version") === 2;
-  const requiredPermission = isV2Search ? null : SUBCOMMAND_PERMISSIONS[subcommand] ?? null;
+  const isAggregateSearch = canonicalSubcommand === "search-missions" && (intFlag(body, "--response-version") === 2 || intFlag(body, "--response-version") === 3);
+  const requiredPermission = isAggregateSearch ? null : SUBCOMMAND_PERMISSIONS[canonicalSubcommand] ?? null;
   try {
     const ctx = await buildProtocolContext(body, requiredPermission);
-    await validateObjectiveAddressing({ ctx, body, subcommand });
+    await validateObjectiveAddressing({ ctx, body, subcommand: canonicalSubcommand });
     return await handler(ctx, body);
   } catch (error53) {
     if (error53 instanceof ProjectSelectionRequiredError) {
@@ -157918,6 +159037,32 @@ async function runProtocolSubcommand(subcommand, body) {
     }
     throw error53;
   }
+}
+
+// ../mcp/search-detail.ts
+function isRecord(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function compactSearchResponse(value) {
+  if (!isRecord(value) || value.version !== 3 || !Array.isArray(value.results)) return value;
+  return {
+    ...value,
+    results: value.results.map((result) => {
+      if (!isRecord(result) || !Array.isArray(result.matches)) return result;
+      return {
+        ...result,
+        matches: result.matches.slice(0, 2).map((match) => {
+          if (!isRecord(match)) return match;
+          const compact = { ...match };
+          delete compact.snippet;
+          delete compact.matchedTerms;
+          delete compact.createdAt;
+          delete compact.updatedAt;
+          return compact;
+        })
+      };
+    })
+  };
 }
 
 // ../mcp/tool-catalog.ts
@@ -158013,7 +159158,7 @@ var hostedMcpToolDefinitions = [
   {
     name: "overlord_search_missions",
     title: "Search Overlord missions",
-    description: "Use this when the user wants to find or list missions across the caller's authorized workspaces in one organization. Returns SearchMissionsResponseV2 with snippets, match evidence, appliedFilters, and totalMatchedBeforeLimit. Complete and cancelled missions stay eligible by default. There is no relative-date parsing and no implicit time window: compute absolute ISO bounds yourself and pass them as from/to. Raise limit for broad questions \u2014 the default of 25 is split evenly across the workspaces searched \u2014 and read workspaceCounts and totalMatchedBeforeLimit before telling the user a list is complete. An appliedFilters.mode of 'fallback' means the query text matched nothing usable and the results are a recency listing rather than an answer.",
+    description: "Use this to find missions across the caller's authorized workspaces. Results are mission anchors with only the matching objectives and deliveries in matches; an objective displayId (for example coo:789.2nnh) can be passed directly to overlord_load_mission_context. matches is never the mission's complete objective list. Artifacts are not indexed; load mission context after locating the mission to read them. There is no relative-date parsing or implicit time window: compute absolute ISO bounds and pass from/to. Raise limit for broad questions and inspect workspaceCounts, entityCounts, and truncatedCandidates before claiming a list is complete. appliedFilters.mode 'fallback' means the query contributed nothing and results are a recency listing, not an answer. Compact detail is the default and retains navigation identity while reducing child payload; request full for snippets and child metadata.",
     inputSchema: objectSchema({
       query: stringProperty("Search query text."),
       status: stringProperty(
@@ -158036,10 +159181,25 @@ var hostedMcpToolDefinitions = [
       limit: {
         type: "number",
         description: "Maximum result count. Defaults to 25."
+      },
+      entityTypes: stringProperty(
+        "Optional comma-separated v3 entity types: mission, objective, delivery."
+      ),
+      objectiveStates: stringProperty(
+        "Optional comma-separated v3 objective states for matching objectives."
+      ),
+      matchesPerResult: {
+        type: "number",
+        description: "Optional v3 child-match cap per mission (default 3, max 10; compact returns at most 2)."
+      },
+      detail: {
+        type: "string",
+        enum: ["compact", "full"],
+        description: "Result detail: compact (default) keeps child navigation fields and removes child snippets/metadata; full returns the complete v3 child matches."
       }
     }),
     outputSchema: protocolOutputSchema(
-      "SearchMissionsResponseV2: version, results (with labels, dueDatetime, snippets, matchedTerms), appliedFilters, totalMatchedBeforeLimit, workspaceCounts. Or a 'project_selection_required' result when projectId names a project in more than one workspace."
+      "SearchResponseV3: mission-anchored results with matched objective/delivery children, appliedFilters, entityCounts, totalMatchedBeforeLimit, workspaceCounts, and truncatedCandidates. Or a 'project_selection_required' result when projectId names a project in more than one workspace."
     ),
     annotations: readOnly,
     _meta: widget("ui://overlord/mission-list.html")
@@ -158461,7 +159621,7 @@ function readHostedMcpWidget(uri) {
 
 // ../mcp/server.ts
 var MCP_PROTOCOL_VERSION = "2025-11-25";
-function isRecord(value) {
+function isRecord2(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 function optionalString(args, name) {
@@ -158498,7 +159658,7 @@ function protocolBody(flags) {
   return { flags };
 }
 function jsonText(value) {
-  const structured = isRecord(value) ? value : { results: value };
+  const structured = isRecord2(value) ? value : { results: value };
   return {
     content: [
       {
@@ -158541,21 +159701,33 @@ var toolHandlers = {
       ...optionalString(args, "workspaceId") ? { "--workspace-id": requiredString(args, "workspaceId") } : {}
     })
   ),
-  overlord_search_missions: (args) => runProtocolSubcommand(
-    "search-missions",
-    protocolBody({
-      "--response-version": "2",
-      ...optionalString(args, "query") ? { "--query": requiredString(args, "query") } : {},
-      ...optionalString(args, "status") ? { "--status": requiredString(args, "status") } : {},
-      ...optionalProjectRef(args) ? { "--project-id": optionalProjectRef(args) } : {},
-      ...optionalString(args, "workspaceId") ? { "--workspace-id": requiredString(args, "workspaceId") } : {},
-      ...optionalString(args, "resourceKey") ? { "--resource-key": requiredString(args, "resourceKey") } : {},
-      ...optionalString(args, "dateField") ? { "--date-field": requiredString(args, "dateField") } : {},
-      ...optionalString(args, "from") ? { "--from": requiredString(args, "from") } : {},
-      ...optionalString(args, "to") ? { "--to": requiredString(args, "to") } : {},
-      ...typeof args.limit === "number" && Number.isFinite(args.limit) ? { "--limit": String(Math.trunc(args.limit)) } : {}
-    })
-  ),
+  overlord_search_missions: async (args) => {
+    const detail = optionalString(args, "detail") ?? "compact";
+    if (detail !== "compact" && detail !== "full") {
+      throw new Error("detail must be 'compact' or 'full'");
+    }
+    const result = await runProtocolSubcommand(
+      "search",
+      protocolBody({
+        "--response-version": "3",
+        ...optionalString(args, "query") ? { "--query": requiredString(args, "query") } : {},
+        ...optionalString(args, "status") ? { "--status": requiredString(args, "status") } : {},
+        ...optionalProjectRef(args) ? { "--project-id": optionalProjectRef(args) } : {},
+        ...optionalString(args, "workspaceId") ? { "--workspace-id": requiredString(args, "workspaceId") } : {},
+        ...optionalString(args, "resourceKey") ? { "--resource-key": requiredString(args, "resourceKey") } : {},
+        ...optionalString(args, "dateField") ? { "--date-field": requiredString(args, "dateField") } : {},
+        ...optionalString(args, "from") ? { "--from": requiredString(args, "from") } : {},
+        ...optionalString(args, "to") ? { "--to": requiredString(args, "to") } : {},
+        ...typeof args.limit === "number" && Number.isFinite(args.limit) ? { "--limit": String(Math.trunc(args.limit)) } : {},
+        ...optionalString(args, "entityTypes") ? { "--entity-types": requiredString(args, "entityTypes") } : {},
+        ...optionalString(args, "objectiveStates") ? { "--objective-states": requiredString(args, "objectiveStates") } : {},
+        ...typeof args.matchesPerResult === "number" && Number.isFinite(args.matchesPerResult) ? {
+          "--matches-per-result": String(Math.trunc(args.matchesPerResult))
+        } : {}
+      })
+    );
+    return detail === "compact" ? compactSearchResponse(result) : result;
+  },
   overlord_create_mission: (args) => runProtocolSubcommand(
     "create",
     protocolBody({
@@ -158736,7 +159908,7 @@ function failure(id, error53) {
   return { jsonrpc: "2.0", id: id ?? null, error: error53 };
 }
 async function callTool(params) {
-  if (!isRecord(params) || !isRecord(params.arguments)) {
+  if (!isRecord2(params) || !isRecord2(params.arguments)) {
     throw new Error("tools/call requires params.name and params.arguments");
   }
   const name = typeof params.name === "string" ? params.name : "";
@@ -158749,7 +159921,7 @@ async function callTool(params) {
   }
 }
 function readResource(params) {
-  if (!isRecord(params) || typeof params.uri !== "string") {
+  if (!isRecord2(params) || typeof params.uri !== "string") {
     throw new Error("resources/read requires params.uri");
   }
   const resource = readHostedMcpWidget(params.uri);
@@ -158823,7 +159995,7 @@ async function handleMcpPost(req, res, next) {
     const requests = Array.isArray(body) ? body : [body];
     const responses = [];
     for (const item of requests) {
-      const response = await dispatch(isRecord(item) ? item : {});
+      const response = await dispatch(isRecord2(item) ? item : {});
       if (response) responses.push(response);
     }
     if (Array.isArray(body)) {
@@ -168010,6 +169182,47 @@ app.get(
       from,
       to,
       limit
+    });
+  })
+);
+app.get(
+  "/api/search/v3",
+  handle3(async (req) => {
+    const csv = (value) => typeof value === "string" ? value.split(",").map((item) => item.trim()).filter((item) => item !== "") : null;
+    const query = typeof req.query.q === "string" ? req.query.q : null;
+    const parsedLimit = Number.parseInt(
+      typeof req.query.limit === "string" ? req.query.limit : "",
+      10
+    );
+    const limit = Number.isFinite(parsedLimit) ? parsedLimit : void 0;
+    const statusTypes = csv(req.query.statusTypes);
+    const projectIdsRaw = typeof req.query.projectIds === "string" ? req.query.projectIds : typeof req.query.projectId === "string" ? req.query.projectId : "";
+    const projectIds = projectIdsRaw.split(",").map((value) => value.trim()).filter((value) => value !== "");
+    const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (projectIds.some((id) => !uuidRe.test(id))) {
+      throw new ApiError(400, "V3 search accepts only stable project UUIDs in projectIds");
+    }
+    const resourceKeys = csv(req.query.resourceKeys) ?? (typeof req.query.resourceKey === "string" && req.query.resourceKey.trim() ? [req.query.resourceKey.trim()] : null);
+    const rawDateField = typeof req.query.dateField === "string" ? req.query.dateField : null;
+    if (rawDateField && rawDateField !== "createdAt" && rawDateField !== "updatedAt" && rawDateField !== "dueDatetime") {
+      throw new ApiError(400, "dateField must be createdAt, updatedAt, or dueDatetime");
+    }
+    const dateField = rawDateField;
+    const from = typeof req.query.from === "string" && req.query.from.trim() ? req.query.from : null;
+    const to = typeof req.query.to === "string" && req.query.to.trim() ? req.query.to : null;
+    const matchesPerResultRaw = typeof req.query.matchesPerResult === "string" ? req.query.matchesPerResult : null;
+    return searchMissionsV32({
+      query,
+      projectIds: projectIds.length > 0 ? projectIds : null,
+      statusTypes,
+      resourceKeys,
+      dateField,
+      from,
+      to,
+      limit,
+      entityTypes: csv(req.query.entityTypes),
+      objectiveStates: csv(req.query.objectiveStates),
+      matchesPerResult: matchesPerResultRaw
     });
   })
 );

@@ -60,6 +60,30 @@ export {
   parseResourcePathsCsv,
   type ResourcePathPermission
 } from './resource-paths.js';
+export {
+  DEFAULT_MATCHES_PER_RESULT,
+  DEFAULT_SEARCH_ENTITY_TYPES,
+  isSearchMatchEntityType,
+  MAX_MATCHES_PER_RESULT,
+  parseMatchesPerResult,
+  parseSearchEntityTypes,
+  parseSearchObjectiveStates,
+  SEARCH_CANDIDATE_FETCH_LIMIT,
+  SEARCH_CHILD_CONTEXT_WEIGHT,
+  SEARCH_MATCH_ENTITY_TYPES,
+  SEARCH_OBJECTIVE_STATES,
+  SEARCH_RESULT_ENTITY_TYPES,
+  type SearchAppliedFiltersV3,
+  type SearchEntityCounts,
+  type SearchMatch,
+  type SearchMatchEntityType,
+  type SearchMatchKind,
+  type SearchObjectiveState,
+  type SearchParseResult,
+  type SearchResponseV3,
+  type SearchResultEntityType,
+  type SearchResultV3
+} from './search.js';
 
 // ---- Closed status vocabularies (from the schema CHECK constraints) ----
 

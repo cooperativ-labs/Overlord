@@ -116,17 +116,16 @@ repository resource carrying `.overlord/project.json`. If that file lists
 multiple projects, use the entry with `isPrimary: true` (also the top-level
 `projectId`) unless the caller names a different linked project.
 
-### Search v2
+### Search v3
 
-`overlord_search_missions` returns the versioned `SearchMissionsResponseV2`
-envelope across the caller's authorized workspaces in one organization. It
-accepts one stable project UUID in `projectId`, plus `resourceKey`, `dateField`
-(`createdAt` or `updatedAt`), inclusive `from`,
-exclusive `to`, status types, and a global limit. A date field defaults to
-`updatedAt` only when a bound is supplied. The response includes `results`,
-`appliedFilters`, `totalMatchedBeforeLimit`, and per-workspace matched/returned
-counts. It never resolves project names and never fans out across organizations;
-the OAuth consent organization is the hard boundary.
+`overlord_search_missions` returns grouped `SearchResponseV3` mission anchors
+with matched objectives and deliveries. It accepts project and workspace
+references, status/resource/date filters, `entityTypes`, `objectiveStates`,
+`matchesPerResult`, and `detail` (`compact` by default, `full` for child
+snippets and metadata). Compact retains child IDs and objective display IDs for
+navigation. Artifacts are not indexed. Read `workspaceCounts`, `entityCounts`,
+and `truncatedCandidates` before asserting completeness; `fallback` mode is a
+recency listing rather than a text-match result.
 
 `overlord_deliver_session` accepts the same optional `artifacts` shape as the
 Protocol delivery operation — still valid when finishing a turn. Agents can also

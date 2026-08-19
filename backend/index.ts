@@ -215,6 +215,7 @@ import {
   revokeUserToken,
   searchMissions,
   searchMissionsV2,
+  searchMissionsV3,
   setDefaultProjectPreference,
   updateArtifact,
   updateInboxItem,
@@ -1700,6 +1701,72 @@ app.get(
       from,
       to,
       limit
+    });
+  })
+);
+app.get(
+  '/api/search/v3',
+  handle(async req => {
+    const csv = (value: unknown): string[] | null =>
+      typeof value === 'string'
+        ? value
+            .split(',')
+            .map(item => item.trim())
+            .filter(item => item !== '')
+        : null;
+    const query = typeof req.query.q === 'string' ? req.query.q : null;
+    const parsedLimit = Number.parseInt(
+      typeof req.query.limit === 'string' ? req.query.limit : '',
+      10
+    );
+    const limit = Number.isFinite(parsedLimit) ? parsedLimit : undefined;
+    const statusTypes = csv(req.query.statusTypes);
+    const projectIdsRaw =
+      typeof req.query.projectIds === 'string'
+        ? req.query.projectIds
+        : typeof req.query.projectId === 'string'
+          ? req.query.projectId
+          : '';
+    const projectIds = projectIdsRaw
+      .split(',')
+      .map(value => value.trim())
+      .filter(value => value !== '');
+    const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (projectIds.some(id => !uuidRe.test(id))) {
+      throw new ApiError(400, 'V3 search accepts only stable project UUIDs in projectIds');
+    }
+    const resourceKeys =
+      csv(req.query.resourceKeys) ??
+      (typeof req.query.resourceKey === 'string' && req.query.resourceKey.trim()
+        ? [req.query.resourceKey.trim()]
+        : null);
+    const rawDateField = typeof req.query.dateField === 'string' ? req.query.dateField : null;
+    if (
+      rawDateField &&
+      rawDateField !== 'createdAt' &&
+      rawDateField !== 'updatedAt' &&
+      rawDateField !== 'dueDatetime'
+    ) {
+      throw new ApiError(400, 'dateField must be createdAt, updatedAt, or dueDatetime');
+    }
+    const dateField = rawDateField as MissionSearchDateField | null;
+    const from =
+      typeof req.query.from === 'string' && req.query.from.trim() ? req.query.from : null;
+    const to = typeof req.query.to === 'string' && req.query.to.trim() ? req.query.to : null;
+    const matchesPerResultRaw =
+      typeof req.query.matchesPerResult === 'string' ? req.query.matchesPerResult : null;
+    return searchMissionsV3({
+      query,
+      projectIds: projectIds.length > 0 ? projectIds : null,
+      statusTypes,
+      resourceKeys,
+      dateField,
+      from,
+      to,
+      limit,
+      entityTypes: csv(req.query.entityTypes),
+      objectiveStates: csv(req.query.objectiveStates),
+      matchesPerResult: matchesPerResultRaw
     });
   })
 );

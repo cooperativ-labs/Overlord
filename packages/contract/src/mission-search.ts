@@ -2,7 +2,14 @@
 export type MissionSearchMode = 'display_id' | 'any' | 'all' | 'phrase' | 'fallback';
 
 /** Where a result matched the query. */
-export type MissionSearchMatchKind = 'title' | 'displayId' | 'objective' | 'event';
+export type MissionSearchMatchKind =
+  | 'title'
+  | 'displayId'
+  | 'objective'
+  | 'event'
+  | 'delivery'
+  | 'constraints'
+  | 'notes';
 
 /**
  * Date column used by an explicit v2 range filter.

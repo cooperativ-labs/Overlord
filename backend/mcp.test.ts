@@ -3,6 +3,7 @@ import { spawn } from 'node:child_process';
 import path from 'node:path';
 import test from 'node:test';
 
+import { compactSearchResponse } from '../mcp/search-detail.ts';
 import { hostedMcpToolDefinitions } from '../mcp/tool-catalog.ts';
 import { hostedMcpWidgetResources, readHostedMcpWidget } from '../mcp/widgets.ts';
 
@@ -114,6 +115,46 @@ test('hosted MCP tool metadata is publication-ready', () => {
   }
 });
 
+test('MCP search compact and full detail modes preserve navigation semantics', () => {
+  const full = {
+    version: 3,
+    entityCounts: { mission: 1, objective: 3, delivery: 0, event: 0 },
+    results: [
+      {
+        id: 'mission-1',
+        matches: [
+          ...Array.from({ length: 3 }, (_, index) => ({
+            id: `objective-${index}`,
+            displayId: `coo:789.${index}`,
+            entityType: 'objective',
+            snippet: 'needle',
+            matchedTerms: ['needle'],
+            createdAt: '2026-08-19T00:00:00.000Z',
+            updatedAt: '2026-08-19T00:00:00.000Z'
+          }))
+        ]
+      }
+    ]
+  };
+  const compact = compactSearchResponse(full) as typeof full;
+  assert.equal(compact.version, 3);
+  assert.equal(full.version, 3);
+  assert.equal(compact.entityCounts.objective, 3);
+  for (const result of compact.results) {
+    assert.ok(result.matches.length <= 2);
+    for (const match of result.matches) {
+      assert.ok('id' in match);
+      assert.ok('displayId' in match);
+      assert.equal('snippet' in match, false);
+      assert.equal('matchedTerms' in match, false);
+      assert.equal('createdAt' in match, false);
+      assert.equal('updatedAt' in match, false);
+    }
+  }
+  for (const result of full.results)
+    for (const match of result.matches) assert.ok('snippet' in match);
+});
+
 test('hosted MCP widget resources are self-contained and readable', () => {
   assert.deepEqual(hostedMcpWidgetResources.map(resource => resource.uri).sort(), [
     'ui://overlord/file-changes.html',
@@ -155,8 +196,12 @@ test('overlord_list_project_statuses is a read-only project-scoped discovery too
   assert.match(status.description, /not accepted here/);
   assert.deepEqual(Object.keys(properties).sort(), [
     'dateField',
+    'detail',
+    'entityTypes',
     'from',
     'limit',
+    'matchesPerResult',
+    'objectiveStates',
     'projectId',
     'query',
     'resourceKey',
@@ -171,4 +216,7 @@ test('overlord_list_project_statuses is a read-only project-scoped discovery too
   assert.match(properties.workspaceId.description, /narrows an ambiguous projectId/);
   assert.match(properties.dateField.description, /dueDatetime/);
   assert.match(search.description, /authorized workspaces/);
+  assert.match(search.description, /Artifacts are not indexed/);
+  assert.match(search.description, /matching objectives and deliveries/);
+  assert.deepEqual((properties.detail as unknown as { enum: string[] }).enum, ['compact', 'full']);
 });

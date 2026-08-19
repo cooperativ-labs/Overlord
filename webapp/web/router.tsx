@@ -17,6 +17,7 @@ import { SidebarInset, SidebarProvider } from './components/ui/sidebar.tsx';
 import { parseMissionPanelSearch } from './lib/mission-panel-search.ts';
 import { useAllProjects, useMeta, useWorkspaceMyMissions } from './lib/queries.ts';
 import { shouldShowOnboarding, shouldShowOnboardingSetup } from './lib/router-gates.ts';
+import { parseSearchPageSearch } from './lib/search-page-search.ts';
 
 function EmptyWorkspaceModal() {
   const projects = useAllProjects();
@@ -121,6 +122,13 @@ const projectsRoute = createRoute({
   component: lazyRouteComponent(() => import('./pages/ProjectsPage.tsx'), 'ProjectsPage')
 });
 
+const searchRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/search',
+  validateSearch: parseSearchPageSearch,
+  component: lazyRouteComponent(() => import('./pages/SearchPage.tsx'), 'SearchPage')
+});
+
 const inboxRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/inbox',
@@ -187,6 +195,7 @@ export const routeTree = rootRoute.addChildren([
   indexRoute,
   inboxRoute.addChildren([inboxMissionPanelRoute]),
   projectsRoute,
+  searchRoute,
   workspaceLegacyRedirectRoute,
   workspaceMissionLegacyRedirectRoute,
   myMissionsRoute.addChildren([myMissionsPanelRoute]),

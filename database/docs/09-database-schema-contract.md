@@ -2317,15 +2317,15 @@ Indexes:
 
 ### `search_documents`
 
-Portable search indexing table. Adapters can replace or augment this with SQLite FTS5 or Postgres `tsvector`. Every searchable document maps back to a mission via `mission_id`, so mission search always returns missions while ranking aggregates content across all source entity types.
+Portable search indexing table. Adapters can replace or augment this with SQLite FTS5 or Postgres `tsvector`. Every searchable document maps back to a mission via `mission_id`, so mission search always returns missions while ranking aggregates content across all source entity types. Delivery documents retain their source `entity_id`; grouped v3 retrieval joins that identity so an objective or delivery can be returned beneath its mission anchor.
 
 | Column            | Type         | Required | Notes                                                                                                                                                             |
 | ----------------- | ------------ | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `id`              | Id           | yes      |                                                                                                                                                                   |
 | `workspace_id`    | Id           | yes      | FK to `workspaces`.                                                                                                                                               |
 | `project_id`      | Id           | no       | FK to `projects`.                                                                                                                                                 |
-| `mission_id`      | Id           | yes      | Owning mission. For `entity_type = 'mission'` this equals `entity_id`; for objectives and events it is the parent mission so all documents aggregate per mission. |
-| `entity_type`     | text         | yes      | `mission`, `objective`, `event`, etc.                                                                                                                             |
+| `mission_id`      | Id           | yes      | Owning mission. For `entity_type = 'mission'` this equals `entity_id`; for objectives, events, and deliveries it is the parent mission so all documents aggregate per mission. |
+| `entity_type`     | text         | yes      | Closed core vocabulary: `mission`, `objective`, `event`, `delivery`.                                                                                              |
 | `entity_id`       | Id           | yes      |                                                                                                                                                                   |
 | `title`           | text         | no       |                                                                                                                                                                   |
 | `body_text`       | text         | yes      | Redacted searchable text.                                                                                                                                         |
@@ -2344,7 +2344,7 @@ Indexes:
 Mission search should support:
 
 - Exact lookup by `display_id`.
-- Ranked text search over title, display ID, objective text, and mission-event summaries.
+- Ranked text search over title, display ID, objective text, and mission-event summaries. Delivery text is indexed and returnable on the v3 grouped surface; v1/v2 preserve their existing mission/objective/event corpus.
 - V2 filters for stable project UUIDs, resource-key names, status types, and an
   explicit date field (`createdAt` or `updatedAt`) with inclusive `from` and
   exclusive `to`. `updatedAt` is the default field only when either range bound
@@ -2360,11 +2360,15 @@ the remainder assigned by ascending workspace UUID; unused quota is never
 redistributed. The versioned response reports `appliedFilters`,
 `totalMatchedBeforeLimit`, and per-workspace matched/returned counts.
 
-Ranking aggregates per-document relevance into one score per mission with `max(documentScore)` plus a bounded corroboration bonus, never an unbounded sum. The reference implementation weights the title column above the body and weights source kinds by importance (mission title > objective > event), fuses text rank with recency, and sorts exact display-id and exact-title matches ahead of the fused ranking, so a query that hits a mission's title outranks chatter in its events.
+Ranking aggregates per-document relevance into one score per mission with `max(documentScore)` plus a bounded corroboration bonus, never an unbounded sum. The reference implementation weights the title column above the body and weights source kinds by importance (mission title > objective > delivery > event), fuses text rank with recency, and sorts exact display-id and exact-title matches ahead of the fused ranking, so a query that hits a mission's title outranks chatter in its events.
 
-The index is maintained by adapter triggers, not application writes: insert/update/delete on `missions`, `objectives`, and `mission_events` keep `search_documents` (and the adapter full-text index) in sync, and a soft delete of a mission removes every document for that mission so deleted missions never surface. `content_hash` and `source_revision` allow incremental reindexing instead of blind rebuilds.
+V3 retrieval selects `entity_id` so matching objectives and deliveries are identifiable. SQLite joins `search_documents` from `search_documents_fts.rowid` rather than adding `entity_id` to the FTS virtual table. Each workspace fetch is `ORDER BY doc_score DESC LIMIT 500`; when that cap is hit, `truncatedCandidates` is true and envelope counts are lower bounds. Child matches inside a group are ranked `docScore + 0.15 * missionScore` and capped by `matchesPerResult`. Events remain corroboration-only.
 
-- **SQLite** implements the full-text index as an external-content FTS5 virtual table (`search_documents_fts`) over `search_documents`, with `mission_id`/`entity_type` carried as `UNINDEXED` columns so a single `bm25()`-ranked query can return and weight missions without a join back to the base table.
+The index is maintained by adapter triggers, not application writes: insert/update/delete on `missions`, `objectives`, `mission_events`, and `deliveries` keep `search_documents` (and the adapter full-text index) in sync, and a soft delete of a mission removes every document for that mission so deleted missions never surface. Workspace moves first remove the old workspace's document and then upsert the new one. Delivery rows are omitted once soft-deleted. `content_hash` and `source_revision` allow incremental reindexing instead of blind rebuilds.
+
+Mission document bodies concatenate the title/display ID with `constraints_text`, `output_format_text`, and `notes_text`. `notes_text` remains excluded from attach/load context and prompt assembly, but is searchable by every authorized caller, including agents. Delivery document bodies concatenate `summary`, `verification_summary`, `follow_up_notes`, and only `deliveryReport.agentReport.humanActions`, `knownRisks`, `deferredWork`, `assumptions`, and each `tradeoffsMade[].decision`; adapters cap that resulting body at 20,000 characters. Text beyond that cap is not searchable. Artifacts are not indexed.
+
+- **SQLite** implements the full-text index as an external-content FTS5 virtual table (`search_documents_fts`) over `search_documents`, with `mission_id`/`entity_type` carried as `UNINDEXED` columns so a single `bm25()`-ranked query can return and weight missions. V3 child identity comes from joining `search_documents` on `rowid`, not from adding `entity_id` to the virtual table.
 - **Postgres** implements it as a generated `tsvector` column with a GIN index and `plpgsql` sync triggers; trigram indexes and a stable search RPC may be added as adapter details.
 
 ## Audit And Migrations

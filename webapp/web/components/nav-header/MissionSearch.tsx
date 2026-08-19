@@ -1,4 +1,4 @@
-import type { MissionSearchResultV2, SearchMissionsResponseV2 } from '@overlord/contract';
+import type { SearchResponseV3, SearchResultV3 } from '@overlord/contract';
 import { useNavigate, useRouter } from '@tanstack/react-router';
 import { ArrowLeft } from 'lucide-react';
 import { type KeyboardEvent, useEffect, useId, useMemo, useRef, useState } from 'react';
@@ -9,6 +9,14 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { api } from '@/lib/api';
 import { useAllProjects } from '@/lib/queries';
 import { cn } from '@/lib/utils';
+
+import {
+  flattenSearchRows,
+  SearchCompletenessNotice,
+  searchDestination,
+  SearchResultRowContent,
+  type VisibleSearchRow
+} from '../search/search-presentation.tsx';
 
 type MissionSearchProps = {
   className?: string;
@@ -23,8 +31,8 @@ function dateInputToIsoBound(value: string, endExclusive = false): string | unde
 
 /**
  * Global mission search bar. Debounces input, queries the shared search index via
- * GET /api/missions/search (the same endpoint and ranking the CLI uses), and
- * navigates to the selected mission. ⌘F / Ctrl+F focuses it; ⌥← / Alt+← goes back.
+ * GET /api/search/v3 and renders a one-child-per-mission compact projection.
+ * ⌘F / Ctrl+F focuses it; ⌥← / Alt+← goes back.
  */
 export function MissionSearch({ className }: MissionSearchProps) {
   const navigate = useNavigate();
@@ -34,8 +42,8 @@ export function MissionSearch({ className }: MissionSearchProps) {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<MissionSearchResultV2[]>([]);
-  const [searchMeta, setSearchMeta] = useState<SearchMissionsResponseV2 | null>(null);
+  const [results, setResults] = useState<SearchResultV3[]>([]);
+  const [searchMeta, setSearchMeta] = useState<SearchResponseV3 | null>(null);
   const [projectId, setProjectId] = useState('');
   const [resourceKey, setResourceKey] = useState('');
   const [resources, setResources] = useState<string[]>([]);
@@ -45,17 +53,11 @@ export function MissionSearch({ className }: MissionSearchProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [searchShortcutHint, setSearchShortcutHint] = useState('⌘F');
   const [backShortcutHint, setBackShortcutHint] = useState('⌥←');
 
-  // Resolve project names for the result subtitle without an extra request per
-  // result; the projects list is already cached by react-query.
   const projects = useAllProjects();
-  const projectNameById = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const project of projects.data ?? []) map.set(project.id, project.name);
-    return map;
-  }, [projects.data]);
 
   useEffect(() => {
     let isCurrent = true;
@@ -79,31 +81,38 @@ export function MissionSearch({ className }: MissionSearchProps) {
       setIsOpen(false);
       setActiveIndex(0);
       setIsLoading(false);
+      setSearchError(null);
       return;
     }
 
     let isCurrent = true;
     setIsLoading(true);
+    setSearchError(null);
 
     const timeoutId = window.setTimeout(async () => {
       try {
-        const data = await api.searchMissionsV2(query.trim(), {
+        const data = await api.searchMissionsV3(query.trim(), {
           projectIds: projectId ? [projectId] : undefined,
           resourceKeys: resourceKey ? [resourceKey] : undefined,
           dateField: from || to ? dateField : undefined,
           from: dateInputToIsoBound(from),
           // The REST contract uses an exclusive upper bound; a calendar day is
           // therefore represented by the following midnight.
-          to: dateInputToIsoBound(to, true)
+          to: dateInputToIsoBound(to, true),
+          matchesPerResult: 1
         });
         if (!isCurrent) return;
         const missions = data.results;
         setResults(missions);
         setSearchMeta(data);
-        setIsOpen(missions.length > 0);
+        setIsOpen(true);
         setActiveIndex(0);
       } catch (error) {
-        if (isCurrent) console.error(error);
+        if (isCurrent) {
+          console.error(error);
+          setSearchError(error instanceof Error ? error.message : 'Search could not be completed.');
+          setIsOpen(true);
+        }
       } finally {
         if (isCurrent) setIsLoading(false);
       }
@@ -150,31 +159,40 @@ export function MissionSearch({ className }: MissionSearchProps) {
     return () => window.removeEventListener('keydown', handleGlobalHotkeys);
   }, [router]);
 
-  const selectMission = (mission: MissionSearchResultV2) => {
-    void navigate({
-      to: '/projects/$projectId/missions/$missionId',
-      params: { projectId: mission.projectId, missionId: mission.id }
-    });
+  const rows = useMemo(() => flattenSearchRows(results, { childLimit: 1 }), [results]);
+
+  const selectRow = (row: VisibleSearchRow) => {
+    void navigate(searchDestination(row.mission, row.kind === 'match' ? row.match : undefined));
     setQuery('');
     setResults([]);
     setIsOpen(false);
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (!results.length) {
+    if (!rows.length) {
       return;
     }
 
     if (event.key === 'ArrowDown') {
       event.preventDefault();
-      setIsOpen(true);
-      setActiveIndex(prev => Math.min(prev + 1, results.length - 1));
+      if (!isOpen) {
+        setIsOpen(true);
+        setActiveIndex(0);
+      } else {
+        setActiveIndex(prev => Math.min(prev + 1, rows.length - 1));
+      }
     } else if (event.key === 'ArrowUp') {
       event.preventDefault();
-      setActiveIndex(prev => Math.max(prev - 1, 0));
+      if (!isOpen) {
+        setIsOpen(true);
+        setActiveIndex(rows.length - 1);
+      } else {
+        setActiveIndex(prev => Math.max(prev - 1, 0));
+      }
     } else if (event.key === 'Enter' && isOpen) {
       event.preventDefault();
-      selectMission(results[activeIndex]);
+      const activeRow = rows[activeIndex];
+      if (activeRow) selectRow(activeRow);
     } else if (event.key === 'Escape') {
       setIsOpen(false);
     }
@@ -211,6 +229,9 @@ export function MissionSearch({ className }: MissionSearchProps) {
             role="combobox"
             aria-expanded={isOpen}
             aria-controls={listboxId}
+            aria-activedescendant={
+              isOpen && rows[activeIndex] ? `${listboxId}-${activeIndex}` : undefined
+            }
             aria-autocomplete="list"
             onKeyDown={handleKeyDown}
           />
@@ -279,49 +300,72 @@ export function MissionSearch({ className }: MissionSearchProps) {
             />
           </div>
         )}
-        {isOpen && results.length > 0 && (
+        {isOpen && rows.length > 0 && (
           <ul
             role="listbox"
             id={listboxId}
             className="absolute left-0 top-full z-20 mt-2 w-full max-h-[80vh] overflow-y-auto rounded-xl border border-border bg-card shadow-xl"
           >
-            {results.map((mission, index) => {
+            {rows.map((row, index) => {
               const isActive = index === activeIndex;
-              const projectName = projectNameById.get(mission.projectId);
               return (
                 <li
-                  key={mission.id}
+                  key={row.key}
+                  id={`${listboxId}-${index}`}
                   role="option"
                   aria-selected={isActive}
                   className={cn(
                     'px-4 py-3 transition hover:bg-muted/90',
                     isActive ? 'bg-primary/10' : 'bg-card'
                   )}
-                  onMouseDown={() => selectMission(mission)}
+                  onMouseDown={() => selectRow(row)}
                   onMouseEnter={() => setActiveIndex(index)}
                 >
-                  <p className="truncate text-sm font-medium text-foreground">
-                    {mission.title || 'Untitled mission'}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {mission.displayId} • {projectName ?? 'Unknown project'}
-                  </p>
+                  <SearchResultRowContent row={row} compact />
                 </li>
               );
             })}
+            <li className="border-t px-2 py-2">
+              <Button
+                className="w-full justify-start"
+                size="sm"
+                variant="ghost"
+                onMouseDown={() => {
+                  void navigate({ to: '/search', search: { q: query.trim() } });
+                  setIsOpen(false);
+                }}
+              >
+                View all results
+              </Button>
+            </li>
           </ul>
         )}
-        {isOpen && searchMeta && (
-          <p className="mt-1 text-xs text-muted-foreground">
-            Showing {results.length} of {searchMeta.totalMatchedBeforeLimit} matches
-            {searchMeta.appliedFilters.projectIds.length ||
-            searchMeta.appliedFilters.resourceKeys.length ||
-            searchMeta.appliedFilters.from ||
-            searchMeta.appliedFilters.to
-              ? ' with filters applied'
-              : ''}
-            .
+        {isOpen && !isLoading && searchError && (
+          <p
+            role="alert"
+            className="mt-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive"
+          >
+            Search could not be completed. {searchError}
           </p>
+        )}
+        {isOpen && !isLoading && !searchError && searchMeta && rows.length === 0 && (
+          <p className="mt-2 rounded-md border bg-card px-3 py-2 text-xs text-muted-foreground">
+            No matching missions, objectives, or deliveries.
+          </p>
+        )}
+        {isOpen && searchMeta && (
+          <div className="mt-1">
+            <SearchCompletenessNotice
+              returned={results.length}
+              totalMatchedBeforeLimit={searchMeta.totalMatchedBeforeLimit}
+              truncatedCandidates={searchMeta.truncatedCandidates}
+            />
+            {searchMeta.appliedFilters.mode === 'fallback' && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                Showing fallback results because the query has no meaningful terms.
+              </p>
+            )}
+          </div>
         )}
       </div>
     </div>

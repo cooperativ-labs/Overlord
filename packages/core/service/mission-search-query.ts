@@ -11,6 +11,8 @@ export type ParsedMissionSearchQuery = {
   mode: MissionSearchQueryMode;
   /** Mission display id when `mode === 'display_id'`. */
   displayId: string | null;
+  /** Objective display key when the query was `coo:789.2nnh`. */
+  objectiveDisplayKey: string | null;
   /** Distinct meaningful terms (stop words removed, identifiers preserved). */
   terms: string[];
   coverageFloor: number | null;
@@ -125,12 +127,28 @@ function tokenizeRemainder(text: string): string[] {
 export function parseMissionSearchQuery(query: string): ParsedMissionSearchQuery {
   const raw = query.trim();
   if (!raw) {
-    return { raw, mode: 'fallback', displayId: null, terms: [], coverageFloor: null };
+    return {
+      raw,
+      mode: 'fallback',
+      displayId: null,
+      objectiveDisplayKey: null,
+      terms: [],
+      coverageFloor: null
+    };
   }
 
   if (DISPLAY_ID_QUERY_RE.test(raw)) {
-    const displayId = raw.replace(/\.[a-z0-9]+$/i, '');
-    return { raw, mode: 'display_id', displayId, terms: [], coverageFloor: null };
+    const suffix = raw.match(/^([a-z0-9-]+:\d+)\.([a-z0-9]+)$/i);
+    const displayId = suffix ? suffix[1]! : raw;
+    const objectiveDisplayKey = suffix ? suffix[2]!.toLowerCase() : null;
+    return {
+      raw,
+      mode: 'display_id',
+      displayId,
+      objectiveDisplayKey,
+      terms: [],
+      coverageFloor: null
+    };
   }
 
   const terms: string[] = [];
@@ -152,13 +170,21 @@ export function parseMissionSearchQuery(query: string): ParsedMissionSearchQuery
 
   const meaningful = uniquePreserve(terms);
   if (meaningful.length === 0) {
-    return { raw, mode: 'fallback', displayId: null, terms: [], coverageFloor: null };
+    return {
+      raw,
+      mode: 'fallback',
+      displayId: null,
+      objectiveDisplayKey: null,
+      terms: [],
+      coverageFloor: null
+    };
   }
 
   return {
     raw,
     mode: 'any',
     displayId: null,
+    objectiveDisplayKey: null,
     terms: meaningful,
     coverageFloor: missionSearchCoverageFloor(meaningful.length)
   };

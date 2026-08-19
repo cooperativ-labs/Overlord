@@ -4,6 +4,7 @@ import type { NextFunction, Request, Response } from 'express';
 import type { ProtocolRequestBody } from '../backend/protocol.ts';
 import { runProtocolSubcommand } from '../backend/protocol.ts';
 
+import { compactSearchResponse } from './search-detail.ts';
 import { hostedMcpToolDefinitions, type ToolDefinition } from './tool-catalog.ts';
 import { hostedMcpWidgetResources, readHostedMcpWidget } from './widgets.ts';
 
@@ -169,11 +170,15 @@ const toolHandlers: Record<string, ToolHandler> = {
           : {})
       })
     ),
-  overlord_search_missions: args =>
-    runProtocolSubcommand(
-      'search-missions',
+  overlord_search_missions: async args => {
+    const detail = optionalString(args, 'detail') ?? 'compact';
+    if (detail !== 'compact' && detail !== 'full') {
+      throw new Error("detail must be 'compact' or 'full'");
+    }
+    const result = await runProtocolSubcommand(
+      'search',
       protocolBody({
-        '--response-version': '2',
+        '--response-version': '3',
         ...(optionalString(args, 'query') ? { '--query': requiredString(args, 'query') } : {}),
         ...(optionalString(args, 'status') ? { '--status': requiredString(args, 'status') } : {}),
         ...(optionalProjectRef(args) ? { '--project-id': optionalProjectRef(args)! } : {}),
@@ -190,9 +195,22 @@ const toolHandlers: Record<string, ToolHandler> = {
         ...(optionalString(args, 'to') ? { '--to': requiredString(args, 'to') } : {}),
         ...(typeof args.limit === 'number' && Number.isFinite(args.limit)
           ? { '--limit': String(Math.trunc(args.limit)) }
+          : {}),
+        ...(optionalString(args, 'entityTypes')
+          ? { '--entity-types': requiredString(args, 'entityTypes') }
+          : {}),
+        ...(optionalString(args, 'objectiveStates')
+          ? { '--objective-states': requiredString(args, 'objectiveStates') }
+          : {}),
+        ...(typeof args.matchesPerResult === 'number' && Number.isFinite(args.matchesPerResult)
+          ? {
+              '--matches-per-result': String(Math.trunc(args.matchesPerResult))
+            }
           : {})
       })
-    ),
+    );
+    return detail === 'compact' ? compactSearchResponse(result) : result;
+  },
   overlord_create_mission: args =>
     runProtocolSubcommand(
       'create',
