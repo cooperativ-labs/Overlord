@@ -94,7 +94,7 @@ export function createKanbanCollisionDetection({
     const intersections = pointerHits.length > 0 ? pointerHits : rectIntersection(args);
     let overId = getFirstCollision(intersections, 'id');
 
-    if (overId != null) {
+    if (overId !== null && overId !== undefined) {
       const columnKey = String(overId);
       if (Object.prototype.hasOwnProperty.call(columns, columnKey)) {
         const containerItems = columns[columnKey] ?? [];

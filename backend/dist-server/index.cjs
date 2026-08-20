@@ -151228,15 +151228,14 @@ async function deleteObjective(idRef) {
   });
 }
 async function loadOperatorUserRow(db = requireDatabaseClient()) {
-  const actor = getActorWorkspaceUserId();
-  if (actor) {
+  const profileId = await resolveActiveProfileId(db);
+  if (profileId) {
     const row = await db.get(
       `SELECT p.id, p.kind, p.display_name, p.handle, p.email,
                 p.metadata_json, p.created_at, p.revision
            FROM profiles p
-           JOIN workspace_users wu ON wu.profile_id = p.id
-          WHERE wu.id = ? AND p.deleted_at IS NULL`,
-      [actor]
+          WHERE p.id = ? AND p.deleted_at IS NULL`,
+      [profileId]
     );
     if (row) return row;
   }
@@ -167202,7 +167201,7 @@ function validateAuthorizationRequest(req) {
   if (resource !== canonicalResource) {
     throw new ApiError(
       400,
-      "OAuth resource must match this Overlord MCP server",
+      `OAuth resource must match this Overlord MCP server: expected ${canonicalResource}, received ${resource}`,
       void 0,
       "invalid_target"
     );
@@ -167234,10 +167233,16 @@ async function consumeAuthorizationCode(code) {
   }
   return entry;
 }
+function isLocalHostHeader(host) {
+  const hostname5 = host.replace(/:\d+$/, "").toLowerCase();
+  return hostname5 === "localhost" || hostname5.endsWith(".localhost") || hostname5 === "127.0.0.1" || hostname5 === "::1" || hostname5 === "[::1]";
+}
 function webPublicBaseUrl(req) {
   const configured = process.env.OVERLORD_WEBAPP_PUBLIC_URL?.trim() || process.env.OVERLORD_PUBLIC_URL?.trim();
   if (configured) return configured.replace(/\/+$/, "");
-  return `${req.protocol}://${req.get("host") ?? "localhost"}`;
+  const host = req.get("host") ?? "localhost";
+  const protocol = isLocalHostHeader(host) ? req.protocol : "https";
+  return `${protocol}://${host}`;
 }
 function oauthProtectedResourceMetadata(req) {
   const baseUrl = webPublicBaseUrl(req);
