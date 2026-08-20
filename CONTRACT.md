@@ -34,7 +34,7 @@ where a surface differs by edition this document calls it out explicitly.
 
 ## Contract Version
 
-Current version: `104`
+Current version: `105`
 
 This `Current version` line is the **sole authoritative** statement of the contract
 version in this document. Automated checks and agents MUST read it (and
@@ -57,6 +57,25 @@ derived compatibility projection: Protocol create/prompt/add/update flags map
 to Run Queue membership and preserve mission-local queue order. The legacy
 storage write remains during this release, retires in the next release, and
 column removal requires a later contract-version bump.
+
+### Version 105 Change Summary
+
+A `USER_TOKEN` a signed-in user mints for themselves — CLI login and the
+settings page — consents to every current and future workspace in the caller's
+organization, and no longer requires a workspace selection. Workspace consent
+narrowing exists for third-party OAuth clients, which continue to pass it
+explicitly from the approval screen; there is no third party to narrow for when
+a user authorizes their own CLI, and requiring a selection made token creation
+fail outright for any account with more than one workspace. Runtime
+authorization is unchanged: consent is always intersected with live membership
+and per-workspace RBAC, so joining or leaving a workspace takes effect
+immediately without reissuing the token. `user_tokens.workspace_id` and
+`workspace_user_id` remain issuance attribution and are never authorization
+inputs.
+
+Token ownership resolves from the authenticated profile. Session and
+`USER_TOKEN` requests establish no ambient workspace member, so an owner lookup
+must not fall back to the instance's oldest profile for an authenticated caller.
 
 ### Version 104 Change Summary
 
@@ -507,7 +526,7 @@ Owns:
 - Workspace target projection (`GET /api/workspaces/:id/execution-targets`): authenticated members may view every non-deleted, executable target in that workspace (browser-only web sessions are not execution targets and are excluded), including non-secret identity/status/owner metadata, reachability, and active-member access count. Workspace admins may rename a target label via `PATCH /api/workspaces/:id/execution-targets/:targetId` (`{ label }`), and may soft-delete a target via `DELETE /api/workspaces/:id/execution-targets/:targetId` when it has no active queued work; deletion clears target-scoped project resources and project target preferences pointing at it, and soft-deletes the linked `devices` row when it no longer has any live execution target. The projection also soft-deletes any remaining orphan devices (no live execution target) before returning. The projection never exposes `connection_json` or credentials; project selection remains constrained to the caller's eligible targets.
 - Workspace agent catalog and launch-settings management only through their workspace-scoped routes under `/api/workspaces/:id/...`, authorized against the target workspace's own membership (`launch:read` to view, `launch:configure` to mutate; non-membership reads as 404). Resource-owned REST and extension operations derive both the workspace and the caller's membership in it before authorization, persistence, provider access, and change-feed attribution.
 - Authenticated default-project preference routes: `GET /api/profile/default-project`, `PUT /api/profile/default-project` (`{ projectId }`), and `DELETE /api/profile/default-project`. The read result is `{ projectId: string | null }`; `defaultProjectId` is additive on `/api/meta`. A preference is profile navigation state, grants no access, and is ignored when its project is no longer readable.
-- User-token lifecycle endpoints: authenticated owners may list, create, rename, and revoke their own tokens; `DELETE /api/user-tokens/:id` shares the existing `user_token:self:revoke` authorization and only soft-deletes an already-revoked token, returning `204` and emitting an `entity_changes` delete tombstone. Token list/create/rename/revoke/delete responses never expose raw secrets or hashes.
+- User-token lifecycle endpoints: authenticated owners may list, create, rename, and revoke their own tokens; `DELETE /api/user-tokens/:id` shares the existing `user_token:self:revoke` authorization and only soft-deletes an already-revoked token, returning `204` and emitting an `entity_changes` delete tombstone. Token list/create/rename/revoke/delete responses never expose raw secrets or hashes. `POST /api/user-tokens` takes no workspace or organization selection: a token minted by the signed-in user for themselves consents to all current and future workspaces in that caller's organization, recorded as `all_workspaces` with no narrowing allowlist, and its issuance workspace is audit attribution only. Every request still intersects that consent with live membership and per-workspace RBAC. Explicit workspace consent is the third-party OAuth approval path only. These endpoints resolve the owning profile from the authenticated caller, never from the instance's oldest account.
 - Hosted MCP OAuth endpoints: dynamic client registration (`POST /oauth/register`), authorization-code + PKCE token exchange (`POST /oauth/token`), revocation (`POST /oauth/revoke`), browser authorization redirect (`GET /oauth/authorize` → web approval UI), and authenticated approval helpers (`POST /oauth/authorize/request`, `POST /oauth/authorize/approve`). The request/approval helpers expose and require an explicit single-organization consent choice when more than one organization is available; approval selects explicit live workspace ids or all current/future workspaces in that organization. `GET /api/authorized-workspaces` is the read-only projection of the caller's organization/workspace authorization snapshot and never changes scope.
 - The versioned **virtual-target gateway route family** (`/api/virtual-targets/v1/*`): `PUT …/registration`, `POST …/claim`, `POST …/requests/:id/progress`, `POST …/requests/:id/launched`, `POST …/requests/:id/failed`, `POST …/grants/:id/exchange`, `GET …/missions/:id/resources`, and `POST …/missions/:id/actions`. REST owns the DTO shapes, target-authenticated auth/RBAC enforcement, per-request idempotency, and bounded/redacted output for this surface. The immutable `VirtualExecutionQueueItemV1` payload and its digest are built by the service layer at queue time and returned only to the authenticated claiming gateway; the local `/api/runner/*` routes are unchanged
 - Mobile Live Activity registration routes: authenticated `PUT` and `DELETE /api/mobile/live-activities/:activityId/push-token`. Registration accepts an opaque ActivityKit push token, required `environment`/`bundleId` for per-registration APNs routing, and an optional `startedByPush` handoff marker, and is private to the caller's profile; neither registrations nor tokens have a read surface.

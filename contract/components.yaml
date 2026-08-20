@@ -4,7 +4,7 @@
 # IMPORTANT: Update this file and CONTRACT.md together when adding components or surfaces.
 # Increment contractVersion when any stable interface changes.
 
-contractVersion: '104'
+contractVersion: '105'
 
 components:
   protocol:
@@ -46,7 +46,7 @@ components:
       - 'objectives.display_key: required Crockford Base32 key unique among live rows of a mission; public displayId is computed as {missions.display_id}.{display_key} and is not stored as a second column'
 
       - 'organizations table (grouping layer above workspaces) and the required workspaces.organization_id FK; workspaces remain the sole RBAC layer; slugs are unique per organization, not instance-wide'
-      - 'organization-bound USER_TOKEN consent: user_tokens.organization_id plus all_workspaces, with user_token_workspaces as the explicit allowlist. An active token authorizes only live memberships in that one organization intersected with its consent; an empty explicit allowlist fails closed. Existing tokens backfill only their recorded user_tokens.workspace_id'
+      - 'organization-bound USER_TOKEN consent: user_tokens.organization_id plus all_workspaces, with user_token_workspaces as the explicit allowlist. An active token authorizes only live memberships in that one organization intersected with its consent; an empty explicit allowlist fails closed. A token the signed-in user mints for themselves is stored with all_workspaces and no allowlist rows; explicit allowlists come from third-party OAuth approval. Existing tokens backfill only their recorded user_tokens.workspace_id'
       - 'Agent Session Exchange core tables (agent_session_channels, agent_session_events, agent_requests, agent_session_inputs) declared by contract and migrated with the channel bootstrap; the scoped channel credential is hash-only and scoped to one channel, native_session_id is a correlation alias and never an authorization key, raw native payloads are never persisted, and no derived capability tier is persisted. The never-migrated hook_events and permission_requests designs are superseded by them; their closed status vocabulary and the mission_events permission_request value remain valid'
       - 'controlled vocabularies (closed and open sets)'
       - 'creation provenance on missions and objectives: created_by_kind (closed human/agent/automation, NOT NULL DEFAULT human), created_by_agent (open connector identifier), and created_by_session_id as a deliberate soft reference to agent_sessions.id with no foreign key, so a dangling provenance pointer can never block a delete; provenance is read as a column on rows already selected and carries no new index'
@@ -243,6 +243,7 @@ components:
       - 'self-service account deletion trigger (user.deleteUser), delegating the cascade to a backend-supplied callback'
       - 'sign-up/sign-in email verification via an optional backend-supplied sendVerificationEmail callback (Resend-backed, RESEND_API_KEY, notifications.cooperativ.io); disabled by default when unset'
       - 'hosted MCP OAuth consent and token issuance: browser approval creates scoped mission_lifecycle USER_TOKEN access tokens; authorization codes are short-lived, single-use, PKCE-protected, and resource-bound; refresh tokens are not issued through contract version 2'
+      - 'self-issued USER_TOKEN consent: a token an authenticated user creates for themselves (CLI login, settings) takes no workspace or organization selection and consents to all current and future workspaces in that caller''s organization; its issuance workspace is audit attribution only, and runtime access remains consent intersected with live membership and per-workspace RBAC. Token ownership resolves from the authenticated profile, never from the instance''s oldest account'
     dependsOn:
       - database
     interactionSurfaces:

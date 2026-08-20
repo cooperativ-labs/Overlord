@@ -26,6 +26,7 @@ Initial behavior:
 - The token itself does not have independent permission scope in the first implementation.
 - When role-based access control is enabled, token requests should pass through the same authorization provider as interactive user requests.
 - Tokens are workspace-agnostic authentication credentials: they are owned by the creating user account, visible/manageable only to that user, and usable across any workspace where that user has active membership. Workspace authorization remains per-workspace through RBAC.
+- Consent narrows, it never grants. A token the user mints for themselves (CLI login, settings) consents to every current and future workspace in that user's organization and asks for no selection; a third-party OAuth client's token carries whatever the approval screen selected. Either way, effective access is that consent intersected with live membership and per-workspace RBAC.
 
 Future behavior:
 

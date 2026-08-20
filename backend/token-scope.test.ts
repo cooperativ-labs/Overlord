@@ -47,18 +47,26 @@ test('createUserToken defaults to a ~90-day expiry when none is given', async ()
   assert.ok(delta > NINETY_DAYS_MS - 60_000 && delta < NINETY_DAYS_MS + 60_000);
   assert.equal(token.scope, 'full');
   assert.deepEqual(token.scopeGrants, []);
+  // A token the user mints for themselves consents to their whole organization:
+  // no narrowing allowlist, and `workspace_id` remains issuance attribution only.
   const consent = db
     .prepare(
-      `SELECT t.organization_id, t.all_workspaces, utw.workspace_id
+      `SELECT t.organization_id, t.all_workspaces, t.workspace_id,
+              (SELECT COUNT(*) FROM user_token_workspaces WHERE token_id = t.id) AS allowlist
          FROM user_tokens t
-         JOIN user_token_workspaces utw ON utw.token_id = t.id
         WHERE t.id = ?`
     )
-    .get(token.id) as { organization_id: string; all_workspaces: number; workspace_id: string };
+    .get(token.id) as {
+    organization_id: string;
+    all_workspaces: number;
+    workspace_id: string;
+    allowlist: number;
+  };
   assert.deepEqual(consent, {
     organization_id: 'test-organization',
-    all_workspaces: 0,
-    workspace_id: 'local-workspace'
+    all_workspaces: 1,
+    workspace_id: 'local-workspace',
+    allowlist: 0
   });
 });
 

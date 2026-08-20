@@ -276,6 +276,29 @@ checks are all in place.
   `requireWorkspacePermission`, tolerating per-workspace denial (the agent-request inbox
   pattern), and must never fall back to the request's ambient default.
 
+## Correction — self-issued tokens (2026-08-20)
+
+Q2's consent design is right for a third-party MCP client and wrong for the
+user's own CLI. Shipping it made `POST /api/user-tokens` reject any caller with
+more than one authorized workspace ("Token creation requires explicit
+organization/workspace consent when more than one workspace is authorized"),
+which broke `ovld login` and the settings page for exactly the multi-workspace
+accounts this work was meant to serve.
+
+A token the signed-in user mints for themselves now consents to all current and
+future workspaces in their organization — `all_workspaces = true`, no allowlist
+rows — because there is no third party to narrow for. The narrowing allowlist
+stays the OAuth approval path. Nothing about runtime authorization changes:
+consent is still intersected with live membership and per-workspace RBAC, so
+leaving a workspace still cuts access immediately.
+
+Two adjacent regressions from the same request-context change, fixed alongside
+it: `resolveAuthorizedWorkspaces` used Postgres-only `?::text` casts, a syntax
+error on SQLite that failed every session-authenticated request in Overlord
+Local; and the token/profile owner lookup fell back to the instance's oldest
+profile when no ambient workspace member was set, which is now every
+session-authenticated request.
+
 ## Decisions
 
 All open questions were answered on 2026-08-19. Q4 was spun out to its own mission.

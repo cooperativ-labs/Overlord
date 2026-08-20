@@ -7479,20 +7479,24 @@ interface UserRow {
 }
 
 /**
- * Resolve the local operator's `profiles` row. Prefers the profile behind the active
- * workspace's actor; falls back to the oldest active human user so a freshly
- * switched workspace without a recorded actor still resolves an identity.
+ * Resolve the caller's `profiles` row: the authenticated profile — or the one
+ * behind the attributed workspace member — falling back to the oldest active
+ * human user so a local operator with neither still resolves an identity.
  */
 async function loadOperatorUserRow(db: DatabaseClient = requireDatabaseClient()): Promise<UserRow> {
-  const actor = getActorWorkspaceUserId();
-  if (actor) {
+  // Session and USER_TOKEN requests authenticate a profile without attributing
+  // an ambient workspace member, so the authenticated profile is the authority.
+  // The oldest-profile fallback below exists only for the loopback/local
+  // operator and direct-service callers, which never establish one; letting it
+  // answer for an authenticated caller would hand them another account.
+  const profileId = await resolveActiveProfileId(db);
+  if (profileId) {
     const row = (await db.get(
       `SELECT p.id, p.kind, p.display_name, p.handle, p.email,
                 p.metadata_json, p.created_at, p.revision
            FROM profiles p
-           JOIN workspace_users wu ON wu.profile_id = p.id
-          WHERE wu.id = ? AND p.deleted_at IS NULL`,
-      [actor]
+          WHERE p.id = ? AND p.deleted_at IS NULL`,
+      [profileId]
     )) as UserRow | undefined;
     if (row) return row;
   }
@@ -7947,31 +7951,54 @@ async function toUserTokenDto(db: DatabaseClient, row: UserTokenRow): Promise<Us
 
 /**
  * Resolve the global user id that owns tokens plus the caller's active
- * workspace membership for audit attribution.
+ * workspace membership for audit attribution. Session and USER_TOKEN requests
+ * carry no ambient workspace member, so the authenticated profile is the
+ * authority; the operator-row fallback only serves the loopback/local and
+ * direct-service callers that never establish one.
  */
 async function loadOperatorIdentity(db: DatabaseClient): Promise<OperatorIdentity> {
   const user = await loadOperatorUserRow(db);
   return { userId: user.id, workspaceUserId: getActorWorkspaceUserId() };
 }
 
-function singleWorkspaceTokenIssuanceScope(): {
-  workspaceId: string;
-  workspaceUserId: string;
+interface TokenIssuanceConsent {
+  /** Null only for a bootstrap/loopback caller; resolved from the issuance workspace. */
   organizationId: string | null;
-} {
+  allWorkspaces: boolean;
+  workspaceIds: string[];
+  issuanceWorkspaceId: string;
+  issuanceWorkspaceUserId: string;
+}
+
+/**
+ * Consent for a token the signed-in user mints for themselves — `ovld login`
+ * and the settings page. There is no third party to narrow access for, so the
+ * token consents to every current and future workspace in the caller's
+ * organization: `USER_TOKEN`s authenticate the account, and every request still
+ * intersects that consent with live membership and per-workspace RBAC, so
+ * joining or leaving a workspace takes effect immediately without reissuing the
+ * token. Third-party OAuth clients pass explicit `consent` instead and are
+ * narrowed to whatever the approval screen selected.
+ *
+ * The issuance workspace is audit attribution only — never an authorization
+ * input — so a deterministic pick from the authorized snapshot is enough; the
+ * route's `requireAnyWorkspacePermission` is the gate.
+ */
+function selfIssuedTokenConsent(): TokenIssuanceConsent {
   const authorized = getAuthorizedWorkspacesContext();
   if (authorized) {
-    if (authorized.workspaces.length !== 1) {
-      throw new ApiError(
-        400,
-        'Token creation requires explicit organization/workspace consent when more than one workspace is authorized'
-      );
+    const issuance = [...authorized.workspaces].sort((a, b) =>
+      a.workspaceId.localeCompare(b.workspaceId)
+    )[0];
+    if (!issuance) {
+      throw new ApiError(409, 'No workspace membership is available for token issuance');
     }
-    const only = authorized.workspaces[0]!;
     return {
-      workspaceId: only.workspaceId,
-      workspaceUserId: only.workspaceUserId,
-      organizationId: authorized.organizationId
+      organizationId: authorized.organizationId,
+      allWorkspaces: true,
+      workspaceIds: [],
+      issuanceWorkspaceId: issuance.workspaceId,
+      issuanceWorkspaceUserId: issuance.workspaceUserId
     };
   }
   const workspaceId = getBootstrapWorkspaceIdOrNull();
@@ -7979,7 +8006,13 @@ function singleWorkspaceTokenIssuanceScope(): {
   if (!workspaceId || !workspaceUserId) {
     throw new ApiError(409, 'No workspace membership is available for token issuance');
   }
-  return { workspaceId, workspaceUserId, organizationId: null };
+  return {
+    organizationId: null,
+    allWorkspaces: true,
+    workspaceIds: [],
+    issuanceWorkspaceId: workspaceId,
+    issuanceWorkspaceUserId: workspaceUserId
+  };
 }
 
 async function loadUserTokenForUpdate(
@@ -8049,43 +8082,32 @@ export async function createUserToken(
     }
     const scopeGrants = scopeGrantsForPreset(scope);
 
-    const issuanceScope = consent
-      ? {
-          workspaceId: consent.issuanceWorkspaceId,
-          workspaceUserId: consent.issuanceWorkspaceUserId,
-          organizationId: consent.organizationId
-        }
-      : singleWorkspaceTokenIssuanceScope();
-    const identity = consent
-      ? {
-          userId: await resolveActiveProfileId(tx),
-          workspaceUserId: consent.issuanceWorkspaceUserId
-        }
-      : {
-          userId: (await loadOperatorIdentity(tx)).userId,
-          workspaceUserId: issuanceScope.workspaceUserId
-        };
-    if (!identity.userId) throw new ApiError(401, 'Authentication required');
-    const { userId, workspaceUserId } = identity;
-    const workspaceId = issuanceScope.workspaceId;
+    // An OAuth client supplies the consent its approval screen collected; a
+    // token the user mints for themselves consents to their whole organization.
+    const issuance: TokenIssuanceConsent = consent ?? selfIssuedTokenConsent();
+    const { userId } = await loadOperatorIdentity(tx);
+    if (!userId) throw new ApiError(401, 'Authentication required');
+    const workspaceUserId = issuance.issuanceWorkspaceUserId;
+    const workspaceId = issuance.issuanceWorkspaceId;
     const workspace = await tx.get<{ organization_id: string }>(
       `SELECT organization_id FROM workspaces WHERE id = ? AND deleted_at IS NULL`,
       [workspaceId]
     );
     if (!workspace) throw new ApiError(409, 'Active workspace no longer exists');
-    if (consent && workspace.organization_id !== consent.organizationId) {
+    const organizationId = issuance.organizationId ?? workspace.organization_id;
+    if (workspace.organization_id !== organizationId) {
       throw new ApiError(400, 'Token consent organization does not match its issuance workspace');
     }
-    if (consent && !consent.allWorkspaces && consent.workspaceIds.length === 0) {
+    if (!issuance.allWorkspaces && issuance.workspaceIds.length === 0) {
       throw new ApiError(400, 'Explicit token consent requires at least one workspace');
     }
-    if (consent && !consent.allWorkspaces) {
-      for (const consentedWorkspaceId of consent.workspaceIds) {
+    if (!issuance.allWorkspaces) {
+      for (const consentedWorkspaceId of issuance.workspaceIds) {
         const consentedWorkspace = await tx.get<{ organization_id: string }>(
           `SELECT organization_id FROM workspaces WHERE id = ? AND deleted_at IS NULL`,
           [consentedWorkspaceId]
         );
-        if (!consentedWorkspace || consentedWorkspace.organization_id !== consent.organizationId) {
+        if (!consentedWorkspace || consentedWorkspace.organization_id !== organizationId) {
           throw new ApiError(400, 'Token consent workspaces must belong to its organization');
         }
       }
@@ -8118,7 +8140,7 @@ export async function createUserToken(
       [
         id,
         workspaceId,
-        consent?.organizationId ?? workspace.organization_id,
+        organizationId,
         userId,
         workspaceUserId,
         label,
@@ -8131,11 +8153,10 @@ export async function createUserToken(
       ]
     );
 
-    if (consent?.allWorkspaces) {
+    if (issuance.allWorkspaces) {
       await tx.run(`UPDATE user_tokens SET all_workspaces = true WHERE id = ?`, [id]);
     } else {
-      const workspaceIds = consent?.workspaceIds ?? [workspaceId];
-      for (const consentedWorkspaceId of workspaceIds) {
+      for (const consentedWorkspaceId of issuance.workspaceIds) {
         await tx.run(
           `INSERT INTO user_token_workspaces (token_id, workspace_id, created_at)
            VALUES (?, ?, ?)`,

@@ -371,7 +371,7 @@ completes onboarding or joins a workspace.
 | `id`                           | Id           | yes      | Token identifier.                                                                                                                                                                           |
 | `workspace_id`                 | Id           | no       | Issuance workspace FK to `workspaces`; not the token's authorization scope. `NULL` for a token minted before the profile has any workspace membership.                                      |
 | `organization_id`              | Id           | no       | Approved organization FK. Required for a token that authorizes workspace data; `NULL` pre-onboarding tokens authorize no workspace data.                                                    |
-| `all_workspaces`               | boolean      | yes      | `true` authorizes current and future live memberships only within `organization_id`; `false` uses `user_token_workspaces`.                                                                  |
+| `all_workspaces`               | boolean      | yes      | `true` authorizes current and future live memberships only within `organization_id`; `false` uses `user_token_workspaces`. A token the signed-in user mints for themselves (CLI login, settings) is written with `true`; `false` comes from third-party OAuth approval. |
 | `profile_id`                   | Id           | yes      | Profile that owns the token.                                                                                                                                                                |
 | `workspace_user_id`            | Id           | no       | Issuing workspace membership for audit. Runtime permissions come from the owner's active membership in the requested workspace. `NULL` alongside `workspace_id` for a pre-onboarding token. |
 | `label`                        | text         | yes      | User supplied.                                                                                                                                                                              |
@@ -412,7 +412,9 @@ never removes the audit trail or exposes the token hash.
 
 Explicit workspace consent for a `USER_TOKEN` where `user_tokens.all_workspaces`
 is false. Every row's workspace must belong to the token's approved organization.
-An empty explicit allowlist is fail-closed: it grants no workspace access.
+An empty explicit allowlist is fail-closed: it grants no workspace access. Rows
+exist only for a narrowed token — a self-issued CLI/settings token consents to
+its whole organization and has none.
 
 | Column         | Type         | Required | Notes                                                         |
 | -------------- | ------------ | -------- | ------------------------------------------------------------- |

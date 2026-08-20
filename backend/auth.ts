@@ -169,6 +169,23 @@ export async function resolveAuthorizedWorkspaces(
   // A partially migrated/pre-onboarding token has no organization boundary and
   // must not turn an explicit allowlist into cross-organization access.
   if (token && !token.organizationId) return { organizationId: null, workspaces: [] };
+  // Both filters are composed rather than expressed as `NULL`-guarded
+  // parameters: an untyped placeholder compared against `NULL` needs a
+  // Postgres-only `::text` cast, which is a syntax error on SQLite and would
+  // fail every authenticated request in Overlord Local.
+  const filters: string[] = [];
+  const params: unknown[] = [profileId];
+  if (token) {
+    filters.push('AND w.organization_id = ?');
+    params.push(token.organizationId);
+    if (!token.allWorkspaces) {
+      filters.push(`AND EXISTS (
+            SELECT 1 FROM user_token_workspaces utw
+             WHERE utw.token_id = ? AND utw.workspace_id = wu.workspace_id
+          )`);
+      params.push(token.id);
+    }
+  }
   const rows = await requireDatabaseClient().all<{
     workspace_id: string;
     workspace_user_id: string;
@@ -187,22 +204,9 @@ export async function resolveAuthorizedWorkspaces(
          ON ra.workspace_id = wu.workspace_id AND ra.workspace_user_id = wu.id
         AND ra.deleted_at IS NULL
       WHERE wu.profile_id = ? AND wu.status = 'active' AND wu.deleted_at IS NULL
-        AND (?::text IS NULL OR w.organization_id = ?)
-        AND (
-          ?::text IS NULL OR ? = 1 OR EXISTS (
-            SELECT 1 FROM user_token_workspaces utw
-             WHERE utw.token_id = ? AND utw.workspace_id = wu.workspace_id
-          )
-        )
+        ${filters.join('\n        ')}
       ORDER BY w.organization_id ASC, wu.workspace_id ASC, ra.role_key ASC`,
-    [
-      profileId,
-      token?.organizationId ?? null,
-      token?.organizationId ?? null,
-      token?.id ?? null,
-      token?.allWorkspaces ? 1 : 0,
-      token?.id ?? null
-    ]
+    params
   );
 
   const organizationIds = [...new Set(rows.map(row => row.organization_id))];

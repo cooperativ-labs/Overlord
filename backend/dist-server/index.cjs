@@ -136301,8 +136301,6 @@ async function allocateObjectiveDisplayKey({
 
 // ../packages/core/service/missions.ts
 init_projects();
-init_util3();
-init_webhook_events();
 
 // ../packages/core/service/run-queue.ts
 init_errors4();
@@ -136902,6 +136900,8 @@ async function deleteRunQueue(db, queueId, moveEntriesTo) {
 }
 
 // ../packages/core/service/missions.ts
+init_util3();
+init_webhook_events();
 function isTruthyFlag2(value) {
   return value === true || value === 1;
 }
@@ -141953,6 +141953,116 @@ function authStatus({ ctx }) {
 
 // protocol.ts
 init_util3();
+
+// execution/launch.ts
+init_dist();
+
+// ../packages/core/dist/service/terminal-profile-types.js
+var DEFAULT_VIEWER_OPEN_AS2 = "window";
+function viewerOpenAsForPlacement2(placement) {
+  return typeof placement === "string" && placement.trim().toLowerCase() === "tab" ? "tab" : DEFAULT_VIEWER_OPEN_AS2;
+}
+function parseViewerOpenAs2(value) {
+  return typeof value === "string" && value.trim().toLowerCase() === "tab" ? "tab" : DEFAULT_VIEWER_OPEN_AS2;
+}
+var TERMINAL_PROFILE_VERSION2 = 1;
+var DEFAULT_LATCH_EXECUTABLE2 = "latch";
+var DEFAULT_EXECUTION_PROVIDER2 = {
+  kind: "direct",
+  executable: DEFAULT_LATCH_EXECUTABLE2
+};
+var DEFAULT_OPEN_VIEWER_ON_LAUNCH2 = true;
+var DEFAULT_TERMINAL_PROFILE2 = {
+  launcher: "Terminal",
+  placement: "window",
+  chord: null,
+  background: false
+};
+var DEFAULT_LAUNCH_SESSION_DEFAULTS2 = {
+  executionProvider: { ...DEFAULT_EXECUTION_PROVIDER2 },
+  openViewerOnLaunch: DEFAULT_OPEN_VIEWER_ON_LAUNCH2
+};
+var LAUNCH_SESSION_METADATA_KEY2 = "launchSession";
+function trimmed9(value) {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+function viewerKindForLauncher2(launcher) {
+  const value = trimmed9(launcher);
+  if (!value)
+    return "inline";
+  const lowered = value.toLowerCase();
+  if (lowered === "iterm2" || lowered === "iterm")
+    return "iterm";
+  if (lowered === "terminal")
+    return "terminal";
+  return "custom";
+}
+function normalizeExecutionProvider2(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    return null;
+  const cast = value;
+  const kind = trimmed9(cast.kind)?.toLowerCase() === "latch" ? "latch" : "direct";
+  return {
+    kind,
+    executable: trimmed9(cast.executable) ?? DEFAULT_LATCH_EXECUTABLE2
+  };
+}
+function resolveLaunchSession2({ profile, defaults: defaults2 = DEFAULT_LAUNCH_SESSION_DEFAULTS2 }) {
+  const launcher = profile ? profile.launcher : DEFAULT_TERMINAL_PROFILE2.launcher;
+  const provider = profile?.executionProvider ? normalizeExecutionProvider2(profile.executionProvider) : null;
+  const openOnLaunch = typeof profile?.openViewerOnLaunch === "boolean" ? profile.openViewerOnLaunch : null;
+  return {
+    version: TERMINAL_PROFILE_VERSION2,
+    executionProvider: provider ?? {
+      ...normalizeExecutionProvider2(defaults2.executionProvider) ?? DEFAULT_EXECUTION_PROVIDER2
+    },
+    viewer: {
+      kind: viewerKindForLauncher2(launcher),
+      launcher: launcher ?? null,
+      openOnLaunch: openOnLaunch ?? defaults2.openViewerOnLaunch !== false,
+      openAs: viewerOpenAsForPlacement2(profile?.placement ?? DEFAULT_TERMINAL_PROFILE2.placement)
+    },
+    executionProviderSource: provider ? "target" : "user_default",
+    viewerOpenSource: openOnLaunch === null ? "user_default" : "target"
+  };
+}
+function launchSessionSnapshotFromMetadata2(metadata) {
+  const raw = metadata?.[LAUNCH_SESSION_METADATA_KEY2];
+  if (!raw || typeof raw !== "object" || Array.isArray(raw))
+    return null;
+  const cast = raw;
+  if (cast.version !== TERMINAL_PROFILE_VERSION2)
+    return null;
+  const viewer = cast.viewer && typeof cast.viewer === "object" && !Array.isArray(cast.viewer) ? cast.viewer : null;
+  const launcher = trimmed9(viewer?.launcher);
+  const source = (value) => trimmed9(value) === "target" ? "target" : "user_default";
+  return {
+    version: TERMINAL_PROFILE_VERSION2,
+    executionProvider: normalizeExecutionProvider2(cast.executionProvider) ?? {
+      ...DEFAULT_EXECUTION_PROVIDER2
+    },
+    viewer: {
+      kind: trimmed9(viewer?.kind) ? trimmed9(viewer?.kind) : viewerKindForLauncher2(launcher),
+      launcher,
+      openOnLaunch: viewer?.openOnLaunch !== false,
+      // A snapshot frozen before `openAs` existed carries none; `window` is what
+      // those runs actually did, so the absent case must not become `tab`.
+      openAs: parseViewerOpenAs2(viewer?.openAs)
+    },
+    executionProviderSource: source(cast.executionProviderSource),
+    viewerOpenSource: source(cast.viewerOpenSource),
+    resolvedAt: trimmed9(cast.resolvedAt) ?? ""
+  };
+}
+
+// execution/launch.ts
+init_dist2();
+init_agent_catalog();
+init_config();
+init_execution_targets();
+init_local_target_mutations();
+init_project_execution_target();
+init_projects();
 init_db();
 init_errors5();
 
@@ -142208,825 +142318,7 @@ async function listOrganizationAdminProfileIds(organizationId, client = requireD
   return rows.map((row) => row.profile_id);
 }
 
-// repository.ts
-init_dist2();
-var import_node_os9 = __toESM(require("node:os"), 1);
-var import_node_path26 = __toESM(require("node:path"), 1);
-init_delivery_report();
-init_errors4();
-init_execution_targets();
-init_local_target();
-
-// ../packages/core/service/mission-branch-observations.ts
-init_dist2();
-init_errors4();
-init_execution_targets();
-init_util3();
-var OBSERVED_BRANCH_STATUSES = /* @__PURE__ */ new Set([
-  "created",
-  "published",
-  "merged_unpushed",
-  "merged"
-]);
-function parseBranchStatus(value) {
-  const status = typeof value === "string" ? value.trim() : "";
-  if (!OBSERVED_BRANCH_STATUSES.has(status)) {
-    throw new ServiceError(
-      `Invalid branch observation status: ${status || "(empty)"}`,
-      "validation_error",
-      400
-    );
-  }
-  return status;
-}
-function parseObservationInput2(value) {
-  if (!value || typeof value !== "object") {
-    throw new ServiceError("Each branch observation must be an object", "validation_error", 400);
-  }
-  const row = value;
-  const missionId = typeof row.missionId === "string" ? row.missionId.trim() : "";
-  if (!missionId) {
-    throw new ServiceError(
-      "missionId is required for each branch observation",
-      "validation_error",
-      400
-    );
-  }
-  const observedAt = typeof row.observedAt === "string" ? row.observedAt.trim() : "";
-  if (!observedAt) {
-    throw new ServiceError(
-      "observedAt is required for each branch observation",
-      "validation_error",
-      400
-    );
-  }
-  const resourceKey = typeof row.resourceKey === "string" ? row.resourceKey.trim() : "";
-  if (!resourceKey) {
-    throw new ServiceError(
-      "resourceKey is required for each branch observation",
-      "validation_error",
-      400
-    );
-  }
-  if (typeof row.dirty !== "boolean") {
-    throw new ServiceError(
-      "dirty is required for each branch observation",
-      "validation_error",
-      400
-    );
-  }
-  return {
-    missionId,
-    resourceKey,
-    status: parseBranchStatus(row.status),
-    dirty: row.dirty,
-    worktreePath: typeof row.worktreePath === "string" ? row.worktreePath : null,
-    observedAt
-  };
-}
-async function executionTargetInWorkspace2({
-  ctx,
-  executionTargetId
-}) {
-  const row = await ctx.db.get(
-    `SELECT id FROM execution_targets
-        WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-    [executionTargetId, ctx.workspace.id]
-  );
-  if (!row) {
-    throw new ServiceError("Execution target not found", "execution_target_not_found", 404);
-  }
-}
-async function assertMissionsBelongToWorkspace({
-  ctx,
-  observations
-}) {
-  for (const observation of observations) {
-    const mission = await ctx.db.get(
-      `SELECT id FROM missions
-        WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-      [observation.missionId, ctx.workspace.id]
-    );
-    if (!mission) {
-      throw new ServiceError("Mission not found", "mission_not_found", 404);
-    }
-  }
-}
-async function recordMissionBranchObservations({
-  ctx,
-  executionTargetId,
-  observations: rawObservations
-}) {
-  const targetId = executionTargetId.trim();
-  if (!targetId) {
-    throw new ServiceError("executionTargetId is required", "validation_error", 400);
-  }
-  if (!Array.isArray(rawObservations) || rawObservations.length === 0) {
-    throw new ServiceError("At least one branch observation is required", "validation_error", 400);
-  }
-  const actingTargetId = await findActingDeviceExecutionTargetId({ ctx });
-  if (actingTargetId !== targetId) {
-    throw new ServiceError(
-      "Branch observations must be reported for the acting execution target",
-      "execution_target_mismatch",
-      403
-    );
-  }
-  await executionTargetInWorkspace2({ ctx, executionTargetId: targetId });
-  const observations = rawObservations.map(parseObservationInput2);
-  await assertMissionsBelongToWorkspace({ ctx, observations });
-  const now2 = nowIso();
-  await ctx.db.transaction(async (tx) => {
-    for (const observation of observations) {
-      const existing = await tx.get(
-        `SELECT id FROM mission_branch_observations
-          WHERE execution_target_id = ? AND mission_id = ? AND resource_key = ?`,
-        [targetId, observation.missionId, observation.resourceKey]
-      );
-      if (existing) {
-        await tx.run(
-          `UPDATE mission_branch_observations
-              SET status = ?, dirty = ?, worktree_path = ?, observed_at = ?, updated_at = ?
-            WHERE id = ?`,
-          [
-            observation.status,
-            bindBool(ctx.db.dialect, observation.dirty),
-            observation.worktreePath,
-            observation.observedAt,
-            now2,
-            existing.id
-          ]
-        );
-      } else {
-        await tx.run(
-          `INSERT INTO mission_branch_observations
-             (id, workspace_id, execution_target_id, mission_id, resource_key, status, dirty,
-              worktree_path, observed_at, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [
-            newId(),
-            ctx.workspace.id,
-            targetId,
-            observation.missionId,
-            observation.resourceKey,
-            observation.status,
-            bindBool(ctx.db.dialect, observation.dirty),
-            observation.worktreePath,
-            observation.observedAt,
-            now2,
-            now2
-          ]
-        );
-      }
-    }
-  });
-  return { recorded: observations.length };
-}
-async function loadMissionBranchObservationsForMissions({
-  ctx,
-  executionTargetId,
-  missionIds,
-  resourceKey
-}) {
-  const byMission = /* @__PURE__ */ new Map();
-  if (!executionTargetId || missionIds.length === 0) return byMission;
-  const placeholders2 = missionIds.map(() => "?").join(", ");
-  const normalizedKey = resourceKey?.trim() || null;
-  const params = [ctx.workspace.id, executionTargetId, ...missionIds];
-  const resourceFilter = normalizedKey ? "AND resource_key = ?" : "";
-  if (normalizedKey) {
-    params.push(normalizedKey);
-  }
-  const rows = await ctx.db.all(
-    `SELECT execution_target_id, mission_id, resource_key, status, dirty, worktree_path, observed_at, updated_at
-       FROM mission_branch_observations
-      WHERE workspace_id = ?
-        AND execution_target_id = ?
-        AND mission_id IN (${placeholders2})
-        ${resourceFilter}`,
-    params
-  );
-  for (const row of rows) {
-    byMission.set(row.mission_id, {
-      executionTargetId: row.execution_target_id,
-      missionId: row.mission_id,
-      resourceKey: row.resource_key,
-      status: row.status,
-      dirty: row.dirty === true || row.dirty === 1,
-      worktreePath: row.worktree_path,
-      observedAt: row.observed_at,
-      updatedAt: row.updated_at
-    });
-  }
-  return byMission;
-}
-function mergeMissionBranchObservation({
-  controlPlaneBranch,
-  observation
-}) {
-  if (!observation?.observedAt) return controlPlaneBranch;
-  return {
-    ...controlPlaneBranch,
-    status: observation.status,
-    dirty: observation.dirty,
-    worktreePath: observation.worktreePath ?? controlPlaneBranch.worktreePath,
-    observedAt: observation.observedAt,
-    observationSource: "client"
-  };
-}
-
-// repository.ts
-init_project_execution_target();
-init_util3();
-
-// ../webapp/shared/contract.ts
-init_dist();
-
-// automation/commit-message-automation.ts
-var MAX_DIFF_CHARS = 12e3;
-var SYSTEM_INSTRUCTION2 = [
-  "You write concise, conventional git commit messages from a diff.",
-  "Respond with ONLY the commit message \u2014 no markdown, code fences, or commentary.",
-  "Format: a single imperative subject line of at most 72 characters, then,",
-  "when the change is non-trivial, a blank line followed by 1\u20133 short bullet",
-  'lines (each starting with "- ") summarizing what changed and why.',
-  "Do not invent changes that are not in the diff."
-].join(" ");
-async function generateCommitMessageFromDiff(params) {
-  const trimmedDiff = params.diff.trim();
-  if (!trimmedDiff) {
-    return null;
-  }
-  const diff = trimmedDiff.length > MAX_DIFF_CHARS ? `${trimmedDiff.slice(0, MAX_DIFF_CHARS)}
-\u2026(diff truncated)\u2026` : trimmedDiff;
-  const message2 = await generateGeminiText({
-    prompt: `Write a commit message for the following changes:
-
-${diff}`,
-    systemInstruction: SYSTEM_INSTRUCTION2,
-    temperature: 0.3,
-    maxOutputTokens: 320,
-    env: params.env ?? process.env,
-    logPrefix: "[webapp] commit-message automation"
-  });
-  return message2?.trim() || null;
-}
-
-// automation/title-automation.ts
-init_db();
-
-// realtime.ts
-init_db();
-var CHANGE_BATCH_LIMIT = 500;
-var AUTHORIZATION_CHANGE_ENTITY_TYPES = /* @__PURE__ */ new Set([
-  "role_assignment",
-  "user_token",
-  "user_token_workspace",
-  "workspace",
-  "workspace_user"
-]);
-var SELECT_CHANGES_SQL = `
-  SELECT seq, workspace_id, entity_type, entity_id, operation, project_id, mission_id, objective_id,
-         changed_fields_json, occurred_at
-    FROM entity_changes
-   WHERE seq > ?
-   ORDER BY seq ASC
-   LIMIT ?
-`;
-function parseChangedFields(value) {
-  if (!value) return [];
-  try {
-    const parsed = JSON.parse(value);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter((field) => typeof field === "string");
-  } catch {
-    return [];
-  }
-}
-function entityChangeDtoFromRow(row) {
-  return {
-    seq: row.seq,
-    workspaceId: row.workspace_id,
-    entityType: row.entity_type,
-    entityId: row.entity_id,
-    operation: row.operation,
-    projectId: row.project_id,
-    missionId: row.mission_id,
-    objectiveId: row.objective_id,
-    changedFields: parseChangedFields(row.changed_fields_json),
-    occurredAt: row.occurred_at
-  };
-}
-async function readableChangeFeedWorkspaceIds() {
-  const authorized = getAuthorizedWorkspacesContext();
-  if (!authorized) return [];
-  const checked = await Promise.all(
-    authorized.workspaces.map(async (workspace) => ({
-      workspaceId: workspace.workspaceId,
-      allowed: await actorCan(PERMISSIONS.PROJECT_READ, {
-        workspaceId: workspace.workspaceId,
-        workspaceUserId: workspace.workspaceUserId
-      })
-    }))
-  );
-  return checked.filter((workspace) => workspace.allowed).map((workspace) => workspace.workspaceId);
-}
-async function readChangesAfter(afterSeq, workspaceIds, limit = CHANGE_BATCH_LIMIT) {
-  const normalizedAfter = Number.isFinite(afterSeq) && afterSeq > 0 ? Math.floor(afterSeq) : 0;
-  const requestedLimit = Number.isFinite(limit) ? Math.floor(limit) : CHANGE_BATCH_LIMIT;
-  const normalizedLimit = Math.max(1, Math.min(requestedLimit, CHANGE_BATCH_LIMIT));
-  const client = requireDatabaseClient();
-  const scanThroughSeq = Math.max(normalizedAfter, await currentMaxSeq(client));
-  const authorizedWorkspaceIds = [...new Set(workspaceIds.filter(Boolean))];
-  if (authorizedWorkspaceIds.length === 0 || scanThroughSeq === normalizedAfter) {
-    return { changes: [], cursor: scanThroughSeq, hasMore: false };
-  }
-  const workspacePlaceholders = authorizedWorkspaceIds.map(() => "?").join(", ");
-  const rows = await client.all(
-    `SELECT seq, workspace_id, entity_type, entity_id, operation, project_id, mission_id,
-            objective_id, changed_fields_json, occurred_at
-       FROM entity_changes
-      WHERE seq > ? AND seq <= ? AND workspace_id IN (${workspacePlaceholders})
-      ORDER BY seq ASC
-      LIMIT ?`,
-    [normalizedAfter, scanThroughSeq, ...authorizedWorkspaceIds, normalizedLimit + 1]
-  );
-  const hasMore = rows.length > normalizedLimit;
-  const returnedRows = hasMore ? rows.slice(0, normalizedLimit) : rows;
-  const changes = returnedRows.map(entityChangeDtoFromRow);
-  const cursor = hasMore ? changes[changes.length - 1].seq : scanThroughSeq;
-  return { changes, cursor, hasMore };
-}
-var RealtimeHub = class {
-  clients = /* @__PURE__ */ new Map();
-  cursor = 0;
-  lastDataVersion = null;
-  pollTimer = null;
-  heartbeatTimer = null;
-  start() {
-    if (this.pollTimer) return;
-    void this.initializeCursor();
-    this.pollTimer = setInterval(() => void this.poll(), 500);
-    this.heartbeatTimer = setInterval(() => this.heartbeat(), 25e3);
-  }
-  addClient(res, options) {
-    res.writeHead(200, {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache, no-transform",
-      Connection: "keep-alive",
-      "X-Accel-Buffering": "no"
-    });
-    res.write("retry: 2000\n\n");
-    const client = {
-      response: res,
-      workspaceIds: new Set(options.workspaceIds)
-    };
-    this.clients.set(res, client);
-    this.send(res, "hello", { type: "hello", cursor: this.cursor });
-    if (options.afterSeq !== void 0 && options.afterSeq < this.cursor) {
-      void this.sendCatchUp(res, options.afterSeq);
-    }
-  }
-  removeClient(res) {
-    this.clients.delete(res);
-  }
-  /** Run a poll immediately — used right after a local mutation for snappy echoes. */
-  pollNow() {
-    return this.poll();
-  }
-  /**
-   * Force every subscriber to refetch. Used for server-state changes that do not
-   * write to `entity_changes` — notably switching the active workspace, which
-   * changes what every scoped query returns.
-   */
-  refreshAll() {
-    this.broadcast("refresh", { type: "refresh" });
-  }
-  async initializeCursor() {
-    const client = requireDatabaseClient();
-    this.cursor = await currentMaxSeq(client);
-    this.lastDataVersion = await client.sqliteDataVersion?.() ?? null;
-  }
-  async poll() {
-    const client = requireDatabaseClient();
-    if (this.clients.size === 0) {
-      this.cursor = await currentMaxSeq(client);
-      this.lastDataVersion = await client.sqliteDataVersion?.() ?? null;
-      return;
-    }
-    const rows = await client.all(SELECT_CHANGES_SQL, [this.cursor, CHANGE_BATCH_LIMIT]);
-    if (rows.length > 0) {
-      this.cursor = rows[rows.length - 1].seq;
-      if (rows.some((row) => AUTHORIZATION_CHANGE_ENTITY_TYPES.has(row.entity_type))) {
-        this.reconnectClientsForAuthorizationChange();
-      } else {
-        this.broadcastChanges(rows, this.cursor);
-      }
-    }
-    const version4 = await client.sqliteDataVersion?.() ?? null;
-    if (version4 !== null && version4 !== this.lastDataVersion) {
-      this.lastDataVersion = version4;
-      if (rows.length === 0) {
-        this.broadcast("refresh", { type: "refresh" });
-      }
-    }
-  }
-  heartbeat() {
-    for (const { response } of this.clients.values()) response.write(": ping\n\n");
-  }
-  broadcast(event, data) {
-    for (const { response } of this.clients.values()) this.send(response, event, data);
-  }
-  broadcastChanges(rows, cursor) {
-    for (const client of this.clients.values()) {
-      const changes = rows.filter((row) => client.workspaceIds.has(row.workspace_id)).map(entityChangeDtoFromRow);
-      if (changes.length > 0) {
-        this.send(client.response, "change", { type: "change", changes, cursor });
-      }
-    }
-  }
-  reconnectClientsForAuthorizationChange() {
-    for (const { response } of [...this.clients.values()]) {
-      this.removeClient(response);
-      response.end();
-    }
-  }
-  async sendCatchUp(res, afterSeq) {
-    let cursor = afterSeq;
-    while (this.clients.has(res)) {
-      const client = this.clients.get(res);
-      const batch = await readChangesAfter(cursor, [...client.workspaceIds]);
-      if (!this.clients.has(res)) return;
-      if (batch.changes.length > 0) {
-        this.send(res, "change", { type: "change", changes: batch.changes, cursor: batch.cursor });
-      }
-      cursor = batch.cursor;
-      if (!batch.hasMore) return;
-    }
-  }
-  send(res, event, data) {
-    res.write(`event: ${event}
-`);
-    const cursor = typeof data === "object" && data && "cursor" in data ? Number(data.cursor) : NaN;
-    if (Number.isFinite(cursor)) res.write(`id: ${cursor}
-`);
-    res.write(`data: ${JSON.stringify(data)}
-
-`);
-  }
-};
-var realtime = new RealtimeHub();
-
-// automation/title-automation.ts
-var objectiveTitleStore = {
-  updateObjectiveTitle: async ({
-    objectiveId,
-    title
-  }) => {
-    const existing = await requireDatabaseClient().get(
-      `SELECT id, workspace_id, project_id, mission_id, title, revision
-         FROM objectives
-        WHERE id = ? AND deleted_at IS NULL`,
-      [objectiveId]
-    );
-    if (!existing || existing.title === title) {
-      return;
-    }
-    const now2 = nowIso2();
-    const revision = existing.revision + 1;
-    await requireDatabaseClient().run(
-      `UPDATE objectives SET title = ?, updated_at = ?, revision = ? WHERE id = ?`,
-      [title, now2, revision, objectiveId]
-    );
-    await recordChange2({
-      entityType: "objective",
-      entityId: objectiveId,
-      operation: "update",
-      entityRevision: revision,
-      projectId: existing.project_id,
-      missionId: existing.mission_id,
-      objectiveId,
-      changedFields: ["title"],
-      workspaceId: existing.workspace_id
-    });
-  }
-};
-async function updateMissionTitle({
-  missionId,
-  title
-}) {
-  const existing = await requireDatabaseClient().get(
-    `SELECT id, workspace_id, project_id, title, revision
-       FROM missions
-      WHERE id = ? AND deleted_at IS NULL`,
-    [missionId]
-  );
-  if (!existing || existing.title === title) {
-    return;
-  }
-  const now2 = nowIso2();
-  const revision = existing.revision + 1;
-  await requireDatabaseClient().run(
-    `UPDATE missions SET title = ?, updated_at = ?, revision = ? WHERE id = ?`,
-    [title, now2, revision, missionId]
-  );
-  await recordChange2({
-    entityType: "mission",
-    entityId: missionId,
-    operation: "update",
-    entityRevision: revision,
-    projectId: existing.project_id,
-    missionId,
-    changedFields: ["title"],
-    workspaceId: existing.workspace_id
-  });
-}
-function notifyAfterTitleAutomation(task) {
-  void task.then(() => {
-    realtime.pollNow();
-  }).catch((err) => {
-    const message2 = err instanceof Error ? err.message : String(err);
-    console.warn("[webapp] title automation failed:", message2);
-  });
-}
-function initialTitleFromInstruction2(instructionText) {
-  return deriveTitleFromInstructionText(instructionText.trim());
-}
-function scheduleObjectiveTitleGeneration(params) {
-  notifyAfterTitleAutomation(
-    generateAndSetObjectiveTitle({
-      store: objectiveTitleStore,
-      objectiveId: params.objectiveId,
-      instructionText: params.instructionText,
-      env: process.env
-    })
-  );
-}
-function scheduleMissionTitleGeneration(params) {
-  notifyAfterTitleAutomation(
-    generateObjectiveTitle({
-      instructionText: params.instructionText,
-      env: process.env
-    }).then((title) => {
-      if (!title) {
-        return;
-      }
-      return updateMissionTitle({ missionId: params.missionId, title });
-    })
-  );
-}
-async function generateMissionTitleNow(params) {
-  const title = await generateObjectiveTitle({
-    instructionText: params.instructionText,
-    env: process.env
-  });
-  if (!title) {
-    return "";
-  }
-  await updateMissionTitle({ missionId: params.missionId, title });
-  return title;
-}
-
-// ../packages/core/dist/service/terminal-profile-types.js
-var DEFAULT_VIEWER_OPEN_AS2 = "window";
-function viewerOpenAsForPlacement2(placement) {
-  return typeof placement === "string" && placement.trim().toLowerCase() === "tab" ? "tab" : DEFAULT_VIEWER_OPEN_AS2;
-}
-function parseViewerOpenAs2(value) {
-  return typeof value === "string" && value.trim().toLowerCase() === "tab" ? "tab" : DEFAULT_VIEWER_OPEN_AS2;
-}
-var TERMINAL_PROFILE_VERSION2 = 1;
-var DEFAULT_LATCH_EXECUTABLE2 = "latch";
-var DEFAULT_EXECUTION_PROVIDER2 = {
-  kind: "direct",
-  executable: DEFAULT_LATCH_EXECUTABLE2
-};
-var DEFAULT_OPEN_VIEWER_ON_LAUNCH2 = true;
-var DEFAULT_TERMINAL_PROFILE2 = {
-  launcher: "Terminal",
-  placement: "window",
-  chord: null,
-  background: false
-};
-var DEFAULT_LAUNCH_SESSION_DEFAULTS2 = {
-  executionProvider: { ...DEFAULT_EXECUTION_PROVIDER2 },
-  openViewerOnLaunch: DEFAULT_OPEN_VIEWER_ON_LAUNCH2
-};
-var LAUNCH_SESSION_METADATA_KEY2 = "launchSession";
-function trimmed9(value) {
-  return typeof value === "string" && value.trim() ? value.trim() : null;
-}
-function viewerKindForLauncher2(launcher) {
-  const value = trimmed9(launcher);
-  if (!value)
-    return "inline";
-  const lowered = value.toLowerCase();
-  if (lowered === "iterm2" || lowered === "iterm")
-    return "iterm";
-  if (lowered === "terminal")
-    return "terminal";
-  return "custom";
-}
-function normalizeExecutionProvider2(value) {
-  if (!value || typeof value !== "object" || Array.isArray(value))
-    return null;
-  const cast = value;
-  const kind = trimmed9(cast.kind)?.toLowerCase() === "latch" ? "latch" : "direct";
-  return {
-    kind,
-    executable: trimmed9(cast.executable) ?? DEFAULT_LATCH_EXECUTABLE2
-  };
-}
-function resolveLaunchSession2({ profile, defaults: defaults2 = DEFAULT_LAUNCH_SESSION_DEFAULTS2 }) {
-  const launcher = profile ? profile.launcher : DEFAULT_TERMINAL_PROFILE2.launcher;
-  const provider = profile?.executionProvider ? normalizeExecutionProvider2(profile.executionProvider) : null;
-  const openOnLaunch = typeof profile?.openViewerOnLaunch === "boolean" ? profile.openViewerOnLaunch : null;
-  return {
-    version: TERMINAL_PROFILE_VERSION2,
-    executionProvider: provider ?? {
-      ...normalizeExecutionProvider2(defaults2.executionProvider) ?? DEFAULT_EXECUTION_PROVIDER2
-    },
-    viewer: {
-      kind: viewerKindForLauncher2(launcher),
-      launcher: launcher ?? null,
-      openOnLaunch: openOnLaunch ?? defaults2.openViewerOnLaunch !== false,
-      openAs: viewerOpenAsForPlacement2(profile?.placement ?? DEFAULT_TERMINAL_PROFILE2.placement)
-    },
-    executionProviderSource: provider ? "target" : "user_default",
-    viewerOpenSource: openOnLaunch === null ? "user_default" : "target"
-  };
-}
-function launchSessionSnapshotFromMetadata2(metadata) {
-  const raw = metadata?.[LAUNCH_SESSION_METADATA_KEY2];
-  if (!raw || typeof raw !== "object" || Array.isArray(raw))
-    return null;
-  const cast = raw;
-  if (cast.version !== TERMINAL_PROFILE_VERSION2)
-    return null;
-  const viewer = cast.viewer && typeof cast.viewer === "object" && !Array.isArray(cast.viewer) ? cast.viewer : null;
-  const launcher = trimmed9(viewer?.launcher);
-  const source = (value) => trimmed9(value) === "target" ? "target" : "user_default";
-  return {
-    version: TERMINAL_PROFILE_VERSION2,
-    executionProvider: normalizeExecutionProvider2(cast.executionProvider) ?? {
-      ...DEFAULT_EXECUTION_PROVIDER2
-    },
-    viewer: {
-      kind: trimmed9(viewer?.kind) ? trimmed9(viewer?.kind) : viewerKindForLauncher2(launcher),
-      launcher,
-      openOnLaunch: viewer?.openOnLaunch !== false,
-      // A snapshot frozen before `openAs` existed carries none; `window` is what
-      // those runs actually did, so the absent case must not become `tab`.
-      openAs: parseViewerOpenAs2(viewer?.openAs)
-    },
-    executionProviderSource: source(cast.executionProviderSource),
-    viewerOpenSource: source(cast.viewerOpenSource),
-    resolvedAt: trimmed9(cast.resolvedAt) ?? ""
-  };
-}
-
-// execution/latch-sessions.ts
-init_latch_launch();
-init_db();
-init_errors5();
-function terminalSessionState(value) {
-  switch (value) {
-    case "exited":
-      return "exited";
-    case "stopping":
-      return "stopping";
-    case "lost":
-      return "lost";
-    default:
-      return "running";
-  }
-}
-async function listMissionTerminalSessions(missionId) {
-  const rows = await requireDatabaseClient().all(
-    `SELECT er.id AS execution_request_id, er.objective_id, er.metadata_json,
-            et.label AS target_label, d.label AS device_label
-       FROM execution_requests er
-       LEFT JOIN execution_targets et
-         ON et.id = COALESCE(er.claimed_by_execution_target_id, er.execution_target_id)
-       LEFT JOIN devices d ON d.id = et.device_id
-      WHERE er.mission_id = ? AND er.deleted_at IS NULL
-      ORDER BY er.created_at DESC`,
-    [missionId]
-  );
-  return rows.flatMap((row) => {
-    const metadata = parseMetadataJson(row.metadata_json);
-    const providerSession = providerSessionFromMetadata(metadata);
-    if (!providerSession) return [];
-    const snapshot = launchSessionSnapshotFromMetadata2(metadata);
-    return [
-      {
-        executionRequestId: row.execution_request_id,
-        objectiveId: row.objective_id,
-        provider: "latch",
-        providerSessionId: providerSession.providerSessionId,
-        sessionName: providerSession.sessionName ?? providerSession.providerSessionId,
-        executionTargetId: providerSession.executionTargetId,
-        deviceLabel: row.device_label ?? row.target_label,
-        agentSessionId: providerSession.agentSessionId,
-        executable: snapshot?.executionProvider.executable ?? "latch",
-        viewerKind: snapshot?.viewer.kind ?? "iterm",
-        viewerOpenAs: snapshot?.viewer.openAs ?? "window",
-        createdAt: providerSession.createdAt,
-        lastObservedState: terminalSessionState(providerSession.lastObservedState),
-        observation: providerSession.observation ? {
-          cursor: providerSession.observation.cursor,
-          lastEventAt: providerSession.observation.lastEventAt,
-          turnCount: providerSession.observation.turnCount,
-          pendingInput: providerSession.observation.pendingInput,
-          unattached: providerSession.observation.unattached
-        } : null
-      }
-    ];
-  });
-}
-async function ingestMissionHarnessEvents(missionRef, body) {
-  const scope = await requireMissionPermission({
-    missionRef,
-    permission: PERMISSIONS.SESSION_READ
-  });
-  const ctx = await buildWebappServiceContextForWorkspace(
-    scope.workspaceId,
-    requireDatabaseClient(),
-    scope.workspaceUserId
-  );
-  const payload = asRecord(body);
-  const providerSessionId = typeof payload.providerSessionId === "string" ? payload.providerSessionId : "";
-  const executionRequestId = typeof payload.executionRequestId === "string" ? payload.executionRequestId : null;
-  const events = Array.isArray(payload.events) ? payload.events : [];
-  const from = typeof payload.from === "number" ? payload.from : 0;
-  return ingestLatchHarnessEvents({
-    ctx,
-    missionId: scope.missionId,
-    executionRequestId,
-    providerSessionId,
-    events,
-    from
-  });
-}
-async function resolveMissionLatchObservation(missionRef, body) {
-  const scope = await requireMissionPermission({
-    missionRef,
-    permission: PERMISSIONS.SESSION_ATTACH
-  });
-  const ctx = await buildWebappServiceContextForWorkspace(
-    scope.workspaceId,
-    requireDatabaseClient(),
-    scope.workspaceUserId
-  );
-  const payload = asRecord(body);
-  const providerSessionId = typeof payload.providerSessionId === "string" ? payload.providerSessionId : "";
-  const requestId = typeof payload.requestId === "string" ? payload.requestId : "";
-  if (!providerSessionId.trim() || !requestId.trim()) {
-    throw new ApiError(400, "providerSessionId and requestId are required");
-  }
-  const observation = await clearLatchPendingInput({
-    ctx,
-    missionId: scope.missionId,
-    providerSessionId,
-    requestId
-  });
-  return { observation };
-}
-async function forgetMissionLatchSession(missionRef, body) {
-  const scope = await requireMissionPermission({
-    missionRef,
-    permission: PERMISSIONS.SESSION_READ
-  });
-  const ctx = await buildWebappServiceContextForWorkspace(
-    scope.workspaceId,
-    requireDatabaseClient(),
-    scope.workspaceUserId
-  );
-  const payload = asRecord(body);
-  const providerSessionId = typeof payload.providerSessionId === "string" ? payload.providerSessionId : "";
-  const executionRequestId = typeof payload.executionRequestId === "string" ? payload.executionRequestId : null;
-  if (!providerSessionId.trim()) {
-    throw new ApiError(400, "providerSessionId is required");
-  }
-  return forgetLatchProviderSession({
-    ctx,
-    missionId: scope.missionId,
-    executionRequestId,
-    providerSessionId
-  });
-}
-
 // execution/launch.ts
-init_dist();
-init_dist2();
-init_agent_catalog();
-init_config();
-init_execution_targets();
-init_local_target_mutations();
-init_project_execution_target();
-init_projects();
-init_db();
-init_errors5();
 var AGENT_CATALOG_SETTINGS_KEY = "agentCatalog";
 var WORKTREE_BRANCH_AUTOMATION_SETTINGS_KEY = "worktreeBranchAutomationEnabled";
 function instanceAgentCatalog() {
@@ -143920,6 +143212,720 @@ async function getObjectiveLaunchCommand(objectiveRef, query) {
     flags: resolved.config.flags
   });
   return { objectiveId: row.id, missionId: row.mission_id, command };
+}
+
+// protocol.ts
+init_db();
+init_errors5();
+
+// repository.ts
+init_dist2();
+var import_node_os9 = __toESM(require("node:os"), 1);
+var import_node_path26 = __toESM(require("node:path"), 1);
+init_delivery_report();
+init_errors4();
+init_execution_targets();
+init_local_target();
+
+// ../packages/core/service/mission-branch-observations.ts
+init_dist2();
+init_errors4();
+init_execution_targets();
+init_util3();
+var OBSERVED_BRANCH_STATUSES = /* @__PURE__ */ new Set([
+  "created",
+  "published",
+  "merged_unpushed",
+  "merged"
+]);
+function parseBranchStatus(value) {
+  const status = typeof value === "string" ? value.trim() : "";
+  if (!OBSERVED_BRANCH_STATUSES.has(status)) {
+    throw new ServiceError(
+      `Invalid branch observation status: ${status || "(empty)"}`,
+      "validation_error",
+      400
+    );
+  }
+  return status;
+}
+function parseObservationInput2(value) {
+  if (!value || typeof value !== "object") {
+    throw new ServiceError("Each branch observation must be an object", "validation_error", 400);
+  }
+  const row = value;
+  const missionId = typeof row.missionId === "string" ? row.missionId.trim() : "";
+  if (!missionId) {
+    throw new ServiceError(
+      "missionId is required for each branch observation",
+      "validation_error",
+      400
+    );
+  }
+  const observedAt = typeof row.observedAt === "string" ? row.observedAt.trim() : "";
+  if (!observedAt) {
+    throw new ServiceError(
+      "observedAt is required for each branch observation",
+      "validation_error",
+      400
+    );
+  }
+  const resourceKey = typeof row.resourceKey === "string" ? row.resourceKey.trim() : "";
+  if (!resourceKey) {
+    throw new ServiceError(
+      "resourceKey is required for each branch observation",
+      "validation_error",
+      400
+    );
+  }
+  if (typeof row.dirty !== "boolean") {
+    throw new ServiceError(
+      "dirty is required for each branch observation",
+      "validation_error",
+      400
+    );
+  }
+  return {
+    missionId,
+    resourceKey,
+    status: parseBranchStatus(row.status),
+    dirty: row.dirty,
+    worktreePath: typeof row.worktreePath === "string" ? row.worktreePath : null,
+    observedAt
+  };
+}
+async function executionTargetInWorkspace2({
+  ctx,
+  executionTargetId
+}) {
+  const row = await ctx.db.get(
+    `SELECT id FROM execution_targets
+        WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+    [executionTargetId, ctx.workspace.id]
+  );
+  if (!row) {
+    throw new ServiceError("Execution target not found", "execution_target_not_found", 404);
+  }
+}
+async function assertMissionsBelongToWorkspace({
+  ctx,
+  observations
+}) {
+  for (const observation of observations) {
+    const mission = await ctx.db.get(
+      `SELECT id FROM missions
+        WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+      [observation.missionId, ctx.workspace.id]
+    );
+    if (!mission) {
+      throw new ServiceError("Mission not found", "mission_not_found", 404);
+    }
+  }
+}
+async function recordMissionBranchObservations({
+  ctx,
+  executionTargetId,
+  observations: rawObservations
+}) {
+  const targetId = executionTargetId.trim();
+  if (!targetId) {
+    throw new ServiceError("executionTargetId is required", "validation_error", 400);
+  }
+  if (!Array.isArray(rawObservations) || rawObservations.length === 0) {
+    throw new ServiceError("At least one branch observation is required", "validation_error", 400);
+  }
+  const actingTargetId = await findActingDeviceExecutionTargetId({ ctx });
+  if (actingTargetId !== targetId) {
+    throw new ServiceError(
+      "Branch observations must be reported for the acting execution target",
+      "execution_target_mismatch",
+      403
+    );
+  }
+  await executionTargetInWorkspace2({ ctx, executionTargetId: targetId });
+  const observations = rawObservations.map(parseObservationInput2);
+  await assertMissionsBelongToWorkspace({ ctx, observations });
+  const now2 = nowIso();
+  await ctx.db.transaction(async (tx) => {
+    for (const observation of observations) {
+      const existing = await tx.get(
+        `SELECT id FROM mission_branch_observations
+          WHERE execution_target_id = ? AND mission_id = ? AND resource_key = ?`,
+        [targetId, observation.missionId, observation.resourceKey]
+      );
+      if (existing) {
+        await tx.run(
+          `UPDATE mission_branch_observations
+              SET status = ?, dirty = ?, worktree_path = ?, observed_at = ?, updated_at = ?
+            WHERE id = ?`,
+          [
+            observation.status,
+            bindBool(ctx.db.dialect, observation.dirty),
+            observation.worktreePath,
+            observation.observedAt,
+            now2,
+            existing.id
+          ]
+        );
+      } else {
+        await tx.run(
+          `INSERT INTO mission_branch_observations
+             (id, workspace_id, execution_target_id, mission_id, resource_key, status, dirty,
+              worktree_path, observed_at, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            newId(),
+            ctx.workspace.id,
+            targetId,
+            observation.missionId,
+            observation.resourceKey,
+            observation.status,
+            bindBool(ctx.db.dialect, observation.dirty),
+            observation.worktreePath,
+            observation.observedAt,
+            now2,
+            now2
+          ]
+        );
+      }
+    }
+  });
+  return { recorded: observations.length };
+}
+async function loadMissionBranchObservationsForMissions({
+  ctx,
+  executionTargetId,
+  missionIds,
+  resourceKey
+}) {
+  const byMission = /* @__PURE__ */ new Map();
+  if (!executionTargetId || missionIds.length === 0) return byMission;
+  const placeholders2 = missionIds.map(() => "?").join(", ");
+  const normalizedKey = resourceKey?.trim() || null;
+  const params = [ctx.workspace.id, executionTargetId, ...missionIds];
+  const resourceFilter = normalizedKey ? "AND resource_key = ?" : "";
+  if (normalizedKey) {
+    params.push(normalizedKey);
+  }
+  const rows = await ctx.db.all(
+    `SELECT execution_target_id, mission_id, resource_key, status, dirty, worktree_path, observed_at, updated_at
+       FROM mission_branch_observations
+      WHERE workspace_id = ?
+        AND execution_target_id = ?
+        AND mission_id IN (${placeholders2})
+        ${resourceFilter}`,
+    params
+  );
+  for (const row of rows) {
+    byMission.set(row.mission_id, {
+      executionTargetId: row.execution_target_id,
+      missionId: row.mission_id,
+      resourceKey: row.resource_key,
+      status: row.status,
+      dirty: row.dirty === true || row.dirty === 1,
+      worktreePath: row.worktree_path,
+      observedAt: row.observed_at,
+      updatedAt: row.updated_at
+    });
+  }
+  return byMission;
+}
+function mergeMissionBranchObservation({
+  controlPlaneBranch,
+  observation
+}) {
+  if (!observation?.observedAt) return controlPlaneBranch;
+  return {
+    ...controlPlaneBranch,
+    status: observation.status,
+    dirty: observation.dirty,
+    worktreePath: observation.worktreePath ?? controlPlaneBranch.worktreePath,
+    observedAt: observation.observedAt,
+    observationSource: "client"
+  };
+}
+
+// repository.ts
+init_project_execution_target();
+init_util3();
+
+// ../webapp/shared/contract.ts
+init_dist();
+
+// automation/commit-message-automation.ts
+var MAX_DIFF_CHARS = 12e3;
+var SYSTEM_INSTRUCTION2 = [
+  "You write concise, conventional git commit messages from a diff.",
+  "Respond with ONLY the commit message \u2014 no markdown, code fences, or commentary.",
+  "Format: a single imperative subject line of at most 72 characters, then,",
+  "when the change is non-trivial, a blank line followed by 1\u20133 short bullet",
+  'lines (each starting with "- ") summarizing what changed and why.',
+  "Do not invent changes that are not in the diff."
+].join(" ");
+async function generateCommitMessageFromDiff(params) {
+  const trimmedDiff = params.diff.trim();
+  if (!trimmedDiff) {
+    return null;
+  }
+  const diff = trimmedDiff.length > MAX_DIFF_CHARS ? `${trimmedDiff.slice(0, MAX_DIFF_CHARS)}
+\u2026(diff truncated)\u2026` : trimmedDiff;
+  const message2 = await generateGeminiText({
+    prompt: `Write a commit message for the following changes:
+
+${diff}`,
+    systemInstruction: SYSTEM_INSTRUCTION2,
+    temperature: 0.3,
+    maxOutputTokens: 320,
+    env: params.env ?? process.env,
+    logPrefix: "[webapp] commit-message automation"
+  });
+  return message2?.trim() || null;
+}
+
+// automation/title-automation.ts
+init_db();
+
+// realtime.ts
+init_db();
+var CHANGE_BATCH_LIMIT = 500;
+var AUTHORIZATION_CHANGE_ENTITY_TYPES = /* @__PURE__ */ new Set([
+  "role_assignment",
+  "user_token",
+  "user_token_workspace",
+  "workspace",
+  "workspace_user"
+]);
+var SELECT_CHANGES_SQL = `
+  SELECT seq, workspace_id, entity_type, entity_id, operation, project_id, mission_id, objective_id,
+         changed_fields_json, occurred_at
+    FROM entity_changes
+   WHERE seq > ?
+   ORDER BY seq ASC
+   LIMIT ?
+`;
+function parseChangedFields(value) {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((field) => typeof field === "string");
+  } catch {
+    return [];
+  }
+}
+function entityChangeDtoFromRow(row) {
+  return {
+    seq: row.seq,
+    workspaceId: row.workspace_id,
+    entityType: row.entity_type,
+    entityId: row.entity_id,
+    operation: row.operation,
+    projectId: row.project_id,
+    missionId: row.mission_id,
+    objectiveId: row.objective_id,
+    changedFields: parseChangedFields(row.changed_fields_json),
+    occurredAt: row.occurred_at
+  };
+}
+async function readableChangeFeedWorkspaceIds() {
+  const authorized = getAuthorizedWorkspacesContext();
+  if (!authorized) return [];
+  const checked = await Promise.all(
+    authorized.workspaces.map(async (workspace) => ({
+      workspaceId: workspace.workspaceId,
+      allowed: await actorCan(PERMISSIONS.PROJECT_READ, {
+        workspaceId: workspace.workspaceId,
+        workspaceUserId: workspace.workspaceUserId
+      })
+    }))
+  );
+  return checked.filter((workspace) => workspace.allowed).map((workspace) => workspace.workspaceId);
+}
+async function readChangesAfter(afterSeq, workspaceIds, limit = CHANGE_BATCH_LIMIT) {
+  const normalizedAfter = Number.isFinite(afterSeq) && afterSeq > 0 ? Math.floor(afterSeq) : 0;
+  const requestedLimit = Number.isFinite(limit) ? Math.floor(limit) : CHANGE_BATCH_LIMIT;
+  const normalizedLimit = Math.max(1, Math.min(requestedLimit, CHANGE_BATCH_LIMIT));
+  const client = requireDatabaseClient();
+  const scanThroughSeq = Math.max(normalizedAfter, await currentMaxSeq(client));
+  const authorizedWorkspaceIds = [...new Set(workspaceIds.filter(Boolean))];
+  if (authorizedWorkspaceIds.length === 0 || scanThroughSeq === normalizedAfter) {
+    return { changes: [], cursor: scanThroughSeq, hasMore: false };
+  }
+  const workspacePlaceholders = authorizedWorkspaceIds.map(() => "?").join(", ");
+  const rows = await client.all(
+    `SELECT seq, workspace_id, entity_type, entity_id, operation, project_id, mission_id,
+            objective_id, changed_fields_json, occurred_at
+       FROM entity_changes
+      WHERE seq > ? AND seq <= ? AND workspace_id IN (${workspacePlaceholders})
+      ORDER BY seq ASC
+      LIMIT ?`,
+    [normalizedAfter, scanThroughSeq, ...authorizedWorkspaceIds, normalizedLimit + 1]
+  );
+  const hasMore = rows.length > normalizedLimit;
+  const returnedRows = hasMore ? rows.slice(0, normalizedLimit) : rows;
+  const changes = returnedRows.map(entityChangeDtoFromRow);
+  const cursor = hasMore ? changes[changes.length - 1].seq : scanThroughSeq;
+  return { changes, cursor, hasMore };
+}
+var RealtimeHub = class {
+  clients = /* @__PURE__ */ new Map();
+  cursor = 0;
+  lastDataVersion = null;
+  pollTimer = null;
+  heartbeatTimer = null;
+  start() {
+    if (this.pollTimer) return;
+    void this.initializeCursor();
+    this.pollTimer = setInterval(() => void this.poll(), 500);
+    this.heartbeatTimer = setInterval(() => this.heartbeat(), 25e3);
+  }
+  addClient(res, options) {
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no"
+    });
+    res.write("retry: 2000\n\n");
+    const client = {
+      response: res,
+      workspaceIds: new Set(options.workspaceIds)
+    };
+    this.clients.set(res, client);
+    this.send(res, "hello", { type: "hello", cursor: this.cursor });
+    if (options.afterSeq !== void 0 && options.afterSeq < this.cursor) {
+      void this.sendCatchUp(res, options.afterSeq);
+    }
+  }
+  removeClient(res) {
+    this.clients.delete(res);
+  }
+  /** Run a poll immediately — used right after a local mutation for snappy echoes. */
+  pollNow() {
+    return this.poll();
+  }
+  /**
+   * Force every subscriber to refetch. Used for server-state changes that do not
+   * write to `entity_changes` — notably switching the active workspace, which
+   * changes what every scoped query returns.
+   */
+  refreshAll() {
+    this.broadcast("refresh", { type: "refresh" });
+  }
+  async initializeCursor() {
+    const client = requireDatabaseClient();
+    this.cursor = await currentMaxSeq(client);
+    this.lastDataVersion = await client.sqliteDataVersion?.() ?? null;
+  }
+  async poll() {
+    const client = requireDatabaseClient();
+    if (this.clients.size === 0) {
+      this.cursor = await currentMaxSeq(client);
+      this.lastDataVersion = await client.sqliteDataVersion?.() ?? null;
+      return;
+    }
+    const rows = await client.all(SELECT_CHANGES_SQL, [this.cursor, CHANGE_BATCH_LIMIT]);
+    if (rows.length > 0) {
+      this.cursor = rows[rows.length - 1].seq;
+      if (rows.some((row) => AUTHORIZATION_CHANGE_ENTITY_TYPES.has(row.entity_type))) {
+        this.reconnectClientsForAuthorizationChange();
+      } else {
+        this.broadcastChanges(rows, this.cursor);
+      }
+    }
+    const version4 = await client.sqliteDataVersion?.() ?? null;
+    if (version4 !== null && version4 !== this.lastDataVersion) {
+      this.lastDataVersion = version4;
+      if (rows.length === 0) {
+        this.broadcast("refresh", { type: "refresh" });
+      }
+    }
+  }
+  heartbeat() {
+    for (const { response } of this.clients.values()) response.write(": ping\n\n");
+  }
+  broadcast(event, data) {
+    for (const { response } of this.clients.values()) this.send(response, event, data);
+  }
+  broadcastChanges(rows, cursor) {
+    for (const client of this.clients.values()) {
+      const changes = rows.filter((row) => client.workspaceIds.has(row.workspace_id)).map(entityChangeDtoFromRow);
+      if (changes.length > 0) {
+        this.send(client.response, "change", { type: "change", changes, cursor });
+      }
+    }
+  }
+  reconnectClientsForAuthorizationChange() {
+    for (const { response } of [...this.clients.values()]) {
+      this.removeClient(response);
+      response.end();
+    }
+  }
+  async sendCatchUp(res, afterSeq) {
+    let cursor = afterSeq;
+    while (this.clients.has(res)) {
+      const client = this.clients.get(res);
+      const batch = await readChangesAfter(cursor, [...client.workspaceIds]);
+      if (!this.clients.has(res)) return;
+      if (batch.changes.length > 0) {
+        this.send(res, "change", { type: "change", changes: batch.changes, cursor: batch.cursor });
+      }
+      cursor = batch.cursor;
+      if (!batch.hasMore) return;
+    }
+  }
+  send(res, event, data) {
+    res.write(`event: ${event}
+`);
+    const cursor = typeof data === "object" && data && "cursor" in data ? Number(data.cursor) : NaN;
+    if (Number.isFinite(cursor)) res.write(`id: ${cursor}
+`);
+    res.write(`data: ${JSON.stringify(data)}
+
+`);
+  }
+};
+var realtime = new RealtimeHub();
+
+// automation/title-automation.ts
+var objectiveTitleStore = {
+  updateObjectiveTitle: async ({
+    objectiveId,
+    title
+  }) => {
+    const existing = await requireDatabaseClient().get(
+      `SELECT id, workspace_id, project_id, mission_id, title, revision
+         FROM objectives
+        WHERE id = ? AND deleted_at IS NULL`,
+      [objectiveId]
+    );
+    if (!existing || existing.title === title) {
+      return;
+    }
+    const now2 = nowIso2();
+    const revision = existing.revision + 1;
+    await requireDatabaseClient().run(
+      `UPDATE objectives SET title = ?, updated_at = ?, revision = ? WHERE id = ?`,
+      [title, now2, revision, objectiveId]
+    );
+    await recordChange2({
+      entityType: "objective",
+      entityId: objectiveId,
+      operation: "update",
+      entityRevision: revision,
+      projectId: existing.project_id,
+      missionId: existing.mission_id,
+      objectiveId,
+      changedFields: ["title"],
+      workspaceId: existing.workspace_id
+    });
+  }
+};
+async function updateMissionTitle({
+  missionId,
+  title
+}) {
+  const existing = await requireDatabaseClient().get(
+    `SELECT id, workspace_id, project_id, title, revision
+       FROM missions
+      WHERE id = ? AND deleted_at IS NULL`,
+    [missionId]
+  );
+  if (!existing || existing.title === title) {
+    return;
+  }
+  const now2 = nowIso2();
+  const revision = existing.revision + 1;
+  await requireDatabaseClient().run(
+    `UPDATE missions SET title = ?, updated_at = ?, revision = ? WHERE id = ?`,
+    [title, now2, revision, missionId]
+  );
+  await recordChange2({
+    entityType: "mission",
+    entityId: missionId,
+    operation: "update",
+    entityRevision: revision,
+    projectId: existing.project_id,
+    missionId,
+    changedFields: ["title"],
+    workspaceId: existing.workspace_id
+  });
+}
+function notifyAfterTitleAutomation(task) {
+  void task.then(() => {
+    realtime.pollNow();
+  }).catch((err) => {
+    const message2 = err instanceof Error ? err.message : String(err);
+    console.warn("[webapp] title automation failed:", message2);
+  });
+}
+function initialTitleFromInstruction2(instructionText) {
+  return deriveTitleFromInstructionText(instructionText.trim());
+}
+function scheduleObjectiveTitleGeneration(params) {
+  notifyAfterTitleAutomation(
+    generateAndSetObjectiveTitle({
+      store: objectiveTitleStore,
+      objectiveId: params.objectiveId,
+      instructionText: params.instructionText,
+      env: process.env
+    })
+  );
+}
+function scheduleMissionTitleGeneration(params) {
+  notifyAfterTitleAutomation(
+    generateObjectiveTitle({
+      instructionText: params.instructionText,
+      env: process.env
+    }).then((title) => {
+      if (!title) {
+        return;
+      }
+      return updateMissionTitle({ missionId: params.missionId, title });
+    })
+  );
+}
+async function generateMissionTitleNow(params) {
+  const title = await generateObjectiveTitle({
+    instructionText: params.instructionText,
+    env: process.env
+  });
+  if (!title) {
+    return "";
+  }
+  await updateMissionTitle({ missionId: params.missionId, title });
+  return title;
+}
+
+// execution/latch-sessions.ts
+init_latch_launch();
+init_db();
+init_errors5();
+function terminalSessionState(value) {
+  switch (value) {
+    case "exited":
+      return "exited";
+    case "stopping":
+      return "stopping";
+    case "lost":
+      return "lost";
+    default:
+      return "running";
+  }
+}
+async function listMissionTerminalSessions(missionId) {
+  const rows = await requireDatabaseClient().all(
+    `SELECT er.id AS execution_request_id, er.objective_id, er.metadata_json,
+            et.label AS target_label, d.label AS device_label
+       FROM execution_requests er
+       LEFT JOIN execution_targets et
+         ON et.id = COALESCE(er.claimed_by_execution_target_id, er.execution_target_id)
+       LEFT JOIN devices d ON d.id = et.device_id
+      WHERE er.mission_id = ? AND er.deleted_at IS NULL
+      ORDER BY er.created_at DESC`,
+    [missionId]
+  );
+  return rows.flatMap((row) => {
+    const metadata = parseMetadataJson(row.metadata_json);
+    const providerSession = providerSessionFromMetadata(metadata);
+    if (!providerSession) return [];
+    const snapshot = launchSessionSnapshotFromMetadata2(metadata);
+    return [
+      {
+        executionRequestId: row.execution_request_id,
+        objectiveId: row.objective_id,
+        provider: "latch",
+        providerSessionId: providerSession.providerSessionId,
+        sessionName: providerSession.sessionName ?? providerSession.providerSessionId,
+        executionTargetId: providerSession.executionTargetId,
+        deviceLabel: row.device_label ?? row.target_label,
+        agentSessionId: providerSession.agentSessionId,
+        executable: snapshot?.executionProvider.executable ?? "latch",
+        viewerKind: snapshot?.viewer.kind ?? "iterm",
+        viewerOpenAs: snapshot?.viewer.openAs ?? "window",
+        createdAt: providerSession.createdAt,
+        lastObservedState: terminalSessionState(providerSession.lastObservedState),
+        observation: providerSession.observation ? {
+          cursor: providerSession.observation.cursor,
+          lastEventAt: providerSession.observation.lastEventAt,
+          turnCount: providerSession.observation.turnCount,
+          pendingInput: providerSession.observation.pendingInput,
+          unattached: providerSession.observation.unattached
+        } : null
+      }
+    ];
+  });
+}
+async function ingestMissionHarnessEvents(missionRef, body) {
+  const scope = await requireMissionPermission({
+    missionRef,
+    permission: PERMISSIONS.SESSION_READ
+  });
+  const ctx = await buildWebappServiceContextForWorkspace(
+    scope.workspaceId,
+    requireDatabaseClient(),
+    scope.workspaceUserId
+  );
+  const payload = asRecord(body);
+  const providerSessionId = typeof payload.providerSessionId === "string" ? payload.providerSessionId : "";
+  const executionRequestId = typeof payload.executionRequestId === "string" ? payload.executionRequestId : null;
+  const events = Array.isArray(payload.events) ? payload.events : [];
+  const from = typeof payload.from === "number" ? payload.from : 0;
+  return ingestLatchHarnessEvents({
+    ctx,
+    missionId: scope.missionId,
+    executionRequestId,
+    providerSessionId,
+    events,
+    from
+  });
+}
+async function resolveMissionLatchObservation(missionRef, body) {
+  const scope = await requireMissionPermission({
+    missionRef,
+    permission: PERMISSIONS.SESSION_ATTACH
+  });
+  const ctx = await buildWebappServiceContextForWorkspace(
+    scope.workspaceId,
+    requireDatabaseClient(),
+    scope.workspaceUserId
+  );
+  const payload = asRecord(body);
+  const providerSessionId = typeof payload.providerSessionId === "string" ? payload.providerSessionId : "";
+  const requestId = typeof payload.requestId === "string" ? payload.requestId : "";
+  if (!providerSessionId.trim() || !requestId.trim()) {
+    throw new ApiError(400, "providerSessionId and requestId are required");
+  }
+  const observation = await clearLatchPendingInput({
+    ctx,
+    missionId: scope.missionId,
+    providerSessionId,
+    requestId
+  });
+  return { observation };
+}
+async function forgetMissionLatchSession(missionRef, body) {
+  const scope = await requireMissionPermission({
+    missionRef,
+    permission: PERMISSIONS.SESSION_READ
+  });
+  const ctx = await buildWebappServiceContextForWorkspace(
+    scope.workspaceId,
+    requireDatabaseClient(),
+    scope.workspaceUserId
+  );
+  const payload = asRecord(body);
+  const providerSessionId = typeof payload.providerSessionId === "string" ? payload.providerSessionId : "";
+  const executionRequestId = typeof payload.executionRequestId === "string" ? payload.executionRequestId : null;
+  if (!providerSessionId.trim()) {
+    throw new ApiError(400, "providerSessionId is required");
+  }
+  return forgetLatchProviderSession({
+    ctx,
+    missionId: scope.missionId,
+    executionRequestId,
+    providerSessionId
+  });
 }
 
 // repository.ts
@@ -146833,7 +146839,7 @@ function toObjectiveDto(r5) {
     instructionText: r5.instruction_text,
     state: r5.state,
     autoAdvance: r5.queue_entry_id !== void 0 ? Boolean(r5.queue_entry_id) : isTruthyFlag4(r5.auto_advance),
-    queueEntry: r5.queue_entry_id && r5.queue_id && r5.queue_name && r5.queue_position != null && r5.queue_state ? {
+    queueEntry: r5.queue_entry_id && r5.queue_id && r5.queue_name && typeof r5.queue_position === "number" && r5.queue_state ? {
       id: r5.queue_entry_id,
       queueId: r5.queue_id,
       queueName: r5.queue_name,
@@ -151138,12 +151144,7 @@ async function updateObjectiveTx(idRef, body) {
     }
     if (body.autoAdvance !== void 0) {
       if (body.autoAdvance) {
-        await enqueueObjectiveAfterLastQueuedSibling(
-          tx,
-          existing.project_id,
-          id,
-          workspaceUserId
-        );
+        await enqueueObjectiveAfterLastQueuedSibling(tx, existing.project_id, id, workspaceUserId);
       } else {
         await removeRunQueueEntryForObjective(tx, existing.project_id, id);
       }
@@ -151556,20 +151557,21 @@ async function loadOperatorIdentity(db) {
   const user = await loadOperatorUserRow(db);
   return { userId: user.id, workspaceUserId: getActorWorkspaceUserId() };
 }
-function singleWorkspaceTokenIssuanceScope() {
+function selfIssuedTokenConsent() {
   const authorized = getAuthorizedWorkspacesContext();
   if (authorized) {
-    if (authorized.workspaces.length !== 1) {
-      throw new ApiError(
-        400,
-        "Token creation requires explicit organization/workspace consent when more than one workspace is authorized"
-      );
+    const issuance = [...authorized.workspaces].sort(
+      (a5, b5) => a5.workspaceId.localeCompare(b5.workspaceId)
+    )[0];
+    if (!issuance) {
+      throw new ApiError(409, "No workspace membership is available for token issuance");
     }
-    const only = authorized.workspaces[0];
     return {
-      workspaceId: only.workspaceId,
-      workspaceUserId: only.workspaceUserId,
-      organizationId: authorized.organizationId
+      organizationId: authorized.organizationId,
+      allWorkspaces: true,
+      workspaceIds: [],
+      issuanceWorkspaceId: issuance.workspaceId,
+      issuanceWorkspaceUserId: issuance.workspaceUserId
     };
   }
   const workspaceId2 = getBootstrapWorkspaceIdOrNull();
@@ -151577,7 +151579,13 @@ function singleWorkspaceTokenIssuanceScope() {
   if (!workspaceId2 || !workspaceUserId) {
     throw new ApiError(409, "No workspace membership is available for token issuance");
   }
-  return { workspaceId: workspaceId2, workspaceUserId, organizationId: null };
+  return {
+    organizationId: null,
+    allWorkspaces: true,
+    workspaceIds: [],
+    issuanceWorkspaceId: workspaceId2,
+    issuanceWorkspaceUserId: workspaceUserId
+  };
 }
 async function loadUserTokenForUpdate(db, id) {
   const { userId } = await loadOperatorIdentity(db);
@@ -151625,39 +151633,30 @@ async function createUserToken(body, consent) {
       throw new ApiError(400, `Unknown token scope: ${String(scope)}`);
     }
     const scopeGrants = scopeGrantsForPreset(scope);
-    const issuanceScope = consent ? {
-      workspaceId: consent.issuanceWorkspaceId,
-      workspaceUserId: consent.issuanceWorkspaceUserId,
-      organizationId: consent.organizationId
-    } : singleWorkspaceTokenIssuanceScope();
-    const identity = consent ? {
-      userId: await resolveActiveProfileId(tx),
-      workspaceUserId: consent.issuanceWorkspaceUserId
-    } : {
-      userId: (await loadOperatorIdentity(tx)).userId,
-      workspaceUserId: issuanceScope.workspaceUserId
-    };
-    if (!identity.userId) throw new ApiError(401, "Authentication required");
-    const { userId, workspaceUserId } = identity;
-    const workspaceId2 = issuanceScope.workspaceId;
+    const issuance = consent ?? selfIssuedTokenConsent();
+    const { userId } = await loadOperatorIdentity(tx);
+    if (!userId) throw new ApiError(401, "Authentication required");
+    const workspaceUserId = issuance.issuanceWorkspaceUserId;
+    const workspaceId2 = issuance.issuanceWorkspaceId;
     const workspace = await tx.get(
       `SELECT organization_id FROM workspaces WHERE id = ? AND deleted_at IS NULL`,
       [workspaceId2]
     );
     if (!workspace) throw new ApiError(409, "Active workspace no longer exists");
-    if (consent && workspace.organization_id !== consent.organizationId) {
+    const organizationId = issuance.organizationId ?? workspace.organization_id;
+    if (workspace.organization_id !== organizationId) {
       throw new ApiError(400, "Token consent organization does not match its issuance workspace");
     }
-    if (consent && !consent.allWorkspaces && consent.workspaceIds.length === 0) {
+    if (!issuance.allWorkspaces && issuance.workspaceIds.length === 0) {
       throw new ApiError(400, "Explicit token consent requires at least one workspace");
     }
-    if (consent && !consent.allWorkspaces) {
-      for (const consentedWorkspaceId of consent.workspaceIds) {
+    if (!issuance.allWorkspaces) {
+      for (const consentedWorkspaceId of issuance.workspaceIds) {
         const consentedWorkspace = await tx.get(
           `SELECT organization_id FROM workspaces WHERE id = ? AND deleted_at IS NULL`,
           [consentedWorkspaceId]
         );
-        if (!consentedWorkspace || consentedWorkspace.organization_id !== consent.organizationId) {
+        if (!consentedWorkspace || consentedWorkspace.organization_id !== organizationId) {
           throw new ApiError(400, "Token consent workspaces must belong to its organization");
         }
       }
@@ -151686,7 +151685,7 @@ async function createUserToken(body, consent) {
       [
         id,
         workspaceId2,
-        consent?.organizationId ?? workspace.organization_id,
+        organizationId,
         userId,
         workspaceUserId,
         label,
@@ -151698,11 +151697,10 @@ async function createUserToken(body, consent) {
         now2
       ]
     );
-    if (consent?.allWorkspaces) {
+    if (issuance.allWorkspaces) {
       await tx.run(`UPDATE user_tokens SET all_workspaces = true WHERE id = ?`, [id]);
     } else {
-      const workspaceIds = consent?.workspaceIds ?? [workspaceId2];
-      for (const consentedWorkspaceId of workspaceIds) {
+      for (const consentedWorkspaceId of issuance.workspaceIds) {
         await tx.run(
           `INSERT INTO user_token_workspaces (token_id, workspace_id, created_at)
            VALUES (?, ?, ?)`,
@@ -159098,7 +159096,9 @@ async function queueObjectiveFromProtocol(ctx, body) {
     if (requestedPosition === 1) position = 0;
     else afterEntryId = entriesWithoutCurrent[requestedPosition - 2]?.id;
   }
-  const wantsMove = Boolean(queueRef || afterEntryId || hasFront || requestedPosition !== void 0);
+  const wantsMove = Boolean(
+    queueRef || afterEntryId || hasFront || requestedPosition !== void 0
+  );
   if (existing && !wantsMove) {
     return queues.flatMap((queue) => queue.entries).find((entry) => entry.id === existing.id);
   }
@@ -159970,7 +159970,9 @@ var hostedMcpToolDefinitions = [
         "Objective UUID or display id such as coo:756.k7xm. Use a display id when that is the only identifier available."
       )
     }),
-    outputSchema: protocolOutputSchema("The mission's newest-first normalized DeliveryDto records."),
+    outputSchema: protocolOutputSchema(
+      "The mission's newest-first normalized DeliveryDto records."
+    ),
     annotations: readOnly
   },
   {
@@ -164915,6 +164917,19 @@ function isLoopbackRequest(req) {
 }
 async function resolveAuthorizedWorkspaces(profileId, token) {
   if (token && !token.organizationId) return { organizationId: null, workspaces: [] };
+  const filters = [];
+  const params = [profileId];
+  if (token) {
+    filters.push("AND w.organization_id = ?");
+    params.push(token.organizationId);
+    if (!token.allWorkspaces) {
+      filters.push(`AND EXISTS (
+            SELECT 1 FROM user_token_workspaces utw
+             WHERE utw.token_id = ? AND utw.workspace_id = wu.workspace_id
+          )`);
+      params.push(token.id);
+    }
+  }
   const rows = await requireDatabaseClient().all(
     `SELECT wu.workspace_id, wu.id AS workspace_user_id,
             w.slug AS workspace_slug, w.name AS workspace_name, w.kind AS workspace_kind,
@@ -164925,22 +164940,9 @@ async function resolveAuthorizedWorkspaces(profileId, token) {
          ON ra.workspace_id = wu.workspace_id AND ra.workspace_user_id = wu.id
         AND ra.deleted_at IS NULL
       WHERE wu.profile_id = ? AND wu.status = 'active' AND wu.deleted_at IS NULL
-        AND (?::text IS NULL OR w.organization_id = ?)
-        AND (
-          ?::text IS NULL OR ? = 1 OR EXISTS (
-            SELECT 1 FROM user_token_workspaces utw
-             WHERE utw.token_id = ? AND utw.workspace_id = wu.workspace_id
-          )
-        )
+        ${filters.join("\n        ")}
       ORDER BY w.organization_id ASC, wu.workspace_id ASC, ra.role_key ASC`,
-    [
-      profileId,
-      token?.organizationId ?? null,
-      token?.organizationId ?? null,
-      token?.id ?? null,
-      token?.allWorkspaces ? 1 : 0,
-      token?.id ?? null
-    ]
+    params
   );
   const organizationIds = [...new Set(rows.map((row) => row.organization_id))];
   const organizationId = token?.organizationId ?? (organizationIds.length === 1 ? organizationIds[0] : null);

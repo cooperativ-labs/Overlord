@@ -1,5 +1,5 @@
 {
-  "contractVersion": 95,
+  "contractVersion": 105,
   "description": "Normative vectors for the organization-bounded authorization and SearchMissionsResponseV2 contract.",
   "vectors": [
     {
@@ -20,6 +20,12 @@
       "token": { "organizationId": "org-a", "allWorkspaces": false, "workspaceIds": [] },
       "liveMemberships": ["ws-a"],
       "expectedAuthorizedWorkspaces": []
+    },
+    {
+      "name": "self-issued-token-consents-to-the-whole-organization",
+      "issuance": { "kind": "self_issued", "authorizedWorkspaces": ["ws-a", "ws-b"], "organizationId": "org-a" },
+      "expectedConsent": { "organizationId": "org-a", "allWorkspaces": true, "workspaceIds": [] },
+      "note": "CLI login and the settings page take no workspace selection; explicit workspaceIds come only from third-party OAuth approval."
     },
     {
       "name": "legacy-token-backfill-is-conservative",
