@@ -33,6 +33,12 @@ function dateInputToIsoBound(value: string, endExclusive = false): string | unde
  * Global mission search bar. Debounces input, queries the shared search index via
  * GET /api/search/v3 and renders a one-child-per-mission compact projection.
  * ⌘F / Ctrl+F focuses it; ⌥← / Alt+← goes back.
+ *
+ * Filters, results, and status notices all live in one absolutely positioned
+ * panel anchored below the input. Keeping them out of flow is load-bearing: the
+ * NavHeader is a fixed `h-11` strip that centres its children, so anything that
+ * grows the search column in flow re-centres it and pushes the input off the
+ * top of the window.
  */
 export function MissionSearch({ className }: MissionSearchProps) {
   const navigate = useNavigate();
@@ -247,123 +253,121 @@ export function MissionSearch({ className }: MissionSearchProps) {
           )}
         </div>
         {(isOpen || query.trim()) && (
-          <div className="mt-1 flex flex-wrap items-center gap-1 text-xs">
-            <select
-              aria-label="Filter search by project"
-              className="h-7 rounded border bg-background px-1 text-xs"
-              value={projectId}
-              onChange={event => setProjectId(event.target.value)}
-            >
-              <option value="">All projects</option>
-              {(projects.data ?? []).map(project => (
-                <option key={project.id} value={project.id}>
-                  {project.name}
-                </option>
-              ))}
-            </select>
-            <select
-              aria-label="Filter search by resource"
-              className="h-7 rounded border bg-background px-1 text-xs"
-              value={resourceKey}
-              disabled={!projectId}
-              onChange={event => setResourceKey(event.target.value)}
-            >
-              <option value="">All resources</option>
-              {resources.map(resource => (
-                <option key={resource} value={resource}>
-                  {resource}
-                </option>
-              ))}
-            </select>
-            <select
-              aria-label="Date field"
-              className="h-7 rounded border bg-background px-1 text-xs"
-              value={dateField}
-              onChange={event => setDateField(event.target.value as 'updatedAt' | 'createdAt')}
-            >
-              <option value="updatedAt">Updated</option>
-              <option value="createdAt">Created</option>
-            </select>
-            <Input
-              aria-label="From date"
-              type="date"
-              className="h-7 w-32 text-xs"
-              value={from}
-              onChange={event => setFrom(event.target.value)}
-            />
-            <Input
-              aria-label="To date"
-              type="date"
-              className="h-7 w-32 text-xs"
-              value={to}
-              onChange={event => setTo(event.target.value)}
-            />
-          </div>
-        )}
-        {isOpen && rows.length > 0 && (
-          <ul
-            role="listbox"
-            id={listboxId}
-            className="absolute left-0 top-full z-20 mt-2 w-full max-h-[80vh] overflow-y-auto rounded-xl border border-border bg-card shadow-xl"
-          >
-            {rows.map((row, index) => {
-              const isActive = index === activeIndex;
-              return (
-                <li
-                  key={row.key}
-                  id={`${listboxId}-${index}`}
-                  role="option"
-                  aria-selected={isActive}
-                  className={cn(
-                    'px-4 py-3 transition hover:bg-muted/90',
-                    isActive ? 'bg-primary/10' : 'bg-card'
-                  )}
-                  onMouseDown={() => selectRow(row)}
-                  onMouseEnter={() => setActiveIndex(index)}
-                >
-                  <SearchResultRowContent row={row} compact />
-                </li>
-              );
-            })}
-            <li className="border-t px-2 py-2">
-              <Button
-                className="w-full justify-start"
-                size="sm"
-                variant="ghost"
-                onMouseDown={() => {
-                  void navigate({ to: '/search', search: { q: query.trim() } });
-                  setIsOpen(false);
-                }}
+          <div className="absolute left-0 top-full z-20 mt-2 flex max-h-[70vh] w-full flex-col overflow-hidden rounded-xl border border-border bg-card/95 shadow-xl backdrop-blur-md supports-backdrop-filter:bg-card/75">
+            <div className="flex shrink-0 flex-wrap items-center gap-1 border-b border-border/60 bg-muted/30 px-3 py-2 text-xs">
+              <select
+                aria-label="Filter search by project"
+                className="h-7 rounded border bg-background/70 px-1 text-xs"
+                value={projectId}
+                onChange={event => setProjectId(event.target.value)}
               >
-                View all results
-              </Button>
-            </li>
-          </ul>
-        )}
-        {isOpen && !isLoading && searchError && (
-          <p
-            role="alert"
-            className="mt-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive"
-          >
-            Search could not be completed. {searchError}
-          </p>
-        )}
-        {isOpen && !isLoading && !searchError && searchMeta && rows.length === 0 && (
-          <p className="mt-2 rounded-md border bg-card px-3 py-2 text-xs text-muted-foreground">
-            No matching missions, objectives, or deliveries.
-          </p>
-        )}
-        {isOpen && searchMeta && (
-          <div className="mt-1">
-            <SearchCompletenessNotice
-              returned={results.length}
-              totalMatchedBeforeLimit={searchMeta.totalMatchedBeforeLimit}
-              truncatedCandidates={searchMeta.truncatedCandidates}
-            />
-            {searchMeta.appliedFilters.mode === 'fallback' && (
-              <p className="mt-1 text-xs text-muted-foreground">
-                Showing fallback results because the query has no meaningful terms.
+                <option value="">All projects</option>
+                {(projects.data ?? []).map(project => (
+                  <option key={project.id} value={project.id}>
+                    {project.name}
+                  </option>
+                ))}
+              </select>
+              <select
+                aria-label="Filter search by resource"
+                className="h-7 rounded border bg-background/70 px-1 text-xs"
+                value={resourceKey}
+                disabled={!projectId}
+                onChange={event => setResourceKey(event.target.value)}
+              >
+                <option value="">All resources</option>
+                {resources.map(resource => (
+                  <option key={resource} value={resource}>
+                    {resource}
+                  </option>
+                ))}
+              </select>
+              <select
+                aria-label="Date field"
+                className="h-7 rounded border bg-background/70 px-1 text-xs"
+                value={dateField}
+                onChange={event => setDateField(event.target.value as 'updatedAt' | 'createdAt')}
+              >
+                <option value="updatedAt">Updated</option>
+                <option value="createdAt">Created</option>
+              </select>
+              <Input
+                aria-label="From date"
+                type="date"
+                className="h-7 w-32 bg-background/70 text-xs"
+                value={from}
+                onChange={event => setFrom(event.target.value)}
+              />
+              <Input
+                aria-label="To date"
+                type="date"
+                className="h-7 w-32 bg-background/70 text-xs"
+                value={to}
+                onChange={event => setTo(event.target.value)}
+              />
+            </div>
+            {isOpen && rows.length > 0 && (
+              <ul role="listbox" id={listboxId} className="min-h-0 flex-1 overflow-y-auto">
+                {rows.map((row, index) => {
+                  const isActive = index === activeIndex;
+                  return (
+                    <li
+                      key={row.key}
+                      id={`${listboxId}-${index}`}
+                      role="option"
+                      aria-selected={isActive}
+                      className={cn(
+                        'px-4 py-3 transition hover:bg-muted/70',
+                        isActive ? 'bg-primary/10' : 'bg-transparent'
+                      )}
+                      onMouseDown={() => selectRow(row)}
+                      onMouseEnter={() => setActiveIndex(index)}
+                    >
+                      <SearchResultRowContent row={row} compact />
+                    </li>
+                  );
+                })}
+                <li className="border-t border-border/60 px-2 py-2">
+                  <Button
+                    className="w-full justify-start"
+                    size="sm"
+                    variant="ghost"
+                    onMouseDown={() => {
+                      void navigate({ to: '/search', search: { q: query.trim() } });
+                      setIsOpen(false);
+                    }}
+                  >
+                    View all results
+                  </Button>
+                </li>
+              </ul>
+            )}
+            {isOpen && !isLoading && searchError && (
+              <p
+                role="alert"
+                className="shrink-0 border-t border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive"
+              >
+                Search could not be completed. {searchError}
               </p>
+            )}
+            {isOpen && !isLoading && !searchError && searchMeta && rows.length === 0 && (
+              <p className="shrink-0 px-3 py-2 text-xs text-muted-foreground">
+                No matching missions, objectives, or deliveries.
+              </p>
+            )}
+            {isOpen && searchMeta && (
+              <div className="shrink-0 border-t border-border/60 px-3 py-2 text-xs [&_p]:text-xs">
+                <SearchCompletenessNotice
+                  returned={results.length}
+                  totalMatchedBeforeLimit={searchMeta.totalMatchedBeforeLimit}
+                  truncatedCandidates={searchMeta.truncatedCandidates}
+                />
+                {searchMeta.appliedFilters.mode === 'fallback' && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Showing fallback results because the query has no meaningful terms.
+                  </p>
+                )}
+              </div>
             )}
           </div>
         )}
