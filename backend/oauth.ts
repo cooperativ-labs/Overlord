@@ -211,9 +211,12 @@ function validateAuthorizationRequest(req: Request): {
   const canonicalResource = `${webPublicBaseUrl(req)}/mcp`;
   const resource = requestParam(req, 'resource') || canonicalResource;
   if (resource !== canonicalResource) {
+    // Name both sides: this is almost always a deployment whose public origin
+    // (`OVERLORD_WEBAPP_PUBLIC_URL`) does not match the origin the client
+    // connected to, and the bare mismatch is undiagnosable from the client.
     throw new ApiError(
       400,
-      'OAuth resource must match this Overlord MCP server',
+      `OAuth resource must match this Overlord MCP server: expected ${canonicalResource}, received ${resource}`,
       undefined,
       'invalid_target'
     );
@@ -249,11 +252,43 @@ async function consumeAuthorizationCode(code: string): Promise<AuthorizationCode
   return entry;
 }
 
+/** Whether a `Host` header names this machine rather than a public origin. */
+function isLocalHostHeader(host: string): boolean {
+  const hostname = host.replace(/:\d+$/, '').toLowerCase();
+  return (
+    hostname === 'localhost' ||
+    hostname.endsWith('.localhost') ||
+    hostname === '127.0.0.1' ||
+    hostname === '::1' ||
+    hostname === '[::1]'
+  );
+}
+
+/**
+ * The origin clients use to reach this Overlord — the identity published in
+ * OAuth discovery metadata and bound as the MCP `resource`.
+ *
+ * `OVERLORD_WEBAPP_PUBLIC_URL` / `OVERLORD_PUBLIC_URL` is authoritative, and is
+ * required whenever clients arrive through a different origin: the hosted web
+ * app proxies `/mcp` and the OAuth endpoints to this backend, so a client that
+ * connected to the web app sends that origin as its `resource` while this
+ * server, left to itself, can only describe its own hostname.
+ *
+ * The fallback derives the origin from the request's own `Host`, deliberately
+ * never from `X-Forwarded-Host`: that header is attacker-controlled on a
+ * directly reachable backend, and it feeds both the resource binding and the
+ * `/oauth/authorize` redirect. The scheme is assumed `https` for any non-local
+ * host, because a TLS-terminating proxy speaks plain HTTP to the app —
+ * `req.protocol` would otherwise publish `http://` URLs that no MCP client can
+ * use, and that no client's `resource` will ever match.
+ */
 export function webPublicBaseUrl(req: Request): string {
   const configured =
     process.env.OVERLORD_WEBAPP_PUBLIC_URL?.trim() || process.env.OVERLORD_PUBLIC_URL?.trim();
   if (configured) return configured.replace(/\/+$/, '');
-  return `${req.protocol}://${req.get('host') ?? 'localhost'}`;
+  const host = req.get('host') ?? 'localhost';
+  const protocol = isLocalHostHeader(host) ? req.protocol : 'https';
+  return `${protocol}://${host}`;
 }
 
 export function oauthProtectedResourceMetadata(req: Request): Record<string, unknown> {

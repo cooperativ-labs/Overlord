@@ -54,6 +54,15 @@ traffic to the backend. Set `OVERLORD_BACKEND_URL` and
 `OVERLORD_WEBAPP_PUBLIC_URL` in the web deployment so remote MCP clients can use
 the webapp domain as the MCP resource.
 
+`OVERLORD_WEBAPP_PUBLIC_URL` (or `OVERLORD_PUBLIC_URL`) must be set on the
+**backend** deployment too, to that same webapp origin. It is the canonical
+resource the backend publishes and the only one it accepts, and the approval
+call reaches the backend directly rather than through the proxy — so a backend
+that does not know the public origin rejects the connection with `invalid_target`
+("OAuth resource must match this Overlord MCP server") even though every
+discovery document looks correct. Connect clients to the same origin: mixing the
+webapp `/mcp` URL with the backend's own hostname is the same mismatch.
+
 ## Tools
 
 The current tool catalog is mission-first:

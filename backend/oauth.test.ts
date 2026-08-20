@@ -367,3 +367,75 @@ test('the approve-time sweep revokes tokens of codes that expired unexchanged', 
     mock.timers.reset();
   }
 });
+
+// A hosted backend sits behind a TLS-terminating proxy: the app itself receives
+// plain HTTP, and the origin clients actually connect to is the web app's. Both
+// halves of that must be right, or an approval fails `invalid_target` with the
+// client having done nothing wrong.
+function proxiedRequest(body: Record<string, unknown>, host: string): Request {
+  return {
+    body,
+    query: {},
+    // Express reports the hop from the proxy, not the client's TLS connection.
+    protocol: 'http',
+    get: (name: string) => (name.toLowerCase() === 'host' ? host : undefined)
+  } as unknown as Request;
+}
+
+test('discovery metadata behind a TLS-terminating proxy advertises https, not the proxy hop', () => {
+  const metadata = oauth.oauthProtectedResourceMetadata(proxiedRequest({}, 'backend.example.test'));
+  assert.equal(metadata.resource, 'https://backend.example.test/mcp');
+  assert.deepEqual(metadata.authorization_servers, ['https://backend.example.test']);
+
+  const authServer = oauth.oauthAuthorizationServerMetadata(
+    proxiedRequest({}, 'backend.example.test')
+  );
+  assert.equal(authServer.issuer, 'https://backend.example.test');
+
+  // A loopback backend is genuinely http; Overlord Local must not be upgraded.
+  assert.equal(
+    oauth.oauthProtectedResourceMetadata(proxiedRequest({}, 'localhost:3000')).resource,
+    'http://localhost:3000/mcp'
+  );
+});
+
+test('a configured public origin wins over the backend hostname clients never see', () => {
+  process.env.OVERLORD_WEBAPP_PUBLIC_URL = 'https://app.example.test/';
+  try {
+    assert.equal(
+      oauth.oauthProtectedResourceMetadata(proxiedRequest({}, 'backend.example.test')).resource,
+      'https://app.example.test/mcp'
+    );
+  } finally {
+    delete process.env.OVERLORD_WEBAPP_PUBLIC_URL;
+  }
+});
+
+test('a resource mismatch names both origins so the deployment can be fixed', async () => {
+  const clientId = registerClient('Proxy Origin Client');
+  const res = mockResponse();
+  await assert.rejects(
+    () =>
+      oauth.handleOAuthRequestInfo(
+        proxiedRequest(
+          {
+            response_type: 'code',
+            client_id: clientId,
+            redirect_uri: REDIRECT_URI,
+            code_challenge_method: 'S256',
+            code_challenge: CODE_CHALLENGE,
+            // What a client that connected through the web app sends.
+            resource: 'https://app.example.test/mcp'
+          },
+          'backend.example.test'
+        ),
+        res
+      ),
+    (error: Error & { code?: string }) => {
+      assert.equal(error.code, 'invalid_target');
+      assert.match(error.message, /expected https:\/\/backend\.example\.test\/mcp/);
+      assert.match(error.message, /received https:\/\/app\.example\.test\/mcp/);
+      return true;
+    }
+  );
+});
