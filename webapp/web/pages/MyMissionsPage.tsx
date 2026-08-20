@@ -597,9 +597,7 @@ export function MyMissionsPage() {
           />
         ) : view === 'board' ? (
           <DndContext {...dndContextProps}>
-            <div className="flex h-full min-h-0 items-stretch gap-2">
-              {renderColumns()}
-            </div>
+            <div className="flex h-full min-h-0 items-stretch gap-2">{renderColumns()}</div>
             <DragOverlay>
               {activeMission ? (
                 <SortableMissionCard

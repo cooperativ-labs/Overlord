@@ -262,9 +262,9 @@ export function MissionSearch({ className }: MissionSearchProps) {
         </div>
         {(isOpen || query.trim()) && (
           // The panel is deliberately wider than the input so the whole filter
-          // row fits on one line; it is capped to the viewport so it can never
-          // overflow on a narrow window.
-          <div className="absolute left-0 top-full z-20 mt-2 flex max-h-[70vh] w-[44rem] min-w-full max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-xl border border-border bg-card/95 shadow-xl backdrop-blur-md supports-backdrop-filter:bg-card/75">
+          // row fits on one line; it is centred on the input and capped to the
+          // viewport so it can never overflow on a narrow window.
+          <div className="absolute left-1/2 top-full z-20 mt-2 flex max-h-[70vh] w-[44rem] min-w-full max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-col overflow-hidden rounded-xl border border-border bg-card/95 shadow-xl backdrop-blur-md supports-backdrop-filter:bg-card/75">
             <div className="flex shrink-0 flex-wrap items-center gap-1.5 border-b border-border/60 bg-muted/30 px-3 py-2 text-xs">
               <select
                 aria-label="Filter search by project"

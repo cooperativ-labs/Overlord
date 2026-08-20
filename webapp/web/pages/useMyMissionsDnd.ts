@@ -119,7 +119,11 @@ export function useMyMissionsDnd({
       const { active, over } = event;
       const id = String(active.id);
       const source = overrideRef.current ?? columns;
-      const overId = over ? String(over.id) : lastOverId.current ? String(lastOverId.current) : null;
+      const overId = over
+        ? String(over.id)
+        : lastOverId.current
+          ? String(lastOverId.current)
+          : null;
 
       setActiveId(null);
       lastOverId.current = null;
