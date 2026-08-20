@@ -181,7 +181,11 @@ export function BoardColumn<TMission extends MissionDto = MissionDto>({
         </div>
       </div>
       {draggable ? (
-        <SortableContext items={missions.map(t => t.id)} strategy={verticalListSortingStrategy}>
+        <SortableContext
+          id={status.id}
+          items={missions.map(t => t.id)}
+          strategy={verticalListSortingStrategy}
+        >
           {content}
         </SortableContext>
       ) : (

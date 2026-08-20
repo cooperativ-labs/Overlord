@@ -72,6 +72,15 @@ describe('groupMissionsByStatusType', () => {
     assert.deepEqual(columns['review'], []);
   });
 
+  it('orders by personal myPosition within a type, then original order', () => {
+    const columns = groupMissionsByStatusType([
+      { ...mission('m1', 'project-a', 'next'), myPosition: 200 } as MissionDto,
+      { ...mission('m2', 'project-a', 'next'), myPosition: 100 } as MissionDto,
+      mission('m3', 'project-a', 'next')
+    ]);
+    assert.deepEqual(columns['next'], ['m2', 'm1', 'm3']);
+  });
+
   it('places missions outside the board vocabulary in no column', () => {
     const columns = groupMissionsByStatusType([
       mission('m1', 'project-a', 'draft'),

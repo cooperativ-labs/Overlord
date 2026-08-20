@@ -325,15 +325,6 @@ export function MyMissionsPage() {
     return projects[0]?.id ?? '';
   }, [meta.data?.defaultProjectId, projects]);
 
-  const filteredColumns = useMemo<ColumnMap>(() => {
-    const visibleMissionIds = new Set(filteredMissions.map(mission => mission.id));
-    const map: ColumnMap = {};
-    for (const column of MY_MISSIONS_BOARD_COLUMNS) {
-      map[column.key] = (columnsForDnd[column.key] ?? []).filter(id => visibleMissionIds.has(id));
-    }
-    return map;
-  }, [columnsForDnd, filteredMissions]);
-
   // Persist a drop. The column is a status type, so the whole column — across
   // every project and workspace it aggregates — is sent in one call and the
   // server resolves each moved mission's target status inside its own project.
@@ -372,13 +363,20 @@ export function MyMissionsPage() {
 
   const myMissionsDnd = useMyMissionsDnd({ columns: columnsForDnd, onDrop });
   const { activeId, displayColumns, dndContextProps } = myMissionsDnd;
-  const visibleColumns = isFilterActive ? filteredColumns : displayColumns;
 
-  const listDnd = useMyMissionsDnd({
-    columns: visibleColumns,
-    onDrop,
-    draggable: !isFilterActive
-  });
+  // Filters only hide cards; the hook always owns the full column so a drop
+  // still persists hidden missions' slots. Drag stays enabled with filters on.
+  const visibleColumns = useMemo<ColumnMap>(() => {
+    if (!isFilterActive) return displayColumns;
+    const visibleMissionIds = new Set(filteredMissions.map(mission => mission.id));
+    const map: ColumnMap = {};
+    for (const column of MY_MISSIONS_BOARD_COLUMNS) {
+      map[column.key] = (displayColumns[column.key] ?? []).filter(id => visibleMissionIds.has(id));
+    }
+    return map;
+  }, [displayColumns, filteredMissions, isFilterActive]);
+
+  const listDnd = { ...myMissionsDnd, displayColumns: visibleColumns };
 
   // The list view groups by the same four status-type columns as the board.
   const listStatuses = useMemo<BoardColumnStatus[]>(
@@ -509,7 +507,7 @@ export function MyMissionsPage() {
 
   const activeMission = activeId ? missionById.get(activeId) : undefined;
 
-  const renderColumns = (draggable: boolean) => (
+  const renderColumns = () => (
     <>
       {visibleStatusColumns.map(column => {
         const colMissions = resolveColumnMissions(visibleColumns[column.key] ?? [], missionById);
@@ -524,7 +522,7 @@ export function MyMissionsPage() {
             defaultProjectId={defaultCreateProjectId}
             membersByWorkspaceUserId={membersByWorkspaceUserId}
             selectedMissionId={selectedMissionId}
-            draggable={draggable}
+            draggable
             onOpenMission={openMission}
             onCreateMission={handleCreateMissionFromColumn}
             onCreateAndOpenMission={handleCreateAndOpenMissionFromColumn}
@@ -598,29 +596,27 @@ export function MyMissionsPage() {
             }
           />
         ) : view === 'board' ? (
-          <DndContext {...(isFilterActive ? listDnd.dndContextProps : dndContextProps)}>
+          <DndContext {...dndContextProps}>
             <div className="flex h-full min-h-0 items-stretch gap-2">
-              {renderColumns(!isFilterActive)}
+              {renderColumns()}
             </div>
-            {!isFilterActive ? (
-              <DragOverlay>
-                {activeMission ? (
-                  <SortableMissionCard
-                    mission={activeMission}
-                    projectId={activeMission.projectId}
-                    projectName={activeMission.projectName}
-                    projectColor={activeMission.projectColor}
-                    assignee={
-                      activeMission.assignedWorkspaceUserId
-                        ? membersByWorkspaceUserId.get(activeMission.assignedWorkspaceUserId)
-                        : undefined
-                    }
-                    selected={activeMission.id === selectedMissionId}
-                    isDragOverlay
-                  />
-                ) : null}
-              </DragOverlay>
-            ) : null}
+            <DragOverlay>
+              {activeMission ? (
+                <SortableMissionCard
+                  mission={activeMission}
+                  projectId={activeMission.projectId}
+                  projectName={activeMission.projectName}
+                  projectColor={activeMission.projectColor}
+                  assignee={
+                    activeMission.assignedWorkspaceUserId
+                      ? membersByWorkspaceUserId.get(activeMission.assignedWorkspaceUserId)
+                      : undefined
+                  }
+                  selected={activeMission.id === selectedMissionId}
+                  isDragOverlay
+                />
+              ) : null}
+            </DragOverlay>
           </DndContext>
         ) : view === 'calendar' ? (
           <MissionCalendarView

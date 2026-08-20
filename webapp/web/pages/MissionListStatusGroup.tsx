@@ -143,7 +143,11 @@ export function MissionListStatusGroup<TMission extends MissionDto = MissionDto>
               focusTrigger={focusEditorCount}
             />
           ) : null}
-          <SortableContext items={missions.map(t => t.id)} strategy={verticalListSortingStrategy}>
+          <SortableContext
+            id={status.id}
+            items={missions.map(t => t.id)}
+            strategy={verticalListSortingStrategy}
+          >
             {missions.length === 0 ? (
               isAdding ? null : (
                 <button

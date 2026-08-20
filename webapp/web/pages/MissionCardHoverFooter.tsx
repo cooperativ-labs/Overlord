@@ -120,10 +120,10 @@ export function MissionCardHoverFooter({
   return (
     <CardFooter
       className={cn(
-        'p-0',
+        'p-0 pointer-events-none',
         'grid grid-rows-[0fr] opacity-0 transition-all duration-150 ease-out',
-        'group-hover:grid-rows-[1fr] group-hover:opacity-100',
-        'focus-within:grid-rows-[1fr] focus-within:opacity-100'
+        'group-hover:pointer-events-auto group-hover:grid-rows-[1fr] group-hover:opacity-100',
+        'focus-within:pointer-events-auto focus-within:grid-rows-[1fr] focus-within:opacity-100'
       )}
       onClick={stopPropagation}
       onPointerDown={stopPropagation}

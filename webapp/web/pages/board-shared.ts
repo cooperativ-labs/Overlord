@@ -1,8 +1,9 @@
 import type {
-  closestCenter,
+  CollisionDetection,
   DragEndEvent,
   DragOverEvent,
   DragStartEvent,
+  MeasuringConfiguration,
   useSensors
 } from '@dnd-kit/core';
 
@@ -26,7 +27,8 @@ export type BoardDndResult = {
   displayColumns: ColumnMap;
   dndContextProps: {
     sensors: ReturnType<typeof useSensors>;
-    collisionDetection: typeof closestCenter;
+    collisionDetection: CollisionDetection;
+    measuring?: MeasuringConfiguration;
     onDragStart: (event: DragStartEvent) => void;
     onDragOver: (event: DragOverEvent) => void;
     onDragEnd: (event: DragEndEvent) => void;

@@ -36,6 +36,15 @@ export function isMyMissionsColumnKey(value: string): value is MyMissionsColumnT
 }
 
 /**
+ * Personal slot on My Missions (`MyMissionDto.myPosition`). Other mission
+ * shapes omit it; treat those as unpositioned so they sort after dragged cards.
+ */
+function personalColumnPosition(mission: MissionDto): number | null {
+  const value = (mission as { myPosition?: number | null }).myPosition;
+  return typeof value === 'number' ? value : null;
+}
+
+/**
  * Bucket missions into the four status-type columns, preserving the server's
  * within-column order (personal position first, then the default fallback).
  * Missions whose status type is outside the board vocabulary (`draft`,
@@ -44,7 +53,17 @@ export function isMyMissionsColumnKey(value: string): value is MyMissionsColumnT
 export function groupMissionsByStatusType<T extends MissionDto>(missions: T[]): ColumnMap {
   const columns: ColumnMap = {};
   for (const column of MY_MISSIONS_BOARD_COLUMNS) columns[column.key] = [];
-  for (const mission of missions) {
+  const indexed = missions.map((mission, index) => ({ mission, index }));
+  indexed.sort((left, right) => {
+    const leftPos = personalColumnPosition(left.mission);
+    const rightPos = personalColumnPosition(right.mission);
+    const leftMissing = leftPos === null;
+    const rightMissing = rightPos === null;
+    if (leftMissing !== rightMissing) return leftMissing ? 1 : -1;
+    if (leftPos !== null && rightPos !== null && leftPos !== rightPos) return leftPos - rightPos;
+    return left.index - right.index;
+  });
+  for (const { mission } of indexed) {
     const bucket = columns[mission.statusType];
     if (bucket) bucket.push(mission.id);
   }

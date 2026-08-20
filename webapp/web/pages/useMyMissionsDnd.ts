@@ -1,23 +1,24 @@
 import {
-  closestCenter,
   type DragEndEvent,
   type DragOverEvent,
   type DragStartEvent,
   KeyboardSensor,
   PointerSensor,
-  pointerWithin,
+  type UniqueIdentifier,
   useSensor,
   useSensors
 } from '@dnd-kit/core';
-import { arrayMove, sortableKeyboardCoordinates } from '@dnd-kit/sortable';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { type BoardDndResult, type ColumnMap, columnMapsEqual } from './board-shared.ts';
-
-function findColumn(columns: ColumnMap, id: string): string | undefined {
-  if (id in columns) return id;
-  return Object.keys(columns).find(columnId => columns[columnId]?.includes(id));
-}
+import {
+  applyKanbanDrag,
+  createKanbanCollisionDetection,
+  findKanbanColumn,
+  KANBAN_DROPPABLE_MEASURING,
+  KANBAN_POINTER_SENSOR_OPTIONS
+} from './kanban-dnd.ts';
 
 /** Destination of a completed drop, handed to the page to persist. */
 export interface MyMissionsDropTarget {
@@ -55,6 +56,7 @@ export function useMyMissionsDnd({
   // layout in a ref as well so a cross-column drop always persists the card in
   // its destination column rather than the stale pre-drag list.
   const overrideRef = useRef<ColumnMap | null>(null);
+  const lastOverId = useRef<UniqueIdentifier | null>(null);
 
   const setOptimisticOverride = useCallback((next: ColumnMap | null) => {
     overrideRef.current = next;
@@ -69,21 +71,26 @@ export function useMyMissionsDnd({
   }, [activeId, override, columns, setOptimisticOverride]);
 
   const dndSensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(PointerSensor, KANBAN_POINTER_SENSOR_OPTIONS),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
   const noSensors = useSensors();
   const sensors = draggable ? dndSensors : noSensors;
 
-  const collisionDetection = useCallback((...args: Parameters<typeof pointerWithin>) => {
-    const hits = pointerWithin(...args);
-    return hits.length > 0 ? hits : closestCenter(...args);
-  }, []);
+  const collisionDetection = useMemo(
+    () =>
+      createKanbanCollisionDetection({
+        getColumns: () => overrideRef.current ?? columns,
+        lastOverId
+      }),
+    [columns]
+  );
 
   const displayColumns = override ?? columns;
 
   const handleDragStart = useCallback(
     (event: DragStartEvent) => {
+      lastOverId.current = null;
       setActiveId(String(event.active.id));
       setOptimisticOverride(columns);
     },
@@ -97,19 +104,12 @@ export function useMyMissionsDnd({
       const activeMissionId = String(active.id);
       const overId = String(over.id);
       const source = overrideRef.current ?? columns;
-      const fromCol = findColumn(source, activeMissionId);
-      const toCol = findColumn(source, overId);
+      const fromCol = findKanbanColumn(source, activeMissionId);
+      const toCol = findKanbanColumn(source, overId);
       if (!fromCol || !toCol || fromCol === toCol) return;
 
-      const fromItems = source[fromCol] ?? [];
-      const toItems = source[toCol] ?? [];
-      const overIndex = toItems.indexOf(overId);
-      const insertAt = overIndex >= 0 ? overIndex : toItems.length;
-      setOptimisticOverride({
-        ...source,
-        [fromCol]: fromItems.filter(id => id !== activeMissionId),
-        [toCol]: [...toItems.slice(0, insertAt), activeMissionId, ...toItems.slice(insertAt)]
-      });
+      const moved = applyKanbanDrag({ columns: source, activeId: activeMissionId, overId });
+      if (moved) setOptimisticOverride(moved.columns);
     },
     [columns, setOptimisticOverride]
   );
@@ -119,28 +119,25 @@ export function useMyMissionsDnd({
       const { active, over } = event;
       const id = String(active.id);
       const source = overrideRef.current ?? columns;
-      const dropColumn = over ? findColumn(source, String(over.id)) : undefined;
+      const overId = over ? String(over.id) : lastOverId.current ? String(lastOverId.current) : null;
 
       setActiveId(null);
+      lastOverId.current = null;
 
-      if (!dropColumn) {
+      if (!overId) {
         setOptimisticOverride(null);
         return;
       }
 
-      const items = source[dropColumn] ?? [];
-      const fromIndex = items.indexOf(id);
-      const overIndex =
-        over && String(over.id) !== dropColumn ? items.indexOf(String(over.id)) : items.length - 1;
-      const finalItems =
-        fromIndex !== -1 && overIndex !== -1 && fromIndex !== overIndex
-          ? arrayMove(items, fromIndex, overIndex)
-          : items;
+      const moved = applyKanbanDrag({ columns: source, activeId: id, overId });
+      if (!moved) {
+        setOptimisticOverride(null);
+        return;
+      }
 
-      const finalColumns: ColumnMap = { ...source, [dropColumn]: finalItems };
-      setOptimisticOverride(finalColumns);
+      setOptimisticOverride(moved.columns);
 
-      if (columnMapsEqual(finalColumns, columns)) {
+      if (columnMapsEqual(moved.columns, columns)) {
         setOptimisticOverride(null);
         return;
       }
@@ -149,14 +146,15 @@ export function useMyMissionsDnd({
       // server error) rolls the optimistic override back to server truth.
       void onDrop({
         movedMissionId: id,
-        dropColumnKey: dropColumn,
-        orderedMissionIds: finalItems
+        dropColumnKey: moved.dropColumnKey,
+        orderedMissionIds: moved.orderedMissionIds
       }).catch(() => setOptimisticOverride(null));
     },
     [columns, onDrop, setOptimisticOverride]
   );
 
   const handleDragCancel = useCallback(() => {
+    lastOverId.current = null;
     setActiveId(null);
     setOptimisticOverride(null);
   }, [setOptimisticOverride]);
@@ -166,7 +164,8 @@ export function useMyMissionsDnd({
     displayColumns,
     dndContextProps: {
       sensors,
-      collisionDetection: collisionDetection as typeof closestCenter,
+      collisionDetection,
+      measuring: KANBAN_DROPPABLE_MEASURING,
       onDragStart: handleDragStart,
       onDragOver: handleDragOver,
       onDragEnd: handleDragEnd,

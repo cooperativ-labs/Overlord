@@ -1,4 +1,4 @@
-import type { SearchResponseV3, SearchResultV3 } from '@overlord/contract';
+import type { MissionSearchDateField, SearchResponseV3, SearchResultV3 } from '@overlord/contract';
 import { useNavigate, useRouter } from '@tanstack/react-router';
 import { ArrowLeft } from 'lucide-react';
 import { type KeyboardEvent, useEffect, useId, useMemo, useRef, useState } from 'react';
@@ -21,6 +21,13 @@ import {
 type MissionSearchProps = {
   className?: string;
 };
+
+/**
+ * `none` is the default and is deliberately labelled "Date Range": picking a
+ * concrete field is what opens the range inputs, so the neutral option reads as
+ * the name of the control rather than as an "off" switch.
+ */
+type SearchDateFieldOption = 'none' | MissionSearchDateField;
 
 function dateInputToIsoBound(value: string, endExclusive = false): string | undefined {
   if (!value) return undefined;
@@ -53,7 +60,7 @@ export function MissionSearch({ className }: MissionSearchProps) {
   const [projectId, setProjectId] = useState('');
   const [resourceKey, setResourceKey] = useState('');
   const [resources, setResources] = useState<string[]>([]);
-  const [dateField, setDateField] = useState<'updatedAt' | 'createdAt'>('updatedAt');
+  const [dateField, setDateField] = useState<SearchDateFieldOption>('none');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [isOpen, setIsOpen] = useState(false);
@@ -64,6 +71,7 @@ export function MissionSearch({ className }: MissionSearchProps) {
   const [backShortcutHint, setBackShortcutHint] = useState('⌥←');
 
   const projects = useAllProjects();
+  const hasDateFilter = dateField !== 'none' && Boolean(from || to);
 
   useEffect(() => {
     let isCurrent = true;
@@ -100,11 +108,11 @@ export function MissionSearch({ className }: MissionSearchProps) {
         const data = await api.searchMissionsV3(query.trim(), {
           projectIds: projectId ? [projectId] : undefined,
           resourceKeys: resourceKey ? [resourceKey] : undefined,
-          dateField: from || to ? dateField : undefined,
-          from: dateInputToIsoBound(from),
+          dateField: hasDateFilter ? dateField : undefined,
+          from: hasDateFilter ? dateInputToIsoBound(from) : undefined,
           // The REST contract uses an exclusive upper bound; a calendar day is
           // therefore represented by the following midnight.
-          to: dateInputToIsoBound(to, true),
+          to: hasDateFilter ? dateInputToIsoBound(to, true) : undefined,
           matchesPerResult: 1
         });
         if (!isCurrent) return;
@@ -128,7 +136,7 @@ export function MissionSearch({ className }: MissionSearchProps) {
       isCurrent = false;
       window.clearTimeout(timeoutId);
     };
-  }, [query, projectId, resourceKey, dateField, from, to]);
+  }, [query, projectId, resourceKey, dateField, from, to, hasDateFilter]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -253,8 +261,11 @@ export function MissionSearch({ className }: MissionSearchProps) {
           )}
         </div>
         {(isOpen || query.trim()) && (
-          <div className="absolute left-0 top-full z-20 mt-2 flex max-h-[70vh] w-full flex-col overflow-hidden rounded-xl border border-border bg-card/95 shadow-xl backdrop-blur-md supports-backdrop-filter:bg-card/75">
-            <div className="flex shrink-0 flex-wrap items-center gap-1 border-b border-border/60 bg-muted/30 px-3 py-2 text-xs">
+          // The panel is deliberately wider than the input so the whole filter
+          // row fits on one line; it is capped to the viewport so it can never
+          // overflow on a narrow window.
+          <div className="absolute left-0 top-full z-20 mt-2 flex max-h-[70vh] w-[44rem] min-w-full max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-xl border border-border bg-card/95 shadow-xl backdrop-blur-md supports-backdrop-filter:bg-card/75">
+            <div className="flex shrink-0 flex-wrap items-center gap-1.5 border-b border-border/60 bg-muted/30 px-3 py-2 text-xs">
               <select
                 aria-label="Filter search by project"
                 className="h-7 rounded border bg-background/70 px-1 text-xs"
@@ -286,25 +297,38 @@ export function MissionSearch({ className }: MissionSearchProps) {
                 aria-label="Date field"
                 className="h-7 rounded border bg-background/70 px-1 text-xs"
                 value={dateField}
-                onChange={event => setDateField(event.target.value as 'updatedAt' | 'createdAt')}
+                onChange={event => {
+                  const next = event.target.value as SearchDateFieldOption;
+                  setDateField(next);
+                  if (next === 'none') {
+                    setFrom('');
+                    setTo('');
+                  }
+                }}
               >
-                <option value="updatedAt">Updated</option>
+                <option value="none">Date Range</option>
                 <option value="createdAt">Created</option>
+                <option value="updatedAt">Updated</option>
+                <option value="dueDatetime">Due</option>
               </select>
-              <Input
-                aria-label="From date"
-                type="date"
-                className="h-7 w-32 bg-background/70 text-xs"
-                value={from}
-                onChange={event => setFrom(event.target.value)}
-              />
-              <Input
-                aria-label="To date"
-                type="date"
-                className="h-7 w-32 bg-background/70 text-xs"
-                value={to}
-                onChange={event => setTo(event.target.value)}
-              />
+              {dateField !== 'none' && (
+                <>
+                  <Input
+                    aria-label="From date"
+                    type="date"
+                    className="h-7 w-32 rounded bg-background/70 text-xs"
+                    value={from}
+                    onChange={event => setFrom(event.target.value)}
+                  />
+                  <Input
+                    aria-label="To date"
+                    type="date"
+                    className="h-7 w-32 rounded bg-background/70 text-xs"
+                    value={to}
+                    onChange={event => setTo(event.target.value)}
+                  />
+                </>
+              )}
             </div>
             {isOpen && rows.length > 0 && (
               <ul role="listbox" id={listboxId} className="min-h-0 flex-1 overflow-y-auto">

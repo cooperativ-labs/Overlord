@@ -9,6 +9,33 @@ import { MissionCardBody } from './MissionCardBody.tsx';
 import { getMissionCardState } from './missionCardState.ts';
 import { MissionCardSurface } from './MissionCardSurface.tsx';
 
+function MissionCardDragOverlay({
+  mission,
+  projectId,
+  projectName,
+  projectColor,
+  assignee
+}: {
+  mission: MissionDto;
+  projectId: string;
+  projectName: string;
+  projectColor: string | null;
+  assignee?: WorkspaceMemberDto | null;
+}) {
+  return (
+    <div className="pointer-events-none w-full rounded-md border border-dashed border-primary/40 bg-card pt-2 shadow-lg">
+      <MissionCardBody
+        mission={mission}
+        projectId={projectId}
+        projectName={projectName}
+        projectColor={projectColor}
+        assignee={assignee}
+        cardState={getMissionCardState(mission)}
+      />
+    </div>
+  );
+}
+
 export function SortableMissionCard({
   mission,
   projectId,
@@ -31,25 +58,55 @@ export function SortableMissionCard({
   /** Override the default navigate-to-project-mission click (e.g. the My Missions board). */
   onOpen?: () => void;
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: mission.id,
-    disabled: isDragOverlay || disabled
-  });
-
   if (isDragOverlay) {
     return (
-      <div className="w-full rounded-md border border-dashed pt-2 border-primary/40 bg-card shadow-lg">
-        <MissionCardBody
-          mission={mission}
-          projectId={projectId}
-          projectName={projectName}
-          projectColor={projectColor}
-          assignee={assignee}
-          cardState={getMissionCardState(mission)}
-        />
-      </div>
+      <MissionCardDragOverlay
+        mission={mission}
+        projectId={projectId}
+        projectName={projectName}
+        projectColor={projectColor}
+        assignee={assignee}
+      />
     );
   }
+
+  return (
+    <SortableMissionCardActive
+      mission={mission}
+      projectId={projectId}
+      projectName={projectName}
+      projectColor={projectColor}
+      assignee={assignee}
+      selected={selected}
+      disabled={disabled}
+      onOpen={onOpen}
+    />
+  );
+}
+
+function SortableMissionCardActive({
+  mission,
+  projectId,
+  projectName,
+  projectColor,
+  assignee,
+  selected,
+  disabled,
+  onOpen
+}: {
+  mission: MissionDto;
+  projectId: string;
+  projectName: string;
+  projectColor: string | null;
+  assignee?: WorkspaceMemberDto | null;
+  selected?: boolean;
+  disabled?: boolean;
+  onOpen?: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: mission.id,
+    disabled
+  });
 
   const style = {
     transform: CSS.Transform.toString(transform),

@@ -1,21 +1,25 @@
 import {
-  closestCenter,
   type DragEndEvent,
   type DragOverEvent,
   type DragStartEvent,
   KeyboardSensor,
   PointerSensor,
-  pointerWithin,
+  type UniqueIdentifier,
   useSensor,
   useSensors
 } from '@dnd-kit/core';
 import { arrayMove, sortableKeyboardCoordinates } from '@dnd-kit/sortable';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { ProjectStatusDto } from '../../shared/contract.ts';
 import { useReorderBoardColumn } from '../lib/queries.ts';
 
 import { type BoardDndResult, type ColumnMap, columnMapsEqual } from './board-shared.ts';
+import {
+  createKanbanCollisionDetection,
+  KANBAN_DROPPABLE_MEASURING,
+  KANBAN_POINTER_SENSOR_OPTIONS
+} from './kanban-dnd.ts';
 
 /**
  * Shared drag-and-drop state machine for the project board's columns. Both the
@@ -44,6 +48,7 @@ export function useBoardColumnDnd({
   const reorder = useReorderBoardColumn();
   const [activeId, setActiveId] = useState<string | null>(null);
   const [override, setOverride] = useState<ColumnMap | null>(null);
+  const lastOverId = useRef<UniqueIdentifier | null>(null);
 
   // Drop the optimistic override once the real columns catch up to it.
   useEffect(() => {
@@ -53,18 +58,24 @@ export function useBoardColumnDnd({
   }, [activeId, override, columns]);
 
   const dndSensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(PointerSensor, KANBAN_POINTER_SENSOR_OPTIONS),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
   const noSensors = useSensors();
   const sensors = draggable ? dndSensors : noSensors;
 
-  const collisionDetection = useCallback((...args: Parameters<typeof pointerWithin>) => {
-    const hits = pointerWithin(...args);
-    return hits.length > 0 ? hits : closestCenter(...args);
-  }, []);
-
   const displayColumns = override ?? columns;
+  const columnsRef = useRef(displayColumns);
+  columnsRef.current = displayColumns;
+
+  const collisionDetection = useMemo(
+    () =>
+      createKanbanCollisionDetection({
+        getColumns: () => columnsRef.current,
+        lastOverId
+      }),
+    []
+  );
 
   const findColumn = useCallback(
     (id: string): string | undefined => {
@@ -76,6 +87,7 @@ export function useBoardColumnDnd({
 
   const handleDragStart = useCallback(
     (event: DragStartEvent) => {
+      lastOverId.current = null;
       setActiveId(String(event.active.id));
       setOverride(columns);
     },
@@ -156,6 +168,7 @@ export function useBoardColumnDnd({
   );
 
   const handleDragCancel = useCallback(() => {
+    lastOverId.current = null;
     setActiveId(null);
     setOverride(null);
   }, []);
@@ -165,7 +178,8 @@ export function useBoardColumnDnd({
     displayColumns,
     dndContextProps: {
       sensors,
-      collisionDetection: collisionDetection as typeof closestCenter,
+      collisionDetection,
+      measuring: KANBAN_DROPPABLE_MEASURING,
       onDragStart: handleDragStart,
       onDragOver: handleDragOver,
       onDragEnd: handleDragEnd,
