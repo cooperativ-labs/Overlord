@@ -26,7 +26,8 @@ import {
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
-  SidebarMenu
+  SidebarMenu,
+  useSidebar
 } from '@/components/ui/sidebar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { isWorkspaceSectionExpanded, setWorkspaceSectionExpanded } from '@/lib/org-preferences';
@@ -39,6 +40,65 @@ type WorkspaceSidebarSectionProps = {
   organizationId: string;
   onOpenWorkspaceSettings: (workspaceId: string) => void;
 };
+
+type WorkspaceHeaderActionsProps = {
+  onOpenWorkspaceSettings: () => void;
+  onAddProject: () => void;
+  showButtonTooltips: boolean;
+};
+
+function WorkspaceHeaderActions({
+  onOpenWorkspaceSettings,
+  onAddProject,
+  showButtonTooltips
+}: WorkspaceHeaderActionsProps) {
+  const settingsButton = (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon-xs"
+      className="text-muted-foreground"
+      aria-label="Workspace settings"
+      onClick={onOpenWorkspaceSettings}
+    >
+      <Settings className="size-3.5" />
+    </Button>
+  );
+  const addProjectButton = (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon-xs"
+      className="text-muted-foreground"
+      aria-label="Add project"
+      onClick={onAddProject}
+    >
+      <Plus className="size-3.5" />
+    </Button>
+  );
+
+  return (
+    <div className="flex shrink-0 items-center justify-end gap-0.5">
+      {showButtonTooltips ? (
+        <>
+          <Tooltip>
+            <TooltipTrigger render={settingsButton} />
+            <TooltipContent side="top">Workspace settings</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger render={addProjectButton} />
+            <TooltipContent side="top">Add project</TooltipContent>
+          </Tooltip>
+        </>
+      ) : (
+        <>
+          {settingsButton}
+          {addProjectButton}
+        </>
+      )}
+    </div>
+  );
+}
 
 export function WorkspaceSidebarSection({
   workspace,
@@ -54,6 +114,8 @@ export function WorkspaceSidebarSection({
   const [projectCreatorOpen, setProjectCreatorOpen] = useState(false);
   const [projectSettingsId, setProjectSettingsId] = useState<string | null>(null);
   const [reorderError, setReorderError] = useState<string | null>(null);
+  const { isMobile, state: sidebarState } = useSidebar();
+  const isSidebarCollapsed = sidebarState === 'collapsed' && !isMobile;
 
   const { activeProjects, archivedProjects } = useMemo(() => {
     const all = projects.data ?? [];
@@ -134,51 +196,59 @@ export function WorkspaceSidebarSection({
     [projectSettingsId, projects.data]
   );
 
+  function handleOpenWorkspaceSettings() {
+    onOpenWorkspaceSettings(workspace.id);
+  }
+
+  function handleAddProject() {
+    setProjectCreatorOpen(true);
+  }
+
+  const headerActions = (
+    <WorkspaceHeaderActions
+      onOpenWorkspaceSettings={handleOpenWorkspaceSettings}
+      onAddProject={handleAddProject}
+      showButtonTooltips={!isSidebarCollapsed}
+    />
+  );
+
+  const collapsibleTrigger = (
+    <CollapsibleTrigger
+      aria-label={workspace.name}
+      className="flex min-w-0 flex-1 items-center gap-1 text-left group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:flex-none group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:rounded-md hover:group-data-[collapsible=icon]:bg-sidebar-accent"
+    >
+      <ChevronDown
+        className={`size-4 shrink-0 transition-transform ${expanded ? '' : '-rotate-90'}`}
+      />
+      <SidebarGroupLabel className="truncate p-0 group-data-[collapsible=icon]:hidden">
+        {workspace.name}
+      </SidebarGroupLabel>
+    </CollapsibleTrigger>
+  );
+
   return (
     <>
       <SidebarGroup>
         <Collapsible open={expanded} onOpenChange={handleExpandedChange}>
-          <div className="flex items-center justify-between gap-1 px-2">
-            <CollapsibleTrigger className="flex min-w-0 flex-1 items-center gap-1 text-left">
-              <ChevronDown
-                className={`size-4 shrink-0 transition-transform ${expanded ? '' : '-rotate-90'}`}
-              />
-              <SidebarGroupLabel className="truncate p-0">{workspace.name}</SidebarGroupLabel>
-            </CollapsibleTrigger>
-            <div className="flex shrink-0 items-center justify-end gap-0.5">
+          <div className="flex items-center justify-between gap-1 px-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
+            {isSidebarCollapsed ? (
               <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-xs"
-                      className="text-muted-foreground"
-                      onClick={() => onOpenWorkspaceSettings(workspace.id)}
-                    >
-                      <Settings className="size-3.5" />
-                    </Button>
-                  }
-                />
-                <TooltipContent side="top">Workspace settings</TooltipContent>
+                <TooltipTrigger render={collapsibleTrigger} />
+                <TooltipContent
+                  side="right"
+                  align="center"
+                  hideArrow
+                  className="border border-border bg-popover px-1 py-0.5 text-popover-foreground shadow-md"
+                >
+                  {headerActions}
+                </TooltipContent>
               </Tooltip>
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-xs"
-                      className="text-muted-foreground"
-                      onClick={() => setProjectCreatorOpen(true)}
-                    >
-                      <Plus className="size-3.5" />
-                    </Button>
-                  }
-                />
-                <TooltipContent side="top">Add project</TooltipContent>
-              </Tooltip>
-            </div>
+            ) : (
+              <>
+                {collapsibleTrigger}
+                {headerActions}
+              </>
+            )}
           </div>
           <CollapsibleContent>
             <SidebarGroupContent>
