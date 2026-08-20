@@ -231,6 +231,18 @@ import {
   upsertMissionSharedContext
 } from './repository.ts';
 import {
+  deleteRunQueueEntry,
+  getProjectRunQueues,
+  patchProjectRunQueueOrder,
+  patchRunQueue,
+  patchRunQueueEntry,
+  patchRunQueueOrder,
+  postProjectRunQueue,
+  postRunQueueEntry,
+  removeRunQueue
+} from './run-queue.ts';
+import { runQueueDispatchWorker } from './run-queue-dispatch-worker.ts';
+import {
   deleteObjectiveAttachment,
   listObjectiveAttachments,
   MAX_ATTACHMENT_BYTES,
@@ -1283,6 +1295,42 @@ app.patch(
 app.delete(
   '/api/projects/:id',
   handle(req => deleteProject(req.params.id), { mutates: true })
+);
+app.get(
+  '/api/projects/:id/run-queues',
+  handle(req => getProjectRunQueues(req.params.id))
+);
+app.post(
+  '/api/projects/:id/run-queues',
+  handle(req => postProjectRunQueue(req.params.id, req.body), { mutates: true })
+);
+app.patch(
+  '/api/projects/:id/run-queues/order',
+  handle(req => patchProjectRunQueueOrder(req.params.id, req.body), { mutates: true })
+);
+app.post(
+  '/api/projects/:id/run-queues/entries',
+  handle(req => postRunQueueEntry(req.params.id, req.body), { mutates: true })
+);
+app.patch(
+  '/api/run-queues/:queueId',
+  handle(req => patchRunQueue(req.params.queueId, req.body), { mutates: true })
+);
+app.delete(
+  '/api/run-queues/:queueId',
+  handle(req => removeRunQueue(req.params.queueId, req.body ?? {}), { mutates: true })
+);
+app.patch(
+  '/api/run-queues/:queueId/order',
+  handle(req => patchRunQueueOrder(req.params.queueId, req.body), { mutates: true })
+);
+app.patch(
+  '/api/run-queues/entries/:entryId',
+  handle(req => patchRunQueueEntry(req.params.entryId, req.body), { mutates: true })
+);
+app.delete(
+  '/api/run-queues/entries/:entryId',
+  handle(req => deleteRunQueueEntry(req.params.entryId), { mutates: true })
 );
 app.get(
   '/api/projects/:id/statuses',
@@ -2348,6 +2396,7 @@ async function start(): Promise<void> {
   realtime.start();
   webhookDispatcher.start();
   deliveryComposeWorker.start();
+  runQueueDispatchWorker.start();
   liveActivityDispatcher.start();
   pushNotificationDispatcher.start();
   notificationDispatcher.start();

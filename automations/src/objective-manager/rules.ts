@@ -106,6 +106,92 @@ export type AutoAdvanceDecision =
   | { action: 'await_approval'; objectiveId: string; reason: string }
   | { action: 'queue_launch'; objectiveId: string; idempotencyKey: string };
 
+export type RunQueuePlannerEntry = {
+  id: string;
+  queueId: string;
+  objectiveId: string;
+  position: number;
+  state: 'waiting' | 'blocked' | 'dispatched' | 'running';
+  attemptCount: number;
+};
+export type RunQueuePlannerObjective = {
+  id: string;
+  state: ObjectiveLifecycleState | string;
+  instructionText: string;
+  missionBusy?: boolean;
+  resourceConnected?: boolean;
+  deleted?: boolean;
+};
+export type RunQueueDispatchAction =
+  | { action: 'drop'; entryId: string; reason: 'objective_gone' }
+  | {
+      action: 'hold';
+      entryId: string;
+      reason: 'no_instruction' | 'mission_busy' | 'resource_disconnected' | 'dispatch_failed';
+    }
+  | { action: 'mark_running'; entryId: string }
+  | {
+      action: 'dispatch';
+      entryId: string;
+      objectiveId: string;
+      promoteFutureToDraft: boolean;
+      idempotencyKey: string;
+    };
+
+/** Pure, target-neutral planner. Held entries remain visible and do not block later work. */
+export function planRunQueueDispatch(input: {
+  queues: readonly { id: string; paused: boolean }[];
+  entries: readonly RunQueuePlannerEntry[];
+  objectives: Readonly<Record<string, RunQueuePlannerObjective | undefined>>;
+  maxDispatchAttempts?: number;
+}): RunQueueDispatchAction[] {
+  const actions: RunQueueDispatchAction[] = [];
+  const maxAttempts = input.maxDispatchAttempts ?? 3;
+  for (const queue of input.queues) {
+    if (queue.paused) continue;
+    const entries = input.entries.filter(entry => entry.queueId === queue.id);
+    if (entries.some(entry => entry.state === 'dispatched' || entry.state === 'running')) continue;
+    for (const entry of entries
+      .filter(entry => entry.state === 'waiting' || entry.state === 'blocked')
+      .sort((a, b) => a.position - b.position || a.id.localeCompare(b.id))) {
+      const objective = input.objectives[entry.objectiveId];
+      if (!objective || objective.deleted || objective.state === 'complete') {
+        actions.push({ action: 'drop', entryId: entry.id, reason: 'objective_gone' });
+        continue;
+      }
+      if (!objective.instructionText.trim()) {
+        actions.push({ action: 'hold', entryId: entry.id, reason: 'no_instruction' });
+        continue;
+      }
+      if (objective.state === 'executing' || objective.state === 'pending_delivery') {
+        actions.push({ action: 'mark_running', entryId: entry.id });
+        break;
+      }
+      if (objective.missionBusy) {
+        actions.push({ action: 'hold', entryId: entry.id, reason: 'mission_busy' });
+        continue;
+      }
+      if (objective.resourceConnected === false) {
+        actions.push({ action: 'hold', entryId: entry.id, reason: 'resource_disconnected' });
+        continue;
+      }
+      if (entry.attemptCount >= maxAttempts) {
+        actions.push({ action: 'hold', entryId: entry.id, reason: 'dispatch_failed' });
+        continue;
+      }
+      actions.push({
+        action: 'dispatch',
+        entryId: entry.id,
+        objectiveId: entry.objectiveId,
+        promoteFutureToDraft: objective.state === 'future',
+        idempotencyKey: `run_queue:${entry.id}`
+      });
+      break;
+    }
+  }
+  return actions;
+}
+
 export type ObjectiveLifecycleView<TObjective extends ObjectiveLifecycleObjective> = {
   orderedObjectives: TObjective[];
   executedObjectives: TObjective[];

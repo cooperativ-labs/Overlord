@@ -702,7 +702,14 @@ export interface ObjectiveDto {
   title: string | null;
   instructionText: string;
   state: ObjectiveState;
+  /**
+   * @deprecated Queue membership is authoritative. Use `queueEntry` to inspect
+   * the objective's live Run Queue state; this compatibility field is derived
+   * from it and legacy storage writes retire in the next release.
+   */
   autoAdvance: boolean;
+  /** Live Run Queue membership. `autoAdvance` is derived from this for compatibility. */
+  queueEntry?: ObjectiveRunQueueEntryDto | null;
   assignedAgent: string | null;
   model: string | null;
   reasoningEffort: string | null;
@@ -742,6 +749,52 @@ export interface ObjectiveDto {
   createdByWorkspaceUserId: string | null;
   /** Explicit per-objective launch overrides keyed by target id (`*` means any target), then agent. */
   launchConfigOverrides?: Record<string, Record<string, AgentLaunchConfigDto>>;
+}
+
+export type RunQueueEntryState = 'waiting' | 'blocked' | 'dispatched' | 'running';
+export interface ObjectiveRunQueueEntryDto {
+  id: string;
+  queueId: string;
+  queueName: string;
+  position: number;
+  state: RunQueueEntryState;
+  blockedReason: string | null;
+  precededBy: {
+    objectiveDisplayId: string;
+    objectiveTitle: string | null;
+    missionTitle: string;
+  } | null;
+}
+export interface RunQueueEntryDto {
+  id: string;
+  queueId: string;
+  position: number;
+  state: RunQueueEntryState;
+  blockedReason: string | null;
+  objectiveId: string;
+  objectiveDisplayId: string;
+  objectiveTitle: string | null;
+  missionId: string;
+  missionDisplayId: string;
+  missionTitle: string;
+  assignedAgent: string | null;
+  resourceKey: string | null;
+  enqueuedAt: string;
+  executionRequestId: string | null;
+}
+export interface RunQueueDto {
+  id: string;
+  projectId: string;
+  name: string;
+  isDefault: boolean;
+  paused: boolean;
+  position: number;
+  entries: RunQueueEntryDto[];
+  running: RunQueueEntryDto | null;
+}
+export interface ProjectRunQueuesDto {
+  projectId: string;
+  queues: RunQueueDto[];
 }
 
 export type ArtifactType =

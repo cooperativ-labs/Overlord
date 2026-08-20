@@ -65,8 +65,12 @@ The current tool catalog is mission-first:
 - `overlord_create_mission`
 - `overlord_create_inbox_item`
 - `overlord_load_mission_context`
+- `overlord_list_deliveries` — read normalized delivery summaries, verification/follow-up notes, and authoritative delivery evidence for one mission
+- `overlord_launch_objective` — explicitly queue the normal execution request for one objective; this is distinct from attaching the MCP agent to work
+- `overlord_reorder_future_objectives` — explicitly replace one mission's complete future-objective ordering
 - `overlord_add_objectives`
 - `overlord_update_objective` — turn auto-advance on or off and/or edit instruction text on draft/future objectives
+- `overlord_queue_objective` — add, move, or remove one objective from the authoritative project Run Queue
 - `overlord_attach_session`
 - `overlord_update_session`
 - `overlord_deliver_session`
@@ -106,8 +110,13 @@ is available. On `overlord_add_objectives` and `overlord_update_artifact` it onl
 supplies the mission scope.
 
 `overlord_create_mission` and `overlord_add_objectives` accept optional
-`autoAdvance` (boolean; default false) so delivery can queue the next objective.
-`overlord_update_objective` toggles that flag on an existing objective.
+`autoAdvance` (boolean; default false), which maps to authoritative Run Queue
+membership. `overlord_update_objective` maps its `autoAdvance` compatibility
+input the same way. `overlord_queue_objective` is the explicit queue surface:
+it takes `objectiveId`, optional queue/predecessor placement, and `remove` to
+dequeue. The returned `autoAdvance` field is deprecated and derived from live
+`queueEntry` membership; legacy storage writes retire next release and column
+removal requires a later contract bump.
 
 Hosted MCP cannot observe an agent's local current working directory. Tools
 that create missions require explicit `projectId`; clients should call

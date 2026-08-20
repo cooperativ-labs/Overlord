@@ -42,6 +42,7 @@ import type {
   PreviewScheduleBody,
   ProjectDto,
   ProjectListLifecycle,
+  ProjectRunQueuesDto,
   ProjectStatusDto,
   ProjectTagDto,
   RemoveWorktreeBody,
@@ -75,6 +76,7 @@ import type {
   WorkspaceDto,
   WorkspaceExecutionTargetDto
 } from '../../shared/contract.ts';
+import { buildEverythingQueuedProjection } from '../components/everything-queued/everything-queued-model.ts';
 
 import { api } from './api.ts';
 import { clearAuthTokens } from './api-base.ts';
@@ -191,6 +193,226 @@ export const useRunnerStatus = (options?: { enabled?: boolean; refetchInterval?:
     enabled: options?.enabled ?? true,
     refetchInterval: options?.refetchInterval ?? 15_000
   });
+
+/** Project-scoped Run Queue state. Poll while a queue is live so held/running rows stay current. */
+export const useProjectRunQueues = (projectId: string) =>
+  useQuery<ProjectRunQueuesDto>({
+    queryKey: keys.runQueues(projectId),
+    queryFn: () => api.getProjectRunQueues(projectId),
+    enabled: Boolean(projectId),
+    refetchInterval: 10_000
+  });
+
+/** Read-only Inbox projection assembled from independently authorized project queue reads. */
+export const useEverythingQueued = () => {
+  const projects = useAllProjects('all');
+  const workspaces = useAccessibleWorkspaces();
+  const queueQueries = useQueries({
+    queries: projects.data.map(project => ({
+      queryKey: keys.runQueues(project.id),
+      queryFn: () => api.getProjectRunQueues(project.id),
+      enabled: !projects.isLoading,
+      refetchInterval: 10_000
+    }))
+  });
+  const data = buildEverythingQueuedProjection(
+    projects.data.map((project, index) => ({
+      project,
+      workspaceName:
+        workspaces.find(workspace => workspace.id === project.workspaceId)?.name ??
+        'Unknown workspace',
+      queues: queueQueries[index]?.data,
+      readable: !queueQueries[index]?.isError
+    }))
+  );
+  const queueLoading = queueQueries.some(query => query.isLoading);
+  const queueErrors = queueQueries.filter(query => query.isError).length;
+
+  return {
+    data,
+    isLoading: projects.isLoading || queueLoading,
+    isError:
+      !projects.isLoading &&
+      ((projects.isError && projects.data.length === 0) ||
+        (projects.data.length > 0 && queueErrors === projects.data.length)),
+    hasPartialError:
+      (projects.isError && projects.data.length > 0) ||
+      (queueErrors > 0 && queueErrors < projects.data.length)
+  };
+};
+
+function invalidateRunQueue(qc: QueryClient, projectId: string) {
+  void qc.invalidateQueries({ queryKey: keys.runQueues(projectId) });
+  void qc.invalidateQueries({ queryKey: keys.missions(projectId) });
+  invalidateAll(qc);
+}
+
+export function useEnqueueRunQueueEntry(projectId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { objectiveId: string; queueId?: string; afterEntryId?: string }) =>
+      api.enqueueRunQueueEntry(projectId, body),
+    onSuccess: () => invalidateRunQueue(qc, projectId)
+  });
+}
+
+export function useRemoveRunQueueEntry(projectId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (entryId: string) => api.deleteRunQueueEntry(entryId),
+    onSuccess: () => invalidateRunQueue(qc, projectId)
+  });
+}
+
+export function useUpdateRunQueue(projectId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      queueId,
+      body
+    }: {
+      queueId: string;
+      body: { paused?: boolean; name?: string };
+    }) => api.updateRunQueue(queueId, body),
+    onSuccess: () => invalidateRunQueue(qc, projectId)
+  });
+}
+
+export function useCreateRunQueue(projectId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (name: string) => api.createRunQueue(projectId, { name }),
+    onSuccess: () => invalidateRunQueue(qc, projectId)
+  });
+}
+
+export function useDeleteRunQueue(projectId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ queueId, moveEntriesTo }: { queueId: string; moveEntriesTo?: string }) =>
+      api.deleteRunQueue(queueId, moveEntriesTo ? { moveEntriesTo } : {}),
+    onSuccess: () => invalidateRunQueue(qc, projectId)
+  });
+}
+
+/** Queue definition order is optimistic and restores the prior projection on rejection. */
+export function useReorderProjectRunQueues(projectId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (orderedQueueIds: string[]) =>
+      api.reorderProjectRunQueues(projectId, orderedQueueIds),
+    onMutate: async orderedQueueIds => {
+      await qc.cancelQueries({ queryKey: keys.runQueues(projectId) });
+      const previous = qc.getQueryData<ProjectRunQueuesDto>(keys.runQueues(projectId));
+      if (previous) {
+        qc.setQueryData<ProjectRunQueuesDto>(keys.runQueues(projectId), {
+          ...previous,
+          queues: orderedQueueIds
+            .map(id => previous.queues.find(queue => queue.id === id))
+            .filter((queue): queue is NonNullable<typeof queue> => Boolean(queue))
+            .map((queue, index) => ({ ...queue, position: index + 1 }))
+        });
+      }
+      return { previous };
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previous) qc.setQueryData(keys.runQueues(projectId), context.previous);
+    },
+    onSettled: () => invalidateRunQueue(qc, projectId)
+  });
+}
+
+/** Cross-queue entry moves update both sections optimistically and recover on rejected writes. */
+export function useMoveRunQueueEntry(projectId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      entryId,
+      queueId,
+      afterEntryId
+    }: {
+      entryId: string;
+      queueId: string;
+      afterEntryId?: string;
+    }) => api.moveRunQueueEntry(entryId, { queueId, ...(afterEntryId ? { afterEntryId } : {}) }),
+    onMutate: async ({ entryId, queueId, afterEntryId }) => {
+      await qc.cancelQueries({ queryKey: keys.runQueues(projectId) });
+      const previous = qc.getQueryData<ProjectRunQueuesDto>(keys.runQueues(projectId));
+      if (previous) {
+        const entry = previous.queues
+          .flatMap(queue => queue.entries)
+          .find(item => item.id === entryId);
+        if (entry) {
+          qc.setQueryData<ProjectRunQueuesDto>(keys.runQueues(projectId), {
+            ...previous,
+            queues: previous.queues.map(queue => {
+              const withoutEntry = queue.entries.filter(item => item.id !== entryId);
+              if (queue.id !== queueId) {
+                return {
+                  ...queue,
+                  entries: withoutEntry.map((item, index) => ({ ...item, position: index + 1 }))
+                };
+              }
+              const insertAt = afterEntryId
+                ? Math.max(0, withoutEntry.findIndex(item => item.id === afterEntryId) + 1)
+                : withoutEntry.length;
+              const entries = [...withoutEntry];
+              entries.splice(insertAt, 0, {
+                ...entry,
+                queueId,
+                state: 'waiting',
+                blockedReason: null
+              });
+              return {
+                ...queue,
+                entries: entries.map((item, index) => ({ ...item, position: index + 1 }))
+              };
+            })
+          });
+        }
+      }
+      return { previous };
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previous) qc.setQueryData(keys.runQueues(projectId), context.previous);
+    },
+    onSettled: () => invalidateRunQueue(qc, projectId)
+  });
+}
+
+/** Reordering is optimistic and restores the previous queue snapshot on a rejected write. */
+export function useReorderRunQueue(projectId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ queueId, orderedEntryIds }: { queueId: string; orderedEntryIds: string[] }) =>
+      api.reorderRunQueue(queueId, orderedEntryIds),
+    onMutate: async ({ queueId, orderedEntryIds }) => {
+      await qc.cancelQueries({ queryKey: keys.runQueues(projectId) });
+      const previous = qc.getQueryData<ProjectRunQueuesDto>(keys.runQueues(projectId));
+      if (previous) {
+        qc.setQueryData<ProjectRunQueuesDto>(keys.runQueues(projectId), {
+          ...previous,
+          queues: previous.queues.map(queue =>
+            queue.id !== queueId
+              ? queue
+              : {
+                  ...queue,
+                  entries: orderedEntryIds
+                    .map(id => queue.entries.find(entry => entry.id === id))
+                    .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry))
+                    .map((entry, index) => ({ ...entry, position: index + 1 }))
+                }
+          )
+        });
+      }
+      return { previous };
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previous) qc.setQueryData(keys.runQueues(projectId), context.previous);
+    },
+    onSettled: () => invalidateRunQueue(qc, projectId)
+  });
+}
 
 /**
  * Local persistent-runner service state via the desktop bridge (`ovld runner
@@ -340,25 +562,27 @@ export const useProjects = (workspaceId?: string, lifecycle: ProjectListLifecycl
  * of is offered equally; per-workspace cache entries are shared with
  * `useProjects(workspaceId)` via the same query keys.
  */
-export const useAllProjects = () => {
+export const useAllProjects = (lifecycle: ProjectListLifecycle = 'active') => {
   const meta = useMeta();
   const workspaces = meta.data?.workspaces ?? [];
 
   const combined = useQueries({
     queries: workspaces.map(workspace => ({
-      queryKey: keys.projects(workspace.id),
-      queryFn: () => api.listProjectsForWorkspace(workspace.id)
+      queryKey: keys.projects(workspace.id, lifecycle),
+      queryFn: () => api.listProjectsForWorkspace(workspace.id, lifecycle)
     })),
     combine: results => ({
       projects: results.flatMap(result => result.data ?? []),
-      anyLoading: results.some(result => result.isLoading)
+      anyLoading: results.some(result => result.isLoading),
+      anyError: results.some(result => result.isError)
     })
   });
 
   return {
     data: combined.projects,
     isLoading: meta.isLoading || combined.anyLoading,
-    isPending: meta.isPending || combined.anyLoading
+    isPending: meta.isPending || combined.anyLoading,
+    isError: meta.isError || combined.anyError
   };
 };
 
@@ -1570,17 +1794,25 @@ export function useReorderFutureObjectives() {
  * the workspace settings Models page or a cross-workspace project chooser);
  * omit it for the active workspace.
  */
-export const useAgentCatalog = (workspaceId?: string | null) =>
+export const useAgentCatalog = (
+  workspaceId?: string | null,
+  { enabled = true }: { enabled?: boolean } = {}
+) =>
   useQuery({
     queryKey: keys.agentCatalog(workspaceId),
     queryFn: () => api.getAgentCatalog(workspaceId),
+    enabled,
     staleTime: 60_000
   });
 
-export const useLaunchSettings = (workspaceId?: string | null) =>
+export const useLaunchSettings = (
+  workspaceId?: string | null,
+  { enabled = true }: { enabled?: boolean } = {}
+) =>
   useQuery({
     queryKey: keys.launchSettings(workspaceId),
     queryFn: () => api.getLaunchSettings(workspaceId),
+    enabled,
     staleTime: 60_000
   });
 

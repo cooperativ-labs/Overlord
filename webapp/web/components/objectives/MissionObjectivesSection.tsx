@@ -28,9 +28,23 @@ import type {
   ObjectiveDto
 } from '../../../shared/contract.ts';
 import { objectiveMatchesFocus } from '../../lib/mission-panel-search.ts';
-import { useReorderFutureObjectives } from '../../lib/queries.ts';
+import {
+  useEnqueueRunQueueEntry,
+  useProjectRunQueues,
+  useRemoveRunQueueEntry,
+  useReorderFutureObjectives,
+  useReorderRunQueue
+} from '../../lib/queries.ts';
 import { cn } from '../../lib/utils.ts';
 import { Button } from '../ui.tsx';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from '../ui/dialog.tsx';
 
 import { DraftObjective } from './DraftObjective.tsx';
 import { GhostObjective } from './GhostObjective.tsx';
@@ -147,6 +161,10 @@ export function MissionObjectivesSection({
   focusObjectiveRef?: string;
 }) {
   const reorder = useReorderFutureObjectives();
+  const runQueues = useProjectRunQueues(mission.projectId);
+  const reorderQueue = useReorderRunQueue(mission.projectId);
+  const enqueue = useEnqueueRunQueueEntry(mission.projectId);
+  const dequeue = useRemoveRunQueueEntry(mission.projectId);
   /** Whether the user asked for an extra (queued) composer via "+ Add objective". */
   const [extraSlotRequested, setExtraSlotRequested] = useState(false);
 
@@ -169,6 +187,11 @@ export function MissionObjectivesSection({
   const [futureOrder, setFutureOrder] = useState<string[]>(() =>
     futureObjectivesFromServer.map(o => o.id)
   );
+  const [queueBoundaryAction, setQueueBoundaryAction] = useState<
+    | { kind: 'enqueue'; objective: ObjectiveDto; afterEntryId: string; queueId: string }
+    | { kind: 'dequeue'; objective: ObjectiveDto; entryId: string }
+    | null
+  >(null);
 
   useEffect(() => {
     const incomingIds = futureObjectivesFromServer.map(o => o.id);
@@ -197,8 +220,62 @@ export function MissionObjectivesSection({
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
-    const oldIndex = futureOrder.indexOf(String(active.id));
-    const newIndex = futureOrder.indexOf(String(over.id));
+    const activeObjective = futureObjectivesFromServer.find(
+      objective => objective.id === active.id
+    );
+    const overObjective = futureObjectivesFromServer.find(objective => objective.id === over.id);
+    if (!activeObjective || !overObjective) return;
+    const activeEntry = activeObjective.queueEntry ?? null;
+    const overEntry = overObjective.queueEntry ?? null;
+
+    // Queue-to-queue drags use the authoritative queue ordering rather than the
+    // legacy mission-only future-objective reorder surface. Cross-queue moves
+    // are deliberately deferred to Phase 4.
+    if (activeEntry && overEntry) {
+      if (activeEntry.queueId !== overEntry.queueId) return;
+      const queue = runQueues.data?.queues.find(item => item.id === activeEntry.queueId);
+      if (
+        !queue ||
+        activeEntry.state === 'running' ||
+        activeEntry.state === 'dispatched' ||
+        overEntry.state === 'running' ||
+        overEntry.state === 'dispatched'
+      )
+        return;
+      const from = queue.entries.findIndex(entry => entry.id === activeEntry.id);
+      const to = queue.entries.findIndex(entry => entry.id === overEntry.id);
+      if (from < 0 || to < 0 || from === to) return;
+      reorderQueue.mutate({
+        queueId: queue.id,
+        orderedEntryIds: arrayMove(
+          queue.entries.map(entry => entry.id),
+          from,
+          to
+        )
+      });
+      return;
+    }
+    if (activeEntry && !overEntry) {
+      if (activeEntry.state === 'running' || activeEntry.state === 'dispatched') return;
+      setQueueBoundaryAction({
+        kind: 'dequeue',
+        objective: activeObjective,
+        entryId: activeEntry.id
+      });
+      return;
+    }
+    if (!activeEntry && overEntry) {
+      if (overEntry.state === 'running' || overEntry.state === 'dispatched') return;
+      setQueueBoundaryAction({
+        kind: 'enqueue',
+        objective: activeObjective,
+        afterEntryId: overEntry.id,
+        queueId: overEntry.queueId
+      });
+      return;
+    }
+    const oldIndex = futureOrder.indexOf(activeObjective.id);
+    const newIndex = futureOrder.indexOf(overObjective.id);
     if (oldIndex === -1 || newIndex === -1) return;
 
     const nextOrder = arrayMove(futureOrder, oldIndex, newIndex);
@@ -317,6 +394,54 @@ export function MissionObjectivesSection({
           </Button>
         </div>
       </div>
+      <Dialog
+        open={queueBoundaryAction !== null}
+        onOpenChange={open => {
+          if (!open) setQueueBoundaryAction(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {queueBoundaryAction?.kind === 'enqueue'
+                ? 'Add to Run Queue?'
+                : 'Remove from Run Queue?'}
+            </DialogTitle>
+            <DialogDescription>
+              {queueBoundaryAction?.kind === 'enqueue'
+                ? 'This objective will join the queue after the row you dropped it on.'
+                : 'This objective will leave the queue and will not launch automatically.'}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => setQueueBoundaryAction(null)}>
+              Cancel
+            </Button>
+            <Button
+              disabled={enqueue.isPending || dequeue.isPending}
+              onClick={() => {
+                if (!queueBoundaryAction) return;
+                if (queueBoundaryAction.kind === 'enqueue') {
+                  enqueue.mutate(
+                    {
+                      objectiveId: queueBoundaryAction.objective.id,
+                      queueId: queueBoundaryAction.queueId,
+                      afterEntryId: queueBoundaryAction.afterEntryId
+                    },
+                    { onSuccess: () => setQueueBoundaryAction(null) }
+                  );
+                } else {
+                  dequeue.mutate(queueBoundaryAction.entryId, {
+                    onSuccess: () => setQueueBoundaryAction(null)
+                  });
+                }
+              }}
+            >
+              {queueBoundaryAction?.kind === 'enqueue' ? 'Add to queue' : 'Remove'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

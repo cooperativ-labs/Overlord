@@ -247,6 +247,66 @@ export const hostedMcpToolDefinitions: ToolDefinition[] = [
     _meta: widget('ui://overlord/objective-viewer.html')
   },
   {
+    name: 'overlord_list_deliveries',
+    title: 'List mission deliveries',
+    description:
+      "Use this to read a mission's delivered work after locating it. Returns newest-first normalized delivery records including summary, verification, follow-up notes, and authoritative human-action, tradeoff, risk, deferred-work, and assumption evidence; it never exposes raw delivery payloads.",
+    inputSchema: objectSchema({
+      missionId: stringProperty(
+        'Mission UUID or workspace display id. Optional when objectiveId is a display id such as coo:756.k7xm, which already names its mission.'
+      ),
+      objectiveId: stringProperty(
+        'Objective UUID or display id such as coo:756.k7xm. Use a display id when that is the only identifier available.'
+      )
+    }),
+    outputSchema: protocolOutputSchema(
+      "The mission's newest-first normalized DeliveryDto records."
+    ),
+    annotations: readOnly
+  },
+  {
+    name: 'overlord_launch_objective',
+    title: 'Launch objective execution',
+    description:
+      'Use this only when the user explicitly asks to start a particular objective. It queues the normal Overlord execution request; it does not attach this MCP agent to perform the work. The objective must be launchable, its workspace must authorize execution, and an existing active request is returned instead of duplicated.',
+    inputSchema: objectSchema(
+      {
+        objectiveId: stringProperty('Objective UUID or display id such as coo:756.k7xm.'),
+        agent: stringProperty('Agent identifier to launch, such as codex or claude.'),
+        model: stringProperty('Optional model identifier to snapshot onto the execution request.'),
+        reasoningEffort: stringProperty(
+          'Optional reasoning-effort setting to snapshot onto the execution request.'
+        ),
+        executionTargetId: stringProperty(
+          "Optional eligible execution target id. Omit to use the project's normal target selection."
+        )
+      },
+      ['objectiveId', 'agent']
+    ),
+    outputSchema: protocolOutputSchema('The queued or already-active ExecutionRequestDto.'),
+    annotations: writeAction
+  },
+  {
+    name: 'overlord_reorder_future_objectives',
+    title: 'Reorder future objectives',
+    description:
+      'Use this only when the user explicitly asks to change the order of future objectives in one mission. Supply every future objective UUID in its complete desired top-to-bottom order; draft, active, and completed objectives cannot be moved by this tool.',
+    inputSchema: objectSchema(
+      {
+        missionId: stringProperty('Mission UUID.'),
+        orderedObjectiveIds: {
+          type: 'array',
+          description:
+            'Complete desired top-to-bottom UUID order of every objective currently in the future state.',
+          items: stringProperty('Future objective UUID.')
+        }
+      },
+      ['missionId', 'orderedObjectiveIds']
+    ),
+    outputSchema: protocolOutputSchema("The mission's full ObjectiveDto list in its new order."),
+    annotations: writeAction
+  },
+  {
     name: 'overlord_add_objectives',
     title: 'Add objectives',
     description:
@@ -298,6 +358,27 @@ export const hostedMcpToolDefinitions: ToolDefinition[] = [
     outputSchema: protocolOutputSchema(
       'The updated objective, including autoAdvance and instructionText.'
     ),
+    annotations: writeAction
+  },
+  {
+    name: 'overlord_queue_objective',
+    title: 'Queue objective',
+    description:
+      'Use this only when the user explicitly asks to add, move, or remove an objective in the project Run Queue. Queue membership is target-neutral and sequences delivery-driven launches; it does not directly launch the objective.',
+    inputSchema: objectSchema(
+      {
+        objectiveId: stringProperty('Objective UUID or display id such as coo:756.k7xm.'),
+        queue: stringProperty('Optional Run Queue UUID or unambiguous queue name.'),
+        after: stringProperty(
+          'Optional queued predecessor entry id, objective UUID, or objective display id. Its queue is used when queue is omitted.'
+        ),
+        remove: booleanProperty(
+          'When true, remove this objective from the Run Queue instead of adding or moving it.'
+        )
+      },
+      ['objectiveId']
+    ),
+    outputSchema: protocolOutputSchema('The queued entry, or removal confirmation.'),
     annotations: writeAction
   },
   {

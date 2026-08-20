@@ -17,7 +17,7 @@ ChatGPT web/mobile smoke test.
 | --- | --- |
 | App name | Overlord |
 | Short description | Plan, track, and deliver engineering work from ChatGPT. |
-| Long description | Overlord connects ChatGPT to your authorized engineering workspace. Find projects and missions, inspect objectives and delivery history, create clearly scoped work only when you ask, and keep mission progress up to date. Overlord uses OAuth and your existing workspace permissions; it never accesses your local files, runners, worktrees, or branches from ChatGPT. |
+| Long description | Overlord connects ChatGPT to your authorized engineering workspaces. Find projects and missions, inspect matching objectives and delivery history, create clearly scoped work only when you ask, and keep mission progress up to date. Overlord uses OAuth and your existing workspace permissions; it never accesses your local files, runners, worktrees, or branches from ChatGPT. |
 | Publisher | **TODO:** verified individual or business name in the OpenAI Platform Dashboard. |
 | Logo | **TODO:** supply a square, high-resolution brand logo that matches the published app name; avoid OpenAI marks or implied endorsement. |
 | Screenshots | **TODO:** capture the project selector, mission list, objective viewer, and file-change viewer in ChatGPT, using the portal's current required dimensions. |
@@ -30,7 +30,7 @@ ChatGPT web/mobile smoke test.
 | --- | --- | --- |
 | `overlord_resolve_project` | Resolves a project the user identifies. | Read-only |
 | `overlord_list_project_statuses` | Lists one project's board column names and types. | Read-only |
-| `overlord_search_missions` | Lists matching missions in the connected workspace. | Read-only |
+| `overlord_search_missions` | Searches mission anchors across authorized workspaces, with matched objectives and deliveries plus filtering and completeness metadata. | Read-only |
 | `overlord_load_mission_context` | Shows one mission's objectives, history, artifacts, and shared context. | Read-only |
 | `overlord_create_mission` | Creates a draft mission in an explicit project. | Write; no implicit project selection |
 | `overlord_add_objectives` | Adds draft objectives to a mission. | Write |
@@ -41,8 +41,8 @@ ChatGPT web/mobile smoke test.
 
 All tools have `openWorldHint: false` and `destructiveHint: false`: the public
 surface does not publish external content or delete/overwrite data. Write tools
-are marked `readOnlyHint: false`, are narrowly scoped to the connected
-workspace, and require explicit user intent in their descriptions. The server
+are marked `readOnlyHint: false`, are narrowly scoped to the caller's authorized
+workspaces, and require explicit user intent in their descriptions. The server
 provides input and output schemas plus `structuredContent`; the presentation
 resources are self-contained and have an empty resource/network/frame CSP.
 

@@ -86,6 +86,7 @@ import type {
   ProjectListLifecycle,
   ProjectRepositoryDto,
   ProjectResourceDto,
+  ProjectRunQueuesDto,
   ProjectStatusDto,
   ProjectTagDto,
   PurgeMergedWorktreesBody,
@@ -100,6 +101,8 @@ import type {
   ReorderProjectsBody,
   ReorderProjectStatusesBody,
   RotateWebhookSecretResultDto,
+  RunQueueDto,
+  RunQueueEntryDto,
   ScheduleInput,
   SharedContextEntryDto,
   StoredImageDto,
@@ -481,6 +484,30 @@ export const api = {
     );
   },
   getRunnerStatus: () => request<RunnerQueueStatus>('GET', '/api/runner/status'),
+  getProjectRunQueues: (projectId: string) =>
+    request<ProjectRunQueuesDto>('GET', `/api/projects/${projectId}/run-queues`),
+  createRunQueue: (projectId: string, body: { name: string }) =>
+    request<RunQueueDto>('POST', `/api/projects/${projectId}/run-queues`, body),
+  reorderProjectRunQueues: (projectId: string, orderedQueueIds: string[]) =>
+    request<ProjectRunQueuesDto>('PATCH', `/api/projects/${projectId}/run-queues/order`, {
+      orderedQueueIds
+    }),
+  enqueueRunQueueEntry: (
+    projectId: string,
+    body: { objectiveId: string; queueId?: string; afterEntryId?: string; position?: number }
+  ) => request<RunQueueEntryDto>('POST', `/api/projects/${projectId}/run-queues/entries`, body),
+  updateRunQueue: (queueId: string, body: { name?: string; paused?: boolean }) =>
+    request<RunQueueDto>('PATCH', `/api/run-queues/${queueId}`, body),
+  deleteRunQueue: (queueId: string, body: { moveEntriesTo?: string } = {}) =>
+    request<{ removed: boolean }>('DELETE', `/api/run-queues/${queueId}`, body),
+  reorderRunQueue: (queueId: string, orderedEntryIds: string[]) =>
+    request<RunQueueDto>('PATCH', `/api/run-queues/${queueId}/order`, { orderedEntryIds }),
+  moveRunQueueEntry: (
+    entryId: string,
+    body: { queueId?: string; afterEntryId?: string; position?: number }
+  ) => request<RunQueueEntryDto>('PATCH', `/api/run-queues/entries/${entryId}`, body),
+  deleteRunQueueEntry: (entryId: string) =>
+    request<{ removed: boolean }>('DELETE', `/api/run-queues/entries/${entryId}`),
   clearRunnerQueue: (body: { objectiveId?: string; projectId?: string } = {}) =>
     request<{ cleared: number }>('POST', '/api/runner/clear', body),
   listMissions: (projectId: string, options: { includeObjectives?: boolean } = {}) =>

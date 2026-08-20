@@ -6,9 +6,11 @@ import { api } from '../../lib/api.ts';
 import { useCopyToClipboard } from '../../lib/hooks/use-copy-to-clipboard.ts';
 import { objectiveResourceConnection } from '../../lib/project-resources.ts';
 import {
+  useEnqueueRunQueueEntry,
   useLaunchObjective,
   useProjectExecutionTarget,
   useProjectResources,
+  useProjectRunQueues,
   useUpdateObjective
 } from '../../lib/queries.ts';
 import { cn } from '../../lib/utils.ts';
@@ -65,9 +67,9 @@ const sizeStyles: Record<
  * for driving an agent manually, and a paste-ready `ovld launch` command. When the manual pseudo-agent is
  * selected, the run affordance is replaced with a Complete button that marks
  * the objective complete. Mirrors the legacy AgentSplitButton: confirm-before-
- * queue when an agent is already working the mission (enabling auto-advance
- * instead of sending to the runner), and a disabled-state tooltip explaining
- * what is missing.
+ * queue when an agent is already working the mission, and a disabled-state
+ * tooltip explaining what is missing. Direct Run always remains a separate
+ * Delegator path from the project Run Queue.
  */
 export function AgentLaunchButton({
   objective,
@@ -82,6 +84,8 @@ export function AgentLaunchButton({
   const updateObjective = useUpdateObjective();
   const resourcesQ = useProjectResources(objective.projectId);
   const executionTargetQ = useProjectExecutionTarget(objective.projectId);
+  const runQueuesQ = useProjectRunQueues(objective.projectId);
+  const enqueue = useEnqueueRunQueueEntry(objective.projectId);
   const [showActiveConfirm, setShowActiveConfirm] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [executionTargetId, setExecutionTargetId] = useState<string>('');
@@ -130,13 +134,18 @@ export function AgentLaunchButton({
     );
   }
 
-  function enableAutoAdvance() {
+  function queueAfterActiveSibling() {
     setError(null);
-    updateObjective.mutate(
-      { id: objective.id, body: { autoAdvance: true } },
+    const queue = runQueuesQ.data?.queues.find(item => item.isDefault);
+    if (!queue) {
+      setError('The default Run Queue is not available yet');
+      return;
+    }
+    enqueue.mutate(
+      { objectiveId: objective.id, queueId: queue.id },
       {
         onError: err =>
-          setError(err instanceof Error ? err.message : 'Failed to enable auto-advance')
+          setError(err instanceof Error ? err.message : 'Failed to add to the Run Queue')
       }
     );
   }
@@ -245,8 +254,8 @@ export function AgentLaunchButton({
       <PopoverTrigger render={<span className="inline-flex">{runButton}</span>} />
       <PopoverContent side="top" className="w-80 p-3 text-sm">
         <p className="mb-3 text-foreground">
-          An agent appears to be working this mission already. Enable auto-advance so this objective
-          launches automatically after the current one completes?
+          An agent appears to be working this mission already. Add this objective to the Run Queue
+          so it launches after the current work completes?
         </p>
         <div className="flex items-center justify-end gap-2">
           <DropdownMenu>
@@ -276,13 +285,23 @@ export function AgentLaunchButton({
           </button>
           <button
             type="button"
+            className="rounded-md px-3 py-1.5 text-xs text-muted-foreground hover:bg-accent"
+            onClick={() => {
+              setShowActiveConfirm(false);
+              queueLaunch();
+            }}
+          >
+            Run now
+          </button>
+          <button
+            type="button"
             className="rounded-md bg-primary px-3 py-1.5 text-xs text-primary-foreground hover:bg-primary/90"
             onClick={() => {
               setShowActiveConfirm(false);
-              enableAutoAdvance();
+              queueAfterActiveSibling();
             }}
           >
-            Enable auto-advance
+            Add to queue
           </button>
         </div>
       </PopoverContent>

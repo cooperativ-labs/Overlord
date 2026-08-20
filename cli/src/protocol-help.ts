@@ -10,17 +10,23 @@ export const SUPPORTED_PROTOCOL_SUBCOMMANDS = [
   'changes',
   'connect',
   'create',
+  'dequeue-objective',
   'deliver',
   'discover-project',
   'discuss-objective',
   'heartbeat',
   'hook-event',
+  'launch-objective',
+  'list-deliveries',
   'list-organizations',
   'load-context',
   'prompt',
   'read-context',
   'record-touched',
   'record-work',
+  'reorder-future-objectives',
+  'run-queue',
+  'queue-objective',
   'resume-follow-up',
   'search',
   'search-missions',
@@ -193,6 +199,80 @@ load-context:
                                 rediscovering the mission's active objective. Required
                                 on a mission running objectives in parallel.
 
+list-deliveries:
+  Purpose:
+    Read one mission's newest-first normalized delivery records without exposing
+    arbitrary stored payload JSON.
+  Required:
+    --mission-id <id>            Or --objective-id with a display id
+  Optional:
+    --objective-id <id>         Supplies mission addressing when it is a display id
+  Returns:
+    DeliveryDto[] including summary, verification, follow-up notes, and normalized
+    delivery report evidence.
+
+launch-objective:
+  Purpose:
+    Queue the normal execution request for one objective. This does not attach the
+    calling agent; a runner or eligible execution target performs the requested launch.
+  Required:
+    --objective-id <id>         Objective UUID or display id
+    --agent <identifier>
+  Optional:
+    --model <identifier>
+    --reasoning-effort <value>
+    --execution-target-id <id>
+  Returns:
+    The queued or already-active ExecutionRequestDto. Existing launchability,
+    authorization, target resolution, sibling, and idempotency rules apply.
+
+reorder-future-objectives:
+  Purpose:
+    Change the order of one mission's future objectives without moving draft,
+    active, or complete objectives.
+  Required:
+    --mission-id <uuid>
+    --ordered-objective-ids-json <json>
+  Returns:
+    The mission's full ObjectiveDto[] list in its new order.
+  Rules:
+    Supply every future objective UUID in the complete desired top-to-bottom order.
+    Duplicate, missing, and non-future objective ids are rejected.
+
+run-queue:
+  Purpose:
+    Read every live Run Queue in one project, including queued, held, and running entries.
+  Required:
+    --project-id <id|slug|name>
+  Returns:
+    ProjectRunQueuesDto JSON. This reads sequencing state; it does not launch work.
+
+queue-objective:
+  Purpose:
+    Add or move one objective in the authoritative Run Queue without choosing a target.
+  Required:
+    --objective-id <id>         Objective UUID or display id
+  Optional:
+    --project-id <id|slug|name> Confirms the objective's project
+    --queue <id|name>           Queue UUID or unambiguous queue name
+    --after <entry|objective>   Queue after this queued entry/objective
+    --front                     Place first in the selected/default queue
+    --position <n>              One-based insertion rank
+  Rules:
+    Choose at most one of --after, --front, and --position. Without --queue,
+    --after selects its queue; otherwise the default queue is used. Re-running
+    without placement is idempotent.
+
+dequeue-objective:
+  Purpose:
+    Remove one objective from the authoritative Run Queue.
+  Required:
+    --objective-id <id>         Objective UUID or display id
+  Optional:
+    --project-id <id|slug|name> Confirms the objective's project
+  Returns:
+    { removed, objectiveId }. Already-unqueued objectives return removed: false.
+
 search:
   Purpose:
     Find grouped mission, objective, and delivery matches by keyword, status type, or project.
@@ -265,7 +345,7 @@ add-objectives:
 
 update-objective:
   Purpose:
-    Turn auto-advance on or off and/or edit instruction text on an existing objective.
+    Queue or dequeue compatibility auto-advance and/or edit instruction text on an existing objective.
   Required:
     --objective-id <id>
     At least one of:
@@ -275,7 +355,7 @@ update-objective:
     Instruction text may be edited only when the objective is in draft or future state.
     Blank instruction text is allowed in those states.
   Returns:
-    The updated objective JSON, including autoAdvance and instructionText.
+    The updated objective JSON. autoAdvance is deprecated and derived from live queueEntry membership.
 
 create:
   Purpose:
@@ -290,7 +370,7 @@ create:
     --inbox                     Force an account-owned inbox item instead of a project mission
     --assigned-to <id>          Workspace member to own the mission (meaningless on the inbox fallback)
     --auto-advance / --no-auto-advance
-        Queue the next objective after this one is delivered. Defaults to off.
+        Add matching objectives to the authoritative Run Queue. Defaults to off.
         Per-item override: "autoAdvance": true|false in --objectives-json items.
 
 prompt:
@@ -306,7 +386,7 @@ prompt:
     --external-session-id <id>
     --assigned-to <id>          Workspace member to own the mission
     --auto-advance / --no-auto-advance
-        Queue the next objective after this one is delivered. Defaults to off.
+        Add matching objectives to the authoritative Run Queue. Defaults to off.
         Per-item override: "autoAdvance": true|false in --objectives-json items.
   Returns:
     New mission/session JSON plus SESSION_KEY on stderr when available.

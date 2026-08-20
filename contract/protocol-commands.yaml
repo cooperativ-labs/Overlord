@@ -312,6 +312,90 @@ missionDiscovery:
     sideEffects:
       - creates-session-key
 
+  listDeliveries:
+    description: 'List one addressed mission\'s newest-first normalized delivery records'
+    readOnly: true
+    optionalFlags:
+      - --mission-id
+      - --objective-id
+    responseShape: DeliveryDto[]
+    rules:
+      - 'Uses mission:read authorization and returns the existing delivery DTO projection, never arbitrary deliveries.payload_json'
+
+  launchObjective:
+    description: 'Queue the normal execution request for one objective'
+    requiredFlags:
+      - --objective-id
+      - --agent
+    optionalFlags:
+      - --model
+      - --reasoning-effort
+      - --execution-target-id
+    responseShape: ExecutionRequestDto
+    rules:
+      - 'Uses execution_request:create in the objective workspace and preserves existing objective launchability, active-sibling, execution-target, and active-request idempotency checks'
+      - 'An objective UUID or full objective display id is accepted; a display id supplies the mission address'
+    sideEffects:
+      - queues-execution-request
+      - may-transition-draft-objective-to-launching
+
+  reorderFutureObjectives:
+    description: 'Reorder one mission UUID\'s future objectives without changing non-future positions'
+    requiredFlags:
+      - --mission-id
+      - --ordered-objective-ids-json
+    optionalFlags:
+      - --objective-id
+    responseShape: ObjectiveDto[]
+    rules:
+      - 'The mission and future objective identifiers are stable UUIDs. Uses objective:update and requires the complete post-move UUID ordering of future objectives; duplicate, missing, and non-future ids are rejected'
+      - 'Returns the existing mission-wide objective list in its new order'
+    sideEffects:
+      - updates-future-objective-positions
+
+  queueObjective:
+    description: 'Add or reposition one objective in the authoritative project Run Queue'
+    requiredFlags:
+      - --objective-id
+    optionalFlags:
+      - --project-id
+      - --queue
+      - --after
+      - --front
+      - --position
+    responseShape: RunQueueEntryDto
+    rules:
+      - 'Objective UUIDs and display ids are accepted. --project-id accepts the normal project UUID, slug, or name reference and, when supplied, must own the objective.'
+      - '--queue accepts a queue UUID or an unambiguous queue name in the addressed project. --after accepts a queued entry id, objective UUID, or objective display id; without --queue it selects that predecessor''s queue.'
+      - '--front and --position are mutually exclusive with --after. --position is one-based and bounded to the insertion range. Existing membership is idempotent unless a queue or placement option requests a move.'
+      - 'Uses execution_request:create and the Run Queue service; entries remain target-neutral.'
+    sideEffects:
+      - enqueues-or-moves-run-queue-entry
+      - rewrites-affected-mission-objective-positions
+
+  dequeueObjective:
+    description: 'Remove one objective from the authoritative project Run Queue'
+    requiredFlags:
+      - --objective-id
+    optionalFlags:
+      - --project-id
+    responseShape: '{ removed: boolean, objectiveId: string }'
+    rules:
+      - 'Objective UUIDs and display ids are accepted. --project-id accepts a UUID, slug, or name and, when supplied, must own the objective.'
+      - 'Uses execution_request:create and is idempotent when the objective is already unqueued.'
+    sideEffects:
+      - dequeues-run-queue-entry
+      - rewrites-affected-mission-objective-positions
+
+  runQueue:
+    description: 'Read the addressed project''s live Run Queue projection'
+    readOnly: true
+    requiredFlags:
+      - --project-id
+    responseShape: ProjectRunQueuesDto
+    rules:
+      - '--project-id accepts the normal project UUID, slug, or name reference and uses objective:read authorization.'
+
   search:
     aliases:
       - search-missions

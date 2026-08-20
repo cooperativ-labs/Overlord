@@ -8,7 +8,11 @@ import {
   type ObjectiveLifecycleObjective,
   type ObjectiveLifecycleOptions,
   type ObjectiveLifecycleViolation,
-  planEnsureDraftSlot
+  planEnsureDraftSlot,
+  planRunQueueDispatch,
+  type RunQueueDispatchAction,
+  type RunQueuePlannerEntry,
+  type RunQueuePlannerObjective
 } from './rules.js';
 
 export type {
@@ -18,7 +22,10 @@ export type {
   ObjectiveLifecycleOptions,
   ObjectiveLifecycleState,
   ObjectiveLifecycleView,
-  ObjectiveLifecycleViolation
+  ObjectiveLifecycleViolation,
+  RunQueueDispatchAction,
+  RunQueuePlannerEntry,
+  RunQueuePlannerObjective
 } from './rules.js';
 export {
   ACTIVE_OBJECTIVE_STATES,
@@ -42,6 +49,7 @@ export {
   objectiveResourcesConflict,
   PARALLEL_BLOCKING_OBJECTIVE_STATES,
   planEnsureDraftSlot,
+  planRunQueueDispatch,
   shouldDiscardEmptiedObjective,
   siblingBlocksParallelLaunch,
   sortObjectivesByLifecycleOrder,

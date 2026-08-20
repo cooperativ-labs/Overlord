@@ -277,21 +277,21 @@ export function RunnerStatusModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Runner</DialogTitle>
+          <DialogTitle>Delegator</DialogTitle>
           <DialogDescription>
-            Queued work and the persistent runner that launches it.
+            In-flight work and the persistent runner that launches it.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-5">
           <section className="space-y-2">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-medium">Queue</h3>
+              <h3 className="text-sm font-medium">In flight</h3>
               <div className="flex items-center gap-2">
                 <span className="text-xs text-muted-foreground">
                   {queueError
                     ? 'unavailable'
-                    : `${queue.length} ${queue.length === 1 ? 'request' : 'requests'}`}
+                    : `${queue.length} ${queue.length === 1 ? 'launch' : 'launches'}`}
                 </span>
                 {queue.length > 0 ? (
                   <Button
@@ -314,14 +314,14 @@ export function RunnerStatusModal({
             {queueError ? (
               <div className="space-y-1">
                 <p className="text-xs text-muted-foreground">
-                  Could not load the runner queue right now.
+                  Could not load Delegator work right now.
                 </p>
                 {queueErrorDetail ? (
                   <p className="text-xs text-destructive break-words">{queueErrorDetail}</p>
                 ) : null}
               </div>
             ) : queue.length === 0 ? (
-              <p className="text-xs text-muted-foreground">No execution requests are queued.</p>
+              <p className="text-xs text-muted-foreground">No launches are in flight.</p>
             ) : (
               <ul className="space-y-1.5">
                 {queue.slice(0, 8).map(request => (

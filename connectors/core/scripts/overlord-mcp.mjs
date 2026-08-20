@@ -259,6 +259,58 @@ const tools = [
     )
   },
   {
+    name: 'overlord_list_deliveries',
+    title: 'List mission deliveries',
+    description:
+      'Use this to read a mission\'s delivered work after locating it. Returns newest-first normalized delivery records including summary, verification, follow-up notes, and authoritative delivery evidence; it never exposes raw delivery payloads.',
+    inputSchema: objectSchema({
+      missionId: stringProperty(
+        'Mission UUID or workspace display id. Optional when objectiveId is a display id such as coo:756.k7xm, which already names its mission.'
+      ),
+      objectiveId: stringProperty(
+        'Objective UUID or display id such as coo:756.k7xm. Use a display id when that is the only identifier available.'
+      )
+    })
+  },
+  {
+    name: 'overlord_launch_objective',
+    title: 'Launch objective execution',
+    description:
+      'Use this only when the user explicitly asks to start a particular objective. It queues the normal Overlord execution request; it does not attach this MCP agent to perform the work. An existing active request is returned instead of duplicated.',
+    inputSchema: objectSchema(
+      {
+        objectiveId: stringProperty('Objective UUID or display id such as coo:756.k7xm.'),
+        agent: stringProperty('Agent identifier to launch, such as codex or claude.'),
+        model: stringProperty('Optional model identifier to snapshot onto the execution request.'),
+        reasoningEffort: stringProperty(
+          'Optional reasoning-effort setting to snapshot onto the execution request.'
+        ),
+        executionTargetId: stringProperty(
+          'Optional eligible execution target id. Omit to use the project\'s normal target selection.'
+        )
+      },
+      ['objectiveId', 'agent']
+    )
+  },
+  {
+    name: 'overlord_reorder_future_objectives',
+    title: 'Reorder future objectives',
+    description:
+      'Use this only when the user explicitly asks to change future-objective order in one mission. Supply every future objective UUID in its complete desired top-to-bottom order; draft, active, and completed objectives cannot be moved by this tool.',
+    inputSchema: objectSchema(
+      {
+        missionId: stringProperty('Mission UUID.'),
+        orderedObjectiveIds: {
+          type: 'array',
+          description:
+            'Complete desired top-to-bottom UUID order of every objective currently in the future state.',
+          items: stringProperty('Future objective UUID.')
+        }
+      },
+      ['missionId', 'orderedObjectiveIds']
+    )
+  },
+  {
     name: 'overlord_add_objectives',
     title: 'Add objectives',
     description: 'Append one or more draft objectives to an existing mission.',
@@ -300,6 +352,25 @@ const tools = [
         ),
         instructionText: stringProperty(
           'Replacement instruction text. Allowed only when the objective is in draft or future state; blank clears the text in those states.'
+        )
+      },
+      ['objectiveId']
+    )
+  },
+  {
+    name: 'overlord_queue_objective',
+    title: 'Queue objective',
+    description:
+      'Use this only when the user explicitly asks to add, move, or remove an objective in the project Run Queue. Queue membership is target-neutral and sequences delivery-driven launches; it does not directly launch the objective.',
+    inputSchema: objectSchema(
+      {
+        objectiveId: stringProperty('Objective UUID or display id such as coo:756.k7xm.'),
+        queue: stringProperty('Optional Run Queue UUID or unambiguous queue name.'),
+        after: stringProperty(
+          'Optional queued predecessor entry id, objective UUID, or objective display id. Its queue is used when queue is omitted.'
+        ),
+        remove: booleanProperty(
+          'When true, remove this objective from the Run Queue instead of adding or moving it.'
         )
       },
       ['objectiveId']
@@ -602,6 +673,31 @@ async function callOverlordTool(name, args) {
         : {})
     });
   }
+  if (name === 'overlord_list_deliveries') {
+    return runProtocol('list-deliveries', missionScopeFlags(args));
+  }
+  if (name === 'overlord_launch_objective') {
+    return runProtocol('launch-objective', {
+      'objective-id': requiredString(args, 'objectiveId'),
+      agent: requiredString(args, 'agent'),
+      ...(optionalString(args, 'model') ? { model: requiredString(args, 'model') } : {}),
+      ...(optionalString(args, 'reasoningEffort')
+        ? { 'reasoning-effort': requiredString(args, 'reasoningEffort') }
+        : {}),
+      ...(optionalString(args, 'executionTargetId')
+        ? { 'execution-target-id': requiredString(args, 'executionTargetId') }
+        : {})
+    });
+  }
+  if (name === 'overlord_reorder_future_objectives') {
+    if (!Array.isArray(args.orderedObjectiveIds)) {
+      throw new Error('orderedObjectiveIds must be an array');
+    }
+    return runProtocol('reorder-future-objectives', {
+      'mission-id': requiredString(args, 'missionId'),
+      'ordered-objective-ids-json': args.orderedObjectiveIds
+    });
+  }
   if (name === 'overlord_add_objectives') {
     if (!Array.isArray(args.objectives)) throw new Error('objectives must be an array');
     return runProtocol('add-objectives', {
@@ -623,6 +719,17 @@ async function callOverlordTool(name, args) {
           : { 'no-auto-advance': true }
         : {}),
       ...(hasInstructionText ? { 'instruction-text': requiredString(args, 'instructionText') } : {})
+    });
+  }
+  if (name === 'overlord_queue_objective') {
+    return runProtocol(args.remove === true ? 'dequeue-objective' : 'queue-objective', {
+      'objective-id': requiredString(args, 'objectiveId'),
+      ...(args.remove === true
+        ? {}
+        : {
+            ...(optionalString(args, 'queue') ? { queue: requiredString(args, 'queue') } : {}),
+            ...(optionalString(args, 'after') ? { after: requiredString(args, 'after') } : {})
+          })
     });
   }
   if (name === 'overlord_attach_session') {
@@ -762,7 +869,7 @@ process.stdin.on('data', async chunk => {
         result: {
           protocolVersion: PROTOCOL_VERSION,
           capabilities: { tools: { listChanged: false } },
-          serverInfo: { name: 'overlord-__OVERLORD_ADAPTER_KEY__', version: '0.3.29' }
+          serverInfo: { name: 'overlord-__OVERLORD_ADAPTER_KEY__', version: '0.3.31' }
         }
       });
       continue;

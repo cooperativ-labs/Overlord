@@ -4,7 +4,7 @@
 # IMPORTANT: Update this file and CONTRACT.md together when adding components or surfaces.
 # Increment contractVersion when any stable interface changes.
 
-contractVersion: '100'
+contractVersion: '104'
 
 components:
   protocol:
@@ -27,7 +27,8 @@ components:
       - 'in-place mission artifact updates via update-artifact (same editable fields and revision CAS as REST PATCH /api/missions/:id/artifacts/:artifactId; no session key required)'
       - 'mid-turn mission artifact creation via add-artifact (POST /api/protocol/add-artifact), which creates an artifact without a delivery using the same createArtifact service as REST POST /api/missions/:id/artifacts; optional session key stamps session/objective provenance when present'
       - 'account-owned inbox capture: protocol create --inbox explicitly creates a private profile-owned inbox item; ordinary non-executing create falls back to inbox only after explicit and discovered project resolution fail, while prompt and record-work remain project-required'
-      - 'objective auto-advance on create/prompt/add-objectives via per-item autoAdvance and --auto-advance/--no-auto-advance, plus update-objective to toggle auto-advance or edit instruction text on draft/future objectives'
+      - 'Run Queue agent operations: queue-objective, dequeue-objective, and run-queue resolve objective display IDs/project references and route placement and membership only through the Run Queue service'
+      - 'deprecated autoAdvance compatibility: create/prompt/add-objectives per-item autoAdvance and --auto-advance/--no-auto-advance, plus update-objective, map to authoritative Run Queue membership; legacy storage writes retire next release and column removal requires a later contract bump'
       - 'agent-facing mission lifecycle commands only; runner queue/device/project-resource management commands live on CLI/Runner/REST surfaces'
     dependsOn:
       - database
@@ -170,6 +171,7 @@ components:
     referenceSection: 'REST API Boundary'
     owns:
       - 'URL paths and HTTP method contracts'
+      - 'project Run Queue REST family: project-scoped reads and queue/entry create, update, pause, move, reorder, and delete operations; queue-definition order is rewritten only through PATCH /api/projects/:id/run-queues/order with project:update, while entry order uses execution_request:create; queue entries are target-neutral, ObjectiveDto.queueEntry projects live membership, and compatibility autoAdvance is derived from membership'
       - 'project resource-source launch defaults via PATCH /api/projects/:id/resources/:resourceId/sources/:sourceId, preserving the materialization fields in descriptor_json while replacing per-agent launchDefaults'
       - 'request/response DTO shapes (camelCase, derived from logical schema)'
       - 'creation-provenance projection: MissionDto/ObjectiveDto carry non-optional createdByKind (human fallback in the mapper), createdByAgent, and createdByWorkspaceUserId; MissionDetailDto alone carries createdFrom (sessionId, missionId, missionDisplayId, agentIdentifier, or null) via a LEFT JOIN that tolerates a missing session and is never paid per board row'
@@ -252,6 +254,7 @@ components:
     referenceSpec: 'automations/docs/01-automations-overview.md'
     owns:
       - 'Automation interface and built-in automation registry'
+      - 'pure planRunQueueDispatch planner: independent per-queue sequencing, hold-and-skip planning, and no I/O or target selection'
       - 'Gemini provider configuration and client lifecycle'
       - 'reference summarization automations and objective title automation'
       - 'compose-delivery automation: schema-constrained Gemini presentation for delivery reports with null fallback'
@@ -334,7 +337,9 @@ components:
       - 'hosted overlord_add_artifact tool forwarding to Protocol add-artifact'
       - 'additive assignedTo input on overlord_create_mission, forwarded to the same service-layer member resolver as Protocol --assigned-to (workspace_users.id, profile UUID, orgid:username, bare username, or email); an unresolvable member is an error, never a silent fallback to unassigned'
       - 'additive autoAdvance input on overlord_create_mission and overlord_add_objectives items, forwarded to Protocol create/add-objectives'
-      - 'hosted overlord_update_objective tool forwarding to Protocol update-objective'
+      - 'hosted overlord_update_objective tool forwards autoAdvance compatibility to Protocol queue membership and instructionText to Protocol update-objective'
+      - 'hosted overlord_queue_objective forwards queue/add/remove intent to Protocol queue-objective or dequeue-objective; it does not access queue tables directly'
+      - 'overlord_list_deliveries, overlord_launch_objective, and overlord_reorder_future_objectives forward to Protocol list-deliveries, launch-objective, and reorder-future-objectives; they preserve the existing normalized delivery response, execution-request queue semantics, and full future-objective ordering validation'
       - "read-only overlord_list_project_statuses tool forwarding to Protocol statuses, returning one project's ordered board columns; overlord_search_missions.status remains a status TYPE filter and rejects project-defined status names"
       - 'overlord_search_missions v3: uses human project references resolved by Protocol, resourceKeys, explicit date bounds, status types, entityTypes, objectiveStates, matchesPerResult, and detail (compact default or full); returns grouped SearchResponseV3 without crossing the token/session selected organization. Compact keeps child identity/navigation and envelope completeness metadata while limiting child matches to two and omitting child snippets, matchedTerms, createdAt, and updatedAt. The hosted MCP and local shim stay schema- and behavior-aligned.'
     dependsOn:
@@ -537,7 +542,8 @@ interactionSurfaces:
       - 'Hosted MCP delivery artifacts use the existing Protocol deliver artifact shape and lifecycle; MCP does not create artifact types or write artifact rows directly'
       - 'Hosted MCP mid-turn artifact creation uses overlord_add_artifact → Protocol add-artifact → the same createArtifact service as REST POST; MCP does not write artifact rows directly'
       - 'Hosted MCP artifact updates use overlord_update_artifact → Protocol update-artifact → the same updateArtifact service as REST PATCH; MCP does not write artifact rows directly'
-      - 'Hosted MCP objective updates use overlord_create_mission / overlord_add_objectives autoAdvance and overlord_update_objective → Protocol create/add-objectives/update-objective; MCP does not write objective rows directly'
+      - 'Hosted MCP objective queue mutations use overlord_create_mission / overlord_add_objectives autoAdvance, overlord_update_objective, and overlord_queue_objective → Protocol create/add-objectives/update-objective/queue-objective/dequeue-objective; MCP does not write objective or queue rows directly'
+      - 'Hosted MCP delivery reads, objective launches, and future-objective reorders forward through Protocol to the existing authorized service operations; MCP does not query deliveries, objectives, or execution_requests directly'
       - 'Hosted MCP must not expose local filesystem/worktree inspection, runner queue claiming, execution target mutation, or branch-action tools'
       - 'MCP Apps widget resources use ui://overlord/* URIs, self-contained HTML, and associated tool structuredContent only; no third-party frames, secrets, or unrestricted network access'
 

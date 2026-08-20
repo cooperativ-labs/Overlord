@@ -35,15 +35,36 @@ Requirements:
   explicitly creates an account-owned unassigned capture; ordinary non-executing
   create uses that fallback only after explicit and discovered project resolution
   fail. `prompt` and `record-work` still require a resolved project.
-  `--auto-advance` / `--no-auto-advance` set whether delivery queues the next
-  objective (default off). `--objectives-json` items may set per-objective
-  `autoAdvance`.
+  `--auto-advance` / `--no-auto-advance` map to authoritative Run Queue
+  membership (default off). `--objectives-json` items may set per-objective
+  `autoAdvance`; the deprecated compatibility projection is derived from live
+  queue membership.
 - `prompt`: create a mission and attach or queue execution immediately.
 - `load-context`: read mission context without creating a session. Optional
   `--objective-id` returns that objective as the current one instead of
   rediscovering the mission's active objective — required on a mission running
   objectives in parallel, where unpinned rediscovery returns
   `ambiguous_active_objective`.
+- `list-deliveries`: read one addressed mission's newest-first normalized
+  `DeliveryDto[]`, including verification/follow-up text and normalized delivery
+  evidence without exposing raw payload JSON.
+- `launch-objective`: queue the normal execution request for an objective UUID
+  or display id. It requires `--agent` and preserves the existing
+  `execution_request:create` authorization, launchability, target-selection,
+  sibling, and active-request idempotency rules; it does not attach the calling
+  agent or claim a runner request.
+- `reorder-future-objectives`: reorder a mission UUID's future objectives using the
+  complete desired UUID list in `--ordered-objective-ids-json`. It retains the
+  existing `objective:update` authorization and rejects duplicate, missing, or
+  non-future ids while returning the full objective list.
+- `run-queue`: return all live queues and entries for `--project-id` (UUID,
+  slug, or name). It is a read of delivery-driven sequencing state, not a direct
+  launch command.
+- `queue-objective`: enqueue or move an objective UUID/display id through the
+  existing Run Queue service. Optional `--queue`, `--after`, `--front`, and
+  one-based `--position` control placement; entries never select a target.
+- `dequeue-objective`: remove an objective UUID/display id from live queue
+  membership; an already-unqueued objective is an idempotent no-op.
 - `connect`: create a lightweight session key without full context. Optional
   `--objective-id` pins the session to that objective.
 - `search` (with `search-missions` retained as an alias): v1 remains compatible. `--response-version 2` returns the
@@ -58,9 +79,10 @@ Requirements:
   `--objective-id` names which draft when a mission holds more than one; the
   objective must be in `draft` state.
 - `add-objectives`: append ordered objectives to a mission. Same `autoAdvance`
-  JSON field and `--auto-advance` / `--no-auto-advance` default as create.
-- `update-objective`: turn auto-advance on or off and/or edit instruction text on draft/future objectives
-  (`--objective-id` plus `--auto-advance` or `--no-auto-advance`).
+  JSON field and `--auto-advance` / `--no-auto-advance` Run Queue mapping as create.
+- `update-objective`: maps `--auto-advance` / `--no-auto-advance` to queue
+  membership and can edit instruction text on draft/future objectives. The
+  returned `autoAdvance` field is deprecated and derived from `queueEntry`.
 - `record-work`: record already-completed chat work as a review mission with completed objective and delivery record.
 
 ### Addressing A Mission Or An Objective
@@ -152,7 +174,9 @@ protocol. They are management surfaces:
 
 Agents should treat objective execution as: attach to a mission, report progress,
 ask when blocked, and deliver. They should not claim queue work through
-`ovld protocol`.
+`ovld protocol`. A user-facing PM agent may use `launch-objective` to create the
+same execution request as the existing launch surface, but it still may not
+claim queue work.
 
 ## Attach Response Requirements
 

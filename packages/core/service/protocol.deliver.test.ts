@@ -351,7 +351,7 @@ describe('deliverSession mechanical change capture', () => {
     await db.close();
   });
 
-  it('promotes a future objective over a blank draft placeholder after delivery', async () => {
+  it('leaves future objectives untouched until Run Queue dispatch', async () => {
     const { db, ctx } = await setup();
     const project = await createProject({ ctx, name: 'Deliver Future Before Placeholder' });
     const { mission } = await createMissionWithObjectives({
@@ -394,20 +394,20 @@ describe('deliverSession mechanical change capture', () => {
     )) as Array<{ id: string; instruction_text: string; state: string }>;
     assert.deepEqual(
       rows.map(row => row.state),
-      ['complete', 'draft']
+      ['complete', 'draft', 'future']
     );
-    assert.equal(rows[1]?.id, future.id);
-    assert.equal(rows[1]?.instruction_text, 'Continue with real objective');
+    assert.equal(rows[2]?.id, future.id);
+    assert.equal(rows[2]?.instruction_text, 'Continue with real objective');
 
     const placeholderRow = (await ctx.db.get(`SELECT deleted_at FROM objectives WHERE id = ?`, [
       placeholder.id
     ])) as { deleted_at: string | null };
-    assert.ok(placeholderRow.deleted_at);
+    assert.equal(placeholderRow.deleted_at, null);
 
     await db.close();
   });
 
-  it('stamps the resolved launch config onto the auto-advanced next request', async () => {
+  it('queues durable Run Queue dispatch instead of launching auto-advance inline', async () => {
     const { db, ctx } = await setup();
     const project = await createProject({ ctx, name: 'Auto Advance Launch Flags' });
     const { mission, objectives } = await createMissionWithObjectives({
@@ -466,17 +466,12 @@ describe('deliverSession mechanical change capture', () => {
     )) as
       | { launch_flags_json: string; requested_agent: string | null; requested_source: string }
       | undefined;
-    assert.ok(request, 'auto-advance should queue an execution request for the next objective');
-    assert.equal(request.requested_source, 'auto_advance');
-    // The agent is inherited from the just-delivered objective so the launch
-    // config can be resolved for it.
-    assert.equal(request.requested_agent, 'claude');
-    const flags = JSON.parse(request.launch_flags_json) as {
-      preCommand?: string;
-      flags?: Array<{ name: string; value?: string | null }>;
-    };
-    assert.equal(flags.preCommand, 'nvm use 20');
-    assert.deepEqual(flags.flags, [{ name: '--verbose', value: null }]);
+    assert.equal(request, undefined, 'delivery must not create an execution request inline');
+    const job = await ctx.db.get<{ payload_json: string }>(
+      `SELECT payload_json FROM worker_jobs WHERE type = 'overlord.run-queue.dispatch.v1' AND status = 'queued'`
+    );
+    assert.ok(job);
+    assert.equal(JSON.parse(job.payload_json).projectId, project.id);
 
     await db.close();
   });

@@ -51,6 +51,7 @@ import {
   findPrimaryProjectResource,
   findProjectResourceByKey
 } from './projects.js';
+import { enqueueRunQueueDispatch } from './run-queue.js';
 import { generateSessionKey, hashSessionKey, newId, nowIso } from './util.js';
 import { enqueueWebhookEvent } from './webhook-events.js';
 import { enqueueDeliveryComposeJob } from './worker-jobs.js';
@@ -2102,6 +2103,11 @@ export async function deliverSession({
          WHERE id = ?`,
       [now, now, session.objective_id]
     );
+    await txCtx.db.run(
+      `UPDATE run_queue_entries SET deleted_at = ?, updated_at = ?, revision = revision + 1
+         WHERE objective_id = ? AND deleted_at IS NULL`,
+      [now, now, session.objective_id]
+    );
     const objectiveRevision = (
       (await txCtx.db.get(`SELECT revision FROM objectives WHERE id = ?`, [
         session.objective_id
@@ -2167,6 +2173,13 @@ export async function deliverSession({
     }
   });
 
+  /* Legacy inline auto-advance dispatch is intentionally disabled. Run Queue
+   * membership is authoritative and its durable project-deduped worker owns
+   * target/config resolution and launch retries. Keep the old block below
+   * unreachable for one release while compatibility readers are retired. */
+  await enqueueRunQueueDispatch(ctx.db, mission.projectId, ctx.workspace.id);
+  const useLegacyInlineAutoAdvance = false;
+
   // The objective that just delivered is the agent the user last ran. Auto-advance
   // inherits it when the next objective has not been given its own agent, so the
   // chain never silently falls back to the runner's hardcoded default.
@@ -2177,12 +2190,14 @@ export async function deliverSession({
     | { assigned_agent: string | null; model: string | null; reasoning_effort: string | null }
     | undefined;
 
-  await ensureNextDraftObjective({
-    ctx: ctx,
-    missionId: mission.id,
-    projectId: mission.projectId,
-    now: nowIso()
-  });
+  if (useLegacyInlineAutoAdvance) {
+    await ensureNextDraftObjective({
+      ctx: ctx,
+      missionId: mission.id,
+      projectId: mission.projectId,
+      now: nowIso()
+    });
+  }
 
   // A draft with no instruction text is the blank slot the UI keeps ready for the
   // user to type into, not queued work. Treating it as the next objective raised
@@ -2213,7 +2228,7 @@ export async function deliverSession({
   // Live Activity already shows; only a delivery that actually parks the mission
   // in review owes the assignee an interrupting notification.
   let autoAdvanceQueued = false;
-  if (nextObjective) {
+  if (useLegacyInlineAutoAdvance && nextObjective) {
     const allowParallelObjectives = await missionAllowsParallelObjectives({
       ctx,
       missionId: mission.id
@@ -2351,6 +2366,32 @@ export async function deliverSession({
           ]
         );
       }
+    }
+  }
+
+  if (!useLegacyInlineAutoAdvance && nextObjective) {
+    const queued = await ctx.db.get<{ id: string }>(
+      'SELECT id FROM run_queue_entries WHERE objective_id = ? AND deleted_at IS NULL',
+      [nextObjective.id]
+    );
+    if (!queued) {
+      await ctx.db.run(
+        `INSERT INTO mission_events
+           (id, workspace_id, project_id, mission_id, objective_id,
+            type, phase, summary, payload_json, source, actor_workspace_user_id, created_at)
+         VALUES (?, ?, ?, ?, ?, 'awaiting_approval', 'review', ?, '{}', ?, ?, ?)`,
+        [
+          newId(),
+          ctx.workspace.id,
+          mission.projectId,
+          mission.id,
+          nextObjective.id,
+          `Next objective is waiting for approval: ${nextObjective.title}`,
+          ctx.source,
+          ctx.actorWorkspaceUserId,
+          nowIso()
+        ]
+      );
     }
   }
 

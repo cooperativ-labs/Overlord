@@ -7,7 +7,11 @@ import {
   type UpdateObjectiveBody
 } from '@overlord/contract';
 
-import { resolveObjectiveRef, type ServiceContext } from '../packages/core/service/context.ts';
+import {
+  resolveObjectiveRef,
+  resolveProjectId,
+  type ServiceContext
+} from '../packages/core/service/context.ts';
 import { ServiceError } from '../packages/core/service/errors.ts';
 import { listAttachments } from '../packages/core/service/missions.ts';
 import { registerActingExecutionTarget } from '../packages/core/service/project-execution-target.ts';
@@ -37,8 +41,15 @@ import {
   updateSession,
   writeSharedContext
 } from '../packages/core/service/protocol.ts';
+import {
+  enqueueRunQueueEntry,
+  listProjectRunQueues,
+  moveRunQueueEntry,
+  removeRunQueueEntry
+} from '../packages/core/service/run-queue.ts';
 import { hashSessionKey } from '../packages/core/service/util.ts';
 
+import { launchObjective } from './execution/launch.ts';
 import {
   buildWebappServiceContext,
   buildWebappServiceContextForWorkspace,
@@ -59,6 +70,8 @@ import {
   callerWorkspaceMemberships,
   createArtifact,
   createInboxItem,
+  listMissionDeliveries,
+  reorderFutureObjectives,
   searchMissionsV2 as searchMissionsAcrossWorkspaces,
   searchMissionsV3 as searchMissionsV3AcrossWorkspaces,
   updateArtifact,
@@ -670,6 +683,154 @@ type ObjectiveInput = {
   resourceKey?: string | null;
 };
 
+type QueueEntryProjection = {
+  id: string;
+  objectiveId: string;
+  objectiveDisplayId: string;
+};
+
+type QueueProjection = {
+  id: string;
+  name: string;
+  isDefault: boolean;
+  entries: QueueEntryProjection[];
+};
+
+function oneBasedQueuePosition(body: ProtocolRequestBody): number | undefined {
+  const raw = strFlag(body, '--position');
+  if (raw === undefined) return undefined;
+  if (!/^\d+$/.test(raw) || Number(raw) < 1 || !Number.isSafeInteger(Number(raw))) {
+    throw new ApiError(400, '--position must be a positive integer');
+  }
+  return Number(raw);
+}
+
+function queueByRef(queues: QueueProjection[], ref: string): QueueProjection {
+  const exactId = queues.find(queue => queue.id === ref);
+  if (exactId) return exactId;
+  const matches = queues.filter(queue => queue.name.toLowerCase() === ref.toLowerCase());
+  if (matches.length === 1) return matches[0]!;
+  if (matches.length > 1) {
+    throw new ApiError(409, `Run Queue name is ambiguous in this project: ${ref}`);
+  }
+  throw new ApiError(404, `Run Queue not found: ${ref}`);
+}
+
+async function queueObjectiveFromProtocol(
+  ctx: ServiceContext,
+  body: ProtocolRequestBody
+): Promise<unknown> {
+  const objective = await resolveObjectiveRef({
+    ctx,
+    ref: requireFlag(body, '--objective-id')
+  });
+  const projectRef = strFlag(body, '--project-id');
+  if (projectRef) {
+    const projectId = await resolveProjectId(ctx, projectRef);
+    if (projectId !== objective.projectId) {
+      throw new ApiError(400, '--project-id does not own the addressed objective');
+    }
+  }
+
+  const hasAfter = strFlag(body, '--after') !== undefined;
+  const hasFront = boolFlag(body, '--front');
+  const requestedPosition = oneBasedQueuePosition(body);
+  if (
+    (hasAfter && (hasFront || requestedPosition !== undefined)) ||
+    (hasFront && requestedPosition !== undefined)
+  ) {
+    throw new ApiError(400, 'Choose only one placement option: --after, --front, or --position');
+  }
+
+  const projection = await listProjectRunQueues(ctx.db, objective.projectId);
+  const queues = projection.queues as QueueProjection[];
+  const existing = queues
+    .flatMap(queue => queue.entries)
+    .find(entry => entry.objectiveId === objective.id);
+  const afterRef = strFlag(body, '--after');
+  const after = afterRef
+    ? queues
+        .flatMap(queue => queue.entries.map(entry => ({ ...entry, queueId: queue.id })))
+        .find(
+          entry =>
+            entry.id === afterRef ||
+            entry.objectiveId === afterRef ||
+            entry.objectiveDisplayId === afterRef
+        )
+    : undefined;
+  if (afterRef && !after) throw new ApiError(404, `Queued predecessor not found: ${afterRef}`);
+  if (after?.objectiveId === objective.id) {
+    throw new ApiError(400, 'An objective cannot be placed after itself');
+  }
+
+  const queueRef = strFlag(body, '--queue');
+  const selectedQueue = queueRef
+    ? queueByRef(queues, queueRef)
+    : after
+      ? queues.find(queue => queue.id === after.queueId)
+      : existing
+        ? queues.find(queue => queue.entries.some(entry => entry.id === existing.id))
+        : queues.find(queue => queue.isDefault);
+  if (!selectedQueue) throw new ApiError(404, 'Default Run Queue not found');
+  if (after && after.queueId !== selectedQueue.id) {
+    throw new ApiError(400, 'The queued predecessor belongs to a different Run Queue');
+  }
+
+  const entriesWithoutCurrent = selectedQueue.entries.filter(entry => entry.id !== existing?.id);
+  let afterEntryId: string | undefined = after?.id;
+  let position: number | undefined;
+  if (hasFront) {
+    position = 0;
+  } else if (requestedPosition !== undefined) {
+    if (requestedPosition > entriesWithoutCurrent.length + 1) {
+      throw new ApiError(400, '--position is outside the queue insertion range');
+    }
+    if (requestedPosition === 1) position = 0;
+    else afterEntryId = entriesWithoutCurrent[requestedPosition - 2]?.id;
+  }
+
+  const wantsMove = Boolean(
+    queueRef || afterEntryId || hasFront || requestedPosition !== undefined
+  );
+  if (existing && !wantsMove) {
+    return queues.flatMap(queue => queue.entries).find(entry => entry.id === existing.id)!;
+  }
+  if (existing) {
+    return moveRunQueueEntry(ctx.db, existing.id, {
+      queueId: selectedQueue.id,
+      ...(afterEntryId ? { afterEntryId } : {}),
+      ...(position !== undefined ? { position } : {})
+    });
+  }
+  return enqueueRunQueueEntry(ctx.db, objective.projectId, objective.id, {
+    queueId: selectedQueue.id,
+    ...(afterEntryId ? { afterEntryId } : {}),
+    ...(position !== undefined ? { position } : {}),
+    actorId: ctx.actorWorkspaceUserId
+  });
+}
+
+async function dequeueObjectiveFromProtocol(
+  ctx: ServiceContext,
+  body: ProtocolRequestBody
+): Promise<{ removed: boolean; objectiveId: string }> {
+  const objective = await resolveObjectiveRef({
+    ctx,
+    ref: requireFlag(body, '--objective-id')
+  });
+  const projectRef = strFlag(body, '--project-id');
+  if (projectRef && (await resolveProjectId(ctx, projectRef)) !== objective.projectId) {
+    throw new ApiError(400, '--project-id does not own the addressed objective');
+  }
+  const projection = await listProjectRunQueues(ctx.db, objective.projectId);
+  const entry = projection.queues
+    .flatMap(queue => queue.entries)
+    .find(item => item.objectiveId === objective.id);
+  if (!entry) return { removed: false, objectiveId: objective.id };
+  await removeRunQueueEntry(ctx.db, entry.id);
+  return { removed: true, objectiveId: objective.id };
+}
+
 /** Objective array for create/prompt: `--objectives-json`, else a one-item `--objective`. */
 function objectiveInputs(body: ProtocolRequestBody): ObjectiveInput[] {
   const parsed =
@@ -1031,6 +1192,39 @@ const handlers: Record<string, Handler> = {
       executionTargetId: strFlag(body, '--execution-target-id') ?? null
     }),
 
+  'list-deliveries': (_ctx, body) => listMissionDeliveries(missionRefFlag(body)),
+
+  'launch-objective': (_ctx, body) =>
+    launchObjective(requireFlag(body, '--objective-id'), {
+      agent: requireFlag(body, '--agent'),
+      ...(strFlag(body, '--model') !== undefined ? { model: strFlag(body, '--model') } : {}),
+      ...(strFlag(body, '--reasoning-effort') !== undefined
+        ? { reasoningEffort: strFlag(body, '--reasoning-effort') }
+        : {}),
+      ...(strFlag(body, '--execution-target-id') !== undefined
+        ? { executionTargetId: strFlag(body, '--execution-target-id') }
+        : {})
+    }),
+
+  'reorder-future-objectives': (_ctx, body) => {
+    const orderedObjectiveIds = parseJsonInput<string[]>(
+      body,
+      '--ordered-objective-ids-json',
+      '--ordered-objective-ids-file'
+    );
+    if (orderedObjectiveIds === undefined) {
+      throw new ApiError(400, 'Missing required flag: --ordered-objective-ids-json');
+    }
+    return reorderFutureObjectives(missionRefFlag(body), { orderedObjectiveIds });
+  },
+
+  'queue-objective': (ctx, body) => queueObjectiveFromProtocol(ctx, body),
+
+  'dequeue-objective': (ctx, body) => dequeueObjectiveFromProtocol(ctx, body),
+
+  'run-queue': async (ctx, body) =>
+    listProjectRunQueues(ctx.db, await resolveProjectId(ctx, requireFlag(body, '--project-id'))),
+
   connect: (ctx, body) =>
     connectSession({
       ctx,
@@ -1332,6 +1526,12 @@ const SUBCOMMAND_PERMISSIONS: Record<string, Permission | null> = {
   create: null,
   prompt: PERMISSIONS.MISSION_CREATE,
   'load-context': PERMISSIONS.MISSION_READ,
+  'list-deliveries': PERMISSIONS.MISSION_READ,
+  'launch-objective': PERMISSIONS.EXECUTION_REQUEST_CREATE,
+  'reorder-future-objectives': PERMISSIONS.OBJECTIVE_UPDATE,
+  'queue-objective': PERMISSIONS.EXECUTION_REQUEST_CREATE,
+  'dequeue-objective': PERMISSIONS.EXECUTION_REQUEST_CREATE,
+  'run-queue': PERMISSIONS.OBJECTIVE_READ,
   connect: PERMISSIONS.SESSION_ATTACH,
   'search-missions': PERMISSIONS.MISSION_READ,
   'discuss-objective': PERMISSIONS.OBJECTIVE_SUBMIT,

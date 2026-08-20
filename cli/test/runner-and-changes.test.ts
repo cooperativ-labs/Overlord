@@ -614,7 +614,7 @@ test('runner does not claim a queued request for a soft-deleted objective', asyn
   await db.close();
 });
 
-test('delivery auto-advance queues next objective when enabled', async () => {
+test('delivery schedules durable Run Queue dispatch instead of auto-advance inline', async () => {
   const { db, ctx } = await createContext();
   const project = await createProject({ ctx, name: 'Auto Advance Test' });
   const workingDirectory = createIsolatedCheckout('ovld-runner-');
@@ -652,13 +652,12 @@ test('delivery auto-advance queues next objective when enabled', async () => {
   });
 
   const requests = await listExecutionRequests({ ctx });
-  assert.equal(requests.length, 1);
-  assert.equal(requests[0]?.objectiveId, objectives[1]?.id);
-  assert.equal(requests[0]?.requestedSource, 'auto_advance');
-  // Execution uses the agent from the db, inherited from the delivered objective.
-  assert.equal(requests[0]?.requestedAgent, 'claude');
-  assert.equal(requests[0]?.requestedModel, 'claude-opus-4-8');
-  assert.equal(requests[0]?.requestedReasoningEffort, 'high');
+  assert.equal(requests.length, 0);
+  const job = await ctx.db.get<{ payload_json: string }>(
+    `SELECT payload_json FROM worker_jobs WHERE type = 'overlord.run-queue.dispatch.v1' AND status = 'queued'`
+  );
+  assert.ok(job);
+  assert.equal(JSON.parse(job.payload_json).projectId, project.id);
 
   // The inherited selection is persisted onto the next objective so the launch
   // button (which reads the db) reflects what actually executed.
@@ -670,14 +669,14 @@ test('delivery auto-advance queues next objective when enabled', async () => {
     model: string | null;
     reasoning_effort: string | null;
   };
-  assert.equal(nextObjective.assigned_agent, 'claude');
-  assert.equal(nextObjective.model, 'claude-opus-4-8');
-  assert.equal(nextObjective.reasoning_effort, 'high');
+  assert.equal(nextObjective.assigned_agent, null);
+  assert.equal(nextObjective.model, null);
+  assert.equal(nextObjective.reasoning_effort, null);
 
   await db.close();
 });
 
-test('delivery auto-advance keeps the next objective explicit agent', async () => {
+test('durable dispatch preserves the next objective explicit agent until worker execution', async () => {
   const { db, ctx } = await createContext();
   const project = await createProject({ ctx, name: 'Auto Advance Explicit Agent' });
   const workingDirectory = createIsolatedCheckout('ovld-runner-');
@@ -714,9 +713,12 @@ test('delivery auto-advance keeps the next objective explicit agent', async () =
   });
 
   const requests = await listExecutionRequests({ ctx });
-  assert.equal(requests.length, 1);
-  assert.equal(requests[0]?.objectiveId, objectives[1]?.id);
-  assert.equal(requests[0]?.requestedAgent, 'claude');
+  assert.equal(requests.length, 0);
+  const nextObjective = await ctx.db.get<{ assigned_agent: string | null }>(
+    'SELECT assigned_agent FROM objectives WHERE id = ?',
+    [objectives[1]?.id]
+  );
+  assert.equal(nextObjective?.assigned_agent, 'claude');
 
   await db.close();
 });

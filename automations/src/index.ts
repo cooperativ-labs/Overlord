@@ -19,7 +19,10 @@ export type {
   ObjectiveLifecycleOptions,
   ObjectiveLifecycleState,
   ObjectiveLifecycleView,
-  ObjectiveLifecycleViolation
+  ObjectiveLifecycleViolation,
+  RunQueueDispatchAction,
+  RunQueuePlannerEntry,
+  RunQueuePlannerObjective
 } from './objective-manager/index.js';
 export {
   ACTIVE_OBJECTIVE_STATES,
@@ -45,6 +48,7 @@ export {
   objectiveResourcesConflict,
   PARALLEL_BLOCKING_OBJECTIVE_STATES,
   planEnsureDraftSlot,
+  planRunQueueDispatch,
   siblingBlocksParallelLaunch,
   sortObjectivesByLifecycleOrder,
   validateObjectiveLifecycle

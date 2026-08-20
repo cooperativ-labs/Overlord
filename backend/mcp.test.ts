@@ -220,3 +220,40 @@ test('overlord_list_project_statuses is a read-only project-scoped discovery too
   assert.match(search.description, /matching objectives and deliveries/);
   assert.deepEqual((properties.detail as unknown as { enum: string[] }).enum, ['compact', 'full']);
 });
+
+test('PM-management MCP tools preserve the protocol contracts', () => {
+  const deliveries = hostedMcpToolDefinitions.find(
+    definition => definition.name === 'overlord_list_deliveries'
+  );
+  assert.ok(deliveries);
+  assert.equal(deliveries.annotations?.readOnlyHint, true);
+  assert.deepEqual(Object.keys(deliveries.inputSchema.properties ?? {}).sort(), [
+    'missionId',
+    'objectiveId'
+  ]);
+  assert.match(deliveries.description, /human-action/);
+  assert.match(deliveries.description, /raw delivery payloads/);
+
+  const launch = hostedMcpToolDefinitions.find(
+    definition => definition.name === 'overlord_launch_objective'
+  );
+  assert.ok(launch);
+  assert.equal(launch.annotations?.readOnlyHint, false);
+  assert.deepEqual(launch.inputSchema.required, ['objectiveId', 'agent']);
+  assert.deepEqual(Object.keys(launch.inputSchema.properties ?? {}).sort(), [
+    'agent',
+    'executionTargetId',
+    'model',
+    'objectiveId',
+    'reasoningEffort'
+  ]);
+  assert.match(launch.description, /does not attach this MCP agent/);
+
+  const reorder = hostedMcpToolDefinitions.find(
+    definition => definition.name === 'overlord_reorder_future_objectives'
+  );
+  assert.ok(reorder);
+  assert.equal(reorder.annotations?.readOnlyHint, false);
+  assert.deepEqual(reorder.inputSchema.required, ['missionId', 'orderedObjectiveIds']);
+  assert.match(reorder.description, /every future objective UUID/);
+});

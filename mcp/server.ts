@@ -248,6 +248,35 @@ const toolHandlers: Record<string, ToolHandler> = {
           : {})
       })
     ),
+  overlord_list_deliveries: args =>
+    runProtocolSubcommand('list-deliveries', protocolBody(missionScopeFlags(args))),
+  overlord_launch_objective: args =>
+    runProtocolSubcommand(
+      'launch-objective',
+      protocolBody({
+        '--objective-id': requiredString(args, 'objectiveId'),
+        '--agent': requiredString(args, 'agent'),
+        ...(optionalString(args, 'model') ? { '--model': requiredString(args, 'model') } : {}),
+        ...(optionalString(args, 'reasoningEffort')
+          ? { '--reasoning-effort': requiredString(args, 'reasoningEffort') }
+          : {}),
+        ...(optionalString(args, 'executionTargetId')
+          ? { '--execution-target-id': requiredString(args, 'executionTargetId') }
+          : {})
+      })
+    ),
+  overlord_reorder_future_objectives: args => {
+    if (!Array.isArray(args.orderedObjectiveIds)) {
+      throw new Error('orderedObjectiveIds must be an array');
+    }
+    return runProtocolSubcommand(
+      'reorder-future-objectives',
+      protocolBody({
+        '--mission-id': requiredString(args, 'missionId'),
+        '--ordered-objective-ids-json': JSON.stringify(args.orderedObjectiveIds)
+      })
+    );
+  },
   overlord_add_objectives: args => {
     if (!Array.isArray(args.objectives)) {
       throw new Error('objectives must be an array');
@@ -277,6 +306,21 @@ const toolHandlers: Record<string, ToolHandler> = {
       })
     );
   },
+  overlord_queue_objective: args =>
+    runProtocolSubcommand(
+      args.remove === true ? 'dequeue-objective' : 'queue-objective',
+      protocolBody({
+        '--objective-id': requiredString(args, 'objectiveId'),
+        ...(args.remove === true
+          ? {}
+          : {
+              ...(optionalString(args, 'queue')
+                ? { '--queue': requiredString(args, 'queue') }
+                : {}),
+              ...(optionalString(args, 'after') ? { '--after': requiredString(args, 'after') } : {})
+            })
+      })
+    ),
   overlord_attach_session: args =>
     runProtocolSubcommand(
       'attach',

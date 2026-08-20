@@ -2,6 +2,7 @@ import { Outlet, useNavigate, useParams } from '@tanstack/react-router';
 import { useMemo, useState } from 'react';
 
 import { ActivityFeed } from '@/components/activity-feed/ActivityFeed.tsx';
+import { EverythingQueuedPanel } from '@/components/everything-queued/EverythingQueuedPanel.tsx';
 import { InboxMissionCard } from '@/components/InboxMissionCard.tsx';
 import { MissionDrawer } from '@/components/MissionDrawer.tsx';
 import { MissionPanel } from '@/components/MissionPanel.tsx';
@@ -93,6 +94,9 @@ export function InboxPage() {
               })
             }
           />
+        </ProjectWorkspaceErrorBoundary>
+        <ProjectWorkspaceErrorBoundary region="Everything Queued">
+          <EverythingQueuedPanel />
         </ProjectWorkspaceErrorBoundary>
       </main>
       <ProjectWorkspaceErrorBoundary region="mission panel">

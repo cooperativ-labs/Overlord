@@ -23,6 +23,7 @@ export const keys = {
       ? (['workspace', workspaceId, 'projects', lifecycle] as const)
       : (['projects', lifecycle] as const),
   project: (id: string) => ['project', id] as const,
+  runQueues: (projectId: string) => ['project', projectId, 'run-queues'] as const,
   projectStatuses: (projectId: string) => ['project', projectId, 'statuses'] as const,
   workspaceProjectStatuses: (workspaceId: string) =>
     ['workspace', workspaceId, 'project-statuses'] as const,

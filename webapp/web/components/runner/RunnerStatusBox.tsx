@@ -29,10 +29,10 @@ function deriveState({
 }
 
 const STATE_LABEL: Record<RunnerState, string> = {
-  active: 'Runner active',
-  ready: 'Runner ready',
-  idle: 'Runner idle',
-  error: 'Runner error'
+  active: 'Delegator active',
+  ready: 'Delegator ready',
+  idle: 'Delegator idle',
+  error: 'Delegator error'
 };
 
 const DOT_CLASS: Record<RunnerState, string> = {

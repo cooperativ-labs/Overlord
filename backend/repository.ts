@@ -57,6 +57,10 @@ import {
 import { emitNotification } from '../packages/core/service/notifications/notifications.ts';
 import { resolveProjectExecutionTargetForLaunch } from '../packages/core/service/project-execution-target.ts';
 import {
+  enqueueObjectiveAfterLastQueuedSibling,
+  removeRunQueueEntryForObjective
+} from '../packages/core/service/run-queue.ts';
+import {
   loadTargetResourceObservations,
   mergeResourceStatusWithObservation,
   type TargetResourceObservationRow
@@ -632,6 +636,12 @@ interface ObjectiveRow {
   created_by_kind: string | null;
   created_by_agent: string | null;
   created_by_workspace_user_id: string | null;
+  queue_entry_id?: string | null;
+  queue_id?: string | null;
+  queue_name?: string | null;
+  queue_position?: number | null;
+  queue_state?: string | null;
+  queue_blocked_reason?: string | null;
 }
 
 // ---- serializers ---------------------------------------------------------
@@ -1771,7 +1781,24 @@ function toObjectiveDto(r: ObjectiveRow): ObjectiveDto {
     title: r.title,
     instructionText: r.instruction_text,
     state: r.state as ObjectiveDto['state'],
-    autoAdvance: isTruthyFlag(r.auto_advance),
+    autoAdvance:
+      r.queue_entry_id !== undefined ? Boolean(r.queue_entry_id) : isTruthyFlag(r.auto_advance),
+    queueEntry:
+      r.queue_entry_id &&
+      r.queue_id &&
+      r.queue_name &&
+      typeof r.queue_position === 'number' &&
+      r.queue_state
+        ? {
+            id: r.queue_entry_id,
+            queueId: r.queue_id,
+            queueName: r.queue_name,
+            position: r.queue_position,
+            state: r.queue_state as 'waiting' | 'blocked' | 'dispatched' | 'running',
+            blockedReason: r.queue_blocked_reason ?? null,
+            precededBy: null
+          }
+        : null,
     assignedAgent: r.assigned_agent,
     model: r.model,
     reasoningEffort: r.reasoning_effort,
@@ -3692,6 +3719,9 @@ async function getObjectivesByMission(
   const placeholders = missionIds.map(() => '?').join(', ');
   const rows = (await db.all(
     `SELECT o.*, m.display_id AS mission_display_id,
+         e.id AS queue_entry_id, e.queue_id, q.name AS queue_name,
+         CASE WHEN e.id IS NULL THEN NULL ELSE (SELECT COUNT(*) FROM run_queue_entries er WHERE er.queue_id = e.queue_id AND er.deleted_at IS NULL AND (er.position < e.position OR (er.position = e.position AND er.id <= e.id))) END AS queue_position,
+         e.state AS queue_state, e.blocked_reason AS queue_blocked_reason,
          (
            SELECT s.external_session_id
              FROM agent_sessions s
@@ -3701,6 +3731,8 @@ async function getObjectivesByMission(
          ) AS external_session_id
          FROM objectives o
          JOIN missions m ON m.id = o.mission_id
+         LEFT JOIN run_queue_entries e ON e.objective_id = o.id AND e.deleted_at IS NULL
+         LEFT JOIN run_queues q ON q.id = e.queue_id AND q.deleted_at IS NULL
         WHERE o.mission_id IN (${placeholders}) AND o.deleted_at IS NULL
         ORDER BY o.mission_id ASC, o.position ASC`,
     missionIds
@@ -6644,6 +6676,9 @@ export async function listObjectives(
   });
   const rows = (await db.all(
     `SELECT o.*, m.display_id AS mission_display_id,
+         e.id AS queue_entry_id, e.queue_id, q.name AS queue_name,
+         CASE WHEN e.id IS NULL THEN NULL ELSE (SELECT COUNT(*) FROM run_queue_entries er WHERE er.queue_id = e.queue_id AND er.deleted_at IS NULL AND (er.position < e.position OR (er.position = e.position AND er.id <= e.id))) END AS queue_position,
+         e.state AS queue_state, e.blocked_reason AS queue_blocked_reason,
          (
            SELECT s.external_session_id
              FROM agent_sessions s
@@ -6653,6 +6688,8 @@ export async function listObjectives(
          ) AS external_session_id
          FROM objectives o
          JOIN missions m ON m.id = o.mission_id
+         LEFT JOIN run_queue_entries e ON e.objective_id = o.id AND e.deleted_at IS NULL
+         LEFT JOIN run_queues q ON q.id = e.queue_id AND q.deleted_at IS NULL
         WHERE o.mission_id = ? AND o.deleted_at IS NULL
         ORDER BY o.position ASC`,
     [missionId]
@@ -7318,6 +7355,17 @@ async function updateObjectiveTx(
         now,
         tx
       });
+    }
+
+    // REST and Protocol retain `autoAdvance` as a compatibility input, but the
+    // Run Queue is the only sequencer. Keep the legacy column write above during
+    // the staged retirement and materialize/remove live membership here.
+    if (body.autoAdvance !== undefined) {
+      if (body.autoAdvance) {
+        await enqueueObjectiveAfterLastQueuedSibling(tx, existing.project_id, id, workspaceUserId);
+      } else {
+        await removeRunQueueEntryForObjective(tx, existing.project_id, id);
+      }
     }
 
     const row = (await tx.get(

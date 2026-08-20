@@ -200,8 +200,11 @@ function AgentModelsSection({
   agent,
   savedAgent,
   onChange,
+  onSaveAgent,
   onSaveModels,
+  savingAgent,
   savingModels,
+  saveAgentError,
   saveModelsError,
   disabled
 }: {
@@ -209,8 +212,11 @@ function AgentModelsSection({
   /** The stored counterpart, used to decide which rows are dirty (coo:719). */
   savedAgent: DraftAgent | null;
   onChange: (next: DraftAgent) => void;
+  onSaveAgent: () => void;
   onSaveModels: () => void;
+  savingAgent: boolean;
   savingModels: boolean;
+  saveAgentError: string | null;
   saveModelsError: string | null;
   disabled: boolean;
 }) {
@@ -258,6 +264,8 @@ function AgentModelsSection({
       );
     });
   }, [agent.models, savedAgent]);
+
+  const isDirty = !savedAgent || !catalogsEqual([agent], [savedAgent]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -418,12 +426,19 @@ function AgentModelsSection({
           <Plus className="mr-1 size-4" />
           Add model
         </Button>
+        <Button type="button" size="sm" disabled={disabled || !isDirty} onClick={onSaveAgent}>
+          {savingAgent ? 'Saving…' : 'Save agent'}
+        </Button>
         {saveModelsError ? (
           <p className="text-xs text-destructive">{saveModelsError}</p>
+        ) : saveAgentError ? (
+          <p className="text-xs text-destructive">{saveAgentError}</p>
         ) : dirtyRows.some(Boolean) ? (
           <p className="text-xs text-muted-foreground">
             Save a changed row to apply this model list immediately.
           </p>
+        ) : isDirty ? (
+          <p className="text-xs text-muted-foreground">Unsaved agent changes</p>
         ) : null}
       </div>
     </div>
@@ -450,6 +465,8 @@ export function ModelsPage({ open, workspaceId }: ModelsPageProps) {
   /** Agent key whose model list is mid-save from a row-level Save (coo:719). */
   const [savingModelsFor, setSavingModelsFor] = useState<string | null>(null);
   const [modelsErrors, setModelsErrors] = useState<Record<string, string>>({});
+  const [savingAgentFor, setSavingAgentFor] = useState<string | null>(null);
+  const [agentErrors, setAgentErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (!open || !catalog.data) return;
@@ -461,6 +478,7 @@ export function ModelsPage({ open, workspaceId }: ModelsPageProps) {
     setSaveError(null);
     setSaveState('default');
     setModelsErrors({});
+    setAgentErrors({});
   }, [open, catalog.data]);
 
   const isDirty = !catalogsEqual(draftAgents, savedAgents);
@@ -556,6 +574,40 @@ export function ModelsPage({ open, workspaceId }: ModelsPageProps) {
     }
   }
 
+  /**
+   * Persist a complete agent section without submitting in-progress changes in
+   * the rest of the catalog. The API accepts the whole catalog, so build the
+   * payload from the saved entries and replace only the selected agent.
+   */
+  async function handleSaveAgent(agentKey: string) {
+    const draftAgent = draftAgents.find(entry => entry.key === agentKey);
+    if (!draftAgent) return;
+    setSavingAgentFor(agentKey);
+    setAgentErrors(previous =>
+      Object.fromEntries(Object.entries(previous).filter(([key]) => key !== agentKey))
+    );
+    try {
+      const updated = await updateCatalog.mutateAsync({
+        agents: savedAgents.map(saved => (saved.key === agentKey ? draftAgent : saved))
+      });
+      const next = cloneCatalogAgents(updated);
+      const savedAgent = next.find(entry => entry.key === agentKey);
+      setSavedAgents(next);
+      if (savedAgent) {
+        setDraftAgents(previous =>
+          previous.map(entry => (entry.key === agentKey ? savedAgent : entry))
+        );
+      }
+    } catch (error) {
+      setAgentErrors(previous => ({
+        ...previous,
+        [agentKey]: error instanceof Error ? error.message : 'Failed to save this agent.'
+      }));
+    } finally {
+      setSavingAgentFor(null);
+    }
+  }
+
   function applyJsonDraft() {
     setJsonError(null);
     try {
@@ -596,8 +648,11 @@ export function ModelsPage({ open, workspaceId }: ModelsPageProps) {
           <AgentModelsSection
             agent={agent}
             savedAgent={savedAgents.find(saved => saved.key === agent.key) ?? null}
+            onSaveAgent={() => void handleSaveAgent(agent.key)}
             onSaveModels={() => void handleSaveAgentModels(agent.key)}
+            savingAgent={savingAgentFor === agent.key}
             savingModels={savingModelsFor === agent.key}
+            saveAgentError={agentErrors[agent.key] ?? null}
             saveModelsError={modelsErrors[agent.key] ?? null}
             disabled={updateCatalog.isPending}
             onChange={next =>

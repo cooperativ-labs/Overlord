@@ -30,9 +30,11 @@ import {
   providerChoiceFromProfile,
   sessionOverrideFields
 } from '@/lib/launch-session-form';
+import { resolveLaunchSettingsWorkspaceId } from '@/lib/launch-settings-workspace';
 import {
   useAgentCatalog,
   useLaunchSettings,
+  useMeta,
   useProfile,
   useRefreshAgentCatalog,
   useUpdateAgentLaunchConfig,
@@ -135,14 +137,26 @@ const NO_EXECUTION_TARGET_HINT =
   'that runs agents first — link a project directory from it, or run `ovld add-et --name "<name>"` there.';
 
 export function IdePage({ open }: IdePageProps) {
+  const meta = useMeta();
   const profile = useProfile();
   const updateProfile = useUpdateProfile();
-  const catalog = useAgentCatalog();
-  const launchSettings = useLaunchSettings();
-  const refreshCatalog = useRefreshAgentCatalog();
-  const updateAgentLaunchConfig = useUpdateAgentLaunchConfig();
-  const updateTerminalProfile = useUpdateTerminalProfile();
-  const updateSessionDefaults = useUpdateLaunchSessionDefaults();
+  const [selectedLaunchWorkspaceId, setSelectedLaunchWorkspaceId] = useState<string | null>(null);
+  const launchWorkspaces = meta.data?.workspaces ?? [];
+  const launchWorkspaceId = resolveLaunchSettingsWorkspaceId({
+    selectedWorkspaceId: selectedLaunchWorkspaceId,
+    defaultWorkspaceId: meta.data?.workspace?.id,
+    workspaces: launchWorkspaces
+  });
+  // The cross-workspace UI deliberately has no implicit active workspace. Wait
+  // for an explicit scope instead of calling the legacy unscoped routes, which
+  // correctly reject multi-workspace requests with `workspaceId is required`.
+  const launchWorkspaceReady = meta.isSuccess && launchWorkspaceId !== null;
+  const catalog = useAgentCatalog(launchWorkspaceId, { enabled: launchWorkspaceReady });
+  const launchSettings = useLaunchSettings(launchWorkspaceId, { enabled: launchWorkspaceReady });
+  const refreshCatalog = useRefreshAgentCatalog(launchWorkspaceId);
+  const updateAgentLaunchConfig = useUpdateAgentLaunchConfig(launchWorkspaceId);
+  const updateTerminalProfile = useUpdateTerminalProfile(launchWorkspaceId);
+  const updateSessionDefaults = useUpdateLaunchSessionDefaults(launchWorkspaceId);
   // Discovery runs on the execution target through the local-target boundary,
   // never in the browser: only the device that would host the process can
   // answer whether Latch works there.
@@ -334,6 +348,37 @@ export function IdePage({ open }: IdePageProps) {
           the CLI and runner for the local execution target.
         </p>
       </div>
+
+      {launchWorkspaces.length > 1 ? (
+        <div className="max-w-xl space-y-2">
+          <Label htmlFor="launch-settings-workspace">Workspace context</Label>
+          <Select
+            value={launchWorkspaceId ?? ''}
+            onValueChange={value => setSelectedLaunchWorkspaceId(value || null)}
+          >
+            <SelectTrigger id="launch-settings-workspace">
+              <SelectValue placeholder="Select a workspace" />
+            </SelectTrigger>
+            <SelectContent>
+              {launchWorkspaces.map(workspace => (
+                <SelectItem key={workspace.id} value={workspace.id}>
+                  {workspace.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            Used to find this machine&apos;s execution target. Agent launch defaults are saved once
+            per user and machine, not separately for every workspace.
+          </p>
+        </div>
+      ) : null}
+
+      {!launchWorkspaceReady && meta.isSuccess ? (
+        <p className="text-sm text-muted-foreground">
+          Join or create a workspace before configuring launch settings for this machine.
+        </p>
+      ) : null}
 
       {launchSettings.data ? (
         <div className="rounded-lg border p-4">

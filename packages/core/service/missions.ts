@@ -22,6 +22,10 @@ import {
 } from './mission-search.js';
 import { allocateObjectiveDisplayKey } from './objective-display-id.js';
 import { assertProjectResourceKeyExists } from './projects.js';
+import {
+  enqueueObjectiveAfterLastQueuedSibling,
+  removeRunQueueEntryForObjective
+} from './run-queue.js';
 import { initialTitleFromInstruction, newId, nowIso } from './util.js';
 import { enqueueWebhookEvent } from './webhook-events.js';
 
@@ -471,6 +475,18 @@ export async function insertObjective({
     missionId: mission.id,
     objectiveId: id
   });
+
+  // Queue membership is authoritative. Keep writing the legacy boolean during
+  // the staged retirement, but immediately materialize opted-in objectives in
+  // the Run Queue so every surface observes the same sequence.
+  if (autoAdvance) {
+    await enqueueObjectiveAfterLastQueuedSibling(
+      ctx.db,
+      mission.projectId,
+      id,
+      ctx.actorWorkspaceUserId
+    );
+  }
 
   return toObjectiveSummary({
     id,
@@ -1072,6 +1088,17 @@ export async function updateObjective({
       WHERE id = ? AND workspace_id = ?`,
     [bindBool(ctx.db.dialect, autoAdvance), now, nextRevision, existing.id, ctx.workspace.id]
   );
+
+  if (autoAdvance) {
+    await enqueueObjectiveAfterLastQueuedSibling(
+      ctx.db,
+      existing.project_id,
+      existing.id,
+      ctx.actorWorkspaceUserId
+    );
+  } else {
+    await removeRunQueueEntryForObjective(ctx.db, existing.project_id, existing.id);
+  }
 
   await recordChange({
     ctx,

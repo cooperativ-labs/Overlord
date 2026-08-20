@@ -8,6 +8,7 @@ import {
   type ObjectiveLifecycleObjective,
   objectiveResourcesConflict,
   planEnsureDraftSlot,
+  planRunQueueDispatch,
   shouldDiscardEmptiedObjective,
   siblingBlocksParallelLaunch,
   validateObjectiveLifecycle
@@ -296,5 +297,81 @@ describe('objective lifecycle rules', () => {
       }),
       false
     );
+  });
+
+  it('plans independent queue heads and skips held entries', () => {
+    const actions = planRunQueueDispatch({
+      queues: [
+        { id: 'a', paused: false },
+        { id: 'b', paused: false },
+        { id: 'paused', paused: true }
+      ],
+      entries: [
+        {
+          id: 'held',
+          queueId: 'a',
+          objectiveId: 'held-objective',
+          position: 1,
+          state: 'waiting',
+          attemptCount: 0
+        },
+        {
+          id: 'next',
+          queueId: 'a',
+          objectiveId: 'next-objective',
+          position: 2,
+          state: 'waiting',
+          attemptCount: 0
+        },
+        {
+          id: 'parallel',
+          queueId: 'b',
+          objectiveId: 'future-objective',
+          position: 1,
+          state: 'waiting',
+          attemptCount: 0
+        },
+        {
+          id: 'paused-entry',
+          queueId: 'paused',
+          objectiveId: 'paused-objective',
+          position: 1,
+          state: 'waiting',
+          attemptCount: 0
+        }
+      ],
+      objectives: {
+        'held-objective': {
+          id: 'held-objective',
+          state: 'draft',
+          instructionText: 'held',
+          resourceConnected: false
+        },
+        'next-objective': { id: 'next-objective', state: 'draft', instructionText: 'next' },
+        'future-objective': {
+          id: 'future-objective',
+          state: 'future',
+          instructionText: 'parallel'
+        },
+        'paused-objective': { id: 'paused-objective', state: 'draft', instructionText: 'paused' }
+      }
+    });
+    assert.deepEqual(actions, [
+      { action: 'hold', entryId: 'held', reason: 'resource_disconnected' },
+      {
+        action: 'dispatch',
+        entryId: 'next',
+        objectiveId: 'next-objective',
+        promoteFutureToDraft: false,
+        idempotencyKey: 'run_queue:next'
+      },
+      {
+        action: 'dispatch',
+        entryId: 'parallel',
+        objectiveId: 'future-objective',
+        promoteFutureToDraft: true,
+        idempotencyKey: 'run_queue:parallel'
+      }
+    ]);
   });
 });

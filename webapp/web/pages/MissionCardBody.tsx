@@ -1,9 +1,12 @@
+import { ListOrdered } from 'lucide-react';
+
 import { MissionTagPill } from '@/components/MissionTagPill.tsx';
 import { CardContent } from '@/components/ui/card';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils.ts';
 
 import type { MissionDto, WorkspaceMemberDto } from '../../shared/contract.ts';
+import { useProjectRunQueues } from '../lib/queries.ts';
 
 import { getMissionTags } from './board-shared.ts';
 import { MissionCardHoverFooter } from './MissionCardHoverFooter.tsx';
@@ -32,6 +35,11 @@ export function MissionCardBody({
   cardState: MissionCardState;
 }) {
   const tags = getMissionTags(mission);
+  const runQueues = useProjectRunQueues(projectId);
+  const queuedCount = (runQueues.data?.queues ?? []).reduce(
+    (count, queue) => count + queue.entries.filter(entry => entry.missionId === mission.id).length,
+    0
+  );
 
   return (
     <CardContent className="flex h-full flex-col p-0 font-body">
@@ -71,6 +79,21 @@ export function MissionCardBody({
             </div>
             <div className="flex min-w-0 max-w-[55%] shrink items-center justify-end gap-2">
               <MissionDueDateBadge dueDatetime={mission.dueDatetime} />
+              {queuedCount > 0 ? (
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <span className="inline-flex h-5 items-center gap-1 rounded-full bg-emerald-500/15 px-1.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-300">
+                        <ListOrdered className="h-3 w-3" />
+                        {queuedCount}
+                      </span>
+                    }
+                  />
+                  <TooltipContent>
+                    {queuedCount} objective{queuedCount === 1 ? '' : 's'} queued
+                  </TooltipContent>
+                </Tooltip>
+              ) : null}
               {cardState.objectiveCount > 0 ? (
                 <Tooltip>
                   <TooltipTrigger

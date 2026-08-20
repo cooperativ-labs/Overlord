@@ -1282,6 +1282,15 @@ export async function launchObjective(
       eventSummary: `Queued ${agentKey}${model ? ` (${model})` : ''} execution for a runner.`,
       eventPayload: { agent: agentKey, model, reasoningEffort }
     });
+    // Direct Run bypasses queue ordering, but if this objective already belongs
+    // to a Run Queue it becomes that queue's in-flight entry so delivery advances it.
+    await tx.run(
+      `UPDATE run_queue_entries
+          SET state = 'running', blocked_reason = NULL, execution_request_id = ?,
+              dispatched_at = COALESCE(dispatched_at, ?), updated_at = ?, revision = revision + 1
+        WHERE objective_id = ? AND deleted_at IS NULL AND state IN ('waiting', 'blocked')`,
+      [request.id, now, now, objective.id]
+    );
     return executionSummaryToDto(request);
   });
 }
